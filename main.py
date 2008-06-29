@@ -17,13 +17,13 @@ class ped_psapi(object):
         super(ped_psapi, self).__init__()
         self.wmi = com.GetObject("winmgmts://%s"% host)
         
-    def enumerateProcesses(self):
+    def enumerateProcesses(self, verbose=False):
         res = self.wmi.InstancesOf('Win32_Process')
-        return [ (x.Name, x.ProcessId) for x in res ]
+        return [ (x.ProcessId, x.Name, x.ExecutablePath, x.CommandLine) for x in res ]
 
     def enumerateThreads(self, pid):
         res = self.wmi.InstancesOf('Win32_Thread')
-        res = [ int(x.Handle) for x in res if int(x.ProcessHandle) == pid ]
+        res = [ (int(x.Handle), x.StartAddress, x.ThreadState, x.ThreadWaitReason) for x in res if int(x.ProcessHandle) == pid ]
         assert len(res) > 0
         return res
 
@@ -99,24 +99,26 @@ class ped_debug(object):
 
     def set(self, context):
         self.suspend()
-        res = k32.SetThreadContext(self.handle, byref(context.me))
+        res = k32.SetThreadContext(self.handle, ctypes.byref(context.me))
         self.resume()
         return res
 
 if __name__ == '__main__':
     x = ped_psapi()
-    res = dict(x.enumerateProcesses())
-    res =  x.enumerateThreads( res[u'uedit32.exe'] )
-    thread = res[0]
+    res = x.enumerateProcesses()
+    res = dict([(b,a) for a,b,c,d in res])
+    res = x.enumerateThreads( res[u'uedit32.exe'] )
+    tid,address,state,reason = res[0]
 
     # we don't do it by memory because that'd be slow as fuck
 #    for x in moduleList(x):
 #        searchModuleForInstructionsWeNeed()
 
-    dbg = ped_debug(thread)
+    dbg = ped_debug(tid)
+    dbg.suspend()
     res = dbg.get()
-    res['Eip'] = 0
+    res['Eip'] = 0x42424242
     res = dbg.set(res)
-    print res
+    dbg.resume()
     
-    print res
+    

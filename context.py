@@ -108,6 +108,7 @@ class CONTEXT(Structure):
         ('Edx', DWORD),
         ('Ecx', DWORD),
         ('Eax', DWORD),
+        ('Ebp', DWORD),
         ('Eip', DWORD),
         ('SegCs', DWORD),
         ('EFlags', DWORD),
