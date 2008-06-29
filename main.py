@@ -1,124 +1,148 @@
-import sys
-sys.path.append('lib/')
+import os,sys
+sys.path.append('./lib')
 
-import win32com.client as com
-import ctypes
+import ia32
 
-import context as ctx
-
-k32 = ctypes.WinDLL('kernel32.dll')
-advapi32 = ctypes.WinDLL('kernel32.dll')
-
-# I am Yor, the hunter from the future
-class ped_psapi(object):
-    wmi = None
-
-    def __init__(self, host="./"):
-        super(ped_psapi, self).__init__()
-        self.wmi = com.GetObject("winmgmts://%s"% host)
+import peepeelite
+PE = peepeelite.PE
+def findFile(name, paths=["."]):
+    # I am Yor, the hunter from the future
+    for path in paths + os.environ['PATH'].split( os.pathsep ):
         
-    def enumerateProcesses(self, verbose=False):
-        res = self.wmi.InstancesOf('Win32_Process')
-        return [ (x.ProcessId, x.Name, x.ExecutablePath, x.CommandLine) for x in res ]
+        try:
+            path += os.sep + name
+            x = file(path, 'r')
+            x.close()
 
-    def enumerateThreads(self, pid):
-        res = self.wmi.InstancesOf('Win32_Thread')
-        res = [ (int(x.Handle), x.StartAddress, x.ThreadState, x.ThreadWaitReason) for x in res if int(x.ProcessHandle) == pid ]
-        assert len(res) > 0
-        return res
+            return path
 
-class ped_debug(object):
-    ## XXX: This was taken from http://www.rootkit.com/vault/c0de90e7/gw_ng.c
-    ##      I'm not sure why I'm implementing it like this, i think it just
-    ##      looked really fun. We get the added benefit of being able to call
-    ##      code from the context of any thread
+        except IOError:
+            pass
 
-    def safe_set(self, value):
-        k32.CloseHandle(self.__handle)
-        self.__handle = value
-    handle = property(fset=safe_set, fget=lambda self: self.__handle)
-    __handle = None
+    raise ValueError('unable to find %s!'% name)
 
-    def __init__(self, tid, isBestowed=False):
-        '''
-        Yes, I know that 'isBestowed' is kind of weird.
-        isBestowed means that this token will be inherited by our children.
-        '''
+def getAllSections(pe):
+    return [(sect['PointerToRawData'], sect['SizeOfRawData']) for sect in pe['section']]
 
-        STANDARD_RIGHTS_REQUIRED = 0xf0000
-        SYNCHRONIZE = 0x100000
-        THREAD_TERMINATE = 0x0001
-        THREAD_SUSPEND_RESUME = 0x0002
-        THREAD_GET_CONTEXT = 0x0008
-        THREAD_SET_CONTEXT = 0x0010
-        THREAD_SET_INFORMATION = 0x0020
-        THREAD_QUERY_INFORMATION = 0x0040
-        THREAD_SET_THREAD_TOKEN = 0x0080
-        THREAD_IMPERSONATE = 0x0100
-        THREAD_DIRECT_IMPERSONATION = 0x0200
+def getAllImports(pe):
+    res = {}
+    for k in pe['imports'].keys():
+        path = findFile(k)
+        x = PE()
+        x.open(path)
+        x.read()
+        if path in res:
+            continue
+        res[path] = ( x, getAllSections(pe) )
 
-        THREAD_ALL_ACCESS = STANDARD_RIGHTS_REQUIRED | SYNCHRONIZE | 0x3ff
+    return res
 
-        res = THREAD_SET_CONTEXT | THREAD_SET_CONTEXT | THREAD_SUSPEND_RESUME
-        res = THREAD_ALL_ACCESS
-        self.handle = k32.OpenThread(res, isBestowed, tid)
-        assert self.handle
+match = [
+    {'opcode':'\x8b'},
+    {'opcode':'\xc3'}
+]
 
-    def __del__(self):
-        ## heh, it's a shame that we can't close this handle. thx, python! ;)
-        ## we could use "with" i guess, but that shit's gay and only in 2.5
-        # k32.CloseHandle(self.handle)
-        pass
+match = [
+    {'opcode':'\xe9'},
+    {'opcode':'\x05'}
+]
 
-    def suspend(self):
-        return k32.SuspendThread(self.handle)
+def matchDictionary(minor, major):
+    for k in minor.keys():
+        if minor[k] == major[k]:
+            return True
+    return False
 
-    def resume(self):
-        return k32.ResumeThread(self.handle)
+s = '\x8b\xff\xc3'
+s = '\xe9'*30
 
-    def terminate(self, exit=0):
+print matchDictionary( match[0], ia32.decode(s) )
+#print matchDictionary( match[0], ia32.decode('\x8c\xff') )
 
-        def killed(self, *args, **kwds):
-            raise ValueError("Thread %x has been terminated"% self.handle)
+def matchInstructions(s, matches):
+    ''' returns a list of instructionsl. will raise ValueError if no match was made '''
 
-        res = k32.TerminateThread(self.handle, exit)
-        if res:
-            self.__getattribute__ = killed
-        return res
+    res = []
+    for m in matches:
+        if not s:
+            raise ValueError
+        instruction = ia32.decode(s)
+        if not matchDictionary(m, instruction):
+            raise ValueError
 
-    def get(self, flags=ctx.CONTEXT_ALL):
-        res = ctx.resolve( ctx.CONTEXT() )
-        res['ContextFlags'] = flags
+        res.append(instruction)
 
-        self.suspend()
-        error = k32.GetThreadContext(self.handle, ctypes.byref(res.me))
-        self.resume()
+        s = s[ instruction['size']:]
+    return res
 
-        assert error
-        return res
+#print matchInstructions(s, match)
+#print matchInstructions('\x8c\xff\xc6', match)
 
-    def set(self, context):
-        self.suspend()
-        res = k32.SetThreadContext(self.handle, ctypes.byref(context.me))
-        self.resume()
-        return res
+def searchInstructions(s, matches):
+    ''' returns [(offset_in_string, instruction), ...] '''
+    offset = 0
+    res = []
+    for m in matches:
+        s = s[offset:]
+        if not s:
+            break
 
+        try:
+            insns = matchInstructions(s,matches)
+            res.append( (offset, insns) )
+            #size = reduce( lambda x,y: x+y, [ insn['size'] for insn in insns ] )
+            #offset += size
+            offset += 1
+            continue
+
+        except ValueError:
+            pass
+
+        offset += 1
+
+    return res
+
+#print '\n'.join([ repr(x) for x in searchInstructions(s, match) ])
+#print '\n'.join([ repr(x) for x in searchInstructions('\x8b\xff\xc2', match) ])
+#print '\n'.join([ repr(x) for x in searchInstructions('\x8c\xff\xc2', match) ])
+
+def readSection(input, section):
+    offset,width = section
+    input.file.seek(offset)
+    return input.file.read(width)
+
+def getVAs(input, sectiontable, match):
+    res = []
+    for section in sectiontable:
+        baseoffset,width = section
+        s = readSection(input, section)
+        v = [blah for blah in searchInstructions(s, match) if blah]
+        if not v:
+            continue
+            
+        v = [(input.getVAByOffset(baseoffset+ofs),insns) for ofs,insns in v]
+        res.append(v)
+    return res
+        
 if __name__ == '__main__':
-    x = ped_psapi()
-    res = x.enumerateProcesses()
-    res = dict([(b,a) for a,b,c,d in res])
-    res = x.enumerateThreads( res[u'uedit32.exe'] )
-    tid,address,state,reason = res[0]
+    x = PE()
+    x.open('/Program Files/IDM Computer Solutions/UltraEdit-32/uedit32.exe')
+    x.open('/Windows/notepad.exe')
+    x.read()
+    pe = x
 
-    # we don't do it by memory because that'd be slow as fuck
-#    for x in moduleList(x):
-#        searchModuleForInstructionsWeNeed()
+#    positions = [v['PointerToRawData'], v['SizeOfRawData']) for v in x['section']]
+#    searchThroughForInstructions(positions)
+#
+#    for x in x['imports'].keys()
+#        res = findFile(x)
+#        PE.parse(res)
+        
+#    need some infinite loop instructions
+#    need some instructions for writing to an address we can control and a return
 
-    dbg = ped_debug(tid)
-    dbg.suspend()
-    res = dbg.get()
-    res['Eip'] = 0x42424242
-    res = dbg.set(res)
-    dbg.resume()
-    
+    res = getAllImports(pe)
+    for k in res:
+        input, sections = res[k]
+        print getVAs(input, sections, match)
     

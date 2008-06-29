@@ -72,12 +72,16 @@ class PE(dict):
             sect, = sect
             return sect
 
-        raise ValueError, "Unable to find matching PE section"
+        raise ValueError("Unable to find matching PE section")
 
     def getSectionByRVA(self, va):
         sections = self['section']
         isInside = lambda sect: va >= sect['VirtualAddress'] and va < sect['VirtualAddress']+sect['VirtualSize']
-        return self.getSectionByFunction(isInside)
+        try:
+            return self.getSectionByFunction(isInside)
+
+        except ValueError:
+            raise ValueError("Unable to find PE section for RVA(%x)"% va)
 
     def getSectionByVA(self, va, **kwds):
         imagebase = kwds.get("ImageBase", self["opt"]["ImageBase"])
@@ -166,7 +170,7 @@ class PE(dict):
 
         d = self['directory'][IMPORT]
         if d['VirtualAddress'] == 0:
-            self['imports'] = []
+            self['imports'] = {}
             return
 
         ofs = self.getOffsetByRVA(d['VirtualAddress'])
