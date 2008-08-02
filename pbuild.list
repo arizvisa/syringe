@@ -1,0 +1,74 @@
+compile()
+{
+    TARGET=$1
+    shift
+
+    gcc -c -o "$TARGET" $@
+    return $?
+}
+
+assemble()
+{
+    TARGET=$1
+    shift
+
+	as -o "$TARGET" $@
+    return $?
+}
+
+link()
+{
+    TARGET=$1
+    shift
+
+    libs="-L. -luser32 -lkernel32 -lmsvcrt -lwhook"
+	gcc $libs -o "$TARGET" $@
+    return $?
+}
+
+dll()
+{
+    TARGET=$1
+    shift
+
+    basename=$(basename "$TARGET" .dll)
+
+    libs="-luser32 -lkernel32 -lmsvcrt"
+#    ld $libs -shared --compat-implib --out-implib "lib$TARGET.a" -o "$TARGET" $@
+    gcc -Wl,-out-implib,"lib$basename.a",-compat-implib $libs -shared -o "$TARGET" $@
+    return $?
+}
+
+build()
+{
+    TARGET=$1
+    shift
+    echo "[$TARGET] Successfully built:"
+    for target in $@; do
+        echo "	$target"
+    done
+    return 1
+}
+
+alltargets()
+{
+    for i in $( echo "$LIST" | cut -d ':' -f 1 ); do
+        if $( test -e "$i" ); then
+            echo "Removing \"$i\""
+            rm -i "$i"
+        fi
+    done
+    return 1
+}
+
+resolve dlltest.o compile dlltest.c
+resolve dlltest.exe link dlltest.o
+
+resolve whook.o assemble whook.s
+resolve whook.dll dll whook.o
+
+#resolve blah.o compile blah.c
+#resolve blah.exe link blah.o libwhook.a
+
+resolve all build whook.dll dlltest.exe
+resolve clean alltargets

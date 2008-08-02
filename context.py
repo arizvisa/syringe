@@ -1,3 +1,5 @@
+# this makes ctypes friendlier (for me, anyways)
+
 from ctypes import *
 
 ## constants
