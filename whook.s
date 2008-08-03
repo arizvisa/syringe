@@ -1,15 +1,18 @@
 .section .drectve
-	.ascii " -export:reenableWindowHooks"
 	.ascii " -export:disableWindowHooks"
+	.ascii " -export:reenableWindowHooks"
+    .ascii " -export:getCallerModuleHandle"
 
 .section .data
 messageFailure:
-    .string "[%x] failure [error: %08x]\n"
+    .string "[%x] failure [error: %08x] "
 messageSuccess:
     .string "[%x] success [handle: %08x]\n"
+messageNewline:
+    .string "\n"
 
 message:
-    .long 0
+    .long messageNewline
     .long messageFailure
     .long messageSuccess
 
@@ -33,15 +36,41 @@ hHooks:
     .long 0xcc
 
 .section .text
+getLastErrorMessage:
+    pushl %ebp
+    movl %esp, %ebp
+    subl $4, %esp
 
-.global _disableWindowHooks
+    pushl $0
+    pushl $0
+    leal 8(%esp), %eax
+    pushl %eax
+    pushl $(1 << 10 | 0)
+    call _GetLastError@0
+    pushl %eax
+    pushl $0
+    pushl $(0x1000 | 0x200 | 0x100)
+    call _FormatMessageA@28
+
+    pushl (%esp)
+    call _printf
+    add $4, %esp
+
+    pushl -4(%ebp)
+    call _LocalFree@4
+
+    movl %ebp, %esp
+    popl %ebp
+    ret
+
+    .global _disableWindowHooks
 _disableWindowHooks:
     pushl %ebp
     movl %esp, %ebp
 
-    pushl $16
+    pushl $0xf
 1:
-    call getCallerModuleHandle
+    call _getCallerModuleHandle
 
     pushl 8(%ebp)   #dwThreadId
     pushl %eax
@@ -52,6 +81,7 @@ _disableWindowHooks:
     andl %eax, %eax
     jnz 2f
 
+    ## failure
     call _GetLastError@0
     movl (%esp), %ecx
 
@@ -59,14 +89,14 @@ _disableWindowHooks:
     pushl %ecx
     pushl (message + 4*1)
     call _printf
+    call getLastErrorMessage
     addl $0xc, %esp
 
     jmp 3f
 
 2:
-    movl (%esp), %ebx
-    leal hHooks(, %ebx, 4), %edi
-    stosl %eax, (%edi)
+    movl (%esp), %ecx
+    movl %eax, hHooks(, %ecx, 4)
 
     pushl %eax
     pushl 4(%esp)
@@ -78,29 +108,30 @@ _disableWindowHooks:
 
 3:
     decl (%esp)
-    jnz 1b
-
+    jns 1b
     addl $4, %esp
+
+    xorl %eax, %eax
     popl %ebp
     ret
 
     .global _reenableWindowHooks
 _reenableWindowHooks:
-    pushl $16
+    pushl $0xf
 1:
     
-    movl (%esp), %ebx
-    leal hHooks(, %ebx, 4), %edi
-    pushl %edi
+    movl (%esp), %ecx
+    pushl hHooks(, %ecx, 4)
     call _UnhookWindowsHookEx@4
 
     decl (%esp)
     jnz 1b
-
+    addl $4, %esp
     ret
 
 ###########################
-getLdrModuleByAddress:
+    .global _GetLdrModuleByAddress
+_getLdrModuleByAddress:
     pushl %ebp
     movl %esp, %ebp
 
@@ -108,27 +139,27 @@ getLdrModuleByAddress:
     movl %fs:0x30, %edx
     movl 0xc(%edx), %edx
     movl 0x10(%edx), %edx
-    movl %edx, %esi
+    movl %edx, %ecx
 
 1:
     # check DllBase
-    movl 0x18(%esi), %eax
+    movl 0x18(%ecx), %eax
     cmpl %eax, 8(%ebp)
     jb 2f
 
     # add size, and then check
-    addl 0x20(%esi), %eax
-    cmpl %eax, %ebx
+    addl 0x20(%ecx), %eax
+    cmpl %eax, 8(%ebp)
     ja 2f
     
-    movl %esi, %eax
+    movl %ecx, %eax
     popl %ebp
     ret
     
     # check if matches original
 2:
-    movl (%esi), %esi
-    cmp %esi, %edx
+    movl (%ecx), %ecx
+    cmp %ecx, %edx
     jne 1b
 
     # unable to find a module that matches our caller
@@ -137,22 +168,25 @@ getLdrModuleByAddress:
     ret
 
 #######
-getCallerModuleHandle:
-    movl (%esp), %ebx
+    .global _getCallerModuleHandle
+_getCallerModuleHandle:
+    movl (%esp), %edx
 
     pushl %ebp
     movl %esp, %ebp
 
-    pushl %ebx
-    call getLdrModuleByAddress
+    pushl %edx
+    call _getLdrModuleByAddress
+    addl $4, %esp
 
     movl %eax, %edx
     addl $0x24, %edx    #FullDllName
 
+
     movw 2(%edx), %ax    #FullDllName.MaximumLength
     cwtl
-    incl %ecx
-    incl %ecx
+    incl %eax
+    incl %eax
     movl %eax, %ecx
 
     subl %ecx, %esp
@@ -160,23 +194,52 @@ getCallerModuleHandle:
     subl $3, %esp
     andl $0xfffffffc, %esp
 
+
     movw (%edx), %ax    #FullDllName.Length
     cwtl
-    movl %eax, %ecx
 
-    movl %esp, %edi
-    movl 4(%edx), %esi  #FullDllName.Buffer
-    rep movsb (%esi), (%edi)
-    xorl %eax, %eax
-    stosw %ax, (%edi)
+    pushl %eax
+    pushl 4(%edx)
+    leal 8(%esp), %eax
+    pushl %eax
+    call memcpy
+    addl $0xc, %esp
+
+    movw $0, (%esp, %eax,1)
 
     # (%esp) now points to our name
     pushl %esp
     call _LoadLibraryW@4
 
-    movl %ebp, %esp   # restore our frame
+    movl %ebp, %esp
     popl %ebp
     ret
+
+memcpy:
+    pushl %ebp
+    movl %esp, %ebp
+    pushl %esi
+    pushl %edi
+
+    movl 0x8(%ebp), %edi
+    movl 0xc(%ebp), %esi
+    movl 0x10(%ebp), %ecx
+    movl %ecx, %edx
+
+    shrl $2, %ecx
+    rep movsd (%esi), (%edi)
+
+    andl $3, %edx
+    movl %edx, %ecx
+    rep movsb (%esi), (%edi)
+
+    movl 0x10(%ebp), %eax
+
+    popl %edi
+    popl %esi
+    popl %ebp
+    ret
+    
 
 #######
 hookFunction:
@@ -188,8 +251,7 @@ hookFunction:
     movl %esp, %ebp
 
     movl 8(%ebp), %edx
-    leal hHooks(, %edx, 4), %esi
-    lodsl (%esi), %eax
+    movl hHooks(, %edx, 4), %eax
 
     pushl 0x10(%ebp)
     pushl 0xc(%ebp)
@@ -199,5 +261,4 @@ hookFunction:
 
     popl %ebp
     popa
-    ret
-
+    ret 
