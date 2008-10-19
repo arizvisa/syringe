@@ -95,8 +95,8 @@ _disableWindowHooks:
     jmp 3f
 
 2:
-    movl (%esp), %ecx
-    movl %eax, hHooks(, %ecx, 4)
+movl (%esp), %ecx
+movl %eax, hHooks(, %ecx, 4)
 
     pushl %eax
     pushl 4(%esp)
@@ -182,7 +182,6 @@ _getCallerModuleHandle:
     movl %eax, %edx
     addl $0x24, %edx    #FullDllName
 
-
     movw 2(%edx), %ax    #FullDllName.MaximumLength
     cwtl
     incl %eax
@@ -193,7 +192,6 @@ _getCallerModuleHandle:
 
     subl $3, %esp
     andl $0xfffffffc, %esp
-
 
     movw (%edx), %ax    #FullDllName.Length
     cwtl
@@ -243,14 +241,14 @@ memcpy:
 
 #######
 hookFunction:
-    ret
+#    ret
 
 ## ensure that all hooks don't tamper w/ the current register state
     pusha
     pushl %ebp
-    movl %esp, %ebp
+    movl %esp, %ebp     # delta = 0x24
 
-    movl 8(%ebp), %edx
+    movl 0x2c(%ebp), %edx         # 8(%ebp)
     movl hHooks(, %edx, 4), %eax
 
     pushl 0x10(%ebp)

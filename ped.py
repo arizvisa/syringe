@@ -1,6 +1,5 @@
 # this is the debugger attacher for manipulating a process
-
-import sys
+import sys,time
 sys.path.append('lib/')
 
 import win32com.client as com
@@ -9,9 +8,10 @@ import ctypes
 import context as ctx
 
 k32 = ctypes.WinDLL('kernel32.dll')
+u32 = ctypes.WinDLL('user32.dll')
 advapi32 = ctypes.WinDLL('kernel32.dll')
 
-hooker = ctypes.CDLL('hooker.dll')
+#hooker = ctypes.CDLL('whook.dll')
 
 class ped_psapi(object):
     wmi = None
@@ -113,66 +113,85 @@ def getProcessByName(name):
     res = x.enumerateThreads( res[name] )
     return res[0]
 
+### heh
+options = { 'value':('Eax',0), 'address':('Ebx', 0x170), 'stack':0xc }
+def ped_poke(dbg, address, value, options=options):
+    res = dbg.get()
+
+    # value
+    reg,offset = options['value']
+    res[reg] = value - offset
+
+    # address
+    reg,offset = options['address']
+    res[reg] = address - offset
+
+    ## 
+    res['Esp'] -= options['stack']
+    res['Eip'] = write_address
+
+    dbg.set(res)
+
+write_address = 0x7c92b04d
+stop_address = 0x7c92a931
+
 if __name__ == '__main__':
-.text:7C92B04D 89 83 70 01 00 00                 mov     [ebx+170h], eax
-.text:7C92B053 5F                                pop     edi
-.text:7C92B054 5E                                pop     esi
-.text:7C92B055 5B                                pop     ebx
-.text:7C92B056 C9                                leave
-.text:7C92B057 C2 04 00                          retn    4
+    """
+    .text:7C92B04D 89 83 70 01 00 00                 mov     [ebx+170h], eax
+    .text:7C92B053 5F                                pop     edi
+    .text:7C92B054 5E                                pop     esi
+    .text:7C92B055 5B                                pop     ebx
+    .text:7C92B056 C9                                leave
+    .text:7C92B057 C2 04 00                          retn    4
 
-7c92a931
-.text:7C92A931 EB FE                             jmp     short 7C92A931
+    7c92a931
+    .text:7C92A931 EB FE                             jmp     short 7C92A931
 
-#i need to identify what each instruction is capable of reading/writing, and how to save each state for restoration later
-# mov [ memxpr( add(@ebx, 0x170) ) ], register
-# pop register  (register)     #how do we make something useful out of stack-using instructions, w/o storing their value
-# pop register  (register)
-# pop register  (register)
-# leave  ( @esp )
-# retn 4 ( @eip )
+    #i need to identify what each instruction is capable of reading/writing, and how to save each state for restoration later
+    # mov [ memxpr( add(@ebx, 0x170) ) ], register
+    # pop register  (register)     #how do we make something useful out of stack-using instructions, w/o storing their value
+    # pop register  (register)
+    # pop register  (register)
+    # leave  ( @esp )
+    # retn 4 ( @eip )
 
-# jmp register
+    # jmp register
 
     # this type of hooking can be defeated via a SetWindowHookEx hook, which is
     # called from by the kernel via u32.DispatchHookW.
     # msctf.dll contains functions that use this hook. Ultramon.exe seems to set one.
     # these are also stored in PEB.KernelCallbackTable
 
-    # execution of hooks are stored in TEB.Win32ThreadInfo
+    # addresses of hooks are stored in TEB.Win32ThreadInfo
+    """
 
-    pid = 3560
+# [1] allocate space on stack
+# [2] save top of stack
+# [3] write halt instruction at return address
+# [4] resume
+# [5] check that we're at the halt address
 
-    tid,address,state,reason = getProcessByName( u'pidgin.exe' )
-    hooker.disableWindowHooks(tid)
+    tid,address,state,reason = getProcessByName( u'notepad.exe' )
+#    hooker.disableWindowHooks(tid)
 
-    #hProcess = k32.OpenProcess(0x0400, False, pid)
-    #res = k32.FlushInstructionCache( hProcess, 0x7c92b04d, 0x1000 )
     dbg = ped_debug(tid)
 
-    # need to first write 0x7c92a931 at the top of our call stack
-    # the write also needs to return to this address too
-
-    # push a return address onto our stack
     dbg.suspend()
-    
-    res = dbg.get()
-    original, res = (dbg.get(), dbg.get())
-    bottom = original['Ebp']-8
-#    res['Eip'] = 0x7c92b04d
-    res['Eip'] = 0x7c92a931
-    res['Ebp'] = bottom-4
-    res['Esp'] -= 0x4000
+    original = dbg.get()
 
-    res['Ebx'] = bottom - 0x170
-    res['Eax'] = 0xcccccccc
+#    res = dbg.get()
+    top = original['Esp'] - 4
+#    res['Ebp'] = top
+#    res['Esp'] = top - options['stack']
+#    dbg.set(res)
 
-    dbg.suspend()
-    assert dbg.set(res)
-    assert dbg.set(original)
-    dbg.resume()
+    ped_poke(dbg, top+4, stop_address)
 
-    dbg.resume()            # this triggers the hook
+#    dbg.resume()
+#    dbg.set(original)
+###
 
+"""
 bp 0x7c92b04d
-bp 0X7c92b053
+bp 0x7c92b053
+"""

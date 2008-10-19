@@ -21,8 +21,9 @@ link()
     TARGET=$1
     shift
 
-    libs="-L. -luser32 -lkernel32 -lmsvcrt -lwhook"
-	gcc $libs -o "$TARGET" $@
+    #libs="-luser32 -lkernel32 -lmsvcrt -lwhook"
+    libs="-L/c/python24/libs -lkernel32 -luser32 -lmsvcrt -lpython24"
+	gcc -L. $libs -o "$TARGET" $@
     return $?
 }
 
@@ -69,6 +70,9 @@ resolve whook.dll dll whook.o
 
 #resolve blah.o compile blah.c
 #resolve blah.exe link blah.o libwhook.a
+
+resolve python-stub.o assemble python-stub.s
+resolve python-stub.exe link python-stub.o
 
 resolve all build whook.dll dlltest.exe
 resolve clean alltargets
