@@ -169,7 +169,7 @@ hookstub:
     pushl -4(%ebp)
     call *(gpf_Py_DecRef)
 
-    addl $4 + $8, %esp
+    addl $(4+8), %esp
     movl %ebp, %esp
     popa
     ret
