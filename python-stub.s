@@ -63,7 +63,7 @@ gp_registerEip:
 
 gp_testHook:    .string "testHook"
 gp_pythonApplication:
-    .string "def testHook(ctx):\n    print repr(ctx)\n\n\nprint 'hello world'\n"
+    .string "def testHook(ctx):\n    ctx['eip']=666\n    print repr(ctx)\n\n\nprint 'hello world'\n"
 
 ##############################################################################
 .section .text
@@ -111,7 +111,6 @@ hookstub:
 
 ###################
 @@callHook:
-    int3
     movl 0x20(%ebp), %eax
     pushl %eax
     call *(gpf_PyInt_FromLong)
@@ -129,6 +128,7 @@ hookstub:
     pushl $1
     call *(gpf_PyTuple_Pack)
     addl $8, %esp
+    xchgl (%esp), %eax
     pushl %eax
     call *(gpf_PyObject_CallObject)
     addl $8, %esp
@@ -168,9 +168,8 @@ hookstub:
     ## we're done
     pushl -4(%ebp)
     call *(gpf_Py_DecRef)
-    addl $4, %esp
 
-    addl $8, %esp
+    addl $4 + $8, %esp
     movl %ebp, %esp
     popa
     ret

@@ -1,0 +1,37 @@
+debugger api
+    - figure out why the following logic doesn't work:
+
+        suspendthread(thread)
+        setthreadcontext( thread, {eip=wherever, eax=whatever} )
+        resumethread(thread)
+
+        something seems to mangle our context state (%eax, and stuff other than
+        %eip) before we actually execute our specified eip.
+
+
+python stub
+    - clean up this code in order to be remotely injectable
+    - merge with injector utils code
+
+injector utilities
+    - add functions for doing heap management
+    - implement dynamic symbol resolver for providing to python (maybe)
+    - come up with more things that might be useful
+      (like a really low-level profiler (to be less intrusive) )
+
+lde
+    - start this, heh.
+
+python utils
+    - check to see if we can use ctypes for all of this
+    
+    - write code for calling native code for python
+        - cdecl
+        - stdcall
+        - fastcall
+        - thiscall
+        - syscall
+
+documentation
+    - rewrite this TODO so it's not so broken-thoughted. :)
+    - come up with more pieces to this
