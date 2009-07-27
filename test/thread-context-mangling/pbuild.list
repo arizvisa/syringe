@@ -1,0 +1,6 @@
+resolve thread-test-gui.obj mscompile thread-test-gui.c
+resolve thread-test-gui.exe mslink thread-test-gui.obj
+
+resolve thread-test-console.obj mscompile thread-test-console.c
+resolve thread-test-console.exe mslink thread-test-console.obj
+

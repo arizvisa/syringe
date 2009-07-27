@@ -1,0 +1,14 @@
+
+#resolve obj/inject-stub.o assemble src/inject-stub.s
+#resolve test/inject-stub.exe mscompile obj/inject-stub.o
+#
+#resolve obj/thread-test-gui.obj mscompile src/thread-test-gui.c
+#resolve test/thread-test-gui.exe mslink obj/thread-test-gui.obj
+#
+#resolve obj/thread-test-console.obj mscompile src/thread-test-console.c
+#resolve test/thread-test-console.exe mslink obj/thread-test-console.obj
+
+
+. thread-context-mangling/pbuild.list
+. window-hook-mangling/pbuild.list
+. call-export/pbuild.list

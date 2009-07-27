@@ -1,0 +1,2 @@
+resolve dlltest.o compile dlltest.c
+resolve dlltest.exe link dlltest.o

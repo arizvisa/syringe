@@ -1,3 +1,8 @@
+
+###
+#### to fix the issue with window messages being dispatched, we might need to execute code that
+###  calls GetQueueStatus, and then will empty the queue to dispatch them later
+
 # this is the debugger attacher for manipulating a process
 import sys,time
 sys.path.append('lib/')
@@ -132,20 +137,20 @@ def ped_poke(dbg, address, value, options=options):
 
     dbg.set(res)
 
-write_address = 0x7c92b04d
-stop_address = 0x7c92a931
+write_address = 0x7c912dd9
+stop_address = 0x7c940f45
 
 if __name__ == '__main__':
     """
-    .text:7C92B04D 89 83 70 01 00 00                 mov     [ebx+170h], eax
-    .text:7C92B053 5F                                pop     edi
-    .text:7C92B054 5E                                pop     esi
-    .text:7C92B055 5B                                pop     ebx
-    .text:7C92B056 C9                                leave
-    .text:7C92B057 C2 04 00                          retn    4
+    .text:7C912DD9                   loc_7C912DD9:                           ; CODE XREF: .text:7C93C58Aj
+    .text:7C912DD9 8B 46 20                          mov     eax, [esi+20h]
+    .text:7C912DDC 5E                                pop     esi
+    .text:7C912DDD 5B                                pop     ebx
+    .text:7C912DDE 5D                                pop     ebp
+    .text:7C912DDF C2 10 00                          retn    10h
 
-    7c92a931
-    .text:7C92A931 EB FE                             jmp     short 7C92A931
+    .text:7C940F45                   loc_7C940F45:                           ; CODE XREF: LdrpLoadImportModule(x,x,x,x,x):loc_7C940F45j
+    .text:7C940F45 EB FE                             jmp     short loc_7C940F45
 
     #i need to identify what each instruction is capable of reading/writing, and how to save each state for restoration later
     # mov [ memxpr( add(@ebx, 0x170) ) ], register
@@ -172,26 +177,94 @@ if __name__ == '__main__':
 # [5] check that we're at the halt address
 
     tid,address,state,reason = getProcessByName( u'notepad.exe' )
+    print repr( (tid, address, state, reason) )
 #    hooker.disableWindowHooks(tid)
 
     dbg = ped_debug(tid)
 
     dbg.suspend()
     original = dbg.get()
+    print repr(original)
 
-#    res = dbg.get()
-    top = original['Esp'] - 4
+#    top = original['Esp'] - 4
 #    res['Ebp'] = top
 #    res['Esp'] = top - options['stack']
 #    dbg.set(res)
+#    ped_poke(dbg, top+4, stop_address)
 
-    ped_poke(dbg, top+4, stop_address)
+    res = dbg.get()
+    res['Eip'] = stop_address
+    res['Eax'] = 0x0d0e0a0d
+    res['Ebx'] = 0x0d0e0a0d
+    res['Ecx'] = 0x0d0e0a0d
+    res['Edx'] = 0x0d0e0a0d
 
-#    dbg.resume()
+    dbg.set(res)
+
+    dbg.resume()
 #    dbg.set(original)
 ###
 
 """
-bp 0x7c92b04d
-bp 0x7c92b053
+bp 0x7c912dd9
+bp 0x7c940f45
 """
+
+############## enumthread windows
+from ctypes import *
+
+def enumerateThreadWindows(threadId):
+    WNDENUMPROC = WINFUNCTYPE(c_int, c_int, c_long)
+
+    windows = []
+    def enumerator(hWnd, object):
+        windows.append(hWnd)
+        return 1
+
+    res = u32.EnumThreadWindows(threadId, WNDENUMPROC(enumerator), c_void_p(0))
+    assert bool(res)
+
+    return windows
+
+def getLastErrorTuple():
+    errorCode = GetLastError()
+    p_string = c_void_p(0)
+
+    # FORMAT_MESSAGE_
+    ALLOCATE_BUFFER = 0x100
+    FROM_SYSTEM = 0x1000
+    res = k32.FormatMessageA(
+        ALLOCATE_BUFFER | FROM_SYSTEM, 0, errorCode,
+        0, pointer(p_string), 0, None
+    )
+    res = cast(p_string, c_char_p)
+    errorString = str(res.value)
+    res = k32.LocalFree(res)
+    assert res == 0, "kernel32!LocalFree failed. Error 0x%08x."% k32.GetLastError()
+
+    return (errorCode, errorString)
+
+def getLastErrorString():
+    code, string = getLastErrorTuple()
+    return string
+
+def getWindowText(hWnd):
+    buffer = (c_byte*1024)()
+    res = u32.GetWindowTextA( hWnd, pointer(buffer), len(buffer) )
+    assert bool(res), repr(getLastErrorTuple())
+    return ''.join([ chr(x) for x in buffer ][ : res ])
+
+def sendUpdateMessage(hWnd):
+    WM_PAINT = 0x000f   # WinUser.h
+    res = u32.PostMessageA(hWnd, WM_PAINT, 0, 0)
+    if bool(res):
+        print 'WM_PAINT was processed by application'
+    else:
+        print 'WM_PAINT was not processed by application'
+    return True
+
+res = enumerateThreadWindows(tid)
+print repr([hex(x) for x in res])
+print repr([getWindowText(x) for x in res])
+
+res = [ sendUpdateMessage(hwnd) for hwnd in res ]

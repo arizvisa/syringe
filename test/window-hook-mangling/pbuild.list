@@ -1,0 +1,2 @@
+resolve whook.o assemble whook.s
+resolve whook.dll dll whook.o

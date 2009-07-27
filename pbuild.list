@@ -1,9 +1,20 @@
+msGeneralOptions='-nologo'
+msCFlags='-I.'
+msSubsystem='console'
+msLinkFlags='-libpath:. -debug'
+msLinkLibs='kernel32.lib user32.lib gdi32.lib'
+
+CWD=$(pwd)
+
+CFLAGS="-I "
+LDFLAGS=""
+
 compile()
 {
     TARGET=$1
     shift
 
-    gcc -c -o "$TARGET" $@
+    gcc -c $CFLAGS -o "$TARGET" $@
     return $?
 }
 
@@ -40,6 +51,43 @@ dll()
     return $?
 }
 
+elf2coff()
+{
+    TARGET=$1
+    SOURCE=$2
+    shift
+    shift
+
+    objcopy --input-target=elf32-i386 --output-target=coff-i386 "$SOURCE" "$TARGET"
+    test -e "$TARGET"
+    return $?
+}
+
+mscompile()
+{
+    TARGET=$1
+    shift
+    cl.exe -c "-Fo$TARGET" $msGeneralOptions $msCFlags $@
+    return $?
+}
+
+mslibrary()
+{
+    TARGET=$1
+    shift
+    lib.exe -subsystem:$msSubsystem "-out:$TARGET" $msGeneralOptions $msLinkFlags $msLinkLibs $@
+    return $?
+}
+
+mslink()
+{
+    TARGET=$1
+    shift
+    rm -f "$TARGET"
+    link.exe -subsystem:$msSubsystem "-out:$TARGET" $msGeneralOptions $msLinkFlags $msLinkLibs $@
+    return $?
+}
+
 build()
 {
     TARGET=$1
@@ -62,17 +110,16 @@ alltargets()
     return 1
 }
 
-resolve dlltest.o compile dlltest.c
-resolve dlltest.exe link dlltest.o
+#resolve obj/blah.o compile blah.c
+#resolve blah.exe link obj/blah.o libwhook.a
 
-resolve whook.o assemble whook.s
-resolve whook.dll dll whook.o
+resolve obj/python-stub.o assemble src/python-stub.s
+resolve test/python-stub.exe link obj/python-stub.o
 
-#resolve blah.o compile blah.c
-#resolve blah.exe link blah.o libwhook.a
+resolve obj/inject-helper.o assemble src/inject-helper.s
+resolve obj/inject-helper.obj elf2coff obj/inject-helper.o
+resolve obj/inject-test.obj mscompile src/inject-test.c
+resolve inject-test.exe mslink obj/inject-test.obj obj/inject-helper.obj
 
-resolve python-stub.o assemble python-stub.s
-resolve python-stub.exe link python-stub.o
-
-resolve all build whook.dll dlltest.exe
+#resolve all build test/thread-test-gui.exe test/thread-test-console.exe test/inject-stub.exe
 resolve clean alltargets
