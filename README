@@ -1,14 +1,26 @@
-hooker:
+hooker
     * collection of tools intended for manipulating control flow
-    - patching in a farjmp, lifting the code, blah blah
-    - hooking exports
+    - hooking an arbitrary address
+        * patching in a farjmp, lifting the code, blah blah
+            * this will need to be tested out as i've failed to do this via .dvalloc
+                in a generic fashion, but i might suck at managing my thoughts in a debugger
+    - hooking exports (for all modules)
+    - hooking imports for a particular module
+    - hooking heap locks
+    - hooking peb lock
+    - hooking exceptions
+    - hooking module load/unload
+    - hooking thread load/unload
 
 disasm:
-    - rewrite ia32.decode using new length disassembler
-        - import oplength table into python
+    X rewrite ia32.decode using new length disassembler
+        X import oplength table into python
+    - write tests for new implementation of ia32.decode32 (?)
+    - replace generate-table.pl with something better
 
 asm:
     * optional
+    * cody wants this
     - will need some way of emitting instructions
         - perhaps also emitting llvm
 
@@ -39,6 +51,12 @@ loader:
         - load the python dll
             * need to ensure python uses a different heap just in case
 
+-> work/pCOFF.py
+    - provide a dictionary to resolve symbols
+    - output some page of contiguous memory which contains all relocations and all that shit
+    - support linking of multiple object files
+
+-> work/alloc.py
     X memory allocator (page granularity)
     X   allocate_memory
     X       return a pointer to some writeable memory
@@ -50,6 +68,7 @@ loader:
     X   free_memory
     X       deallocate the memory
             
+-> work/inject.py
     - figure out how to provide an interface from the debugger to 
       some of the injected functionality
         - python interpreter
@@ -59,8 +78,12 @@ loader:
             * the memqueue could possibly be stored in Tls or some page
               somewhere
 
+-> work/debug.py
 debugger api
-    - figure out why the following logic doesn't work:
+    x finished implementing attach,detach,read,write
+        * need to have context associated with it
+
+    * figure out why the following logic doesn't work in windows:
 
         suspendthread(thread)
         setthreadcontext( thread, {eip=wherever, eax=whatever} )
@@ -70,19 +93,20 @@ debugger api
         %eip) before we actually execute our specified eip. i suspect it's
         dispatched for window messages by the kernel.
 
-    - finished implementing attach,detach,read,write
-        * need to have context associated with it
 
+-> src/python-stub.s
 python stub
-    - clean up this code in order to be remotely injectable
+    - clean up this code in order to be remotely injectable (??)
     - merge with injector utils code
 
+-> ??
 injector utilities
     - add functions for doing heap management
     - implement dynamic symbol resolver for providing to python (maybe)
     - come up with more things that might be useful
       (like an instruction granularity profiler (to be less intrusive) )
 
+-> ??
 python utils
     - check to see if we can use ctypes for all of this
     
@@ -93,11 +117,12 @@ python utils
         - thiscall
         - syscall
 
-    - ctypesless
-        - implement way for converting to and back from the
-          different ctype structures, essentially we want a
-          native python data structure that doesn't do type checking
-          because we want to shoot ourselves in the foot
+-> work/ctypesless.py
+making ctypes allow non-typesafe stuff
+    - implement way for converting to and back from the
+      different ctype structures, essentially we want a
+      native python data structure that doesn't do type checking
+      because we want to be able to shoot ourselves in the foot
 
 results (or the problems this aims to solve)
     we can arbitrarily instrument any part of the process
