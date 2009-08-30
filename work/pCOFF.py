@@ -1,5 +1,5 @@
-import sys
-sys.path.append('/work/code/ptypes.git')
+#import sys
+#sys.path.append('/work/code/ptypes.git')
 
 import ptypes
 from ptypes import *
@@ -42,6 +42,26 @@ class FileHeader(pStruct):
         (word, 'Characteristics')
     ]
 
+    def getSymbolAndStringTable(self, filedata):
+        '''fetch a 2 element array containing (SymbolTable, StringTable)'''
+        ofs,length = (int(self['PointerToSymbolTable']), int(self['NumberOfSymbols']))
+        stream = iter(filedata[ofs:])
+
+        syms = SymbolTable()
+        syms.totallength = length
+        syms.setOffset(ofs)
+        syms.deserialize(stream)
+        ofs += syms.size()
+
+        strs = StringTable()
+        strs.setOffset(ofs)
+        strs.deserialize(stream)
+
+        res = dyn.array(pStruct, 0, 'SYMBOLANDSTRINGTABLE')()
+        res.append(syms)
+        res.append(strs)
+        return res
+
 class SectionTable(pStruct):
     _fields_ = [
         (dyn.block(8), 'Name'),
@@ -55,6 +75,33 @@ class SectionTable(pStruct):
         (uint16, 'NumberOfLinenumbers'),
         (dword, 'Characteristics'),
     ]
+
+    def getData(self, filedata):
+        '''fetch a block containing the contents of the section'''
+        ofs,length = (int(self['PointerToRawData']), int(self['SizeOfRawData']))
+
+        data = dyn.block(length, name='DATA')()
+        data.setOffset(ofs)
+        data.deserialize(filedata[ofs:ofs+length])
+        return data
+
+    def getRelocations(self, filedata):
+        '''fetch an array containing the Relocations'''
+        ofs,length = (int(self['PointerToRelocations']), int(self['NumberOfRelocations']))
+
+        relocations = dyn.array(Relocation, length)()
+        relocations.setOffset(ofs)
+        relocations.deserialize(filedata[ofs:])
+        return relocations
+
+    def getLinenumbers(self, filedata):
+        '''fetch an array containing the Linenumbers'''
+        ofs,length = (int(self['PointerToLinenumbers']), int(self['NumberOfLinenumbers']))
+
+        linenumbers = dyn.array(LineNumber, length)()
+        linenumbers.setOffset(ofs)
+        linenumbers.deserialize( filedata[ofs:] )
+        return linenumbers
 
 class Relocation(pStruct):
     _fields_ = [
@@ -138,6 +185,7 @@ class IMAGE_SYM_CLASS(pEnum, uint8):
     ]
 
     def getAuxType(self):
+        '''return the pType constructor for the symbol storage class type'''
         res = int(self)
         try:
             res = AuxiliaryRecord.lookupByStorageClass(res)
@@ -151,6 +199,18 @@ class ShortName(pStruct):
         (off_t, 'Offset')
     ]
 
+    def get(self, stringtable):
+        '''resolve the Name of the object utilizing the provided StringTable if necessary'''
+        if int(self['IsShort']) != 0x00000000:
+            res = self.serialize()
+            try:
+                length = res.index('\x00')
+                res = res[:length]
+            except ValueError:
+                pass
+            return res
+        return stringtable.get( int(self['Offset']) )
+
 class Symbol(pStruct):
     _fields_ = [
         (ShortName, 'Name'),
@@ -161,37 +221,25 @@ class Symbol(pStruct):
         (uint8, 'NumberOfAuxSymbols')
     ]
 
-class SymbolTable(pArray):
-    _object_ = None
+class SymbolTableEntry(pStruct):
+    _fields_ = [
+        (Symbol, 'symbol'),
+        (lambda x: dyn.array(x['symbol']['StorageClass'].getAuxType(), x['symbol']['NumberOfAuxSymbols'])(), 'aux')
+    ]
 
-    def deserializeAux(self, iterable, cls, count):
-        iterable = iter(iterable)
-        res = []
-        while count > 0:
-            x = self.newchild(cls)
-            x.deserialize(iterable)
-            res.append(x)
-            count -= 1  
-        return res
+class SymbolTable(pTerminatedArray):
+    _object_ = SymbolTableEntry
+    length = 0
+
+    def isTerminator(self, n):
+        count = len(n['aux'])
+        self.__length += 1+count
+        return not(self.__length < self.totallength)
 
     def deserialize(self, iterable):
-        iterable = iter(iterable)
-        self.value = []
-        length = len(self)
-        
-        while length > 0:
-            res = self.newchild(Symbol)
-            res.deserialize(iterable)
-            self.value.append(res)
-            length -= 1
-
-            count = res['NumberOfAuxSymbols']
-            auxtype = res['StorageClass'].getAuxType()
-
-            res = self.deserializeAux(iterable, res['StorageClass'].getAuxType(), count)
-            self.value.extend(res)
-            length -= len(res)
-        return
+        self.__length = 0
+        super(SymbolTable, self).deserialize(iterable)
+        assert self.__length == self.totallength, '%d != %d | %d'% (self.__length, self.totallength, self.length)
 
 class AuxiliaryRecord(pStruct):
     @classmethod
@@ -269,7 +317,8 @@ class StringTable(pStruct):
         (lambda self: dyn.block(self['Size'] - 4)(), 'Data')
     ]
 
-    def lookupByOffset(self, offset):
+    def get(self, offset):
+        '''return the string associated with a particular offset'''
         data = self.serialize()
         res = data[offset:]
         try:
@@ -280,61 +329,42 @@ class StringTable(pStruct):
         return res
 
 def getFileContents(filename):
-    input = file('../obj/inject-test.obj', 'rb')
+    input = file(filename, 'rb')
     res = input.read()
     input.close()
     return res
 
+class File(pStruct):
+    _fields_ = [
+        (FileHeader, 'Header'),
+        (lambda x: dyn.array( SectionTable, int(x['Header']['NumberOfSections']) )(), 'Sections')
+    ]
+
 if __name__ == '__main__':
-    res = getFileContents('../obj/inject-test.obj')
-    filedata, stream = res, iter(res)
+    filedata = getFileContents('../obj/inject-test.obj')
 
-    header = FileHeader()
-    header.deserialize(stream)
-    print header
+    ## parse the file
+    coff = File()
+    coff.deserialize(filedata)
+    print repr(coff)
 
-    if False:
-        sections = dyn.array( SectionTable, int(header['NumberOfSections']) )()
-        sections.deserialize(stream)
+    ## prove we can get section data
+    print '\n'.join([repr(x) for x in coff['Sections']])
 
-        print '\n'.join([repr(x['Name']) for x in sections])
-        print '\n'.join([repr(x) for x in sections])
+    ## handle relocations(?)
+    sections = coff['Sections']
+    x = sections[-1]
+    relocations = x.getRelocations(filedata)
+    print '\n'.join([repr(x) for x in relocations])
 
-        res = []
-        for x in sections:
-            start = int(x['PointerToRawData'])
-            data = filedata[ start : start + int(x['SizeOfRawData']) ]
-            res.append( (x['Name'].serialize(), data) )
+    ## prove we can view the symbol table
+    symboltable, stringtable = coff['Header'].getSymbolAndStringTable(filedata)
+    print '\n'.join([repr(x) for x in symboltable])
+    print '\n'.join([repr(x['symbol']) for x in symboltable])
+    print '\n'.join([repr(x['aux']) for x in symboltable])
 
-        x = sections[-1]
-        ofs,length = (int(x['PointerToRelocations']), int(x['NumberOfRelocations']))
-        
-        data = filedata[ ofs: ]
-        relocations = dyn.array(Relocation, length)()
-        relocations.deserialize(data)
-        print '\n'.join([repr(x) for x in relocations])
+    ## prove we can view the string table
+    print repr(stringtable)
 
-    ## symbol table shit
-    ofs,length = int(header['PointerToSymbolTable']), int(header['NumberOfSymbols'])
-    data = filedata[ ofs: ]
-
-    stream = iter(data)
-    symboltable = SymbolTable()
-    symboltable.length = length
-    symboltable.deserialize(stream)
-
-    stringtable = StringTable()
-    stringtable.deserialize(stream)
-
-    ## list all long symbol names
-    if False:
-        res = [x for x in symboltable if type(x) is Symbol]
-        res = [x['Name'] for x in res if x['Name']['IsShort'] == 0]
-        res = [int(x['Offset']) for x in res]
-        print repr(res)
-
-        res = [stringtable.lookupByOffset(x) for x in res]
-        print '\n'.join([repr(x) for x in res])
-
-    print '\n------------ '.join([repr(x) for x in symboltable])
-#    print utils.hexdump(stringtable['Data'].serialize())
+    ## prove we can do both
+    print '\n'.join([repr(x['symbol']['Name'].get(stringtable)) for x in symboltable])
