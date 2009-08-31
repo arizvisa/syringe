@@ -9,11 +9,23 @@ config.WIDTH = None
 byte = pByte
 word = pWord
 dword = pDword
+float = int32
+double = pQword
 uint8 = int8 = bigendian(pByte)
 uint16 = int16 = bigendian(pWord)
 uint32 = int32 = bigendian(pDword)
 off_t = bigendian(pDword)
 addr_t = bigendian(pDword)
+
+def strdup(string, terminator='\x00'):
+    '''will convert string to a string ended by terminator'''
+    string = iter(string)
+    res = ''
+    for x in string:
+        if x == char:
+            break
+        res += x
+    return res
 
 class IMAGE_REL_I386(pEnum, uint16):
     _fields_ = [
@@ -28,6 +40,16 @@ class IMAGE_REL_I386(pEnum, uint16):
         ('IMAGE_REL_I386_TOKEN', 0x000C),
         ('IMAGE_REL_I386_SECREL7', 0x000D),
         ('IMAGE_REL_I386_REL32', 0x0014)
+    ]
+
+class IMAGE_COMDAT_SELECT(pEnum, byte):
+    _fields_ = [
+        ('IMAGE_COMDAT_SELECT_NODUPIC', 1),
+        ('IMAGE_COMDAT_SELECT_ANY', 2),
+        ('IMAGE_COMDAT_SELECT_SAME_SIZE', 3),
+        ('IMAGE_COMDAT_SELECT_EXACT_MATCH', 4),
+        ('IMAGE_COMDAT_SELECT_ASSOCIATIVE', 5),
+        ('IMAGE_COMDAT_SELECT_LARGEST', 6)
     ]
 
 ## structs
@@ -202,13 +224,7 @@ class ShortName(pStruct):
     def get(self, stringtable):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
         if int(self['IsShort']) != 0x00000000:
-            res = self.serialize()
-            try:
-                length = res.index('\x00')
-                res = res[:length]
-            except ValueError:
-                pass
-            return res
+            return strdup( self.serialize(), terminator='\x00')
         return stringtable.get( int(self['Offset']) )
 
 class Symbol(pStruct):
@@ -226,6 +242,17 @@ class SymbolTableEntry(pStruct):
         (Symbol, 'symbol'),
         (lambda x: dyn.array(x['symbol']['StorageClass'].getAuxType(), x['symbol']['NumberOfAuxSymbols'])(), 'aux')
     ]
+
+    def __repr__(self):
+        symbol = self['symbol']
+        aux = self['aux']
+
+        symbol = repr(symbol)
+
+        res = [repr(x) for x in aux]
+        auxiliary = '\n'.join(res)
+
+        return '%s %s\n%s\n'% (self.__class__, symbol, auxiliary)
 
 class SymbolTable(pTerminatedArray):
     _object_ = SymbolTableEntry
@@ -298,7 +325,7 @@ class SectionAuxiliaryRecord(AuxiliaryRecord):
         (uint16, 'NumberOfLinenumbers'),
         (dword, 'CheckSum'),
         (word, 'Number'),
-        (byte, 'Selection'),
+        (IMAGE_COMDAT_SELECT, 'Selection'),
         (dyn.block(3), 'Unused')
     ]
 
@@ -319,14 +346,9 @@ class StringTable(pStruct):
 
     def get(self, offset):
         '''return the string associated with a particular offset'''
-        data = self.serialize()
-        res = data[offset:]
-        try:
-            length = res.index('\x00')
-            res = res[:length]
-        except ValueError:
-            pass
-        return res
+        string = self.serialize()
+        string = string[offset:]
+        return strdup(string, terminator='\x00')
 
 def getFileContents(filename):
     input = file(filename, 'rb')
@@ -348,17 +370,18 @@ if __name__ == '__main__':
     coff.deserialize(filedata)
     print repr(coff)
 
+    symboltable, stringtable = coff['Header'].getSymbolAndStringTable(filedata)
+
     ## prove we can get section data
     print '\n'.join([repr(x) for x in coff['Sections']])
 
-    ## handle relocations(?)
-    sections = coff['Sections']
-    x = sections[-1]
-    relocations = x.getRelocations(filedata)
-    print '\n'.join([repr(x) for x in relocations])
+    ## handle relocations(?) for a section
+#    sections = coff['Sections']
+#    x = sections[-1]
+#    relocations = x.getRelocations(filedata)
+#    print '\n'.join([repr(x) for x in relocations])
 
     ## prove we can view the symbol table
-    symboltable, stringtable = coff['Header'].getSymbolAndStringTable(filedata)
     print '\n'.join([repr(x) for x in symboltable])
     print '\n'.join([repr(x['symbol']) for x in symboltable])
     print '\n'.join([repr(x['aux']) for x in symboltable])
@@ -368,3 +391,17 @@ if __name__ == '__main__':
 
     ## prove we can do both
     print '\n'.join([repr(x['symbol']['Name'].get(stringtable)) for x in symboltable])
+
+    ## handle different types of auxiliary records
+    x = symboltable[5]
+    print repr(x)
+
+    print x['symbol']['Name'].get(stringtable)
+
+    ## FileAuxiliaryRecord
+    filename = strdup( x['aux'].serialize() )
+
+    ## SectionAuxiliaryRecord
+    section = coff['Sections'][ int(x['symbol']['SectionNumber'])-1 ]
+    # XXX: calculate checksum
+
