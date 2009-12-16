@@ -10,11 +10,9 @@ from win32context import *
 ##    3] freeExecutable(newaddress, length)
 ##    4] freeWriteable(address, length)
 
-class OSPageAllocator(object):
-    def attach(self, id):
-        raise NotImplementedError
-    def detach(self):
-        raise NotImplementedError
+class OSExecPageAllocator(object):
+    def __init__(self, id):
+        self.id = id
 
     def getWriteable(self, desiredAddress, count, **attrs):
         '''
@@ -46,17 +44,16 @@ class OSPageAllocator(object):
         raise NotImplementedError
 
 ############################ platform specific shit
-# XXX: this is prototype code, but we can optimize it by removing the
+# XXX: this is prototype code, but we can "optimize" (heh) it by removing the
 #      virtualprotect calls.
 
-class WindowPageAllocator(OSPageAllocator):
-    handle = None
-    def attach(self, handle):
-        # XXX: should we duplicatehandle this?
-        self.handle = handle
+import utils
+class Windows(OSExecPageAllocator):
+    handle = int
 
-    def detach(self, handle):
-        self.handle = None
+    def __init__(self, debugger):
+        super(Windows, self).__init__(debugger)
+        self.handle = self.id.process.handle
 
     def getPageSize(self):
         return 1<<12
@@ -70,6 +67,8 @@ class WindowPageAllocator(OSPageAllocator):
             MEM_COMMIT,
             PAGE_READWRITE
         )
+        if not res:
+            raise OSError("GetLastError() -> %s"% (repr(utils.getLastErrorTuple())))
         return res
 
     def getExecutable(self, address, count, **attrs):
@@ -82,11 +81,13 @@ class WindowPageAllocator(OSPageAllocator):
             PAGE_EXECUTE,
             byref(oldProtections)
         )
+        if not res:
+            raise OSError("GetLastError() -> %s"% (repr(utils.getLastErrorTuple())))
         return address
 
-    def freeWriteable(self, address, count, **attrs):
+    def freeExecutable(self, address, count, **attrs):
         oldProtections = DWORD()
-        
+
         res = k32.VirtualProtectEx(
             self.handle,
             address,
@@ -94,9 +95,11 @@ class WindowPageAllocator(OSPageAllocator):
             PAGE_EXECUTE,
             byref(oldProtections)
         )
+        if not res:
+            raise OSError("GetLastError() -> %s"% (repr(utils.getLastErrorTuple())))
         return res != 0
 
-    def freeExecutable(self, address, count, **attrs):
+    def freeWriteable(self, address, count, **attrs):
         MEM_DECOMMIT = 0x4000
 
         res = k32.VirtualFreeEx(
@@ -105,8 +108,10 @@ class WindowPageAllocator(OSPageAllocator):
             count * 0x1000,
             MEM_DECOMMIT
         )
+        if not res:
+            raise OSError("GetLastError() -> %s"% (repr(utils.getLastErrorTuple())))
         return res != 0
 
-def getPageAllocator():
-    return WindowPageAllocator()
+def Default(*args, **kwds):
+    return Windows(*args, **kwds)
 

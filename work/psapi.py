@@ -1,6 +1,9 @@
 import ctypes
 import win32com.client as com
 
+# FIXME: the attach/detach interface is lame
+#        i need to remove this dependency on pywin32, and use comtypes instead
+
 class psapi(object):
     def attach(self, id, **attrs):
         raise NotImplementedError

@@ -34,10 +34,10 @@ loader:
             X perhaps the lde code too
                 * we can hook ourself now
 
-    - injection
-        - virtual alloc some space
-        - writeprocessmem python code
-        - setthreadcontext address of virtual alloc
+    X injection
+        X memorymanager.alloc some space
+        X writeprocessmem python code
+        X setthreadcontext address of virtual alloc
 
     - first stub for injection
         * i'll need to double-check how much this will tamper with it
@@ -52,7 +52,7 @@ loader:
             * need to ensure python uses a different heap just in case
 
 -> work/pCOFF.py
-    - provide a dictionary to resolve symbols
+    X provide a dictionary to resolve symbols
     - output some page of contiguous memory which contains all relocations and all that shit
     - support linking of multiple object files
 
@@ -101,7 +101,7 @@ python stub
 
 -> ??
 injector utilities
-    - add functions for doing heap management
+    X add functions for doing heap management
     - implement dynamic symbol resolver for providing to python (maybe)
     - come up with more things that might be useful
       (like an instruction granularity profiler (to be less intrusive) )

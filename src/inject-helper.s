@@ -130,7 +130,7 @@ _loader:
     # write our old esp there, and switch stack
     movl %esp, (%edx)
     movl %edx, %esp         # woo, 7 slots of stack
-    #movl $topStack, %esp
+#    movl $topStack, %esp
 
 ####### lvl 0 stack is initialized
 
@@ -141,6 +141,8 @@ kernel32_unicode:
     #movl $kernel32_unicode, %ebp
     popl %ebp
 
+breakhere:
+    int3
 ####### find the base address for kernel32.dll -> %ebx
     # look through initializationorder list
     # %edx == PEB.Ldr.InInitializationOrderLinks
@@ -171,6 +173,7 @@ kernel32_unicode:
     .word 0x01cd
 
 2:
+
 ####### set %edx to import table address of module in %ebx
 #### XXX: need to not trash esp with this code
     movl 0x18(%ebx), %ebx   # module's base address

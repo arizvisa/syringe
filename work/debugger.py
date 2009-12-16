@@ -111,6 +111,11 @@ class win32process(debug):
         self.handle = handle
         self.id = id
 
+        res = k32.DebugSetProcessKillOnExit(False)
+        if res == 0:
+            __import__('warnings').warn('Unable to set process kill on exit')
+
+
     def detach(self):
         id = self.id
 
@@ -145,7 +150,7 @@ class win32process(debug):
 
         res = k32.WriteProcessMemory(self.handle, address, Buffer, len(value), byref(NumberOfBytesWritten)) 
         if res == 0:
-            raiseW32Error('Unable to write to pid(%x)[%08x:%08x].'% (id, address, address+len(value)))
+            raiseW32Error('Unable to write to pid(%x)[%08x:%08x].'% (self.id, address, address+len(value)))
 
         #assert NumberOfBytesWritten.value == length, 'Expected %d bytes, received %d bytes.'% (length, NumberOfBytesWritten.value)
 
@@ -171,10 +176,16 @@ class win32debug(debug):
         self.process = self.thread = None
 
     def read(self, address, length):
-        return self.process.read(address, length)
+        if length > 0:
+            return self.process.read(address, length)
+        #warn('Refused read of 0 bytes from %x'% address)
+        return ''
 
     def write(self, address, value):
-        return self.process.write(address, value)
+        if len(value) > 0:
+            return self.process.write(address, value)
+        #warn('Refused write of 0 bytes to %x'% address)
+        return 0
 
     def setcontext(self, context):
         return self.thread.setcontext(context.me)
@@ -206,5 +217,11 @@ class win32debug(debug):
         # should not fail
         return True
 
-def getDebugger():
+    def suspend(self):
+        return self.thread.suspend()
+
+    def resume(self):
+        return self.thread.resume()
+
+def Default(*args, **kwds):
     return win32debug()

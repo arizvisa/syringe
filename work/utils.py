@@ -68,17 +68,17 @@ def hexdump(value, offset=0, length=16, **kwds):
     return '\n'.join(res)
 
 def getLastErrorTuple():
-    errorCode = GetLastError()
-    p_string = c_void_p(0)
+    errorCode = k32.GetLastError()
+    p_string = ctypes.c_void_p(0)
 
     # FORMAT_MESSAGE_
     ALLOCATE_BUFFER = 0x100
     FROM_SYSTEM = 0x1000
     res = k32.FormatMessageA(
         ALLOCATE_BUFFER | FROM_SYSTEM, 0, errorCode,
-        0, pointer(p_string), 0, None
+        0, ctypes.pointer(p_string), 0, None
     )
-    res = cast(p_string, c_char_p)
+    res = ctypes.cast(p_string, ctypes.c_char_p)
     errorString = str(res.value)
     res = k32.LocalFree(res)
     assert res == 0, "kernel32!LocalFree failed. Error 0x%08x."% k32.GetLastError()
@@ -88,3 +88,4 @@ def getLastErrorTuple():
 def getLastErrorString():
     code, string = getLastErrorTuple()
     return string
+

@@ -1,17 +1,19 @@
 import sys,time
-sys.path.append('lib/')
-sys.path.append('work/')
 import utils
 
-import debug,alloc,psapi
+import debugger,memorymanager,psapi
 from ctypes import *
 
 # TODO:
 # X remotely allocate/deallocate memory
-#    ? abstract this to a memqueue interface
-# 
+#    v abstract this to a memqueue interface
+#    X implemented phk-like malloc in memorymanager.py
+
 #we need a better way to load code
-#    can use loadlibrary perhaps
+# X  can use loadlibrary perhaps
+#   X wrote a linker for coff objects
+#
+
 #we need some code for a generic breakpoint so that we
 #    can "signal" the management process.
 
@@ -47,37 +49,4 @@ def sendUpdateMessage(hWnd):
     else:
         print 'WM_PAINT was not processed by application'
     return True
-
-if __name__ == '__main__':
-
-    ps = psapi.getInterface()
-    ps.attach()
-    processId = getProcessIdByName(ps, 'calc.exe')
-    x = ps.enumerateThreads(processId)
-    
-    threadId = x[0][0]
-    dbg = debug.getDebugger()
-    dbg.enablePrivileges()
-    dbg.attach(threadId)
-
-    allocator = alloc.getPageAllocator()
-    allocator.attach(dbg.process.handle)
-
-#    v = allocator.getWriteable(None, 64)
-#    allocator.freeWriteable(v, 64)
-
-    ctx = dbg.getcontext()
-    #ctx['Esp'] = v + 60*0x1000
-    #print '%x'%ctx['Esp']
-    #l = dbg.setcontext(ctx)
-# 0xaa0000
-
-    v = allocator.getWriteable(None, 1)
-    res = dbg.write(v, "hi there.")
-    print 'wrote %d bytes to %x'% (res, v)
-
-    #address = allocator.getExecutable(v, 4)
-    #print '%x'% address
-    #print utils.hexdump(v, offset=0x1012475)
-    dbg.detach()
 
