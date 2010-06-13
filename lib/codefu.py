@@ -1,6 +1,12 @@
+# should rename this to libfu
+# that way fn_clone, module_clone, etc can be implemented with a sane naming scheme
+
 instancemethod = type(Exception.__str__)
 function = type(lambda:False)
 code = type(eval('lambda:False').func_code)
+module = __import__(__name__).__class__
+generator = type( (x for x in []) )
+builtin = type(zip)
 
 ## representing certain types
 def fn_repr(fn):

@@ -131,53 +131,34 @@
         </xsl:choose>
     </xsl:template>
 
+    <xsl:template name="operandtype">
+        <xsl:choose>
+            <xsl:when test="descendant::a">
+                <xsl:call-template name="translateAddressString">
+                    <xsl:with-param name="string" select="descendant::a/text()" />
+                </xsl:call-template>
+            </xsl:when>
+        </xsl:choose>
+    </xsl:template>
+
+    <xsl:template name="operandsize">
+        <xsl:choose>
+            <xsl:when test="descendant::t">
+                <xsl:call-template name="translateTypeString">
+                    <xsl:with-param name="string" select="descendant::t/text()" />
+                </xsl:call-template>
+            </xsl:when>
+        </xsl:choose>
+    </xsl:template>
+
     <xsl:template mode="syntax" match="syntax[1]">
         <mnemonic><xsl:value-of select="mnem" /></mnemonic>
-
-        <xsl:variable name="address">
-            <xsl:choose>
-                <xsl:when test="src[1]/descendant::a">
-                    <xsl:value-of select="src[1]/a/text()" />
-                </xsl:when>
-                <xsl:when test="dst[1]/descendant::a">
-                    <xsl:value-of select="dst[1]/a/text()" />
-                </xsl:when>
-            </xsl:choose>
-        </xsl:variable>
-
-        <xsl:variable name="type">
-            <xsl:choose>
-                <xsl:when test="src[1]/descendant::t">
-                    <xsl:value-of select="src[1]/t/text()" />
-                </xsl:when>
-                <xsl:when test="dst[1]/descendant::t">
-                    <xsl:value-of select="dst[1]/t/text()" />
-                </xsl:when>
-            </xsl:choose>
-        </xsl:variable>
-
-
-        
-        <xsl:if test="src[1]/descendant::a or dst[1]/descendant::a">
+        <xsl:for-each select="src|dst">
             <operand>
-                <xsl:call-template name="translateAddressString">
-                    <xsl:with-param name="string" select="src[1]/a/text()" />
-                </xsl:call-template>
+                <type><xsl:call-template name="operandtype" /></type>
+                <size><xsl:call-template name="operandsize" /></size>
             </operand>
-        </xsl:if>
-        <!--xsl:if test="dst[1]/descendant::a">
-            <operand>
-                <xsl:call-template name="translateAddressString">
-                    <xsl:with-param name="string" select="dst[1]/a/text()" />
-                </xsl:call-template>
-            </operand>
-        </xsl:if-->
-
-        <size>
-            <xsl:call-template name="translateTypeString">
-                <xsl:with-param name="string" select="$type" />
-            </xsl:call-template>
-        </size>
+        </xsl:for-each>
     </xsl:template>
 
     <xsl:template name="new-entry">
@@ -215,8 +196,7 @@
         <xsl:param name="opc_value" required="yes" />
 
         <xsl:for-each select="entry[
-            not(@attr='invd' or @attr='undef' or @mode='e' or grp1/text() = 'prefix') and
-            (@doc='d') and not(descendant::sec_opcd)
+            not(@attr='invd' or @attr='undef' or @mode='e' or grp1/text() = 'prefix') and not(descendant::sec_opcd)
             ]">
 
             <xsl:sort select="number(proc_start) or number(00)" data-type="number" order="descending"/>

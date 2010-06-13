@@ -1,0 +1,27 @@
+# This depends on saxon [http://saxon.sourceforge.net/] in order to build
+
+transform()
+{
+    TARGET=$1
+    XSLT=$2
+    SOURCE=$3
+    shift 3
+
+    Transform -s:$SOURCE -xsl:$XSLT -o:$TARGET
+    # XXX: this might not return true on success
+    return $?
+}
+
+generate()
+{
+    TARGET=$1
+    SOURCE=$2
+    shift 2
+
+    perl generate-table.pl < $SOURCE >| $TARGET
+    return $?
+}
+
+resolve operand-table.xml transform generate-table.xslt test.xml
+#resolve operand-table.xml transform generate-table.xslt x86reference.xml
+resolve _optable.py generate operand-table.xml

@@ -1,7 +1,8 @@
-<?xml version="1.0" encoding="ISO-8859-1"?>
+<?xml version="1.0" encoding="UTF-8"?>
 
 <!-- Visit http://ref.x86asm.net -->
-<!-- For version information see x86reference.xml -->
+
+<!-- revision 1.11 -->
 
  <!-- Elements -->
 
@@ -48,10 +49,6 @@
 <!ELEMENT ring_note	EMPTY>
 
  <!-- 4th level-->
-
- <!-- value: the value of primary opcode itself -->
-
-<!ELEMENT value		(#PCDATA)>
 
  <!-- entry: wraps all informations about single opcode extension, -->
  <!-- single mod variant {to be revised} and single semantic (i.e. single -->
@@ -112,6 +109,7 @@
  10 - Pentium 4
  11 - Core 1
  12 - Core 2
+ 13 - Core i7
  99 - Itanium
  -->
 
@@ -159,11 +157,9 @@
 
 <!ELEMENT f_vals_fpu	(#PCDATA)>
 
- <!-- note: description and notes -->
+ <!-- note: description and notes (brief and detailed) -->
 
-<!ELEMENT note 		(#PCDATA|sup|sub)*>
-
- <!-- 6th level -->
+<!ELEMENT note 			(brief, det?)>
 
  <!-- syntax: instruction syntax; there may be more syntaxes for one -->
  <!-- opcode; the syntax may be empty -->
@@ -173,7 +169,10 @@
 			dst*,
 			src*)>
 
- <!-- 7th level -->
+<!ELEMENT brief		(#PCDATA|sup|sub)*>
+<!ELEMENT det		(#PCDATA|op1|op2|op3|op4)*>   <!-- op* intended for future use -->
+
+ <!-- 6th level -->
 
  <!-- mnem: instruction mnemonic -->
 
@@ -187,12 +186,17 @@
 
 <!ELEMENT src 		(#PCDATA|a|t)*>
 
- <!-- note/sup and note/sub: superscript and subscript -->
+ <!-- note/brief/sup and note/brief/sub: superscript and subscript -->
 
 <!ELEMENT sup		(#PCDATA)>
 <!ELEMENT sub		(#PCDATA)>
 
- <!-- 8th level -->
+<!ELEMENT op1		EMPTY>
+<!ELEMENT op2		EMPTY>
+<!ELEMENT op3		EMPTY>
+<!ELEMENT op4		EMPTY>
+
+ <!-- 7th level -->
 
 <!ELEMENT a		(#PCDATA)>
 <!ELEMENT t		(#PCDATA)>
@@ -216,11 +220,12 @@
 
 <!ATTLIST pri_opcd	value			NMTOKEN			#REQUIRED>
 
- <!-- proc_start@post: is valid also on posterior processors?  -->
- <!-- proc_start@lat_step: is valid only in latter steppings of the processor?  -->
+ <!-- DEPRECATED since 1.11, unnecessary, will be removed in future:
+      proc_start@post: is valid also on posterior processors? -->
+ <!-- proc_start@lat_step: is valid only in latter steppings of the processor? -->
 
-<!ATTLIST proc_start	post			(yes|no)		"yes">
-<!ATTLIST proc_start	lat_step		(yes|no) 		"no">
+<!ATTLIST proc_start	post			(no)			#IMPLIED>   <!-- "yes" is implied -->
+<!ATTLIST proc_start	lat_step		(yes) 			#IMPLIED>   <!-- "no" is implied -->
 
  <!-- entry -->
  <!-- - bit fields present in the primary opcode -->
@@ -292,14 +297,17 @@
 						1100|1101|1110|1111
 						)				#IMPLIED>
 <!ATTLIST entry		mem_format		(00|01|10|11)			#IMPLIED>
-<!ATTLIST entry		r			(yes|no)			"no">
-<!-- since 1.01 implied -->
+
+<!ATTLIST entry		r			(yes)				#IMPLIED>   <!-- "no" is implied -->
+
 <!ATTLIST entry		mod			(nomem|mem)			#IMPLIED>
 <!ATTLIST entry		ref			IDREF				#IMPLIED>
 <!ATTLIST entry		alias			NMTOKEN				#IMPLIED>
 <!ATTLIST entry		part_alias 		NMTOKEN				#IMPLIED>
 <!ATTLIST entry		doc_part_alias_ref	IDREF				#IMPLIED>
-<!ATTLIST entry		lock			(yes|no)			"no">
+
+<!ATTLIST entry		lock			(yes)				#IMPLIED>   <!-- "no" is implied -->
+
 <!ATTLIST entry		attr			(
 						invd|
 						undef|
@@ -311,37 +319,41 @@
 						delaysint|
 						delaysint_cond
 						)				#IMPLIED>
-<!ATTLIST entry		doc			(d|m|u)				"d">
+
+<!ATTLIST entry		doc			(m|u)				#IMPLIED>   <!-- "d" is implied -->
+
+<!-- is_doc, is_undoc new in 1.02.dev1 -->
+<!ATTLIST entry		is_doc			(yes)				#IMPLIED>   <!-- "no" is implied -->
+<!ATTLIST entry		is_undoc		(yes)				#IMPLIED>   <!-- "no" is implied -->
+
 <!ATTLIST entry		doc_ref			IDREF				#IMPLIED>
 <!ATTLIST entry		doc1632_ref		IDREF				#IMPLIED>
 <!ATTLIST entry		doc64_ref		IDREF				#IMPLIED>
 <!ATTLIST entry		ring			(3|2|1|0|f)			#IMPLIED>
 <!ATTLIST entry		ring_ref		IDREF				#IMPLIED>
-<!ATTLIST entry		mode			(r|p|e|s)			#IMPLIED>
+<!ATTLIST entry		mode			(p|e|s)				#IMPLIED>   <!-- "r" is implied -->
 <!ATTLIST entry		fpop			(once|twice)			#IMPLIED>
 <!ATTLIST entry		fpush			(yes)				#IMPLIED>
-<!ATTLIST entry		particular		(yes|no)			"no">
+
+<!ATTLIST entry		particular		(yes)				#IMPLIED>   <!-- "no" is implied -->
 
   <!-- sec_opcd@escape="yes" indicates three-byte escapes -->
 
-<!ATTLIST sec_opcd	escape			(yes|no)			#IMPLIED>
+<!ATTLIST sec_opcd	escape			(yes)				#IMPLIED>   <!-- "no" is implied -->
 
  <!-- syntax@mod: similar to entry@mod, enables easier definition of -->
  <!-- syntaxes when the instruction acts the same but uses different -->
  <!-- syntaxes -->
 
-<!-- since 1.01 implied -->
 <!ATTLIST syntax	mod			(nomem|mem)			#IMPLIED>
 
 <!ATTLIST note		short			IDREF				#IMPLIED>
 
  <!--  mnem@sug: author's suggestion in case of no oficial mnemonic -->
 
-<!ATTLIST mnem		sug			(yes|no)			"no">
+<!ATTLIST mnem		sug			(yes)				#IMPLIED>   <!-- "no" is implied -->
 
  <!-- src and dst: -->
- <!-- note that meaning of presence of any @nr, @group, @type or @address attribute is -->
- <!-- that the operand is implicit --> 
  <!-- @nr: in case of direct register operand, its hardware number, if any -->
  <!-- @group: in case of direct register operand, its group -->
  <!-- @type: in case of direct register operand, its type code, if explicitly needed -->
@@ -350,24 +362,25 @@
  <!-- @displayed: is the implicit operand displayed within the syntax? -->
 
 <!ATTLIST src		nr			NMTOKEN				#IMPLIED>
-<!ATTLIST src		group			(gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug) #IMPLIED>
+<!ATTLIST src		group			(gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug|xcr) #IMPLIED>
 <!ATTLIST src		type			NMTOKEN				#IMPLIED>
-<!ATTLIST src		address			(F|I|S2|S33|EST)		#IMPLIED>
-<!ATTLIST src		depend			(yes|no)			"yes">
-<!ATTLIST src		displayed		(yes|no)			"yes">
+<!ATTLIST src		address			(BA|BB|F|I|X|Y|S2|S33|EST|SC)	#IMPLIED>
+<!ATTLIST src		depend			(no)				#IMPLIED>   <!-- "yes" is implied -->
+<!ATTLIST src		displayed		(no)				#IMPLIED>   <!-- "yes" is implied -->
+
+<!-- -->
 
 <!ATTLIST dst		nr			NMTOKEN				#IMPLIED>
-<!ATTLIST dst		group			(gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug) #IMPLIED>
+<!ATTLIST dst		group			(gen|mmx|xmm|seg|x87fpu|ctrl|systabp|msr|debug|xcr) #IMPLIED>
 <!ATTLIST dst		type			NMTOKEN				#IMPLIED>
-<!ATTLIST dst		address			(F|S2|S30|S33|EST)		#IMPLIED>
-<!ATTLIST dst		depend			(yes|no)			"yes">
-<!ATTLIST dst		displayed		(yes|no)			"yes">
+<!ATTLIST dst		address			(BD|F|X|Y|S2|S30|S33|EST|SC)	#IMPLIED>
+<!ATTLIST dst		depend			(no)				#IMPLIED>   <!-- "yes" is implied -->
+<!ATTLIST dst		displayed		(no)				#IMPLIED>   <!-- "yes" is implied -->
 
  <!-- test_f, modif_f, def_f, and undef_f -->
  <!-- @cond: the flags apply only under further conditions -->
 
-<!ATTLIST test_f	cond			(yes|no)			"no">
-<!ATTLIST modif_f	cond			(yes|no)			"no">
-<!ATTLIST def_f		cond			(yes|no)			"no">
-<!ATTLIST undef_f	cond			(yes|no)			"no">
-
+<!ATTLIST test_f	cond			(yes)			#IMPLIED>   <!-- "no" is implied -->
+<!ATTLIST modif_f	cond			(yes)			#IMPLIED>   <!-- "no" is implied -->
+<!ATTLIST def_f		cond			(yes)			#IMPLIED>   <!-- "no" is implied -->
+<!ATTLIST undef_f	cond			(yes)			#IMPLIED>   <!-- "no" is implied -->

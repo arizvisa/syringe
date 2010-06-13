@@ -1,178 +1,206 @@
-OperandLookupTable = ''.join([
-        '\x81\xbd\x81\xbd\x41\x7d\x00\x00\x81\xbd\x81\xbd\x41\x7d\x00\x00',
-        '\x81\xbd\x81\xbd\x41\x7d\x00\x00\x81\xbd\x81\xbd\x41\x7d\x00\x00',
-        '\x81\xbd\x81\xbd\x41\x7d\x00\x00\x81\xbd\x81\xbd\x41\x7d\x00\x00',
-        '\x81\xbd\x81\xbd\x41\x7d\x00\x00\x81\xbd\x81\xbd\x00\x00\x00\x00',
-        '\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d',
-        '\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d',
-        '\x00\x00\xbd\x82\x00\x00\x00\x00\x7d\xbd\x41\xbd\x01\x02\x01\x02',
-        '\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41\x41',
-        '\xc1\xfd\xc1\xc1\x81\xbd\x81\xbd\x81\xbd\x81\xbd\x82\xbd\xbd\xbd',
-        '\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x00\x00\x7a\x00\x00\x00\x00\x00',
-        '\x41\x7d\x41\x7d\x01\x02\x01\x02\x00\x00\x01\x02\x01\x02\x01\x02',
-        '\x41\x41\x41\x41\x41\x41\x41\x41\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d',
-        '\xc1\xc1\x42\x00\xba\xba\xc1\xfd\x42\x00\x42\x00\x00\x41\x00\x00',
-        '\x81\xbd\x81\xbd\x41\x41\x00\x01\x84\x84\x84\x84\x84\x84\x82\x82',
-        '\x41\x41\x41\x41\x41\x41\x41\x41\x7d\x7d\x7a\x41\x00\x00\x00\x00',
-        '\x00\x00\x00\x00\x00\x00\x81\xbd\x00\x00\x00\x00\x00\x00\x81\xbd',
-        '\x82\x84\x82\x82\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
-        '\x84\x84\x88\x88\x88\x88\x88\x88\x81\x00\x00\x00\x00\x00\x00\xbd',
-        '\x84\xbc\x84\xbc\x84\x00\x84\x00\x84\x84\x88\x84\x84\x84\x84\x84',
-        '\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00',
-        '\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd\xbd',
-        '\x84\x84\x84\x84\x84\x84\x84\x84\x84\x84\x84\x90\x84\x84\x84\x84',
-        '\x84\x84\x84\x84\x84\x84\x84\x88\x88\x88\x88\x88\x90\x90\x84\x88',
-        '\x88\xc1\xc1\xc1\x88\x88\x88\x00\x00\x00\x00\x00\x84\x84\x88\x88',
-        '\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d\x7d',
-        '\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81\x81',
-        '\x00\x00\x00\xbd\xbd\xbd\x00\x00\x00\x00\x00\xbd\xbd\xbd\x84\xbd',
-        '\x81\xbd\xba\xbd\xba\xba\x81\x82\x00\x00\xbd\xbd\xbd\xbd\x81\x82',
-        '\x81\xbd\x84\xbc\xbc\x88\x84\x88\x3d\x3d\x3d\x3d\x3d\x3d\x3d\x3d',
-        '\x84\x88\x88\x88\x88\x88\x88\x88\x88\x88\x88\x84\x88\x88\x88\x88',
-        '\x88\x88\x88\x88\x88\x88\x84\x88\x88\x88\x88\x88\x88\x88\x88\x88',
-        '\x90\x88\x88\x88\x88\x84\x88\x88\x88\x88\x88\x88\x88\x88\x88\x00',
-])
+import decoder
+from decoder import isprefix,consume
+import optable
+lookup = optable.Lookup
 
-## our sizes
-wordsize = 4
-halfwordsize = wordsize/2
-bytesize = halfwordsize/1
+decode = lambda string: consume(iter(string))
 
-prefixes = "\x26\x2e\x36\x3e\x64\x65\x66\x67\xf0\xf2\xf3"
-def getPrefixes(string):
-    '''given a string, return the prefixes part of the instruction'''
-    ## XXX: i'm pretty sure the intel arch only allows a certain number of prefixes
-    res = ''
-    for x in string:
-        if x in prefixes:
-            res += x
-            continue
-        break
-    return res
+def disassemble(codeblock):
+    result = []
+    code = iter(codeblock)
+    try:
+        while True:
+            result.append( consume(code) )
 
-def opcodeLookup(instruction):
-    '''given an instruction, return the result of the table lookup'''
-    res = ord(instruction[0])
-    if res == 0x0f:
-        res = ord(instruction[1])
-        return OperandLookupTable[res+0x100]
-    return OperandLookupTable[res]
+    except StopIteration:
+        pass
 
-def operandHasModrm(v):
-    return bool(ord(v[0]) & 0x80)
-def operandHasImmediate(v):
-    return bool(ord(v[0]) & 0x40)
-def operandGetImmediate(string, lookup, prefixes):
-    res = ord(lookup) & 0x3f
+    return result
 
-    opsizeindex = not int('\x66' in prefixes)
+def new():
+    return ('','','','','','')
+def length(instruction):
+    return len(''.join(instruction))
 
-    if res == 0x3f:    # it sucks because i know python has such a horrible optimizer, and i need to redo this as a dict for that reason
-        size = [ 2*halfwordsize, 2*wordsize ][opsizeindex]
-    elif res == 0x3e:
-        size = [ bytesize, halfwordsize ][opsizeindex]
-    elif res == 0x3d:
-        size = [ halfwordsize, wordsize ][opsizeindex]
-    elif res == 0x3c:
-        size = [ wordsize, wordsize*2][opsizeindex]
-    elif res == 0x3b:
-        size = [ wordsize*2, halfwordsize ][opsizeindex]
-    elif res == 0x3a:
-        size = [ halfwordsize + wordsize, wordsize ][opsizeindex]
-    else:
-        size = res
+#instruction = (prefix, opcode, modrm, sib, disp, immediate)
+def getPrefix(instruction): return instruction[0]
+def getOpcode(instruction): return instruction[1]
+def getModrm(instruction): return instruction[2]
+def getSIB(instruction): return instruction[3]
+def getDisplacement(instruction): return instruction[4]
+def getImmediate(instruction): return instruction[5]
 
-    return string[:size]
+#instruction = (prefix, opcode, modrm, sib, disp, immediate)
+def setPrefix(instruction, value):
+    n = instruction
+    return (value, n[1], n[2], n[3], n[4], n[5])
+def setOpcode(instruction, value):
+    n = instruction
+    return (n[0], value, n[2], n[3], n[4], n[5])
+def setModrm(instruction, value):
+    n = instruction
+    return (n[0], n[1], value, n[3], n[4], n[5])
+def setSIB(instruction, value):
+    n = instruction
+    return (n[0], n[1], n[2], value, n[4], n[5])
+def setDisplacement(instruction, value):
+    n = instruction
+    return (n[0], n[1], n[2], n[3], value, n[5])
+def setImmediate(instruction, value):
+    n = instruction
+    return (n[0], n[1], n[2], n[3], n[4], value)
 
-def getInstruction(string):
-    '''return the full opcodes (up to 2 bytes)'''
-    res = string[0]
-    if res == '\x0f':
-        res += string[1]
-    return res
+def isInstruction(value):
+    '''returns true if provided a valid instruction'''
+    return type(value) is tuple and len(value) == 6
 
-## prefixes, opcode, modrm, sib, disp, imm
-def decode32(string):
-    '''given a string to some bytecode, will return a tuple of (prefix, instruction, modrm, disp, sib, immediate)'''
-    prefixes = getPrefixes(string)
-    string = string[len(prefixes):]
+def isConditionalBranch8(instruction):
+    opcode = getOpcode(instruction)
+    if len(opcode) == 1:
+        ch = ord(opcode[0])
+        return ch & 0xf0 == 0x70
+    return False
 
-    instruction = getInstruction(string)
-    string = string[len(instruction):]
+def isConditionalBranch32(instruction):
+    opcode = getOpcode(instruction)
+    if len(opcode) == 2:
+        ch = ord(opcode[1])
+        return ch & 0xf0 == 0x80
+    return False
 
-    lookup = opcodeLookup(instruction)
+def isConditionalBranch(instruction):
+    return isConditionalBranch8(instruction) or isConditionalBranch32(instruction)
 
-    # initialize all results
-    modrm, sib, disp, imm = ('', '', '', '')
+## regular branches
+def isUnconditionalBranch8(instruction):
+    '''jmp Jb'''
+    return getOpcode(instruction) == '\xeb'
+def isUnconditionalBranch32(instruction):
+    '''jmp Jz'''
+    return getOpcode(instruction) == '\xe9'
+def isUnconditionalBranch(instruction):
+    return isUnconditionalBranch8(instruction) or isUnconditionalBranch32(instruction)
 
-    if operandHasModrm(lookup):
-        modrm = string[0]
-        string = string[1:]
+def isJmpFF(instruction):
+    opcode = getOpcode(instruction)
+    if opcode == '\xff':
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return reg in [4,5]
+    return False
+def isShortJmp(instruction):
+    opcode = getOpcode(instruction)
+    if opcode == '\xff':
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return reg == 4
+    return False
+def isFarJmp(instruction):
+    opcode = getOpcode(instruction)
+    if opcode == '\xff':
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return reg == 5
+    return False
 
-        if '\x67' not in prefixes:
-            # get sib
-            res = ord(modrm)
-            mod,reg,rm = ((res&0xc0) >> 6, (res&0x38) >> 3, (res&7) >> 0)
-            if mod < 3 and rm == 4:
-                sib = string[0]
-                string = string[1:]
+### XXX: these branch tests will need to be tested
+def isRegisterBranch(instruction):
+    if isJmpFF(instruction):
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return mod == 3
+    return False
 
-            disp = getDisp32(string, modrm, prefixes)
-            string = string[len(disp):]
+def isMemoryBranch(instruction):
+    if isJmpFF(instruction):
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return mod < 3
+    return False
 
-        else:
-            disp = getDisp16(string, modrm, prefixes)
-            string = string[len(disp):]
+def isDispBranch(instruction):
+    if isJmpFF(instruction):
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return rm == 5 and mod in [1,2]
+    return False
 
-    if operandHasImmediate(lookup):
-        imm = operandGetImmediate(string, lookup, prefixes)
-        string = string[len(imm):]
+def isSibBranch(instruction):
+    if isJmpFF(instruction):
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return rm == 4 and mod < 3
+    return False
 
-    return (prefixes, instruction, modrm, disp, sib, imm)
+def isAbsoluteBranch(instruction):
+    '''jmp Ap'''
+    opcode = getOpcode(instruction)
+    return opcode == '\xea'
 
-def getSib(string, modrm, prefixes):
-    res = [0, wordsize][ (ord(modrm) & 0x7) == 4 ]
-    return string[:res]
+def isRelativeBranch(instruction):
+    return isUnconditionalBranch(instruction) or isConditionalBranch(instruction)
 
-def getDisp16(string, modrm, prefixes):
-    res = [0, bytesize, halfwordsize, 0][ (ord(modrm) & 0xc0)>>6 ]
-    return string[:res]
+def isBranch(instruction):
+    return isRelativeBranch(instruction) or isAbsoluteBranch(instruction) or \
+        isRegisterBranch(instruction) or isMemoryBranch(instruction) or \
+        isDispBranch(instruction) or isSibBranch(instruction)
 
-def getDisp32(string, modrm, prefixes):
-    res = [0, bytesize, wordsize, 0][ (ord(modrm) & 0xc0)>>6 ]
-    return string[:res]
+## calls
+def isAbsoluteCall(instruction):
+    '''call Ap'''
+    return getOpcode(instruction) == '\x9a'
 
-## XXX: default
-decode = decode32
+def isRelativeCall(instruction):
+    '''call Jz'''
+    return getOpcode(instruction) == '\xe8'
+
+def isRegisterCall(instruction):
+    '''call Ev'''
+    if getOpcode(instruction) == '\xff':
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return reg == 2 and mod == 3
+    return False
+def isMemoryCall(instruction):
+    '''call Mp'''
+    if getOpcode(instruction) == '\xff':
+        modrm = getModrm(instruction)
+        mod,reg,rm = decoder.extractmodrm(ord(modrm))
+        return reg in [2,3] and mod < 3
+    return False
+
+def isCall(instruction):
+    return isRelativeCall(instruction) or isMemoryCall(instruction) or isRegisterCall(instruction) or isAbsoluteCall(instruction)
+
+def isReturn(instruction):
+    return getOpcode(instruction) in ['\xc2', '\xc3', '\xca', '\xcb', '\xcf']
 
 if __name__ == '__main__':
-    '''
-    804876b:       55                      push   %ebp
-    804876c:       89 e5                   mov    %esp,%ebp
-    804876e:       83 ec 08                sub    $0x8,%esp
-    8048771:       a1 48 26 05 08          mov    0x8052648,%eax
-    8048776:       85 c0                   test   %eax,%eax
-    8048778:       74 12                   je     804878c <read@plt+0xac>
-    804877a:       b8 00 00 00 00          mov    $0x0,%eax
-    804877f:       85 c0                   test   %eax,%eax
-    8048781:       74 09                   je     804878c <read@plt+0xac>
-    8048783:       c7 04 24 48 26 05 08    movl   $0x8052648,(%esp)
-    804878a:       ff d0                   call   *%eax
-    804878c:       c9                      leave
-    804878d:       c3                      ret
-    '''
+    # relative
+    if False:
+        code = '\xE8\x72\xFB\xFF\xFF'
+        insn = decode(code)
+        print 'rel',isRelativeCall(insn)
 
-    code = "55 89 e5 83 ec 08 a1 48 26 05 08 85 c0 74 12 b8 00 00 00 00 85 c0 74 09 c7 04 24 48 26 05 08 ff d0 c9 c3"
-    code = ''.join([chr(int(x,16)) for x in code.split(' ')])
+    # register
+    # 11 010 110
+    if False:
+        code = '\xff\xd6'
+        insn = decode(code)
+        print 'reg',isRegisterCall(insn)
 
-    # i think these should be paired together, and should return a tuple of opcode, argument, type
-    labels = ('prefixes', 'instruction', 'modrm', 'disp', 'sib', 'imm')
+    # memory
+    # 00 010 101
+    if False:
+        code = '\xFF\x15\xC0\x52\x5C\x00'
+        insn = decode(code)
+        print 'mem',isMemoryCall(insn)
 
-    list = []
-    while code:
-        opcode = decode32(code)
-        res = dict( zip(labels, opcode) )
-        list.append(res)
-        code = code[ len(''.join(opcode)) : ]
-
-    print '\n'.join(['%s -> %d'% (repr(x), len(''.join(x.values()))) for x in list])
+    # forgot
+    # 00 100 101
+    if False:
+        code = '\xFF\x25\xB0\x51\x5C\x00'
+        insn = decode(code)
+        print repr(insn)
+        print 'mem',isBranch(insn),isMemoryBranch(insn)
+    

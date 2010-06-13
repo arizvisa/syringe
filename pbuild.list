@@ -6,7 +6,7 @@ msLinkLibs='kernel32.lib user32.lib gdi32.lib'
 
 CWD=$(pwd)
 
-CFLAGS="-I "
+CFLAGS="-I."
 LDFLAGS=""
 
 compile()
@@ -14,7 +14,7 @@ compile()
     TARGET=$1
     shift
 
-    gcc -c $CFLAGS -o "$TARGET" $@
+    gcc $CFLAGS -o "$TARGET" -c $@
     return $?
 }
 
@@ -33,7 +33,8 @@ link()
     shift
 
     #libs="-luser32 -lkernel32 -lmsvcrt -lwhook"
-    libs="-L/c/python24/libs -lkernel32 -luser32 -lmsvcrt -lpython24"
+    #libs="-L/c/python24/libs -lkernel32 -luser32 -lmsvcrt -lpython24"
+    libs=""
 	gcc -L. $libs -o "$TARGET" $@
     return $?
 }
@@ -84,6 +85,7 @@ mslink()
     TARGET=$1
     shift
     rm -f "$TARGET"
+    echo link.exe -subsystem:$msSubsystem "-out:$TARGET" $msGeneralOptions $msLinkFlags $msLinkLibs $@
     link.exe -subsystem:$msSubsystem "-out:$TARGET" $msGeneralOptions $msLinkFlags $msLinkLibs $@
     return $?
 }
@@ -114,12 +116,19 @@ alltargets()
 #resolve blah.exe link obj/blah.o libwhook.a
 
 resolve obj/python-stub.o assemble src/python-stub.s
-resolve test/python-stub.exe link obj/python-stub.o
+resolve obj/python-stub.obj elf2coff obj/python-stub.o
+#resolve test/python-stub.exe link obj/python-stub.o
+resolve obj/python-stub.exe mslink obj/python-stub.obj
 
 resolve obj/inject-helper.o assemble src/inject-helper.s
 resolve obj/inject-helper.obj elf2coff obj/inject-helper.o
 resolve obj/inject-test.obj mscompile src/inject-test.c
 resolve inject-test.exe mslink obj/inject-test.obj obj/inject-helper.obj
+
+resolve obj/stackless.o assemble src/stackless.s
+
+resolve obj/python-test.obj mscompile src/test.c
+resolve python-test.exe mslink obj/python-test.obj
 
 #resolve all build test/thread-test-gui.exe test/thread-test-console.exe test/inject-stub.exe
 resolve clean alltargets
