@@ -120,14 +120,17 @@ def getDifferences(inputa, inputb):
             yield res
     return
 
-def help():
-    print 'Usage: %s [-generate template.%%s.diff] file1 file2'% sys.argv[0]
+def help(*args):
+    try:
+        first, = args
+    except ValueError:
+        first = 'bindiff.run'
+    print 'Usage: %s [-generate template.%%s.diff] file1 file2'% first
     print """
     Will do a byte-for-byte compare between file1 and file2, and then output
     the results. If -generate is specified, the application will generate
     a version of the original file for each independant modification
     """
-    sys.exit()
 
 def do_diff_friendly( (a,inputa), (b,inputb) ):
     for o,l in getDifferences(a, b):
@@ -149,7 +152,6 @@ def do_diff_friendly( (a,inputa), (b,inputb) ):
         res = [ s.split('\n') for s in res ]
         rows = [ ' | '.join(x) for x in zip(*res) ]
         print '\n'.join(rows)
-    exit(0)
 
 def do_diff_generate((a,inputa),(b,inputb), template='%s.diff'):
     assert '%s' in template, "Filename template `%s' needs a %%s for modification range"% template
@@ -172,25 +174,26 @@ def do_diff_generate((a,inputa),(b,inputb), template='%s.diff'):
         count += 1
 
     print 'Outputted %d files'% count
-    exit(0)
 
-if __name__ == '__main__':
-    import sys
+def run(*args):
+    """Run the bindiff.py commandline"""
     generate_differences = None
     try:
-        if '-generate' in sys.argv:
-            v = sys.argv.index('-generate')
-            generate_differences = sys.argv[v+1]
-            del(sys.argv[v:v+2])
+        if '-generate' in args:
+            v = args.index('-generate')
+            generate_differences = args[v+1]
+            del(args[v:v+2])
 
     except IndexError:
-        help()
+        help(*args)
+        return
 
     try:
-        inputa, inputb = sys.argv[1:]
+        inputa, inputb = args
 
     except ValueError:
-        help()
+        help(*args)
+        return
 
     inputa, inputb = file(inputa, 'rb'), file(inputb, 'rb')
     a,b = (blockreader(inputa, 512), blockreader(inputb, 512))
@@ -198,4 +201,8 @@ if __name__ == '__main__':
     if generate_differences:
         do_diff_generate( (a,inputa), (b,inputb), generate_differences )
     do_diff_friendly( (a,inputa), (b,inputb) )
+    return
 
+if __name__ == '__main__':
+    import sys
+    run(*sys.argv[1:])
