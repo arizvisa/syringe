@@ -135,7 +135,7 @@ class type(__pstruct_generic):
         return repr(self.__class__)
 
     def at(self, offset):
-        result = super(type, self).at(offset, **attrs)
+        result = super(type, self).at(offset)
         index = result[-1]
 
         result[-1] = self.keys()[index]     # convert our index to a name
