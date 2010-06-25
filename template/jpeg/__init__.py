@@ -3,10 +3,9 @@
 
 import ptypes
 from ptypes import *
-config.WIDTH = 180
 
 def CBinary(args):
-    class _CBinary(pBinary):
+    class _CBinary(pbinary.struct):
         _fields_ = args[:]
     return _CBinary
 
@@ -83,8 +82,8 @@ class header(pstruct.type):
     marker = ''
 
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
         (lambda self: dyn.block(self['length'] - 2)(), 'data'),
     ]
 
@@ -110,43 +109,43 @@ class unknown(header):
 class JFIF(header):
     marker = '\xff\xe0'
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
         (dyn.block(5), 'identiier'),
-        (pWord, 'version'),
-        (pByte, 'units'),
-        (pWord, 'Xdensity'),
-        (pWord, 'Ydensity'),
-        (pByte, 'Xthumbnail'),
-        (pByte, 'Ythumbnail'),
+        (pint.uint16_t, 'version'),
+        (pint.uint8_t, 'units'),
+        (pint.uint16_t, 'Xdensity'),
+        (pint.uint16_t, 'Ydensity'),
+        (pint.uint8_t, 'Xthumbnail'),
+        (pint.uint8_t, 'Ythumbnail'),
         (lambda self: dyn.block( 3 * (self['Xthumbnail']*self['Ythumbnail']))(), 'RGB')
     ]
 
 class SOI(header):
     marker = '\xff\xd8'
-    _fields_ = [(pWord, 'marker')]
+    _fields_ = [(pint.uint16_t, 'marker')]
 
 class EOI(header):
     marker = '\xff\xd9'
-    _fields_ = [(pWord, 'marker')]
+    _fields_ = [(pint.uint16_t, 'marker')]
 
 class SOF(header):
     marker = '\xff\xc0'
 
     class component(pstruct.type):
         _fields_ = [
-            (pByte, 'id'),
+            (pint.uint8_t, 'id'),
             (CBinary([(4,'H'), (4,'V')]), 'sampling factors'),
-            (pByte, 'quantization table number')
+            (pint.uint8_t, 'quantization table number')
         ]
 
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
-        (pByte, 'precision'),
-        (pWord, 'height'),
-        (pWord, 'width'),
-        (pByte, 'number of components'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
+        (pint.uint8_t, 'precision'),
+        (pint.uint16_t, 'height'),
+        (pint.uint16_t, 'width'),
+        (pint.uint8_t, 'number of components'),
         (lambda self: dyn.array( SOF.component, self['number of components'])(), 'components')
     ]
 
@@ -156,7 +155,7 @@ class APP12(header):
 class APP14(header):
     marker = '\xff\xee'
 
-class DQTPrecisionAndIndex(pBinary):
+class DQTPrecisionAndIndex(pbinary.struct):
     _fields_ = [
         (4, 'precision'),
         (4, 'index')
@@ -180,7 +179,7 @@ class DQTTable(pstruct.type):
         res.append( self.dumpValue() )
         return '%s\n%s\n'% (repr(type(self)), '\n'.join(res))
 
-class DQTTableArray(pTerminatedArray):
+class DQTTableArray(parray.terminated):
     _object_ = DQTTable
     def isTerminator(self, value):
         return False
@@ -193,8 +192,8 @@ class DQTTableArray(pTerminatedArray):
 class DQT(header):
     marker = '\xff\xdb'
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
         (lambda self: blockread(DQTTableArray, self['length']-2)(), 'table')    # FIXME: get this shit working too
     ]
 
@@ -229,7 +228,7 @@ class HuffmanTable(pstruct.type):
         res.append('value ->\n%s'% (self.dumpValue('    ')))
         return '%s\n%s\n'% (repr(type(self)), '\n'.join(res))
 
-class HuffmanTableArray(pTerminatedArray):
+class HuffmanTableArray(parray.terminated):
     _object_ = HuffmanTable
     def deserialize(self, iterable):
         try:
@@ -241,15 +240,15 @@ class HuffmanTableArray(pTerminatedArray):
 class DHT(header):
     marker = '\xff\xc4'
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
         (lambda self: blockread(infiniteelements(HuffmanTableArray),self['length']-2)(), 'table')
     ]
 
 class SOS(header):
     marker = '\xff\xda'
 
-    class component(pBinary):
+    class component(pbinary.struct):
         _fields_ = [
             (8, 'id'),
             (4, 'DC'),
@@ -257,20 +256,20 @@ class SOS(header):
         ]
 
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
-        (pByte, 'number of components'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
+        (pint.uint8_t, 'number of components'),
         (lambda self: dyn.array(SOS.component, self['number of components'])(), 'component'),
-        (pByte, 'start of spectral selection'),
-        (pByte, 'end of spectral selection'),
+        (pint.uint8_t, 'start of spectral selection'),
+        (pint.uint8_t, 'end of spectral selection'),
         (CBinary([(4,'high'),(4,'low')]), 'successive approximation')
     ]
 
 class Comment(header):
     marker = '\xff\xfe'
     _fields_ = [
-        (pWord, 'marker'),
-        (pWord, 'length'),
+        (pint.uint16_t, 'marker'),
+        (pint.uint16_t, 'length'),
         (lambda self: dyn.block( self['length'] - 2 ), 'data')
     ]
 

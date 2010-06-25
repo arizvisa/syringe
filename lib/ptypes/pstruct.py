@@ -29,7 +29,6 @@ class __pstruct_generic(ptype.pcontainer):
     def items(self):
         return [(k,v) for k,v in zip(self.keys(), self.values())]
 
-#    @ptype.rethrow
     def __getitem__(self, name):
         index = self.getindex(name)
         return self.value[index]
@@ -56,7 +55,6 @@ class type(__pstruct_generic):
     def serialize(self):
         return ''.join([ x.serialize() for x in self.value ])
 
-#    @ptype.rethrow
     def alloc(self):
         self.value = []
 
@@ -68,7 +66,6 @@ class type(__pstruct_generic):
             ofs += n.size()
         return self
 
-#    @ptype.rethrow
     def deserialize(self, source):
         source = iter(source)
         self.value = []
@@ -81,7 +78,6 @@ class type(__pstruct_generic):
             ofs += n.size()
         return
 
-#    @ptype.rethrow
     def load(self):
         ofs = self.getoffset()
         self.value = []

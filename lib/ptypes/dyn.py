@@ -47,7 +47,6 @@ class union(pstruct.type):
     '''
     Provides a Union-like data structure
     '''
-#    @ptype.rethrow
     def load(self):
         # all point to the same source
         self.alloc()
@@ -55,7 +54,6 @@ class union(pstruct.type):
         [ n.load() for n in self.value ]
         return self
 
-#    @ptype.rethrow
     def deserialize(self, source):
         source = iter(source)
         ofs = self.getoffset()

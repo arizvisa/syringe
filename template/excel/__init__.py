@@ -1,4 +1,5 @@
 from ptypes import *
+import officeart
 
 ### primitive types
 class USHORT(pint.uint16_t): pass
@@ -52,8 +53,14 @@ class BiffSubStream(parray.terminated):
         return result
 
     def __repr__(self):
-        bof = self[0]['data']
-        return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof['dt']))
+        if self.initialized:
+            bof = self[0]['data']
+            try:
+                return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof['dt']))
+            except TypeError:
+                pass
+            return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof.serialize()))
+        return super(BiffSubStream, self).__repr__()
 
 ###
 class RRTabId(dyn.array(USHORT, 3), Biff):
@@ -263,6 +270,9 @@ class BOF(pstruct.type, Biff):
         (pint.uint16_t, 'rupYear'),
         (__BOFFlags, 'f')
     ]
+
+class MSODRAWING(officeart.SpContainer, Biff):
+    bifftype = 0xec
 
 class EOF(pstruct.type, Biff):
     bifftype = 10

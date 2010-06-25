@@ -37,12 +37,9 @@ class __parray_generic(ptype.pcontainer):
         del(self.value[index])
 
     def __setitem__(self, index, value):
-        assert self.initialized
         self.value[index] = value
 
-#    @ptype.rethrow
     def __getitem__(self, index):
-        assert self.initialized
         return self.value[index]
 
     def __getslice__(self, i, j):
@@ -77,7 +74,6 @@ class type(__parray_generic):
     def serialize(self):
         return ''.join([ x.serialize() for x in self.value ])
 
-#    @ptype.rethrow
     def alloc(self):
         self.value = []
 
@@ -91,7 +87,6 @@ class type(__parray_generic):
             ofs += n.size()
         return self
 
-#    @ptype.rethrow
     def deserialize(self, source):
         source = iter(source)
         self.value = []
@@ -121,7 +116,6 @@ class type(__parray_generic):
             ofs += n.size()
         return
 
-#    @ptype.rethrow
     def load(self):
         obj = self._object_
         self.value = []
@@ -185,7 +179,6 @@ class terminated(type):
             ofs += n.size()
         return self
 
-#    @ptype.rethrow
     def deserialize(self, source):
         source = iter(source)
         self.value = []
