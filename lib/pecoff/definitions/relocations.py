@@ -227,7 +227,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.terminated):
                     print "Relocation target at %x to %x lands outside section space"% (currentrva, targetrva)
 
                     # XXX: is it possible to hack support for relocations to the
-                    #      'mz' header into this?
+                    #      'mz' header into this? that only fixes that case...but why else would you legitimately need something outside a section?
                     continue
 
                 targetsectionname = targetsection['Name'].get()

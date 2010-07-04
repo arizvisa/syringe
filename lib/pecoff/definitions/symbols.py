@@ -121,7 +121,7 @@ class Symbol(pstruct.type):
 
     def __repr__(self):
         if self.initialized:
-            kwds = ['SectionNumber', 'Type', 'StorageClass']
+            kwds = ['SectionNumber', 'Type', 'StorageClass', 'NumberOfAuxSymbols']
             res = ', '.join(['%s:%d'% (k, int(self[k])) for k in kwds])
             #print self['Name'].get(), self['Value']
             return '[%x] %s %s {%s} Value: 0x%x'% (self.getoffset(), self.__class__, self['Name'].get(), res, int(self['Value']))

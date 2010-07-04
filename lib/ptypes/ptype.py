@@ -132,7 +132,7 @@ class type(object):
 
     def __getparent_type(self,type):
         result = []
-        while self.parent:
+        while self.parent is not None:
             result.append(self.__class__)
             if issubclass(self.__class__,type):
                 return self
@@ -280,6 +280,14 @@ class type(object):
     def copy(self):
         result = self.newelement( self.__class__, self.name(), self.getoffset() )
         result.deserialize( self.serialize() )
+        return result
+
+    def cast(self, t):
+        result = self.newelement( t, 'cast(%s, %s)'% (self.name(), repr(t.__class__)), self.getoffset() )
+        try:
+            result.deserialize( self.serialize() )
+        except StopIteration:
+            result.l # try to load it anyways
         return result
 
 class pcontainer(type):
