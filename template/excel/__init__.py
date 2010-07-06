@@ -20,11 +20,29 @@ class BiffGeneral(pstruct.type):
             pass
         return dyn.block( int(s['length'].l) )
 
+    def __figureextra(s):
+        used = s['data'].size()
+        total = int(s['length'].l)
+        if used == total:
+            return dyn.block(0)
+
+        if total >= used:
+            l = total-used
+            print '%d unused bytes in biff object at %x with type %s'% (l, s.getoffset(), s['data'].name())
+            return dyn.block(l)
+
+        print 'Error parsing biff object at %x with type %s'% (s.getoffset(), s['data'].name())
+        return dyn.block(0)
+
     _fields_ = [
         (pint.uint16_t, 'type'),
         (pint.uint16_t, 'length'),
-        (__lookuptype, 'data')
+        (__lookuptype, 'data'),
+        (__figureextra, 'extra')
     ]
+
+    def size(self):     # XXX: holy shit this is so dirty, but it umm...works in an array..heh...
+        return 4 + int(self['length'])
 
 class BiffSubStream(parray.terminated):
     _object_ = BiffGeneral
@@ -57,7 +75,7 @@ class BiffSubStream(parray.terminated):
             bof = self[0]['data']
             try:
                 return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof['dt']))
-            except TypeError:
+            except (TypeError,KeyError):
                 pass
             return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof.serialize()))
         return super(BiffSubStream, self).__repr__()

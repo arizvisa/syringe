@@ -47,9 +47,15 @@ class Property(pstruct.type):
             pass
         return dyn.block( int(self['rh'].l['recLen']) )
 
+    def figureextra(self):
+        total = int(self['rh'].l['recLen'])
+        current = self['r'].size()
+        return dyn.block(total-current)
+
     _fields_ = [
         (RecordHeader, 'rh'),
-        (autoRecordType, 'r')
+        (autoRecordType, 'r'),
+        (figureextra, '_')
     ]
 
 class PropertyList(parray_sized):
