@@ -1,4 +1,5 @@
 import utils
+import warnings
 
 class provider(object):
     '''Base provider class. Intended to be Inherited from'''
@@ -15,8 +16,19 @@ class provider(object):
 class file(provider):
     '''Basic file provider'''
     file = None
-    def __init__(self, filename, mode='r+b'):
+    def __init__(self, filename, mode='rb'):
         ## XXX: i thought __builtins__ was a module...
+        if not mode.startswith('r'):
+            warnings.warn("You are not using the correct syntax for a mode, so i'm fixing it for you")
+            mode = 'r+b'
+
+        if 'w' in mode:
+            warnings.warn("You are not using the correct syntax for a mode, so i'm fixing it for you")
+            mode = 'r+b'
+
+        if not mode.endswith('b'):
+            mode += 'b'
+
         self.file = __builtins__['file'](filename, mode)
 
     def seek(self, offset):

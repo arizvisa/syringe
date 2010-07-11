@@ -290,7 +290,8 @@ class BOF(pstruct.type, Biff):
     ]
 
 class MSODRAWING(officeart.SpContainer, Biff):
-    bifftype = 0xec
+    bifftype = 0x00ec
+    bifftype = 236
 
 class EOF(pstruct.type, Biff):
     bifftype = 10

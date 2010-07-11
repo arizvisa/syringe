@@ -73,10 +73,11 @@ def dumpcontainer(pc, indent=''):
 
 def dumpexecutable(filename):
     # globals for interpretive use
-    global mz,pe,imagebase,sections,datadirectory
+    global mz,pe,imagebase,sections,datadirectory,imports
 
     print 'Module: %s'% os.path.basename(filename)
     print 'ImageBase: %x'% imagebase
+    print 'Imports: %s'% ', '.join([x['Name'].d.l.get() for x in imports.l[:-1]])
 
     mz.setoffset(imagebase,recurse=True)
     print pe

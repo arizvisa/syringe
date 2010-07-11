@@ -30,11 +30,20 @@ class RealMedia_Header(pstruct.type):
         
         return dyn.block( int(self['size'].l) - 10 )
 
+    def figureextra(s):
+        l = int(s['size'].l)
+        s = s['object'].size() + 4 + 4 + 2
+        if l > s:
+            return dyn.block( l - s )
+        print 'wtf'
+        return dyn.block(0)
+
     _fields_ = [
         (UINT32, 'object_id'),
         (UINT32, 'size'),
         (UINT16, 'object_version'),
-        (getobject, 'object')
+        (getobject, 'object'),
+        (figureextra, 'extra')
     ]
 
 class RealMedia_Header_Type(object): pass
@@ -136,14 +145,27 @@ class Type_Specific(pstruct.type):
 
     def getobject(self):
         ver = int(self['object_version'].l)
-        return self._object_[ver]
+        try:
+            return self._object_[ver]
+        except KeyError:
+            pass
+        return ptype.type
+
+    def figurecodec(s):
+        h = s.getparent(RealMedia_Header_Type)
+        print h['type_specific_len']
+        l = int(h['type_specific_len'].l)
+        if l > 0:
+            return dyn.block( l - (s['object'].size()+6) )
+        print 'wtf2'
+        return dyn.block(0)
 
     _fields_ = [
         (UINT32, 'object_id'),
         (UINT16, 'object_version'),
         (getobject, 'object'),
 #        (lambda s: dyn.block( int(s['object'].l['header_size']) - (s['object'].size() + 6)), 'codec?')
-        (lambda s: dyn.block( int(s.getparent(RealMedia_Header_Type)['type_specific_len'].l) - (s['object'].size() + 6)), 'codec?')
+        (figurecodec, 'codec?')
     ]
 
 ### sub-headers
