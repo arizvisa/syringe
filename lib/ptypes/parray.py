@@ -195,6 +195,50 @@ class terminated(type):
 
     load_block = load_container
 
+class infinite(terminated):
+    '''
+    an array that consumes as much data as possible, and neatly leaves when out of data
+    '''
+    def isTerminator(self, v):
+        return False
+
+    def load_container(self):
+        ofs = self.getoffset()
+        try:
+            for index in utils.infiniterange(0):
+                n = self.newelement(self._object_, str(index), ofs)
+                n.load()            # swapped so we don't append junk
+                self.append(n)
+                if self.isTerminator(n):
+                    break
+                ofs += n.size()
+            pass
+        except StopIteration:
+            pass
+        return self
+
+    def deserialize(self, source):
+        source = iter(source)
+        self.value = []
+
+        ofs = self.getoffset()
+
+        try:
+            for index in utils.infiniterange(0):
+                n = self.newelement(self._object_, str(index), ofs)
+                n.deserialize(source)    # swapped so we don't append junk
+                self.append(n)
+                if self.isTerminator(n):
+                    break
+                ofs += n.size()
+            pass
+        except StopIteration:
+            pass
+
+        return self
+
+    load_block = load_container
+
 if __name__ == '__main__':
     import ptype,parray
 
