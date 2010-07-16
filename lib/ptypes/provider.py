@@ -84,11 +84,14 @@ class string(provider):
     def seek(self, offset):
         self.offset = offset
     def consume(self, amount):
-        return self.string[self.offset: self.offset+amount]
+        res = self.string[self.offset: self.offset+amount]
+        self.offset += amount
+        return res
     def write(self, data):
         left, right = self.offset, self.offset + len(data)
         self.string = self.string[:left] + data + self.string[right:]
-        return True
+        self.offset = right
+        return len(data)
 
 import ctypes
 from ctypes import *
@@ -103,10 +106,14 @@ class memory(provider):
         self.address = offset
 
     def consume(self, amount):
-        return memory._read(self.address, amount)
+        res = memory._read(self.address, amount)
+        self.offset += amount
+        return res
 
     def write(self, data):
-        return memory._write(self.address, data)
+        res = memory._write(self.address, data)
+        self.offset += len(data)
+        return res
 
     @staticmethod
     def _read(address, length):
@@ -150,6 +157,7 @@ if sys.platform == 'win32':
 
             assert NumberOfBytesRead.value == amount, 'Expected %d bytes, received %d bytes.'% (amount, NumberOfBytesRead.value)
 
+            self.address += amount
             # XXX: test tihs shit out
             return str(Buffer.raw)
 
@@ -163,6 +171,8 @@ if sys.platform == 'win32':
             res = k32.WriteProcessMemory(self.handle, self.address, Buffer, len(value), byref(NumberOfBytesWritten)) 
             if res == 0:
                 raise ValueError('Unable to write to pid(%x)[%08x:%08x].'% (self.id, self.address, self.address+len(value)))
+
+            self.address += len(value)
 
             #assert NumberOfBytesWritten.value == amount, 'Expected %d bytes, received %d bytes.'% (amount, NumberOfBytesWritten.value)
             return NumberOfBytesWritten.value

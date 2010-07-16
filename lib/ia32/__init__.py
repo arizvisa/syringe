@@ -54,6 +54,15 @@ def isInstruction(value):
     '''returns true if provided a valid instruction'''
     return type(value) is tuple and len(value) == 6
 
+def getBranchOffset(instruction):
+    import struct
+
+    assert isRelativeBranch(instruction) or isRelativeCall(instruction), 'Invalid instruction %s'% repr(instruction)
+    immediate = getImmediate(instruction)
+    formats = (None, 'b', 'h', None, 'l')     #we'll take the loss of a good error message
+    res, = struct.unpack(formats[ len(immediate) ], immediate)
+    return res
+
 def isConditionalBranch8(instruction):
     opcode = getOpcode(instruction)
     if len(opcode) == 1:

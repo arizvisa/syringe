@@ -2,9 +2,9 @@ import ptypes
 import definitions
 from warnings import warn
 
-def open(filename):
+def open(filename, **kwds):
     res = File()
-    res.source = ptypes.provider.file(filename)
+    res.source = ptypes.provider.file(filename, **kwds)
     res.load()
     res.filename = filename     # ;)
     return res

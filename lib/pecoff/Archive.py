@@ -183,9 +183,9 @@ class File(pstruct.type):
             yield self.newelement(Object.File, 'Member[%d]'% index, o)
         return
 
-def open(filename):
+def open(filename, **kwds):
     res = File()
-    res.source = provider.file(filename)
+    res.source = provider.file(filename, **kwds)
     res.load()
     res.filename = filename
     return res
