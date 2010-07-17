@@ -4,7 +4,8 @@ from ptypes import *
 class UBYTE(pint.uint8_t): pass
 class WORD(pint.int16_t): pass
 class UWORD(pint.uint16_t): pass
-class LONG(pint.bigendian(pint.int32_t)): pass
+class LONG(pint.int32_t): pass
+#class LONG(pint.bigendian(pint.int32_t)): pass
 
 class ID( dyn.block(4) ): pass
 
@@ -32,9 +33,18 @@ class Chunk(pstruct.type):
             size += 1
         return size
 
+    def __ckSize(self):
+        p = self
+        while p.parent is not None:
+            p = p.parent
+
+        if p['ID'].serialize() == 'XFIR':
+            return LONG
+        return pint.bigendian(LONG)
+
     _fields_ = [
         (ID, 'ckID'),
-        (LONG, 'ckSize'),
+        (__ckSize, 'ckSize'),
         (ckData, 'ckData'),
         (ckExtra, 'ckExtra'),
     ]
@@ -47,9 +57,14 @@ class File(pstruct.type):
     def __Data(self):
         return dyn.block( int(self['Size'].l) - 4 )
 
+    def __Size(self):
+        if self['ID'].l.serialize() == 'XFIR':
+            return LONG
+        return pint.bigendian(LONG)
+
     _fields_ = [
         (ID, 'ID'),
-        (LONG, 'Size'),
+        (__Size, 'Size'),
         (ID, 'Format'),
         (__Data, 'Data'),
     ]

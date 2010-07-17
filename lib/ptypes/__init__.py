@@ -9,3 +9,5 @@ __all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn,provider,utils'.spl
 
 def setsource(provider):
     ptype.type.source = provider
+
+from ptype import debug,debugrecurse
