@@ -29,7 +29,7 @@ def array(obj, elements, **kwds):
         _object_ = obj
         length = count
 
-    _dynarray.__name__ = kwds.get('name', 'array(%s, %d)'% (obj.__name__, count))
+    _dynarray.__name__ = kwds.get('name', 'array(%s.%s, %d)'% (obj.__module__, obj.__name__, count))
     return _dynarray
 
 def clone(cls, **newattrs):
@@ -40,7 +40,8 @@ def clone(cls, **newattrs):
     class __clone(cls): pass
     for k,v in newattrs.items():
         setattr(__clone, k, v)
-    __clone.__name__ = 'clone(%s)'% cls.__name__   # perhaps display newattrs all formatted pretty too?
+    __clone.__name__ = 'clone(%s.%s)'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
+#    __clone.__name__ = cls.__name__
     return __clone
 
 class union(pstruct.type):
@@ -98,7 +99,7 @@ def pointer(object):
     '''Create a new pointer type of a specified object'''
     class pclass(addr_t):
         pass
-    pclass.__name__ = 'pointer(%s)'% object.__name__
+    pclass.__name__ = 'pointer(%s.%s)'% (object.__module__, object.__name__)
     pclass._object_ = object
     return pclass
 
@@ -108,13 +109,14 @@ def rpointer(object, relative=lambda s: int(s)):
     XXX: This functionality might change.
     '''
     p = pointer(object)
-    p.__name__ = 'rpointer(%s, %s)'% (object.__name__, repr(relative))
+    p.__name__ = 'rpointer(%s.%s, %s)'% (object.__module__, object.__name__, repr(relative))
     p.dereference = lambda s: s.newelement(s._object_, repr(s._object_), relative(s))
     p.deref = p.dereference
     p.d = property(fget=p.dereference)
     return p
 
 def cast(sourcevalue, destination):
+    raise DeprecationWarning("Please use ptype.cast instead")
     result = sourcevalue.newelement( destination, 'cast(%s, %s)'% (sourcevalue.name(), repr(destination.__class__)), sourcevalue.getoffset() )
     result.deserialize( sourcevalue.serialize() )
     return result

@@ -1,6 +1,6 @@
-import decoder
+import bitmap
+import optable,decoder
 from decoder import isprefix,consume
-import optable
 lookup = optable.Lookup
 
 decode = lambda string: consume(iter(string))
@@ -21,6 +21,23 @@ def new():
     return ('','','','','','')
 def length(instruction):
     return len(''.join(instruction))
+
+def stringToNumber(string):
+    '''given a string encoded in the native byte-order, will produce an integer'''
+    res = bitmap.new(0,0)
+    for ch in string:
+        res = bitmap.insert(res, (ord(ch),8))
+    res,_ = res
+    return res
+
+def numberToString(number, bytes):
+    '''given an integer and a number of bytes, will return a string encoded in the native endianness'''
+    counter = bitmap.new(number,bytes*8)
+    res = ''
+    while counter[1] > 0:
+        counter,_ = bitmap.consume(counter,8)
+        res += chr(_)
+    return res
 
 #instruction = (prefix, opcode, modrm, sib, disp, immediate)
 def getPrefix(instruction): return instruction[0]
@@ -54,14 +71,12 @@ def isInstruction(value):
     '''returns true if provided a valid instruction'''
     return type(value) is tuple and len(value) == 6
 
-def getBranchOffset(instruction):
-    import struct
-
-    assert isRelativeBranch(instruction) or isRelativeCall(instruction), 'Invalid instruction %s'% repr(instruction)
-    immediate = getImmediate(instruction)
-    formats = (None, 'b', 'h', None, 'l')     #we'll take the loss of a good error message
-    res, = struct.unpack(formats[ len(immediate) ], immediate)
-    return res
+def getRelativeAddress(pc, instruction):
+    res = stringToNumber(getImmediate(instruction))
+    pc += length(instruction)
+    if res & 0x80000000:
+        return pc - (0x100000000 - res)
+    return pc + res
 
 def isConditionalBranch8(instruction):
     opcode = getOpcode(instruction)

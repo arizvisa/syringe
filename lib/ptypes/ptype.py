@@ -106,7 +106,7 @@ class type(object):
         initialized:bool(r)
             if ptype has been initialized yet
     '''
-    __offset = 0
+    offset = 0
     length = 0      # int
     value = None    # str
 
@@ -122,6 +122,7 @@ class type(object):
         # update self if user specified
         for k,v in attrs.items():
             setattr(self, k, v)
+        return
 
     def __nonzero__(self):
         return self.initialized
@@ -174,14 +175,14 @@ class type(object):
         return [-1,0][id(self) is id(x)]
 
     def setoffset(self, value, **kwds):
-        '''modifies the current offset'''
-        res = self.__offset
-        self.__offset = value
+        '''modifies the current offset (should probably be deprecated)'''
+        res = self.offset
+        self.offset = value
         return res
 
     def getoffset(self, **kwds):
-        '''returns the current offset'''
-        return int(self.__offset)
+        '''returns the current offset (should probably be deprecated)'''
+        return int(self.offset)
 
     def newelement(self, ptype, name, ofs):
         '''
