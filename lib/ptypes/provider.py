@@ -107,12 +107,12 @@ class memory(provider):
 
     def consume(self, amount):
         res = memory._read(self.address, amount)
-        self.offset += amount
+        self.address += amount
         return res
 
     def write(self, data):
         res = memory._write(self.address, data)
-        self.offset += len(data)
+        self.address += len(data)
         return res
 
     @staticmethod
