@@ -171,10 +171,9 @@ class type(object):
 
         return self.parent
 
-    def path(self, next=lambda x: x.getparent()):
+    def traverse(self, next=lambda x: x.getparent()):
         '''
-        Return the path to get to a particular node as determined by the 'next'
-        parameter.
+        Traverse the tree using the 'next' paremeter to navigate
         '''
         n = self
         while n is not None:
@@ -382,6 +381,11 @@ class pcontainer(type):
             pass
 
         return [i]
+
+    def walkto(self, offset):
+        '''will walk all the objects needed to reach a particular offset'''
+        path = iter(reversed(self.at(offset)))
+        return self.traverse( lambda s: s[path.next()] )
 
     def setoffset(self, value=0, recurse=False):
         '''modifies the current offset'''

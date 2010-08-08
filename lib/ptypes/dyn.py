@@ -40,7 +40,8 @@ def clone(cls, **newattrs):
     class __clone(cls): pass
     for k,v in newattrs.items():
         setattr(__clone, k, v)
-    __clone.__name__ = 'clone(%s.%s)'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
+#    __clone.__name__ = 'clone(%s.%s)'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
+    __clone.__name__ = '%s.%s'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
 #    __clone.__name__ = cls.__name__
     return __clone
 

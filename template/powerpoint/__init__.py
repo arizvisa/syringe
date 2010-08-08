@@ -9,11 +9,22 @@ class sint4(pint.int32_t): pass
 
 ### all general records (scroll down to the next ###)
 class RecordHeader(pstruct.type):
+        
     _fields_ = [
         (pint.uint16_t, 'recVer/recInstance'),
         (pint.uint16_t, 'recType'),
         (pint.uint32_t, 'recLength')
     ]
+
+    def __repr__(self):
+        if self.initialized:
+            v = int(self['recVer/recInstance'])
+            t = int(self['recType'])
+            l = int(self['recLength'])
+            return '%s ver=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
+        return super(RecordHeader, self).__repr__()
+
+class RecordUnknown(dyn.block(0)): pass
 
 LookupRecordType = {}
 class RecordGeneral(pstruct.type):
@@ -24,7 +35,8 @@ class RecordGeneral(pstruct.type):
             cls = LookupRecordType[t]
 
         except KeyError:
-            return dyn.clone(dyn.block(l), maxsize=l)
+            name = '%s type:%04x'% (repr(RecordUnknown), t)
+            return dyn.clone(RecordUnknown, maxsize=l, length=l, recordtype=t, name=lambda x:name)
         return dyn.clone(cls, maxsize=l)
 
     def autofiller(self):
@@ -35,7 +47,7 @@ class RecordGeneral(pstruct.type):
             t = int(self['header'].l['recType'])
             
             name = []
-            for n in list(self.path()):
+            for n in list(self.traverse(lambda s: s.getparent())):
                 try:
                     name.append(str(n.__name__))
                 except AttributeError:
@@ -53,6 +65,11 @@ class RecordGeneral(pstruct.type):
         (autorecord, 'data'),
         (autofiller, 'extra')
     ]
+
+    def __repr__(self):
+        if self.initialized:
+            return '%s %s length=%x data=%s'%( self.name(), self['data'].name(), self['data'].size(), repr(self['data'].serialize()) )
+        return super(RecordGeneral, self).__repr__()
 
 class Record(object): pass
 class RecordContainer(parray.terminated, Record):
@@ -78,6 +95,20 @@ class RecordContainer(parray.terminated, Record):
         assert len(res) == 1, repr(res)
         return res[0]
 
+    def walk(self):
+        for x in self:
+            yield x['data']
+        return
+
+    def __repr__(self):
+        if self.initialized:
+            records = []
+            for v in self.walk():
+                n = '%s[%x]'%(v.__class__.__name__,v.recordtype)
+                records.append(n)
+            return '%s length=%d [%s]'%(self.name(), len(self), ','.join(records))
+        return super(RecordContainer, self).__repr__()
+
 # yea, a file really is just a gigantic list of records...
 class File(parray.infinite):
     _object_ = RecordGeneral
@@ -93,6 +124,20 @@ class File(parray.infinite):
             raise KeyError(type)
         assert len(res) == 1, repr(res)
         return res[0]
+
+    def walk(self):
+        for x in self:
+            yield x['data']
+        return
+
+    def __repr__(self):
+        if self.initialized:
+            records = []
+            for v in self.walk():
+                n = '%s[%x]'%(v.__class__.__name__,v.recordtype)
+                records.append(n)
+            return '%s length=%d [%s]'%(self.name(), len(self), ','.join(records))
+        return super(File, self).__repr__()
 
 ### list of all records
 ## PowerPoint stream
@@ -141,8 +186,19 @@ class PersistDirectoryEntry(pstruct.type):
 
     _fields_ = [
         (__info, 'info'),
-        (lambda s: dyn.array(uint4, s['info'].l['cPersist'] ), 'offsets')
+        (lambda s: dyn.array( dyn.pointer(RecordGeneral), s['info'].l['cPersist'] ), 'offsets')
     ]
+
+    def __repr__(self):
+        id = 'id:%x'% self['info']['persistId']
+        addresses = [hex(int(o)) for o in self['offsets']]
+        return ' '.join( (self.name(), id, 'offsets: [', ','.join(addresses), ']') )
+
+    def walk(self):
+        # heh
+        for n in self['offsets']:
+            yield n.d.l['data']
+        return
 
 class PersistDirectoryAtom(parray.infinite, Record):
     recordtype = 6002
@@ -185,6 +241,10 @@ class PST_ShapeContainer(RecordContainer):
     recordtype = 61444
 class PST_ShapeClientContainer(RecordContainer):
     recordtype = 61457
+
+class Handout(RecordContainer):
+    recordtype = 4041
+    recordtype = 0x0fc9
 
 ### office art
 class msofbtExtTimeNodeContainer(RecordContainer):
@@ -274,3 +334,24 @@ for cls in globals().values():
         print '%s has no record type'% cls
     continue
 
+if __name__ == '__main__':
+    import ptypes,powerpoint
+    usersource = ptypes.provider.file('user.stream')
+    datasource = ptypes.provider.file('data.stream')
+
+    user = powerpoint.File(source=usersource).l
+    datastream = powerpoint.File(source=datasource).l
+
+    currentuseratom = user[0]['data']
+    currentedit = currentuseratom['offsetToCurrentEdit'].d      # points to offset inside a data stream
+    currentedit.source = datastream.source
+    print currentedit.l
+    usereditatom = currentedit['data']
+    persistdirectory = usereditatom['offsetPersistDirectory'].d
+
+    # go through persist directory
+    for i,entry in enumerate(persistdirectory.l['data']):
+        print '%s %x'%('-'*70, i)
+        for obj in entry.walk():
+            print obj
+        continue
