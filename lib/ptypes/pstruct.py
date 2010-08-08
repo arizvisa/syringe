@@ -116,7 +116,9 @@ class type(__pstruct_generic):
             result.append(' '.join([ofs, repr(t), name, '???']))
             ofs = '[%x+??]'% startofs
 
-        return '\n'.join(result)
+        if len(result) > 0:
+            return '\n'.join(result)
+        return '[]'
 
     def __repr__initialized(self):
         row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, repr(value.serialize())])

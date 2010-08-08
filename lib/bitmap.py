@@ -181,7 +181,7 @@ def shift(bitmap, bits):
     res = (bitmap[0] & bmask) >> shifty
     return ((bitmap[0] & ~bmask, shifty), res)
 
-class bitconsumer(object):
+class consumer(object):
     '''Given an iterable, provide an interface to supply bits'''
     def __init__(self, iterable):
         self.source = iter(iterable)
@@ -233,7 +233,7 @@ if __name__ == '__main__':
     x = bitmap.insert(x, (0x4,4) )
     print x,bitmap.string(x)
 
-    x = bitconsumer('\x12\x34')
+    x = consumer('\x12\x34')
     print x.consume(4)
     print x.consume(4)
     print x.consume(4)

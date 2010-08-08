@@ -1,18 +1,18 @@
 import ptypes
 from ptypes import *
 
-raise NotImplementedError("This is using an older/outdated version of ptypes")
-
-config.WIDTH = 192
+#raise NotImplementedError("This is using an older/outdated version of ptypes")
+#
+#config.WIDTH = 192
 
 ## primitive types
-class BYTE(pByte): pass
-class WORD(littleendian(pWord)): pass
-class DWORD(littleendian(pDword)): pass
-class short(WORD): pass
-class ushort(WORD): pass
+class BYTE(pint.uint8_t): pass
+class WORD(littleendian(pint.uint16_t)): pass
+class DWORD(littleendian(pint.uint32_t)): pass
+class short(pint.int16_t): pass
+class ushort(pint.uint16_t): pass
 
-class chunkheader(pStruct):
+class chunkheader(pstruct.type):
     _fields_ = [
         (DWORD, 'size'),
         (WORD, 'type')
@@ -29,8 +29,8 @@ def createUnknownChunk(t):
     Unknown.__name__ = 'Unknown<0x%x>'% t
     return Unknown
 
-class Chunk(pStruct): pass
-class ChunkArray(pArray):
+class Chunk(pstruct.type): pass
+class ChunkArray(parray.type):
     _object_ = None
 
     def deserialize(self, iterable):
@@ -40,7 +40,7 @@ class ChunkArray(pArray):
             self.append(a)
 
 ## structures
-class Header(pStruct):
+class Header(pstruct.type):
     _fields_ = [
         (DWORD, 'size'),
         (WORD,  'type'),
@@ -123,7 +123,7 @@ class SEGMENT(Chunk):
         (dyn.array(BYTE,2),  'reserved2'),
     ]
 
-class HUFFMAN_CODE(pStruct):
+class HUFFMAN_CODE(pstruct.type):
     _fields_ = [
         (WORD, 'code'),
         (BYTE, 'length'),
@@ -222,7 +222,7 @@ class FRAMESHIFT(Chunk):
         (WORD,  'prio_list'),
     ]
 
-class RGB(pBinary):
+class RGB(pbinary.struct):
     _fields_ = [(8, 'r'), (8, 'g'), (8, 'b')]
 
 class ColorPacket(pStruct):
@@ -241,14 +241,14 @@ class COLOR_64(Chunk):
         (lambda s: dyn.array(ColorPacket, s['numpackets'])(), 'packets')
     ]
 
-class LinePacket(pStruct):
+class LinePacket(pstruct.type):
     _fields_ = [
         (BYTE, 'skip'),
         (BYTE, 'count'),
         (lambda s: dyn.block((int(s['count'])&0x80) and 1 or int(s['count'])&0x7f )(), 'data')
     ]
 
-class Line(pStruct):
+class Line(pstruct.type):
     _fields_ = [
         (BYTE, 'numpackets'),
         (lambda s: dyn.array(LinePacket, s['numpackets'])(), 'packets')

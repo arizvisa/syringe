@@ -6,6 +6,7 @@ import types
 
 def ispbinarytype(t):
     return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
+
 def ispbinaryinstance(v):
     return isinstance(v, type)
 
@@ -25,8 +26,48 @@ def forcepbinary(p, self):
     assert ispbinaryinstance(p) or ispbinarytype(p), 'resolved class %s cannot be made a member of a pbinary type'% repr(p)
     return p
 
+### endianness
+def bigendian(p):
+    class bigendianpbinary(p):
+        def set(self, integer):
+            bmp = bitmap.new(integer, self.bits())
+            return self.set_bitmap(bmp)
+
+        def deserialize(self, source):
+            source = iter(source)
+            bc = bitmap.consumer(source)
+            bc.consume(self.getbitoffset())     # skip some number of bits
+            return self.deserialize_consumer(bc)
+
+    bigendianpbinary.__name__ = p.__name__
+    return bigendianpbinary
+
+def littleendian(p):
+    class littleendianpbinary(p):
+        # XXX: This won't work if the size is dynamic, for obvious reasons
+        def set(self, integer):
+            raise NotImplementedError
+            bmp = bitmap.new(integer, self.bits())
+            return self.set_bitmap(bmp)
+
+        def deserialize(self, source):
+            source = iter(source)
+            block = ''.join([x for i,x in zip(range(self.alloc().size()), source)])
+            bc = bitmap.consumer(reversed(block))
+            bc.consume(self.getbitoffset())
+            return self.deserialize_consumer(bc)
+
+    littleendianpbinary.__name__ = p.__name__
+    return littleendianpbinary
+
 class type(ptype.pcontainer):
     initialized = property(fget=lambda s: s.value is not None)
+
+    def deserialize(self, source):
+        raise NotImplementedError(self.name())
+    def set(self, source):
+        raise NotImplementedError(self.name())
+
     def __int__(self):
         result = bitmap.new(0,0)
         for n in self.value:
@@ -88,21 +129,18 @@ class type(ptype.pcontainer):
             
         raise ValueError('Unknown type %s returned'% n.__class__)
 
-    def set(self, integer):
-        giantinteger = bitinteger()
-        giantinteger.push(integer, self.bits())
-
+    def set_bitmap(self, bits):
+        assert bitmap.isbitmap(bits)
         for i in range(len(self.value)):
             n = self.value[i]
             if ispbinaryinstance(n):
-                n.set( giantinteger.consume(n.bits()) )
+                bits,value = bitmap.consume(bits, n.bits())
+                n.set(value)
                 continue
 
             value,bits = self.value[i]
-            value = giantinteger.consume(bits)
+            bits,value = bitmap.consume(bits,n.bits())
             self.value[i] = value,bits
-            continue
-
         return self
 
     __boffset = 0
@@ -113,13 +151,6 @@ class type(ptype.pcontainer):
 
     def size(self):
         return (self.bits()+7)/8
-
-#    @ptype.rethrow
-    def deserialize(self, source):
-        source = iter(source)
-        bc = bitmap.bitconsumer(source)
-        bc.consume(self.getbitoffset())     # skip some number of bits
-        return self.deserialize_consumer(bc)
 
     def deserialize_consumer(self, source):
         raise NotImplementedError(self.name())
@@ -132,7 +163,7 @@ class type(ptype.pcontainer):
         # read original data that we're gonna update
         self.source.seek( self.getoffset() )
         olddata = self.source.consume( self.size() )
-        bc = bitmap.bitconsumer(iter(olddata))
+        bc = bitmap.consumer(iter(olddata))
 
         # calculate offsets
         leftbits,middlebits = bo, self.bits() - bo, 
@@ -165,6 +196,11 @@ class type(ptype.pcontainer):
         result.deserialize( self.serialize() )
         return result
 
+    def load_block(self):
+        self.source.seek(self.getoffset())
+        block = self.source.consume( self.size() + (self.getbitoffset()+7)/8 )
+        return self.deserialize(block)
+
 class __struct_generic(type):
     __fastindex = dict  # our on-demand index lookup for .value
 
@@ -188,15 +224,16 @@ class __struct_generic(type):
         raise KeyError(name)
 
     def keys(self):
+        '''return the name of each field'''
         return [name for type,name in self._fields_]
 
     def values(self):
-        return list(self.value)
+        '''return all the integer values of each field'''
+        return [integer&((1<<bits)-1) for integer,bits in self.value]
 
     def items(self):
         return [(k,v) for k,v in zip(self.keys(), self.values())]
 
-#    @ptype.rethrow
     def __getitem__(self, name):
         index = self.getindex(name)
         value = self.value[index]
@@ -226,7 +263,7 @@ class __struct_generic(type):
         return ''.join(['struct[', hex(int(element)), ']'])
 
     def __repr__initialized(self):
-        res = [ '%s=%s'% (name, self.__repr__value(val)) for name,val in self.items() ]
+        res = [ '%s=%s'% (name, self.__repr__value(val)) for name,val in zip(self.keys(), self.value) ]
         return ' '.join(res)
 
     def __repr__uninitialized(self):
@@ -234,7 +271,6 @@ class __struct_generic(type):
         return ' '.join(res)
 
 class struct(__struct_generic):
-#    @ptype.rethrow
     def alloc(self):
         self.value = []
         offset = self.getbitoffset() + (self.getoffset()<<3)
@@ -253,7 +289,6 @@ class struct(__struct_generic):
             raise ValueError('Unknown type %s while trying to assign to %s[%s]'% (n.__class_, self.__class__, name))
         return self
 
-#    @ptype.rethrow
     def load(self):
         self.value = []
         offset = self.getbitoffset() + (self.getoffset()<<3)
@@ -266,10 +301,7 @@ class struct(__struct_generic):
             self.value.append(n)
             continue
 
-        # deserialize
-        self.source.seek(self.getoffset())
-        block = self.source.consume( self.size() + (self.getbitoffset()+7)/8 )
-        return self.deserialize(block)
+        return self.load_block()
 
     def deserialize_consumer(self, source):
         self.value = []
@@ -327,7 +359,6 @@ class __array_generic(type):
 class array(__array_generic):
     _object_ = None
 
-#    @ptype.rethrow
     def alloc(self):
         self.value = []
         offset = self.getbitoffset() + (self.getoffset()<<3)
@@ -362,7 +393,6 @@ class array(__array_generic):
             self.value.append(n)
         return self
             
-#    @ptype.rethrow
     def load(self):
         self.value = []
         offset = self.getbitoffset() + (self.getoffset()<<3)
@@ -375,10 +405,10 @@ class array(__array_generic):
             self.value.append(n)
             continue
 
-        # deserialize
-        self.source.seek(self.getoffset())
-        block = self.source.consume( self.size() + (self.getbitoffset()+7)/8 )
-        return self.deserialize(block)
+        return self.load_block()
+
+array = bigendian(array)
+struct = bigendian(struct)
 
 if __name__ == '__main__':
     import sys
@@ -470,8 +500,7 @@ if __name__ == '__main__':
         print repr(res['size'])
 
     def test5():
-        raise NotImplementedError("endianness not supported")
-        print "test5"
+        print "test5 - bigendian"
         class blah(pbinary.struct):
             _fields_ = [
                 (4, 'heh'),
@@ -483,18 +512,17 @@ if __name__ == '__main__':
                 (4, 'blah6')
             ]
 
-        #blah = bigendian(blah)
-        data = '\xaa\xbb\xcc\xdd'
+        blah = bigendian(blah)
+        data = '\xaa\xbb\xcc\xdd\x11\x11'
 
         res = blah()
         res.deserialize(data)
-        print repr(data)
-        print repr(res)
-        print '\n'.join(map(repr, res.values()))
+        print repr(data), " -> ", repr(res)
+        print repr(res.keys())
+        print repr(res.values())
 
     def test6():
-        raise NotImplementedError("endianness not supported")
-        print "test6"
+        print "test6 - littleendian"
         class blah(pbinary.struct):
             _fields_ = [
                 (4, 'heh'),
@@ -505,12 +533,14 @@ if __name__ == '__main__':
                 (8, 'blah5'),
                 (4, 'blah6')
             ]
-        #blah = littleendian(blah)
-        input = '\xdd\xcc\xbb\xaa'
+        blah = littleendian(blah)
+        data = '\xdd\xcc\xbb\xaa\x11\x11'
 
         res = blah()
-        res.deserialize(input)
-        print repr(input), " -> ", repr(res)
+        res.deserialize(data)
+        print repr(data), " -> ", repr(res)
+        print repr(res.keys())
+        print repr(res.values())
 
     def test7():
         print "test7"
@@ -662,23 +692,23 @@ if __name__ == '__main__':
         print n
         print n.value
 
-    class nibble(struct):
+    class nibble(pbinary.struct):
         _fields_ = [
             (4, 'value')
         ]
 
-    class byte(struct):
+    class byte(pbinary.struct):
         _fields_ = [
             (8, 'value')
         ]
 
-    class word(struct):
+    class word(pbinary.struct):
         _fields_ = [
             (8, 'high'),
             (8, 'low'),
         ]
 
-    class dword(struct):
+    class dword(pbinary.struct):
         _fields_ = [
             (16, 'high'),
             (16, 'low')
@@ -696,7 +726,7 @@ if __name__ == '__main__':
     def test13():
         print "test13"
         ## a struct containing ptype
-        class blah(struct):
+        class blah(pbinary.struct):
             _fields_ = [
                 (word, 'higher'),
                 (word, 'lower'),
@@ -713,7 +743,7 @@ if __name__ == '__main__':
     def test14():
         print "test14"
         ## a struct containing functions
-        class blah(struct):
+        class blah(pbinary.struct):
             _fields_ = [
                 (lambda s: word, 'higher'),
                 (lambda s: 8, 'lower')
@@ -726,7 +756,7 @@ if __name__ == '__main__':
     def test15():
         print "test15"
         ## an array containing a bit size
-        class blah(array):
+        class blah(pbinary.array):
             _object_ = 4
             length = 8
 
@@ -740,7 +770,7 @@ if __name__ == '__main__':
     def test16():
         print "test16"
         ## an array containing a pbinary
-        class blah(array):
+        class blah(pbinary.array):
             _object_ = byte
             length = 4
 
@@ -754,7 +784,7 @@ if __name__ == '__main__':
 
     def test17():
         print "test17"
-        class blah(array):
+        class blah(pbinary.array):
             _object_ = lambda s: byte
             length = 4
 
@@ -766,7 +796,7 @@ if __name__ == '__main__':
 
     def test18():
         print "test18"
-        class blah(struct):
+        class blah(pbinary.struct):
             _fields_ = [
                 (byte, 'first'),
                 (byte, 'second'),
@@ -784,7 +814,7 @@ if __name__ == '__main__':
 
     def test19():
         print "test19"
-        class blah(array):
+        class blah(pbinary.array):
             length = 12
             _object_ = nibble
 
@@ -800,7 +830,7 @@ if __name__ == '__main__':
 
     def test20():
         print "test20"
-        class blah(struct):
+        class blah(pbinary.struct):
             _fields_ = [
                 (4, 'heh'),
                 (dword, 'dw'),
@@ -821,25 +851,26 @@ if __name__ == '__main__':
         #print self.value[2]
         #print self
 
-    testold()
-    test1()
-    test2()
-    test3()
-    test4()
-#    test5()
-#    test6()
-    test7()
-    test8()
-    test9()
-    test10()
-    test12()
-    test13()
-    test14()
-    test15()
-    test16()
-    test17()
-    test18()
-    test19()
-    test20()
+    if True:
+        testold()
+        test1()
+        test2()
+        test3()
+        test4()
+        test5()
+        test6()
+        test7()
+        test8()
+        test9()
+        test10()
+        test12()
+        test13()
+        test14()
+        test15()
+        test16()
+        test17()
+        test18()
+        test19()
+        test20()
 
     ## wow, i can't believe this shit works

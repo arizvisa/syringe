@@ -113,11 +113,17 @@ class type(object):
     initialized = property(fget=lambda self: self.value is not None)    # bool
     source = None   # ptype.provider
     parent = type   # ptype.type
+
+    attrs = None
     
     ## initialization
     def __init__(self, **attrs):
         self.source = self.source or provider.memory()
         self.parent = None
+        if attrs:
+            self.attrs = attrs
+        if self.attrs is None:
+            self.attrs = {}
 
         # update self if user specified
         for k,v in attrs.items():
@@ -133,7 +139,8 @@ class type(object):
 
     def __getparent_type(self,type):
         result = []
-        while self.parent is not None:
+        self = self.parent
+        while self is not None:
             result.append(self.__class__)
             if issubclass(self.__class__,type):
                 return self
@@ -142,7 +149,8 @@ class type(object):
 
     def __getparent_cmp(self, operand):
         result = []
-        while self.parent:
+        self = self.parent
+        while self is not None:
             result.append(self.__class__)
             if operand(self):
                 return self
@@ -162,6 +170,17 @@ class type(object):
             return self.__getparent_cmp(cmp)
 
         return self.parent
+
+    def path(self, next=lambda x: x.getparent()):
+        '''
+        Return the path to get to a particular node as determined by the 'next'
+        parameter.
+        '''
+        n = self
+        while n is not None:
+            yield n
+            n = next(n)
+        return
 
     def alloc(self):
         '''initializes self with zeroes'''
@@ -195,7 +214,7 @@ class type(object):
 
         if isptype(res):
 #            res.name = lambda s: name
-            res = res()
+            res = res(**self.attrs)     # all children will inherit too
         res.parent = self
         res.source = self.source
         res.__name__ = name

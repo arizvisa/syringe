@@ -24,19 +24,22 @@ class RealMedia_Header(pstruct.type):
 
         lookup = globals()['RealMedia_Header_Lookup']
         try:
-            return lookup[ (id,ver) ]
+            res = lookup[ (id,ver) ]
         except KeyError:
-            pass
-        
-        return dyn.block( int(self['size'].l) - 10 )
+            res = dyn.block( int(self['size'].l) - 10 )
+        return res
 
     def figureextra(s):
         l = int(s['size'].l)
         s = s['object'].size() + 4 + 4 + 2
         if l > s:
+            print 'hit some untested code'
             return dyn.block( l - s )
-        print 'wtf'
         return dyn.block(0)
+
+    def size(self):
+        l = int(self['size'])
+        return l
 
     _fields_ = [
         (UINT32, 'object_id'),
@@ -153,11 +156,9 @@ class Type_Specific(pstruct.type):
 
     def figurecodec(s):
         h = s.getparent(RealMedia_Header_Type)
-        print h['type_specific_len']
         l = int(h['type_specific_len'].l)
         if l > 0:
             return dyn.block( l - (s['object'].size()+6) )
-        print 'wtf2'
         return dyn.block(0)
 
     _fields_ = [

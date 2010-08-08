@@ -1,78 +1,115 @@
 from primitives import *
 
-def blockread(ptype, length):
-    class cls(ptype):
-        def deserialize(self, iterable):
-            input = ''.join([ x for i,x in zip(range(length), iterable)])
-            super(cls, self).deserialize(input)
+### for searching and creating atoms out of our defined
+def newAtom(atomType, atomLength):
+    res = []
+    for k,v in globals().items():
+        if type(v) == type and v is not AtomType and issubclass(v, AtomType):
+            if atomType == v.type:
+                return dyn.clone(v, maxsize=atomLength)
+            pass
+        continue
 
-    cls.__name__ = 'blockread(%s, %d)'% (ptype.__name__, length)
-    return cls
+    class unkunkunk(Unknown):
+        type = atomType
+        length = maxsize = atomLength
+
+    unkunkunk.__name__ = 'Unknown<%s>'% repr(atomType.serialize())
+    return unkunkunk
 
 ### main atom structures
 class AtomType(object): pass
-class Atom(pStruct):
+class Atom(pstruct.type):
+    def __data(self):
+        t = self['type'].l
 
-    def slacker(self):
-        x = self['size'] - self['data'].size()
-        return dyn.block(x)()
+        try:
+            self.getparent(MDAT)
 
-    def atom(self):
-        print self['type']
-        return AtomAuto.new(self['type'], self['size'])
+        except ValueError:
+            return newAtom(t, self.getsize() - self.getheadersize())
+
+        class unk(Unknown): pass
+
+        unk.type = t
+        unk.__name__ = 'Unknown<%s>'% repr(t.serialize())
+        unk.length = unk.maxsize = self.getsize() - self.getheadersize()
+        return unk
+
+    def __extended_size(self):
+        s = int(self['size'].l)
+        if s == 1:
+            return pint.uint64_t
+        return dyn.clone(pint.uint_t, length=0)
+
+    def getheadersize(self):
+        return 4 + 4 + self['extended_size'].size()
+
+    def getsize(self):
+        s = int(self['size'])
+        if s == 1:
+            s = int(self['extended_size'])
+
+        if s >= self.getheadersize():
+            return s
+
+        container = self.parent.parent
+        if s == 0:
+            if container is None:
+                return self.source.size() - (self.getoffset())
+
+            position = self.getoffset() - container.getoffset()
+            return container.getsize() - position
+
+        raise NotImplementedError(repr(self['type']),repr(s))
+
+    def __slack(self):
+        t,s = (self['type'].l, self.getsize())
+        s = self.getsize() - self.getheadersize()
+        datasize = self['data'].size()
+
+        container = self.parent.parent
+        if s >= datasize:
+            return dyn.block(s - datasize)
+
+        print 'miscalculated slack:',hex(s),'>',hex(datasize)
+        return dyn.block(0)
+
+    def size(self):
+        return self.getsize()
 
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
-        (atom, 'data'),
-#        (slacker, 'slack')
+        (__extended_size, 'extended_size'),
+        (__data, 'data'),
+        (__slack, 'slack')
     ]
 
-class AtomList(pInfiniteArray):
+class AtomList(parray.terminated):
     _object_ = Atom
+    currentsize = maxsize = 0   # copied from powerpoint
+
+    def isTerminator(self, value):
+        self.currentsize += value.size()
+        if (self.currentsize + 8 <= self.maxsize):
+            return False
+        return True
+
+    def search(self, type):
+        '''Search through a list of atoms for a particular fourcc type'''
+        return (x for x in self if x['type'] == type)
 
     def lookup(self, type):
+        '''Return the first instance of specified atom type'''
         res = [x for x in self if x['type'] == type]
         if not res:
             raise KeyError(type)
         assert len(res) == 1, repr(res)
         return res[0]
 
-class AtomAuto(pStruct):
-    type = None
-
-    @classmethod
-    def find(cls, atomType):
-        res = []
-        for k,v in globals().items():
-            if type(v) == type and v is not AtomType and issubclass(v, AtomType):
-                if atomType == v.type:
-                    return v
-        class unkunkunk(Unknown):
-            type = atomType
-
-        unkunkunk.__name__ = 'Unknown<%s>'% repr(atomType.serialize())
-        return unkunkunk
-
-    @classmethod
-    def new(cls, type, length):
-        atom = cls.find(type)
-        size = length - 8
-
-        assert size >= 0, 'size %d <= 0'% size
-
-        class _atom(atom):
-            pass
-        _atom.__name__ = atom.__name__
-    
-        _atom = blockread(_atom, size)
-        return _atom()
-        
-    def __repr__(self):
-        return '[\n%s]'% utils.hexdump(self.serialize(), offset=self.offset)
-
 ### list of atoms
-class Unknown(pType):
+class Unknown(dyn.block(0)):
     type = None
 
 ## container atoms
@@ -88,215 +125,219 @@ class STBL(AtomList, AtomType): type = 'stbl'
 class GMHD(AtomList, AtomType): type = 'gmhd'
 
 ## empty atoms
-class WIDE(pType, AtomType): type = 'wide'
+class WIDE(ptype.type, AtomType): type = 'wide'
 
 ## WLOC
-class WLOC(pStruct, AtomType):
+class WLOC(pstruct.type, AtomType):
     type = 'WLOC'
     _fields_ = [
-        (pWord, 'X'),
-        (pWord, 'Y')
+        (pint.uint16_t, 'X'),
+        (pint.uint16_t, 'Y')
     ]
 
 ## ftyp
-class FileType(pStruct, AtomType):
+class FileType(pstruct.type, AtomType):
     type = 'ftyp'
     _fields_ = [
         (pQTInt, 'Major_Brand'),
         (pQTInt, 'Minor_Version'),
-        (pQTIntArray, 'Compatible_Brands')
+        (lambda s: dyn.clone(pQTIntArray,maxsize=s.maxsize-8), 'Compatible_Brands')      # XXX: this isn't working
     ]
 
-class MVHD(pStruct, AtomType):
+class MVHD(pstruct.type, AtomType):
     type = 'mvhd'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
-        (pDword, 'Creation time'),
-        (pDword, 'Modification time'),
-        (pDword, 'Time scale'),
-        (pDword, 'Duration'),
-        (pDword, 'Preferred rate'),
-        (pWord, 'Preferred volume'),
+        (pint.uint32_t, 'Creation time'),
+        (pint.uint32_t, 'Modification time'),
+        (pint.uint32_t, 'Time scale'),
+        (pint.uint32_t, 'Duration'),
+        (pint.uint32_t, 'Preferred rate'),
+        (pint.uint16_t, 'Preferred volume'),
         (dyn.block(10), 'Reserved'),
         (dyn.block(36), 'Matrix structure'),
-        (pDword, 'Preview time'),
-        (pDword, 'Preview duration'),
-        (pDword, 'Poster time'),
-        (pDword, 'Selection time'),
-        (pDword, 'Selection duration'),
-        (pDword, 'Current time'),
-        (pDword, 'Next track ID'),
+        (pint.uint32_t, 'Preview time'),
+        (pint.uint32_t, 'Preview duration'),
+        (pint.uint32_t, 'Poster time'),
+        (pint.uint32_t, 'Selection time'),
+        (pint.uint32_t, 'Selection duration'),
+        (pint.uint32_t, 'Current time'),
+        (pint.uint32_t, 'Next track ID'),
     ]
 
-class TKHD(pStruct, AtomType):
+class TKHD(pstruct.type, AtomType):
     type = 'tkhd'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
-        (pDword, 'Creation time'),
-        (pDword, 'Modification time'),
-        (pDword, 'Track ID'),
-        (pDword, 'Reserved'),
-        (time, 'Duration'),
-        (pQword, 'Reserved'),
-        (pWord, 'Layer'),
-        (pWord, 'Alternate group'),
-        (pWord, 'Volume'),
-        (pWord, 'Reserved'),
+        (pint.uint32_t, 'Creation time'),
+        (pint.uint32_t, 'Modification time'),
+        (pint.uint32_t, 'Track ID'),
+        (pint.uint32_t, 'Reserved'),
+        (pint.uint32_t, 'Duration'),    # XXX: is this right?
+        (pint.uint64_t, 'Reserved'),
+        (pint.uint16_t, 'Layer'),
+        (pint.uint16_t, 'Alternate group'),
+        (pint.uint16_t, 'Volume'),
+        (pint.uint16_t, 'Reserved'),
         (dyn.block(36), 'Matrix structure'),
-        (pDword, 'Track width'),
-        (pDword, 'Track height'),
+        (pint.uint32_t, 'Track width'),
+        (pint.uint32_t, 'Track height'),
     ]
 
-class ELST(pStruct, AtomType):
+class ELST(pstruct.type, AtomType):
     type = 'elst'
+
+    def __Entry(self):
+        return dyn.array(pint.uint32_t, int(self['Number of entries'].l))
+
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
-        (pDword, 'Number of entries'),
-        (lambda self: dyn.array(pDword, self['Number of entries'])(), 'Entry')
+        (pint.uint32_t, 'Number of entries'),
+        (lambda self: dyn.array(pint.uint32_t, int(self['Number of entries'].l)), 'Entry')
     ]
 
-class MDHD(pStruct, AtomType):
+class MDHD(pstruct.type, AtomType):
     type = 'mdhd'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
-        (pDword, 'Creation time'),
-        (pDword, 'Modification time'),
-        (pDword, 'Time scale'),
-        (pDword, 'Duration'),
-        (pWord, 'Language'),
-        (pWord, 'Quality')
+        (pint.uint32_t, 'Creation time'),
+        (pint.uint32_t, 'Modification time'),
+        (pint.uint32_t, 'Time scale'),
+        (pint.uint32_t, 'Duration'),
+        (pint.uint16_t, 'Language'),
+        (pint.uint16_t, 'Quality')
     ]
 
-class HDLR(pStruct, AtomType):
+class HDLR(pstruct.type, AtomType):
     type = 'hdlr'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
-        (pDword, 'Component type'),
-        (pDword, 'Component subtype'),
-        (pDword, 'Component manufacturer'),
-        (pDword, 'Component flags'),
-        (pDword, 'Component Flags mask'),
+        (pint.uint32_t, 'Component type'),
+        (pint.uint32_t, 'Component subtype'),
+        (pint.uint32_t, 'Component manufacturer'),
+        (pint.uint32_t, 'Component flags'),
+        (pint.uint32_t, 'Component Flags mask'),
     ]
 
 ## stsd
 if False:
-    class MediaVideo(pStruct, AtomType):   #XXX: might need to be renamed
+    class MediaVideo(pstruct.type, AtomType):   #XXX: might need to be renamed
         _fields_ = [
-            (pWord, 'Version'),
-            (pWord, 'Revision level'),
+            (pint.uint16_t, 'Version'),
+            (pint.uint16_t, 'Revision level'),
             (pQTType, 'Vendor'),
             (pQTInt, 'Temporal Quality'),
             (pQTInt, 'Spatial Quality'),
-            (pWord, 'Width'),
-            (pWord, 'Height'),
+            (pint.uint16_t, 'Width'),
+            (pint.uint16_t, 'Height'),
             (pQTInt, 'Horizontal Resolution'),
             (pQTInt, 'Vertical Resolution'),
             (pQTInt, 'Data size'),
-            (pWord, 'Frame count'),
+            (pint.uint16_t, 'Frame count'),
             (dyn.block(32), 'Compressor Name'),
-            (pWord, 'Depth'),
-            (pWord, 'Color table ID')
+            (pint.uint16_t, 'Depth'),
+            (pint.uint16_t, 'Color table ID')
         ]
 
-class stsd_entry(pStruct):
+class stsd_entry(pstruct.type):
     _fields_ = [
         (pQTInt, 'Sample description size'),
         (pQTType, 'Data format'),
         (dyn.block(6), 'Reserved'),
-        (pWord, 'Data reference index')
+        (pint.uint16_t, 'Data reference index')
     ]
 
-class stsd(pStruct, AtomType):
+class stsd(pstruct.type, AtomType):
     '''Sample description atom'''
     type = 'stsd'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of Entries'),
-        (lambda x: dyn.array(stsd_entry, x['Number of Entries'])(), 'Entries')
+        (lambda x: dyn.array(stsd_entry, int(x['Number of Entries'].l)), 'Entries')
     ]
 
 ### stts
-class stts_entry(pStruct):
+class stts_entry(pstruct.type):
     _fields_ = [
         (pQTInt, 'Sample count'),
         (pQTInt, 'Sample duration')
     ]
 
-class stts(pStruct, AtomType):
+class stts(pstruct.type, AtomType):
     '''Time-to-sample atom'''
     type = 'stts'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stts_entry, x['Number of entries'])(), 'Entries')
+        (lambda x: dyn.array(stts_entry, int(x['Number of entries'].l)), 'Entries')
     ]
 
 if False:
-    class stss(pStruct, AtomType):
+    class stss(pstruct.type, AtomType):
         '''Sync Sample Atom'''
         _fields_ = [
-            (pByte, 'Version'),
+            (pint.uint8_t, 'Version'),
             (dyn.block(3), 'Flags'),
             (pQTInt, 'Number of entries'),
-            (lambda x: dyn.array(pQTInt, x['Number of entries'])(), 'Entries')
+            (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
         ]
 
 ## stsc
-class stsc_entry(pStruct):
+class stsc_entry(pstruct.type):
     _fields_ = [
         (pQTInt, 'First chunk'),
         (pQTInt, 'Samples per chunk'),
         (pQTInt, 'Sample description ID')
     ]
 
-class stsc(pStruct, AtomType):
+class stsc(pstruct.type, AtomType):
     '''Sample-to-chunk atom'''
     type = 'stsc'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stsc_entry, x['Number of entries'])(), 'Entries')
+        (lambda x: dyn.array(stsc_entry, int(x['Number of entries'].l)), 'Entries')
     ]
 
 ## stsz
-class stsz(pStruct, AtomType):
+class stsz(pstruct.type, AtomType):
     '''Sample size atom'''
     type = 'stsz'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Sample size'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, x['Number of entries'])(), 'Entries')
+        (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
     ]
 
 ## stco
-class stco(pStruct, AtomType):
+class stco(pstruct.type, AtomType):
     '''Chunk offset atom'''
     type = 'stco'
     _fields_ = [
-        (pByte, 'Version'),
+        (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, x['Number of entries'])(), 'Entries')
+        (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
     ]
 
 if False:
     # XXX: this doesn't exist (?)
-    class stsh(pStruct, AtomType):
+    class stsh(pstruct.type, AtomType):
         '''Shadow sync atom'''
         _fields_ = [
-            (pByte, 'Version'),
+            (pint.uint8_t, 'Version'),
             (dyn.block(3), 'Flags'),
             (pQTInt, 'Number of entries'),
-            (lambda x: dyn.array(pQTInt, x['Number of entries'])(), 'Entries')
+            (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
         ]
 
