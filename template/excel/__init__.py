@@ -18,9 +18,20 @@ class BiffGeneral(pstruct.type):
             return LookupBiffType[t]
         except KeyError:
             pass
-        return dyn.block( int(s['length'].l) )
+        return dyn.clone(dyn.block(int(s['length'].l)), bifftype=t)
 
     def __figureextra(s):
+        # all for an identity
+        t, name = int(s['type'].l), []
+        for n in list(s.traverse(lambda s: s.getparent())):
+            try:
+                name.append(str(n.__name__))
+            except AttributeError:
+                name.append(None)
+            continue
+        name = '[%s]'% ','.join(list(reversed(name))[1:])
+
+
         used = s['data'].size()
         total = int(s['length'].l)
         if used == total:
@@ -28,10 +39,10 @@ class BiffGeneral(pstruct.type):
 
         if total >= used:
             l = total-used
-            print '%d unused bytes in biff object at %x with type %s'% (l, s.getoffset(), s['data'].name())
+            print "biff object at %x (type %x) %s has %x bytes unused"% (s.getoffset(), t, name,l)
             return dyn.block(l)
 
-        print 'Error parsing biff object at %x with type %s'% (s.getoffset(), s['data'].name())
+        print "biff object at %x (type %x) %s's contents are larger than expected (%x>%x)"% (s.getoffset(), t, name,used,total)
         return dyn.block(0)
 
     _fields_ = [
@@ -52,6 +63,7 @@ class BiffSubStream(parray.terminated):
         return False
 
     def search(self, bifftype):
+        bifftype = int(bifftype)
         result = []
         for i,n in enumerate(self):
             try:
@@ -79,6 +91,26 @@ class BiffSubStream(parray.terminated):
                 pass
             return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof.serialize()))
         return super(BiffSubStream, self).__repr__()
+
+###
+class CatSerRange(pstruct.type, Biff):
+    bifftype = 0x1020
+    bifftype = 4128
+
+    class __flags(pbinary.struct):
+        _fields_ = [
+            (1, 'fBetween'),
+            (1, 'fMaxCross'),
+            (1, 'fReverse'),
+            (13, 'reserved')
+        ]
+
+    _fields_ = [
+        (pint.int16_t, 'catCross'),
+        (pint.int16_t, 'catLabel'),
+        (pint.int16_t, 'catMark'),
+        (__flags, 'catFlags')
+    ]
 
 ###
 class RRTabId(dyn.array(USHORT, 3), Biff):
@@ -238,7 +270,7 @@ class XLUnicodeString(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'cch'),
         (pint.uint8_t, 'fHighByte'),
-        (lambda s: dyn.clone(pstr.wstring, length=[s.length, s.length*2][int(s['fHighByte'].l)>>7]), 'rgb')
+        (lambda s: dyn.clone(pstr.wstring, length=[int(s['cch'].l), int(s['cch'])*2][int(s['fHighByte'].l)>>7]), 'rgb')
     ]
 
 class SupBook(pstruct.type, Biff):
@@ -246,6 +278,49 @@ class SupBook(pstruct.type, Biff):
     _fields_ = [
         (pint.uint16_t, 'ctab'),
         (pint.uint16_t, 'cch'),
+    ]
+
+#DataValidationCriteria
+class DVAL(pstruct.type, Biff):
+    bifftype = 434
+    bifftype = 0x1b2
+    class __wDviFlags(pbinary.struct):
+        _fields_ = [
+            (1, 'fWnClosed'),
+            (1, 'fWnPinned'),
+            (1, 'fCached'),
+            (13, 'Reserved')
+        ]
+
+    _fields_ = [
+        (pbinary.littleendian(__wDviFlags), 'wDviFlags'),
+        (pint.uint32_t, 'xLeft'),
+        (pint.uint32_t, 'yTop'),
+        (pint.uint32_t, 'idObj'),
+        (pint.uint32_t, 'idvMac'),
+    ]
+
+class DV(pstruct.type, Biff):
+    bifftype = 0x1be
+    bifftype = 446
+
+    class __dwDvFlags(pbinary.struct):
+        _fields_ = [
+            (4, 'ValType'),
+            (3, 'ErrStyle'),
+            (1, 'fStrLookup'),
+            (1, 'fAllowBlank'),
+            (1, 'fSuppressCombo'),
+            (8, 'mdImeMode'),
+            (1, 'fShowInputMsg'),
+            (1, 'fShowErrorMsg'),
+            (4, 'typOperator'),
+            (8, 'Reserved'),
+        ]
+
+    _fields_ = [
+        (__dwDvFlags, 'dwDvFlags'),
+        (DVAL, 'Dval')
     ]
 
 ###
@@ -303,6 +378,10 @@ for cls in globals().values():
     if inspect.isclass(cls) and issubclass(cls, Biff):
         LookupBiffType[cls.bifftype] = cls
     continue
+
+class File(parray.type):
+    length=3
+    _object_ = BiffSubStream
 
 if __name__ == '__main__':
     import ptypes

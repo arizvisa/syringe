@@ -55,13 +55,10 @@ def rethrow(fn):
             self = args[0]
             type, exception = sys.exc_info()[:2]
 
-            getpathtohead = lambda x: x.parent and [x] + getpathtohead(x.parent) or [x]
-
             # XXX: any way to make this better?
-            path = getpathtohead(self)
-            path = [ repr(x.name()) for x in reversed(path)]
-            path = '\t' + ' ->\n\t'.join(path)
-#            id =  repr(map(lambda x: x.__class__, self.value))       # this should be the path from our parent's name to this element
+            path = list(self.traverse(lambda n: n.parent))
+            path = [ (x.name(), getattr(x, '__name__', '')) for x in reversed(path)]
+            path = '\t' + ' ->\n\t'.join(map(repr,path))
 
             id = self.name()
 
@@ -71,10 +68,12 @@ def rethrow(fn):
             res.append('Caught exception %s in'% (repr(exception)))
             res.append(path + '->')
             res.append('\t' + id + '.' + fn.__name__)
+
             if self.initialized:
-                res.append(repr(self.value))
+                res.append('\t<type length> %x'% len(self.length))
             elif ispcontainer(self.__class__):
-                res.append(repr([x.name() for x in self.value]))
+                res.append('\t<container length> %x'% len(self.value))
+
             res.append('')
             res.append('Traceback (most recent call last):')
             res.append( ''.join(tb) )
@@ -228,7 +227,8 @@ class type(object):
 
         try:
             self.source.seek( self.getoffset() )
-            self.value = self.source.consume( self.size() )
+#            self.value = self.source.consume( self.size() )
+            self.deserialize( self.source.consume( self.size() ) )
             return self
 
         except MemoryError:

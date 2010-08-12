@@ -11,3 +11,6 @@ def setsource(provider):
     ptype.type.source = provider
 
 from ptype import debug,debugrecurse
+from ptype import isptype,ispcontainer
+
+from provider import file,memory

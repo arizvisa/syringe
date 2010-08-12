@@ -1,5 +1,5 @@
 '''ptypes with a numerical sort of feel'''
-import ptype
+import ptype,bitmap
 
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
@@ -12,8 +12,13 @@ def bigendian(ptype):
             mask = (1<<self.size()*8) - 1
             integer &= mask
 
-            consumebyte = lambda integer: (integer > 0) and ([integer & 0xff] + consumebyte(integer >> 8)) or []
-            res = consumebyte(integer)
+            bc = bitmap.new(integer, self.size() * 8)
+            res = []
+    
+            while bc[1] > 0:
+                bc,x = bitmap.consume(8)
+                res.append(x)
+
             res = res + [0]*(self.size() - len(res))
             res = ''.join(map(chr, reversed(res)))
             self.value = res
@@ -33,8 +38,13 @@ def littleendian(ptype):
             mask = (1<<self.size()*8) - 1
             integer &= mask
 
-            consumebyte = lambda integer: (integer > 0) and ([integer & 0xff] + consumebyte(integer >> 8)) or []
-            res = consumebyte(integer)
+            bc = bitmap.new(integer, self.size() * 8)
+            res = []
+    
+            while bc[1] > 0:
+                bc,x = bitmap.consume(bc,8)
+                res.append(x)
+
             res = res + [0]*(self.size() - len(res))
             res = ''.join(map(chr, res))
             self.value = res
@@ -63,19 +73,19 @@ integer_t = littleendian(integer_t)
 class sint_t(integer_t):
     '''Provides signed integer support'''
     def __int__(self):
-        res = super(sint_t, self).__int__()
         signmask = 1 << 8*self.size()
+        res = super(sint_t, self).__int__()
         
         res = res & (signmask-1)
         return [res, res*-1][bool(res&signmask)]
 
     def set(self, integer):
-        res = integer & ((1<<self.size())*8-1)
-        signbit = 1 << 8*self.size()
+        signmask = 1 << 8*self.size()
+        res = integer & (signmask-1)
         if integer < 0:
-            res |= signbit
+            res |= signmask
         return super(sint_t, self).set(res)
-        
+
 class uint_t(integer_t): pass
 class int_t(sint_t): pass
 

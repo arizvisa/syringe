@@ -4,12 +4,12 @@ from stypes import *
 def CBinary(iterable):
     iter(iterable)
 
-    class _CBinary(pBinary):
+    class _CBinary(pbinary.struct):
         _fields_ = list(iterable)
 
     return _CBinary()
 
-class Tag(pStruct):
+class Tag(pstruct.type):
     '''this wraps around a tag'''
     def autopad(self):
         size = int(self['Header']['length'])
@@ -20,18 +20,18 @@ class Tag(pStruct):
         used = self['data'].size()
         assert used <= size, 'invalid size specified (%d > %d)'%(used, size)
         if size >= used:
-            return dyn.block(size - used)()
-        return Empty()
+            return dyn.block(size - used)
+        return Empty
 
     def islongheader(self):
         if self['Header']['length'] == 0x3f:
             return UI32()
-        return Empty()
+        return Empty
 
     _fields_ = [
         (RECORDHEADER, 'Header'),
         (islongheader, 'HeaderLongLength'),
-        (lambda self: autotag(self['Header']['type'])(), 'data'),
+        (lambda self: autotag(self['Header']['type']), 'data'),
         (autopad, 'unknown')
     ]
 
@@ -47,7 +47,7 @@ class Tag(pStruct):
 
         return super(Tag, self).serialize()
 
-class TagList(pTerminatedArray):
+class TagList(parray.terminated):
     _object_ = Tag
     length = 0
 
@@ -58,14 +58,14 @@ class SWFT(object):
     '''all tags are derived from this class'''
     tag = None
 
-class TagS(pStruct, SWFT):
+class TagS(pstruct.type, SWFT):
     pass
 
-class TagB(pBinary, SWFT):
+class TagB(pbinary.struct, SWFT):
     pass
 
 ######## display list
-class Unknown(pType):
+class Unknown(ptype.type):
     def __repr__(self):
         return "%s tagid: %d"%(self.__class__, self.tag);
 
@@ -100,7 +100,7 @@ class DoAction(TagS):
 #    ]
 
 #thank you macromedia for keeping this struct a multiple of 8 bits
-class _PlaceObject_Flag(pBinary):
+class _PlaceObject_Flag(pbinary.struct):
     _fields_ = [
         (1, 'HasClipActions'),
         (1, 'HasClipDepth'),
@@ -135,7 +135,7 @@ class PlaceObject2(TagS):
     ]
 
 #thank you macromedia for keeping this struct a byte in width
-class _PlaceObject3_Flag(pBinary):
+class _PlaceObject3_Flag(pbinary.struct):
     _fields_ = [
         (5, 'Reserved'),
         (1, 'HasCacheAsBitmap'),
@@ -288,7 +288,7 @@ if False:
                 self[name].deserialize(iterable)
 
 
-class _asset(pStruct):
+class _asset(pstruct.type):
     _fields_ = [
         (UI16, 'Tag'),
         (STRING, 'Name')
@@ -300,7 +300,7 @@ class ImportAssets(TagS):
     _fields_ = [
         (STRING, 'URL'),
         (UI16, 'Count'),
-        (dyn.array( _asset, 'Count' ), 'Asset')        
+        (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
     ]
 
 class ExportAssets(TagS):
@@ -309,7 +309,7 @@ class ExportAssets(TagS):
 
     _fields_ = [
         (UI16, 'Count'),
-        (dyn.array( _asset, 'Count'), 'Asset')
+        (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
     ]
 
 class ImportAssets2(TagS):
@@ -320,7 +320,7 @@ class ImportAssets2(TagS):
         (UI8, 'Reserved1'),
         (UI8, 'Reserved2'),
         (UI16, 'Count'),
-        (dyn.array(_asset, 'Count'), 'Asset')
+        (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
     ]
 
 class EnableDebugger(TagS):

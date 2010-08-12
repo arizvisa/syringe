@@ -1,7 +1,8 @@
+import ptypes
 from ptypes import *
-from ptypes.utils import biterator,bitconsume
+from ptypes.pint import littleendian
 
-class pFixed(pType):
+class pFixed(ptype.type):
     length = 0
 
     def __float__(self):
@@ -23,21 +24,22 @@ class pFixed(pType):
 
 ## float types
 #TODO: define __repr__ for each of these types
-class FLOAT16(pBinary):
+# FIXME: can probably use pfloat.type
+class FLOAT16(pbinary.struct):
     _fields_ = [
         (1, 'sign'),
         (5, 'exponent'),
         (10, 'mantissa')
     ]
 
-class FLOAT(pBinary):
+class FLOAT(pbinary.struct):
     _fields_ = [
         (1, 'sign'),
         (8, 'exponent'),
         (23, 'mantissa')
     ]
 
-class DOUBLE(pBinary):
+class DOUBLE(pbinary.struct):
     _fields_ = [
         (1, 'sign'),
         (11, 'exponent'),
@@ -45,35 +47,35 @@ class DOUBLE(pBinary):
     ]
 
 ## int types
-class SI8(pInt):
+class SI8(pint.sint_t):
     length = 1
     signed = True
 
-class UI8(pInt):
+class UI8(pint.uint_t):
     length = 1
     signed = False
 
-class SI16(pInt):
+class SI16(pint.sint_t):
     length = 2
     signed = True
 
-class UI16(pInt):
+class UI16(pint.uint_t):
     length = 2
     signed = False
 
-class SI32(pInt):
+class SI32(pint.sint_t):
     length = 4
     signed = True
 
-class UI32(pInt):
+class UI32(pint.uint_t):
     length = 4
     signed = False
 
-class UI64(pInt):
+class UI64(pint.uint_t):
     length = 8
     signed = False
 
-(SI8, UI8, SI16, UI16, SI32, UI32, UI64) = ( lilendian(x) for x in (SI8,UI8,SI16,UI16,SI32,UI32,UI64) )
+(SI8, UI8, SI16, UI16, SI32, UI32, UI64) = ( littleendian(x) for x in (SI8,UI8,SI16,UI16,SI32,UI32,UI64) )
 
 class FIXED(pFixed):
     length = 4
@@ -81,7 +83,7 @@ class FIXED(pFixed):
 class FIXED8(pFixed):
     length = 2
 
-class RECT(pBinary):
+class RECT(pbinary.struct):
     _fields_ = [
         (5, 'Nbits'),
         (lambda self: self['Nbits'], 'Xmin'),
@@ -96,16 +98,24 @@ if False:
     # on __setitem__ if we're dynamic, then initialize self.value with shit
     x['Xmin'] =  16
 
-class MATRIX(pBinary):
+class MATRIX(pbinary.struct):
     '''look at deserialize to see how this gets read'''
+
+    def _ifelse(field, t, f):
+        def fn(self):
+            if self[field]:
+                return t
+            return f
+        return fn
+
     _fields_ = [
         (1, 'HasScale'),
-        (dyn.ifelse(lambda self: self['HasScale'], 5, 0), 'NScaleBits'),
+        (_ifelse('HasScale', 5, 0), 'NScaleBits'),
         (lambda self: self['NScaleBits'], 'ScaleX'),
         (lambda self: self['NScaleBits'], 'ScaleY'),
 
         (1, 'HasRotate'),
-        (dyn.ifelse(lambda self: self['HasRotate'], 5, 0), 'NRotateBits'),
+        (_ifelse('HasRotate', 5, 0), 'NRotateBits'),
         (lambda self: self['NRotateBits'], 'RotateSkew0'),
         (lambda self: self['NRotateBits'], 'RotateSkew1'),
 
@@ -114,16 +124,14 @@ class MATRIX(pBinary):
         (lambda self: self['NTranslateBits'], 'TranslateY')
     ]
 
-class STRING(pTerminatedArray):
-    _object_ = UI8
-
+class STRING(pstr.szstring):
     def isTerminator(self, v):
         return int(v) == 0
 
     def __str__(self):
         return ''.join( [str(v) for v in self] )
 
-class Empty(pType):
+class Empty(ptype.type):
     initialized = property(fget=lambda x: True, fset=lambda x,v: None)
     value = []
 

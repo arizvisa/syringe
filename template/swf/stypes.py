@@ -1,21 +1,34 @@
 from primitives import *
-from ptypes.utils import biterator,bitconsume
 
-class RECORDHEADER(pBinary):
+def _ifelse(field, t, f):
+    def fn(self):
+        if self[field]:
+            return t
+        return f
+    return fn
+
+def _ifeq(field, value, t, f):
+    def fn(self):
+        if int(self[field]) == value:
+            return t
+        return f
+    return fn
+
+class RECORDHEADER(pbinary.struct):
     _fields_ = [
         (10, 'type'),
         (6, 'length')
     ]
-RECORDHEADER = littleendian(RECORDHEADER)
+RECORDHEADER = pbinary.littleendian(RECORDHEADER)
 
-class RGB(pStruct):
+class RGB(pstruct.type):
     _fields_ = [
         (UI8, 'Red'),
         (UI8, 'Green'),
         (UI8, 'Blue')
     ]
 
-class RGBA(pStruct):
+class RGBA(pstruct.type):
     _fields_ = [
         (UI8, 'Red'),
         (UI8, 'Green'),
@@ -23,7 +36,7 @@ class RGBA(pStruct):
         (UI8, 'Alpha')
     ]
 
-class ARGB(pStruct):
+class ARGB(pstruct.type):
     _fields_ = [
         (UI8, 'Alpha'),
         (UI8, 'Red'),
@@ -35,7 +48,7 @@ class LANGCODE(UI8):
     pass
 
 ###
-class _CLIPEVENTFLAGS_Events(pBinary):
+class _CLIPEVENTFLAGS_Events(pbinary.struct):
     _fields_ = [
         (1, 'ClipEventKeyUp'),   
         (1, 'ClipEventKeyDown'),   
@@ -56,7 +69,7 @@ class _CLIPEVENTFLAGS_Events(pBinary):
         (1, 'ClipEventData'),
     ]
 
-class _CLIPEVENTFLAGS6_Events(pBinary):
+class _CLIPEVENTFLAGS6_Events(pbinary.struct):
     _fields_ = [
         (5, 'Reserved'),
         (1, 'ClipEventConstruct'),
@@ -65,51 +78,51 @@ class _CLIPEVENTFLAGS6_Events(pBinary):
         (8, 'Reserved')
     ]
 
-class CLIPEVENTFLAGS(pStruct):
+class CLIPEVENTFLAGS(pstruct.type):
     def _ifver(version, typ):
-        return typ()
+        return typ
 
     _fields_ = [
         (_CLIPEVENTFLAGS_Events, 'Events'),
         (_ifver(6, _CLIPEVENTFLAGS6_Events), 'Events6')
     ]
     
-class CXFORM(pBinary):
+class CXFORM(pbinary.struct):
     '''fuck you swf'''
     _fields_ = [
         (1, 'HasAddTerms'),
         (1, 'HasMultTerms'),
         (4, 'Nbits'),
     
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'RedMultTerm'),
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'GreenMultTerm'),
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'BlueMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'RedMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'GreenMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'BlueMultTerm'),
 
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'RedAddTerm'),
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'GreenAddTerm'),
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'BlueAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'RedAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'GreenAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'BlueAddTerm'),
     ]
 
-class CXFORMWITHALPHA(pBinary):
+class CXFORMWITHALPHA(pbinary.struct):
     '''fuck you swf'''
     _fields_ = [
         (1, 'HasAddTerms'),
         (1, 'HasMultTerms'),
         (4, 'Nbits'),
     
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'RedMultTerm'),
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'GreenMultTerm'),
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'BlueMultTerm'),
-        (lambda self: dyn.ifelse(self['HasMultTerms'], self['Nbits'], 0), 'AlphaMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'RedMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'GreenMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'BlueMultTerm'),
+        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'AlphaMultTerm'),
 
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'RedAddTerm'),
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'GreenAddTerm'),
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'BlueAddTerm'),
-        (lambda self: dyn.ifelse(self['HasAddTerms'], self['Nbits'], 0), 'AlphaAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'RedAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'GreenAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'BlueAddTerm'),
+        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'AlphaAddTerm'),
     ]
 
 ###
-class _DROPSHADOWFILTER_Flags(pBinary):
+class _DROPSHADOWFILTER_Flags(pbinary.struct):
     _fields_ = [
         (1, 'InnerShadow'),
         (1, 'KnockOut'),
@@ -117,7 +130,7 @@ class _DROPSHADOWFILTER_Flags(pBinary):
         (5, 'Passes')
     ]
 
-class DROPSHADOWFILTER(pStruct):
+class DROPSHADOWFILTER(pstruct.type):
     _fields_ = [
         (RGBA, 'DropShadowColor'),
         (FIXED, 'BlurX'),
@@ -129,13 +142,13 @@ class DROPSHADOWFILTER(pStruct):
     ]
 
 ###
-class _BLURFILTER_Flags(pBinary):
+class _BLURFILTER_Flags(pbinary.struct):
     _fields_ = [
         (5, 'Passes'),
         (3, 'Reserved')
     ]
 
-class BLURFILTER(pStruct):
+class BLURFILTER(pstruct.type):
     _fields_ = [
         (FIXED, 'BlurX'),
         (FIXED, 'BlurY'),
@@ -146,7 +159,7 @@ class BLURFILTER(pStruct):
 class _GLOWFILTER_Flags(_DROPSHADOWFILTER_Flags):
     pass
 
-class GLOWFILTER(pStruct):
+class GLOWFILTER(pstruct.type):
     _fields_ = [
         (RGBA, 'GlowColor'),
         (FIXED, 'BlurX'),
@@ -156,7 +169,7 @@ class GLOWFILTER(pStruct):
     ]
 
 ###
-class _BEVELFILTER_Flags(pBinary):
+class _BEVELFILTER_Flags(pbinary.struct):
     _fields_ = [
         (1, 'InnerShadow'),
         (1, 'KnockOut'),
@@ -165,7 +178,7 @@ class _BEVELFILTER_Flags(pBinary):
         (4, 'Passes')
     ]
 
-class BEVELFILTER(pStruct):
+class BEVELFILTER(pstruct.type):
     _fields_ = [
         (RGBA, 'ShadowColor'),
         (RGBA, 'HighlightColor'),
@@ -181,7 +194,7 @@ class BEVELFILTER(pStruct):
 class _GRADIENTGLOWFILTER_Flags(_BEVELFILTER_Flags):
     pass
 
-class GRADIENTGLOWFILTER(pStruct):
+class GRADIENTGLOWFILTER(pstruct.type):
     _fields_ = [
         (FIXED, 'BlurX'),
         (FIXED, 'BlurY'),
@@ -192,14 +205,14 @@ class GRADIENTGLOWFILTER(pStruct):
     ]
 
 ###
-class _CONVOLUTIONFILTER_Flags(pBinary):
+class _CONVOLUTIONFILTER_Flags(pbinary.struct):
     _fields_ = [
         (6, 'Reserved'),
         (1, 'Clamp'),
         (1, 'PreserveAlpha')
     ]
 
-class CONVOLUTIONFILTER(pStruct):
+class CONVOLUTIONFILTER(pstruct.type):
     _fields_ = [
         (UI8, 'MatrixX'),
         (UI8, 'MatrixY'),
@@ -211,12 +224,12 @@ class CONVOLUTIONFILTER(pStruct):
     ]
 
 ###
-class COLORMATRIXFILTER(pArray):
+class COLORMATRIXFILTER(parray.type):
     _object_ = FLOAT
     length = 20
 
 ###
-class _GRADIENTBEVELFILTER_Flags(pBinary):
+class _GRADIENTBEVELFILTER_Flags(pbinary.struct):
     _fields_ = [
         (1, 'InnerShadow'),
         (1, 'KnockOut'),
@@ -225,7 +238,7 @@ class _GRADIENTBEVELFILTER_Flags(pBinary):
         (4, 'Passes'),
     ]
 
-class GRADIENTBEVELFILTER(pStruct):
+class GRADIENTBEVELFILTER(pstruct.type):
     _fields_ = [
         (UI8, 'NumColors'),
         (lambda self: dyn.array(RGBA, self['NumColors'])(), 'Gradientcolors'),
@@ -239,7 +252,7 @@ class GRADIENTBEVELFILTER(pStruct):
     ]
 
 ###
-class FILTER(pStruct):
+class FILTER(pstruct.type):
     def _iff(field, value, typ):
         def fn(self):
             if self[field] == value:
@@ -259,13 +272,13 @@ class FILTER(pStruct):
         (_iff('FilterID', 7, GRADIENTBEVELFILTER), 'GradientBevelFilter')
     ]
 
-class FILTERLIST(pStruct):
+class FILTERLIST(pstruct.type):
     _fields_ = [
         (UI8, 'NumberOfFilters'),
         (lambda self: dyn.array(FILTER, self['NumberOfFilters'])(), 'Filter')
     ]
 
-class CLIPACTIONS(pStruct):
+class CLIPACTIONS(pstruct.type):
     _fields_ = [
         (UI16, 'Reserved'),
         (CLIPEVENTFLAGS, 'AllEventFlags'),
@@ -273,7 +286,7 @@ class CLIPACTIONS(pStruct):
     ]
 
 ####
-class GRADRECORD(pStruct):
+class GRADRECORD(pstruct.type):
     def dyn_shape(self):
 #        if self.stash('shape') == 3:
 #            return RGBA
@@ -284,20 +297,20 @@ class GRADRECORD(pStruct):
         (dyn_shape, 'Color')       
     ]
 
-class _GRADIENT_bits(pBinary):
+class _GRADIENT_bits(pbinary.struct):
     _fields_ = [
         (2, 'SpreadMode'),
         (2, 'InterpolationMode'),
         (4, 'NumGradients')
     ]
 
-class GRADIENT(pStruct):
+class GRADIENT(pstruct.type):
     _fields_ = [
         (_GRADIENT_bits, 'GradientHeader'),
         (lambda self: dyn.array(GRADRECORD, self['GradientHeader']['NumGradients'])(), 'GradientRecords')
     ]
 
-class FOCALGRADIENT(pStruct):
+class FOCALGRADIENT(pstruct.type):
     _fields_ = [
         (_GRADIENT_bits, 'GradientHeader'),
         (lambda self: dyn.array(GRADRECORD, self['GradientHeader']['NumGradients'])(), 'GradientRecords'),
@@ -305,10 +318,10 @@ class FOCALGRADIENT(pStruct):
     ]
 
 ############
-class ENDSHAPERECORD(pBinary):
+class ENDSHAPERECORD(pbinary.struct):
     pass
 
-class FILLSTYLE(pStruct):
+class FILLSTYLE(pstruct.type):
     def dyn_shape(self):
 #        if self.stash('shape') == 3:
 #            return RGBA
@@ -343,7 +356,7 @@ class FILLSTYLE(pStruct):
         (iftypes([0x40,0x41,0x42,0x43], MATRIX), 'BitmapMatrix')
     ]
 
-class LINESTYLE(pStruct):
+class LINESTYLE(pstruct.type):
     def dyn_shape(self):
 #        if self.stash('shape') == 3:
 #            return RGBA
@@ -354,7 +367,7 @@ class LINESTYLE(pStruct):
         (dyn_shape, 'Color'),
     ]
 
-class FILLSTYLEARRAY(pStruct):
+class FILLSTYLEARRAY(pstruct.type):
     def _iff(field, value, typ):
         def fn(self):
             if self[field] == value:
@@ -383,13 +396,13 @@ class LINESTYLEARRAY(FILLSTYLEARRAY):
     ]
 
 
-class _SHAPEWITHSTYLE_Num(pBinary):
+class _SHAPEWITHSTYLE_Num(pbinary.struct):
     _fields_ = [
         (4, 'FillBits'),
         (4, 'LineBits')
     ]
 
-class SHAPEWITHSTYLE(pStruct):
+class SHAPEWITHSTYLE(pstruct.type):
     _fields_ = [
         (FILLSTYLEARRAY, 'FillStyles'),
         (LINESTYLEARRAY, 'LineStyles'),
@@ -397,54 +410,55 @@ class SHAPEWITHSTYLE(pStruct):
         (Empty, 'ShapeRecords')
     ]
 
-'''
-# FIXME: please implement this....
-class SHAPERECORD(pBinary):
-    id = 0
+if False:
+    '''
+    # FIXME: please implement this....
+    class SHAPERECORD(pbinary.struct):
+        id = 0
 
-class ENDSHAPERECORD(SHAPERECORD):
-    _fields_ = [
-        (1, 'TypeFlag'),
-        (5, 'EndOfshape')
-    ]
+    class ENDSHAPERECORD(SHAPERECORD):
+        _fields_ = [
+            (1, 'TypeFlag'),
+            (5, 'EndOfshape')
+        ]
 
-class _STYLECHANGERECORD_bits(pBinary):
-    _fields_ = [
-        (1, 'TypeFlag'),
-        (1, 'StateNewStyles'),
-        (1, 'StateLineStyle'),
-        (1, 'StateFillStyle1'),
-        (1, 'StateFillStyle0'),
-        (1, 'StateMoveTo')
-        (lambda self: self['StateMoveTo'] and 5 or 0, 'MoveBits'),
-        (lambda self: self['StateMoveTo'] and self['MoveBits'] or 0, 'MoveDeltaX'),
-        (lambda self: self['StateMoveTo'] and self['MoveBits'] or 0, 'MoveDeltaX'),
-    ]
+    class _STYLECHANGERECORD_bits(pbinary.struct):
+        _fields_ = [
+            (1, 'TypeFlag'),
+            (1, 'StateNewStyles'),
+            (1, 'StateLineStyle'),
+            (1, 'StateFillStyle1'),
+            (1, 'StateFillStyle0'),
+            (1, 'StateMoveTo')
+            (lambda self: self['StateMoveTo'] and 5 or 0, 'MoveBits'),
+            (lambda self: self['StateMoveTo'] and self['MoveBits'] or 0, 'MoveDeltaX'),
+            (lambda self: self['StateMoveTo'] and self['MoveBits'] or 0, 'MoveDeltaX'),
+        ]
 
-    def debit(self, nextbit):
-        fillbits = self.parent['Num']['FillBits']
-        linebits = self.parent['Num']['LineBits']
+        def debit(self, nextbit):
+            fillbits = self.parent['Num']['FillBits']
+            linebits = self.parent['Num']['LineBits']
 
-        nextbit(6)
-       
-        if self['StateMoveTo']:
-            self._fields_.append( (5, 'MoveBits') )
-            nextbit(5)
+            nextbit(6)
+           
+            if self['StateMoveTo']:
+                self._fields_.append( (5, 'MoveBits') )
+                nextbit(5)
 
-            self._fields_.append( (self['MoveBits'], 'MoveDeltaX') )
-            self._fields_.append( (self['MoveBits'], 'MoveDeltaY') )
-            nextbit( self['MoveBits']*2 )
-        
-        if self['StateFillStyle0']:
-            self._fields_.append( (fillbits, 'FillStyle0') )
-            nextbit(fillbits)
+                self._fields_.append( (self['MoveBits'], 'MoveDeltaX') )
+                self._fields_.append( (self['MoveBits'], 'MoveDeltaY') )
+                nextbit( self['MoveBits']*2 )
+            
+            if self['StateFillStyle0']:
+                self._fields_.append( (fillbits, 'FillStyle0') )
+                nextbit(fillbits)
 
-        if self['StateFillStyle1']:
-            self._fields_.append( (fillbits, 'FillStyle1') )
-            nextbit(fillbits)
-'''
+            if self['StateFillStyle1']:
+                self._fields_.append( (fillbits, 'FillStyle1') )
+                nextbit(fillbits)
+    '''
 
-class FILLSTYLE(pStruct):
+class FILLSTYLE(pstruct.type):
     def _ifcolor(self):
         if self['FillStyleType'] == 0:
             if type(self.parent) == DefineShape3:
@@ -463,13 +477,13 @@ class FILLSTYLE(pStruct):
     _fields_ = [
         (UI8, 'FillStyleType'),
         (_ifcolor, 'Color'),
-        ( dyn.ifelse(lambda x: int(x['FillStyleType']) in [0x10, 0x12], MATRIX, Empty), 'GradientMatrix'),
+        ( _ifelse(lambda x: int(x['FillStyleType']) in [0x10, 0x12], MATRIX, Empty), 'GradientMatrix'),
         ( _ifgradient, 'Gradient'),
-        ( dyn.ifelse( lambda x: int(x['FillStyleType']) in [0x40, 0x41, 0x42, 0x43], UI16, Empty), 'BitmapId' ),
-        ( dyn.ifelse( lambda x: int(x['FillStyletype']) in [0x40, 0x41, 0x42, 0x43], MATRIX, Empty), 'BitmapMatrix' )
+        ( _ifelse( lambda x: int(x['FillStyleType']) in [0x40, 0x41, 0x42, 0x43], UI16, Empty), 'BitmapId' ),
+        ( _ifelse( lambda x: int(x['FillStyletype']) in [0x40, 0x41, 0x42, 0x43], MATRIX, Empty), 'BitmapMatrix' )
     ]
 
-class LINESTYLE(pStruct):
+class LINESTYLE(pstruct.type):
     def _ifshape(self):
         if type(self.parent) == DefineShape3:
             return RGBA
@@ -480,7 +494,7 @@ class LINESTYLE(pStruct):
         (_ifshape, 'Color'),
     ]
 
-class _LINESTYLE2_style(pBinary):
+class _LINESTYLE2_style(pbinary.struct):
     _fields_ = [
         (2, 'StartCapStyle'),
         (2, 'JoinStyle'),
@@ -493,7 +507,7 @@ class _LINESTYLE2_style(pBinary):
         (2, 'EndCapStyle')
     ]
 
-class LINESTYLE2(pStruct):
+class LINESTYLE2(pstruct.type):
     def _ifshape(self):
         if type(self.parent) == DefineShape3:
             return RGBA
@@ -502,19 +516,19 @@ class LINESTYLE2(pStruct):
     _fields_ = [
         (UI16, 'Width'),
         (_LINESTYLE2_style, 'Style'),
-        (dyn.ifelse( lambda x: x['Style']['JoinStyle'] == 2, UI16, Empty), 'MiterLimitFactor'),
-        (dyn.ifelse( lambda x: x['Style']['HasFillFlag'] == 0, RGBA, Empty), 'Color'),
-        (dyn.ifelse( lambda x: x['Style']['HasFillFlag'] == 1, FILLSTYLE, Empty), 'FillType')
+        (_ifelse( lambda x: x['Style']['JoinStyle'] == 2, UI16, Empty), 'MiterLimitFactor'),
+        (_ifelse( lambda x: x['Style']['HasFillFlag'] == 0, RGBA, Empty), 'Color'),
+        (_ifelse( lambda x: x['Style']['HasFillFlag'] == 1, FILLSTYLE, Empty), 'FillType')
     ]
 
-class FILLSTYLEARRAY(pStruct):
+class FILLSTYLEARRAY(pstruct.type):
     _fields_ = [
         (UI8, 'FillStyleCount'),
-        (dyn.ifeq('FillStylecount', 0xff, UI16, Empty), 'FillStyleCountExtended'),
+        (_ifeq('FillStylecount', 0xff, UI16, Empty), 'FillStyleCountExtended'),
         (lambda self: dyn.array(FILLSTYLE, self['FillStyleCount'])(), 'FillStyles' )
     ]
 
-class LINESTYLEARRAY(pStruct):
+class LINESTYLEARRAY(pstruct.type):
     def _dynstyles(self):
         if type(self.parent) == DefineShape4:
             return dyn.array(LINESTYLE2, self['LineStyleCount'])()
@@ -522,7 +536,7 @@ class LINESTYLEARRAY(pStruct):
 
     _fields_ = [
         (UI8, 'LineStyleCount'),
-        (dyn.ifeq('LineStylecount', 0xff, UI16, Empty), 'LineStyleCountExtended'),
+        (_ifeq('LineStylecount', 0xff, UI16, Empty), 'LineStyleCountExtended'),
         ( _dynstyles, 'LineStyles' )
     ]
 

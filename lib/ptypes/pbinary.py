@@ -39,6 +39,15 @@ def bigendian(p):
             bc.consume(self.getbitoffset())     # skip some number of bits
             return self.deserialize_consumer(bc)
 
+        def serialize(self):
+            p = bitmap.new(int(self), self.bits())
+
+            res = []
+            while p[1] > 0:
+                p,v = bitmap.consume(p,8)
+                res.append(v)
+            return ''.join(map(chr,reversed(res)))
+
     bigendianpbinary.__name__ = p.__name__
     return bigendianpbinary
 
@@ -57,12 +66,23 @@ def littleendian(p):
             bc.consume(self.getbitoffset())
             return self.deserialize_consumer(bc)
 
+        def serialize(self):
+            p = bitmap.new(int(self), self.bits())
+
+            res = []
+            while p[1] > 0:
+                p,v = bitmap.consume(p,8)
+                res.append(v)
+            return ''.join(map(chr,res))
+
     littleendianpbinary.__name__ = p.__name__
     return littleendianpbinary
 
 class type(ptype.pcontainer):
     initialized = property(fget=lambda s: s.value is not None)
 
+    def serialize(self, source):
+        raise NotImplementedError(self.name())
     def deserialize(self, source):
         raise NotImplementedError(self.name())
     def set(self, source):
@@ -82,16 +102,6 @@ class type(ptype.pcontainer):
             raise ValueError('Unknown type %s stored in %s'% (repr(n), repr(self)))
             continue
         return result[0]
-
-    def serialize(self):
-        p = bitmap.new(int(self), self.bits())
-
-        res = []
-        while p[1] > 0:
-            p,v = bitmap.consume(p,8)
-            res.append(v)
-        
-        return ''.join(map(chr,reversed(res)))
 
     def bits(self):
         result = 0
