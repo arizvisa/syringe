@@ -1,5 +1,5 @@
 #raise NotImplementedError("This is using an older version of ptypes")
-raise NotImplementedError("This is still broken")
+#raise NotImplementedError("This is still broken")
 
 import zlib
 from tags import *

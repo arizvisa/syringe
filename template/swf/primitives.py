@@ -24,7 +24,7 @@ class pFixed(ptype.type):
 
 ## float types
 #TODO: define __repr__ for each of these types
-# FIXME: can probably use pfloat.type
+# FIXME: if we modify pfloat.type, we can support this structure directly
 class FLOAT16(pbinary.struct):
     _fields_ = [
         (1, 'sign'),
@@ -82,47 +82,6 @@ class FIXED(pFixed):
 
 class FIXED8(pFixed):
     length = 2
-
-class RECT(pbinary.struct):
-    _fields_ = [
-        (5, 'Nbits'),
-        (lambda self: self['Nbits'], 'Xmin'),
-        (lambda self: self['Nbits'], 'Xmax'),
-        (lambda self: self['Nbits'], 'Ymin'),
-        (lambda self: self['Nbits'], 'Ymax')
-    ]
-
-if False:
-    x = RECT()
-    x['Nbits'] = 7
-    # on __setitem__ if we're dynamic, then initialize self.value with shit
-    x['Xmin'] =  16
-
-class MATRIX(pbinary.struct):
-    '''look at deserialize to see how this gets read'''
-
-    def _ifelse(field, t, f):
-        def fn(self):
-            if self[field]:
-                return t
-            return f
-        return fn
-
-    _fields_ = [
-        (1, 'HasScale'),
-        (_ifelse('HasScale', 5, 0), 'NScaleBits'),
-        (lambda self: self['NScaleBits'], 'ScaleX'),
-        (lambda self: self['NScaleBits'], 'ScaleY'),
-
-        (1, 'HasRotate'),
-        (_ifelse('HasRotate', 5, 0), 'NRotateBits'),
-        (lambda self: self['NRotateBits'], 'RotateSkew0'),
-        (lambda self: self['NRotateBits'], 'RotateSkew1'),
-
-        (5, 'NTranslateBits'),
-        (lambda self: self['NTranslateBits'], 'TranslateX'),
-        (lambda self: self['NTranslateBits'], 'TranslateY')
-    ]
 
 class STRING(pstr.szstring):
     def isTerminator(self, v):

@@ -18,7 +18,7 @@ class Tag(pstruct.type):
             size = int(self['HeaderLongLength'])
 
         used = self['data'].size()
-        assert used <= size, 'invalid size specified (%d > %d)'%(used, size)
+        #assert used <= size, 'invalid size specified (%d > %d)'%(used, size)
         if size >= used:
             return dyn.block(size - used)
         return Empty
@@ -35,9 +35,7 @@ class Tag(pstruct.type):
         (autopad, 'unknown')
     ]
 
-    def serialize(self, iterable):
-        iterable = iter(iterable)
-
+    def serialize(self):
         # fix up header
         tag, size = self['data'].tag, self['data'].size()
         self['Header']['type'] = tag
@@ -469,10 +467,122 @@ class DefineEditText(TagS):
         (Empty, 'incomplete')
     ]
 
+class DefineFontInfo(TagS):
+    tag = 13
+    version = 1
+
+    class __FontFlags(pbinary.struct):
+        _fields_ = [
+            (2, 'Reserved'), (1, 'SmallText'), (1, 'ShiftJIS'), (1, 'ANSI'),
+            (1, 'Italic'), (1, 'Bold'), (1, 'WideCodes')
+        ]
+
+    def __CodeTable(self):
+        nGlyphs = 0
+        if self['FontFlags'].l['WideCodes']:
+            return dyn.array( UI16, nGlyphs )
+        return dyn.array( UI8, nGlyphs )
+    
+    _fields_ = [
+        (UI16, 'FontID'),
+        (UI8, 'FontNameLen'),
+        (lambda s: dyn.clone(pstr.string,length=int(s['FontNameLen'].l)), 'FontName'),
+        (__FontFlags, 'FontFlags'),
+        (__CodeTable, 'CodeTable'),
+    ]
+
+class GLYPHENTRY(pbinary.struct):
+    def __Index(self):
+        p = self.getparent(TagS)    # DefineText
+        return int(p['GlyphBits'])
+        
+    def __Advance(self):
+        p = self.getparent(TagS)    # DefineText
+        return int(p['AdvanceBits'])
+
+    _fields_ = [
+        (__Index, 'Index'),
+        (__Advance, 'Advance'),
+    ]
+
+class TEXTRECORD(pstruct.type):
+    class __StyleFlags(pbinary.struct):
+        _fields_ = [
+            (1, 'Type'),
+            (3, 'Reserved'),
+            (1, 'HasFont'),
+            (1, 'HasColor'),
+            (1, 'HasYOffset'),
+            (1, 'HasXOffset'),
+        ]
+    import tags
+    def __TextColor(self):
+        if int(s['StyleFlags']['HasColor']):
+            try:
+                self.getparent(tags.DefineText2)
+            except ValueError:
+                return RGB
+            return RGBA
+        return Empty
+
+    __FontID = lambda s: [Empty, UI16][ int(s['StyleFlags'].l['HasFont']) ]
+    __XOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasXOffset']) ]
+    __YOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasYOffset']) ]
+    __TextHeight = lambda s: [Empty, UI16][ int(s['StyleFlags']['HasFont']) ]
+
+    _fields_ = [
+        (__StyleFlags, 'StyleFlags'),
+        (__FontID, 'FontID'),
+        (__TextColor, 'TextColor'),
+        (__XOffset, 'XOffset'),
+        (__YOffset, 'YOffset'),
+        (__TextHeight, 'TextHeight'),
+        (UI8, 'GlyphCount'),
+        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].l)), 'GlyphEntries'),
+    ]
+
+class DefineText(TagS):
+    tag = 11
+    version = 1
+
+    class __TextRecords(parray.terminated):
+        _object_ = TEXTRECORD
+        def isTerminator(self, value):
+            if value.serialize()[0] == 0:
+                return True
+            return False
+
+    _fields_ = [
+        (UI16, 'CharacterID'),
+        (RECT, 'TextBounds'),
+        (MATRIX, 'TextMatrix'),
+        (UI8, 'GlyphBits'),
+        (UI8, 'AdvanceBits'),
+        (__TextRecords, 'TextRecord')
+    ]
+
+class DefineText2(DefineText):
+    tag = 33
+    version = 3
+
 class JPEGTables(TagS):
     tag = 8
     version = 1
     _fields_ = []   # XXX: the rest of the tag contains the JET
+
+class FileAttributes(TagB):
+    version = 8
+    tag = 69
+    _fields_ = [
+        (1, 'Reserved[0]'),
+        (1, 'UseDirectBlit'),
+        (1, 'UseGPU'),
+        (1, 'HasMetadata'),
+        (1, 'ActionScript3'),
+        (2, 'Reserved'),
+        (1, 'UseNetwork'),
+        (24, 'Reserved[7]'),
+    ]
 
 ##############################################
 def istype(obj):

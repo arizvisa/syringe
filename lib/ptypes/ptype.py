@@ -232,7 +232,15 @@ class type(object):
             return self
 
         except MemoryError:
-            raise MemoryError('Out of memory trying to allocate %d bytes'% self.size())
+            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
+            path = ' -> '.join(map(repr,reversed(path)))
+            raise MemoryError('%s: Unable to allocate %d bytes at %x'% (path, self.size(), self.getoffset()))
+
+        except StopIteration:
+            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
+            path = ' -> '.join(map(repr,reversed(path)))
+            raise StopIteration("%s: Unable to read %d bytes at %x"% (path, self.size(), self.getoffset()))
+
         return self
 
     def commit(self):
@@ -266,18 +274,22 @@ class type(object):
     def deserialize(self, source):
         '''initializes self with input from from the specified iterator 'source\''''
         source = iter(source)
-        self.value = ''
+        self.value = ''         # XXX: would it be faster if we make this an array?
         
         try:
             for i,byte in zip(xrange(self.size()), source):
                 self.value += byte
 
         except MemoryError:
-            raise MemoryError('Out of memory trying to allocate %d bytes'% self.size())
+            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
+            path = ' -> '.join(map(repr,reversed(path)))
+            raise MemoryError('%s: Unable to allocate %d bytes at %x'% (path, self.size(), self.getoffset()))
 
         if len(self.value) != self.size():
-            raise StopIteration("unable to continue reading (byte %d out of %d at %x)"% (len(self.value), self.size(), self.getoffset()))
-        return
+            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
+            path = ' -> '.join(map(repr,reversed(path)))
+            raise StopIteration("%s: Unable to continue reading (byte %d out of %d at %x)"% (path, len(self.value), self.size(), self.getoffset()))
+        return self
 
     ## representation
     def name(self):
@@ -398,6 +410,25 @@ class pcontainer(type):
             pass
         return res
 
+    def newelement_stream(self, stream, type, name, offset):
+        n = self.newelement(type,name,offset)
+        n.deserialize(stream)
+        self.value.append(n)
+        return n
+
+    def deserialize(self, source):
+        stream = iter(source)
+        self.value = []
+        return self.deserialize_stream(stream)
+
+    def deserialize_stream(self, source):
+        raise NotImplementedError
+
+    def alloc(self):
+        zero = ( '\x00' for x in utils.infiniterange(0) )
+        self.value = []
+        return self.deserialize_stream(zero)
+        
 def debug(ptype):
     assert isptype(ptype), '%s is not a ptype'% repr(ptype)
     class newptype(ptype):

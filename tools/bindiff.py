@@ -178,6 +178,7 @@ def do_diff_generate((a,inputa),(b,inputb), template='%s.diff'):
 def run(*args):
     """Run the bindiff.py commandline"""
     generate_differences = None
+    args = list(args)
     try:
         if '-generate' in args:
             v = args.index('-generate')

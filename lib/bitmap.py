@@ -3,7 +3,7 @@ import sys
 
 ## start somewhere
 def new(value, size):
-    '''creates a new bitmap object'''
+    '''creates a new bitmap object. Bitmaps "grow" to the left.'''
     return (value & (2**size-1), size)
 
 def isinteger(v):
@@ -42,11 +42,11 @@ def string(bitmap):
     '''returns bitmap as a formatted binary string'''
     integer, size = bitmap
 
-    res = ''
+    res = []
     for position in range(size):
-        res += ['0', '1'][integer & 1 != 0]
+        res.append(['0', '1'][integer & 1 != 0])
         integer >>= 1
-    return res
+    return ''.join(reversed(res))
 
 def scan(bitmap, value=True, position=0):
     '''searches through bitmap for specified /value/ and returns it's position'''
@@ -142,7 +142,7 @@ def shrink(bitmap, count):
 
 ## for treating a bitmap like an integer stream
 def push(bitmap, operand):
-    '''Append bitmap data to the current bitmap'''
+    '''Append bitmap data to the end of the current bitmap'''
     (result, rbits) = bitmap
     (number, nbits) = operand
     rmask = 2**rbits - 1
@@ -154,7 +154,7 @@ def push(bitmap, operand):
     return (res, nbits+rbits)
 
 def insert(bitmap, operand):
-    '''Insert bitmap data at the front of the bitmap'''
+    '''Insert bitmap data at the beginning of the bitmap'''
     (result, rbits) = bitmap
     (number, nbits) = operand
     rmask = 2**rbits - 1
@@ -174,10 +174,9 @@ def consume(bitmap, bits):
 
 def shift(bitmap, bits):
     '''Shift some number of bits off of the beginning of a bitmap. Returns tuple(new bitmap, integer shifted off)'''
-    # FIXME
     assert bits >= 0 and bitmap[1] >= bits
     shifty = bitmap[1] - bits
-    bmask = 2**bits-1 << shifty
+    bmask = (2**bits-1) << shifty
     res = (bitmap[0] & bmask) >> shifty
     return ((bitmap[0] & ~bmask, shifty), res)
 
@@ -203,11 +202,29 @@ class consumer(object):
         return result
 
     def __repr__(self):
-        return ' '.join([self.__class__.__repr__(), self.cache.__repr__(), string(self.cache)])
+        return ' '.join([str(self.__class__), self.cache.__repr__(), string(self.cache)])
 
 def repr(object):
     integer,size = object
     return "<type 'bitmap'> (0x%x, %d)"% (integer,size)
+
+def data(bitmap, flipendian=False):
+    '''Convert a bitmap to a string left-aligned to 8-bits'''
+    fn = [shift,consume][int(flipendian)]
+
+    l = bitmap[1] % 8
+    if l > 0:
+        if flipendian:
+            bitmap = insert( bitmap, (0, 8-l))  # i probably should pull this out of this loop...
+        else:
+            bitmap = push( bitmap, (0, 8-l))  # i probably should pull this out of this loop...
+        pass
+
+    res = []
+    while bitmap[1] > 0:
+        bitmap,b = fn(bitmap, 8)
+        res.append(b)
+    return ''.join(map(chr,res))
 
 if __name__ == '__main__':
     import bitmap; reload(bitmap)

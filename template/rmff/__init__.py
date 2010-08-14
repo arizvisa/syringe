@@ -18,7 +18,7 @@ class Str8(pstruct.type):
 
 ### General Types
 class RealMedia_Header(pstruct.type):
-    def getobject(self):
+    def __object(self):
         id = self['object_id'].l.serialize()
         ver = int(self['object_version'].l)
 
@@ -29,7 +29,7 @@ class RealMedia_Header(pstruct.type):
             res = dyn.block( int(self['size'].l) - 10 )
         return res
 
-    def figureextra(s):
+    def __extra(s):
         l = int(s['size'].l)
         s = s['object'].size() + 4 + 4 + 2
         if l > s:
@@ -45,8 +45,8 @@ class RealMedia_Header(pstruct.type):
         (UINT32, 'object_id'),
         (UINT32, 'size'),
         (UINT16, 'object_version'),
-        (getobject, 'object'),
-        (figureextra, 'extra')
+        (__object, 'object'),
+        (__extra, 'extra')
     ]
 
 class RealMedia_Header_Type(object): pass
@@ -73,17 +73,59 @@ class RealMedia_Record(pstruct.type):
     ]
 
 ### non general types
-## type specific
+
+### type specific codec data
+class Codec_Data(object):
+    __lookup = {}
+    @classmethod
+    def add(cls, type):
+        t = type.fourcc
+        v = type.version
+        p = (t,v)
+        assert p not in cls.__lookup
+        cls.__lookup[p] = type
+
+    @classmethod
+    def lookup(cls, fourcc, version):
+        return cls.__lookup[(fourcc,version)]
+
+class Codec_Data_cook_v4(pstruct.type):
+    fourcc = 'cook'
+    version = 4
+    _fields_ = [
+        (UINT16, 'unknown_0'),
+        (UINT8, 'unknown_2'),
+        (ULONG32, 'length'),
+        (lambda s: dyn.block(int(s['length'].l)), 'data')
+    ]
+Codec_Data.add(Codec_Data_cook_v4)
+
+class Codec_Data_cook_v5(pstruct.type):
+    fourcc = 'cook'
+    version = 5
+    _fields_ = [
+        (UINT16, 'unknown_0'),
+        (UINT8, 'unknown_2'),
+        (UINT8, 'unknown_3'),
+        (ULONG32, 'length'),
+        (lambda s: dyn.block(int(s['length'].l)), 'data')
+    ]
+Codec_Data.add(Codec_Data_cook_v5)
+
+### type specific
 # http://git.ffmpeg.org/?p=ffmpeg;a=blob;f=libavformat/rmdec.c;h=436a7e08f2a593735d50e15ba38ed34c5f8eede1;hb=HEAD
 
 class Type_Specific_v3(pstruct.type):
-    object_verison = 3
+    object_version = 3
     _fields_ = [
         (dyn.block(14), 'unknown[1]'),  # XXX: this might not be right
         (Str8, 'metadata'),
         (UINT8, 'unknown[3]'),
         (Str8, 'fourcc'),
     ]
+
+    def codec(self):
+        return self['fourcc'].serialize()
 
 class Type_Specific_v4(pstruct.type):
     object_version = 4
@@ -101,13 +143,16 @@ class Type_Specific_v4(pstruct.type):
         (UINT16, 'sub_packet_h'),
         (UINT16, 'frame_size'),
         (UINT16, 'sub_packet_size'),
-        (UINT16, 'unknown[d]'),
         (UINT16, 'sample_rate'),
         (UINT32, 'unknown[f]'),
         (UINT16, 'channels'),
         (Str8, 'desc1'),
         (Str8, 'desc2'),
     ]
+    def codec(self):
+        print hex(self.getoffset())
+        print self['desc1'], self['desc2']
+        return self['desc2'].serialize()
 
 class Type_Specific_vAny(Type_Specific_v4): pass
 
@@ -138,15 +183,37 @@ class Type_Specific_v5(pstruct.type):
         (dyn.block(4), 'buffer'),
     ]
 
+    def codec(self):
+        return self['buffer'].serialize()
+
+class Type_Specific_v0(pstruct.type):
+    object_version = 0
+
+    _fields_ = [
+        (UINT32, 'unknown[0]'),
+        (UINT16, 'unknown[1]'),
+        (UINT16, 'unknown[2]'),
+        (UINT16, 'unknown[3]'),
+        (UINT16, 'unknown[4]'),
+        (Str8, 'unknown[5]'),
+        (UINT16, 'unknown[6]'),
+        (UINT32, 'unknown[7]'),
+        (dyn.block(4), 'Auto?'),
+        (dyn.block(4), 'fourcc'),
+        # FIXME: I think this is really an array of structs that contains strings
+    ]
+    def codec(self):
+        return self['fourcc'].serialize()
+
 class Type_Specific(pstruct.type):
     _object_ = {
-        0 : Type_Specific_vAny,
+        0 : Type_Specific_v0,
         3 : Type_Specific_v3,
         4 : Type_Specific_v4,
         5 : Type_Specific_v5
     }
 
-    def getobject(self):
+    def __object(self):
         ver = int(self['object_version'].l)
         try:
             return self._object_[ver]
@@ -154,19 +221,28 @@ class Type_Specific(pstruct.type):
             pass
         return ptype.type
 
-    def figurecodec(s):
-        h = s.getparent(RealMedia_Header_Type)
+    def __codec(self):
+        h = self.getparent(RealMedia_Header_Type)
+        fourcc = self['object'].l.codec()
+        version = int(self['object_version'].l)
+
+        try:
+            return Codec_Data.lookup(fourcc, version)
+        except KeyError:
+            pass
+
+#        path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
+#        path = '\n\t -> '.join(map(repr,reversed(path)))
+#        print 'unknown (fourcc,version) -> (%s, %d)\n%s'% (repr(fourcc), version, path)
+
         l = int(h['type_specific_len'].l)
-        if l > 0:
-            return dyn.block( l - (s['object'].size()+6) )
-        return dyn.block(0)
+        return dyn.block( l - (self['object'].size()+6) )
 
     _fields_ = [
         (UINT32, 'object_id'),
         (UINT16, 'object_version'),
-        (getobject, 'object'),
-#        (lambda s: dyn.block( int(s['object'].l['header_size']) - (s['object'].size() + 6)), 'codec?')
-        (figurecodec, 'codec?')
+        (__object, 'object'),
+        (__codec, 'codec')
     ]
 
 ### sub-headers

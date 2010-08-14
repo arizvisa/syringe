@@ -14,12 +14,11 @@ def _ifeq(field, value, t, f):
         return f
     return fn
 
-class RECORDHEADER(pbinary.struct):
+class RECORDHEADER(pbinary.littleendian(pbinary.struct)):
     _fields_ = [
         (10, 'type'),
         (6, 'length')
     ]
-RECORDHEADER = pbinary.littleendian(RECORDHEADER)
 
 class RGB(pstruct.type):
     _fields_ = [
@@ -46,6 +45,40 @@ class ARGB(pstruct.type):
 
 class LANGCODE(UI8):
     pass
+
+####
+class RECT(pbinary.struct):
+    _fields_ = [
+        (5, 'Nbits'),
+        (lambda self: self['Nbits'], 'Xmin'),
+        (lambda self: self['Nbits'], 'Xmax'),
+        (lambda self: self['Nbits'], 'Ymin'),
+        (lambda self: self['Nbits'], 'Ymax')
+    ]
+
+class MATRIX(pbinary.struct):
+    def _ifelse(field, t, f):
+        def fn(self):
+            if self[field]:
+                return t
+            return f
+        return fn
+
+    _fields_ = [
+        (1, 'HasScale'),
+        (_ifelse('HasScale', 5, 0), 'NScaleBits'),
+        (lambda self: self['NScaleBits'], 'ScaleX'),
+        (lambda self: self['NScaleBits'], 'ScaleY'),
+
+        (1, 'HasRotate'),
+        (_ifelse('HasRotate', 5, 0), 'NRotateBits'),
+        (lambda self: self['NRotateBits'], 'RotateSkew0'),
+        (lambda self: self['NRotateBits'], 'RotateSkew1'),
+
+        (5, 'NTranslateBits'),
+        (lambda self: self['NTranslateBits'], 'TranslateX'),
+        (lambda self: self['NTranslateBits'], 'TranslateY')
+    ]
 
 ###
 class _CLIPEVENTFLAGS_Events(pbinary.struct):
@@ -256,8 +289,8 @@ class FILTER(pstruct.type):
     def _iff(field, value, typ):
         def fn(self):
             if self[field] == value:
-                return typ()
-            return Empty()
+                return ty
+            return Empty
         return fn
 
     _fields_ = [

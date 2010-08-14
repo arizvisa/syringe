@@ -74,31 +74,14 @@ class type(__parray_generic):
     def serialize(self):
         return ''.join([ x.serialize() for x in self.value ])
 
-    def alloc(self):
-        self.value = []
-
+    def deserialize_stream(self, stream):
         ofs = self.getoffset()
-        obj = self._object_
         for index in xrange(self.length):
-            n = self.newelement(self._object_, str(index), ofs)
-            self.value.append(n)
-            n.alloc()
-            n.setoffset(ofs)
+            n = self.newelement_stream(stream, self._object_, str(index), ofs)
             ofs += n.size()
         return self
 
-    def deserialize(self, source):
-        source = iter(source)
-        self.value = []
-
-        ofs = self.getoffset()
-        for index in xrange(self.length):
-            n = self.newelement(self._object_, str(index), ofs)
-            self.value.append(n)
-            n.deserialize(source)
-            ofs += n.size()
-        return
-
+    # load ourselves lazily
     def load_block(self):
         ofs = self.getoffset()
         for index in xrange(self.length):
@@ -107,6 +90,7 @@ class type(__parray_generic):
             ofs += n.size()
         return
 
+    # load ourselves incrementally
     def load_container(self):
         ofs = self.getoffset()
         for index in xrange(self.length):
@@ -133,17 +117,9 @@ class type(__parray_generic):
 #        assert len(self) == len(self.value), '%d != %d'% (len(self), len(self.value))
 
         # now that we know the length, read the array
-        self.source.seek( self.getoffset() )
-        block = self.source.consume( self.size() )
-
-        # start over and populate entire self with values
-        block = iter(block)
-        for i in xrange(len(self.value)):
-            n = self.value[i]
-            n.deserialize(block)
-
-#        assert len(self) == len(self.value), '%d != %d'% (len(self), len(self.value))
-        return self
+        self.source.seek(self.getoffset())
+        block = self.source.consume(self.size())
+        return self.deserialize(block)
 
     def __repr__(self):
         res = '???'
@@ -173,21 +149,15 @@ class terminated(type):
         for index in utils.infiniterange(0):
             n = self.newelement(self._object_, str(index), ofs)
             self.append(n)
-            n.load()
-            if self.isTerminator(n):
+            if self.isTerminator(n.load()):
                 break
             ofs += n.size()
         return self
 
-    def deserialize(self, source):
-        source = iter(source)
-        self.value = []
-
+    def deserialize_stream(self, stream):
         ofs = self.getoffset()
         for index in utils.infiniterange(0):
-            n = self.newelement(self._object_, str(index), ofs)
-            self.append(n)
-            n.deserialize(source)
+            n = self.newelement_stream(stream, self._object_, str(index), ofs)
             if self.isTerminator(n):
                 break
             ofs += n.size()
@@ -207,9 +177,8 @@ class infinite(terminated):
         try:
             for index in utils.infiniterange(0):
                 n = self.newelement(self._object_, str(index), ofs)
-                n.load()            # swapped so we don't append junk
                 self.append(n)
-                if self.isTerminator(n):
+                if self.isTerminator(n.load()):
                     break
                 ofs += n.size()
             pass
@@ -217,24 +186,16 @@ class infinite(terminated):
             pass
         return self
 
-    def deserialize(self, source):
-        source = iter(source)
-        self.value = []
-
+    def deserialize_stream(self, stream):
         ofs = self.getoffset()
-
         try:
             for index in utils.infiniterange(0):
-                n = self.newelement(self._object_, str(index), ofs)
-                n.deserialize(source)    # swapped so we don't append junk
-                self.append(n)
+                n = self.newelement_stream(stream, self._object_, str(index), ofs)
                 if self.isTerminator(n):
                     break
                 ofs += n.size()
-            pass
         except StopIteration:
             pass
-
         return self
 
     load_block = load_container

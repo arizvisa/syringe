@@ -55,28 +55,12 @@ class type(__pstruct_generic):
     def serialize(self):
         return ''.join([ x.serialize() for x in self.value ])
 
-    def alloc(self):
-        self.value = []
-
+    def deserialize_stream(self, stream):
         ofs = self.getoffset()
         for t,name in self._fields_:
-            n = self.newelement(t, name, ofs)
-            self.value.append(n)
-            n.alloc()
+            n = self.newelement_stream(stream, t, name, ofs)
             ofs += n.size()
         return self
-
-    def deserialize(self, source):
-        source = iter(source)
-        self.value = []
-
-        ofs = self.getoffset()
-        for t,name in self._fields_:
-            n = self.newelement(t, name, ofs)
-            self.value.append(n)
-            n.deserialize(source)
-            ofs += n.size()
-        return
 
     def load(self):
         ofs = self.getoffset()
@@ -84,29 +68,21 @@ class type(__pstruct_generic):
         fields = list(self._fields_)
 
         # create each element
-        while fields:
-            t,name = fields.pop(0)
-
+        for t,name in fields:
             n = self.newelement(t, name, ofs)
             if ptype.ispcontainer(t) or ptype.isresolveable(t):
                 n.load()
 
             ofs += n.size()
             self.value.append(n)
-            continue
 
         if self.initialized:
             return self
 
         # read the block
         self.source.seek(self.getoffset())
-        block = self.source.consume( self.size() )
-
-        # populate self
-        block = iter(block)
-        for n in self.value:
-            n.deserialize(block)
-        return self
+        block = self.source.consume(self.size())
+        return self.deserialize(block)
 
     def __repr__uninitialized(self):
         result = []
@@ -182,7 +158,7 @@ if __name__ == '__main__':
             (Elf32_Half, 'e_shentsize'),
             (Elf32_Half, 'e_shnum'),
             (Elf32_Half, 'e_shstrndx'),
-            (lambda s: dyn.block( int(s['e_shentsize'].load()) )(), 'e_shstrndx'),
+            (lambda s: dyn.block( int(s['e_shentsize'].load()) ), 'e_shstrndx'),
         ]
 
     class Elf32_Shdr(pstruct.type):
@@ -205,7 +181,7 @@ if __name__ == '__main__':
 #    self.load()
 #    print self
 
-    print 'Ehdr from mem'
+#    print 'Ehdr from mem'
     self = Elf32_Ehdr()
     self.source = provider.memory()
     self.setoffset(id(self))
