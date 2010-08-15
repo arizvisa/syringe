@@ -214,7 +214,8 @@ class type(object):
 #            res.name = lambda s: name
             res = res(**self.attrs)     # all children will inherit too
         res.parent = self
-        res.source = self.source
+        if 'source' not in self.attrs:
+            res.source = self.source
         res.__name__ = name
         res.setoffset(ofs)
         return res
@@ -410,7 +411,8 @@ class pcontainer(type):
             pass
         return res
 
-    def newelement_stream(self, stream, type, name, offset):
+    def addelement_stream(self, stream, type, name, offset):
+        '''adds an element from a byte stream'''
         n = self.newelement(type,name,offset)
         n.deserialize(stream)
         self.value.append(n)

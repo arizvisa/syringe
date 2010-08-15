@@ -83,12 +83,7 @@ class FIXED(pFixed):
 class FIXED8(pFixed):
     length = 2
 
-class STRING(pstr.szstring):
-    def isTerminator(self, v):
-        return int(v) == 0
-
-    def __str__(self):
-        return ''.join( [str(v) for v in self] )
+class STRING(pstr.szstring): pass
 
 class Empty(ptype.type):
     initialized = property(fget=lambda x: True, fset=lambda x,v: None)

@@ -1,9 +1,8 @@
-import ptype,bitmap
+import ptype,utils,bitmap
 import types
-import itertools,dyn
 
-# FIXME: this needs to be reorganized
-#        I imagine there's a lot of cross method calling that doesn't need to happen
+# FIXME: unfortunately this module doesn't currently support block-based loads
+#        due to needing to support endianness as well as dynamic elements
 
 def ispbinarytype(t):
     return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
@@ -41,20 +40,25 @@ def bigendian(p):
             return self.deserialize_consumer(bc)
 
         def serialize(self):
-            p = bitmap.new(int(self), self.bits())
+            p = bitmap.new(self.getinteger(), self.bits())
             return bitmap.data(p)
+
+        def load(self):
+            self.source.seek(self.getoffset())
+            producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
+            return self.deserialize(producer)
 
     bigendianpbinary.__name__ = p.__name__
     return bigendianpbinary
 
 def littleendian(p):
     class littleendianpbinary(p):
-        # XXX: This won't work if the size is dynamic, for obvious reasons
         def set(self, integer):
             raise NotImplementedError
             bmp = bitmap.new(integer, self.bits())
             return self.deserialize_bitmap(bmp)
 
+        # XXX: This won't work if the size is dynamic, for obvious reasons
         def deserialize(self, source):
             source = iter(source)
             block = ''.join([x for i,x in zip(range(self.alloc().size()), source)])
@@ -62,15 +66,25 @@ def littleendian(p):
             bc.consume(self.getbitoffset())
             return self.deserialize_consumer(bc)
 
-        def serialize(self):
-            p = bitmap.new(int(self), self.bits())
-            return bitmap.data(p, flipendian=True)
+        def load(self):
+            self.source.seek(self.getoffset())
+            producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
+            block = ''.join([x for i,x in zip(range(self.alloc().size()), producer)])
+            return self.deserialize(block)
 
+        def serialize(self):
+            p = bitmap.new(self.getinteger(), self.bits())
+            return bitmap.data(p, flipendian=True)
+            
     littleendianpbinary.__name__ = p.__name__
     return littleendianpbinary
 
 class type(ptype.pcontainer):
-    initialized = property(fget=lambda s: s.value is not None)
+    def isInitialized(self):
+        if self.value is None or None in self.value:
+            return False
+        return not(False in [x.initialized for x in self.value if ispbinaryinstance(x)])
+    initialized = property(fget=isInitialized)  # bool
 
     # for the "decorators"
     def serialize(self):
@@ -80,16 +94,15 @@ class type(ptype.pcontainer):
     def set(self, source):
         raise NotImplementedError(self.name())
 
-    # for the children
+    # por los hijos
     def deserialize_consumer(self, source):
         raise NotImplementedError(self.name())
 
-
-    def __int__(self):
+    def getinteger(self):
         result = bitmap.new(0,0)
         for n in self.value:
             if ispbinaryinstance(n):
-                result = bitmap.push( result, (int(n), n.bits()))
+                result = bitmap.push( result, (n.getinteger(), n.bits()))
                 continue
 
             if bitmap.isbitmap(n):
@@ -110,7 +123,6 @@ class type(ptype.pcontainer):
                 result += x.bits()
                 continue
             raise ValueError('Unknown type %s stored in %s'% (repr(x), repr(self)))
-
         return result
 
     def newelement(self, pbinarytype, name, offset):
@@ -163,7 +175,7 @@ class type(ptype.pcontainer):
     def commit(self):
         raise NotImplementedError("I'm pretty certain I just broke this")
         # FIXME: this hasn't been formally tested
-        newdata = bitmap.new(int(self), self.bits())
+        newdata = bitmap.new(self.getinteger(), self.bits())
         bo = self.getbitoffset()
 
         # read original data that we're gonna update
@@ -202,10 +214,10 @@ class type(ptype.pcontainer):
         result.deserialize( self.serialize() )
         return result
 
-    def addfromsource(self, source, type, name, offset):
+    def addbitsfromsource(self, source, type, name, offset):
         '''
         Adds an element to the current container reading /type/ from source.
-        /name/ and /offsets/ are attributes that will be set
+        /name/ and /offsets/ are attributes that will be set. returns bitsize
         '''
         n = self.newelement(type, name, (offset>>3, offset & 7)) # XXX: offset needs to be fixed
         if bitmap.isbitmap(n):
@@ -218,18 +230,11 @@ class type(ptype.pcontainer):
         return res
 
     def alloc(self):
-        zero = ( 0 for x in itertools.count() )
+        zero = ( 0 for x in utils.infiniterange(0) )
         class allocator(object):
             def consume(self, v):
                 return zero.next()
         return self.deserialize_consumer( allocator() )
-
-    def load(self):
-        self.source.seek(self.getoffset())
-        producer = ( self.source.consume(1) for x in itertools.count() )
-        source = bitmap.consumer(producer)
-        source.consume(self.getbitoffset())     # skip some number of bits
-        return self.deserialize_consumer(source)
 
 class __struct_generic(type):
     __fastindex = dict  # our on-demand index lookup for .value
@@ -296,7 +301,7 @@ class __struct_generic(type):
     def __repr__value(self, element):
         if bitmap.isbitmap(element):
             return hex(element[0])
-        return ''.join(['struct[', hex(int(element)), ']'])
+        return ''.join(['struct[', hex(element.getinteger()), ']'])
 
     def __repr__initialized(self):
         res = [ '%s=%s'% (name, self.__repr__value(val)) for name,val in zip(self.keys(), self.value) ]
@@ -311,14 +316,16 @@ class struct(__struct_generic):
         self.value = []
         offset = (self.getoffset() << 3) + self.getbitoffset()
         for t,name in self._fields_:
-            s = self.addfromsource(source, t, name, offset)
+            s = self.addbitsfromsource(source, t, name, offset)
             offset += s
         return self
 
 class __array_generic(type):
     length = 0
     def __len__(self):
-        return int(self.length)
+        if not self.initialized:
+            return int(self.length)
+        return len(self.value)
 
     def __iter__(self):
         for x in self.value:
@@ -367,7 +374,7 @@ class __array_generic(type):
             name = bitmap.repr(obj)
         else:
             name = obj.__class__
-        return '%s[%d] value=%x,bits=%x'% (name, len(self), int(self), self.bits())
+        return '%s[%d] value=%x,bits=%x'% (name, len(self), self.getinteger(), self.bits())
 
 class array(__array_generic):
     _object_ = None
@@ -375,12 +382,40 @@ class array(__array_generic):
     def deserialize_consumer(self, source):
         self.value = []
         offset = (self.getoffset() << 3) + self.getbitoffset()
-        for i in xrange(len(self)):
-            s = self.addfromsource(source, self._object_, str(i), offset)
+        for i in xrange(self.length):
+            s = self.addbitsfromsource(source, self._object_, str(i), offset)
             offset += s
         return self
 
+class terminatedarray(__array_generic):
+    length = None
+    def deserialize_consumer(self, source):
+        forever = self.length
+        if forever is None:
+            forever = utils.infiniterange(0)
+        else:
+            forever = xrange(forever)
+
+        self.value = []
+        offset = (self.getoffset() << 3) + self.getbitoffset()
+
+        try:
+            for i in forever:
+                s = self.addbitsfromsource(source, self._object_, str(i), offset)
+                if self.isTerminator(self.value[-1]):
+                    break
+                offset += s
+
+        except StopIteration:
+            pass
+        return self
+
+    def isTerminator(self, v):
+        '''intended to be overloaded. should return True if value /v/ represents the end of the array.'''
+        raise NotImplementedError
+
 array = bigendian(array)
+terminatedarray = bigendian(terminatedarray)
 struct = bigendian(struct)
 
 if __name__ == '__main__':
@@ -406,7 +441,7 @@ if __name__ == '__main__':
                 print '%s: Success'% name
                 return True
 
-            except Failure:
+            except Failure,e:
                 pass
 
             print '%s: Failure'% name
@@ -587,32 +622,6 @@ if __name__ == '__main__':
         if x['size'] == 6 and x.size() == (4 + 6*3 + 7)/8:
             raise Success
         return
-
-    def test8():
-#        print "test8"
-        # print out bit offsets for an array
-
-#        class halfnibble(pbinary.struct): _fields_ = [(2, 'value')]
-        class tribble(pbinary.struct): _fields_ = [(3, 'value')]
-
-        class blah(pbinary.array):
-            _object_ = tribble
-            length = 16
-
-        res = reduce(lambda x,y: x<<1 | [0,1][int(y)], ('11001100'), 0)
-#        print hex(res)
-
-        x = blah()
-        x.deserialize(chr(res)*63)
-        res = [ (x.getoffset(), x.getbitoffset()) for x in x ]
-#        print '\n'.join(map(repr,res))
-
-        start = 0
-        for o,b in res:
-            if b != start&7:
-                raise Failure
-            start += 3
-        raise Success
 
     @TestCase
     def test8():
@@ -962,6 +971,36 @@ if __name__ == '__main__':
         if z['Nbits'] == 4 and z['Xmin'] == 0xd and z['Xmax'] == 0xe and z['Ymin'] == 0xa and z['Ymax'] == 0xd:
             raise Success
 
+    @TestCase
+    def test22():
+        class myarray(pbinary.terminatedarray):
+            _object_ = 4
+    
+            def isTerminator(self, v):
+                if v[0] == 0:
+                    return True
+                return False
+
+        z = myarray()
+        z.deserialize('\x44\x43\x42\x41\x3f\x0f\xee\xde')
+        if z.serialize() == 'DCBA?\x00':
+            raise Success
+
+    @TestCase
+    def test23():
+        class mystruct(pbinary.struct):
+            _fields_ = [
+                (4, 'high'),
+                (4, 'low'),
+                (4, 'lower'),
+                (4, 'hell'),
+            ]
+
+        z = mystruct()
+        z.deserialize('\x41\x40')
+        if z.getinteger() == 0x4140:
+            raise Success
+
     if False:
         testold()
         test1()
@@ -984,6 +1023,7 @@ if __name__ == '__main__':
         test19()
         test20()
         test21()
+        test22()
 
     ## wow, i can't believe this shit works
 

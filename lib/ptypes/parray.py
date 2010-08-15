@@ -77,7 +77,7 @@ class type(__parray_generic):
     def deserialize_stream(self, stream):
         ofs = self.getoffset()
         for index in xrange(self.length):
-            n = self.newelement_stream(stream, self._object_, str(index), ofs)
+            n = self.addelement_stream(stream, self._object_, str(index), ofs)
             ofs += n.size()
         return self
 
@@ -140,13 +140,20 @@ class terminated(type):
     an array that terminates deserialization based on the value returned by
     .isTerminator()
     '''
+    length = None
     def isTerminator(self, v):
         '''intended to be overloaded. should return True if element /v/ represents the end of the array.'''
         raise NotImplementedError('Developer forgot to overload this method')
 
     def load_container(self):
+        forever = self.length
+        if forever is None:
+            forever = utils.infiniterange(0)
+        else:
+            forever = xrange(forever)
+
         ofs = self.getoffset()
-        for index in utils.infiniterange(0):
+        for index in forever:
             n = self.newelement(self._object_, str(index), ofs)
             self.append(n)
             if self.isTerminator(n.load()):
@@ -155,9 +162,15 @@ class terminated(type):
         return self
 
     def deserialize_stream(self, stream):
+        forever = self.length
+        if forever is None:
+            forever = utils.infiniterange(0)
+        else:
+            forever = xrange(forever)
+
         ofs = self.getoffset()
-        for index in utils.infiniterange(0):
-            n = self.newelement_stream(stream, self._object_, str(index), ofs)
+        for index in forever:
+            n = self.addelement_stream(stream, self._object_, str(index), ofs)
             if self.isTerminator(n):
                 break
             ofs += n.size()
@@ -169,19 +182,15 @@ class infinite(terminated):
     '''
     an array that consumes as much data as possible, and neatly leaves when out of data
     '''
+    length = None
     def isTerminator(self, v):
+        print v
         return False
 
     def load_container(self):
         ofs = self.getoffset()
         try:
-            for index in utils.infiniterange(0):
-                n = self.newelement(self._object_, str(index), ofs)
-                self.append(n)
-                if self.isTerminator(n.load()):
-                    break
-                ofs += n.size()
-            pass
+            return super(infinite, self).load_container()
         except StopIteration:
             pass
         return self
@@ -189,11 +198,7 @@ class infinite(terminated):
     def deserialize_stream(self, stream):
         ofs = self.getoffset()
         try:
-            for index in utils.infiniterange(0):
-                n = self.newelement_stream(stream, self._object_, str(index), ofs)
-                if self.isTerminator(n):
-                    break
-                ofs += n.size()
+            return super(infinite, self).deserialize_stream(stream)
         except StopIteration:
             pass
         return self
@@ -229,8 +234,6 @@ if __name__ == '__main__':
     x.deserialize('AAAA'*15)
     print x.length,len(x), x.value
     print repr(x)
-    import sys
-    sys.exit()
 
     class myarray(parray.type):
         length = 16
@@ -246,3 +249,16 @@ if __name__ == '__main__':
 
     import utils
     print '\n'.join(['[%d] %s -> %x'% (i, repr(x), x.getoffset()) for x,i in zip(x, utils.infiniterange(0))])
+
+    import pint
+    class myarray(parray.terminated):
+        _object_ = pint.uint8_t
+        def isTerminator(self, v):
+            if v.serialize() == 'H':
+                return True
+            return False
+
+    z = myarray()
+    z.deserialize('GFEDCBABCDHEFG')
+    print z
+    print len(z)

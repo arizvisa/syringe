@@ -1,6 +1,3 @@
-#raise NotImplementedError("This is using an older version of ptypes")
-#raise NotImplementedError("This is still broken")
-
 import zlib
 from tags import *
 from stypes import *
@@ -19,93 +16,52 @@ class FrameInfo(pstruct.type):
         (UI16, 'FrameCount')
     ]
 
-if False:
-    class ifile(file):
-        def __iter__(self):
-            while True:
-                res = self.read(1)
-                assert len(res) > 0
-                yield res
-                    
-    class sfile(object):
-        def __init__(self, data):
-            super(sfile, self).__init__()
-            self.data = data
-            self.offset = 0
+class File(pstruct.type):
+    class cdata(pstruct.type):
+        _fields_ = [
+            (FrameInfo, 'frameinfo'),
+            (TagList, 'tags')
+        ]
 
-        def __iter__(self):
-            while True:
-                yield self.read(1)
+        def load(self):
+            self.source.seek(self.getoffset())
+            block = self.source.consume(self._size)
 
-        def read(self, count=-1):
-            if count < 0:
-                res = self.data[ self.offset: ]
-            else:
-                res = self.data[ self.offset : self.offset+count ]
+            # XXX: modify ours and our parent's source with the new decompressed file
+            self.parent.source = self.source = ptypes.provider.string(self.parent['header'].serialize() + zlib.decompress(block))
+            return self.deserialize(block)
 
-            self.offset += len(res)
-            return res
+        def deserialize(self, source):
+            block = ''.join([x for i,x in zip(xrange(self._size), source)])
+            s = zlib.decompress(block)
+            print 'zlib: decompressed %x to %x bytes'%(len(block),len(s))
+            return super(File.cdata, self).deserialize(s)
 
-        def write(self, data):
-            self.data[ self.offset : self.offset+len(data) ] = data
+    class data(pstruct.type):
+        _fields_ = [
+            (FrameInfo, 'frameinfo'),
+            (TagList, 'tags')
+        ]
 
-        def seek(self, offset, whence=0):
-            if whence == 0:
-                self.offset = offset
-            elif whence == 1:
-                self.offset += offset
-            elif whence == 2:
-                self.offset = len(self.data) - offset
-            else:
-                raise ValueError('invalid whence')
+    def __data(self):
+        # if it's compressed then use the 'cdata' structure
+        if int( self['header'].l['Signature'][0]) == ord('C'):
+            r = int(self['header'].l['FileLength'])
+            size = r - self['header'].size()
+            maxsize = self.source.size()
+            current = maxsize - self['header'].size() + self['header'].getoffset()
 
-        def tell(self):
-            return self.offset
+            # File.cdata decompresses and changes our source, so we fix our header here
+            self['header']['Signature'][0].set( ord('F') )
+            return dyn.clone(File.cdata, _size=current)
 
-        def close(self):
-            pass
+        return self.data
+    
+    _fields_ = [
+        (Header, 'header'),
+        (__data, 'data')
+    ]
 
-    class File(parray.type):
-        file = None
-
-        def open(self, filename):
-            self.file = ifile(filename, 'rb')
-            input = iter(self.file)
-            self.value = []
-
-            x = Header()
-            x.deserialize(input)
-            self.append(x)
-            x.setoffset(0)
-
-            # decompress if necessary
-            if int( self[0]['Signature'][0]) == ord('C'):
-                self.file.seek( self[0].size() )
-                data = self.file.read()
-                self.file = sfile( self[0].serialize() + zlib.decompress(data) )
-                self.file.seek( self[0].size() )
-                input = iter(self.file)
-            
-            x = FrameInfo()
-            x.deserialize(input)
-            self.append(x)
-            x.setoffset( x.getOffset(1) )
-
-            x = TagList()
-            x.deserialize(input)
-            self.extend(x)
-            x.setoffset( x.getOffset(2) )
-
-
-if False:
-    ptypes.setsource(ptypes.file('poc.spl'))
-    x = swf.Header()
-    print x.l
-
-    length  = x.source.size() - x.size()
-    x.source.seek(x.size())
-    data = x.source.consume(x.source.size()-8)
-    data = zlib.decompress(data)
 
 if __name__ == '__main__':
     import sys

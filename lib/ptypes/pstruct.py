@@ -58,26 +58,21 @@ class type(__pstruct_generic):
     def deserialize_stream(self, stream):
         ofs = self.getoffset()
         for t,name in self._fields_:
-            n = self.newelement_stream(stream, t, name, ofs)
+            n = self.addelement_stream(stream, t, name, ofs)
             ofs += n.size()
         return self
 
     def load(self):
-        ofs = self.getoffset()
         self.value = []
-        fields = list(self._fields_)
+        ofs = self.getoffset()
 
         # create each element
-        for t,name in fields:
+        for t,name in self._fields_:
             n = self.newelement(t, name, ofs)
+            self.value.append(n)
             if ptype.ispcontainer(t) or ptype.isresolveable(t):
                 n.load()
-
             ofs += n.size()
-            self.value.append(n)
-
-        if self.initialized:
-            return self
 
         # read the block
         self.source.seek(self.getoffset())

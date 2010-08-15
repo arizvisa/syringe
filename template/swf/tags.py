@@ -1,5 +1,6 @@
 from ptypes import *
 from stypes import *
+import as3
 
 def CBinary(iterable):
     iter(iterable)
@@ -25,7 +26,7 @@ class Tag(pstruct.type):
 
     def islongheader(self):
         if self['Header']['length'] == 0x3f:
-            return UI32()
+            return UI32
         return Empty
 
     _fields_ = [
@@ -41,13 +42,13 @@ class Tag(pstruct.type):
         self['Header']['type'] = tag
         if size >= 0x3f:
             self['Header']['length'] = 0x3f
-            self['HeaderLongLength'] = size
+            self['HeaderLongLength'] = UI32().set(size)     # this creates a bad reference but whatever..
+            self['HeaderLongLength'].set(size)
 
         return super(Tag, self).serialize()
 
 class TagList(parray.terminated):
     _object_ = Tag
-    length = 0
 
     def isTerminator(self, n):
         return type(n['data']) == End
@@ -85,6 +86,15 @@ class DoAction(TagS):
     version = 3
     _fields_ = [
         (Empty, 'Actions')
+    ]
+
+class DoABC(TagS):
+    tag = 82
+    version = 9
+    _fields_ = [
+        (UI32, 'Flags'),
+        (STRING, 'Name'),
+        (as3.abcFile, 'ABCData')
     ]
 
 #class PlaceObject(TagS):

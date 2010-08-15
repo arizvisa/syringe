@@ -92,6 +92,8 @@ class string(provider):
         self.string = self.string[:left] + data + self.string[right:]
         self.offset = right
         return len(data)
+    def size(self):
+        return len(self.string)
 
 import ctypes
 from ctypes import *

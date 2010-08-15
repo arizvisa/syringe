@@ -128,3 +128,21 @@ def cast(sourcevalue, destination):
     result = sourcevalue.newelement( destination, 'cast(%s, %s)'% (sourcevalue.name(), repr(destination.__class__)), sourcevalue.getoffset() )
     result.deserialize( sourcevalue.serialize() )
     return result
+
+if __name__ == '__main__':
+    import ptypes,zlib
+    from ptypes import *
+
+    s = 'the quick brown fox jumped over the lazy dog'
+    
+    class zlibstring(pstr.string):
+        length = 44
+
+    t = dyn.transform(zlibstring, lambda s,v: zlib.decompress(v), lambda s,v: zlib.compress(v))
+
+    data = zlib.compress(s)
+
+    z = t()
+    z.source = ptypes.provider.string(data)
+    print z.deserialize(data)
+    print z.l

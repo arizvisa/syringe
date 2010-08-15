@@ -1,9 +1,6 @@
 import ptype,parray
 import pint,pstr,dyn,utils
 
-## XXX: should we implement all string types as a ptype.type instead of a parray.type?
-##      it would make string manipulations hella faster and less memory intensive...
-
 class _char_t(pint.integer_t):
     length = 1
 
@@ -103,12 +100,9 @@ class string(ptype.pcontainer):
         return self
 
     def get(self):
-        result = dyn.array(self._object_, len(self))()
-        result.deserialize(self.value)
-        result = [x.get() for x in result]
-        return utils.strdup(result, terminator='\x00')
+        s = self.value
+        return utils.strdup(s)[:len(self)]
 
-#    @ptype.rethrow
     def deserialize(self, source):
         '''initializes self with input from from the specified iterator 'source\''''
         source = iter(source)
@@ -131,10 +125,13 @@ class string(ptype.pcontainer):
 
         if len(self.value) != self.size():
             raise StopIteration("unable to continue reading (byte %d out of %d)"% (len(self.value), self.size()))
-        return
+        return self
 
     def setoffset(self, value, **kwds):
         return super(string, self).setoffset(value)
+
+    def __repr__(self):
+        return ' '.join([self.name(), self.get()])
 
 class szstring(string):
     '''Standard null-terminated string'''
@@ -167,7 +164,6 @@ class szstring(string):
             raise MemoryError('Out of memory trying to allocate %d bytes'% self.size())
         return self
 
-#    @ptype.rethrow
     def load(self):
         '''sync self with some specified data source'''
         l = self._object_.length
@@ -189,60 +185,13 @@ class szstring(string):
 class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
+    def get(self):
+        s = unicode(self.value, 'utf-16').encode('utf-8')
+        return utils.strdup(s)[:len(self)]
+
 class szwstring(szstring):
     '''Standard null-terminated string of wide-characters'''
     _object_ = wchar_t
-
-if False:
-    class string(parray.type):
-        '''String of characters'''
-        _object_ = pstr.char_t
-        length = 0
-
-        def set(self, value):
-            self.length = len(value)
-            self.deserialize(value)
-            return self
-
-        def __str__(self):
-            return self.get()
-
-        def get(self):
-            return utils.strdup(self.serialize(), terminator='\x00')
-
-    class wstring(parray.type):
-        '''String of wide-characters'''
-        _object_ = pstr.wchar_t
-        length = 0
-
-        def set(self, value):
-            self.length = len(value)
-            self.alloc()
-            value = iter(value)
-
-            for n in self.value:
-                char = value.next()
-                n.set(char)
-            return self
-
-        def get(self):
-            return utils.strdup(''.join([x.get() for x in self.value]), terminator='\x00')
-
-    class szstring(parray.terminated, string):
-        '''Standard null-terminated string'''
-        _object_ = char_t
-        def isTerminator(self, value):
-            if int(value) == 0:
-                return True
-            return False    
-
-    class szwstring(parray.terminated, wstring):
-        '''Standard null-terminated string of wide-characters'''
-        _object_ = wchar_t
-        def isTerminator(self, value):
-            if int(value) == 0:
-                return True
-            return False
 
 if __name__ == '__main__':
     import provider
