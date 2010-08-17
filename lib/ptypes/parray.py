@@ -145,6 +145,9 @@ class terminated(type):
         '''intended to be overloaded. should return True if element /v/ represents the end of the array.'''
         raise NotImplementedError('Developer forgot to overload this method')
 
+    def __len__(self):
+        return len(self.value)
+
     def load_container(self):
         forever = self.length
         if forever is None:
@@ -184,15 +187,15 @@ class infinite(terminated):
     '''
     length = None
     def isTerminator(self, v):
-        print v
         return False
 
-    def load_container(self):
+    def load(self):
         ofs = self.getoffset()
         try:
-            return super(infinite, self).load_container()
+            return super(infinite, self).load()
         except StopIteration:
-            pass
+            if not self[-1].initialized:
+                del( self[-1] )     # XXX: hopefully this isn't partially initialzied...
         return self
 
     def deserialize_stream(self, stream):
@@ -202,8 +205,6 @@ class infinite(terminated):
         except StopIteration:
             pass
         return self
-
-    load_block = load_container
 
 if __name__ == '__main__':
     import ptype,parray

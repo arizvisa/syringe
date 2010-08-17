@@ -51,6 +51,13 @@ def rethrow(fn):
             return fn(*args, **kwds)
 
         except:
+            # FIXME: this code is stupid.
+            #        what we want is when an exception is raised in
+            #          .load/.deserialize, to display the elements involved,
+            #          and display the fields that have been successfully
+            #          loaded. in order to debug those, all we care about is
+            #          what particular field caused the structure initialization
+            #          to fail.
             tb = traceback.format_stack()
             self = args[0]
             type, exception = sys.exc_info()[:2]
@@ -72,7 +79,10 @@ def rethrow(fn):
             if self.initialized:
                 res.append('\t<type length> %x'% len(self.length))
             elif ispcontainer(self.__class__):
-                res.append('\t<container length> %x'% len(self.value))
+                if self.value:
+                    res.append('\t<container length> %x'% len(self.value))
+                else:
+                    res.append('\t<container value> %s'% repr(self.value))
 
             res.append('')
             res.append('Traceback (most recent call last):')
