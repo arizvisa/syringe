@@ -2,7 +2,8 @@ import ptype,utils,bitmap
 import types
 
 # FIXME: unfortunately this module doesn't currently support block-based loads
-#        due to needing to support endianness as well as dynamic elements
+#        due to needing to support endianness as well as dynamic elements.
+#        I'll need to fully initialize the container in it's .load() method.
 
 def ispbinarytype(t):
     return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
@@ -130,17 +131,19 @@ class type(ptype.pcontainer):
         n = forcepbinary(pbinarytype, self)
         if ispbinarytype(n):
             n = n()
-            n.__name__ = name
+            n.parent = self
             n.source = self.source
+            n.__name__ = name
             if bitmap.isbitmap(offset):
                 n.setbitoffset(offset[1])
                 n.setoffset(offset[0])
                 return n
             n.setbitoffset(0)
             n.setoffset(offset)
-            n.parent = self
+            return n
 
         if ispbinaryinstance(n):
+            n.parent = self
             return n
 
         elif bitmap.isbitmap(n):
@@ -1000,6 +1003,26 @@ if __name__ == '__main__':
         z.deserialize('\x41\x40')
         if z.getinteger() == 0x4140:
             raise Success
+
+    @TestCase
+    def test24():
+        class mychild1(pbinary.struct):
+            _fields_ = [(4, 'len')]
+        class mychild2(pbinary.struct):
+            _fields_ = [(4, 'len')]
+        
+        class myparent(pbinary.struct):
+            _fields_ = [(mychild1, 'a'), (mychild2, 'b')]
+
+        from ptypes import provider
+        z = myparent()
+        z.source = provider.string('A'*5000)
+        z.l
+
+        a,b = z['a'],z['b']
+        if (a.parent is b.parent) and (a.parent is z):
+            raise Success
+        raise Failure
 
     if False:
         testold()

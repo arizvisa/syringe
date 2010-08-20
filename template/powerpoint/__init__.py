@@ -35,7 +35,7 @@ class RecordGeneral(pstruct.type):
             cls = LookupRecordType[t]
 
         except KeyError:
-            name = '%s type:%04x'% (repr(RecordUnknown), t)
+            name = repr(RecordUnknown)
             return dyn.clone(RecordUnknown, maxsize=l, length=l, recordtype=t, name=lambda x:name)
         return dyn.clone(cls, maxsize=l)
 
@@ -49,11 +49,19 @@ class RecordGeneral(pstruct.type):
             name = []
             for n in list(self.traverse(lambda s: s.getparent())):
                 try:
-                    name.append(str(n.__name__))
+                    n = n.__name__
                 except AttributeError:
                     name.append(None)
-                continue
-            name = '[%s]'% ','.join(list(reversed(name))[1:])
+                    continue
+
+                try:
+                    int(n)
+                    n = '[%s]'% str(n)
+                except ValueError:
+                    n = '[%s]'% repr(n)
+                name.append(n)
+                    
+            name = ''.join(list(reversed(name))[1:])
             
             print "record at %x (type %x) %s's contents are larger than expected (%x>%x)"%(self.getoffset(), t, name, totalsize, maxsize)
             totalsize = maxsize
@@ -68,11 +76,51 @@ class RecordGeneral(pstruct.type):
 
     def __repr__(self):
         if self.initialized:
-            return '%s %s length=%x data=%s'%( self.name(), self['data'].name(), self['data'].size(), repr(self['data'].serialize()) )
+            header = self['header']
+            return '%s header={ver=%d,type=%x,length=%d} size=%d data=%s'%( self.name(), int(header['recVer/recInstance']), int(header['recType']), int(header['recLength']), self['data'].size(), self['data'].name())
         return super(RecordGeneral, self).__repr__()
 
+class searchingcontainer(object):
+    def search(self, type, recurse=False):
+        '''Search through a list of records for a particular type'''
+        if not recurse:
+            for x in self:
+                if int(x['header']['recType']) == type:
+                    yield x
+                continue
+            return
+
+        # ourselves first
+        for d in self.search(type, False):
+            yield d
+
+        # now our chidren
+        for x in self:
+            try:
+                x['data'].search
+            except AttributeError:
+                continue
+
+            for d in x['data'].search(type, True):
+                yield d
+            continue
+        return
+
+    def lookup(self, type):
+        '''Return the first instance of specified record type'''
+        res = [x for x in self if int(x['header']['recType']) == type]
+        if not res:
+            raise KeyError(type)
+        assert len(res) == 1, repr(res)
+        return res[0]
+
+    def walk(self):
+        for x in self:
+            yield x['data']
+        return
+
 class Record(object): pass
-class RecordContainer(parray.terminated, Record):
+class RecordContainer(parray.terminated, Record, searchingcontainer):
     _object_ = RecordGeneral
     currentsize = maxsize = 0
 
@@ -83,52 +131,19 @@ class RecordContainer(parray.terminated, Record):
             return False
         return True
 
-    def search(self, type):
-        '''Search through a list of records for a particular type'''
-        return (x for x in self if int(x['header']['recType']) == type)
-
-    def lookup(self, type):
-        '''Return the first instance of specified record type'''
-        res = [x for x in self if int(x['header']['recType']) == type]
-        if not res:
-            raise KeyError(type)
-        assert len(res) == 1, repr(res)
-        return res[0]
-
-    def walk(self):
-        for x in self:
-            yield x['data']
-        return
-
     def __repr__(self):
         if self.initialized:
             records = []
             for v in self.walk():
                 n = '%s[%x]'%(v.__class__.__name__,v.recordtype)
                 records.append(n)
-            return '%s length=%d [%s]'%(self.name(), len(self), ','.join(records))
+            header = self.parent['header']
+            return '%s header={ver=%d,type=%x,length=%d} records=%d [%s]'%(self.name(), int(header['recVer/recInstance']), int(header['recType']), int(header['recLength']), len(self), ','.join(records))
         return super(RecordContainer, self).__repr__()
 
 # yea, a file really is just a gigantic list of records...
-class File(parray.infinite):
+class File(parray.infinite, searchingcontainer):
     _object_ = RecordGeneral
-
-    def search(self, type):
-        '''Search through a list of records for a particular type'''
-        return (x for x in self if int(x['header']['recType']) == type)
-
-    def lookup(self, type):
-        '''Return the first instance of specified record type'''
-        res = [x for x in self if int(x['header']['recType']) == type]
-        if not res:
-            raise KeyError(type)
-        assert len(res) == 1, repr(res)
-        return res[0]
-
-    def walk(self):
-        for x in self:
-            yield x['data']
-        return
 
     def __repr__(self):
         if self.initialized:
@@ -136,7 +151,7 @@ class File(parray.infinite):
             for v in self.walk():
                 n = '%s[%x]'%(v.__class__.__name__,v.recordtype)
                 records.append(n)
-            return '%s length=%d [%s]'%(self.name(), len(self), ','.join(records))
+            return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
         return super(File, self).__repr__()
 
 ### list of all records
@@ -249,13 +264,17 @@ class Handout(RecordContainer):
 ### office art
 class msofbtExtTimeNodeContainer(RecordContainer):
     recordtype = 0xf144
+    recordtype = 61764
 class msofbtTimeConditionContainer(RecordContainer):
     recordtype = 0xf125
+    recordtype = 61733
 class msofbtTimeColorBehaviorContainer(RecordContainer):
     recordtype = 0xf12c
+    recordtype = 61740
 
 class msofbtTimeCondition(pstruct.type, Record):
     recordtype = 0xf128
+    recordtype = 61736
 
     class __triggerType(pint.enum, pint.uint32_t):
         _fields_ = [
@@ -324,14 +343,129 @@ class RT_CurrentUserAtom(pstruct.type, Record):
 #        (lambda s: dyn.clone(pstr.wstring,length=int(s['lenUserName'].l)*2), 'unicodeUserName'),
     ]
 
+class PSR_ColorSchemeAtom(parray.type, Record):
+    recordtype = 0x7f0
+    recordtype = 2032
+    length = 8
+    _object_ = uint4
+
+class PSR_HashCodeAtom(pstruct.type, Record):
+    recordtype = 0x2b00
+    recordtype = 11008
+    _fields_ = [(uint4, 'hash')]
+
+class PSR_SlideTimeAtom10(pstruct.type, Record):
+    recordtype = 0x2eeb
+    recordtype = 12011
+    _fields_ = [(uint4, 'dwHighDateTime'),(uint4, 'dwLowDateTime')]
+
+class msofbtTimeNode(pstruct.type, Record):
+    recordtype = 0xf127
+    recordtype = 61735
+    _fields_ = [
+        (pint.uint32_t, 'masterID'),
+        (pint.uint32_t, 'restart'),
+        (pint.uint32_t, 'type'),
+        (pint.uint32_t, 'fill'),
+        (pint.uint32_t, 'syncBehavior'),
+        (pint.uint8_t, 'fSyncMaster'),
+        (pint.uint32_t, 'propertiesSet'),
+    ]
+
+class PSR_ParaBuild(RecordContainer):
+    recordtype = 0x2b08
+    recordtype = 11016
+
+class PSR_BuildList(RecordContainer):
+    recordtype = 0x2b02
+    recordtype = 11010
+
+class msofbtTimeSetBehaviorContainer(RecordContainer):
+    recordtype = 0xf131
+    recordtype = 61745
+
+class msofbtTimePropertyList(RecordContainer):
+    recordtype = 0xf13d
+    recordtype = 61757
+
+class msofbtTimeSetBehaviorContainer(RecordContainer):
+    recordtype = 0xf131
+    recordtype = 61745
+
+class msofbtTimeEffectBehaviorContainer(RecordContainer):
+    recordtype = 0xf12d
+    recordtype = 61741
+
+class msofbtTimeBehaviorContainer(RecordContainer):
+    recordtype = 0xf12a
+    recordtype = 61738
+
+class msofbtClientVisualElement(RecordContainer):
+    recordtype = 0xf13c
+    recordtype = 61756
+
+class msofbtTimeEffectBehavior(pstruct.type, Record):
+    recordtype = 0xf136
+    recordtype = 61750
+    _fields_ = [
+        (pint.uint32_t, 'propertiesUsed'),
+        (pint.uint32_t, 'taetTransition'),
+    ]
+
+class msofbtTimeVariant(pstruct.type, Record):
+    recordtype = 0xf142
+    recordtype = 61762
+
+    def __Value(self):
+        n = int(self['Type'].l)
+        if n == 0:
+            return pint.uint32_t
+        if n == 1:
+            return pint.uint32_t
+        if n == 2:
+            return pfloat.double
+        if n == 0xff:
+            return dyn.block(0)
+
+        print 'unknown type %x'% n
+        return pint.uint32_t
+
+    _fields_ = [
+        (pint.uint8_t, 'Type'),
+        (__Value, 'Value'),
+    ]
+
+class msofbtTimeBehavior(pstruct.type, Record):
+    recordtype = 0xf133
+    recordtype = 61747
+
+    _fields_ = [
+        (pint.uint32_t, 'propertiesUsed'),
+        (pint.uint32_t, 'tbaddAdditive'),
+        (pint.uint32_t, 'tbaccAccmulate'),
+        (pint.uint32_t, 'tbbtTransformType'),
+    ]
+
+class PSR_VisualShapeAtom(pstruct.type, Record):
+    recordtype = 11003
+    recordtype = 0x2afb
+
+    _fields_ = [
+        (uint4, 'type'),
+        (uint4, 'refType'),
+        (uint4, 'id'),
+        (sint4, 'data0'),
+        (sint4, 'data1'),
+    ]
+
 ### collect all classes
 import inspect
-for cls in globals().values():
+for name,cls in globals().items():
     try:
         if inspect.isclass(cls) and issubclass(cls, Record) and cls is not Record:
             LookupRecordType[cls.recordtype] = cls
     except AttributeError:
-        print '%s has no record type'% cls
+        print '%s,%s has no record type'% (name,cls)
     continue
 
 if __name__ == '__main__':

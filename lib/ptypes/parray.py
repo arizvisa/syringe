@@ -189,13 +189,36 @@ class infinite(terminated):
     def isTerminator(self, v):
         return False
 
-    def load(self):
+    def load_container(self):
+        forever = self.length
+        if forever is None:
+            forever = utils.infiniterange(0)
+        else:
+            forever = xrange(forever)
+
         ofs = self.getoffset()
-        try:
-            return super(infinite, self).load()
-        except StopIteration:
-            if not self[-1].initialized:
-                del( self[-1] )     # XXX: hopefully this isn't partially initialzied...
+        for index in forever:
+            n = self.newelement(self._object_, str(index), ofs)
+            self.append(n.load())       # raise exception first.
+            if self.isTerminator(n):    # then check.
+                break
+            ofs += n.size()
+        return self
+    load_block = load_container
+
+    def deserialize_stream(self, stream):
+        forever = self.length
+        if forever is None:
+            forever = utils.infiniterange(0)
+        else:
+            forever = xrange(forever)
+
+        ofs = self.getoffset()
+        for index in forever:
+            n = self.addelement_stream(stream, self._object_, str(index), ofs)
+            if self.isTerminator(n):
+                break
+            ofs += n.size()
         return self
 
     def deserialize_stream(self, stream):
@@ -263,3 +286,24 @@ if __name__ == '__main__':
     z.deserialize('GFEDCBABCDHEFG')
     print z
     print len(z)
+
+    # FIXME: I don't think the following type of code works anymore...
+
+    import pstruct,parray,pint
+    class RecordGeneral(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'start'),
+            (pint.uint32_t, 'end'),
+        ]
+
+    class RecordContainer(parray.infinite):
+        _object_ = RecordGeneral
+
+    chars = '\xdd\xdd\xdd\xdd'
+    st = chars * 2
+    string = st * 8
+    string = string[:-1]
+
+    z = RecordContainer()
+    z.deserialize(string)
+    print z

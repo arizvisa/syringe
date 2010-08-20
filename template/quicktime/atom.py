@@ -68,11 +68,12 @@ class Atom(pstruct.type):
         s = self.getsize() - self.getheadersize()
         datasize = self['data'].size()
 
-        container = self.parent.parent
-        if s >= datasize:
-            return dyn.block(s - datasize)
+        if self.parent is not None:
+            container = self.parent.parent
+            if s >= datasize:
+                return dyn.block(s - datasize)
 
-        print 'miscalculated slack:',hex(s),'>',hex(datasize)
+            print 'miscalculated slack:',hex(s),'>',hex(datasize)
         return dyn.block(0)
 
     def size(self):
@@ -108,6 +109,10 @@ class AtomList(parray.terminated):
         assert len(res) == 1, repr(res)
         return res[0]
 
+    def load(self):
+        self.currentsize = 0
+        return super(AtomList, self).load()
+
 ### list of atoms
 class Unknown(dyn.block(0)):
     type = None
@@ -119,10 +124,13 @@ class EDTS(AtomList, AtomType): type = 'edts'
 class MDIA(AtomList, AtomType): type = 'mdia'
 class MINF(AtomList, AtomType): type = 'minf'
 class DINF(AtomList, AtomType): type = 'dinf'
-class MDAT(AtomList, AtomType): type = 'mdat'
 class UDTA(AtomList, AtomType): type = 'udta'
 class STBL(AtomList, AtomType): type = 'stbl'
 class GMHD(AtomList, AtomType): type = 'gmhd'
+#class MDAT(AtomList, AtomType): type = 'mdat'  # XXX: sometimes this is not a container
+class MDAT(dyn.block(0), AtomType):
+    type = 'mdat'
+    length = property(fget=lambda s: s.maxsize)
 
 ## empty atoms
 class WIDE(ptype.type, AtomType): type = 'wide'

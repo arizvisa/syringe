@@ -77,7 +77,7 @@ def rethrow(fn):
             res.append('\t' + id + '.' + fn.__name__)
 
             if self.initialized:
-                res.append('\t<type length> %x'% len(self.length))
+                res.append('\t<type length> %x'% len(self))
             elif ispcontainer(self.__class__):
                 if self.value:
                     res.append('\t<container length> %x'% len(self.value))

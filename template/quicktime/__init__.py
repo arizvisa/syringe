@@ -27,3 +27,7 @@ class File(ptypes.parray.infinite):
         assert len(res) == 1, repr(res)
         return res[0]
 
+    def load(self):
+        self.currentsize = 0
+        return super(File, self).load()
+
