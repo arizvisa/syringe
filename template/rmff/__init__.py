@@ -115,7 +115,7 @@ Codec_Data.add(Codec_Data_cook_v5)
 ### type specific
 # http://git.ffmpeg.org/?p=ffmpeg;a=blob;f=libavformat/rmdec.c;h=436a7e08f2a593735d50e15ba38ed34c5f8eede1;hb=HEAD
 
-class Type_Specific_v3(pstruct.type):
+class Type_Specific_v3_Audio(pstruct.type):
     object_version = 3
     _fields_ = [
         (dyn.block(14), 'unknown[1]'),  # XXX: this might not be right
@@ -127,7 +127,7 @@ class Type_Specific_v3(pstruct.type):
     def codec(self):
         return self['fourcc'].serialize()
 
-class Type_Specific_v4(pstruct.type):
+class Type_Specific_v4_Audio(pstruct.type):
     object_version = 4
     _fields_ = [
         (UINT16, 'unused[0]'),
@@ -154,9 +154,9 @@ class Type_Specific_v4(pstruct.type):
         print self['desc1'], self['desc2']
         return self['desc2'].serialize()
 
-class Type_Specific_vAny(Type_Specific_v4): pass
+class Type_Specific_vAny_Audio(Type_Specific_v4_Audio): pass
 
-class Type_Specific_v5(pstruct.type):
+class Type_Specific_v5_Audio(pstruct.type):
     object_version = 5
     _fields_ = [
         (UINT16, 'unused[0]'),
@@ -186,7 +186,7 @@ class Type_Specific_v5(pstruct.type):
     def codec(self):
         return self['buffer'].serialize()
 
-class Type_Specific_v0(pstruct.type):
+class Type_Specific_v0_Audio(pstruct.type):
     object_version = 0
 
     _fields_ = [
@@ -205,12 +205,12 @@ class Type_Specific_v0(pstruct.type):
     def codec(self):
         return self['fourcc'].serialize()
 
-class Type_Specific(pstruct.type):
+class Type_Specific_RealAudio(pstruct.type):
     _object_ = {
-        0 : Type_Specific_v0,
-        3 : Type_Specific_v3,
-        4 : Type_Specific_v4,
-        5 : Type_Specific_v5
+        0 : Type_Specific_v0_Audio,
+        3 : Type_Specific_v3_Audio,
+        4 : Type_Specific_v4_Audio,
+        5 : Type_Specific_v5_Audio
     }
 
     def __object(self):
@@ -219,7 +219,7 @@ class Type_Specific(pstruct.type):
             return self._object_[ver]
         except KeyError:
             pass
-        return ptype.type
+        raise NotImplementedError( 'Unknown Type at %x: %x'% (self.getoffset(), ver))
 
     def __codec(self):
         h = self.getparent(RealMedia_Header_Type)
@@ -231,10 +231,6 @@ class Type_Specific(pstruct.type):
         except KeyError:
             pass
 
-#        path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
-#        path = '\n\t -> '.join(map(repr,reversed(path)))
-#        print 'unknown (fourcc,version) -> (%s, %d)\n%s'% (repr(fourcc), version, path)
-
         l = int(h['type_specific_len'].l)
         return dyn.block( l - (self['object'].size()+6) )
 
@@ -244,6 +240,22 @@ class Type_Specific(pstruct.type):
         (__object, 'object'),
         (__codec, 'codec')
     ]
+
+# FIXME: this was ripped from someone's code. It doesn't support multiple versions.
+class Type_Specific_vAny_RealVideo(pstruct.type):
+    _fields_ = [
+        (UINT16, 'version'),
+        (UINT16, 'size'),
+        (dyn.block(4), 'type'),
+        (dyn.block(4), 'codec'),
+        (dyn.block(4), 'codec'),
+        (UINT16, 'width'),
+        (UINT16, 'height'),
+        (dyn.block(6), 'unknown'),
+        (pfloat.double, 'fps'),
+    ]
+
+class Type_Specific_RealVideo(Type_Specific_vAny_RealVideo): pass
 
 ### sub-headers
 class RealMedia_File_Header_v0(pstruct.type, RealMedia_Header_Type):
@@ -277,6 +289,16 @@ class RealMedia_Properties_Header_v0(pstruct.type, RealMedia_Header_Type):
 class RealMedia_MediaProperties_Header_v0(pstruct.type, RealMedia_Header_Type):
     object_id = 'MDPR'
     object_version = 0
+
+    def __type_specific_data(self):
+        mimetype = self['mime_type'].l.get()
+        if mimetype == 'video/x-pn-realvideo':
+            return Type_Specific_RealVideo
+        elif mimetype == 'audio/x-pn-realaudio':
+            return Type_Specific_RealAudio
+        print 'Unknown mimetype: %s'% mimetype
+        return dyn.block(int(self['type_specific_len'].l))
+
     _fields_ = [
         (UINT16, 'stream_number'),
         (UINT32, 'max_bit_rate'),
@@ -292,7 +314,7 @@ class RealMedia_MediaProperties_Header_v0(pstruct.type, RealMedia_Header_Type):
         (lambda s: dyn.clone(pstr.string, length=int(s['mime_type_size'].l)), 'mime_type'),
         (UINT32, 'type_specific_len'),
 #        (lambda s: dyn.block(int(s['type_specific_len'].l)), 'type_specific_data'),
-        (Type_Specific, 'type_specific_data')
+        (__type_specific_data, 'type_specific_data')
     ]
 
 class RealMedia_Content_Description_Header(pstruct.type, RealMedia_Header_Type):
