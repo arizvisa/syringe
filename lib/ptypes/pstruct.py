@@ -52,32 +52,28 @@ class type(__pstruct_generic):
     def size(self):
         return reduce(lambda x,y: x + y.size(), self.value, 0)
 
-    def serialize(self):
-        return ''.join([ x.serialize() for x in self.value ])
-
-    def deserialize_stream(self, stream):
-        ofs = self.getoffset()
-        for t,name in self._fields_:
-            n = self.addelement_stream(stream, t, name, ofs)
-            ofs += n.size()
-        return self
-
     def load(self):
         self.value = []
-        ofs = self.getoffset()
 
         # create each element
+        ofs = self.getoffset()
         for t,name in self._fields_:
             n = self.newelement(t, name, ofs)
             self.value.append(n)
             if ptype.ispcontainer(t) or ptype.isresolveable(t):
                 n.load()
             ofs += n.size()
+        return super(type, self).load()
 
-        # read the block
-        self.source.seek(self.getoffset())
-        block = self.source.consume(self.size())
-        return self.deserialize(block)
+    def deserialize(self, source):
+        source = iter(source)
+        self.value = []
+        ofs = self.getoffset()
+        for t,name in self._fields_:
+            n = self.newelement_stream(source, t, name, ofs)
+            self.value.append(n)
+            ofs += n.size()
+        return super(type, self).deserialize(source)
 
     def __repr__uninitialized(self):
         result = []

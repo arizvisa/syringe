@@ -69,11 +69,15 @@ class Atom(pstruct.type):
         datasize = self['data'].size()
 
         if self.parent is not None:
-            container = self.parent.parent
             if s >= datasize:
                 return dyn.block(s - datasize)
 
-            print 'miscalculated slack:',hex(s),'>',hex(datasize)
+            container = self.parent.parent
+            print 'miscalculated slack:',hex(s),'<',hex(datasize)
+            path = self.traverse(lambda n: n.parent)
+            path = [ 'type:%s name:%s offset:%x size:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset(), x.size()) for x in path ]
+            path = ' ->\n\t'.join(reversed(path))
+            print path
         return dyn.block(0)
 
     def size(self):
@@ -112,6 +116,9 @@ class AtomList(parray.terminated):
     def load(self):
         self.currentsize = 0
         return super(AtomList, self).load()
+    def deserialize(self,source):
+        self.currentsize = 0
+        return super(AtomList, self).deserialize(source)
 
 ### list of atoms
 class Unknown(dyn.block(0)):
@@ -124,7 +131,7 @@ class EDTS(AtomList, AtomType): type = 'edts'
 class MDIA(AtomList, AtomType): type = 'mdia'
 class MINF(AtomList, AtomType): type = 'minf'
 class DINF(AtomList, AtomType): type = 'dinf'
-class UDTA(AtomList, AtomType): type = 'udta'
+#class UDTA(AtomList, AtomType): type = 'udta'
 class STBL(AtomList, AtomType): type = 'stbl'
 class GMHD(AtomList, AtomType): type = 'gmhd'
 #class MDAT(AtomList, AtomType): type = 'mdat'  # XXX: sometimes this is not a container
@@ -198,13 +205,14 @@ class ELST(pstruct.type, AtomType):
     type = 'elst'
 
     def __Entry(self):
-        return dyn.array(pint.uint32_t, int(self['Number of entries'].l))
+        count = self['Number of entries'].l
+        return dyn.array(pint.uint32_t, int(count))
 
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
-        (pint.uint32_t, 'Number of entries'),
-        (lambda self: dyn.array(pint.uint32_t, int(self['Number of entries'].l)), 'Entry')
+        (pQTInt, 'Number of entries'),
+        (__Entry, 'Entry')
     ]
 
 class MDHD(pstruct.type, AtomType):
@@ -319,12 +327,17 @@ class stsc(pstruct.type, AtomType):
 class stsz(pstruct.type, AtomType):
     '''Sample size atom'''
     type = 'stsz'
+
+    def __Entries(self):
+        count = int(self['Number of entries'].l)
+        return dyn.array(pQTInt, count)
+        
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Sample size'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
+        (__Entries, 'Entries'),
     ]
 
 ## stco

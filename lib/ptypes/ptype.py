@@ -62,19 +62,16 @@ def rethrow(fn):
             self = args[0]
             type, exception = sys.exc_info()[:2]
 
-            # XXX: any way to make this better?
-            path = list(self.traverse(lambda n: n.parent))
-            path = [ (x.name(), getattr(x, '__name__', '')) for x in reversed(path)]
-            path = '\t' + ' ->\n\t'.join(map(repr,path))
+            path = self.traverse(lambda n: n.parent)
+            path = [ 'type:%s name:%s offset:%x size:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset(), x.size()) for x in path ]
+            path = ' ->\n\t'.join(reversed(path))
 
-            id = self.name()
-
-            ### FIXME: there _has_ to be a better way than writing to stderr in order to modify the backtrace layout
             res = []
             res.append('')
-            res.append('Caught exception %s in'% (repr(exception)))
-            res.append(path + '->')
-            res.append('\t' + id + '.' + fn.__name__)
+            res.append('Caught exception: %s\n'% exception)
+            res.append(path + ' =>')
+
+            res.append('\t<method name> %s'% fn.__name__)
 
             if self.initialized:
                 res.append('\t<type length> %x'% len(self))
@@ -94,6 +91,35 @@ def rethrow(fn):
         pass
     catch.__name__ = 'catching(%s)'% fn.__name__
     return catch
+
+def debug(ptype):
+    assert isptype(ptype), '%s is not a ptype'% repr(ptype)
+    class newptype(ptype):
+        @rethrow
+        def deserialize_stream(self, stream):
+            return super(newptype, self).deserialize_stream(stream)
+
+        @rethrow
+        def load(self):
+            return super(newptype, self).load()
+
+        @rethrow
+        def commit(self):
+            return super(newptype, self).commit()
+
+    newptype.__name__ = 'debug(%s)'% ptype.__name__
+    return newptype
+
+def debugrecurse(ptype):
+    class newptype(debug(ptype)):
+        @rethrow
+        def newelement(self, ptype, name, ofs):
+            res = forceptype(ptype, self)
+            assert isptype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
+            return super(newptype,self).newelement( debug(res), name, ofs )
+
+    newptype.__name__ = 'debugrecurse(%s)'% ptype.__name__
+    return newptype
 
 class type(object):
     '''
@@ -190,12 +216,18 @@ class type(object):
             n = next(n)
         return
 
+    def set(self, string, **kwds):
+        '''set entire type equal to string'''
+        last = self.value
+
+        res = str(string)
+        self.value = res
+        self.length = len(res)
+        return res
+
     def alloc(self):
-        '''initializes self with zeroes'''
-        if not self.initialized:
-            self.setoffset(0)
-            self.value = '\x00'*self.size()
-        return self
+        zero = ( '\x00' for x in utils.infiniterange(0) )
+        return self.deserialize(zero)
 
     ## operator overloads
     def __cmp__(self, x):
@@ -231,27 +263,12 @@ class type(object):
         return res
 
     ## reading/writing to memory provider
-    # if source is undefined, we don't do anything, except for allocate if necessary
     l = property(fget=lambda s: s.load())   # abbr
     def load(self):
         '''sync self with some specified data source'''
 
-        try:
-            self.source.seek( self.getoffset() )
-#            self.value = self.source.consume( self.size() )
-            self.deserialize( self.source.consume( self.size() ) )
-            return self
-
-        except MemoryError:
-            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
-            path = ' -> '.join(map(repr,reversed(path)))
-            raise MemoryError('%s: Unable to allocate %d bytes at %x'% (path, self.size(), self.getoffset()))
-
-        except StopIteration:
-            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
-            path = ' -> '.join(map(repr,reversed(path)))
-            raise StopIteration("%s: Unable to read %d bytes at %x"% (path, self.size(), self.getoffset()))
-
+        self.source.seek( self.getoffset() )
+        self.value = self.transform( self.source.consume(self.size()) )
         return self
 
     def commit(self):
@@ -259,21 +276,6 @@ class type(object):
         self.source.seek( self.getoffset() )
         self.source.write( self.serialize() )
         return self
-
-    # XXX: perhaps we should remove this if we want to optimze?
-    #      we should only be interacting with memory, period...
-    # XXX: ..and technicaly if we can interact with memory, we can
-    #      use this with files too, heh...  (why am i rewriting this software again?)
-
-    def set(self, string, **kwds):
-        '''set entire type equal to string'''
-        last = self.value
-
-        res = str(string)
-        self.value = res
-        self.length = len(res)
-
-        return res
 
     ## byte stream input/output
     def serialize(self):
@@ -283,23 +285,18 @@ class type(object):
         raise ValueError('%s is uninitialized'% self.name())
 
     def deserialize(self, source):
-        '''initializes self with input from from the specified iterator 'source\''''
-        source = iter(source)
-        self.value = ''         # XXX: would it be faster if we make this an array?
-        
-        try:
-            for i,byte in zip(xrange(self.size()), source):
-                self.value += byte
+        self.value = ''
+        return self.deserialize_stream(iter(source))
 
-        except MemoryError:
-            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
-            path = ' -> '.join(map(repr,reversed(path)))
-            raise MemoryError('%s: Unable to allocate %d bytes at %x'% (path, self.size(), self.getoffset()))
-
-        if len(self.value) != self.size():
-            path = [ (x.name(), getattr(x, '__name__', '')) for x in self.traverse(lambda n: n.parent) ]
-            path = ' -> '.join(map(repr,reversed(path)))
-            raise StopIteration("%s: Unable to continue reading (byte %d out of %d at %x)"% (path, len(self.value), self.size(), self.getoffset()))
+    def deserialize_stream(self, source):
+        s = self.size()
+        block = ''.join( (x for i,x in zip(xrange(s), source)) )
+        if len(block) < s:
+            path = self.traverse(lambda n: n.parent)
+            path = [ 'type:%s name:%s offset:%x size:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset(), x.size()) for x in path ]
+            path = ' ->\n\t'.join(reversed(path))
+            raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), s, path))
+        self.value = self.transform(block)
         return self
 
     ## representation
@@ -331,6 +328,10 @@ class type(object):
         except StopIteration:
             result.l # try to load it anyways
         return result
+
+    ## a hook for zef
+    def transform(self, data):
+        return data
 
 class pcontainer(type):
     '''
@@ -421,50 +422,40 @@ class pcontainer(type):
             pass
         return res
 
-    def addelement_stream(self, stream, type, name, offset):
+    def newelement_stream(self, stream, type, name, offset):
         '''adds an element from a byte stream'''
         n = self.newelement(type,name,offset)
         n.deserialize(stream)
-        self.value.append(n)
         return n
 
+    def serialize(self):
+        return ''.join( (x.serialize() for x in self.value) )
+
+    def load(self):
+        assert self.value is not None, 'Parent must initialize self.value'
+
+        self.source.seek(self.getoffset())
+        block = self.transform( self.source.consume(self.size()) )
+        stream = iter(block)
+
+        self.source.seek(self.getoffset())
+        producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
+        return self.deserialize_stream(producer)
+
     def deserialize(self, source):
-        stream = iter(source)
-        self.value = []
-        return self.deserialize_stream(stream)
+        assert self.value is not None, 'Parent must initialize self.value'
+        data = self.serialize()
+        block = self.transform(data)
+        return self.deserialize_stream(iter(block))
 
     def deserialize_stream(self, source):
-        raise NotImplementedError
-
-    def alloc(self):
-        zero = ( '\x00' for x in utils.infiniterange(0) )
-        self.value = []
-        return self.deserialize_stream(zero)
-        
-def debug(ptype):
-    assert isptype(ptype), '%s is not a ptype'% repr(ptype)
-    class newptype(ptype):
-        @rethrow
-        def deserialize(self, source):
-            return super(newptype, self).deserialize(source)
-
-        @rethrow
-        def load(self):
-            return super(newptype, self).load()
-
-    newptype.__name__ = 'debug(%s)'% ptype.__name__
-    return newptype
-
-def debugrecurse(ptype):
-    class newptype(debug(ptype)):
-        @rethrow
-        def newelement(self, ptype, name, ofs):
-            res = forceptype(ptype, self)
-            assert isptype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
-            return super(newptype,self).newelement( debug(res), name, ofs )
-
-    newptype.__name__ = 'debugrecurse(%s)'% ptype.__name__
-    return newptype
+        assert self.value is not None, 'Parent must initialize self.value'
+        ofs = self.getoffset()
+        for n in self.value:
+            n.setoffset(ofs)
+            n.deserialize_stream(source)
+            ofs += n.size()
+        return self
 
 if __name__ == '__main__':
     ptype = type
@@ -475,10 +466,10 @@ if __name__ == '__main__':
 
     x = p10bytes()
     print repr(x)
-    x.load()
-    print repr(x)
+#    x.load()
+#    print repr(x)
 
-    x.source = provider.memprovider()
+    x.source = provider.memory()
     x.setoffset(id(x))
     x.load()
     print repr(x)

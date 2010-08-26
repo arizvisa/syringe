@@ -71,16 +71,6 @@ class type(__parray_generic):
     def size(self):
         return reduce(lambda x,y: x+y.size(), self.value, 0)
 
-    def serialize(self):
-        return ''.join([ x.serialize() for x in self.value ])
-
-    def deserialize_stream(self, stream):
-        ofs = self.getoffset()
-        for index in xrange(self.length):
-            n = self.addelement_stream(stream, self._object_, str(index), ofs)
-            ofs += n.size()
-        return self
-
     # load ourselves lazily
     def load_block(self):
         ofs = self.getoffset()
@@ -88,7 +78,7 @@ class type(__parray_generic):
             n = self.newelement(self._object_, str(index), ofs)
             self.value.append(n)
             ofs += n.size()
-        return
+        return self
 
     # load ourselves incrementally
     def load_container(self):
@@ -98,7 +88,18 @@ class type(__parray_generic):
             self.value.append(n)
             n.load()
             ofs += n.size()
-        return
+        return self
+
+    def deserialize(self, source):
+        source = iter(source)
+        obj = self._object_
+        self.value = []
+        ofs = self.getoffset()
+        for index in xrange(self.length):
+            n = self.newelement_stream(source, obj, str(index), ofs)
+            self.value.append(n)
+            ofs += n.size()
+        return super(type, self).deserialize(source)
 
     def load(self):
         obj = self._object_
@@ -111,15 +112,7 @@ class type(__parray_generic):
         elif ptype.ispcontainer(obj) or ptype.isresolveable(obj):
             self.load_container()
 
-        if self.initialized:
-            return self
-        
-#        assert len(self) == len(self.value), '%d != %d'% (len(self), len(self.value))
-
-        # now that we know the length, read the array
-        self.source.seek(self.getoffset())
-        block = self.source.consume(self.size())
-        return self.deserialize(block)
+        return super(type, self).load()
 
     def __repr__(self):
         res = '???'
@@ -148,13 +141,25 @@ class terminated(type):
     def __len__(self):
         return len(self.value)
 
-    def load_container(self):
-        forever = self.length
-        if forever is None:
-            forever = utils.infiniterange(0)
-        else:
-            forever = xrange(forever)
+    def deserialize(self, source):
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+        source = iter(source)
+        obj = self._object_
+        self.value = []
 
+        ofs = self.getoffset()
+        for index in forever:
+            n = self.newelement_stream(source, obj, str(index), ofs)
+            self.value.append(n)
+            if self.isTerminator(n):
+                break
+            ofs += n.size()
+        return super(type, self).deserialize(source)
+
+    def load(self):
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+
+        self.value = []
         ofs = self.getoffset()
         for index in forever:
             n = self.newelement(self._object_, str(index), ofs)
@@ -162,24 +167,24 @@ class terminated(type):
             if self.isTerminator(n.load()):
                 break
             ofs += n.size()
-        return self
+        return super(type, self).load()
 
-    def deserialize_stream(self, stream):
-        forever = self.length
-        if forever is None:
-            forever = utils.infiniterange(0)
+    def __repr__(self):
+        # copied..
+        res = '???'
+        index = '...'
+        if self.initialized:
+            res = repr(''.join(self.serialize()))
+            index = str(len(self))
+
+        ofs = '[%x]'%( self.getoffset() )
+
+        if ptype.isptype(self._object_):
+            obj = repr(self._object_)
         else:
-            forever = xrange(forever)
+            obj = repr(self._object_.__class__)
 
-        ofs = self.getoffset()
-        for index in forever:
-            n = self.addelement_stream(stream, self._object_, str(index), ofs)
-            if self.isTerminator(n):
-                break
-            ofs += n.size()
-        return self
-
-    load_block = load_container
+        return ' '.join((ofs, self.name(), '%s[%s] %s'% (obj, index, res)))
 
 class infinite(terminated):
     '''
@@ -189,42 +194,17 @@ class infinite(terminated):
     def isTerminator(self, v):
         return False
 
-    def load_container(self):
-        forever = self.length
-        if forever is None:
-            forever = utils.infiniterange(0)
-        else:
-            forever = xrange(forever)
-
-        ofs = self.getoffset()
-        for index in forever:
-            n = self.newelement(self._object_, str(index), ofs)
-            self.append(n.load())       # raise exception first.
-            if self.isTerminator(n):    # then check.
-                break
-            ofs += n.size()
-        return self
-    load_block = load_container
-
-    def deserialize_stream(self, stream):
-        forever = self.length
-        if forever is None:
-            forever = utils.infiniterange(0)
-        else:
-            forever = xrange(forever)
-
-        ofs = self.getoffset()
-        for index in forever:
-            n = self.addelement_stream(stream, self._object_, str(index), ofs)
-            if self.isTerminator(n):
-                break
-            ofs += n.size()
-        return self
-
-    def deserialize_stream(self, stream):
-        ofs = self.getoffset()
+if False:
+    def load(self):
         try:
-            return super(infinite, self).deserialize_stream(stream)
+            return super(infinite, self).load()
+        except StopIteration:
+            raise
+        return self
+
+    def deserialize(self, source):
+        try:
+            return super(infinite, self).deserialize(source)
         except StopIteration:
             pass
         return self
@@ -306,4 +286,12 @@ if __name__ == '__main__':
 
     z = RecordContainer()
     z.deserialize(string)
+    print z
+
+    class RecordContainer(parray.block):
+        _object_ = RecordGeneral
+        size = lambda s: 10
+
+    z = RecordContainer()
+    z.deserialize('A'*16)
     print z

@@ -36,18 +36,18 @@ def bigendian(p):
 
         def deserialize(self, source):
             source = iter(source)
-            bc = bitmap.consumer(source)
-            bc.consume(self.getbitoffset())     # skip some number of bits
-            return self.deserialize_consumer(bc)
+#            block = self.transform(block)   # whee
+            return self.deserialize_stream(source)
 
         def serialize(self):
             p = bitmap.new(self.getinteger(), self.bits())
             return bitmap.data(p)
 
         def load(self):
+            # XXX: this has been deprecated to using the stream-based loader
             self.source.seek(self.getoffset())
             producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
-            return self.deserialize(producer)
+            return self.deserialize_stream(producer)
 
     bigendianpbinary.__name__ = p.__name__
     return bigendianpbinary
@@ -63,15 +63,13 @@ def littleendian(p):
         def deserialize(self, source):
             source = iter(source)
             block = ''.join([x for i,x in zip(range(self.alloc().size()), source)])
-            bc = bitmap.consumer(reversed(block))
-            bc.consume(self.getbitoffset())
-            return self.deserialize_consumer(bc)
+            block = self.transform(block)   # whee
+            return self.deserialize_stream(reversed(block))
 
         def load(self):
             self.source.seek(self.getoffset())
-            producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
-            block = ''.join([x for i,x in zip(range(self.alloc().size()), producer)])
-            return self.deserialize(block)
+            block = self.source.consume( self.alloc().size() )
+            return self.deserialize_stream(iter(block))
 
         def serialize(self):
             p = bitmap.new(self.getinteger(), self.bits())
@@ -90,10 +88,13 @@ class type(ptype.pcontainer):
     # for the "decorators"
     def serialize(self):
         raise NotImplementedError(self.name())
-    def deserialize(self, source):
-        raise NotImplementedError(self.name())
     def set(self, source):
         raise NotImplementedError(self.name())
+
+    def deserialize_stream(self, source):
+        bc = bitmap.consumer(source)
+        bc.consume(self.getbitoffset())     # skip some number of bits
+        return self.deserialize_consumer(bc)
 
     # por los hijos
     def deserialize_consumer(self, source):
@@ -424,10 +425,6 @@ struct = bigendian(struct)
 if __name__ == '__main__':
     import sys
     sys.path.append('f:/work')
-
-    ####################################
-    # XXX:TODO:EVERYTHING:READTHIS:QUITSLACKING
-    # this needs a testing harness. i really should take tests seriously...
 
     class Result(Exception): pass
     class Success(Result): pass
@@ -1023,32 +1020,6 @@ if __name__ == '__main__':
         if (a.parent is b.parent) and (a.parent is z):
             raise Success
         raise Failure
-
-    if False:
-        testold()
-        test1()
-        test2()
-        test3()
-        test4()
-        test5()
-        test6()
-        test7()
-        test8()
-        test9()
-        test10()
-        test12()
-        test13()
-        test14()
-        test15()
-        test16()
-        test17()
-        test18()
-        test19()
-        test20()
-        test21()
-        test22()
-
-    ## wow, i can't believe this shit works
 
     results = []
     for t in TestCaseList:

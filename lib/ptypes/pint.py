@@ -16,7 +16,7 @@ def bigendian(ptype):
             res = []
     
             while bc[1] > 0:
-                bc,x = bitmap.consume(8)
+                bc,x = bitmap.consume(bc,8)
                 res.append(x)
 
             res = res + [0]*(self.size() - len(res))

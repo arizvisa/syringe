@@ -1,5 +1,31 @@
 from ptypes import *
 
+def getstringpath(object):
+    self = object
+    name = []
+    for obj in list(self.traverse(lambda s: s.getparent())):
+        n = obj
+        if type(obj) is not RecordGeneral:
+            continue
+
+        try:
+            n = n.__name__
+        except AttributeError:
+            name.append(None)
+            continue
+
+        try:
+            int(n)
+            n = '[%s]'% str(n)
+        except ValueError:
+            n = '[%s]'% repr(n)
+        
+        t = int(obj['header']['recType'])
+        #name.append(n)
+        name.append( '<%x>%s'% (t,n) )
+            
+    return ''.join(list(reversed(name))[1:])
+
 class bool1(pint.uint8_t): pass
 class ubyte1(pint.uint8_t): pass
 class uint2(pint.uint16_t): pass
@@ -40,33 +66,11 @@ class RecordGeneral(pstruct.type):
         return dyn.clone(cls, maxsize=l)
 
     def autofiller(self):
-        totalsize = self['data'].size()
-        maxsize = self['data'].maxsize
-
-        if totalsize > maxsize:
-            t = int(self['header'].l['recType'])
-            
-            name = []
-            for n in list(self.traverse(lambda s: s.getparent())):
-                try:
-                    n = n.__name__
-                except AttributeError:
-                    name.append(None)
-                    continue
-
-                try:
-                    int(n)
-                    n = '[%s]'% str(n)
-                except ValueError:
-                    n = '[%s]'% repr(n)
-                name.append(n)
-                    
-            name = ''.join(list(reversed(name))[1:])
-            
-            print "record at %x (type %x) %s's contents are larger than expected (%x>%x)"%(self.getoffset(), t, name, totalsize, maxsize)
-            totalsize = maxsize
-
-        return dyn.block(maxsize - totalsize)
+        totalsize = self.size() - self['header'].size()
+        decodedsize = self['data'].size()
+        if totalsize > decodedsize:
+            return dyn.block( totalsize - decodedsize )
+        return dyn.block(0)
 
     _fields_ = [
         (RecordHeader, 'header'),
@@ -74,10 +78,13 @@ class RecordGeneral(pstruct.type):
         (autofiller, 'extra')
     ]
 
+    def size(self):
+        return self['header'].size() + int(self['header']['recLength'])
+
     def __repr__(self):
         if self.initialized:
             header = self['header']
-            return '%s header={ver=%d,type=%x,length=%d} size=%d data=%s'%( self.name(), int(header['recVer/recInstance']), int(header['recType']), int(header['recLength']), self['data'].size(), self['data'].name())
+            return '[%x] %s header={ver=%d,type=%x,length=%d} size=%d data=%s'%(self.getoffset(), self.name(), int(header['recVer/recInstance']), int(header['recType']), int(header['recLength']), self['data'].size(), self['data'].name())
         return super(RecordGeneral, self).__repr__()
 
 class searchingcontainer(object):
@@ -120,7 +127,7 @@ class searchingcontainer(object):
         return
 
 class Record(object): pass
-class RecordContainer(parray.terminated, Record, searchingcontainer):
+class RecordContainer(parray.infinite, Record, searchingcontainer):
     _object_ = RecordGeneral
     currentsize = maxsize = 0
 
@@ -131,6 +138,14 @@ class RecordContainer(parray.terminated, Record, searchingcontainer):
             return False
         return True
 
+    def load(self):
+        self.currentsize = 0
+        return super(RecordContainer, self).load()
+
+    def deserialize(self, source):
+        self.currentsize = 0
+        return super(RecordContainer, self).deserialize(source)
+
     def __repr__(self):
         if self.initialized:
             records = []
@@ -138,7 +153,7 @@ class RecordContainer(parray.terminated, Record, searchingcontainer):
                 n = '%s[%x]'%(v.__class__.__name__,v.recordtype)
                 records.append(n)
             header = self.parent['header']
-            return '%s header={ver=%d,type=%x,length=%d} records=%d [%s]'%(self.name(), int(header['recVer/recInstance']), int(header['recType']), int(header['recLength']), len(self), ','.join(records))
+            return '[%x] %s header={ver=%d,type=%x,length=%d} records=%d [%s]'%(self.getoffset(),self.name(), int(header['recVer/recInstance']), int(header['recType']), int(header['recLength']), len(self), ','.join(records))
         return super(RecordContainer, self).__repr__()
 
 # yea, a file really is just a gigantic list of records...
@@ -207,7 +222,7 @@ class PersistDirectoryEntry(pstruct.type):
     def __repr__(self):
         id = 'id:%x'% self['info']['persistId']
         addresses = [hex(int(o)) for o in self['offsets']]
-        return ' '.join( (self.name(), id, 'offsets: [', ','.join(addresses), ']') )
+        return ' '.join( (self.name(), id, 'offsets:{', ','.join(addresses), '}') )
 
     def walk(self):
         # heh
@@ -221,15 +236,20 @@ class PersistDirectoryAtom(parray.infinite, Record):
 
     _object_ = PersistDirectoryEntry
 
-    currentsize = 0
     def isTerminator(self, value):
-        s = value.size()
-        self.currentsize += s
+        self.currentsize += value.size()
 
-        l = self.parent['header']['recLength']
-        if self.currentsize < int(l):
+        if self.currentsize < self.maxsize - self.parent['header'].size():
             return False
         return True
+
+    def load(self):
+        self.currentsize = 0
+        return super(PersistDirectoryAtom, self).load()
+
+    def deserialize(self, source):
+        self.currentsize = 0
+        return super(PersistDirectoryAtom, self).deserialize(source)
 
 class CString(ptype.type, Record):
     recordtype = 4026
@@ -268,9 +288,62 @@ class msofbtExtTimeNodeContainer(RecordContainer):
 class msofbtTimeConditionContainer(RecordContainer):
     recordtype = 0xf125
     recordtype = 61733
+class msofbtTimeAnimateBehaviorContainer(RecordContainer):
+    recordtype = 0xf12b
+    recordtype = 61739
 class msofbtTimeColorBehaviorContainer(RecordContainer):
     recordtype = 0xf12c
     recordtype = 61740
+
+class msofbtTimeVariant(pstruct.type):
+    def __Value(self):
+        t = int(self['Type'].l)
+        if t == -1:
+            return dyn.block(0)
+        elif t == 0:
+            return pint.uint8_t
+        elif t == 1:
+            return pint.int32_t
+        elif t == 2:
+            return pfloat.double
+        elif t == 3:
+            return pstr.szwstring
+
+        return dyn.block(0)
+
+    _fields_ = [
+        (pint.int8_t, 'Type'),
+        (__Value, 'Value'),
+    ]
+
+class msofbtTimeAnimationValue(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'Time'),
+        (msofbtTimeVariant, 'Value'),
+        (pstr.szwstring, 'Formula'),
+    ]
+
+class msofbtTimeVariantList(parray.infinite, Record):
+    recordtype = 0xf13f
+    recordtype = 61759
+    _object_ = msofbtTimeAnimationValue
+
+    currentsize = maxsize = 0
+
+    def isTerminator(self, value):
+        s = value.size()
+        self.currentsize += s
+        if (self.currentsize < self.maxsize):
+            return False
+        return True
+
+    def load(self):
+        self.currentsize = 0
+        return super(RecordContainer, self).load()
+
+    def deserialize(self, source):
+        self.currentsize = 0
+        return super(RecordContainer, self).deserialize(source)
 
 class msofbtTimeCondition(pstruct.type, Record):
     recordtype = 0xf128
@@ -424,10 +497,13 @@ class msofbtTimeVariant(pstruct.type, Record):
             return pint.uint32_t
         if n == 2:
             return pfloat.double
+        if n == 3:
+            return pstr.szwstring
         if n == 0xff:
             return dyn.block(0)
 
         print 'unknown type %x'% n
+        print hex(self.getoffset()),getstringpath(self)
         return pint.uint32_t
 
     _fields_ = [

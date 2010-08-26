@@ -103,7 +103,13 @@ class string(ptype.pcontainer):
         s = self.value
         return utils.strdup(s)[:len(self)]
 
+    def load(self):
+        return super(ptype.pcontainer, self).load()
+
     def deserialize(self, source):
+        return super(ptype.pcontainer, self).deserialize(source)
+
+    def deserialize_stream(self, source):
         '''initializes self with input from from the specified iterator 'source\''''
         source = iter(source)
         totalsize = self.size()
@@ -126,6 +132,9 @@ class string(ptype.pcontainer):
         if len(self.value) != self.size():
             raise StopIteration("unable to continue reading (byte %d out of %d)"% (len(self.value), self.size()))
         return self
+
+    def serialize(self):
+        return str(self.value)
 
     def setoffset(self, value, **kwds):
         return super(string, self).setoffset(value)
@@ -228,6 +237,12 @@ if __name__ == '__main__':
         print repr(x)
         print x.get()
 
+    if True:
+        x = pstr.szstring()
+        string = 'null-terminated\x00ok'
+        x.deserialize(string)
+        print x
+
     import parray
     data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
 
@@ -251,21 +266,19 @@ if __name__ == '__main__':
         ]
 
     x = IMAGE_IMPORT_HINT()
-    x.deserialize('AAHello world this is a zero0-terminated string\x00')
+    x.deserialize('AAHello world this is a zero0-terminated string\x00this didnt work')
     print x
 
-    f = file('c:/wtf.txt', 'wb')
-    f.write(x.serialize())
-    f.close()
+    source = provider.string( x.serialize() )
 
     import provider
     if True:
         x = IMAGE_IMPORT_HINT()
-        x.source = provider.file('c:/wtf.txt')
+        x.source = source
 
     if False:
         x = pstr.szstring()
-        x.source = provider.file('c:/wtf.txt')
+        x.source = source
 
     x.load()
     print x

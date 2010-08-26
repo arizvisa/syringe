@@ -9,7 +9,7 @@ class pQTType(pQTInt):
     def __cmp__(self, x):
         if type(x) is str:
             return cmp('%c%c%c%c'% tuple(self.value[:4]), x)
-        return cmp(int(self.l), x)
+        return cmp(int(self), x)
 
 class pQTIntArray(parray.terminated):
     _object_ = pQTInt
@@ -21,3 +21,11 @@ class pQTIntArray(parray.terminated):
         if (self.currentsize < self.maxsize):
             return False
         return True
+
+    def load(self):
+        currentsize = 0
+        return super(pQTIntArray, self).load()
+
+    def deserialize(self,source):
+        currentsize = 0
+        return super(pQTIntArray, self).deserialize(source)
