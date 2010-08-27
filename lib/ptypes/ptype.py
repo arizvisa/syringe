@@ -293,7 +293,7 @@ class type(object):
         block = ''.join( (x for i,x in zip(xrange(s), source)) )
         if len(block) < s:
             path = self.traverse(lambda n: n.parent)
-            path = [ 'type:%s name:%s offset:%x size:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset(), x.size()) for x in path ]
+            path = [ 'type:%s name:%s offset:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
             path = ' ->\n\t'.join(reversed(path))
             raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), s, path))
         self.value = self.transform(block)
@@ -422,9 +422,10 @@ class pcontainer(type):
             pass
         return res
 
-    def newelement_stream(self, stream, type, name, offset):
+    def addelement_stream(self, stream, type, name, offset):
         '''adds an element from a byte stream'''
         n = self.newelement(type,name,offset)
+        self.value.append(n)
         n.deserialize(stream)
         return n
 
@@ -437,15 +438,13 @@ class pcontainer(type):
         self.source.seek(self.getoffset())
         block = self.transform( self.source.consume(self.size()) )
         stream = iter(block)
-
         self.source.seek(self.getoffset())
-        producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
-        return self.deserialize_stream(producer)
+        return self.deserialize_stream(stream)
 
     def deserialize(self, source):
-        assert self.value is not None, 'Parent must initialize self.value'
-        data = self.serialize()
-        block = self.transform(data)
+        assert self.value is not None and source is None, 'Parent must initialize self.value'
+        block = ''.join( (x.serialize() for x in self.value) )
+        block = self.transform(block)
         return self.deserialize_stream(iter(block))
 
     def deserialize_stream(self, source):

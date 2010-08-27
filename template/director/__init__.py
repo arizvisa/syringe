@@ -55,7 +55,8 @@ class ChunkList(parray.infinite):
 ###
 class File(pstruct.type):
     def __Data(self):
-        return dyn.block( int(self['Size'].l) - 4 )
+        # FIXME: should we bound this element by the size specified in the header?
+        return ChunkList
 
     def __Size(self):
         if self['ID'].l.serialize() == 'XFIR':
@@ -82,10 +83,6 @@ def getparentclasslookup(parent, key):
 Riff_Header_Lookup = getparentclasslookup(Chunk_Type, lambda cls: (cls.id))
 
 if __name__ == '__main__':
-    import sys
-    sys.path.append('f:/work/syringe/lib')
-    sys.path.append('f:/work/syringe/template')
-
     import ptypes,director; reload(director)
     ptypes.setsource( ptypes.provider.file('./sample.dir', mode='r') )
 

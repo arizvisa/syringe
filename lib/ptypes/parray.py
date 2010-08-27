@@ -96,10 +96,10 @@ class type(__parray_generic):
         self.value = []
         ofs = self.getoffset()
         for index in xrange(self.length):
-            n = self.newelement_stream(source, obj, str(index), ofs)
-            self.value.append(n)
+            n = self.addelement_stream(source, obj, str(index), ofs)
             ofs += n.size()
-        return super(type, self).deserialize(source)
+
+        return super(type, self).deserialize(None)
 
     def load(self):
         obj = self._object_
@@ -149,12 +149,11 @@ class terminated(type):
 
         ofs = self.getoffset()
         for index in forever:
-            n = self.newelement_stream(source, obj, str(index), ofs)
-            self.value.append(n)
+            n = self.addelement_stream(source, obj, str(index), ofs)
             if self.isTerminator(n):
                 break
             ofs += n.size()
-        return super(type, self).deserialize(source)
+        return super(type, self).deserialize(None)
 
     def load(self):
         forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
@@ -173,7 +172,7 @@ class terminated(type):
         # copied..
         res = '???'
         index = '...'
-        if self.initialized:
+        if self.value is not None:
             res = repr(''.join(self.serialize()))
             index = str(len(self))
 
@@ -194,20 +193,46 @@ class infinite(terminated):
     def isTerminator(self, v):
         return False
 
-if False:
-    def load(self):
-        try:
-            return super(infinite, self).load()
-        except StopIteration:
-            raise
-        return self
-
     def deserialize(self, source):
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+        source = iter(source)
+        obj = self._object_
+        self.value = []
+
         try:
-            return super(infinite, self).deserialize(source)
+            ofs = self.getoffset()
+            for index in forever:
+                n = self.addelement_stream(source, obj, str(index), ofs)
+                if self.isTerminator(n):
+                    break
+                ofs += n.size()
+            pass
+        except StopIteration:
+            pass
+
+        try:
+            return super(type, self).deserialize(None)
         except StopIteration:
             pass
         return self
+
+    def load(self):
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+
+        self.value = []
+        ofs = self.getoffset()
+
+        try:
+            for index in forever:
+                n = self.newelement(self._object_, str(index), ofs)
+                self.append(n.l)
+                if self.isTerminator(n):
+                    break
+                ofs += n.size()
+            pass
+        except StopIteration:
+            pass
+        return super(type, self).load()
 
 if __name__ == '__main__':
     import ptype,parray
@@ -288,9 +313,16 @@ if __name__ == '__main__':
     z.deserialize(string)
     print z
 
-    class RecordContainer(parray.block):
+    class RecordContainer(parray.infinite):
         _object_ = RecordGeneral
-        size = lambda s: 10
+        maxsize = 10
+
+        def load(self):
+            self.currentsize = 0
+            return super(RecordContainer,self).load()
+        def deserialize(self, source):
+            self.currentsize = 0
+            return super(RecordContainer,self).deserialize(source)
 
     z = RecordContainer()
     z.deserialize('A'*16)

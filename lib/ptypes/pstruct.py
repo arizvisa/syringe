@@ -70,10 +70,9 @@ class type(__pstruct_generic):
         self.value = []
         ofs = self.getoffset()
         for t,name in self._fields_:
-            n = self.newelement_stream(source, t, name, ofs)
-            self.value.append(n)
+            n = self.addelement_stream(source, t, name, ofs)
             ofs += n.size()
-        return super(type, self).deserialize(source)
+        return super(type, self).deserialize(None)
 
     def __repr__uninitialized(self):
         result = []

@@ -323,7 +323,7 @@ class msofbtTimeAnimationValue(pstruct.type):
         (pstr.szwstring, 'Formula'),
     ]
 
-class msofbtTimeVariantList(parray.infinite, Record):
+class msofbtTimeVariantList(parray.terminated, Record):
     recordtype = 0xf13f
     recordtype = 61759
     _object_ = msofbtTimeAnimationValue
