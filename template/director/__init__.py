@@ -12,14 +12,12 @@ class ID( dyn.block(4) ): pass
 ### yay
 class Chunk_Type(object): pass
 class Chunk(pstruct.type):
-    def ckExtra(self):
-        expectedsize = int(self['ckSize'])
-        if expectedsize & 1:
-            expectedsize += 1
-        realsize = self['ckData'].size()
+    def __ckExtra(self):
+        expectedsize = self.blocksize() - 8
+        realsize = self['ckData'].blocksize()
         return dyn.block( expectedsize - realsize )
 
-    def ckData(self):
+    def __ckData(self):
         t = self['ckID'].l.serialize()
         try:
             return Riff_Header_Lookup[t]
@@ -27,36 +25,34 @@ class Chunk(pstruct.type):
             pass
         return dyn.block( int(self['ckSize'].l) )
 
-    def size(self):
+    def blocksize(self):
         size = int(self['ckSize']) + 8
         if size & 1:
             size += 1
         return size
 
     def __ckSize(self):
-        p = self
-        while p.parent is not None:
-            p = p.parent
+        p = list(self.traverse())[-1]   # yea, so we're slow. so what.
 
-        if p['ID'].serialize() == 'XFIR':
+        if p['ID'].l.serialize() == 'XFIR':
             return LONG
         return pint.bigendian(LONG)
 
     _fields_ = [
         (ID, 'ckID'),
         (__ckSize, 'ckSize'),
-        (ckData, 'ckData'),
-        (ckExtra, 'ckExtra'),
+        (__ckData, 'ckData'),
+        (__ckExtra, 'ckExtra'),
     ]
 
-class ChunkList(parray.infinite):
+class ChunkList(parray.block):
     _object_ = Chunk
 
 ###
 class File(pstruct.type):
     def __Data(self):
-        # FIXME: should we bound this element by the size specified in the header?
-        return ChunkList
+        l = int(self['Size'].l)
+        return dyn.clone(ChunkList, blocksize=lambda s: l)
 
     def __Size(self):
         if self['ID'].l.serialize() == 'XFIR':
@@ -87,6 +83,8 @@ if __name__ == '__main__':
     ptypes.setsource( ptypes.provider.file('./sample.dir', mode='r') )
 
     z = director.File()
-    self = z.load()['Data'].cast(director.ChunkList)
+    z = z.load()
 
-    print 'Number of Records:', len(self)
+    print 'Number of Records:', len(z['Data'])
+
+    a = z['Data']

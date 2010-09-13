@@ -4,7 +4,7 @@ from atom import Atom,AtomList
 class File(ptypes.parray.infinite):
     _object_ = Atom
 
-    def size(self):
+    def blocksize(self):
         return self.source.size()
 
     def search(self, type):

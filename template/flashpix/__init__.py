@@ -1,7 +1,3 @@
-if False:
-    import sys
-    sys.path.append('f:/work')
-
 from ptypes import *
 
 class BYTE(pint.uint8_t): pass
@@ -117,7 +113,7 @@ class SUBIMAGEHEADER(pstruct.type):
     ]
 
 class TILEHEADER(pstruct.type):
-    class TileHeaderCompressionType(pint.penum, DWORD):
+    class TileHeaderCompressionType(pint.enum, DWORD):
         _fields_ = [
             ('Uncompressed data', 0),
             ('Single color compression', 1),
@@ -143,7 +139,7 @@ if __name__ == '__main__':
     self = SubimageHeaderStream()
 #    self.source = provider.file('./poc.fpx.old')
 #    self.setoffset(0x1080)
-    self.source = provider.file('./poc.fpx')
+    self.source = provider.file('./org.fpx')
     self.setoffset(0x1040)
     self.load()
 

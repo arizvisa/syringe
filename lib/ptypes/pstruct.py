@@ -49,9 +49,6 @@ class type(__pstruct_generic):
 
     initialized = property(fget=lambda s: super(type, s).initialized and len(s.value) == len(s._fields_))
 
-    def size(self):
-        return reduce(lambda x,y: x + y.size(), self.value, 0)
-
     def load(self):
         self.value = []
 
@@ -62,7 +59,7 @@ class type(__pstruct_generic):
             self.value.append(n)
             if ptype.ispcontainer(t) or ptype.isresolveable(t):
                 n.load()
-            ofs += n.size()
+            ofs += n.blocksize()
         return super(type, self).load()
 
     def deserialize(self, source):
@@ -70,8 +67,10 @@ class type(__pstruct_generic):
         self.value = []
         ofs = self.getoffset()
         for t,name in self._fields_:
-            n = self.addelement_stream(source, t, name, ofs)
-            ofs += n.size()
+            n = self.newelement(t,name,ofs)
+            self.value.append(n)
+            n.deserialize(source)
+            ofs += n.blocksize()
         return super(type, self).deserialize(None)
 
     def __repr__uninitialized(self):

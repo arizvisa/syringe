@@ -85,6 +85,8 @@ class string(provider):
         self.offset = offset
     def consume(self, amount):
         res = self.string[self.offset: self.offset+amount]
+        if len(res) != amount:
+            raise StopIteration
         self.offset += amount
         return res
     def write(self, data):

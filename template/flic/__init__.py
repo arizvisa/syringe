@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-#raise NotImplementedError("This is using an older/outdated version of ptypes")
+raise NotImplementedError("This is using an older/outdated version of ptypes")
 #
 #config.WIDTH = 192
 

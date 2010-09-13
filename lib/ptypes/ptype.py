@@ -39,7 +39,7 @@ def forceptype(p, self):
         if isiterator(p):
             return forceptype(p.next(), self)
 
-    raise ValueError('Unknown type %s returned in %s'% (repr(p), repr(self)))
+    raise ValueError('forceptype %s could not be resolved as asked by %s'% (repr(p), self.name()))
 
 ## ...and yeah... now it's done.
 
@@ -62,9 +62,7 @@ def rethrow(fn):
             self = args[0]
             type, exception = sys.exc_info()[:2]
 
-            path = self.traverse(lambda n: n.parent)
-            path = [ 'type:%s name:%s offset:%x size:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset(), x.size()) for x in path ]
-            path = ' ->\n\t'.join(reversed(path))
+            path = ' ->\n\t'.join( self.backtrace() )
 
             res = []
             res.append('')
@@ -74,12 +72,13 @@ def rethrow(fn):
             res.append('\t<method name> %s'% fn.__name__)
 
             if self.initialized:
-                res.append('\t<type length> %x'% len(self))
-            elif ispcontainer(self.__class__):
-                if self.value:
-                    res.append('\t<container length> %x'% len(self.value))
+                if ispcontainer(self.__class__):
+                    if self.value:
+                        res.append('\t<container length> %x'% len(self.value))
+                    else:
+                        res.append('\t<container value> %s'% repr(self.value))
                 else:
-                    res.append('\t<container value> %s'% repr(self.value))
+                    res.append('\t<type length> %x'% len(self))
 
             res.append('')
             res.append('Traceback (most recent call last):')
@@ -145,7 +144,7 @@ class type(object):
     length = 0      # int
     value = None    # str
 
-    initialized = property(fget=lambda self: self.value is not None)    # bool
+    initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.length)    # bool
     source = None   # ptype.provider
     parent = type   # ptype.type
 
@@ -169,8 +168,12 @@ class type(object):
         return self.initialized
 
     def size(self):
-        '''returns the number of bytes occupied'''
+        '''returns the number of bytes used by type'''
         return int(self.length)
+
+    def blocksize(self):
+        '''Can be overloaded to define the block's size'''
+        return self.size()
 
     def __getparent_type(self,type):
         result = []
@@ -215,6 +218,12 @@ class type(object):
             yield n
             n = next(n)
         return
+
+    def backtrace(self):
+        '''Return a backtrace to the root element'''
+        path = self.traverse(lambda n: n.parent)
+        path = [ 'type:%s name:%s offset:%x'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
+        return list(reversed(path))
 
     def set(self, string, **kwds):
         '''set entire type equal to string'''
@@ -266,9 +275,8 @@ class type(object):
     l = property(fget=lambda s: s.load())   # abbr
     def load(self):
         '''sync self with some specified data source'''
-
         self.source.seek( self.getoffset() )
-        self.value = self.transform( self.source.consume(self.size()) )
+        self.value = self.transform( self.source.consume(self.blocksize()) )
         return self
 
     def commit(self):
@@ -289,21 +297,22 @@ class type(object):
         return self.deserialize_stream(iter(source))
 
     def deserialize_stream(self, source):
-        s = self.size()
+        s = self.blocksize()
         block = ''.join( (x for i,x in zip(xrange(s), source)) )
         if len(block) < s:
-            path = self.traverse(lambda n: n.parent)
-            path = [ 'type:%s name:%s offset:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
-            path = ' ->\n\t'.join(reversed(path))
+            self.value = self.transform(block)
+            path = ' ->\n\t'.join(self.backtrace())
             raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), s, path))
         self.value = self.transform(block)
         return self
 
     ## representation
     def name(self):
-        '''intended to be overloaded. should return the name of the current ptype.'''
-        return repr(self.__class__)
-#        return self.__class__.__name__
+        return "<class '%s'>"% self.shortname()
+
+    def shortname(self):
+        '''intended to be overloaded. should return the short name of the current ptype.'''
+        return self.__class__.__name__
 
     def __repr__(self):
         ofs = '[%x]'% self.getoffset()
@@ -355,13 +364,14 @@ class pcontainer(type):
             n.commit()
         return self
 
+    def size(self):
+        '''Calculate the total used size of a container'''
+        return reduce(lambda x,y: x+y.size(), self.value, 0)
+
     def getoffset(self, field=None, **attrs):
         '''fetch the offset of the specified field'''
         if not field:
             return super(pcontainer, self).getoffset()
-
-        if not self.initialized:
-            self.load()
 
         if field.__class__ is list:
             name,res = (field[0], field[1:])
@@ -388,7 +398,7 @@ class pcontainer(type):
         element = None
         for i,n in enumerate(self.value):
             nmin = n.getoffset()
-            nmax = nmin + n.size()
+            nmax = nmin + n.blocksize()
             if (offset >= nmin) and (offset < nmax):
                 element = n
                 break
@@ -411,23 +421,16 @@ class pcontainer(type):
         path = iter(reversed(self.at(offset)))
         return self.traverse( lambda s: s[path.next()] )
 
-    def setoffset(self, value=0, recurse=False):
+    def setoffset(self, value, recurse=False):
         '''modifies the current offset'''
         res = super(pcontainer, self).setoffset(value)
         if recurse:
             assert self.initialized
             for n in self.value:
                 n.setoffset(value, recurse=recurse)
-                value += n.size()
+                value += n.blocksize()
             pass
         return res
-
-    def addelement_stream(self, stream, type, name, offset):
-        '''adds an element from a byte stream'''
-        n = self.newelement(type,name,offset)
-        self.value.append(n)
-        n.deserialize(stream)
-        return n
 
     def serialize(self):
         return ''.join( (x.serialize() for x in self.value) )
@@ -436,9 +439,8 @@ class pcontainer(type):
         assert self.value is not None, 'Parent must initialize self.value'
 
         self.source.seek(self.getoffset())
-        block = self.transform( self.source.consume(self.size()) )
+        block = self.transform( self.source.consume(self.blocksize()) )
         stream = iter(block)
-        self.source.seek(self.getoffset())
         return self.deserialize_stream(stream)
 
     def deserialize(self, source):
@@ -453,7 +455,7 @@ class pcontainer(type):
         for n in self.value:
             n.setoffset(ofs)
             n.deserialize_stream(source)
-            ofs += n.size()
+            ofs += n.blocksize()
         return self
 
 if __name__ == '__main__':

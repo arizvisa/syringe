@@ -25,17 +25,28 @@ class File(pstruct.type):
 
         def load(self):
             self.source.seek(self.getoffset())
-            block = self.source.consume(self._size)
+            block = self.source.consume(self.blocksize())
 
             # XXX: modify ours and our parent's source with the new decompressed file
             self.parent.source = self.source = ptypes.provider.string(self.parent['header'].serialize() + zlib.decompress(block))
-            return self.deserialize(block)
+            print 'zlib: decompressed %x to %x bytes'%(len(block),self.source.size())
+            return super(File.cdata, self).load()
 
         def deserialize(self, source):
-            block = ''.join([x for i,x in zip(xrange(self._size), source)])
+            block = ''.join([x for i,x in zip(xrange(self.blocksize()), source)])
             s = zlib.decompress(block)
             print 'zlib: decompressed %x to %x bytes'%(len(block),len(s))
             return super(File.cdata, self).deserialize(s)
+
+        def blocksize(self):
+            raise NotImplementedError
+
+    if False:
+        def transform(self, data):
+            data = zlib.decompress(data)
+            source = ptypes.provider.string(self.parent['header'].serialize() + data)
+            self.parent.source = self.source = source
+            return data
 
     class data(pstruct.type):
         _fields_ = [
@@ -48,12 +59,11 @@ class File(pstruct.type):
         if int( self['header'].l['Signature'][0]) == ord('C'):
             r = int(self['header'].l['FileLength'])
             size = r - self['header'].size()
-            maxsize = self.source.size()
-            current = maxsize - self['header'].size() + self['header'].getoffset()
+            current = self.source.size() - self['header'].size() + self['header'].getoffset()
 
             # File.cdata decompresses and changes our source, so we fix our header here
             self['header']['Signature'][0].set( ord('F') )
-            return dyn.clone(File.cdata, _size=current)
+            return dyn.clone(File.cdata, blocksize=lambda x:current)
 
         return self.data
     
@@ -65,27 +75,23 @@ class File(pstruct.type):
 
 if __name__ == '__main__':
     import sys
-    fin = File()
-    fin.open(sys.argv[1])
-    for x in fin:
+    import ptypes,__init__ as swf
+    ptypes.setsource(ptypes.file('./test.swf'))
+
+    z = File
+#    z = ptypes.debugrecurse(z)
+    z = z()
+    z = z.l
+    for x in z['data']['tags']:
+        print '-'*32
         print x
 
-    sys.exit(0)
-    
-    ## in chunks
-    x = ifile('sorenson.swf', 'rb')
-    data = iter(x)
+    a = z['data']['tags'][0]
+    print a.hexdump()
+    print a.l.hexdump()
+    print repr(a.l['Header'].serialize())
 
-    x = Header()
-    x.deserialize(data)
-    print repr(x)
+    correct='\x44\x11\x08\x00\x00\x00'
+    print ptypes.utils.hexdump(correct)
 
-    x = FrameInfo()
-    x.deserialize(data)
-    print repr(x)
-
-    while True:
-        x = Tag()
-        x.deserialize(data)
-        print repr(x)
-
+    print a.serialize() == correct

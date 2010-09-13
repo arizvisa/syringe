@@ -2,27 +2,24 @@ from ptypes import *
 from stypes import *
 import as3
 
-def CBinary(iterable):
-    iter(iterable)
-
-    class _CBinary(pbinary.struct):
-        _fields_ = list(iterable)
-
-    return _CBinary()
-
 class Tag(pstruct.type):
     '''this wraps around a tag'''
     def autopad(self):
+        total = self.blocksize() - self.getheadersize()
+        used = self['data'].size()
+        assert used <= total, 'invalid size specified (%d > %d)'%(used, total)
+        if total >= used:
+            return dyn.block(total - used)
+        return Empty
+
+    def getheadersize(self):
+        return self['Header'].size() + self['HeaderLongLength'].size()
+
+    def blocksize(self):
         size = int(self['Header']['length'])
         if size == 0x3f:
-            assert 'HeaderLongLength' in self.keys()
             size = int(self['HeaderLongLength'])
-
-        used = self['data'].size()
-        #assert used <= size, 'invalid size specified (%d > %d)'%(used, size)
-        if size >= used:
-            return dyn.block(size - used)
-        return Empty
+        return size + self.getheadersize()
 
     def islongheader(self):
         if self['Header']['length'] == 0x3f:
@@ -381,11 +378,13 @@ class Metadata(TagS):
     ]
 
 class DefineButton2(TagS):
+    class __Flags(pbinary.struct):
+        _fields_ = [(7,'Reserved'), (1,'TrackAsMenu')]
     tag = 34
     version = 3
     _fields_ = [
         (UI16, 'ButtonId'),
-        ( CBinary([(7,'Reserved'), (1,'TrackAsMenu')]), 'Flags'),
+        (__Flags, 'Flags'),
         (UI16, 'ActionOffset'),
         (Empty, 'incomplete')
     ]
@@ -426,13 +425,17 @@ class DefineShape3(TagS):
     ]
 
 class DefineShape4(TagS):
+    class __Flags(pbinary.struct):
+        _fields_ = [(6,'Reserved'), (1, 'UsesNonScalingStrokes'), (1, 'UsesScalingStrokes')]
+
     tag = 83
     version = 8
     _fields_ = [
         (UI16, 'ShapeId'),
         (RECT, 'ShapeBounds'),
         (RECT, 'EdgeBounds'),
-        (CBinary([(6,'Reserved'), (1, 'UsesNonScalingStrokes'), (1, 'UsesScalingStrokes')]), 'Flags'), (Empty, 'Shapes')
+        (__Flags, 'Flags'),
+        (Empty, 'Shapes')
     ]
 
 class DefineSprite(TagS):

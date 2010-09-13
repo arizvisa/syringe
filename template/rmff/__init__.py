@@ -37,9 +37,8 @@ class RealMedia_Header(pstruct.type):
             return dyn.block( l - s )
         return dyn.block(0)
 
-    def size(self):
-        l = int(self['size'])
-        return l
+    def blocksize(self):
+        return int(self['size'])
 
     _fields_ = [
         (UINT32, 'object_id'),

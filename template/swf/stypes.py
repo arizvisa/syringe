@@ -573,3 +573,13 @@ class LINESTYLEARRAY(pstruct.type):
         ( _dynstyles, 'LineStyles' )
     ]
 
+if __name__ == '__main__':
+    import ptypes
+    data = '\x44\x11'
+
+    z = RECORDHEADER()
+    z.deserialize(data)
+    print z
+
+    z.source = ptypes.provider.string(data)
+    print z.l

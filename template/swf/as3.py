@@ -569,3 +569,6 @@ class abcFile(pstruct.type):
         (u30, 'method_body_count'),
         (_row(method_body_info, 'method_body_count'), 'method_body'),
     ]
+
+if __name__ == '__file__':
+    z = u30()

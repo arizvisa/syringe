@@ -17,10 +17,11 @@ def block(size, **kwds):
         def __getitem__(self, index):
             return self.serialize()[index]
 
-        def at(self, offset):
-            left,right = self.getoffset(),self.getoffset()+self.size()
-            assert offset >= left and offset < right, 'Specified offset %x not found'%offset
-            return [offset - self.getoffset()]
+        if False:
+            def at(self, offset):
+                left,right = self.getoffset(),self.getoffset()+self.size()
+                assert offset >= left and offset < right, 'Specified offset %x not found'%offset
+                return [offset - self.getoffset()]
 
     _block.__name__ = kwds.get('name', 'block(%d)'% size)
     return _block

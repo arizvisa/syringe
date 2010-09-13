@@ -6,13 +6,13 @@ def newAtom(atomType, atomLength):
     for k,v in globals().items():
         if type(v) == type and v is not AtomType and issubclass(v, AtomType):
             if atomType == v.type:
-                return dyn.clone(v, maxsize=atomLength)
+                return dyn.clone(v, blocksize=lambda s:atomLength)
             pass
         continue
 
     class unkunkunk(Unknown):
         type = atomType
-        length = maxsize = atomLength
+        length = atomLength
 
     unkunkunk.__name__ = 'Unknown<%s>'% repr(atomType.serialize())
     return unkunkunk
@@ -27,13 +27,13 @@ class Atom(pstruct.type):
             self.getparent(MDAT)
 
         except ValueError:
-            return newAtom(t, self.getsize() - self.getheadersize())
+            return newAtom(t, self.blocksize() - self.getheadersize())
 
         class unk(Unknown): pass
 
         unk.type = t
         unk.__name__ = 'Unknown<%s>'% repr(t.serialize())
-        unk.length = unk.maxsize = self.getsize() - self.getheadersize()
+        unk.length = self.blocksize() - self.getheadersize()
         return unk
 
     def __extended_size(self):
@@ -80,7 +80,7 @@ class Atom(pstruct.type):
             print path
         return dyn.block(0)
 
-    def size(self):
+    def blocksize(self):
         return self.getsize()
 
     _fields_ = [
@@ -91,15 +91,8 @@ class Atom(pstruct.type):
         (__slack, 'slack')
     ]
 
-class AtomList(parray.terminated):
+class AtomList(parray.block):
     _object_ = Atom
-    currentsize = maxsize = 0   # copied from powerpoint
-
-    def isTerminator(self, value):
-        self.currentsize += value.size()
-        if (self.currentsize + 8 <= self.maxsize):
-            return False
-        return True
 
     def search(self, type):
         '''Search through a list of atoms for a particular fourcc type'''
@@ -112,13 +105,6 @@ class AtomList(parray.terminated):
             raise KeyError(type)
         assert len(res) == 1, repr(res)
         return res[0]
-
-    def load(self):
-        self.currentsize = 0
-        return super(AtomList, self).load()
-    def deserialize(self,source):
-        self.currentsize = 0
-        return super(AtomList, self).deserialize(source)
 
 ### list of atoms
 class Unknown(dyn.block(0)):
@@ -137,7 +123,7 @@ class GMHD(AtomList, AtomType): type = 'gmhd'
 #class MDAT(AtomList, AtomType): type = 'mdat'  # XXX: sometimes this is not a container
 class MDAT(dyn.block(0), AtomType):
     type = 'mdat'
-    length = property(fget=lambda s: s.maxsize)
+    length = property(fget=lambda s: s.blocksize())
 
 ## empty atoms
 class WIDE(ptype.type, AtomType): type = 'wide'

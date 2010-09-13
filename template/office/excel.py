@@ -1,36 +1,13 @@
 from ptypes import *
-import officeart
+import art
 
-### primitive types
-class USHORT(pint.uint16_t): pass
-
-###
-class Biff(object):
-    """Anything that inherits from this is considered a frontend biff type"""
-    bifftype = int
-
-LookupBiffType = {}     # this gets initialized at the very end of this file
-class BiffGeneral(pstruct.type):
-    def __lookuptype(s):
-        global LookupBiffType
+import __init__
+class Record(__init__.Record): cache = {}
+class RecordGeneral(__init__.RecordGeneral):
+    Record=Record
+    def __extra(s):
         t = int(s['type'].l)
-        try:
-            return LookupBiffType[t]
-        except KeyError:
-            pass
-        return dyn.clone(dyn.block(int(s['length'].l)), bifftype=t)
-
-    def __figureextra(s):
-        # all for an identity
-        t, name = int(s['type'].l), []
-        for n in list(s.traverse(lambda s: s.getparent())):
-            try:
-                name.append(str(n.__name__))
-            except AttributeError:
-                name.append(None)
-            continue
-        name = '[%s]'% ','.join(list(reversed(name))[1:])
-
+        name = '[%s]'% ','.join(s.backtrace()[1:])
 
         used = s['data'].size()
         total = int(s['length'].l)
@@ -39,35 +16,51 @@ class BiffGeneral(pstruct.type):
 
         if total >= used:
             l = total-used
-            print "biff object at %x (type %x) %s has %x bytes unused"% (s.getoffset(), t, name,l)
+            print "biff object at %x (type %x) %s has %x bytes unused"% (s.getoffset(), t, name, l)
             return dyn.block(l)
 
-        print "biff object at %x (type %x) %s's contents are larger than expected (%x>%x)"% (s.getoffset(), t, name,used,total)
+        print "biff object at %x (type %x) %s's contents are larger than expected (%x>%x)"% (s.getoffset(), t, name, used, total)
         return dyn.block(0)
+
+    def __data(s):
+        t = int(s['type'].l)
+        l = int(s['length'].l)
+        try:
+            cls = s.Record.Lookup(t)
+        except KeyError:
+            return dyn.clone(__init__.RecordUnknown, type=t, length=l)
+        return dyn.clone(cls, blocksize=lambda s:l)
 
     _fields_ = [
         (pint.uint16_t, 'type'),
         (pint.uint16_t, 'length'),
-        (__lookuptype, 'data'),
-        (__figureextra, 'extra')
+        (__data, 'data'),
+        (__extra, 'extra')
     ]
 
-    def size(self):     # XXX: holy shit this is so dirty, but it umm...works in an array..heh...
+    def blocksize(self):
         return 4 + int(self['length'])
 
+class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
+
+### primitive types
+class USHORT(pint.uint16_t): pass
+
+### File types
 class BiffSubStream(parray.terminated):
-    _object_ = BiffGeneral
+    '''Each excel stream'''
+    _object_ = RecordGeneral
     def isTerminator(self, value):
-        if type(value['data']) is EOF:
+        if int(value['type']) == EOF.type:
             return True
         return False
 
-    def search(self, bifftype):
-        bifftype = int(bifftype)
+    def search(self, type):
+        type = int(type)
         result = []
         for i,n in enumerate(self):
             try:
-                if n['data'].bifftype == bifftype:
+                if n['data'].type == type:
                     result.append(i)
             except AttributeError:
                 pass
@@ -92,10 +85,19 @@ class BiffSubStream(parray.terminated):
             return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof.serialize()))
         return super(BiffSubStream, self).__repr__()
 
+class File(__init__.File):
+    _object_ = BiffSubStream
+
+    def __repr__(self):
+        if self.initialized:
+            return '%s streams=%d'%(self.name(), len(self))
+        return super(File, self).__repr__()
+
 ###
-class CatSerRange(pstruct.type, Biff):
-    bifftype = 0x1020
-    bifftype = 4128
+@Record.Define
+class CatSerRange(pstruct.type):
+    type = 0x1020
+    type = 4128
 
     class __flags(pbinary.struct):
         _fields_ = [
@@ -113,8 +115,12 @@ class CatSerRange(pstruct.type, Biff):
     ]
 
 ###
-class RRTabId(dyn.array(USHORT, 3), Biff):
-    bifftype = 317
+#@Record.Define
+class RRTabId(parray.block):
+    _object_ = USHORT
+    type = 317
+    def size(self):
+        return int(self.parent['length'])
 
 ###
 class FrtFlags(pbinary.struct):
@@ -131,8 +137,9 @@ class FrtHeader(pstruct.type):
         (dyn.block(8), 'reserved')
     ]
 
-class MTRSettings(pstruct.type, Biff):
-    bifftype = 2202
+@Record.Define
+class MTRSettings(pstruct.type):
+    type = 2202
     _fields_ = [
         (FrtHeader, 'frtHeader'),
         (pint.uint32_t, 'fMTREnabled'),
@@ -140,8 +147,9 @@ class MTRSettings(pstruct.type, Biff):
         (pint.uint32_t, 'cUserThreadCount')
     ]
 ###
-class Compat12(pstruct.type, Biff):
-    bifftype = 2188
+@Record.Define
+class Compat12(pstruct.type):
+    type = 2188
     _fields_ = [
         (FrtHeader, 'frtHeader'),
         (pint.uint32_t, 'fNoCompatChk')
@@ -153,9 +161,9 @@ class Cell(pstruct.type):
         (pint.uint16_t, 'col'),
         (pint.uint16_t, 'ixfe')
     ]
-
-class LabelSst(pstruct.type, Biff):
-    bifftype = 253
+@Record.Define
+class LabelSst(pstruct.type):
+    type = 253
     _fields_ = [
         (Cell, 'cell'),
         (pint.uint32_t, 'isst')
@@ -173,8 +181,9 @@ class RkRec(pstruct.type):
         (pint.uint16_t, 'ixfe'),
         (RkNumber, 'RK')
     ]
-class RK(pstruct.type, Biff):
-    bifftype = 638
+@Record.Define
+class RK(pstruct.type):
+    type = 638
     _fields_ = [
         (pint.uint16_t, 'rw'),
         (pint.uint16_t, 'col'),
@@ -182,8 +191,10 @@ class RK(pstruct.type, Biff):
     ]
 ###
 class Xnum(pfloat.double): pass
-class Number(pstruct.type, Biff):
-    bifftype = 515
+
+@Record.Define
+class Number(pstruct.type):
+    type = 515
     _fields_ = [
         (Cell, 'cell'),
         (Xnum, 'num')
@@ -197,14 +208,16 @@ class Ref8(pstruct.type):
         (pint.uint16_t, 'colLast'),
     ]
 
-class MergeCells(pstruct.type, Biff):
-    bifftype = 229
+@Record.Define
+class MergeCells(pstruct.type):
+    type = 229
     _fields_ = [
         (pint.uint16_t, 'cmcs'),
         (lambda s: dyn.array(Ref8, int(s['cmcs'].l)), 'rgref')
     ]
 ###
-class CrtLayout12(pstruct.type, Biff):
+@Record.Define
+class CrtLayout12(pstruct.type):
     class __CrtLayout12Auto(pbinary.struct):
         _fields_ = [
             (1, 'unused'),
@@ -212,7 +225,7 @@ class CrtLayout12(pstruct.type, Biff):
             (11, 'reserved')
         ]
 
-    bifftype = 2205
+    type = 2205
     _fields_ = [
         (FrtHeader, 'frtHeader'),
         (pint.uint32_t, 'dwCheckSum'),
@@ -229,7 +242,8 @@ class CrtLayout12(pstruct.type, Biff):
     ]
 
 ###
-class Frame(pstruct.type, Biff):
+@Record.Define
+class Frame(pstruct.type):
     class __FrameAuto(pbinary.struct):
         _fields_ = [
             (1, 'fAutoSize'),
@@ -237,15 +251,16 @@ class Frame(pstruct.type, Biff):
             (14, 'reserved')
         ]
 
-    bifftype = 4146
+    type = 4146
     _fields_ = [
         (pint.uint16_t, 'frt'),
         (__FrameAuto, 'f')
     ]
 
 ###
-class Pos(pstruct.type, Biff):
-    bifftype = 4175
+@Record.Define
+class Pos(pstruct.type):
+    type = 4175
     _fields_ = [
         (pint.uint16_t, 'mdTopLt'),
         (pint.uint16_t, 'mdBotRt'),
@@ -273,17 +288,20 @@ class XLUnicodeString(pstruct.type):
         (lambda s: dyn.clone(pstr.wstring, length=[int(s['cch'].l), int(s['cch'])*2][int(s['fHighByte'].l)>>7]), 'rgb')
     ]
 
-class SupBook(pstruct.type, Biff):
-    bifftype = 430
+@Record.Define
+class SupBook(pstruct.type):
+    type = 430
     _fields_ = [
         (pint.uint16_t, 'ctab'),
         (pint.uint16_t, 'cch'),
     ]
 
 #DataValidationCriteria
-class DVAL(pstruct.type, Biff):
-    bifftype = 434
-    bifftype = 0x1b2
+@Record.Define
+class DVAL(pstruct.type):
+    type = 434
+    type = 0x1b2
+
     class __wDviFlags(pbinary.struct):
         _fields_ = [
             (1, 'fWnClosed'),
@@ -300,9 +318,10 @@ class DVAL(pstruct.type, Biff):
         (pint.uint32_t, 'idvMac'),
     ]
 
-class DV(pstruct.type, Biff):
-    bifftype = 0x1be
-    bifftype = 446
+@Record.Define
+class DV(pstruct.type):
+    type = 0x1be
+    type = 446
 
     class __dwDvFlags(pbinary.struct):
         _fields_ = [
@@ -324,7 +343,8 @@ class DV(pstruct.type, Biff):
     ]
 
 ###
-class BOF(pstruct.type, Biff):
+@Record.Define
+class BOF(pstruct.type):
     class __BOFFlags(pbinary.struct):
         _fields_ = [
             (1, 'fWin'),
@@ -355,7 +375,7 @@ class BOF(pstruct.type, Biff):
             ('macrosheet', 0x0040)
         ]
 
-    bifftype = 2057
+    type = 2057
     _fields_ = [
         (pint.uint16_t, 'vers'),
         (__BOFDocType, 'dt'),
@@ -364,24 +384,15 @@ class BOF(pstruct.type, Biff):
         (__BOFFlags, 'f')
     ]
 
-class MSODRAWING(officeart.SpContainer, Biff):
-    bifftype = 0x00ec
-    bifftype = 236
+@Record.Define
+class MSODRAWING(art.SpContainer):
+    type = 0x00ec
+    type = 236
 
-class EOF(pstruct.type, Biff):
-    bifftype = 10
+@Record.Define
+class EOF(pstruct.type):
+    type = 10
     _fields_ = []
-
-### build lookup table
-import inspect
-for cls in globals().values():
-    if inspect.isclass(cls) and issubclass(cls, Biff):
-        LookupBiffType[cls.bifftype] = cls
-    continue
-
-class File(parray.type):
-    length=3
-    _object_ = BiffSubStream
 
 if __name__ == '__main__':
     import ptypes
