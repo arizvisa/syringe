@@ -142,7 +142,7 @@ class FileType(pstruct.type, AtomType):
     _fields_ = [
         (pQTInt, 'Major_Brand'),
         (pQTInt, 'Minor_Version'),
-        (lambda s: dyn.clone(pQTIntArray,maxsize=s.maxsize-8), 'Compatible_Brands')      # XXX: this isn't working
+        (lambda s: dyn.clone(pQTIntArray,blocksize=lambda s: s.parent.blocksize()-8), 'Compatible_Brands')      # XXX: this isn't working
     ]
 
 class MVHD(pstruct.type, AtomType):

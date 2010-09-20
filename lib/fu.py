@@ -15,6 +15,11 @@ class __type__(object):
     def dumps(cls, object, **kwds):
         raise NotImplementedError(cls)
 
+    @classmethod
+    def repr(cls, object):
+        '''Default method for displaying a repr of the object'''
+        return repr(object)
+
 class marshallable(__type__):
     import marshal
     @classmethod
@@ -149,6 +154,24 @@ class dict(container):
     def deserialize(cls, object, **kwds):
         return __builtins__['dict']( (lookup.loads(k, **kwds), lookup.loads(v, **kwds)) for k,v in object )
 
+if False:
+    class module(container):
+        id = 7
+        @classmethod
+        def getclass(cls):
+            return __builtins__.__class__
+
+        # TODO: need to store each module's contents along with its name
+        @classmethod
+        def serialize(cls, object, **kwds):
+            return [ (lookup.dumps(k, **kwds), lookup.dumps(v, **kwds)) for k,v in object.__dict__.items() ]
+
+        # TODO: instantiate a new module, and then set all of its attributes
+        #       (or modify it's __dict__)
+        @classmethod
+        def deserialize(cls, object, **kwds):
+            c = cls.getclass()
+            return __builtins__['dict']( (lookup.loads(k, **kwds), lookup.loads(v, **kwds)) for k,v in object )
 
 ### special types
 class special(container):
@@ -162,7 +185,7 @@ class special(container):
         return cls.new(object, **kwds)
 
 class function(special):
-    id = 7
+    id = 8
     attributes = ['func_code', 'func_name', 'func_defaults', 'func_closure']
 
     @classmethod
@@ -177,7 +200,7 @@ class function(special):
         return c(object['func_code'], namespace, object['func_name'], object['func_defaults'], object['func_closure'])
 
 class code(special):
-    id = 8
+    id = 9
     attributes = [
         'co_argcount', 'co_nlocals', 'co_stacksize', 'co_flags', 'co_code',
         'co_consts', 'co_names', 'co_varnames', 'co_filename', 'co_name',
@@ -194,7 +217,7 @@ class code(special):
         return c( *(v for k,v in object) )
 
 class instancemethod(special):
-    id = 9
+    id = 10
 #    attributes = ['im_func', 'im_self', 'im_class']
     attributes = ['im_func']
     @classmethod
@@ -211,7 +234,7 @@ class instancemethod(special):
 
 class type(special):
     '''A class....fuck'''
-    id = 10
+    id = 11
     attributes = ['__name__', '__bases__']
     exclude = set(['__doc__'])
 
@@ -262,7 +285,7 @@ class type(special):
 
 class classobj(type):
     '''A class....fuck'''
-    id = 11
+    id = 12
 
     @classmethod
     def getclass(cls):

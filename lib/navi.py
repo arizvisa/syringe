@@ -1,4 +1,4 @@
-from codefu import *
+import fu
 from inspect import isclass
 ##################################################
 # classes for navigating through types dynamically
@@ -59,7 +59,7 @@ def navi(object):
 
 ### how to represent each attribute by its type
 class navcode(navt):
-    type = code
+    type = fu.code.getclass()
 
     ## merged in from aaron's asm.py
     def findByName(navObj, nodeName):
@@ -119,12 +119,12 @@ if __name__ == '__main__':
         a()
         return True
 
-    print fn_repr(example1)
+    print fu.function.repr(example1)
     cobj = example1.func_code
 
     ##
-    print code_repr(cobj)
-    print code_repr(cobj.co_consts[1])
+    print fu.code.repr(cobj)
+    print fu.code.repr(cobj.co_consts[1])
 
     ##
     nav = navi(cobj)
@@ -148,13 +148,13 @@ if __name__ == '__main__':
         return True
 
     ##
-    print fn_repr(example2)
+    print fu.function.repr(example2)
     cobj = example2.func_code
 
     ##
-    print code_repr(cobj)
-    print code_repr(cobj.co_consts[1])
-    print code_repr(cobj.co_consts[2])
+    print fu.code.repr(cobj)
+    print fu.code.repr(cobj.co_consts[1])
+    print fu.code.repr(cobj.co_consts[2])
 
     ##
     nav = navi(cobj)
@@ -175,13 +175,13 @@ if __name__ == '__main__':
         pass
 
     ##
-    print fn_repr(example3)
+    print fu.function.repr(example3)
     cobj = example3.func_code
 
     ##
-    print code_repr(cobj)
-    print code_repr(cobj.co_consts[1])
-    print code_repr(cobj.co_consts[1].co_consts[1])
+    print fu.code.repr(cobj)
+    print fu.code.repr(cobj.co_consts[1])
+    print fu.code.repr(cobj.co_consts[1].co_consts[1])
 
     ##
     nav = navi(cobj)
