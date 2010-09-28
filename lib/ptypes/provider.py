@@ -13,6 +13,19 @@ class provider(object):
         '''Write some number of bytes'''
         raise NotImplementedError('Developer forgot to overload this method')
 
+class empty(object):
+    '''Empty'''
+    offset = 0
+    def seek(self, offset):
+        '''Seek to a particular offset'''
+        offset=0
+    def consume(self, amount):
+        '''Read some number of bytes'''
+        return '\x00'*amount
+    def write(self, data):
+        '''Write some number of bytes'''
+        raise OSError('Attempted to write to read-only medium')
+
 class file(provider):
     '''Basic file provider'''
     file = None

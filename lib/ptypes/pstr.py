@@ -198,7 +198,7 @@ class wstring(string):
         s = unicode(self.value, 'utf-16').encode('utf-8')
         return utils.strdup(s)[:len(self)]
 
-class szwstring(szstring):
+class szwstring(szstring, wstring):
     '''Standard null-terminated string of wide-characters'''
     _object_ = wchar_t
 
@@ -243,33 +243,35 @@ if __name__ == '__main__':
         x.deserialize(string)
         print x
 
-    import parray
-    data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
+    if True:
+        import parray
+        data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
 
-    class stringarray(parray.terminated):
-        _object_ = pstr.szstring
+        class stringarray(parray.terminated):
+            _object_ = pstr.szstring
 
-        def isTerminator(self, value):
-            if value.get() == 'eof':
-                return True
-            return False
+            def isTerminator(self, value):
+                if value.get() == 'eof':
+                    return True
+                return False
 
-    x = stringarray()
-    x.deserialize(data)
-    print '\n'.join(map(repr,x))
+        x = stringarray()
+        x.deserialize(data)
+        print '\n'.join(map(repr,x))
 
-    import pstruct,pint,pstr
-    class IMAGE_IMPORT_HINT(pstruct.type):
-        _fields_ = [
-            ( pint.uint16_t, 'Hint' ),
-            ( pstr.szstring, 'String' )
-        ]
+    if True:
+        import pstruct,pint,pstr
+        class IMAGE_IMPORT_HINT(pstruct.type):
+            _fields_ = [
+                ( pint.uint16_t, 'Hint' ),
+                ( pstr.szstring, 'String' )
+            ]
 
-    x = IMAGE_IMPORT_HINT()
-    x.deserialize('AAHello world this is a zero0-terminated string\x00this didnt work')
-    print x
+        x = IMAGE_IMPORT_HINT()
+        x.deserialize('AAHello world this is a zero0-terminated string\x00this didnt work')
+        print x
 
-    source = provider.string( x.serialize() )
+        source = provider.string( x.serialize() )
 
     import provider
     if True:
@@ -280,5 +282,18 @@ if __name__ == '__main__':
         x = pstr.szstring()
         x.source = source
 
-    x.load()
-    print x
+        x.load()
+        print x
+
+    if False:
+        h = '43 00 3a 00 5c 00 50 00 79 00 74 00 68 00 6f 00 6e 00 32 00 36 00 5c 00 44 00 4c 00 4c 00 73 00 5c 00 5f 00 63 00 74 00 79 00 70 00 65 00 73 00 2e 00 70 00 79 00 64 00 00 00'
+        h = h.split(' ')
+        h = [int(x,16) for x in h]
+        h = ''.join( [chr(x) for x in h] )
+        print repr(h)
+
+    s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
+    v = pstr.szwstring()
+    v.deserialize(s)
+    print v
+

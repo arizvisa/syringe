@@ -1,5 +1,5 @@
 import ptypes,__base__
-from ptypes import pstruct,parray,ptype,dyn,pstr,pint
+from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pbinary
 from __base__ import *
 import datadirectory,symbols,relocations
 from warnings import warn
@@ -123,6 +123,26 @@ if False:   # this hasn't ever really been tested
 
 ### NtHeader
 class FileHeader(pstruct.type):
+    class __Characteristics(pbinary.littleendian(pbinary.struct)):
+        _fields_ = [
+            (1, 'BYTES_REVERSED_HI'),
+            (1, 'UP_SYSTEM_ONLY'),
+            (1, 'DLL'),
+            (1, 'SYSTEM'),
+            (1, 'NET_RUN_FROM_SWAP'),
+            (1, 'REMOVABLE_RUN_FROM_SWAP'),
+            (1, 'DEBUG_STRIPPED'),
+            (1, '32BIT_MACHINE'),
+            (1, 'BYTES_REVERSED_LO'),
+            (1, 'reserved_9'),
+            (1, 'LARGE_ADDRESS_AWARE'),
+            (1, 'AGGRESSIVE_WS_TRIM'),
+            (1, 'LOCAL_SYMS_STRIPPED'),
+            (1, 'LINE_NUMS_STRIPPED'),
+            (1, 'EXECUTABLE_IMAGE'),
+            (1, 'RELOCS_STRIPPED'),
+        ]
+        
     _fields_ = [
         (word, 'Machine'),
         (uint16, 'NumberOfSections'),
@@ -130,7 +150,7 @@ class FileHeader(pstruct.type):
         (dyn.pointer(symbols.SymbolTableAndStringTable), 'PointerToSymbolTable'),
         (uint32, 'NumberOfSymbols'),
         (word, 'SizeOfOptionalHeader'),
-        (word, 'Characteristics')
+        (__Characteristics, 'Characteristics')
     ]
 
     def getsymbols(self):
@@ -141,6 +161,22 @@ class FileHeader(pstruct.type):
         return res
 
 class OptionalHeader(pstruct.type):
+
+    class __DllCharacteristics(pbinary.littleendian(pbinary.struct)):
+        _fields_ = [
+            (1, 'TERMINAL_SERVER_AWARE'),
+            (1, 'reserved_1'),
+            (1, 'WDM_DRIVER'),
+            (1, 'reserved_3'),
+            (1, 'NO_BIND'),
+            (1, 'NO_SEH'),
+            (1, 'NO_ISOLATION'),
+            (1, 'NX_COMPAT'),
+            (1, 'FORCE_INTEGRITY'),
+            (1, 'DYNAMIC_BASE'),
+            (6, 'reserved_10'),
+        ]
+
     _fields_ = [
         ( uint16, 'Magic' ),
         ( uint8, 'MajorLinkerVersion' ),
@@ -165,7 +201,7 @@ class OptionalHeader(pstruct.type):
         ( uint32, 'SizeOfHeaders' ),
         ( uint32, 'CheckSum' ),
         ( uint16, 'Subsystem' ),
-        ( uint16, 'DllCharacteristics' ),
+        ( __DllCharacteristics, 'DllCharacteristics' ),
         ( uint32, 'SizeOfStackReserve' ),
         ( uint32, 'SizeOfStackCommit' ),
         ( uint32, 'SizeOfHeapReserve' ),

@@ -86,7 +86,6 @@ class lookup(object):
         return marshal.dumps((t.id, t.dumps(object)), **kwds)
 
 ### atomic marshallable types
-
 class int(marshallable):
     id = 1
     @classmethod
@@ -293,6 +292,12 @@ class classobj(type):
         class obj: pass
         return t(obj)
 
+class bool(marshallable):
+    id = 13
+    @classmethod
+    def getclass(cls):
+        return True.__class__
+
 lookup.add(int)
 lookup.add(str)
 lookup.add(none)
@@ -305,6 +310,7 @@ lookup.add(code)
 lookup.add(instancemethod)
 lookup.add(type)
 lookup.add(classobj)
+lookup.add(bool)
 
 def dumps(object, **kwds):
     return lookup.dumps(object, **kwds)

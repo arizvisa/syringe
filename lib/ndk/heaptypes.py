@@ -132,3 +132,13 @@ class HEAP(pstruct.type):
         (pint.uint64_t, 'VirtualAllocdBlocks'),
         (dyn.array(dyn.pointer(HEAP_SEGMENT), 64), 'Segments')
     ]
+
+if __name__ == '__main__':
+    import ptypes,ndk
+    ptypes.setsource( ptypes.provider.WindowsProcessId(3140) )
+    peb = 0x7efde000
+
+    z = ndk.PEB(offset=peb).l
+    ldr = z['Ldr'].d.l
+
+    print z['ProcessHeap'].d.l

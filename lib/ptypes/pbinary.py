@@ -36,7 +36,7 @@ def bigendian(p):
 def littleendian(p):
     class littleendianpbinary(p):
         def deserialize_stream(self, source):
-            size = self.alloc().blocksize()
+            size = self.alloc().blocksize()     # XXX: this means we can't be dynamic unless user defines the size
             block = ''.join([source.next() for x in xrange(size)])
             return super(littleendianpbinary, self).deserialize_stream( iter(reversed(block)) )
 
@@ -122,6 +122,9 @@ class type(ptype.pcontainer):
             raise ValueError('Unknown type %s stored in %s'% (repr(x), repr(self)))
         return result
 
+    def getbitmap(self):
+        return ( self.getinteger(), self.bits() )
+
     def newelement(self, pbinarytype, name, offset):
         '''Given a valid type that we can contain, instantiate a new element'''
         n = forcepbinary(pbinarytype, self)
@@ -161,6 +164,12 @@ class type(ptype.pcontainer):
 
     def size(self):
         return (self.bits()+7)/8
+
+    def set(self, value):
+        return self.alloc().deserialize(bitmap.data((value, self.bits())))
+
+    def commit(self):
+        raise NotImplementedError('not anymore anyways')
 
     if False:
         def commit(self):

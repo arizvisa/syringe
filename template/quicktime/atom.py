@@ -157,7 +157,7 @@ class MVHD(pstruct.type, AtomType):
         (pint.uint32_t, 'Preferred rate'),
         (pint.uint16_t, 'Preferred volume'),
         (dyn.block(10), 'Reserved'),
-        (dyn.block(36), 'Matrix structure'),
+        (Matrix, 'Matrix structure'),
         (pint.uint32_t, 'Preview time'),
         (pint.uint32_t, 'Preview duration'),
         (pint.uint32_t, 'Poster time'),
@@ -182,7 +182,7 @@ class TKHD(pstruct.type, AtomType):
         (pint.uint16_t, 'Alternate group'),
         (pint.uint16_t, 'Volume'),
         (pint.uint16_t, 'Reserved'),
-        (dyn.block(36), 'Matrix structure'),
+        (Matrix, 'Matrix structure'),
         (pint.uint32_t, 'Track width'),
         (pint.uint32_t, 'Track height'),
     ]

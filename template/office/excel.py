@@ -384,7 +384,7 @@ class BOF(pstruct.type):
         (__BOFFlags, 'f')
     ]
 
-@Record.Define
+#@Record.Define
 class MSODRAWING(art.SpContainer):
     type = 0x00ec
     type = 236

@@ -97,13 +97,6 @@ class type(__pstruct_generic):
     def name(self):
         return repr(self.__class__)
 
-    def at(self, offset):
-        result = super(type, self).at(offset)
-        index = result[-1]
-
-        result[-1] = self.keys()[index]     # convert our index to a name
-        return result
-
 if __name__ == '__main__':
     import pstruct
 

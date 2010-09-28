@@ -185,6 +185,7 @@ def isRegisterCall(instruction):
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
         return reg == 2 and mod == 3
     return False
+
 def isMemoryCall(instruction):
     '''call Mp'''
     if getOpcode(instruction) == '\xff':

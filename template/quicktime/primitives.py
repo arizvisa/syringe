@@ -29,3 +29,18 @@ class pQTIntArray(parray.terminated):
     def deserialize(self,source):
         currentsize = 0
         return super(pQTIntArray, self).deserialize(source)
+
+class Fixed(pint.uint32_t): pass
+
+class Matrix(pstruct.type):
+    _fields_ = [
+        (Fixed, 'a'),
+        (Fixed, 'b'),
+        (Fixed, 'u'),
+        (Fixed, 'c'),
+        (Fixed, 'd'),
+        (Fixed, 'v'),
+        (Fixed, 'Tx'),
+        (Fixed, 'Ty'),
+        (Fixed, 'w'),
+    ]

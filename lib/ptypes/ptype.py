@@ -236,6 +236,7 @@ class type(object):
 
     def alloc(self):
         zero = ( '\x00' for x in utils.infiniterange(0) )
+        #self.source = provider.empty()
         return self.deserialize(zero)
 
     ## operator overloads
@@ -392,7 +393,34 @@ class pcontainer(type):
             res = '???'
         return  ' '.join([self.name(), res])
 
+    if False:
+        def at(self, offset):
+            # XXX: this should probably not return a list of names, and should just return the element
+            assert self.initialized
+
+            element = None
+            for i,n in enumerate(self.value):
+                nmin = n.getoffset()
+                nmax = nmin + n.blocksize()
+                if (offset >= nmin) and (offset < nmax):
+                    element = n
+                    break
+                continue
+
+            assert element is not None, 'Specified offset %x not found'%offset
+
+            # drill into containees for more detail
+            try:
+                l = element.at(offset)
+                l.append(i)
+                return l
+            except (NotImplementedError, AttributeError):
+                pass
+
+            return [i]
+
     def at(self, offset):
+        # XXX: this should probably not return a list of names, and should just return the element
         assert self.initialized
 
         element = None
@@ -408,18 +436,21 @@ class pcontainer(type):
 
         # drill into containees for more detail
         try:
-            l = element.at(offset)
-            l.append(i)
-            return l
+            return element.at(offset)
         except (NotImplementedError, AttributeError):
             pass
-
-        return [i]
+        return element
 
     def walkto(self, offset):
         '''will walk all the objects needed to reach a particular offset'''
-        path = iter(reversed(self.at(offset)))
-        return self.traverse( lambda s: s[path.next()] )
+
+        def __traverse(s):
+            if s.parent is not self:
+                return s.parent
+            raise StopIteration
+
+        obj = self.at(offset)
+        return obj.traverse( __traverse )
 
     def setoffset(self, value, recurse=False):
         '''modifies the current offset'''

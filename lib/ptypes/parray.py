@@ -118,6 +118,12 @@ class type(__parray_generic):
         res = '???'
         if self.initialized:
             res = repr(''.join(self.serialize()))
+            length = len(self)
+        else:
+            if self.value is None:
+                length = 0
+            else:
+                length = len(self.value)
 
         ofs = '[%x]'%( self.getoffset() )
 
@@ -126,7 +132,7 @@ class type(__parray_generic):
         else:
             obj = repr(self._object_.__class__)
 
-        return ' '.join((ofs, self.name(), '%s[%d]'% (obj, len(self)), res))
+        return ' '.join((ofs, self.name(), '%s[%d]'% (obj, length), res))
 
 class terminated(type):
     '''
