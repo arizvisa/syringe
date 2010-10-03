@@ -64,8 +64,8 @@ class Atom(pstruct.type):
         raise NotImplementedError(repr(self['type']),repr(s))
 
     def __slack(self):
-        t,s = (self['type'].l, self.getsize())
-        s = self.getsize() - self.getheadersize()
+        t = self['type'].l
+        s = self.blocksize() - self.getheadersize()
         datasize = self['data'].size()
 
         if self.parent is not None:
@@ -74,10 +74,7 @@ class Atom(pstruct.type):
 
             container = self.parent.parent
             print 'miscalculated slack:',hex(s),'<',hex(datasize)
-            path = self.traverse(lambda n: n.parent)
-            path = [ 'type:%s name:%s offset:%x size:%x'%(x.name(), getattr(x, '__name__', repr(None.__class__)), x.getoffset(), x.size()) for x in path ]
-            path = ' ->\n\t'.join(reversed(path))
-            print path
+            path = ' ->\n\t'.join(self.backtrace())
         return dyn.block(0)
 
     def blocksize(self):
@@ -117,7 +114,7 @@ class EDTS(AtomList, AtomType): type = 'edts'
 class MDIA(AtomList, AtomType): type = 'mdia'
 class MINF(AtomList, AtomType): type = 'minf'
 class DINF(AtomList, AtomType): type = 'dinf'
-#class UDTA(AtomList, AtomType): type = 'udta'
+class UDTA(AtomList, AtomType): type = 'udta'
 class STBL(AtomList, AtomType): type = 'stbl'
 class GMHD(AtomList, AtomType): type = 'gmhd'
 #class MDAT(AtomList, AtomType): type = 'mdat'  # XXX: sometimes this is not a container
@@ -194,11 +191,18 @@ class ELST(pstruct.type, AtomType):
         count = self['Number of entries'].l
         return dyn.array(pint.uint32_t, int(count))
 
+    class Entry(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'duration'),
+            (pint.uint32_t, 'time'),
+            (pint.uint32_t, 'rate'),
+        ]
+
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (__Entry, 'Entry')
+        (lambda s: dyn.array(s.Entry, int(s['Number of entries'].l)), 'Entry')
     ]
 
 class MDHD(pstruct.type, AtomType):
@@ -224,6 +228,7 @@ class HDLR(pstruct.type, AtomType):
         (pint.uint32_t, 'Component manufacturer'),
         (pint.uint32_t, 'Component flags'),
         (pint.uint32_t, 'Component Flags mask'),
+        (pQTString, 'Component name')
     ]
 
 ## stsd
@@ -246,39 +251,39 @@ if False:
             (pint.uint16_t, 'Color table ID')
         ]
 
-class stsd_entry(pstruct.type):
-    _fields_ = [
-        (pQTInt, 'Sample description size'),
-        (pQTType, 'Data format'),
-        (dyn.block(6), 'Reserved'),
-        (pint.uint16_t, 'Data reference index')
-    ]
-
 class stsd(pstruct.type, AtomType):
     '''Sample description atom'''
     type = 'stsd'
+    class entry(pstruct.type):
+        _fields_ = [
+            (pQTInt, 'Sample description size'),
+            (pQTType, 'Data format'),
+            (dyn.block(6), 'Reserved'),
+            (pint.uint16_t, 'Data reference index')
+        ]
+
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of Entries'),
-        (lambda x: dyn.array(stsd_entry, int(x['Number of Entries'].l)), 'Entries')
+        (lambda x: dyn.array(stsd.entry, int(x['Number of Entries'].l)), 'Entries')
     ]
 
 ### stts
-class stts_entry(pstruct.type):
-    _fields_ = [
-        (pQTInt, 'Sample count'),
-        (pQTInt, 'Sample duration')
-    ]
-
 class stts(pstruct.type, AtomType):
     '''Time-to-sample atom'''
     type = 'stts'
+    class entry(pstruct.type):
+        _fields_ = [
+            (pQTInt, 'Sample count'),
+            (pQTInt, 'Sample duration')
+        ]
+
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stts_entry, int(x['Number of entries'].l)), 'Entries')
+        (lambda x: dyn.array(stts.entry, int(x['Number of entries'].l)), 'Entries')
     ]
 
 if False:
@@ -292,21 +297,21 @@ if False:
         ]
 
 ## stsc
-class stsc_entry(pstruct.type):
-    _fields_ = [
-        (pQTInt, 'First chunk'),
-        (pQTInt, 'Samples per chunk'),
-        (pQTInt, 'Sample description ID')
-    ]
-
 class stsc(pstruct.type, AtomType):
     '''Sample-to-chunk atom'''
     type = 'stsc'
+    class entry(pstruct.type):
+        _fields_ = [
+            (pQTInt, 'First chunk'),
+            (pQTInt, 'Samples per chunk'),
+            (pQTInt, 'Sample description ID')
+        ]
+
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stsc_entry, int(x['Number of entries'].l)), 'Entries')
+        (lambda s: dyn.array(s.entry, int(s['Number of entries'].l)), 'Entries')
     ]
 
 ## stsz
@@ -348,3 +353,26 @@ if False:
             (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
         ]
 
+class gmin(pstruct.type, AtomType):
+    '''Base media info atom'''
+    type = 'gmin'
+
+    _fields_ = [
+        (pint.uint8_t, 'Version'),
+        (dyn.block(3), 'Flags'),
+        (pint.uint16_t, 'Graphics mode'),
+        (dyn.array(pint.uint16_t,3), 'Opcolor'),
+        (pint.uint16_t, 'Balance'),
+        (pint.uint16_t, 'Reserved'),
+    ]
+
+class dref(pstruct.type, AtomType):
+    '''Chunk offset atom'''
+    type = 'dref'
+
+    _fields_ = [
+        (pint.uint8_t, 'Version'),
+        (dyn.block(3), 'Flags'),
+        (pQTInt, 'Number of entries'),
+        (lambda s: dyn.array(Atom, int(s['Number of entries'].l)), 'Data references')
+    ]

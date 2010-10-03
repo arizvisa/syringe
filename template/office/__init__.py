@@ -150,7 +150,7 @@ class File(RecordContainer):
 if __name__ == '__main__':
     from ptypes import *
 
-    @Record.Define
+#    @Record.Define
     class r(pstruct.type):
         type = 0
         _fields_ = [

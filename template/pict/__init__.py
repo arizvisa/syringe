@@ -119,6 +119,20 @@ class directBitsRect(pstruct.type):
         (WORD, 'mode'),
     ]
 
+class File_v2(pstruct.type):
+    _fields_ = [
+        (dyn.block(0x200), 'padding'),
+        (header, 'h'),
+        (header_v2, 'v2'),
+        (header_ext_v2, 'ext_v2'),
+        (picSize, 'picSize'),
+        (picFrame_v2, 'picFrame_v2'),
+        (directBitsRect, 'bits'),
+    ]
+
+# default to v2
+class File(File_v2): pass
+
 if __name__ == '__main__':
     input = ptypes.provider.file('y:/cases/pucik0044/pict_pixdata_heap/poc.pict')
     

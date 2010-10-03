@@ -77,13 +77,13 @@ class lookup(object):
     @classmethod
     def loads(cls, s, **kwds):
         id,data = marshal.loads(s)
-        t = cls.byid(id)
+        t = kwds.get('type', cls.byid(id))
         return t.loads(data, **kwds)
 
     @classmethod
     def dumps(cls, object, **kwds):
-        t = cls.byclass( __builtins__['type'](object) )
-        return marshal.dumps((t.id, t.dumps(object)), **kwds)
+        t = kwds.get('type', cls.byclass(__builtins__['type'](object)))
+        return marshal.dumps((t.id, t.dumps(object, **kwds)))
 
 ### atomic marshallable types
 class int(marshallable):
@@ -181,22 +181,40 @@ class special(container):
     @classmethod
     def deserialize(cls, object, **kwds):
         object = [((lookup.loads(k,**kwds)), (lookup.loads(v,**kwds))) for k,v in object]
-        return cls.new(object, **kwds)
+        object = __builtins__['dict'](object)
+        return cls.deserialize_dict(object, **kwds)
 
 class function(special):
     id = 8
-    attributes = ['func_code', 'func_name', 'func_defaults', 'func_closure']
+    attributes = ['func_code', 'func_name', 'func_defaults']
+
+    @classmethod
+    def serialize(cls, object, **kwds):
+        result = [(lookup.dumps(k,**kwds), lookup.dumps(getattr(object, k),**kwds)) for k in cls.attributes]
+
+        func_closure = getattr(object, 'func_closure')
+        if func_closure is None:
+            return result + [(lookup.dumps('func_closure'), lookup.dumps(func_closure, type=none))]
+        return result + [(lookup.dumps('func_closure'), lookup.dumps(func_closure, type=cell))]
 
     @classmethod
     def getclass(cls):
         return (lambda:False).__class__
 
     @classmethod
-    def new(cls, object, **kwds):
+    def new(cls, code, globals, **kwds):
+        '''Create a new function'''
+        name = kwds.get('name', code.co_name)
+        argdefs = kwds.get('argdefs', ())
+        closure = kwds.get('closure', ())
         c = cls.getclass()
+        return c(code, globals, name, argdefs, closure)
+
+    @classmethod
+    def deserialize_dict(cls, object, **kwds):
+        '''Create a new function based on supplied attributes'''
         namespace = kwds.get('namespace', globals())
-        object = __builtins__['dict'](object)
-        return c(object['func_code'], namespace, object['func_name'], object['func_defaults'], object['func_closure'])
+        return cls.new( object['func_code'], namespace, name=object['func_name'], argdefs=object['func_defaults'], closure=object['func_closure'])
 
 class code(special):
     id = 9
@@ -211,9 +229,21 @@ class code(special):
         return eval('lambda:False').func_code.__class__
 
     @classmethod
-    def new(cls, object, **kwds):
-        c = cls.getclass()
-        return c( *(v for k,v in object) )
+    def deserialize_dict(cls, object, **kwds):
+        result = (object[k] for k in cls.attributes)
+        result = __builtins__['tuple'](result)
+        return cls.new(*result)
+
+    @classmethod
+    def new(cls, argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
+        i,s,t = __builtins__['int'],__builtins__['str'],__builtins__['tuple']
+        types = [ i, i, i, i, s, t, t, t, s, s, i, s, t, t ]
+        values = [ argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
+
+        for i,t in enumerate(types):
+            values[i] = t( values[i] )
+
+        return cls.getclass()(*values)
 
 class instancemethod(special):
     id = 10
@@ -224,12 +254,14 @@ class instancemethod(special):
         return instancemethod.getclass.__class__
 
     @classmethod
-    def new(cls, object, **kwds):
+    def deserialize_dict(cls, object, **kwds):
         c = cls.getclass()
         namespace = kwds.get('namespace', globals())
-        object = __builtins__['dict'](object)
-
         return c( object['im_func'], kwds.get('instance', None), kwds.get('class', None) )
+
+    @classmethod
+    def new(cls, func, inst, class_):
+        return cls.getclass()(function, instance, class_)
 
 class type(special):
     '''A class....fuck'''
@@ -242,7 +274,7 @@ class type(special):
         return type.__class__
 
     @classmethod
-    def new(cls, object, **kwds):
+    def deserialize_dict(cls, object, **kwds):
         namespace = __builtins__['dict'](object)
         return type.__class__(namespace['__name__'], namespace['__bases__'], namespace)
 
@@ -273,7 +305,7 @@ class type(special):
         attrs,props = marshal.loads(object)
         attrs = [((lookup.loads(k,**kwds)), (lookup.loads(v,**kwds))) for k,v in attrs]
 
-        res = cls.new(attrs, **kwds)
+        res = cls.deserialize_dict(attrs, **kwds)
 
         kwds['class'] = res
 
@@ -298,6 +330,84 @@ class bool(marshallable):
     def getclass(cls):
         return True.__class__
 
+class cell(marshallable):
+    id = 14
+
+    class tuple(object):
+        '''class that always produces a cell container'''
+        def __new__(name, *args):
+            return cell.new(*args)
+
+    @classmethod
+    def getclass(cls):
+        return cell.tuple
+
+    @classmethod
+    def loads(cls, s, **kwds):
+        cells = lookup.loads(s)
+        return cell.new( *cells )
+
+    @classmethod
+    def dumps(cls, object, **kwds):
+        result = ( x.cell_contents for x in object )
+        return lookup.dumps( __builtins__['tuple'](result) )
+
+    @classmethod
+    def new(cls, *args):
+        '''Convert args into a cell tuple'''
+        # create a closure that we can rip its cell list from
+        newinstruction = lambda op,i: op + chr(i&0x00ff) + chr((i&0xff00)/0x100)
+
+        LOAD_CONST = '\x64'     # LOAD_CONST /co_consts/
+        LOAD_DEREF = '\x88'     # LOAD_DEREF /co_freevars/
+        STORE_DEREF = '\x89'    # STORE_DEREF  /co_cellvars/
+        LOAD_CLOSURE = '\x87'   # LOAD_CLOSURE /co_cellvars/
+        MAKE_CLOSURE = '\x86'   # MAKE_CLOSURE /number/ ???
+        STORE_FAST = '\x7d'     # STORE_FAST /co_varnames/
+        LOAD_FAST = '\x7c'      # LOAD_FAST /co_varnames/
+        BUILD_TUPLE = '\x66'    # BUILD_TUPLE /length/
+        POP_TOP = '\x01'
+        RETURN_VALUE = '\x53'
+
+        # generate inner code object
+        result = []
+        for i in range(len(args)):
+            result.append(newinstruction(LOAD_DEREF, i))
+            result.append(POP_TOP)
+        result.append(newinstruction(LOAD_CONST, 0))
+        result.append(RETURN_VALUE)
+
+        freevars = tuple.getclass()( chr(x+65) for x in range(len(args)) )
+        innercodeobj = code.new(0, 0, 0, 0, ''.join(result), (None,), (), (), '', '<closure>', 0, '', freevars, ())
+    
+        # generate outer code object for >= 2.5
+        result = []
+        for i in range(len(args)):
+            result.append( newinstruction(LOAD_CONST, i+1) )
+            result.append( newinstruction(STORE_DEREF, i) )
+            result.append( newinstruction(LOAD_CLOSURE, i) )
+
+        result.append( newinstruction(BUILD_TUPLE, len(args)) )
+        result.append( newinstruction(LOAD_CONST, 0) )
+        result.append( newinstruction(MAKE_CLOSURE, 0) )    # XXX: different for <= 2.4
+        result.append( RETURN_VALUE )
+
+        outercodestring = ''.join(result)
+
+        # build constants list
+        result = list.getclass()(args)
+        result.insert(0, innercodeobj)
+        constants = tuple.getclass()(result)
+
+        # names within outer code object
+        cellvars = tuple.getclass()( chr(x+65) for x in range(len(args)) )
+        outercodeobj = code.new(0, 0, 0, 0, outercodestring, constants, (), (), '', '<function>', 0, '', (), cellvars)
+
+        # finally fucking got it
+        namespace = globals()
+        fn = function.new(outercodeobj, namespace)
+        return fn().func_closure
+
 lookup.add(int)
 lookup.add(str)
 lookup.add(none)
@@ -311,6 +421,7 @@ lookup.add(instancemethod)
 lookup.add(type)
 lookup.add(classobj)
 lookup.add(bool)
+lookup.add(cell)
 
 def dumps(object, **kwds):
     return lookup.dumps(object, **kwds)
@@ -346,4 +457,14 @@ if __name__ == '__main__':
     print b,_b.test(),_b.property
     print a is b
 
-    
+    def test(x):
+        def closure():
+            print 'hello', x
+        return closure
+
+    f = test('computer')
+
+    a = fu.function.dumps(f)
+    b = fu.function.loads(a)
+    b()
+

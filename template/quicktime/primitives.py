@@ -44,3 +44,12 @@ class Matrix(pstruct.type):
         (Fixed, 'Ty'),
         (Fixed, 'w'),
     ]
+
+class pQTString(pstruct.type):
+    _fields_ = [
+        (pint.uint8_t, 'c'),
+        (lambda s: dyn.clone(pstr.string, length=int(s['c'].l)), 's'),
+    ]
+
+    def get(self):
+        return self['s'].get()

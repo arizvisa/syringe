@@ -9,7 +9,7 @@ class ULONG(uint32_t): pass
 class USHORT(uint16_t): pass
 
 class OFFSET(int16_t): pass
-class SECT(pint.penum, ULONG):
+class SECT(pint.enum, ULONG):
     _fields_ = [
         ('DIFSECT', 0xfffffffc),
         ('FATSECT', 0xfffffffd),
@@ -37,7 +37,7 @@ FILE_TIME = TIME_T
 class WCHAR(pstr.wchar_t): pass
 
 ## file header
-class StructuredStorageHeader(pstruct.type):
+class Header(pstruct.type):
     _fields_ = [
         (dyn.array(BYTE, 8), '_abSig'),
         (CLSID, '_clid'),
@@ -92,21 +92,16 @@ class StructuredStorageHeader(pstruct.type):
         assert n not in SECT.enumerations()
 
         sector = self.getsector(n)
-        count = sector.load().size() / StructuredStorageDirectoryEntry_size
+        count = sector.load().size() / DirectoryEntry_size
         return self.newelement(dyn.clone(DirectoryTable, length=count), 'DirectoryTable[%d]'% n, sector.getoffset())
 
-class structuredStorageFile(object):
+class File(Header):
     dif = fat = minifat = list
-
-    def __init__(self, structuredstorageheader):
-        o = structuredstorageheader
-        self.object = o.load()         # we are now in bed with this object....and i don't care
-
     def getfatchain(self, n):   #getglucose?
         result = []
         while True:
             x = self.fat[n]
-            if x == x.ENDOFCHAIN:
+            if int(x) == x.ENDOFCHAIN:
                 break
 
             if x in SECT.enumerations():
@@ -114,7 +109,6 @@ class structuredStorageFile(object):
 
             result.append(x)
             n += 1
-            continue
         return result
 
     def getminifatchain(self, n):
@@ -129,16 +123,15 @@ class structuredStorageFile(object):
 
             result.append(x)
             n += 1
-            continue
         return result
 
     def getdif(self):
-        o = self.object
+        o = self
         dif = [ s for s in o['_sectFat'] ] + self.getlinkeddif()
         return [x for i,x in zip(range(int(o['_csectFat'])), dif)]
 
     def getlinkeddif(self):
-        o = self.object
+        o = self
         currentSector = o['_sectDifStart']
         dif = []
         while int(currentSector) != currentSector.ENDOFCHAIN:
@@ -150,7 +143,7 @@ class structuredStorageFile(object):
         return dif
 
     def getfat(self, dif):
-        o = self.object
+        o = self
         result = []
         for s in dif:
             data = o.getallocationtable(s)
@@ -158,7 +151,7 @@ class structuredStorageFile(object):
         return result
         
     def getminifat(self):
-        o = self.object
+        o = self
         sectors = [ o['_sectMiniFatStart'] ]    # XXX: does this really point to the sector? or the stream?
 
         result = []
@@ -167,12 +160,12 @@ class structuredStorageFile(object):
         return result
 
     def getdirectory(self):
-        o = self.object
+        o = self
         chain = self.getfatchain( int(o['_sectDirStart']) )
         sectors = [ o.getdirectorytable(int(x)) for x in chain ]
 
         # flatten
-        result = DirectoryTable()
+        result = self.newelement(DirectoryTable, 'Directory', 0)
         for x in sectors:
             result.extend(x.load())
         return result
@@ -182,22 +175,22 @@ class structuredStorageFile(object):
         chain = self.getfatchain( int(root['_sectStart']) )
         result = [ self.object.getdirectorytable(int(x)) for x in chain ]
         
-        x = DirectoryTable()
+        result = self.newelement(DirectoryTable, 'MiniDirectory', 0)
         for t in result:
-            x.extend(t.load())
-        return x
+            result.extend(t.load())
+        return result
 
     def extractfatchain(self, chain):
-        o = self.object
+        o = self
         return ''.join([ o.getsector(int(x)).load().serialize() for x in chain ])
 
     def extractminifatchain(self, chain):
         raise NotImplementedError
-        o = self.object
+        o = self
         return ''.join([ o.getsector(int(x)).load().serialize() for x in chain ])
 
 ## directory
-class STGTY(pint.penum, BYTE):
+class STGTY(pint.enum, BYTE):
     _fields_ = [
         ('INVALID', 0),
         ('STORAGE', 1),
@@ -207,12 +200,12 @@ class STGTY(pint.penum, BYTE):
         ('ROOT', 5)
     ]
 
-class DECOLOR(pint.penum, BYTE):
+class DECOLOR(pint.enum, BYTE):
     _fields_ = [('RED', 0), ('BLACK', 1)]
 
-class StructuredStorageDirectoryEntry(pstruct.type):
+class DirectoryEntry(pstruct.type):
     _fields_ = [
-        (pstr.new(32, pstr.wstring), '_ab'),
+        (dyn.clone(pstr.wstring, length=32), '_ab'),
         (WORD, '_cb'),
         (STGTY, '_mse'),
         (DECOLOR, '_bflags'),
@@ -228,10 +221,10 @@ class StructuredStorageDirectoryEntry(pstruct.type):
         (lambda self: dyn.block(128 - self.size()), '__padding__')
     ]
     
-StructuredStorageDirectoryEntry_size = StructuredStorageDirectoryEntry().load().size()
+DirectoryEntry_size = DirectoryEntry().alloc().size()
 
 class DirectoryTable(parray.type):
-    _object_ = StructuredStorageDirectoryEntry
+    _object_ = DirectoryEntry
 
     def names(self):
         return [ x['_ab'].get() for x in self ]
@@ -244,42 +237,37 @@ class DirectoryTable(parray.type):
         raise KeyError(name)
 
 def open(filename):
-    ssh = StructuredStorageHeader()
-    ssh.source = ptypes.provider.file(filename)
-    return structuredStorageFile(ssh)
+    return File(source=ptypes.provider.file(filename))
 
 if __name__ == '__main__':
-    import cdoc; reload(cdoc)
+    import __init__
+    cdoc = __init__
     import ptypes
     from ptypes import utils
 #    filename = 'blocguadalupe.doc'
-    filename = 'org.fpx'
-    self = cdoc.open(filename)
-
-    self = cdoc.StructuredStorageHeader()
-    self.source = ptypes.provider.file(filename)
-    self = cdoc.structuredStorageFile(self)
+    filename = 'null.xls'
+    self = cdoc.open(filename).l
 
     self.dif = self.getdif()
     self.fat = self.getfat( map(int, self.dif) )
-    self.minifat = self.getminifat()
-    self.directory = self.getdirectory()
-    self.minidirectory = self.getminidirectory()
+#    self.minifat = self.getminifat()
+    self.directory = self.getdirectory().l
+#    self.minidirectory = self.getminidirectory()
 
 #    print [ x.get() for x in self.dif]
 #    print [ x.get() for x in self.fat]
 #    print [ x.get() for x in self.minifat]
 
-    print self.getdirectory().names()
+    print self.directory.names()
 
-    print self.object.getminisectorsize()
+    print self.getminisectorsize()
     minidirectory = self.getminidirectory()
     for x in minidirectory.names():
         d = minidirectory.getentry(x)
         print repr(x), repr(d['_sectStart']), repr(d['_ulSize'])
 
-    # figure out how to ge tthe stream representing our minisector shit
-    ministream = self.
+    # figure out how to get the stream representing our minisector shit
+#    ministream = self.
 
     if False:
         # here's our minifat
