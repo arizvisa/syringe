@@ -1,10 +1,21 @@
 '''ptypes with a numerical sort of feel'''
 import ptype,bitmap
 
+def setbyteorder(endianness):
+    for k,v in globals().items():
+        if hasattr(v, '__bases__') and issubclass(v, integer_t) and v is not integer_t:
+            globals()[k] = endianness(v)
+        continue
+    return
+
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
     assert type(ptype) is type and issubclass(ptype, integer_t)
     class newptype(ptype):
+        byteorder = bigendian
+        def shortname(self):
+            return 'bigendian(%s)'% self.__class__.__name__
+
         def __int__(self):  #XXX: should this be renamed to .get()?
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
 
@@ -24,13 +35,17 @@ def bigendian(ptype):
             self.value = res
             return self
 
-    newptype.__name__ = 'bigendian(%s)'% ptype.__name__
+    newptype.__name__ = ptype.__name__
     return newptype
 
 def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
     assert type(ptype) is type and issubclass(ptype, integer_t)
     class newptype(ptype):
+        byteorder = littleendian
+        def shortname(self):
+            return 'littleendian(%s)'% self.__class__.__name__
+
         def __int__(self):
             return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
 
@@ -50,7 +65,7 @@ def littleendian(ptype):
             self.value = res
             return self
 
-    newptype.__name__ = 'littleendian(%s)'% ptype.__name__
+    newptype.__name__ = ptype.__name__
     return newptype
 
 class integer_t(ptype.type):
@@ -62,13 +77,13 @@ class integer_t(ptype.type):
         if self.initialized:
             res = int(self)
 
-            fmt = '0x%%0%dx (%%d)'% (self.length*2)
+            fmt = '0x%%0%dx (%%d)'% (int(self.length)*2)
             res = fmt% (res, res)
         else:
             res = '???'
         return ' '.join([self.name(), res])
 
-integer_t = littleendian(integer_t)
+integer_t = bigendian(integer_t)
 
 class sint_t(integer_t):
     '''Provides signed integer support'''
@@ -186,15 +201,15 @@ if __name__ == '__main__':
 
     string = '\x0a\xbc\xde\xf0'
 
-    v = bigendian(uint32_t)()
-    v.deserialize(string)
-    print v, repr(v.serialize())
-    v.set(0x0abcdef0)
-    print v, repr(v.serialize())
+    a = bigendian(uint32_t)()
+    a.deserialize(string)
+    print a, repr(a.serialize())
+    a.set(0x0abcdef0)
+    print a, repr(a.serialize())
 
-    v = littleendian(uint32_t)()
-    v.deserialize(string)
-    print v, repr(v.serialize())
-    v.set(0x0abcdef0)
-    print v, repr(v.serialize())
+    b = littleendian(uint32_t)()
+    b.deserialize(string)
+    print b, repr(b.serialize())
+    b.set(0x0abcdef0)
+    print b, repr(b.serialize())
 

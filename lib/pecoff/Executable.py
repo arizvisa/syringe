@@ -1,6 +1,3 @@
-import sys
-sys.path.append('f:/work')
-
 import ptypes
 from ptypes import *
 import definitions

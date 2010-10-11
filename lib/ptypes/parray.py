@@ -240,7 +240,7 @@ class infinite(terminated):
                 ofs += n.blocksize()
             return super(type, self).load()
         except StopIteration:
-            if self.parent:
+            if self.parent is not None:
                 path = ' ->\n\t'.join(self.backtrace())
                 print "Stopped reading %s at offset %x\n\t%s"%(self.name(), self.getoffset(), path)
         return self

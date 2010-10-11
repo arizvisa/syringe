@@ -419,38 +419,38 @@ class pcontainer(type):
 
             return [i]
 
-    def at(self, offset):
-        # XXX: this should probably not return a list of names, and should just return the element
-        assert self.initialized
-
-        element = None
-        for i,n in enumerate(self.value):
-            nmin = n.getoffset()
-            nmax = nmin + n.blocksize()
-            if (offset >= nmin) and (offset < nmax):
-                element = n
-                break
-            continue
-
-        assert element is not None, 'Specified offset %x not found'%offset
+    def at(self, offset, recurse=True, **kwds):
+        if not recurse:
+            for i,n in enumerate(self.value):
+                nmin = n.getoffset()
+                nmax = nmin + n.blocksize()
+                if (offset >= nmin) and (offset < nmax):
+                    return n
+                continue
+            raise ValueError('Specified offset %x not found'%offset)
+    
+        res = self.at(offset, False, **kwds)
 
         # drill into containees for more detail
         try:
-            return element.at(offset)
+            return res.at(offset, recurse=recurse, **kwds)
         except (NotImplementedError, AttributeError):
             pass
-        return element
-
-    def walkto(self, offset):
+        return res
+        
+    def walkto(self, offset, **kwds):
         '''will walk all the objects needed to reach a particular offset'''
+        obj = self
 
-        def __traverse(s):
-            if s.parent is not self:
-                return s.parent
-            raise StopIteration
-
-        obj = self.at(offset)
-        return obj.traverse( __traverse )
+        # drill into containees for more detail
+        try:
+            while True:
+                yield obj
+                obj = obj.at(offset, recurse=False, **kwds)
+            assert False is True
+        except (NotImplementedError, AttributeError):
+            pass
+        return
 
     def setoffset(self, value, recurse=False):
         '''modifies the current offset'''

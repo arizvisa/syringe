@@ -29,6 +29,7 @@ class object(store):
                     break
                 continue
         self.hiddensegmentname = hiddensegmentname
+        return self
 
     def __sym_externals(self):
         for s in self.symbols.get():
@@ -276,6 +277,7 @@ class executable(store):
 
         self.relocations = self.__getrelocations()
         self.update( self.__getnamespace() )
+        return self
 
     def getexternals(self):
         splitter = self.__splitModuleName
@@ -579,12 +581,13 @@ class library(container):
         return self.load(pecoff.Archive.open(filename, mode='rb'), os.path.basename(filename))
 
     def load(self, cofflibrary, modulename):
-        warn("linker.coff.library's symbol table updating is broken.")
+        warn("linker.coff.library's import symbol table updating is broken.")
         self.modulename = modulename
         self.value = cofflibrary.load()
         self.stores,self.importmembers = self.__getstoresandimportmembers()
         self.imports = self.__getimports(self.importmembers)
         self.update( self.__getnamespace() )
+        return self
 
     def getmembercount(self):
         return self.value.getmembercount()

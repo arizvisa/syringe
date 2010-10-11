@@ -408,6 +408,50 @@ class cell(marshallable):
         fn = function.new(outercodeobj, namespace)
         return fn().func_closure
 
+class generator(special):
+    id = 15
+    attributes = [
+        'gi_code', 'gi_frame', 'gi_running'
+    ]
+
+    @classmethod
+    def getclass(cls):
+        return (x for x in []).__class__
+
+    @classmethod
+    def deserialize_dict(cls, object, **kwds):
+        raise NotImplementedError('Not possible yet to instantiate a generator object')
+
+        # XXX: we "could" get obnoxious and bypass the readonly attribute requirement
+        #      in order to copy a code object to an already existing generator.
+
+        result = (object[k] for k in cls.attributes)
+        result = __builtins__['tuple'](result)
+        return cls.new(*result)
+
+    @classmethod
+    def new(cls, codeobj, frame, running):
+        return cls.getclass()(codeobj, frame, running)
+
+class frame(special):
+    id = 16
+    attributes = [
+        'f_back', 'f_builtins', 'f_code', 'f_exc_traceback', 'f_exc_type', 'f_exc_value',
+        'f_globals', 'f_lasti', 'f_lineno', 'f_locals', 'f_restricted', 'f_trace'
+    ]
+
+    @classmethod
+    def getclass(cls):
+        return (x for x in []).gi_frame.__class__
+
+    @classmethod
+    def deserialize_dict(cls, object, **kwds):
+        raise NotImplementedError('Not possible yet to instantiate a frame object')
+
+    @classmethod
+    def new(cls, *args):
+        return cls.getclass()(*args)
+
 lookup.add(int)
 lookup.add(str)
 lookup.add(none)

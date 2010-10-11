@@ -228,7 +228,7 @@ if False:
 class Protect(TagS):
     tag = 24
     version = 2
-    _fields = []
+    _fields_ = []
 
 class End(TagS):
     tag = 0
@@ -595,6 +595,26 @@ class FileAttributes(TagB):
         (2, 'Reserved'),
         (1, 'UseNetwork'),
         (24, 'Reserved[7]'),
+    ]
+
+class DefineSceneAndFrameLabelData(TagS):
+    tag = 86
+    class Scene(pstruct.type):
+        _fields_ = [
+            (as3.u32, 'Name'),
+            (STRING, 'Offset'),
+        ]
+    class Frame(pstruct.type):
+        _fields_ = [
+            (as3.u32, 'Num'),
+            (STRING, 'Label'),
+        ]
+
+    _fields_ = [
+        (as3.u32, 'SceneCount'),
+        (lambda s: dyn.array(s.Scene, int(s['SceneCount'].l)), 'Scene'),
+        (as3.u32, 'FrameLabelCount'),
+        (lambda s: dyn.array(s.Frame, int(s['FrameLabelCount'].l)), 'Scene'),
     ]
 
 ##############################################

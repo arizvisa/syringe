@@ -1,6 +1,13 @@
 import ptype,utils,bitmap
 import types
 
+def setbyteorder(endianness):
+    for k,v in globals().items():
+        if hasattr(v, '__bases__') and issubclass(v, type) and v is not type:
+            globals()[k] = endianness(v)
+        continue
+    return
+
 def ispbinarytype(t):
     return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
 
@@ -26,15 +33,23 @@ def forcepbinary(p, self):
 ### endianness
 def bigendian(p):
     class bigendianpbinary(p):
+        byteorder=bigendian
+        def shortname(self):
+#            return 'bigendian(%s)'% self.__class__.__name__
+            return self.__class__.__name__
+
         def serialize(self):
             p = bitmap.new(self.getinteger(), self.bits())
             return bitmap.data(p)
 
-    bigendianpbinary.__name__ = p.__name__
     return bigendianpbinary
 
 def littleendian(p):
     class littleendianpbinary(p):
+        byteorder=littleendian
+        def shortname(self):
+            return 'littleendian(%s)'% self.__class__.__name__
+
         def deserialize_stream(self, source):
             size = self.alloc().blocksize()     # XXX: this means we can't be dynamic unless user defines the size
             block = ''.join([source.next() for x in xrange(size)])
@@ -44,7 +59,6 @@ def littleendian(p):
             p = bitmap.new(self.getinteger(), self.bits())
             return ''.join(reversed(bitmap.data(p)))
             
-    littleendianpbinary.__name__ = p.__name__
     return littleendianpbinary
 
 class type(ptype.pcontainer):
@@ -1063,13 +1077,14 @@ if __name__ == '__main__':
             _fields_ = [ (10, 't'), (6, 'l') ]
 
         class broken(pstruct.type):
-            _fields_ = [(RECORDHEADER, 'h'), (pint.uint32_t, 'v')]
+            _fields_ = [(RECORDHEADER, 'h'), (pint.littleendian(pint.uint32_t), 'v')]
 
         z = broken().alloc()
         z['v'].set(8)
 
         z['h']['l'] = 4
         z['h']['t'] = 0x45
+
         if z.serialize() == correct:
             raise Success
         raise Failure

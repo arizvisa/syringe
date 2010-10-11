@@ -17,8 +17,8 @@ class RecordHeader(pstruct.type):
 
     _fields_ = [
         (__verinstance, 'ver/instance'),
-        (pint.uint16_t, 'type'),
-        (pint.uint32_t, 'length')
+        (pint.littleendian(pint.uint16_t), 'type'),
+        (pint.littleendian(pint.uint32_t), 'length')
     ]
 
     def __repr__(self):

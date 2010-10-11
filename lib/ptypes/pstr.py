@@ -5,8 +5,6 @@ class _char_t(pint.integer_t):
     length = 1
 
 class char_t(_char_t):
-    length = 1
-
     def set(self, value):
         self.value = value
         return self

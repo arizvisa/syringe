@@ -95,8 +95,14 @@ class _addr_t(ptype.type):
 
     d = property(fget=dereference)
 
-class addr32_t(_addr_t, pint.uint32_t): pass
-class addr64_t(_addr_t, pint.uint64_t): pass
+import sys
+if sys.byteorder == 'big':
+    class addr32_t(_addr_t, pint.uint32_t): pass
+    class addr64_t(_addr_t, pint.uint64_t): pass
+elif sys.byteorder == 'little':
+    class addr32_t(_addr_t, pint.littleendian(pint.uint32_t)): pass
+    class addr64_t(_addr_t, pint.littleendian(pint.uint64_t)): pass
+
 class addr_t(addr32_t): pass
 
 def pointer(object):

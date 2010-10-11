@@ -72,7 +72,6 @@ class File(pstruct.type):
         (__data, 'data')
     ]
 
-
 if __name__ == '__main__':
     import sys
     import ptypes,__init__ as swf

@@ -336,7 +336,7 @@ class traits_info(pstruct.type):
         return ' '.join([self.name(), '%s<%x>'%(multiname,n), repr(data)])
 
 class trait_slot(pstruct.type):
-    class _vkind(pint.enum, u8):
+    class __vkind(pint.enum, u8):
         _fields_ = [
             ('Int', 0x03),
             ('Uint', 0x04),
@@ -370,11 +370,6 @@ class trait_slot(pstruct.type):
             0x1a : 'namespace',
             5 : 'namespace',
         }
-
-    def __vkind(self):
-        if int(self['vindex'].l) > 0:
-            return self._vkind
-        return ptype.type
 
     _fields_ = [
         (u30, 'slot_id'),

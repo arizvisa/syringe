@@ -32,8 +32,8 @@ class RecordGeneral(__init__.RecordGeneral):
         return dyn.clone(cls, blocksize=lambda s:l)
 
     _fields_ = [
-        (pint.uint16_t, 'type'),
-        (pint.uint16_t, 'length'),
+        (pint.littleendian(pint.uint16_t), 'type'),
+        (pint.littleendian(pint.uint16_t), 'length'),
         (__data, 'data'),
         (__extra, 'extra')
     ]
