@@ -24,6 +24,9 @@ def length(instruction):
 
 def stringToNumber(string):
     '''given a string encoded in the native byte-order, will produce an integer'''
+
+    # i hate this function name, but i wanted to also be able to pass the length
+    #   as a variable
     res = bitmap.new(0,0)
     for ch in string:
         res = bitmap.insert(res, (ord(ch),8))
@@ -72,11 +75,23 @@ def isInstruction(value):
     return type(value) is tuple and len(value) == 6
 
 def getRelativeAddress(pc, instruction):
-    res = stringToNumber(getImmediate(instruction))
+    imm = getImmediate(instruction)
+    l = len(imm)
+
+    ofs = stringToNumber(imm)
     pc += length(instruction)
-    if res & 0x80000000:
-        return pc - (0x100000000 - res)
-    return pc + res
+
+    if ofs & 0x80000000:
+        return pc - (0x100000000 - ofs)
+
+    elif (l == 2) and (ofs & 0x8000):
+        return pc - (0x10000 - ofs)
+
+    elif (l == 1) and (ofs & 0x80):
+        return pc - (0x100 - ofs)
+
+    # otherwise we're just jumping forward
+    return pc + ofs
 
 def isConditionalBranch8(instruction):
     opcode = getOpcode(instruction)
@@ -229,3 +244,29 @@ if __name__ == '__main__':
         print repr(insn)
         print 'mem',isBranch(insn),isMemoryBranch(insn)
     
+    if False:
+        code = '\x75\x09'
+        insn = decode(code)
+        a = getRelativeAddress(0x1000d6ae, insn)
+        print a == 0x1000d6b9
+
+        code = '\x75\xde'
+        insn = decode(code)
+        a = getRelativeAddress(0x1000d670, insn)
+        print a == 0x1000d650
+
+        code = '\xe8\x47\x4f\x37\x00'
+        insn = decode(code)
+        a = getRelativeAddress(0x1000d6b4, insn)
+        print a == 0x10382600
+
+        code = '\x66\xe9\x42\x03'
+        insn = decode(code)
+        a = getRelativeAddress(0x1000e1b5, insn)
+        print a == 0x1000e4fb
+
+        code = '\x66\xe9\x42\xd3'
+        insn = decode(code)
+        a = getRelativeAddress(0x10006418, insn)
+        print a == 0x1000375e
+        
