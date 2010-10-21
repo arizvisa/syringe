@@ -98,7 +98,6 @@ class type(__parray_generic):
             self.value.append(n)
             n.deserialize(source)
             ofs += n.blocksize()
-
         return super(type, self).deserialize(None)
 
     def load(self):

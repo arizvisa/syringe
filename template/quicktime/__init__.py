@@ -19,3 +19,6 @@ class File(ptypes.parray.infinite):
         assert len(res) == 1, repr(res)
         return res[0]
 
+    def __repr__(self):
+        types = ','.join([x['type'].serialize() for x in self])
+        return ' '.join([self.name(), 'atoms[%d] ->'% len(self), types])

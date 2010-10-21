@@ -103,6 +103,10 @@ class AtomList(parray.block):
         assert len(res) == 1, repr(res)
         return res[0]
 
+    def __repr__(self):
+        types = ','.join([x['type'].serialize() for x in self])
+        return ' '.join([self.name(), 'atoms[%d] ->'% len(self), types])
+
 ### list of atoms
 class Unknown(dyn.block(0)):
     type = None
@@ -117,6 +121,7 @@ class DINF(AtomList, AtomType): type = 'dinf'
 class UDTA(AtomList, AtomType): type = 'udta'
 class STBL(AtomList, AtomType): type = 'stbl'
 class GMHD(AtomList, AtomType): type = 'gmhd'
+class META(AtomList, AtomType): type = 'meta'
 #class MDAT(AtomList, AtomType): type = 'mdat'  # XXX: sometimes this is not a container
 class MDAT(dyn.block(0), AtomType):
     type = 'mdat'

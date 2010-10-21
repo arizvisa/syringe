@@ -143,6 +143,7 @@ class type(object):
     offset = 0
     length = 0      # int
     value = None    # str
+    v = property(fget=lambda s: s.value)   # abbr to get to .value
 
     initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.length)    # bool
     source = None   # ptype.provider
@@ -277,7 +278,7 @@ class type(object):
     def load(self):
         '''sync self with some specified data source'''
         self.source.seek( self.getoffset() )
-        self.value = self.transform( self.source.consume(self.blocksize()) )
+        self.value = self.source.consume(self.blocksize())
         return self
 
     def commit(self):
@@ -290,21 +291,29 @@ class type(object):
     def serialize(self):
         '''return self as a byte stream'''
         if self.initialized:
-            return str(self.value)
+            result = str(self.value)
+            bs = self.blocksize()
+            if len(result) < bs:
+                padding = (bs - len(result)) * self.attrs.get('padding', '\x00')
+                return result + padding
+            assert len(result) == bs, 'value of %s is larger than blocksize (%d>%d)'%(self.shortname(), len(result), bs)
+            return result
         raise ValueError('%s is uninitialized'% self.name())
 
     def deserialize(self, source):
+        '''initialize self using source as a bytestream'''
         self.value = ''
         return self.deserialize_stream(iter(source))
 
     def deserialize_stream(self, source):
-        s = self.blocksize()
-        block = ''.join( (x for i,x in zip(xrange(s), source)) )
-        if len(block) < s:
-            self.value = self.transform(block)
+        bs = self.blocksize()
+        block = ''.join( (x for i,x in zip(xrange(bs), source)) )
+        if len(block) < bs:
+            self.value = block[:self.size()]
             path = ' ->\n\t'.join(self.backtrace())
-            raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), s, path))
-        self.value = self.transform(block)
+            raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), bs, path))
+
+        self.value = block[:self.size()]
         return self
 
     ## representation
@@ -338,10 +347,6 @@ class type(object):
         except StopIteration:
             result.l # try to load it anyways
         return result
-
-    ## a hook for zef
-    def transform(self, data):
-        return data
 
 class pcontainer(type):
     '''
@@ -393,32 +398,6 @@ class pcontainer(type):
             res = '???'
         return  ' '.join([self.name(), res])
 
-    if False:
-        def at(self, offset):
-            # XXX: this should probably not return a list of names, and should just return the element
-            assert self.initialized
-
-            element = None
-            for i,n in enumerate(self.value):
-                nmin = n.getoffset()
-                nmax = nmin + n.blocksize()
-                if (offset >= nmin) and (offset < nmax):
-                    element = n
-                    break
-                continue
-
-            assert element is not None, 'Specified offset %x not found'%offset
-
-            # drill into containees for more detail
-            try:
-                l = element.at(offset)
-                l.append(i)
-                return l
-            except (NotImplementedError, AttributeError):
-                pass
-
-            return [i]
-
     def at(self, offset, recurse=True, **kwds):
         if not recurse:
             for i,n in enumerate(self.value):
@@ -464,20 +443,38 @@ class pcontainer(type):
         return res
 
     def serialize(self):
-        return ''.join( (x.serialize() for x in self.value) )
+        result = ''.join( (x.serialize() for x in self.value) )
+        bs = self.blocksize()
+        if len(result) < bs:
+            padding = (bs - len(result)) * self.attrs.get('padding', '\x00')
+            return result + padding
+        if len(result) > bs:
+            #XXX: serialized contents is larger than user allowed us to be
+            #result = result[:bs]
+            pass
+        return result
 
     def load(self):
         assert self.value is not None, 'Parent must initialize self.value'
 
         self.source.seek(self.getoffset())
-        block = self.transform( self.source.consume(self.blocksize()) )
+        block = self.source.consume(self.blocksize())
         stream = iter(block)
         return self.deserialize_stream(stream)
 
     def deserialize(self, source):
         assert self.value is not None and source is None, 'Parent must initialize self.value'
         block = ''.join( (x.serialize() for x in self.value) )
-        block = self.transform(block)
+
+        bs = self.blocksize()
+        if len(block) < bs:
+            padding = (bs - len(block)) * self.attrs.get('padding', '\x00')
+            block += padding
+
+        if len(block) > bs:
+            path = ' ->\n\t'.join(self.backtrace())
+            raise StopIteration("Error reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), bs, path))
+
         return self.deserialize_stream(iter(block))
 
     def deserialize_stream(self, source):
@@ -490,28 +487,46 @@ class pcontainer(type):
         return self
 
 if __name__ == '__main__':
-    ptype = type
-    class p10bytes(ptype):
-        length = 10
+    import ptype
+    if False:
+        class p10bytes(ptype.type):
+            length = 10
 
-    import provider
+        import provider
 
-    x = p10bytes()
-    print repr(x)
-#    x.load()
-#    print repr(x)
+        x = p10bytes()
+        print repr(x)
+    #    x.load()
+    #    print repr(x)
 
-    x.source = provider.memory()
-    x.setoffset(id(x))
-    x.load()
-    print repr(x)
+        x.source = provider.memory()
+        x.setoffset(id(x))
+        x.load()
+        print repr(x)
 
-#    x.value = '\x7fHAI\x01\x01\x01\x00\x00\x00'
-#    x.commit()
+    if False:
+        x.value = '\x7fHAI\x01\x01\x01\x00\x00\x00'
+        x.commit()
 
-#    x.alloc()
-#    x.deserialize(input.file.read())
-#    x.set('hello there okay')
+        x.alloc()
+        x.deserialize(input.file.read())
+        x.set('hello there okay')
 
-#    x.set("okay, what the fuck. please work. i'm tired.")
-#    x.commit()
+        x.set("okay, what the fuck. please work. i'm tired.")
+        x.commit()
+
+if __name__ == '__main__':
+    class u8(ptype.type): length=1
+    class u16(ptype.type): length=2
+    class u32(ptype.type): length=4
+    
+    x = ptype.pcontainer()
+    x.append( u8() )
+    x.append( u32() )
+    x.append( u16() )
+    x.append( u16() )
+    x.append( u32() )
+    x.append( u16() )
+    x.append( u8() )
+    x.append( u8() )
+    x.append( u16() )

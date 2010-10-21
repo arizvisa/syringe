@@ -1,64 +1,12 @@
-#import sys
-#sys.path.append('/work/code/ptypes.git')
-
 import ptypes
 from ptypes import *
+
+raise NotImplementedError('Borked for now')
 
 def CBinary(args):
     class _CBinary(pbinary.struct):
         _fields_ = args[:]
     return _CBinary
-
-def blockread(ptype, length):
-    class cls(ptype):
-        def deserialize(self, iterable):
-            input = ''.join([ x for i,x in zip(range(length), iterable)])
-            super(cls, self).deserialize(input)
-
-    cls.__name__ = 'blockread(%s, %d)'% (ptype.__name__, length)
-    return cls
-
-def infiniteelements(ptype):
-    assert issubclass(ptype, parray.type)
-    class cls(ptype):
-        def deserialize(self, iterable):
-            iterable = iter(iterable)
-            self.value = []
-            self.length = 0
-            try:
-                while True:
-                    x = self.newchild(self._object_)
-                    x.deserialize(iterable)
-                    x.__name__ = '%d'% len(self.value)
-                    self.append(x)
-
-            except: # StopIteration:
-                self.length = len(self.value)
-
-    cls.__name__ = 'infiniteelements(%s)'% ptype.__name__
-    return cls
-
-def infiniteread(ptype):
-    class cls(ptype):
-        def deserialize(self, iterable):
-            res = ''.join( list(iterable) )
-            self.length = len(res)
-            super(cls, self).deserialize(res)
-
-    cls.__name__ = 'infiniteread(%s)'% ptype.__name__
-    return cls
-
-if False:       # FIXME
-    def nofail(ptype):
-        class cls(ptype):
-            def deserialize(self, iterable):
-                try:
-                    super(cls, self).deserialize(input)
-                except:
-                    pass
-
-        cls.__name__ = 'nofail(%s)'% ptype.__name__
-        return cls
 
 def jpegerator(iterable):
     iterable=iter(iterable)
@@ -84,7 +32,7 @@ class header(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'marker'),
         (pint.uint16_t, 'length'),
-        (lambda self: dyn.block(self['length'] - 2)(), 'data'),
+        (lambda self: dyn.block(self['length'].l - 2), 'data'),
     ]
 
     @classmethod
@@ -118,7 +66,7 @@ class JFIF(header):
         (pint.uint16_t, 'Ydensity'),
         (pint.uint8_t, 'Xthumbnail'),
         (pint.uint8_t, 'Ythumbnail'),
-        (lambda self: dyn.block( 3 * (self['Xthumbnail']*self['Ythumbnail']))(), 'RGB')
+        (lambda self: dyn.block( 3 * (self['Xthumbnail'].l*self['Ythumbnail'].l)), 'RGB')
     ]
 
 class SOI(header):
@@ -146,7 +94,7 @@ class SOF(header):
         (pint.uint16_t, 'height'),
         (pint.uint16_t, 'width'),
         (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array( SOF.component, self['number of components'])(), 'components')
+        (lambda self: dyn.array( SOF.component, self['number of components'].l), 'components')
     ]
 
 class APP12(header):
@@ -194,14 +142,14 @@ class DQT(header):
     _fields_ = [
         (pint.uint16_t, 'marker'),
         (pint.uint16_t, 'length'),
-        (lambda self: blockread(DQTTableArray, self['length']-2)(), 'table')    # FIXME: get this shit working too
+        (lambda self: dyn.clone(DQTTableArray, blocksize=lambda:self['length'].l-2), 'table')    # FIXME: get this shit working too
     ]
 
 class HuffmanTable(pstruct.type):
     _fields_ = [
         (CBinary([(4, 'class'), (4, 'destination')]), 'table'),
         (dyn.block(16), 'count'),
-        (lambda self: dyn.block(reduce(lambda x,y:x+y, [ord(x) for x in self['count'].serialize()]))(), 'symbols') # FIXME: this needs to be calculated correctly somehow, but i can't find the docs for it
+        (lambda self: dyn.block(reduce(lambda x,y:x+y, [ord(x) for x in self['count'].l.serialize()])), 'symbols') # FIXME: this needs to be calculated correctly somehow, but i can't find the docs for it
     ]
 
     def dumpValue(self, indent=''):
@@ -242,7 +190,7 @@ class DHT(header):
     _fields_ = [
         (pint.uint16_t, 'marker'),
         (pint.uint16_t, 'length'),
-        (lambda self: blockread(infiniteelements(HuffmanTableArray),self['length']-2)(), 'table')
+        (lambda self: dyn.clone(HuffmanTableArray,blocksize=lambda:self['length'].l-2), 'table')
     ]
 
 class SOS(header):
@@ -259,7 +207,7 @@ class SOS(header):
         (pint.uint16_t, 'marker'),
         (pint.uint16_t, 'length'),
         (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array(SOS.component, self['number of components'])(), 'component'),
+        (lambda self: dyn.array(SOS.component, self['number of components'].l), 'component'),
         (pint.uint8_t, 'start of spectral selection'),
         (pint.uint8_t, 'end of spectral selection'),
         (CBinary([(4,'high'),(4,'low')]), 'successive approximation')
@@ -285,7 +233,7 @@ class Jpeg(parray.type):
         while string:
             x = header.lookupByMarker(string[:2])()
             x.deserialize(string)
-            x.setOffset(ofs)
+            x.setoffset(ofs)
             self.append(x)
 
             ofs += x.size()
@@ -304,7 +252,7 @@ class Jpeg(parray.type):
 
         sosdata = dyn.block(count, name='SCANDATA')()
         sosdata.deserialize(string[:count])
-        sosdata.setOffset(ofs)
+        sosdata.setoffset(ofs)
         self.append(sosdata)
 
         string = string[count:]
@@ -312,8 +260,10 @@ class Jpeg(parray.type):
 
         x = header.lookupByMarker(string)()
         x.deserialize(string)
-        x.setOffset(ofs)
+        x.setoffset(ofs)
         self.append(x)
+
+class File(Jpeg): pass
 
 def getFileContents(path):
     f = file(path, 'rb')

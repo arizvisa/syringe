@@ -32,21 +32,15 @@ class File(pstruct.type):
             print 'zlib: decompressed %x to %x bytes'%(len(block),self.source.size())
             return super(File.cdata, self).load()
 
-        def deserialize(self, source):
-            block = ''.join([x for i,x in zip(xrange(self.blocksize()), source)])
-            s = zlib.decompress(block)
-            print 'zlib: decompressed %x to %x bytes'%(len(block),len(s))
-            return super(File.cdata, self).deserialize(s)
+        if False:
+            def deserialize(self, source):
+                block = ''.join([x for i,x in zip(xrange(self.blocksize()), source)])
+                s = zlib.decompress(block)
+                print 'zlib: decompressed %x to %x bytes'%(len(block),len(s))
+                return super(File.cdata, self).deserialize(s)
 
         def blocksize(self):
             raise NotImplementedError
-
-    if False:
-        def transform(self, data):
-            data = zlib.decompress(data)
-            source = ptypes.provider.string(self.parent['header'].serialize() + data)
-            self.parent.source = self.source = source
-            return data
 
     class data(pstruct.type):
         _fields_ = [

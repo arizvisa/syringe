@@ -13,7 +13,8 @@ def printable(s):
 
 def hexrow(value, offset=0, length=16, breaks=[8]):
     '''
-    return a formatted hexrow. guaranteed to always return the same length string...i hope.
+    return a formatted hexrow.
+    guaranteed to always return the same length string...i hope.
     '''
     value = str(value)[:length]
     extra = length - len(value)
@@ -36,11 +37,8 @@ def hexrow(value, offset=0, length=16, breaks=[8]):
 
     return '%s  %s  %s'% (left, middle, right)
 
-def hexdump(value, offset=0, length=16, **kwds):
-    '''
-    return a formatted hexdump
-    logic _not_ ripped from scapy.py
-    '''
+def hexdump(value, offset=0, length=16, rows=None, **kwds):
+    '''return a formatted hexdump'''
 
     # TODO: should prolly make this an iterator somehow...
     value = iter(value)
@@ -56,11 +54,15 @@ def hexdump(value, offset=0, length=16, **kwds):
         return res
 
     getRow = lambda o: hexrow(data, offset=o, **kwds)
+    
     res = []
     (ofs, data) = offset, tryRead(value, length)
-    while len(data) == length:
+    for i in infiniterange(1, rows):
         res.append( getRow(ofs) )
         ofs, data = (ofs + length, tryRead(value, length))
+        if len(data) < length:
+            break
+        continue
 
     if len(data) > 0:
         res.append( getRow(ofs) )
