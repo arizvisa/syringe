@@ -174,6 +174,10 @@ class type(object):
 
     def blocksize(self):
         '''Can be overloaded to define the block's size'''
+
+        # XXX: overloading will always provide a side effect of modifying the .source's offset
+        #        make sure to fetch the blocksize first before you .getoffset() on something
+
         return self.size()
 
     def __getparent_type(self,type):
@@ -456,9 +460,9 @@ class pcontainer(type):
 
     def load(self):
         assert self.value is not None, 'Parent must initialize self.value'
-
+        bs = self.blocksize()
         self.source.seek(self.getoffset())
-        block = self.source.consume(self.blocksize())
+        block = self.source.consume(bs)
         stream = iter(block)
         return self.deserialize_stream(stream)
 
