@@ -1,6 +1,5 @@
 #instruction = (prefix, opcode, modrm, sib, disp, immediate)
-
-import optable,typesize
+import bitmap,optable,typesize
 
 prefix_string = "\x26\x2e\x36\x3e\x64\x65\x66\x67\xf0\xf2\xf3"
 prefix_lookup = dict([(_,None) for _ in prefix_string])
@@ -32,6 +31,23 @@ def getdisp16length(modrm, prefixes):
     return [0, typesize.byte, typesize.halfword, 0][ (ord(modrm) & 0xc0)>>6 ]
 def getdisp32length(modrm, prefixes):
     return [0, typesize.byte, typesize.word, 0][ (ord(modrm) & 0xc0)>>6 ]
+
+def decodeInteger(string):
+    '''given a string encoded in the native byte-order, will produce an integer'''
+    res = bitmap.new(0,0)
+    for ch in string:
+        res = bitmap.insert(res, (ord(ch),8))
+    res,_ = res
+    return res
+
+def encodeInteger(number, bytes):
+    '''given an integer and a number of bytes, will return a string encoded in the native endianness'''
+    counter = bitmap.new(number,bytes*8)
+    res = ''
+    while counter[1] > 0:
+        counter,_ = bitmap.consume(counter,8)
+        res += chr(_)
+    return res
 
 def consume(iterable):
     '''given a byte generator, will consume an instruction'''

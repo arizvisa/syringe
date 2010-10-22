@@ -1,11 +1,27 @@
-import bitmap
-import optable,decoder
-from decoder import isprefix,consume
+import optable,decoder,modrm
+
+# XXX: figure out how to add these explicit imports to the doc output
+#      for this module. (without having to use __all__)
+
+from decoder import isprefix,consume,decodeInteger,encodeInteger
 lookup = optable.Lookup
 
+# equivalent to decoder.consume(iter(string)) ->
+#     (prefix, opcode, modrm, sib, disp, immediate)
 decode = lambda string: consume(iter(string))
 
+def extractmodrm(instruction):
+    '''Return the (Mod, Reg, r/m) components of an instruction'''
+    modrm = getModrm(instruction)
+    return decoder.extractmodrm( decodeInteger(modrm) )
+
+def extractsib(instruction):
+    '''Returns (scale,index,base) of an instruction'''
+    sib = getSib(instruction)
+    return decoder.extractsib( decodeInteger(sib) )
+
 def disassemble(codeblock):
+    '''Disassembles string into a list of instruction tuples'''
     result = []
     code = iter(codeblock)
     try:
@@ -18,31 +34,19 @@ def disassemble(codeblock):
     return result
 
 def new():
+    '''A new empty instruction'''
     return ('','','','','','')
+
 def length(instruction):
     return len(''.join(instruction))
 
 def stringToNumber(string):
-    '''given a string encoded in the native byte-order, will produce an integer'''
-
-    # i hate this function name, but i wanted to also be able to pass the length
-    #   as a variable
-    res = bitmap.new(0,0)
-    for ch in string:
-        res = bitmap.insert(res, (ord(ch),8))
-    res,_ = res
-    return res
-
+    '''This function name is deprecated in favor of encodeInteger'''
+    return decodeInteger(string)
 def numberToString(number, bytes):
-    '''given an integer and a number of bytes, will return a string encoded in the native endianness'''
-    counter = bitmap.new(number,bytes*8)
-    res = ''
-    while counter[1] > 0:
-        counter,_ = bitmap.consume(counter,8)
-        res += chr(_)
-    return res
+    '''This function name is deprecated in favor of encodeInteger'''
+    return encodeInteger(number, bytes)
 
-#instruction = (prefix, opcode, modrm, sib, disp, immediate)
 def getPrefix(instruction): return instruction[0]
 def getOpcode(instruction): return instruction[1]
 def getModrm(instruction): return instruction[2]
@@ -51,6 +55,7 @@ def getDisplacement(instruction): return instruction[4]
 def getImmediate(instruction): return instruction[5]
 
 #instruction = (prefix, opcode, modrm, sib, disp, immediate)
+
 def setPrefix(instruction, value):
     n = instruction
     return (value, n[1], n[2], n[3], n[4], n[5])
@@ -75,10 +80,11 @@ def isInstruction(value):
     return type(value) is tuple and len(value) == 6
 
 def getRelativeAddress(pc, instruction):
+    '''Given the specified instruction and address, will return the target branch address'''
     imm = getImmediate(instruction)
     l = len(imm)
 
-    ofs = stringToNumber(imm)
+    ofs = decodeInteger(imm)
     pc += length(instruction)
 
     if ofs & 0x80000000:
@@ -143,6 +149,7 @@ def isFarJmp(instruction):
     return False
 
 ### XXX: these branch tests will need to be tested
+
 def isRegisterBranch(instruction):
     if isJmpFF(instruction):
         modrm = getModrm(instruction)
@@ -213,6 +220,7 @@ def isCall(instruction):
     return isRelativeCall(instruction) or isMemoryCall(instruction) or isRegisterCall(instruction) or isAbsoluteCall(instruction)
 
 def isReturn(instruction):
+    '''retn and friends'''
     return getOpcode(instruction) in ['\xc2', '\xc3', '\xca', '\xcb', '\xcf']
 
 if __name__ == '__main__':
