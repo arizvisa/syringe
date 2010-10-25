@@ -1,5 +1,6 @@
 import ptypes
 from ptypes import *
+ptypes.setbyteorder(ptypes.bigendian)
 
 class int8(pint.int8_t): pass
 class uint8(pint.uint8_t): pass
@@ -9,6 +10,7 @@ class Long(pint.uint32_t): pass
 class Mode(pint.uint16_t): pass
 class Pattern(pint.uint64_t): pass
 class Point(pint.uint32_t): pass
+
 class Rect(pstruct.type):
     _fields_ = [
         (Integer, 'top'),

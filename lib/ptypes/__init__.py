@@ -8,13 +8,19 @@ import utils
 __all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn,provider,utils'.split(',')
 
 ## globally changing the ptype provider
-def setsource(provider):
-    ptype.type.source = provider
+def setsource(prov):
+    '''Sets the default ptype provider to the one specified'''
+    assert issubclass(prov.__class__, provider.provider), 'Needs to be of type %s'% repr(provider.provider)
+    ptype.type.source = prov
 
-## globally changing the endianness of all new 
+## globally changing the endianness of all new pint types
 class littleendian(object): pass
 class bigendian(object): pass
 def setbyteorder(endianness):
+    '''
+        _Globally_ sets the integer byte order to the endianness specified.
+        can be either .bigendian or .littleendian
+    '''
     if endianness is littleendian:
         pint.setbyteorder(pint.littleendian)
     elif endianness is bigendian:
@@ -38,3 +44,7 @@ from ptype import isptype,ispcontainer
 
 from provider import file,memory
 from utils import hexdump
+
+#
+__all__+= 'setsource,littleendian,bigendian,setbyteorder'.split(',')
+__all__+= 'debug,debugrecurse,isptype,ispcontainer,file,memory,hexdump'.split(',')

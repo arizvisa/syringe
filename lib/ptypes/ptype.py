@@ -92,6 +92,7 @@ def rethrow(fn):
     return catch
 
 def debug(ptype):
+    '''Will clone ptype into one containing more detailed debugging information'''
     assert isptype(ptype), '%s is not a ptype'% repr(ptype)
     class newptype(ptype):
         @rethrow
@@ -110,6 +111,7 @@ def debug(ptype):
     return newptype
 
 def debugrecurse(ptype):
+    '''Will clone ptype into one containing recursive debugging information'''
     class newptype(debug(ptype)):
         @rethrow
         def newelement(self, ptype, name, ofs):
@@ -191,6 +193,7 @@ class type(object):
         raise ValueError('type %s not found in chain %s'% (repr(type), repr(result)))
 
     def __getparent_cmp(self, operand):
+        # XXX: can be replaced with .walk
         result = []
         self = self.parent
         while self is not None:
@@ -203,6 +206,7 @@ class type(object):
         raise ValueError('match %s not found in chain %s'% (repr(operand), repr(result)))
 
     def getparent(self, type=None, cmp=None):
+        # XXX: can be replaced with .walk
         '''
         Shortcut for traversing up to a parent node looking for a particular type
         XXX: subject to change?
@@ -214,19 +218,21 @@ class type(object):
 
         return self.parent
 
-    def traverse(self, next=lambda x: x.getparent()):
+    def walk(self, branches=lambda node:(node.getparent() for x in range(1) if node.getparent() is not None)):
         '''
-        Traverse the tree using the 'next' paremeter to navigate
+        Will walk the elements returned by the generator branches(visitee)
+        defaults to getting the path to the root node
         '''
-        n = self
-        while n is not None:
-            yield n
-            n = next(n)
+        for self in branches(self):
+            yield self
+            for y in self.walk(branches):
+                yield y
+            continue
         return
 
     def backtrace(self):
         '''Return a backtrace to the root element'''
-        path = self.traverse(lambda n: n.parent)
+        path = self.walk()
         path = [ 'type:%s name:%s offset:%x'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
         return list(reversed(path))
 
@@ -240,7 +246,9 @@ class type(object):
         return res
 
     def alloc(self):
+        '''Will initialize a ptype with zeroes'''
         zero = ( '\x00' for x in utils.infiniterange(0) )
+        # XXX: should we actually allocate space for a remote provider?
         #self.source = provider.empty()
         return self.deserialize(zero)
 
@@ -281,9 +289,12 @@ class type(object):
     l = property(fget=lambda s: s.load())   # abbr
     def load(self):
         '''sync self with some specified data source'''
-        self.source.seek( self.getoffset() )
-        self.value = self.source.consume(self.blocksize())
-        return self
+        bs = self.blocksize()
+        self.source.seek(self.getoffset())
+        block = self.source.consume(bs)
+        stream = iter(block)
+        self.value = ''
+        return self.deserialize_stream(stream)
 
     def commit(self):
         '''write self to self.source'''

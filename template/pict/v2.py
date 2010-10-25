@@ -91,22 +91,51 @@ class pixMap(pstruct.type):
         (Long, 'pmReserved'),
     ]
 
-#@OpStash.Define
+@OpStash.Define
 class directBitsRect(pstruct.type):
     type = 0x009a
+
+    class Pack3(pstruct.type):
+        def __lineCount(self):
+            return [uint8, Integer][self.parent.rowbytes > 250]
+            
+        _fields_ = [
+            (__lineCount, 'stride'),
+            (lambda s: dyn.block(int(s['stride'].l)), 'data')
+        ]
+
+    def __pixData(self):
+        self['pixMap'].l
+        packtype = int(self['pixMap']['packType'])
+        rowbytes = int(self['pixMap']['rowBytes'])
+        height = int(self['pixMap']['bounds']['bottom']) - int(self['pixMap']['bounds']['top'])
+
+        if packtype == 1 or rowbytes < 8:
+            result = dyn.block( rowbytes*height )
+        elif packtype == 2:
+            result = dyn.block( rowbytes*height * 3 / 4 + 0.5 )
+        elif packtype == 3:
+            result = dyn.array(self.Pack3, height)
+        else:
+            raise NotImplementedError(packtype)
+        return dyn.clone(result, rowbytes=rowbytes)
+
     _fields_ = [
         (Long, 'base'),
         (pixMap, 'pixMap'),
         (Rect, 'srcRect'),
         (Rect, 'dstRect'),
         (Integer, 'mode'),
-        #(GetPixData, 'pixData'),
+        (__pixData, 'pixData'),
     ]
 
 # http://cpansearch.perl.org/src/EXIFTOOL/Image-ExifTool-8.25/lib/Image/ExifTool/PICT.pm
 # GetPixData
 
 """
+class pack3(parray.type):
+    _object_ = __pack3
+
  public int readPack3(QDInputStream theStream)
     throws IOException, QDException
   {

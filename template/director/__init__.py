@@ -32,7 +32,7 @@ class Chunk(pstruct.type):
         return size
 
     def __ckSize(self):
-        p = list(self.traverse())[-1]   # yea, so we're slow. so what.
+        p = list(self.walkparent())[-1]   # yea, so we're slow. so what.
 
         if p['ID'].l.serialize() == 'XFIR':
             return LONG

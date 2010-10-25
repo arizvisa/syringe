@@ -184,6 +184,9 @@ for (my $op=0; $op < @opcodes; $op++) {
     $result[$op] = $operand;
 }
 
+## XXX: hardcode specific opcodes because they're not defined in the xml ref
+$opcodes[0x10f] = "\xc1";       # 3dNow! -> \x0f\x0f modrm imm1
+
 ############################
 my $group=0x10;
 if (0) {

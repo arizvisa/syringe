@@ -278,3 +278,9 @@ if __name__ == '__main__':
         a = getRelativeAddress(0x10006418, insn)
         print a == 0x1000375e
         
+    if False:
+        code = '\x0f\x0f\xe1\xb4'
+        insn = decode(code)
+        print getOpcode(insn) == '\x0f\x0f'
+        print getModrm(insn) == '\xe1'
+        print getImmediate(insn) == '\xb4'

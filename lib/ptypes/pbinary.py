@@ -2,6 +2,10 @@ import ptype,utils,bitmap
 import types
 
 def setbyteorder(endianness):
+    '''
+    Sets the _global_ byte order for any pbinary.type.
+    can be either .bigendian or .littleendian
+    '''
     for k,v in globals().items():
         if hasattr(v, '__bases__') and issubclass(v, type) and v is not type:
             globals()[k] = endianness(v)

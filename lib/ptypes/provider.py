@@ -13,7 +13,7 @@ class provider(object):
         '''Write some number of bytes'''
         raise NotImplementedError('Developer forgot to overload this method')
 
-class empty(object):
+class empty(provider):
     '''Empty'''
     offset = 0
     def seek(self, offset):
