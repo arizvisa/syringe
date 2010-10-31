@@ -6,7 +6,7 @@ import exports,relocations,imports
 
 class Entry(pstruct.type):
     _fields_ = [
-        (dyn.rpointer(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load())), headers.Header_RelativeAddress), 'VirtualAddress'),
+        (dyn.opointer(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load())), headers.Header_RelativeAddress), 'VirtualAddress'),
         (uint32, 'Size')
     ]
 

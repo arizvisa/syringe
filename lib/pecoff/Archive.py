@@ -77,7 +77,7 @@ def newMember(name, membertype):
         ]
 
         def fetch(self):
-            return dyn.cast(self['Member'], membertype)
+            return self['Member'].cast(membertype)
 
         def deserialize(self, source):
             super(Member, self).deserialize(source)

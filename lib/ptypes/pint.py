@@ -12,7 +12,7 @@ def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
     assert type(ptype) is type and issubclass(ptype, integer_t)
     class newptype(ptype):
-        byteorder = bigendian
+        byteorder = property(fget=lambda s:bigendian)
         def shortname(self):
             return 'bigendian(%s)'% self.__class__.__name__
 
@@ -42,7 +42,7 @@ def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
     assert type(ptype) is type and issubclass(ptype, integer_t)
     class newptype(ptype):
-        byteorder = littleendian
+        byteorder = property(fget=lambda s:littleendian)
         def shortname(self):
             return 'littleendian(%s)'% self.__class__.__name__
 
@@ -83,6 +83,14 @@ class integer_t(ptype.type):
             res = '???'
         return ' '.join([self.name(), res])
 
+    def flip(self):
+        '''Returns an integer with the endianness flipped'''
+        if self.byteorder is bigendian:
+            return self.cast(littleendian(self.__class__))
+        elif self.byteorder is littleendian:
+            return self.cast(bigendian(self.__class__))
+        assert False is True, 'Unexpected byte order'''
+
 integer_t = bigendian(integer_t)
 
 class sint_t(integer_t):
@@ -115,29 +123,33 @@ class int64_t(int_t): length = 8
 
 class enum(integer_t):
     '''
-    An integer_t for managing tagged
+    An integer_t for managing constants used when you define your integer.
+    i.e. class myinteger(pint.enum, pint.uint32_t): pass
 
     Settable properties:
-        _fields_:array( tuple( name, value ), ... )<w>
+        _values_:array( tuple( name, value ), ... )<w>
             This contains which enumerations are defined.
     '''
-    _fields_ = list( tuple(('name', 'constant')) )
+    _values_ = list( tuple(('name', 'constant')) )
 
     @classmethod
     def lookupByValue(cls, value):
-        for k,v in cls._fields_:
+        '''Lookup the string in an enumeration by it's first-defined value'''
+        for k,v in cls._values_:
             if v == value:
                 return k
         raise KeyError
 
     @classmethod
     def lookupByName(cls, name):
-        for k,v in cls._fields_:
+        '''Lookup the value in an enumeration by it's first-defined name'''
+        for k,v in cls._values_:
             if k == name:
                 return v
         raise KeyError
 
     def __cmp__(self, value):
+        '''Can compare an enumeration as it's string or integral representation'''
         try:
             if type(value) == str:
                 return cmp(self.lookupByValue(int(self)), value)
@@ -161,6 +173,7 @@ class enum(integer_t):
         return self.get()
 
     def get(self):
+        '''Return value as a string'''
         res = int(self)
         try:
             value = self.lookupByValue(res) + '(0x%x)'% res
@@ -189,12 +202,12 @@ class enum(integer_t):
     @classmethod
     def names(cls):
         '''Return all the names that have been defined'''
-        return [k for k,v in cls._fields_]
+        return [k for k,v in cls._values_]
 
     @classmethod
     def enumerations(cls):
         '''Return all values that have been defined in this'''
-        return [v for k,v in cls._fields_]
+        return [v for k,v in cls._values_]
 
 if __name__ == '__main__':
     import utils

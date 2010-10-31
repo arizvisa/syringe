@@ -3,7 +3,7 @@ from ptypes import pstruct,parray,dyn
 from __base__ import *
 
 class IMAGE_SYM(ptypes.pint.enum, int16):
-    _fields_ = [
+    _values_ = [
         ('UNDEFINED', 0),
         ('ABSOLUTE', 0xffff),   #-1),
         ('DEBUG', 0xfffe)       #-2)
@@ -17,7 +17,7 @@ class IMAGE_SYM(ptypes.pint.enum, int16):
         return n - 1
 
 class IMAGE_SYM_TYPE(ptypes.pint.enum, uint16):
-    _fields_ = [
+    _values_ = [
         ('NULL', 0),
         ('VOID', 1),
         ('CHAR', 2),
@@ -38,7 +38,7 @@ class IMAGE_SYM_TYPE(ptypes.pint.enum, uint16):
     ]
 
 class IMAGE_SYM_DTYPE(ptypes.pint.enum, uint16):
-    _fields_ = [
+    _values_ = [
         ('NULL', 0),
         ('POINTER', 1),
         ('FUNCTION', 2),
@@ -46,7 +46,7 @@ class IMAGE_SYM_DTYPE(ptypes.pint.enum, uint16):
     ]
 
 class IMAGE_SYM_CLASS(ptypes.pint.enum, uint8):
-    _fields_ = [
+    _values_ = [
         ('END_OF_FUNCTION', 0xff),
         ('NULL', 0),
         ('AUTOMATIC', 1),

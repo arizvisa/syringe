@@ -16,7 +16,7 @@ class BITMAPFILEHEADER(pstruct.type):
 
 class BITMAPINFOHEADER(pstruct.type):
     class __biCompression(DWORD, pint.enum):
-        _fields_ = [
+        _values_ = [
             ('BI_RGB', 0),
             ('BI_RLE8', 1),
             ('BI_RLE4', 2),

@@ -368,7 +368,7 @@ class BOF(pstruct.type):
         ]
 
     class __BOFDocType(pint.enum, pint.uint16_t):
-        _fields_ = [
+        _values_ = [
             ('workbook', 0x0005),
             ('worksheet', 0x0010),
             ('charsheet', 0x0020),

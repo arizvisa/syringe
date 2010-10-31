@@ -78,11 +78,11 @@ class IMAGE_IMPORT_HINT(pstruct.type):
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
-        ( dyn.rpointer(IMAGE_IMPORT_NAME_TABLE, headers.Header_RelativeAddress), 'INT'),
+        ( dyn.opointer(IMAGE_IMPORT_NAME_TABLE, headers.Header_RelativeAddress), 'INT'),
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
-        ( dyn.rpointer(pstr.szstring, headers.Header_RelativeAddress), 'Name'),
-        ( dyn.rpointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.Header_RelativeAddress), 'IAT')
+        ( dyn.opointer(pstr.szstring, headers.Header_RelativeAddress), 'Name'),
+        ( dyn.opointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.Header_RelativeAddress), 'IAT')
     ]
 
     def links(self):

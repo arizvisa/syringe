@@ -40,7 +40,7 @@ class ProfileHeader(pstruct.type):
         _fields_= [(8, 'major'), (4, 'minor'), (4, 'bugfix'), (16, 'reserved')]
 
     class __profile_class(pint.enum, pint.uint32_t):
-        _fields_ = {
+        _values_ = {
             'Input Device':0x73636e72,
             'Display Device':0x6d6e7472,
             'Output Device':0x70727472,
@@ -51,7 +51,7 @@ class ProfileHeader(pstruct.type):
         }.items()
 
     class __colorspace(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('XYZData', 0x58595A20),
             ('labData', 0x4C616220),
             ('luvData', 0x4C757620),
@@ -80,7 +80,7 @@ class ProfileHeader(pstruct.type):
         ]
 
     class __platform(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('Apple Computer, Inc', 0x4150504c),
             ('Microsoft Corporation', 0x4d534654),
             ('Silicon Graphics, Inc.', 0x53474920),
@@ -104,7 +104,7 @@ class ProfileHeader(pstruct.type):
         ]
 
     class __rendering_intent(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('Perceptual', 0),
             ('Media-Relative Colorimetric', 1),
             ('Saturation', 2),

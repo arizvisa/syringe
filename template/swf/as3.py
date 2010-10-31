@@ -74,7 +74,7 @@ class string_info(pstruct.type):
 
 class namespace_info(pstruct.type):
     class __kind(pint.enum, u8):
-        _fields_ = [
+        _values_ = [
             ('Namespace', 0x08),
             ('PackageNamespace', 0x16),
             ('PackageInternalNs', 0x17),
@@ -206,7 +206,7 @@ MultiNameTypes.Add(multiname_kind_MultinameLA)
 
 class multiname_info(pstruct.type):
     class __kind(pint.enum, u8):
-        _fields_ = [
+        _values_ = [
             ('QName', 0x07),
             ('QNameA', 0x0d),
             ('RTQName', 0x0f),
@@ -337,7 +337,7 @@ class traits_info(pstruct.type):
 
 class trait_slot(pstruct.type):
     class __vkind(pint.enum, u8):
-        _fields_ = [
+        _values_ = [
             ('Int', 0x03),
             ('Uint', 0x04),
             ('Double', 0x06),

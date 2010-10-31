@@ -2,6 +2,8 @@
 import ptype,parray,pstruct
 import utils
 
+__all__ = []
+
 ## FIXME: might want to raise an exception or warning if we have too large of an array or a block
 def block(size, **kwds):
     '''
@@ -51,6 +53,7 @@ def clone(cls, **newattrs):
 class union(pstruct.type):
     '''
     Provides a Union-like data structure
+    XXX: this hasn't really been tested out, but is in use in a few places.
     '''
     def load(self):
         # all point to the same source
@@ -78,58 +81,95 @@ class union(pstruct.type):
     def size(self):
         return self.value[0].size()
 
-import pint
-from warnings import warn
-class _addr_t(ptype.type):
-    '''Common address class whose value points to a data structure.'''
-    _object_ = None
-    def get(self):
-        '''Returns a new instance and loads it of self._object_'''
-        warn("pointer.get() is deprecated. use pointer.dereference(), or the pointer.d property instead")
-        raise NotImplementedError
-        return self.newelement(self._object_, repr(self._object_), int(self))
-    def dereference(self):
-        '''Dereferences the instance pointed to by pointer.'''
-        return self.newelement(self._object_, repr(self._object_), int(self))
-    deref=dereference
-
-    d = property(fget=dereference)
-
-import sys
+import sys,pint
 if sys.byteorder == 'big':
-    class addr32_t(_addr_t, pint.uint32_t): pass
-    class addr64_t(_addr_t, pint.uint64_t): pass
+    byteorder = pint.bigendian
 elif sys.byteorder == 'little':
-    class addr32_t(_addr_t, pint.littleendian(pint.uint32_t)): pass
-    class addr64_t(_addr_t, pint.littleendian(pint.uint64_t)): pass
+    byteorder = pint.littleendian
 
-class addr_t(addr32_t): pass
+def setbyteorder(endianness):
+    '''Set the global byte order for all pointer types'''
+    global byteorder
+    byteorder = endianness
 
-def pointer(object):
-    '''Create a new pointer type of a specified object'''
-    class pclass(addr_t):
+def addr_t(type):
+    '''Will instantiate a pointer'''
+    global byteorder
+    parent = byteorder(type)        # XXX: this is how we enforce the byte order
+    parentname = parent().shortname()
+
+    class pointer(parent):
+        _target_ = None
+        def shortname(self):
+            return 'pointer<%s>'% (parentname)
+        def dereference(self):
+            name = '*%s'% self.name()
+            p = int(self)
+            return self.newelement(self._target_, name, p)
+        
+        deref=lambda s: s.dereference()
+        d = property(fget=deref)
+
+    pointer._target_ = type
+    return pointer
+
+def pointer(target, type=pint.uint32_t):
+    '''Will return a pointer to the specified target using the provided base type'''
+    parent = addr_t(type)
+    parent._target_ = target
+    parentname = parent().shortname()
+
+    class pointer(parent):
+        _target_ = None
+        def shortname(self):
+            return '%s(%s)'%(parentname, target.__name__)
         pass
-    pclass.__name__ = 'pointer(%s.%s)'% (object.__module__, object.__name__)
-    pclass._object_ = object
-    return pclass
 
-def rpointer(object, relative=lambda s: int(s)):
-    '''
-    Create a relative pointer type of a specified object
-    XXX: This functionality might change.
-    '''
-    p = pointer(object)
-    p.__name__ = 'rpointer(%s.%s, %s)'% (object.__module__, object.__name__, repr(relative))
-    p.dereference = lambda s: s.newelement(s._object_, repr(s._object_), relative(s))
-    p.deref = p.dereference
-    p.d = property(fget=p.dereference)
-    return p
+    pointer._target_ = target
+    return pointer
 
-def cast(sourcevalue, destination):
-    raise DeprecationWarning("Please use ptype.cast instead")
-    result = sourcevalue.newelement( destination, 'cast(%s, %s)'% (sourcevalue.name(), repr(destination.__class__)), sourcevalue.getoffset() )
-    result.deserialize( sourcevalue.serialize() )
-    return result
+def rpointer(target, object=lambda s: list(s.walk())[-1], type=pint.uint32_t):
+    '''Will return a pointer to target using the object return from the provided function as the base address'''
+    parent = addr_t(type)
+    parent._target_ = target
+    parentname = parent().shortname()
+
+    class rpointer(parent):
+        _object_ = None
+        def dereference(self):
+            name = '*%s'% self.name()
+            base = self._object_().getoffset()
+            p = base+int(self)
+            return self.newelement(self._target_, name, p)
+
+        def shortname(self):
+            return 'r%s(%s, %s)'%(parentname, self._target_.__name__, self._object_.__name__)
+        pass
+    
+    rpointer._object_ = object  # promote to a method
+    return rpointer
+
+def opointer(target, calculate=lambda s: s.getoffset(), type=pint.uint32_t):
+    '''Return a pointer to target using the provided method to calculate its address'''
+    parent = addr_t(type)
+    parent._target_ = target
+    parentname = parent().shortname()
+
+    class opointer(parent):
+        _calculate_ = None
+        def dereference(self):
+            name = '*%s'% self.name()
+            p = self._calculate_()
+            return self.newelement(self._target_, name, p)
+
+        def shortname(self):
+            return 'o%s(%s, %s)'%(parentname, self._target_.__name__, self._calculate_.__name__)
+        pass
+    
+    opointer._calculate_ = calculate    # promote it to a method
+    return opointer
+
+__all__+= 'block,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
 
 if __name__ == '__main__':
     import ptypes,zlib

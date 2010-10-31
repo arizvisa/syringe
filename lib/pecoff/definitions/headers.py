@@ -212,7 +212,7 @@ class OptionalHeader(pstruct.type):
     ]
 
 class IMAGE_SCN(pint.enum, dword):
-    _fields_ = [
+    _values_ = [
         ('TYPE_NO_PAD', 0x00000008),
         ('CNT_CODE', 0x00000020),
         ('CNT_INITIALIZED_DATA', 0x00000040),
@@ -258,9 +258,9 @@ class SectionTable(pstruct.type):
         (uint32, 'VirtualSize'),
         (uint32, 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
-        (dyn.rpointer(lambda s:dyn.block(s.parent.getreadsize()), Header_RelativeOffset), 'PointerToRawData'),
-        (dyn.rpointer(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations'])), Header_RelativeOffset), 'PointerToRelocations'),
-        (dyn.rpointer(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers'])), Header_RelativeOffset), 'PointerToLinenumbers'),
+        (dyn.opointer(lambda s:dyn.block(s.parent.getreadsize()), Header_RelativeOffset), 'PointerToRawData'),
+        (dyn.opointer(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations'])), Header_RelativeOffset), 'PointerToRelocations'),
+        (dyn.opointer(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers'])), Header_RelativeOffset), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
         (uint16, 'NumberOfLinenumbers'),
         (IMAGE_SCN, 'Characteristics'),

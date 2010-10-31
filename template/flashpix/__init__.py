@@ -114,7 +114,7 @@ class SUBIMAGEHEADER(pstruct.type):
 
 class TILEHEADER(pstruct.type):
     class TileHeaderCompressionType(pint.enum, DWORD):
-        _fields_ = [
+        _values_ = [
             ('Uncompressed data', 0),
             ('Single color compression', 1),
             ('JPEG', 2),

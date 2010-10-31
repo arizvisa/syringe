@@ -14,27 +14,21 @@ def setsource(prov):
     ptype.type.source = prov
 
 ## globally changing the endianness of all new pint types
-class littleendian(object): pass
-class bigendian(object): pass
+from pint import bigendian,littleendian
 def setbyteorder(endianness):
     '''
         _Globally_ sets the integer byte order to the endianness specified.
         can be either .bigendian or .littleendian
     '''
-    if endianness is littleendian:
-        pint.setbyteorder(pint.littleendian)
-    elif endianness is bigendian:
-        pint.setbyteorder(pint.bigendian)
-    else:
-        print 'Unknown endianness %s specified'% repr(endianness)
-    return
+    pint.setbyteorder(endianness)
+    dyn.setbyteorder(endianness)
 
 ## default to byte order detected by python
 import sys
 if sys.byteorder == 'little':
-    setbyteorder(littleendian)
+    setbyteorder(pint.littleendian)
 elif sys.byteorder == 'big':
-    setbyteorder(bigendian)
+    setbyteorder(pint.bigendian)
 else:
     assert False is True, sys.byteorder
 

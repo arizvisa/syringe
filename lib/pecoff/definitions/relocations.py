@@ -5,7 +5,7 @@ import struct,array,bitmap
 
 ## per symbol relocations
 class IMAGE_REL_I386(ptypes.pint.enum, uint16):
-    _fields_ = [
+    _values_ = [
         ('ABSOLUTE', 0x0000),
         ('DIR16', 0x0001),
         ('REL16', 0x0002),

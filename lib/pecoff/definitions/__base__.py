@@ -25,7 +25,7 @@ class TimeDateStamp(uint32):
         return '%s %s'%(self.__class__, x.strftime('%F %T'))
 
 class IMAGE_COMDAT_SELECT(ptypes.pint.enum, byte):
-    _fields_ = [
+    _values_ = [
         ('NODUPIC', 1),
         ('ANY', 2),
         ('SAME_SIZE', 3),

@@ -10,7 +10,7 @@ class USHORT(uint16_t): pass
 
 class OFFSET(int16_t): pass
 class SECT(pint.enum, ULONG):
-    _fields_ = [
+    _values_ = [
         ('DIFSECT', 0xfffffffc),
         ('FATSECT', 0xfffffffd),
         ('ENDOFCHAIN', 0xfffffffe),
@@ -191,7 +191,7 @@ class File(Header):
 
 ## directory
 class STGTY(pint.enum, BYTE):
-    _fields_ = [
+    _values_ = [
         ('INVALID', 0),
         ('STORAGE', 1),
         ('STREAM', 2),
@@ -201,7 +201,7 @@ class STGTY(pint.enum, BYTE):
     ]
 
 class DECOLOR(pint.enum, BYTE):
-    _fields_ = [('RED', 0), ('BLACK', 1)]
+    _values_ = [('RED', 0), ('BLACK', 1)]
 
 class DirectoryEntry(pstruct.type):
     _fields_ = [

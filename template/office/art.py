@@ -136,7 +136,7 @@ class msofbtTimeCondition(pstruct.type):
     type = 61736
 
     class __triggerType(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('totNone', 0),
             ('totVisualElement', 1),
             ('totTimeNode', 2),
@@ -145,7 +145,7 @@ class msofbtTimeCondition(pstruct.type):
         ]
 
     class __event(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('totNone', 0),
             ('totOnBegin', 1),
             ('totOnEnd', 2),

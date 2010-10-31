@@ -246,7 +246,7 @@ class type(object):
         return res
 
     def alloc(self):
-        '''Will initialize a ptype with zeroes'''
+        '''will initialize a ptype with zeroes'''
         zero = ( '\x00' for x in utils.infiniterange(0) )
         # XXX: should we actually allocate space for a remote provider?
         #self.source = provider.empty()
@@ -269,7 +269,7 @@ class type(object):
     def newelement(self, ptype, name, ofs):
         '''
         create a new element of type ptype with the specified name and offset.
-        This will duplicate the source, and set the new element's .parent
+        this will duplicate the source, and set the new element's .parent
         attribute.
         '''
         res = forceptype(ptype, self)
@@ -350,12 +350,20 @@ class type(object):
     def hexdump(self, **kwds):
         return utils.hexdump( self.serialize(), offset=self.getoffset(), **kwds )
 
+    def new(self, type, **kwds):
+        '''Instantiate a new type as a child of the current ptype'''
+        result = self.newelement(type, None, kwds.get('offset', 0))
+        result.__name__ = kwds.get('__name__', hex(id(result)) )
+        return result
+
     def copy(self):
+        '''Return a duplicated instance of the current ptype'''
         result = self.newelement( self.__class__, self.name(), self.getoffset() )
         result.deserialize( self.serialize() )
         return result
 
     def cast(self, t):
+        '''Cast the contents of the current ptype to a different ptype'''
         result = self.newelement( t, 'cast(%s, %s)'% (self.name(), repr(t.__class__)), self.getoffset() )
         try:
             result.deserialize( self.serialize() )
@@ -447,7 +455,7 @@ class pcontainer(type):
         return
 
     def setoffset(self, value, recurse=False):
-        '''modifies the current offset'''
+        '''modifies the current offset, set recurse=True to update all offsets in all children'''
         res = super(pcontainer, self).setoffset(value)
         if recurse:
             assert self.initialized
