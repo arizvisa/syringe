@@ -6,16 +6,20 @@ from warnings import warn
 
 def findBase(self):
     try:
-        nth = self.getparent(cmp=lambda x: issubclass(x.__class__, BaseHeader))
+#        nth = self.getparent(cmp=lambda x: issubclass(x.__class__, BaseHeader))
+        nth = self.getparent(BaseHeader)
     except ValueError, msg:
-        nth = self.getparent(cmp=lambda x: x.parent is None)
+#        nth = self.getparent(cmp=lambda x: x.parent is None)
+        nth = list(self.walk())[-1]
     return nth
 
 def findHeader(self):
     try:
-        nth = self.getparent(cmp=lambda x: issubclass(x.__class__, Header))
+#        nth = self.getparent(cmp=lambda x: issubclass(x.__class__, Header))
+        nth = self.getparent(Header)
     except ValueError, msg:
-        nth = self.getparent(cmp=lambda x: x.parent is None)
+#        nth = self.getparent(cmp=lambda x: x.parent is None)
+        nth = list(self.walk())[-1]
     return nth
 
 def Header_RelativeAddress(self, address=None):

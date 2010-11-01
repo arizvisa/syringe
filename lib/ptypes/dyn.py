@@ -78,7 +78,7 @@ class union(pstruct.type):
         res = '(' + ', '.join([t.__name__ for t,n in self._fields_]) + ')'
         return ' '.join([repr(self.__class__), 'union', res])
 
-    def size(self):
+    def blocksize(self):
         return self.value[0].size()
 
 import sys,pint

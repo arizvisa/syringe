@@ -51,7 +51,7 @@ class TableRecord(pstruct.type):
     ]
 
     def getblock(self):
-        opentypefile = self.getparent(cmp=lambda x: type(x) is OpenTypeFile)
+        opentypefile = self.getparent(OpenTypeFile)
         offset = opentypefile.getoffset() + int(self['offset'])
         return self.newelement( dyn.block(int(self['length'])), self['identifier'].serialize(), offset)
 

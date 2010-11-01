@@ -39,7 +39,7 @@ class Tag(pstruct.type):
         self['Header']['type'] = tag
         if size >= 0x3f:
             self['Header']['length'] = 0x3f
-            self['HeaderLongLength'] = UI32().set(size)     # this creates a bad reference but whatever..
+            self['HeaderLongLength'] = self.new(UI32).set(size)     # this creates a bad reference but whatever..
             self['HeaderLongLength'].set(size)
 
         return super(Tag, self).serialize()
@@ -122,9 +122,9 @@ class PlaceObject2(TagS):
     version = 3
     def _iff(flag, typ):
         def fn(self):
-            if self['PlaceFlag'][flag]:
-                return typ()
-            return Empty()
+            if self['PlaceFlag'].l[flag]:
+                return typ
+            return Empty
         return fn
 
     _fields_ = [
@@ -153,17 +153,17 @@ class PlaceObject3(TagS):
     version = 8
     def _iff(flag, typ):
         def fn(self):
-            if self['PlaceFlag'][flag]:
-                return typ()
-            return Empty()
+            if self['PlaceFlag'].l[flag]:
+                return typ
+            return Empty
 
         return fn
 
     def _iff3(flag, typ):
         def fn(self):
-            if self['PlaceFlag3'][flag]:
-                return typ()
-            return Empty()
+            if self['PlaceFlag3'].l[flag]:
+                return typ
+            return Empty
         return fn
 
     _fields_ = [
@@ -507,11 +507,11 @@ class DefineFontInfo(TagS):
 class GLYPHENTRY(pbinary.struct):
     def __Index(self):
         p = self.getparent(TagS)    # DefineText
-        return int(p['GlyphBits'])
+        return int(p['GlyphBits'].l)
         
     def __Advance(self):
         p = self.getparent(TagS)    # DefineText
-        return int(p['AdvanceBits'])
+        return int(p['AdvanceBits'].l)
 
     _fields_ = [
         (__Index, 'Index'),
@@ -530,9 +530,9 @@ class TEXTRECORD(pstruct.type):
         ]
     import tags
     def __TextColor(self):
-        if int(s['StyleFlags']['HasColor']):
+        if int(self['StyleFlags'].l['HasColor']):
             try:
-                self.getparent(tags.DefineText2)
+                self.getparent(DefineText2)
             except ValueError:
                 return RGB
             return RGBA
@@ -571,7 +571,7 @@ class DefineText(TagS):
         (MATRIX, 'TextMatrix'),
         (UI8, 'GlyphBits'),
         (UI8, 'AdvanceBits'),
-        (__TextRecords, 'TextRecord')
+#        (__TextRecords, 'TextRecord')
     ]
 
 class DefineText2(DefineText):

@@ -1,5 +1,5 @@
 import sys
-import swf
+import ptypes,swf
 
 def hr(s):
     print '-'*7,
@@ -17,8 +17,10 @@ if __name__ == '__main__':
     except ValueError:
         help()
 
-    myfile = swf.File()
-    myfile.open(filename)
+    print 'loading',filename
+    myfile = swf.File(source=ptypes.file(filename))
+    myfile = myfile.l
 
     for tag in myfile:
+        print tag
         print repr(tag)

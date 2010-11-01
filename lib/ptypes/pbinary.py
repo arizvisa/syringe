@@ -370,7 +370,7 @@ class __struct_generic(type):
             else:
                 v,s = ''.join(['struct[', hex(val.getinteger()), ']']),val.bits()
 
-            result.append( '%s{%d}=%s'% (name, s, v) )
+            result.append( '%s%s=%s'% (name, ['', '{%d}'%s][s>1], v) )
         return ' '.join(result)
 
     def __repr__uninitialized(self):

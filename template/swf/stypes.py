@@ -127,13 +127,13 @@ class CXFORM(pbinary.struct):
         (1, 'HasMultTerms'),
         (4, 'Nbits'),
     
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'RedMultTerm'),
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'GreenMultTerm'),
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'BlueMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'RedMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'GreenMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'BlueMultTerm'),
 
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'RedAddTerm'),
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'GreenAddTerm'),
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'BlueAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'RedAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'GreenAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'BlueAddTerm'),
     ]
 
 class CXFORMWITHALPHA(pbinary.struct):
@@ -143,15 +143,15 @@ class CXFORMWITHALPHA(pbinary.struct):
         (1, 'HasMultTerms'),
         (4, 'Nbits'),
     
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'RedMultTerm'),
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'GreenMultTerm'),
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'BlueMultTerm'),
-        (lambda self: _ifelse(self['HasMultTerms'], self['Nbits'], 0), 'AlphaMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'RedMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'GreenMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'BlueMultTerm'),
+        (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'AlphaMultTerm'),
 
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'RedAddTerm'),
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'GreenAddTerm'),
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'BlueAddTerm'),
-        (lambda self: _ifelse(self['HasAddTerms'], self['Nbits'], 0), 'AlphaAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'RedAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'GreenAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'BlueAddTerm'),
+        (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'AlphaAddTerm'),
     ]
 
 ###

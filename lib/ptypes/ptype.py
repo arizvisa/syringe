@@ -1,6 +1,6 @@
 '''base ptype element'''
 __all__ = 'isptype,ispcontainer,type,pcontainer,rethrow'.split(',')
-import provider,utils
+import bitmap,provider,utils
 import types
 
 ## this is all a horrible and slow way to do this...
@@ -175,50 +175,67 @@ class type(object):
         return int(self.length)
 
     def blocksize(self):
-        '''Can be overloaded to define the block's size'''
+        '''Can be overloaded to define the block's size. This MUST return an integral type'''
 
         # XXX: overloading will always provide a side effect of modifying the .source's offset
         #        make sure to fetch the blocksize first before you .getoffset() on something
 
         return self.size()
 
-    def __getparent_type(self,type):
-        result = []
-        self = self.parent
-        while self is not None:
-            result.append(self.__class__)
-            if issubclass(self.__class__,type):
-                return self
+    if False:
+        def __getparent_type(self,type):
+            result = []
             self = self.parent
-        raise ValueError('type %s not found in chain %s'% (repr(type), repr(result)))
+            while self is not None:
+                print self.__class__ == type
+                result.append(self.__class__)
+                if issubclass(self.__class__,type) or self.__class__ == type:
+                    return self
+                print self.__class__ == type
+                self = self.parent
+            raise ValueError('type %s not found in chain %s'% (repr(type), repr(result)))
 
-    def __getparent_cmp(self, operand):
-        # XXX: can be replaced with .walk
-        result = []
-        self = self.parent
-        while self is not None:
-            result.append(self.__class__)
+        def __getparent_cmp(self, operand):
+            # XXX: can be replaced with .walk
+            result = []
+            self = self.parent
+            while self is not None:
+                result.append(self.__class__)
+                if operand(self):
+                    return self
+                self = self.parent
             if operand(self):
                 return self
-            self = self.parent
-        if operand(self):
+            raise ValueError('match %s not found in chain %s'% (repr(operand), repr(result)))
+
+        def getparent(self, type=None, cmp=None):
+            # XXX: can be replaced with .walk
+            '''
+            Shortcut for traversing up to a parent node looking for a particular type
+            XXX: subject to change?
+            '''
+            if type:
+                return self.__getparent_type(type)
+            elif cmp:
+                return self.__getparent_cmp(cmp)
+
+            return self.parent
+
+    def getparent(self, type=None):
+        if type is None:
+            return self.parent
+
+        if self.__class__ == type:
             return self
-        raise ValueError('match %s not found in chain %s'% (repr(operand), repr(result)))
 
-    def getparent(self, type=None, cmp=None):
-        # XXX: can be replaced with .walk
-        '''
-        Shortcut for traversing up to a parent node looking for a particular type
-        XXX: subject to change?
-        '''
-        if type:
-            return self.__getparent_type(type)
-        elif cmp:
-            return self.__getparent_cmp(cmp)
+        for x in self.walk():
+            if issubclass(x.__class__,type) or x.__class__ == type:
+                return x
+            continue
 
-        return self.parent
+        raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
 
-    def walk(self, branches=lambda node:(node.getparent() for x in range(1) if node.getparent() is not None)):
+    def walk(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
         '''
         Will walk the elements returned by the generator branches(visitee)
         defaults to getting the path to the root node
@@ -354,6 +371,7 @@ class type(object):
         '''Instantiate a new type as a child of the current ptype'''
         result = self.newelement(type, None, kwds.get('offset', 0))
         result.__name__ = kwds.get('__name__', hex(id(result)) )
+        # FIXME: we should probably do something to prevent this from being committed
         return result
 
     def copy(self):
