@@ -235,64 +235,6 @@ class End(TagS):
     version = 1
     _fields_ = []
 
-if False:
-    class ExportAssets(TagS):
-        tag = 56
-        version = 5
-        _fields_ = [
-            (UI16, 'Count')
-        ]
-
-        _looped_ = [
-            (UI16, 'Tag%d'),
-            (STRING, 'Name%d')
-        ]
-
-        def deserialize(self, iterable):
-            iterable = iter(iterable)
-
-            def extend(num):
-                for typ,name in self._looped_:
-                    self._fields_.append( (typ,name%num) )
-
-            self['Count'].deserialize(iterable)
-
-            for n in range( int(self['Count']) ):
-                extend(n)
-
-            self.alloc()
-            for typ,name in self._fields_[1:]:
-                self[name].deserialize(iterable)
-
-if False:
-    class ImportAssets(TagS):
-        tag = 57
-        version = 5
-        _fields_ = [
-            (STRING, 'URL'),
-            (UI16, 'Count')
-        ]
-
-        _looped_ = [
-            (UI16, 'Tag%d'),
-            (STRING, 'Name%d')
-        ]
-
-        def deserialize(self, iterable):
-            iterable = iter(iterable)
-
-            def extend(num):
-                for typ,name in self._looped_:
-                    self._fields_.append( (typ,name%num) )
-
-            self['Count'].deserialize(iterable)
-            for n in range( int(self['Count']) ):
-                extend(n)
-
-            for typ,name in self._fields_[2:]:
-                self[name].deserialize(iterable)
-
-
 class _asset(pstruct.type):
     _fields_ = [
         (UI16, 'Tag'),
@@ -597,25 +539,26 @@ class FileAttributes(TagB):
         (24, 'Reserved[7]'),
     ]
 
-class DefineSceneAndFrameLabelData(TagS):
-    tag = 86
-    class Scene(pstruct.type):
-        _fields_ = [
-            (as3.u32, 'Name'),
-            (STRING, 'Offset'),
-        ]
-    class Frame(pstruct.type):
-        _fields_ = [
-            (as3.u32, 'Num'),
-            (STRING, 'Label'),
-        ]
+if False:
+    class DefineSceneAndFrameLabelData(TagS):
+        tag = 86
+        class Scene(pstruct.type):
+            _fields_ = [
+                (as3.u32, 'Name'),
+                (STRING, 'Offset'),
+            ]
+        class Frame(pstruct.type):
+            _fields_ = [
+                (as3.u32, 'Num'),
+                (STRING, 'Label'),
+            ]
 
-    _fields_ = [
-        (as3.u32, 'SceneCount'),
-        (lambda s: dyn.array(s.Scene, int(s['SceneCount'].l)), 'Scene'),
-        (as3.u32, 'FrameLabelCount'),
-        (lambda s: dyn.array(s.Frame, int(s['FrameLabelCount'].l)), 'Scene'),
-    ]
+        _fields_ = [
+            (as3.u32, 'SceneCount'),
+            (lambda s: dyn.array(s.Scene, int(s['SceneCount'].l)), 'Scene'),
+            (as3.u32, 'FrameLabelCount'),
+            (lambda s: dyn.array(s.Frame, int(s['FrameLabelCount'].l)), 'Scene'),
+        ]
 
 ##############################################
 def istype(obj):

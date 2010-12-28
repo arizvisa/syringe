@@ -70,10 +70,9 @@ def littleendian(p):
         def shortname(self):
             return 'littleendian(%s)'% self.__class__.__name__
 
-        def deserialize_stream(self, source):
-            size = self.alloc().blocksize()     # XXX: this means we can't be dynamic unless user defines the size
-            block = ''.join([source.next() for x in xrange(size)])
-            return super(littleendianpbinary, self).deserialize_stream( iter(reversed(block)) )
+        def deserialize_stream(self, stream):
+            string = [x for i,x in zip(xrange(self.alloc().blocksize()),stream)]
+            return super(littleendianpbinary, self).deserialize_stream( ''.join(reversed(string)) )
 
         def serialize(self):
             bs = self.blockbits() / 8
@@ -116,14 +115,18 @@ class type(ptype.pcontainer):
         producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
         return self.deserialize_stream(producer)
 
-    def deserialize(self, source):
-        source = iter(source)
-        return self.deserialize_stream(source)
-            
-    def deserialize_stream(self, source):
-        bc = bitmap.consumer(source)
+    def deserialize_block(self, string):
+        return self.deserialize_stream( iter(string) )
+
+    def deserialize_stream(self, stream):
+        bc = bitmap.consumer(stream)
         bc.consume(self.getposition()[1])     # skip some number of bits
         return self.deserialize_consumer(bc)
+
+    def alloc(self):
+        '''will initialize a pbinary.type with zeroes'''
+        # XXX: should we actually allocate space for a remote provider?
+        return self.deserialize_stream( ('\x00' for x in utils.infiniterange(0)) )
 
     if False:
         def set(self, integer):
@@ -238,7 +241,7 @@ class type(ptype.pcontainer):
         return (self.bits()+7)/8
 
     def set(self, value):
-        return self.alloc().deserialize(bitmap.data((value, self.bits())))
+        return self.alloc().deserialize_block(bitmap.data((value, self.bits())))
 
     def commit(self):
         raise NotImplementedError("this hasn't really been tested")
@@ -272,12 +275,12 @@ class type(ptype.pcontainer):
 
         # write it finally
         self.source.seek(offset)
-        self.source.write(data)
+        self.source.store(data)
         return self
 
     def copy(self):
         result = self.newelement( self.__class__, self.__name__, self.getposition() )
-        result.deserialize( self.serialize() )
+        result.deserialize_block( self.serialize() )
         return result
 
     def alloc(self):
@@ -534,6 +537,7 @@ def align(bits):
     return align
 
 if __name__ == '__main__':
+    import provider
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -578,8 +582,7 @@ if __name__ == '__main__':
 #        print "test1"
 #        print "size = 4, value1 = 'a', value2 = 'b', value3 = 'c'"
 
-        x = RECT()
-        x.deserialize('\x4a\xbc\xde\xf0')
+        x = RECT(source=provider.string('\x4a\xbc\xde\xf0')).l
 #        print repr(x)
 #        print repr(x.serialize())
 
@@ -602,10 +605,9 @@ if __name__ == '__main__':
 
         s = '\x44\xab\xcd\xef\x00'
 
-        a = blah()
+        a = blah(source=provider.string(s)).l
 #        print repr(s)
 #        print repr(x)
-        a.deserialize(s)
 
         b = a['rectangle']
 
@@ -630,10 +632,7 @@ if __name__ == '__main__':
 
         # 0000 0001 1011 1111
         data = '\x01\xbf'
-        res = blah()
-
-        # xxx: this needs to be moved into bitcontainer
-        res.deserialize(data)
+        res = blah(source=provider.string(data)).l
 
         if res['type'] == 6 and res['size'] == 0x3f:
             raise Success
@@ -653,7 +652,8 @@ if __name__ == '__main__':
         res = pbinary.littleendian(blah)().alloc()
 
         data = [x for n,x in zip(range(res.size()), data)]
-        res.deserialize(data)
+        res.source = provider.string(''.join(data))
+        res.l
 
         if res['type'] == 6 and res['size'] == 0x3f:
             raise Success
@@ -681,8 +681,7 @@ if __name__ == '__main__':
         blah = pbinary.bigendian(blah)
         data = '\xaa\xbb\xcc\xdd\x11\x11'
 
-        res = blah()
-        res.deserialize(data)
+        res = blah(source=provider.string(data)).l
 
         if res.values() == [0xa,0xa,0xb,0xb,0xc,0xcd, 0xd]:
             raise Success
@@ -706,8 +705,7 @@ if __name__ == '__main__':
         blah = pbinary.littleendian(blah)
         data = '\xdd\xcc\xbb\xaa\x11\x11'
 
-        res = blah()
-        res.deserialize(data)
+        res = blah(source=provider.string(data)).l
 #        print res.values()
         if res.values() == [0xa, 0xa, 0xb, 0xb, 0xc, 0xcd, 0xd]:
             raise Success
@@ -719,10 +717,9 @@ if __name__ == '__main__':
     def test7():
 #        print "test7"
 
-        x = RECT()
+        x = RECT(source=provider.string('hello world')).l
         #print x.size()
 #        print x
-        x.deserialize('hello world')
 #        print x.size()
 #        print repr(x)
 #        print repr(x['value1'])
@@ -740,8 +737,7 @@ if __name__ == '__main__':
     
         s = '\xaa\xbb\xcc'
 
-        x = blah()
-        x.deserialize(s)
+        x = blah(source=provider.string(s)).l
         if list(x) == [5, 2, 5]:
             raise Success
 
@@ -771,8 +767,7 @@ if __name__ == '__main__':
         res = reduce(lambda x,y: x<<1 | [0,1][int(y)], ('11001100'), 0)
         print hex(res)
 
-        x = largearray()
-        x.deserialize(chr(res)*63)
+        x = largearray(provider.string(chr(res)*63)).l
         print x
         print x[1]
         print x[1].getposition()
@@ -848,8 +843,7 @@ if __name__ == '__main__':
     #    s = utils.i2h(s, count=3)
         s = '\xff\xdb\x00'
 
-        n = blah1()
-        n.deserialize(s)
+        n = blah1(source=provider.string(s)).l
         print n
         print n.value
 
@@ -860,8 +854,7 @@ if __name__ == '__main__':
     #    s = utils.i2h(s, count=3)
         s = '\x36\xff\xc0'
 
-        n = blah2()
-        n.deserialize(s)
+        n = blah2(source=provider.string(s)).l
         print n
         print n.value
 
@@ -891,9 +884,8 @@ if __name__ == '__main__':
     def test12():
 #        print "test12"
         ## a struct containing ints
-        self = dword()
+        self = dword(source=provider.string('\xde\xad\xde\xaf')).l
         #self.deserialize_bitmap( bitmap.new(0xdeaddeaf, 32) )
-        self.deserialize('\xde\xad\xde\xaf')
 #        print repr(self.serialize())
 #        print self
         if self['high'] == 0xdead and self['low'] == 0xdeaf:
@@ -908,8 +900,8 @@ if __name__ == '__main__':
                 (word, 'higher'),
                 (word, 'lower'),
             ]
-        self = blah()
-        self.deserialize('\xde\xad\xde\xaf')
+        self = blah(source=provider.string('\xde\xad\xde\xaf')).l
+#        self.deserialize('\xde\xad\xde\xaf')
 #        print repr(self.serialize())
 #        print '[1]', self
 #        print '[2]', self['higher']
@@ -929,8 +921,7 @@ if __name__ == '__main__':
                 (lambda s: 8, 'lower')
             ]
 
-        self = blah()
-        self.deserialize('\xde\xad\x80')
+        self = blah(source=provider.string('\xde\xad\x80')).l
         if self['higher']['high'] == 0xde and self['higher']['low'] == 0xad and self['lower'] == 0x80:
             raise Success
 
@@ -942,10 +933,9 @@ if __name__ == '__main__':
             _object_ = 4
             length = 8
 
-        self = blah()
-
         data = '\xab\xcd\xef\x12'
-        self.deserialize(data)
+        self = blah(source=provider.string(data)).l
+
 #        print self
 #        print '\n'.join(map(repr,self))
         if list(self) == [0xa,0xb,0xc,0xd,0xe,0xf,0x1,0x2]:
@@ -959,10 +949,8 @@ if __name__ == '__main__':
             _object_ = byte
             length = 4
 
-        self = blah()
-
         data = '\xab\xcd\xef\x12'
-        self.deserialize(data)
+        self = blah(source = provider.string(data)).l
 
 #        print self
 #        print '\n'.join(map(repr,self))
@@ -978,9 +966,8 @@ if __name__ == '__main__':
             _object_ = lambda s: byte
             length = 4
 
-        self = blah()
         data = '\xab\xcd\xef\x12'
-        self.deserialize(data)
+        self = blah(source=provider.string(data)).l
 #        print self
 #        print '\n'.join(map(repr,self))
         l = [ x['value'] for x in self ]
@@ -1073,8 +1060,7 @@ if __name__ == '__main__':
 #        print repr(s)
 
         i = iter(s)
-        z = pbinary.bigendian(RECT)()
-        z.deserialize(i)
+        z = pbinary.bigendian(RECT)(source=provider.string(s)).l
         
         if z['Nbits'] == 4 and z['Xmin'] == 0xd and z['Xmax'] == 0xe and z['Ymin'] == 0xa and z['Ymax'] == 0xd:
             raise Success
@@ -1089,8 +1075,7 @@ if __name__ == '__main__':
                     return True
                 return False
 
-        z = myarray()
-        z.deserialize('\x44\x43\x42\x41\x3f\x0f\xee\xde')
+        z = myarray(source=provider.string('\x44\x43\x42\x41\x3f\x0f\xee\xde')).l
         if z.serialize() == 'DCBA?\x00':
             raise Success
 
@@ -1104,8 +1089,7 @@ if __name__ == '__main__':
                 (4, 'hell'),
             ]
 
-        z = mystruct()
-        z.deserialize('\x41\x40')
+        z = mystruct(source=provider.string('\x41\x40')).l
         if z.getinteger() == 0x4140:
             raise Success
 
@@ -1140,8 +1124,7 @@ if __name__ == '__main__':
         class broken(pstruct.type):
             _fields_ = [(RECORDHEADER, 'h'), (pint.uint32_t, 'v')]
 
-        z = broken()
-        z.deserialize(correct)
+        z = broken(source=provider.string(correct)).l
 
         if z['h']['t'] == 69 and z['h']['l'] == 4:
             raise Success
@@ -1177,8 +1160,7 @@ if __name__ == '__main__':
                 (4, 'version'),
             ]
 
-        z = header()
-        z.deserialize(correct)
+        z = header(source=provider.string(correct)).l
 
         if z.serialize() != correct:
             raise Failure
@@ -1195,8 +1177,7 @@ if __name__ == '__main__':
                 (4, 'c')
             ]
 
-        x = blah()
-        x.deserialize('\xde\xad')
+        x = blah(source=provider.string('\xde\xad')).l
         if x['a'] == 13 and x['b'] == 14 and x['c'] == 10:
             raise Success
         raise Failure

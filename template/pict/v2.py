@@ -27,7 +27,28 @@ class OpStash(object):
 
 class OpRecord(pstruct.type):
     def __data(self):
-        return OpStash.Lookup( int(self['code'].l) )
+        t = int(self['code'].l)
+
+        if t <= 0x1f:
+            res = OpStash.Lookup(t)
+        elif t <= 0xff:
+            res = OpStash.Lookup(t)
+        elif t in [0x8200, 0x8201, 0x8202]:
+            res = OpStash.Lookup(t)
+        elif t in [0xc00]:
+            res = OpStash.Lookup(t)
+        elif t in [0x200]:
+            res = OpStash.Lookup(t)
+        elif t in [0x7f00]:
+            res = OpStash.Lookup(t)
+        elif t < 0x8100:
+#            res = OpStash.Lookup(t)
+            size = t >> 7
+            size &= -2
+            res = dyn.block(size)
+        else:
+            res = OpStash.Lookup(t)
+        return res
 
     _fields_ = [
         (Opcode_v2, 'code'),
@@ -47,48 +68,6 @@ class header(pstruct.type):
         (Integer, 'x2'),
         (Integer, 'y2'),
         (Long, 'reserved'),
-    ]
-
-class picSize(pstruct.type):
-    _fields_ = [
-        (Integer, 'size'),
-        (Integer, 'top'),
-        (Integer, 'left'),
-        (Integer, 'bottom'),
-        (Integer, 'right'),
-    ]
-
-class picFrame(pstruct.type):
-    _fields_ = [
-        (Integer, 'version'),
-        (Integer, 'picture'),
-        (Integer, 'opcode'),
-        (Long, 'size'),
-        (Long, 'hres'),
-        (Long, 'vres'),
-        (Integer, 'x1'),
-        (Integer, 'y1'),
-        (Integer, 'x2'),
-        (Integer, 'y2'),
-        (Long, 'reserved'),
-    ]
-
-class pixMap(pstruct.type):
-    _fields_ = [
-        (Integer, 'rowBytes'),
-        (Rect, 'bounds'),
-        (Integer, 'pmVersion'),
-        (Integer, 'packType'),
-        (Long, 'packSize'),
-        (Fixed, 'hRes'),
-        (Fixed, 'vRes'),
-        (Integer, 'pixelType'),
-        (Integer, 'pixelSize'),
-        (Integer, 'cmpCount'),
-        (Integer, 'cmpSize'),
-        (Long, 'planeByte'),
-        (Long, 'pmTable'),
-        (Long, 'pmReserved'),
     ]
 
 @OpStash.Define
@@ -122,7 +101,7 @@ class directBitsRect(pstruct.type):
 
     _fields_ = [
         (Long, 'base'),
-        (pixMap, 'pixMap'),
+        (PixMap, 'pixMap'),
         (Rect, 'srcRect'),
         (Rect, 'dstRect'),
         (Integer, 'mode'),
@@ -222,6 +201,14 @@ class LongComment(pstruct.type):
 @OpStash.Define
 class Clip(Rgn):
     type = 0x0001
+
+@OpStash.Define
+class PnMode(Integer):
+    type = 0x0008
+
+@OpStash.Define
+class PnPixPat(PixPat):
+    type = 0x0013
 
 @OpStash.Define
 class frameRgn(Rgn):

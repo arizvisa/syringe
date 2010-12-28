@@ -22,3 +22,19 @@ class File(ptypes.parray.infinite):
     def __repr__(self):
         types = ','.join([x['type'].serialize() for x in self])
         return ' '.join([self.name(), 'atoms[%d] ->'% len(self), types])
+
+class AtomType(object):
+    cache = {}
+    @classmethod
+    def Add(cls, object):
+        t = object.type
+        cls.cache[t] = object
+
+    @classmethod
+    def Lookup(cls, type):
+        return cls.cache[type]
+
+    @classmethod
+    def Define(cls, pt):
+        cls.Add(pt)
+        return pt

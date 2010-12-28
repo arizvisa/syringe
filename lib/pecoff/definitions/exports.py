@@ -4,24 +4,24 @@ from __base__ import *
 import struct
 
 # FuncPointer can also point to some code too
-#class FuncPointer(dyn.opointer(ptype.type, headers.Header_RelativeAddress)): pass
-class FuncPointer(dyn.opointer(pstr.szstring, headers.Header_RelativeAddress)):
+#class FuncPointer(dyn.opointer(ptype.type, headers.RelativeAddress)): pass
+class FuncPointer(dyn.opointer(pstr.szstring, headers.RelativeAddress)):
     def getModuleName(self):
         module,name = self.d.l.get().split('.', 1)
         if name.startswith('#'):
             name = 'Ordinal%d'% int(n[1:])
         return module.lower() + '.dll',name
 
-class NamePointer(dyn.opointer(pstr.szstring, headers.Header_RelativeAddress)): pass
+class NamePointer(dyn.opointer(pstr.szstring, headers.RelativeAddress)): pass
 class Ordinal(word):
     def getExportIndex(self):
         '''Returns the Ordinal's index for things'''
         return int(self) - int(self.parent.parent.parent['Base'])
 
 class IMAGE_EXPORT_DIRECTORY(pstruct.type):
-    _p_AddressOfFunctions =    lambda self: dyn.opointer(dyn.array(FuncPointer, int(self['NumberOfFunctions'].load())), headers.Header_RelativeAddress)
-    _p_AddressOfNames =        lambda self: dyn.opointer(dyn.array(NamePointer, int(self['NumberOfNames'].load())), headers.Header_RelativeAddress)
-    _p_AddressOfNameOrdinals = lambda self: dyn.opointer(dyn.array(Ordinal,     int(self['NumberOfNames'].load())), headers.Header_RelativeAddress)
+    _p_AddressOfFunctions =    lambda self: dyn.opointer(dyn.array(FuncPointer, int(self['NumberOfFunctions'].load())), headers.RelativeAddress)
+    _p_AddressOfNames =        lambda self: dyn.opointer(dyn.array(NamePointer, int(self['NumberOfNames'].load())), headers.RelativeAddress)
+    _p_AddressOfNameOrdinals = lambda self: dyn.opointer(dyn.array(Ordinal,     int(self['NumberOfNames'].load())), headers.RelativeAddress)
 
     _fields_ = [
         ( dword, 'Flags' ),

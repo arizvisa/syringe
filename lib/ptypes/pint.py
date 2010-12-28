@@ -210,18 +210,16 @@ class enum(integer_t):
         return [v for k,v in cls._values_]
 
 if __name__ == '__main__':
-    import utils
+    import provider,utils
 
     string = '\x0a\xbc\xde\xf0'
 
-    a = bigendian(uint32_t)()
-    a.deserialize(string)
+    a = bigendian(uint32_t)(source=provider.string(string)).l
     print a, repr(a.serialize())
     a.set(0x0abcdef0)
     print a, repr(a.serialize())
 
-    b = littleendian(uint32_t)()
-    b.deserialize(string)
+    b = littleendian(uint32_t)(source=provider.string(string)).l
     print b, repr(b.serialize())
     b.set(0x0abcdef0)
     print b, repr(b.serialize())

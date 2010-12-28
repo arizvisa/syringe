@@ -577,8 +577,7 @@ if __name__ == '__main__':
     import ptypes
     data = '\x44\x11'
 
-    z = RECORDHEADER()
-    z.deserialize(data)
+    z = RECORDHEADER(source=ptypes.provider.string(data)).l
     print z
 
     z.source = ptypes.provider.string(data)

@@ -88,18 +88,6 @@ class type(__parray_generic):
             ofs += n.blocksize()
         return self
 
-    def deserialize(self, source):
-        source = iter(source)
-        obj = self._object_
-        self.value = []
-        ofs = self.getoffset()
-        for index in xrange(self.length):
-            n = self.newelement(type,str(index),ofs)
-            self.value.append(n)
-            n.deserialize(source)
-            ofs += n.blocksize()
-        return super(type, self).deserialize(None)
-
     def load(self):
         obj = self._object_
         self.value = []
@@ -131,7 +119,8 @@ class type(__parray_generic):
         else:
             obj = repr(self._object_.__class__)
 
-        return ' '.join((ofs, self.name(), '%s[%d]'% (obj, length), res))
+        name = [lambda:'__name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
+        return ' '.join((ofs, self.name(), name, '%s[%d]'% (obj, length), res))
 
 class terminated(type):
     '''
@@ -146,21 +135,8 @@ class terminated(type):
     def __len__(self):
         return len(self.value)
 
-    def deserialize(self, source):
-        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
-        source = iter(source)
-        obj = self._object_
-        self.value = []
-
-        ofs = self.getoffset()
-        for index in forever:
-            n = self.newelement(obj,str(index),ofs)
-            self.value.append(n)
-            n.deserialize(source)
-            if self.isTerminator(n):
-                break
-            ofs += n.blocksize()
-        return super(type, self).deserialize(None)
+    def blocksize(self):
+        return reduce(lambda x,y: x+y.blocksize(), self.value, 0)
 
     def load(self):
         forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
@@ -191,7 +167,8 @@ class terminated(type):
         else:
             obj = repr(self._object_.__class__)
 
-        return ' '.join((ofs, self.name(), '%s[%s] %s'% (obj, index, res)))
+        name = [lambda:'__name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
+        return ' '.join((ofs, self.name(), name, '%s[%s] %s'% (obj, index, res)))
 
 class infinite(terminated):
     '''
@@ -202,28 +179,6 @@ class infinite(terminated):
             return False
         return True
 
-    def deserialize(self, source):
-        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
-        source = iter(source)
-        obj = self._object_
-        self.value = []
-
-        try:
-            ofs = self.getoffset()
-            for index in forever:
-                n = self.newelement(obj,str(index),ofs)
-                n.deserialize(source)
-                if self.isTerminator(n):
-                    break
-                self.value.append(n)
-                ofs += n.blocksize()
-            pass
-        except StopIteration:
-            if self.parent:
-                path = ' ->\n\t'.join(self.backtrace())
-                print "Stopped reading %s at offset %x\n\t%s"%(self.name(), self.getoffset(), path)
-        return super(type, self).deserialize(None)
-
     def load(self):
         forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
         obj = self._object_
@@ -233,18 +188,20 @@ class infinite(terminated):
             ofs = self.getoffset()
             for index in forever:
                 n = self.newelement(obj, str(index), ofs)
-                if self.isTerminator(n.load()):
+                self.value.append(n.load())
+                if self.isTerminator(n):
                     break
-                self.value.append(n)
                 ofs += n.blocksize()
             return super(type, self).load()
+
         except StopIteration:
             if self.parent is not None:
                 path = ' ->\n\t'.join(self.backtrace())
                 print "Stopped reading %s at offset %x\n\t%s"%(self.name(), self.getoffset(), path)
+            
         return self
 
-class block(infinite):
+class block(terminated):
     __current = 0
     def isTerminator(self, value):
         if value.initialized and self.__current < self.blocksize():
@@ -253,16 +210,57 @@ class block(infinite):
         return True
 
     def load(self):
-        self.__current = 0
-        return super(block, self).load()
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+        obj = self._object_
+        self.value = []
 
-    def deserialize(self, source):
+        # FIXME: i'm having a problem with exceptions being raised from another parray.block defined in _object_
+        #        to remedy that, should we add a special case for all _object_ instances that subclass parray.terminated?
+        #        XXX: this version of parray.block breaks a bunch of my testcases
+
+        ofs = self.getoffset()
         self.__current = 0
-        return super(block, self).deserialize(source)
+        for index in forever:
+            n = self.newelement(obj, str(index), ofs)
+            try:
+                if self.isTerminator(n.load()):
+                    break
+                self.value.append(n)
+            except StopIteration, e:
+                print "<parray.block> Non-fatal error while decoding _object_ %s[%d] at offset %x from %x:+%x -> %s"%(n.shortname(), index, n.getoffset(), self.getoffset(), self.blocksize(), e)
+                break
+
+            ofs += n.blocksize()
+            continue
+        return self
 
 if __name__ == '__main__':
     import ptype,parray
     import pstruct,parray,pint,provider
+
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
 
     class RecordGeneral(pstruct.type):
         _fields_ = [
@@ -270,37 +268,41 @@ if __name__ == '__main__':
             (pint.uint8_t, 'end'),
         ]
 
-    if False:
-        string = 'A'*100
-        class qword(ptype.type): length = 8
-        class dword(ptype.type): length = 4
-        class word(ptype.type): length = 2
-        class byte(ptype.type): length = 1
-       
-        import random
-        random.seed()
-        def function(self):
-    #        if len(self.value) > 0:
-    #            self[0].load()
-    #            print self[0]
-            return random.sample([byte, word, dword, function2], 1)[0]
+    string = 'A'*100
+    class qword(ptype.type): length = 8
+    class dword(ptype.type): length = 4
+    class word(ptype.type): length = 2
+    class byte(ptype.type): length = 1
 
-        def function2(self):
-            return qword()
+    import random
+    random.seed()
+    def function(self):
+#        if len(self.value) > 0:
+#            self[0].load()
+#            print self[0]
+        return random.sample([byte, word, dword, function2], 1)[0]
 
-    if False:
+    def function2(self):
+        return qword()
+
+    @TestCase
+    def Test1():
         class myarray(parray.type):
             length = 5
             _object_ = dword
 
         x = myarray()
-        print x
-        print x.length,len(x), x.value
-        x.deserialize('AAAA'*15)
-        print x.length,len(x), x.value
-        print repr(x)
+#        print x
+#        print x.length,len(x), x.value
+        x.source = provider.string('AAAA'*15)
+        x.l
+#        print x.length,len(x), x.value
+#        print repr(x)
+        if len(x) == 5 and x[4].serialize() == 'AAAA':
+            raise Success
 
-    if False:
+    @TestCase
+    def Test2():
         class myarray(parray.type):
             length = 16
             _object_ = function
@@ -310,12 +312,14 @@ if __name__ == '__main__':
         x.source = provider.memory()
         x.setoffset(id(x))
         x.load()
-        print x
+#        print x
 
         import utils
-        print '\n'.join(['[%d] %s -> %x'% (i, repr(x), x.getoffset()) for x,i in zip(x, utils.infiniterange(0))])
+        if len(x) == 16:
+            raise Success
 
-    if False:
+    @TestCase
+    def Test3():
         import pint
         class myarray(parray.terminated):
             _object_ = pint.uint8_t
@@ -325,55 +329,48 @@ if __name__ == '__main__':
                 return False
 
         block = 'GFEDCBABCDHEFG'
-        z = myarray()
-        z.deserialize(block)
-        print len(z) == 11
+        x = myarray(source=provider.string(block)).l
+        if len(x) == 11:
+            raise Success
 
-        z = myarray(source=provider.string(block))
-        z.l
-        print len(z) == 11
-
-        # FIXME: I don't think the following type of code works anymore...
-
-    if False:
+    @TestCase
+    def Test4():
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        chars = '\xdd\xdd\xdd\xdd'
-        st = chars * 2
-        string = st * 8
+        chars = '\xdd\xdd'
+        string = chars * 8
         string = string[:-1]
 
-        z = RecordContainer()
-        z.deserialize(string)
-        print z
+        z = RecordContainer(source=provider.string(string)).l
+        if len(z) == int(len(string)/2.0) and len(string)%2 == 1:
+            raise Success
 
-    if False:
+    @TestCase
+    def Test6():
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        z = RecordContainer()
-        z.deserialize('A'*5)
-        print z
-        print z.size() == 4 and len(z) == 2
+        z = RecordContainer(source=provider.string('A'*5)).l
+        if z.size() == 4 and len(z) == 2:
+            raise Success
 
-    if False:
+    @TestCase
+    def Test7():
         import pint
         class container(parray.block):
             _object_ = pint.uint8_t
-            blocksize = 4
+            blocksize = lambda s:4
 
         block = ''.join(map(chr,range(0x10)))
 
-        z = container()
-        print z.deserialize(block)
-        print len(z) == 4 and z.size() == 4
+        a = container(source=provider.string(block)).l
+        if len(a) == 4:
+            raise Success
+        print a
 
-        a = container(source=provider.string(block))
-        a.l
-        print a, len(a) == 4
-
-    if False:
+    @TestCase
+    def Test8():
         b = ''.join(map(chr,range(ord('a'), ord('z')) + range(ord('A'), ord('Z')) + range(ord('0'), ord('9'))))
 
         count = 0x10
@@ -385,16 +382,12 @@ if __name__ == '__main__':
         block_length = child_type.length * count
         block = '\x00'*block_length
 
-        n = container_type()
-        n.deserialize(block)
-        print n, len(n) == count
+        n = container_type(source=provider.string(block)).l
+        if len(n) == count:
+            raise Success
 
-        from ptypes import provider
-        n = container_type(source=provider.string(block))
-        n.l
-        print n, len(n) == count
-
-    if True:
+    @TestCase
+    def Test9():
         count = 8
 
         child_type = pint.uint32_t
@@ -403,14 +396,42 @@ if __name__ == '__main__':
         
         block_length = child_type.length * count
         block = '\x00'*block_length
-        container_type.size = lambda s: child_type.length * 4
+        container_type.blocksize = lambda s: child_type.length * 4
 
-        from ptypes import provider
-        a = container_type()
-        a.deserialize(block)
-        print a, len(a) == 4
+        a = container_type(source=provider.string(block)).l
+        if len(a) == 4:
+            raise Success
 
-        a = container_type(source=provider.string(block))
-        a.l
-        print a, len(a) == 4
-        
+#    @TestCase
+    def Test10():
+        ''' This testcase is wrong '''
+        class subarray(parray.type):
+            length = 4
+            _object_ = pint.uint8_t
+            def __int__(self):
+                return reduce(lambda x,y:x*256+int(y), self.v, 0)
+
+            def __repr__(self):
+                if self.initialized:
+                    return self.name() + ' %x'% int(self)
+                return self.name() + ' ???'
+
+        class extreme(parray.infinite):
+            _object_ = subarray
+            def isTerminator(self, v):
+                return int(v) == 0x42424242
+
+            def blocksize(self):
+                return 7
+
+        a = extreme(source=provider.string('A'*0x100 + 'B'*0x100 + 'C'*0x100))
+        a=a.l
+        print len(a)
+        print a[1].v
+        if len(a) == 0x100 / subarray().alloc().size():
+            raise Success
+
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )

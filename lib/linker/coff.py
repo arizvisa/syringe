@@ -559,7 +559,7 @@ class executable(store):
         return data.tostring()
 
     def __setitem__(self, key, value):
-        parent_setitem = super(coffexecutable, self).__setitem__
+        parent_setitem = super(executable, self).__setitem__
         if key in self.__importcache:
             fullname,ordinalstring = self.__importcache[key]
             self[fullname] = value  # recurse
@@ -601,7 +601,6 @@ class library(container):
             res = m.newelement(pecoff.Archive.ImportMember, name, offset)
         else:
             res = m.newelement(pecoff.Object.File, name, offset)
-        #res.deserialize(data)
         return res
 
     def listsegments(self):

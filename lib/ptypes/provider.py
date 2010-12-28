@@ -9,7 +9,7 @@ class provider(object):
     def consume(self, amount):
         '''Read some number of bytes'''
         raise NotImplementedError('Developer forgot to overload this method')
-    def write(self, data):
+    def store(self, data):
         '''Write some number of bytes'''
         raise NotImplementedError('Developer forgot to overload this method')
 
@@ -22,7 +22,7 @@ class empty(provider):
     def consume(self, amount):
         '''Read some number of bytes'''
         return '\x00'*amount
-    def write(self, data):
+    def store(self, data):
         '''Write some number of bytes'''
         raise OSError('Attempted to write to read-only medium')
 
@@ -53,7 +53,7 @@ class file(provider):
             return result
         raise StopIteration('Unable to read 0x%x bytes at file offset 0x%x'% (amount, offset))
 
-    def write(self, data):
+    def store(self, data):
         return self.file.write(data)
 
     def close(self):
@@ -83,32 +83,33 @@ class iter(provider):
     def consume(self, amount):
         return ''.join([x for i,x in zip(utils.infiniterange(0), self.iterator)])
 
-    def write(self, data):
+    def store(self, data):
         ## Can't write to an iterator
         pass
 
+import array
 class string(provider):
     '''Basic string provider'''
 
     offset = int
-    string = str
+    value = str     # this is backed by an array.array type
     def __init__(self, string):
-        self.string = str(string)
+        self.value = array.array('c', string)
     def seek(self, offset):
         self.offset = offset
     def consume(self, amount):
-        res = self.string[self.offset: self.offset+amount]
+        res = self.value[self.offset: self.offset+amount].tostring()
         if len(res) != amount:
-            raise StopIteration
+            raise StopIteration('Only read %d of %d bytes at offset %x'% (len(res), amount, self.offset))
         self.offset += amount
         return res
-    def write(self, data):
+    def store(self, data):
         left, right = self.offset, self.offset + len(data)
-        self.string = self.string[:left] + data + self.string[right:]
+        self.value[left:right] = array.array('c',data)
         self.offset = right
         return len(data)
     def size(self):
-        return len(self.string)
+        return len(self.value)
 
 import ctypes
 from ctypes import *
@@ -127,7 +128,7 @@ class memory(provider):
         self.address += amount
         return res
 
-    def write(self, data):
+    def store(self, data):
         res = memory._write(self.address, data)
         self.address += len(data)
         return res
@@ -148,6 +149,51 @@ class memory(provider):
         for i,c in zip(xrange(length), str(value)):
             p.contents[i] = c
         return True
+
+class localstring(memory):
+    '''
+    This provider is very fragile. If specified address is out of bounds, then it WILL
+    dereference data rampantly..
+    '''
+
+    size = 0
+    buffer = None       # keeps a reference to the string
+    baseaddress = None  # base address into buffer
+    def __init__(self, string):
+        super(localstring,self).__init__()
+
+        self.buffer = str(string)
+        p = id(self.buffer)
+        pbase,psize = p+0x14,p+8    # XXX: hardcoded...
+        self.size = reduce(lambda x,y: x+ord(y), self._read(psize, 4), 0)
+        self.baseaddress = pbase
+
+    def consume(self, amount):
+        p = self.baseaddress+self.address
+        if self.address+amount <= self.size:
+            res = memory._read(p, amount)
+            self.address += amount
+            return res
+
+        amount = self.size-self.address
+        return self.consume(amount)
+
+    def store(self, data):
+        p = self.baseaddress+self.address
+        if self.address+len(data) <= self.size:
+            res = memory._write(p, data)
+            self.address += len(data)
+            return res
+
+        data = data[:self.size-self.address]
+        return self.store(data)
+
+class mmap_readonly(localstring):
+    '''This is for benchmarking an idea for testing, do not use!!!'''
+    def __init__(self, filename, mode='rb'):
+        if 'w' in mode:
+            raise NotImplementedError('Writing is not implemented for this provider')
+        return super(mmap_readonly, self).__init__( __builtins__['file'](filename,mode).read() )
 
 import sys
 if sys.platform == 'win32':
@@ -178,7 +224,7 @@ if sys.platform == 'win32':
             # XXX: test tihs shit out
             return str(Buffer.raw)
 
-        def write(self, value):
+        def store(self, value):
             NumberOfBytesWritten = ctypes.c_int()
 
             res = ctypes.c_char*len(value)

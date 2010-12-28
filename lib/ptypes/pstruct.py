@@ -62,17 +62,6 @@ class type(__pstruct_generic):
             ofs += n.blocksize()
         return super(type, self).load()
 
-    def deserialize(self, source):
-        source = iter(source)
-        self.value = []
-        ofs = self.getoffset()
-        for t,name in self._fields_:
-            n = self.newelement(t,name,ofs)
-            self.value.append(n)
-            n.deserialize(source)
-            ofs += n.blocksize()
-        return super(type, self).deserialize(None)
-
     def __repr__uninitialized(self):
         result = []
         startofs = self.getoffset()
@@ -90,9 +79,10 @@ class type(__pstruct_generic):
         return '\n'.join([row(name,value) for (t,name),value in zip(self._fields_, self.value)])
 
     def __repr__(self):
+        name = [lambda:' __name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
         if not self.initialized:
-            return self.name() + '\n' + self.__repr__uninitialized()
-        return self.name() + '\n' + self.__repr__initialized()
+            return self.name() + name + '\n' + self.__repr__uninitialized()
+        return self.name() + name + '\n' + self.__repr__initialized()
 
     def name(self):
         return repr(self.__class__)

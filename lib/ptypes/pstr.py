@@ -32,7 +32,7 @@ class wchar_t(_char_t):
             return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.get())])
         return ' '.join([super(_char_t, self).__repr__(), ' ???'])
 
-class string(ptype.type):     # XXX: this isn't right to be treated as a container
+class string(ptype.type):
     '''String of characters'''
     length = 0
     _object_ = pstr.char_t
@@ -93,7 +93,7 @@ class string(ptype.type):     # XXX: this isn't right to be treated as a contain
         result = dyn.array(self._object_, len(value))()
         result.alloc()
         for element,character in zip(result, value):
-            element.set(ord(character))
+            element.set(character)
         self.value = result.serialize()
         return self
 
@@ -101,27 +101,16 @@ class string(ptype.type):     # XXX: this isn't right to be treated as a contain
         s = self.value
         return utils.strdup(s)[:len(self)]
 
-    def deserialize_stream(self, source):
-        '''initializes self with input from from the specified iterator 'source\''''
-        totallength = int(self.length)
-        chunklength = self._object_.length
-        assert chunklength > 0
+    def load(self):
+        sz = self._object_.length
+        self.source.seek(self.getoffset())
+        block = self.source.consume( self.blocksize() )
+        return self.deserialize_block(block)
 
-        self.value = ''
-        chunk = ''
-        try:
-            for i,byte in zip(xrange(totallength), source):
-                chunk += byte
-                if len(chunk) == chunklength:
-                    self.value += chunk
-                    chunk = ''
-                continue
-
-        except MemoryError:
-            raise MemoryError('Out of memory trying to allocate %d bytes'% self.size())
-
-        if len(self.value) != self.size():
+    def deserialize_block(self, block):
+        if len(block) != self.blocksize():
             raise StopIteration("unable to continue reading (byte %d out of %d)"% (len(self.value), self.size()))
+        self.value = block
         return self
 
     def serialize(self):
@@ -137,38 +126,41 @@ class string(ptype.type):     # XXX: this isn't right to be treated as a contain
 
 class szstring(string):
     '''Standard null-terminated string'''
+    _object_ = char_t
+    length=None
     def isTerminator(self, v):
         return int(v) == 0
 
+    def set(self, value):
+        o = self._object_().alloc().serialize()
+        return super(szstring, self).set(value+'\x00')
+
+    def deserialize_block(self, block):
+        return self.deserialize_stream(iter(block))
+
     def load(self):
+        sz = self._object_.length
         self.source.seek(self.getoffset())
-        producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
-        return self.deserialize_stream( producer )
+        producer = (self.source.consume(sz) for x in utils.infiniterange(0))
+        return self.deserialize_stream(producer)
 
     def deserialize_stream(self, stream):
-        source = iter(stream)
-        chunklength = self._object_.length
         o = self.getoffset()
-
         obj = self.newelement(self._object_, '', o)
 
         self.value = ''
-
-        chunk = ''
-        for byte in source:
-            chunk += byte
-            if len(chunk) < chunklength:
-                continue
-
-            self.value += chunk
+        for char in stream:
+            self.value += char
 
             obj.setoffset(o)
-            obj.deserialize(chunk)
+            obj.deserialize_block(char)
             if self.isTerminator(obj):
                 break
-            o += len(chunk)
-            chunk = ''
+            o += len(char)
         return self
+
+    def blocksize(self):
+        return self.load().size()       # XXX: heh
 
 class wstring(string):
     '''String of wide-characters'''
@@ -185,41 +177,73 @@ if __name__ == '__main__':
     import provider
     import pstr
 
-    if True:
-        x = pstr.char_t()
-        x.deserialize('hello')
-        print x.get() == 'h'
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
 
-    if True:
-        x = pstr.wchar_t()
-        x.deserialize('\x43\x00')
-        print x.get() == '\x43'
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
 
-    if True:
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
+
+    @TestCase
+    def Test1():
+        x = pstr.char_t(source=provider.string('hello')).l
+        if x.get() == 'h':
+            raise Success
+
+    @TestCase
+    def Test2():
+        x = pstr.wchar_t(source=provider.string('\x43\x00')).l
+        if x.get() == '\x43':
+            raise Success
+
+    @TestCase
+    def Test3():
         x = pstr.string()
         string = "helllo world ok, i'm hungry for some sushi\x00"
         x.length = len(string)/2
         x.source = provider.string(string)
         x.load()
-        print x.get() == string[:len(string)/2]
+        if x.get() == string[:len(string)/2]:
+            raise Success
 
-    if True:
+    @TestCase
+    def Test4():
         x = pstr.wstring()
         oldstring = "ok, this is unicode"
         string = oldstring
-        x.length = len(string)
+        x.length = len(string)/2
         string = ''.join([c+'\x00' for c in string])
         x.source = provider.string(string)
         x.load()
-        print x.get() == oldstring[:len(oldstring)/2]
+        if x.get() == oldstring[:len(oldstring)/2]:
+            raise Success
 
-    if True:
-        x = pstr.szstring()
+    @TestCase
+    def Test5():
         string = 'null-terminated\x00ok'
-        x.deserialize(string)
-        print x.get() == 'null-terminated'
+        x = pstr.szstring(source=provider.string(string)).l
+        if x.get() == 'null-terminated':
+            raise Success
 
-    if True:
+    @TestCase
+    def Test6():
         import parray
         data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
 
@@ -231,11 +255,12 @@ if __name__ == '__main__':
                     return True
                 return False
 
-        x = stringarray()
-        x.deserialize(data)
-        print x[3].get() == 'null-terminated'
+        x = stringarray(source=provider.string(data)).l
+        if x[3].get() == 'null-terminated':
+            raise Success
 
-    if True:
+    @TestCase
+    def Test7():
         import pstruct,pint,pstr
         class IMAGE_IMPORT_HINT(pstruct.type):
             _fields_ = [
@@ -243,32 +268,25 @@ if __name__ == '__main__':
                 ( pstr.szstring, 'String' )
             ]
 
-        x = IMAGE_IMPORT_HINT()
-        x.deserialize('AAHello world this is a zero0-terminated string\x00this didnt work')
-        print x['String'].get() == 'Hello world this is a zero0-terminated string'
+        x = IMAGE_IMPORT_HINT(source=provider.string('AAHello world this is a zero0-terminated string\x00this didnt work')).l
 
-        source = provider.string( x.serialize() )
+        if x['String'].get() == 'Hello world this is a zero0-terminated string':
+            raise Success
 
-    import provider
-    if True:
-        x = IMAGE_IMPORT_HINT()
-        x.source = source
 
-    if False:
-        x = pstr.szstring()
-        x.source = source
-
-        x.load()
-        print x
-
-    if False:
+    @TestCase
+    def Test8():
         h = '43 00 3a 00 5c 00 50 00 79 00 74 00 68 00 6f 00 6e 00 32 00 36 00 5c 00 44 00 4c 00 4c 00 73 00 5c 00 5f 00 63 00 74 00 79 00 70 00 65 00 73 00 2e 00 70 00 79 00 64 00 00 00'
         h = h.split(' ')
         h = [int(x,16) for x in h]
         h = ''.join( [chr(x) for x in h] )
-        print repr(h)
 
-    s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
-    v = pstr.szwstring()
-    v.deserialize(s)
-    print v.get() == 'C:\Python26\DLLs\_ctypes.pyd'
+        s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
+        v = pstr.szwstring(source=provider.string(s)).l
+        if v.get() == 'C:\Python26\DLLs\_ctypes.pyd':
+            raise Success
+
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )

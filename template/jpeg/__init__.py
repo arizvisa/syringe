@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-raise NotImplementedError('Borked for now')
+raise NotImplementedError('outdated')
 
 def CBinary(args):
     class _CBinary(pbinary.struct):
@@ -131,11 +131,6 @@ class DQTTableArray(parray.terminated):
     _object_ = DQTTable
     def isTerminator(self, value):
         return False
-    def deserialize(self, iterable):
-        try:
-            super(DQTTableArray, self).deserialize(iterable)
-        except:
-            pass
 
 class DQT(header):
     marker = '\xff\xdb'
@@ -178,12 +173,6 @@ class HuffmanTable(pstruct.type):
 
 class HuffmanTableArray(parray.terminated):
     _object_ = HuffmanTable
-    def deserialize(self, iterable):
-        try:
-            super(HuffmanTables, self).deserialize(iterable)
-        except:
-            pass
-        return
 
 class DHT(header):
     marker = '\xff\xc4'

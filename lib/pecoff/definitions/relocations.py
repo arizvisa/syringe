@@ -103,12 +103,11 @@ class BaseRelocationEntry(pbinary.struct):
         (4, 'Type'),
         (12, 'Offset'),
     ]
-    def deserialize(self, source):
-        source = iter(source)
-        input = [source.next(), source.next()]
-        return super(BaseRelocationEntry, self).deserialize(reversed(input))
+    def load(self):
+        self.source.seek( self.getoffset() )
+        string = self.source.consume(2)
+        return self.deserialize_stream(reversed(string))
 
-#raise NotImplementedError('This needs to be rewritten for speed reasons')
 class BaseRelocationArray(parray.type):
     _object_ = BaseRelocationEntry
 

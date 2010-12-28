@@ -96,8 +96,12 @@ def debug(ptype):
     assert isptype(ptype), '%s is not a ptype'% repr(ptype)
     class newptype(ptype):
         @rethrow
-        def deserialize_stream(self, stream):
-            return super(newptype, self).deserialize_stream(stream)
+        def deserialize_block(self, block):
+            return super(newptype, self).deserialize_block(block)
+
+        @rethrow
+        def serialize(self):
+            return super(newptype, self).serialize()
 
         @rethrow
         def load(self):
@@ -152,6 +156,7 @@ class type(object):
     parent = type   # ptype.type
 
     attrs = None
+    __name__ = None     # default to unnamed
     
     ## initialization
     def __init__(self, **attrs):
@@ -182,45 +187,6 @@ class type(object):
 
         return self.size()
 
-    if False:
-        def __getparent_type(self,type):
-            result = []
-            self = self.parent
-            while self is not None:
-                print self.__class__ == type
-                result.append(self.__class__)
-                if issubclass(self.__class__,type) or self.__class__ == type:
-                    return self
-                print self.__class__ == type
-                self = self.parent
-            raise ValueError('type %s not found in chain %s'% (repr(type), repr(result)))
-
-        def __getparent_cmp(self, operand):
-            # XXX: can be replaced with .walk
-            result = []
-            self = self.parent
-            while self is not None:
-                result.append(self.__class__)
-                if operand(self):
-                    return self
-                self = self.parent
-            if operand(self):
-                return self
-            raise ValueError('match %s not found in chain %s'% (repr(operand), repr(result)))
-
-        def getparent(self, type=None, cmp=None):
-            # XXX: can be replaced with .walk
-            '''
-            Shortcut for traversing up to a parent node looking for a particular type
-            XXX: subject to change?
-            '''
-            if type:
-                return self.__getparent_type(type)
-            elif cmp:
-                return self.__getparent_cmp(cmp)
-
-            return self.parent
-
     def getparent(self, type=None):
         if type is None:
             return self.parent
@@ -228,28 +194,28 @@ class type(object):
         if self.__class__ == type:
             return self
 
-        for x in self.walk():
+        for x in self.traverse():
             if issubclass(x.__class__,type) or x.__class__ == type:
                 return x
             continue
 
         raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
 
-    def walk(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
+    def traverse(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
         '''
         Will walk the elements returned by the generator branches(visitee)
         defaults to getting the path to the root node
         '''
         for self in branches(self):
             yield self
-            for y in self.walk(branches):
+            for y in self.traverse(branches):
                 yield y
             continue
         return
 
     def backtrace(self):
         '''Return a backtrace to the root element'''
-        path = self.walk()
+        path = self.traverse()
         path = [ 'type:%s name:%s offset:%x'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
         return list(reversed(path))
 
@@ -264,10 +230,12 @@ class type(object):
 
     def alloc(self):
         '''will initialize a ptype with zeroes'''
-        zero = ( '\x00' for x in utils.infiniterange(0) )
         # XXX: should we actually allocate space for a remote provider?
-        #self.source = provider.empty()
-        return self.deserialize(zero)
+        source = self.source
+        self.source = provider.empty()
+        self.load()
+        self.source = source
+        return self
 
     ## operator overloads
     def __cmp__(self, x):
@@ -309,14 +277,13 @@ class type(object):
         bs = self.blocksize()
         self.source.seek(self.getoffset())
         block = self.source.consume(bs)
-        stream = iter(block)
         self.value = ''
-        return self.deserialize_stream(stream)
+        return self.deserialize_block(block)
 
     def commit(self):
         '''write self to self.source'''
         self.source.seek( self.getoffset() )
-        self.source.write( self.serialize() )
+        self.source.store( self.serialize() )
         return self
 
     ## byte stream input/output
@@ -332,18 +299,28 @@ class type(object):
             return result
         raise ValueError('%s is uninitialized'% self.name())
 
-    def deserialize(self, source):
-        '''initialize self using source as a bytestream'''
-        self.value = ''
-        return self.deserialize_stream(iter(source))
-
-    def deserialize_stream(self, source):
+    def deserialize_block(self, source):
         bs = self.blocksize()
         block = ''.join( (x for i,x in zip(xrange(bs), source)) )
         if len(block) < bs:
             self.value = block[:self.size()]
             path = ' ->\n\t'.join(self.backtrace())
             raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), bs, path))
+
+        self.value = block[:self.size()]
+        return self
+
+    def deserialize_block(self, block):
+        bs = self.blocksize()
+        sz = self.size()
+        if len(block) < bs:
+            path = ' ->\n\t'.join(self.backtrace())
+            print Warning("%d bytes left, expected %d"%( len(block), bs))   # XXX
+
+        if len(block) < sz:
+            self.value = block[:sz]
+            path = ' ->\n\t'.join(self.backtrace())
+            raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), sz, path))
 
         self.value = block[:self.size()]
         return self
@@ -362,7 +339,8 @@ class type(object):
             res = repr(''.join(self.serialize()))
         else:
             res = '???'
-        return  ' '.join([ofs, self.name(), res])
+        name = [lambda:'__name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
+        return  ' '.join([ofs, self.name(), name, res])
 
     def hexdump(self, **kwds):
         return utils.hexdump( self.serialize(), offset=self.getoffset(), **kwds )
@@ -377,14 +355,14 @@ class type(object):
     def copy(self):
         '''Return a duplicated instance of the current ptype'''
         result = self.newelement( self.__class__, self.name(), self.getoffset() )
-        result.deserialize( self.serialize() )
+        result.deserialize_block( self.serialize() )
         return result
 
     def cast(self, t):
         '''Cast the contents of the current ptype to a different ptype'''
         result = self.newelement( t, 'cast(%s, %s)'% (self.name(), repr(t.__class__)), self.getoffset() )
         try:
-            result.deserialize( self.serialize() )
+            result.deserialize_block( self.serialize() )
         except StopIteration:
             result.l # try to load it anyways
         return result
@@ -500,36 +478,23 @@ class pcontainer(type):
         bs = self.blocksize()
         self.source.seek(self.getoffset())
         block = self.source.consume(bs)
-        stream = iter(block)
-        return self.deserialize_stream(stream)
+        return self.deserialize_block(block)
 
-    def deserialize(self, source):
-        assert self.value is not None and source is None, 'Parent must initialize self.value'
-        block = ''.join( (x.serialize() for x in self.value) )
-
-        bs = self.blocksize()
-        if len(block) < bs:
-            padding = (bs - len(block)) * self.attrs.get('padding', '\x00')
-            block += padding
-
-        if len(block) > bs:
-            path = ' ->\n\t'.join(self.backtrace())
-            raise StopIteration("Error reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), bs, path))
-
-        return self.deserialize_stream(iter(block))
-
-    def deserialize_stream(self, source):
+    def deserialize_block(self, block):
         assert self.value is not None, 'Parent must initialize self.value'
         ofs = self.getoffset()
         for n in self.value:
+            bs = n.blocksize()
             n.setoffset(ofs)
-            n.deserialize_stream(source)
-            ofs += n.blocksize()
+
+            n.deserialize_block(block[:bs])
+            block = block[bs:]
+            ofs += bs
         return self
 
 if __name__ == '__main__':
     import ptype
-    if False:
+    if True:
         class p10bytes(ptype.type):
             length = 10
 
@@ -556,18 +521,20 @@ if __name__ == '__main__':
         x.set("okay, what the fuck. please work. i'm tired.")
         x.commit()
 
-if __name__ == '__main__':
-    class u8(ptype.type): length=1
-    class u16(ptype.type): length=2
-    class u32(ptype.type): length=4
-    
-    x = ptype.pcontainer()
-    x.append( u8() )
-    x.append( u32() )
-    x.append( u16() )
-    x.append( u16() )
-    x.append( u32() )
-    x.append( u16() )
-    x.append( u8() )
-    x.append( u8() )
-    x.append( u16() )
+    if True:
+        class u8(ptype.type): length=1
+        class u16(ptype.type): length=2
+        class u32(ptype.type): length=4
+        
+        x = ptype.pcontainer(value=[])
+        x.v.append( u8() )
+        x.v.append( u32() )
+        x.v.append( u16() )
+        x.v.append( u16() )
+        x.v.append( u32() )
+        x.v.append( u16() )
+        x.v.append( u8() )
+        x.v.append( u8() )
+        x.v.append( u16() )
+        x.source=provider.empty()
+        print x.l

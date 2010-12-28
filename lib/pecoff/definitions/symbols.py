@@ -101,7 +101,7 @@ class ShortName(pstruct.type):
     def set(self, string):
         if len(string) <= 8:
             string = string + '\x00'*(8-len(string))
-            self.deserialize(string)
+            self.deserialize_block(string)
             return
 
         stringtable = self.parent.parent.parent['Strings']

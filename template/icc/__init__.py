@@ -157,11 +157,6 @@ def verify_bitsize(integertype, bitsize):
             self.__verify()
             return res
 
-        def deserialize(self, source):
-            res = super(verifiedtype, self).deserialize(source)
-            self.__verify()
-            return res
-
         def alloc(self):
             res = super(verifiedtype, self).alloc(source)
             self.__verify()

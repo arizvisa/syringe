@@ -1,6 +1,6 @@
 '''Provides a dynamic kind of feel'''
 import ptype,parray,pstruct
-import utils
+import utils,provider
 
 __all__ = []
 
@@ -21,6 +21,23 @@ def block(size, **kwds):
 
     _block.__name__ = kwds.get('name', 'block(%d)'% size)
     return _block
+
+def align(s, **kwds):
+    '''Return a block that will align definitions in a structure'''
+    class _align(block(0)):
+        initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.size())
+        def size(self):
+            p = self.parent
+            i = p.value.index(self)
+            offset = reduce(lambda x,y:x+int(y.size()), p.value[:i], 0)
+            return (-offset) & (s-1)
+
+        def shortname(self):
+            sz = self.size()
+            return '%s{size=%d}'% (super(_align, self).shortname(), sz)
+    
+    _align.__name__ = kwds.get('name', 'align<%d>'% s)
+    return _align
 
 def array(obj, elements, **kwds):
     '''
@@ -50,36 +67,102 @@ def clone(cls, **newattrs):
 #    __clone.__name__ = cls.__name__
     return __clone
 
-class union(pstruct.type):
+class __union_generic(ptype.pcontainer):
+    __fastindex = dict  # our on-demand index lookup for .value
+
+    def getindex(self, name):
+        try:
+            return self.__fastindex[name]
+        except TypeError:
+            self.__fastindex = {}
+        except KeyError:
+            pass
+
+        res = self.keys()
+        for i in range( len(res) ):
+            if name == res[i]:
+                self.__fastindex[name] = i
+                return i
+
+        raise KeyError(name)
+
+    def keys(self):
+        return [name for type,name in self._fields_]
+
+    def values(self):
+        return list(self.object)
+
+    def items(self):
+        return [(k,v) for k,v in zip(self.keys(), self.values())]
+
+    def __getitem__(self, name):
+        index = self.getindex(name)
+        return self.object[index]
+
+class union(__union_generic):
     '''
-    Provides a Union-like data structure
-    XXX: this hasn't really been tested out, but is in use in a few places.
+    Provides a data structure with Union-like characteristics
+    If the root type isn't defined, it is assumed the first type in the union will be the root.
     '''
-    def load(self):
-        # all point to the same source
-        self.alloc()
-        [ n.setoffset( self.getoffset() ) for n in self.value ]     # we use .alloc() because unions aren't digitally tangible
-        [ n.load() for n in self.value ]
+    root = None         # root type. determines block size.
+    _fields_ = []       # aliases of root type that will act on the same data
+    object = None       # objects associated with each alias
+
+    initialized = property(fget=lambda self: self.__root is not None and self.__root.initialized)    # bool
+    __root = None
+    def alloc(self):
+        self.__create_root()
+        self.__create_objects()
         return self
 
-    def deserialize(self, source):
-        source = iter(source)
-        ofs = self.getoffset()
+    def __create_root(self):
+        assert self.root, 'Need to define an element or a root element in order to create a union'
+        offset = self.getoffset()
+        r = self.newelement(self.root, self.shortname(), offset)
+        self.__root = r
+        self.value = __import__('array').array('c')
 
-        for n in self.alloc().value:
-            n.setoffset(ofs)
-            n.deserialize(source)
+    def __create_objects(self):
+        self.object = [ self.newelement(t, n, 0) for t,n in self._fields_ ]
+        source = provider.string('')
+        source.value = self.value
+        for n in self.object:
+            n.source = source
+        return
 
-            # use the previously defined element as input for the next one
-            source = iter(n.serialize())
+    def __init__(self, **attrs):
+        super(union, self).__init__(**attrs)
+        if not self.root and len(self._fields_) > 0:
+            t,n = self._fields_[0]
+            self.root = t
+        self.__create_root()
+        return
+
+    def serialize(self):
+        return self.value.tostring()
+
+    def load(self):
+        self.__create_root()
+        r = self.__root.l
+        return self.deserialize_block(r.serialize())
+
+    def deserialize_block(self, block):
+        self.value[:] = __import__('array').array('c')
+        self.value.fromstring( block[:self.size()] )
+        self.__create_objects()
+        [ n.load() for n in self.object ]
         return self
 
     def __repr__(self):
-        res = '(' + ', '.join([t.__name__ for t,n in self._fields_]) + ')'
-        return ' '.join([repr(self.__class__), 'union', res])
+        if self.initialized:
+            res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
+            return ' '.join([self.name(), 'union', res, repr(self.serialize())])
 
-    def blocksize(self):
-        return self.value[0].size()
+        res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
+        return ' '.join([self.name(), 'union', res])
+
+    def size(self):
+        return self.__root.size()
 
 import sys,pint
 if sys.byteorder == 'big':
@@ -169,22 +252,50 @@ def opointer(target, calculate=lambda s: s.getoffset(), type=pint.uint32_t):
     opointer._calculate_ = calculate    # promote it to a method
     return opointer
 
-__all__+= 'block,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
+__all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
 
 if __name__ == '__main__':
     import ptypes,zlib
     from ptypes import *
 
-    s = 'the quick brown fox jumped over the lazy dog'
-    
-    class zlibstring(pstr.string):
-        length = 44
+    if False:
+        s = 'the quick brown fox jumped over the lazy dog'
+        
+        class zlibstring(pstr.string):
+            length = 44
 
-    t = dyn.transform(zlibstring, lambda s,v: zlib.decompress(v), lambda s,v: zlib.compress(v))
+        t = dyn.transform(zlibstring, lambda s,v: zlib.decompress(v), lambda s,v: zlib.compress(v))
 
-    data = zlib.compress(s)
+        data = zlib.compress(s)
 
-    z = t()
-    z.source = ptypes.provider.string(data)
-    print z.deserialize(data)
-    print z.l
+        z = t()
+        z.source = ptypes.provider.string(data)
+        print z.l
+
+    if False:
+        import dyn,pint,parray
+        class test(dyn.union): 
+            root = dyn.array(pint.uint8_t,4)
+            _fields_ = [
+                (dyn.block(4), 'block'),
+                (pint.uint32_t, 'int'),
+            ] 
+
+        a = test(source=ptypes.provider.string('A'*4))
+        a=a.l
+        print a
+
+    if False:
+        import dyn,pint,pstruct
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'u32'),
+                (pint.uint8_t, 'u8'),
+                (dyn.align(4), 'alignment'),
+                (pint.uint32_t, 'end'),
+            ]
+
+        a = test(source=ptypes.provider.string('A'*12))
+        a=a.l
+        print a
+        

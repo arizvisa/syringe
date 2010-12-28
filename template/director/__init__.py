@@ -20,10 +20,13 @@ class Chunk(pstruct.type):
     def __ckData(self):
         t = self['ckID'].l.serialize()
         try:
-            return Riff_Header_Lookup[t]
+            return Record.Lookup(t)
         except KeyError:
             pass
-        return dyn.block( int(self['ckSize'].l) )
+
+        res = dyn.clone( Record.Unknown, blocksize=lambda s:int(self['ckSize'].l) )
+        res.type = t
+        return res
 
     def blocksize(self):
         size = int(self['ckSize']) + 8
@@ -32,7 +35,7 @@ class Chunk(pstruct.type):
         return size
 
     def __ckSize(self):
-        p = list(self.walkparent())[-1]   # yea, so we're slow. so what.
+        p = list(self.walk())[-1]   # yea, so we're slow. so what.
 
         if p['ID'].l.serialize() == 'XFIR':
             return LONG
@@ -47,6 +50,10 @@ class Chunk(pstruct.type):
 
 class ChunkList(parray.block):
     _object_ = Chunk
+
+    def __repr__(self):
+        ele = [ x['ckID'].serialize() for x in self.v ]
+        return ' '.join([ self.name(), '[%x]'% len(ele), ','.join(('%s'%x for x in ele))])
 
 ###
 class File(pstruct.type):
@@ -66,17 +73,40 @@ class File(pstruct.type):
         (__Data, 'Data'),
     ]
 
-###
-def getparentclasslookup(parent, key):
-    import inspect
-    res = {}
-    for cls in globals().values():
-        if inspect.isclass(cls) and cls is not parent and issubclass(cls, parent):
-            res[ key(cls) ] = cls
-        continue
-    return res
+    def __repr__(self):
+        name = self.name()
+        id,format = self['ID'], self['Format']
 
-Riff_Header_Lookup = getparentclasslookup(Chunk_Type, lambda cls: (cls.id))
+        self = self['Data']
+        ele = [ x['ckID'].serialize() for x in self.v ]
+        return ' '.join([ name, 'ID=%s,Format=%s'% (id.serialize(), format.serialize()), '[%x]'% len(ele), ','.join(('%s'%x for x in ele))])
+
+### record definition class
+class Record(object):
+    cache = {}
+    @classmethod
+    def Add(cls, object):
+        t = object.type
+        cls.cache[t] = object
+
+    @classmethod
+    def Lookup(cls, type):
+        return cls.cache[type]
+
+    @classmethod
+    def Define(cls, pt):
+        cls.Add(pt)
+        return pt
+
+    class Unknown(dyn.block(0)):
+        length=property(fget=lambda s:s.blocksize())
+        shortname=lambda s: 'Unknown{%x}<%s>'% (s.length, s.type)
+
+### records
+if False:
+    @Record.Define
+    class pami(pstruct.type):
+        pass
 
 if __name__ == '__main__':
     import ptypes,director; reload(director)

@@ -79,12 +79,6 @@ def newMember(name, membertype):
         def fetch(self):
             return self['Member'].cast(membertype)
 
-        def deserialize(self, source):
-            super(Member, self).deserialize(source)
-            s = str(self['Header']['Name'])
-            #assert s == name, 'Found name %s, but expected %s'%(s, name)
-            return self
-
     return Member
 
 class ImportHeaderType(pbinary.struct):

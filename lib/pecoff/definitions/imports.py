@@ -5,16 +5,14 @@ import array
 
 class IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
     _fields_ = [
-        (1, 'Ordinal/Name Flag'),   # True if an ordinal
+        (1, 'OrdinalFlag'),   # True if an ordinal
         (15, 'Zero'),
         (16, 'Ordinal Number'),
     ]
-    def deserialize(self, source):
-        #raise NotImplementedError
-        source = iter(source)
-        input = [source.next(), source.next(), source.next(), source.next()]
-        input = reversed(input)
-        return super(IMAGE_IMPORT_NAME_TABLE_ORDINAL, self).deserialize(input)
+    def load(self):
+        self.source.seek( self.getoffset() )
+        string = self.source.consume(4)
+        return self.deserialize_stream(reversed(string))
 
     def get(self):
         hint = int(self['Ordinal Number'])
@@ -22,34 +20,33 @@ class IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
 
 class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
     _fields_ = [
-        (1, 'Ordinal/Name Flag'),
+        (1, 'OrdinalFlag'),
         (31, 'Name'),
     ]
-    def deserialize(self, source):
-        #raise NotImplementedError
-        source = iter(source)
-        input = [source.next(), source.next(), source.next(), source.next()]
-        input = reversed(input)
-        return super(IMAGE_IMPORT_NAME_TABLE_NAME, self).deserialize(input)
+    def load(self):
+        self.source.seek( self.getoffset() )
+        string = self.source.consume(4)
+        return self.deserialize_stream(reversed(string))
 
     def get(self):
-        offset = headers.Header_RelativeAddress(self, int(self['Name']))
+        offset = headers.RelativeAddress(self, int(self['Name']))
         return self.newelement(IMAGE_IMPORT_HINT, 'ImportName', offset).load().get()
 
 class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
+    root = dyn.block(4)
     _fields_ = [
         (IMAGE_IMPORT_NAME_TABLE_NAME, 'Name'),
         (IMAGE_IMPORT_NAME_TABLE_ORDINAL, 'Ordinal'),
     ]
 
-    def __repr__(self):
-        if int(self['Name']['Ordinal/Name Flag']) == 1:
-            return repr(self['Ordinal'])
-        return repr(self['Name'])
+#    def __repr__(self):
+#        if int(self['Name']['OrdinalFlag']) == 1:
+#            return 'Ordinal -> %s'% repr(self['Ordinal'])
+#        return 'Name -> %s'% repr(self['Name'])
 
     def get(self):
         '''Will return a tuple of (iat index, name)'''
-        if int(self['Name']['Ordinal/Name Flag']) == 1:
+        if int(self['Name']['OrdinalFlag']) == 1:
             return self['Ordinal'].get()
         return self['Name'].get()
 
@@ -58,7 +55,7 @@ class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
 
     def isTerminator(self, v):
-        if int(v['Name']) == 0:
+        if int(v['Name']['Name']) == 0:
             return True
         return False
 
@@ -78,11 +75,11 @@ class IMAGE_IMPORT_HINT(pstruct.type):
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
-        ( dyn.opointer(IMAGE_IMPORT_NAME_TABLE, headers.Header_RelativeAddress), 'INT'),
+        ( dyn.opointer(IMAGE_IMPORT_NAME_TABLE, headers.RelativeAddress), 'INT'),
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
-        ( dyn.opointer(pstr.szstring, headers.Header_RelativeAddress), 'Name'),
-        ( dyn.opointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.Header_RelativeAddress), 'IAT')
+        ( dyn.opointer(pstr.szstring, headers.RelativeAddress), 'Name'),
+        ( dyn.opointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.RelativeAddress), 'IAT')
     ]
 
     def links(self):

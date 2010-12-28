@@ -468,9 +468,17 @@ lookup.add(bool)
 lookup.add(cell)
 
 def dumps(object, **kwds):
+    '''Serialize objects (i.e. convert from an object to a string)'''
     return lookup.dumps(object, **kwds)
 def loads(s, **kwds):
+    '''Deserialize objects (i.e. convert from a string back to an object)'''
     return lookup.loads(s, **kwds)
+
+def closure(l, **kwds):
+    '''Return a closure that will pass the specified named arguments to function l.'''
+    def result(*args):
+        return l(*args, **kwds)
+    return result
 
 if __name__ == '__main__':
     import fu; reload(fu)

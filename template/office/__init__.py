@@ -12,21 +12,21 @@ class RecordUnknown(dyn.block(0)):
         return '.'.join(names)
 
 class RecordHeader(pstruct.type):
-    class __verinstance(pbinary.struct):
-        _fields_=[(4,'ver'),(12,'instance')]
+    class __verinstance(pbinary.littleendian(pbinary.struct)) :
+        _fields_=[(12,'instance'),(4,'ver')]
 
     _fields_ = [
-        (__verinstance, 'ver/instance'),
+        (__verinstance, 'ver/inst'),
         (pint.littleendian(pint.uint16_t), 'type'),
         (pint.littleendian(pint.uint32_t), 'length')
     ]
 
     def __repr__(self):
         if self.initialized:
-            v = self['ver/instance'].getinteger()
+            v = self['ver/inst'].getinteger()
             t = int(self['type'])
             l = int(self['length'])
-            return '%s ver=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
+            return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
         return super(RecordHeader, self).__repr__()
 
 class Record(object):
@@ -61,9 +61,8 @@ class RecordGeneral(pstruct.type):
         t = int(self['header'].l['type'])
         name = '[%s]'% ','.join(self.backtrace()[1:])
 
-
         total = int(self['header']['length'])
-        used = self['data'].size()
+        used = self['data'].blocksize()
 
         if total >= used:
             l = total-used
@@ -131,6 +130,19 @@ class RecordContainer(parray.block):
             yield x['data']
         return
 
+    def errors(self):
+        for x in self:
+            if x.initialized and x.size() == x.blocksize():
+                continue
+            yield x
+        return
+
+    def dumperrors(self):
+        result = []
+        for i,x in enumerate(self.errors()):
+            result.append('%d\t%s\t%d\t%d'%(i,x.shortname(),x.size(),x.blocksize()))
+        return '\n'.join(result)
+
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
     _object_ = None
@@ -146,6 +158,9 @@ class File(RecordContainer):
                 records.append(n)
             return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
         return super(File, self).__repr__()
+
+    def blocksize(self):
+        return self.source.size()
 
 if __name__ == '__main__':
     from ptypes import *

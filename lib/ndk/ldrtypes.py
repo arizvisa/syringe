@@ -1,6 +1,8 @@
 from WinNT import *
 from umtypes import *
 
+## XXX: It would be worth it to do the Loader Data Table Entry Flags
+
 ## declarations, heh. 
 class LDR_DATA_TABLE_ENTRY(pstruct.type): pass
 class _LDR_DATA_TABLE_ENTRY_LIST(dyn.clone(LIST_ENTRY, _object_=lambda s:LDR_DATA_TABLE_ENTRY)):
@@ -37,6 +39,10 @@ class PEB_LDR_DATA(pstruct.type):
         (_LDR_DATA_TABLE_ENTRY_LIST, 'InInitializationOrderModuleList'),
         (PVOID, 'EntryInProgress'),
     ]
+    def walk(self):
+        for x in self['InLoadOrderModuleList'].walk():
+            yield x
+        return
 class PPEB_LDR_DATA(dyn.pointer(PEB_LDR_DATA)): pass
 
 import pecoff
@@ -44,6 +50,11 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
     class SectionPointerUnion(dyn.union):
         _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
     class TimeDateStampUnion(dyn.union):
+        _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
+
+    class __SectionPointerUnion(dyn.union):
+        _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
+    class __TimeDateStampUnion(dyn.union):
         _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
 
     _fields_ = [
@@ -59,9 +70,9 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         (ULONG, 'Flags'),
         (USHORT, 'LoadCount'),
         (USHORT, 'TlsIndex'),
-        (PVOID, 'SectionPointer'),   # SectionPointerUnion
+        (__SectionPointerUnion, 'SectionPointerUnion'),
         (ULONG, 'CheckSum'),
-        (ULONG, 'TimeDateStamp'),   # TimeDateStampUnion
+        (__TimeDateStampUnion, 'TimeDateStampUnion'),
         (PVOID, 'EntryPointActivationContext'),
         (PVOID, 'PatchInformation'),
     ]

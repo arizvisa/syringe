@@ -2,11 +2,11 @@ import ptypes,headers
 from ptypes import pstruct,parray,provider,dyn
 from __base__ import *
 
-import exports,relocations,imports
+import exports,relocations,imports,resources
 
 class Entry(pstruct.type):
     _fields_ = [
-        (dyn.opointer(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load())), headers.Header_RelativeAddress), 'VirtualAddress'),
+        (dyn.opointer(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load())), headers.RelativeAddress), 'VirtualAddress'),
         (uint32, 'Size')
     ]
 
@@ -30,7 +30,9 @@ class Export(Entry):
 class Import(Entry):
     _object_ = imports.IMAGE_IMPORT_DIRECTORY
 
-class Resource(Entry): pass
+class Resource(Entry):
+    _object_ = resources.IMAGE_RESOURCE_DIRECTORY
+
 class Exception(Entry): pass
 class Security(Entry): pass
 class BaseReloc(Entry):

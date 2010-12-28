@@ -63,7 +63,7 @@ class TableRecord(pstruct.type):
             if x.identifier == id:
                 result = self.newelement(x, id, block.getoffset())
                 result.maxsize = int(self['length'])
-                result.deserialize(block.load().serialize())
+                result.deserialize_block(block.load().serialize())
                 return result
             continue
         return block

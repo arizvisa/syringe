@@ -1,3 +1,13 @@
+"""
+This module abstracts page fetching from the os.
+It's intended to be used by a memorymanager, so don't
+use this directly unless you know what you're doing.
+
+To use this, call one of the following.
+allocator.new(pid=yourpid)
+allocator.new(handle=yourhandle)
+"""
+
 import sys,ctypes
 ### this is written this way in case we need to target this at PaX.
 ## logic is like:
@@ -292,7 +302,7 @@ if sys.platform == 'win32':
 
     class WindowsProcessId(Windows):
         def __init__(self, pid, **kwds):
-            res = k32.OpenProcess(kwds.get('access', PROCESS_ALL_ACCESS), False, pid)
+            res = k32.OpenProcess(kwds.get('access', PROCESS_INFO_ALL|PROCESS_VM_ALL), False, pid)
             if res == 0:
                 raise OSError('Unable to open process %d(0x%x)'% (pid, pid))
             self.handle = res

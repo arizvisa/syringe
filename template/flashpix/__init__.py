@@ -31,8 +31,7 @@ if False:
     ]
     argh = (chr(x) for x in res)
 
-    x = CLSID()
-    x.deserialize(argh)
+    x = CLSID(source=provider.string(argh))
     print x
 
 class HEADER(pstruct.type):

@@ -1,7 +1,7 @@
 import ptypes,__base__
 from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pbinary
 from __base__ import *
-import datadirectory,symbols,relocations
+import symbols
 from warnings import warn
 
 def findBase(self):
@@ -22,7 +22,7 @@ def findHeader(self):
         nth = list(self.walk())[-1]
     return nth
 
-def Header_RelativeAddress(self, address=None):
+def RelativeAddress(self, address=None):
     '''given a va, returns offset relative to the baseaddress'''
     if address is None:
         address = int(self)
@@ -37,7 +37,7 @@ def Header_RelativeAddress(self, address=None):
     # memory
     return base + address
 
-def Header_RelativeOffset(self, offset=None):
+def RelativeOffset(self, offset=None):
     '''return an offset relative to the baseaddress'''
     if offset is None:
         offset = int(self)
@@ -262,9 +262,9 @@ class SectionTable(pstruct.type):
         (uint32, 'VirtualSize'),
         (uint32, 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
-        (dyn.opointer(lambda s:dyn.block(s.parent.getreadsize()), Header_RelativeOffset), 'PointerToRawData'),
-        (dyn.opointer(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations'])), Header_RelativeOffset), 'PointerToRelocations'),
-        (dyn.opointer(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers'])), Header_RelativeOffset), 'PointerToLinenumbers'),
+        (dyn.opointer(lambda s:dyn.block(s.parent.getreadsize()), RelativeOffset), 'PointerToRawData'),
+        (dyn.opointer(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations'])), RelativeOffset), 'PointerToRelocations'),
+        (dyn.opointer(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers'])), RelativeOffset), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
         (uint16, 'NumberOfLinenumbers'),
         (IMAGE_SCN, 'Characteristics'),
@@ -409,6 +409,9 @@ class CoffHeader(pstruct.type, Header):
         ( FileHeader, 'Header' ),
         ( lambda s: dyn.clone(SectionTableArray, length=int(s['Header'].load()['NumberOfSections'])), 'Sections' )
     ]
+
+### delayed imports
+import datadirectory,relocations
 
 if __name__ == '__main__':
     from ptypes import provider

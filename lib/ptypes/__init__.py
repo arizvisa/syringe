@@ -5,12 +5,16 @@ import pbinary
 import dyn,provider
 import utils
 
-__all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn,provider,utils'.split(',')
+#__all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn,provider,utils'.split(',')
+__all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn'.split(',')
 
 ## globally changing the ptype provider
 def setsource(prov):
     '''Sets the default ptype provider to the one specified'''
-    assert issubclass(prov.__class__, provider.provider), 'Needs to be of type %s'% repr(provider.provider)
+#    assert issubclass(prov.__class__, provider.provider), 'Needs to be of type %s'% repr(provider.provider)
+    prov.seek
+    prov.consume
+    prov.store
     ptype.type.source = prov
 
 ## globally changing the endianness of all new pint types
@@ -40,5 +44,5 @@ from provider import file,memory
 from utils import hexdump
 
 #
-__all__+= 'setsource,littleendian,bigendian,setbyteorder'.split(',')
-__all__+= 'debug,debugrecurse,isptype,ispcontainer,file,memory,hexdump'.split(',')
+#__all__+= 'setsource,littleendian,bigendian,setbyteorder'.split(',')
+#__all__+= 'debug,debugrecurse,isptype,ispcontainer,file,memory,hexdump'.split(',')

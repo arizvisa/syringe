@@ -1,3 +1,10 @@
+'''
+This module provides facility to hook different parts of a target program given only
+an instance of a memorymanager.
+
+This module is also pretty stupid and shouldn't really be used without the python stub.
+'''
+
 import struct
 def producer(address, mm):
     while True:
@@ -9,7 +16,7 @@ import ia32
 class instruction(object):
     """
     This is only for hooking 32-bit x86. oh and it's not threadsafe...not
-    like it matters tho
+    like it matters tho..
     """
 
     def __setitem__(self, key, value):
@@ -105,7 +112,7 @@ class instruction(object):
 ### writing
     def __buildlifted(self, baseaddress):
         """
-        Reads lifted code, relocates it, tacks on a branch to return, and then writes
+        Reads lifted code, relocates it, tacks on a branch to return to original code, and then writes
         it to baseaddress. updates self.committed
         """
         loaded = self.loaded
@@ -116,6 +123,7 @@ class instruction(object):
             originalcode = self.__liftaddress(address, 5)
             relocatedcode = self.__relocateblock(originalcode, address, baseaddress)
             finalbranch = ''.join(self.__createfarbranch(baseaddress+len(relocatedcode), '\xe9', address + len(originalcode)))
+#            finalbranch = ''.join(self.__createfarbranch(baseaddress+len(relocatedcode), '\xe9', address))
 
             mm.write(baseaddress, relocatedcode+finalbranch)
 
@@ -125,7 +133,7 @@ class instruction(object):
 
     def __buildstub(self, baseaddress):
         """
-        Fetches hook-code, tacks on a branch, writes it to baseaddress. also updates
+        Fetches hook-code, tacks on a branch to the lifted code, writes it to baseaddress. also updates
         self.committed
         """
         loaded = self.loaded
@@ -172,12 +180,13 @@ class instruction(object):
             instructionlength = len(''.join(n))
             if ia32.isRelativeBranch(n) or ia32.isRelativeCall(n):
                 currentaddress = destinationaddress + len(''.join(result))
-                branchoffset = ia32.getBranchOffset(n)
+#                branchoffset = ia32.getBranchOffset(n)
+                branchoffset = ia32.getRelativeAddress(currentaddress, n) - currentaddress
 
                 o = offset + instructionlength + branchoffset
                 if (o<0) or (o>=len(block)):
                     operand = sourceaddress + o
-    #                print hex(o), offset, repr(n), hex(operand)
+#                    print hex(o), offset, repr(n), hex(operand)
                     n = self.__updatebranch(currentaddress, n, operand)
                 
                 pass
@@ -201,25 +210,24 @@ class instruction(object):
             return ia32.setPrefix(n, ''.join(prefix))
         if ia32.isUnconditionalBranch(n) or ia32.isConditionalBranch(n):
             return n
-        raise NotImplementedError(repr(n))
+        raise NotImplementedError('Unable to promote branch instruction to far: %s'%(repr(n)))
         return instruction
 
-    def __updatebranch(self, sourceaddress, instruction, operand):
-        '''Will promote a branch, and then update it's operand to point to the correct dest'''
-        newinstruction = self.__promotebranch(instruction)
-        newinstruction = ia32.setImmediate(newinstruction, '\x00\x00\x00\x00')
-        res = operand - (sourceaddress+len(''.join(newinstruction)))
-        res &= 0xffffffff
-        return ia32.setImmediate(newinstruction, struct.pack('L', res))
+#### utility
+    def __createbranch(self, sourceaddress, instruction, targetaddress):
+        res = targetaddress - (sourceaddress+len(''.join(instruction)))
+        #res = targetaddress - sourceaddress
+        return ia32.setImmediate(instruction, struct.pack('l', res))
 
-### utility
     def __createfarbranch(self, address, opcode, target):
-        '''Will create a branch with the specified opcode'''
         newinstruction = ia32.setOpcode( ia32.new(), opcode )
         newinstruction = ia32.setImmediate(newinstruction, '\x00\x00\x00\x00')
-        res = target - (address+len(''.join(newinstruction)))
-        res &= 0xffffffff
-        return ia32.setImmediate(newinstruction, struct.pack('L', res))
+        return self.__createbranch(address, newinstruction, target)
+
+    def __updatebranch(self, address, instruction, target):
+        newinstruction = self.__promotebranch(instruction)
+        newinstruction = ia32.setImmediate(newinstruction, '\x00\x00\x00\x00')
+        return self.__createbranch(address, newinstruction, target)
 
     def __patch(self, sourceaddress, destinationaddress):
         instruction = ''.join( self.__createfarbranch(sourceaddress, '\xe9', destinationaddress) )
@@ -230,16 +238,30 @@ class instruction(object):
         mm.allocator.setMemoryPermission(sourceaddress, 1, int('101', 2))
 
 if __name__ == '__main__':
-    import memorymanager
-    mm = memorymanager.new(pid=1348)
+    import sys,memorymanager
+    mm = memorymanager.new(pid=int(sys.argv[1],16))
 
     import instrument; reload(instrument)
     self = instrument.instruction(mm)
 
-    address = 0x402f64
+    #address = 0x00402f64
+    #address = 0x00401f0d 
+    address = int(sys.argv[2],16)
     self[address] = '\xcc\xcc\xcc\xcc\xcc'
     self.commit()
 
     print self
     print self.loaded
     print self.committed
+
+    if False:
+        import ia32,struct
+        instruction = ia32.setOpcode(ia32.setImmediate(ia32.new(), '\x00\x00\x00\x00'), '\xe9')
+        sourceaddress,targetaddress = 0x7c36364f,0x261000d
+        sourceaddress = 0x1000
+        targetaddress = 0x0000
+
+        x = setBranch(sourceaddress, instruction, targetaddress)
+        print repr(x)
+
+    #.text:7C36364F 8B C3                                                        mov     eax, ebx        ; hook point 1

@@ -9,7 +9,7 @@ class RecordGeneral(__init__.RecordGeneral):
         t = int(s['type'].l)
         name = '[%s]'% ','.join(s.backtrace()[1:])
 
-        used = s['data'].size()
+        used = s['data'].blocksize()
         total = int(s['length'].l)
         if used == total:
             return dyn.block(0)
@@ -51,6 +51,7 @@ class BiffSubStream(parray.terminated):
     '''Each excel stream'''
     _object_ = RecordGeneral
     def isTerminator(self, value):
+#        print hex(value.getoffset()),value['data'].name(), value.blocksize()
         if int(value['type']) == EOF.type:
             return True
         return False
@@ -318,6 +319,19 @@ class DVAL(pstruct.type):
         (pint.uint32_t, 'idvMac'),
     ]
 
+class CellRange(pstruct.type):
+    class AddressOld(pstruct.type):
+        '''XXX: BIFF2 through BIFF5 only'''
+        _fields_ = [(pint.uint16_t,'first_row'),(pint.uint16_t,'last_row'),(pint.uint8_t,'first_column'),(pint.uint8_t,'last_column')]
+
+    class Address(pstruct.type):
+        _fields_ = [(pint.uint16_t,'first_row'),(pint.uint16_t,'last_row'),(pint.uint16_t,'first_column'),(pint.uint16_t,'last_column')]
+
+    _fields_ = [
+        (pint.uint16_t, 'number'),
+        (lambda s: dyn.array(s.Address, int(s['number'].l)), 'addresses'),
+    ]
+
 @Record.Define
 class DV(pstruct.type):
     type = 0x1be
@@ -337,9 +351,36 @@ class DV(pstruct.type):
             (8, 'Reserved'),
         ]
 
+    class __string(pstruct.type):
+        def __unicode(self):
+            if int(self['unicode_flag'].l):
+                return dyn.clone(pstr.wstring, length=int(self['length'].l))
+            return dyn.clone(pstr.string, length=int(self['length'].l))
+
+        _fields_ = [
+            (pint.uint16_t, 'length'),
+            (pint.uint8_t, 'unicode_flag'),
+            (__unicode, 'string'),
+        ]
+
+    class __formula(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'size'),
+            (pint.uint16_t, 'reserved'),
+            (lambda s: dyn.block(int(s['size'].l)), 'data'),
+        ]
+
     _fields_ = [
         (__dwDvFlags, 'dwDvFlags'),
-        (DVAL, 'Dval')
+        (__string, 'prompt_title'),
+        (__string, 'error_title'),
+        (__string, 'prompt_text'),
+        (__string, 'error_text'),
+
+        (__formula, 'first'),
+        (__formula, 'second'),
+
+        (CellRange, 'addresses'),
     ]
 
 ###

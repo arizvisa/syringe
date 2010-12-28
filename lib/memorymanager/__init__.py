@@ -1,3 +1,13 @@
+"""
+This abstracts memory allocations for a target allocator, so you can
+allocate/free arbitrarily sized blocks of memory, which it will
+manage for you.
+
+To use this, call:
+memorymanager.new(pid=yourpid)
+memorymanager.new(handle=yourhandle)
+"""
+
 ### this module intends to provide an interface for managing address space inside another /context/ (whatever that may be, like a process)
 ### this includes things like allocations, frees, file mappings, code page creation...(using that one module or whatever that i wrote)
 
@@ -13,7 +23,29 @@ def new(*args, **kwds):
         return Managed(alloc)
     return Managed( allocator.new(**kwds) )
 
-class MemoryManager(object):
+def provider(mm):
+    '''Convert a memorymanager to a provider'''
+    return mm
+
+class __provider(object):
+    '''Sort of makes it like a ptype provider'''
+    __address = 0
+    def seek(self, address):
+        result = self.__address
+        self.__address = address
+        return result
+
+    def consume(self, length):
+        res = self.read(self.__address, length)
+        self.__address += length
+        return res
+
+    def store(self, data):
+        res = self.write(self.__address, data)
+        self.__address += len(data)
+        return res
+
+class MemoryManager(__provider):
     allocator = None
     loaded = committed = dict
 
@@ -211,24 +243,6 @@ class Managed(MemoryManager):
 
         # perhaps zero the buffer out?
         return
-
-# for a ptype source
-class provider(object):
-    def __init__(self, mm):
-        self.mm = mm
-
-    def seek(self, address):
-        self.address = address
-
-    def consume(self, length):
-        res = self.mm.read(self.address, length)
-        self.address += length
-        return res
-
-    def write(self, data):
-        res = self.mm.write(self.address, data)
-        self.address += length
-        return res
 
 if __name__ == '__main__':
     import sys

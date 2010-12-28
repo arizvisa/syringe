@@ -154,19 +154,19 @@ class PST_Notes(RecordContainer):
 class PST_PPDrawing(RecordContainer):
     type = 1036
 
-@Record.Define
+#@Record.Define
 class PST_DrawingContainer(RecordContainer):
     type = 61442
 
-@Record.Define
+#@Record.Define
 class PST_GroupShapeContainer(RecordContainer):
     type = 61443
 
-@Record.Define
+#@Record.Define
 class PST_ShapeContainer(RecordContainer):
     type = 61444
 
-@Record.Define
+#@Record.Define
 class PST_ShapeClientContainer(RecordContainer):
     type = 61457
 
@@ -175,7 +175,7 @@ class Handout(RecordContainer):
     type = 4041
     type = 0x0fc9
 
-@Record.Define
+#@Record.Define
 class PSR_ColorSchemeAtom(parray.type):
     type = 0x7f0
     type = 2032
@@ -194,7 +194,7 @@ class PSR_SlideTimeAtom10(pstruct.type):
     type = 12011
     _fields_ = [(uint4, 'dwHighDateTime'),(uint4, 'dwLowDateTime')]
 
-@Record.Define
+#@Record.Define
 class msofbtTimeNode(pstruct.type):
     type = 0xf127
     type = 61735

@@ -193,8 +193,11 @@ class multiname_kind_MultinameL(pstruct.type):
         nssets = self.getparent(cpool_info)['ns_set']
         return ' '.join([self.name(), repr(nssets[s])])
 
-class multiname_kind_MultinameLA(pstruct.type):
+class multiname_kind_MultinameLA(multiname_kind_MultinameL):
     kind = 0x1c
+
+class multiname_kind_MultinameA(multiname_kind_Multiname):
+    kind = 0x0e
 
 MultiNameTypes.Add(multiname_kind_QName)
 MultiNameTypes.Add(multiname_kind_QNameA)
@@ -203,6 +206,7 @@ MultiNameTypes.Add(multiname_kind_RTQNameA)
 MultiNameTypes.Add(multiname_kind_Multiname)
 MultiNameTypes.Add(multiname_kind_MultinameL)
 MultiNameTypes.Add(multiname_kind_MultinameLA)
+MultiNameTypes.Add(multiname_kind_MultinameA)
 
 class multiname_info(pstruct.type):
     class __kind(pint.enum, u8):
