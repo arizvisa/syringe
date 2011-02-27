@@ -21,6 +21,6 @@ if __name__ == '__main__':
     myfile = swf.File(source=ptypes.file(filename))
     myfile = myfile.l
 
-    for tag in myfile:
+    for tag in myfile['data']['tags']:
         print tag
         print repr(tag)

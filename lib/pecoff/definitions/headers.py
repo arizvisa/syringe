@@ -388,7 +388,7 @@ class SectionTableArray(parray.type):
 
     def getsectionbyname(self, name):
         ## it was bound to happen
-        sections = [n for n in self if n['Name'].get() == name]
+        sections = [n for n in self if n['Name'].str() == name]
         if len(sections) > 1:
             warn('More than one section was returned for name %s'% name)
         if len(sections):

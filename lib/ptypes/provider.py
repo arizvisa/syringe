@@ -24,7 +24,7 @@ class empty(provider):
         return '\x00'*amount
     def store(self, data):
         '''Write some number of bytes'''
-        raise OSError('Attempted to write to read-only medium')
+        raise OSError('Attempted to write to read-only medium %s'% repr(self))
 
 class file(provider):
     '''Basic file provider'''

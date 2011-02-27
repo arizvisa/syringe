@@ -16,10 +16,21 @@ class __parray_generic(ptype.pcontainer):
 
     # XXX: update offsets (?)
     def insert(self, index, object):
+        offset = self.value[index].getoffset()
+        object.setoffset(offset, recurse=True)
+        object.source = self.source  
         self.value.insert(index, object)
 
-    # XXX: update offset
+        for i in range(index, len(self.value)):
+            v = self.value[i]
+            v.setoffset(offset, recurse=True)
+            offset += v.size()
+        return
+
     def append(self, object):
+        offset = self.getoffset()+self.size()
+        object.setoffset(offset, recurse=True)
+        object.source = self.source  
         self.value.append(object)
 
     def extend(self, iterable):
@@ -38,6 +49,9 @@ class __parray_generic(ptype.pcontainer):
         del(self.value[index])
 
     def __setitem__(self, index, value):
+        offset = self.value[index].getoffset()
+        value.setoffset(offset, recurse=True)
+        value.source = self.source  
         self.value[index] = value
 
     def __getitem__(self, index):
@@ -73,7 +87,7 @@ class type(__parray_generic):
     def load_block(self):
         ofs = self.getoffset()
         for index in xrange(self.length):
-            n = self.newelement(self._object_, str(index), ofs)
+            n = self.newelement(self._object_, str(index), ofs, source=self.source)
             self.value.append(n)
             ofs += n.blocksize()
         return self
@@ -82,7 +96,7 @@ class type(__parray_generic):
     def load_container(self):
         ofs = self.getoffset()
         for index in xrange(self.length):
-            n = self.newelement(self._object_, str(index), ofs)
+            n = self.newelement(self._object_, str(index), ofs, source=self.source)
             self.value.append(n)
             n.load()
             ofs += n.blocksize()

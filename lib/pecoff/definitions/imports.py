@@ -50,7 +50,12 @@ class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
             return self['Ordinal'].get()
         return self['Name'].get()
 
-class IMAGE_IMPORT_ADDRESS_TABLE(dyn.array(addr_t,0)): pass
+#class IMAGE_IMPORT_ADDRESS_TABLE(dyn.array(addr_t,0)): pass
+class IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
+    _object_ = addr_t
+    def isTerminator(self, value):
+        return int(value) == 0
+
 class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
 
@@ -62,13 +67,15 @@ class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
 class IMAGE_IMPORT_HINT(pstruct.type):
     _fields_ = [
         ( word, 'Hint' ),
-        ( pstr.szstring, 'String' )
+        ( pstr.szstring, 'String' ),
+        ( dyn.align(2), 'Padding' )
     ]
 
-    def size(self):
-        # we're padded to be aligned along an even boundary
-        l = super(IMAGE_IMPORT_HINT, self).size()
-        return [l, l+1][l&1]
+    if False:
+        def size(self):
+            # we're padded to be aligned along an even boundary
+            l = super(IMAGE_IMPORT_HINT, self).size()
+            return [l, l+1][l&1]
 
     def get(self):
         return ( int(self['Hint']), self['String'].get() )
@@ -79,13 +86,15 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
         ( dyn.opointer(pstr.szstring, headers.RelativeAddress), 'Name'),
-        ( dyn.opointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.RelativeAddress), 'IAT')
+#        ( dyn.opointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.RelativeAddress), 'IAT')
+        ( dyn.opointer(IMAGE_IMPORT_ADDRESS_TABLE, headers.RelativeAddress), 'IAT')
     ]
 
     def links(self):
         return set(['INT', 'Name', 'IAT'])
 
     def fetchimports(self):
+        '''[(hint,importname,importtableaddress),...]'''
         address = int(self['IAT'])
         NtHeader = self.getparent(headers.NtHeader)
         section = NtHeader['Sections'].getsectionbyaddress(address)
@@ -126,3 +135,8 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         for n in v.serialize():
             total += ord(n)
         return [True, False][total > 0]
+
+    def walk(self):
+        for x in self[:-1]:
+            yield x
+        return

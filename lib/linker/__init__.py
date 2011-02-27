@@ -1,253 +1,258 @@
-import array,coff
-from store import *
+import array
+import store
 
-class linker(container):
-    def __setitem__(self, key, value):
-        '''
-        This function is a giant fucking hack for a design that i want..god dammit
-        FIXME: rewrite this fucking thing. dammit.
-        '''
-        if key == '.idata' and value is not None:   # XXX: hack
-            o = value
-            for st in self.stores:
-                if key not in st.listsegments():
-                    continue
-                st[key] = o
+class linker(store.container):
+    def __repr__(self):
+        return '%s modules %s'% ( super(linker,self).__repr__(), repr([st.modulename for st in self.stores]) )
 
-                # back into our namespace
-                for n in st.getglobalsbysegmentname('.idata'):
-                    self[n] = st[n]
+if False:
+    class linker(container):
+        def __setitem__(self, key, value):
+            '''
+            This function is a giant fucking hack for a design that i want..god dammit
+            FIXME: rewrite this fucking thing. dammit.
+            '''
+            if key == '.idata' and value is not None:   # XXX: hack
+                o = value
+                for st in self.stores:
+                    if key not in st.listsegments():
+                        continue
+                    st[key] = o
 
-                o += st.getsegmentlength(key)
+                    # back into our namespace
+                    for n in st.getglobalsbysegmentname('.idata'):
+                        self[n] = st[n]
+
+                    o += st.getsegmentlength(key)
+                return super(linker, self).__setitem__(key, value)
+
+            # if it's an external then copy it's value and everything from the
+            #    store back to us
+            # XXX: this is a hack
+            if key in self.__externalcache:
+                for st in self.__externalcache[key]:
+                    st[key] = value
+                for k in st.getglobals():
+                    super(store, self).__setitem__(k,st[k])  #FIXME: PRAYTOO: this causes a dupe symbol
+                pass
             return super(linker, self).__setitem__(key, value)
 
-        # if it's an external then copy it's value and everything from the
-        #    store back to us
-        # XXX: this is a hack
-        if key in self.__externalcache:
-            for st in self.__externalcache[key]:
-                st[key] = value
-            for k in st.getglobals():
-                super(store, self).__setitem__(k,st[k])  #FIXME: PRAYTOO: this causes a dupe symbol
-            pass
-        return super(linker, self).__setitem__(key, value)
+        def __repr__(self):
+            return super(linker,self).__repr__() + " modules " + repr([st.modulename for st in self.__getsortedstores()])
+                
+        def add(self, store):
+            if len(self.stores) == 0:
+                self.__externalcache = {}
 
-    def __repr__(self):
-        return super(linker,self).__repr__() + " modules " + repr([st.modulename for st in self.__getsortedstores()])
-            
-    def add(self, store):
-        if len(self.stores) == 0:
-            self.__externalcache = {}
+            self.stores.append(store)
+            self.__mergestore(store)
 
-        self.stores.append(store)
-        self.__mergestore(store)
-
-    def getstore(self, modulename):
-        for x in self.stores:
-            if x.modulename == modulename:
-                return x
-            continue
-        return None
-
-    def __mergestore(self, store):
-        add = super(container,self).add
-
-        # add externals
-        print '..externals'
-        cache = self.__externalcache
-        for fullname in store.getexternals():
-            try:
-                self[fullname]
-#                print 'External symbol %s has already been defined'% fullname
-            except KeyError:
-                add(fullname, None)
-#                print 'Adding external symbol %s'% fullname
-
-            # add stores for a cache to update on an external assignment  XXX: hack
-            try:
-                cache[fullname] 
-            except KeyError:
-                cache[fullname] = []
-            cache[fullname].append(store)
-
-        # collect globals
-        print '..globals'
-        for name in store.getglobals():
-            try:
-                self[name]
-                if self[name] is not None:
-#                    print 'Duplicate symbol %s:%x is already defined as %s:%x'% (name, store[name], name, self[name])  # XXX: uncomment this
-                    continue
-            except KeyError:
-                add(name, store[name])
-#                print 'Adding global symbol %s'% name
+        def getstore(self, modulename):
+            for x in self.stores:
+                if x.modulename == modulename:
+                    return x
                 continue
-            self[name] = store[name]
+            return None
 
-        # and now segments just cause
-        print '..segments'
-        for name in store.listsegments():
-            try:
-                self[name]
-            except KeyError:
-                add(name, None)
-            continue
-        return
+        def __mergestore(self, store):
+            add = super(container,self).add
 
-    def getsegment(self, name):
-        result = []
-        for st in self.__getsortedstores():
-            for n in st.getexternals():
-                st[n] = self[n]
-            continue
-        return super(linker, self).getsegment(name)
-
-    def getsegmentlength(self, name):
-        result = []
-        for st in self.stores:
-            for n in st.getexternals():
-                st[n] = self[n]
-            continue
-        return super(linker, self).getsegmentlength(name)
-
-    def listsegments(self):
-        # OMG, i fucking hate this code
-        res = list()
-        for v in self.__getsortedstores():
-            for s in v.listsegments():
-                if s in res:
-                    continue
-                res.append(s)
-            continue
-        return res
-
-    def __getstorelist(self, name):
-        result = []
-        ofs = 0
-        for st in self.stores:
-            length = 0
-            if name in st.listsegments():
-                length = st.getsegmentlength(name)
-            result.append( (st, (ofs, length)) )
-            ofs += length
-        return result
-
-    def __getsizelookupbyname(self):
-        return dict( ((name, dict(self.__getstorelist(name))) for name in self.listsegments()) )
-
-    def __getsizelookupbystore(self):
-        result = dict(((id(st),{}) for st in self.stores))
-        for name in self.listsegments():
-            for st,v in self.__getstorelist(name):
-                r = result[id(st)]
-                r[name] = v
-            continue
-        return result
-
-    def __getsortedstores(self):
-        undefinedmodulecache = dict()       # dict of store's dependencies and the store
-        definedmodules = set()
-
-        # iterate through all stores adding and removing modules from our cache
-        for st in self.stores:
-            modules = st.externalmodules()
-            for n in modules:
+            # add externals
+            print '..externals'
+            cache = self.__externalcache
+            for fullname in store.getexternals():
                 try:
-                    undefinedmodulecache[n].append( st )
+                    self[fullname]
+    #                print 'External symbol %s has already been defined'% fullname
                 except KeyError:
-                    undefinedmodulecache[n] = [ st ]
+                    add(fullname, None)
+    #                print 'Adding external symbol %s'% fullname
+
+                # add stores for a cache to update on an external assignment  XXX: hack
+                try:
+                    cache[fullname] 
+                except KeyError:
+                    cache[fullname] = []
+                cache[fullname].append(store)
+
+            # collect globals
+            print '..globals'
+            for name in store.getglobals():
+                try:
+                    self[name]
+                    if self[name] is not None:
+    #                    print 'Duplicate symbol %s:%x is already defined as %s:%x'% (name, store[name], name, self[name])  # XXX: uncomment this
+                        continue
+                except KeyError:
+                    add(name, store[name])
+    #                print 'Adding global symbol %s'% name
+                    continue
+                self[name] = store[name]
+
+            # and now segments just cause
+            print '..segments'
+            for name in store.listsegments():
+                try:
+                    self[name]
+                except KeyError:
+                    add(name, None)
+                continue
+            return
+
+        def getsegment(self, name):
+            result = []
+            for st in self.__getsortedstores():
+                for n in st.getexternals():
+                    st[n] = self[n]
+                continue
+            return super(linker, self).getsegment(name)
+
+        def getsegmentlength(self, name):
+            result = []
+            for st in self.stores:
+                for n in st.getexternals():
+                    st[n] = self[n]
+                continue
+            return super(linker, self).getsegmentlength(name)
+
+        def listsegments(self):
+            # OMG, i fucking hate this code
+            res = list()
+            for v in self.__getsortedstores():
+                for s in v.listsegments():
+                    if s in res:
+                        continue
+                    res.append(s)
+                continue
+            return res
+
+        def __getstorelist(self, name):
+            result = []
+            ofs = 0
+            for st in self.stores:
+                length = 0
+                if name in st.listsegments():
+                    length = st.getsegmentlength(name)
+                result.append( (st, (ofs, length)) )
+                ofs += length
+            return result
+
+        def __getsizelookupbyname(self):
+            return dict( ((name, dict(self.__getstorelist(name))) for name in self.listsegments()) )
+
+        def __getsizelookupbystore(self):
+            result = dict(((id(st),{}) for st in self.stores))
+            for name in self.listsegments():
+                for st,v in self.__getstorelist(name):
+                    r = result[id(st)]
+                    r[name] = v
+                continue
+            return result
+
+        def __getsortedstores(self):
+            undefinedmodulecache = dict()       # dict of store's dependencies and the store
+            definedmodules = set()
+
+            # iterate through all stores adding and removing modules from our cache
+            for st in self.stores:
+                modules = st.externalmodules()
+                for n in modules:
+                    try:
+                        undefinedmodulecache[n].append( st )
+                    except KeyError:
+                        undefinedmodulecache[n] = [ st ]
+                    continue
+
+                if st.modulename in undefinedmodulecache:
+                    definedmodules.add( st.modulename )
                 continue
 
-            if st.modulename in undefinedmodulecache:
-                definedmodules.add( st.modulename )
-            continue
+            # figure out which ones need to be deferred-done (this contains a case with multiple modules that will break this "algo")
+            delay = []
+            for n in definedmodules:
+                delay.extend(undefinedmodulecache[n])
 
-        # figure out which ones need to be deferred-done (this contains a case with multiple modules that will break this "algo")
-        delay = []
-        for n in definedmodules:
-            delay.extend(undefinedmodulecache[n])
+            # put all these stores at the end
+            res = []
+            for st in self.stores:
+                if st in delay:
+                    continue
+                res.append( st )
+            res.extend(delay)
+            return res
 
-        # put all these stores at the end
-        res = []
-        for st in self.stores:
-            if st in delay:
-                continue
-            res.append( st )
-        res.extend(delay)
-        return res
+        def relocatesegment(self, name, data, baseaddress):
+            self[name] = baseaddress
+            storeLookup = self.__getsizelookupbystore()   # heh.
 
-    def relocatesegment(self, name, data, baseaddress):
-        self[name] = baseaddress
-        storeLookup = self.__getsizelookupbystore()   # heh.
+            # sort this list by dependencies...heh...
+            stores = self.__getsortedstores()
 
-        # sort this list by dependencies...heh...
-        stores = self.__getsortedstores()
+            # update symbols first
+            print 'symbol'
+            for st in stores:
+                sectionlookup = storeLookup[ id(st) ]
+                offset,length = sectionlookup[name]
+                if length == 0:
+                    continue
+                self._updatestoresymbols(st, name, sectionlookup, baseaddress+offset)
 
-        # update symbols first
-        print 'symbol'
-        for st in stores:
-            sectionlookup = storeLookup[ id(st) ]
-            offset,length = sectionlookup[name]
-            if length == 0:
-                continue
-            self._updatestoresymbols(st, name, sectionlookup, baseaddress+offset)
+    #        raise NotImplementedError("Will need to sort by dependencies/externals...dammit")  # FIXME
 
-#        raise NotImplementedError("Will need to sort by dependencies/externals...dammit")  # FIXME
+            # do relocation
+            print 'relocate'
+            data = array.array('c', data) 
+            for st in stores:
+                print st
+                lookup = storeLookup[ id(st) ]
+                offset,length = lookup[name]
+                if length == 0:
+                    continue
 
-        # do relocation
-        print 'relocate'
-        data = array.array('c', data) 
-        for st in stores:
-            print st
-            lookup = storeLookup[ id(st) ]
-            offset,length = lookup[name]
-            if length == 0:
-                continue
+                chunk = data[offset:offset+length]
+                chunk = st.relocatesegment(name, chunk.tostring(), baseaddress+offset)
+                chunk = array.array('c', chunk)
+                data[offset:offset+length] = chunk
+            data = data.tostring()
 
-            chunk = data[offset:offset+length]
-            chunk = st.relocatesegment(name, chunk.tostring(), baseaddress+offset)
-            chunk = array.array('c', chunk)
-            data[offset:offset+length] = chunk
-        data = data.tostring()
+            # restore symbols
+            for st in stores:
+                lookup = storeLookup[ id(st) ]
+                offset,length = lookup[name]
+                if length == 0:
+                    continue
+                self._updateoursymbolsfromstore(st, name, lookup)
+            print 'done'
+        
+            return data
 
-        # restore symbols
-        for st in stores:
-            lookup = storeLookup[ id(st) ]
-            offset,length = lookup[name]
-            if length == 0:
-                continue
-            self._updateoursymbolsfromstore(st, name, lookup)
-        print 'done'
-    
-        return data
+        def _updateoursymbolsfromstore(self, st, name, lookup):
+            for n in st.getglobalsbysegmentname(name):
+                self[n] = st[n]
 
-    def _updateoursymbolsfromstore(self, st, name, lookup):
-        for n in st.getglobalsbysegmentname(name):
-            self[n] = st[n]
+            # XXX: because i'm a horrible programmer and i hook __setitem__/__getitem__
+            for n in st.getexternals():
+                self[n] = st[n]
+            return
+        
+        def _updatestoresymbols(self, st, name, lookup, baseaddress):
+            # externals
+            for k in st.getexternals():
+                st[k] = self[k]
 
-        # XXX: because i'm a horrible programmer and i hook __setitem__/__getitem__
-        for n in st.getexternals():
-            self[n] = st[n]
-        return
-    
-    def _updatestoresymbols(self, st, name, lookup, baseaddress):
-        # externals
-        for k in st.getexternals():
-            st[k] = self[k]
+            # segments
+            try:
+                for n in st.listsegments():
+                    o,l = lookup[n]
+                    st[n] = [lambda:self[n]+o, lambda:baseaddress+o][n == name]()   #yes, look carefully
+                pass
+            except (TypeError,KeyError):
+                raise KeyError('Segment %s undefined'% n)
 
-        # segments
-        try:
-            for n in st.listsegments():
-                o,l = lookup[n]
-                st[n] = [lambda:self[n]+o, lambda:baseaddress+o][n == name]()   #yes, look carefully
-            pass
-        except (TypeError,KeyError):
-            raise KeyError('Segment %s undefined'% n)
-
-        # globals
-        for n in st.getglobalsbysegmentname(name):
-            st[n] = self[n]
-        return
+            # globals
+            for n in st.getglobalsbysegmentname(name):
+                st[n] = self[n]
+            return
 
 def new(**kwds):
     return linker()

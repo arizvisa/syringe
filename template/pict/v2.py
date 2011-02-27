@@ -252,7 +252,36 @@ class NOP(ptype.type):
 
 @OpStash.Define
 class OpEndPic(ptype.type):
-    type=0x00ff
+    type = 0x00ff
+
+@OpStash.Define
+class DefHilite(ptype.type):
+    type = 0x001e
+
+@OpStash.Define
+class CompressedQuickTime(pstruct.type):
+    type = 0x8200
+    _fields_ = [
+        raise NotImplementedError
+        (Long, 'size'),
+        (Integer, 'version'),
+        (dyn.array(Long, 9), 'matrix'),
+        (Long, 'matteSize'),
+        (Rect, 'matteRect'),
+        (Integer, 'mode'),
+        (Rect, 'srcRect'),
+        (Long, 'accuracy'),
+        (Long, 'maskSize'),
+
+        (lambda s: s, 'matteDescr'),
+#        (lambda s: dyn.block(s['matteSize'].l.int()), 'matteData'),
+#        (lambda s: dyn.block(s['maskSize'].l.int()), 'maskRgn'),
+#        (lambda s: s, 'imageData'),
+    ]
+
+#@OpStash.Define
+#class UncompressedQuickTime(pstruct.type):
+#    type = 0x8201
 
 class File(pstruct.type):
     class __opcodes(parray.terminated):

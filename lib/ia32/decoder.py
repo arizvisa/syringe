@@ -32,16 +32,25 @@ def getdisp16length(modrm, prefixes):
 def getdisp32length(modrm, prefixes):
     return [0, typesize.byte, typesize.word, 0][ (ord(modrm) & 0xc0)>>6 ]
 
-def decodeInteger(string):
+def decodeInteger(string, signed=False):
     '''given a string encoded in the native byte-order, will produce an integer'''
     res = bitmap.new(0,0)
     for ch in string:
         res = bitmap.insert(res, (ord(ch),8))
     res,_ = res
-    return res
+    if not signed:
+        return res
+
+    bitflag = (0x100**len(string)) / 2
+    signbit,value = res & bitflag, res & (bitflag - 1)
+    if res & signbit:
+        return value - bitflag
+    return value
 
 def encodeInteger(number, bytes):
     '''given an integer and a number of bytes, will return a string encoded in the native endianness'''
+    number &= (0x100**bytes) - 1    # convert to absolute using side-effect of &
+
     counter = bitmap.new(number,bytes*8)
     res = ''
     while counter[1] > 0:
@@ -238,11 +247,11 @@ if __name__ == '__main__':
     if False:
         code = '\x6b\xc0\x2c'
         lookup = optable.Lookup('\x6b')
-        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
+#        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
 
         modrm = '\xc0'
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
-        print mod,reg,rm    
+#        print mod,reg,rm    
 
     if True:
         list = ['f7 d8', '1a c0', '68 80 00 00 00']
@@ -268,7 +277,38 @@ if __name__ == '__main__':
         code = '\xa0\x50\xc0\xa8\x6f' + '\xa8\x08' + '\x75\x18'
         source = iter(code)
         insn = decoder.consume(source)
-        print insn
+#        print insn
 
         lookup = optable.Lookup('\xa0')
-        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
+#        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
+
+    if True:
+        import struct
+        structed = { 1 : 'b', 2 : 'h', 4 : 'l' }
+
+        def test(number, size):
+            n = encodeInteger(number, size)
+            a, = struct.unpack(structed[size], n)
+            return a == number
+
+        print '1 byte'
+        for n in xrange(-0x80, 0x7f):
+            res = test(n, 1)
+            if res is True:
+                continue
+            print n, 1
+            
+        print '2 byte'
+        for n in xrange(-0x8000, 0x7fff):
+            res = test(n, 2)
+            if res is True:
+                continue
+            print n, 1
+        
+    if False:
+        print '4 byte'
+        for n in xrange(-0x80000000, 0x7fffffff):
+            res = test(n, 4)
+            if res is True:
+                continue
+            print n, 1

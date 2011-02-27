@@ -40,6 +40,9 @@ def hexrow(value, offset=0, length=16, breaks=[8]):
 def hexdump(value, offset=0, length=16, rows=None, **kwds):
     '''return a formatted hexdump'''
 
+    if 'lines' in kwds:
+        rows = kwds['lines']
+
     # TODO: should prolly make this an iterator somehow...
     value = iter(value)
 

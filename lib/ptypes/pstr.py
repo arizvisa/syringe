@@ -13,7 +13,7 @@ class char_t(_char_t):
         return str(self.value)
 
     def __repr__(self):
-        return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.get())])
+        return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.str())])
 
 uchar_t = char_t    # yeah, secretly there's no difference..
 
@@ -29,7 +29,7 @@ class wchar_t(_char_t):
 
     def __repr__(self):
         if self.initialized:
-            return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.get())])
+            return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.str())])
         return ' '.join([super(_char_t, self).__repr__(), ' ???'])
 
 class string(ptype.type):
@@ -98,6 +98,12 @@ class string(ptype.type):
         return self
 
     def get(self):
+        import warnings
+        warnings.warn('%s.str() is deprecated'%(self.__class__.__name__), DeprecationWarning, stacklevel=2)
+        return self.str()
+
+    def str(self):
+        '''return type as a str'''
         s = self.value
         return utils.strdup(s)[:len(self)]
 
@@ -116,12 +122,9 @@ class string(ptype.type):
     def serialize(self):
         return str(self.value)
 
-    def setoffset(self, value, **kwds):
-        return super(string, self).setoffset(value)
-
     def __repr__(self):
         if self.initialized:
-            return ' '.join([self.name(), self.get()])
+            return ' '.join([self.name(), self.str()])
         return ' '.join([self.name()])
 
 class szstring(string):
@@ -165,7 +168,7 @@ class szstring(string):
 class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
-    def get(self):
+    def str(self):
         s = unicode(self.value, 'utf-16').encode('utf-8')
         return utils.strdup(s)[:len(self)]
 
@@ -220,7 +223,7 @@ if __name__ == '__main__':
         x.length = len(string)/2
         x.source = provider.string(string)
         x.load()
-        if x.get() == string[:len(string)/2]:
+        if x.str() == string[:len(string)/2]:
             raise Success
 
     @TestCase
@@ -232,14 +235,14 @@ if __name__ == '__main__':
         string = ''.join([c+'\x00' for c in string])
         x.source = provider.string(string)
         x.load()
-        if x.get() == oldstring[:len(oldstring)/2]:
+        if x.str() == oldstring[:len(oldstring)/2]:
             raise Success
 
     @TestCase
     def Test5():
         string = 'null-terminated\x00ok'
         x = pstr.szstring(source=provider.string(string)).l
-        if x.get() == 'null-terminated':
+        if x.str() == 'null-terminated':
             raise Success
 
     @TestCase
@@ -251,12 +254,12 @@ if __name__ == '__main__':
             _object_ = pstr.szstring
 
             def isTerminator(self, value):
-                if value.get() == 'eof':
+                if value.str() == 'eof':
                     return True
                 return False
 
         x = stringarray(source=provider.string(data)).l
-        if x[3].get() == 'null-terminated':
+        if x[3].str() == 'null-terminated':
             raise Success
 
     @TestCase
@@ -270,7 +273,7 @@ if __name__ == '__main__':
 
         x = IMAGE_IMPORT_HINT(source=provider.string('AAHello world this is a zero0-terminated string\x00this didnt work')).l
 
-        if x['String'].get() == 'Hello world this is a zero0-terminated string':
+        if x['String'].str() == 'Hello world this is a zero0-terminated string':
             raise Success
 
 
@@ -283,7 +286,7 @@ if __name__ == '__main__':
 
         s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
         v = pstr.szwstring(source=provider.string(s)).l
-        if v.get() == 'C:\Python26\DLLs\_ctypes.pyd':
+        if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
 
 if __name__ == '__main__':

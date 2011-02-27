@@ -64,11 +64,35 @@ class PBOOLEAN(dyn.pointer(BOOLEAN)): pass
 
 class LIST_ENTRY(pstruct.type): pass
 class LIST_ENTRY(pstruct.type):
+    '''_object_ represents the type of linked list it is'''
+
     _object_ = LIST_ENTRY
     _fields_ = [
         (lambda s: dyn.pointer(s._object_), 'Flink'),
         (lambda s: dyn.pointer(s._object_), 'Blink'),
     ]
 
+    def walk(self, direction='Flink'):
+        '''WAlks through a circular linked list'''
+        n = self[direction]
+        while True:
+            yield n.d
+            n = n[direction]
+            if int(n) == int(self[direction]):
+                break
+            n = n[direction]
+        return
+
+    def moonwalk(self):
+        return self.walk('Blink')
+
 ### ??
 class UCHAR(pint.uint8_t): pass
+
+###
+import sdkddkver
+class versioned(ptype.type):
+    '''will update the attrs with the operating systems NTDDI_VERSION'''
+    def __init__(self, **attrs):
+        attrs['NTDDI_VERSION'] = attrs.setdefault('NTDDI_VERSION', sdkddkver.NTDDI_VERSION)
+        super(versioned, self).__init__(**attrs)

@@ -8,7 +8,7 @@ class PEB_FREE_BLOCK(pstruct.type): pass
 class PPEB_FREE_BLOCK(dyn.pointer(PEB_FREE_BLOCK)): pass
 PEB_FREE_BLOCK._fields_ = [(PPEB_FREE_BLOCK,'Next'),(ULONG,'Size')]
 
-class PEB(pstruct.type):
+class PEB(pstruct.type, versioned):
     class BitField(pbinary.struct):
         _fields_ = [
             (1, 'ImageUsesLargePages'),
@@ -20,12 +20,7 @@ class PEB(pstruct.type):
         ]
 
     def __init__(self, **attrs):
-        super(pstruct.type, self).__init__(**attrs)
-
-        try:
-            self.NTDDI_VERSION
-        except:
-            self.NTDDI_VERSION = sdkddkver.NTDDI_VERSION
+        super(PEB, self).__init__(**attrs)
 
         self._fields_ = f = []
         f.extend([
@@ -98,7 +93,8 @@ class PEB(pstruct.type):
             (ULONG, 'HeapDeCommitFreeBlockThreshold'),
             (ULONG, 'NumberOfHeaps'),
             (ULONG, 'MaximumNumberOfHeaps'),
-            (PVOID, 'ProcessHeaps'),
+#            (PVOID, 'ProcessHeaps'),
+            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=int(s['NumberOfHeaps'].l)), PVOID), 'ProcessHeaps'),
             (PVOID, 'GdiSharedHandleTable'),
             (PVOID, 'ProcessStarterHelper'),
             (ULONG, 'GdiDCAttributeList'),
@@ -153,13 +149,40 @@ class PEB(pstruct.type):
                 (PVOID, 'pContextData'),
                 (PVOID, 'pImageHeaderHash'),
 
-## not sure what this means...
+## FIXME: not sure what this means in the pdb structure...
 #   +0x240 TracingFlags     : 0
 #   +0x240 HeapTracingEnabled : 0y0
 #   +0x240 CritSecTracingEnabled : 0y0
 #   +0x240 SpareTracingBits : 0y000000000000000000000000000000 (0)
             ])
         return
+
+    def getmodulebyname(self, name):
+        ldr = self['Ldr'].d.l
+        for m in ldr.walk():
+            if m['BaseDllName'].str() == name:
+                return m
+            continue
+        raise KeyError(name)
+
+    def getmodulebyaddress(self, address):
+        ldr = self['Ldr'].d.l
+        for m in ldr.walk():
+            start,size = int(m['DllBase']),int(m['SizeOfImage'])
+            left,right = start, start+size
+            if address >= left and address <= right:
+                return m
+            continue
+        raise KeyError(name)
+
+    def getmodulebyfullname(self, name):
+        ldr = self['Ldr'].d.l
+        name = name.lower().replace('\\', '/')
+        for m in ldr.walk():
+            if m['FullDllName'].str().lower().replace('\\', '/') == name:
+                return m
+            continue
+        raise KeyError(name)
 
 if __name__ == '__main__':
     import ctypes

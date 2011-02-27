@@ -150,8 +150,18 @@ class union(__union_generic):
         self.value[:] = __import__('array').array('c')
         self.value.fromstring( block[:self.size()] )
         self.__create_objects()
-        [ n.load() for n in self.object ]
+
+        # try loading everything as quietly as possible
+        # [n.load() for n in self.object] 
+
         return self
+
+    def __getitem__(self, key):
+        # load items on demand
+        result = super(union,self).__getitem__(key)
+        if not result.initialized:
+            return result.l
+        return result
 
     def __repr__(self):
         if self.initialized:
@@ -192,6 +202,11 @@ def addr_t(type):
         
         deref=lambda s: s.dereference()
         d = property(fget=deref)
+
+        def __cmp__(self, other):
+            if issubclass(other.__class__, self.__class__):
+                return cmp(int(self),int(other))
+            return super(pointer, self).__cmp__(other)
 
     pointer._target_ = type
     return pointer

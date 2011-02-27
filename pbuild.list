@@ -1,7 +1,7 @@
 msGeneralOptions='-nologo'
-msCFlags='-I.'
 msSubsystem='console'
-msLinkFlags='-libpath:. -debug'
+msLinkFlags="@ms.cmd"
+msCFlags="@ms.cmd"
 msLinkLibs='kernel32.lib user32.lib gdi32.lib'
 
 CWD=$(pwd)
@@ -68,7 +68,7 @@ mscompile()
 {
     TARGET=$1
     shift
-    cl.exe -c "-Fo$TARGET" $msGeneralOptions $msCFlags $@
+    cl.exe -c -Fo$TARGET $msGeneralOptions $msCFlags $@
     return $?
 }
 
@@ -76,7 +76,7 @@ mslibrary()
 {
     TARGET=$1
     shift
-    lib.exe -subsystem:$msSubsystem "-out:$TARGET" $msGeneralOptions $msLinkFlags $msLinkLibs $@
+    lib.exe -subsystem:$msSubsystem "-out:$TARGET" $msGeneralOptions $msLinkFlags $@
     return $?
 }
 
@@ -129,6 +129,9 @@ resolve obj/stackless.o assemble src/stackless.s
 
 resolve obj/python-test.obj mscompile src/test.c
 resolve python-test.exe mslink obj/python-test.obj
+
+resolve obj/test.obj mscompile src/test.c
+resolve obj/test.lib mslibrary obj/test.obj
 
 #resolve all build test/thread-test-gui.exe test/thread-test-console.exe test/inject-stub.exe
 resolve clean alltargets

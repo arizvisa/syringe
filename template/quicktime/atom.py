@@ -83,20 +83,6 @@ class Atom(pstruct.type):
 
         raise NotImplementedError(repr(self['type']),repr(s))
 
-    def __slack(self):
-        t = self['type'].l
-        s = self.blocksize() - self.getheadersize()
-        datasize = self['data'].size()
-
-        if self.parent is not None:
-            if s >= datasize:
-                return dyn.block(s - datasize)
-
-            container = self.parent.parent
-            print 'miscalculated slack:',hex(s),'<',hex(datasize)
-            path = ' ->\n\t'.join(self.backtrace())
-        return dyn.block(0)
-
     def blocksize(self):
         return self.getsize()
 
@@ -105,7 +91,6 @@ class Atom(pstruct.type):
         (pQTType, 'type'),
         (__extended_size, 'extended_size'),
         (__data, 'data'),
-#        (__slack, 'slack')
     ]
 
 class AtomList(parray.block):
@@ -285,25 +270,24 @@ class HDLR(pstruct.type):
     ]
 
 ## stsd
-if False:
-    @AtomType.Define
-    class MediaVideo(pstruct.type):   #XXX: might need to be renamed
-        _fields_ = [
-            (pint.uint16_t, 'Version'),
-            (pint.uint16_t, 'Revision level'),
-            (pQTType, 'Vendor'),
-            (pQTInt, 'Temporal Quality'),
-            (pQTInt, 'Spatial Quality'),
-            (pint.uint16_t, 'Width'),
-            (pint.uint16_t, 'Height'),
-            (pQTInt, 'Horizontal Resolution'),
-            (pQTInt, 'Vertical Resolution'),
-            (pQTInt, 'Data size'),
-            (pint.uint16_t, 'Frame count'),
-            (dyn.block(32), 'Compressor Name'),
-            (pint.uint16_t, 'Depth'),
-            (pint.uint16_t, 'Color table ID')
-        ]
+#@AtomType.Define
+class MediaVideo(pstruct.type):   #XXX: might need to be renamed
+    _fields_ = [
+        (pint.uint16_t, 'Version'),
+        (pint.uint16_t, 'Revision level'),
+        (pQTType, 'Vendor'),
+        (pQTInt, 'Temporal Quality'),
+        (pQTInt, 'Spatial Quality'),
+        (pint.uint16_t, 'Width'),
+        (pint.uint16_t, 'Height'),
+        (pQTInt, 'Horizontal Resolution'),
+        (pQTInt, 'Vertical Resolution'),
+        (pQTInt, 'Data size'),
+        (pint.uint16_t, 'Frame count'),
+        (dyn.block(32), 'Compressor Name'),
+        (pint.uint16_t, 'Depth'),
+        (pint.uint16_t, 'Color table ID')
+    ]
 
 #@AtomType.Define
 class stsd(pstruct.type):
@@ -339,19 +323,9 @@ class stts(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stts.entry, int(x['Number of entries'].l)), 'Entries')
+#        (lambda x: dyn.array(stts.entry, int(x['Number of entries'].l) - 1), 'Entries')
+        (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
     ]
-
-if False:
-    @AtomType.Define
-    class stss(pstruct.type):
-        '''Sync Sample Atom'''
-        _fields_ = [
-            (pint.uint8_t, 'Version'),
-            (dyn.block(3), 'Flags'),
-            (pQTInt, 'Number of entries'),
-            (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
-        ]
 
 ## stsc
 @AtomType.Define
@@ -373,7 +347,7 @@ class stsc(pstruct.type):
     ]
 
 ## stsz
-#@AtomType.Define
+@AtomType.Define
 class stsz(pstruct.type):
     '''Sample size atom'''
     type = 'stsz'

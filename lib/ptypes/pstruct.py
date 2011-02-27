@@ -35,6 +35,11 @@ class __pstruct_generic(ptype.pcontainer):
 
     def __setitem__(self, name, value):
         index = self.getindex(name)
+        offset = self.value[index].getoffset()
+
+        value.setoffset(offset, recurse=True)
+        value.source = self.source
+
         self.value[index] = value
 
 class type(__pstruct_generic):
@@ -55,7 +60,7 @@ class type(__pstruct_generic):
         # create each element
         ofs = self.getoffset()
         for t,name in self._fields_:
-            n = self.newelement(t, name, ofs)
+            n = self.newelement(t, name, ofs, source=self.source)
             self.value.append(n)
             if ptype.ispcontainer(t) or ptype.isresolveable(t):
                 n.load()

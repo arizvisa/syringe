@@ -36,13 +36,14 @@ class PEB_LDR_DATA(pstruct.type):
         (PVOID, 'SsHandle'),
         (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
         (_LDR_DATA_TABLE_ENTRY_LIST, 'InMemoryOrderModuleList'),
-        (_LDR_DATA_TABLE_ENTRY_LIST, 'InInitializationOrderModuleList'),
+
         (PVOID, 'EntryInProgress'),
     ]
     def walk(self):
         for x in self['InLoadOrderModuleList'].walk():
             yield x
         return
+
 class PPEB_LDR_DATA(dyn.pointer(PEB_LDR_DATA)): pass
 
 import pecoff
@@ -67,7 +68,7 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         (ULONG, 'SizeOfImage'),
         (UNICODE_STRING, 'FullDllName'),
         (UNICODE_STRING, 'BaseDllName'),
-        (ULONG, 'Flags'),
+        (ULONG, 'Flags'),   # !!!
         (USHORT, 'LoadCount'),
         (USHORT, 'TlsIndex'),
         (__SectionPointerUnion, 'SectionPointerUnion'),

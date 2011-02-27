@@ -163,27 +163,36 @@ class Type_Specific_v5_Audio(pstruct.type):
         (UINT32, 'data_size'),
         (UINT16, 'version2'),
         (UINT32, 'header_size'),
+
         (UINT16, 'flavor'),
         (UINT32, 'coded_frame_size'),
+
         (UINT32, 'unknown[7]'),
         (UINT32, 'unknown[8]'),
         (UINT32, 'unknown[9]'),
+
         (UINT16, 'sub_packet_h'),
         (UINT16, 'frame_size'),
         (UINT16, 'sub_packet_size'),
+
         (UINT16, 'unknown[d]'),
         (UINT16, 'unknown[e]'),
         (UINT16, 'unknown[f]'),
         (UINT16, 'unknown[10]'),
+
         (UINT16, 'sample_rate'),
-        (UINT32, 'unknown[12]'),
+        (UINT16, 'unknown[12]'),
+        (UINT16, 'bitpersample'),
         (UINT16, 'channels'),
-        (UINT32, 'unknown[14]'),
-        (dyn.block(4), 'buffer'),
+
+        (UINT32, 'genr'),
+        (dyn.block(4), 'codec'),
+
+        (dyn.block(4), 'unknown[17]'),
     ]
 
     def codec(self):
-        return self['buffer'].serialize()
+        return self['codec'].serialize()
 
 class Type_Specific_v0_Audio(pstruct.type):
     object_version = 0
@@ -224,19 +233,22 @@ class Type_Specific_RealAudio(pstruct.type):
         h = self.getparent(RealMedia_Header_Type)
         fourcc = self['object'].l.codec()
         version = int(self['object_version'].l)
+        type = Codec_Data.lookup(fourcc, version)
+
+        return dyn.block(int(self['i_codec'].l))
 
         try:
-            return Codec_Data.lookup(fourcc, version)
+            return dyn.clone(type, blocksize=lambda s: int(self['i_codec'].l))
         except KeyError:
             pass
 
-        l = int(h['type_specific_len'].l)
         return dyn.block( l - (self['object'].size()+6) )
 
     _fields_ = [
         (UINT32, 'object_id'),
         (UINT16, 'object_version'),
         (__object, 'object'),
+        (UINT32, 'i_codec'),
         (__codec, 'codec')
     ]
 
@@ -247,7 +259,7 @@ class Type_Specific_vAny_RealVideo(pstruct.type):
         (UINT16, 'size'),
         (dyn.block(4), 'type'),
         (dyn.block(4), 'codec'),
-        (dyn.block(4), 'codec'),
+        (dyn.block(4), 'codec2'),
         (UINT16, 'width'),
         (UINT16, 'height'),
         (dyn.block(6), 'unknown'),

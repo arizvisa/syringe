@@ -39,21 +39,21 @@ class Relocation(pstruct.type):
         '''
         currentsection = self.getparent(headers.SectionTable)
         sectionarray = currentsection.parent
-        currentsectionname = currentsection['Name'].get()
+        currentsectionname = currentsection['Name'].str()
         symbol = symboltable[int(self['SymbolTableIndex'])]
 
         # figure out the section name our address points into
         symbolsectionnumber,targetsectionname = symbol['SectionNumber'].get(),None
         if symbolsectionnumber is not None:
             targetsection = currentsection.parent[symbolsectionnumber]
-            targetsectionname = targetsection['Name'].get()
+            targetsectionname = targetsection['Name'].str()
         
         return self.__relocate(data, symbol, sectionarray, currentsectionname, targetsectionname, namespace)
 
     def __relocate(self, data, symbol, sectionarray, currentsectionname, targetsectionname, namespace):
         relocationva,relocationtype = int(self['VirtualAddress']),int(self['Type'])
 #        storageclass,value = int(symbol['StorageClass']), int(symbol['Value'])
-        name = symbol['Name'].get()
+        name = symbol['Name'].str()
         storageclass,value = int(symbol['StorageClass']), namespace[name]
 
         if value is None:

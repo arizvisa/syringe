@@ -118,10 +118,10 @@ def debugrecurse(ptype):
     '''Will clone ptype into one containing recursive debugging information'''
     class newptype(debug(ptype)):
         @rethrow
-        def newelement(self, ptype, name, ofs):
+        def newelement(self, ptype, name='', ofs=0, **attrs):
             res = forceptype(ptype, self)
             assert isptype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
-            return super(newptype,self).newelement( debug(res), name, ofs )
+            return super(newptype,self).newelement( debug(res), name, ofs, **attrs )
 
     newptype.__name__ = 'debugrecurse(%s)'% ptype.__name__
     return newptype
@@ -155,11 +155,12 @@ class type(object):
     source = None   # ptype.provider
     parent = type   # ptype.type
 
-    attrs = None
-    __name__ = None     # default to unnamed
+    attrs = None    # dict of attributes that will get assigned to any child elements
+    __name__ = None # default to unnamed
     
     ## initialization
     def __init__(self, **attrs):
+        '''Create a new instance of object. Will assign provided named arguments to self.attrs'''
         self.source = self.source or provider.memory()
         self.parent = None
         if attrs:
@@ -186,6 +187,11 @@ class type(object):
         #        make sure to fetch the blocksize first before you .getoffset() on something
 
         return self.size()
+
+    def contains(self, offset):
+        nmin = self.getoffset()
+        nmax = nmin + self.blocksize()
+        return (offset >= nmin) and (offset < nmax)
 
     def getparent(self, type=None):
         if type is None:
@@ -251,18 +257,19 @@ class type(object):
         '''returns the current offset (should probably be deprecated)'''
         return int(self.offset)
 
-    def newelement(self, ptype, name, ofs):
+    def newelement(self, ptype, name='', ofs=0, **attrs):
         '''
         create a new element of type ptype with the specified name and offset.
         this will duplicate the source, and set the new element's .parent
-        attribute.
+        attribute. this will also pass the self.attrs property to the child constructor.
         '''
         res = forceptype(ptype, self)
         assert isptype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
 
         if isptype(res):
 #            res.name = lambda s: name
-            res = res(**self.attrs)     # all children will inherit too
+            attrs.update(self.attrs)
+            res = res(**attrs)     # all children will inherit too
         res.parent = self
         if 'source' not in self.attrs:
             res.source = self.source
@@ -362,7 +369,7 @@ class type(object):
         '''Cast the contents of the current ptype to a different ptype'''
         result = self.newelement( t, 'cast(%s, %s)'% (self.name(), repr(t.__class__)), self.getoffset() )
         try:
-            result.deserialize_block( self.serialize() )
+            result.alloc().deserialize_block( self.serialize() )
         except StopIteration:
             result.l # try to load it anyways
         return result
@@ -420,9 +427,7 @@ class pcontainer(type):
     def at(self, offset, recurse=True, **kwds):
         if not recurse:
             for i,n in enumerate(self.value):
-                nmin = n.getoffset()
-                nmax = nmin + n.blocksize()
-                if (offset >= nmin) and (offset < nmax):
+                if n.contains(offset):
                     return n
                 continue
             raise ValueError('Specified offset %x not found'%offset)
@@ -486,7 +491,6 @@ class pcontainer(type):
         for n in self.value:
             bs = n.blocksize()
             n.setoffset(ofs)
-
             n.deserialize_block(block[:bs])
             block = block[bs:]
             ofs += bs

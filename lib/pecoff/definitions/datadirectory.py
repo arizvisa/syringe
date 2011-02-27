@@ -44,7 +44,8 @@ class GlobalPtr(Entry): pass
 class Tls(Entry): pass
 class LoadConfig(Entry): pass
 class BoundImport(Entry): pass
-class IAT(Entry): pass
+class IAT(Entry):
+    _object_ = imports.IMAGE_IMPORT_ADDRESS_TABLE
 class DelayLoad(Entry): pass
 class ComHeader(Entry): pass
 class Reserved(Entry): pass

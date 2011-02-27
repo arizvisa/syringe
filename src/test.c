@@ -1,4 +1,4 @@
-#include <windows.h>
+//#include <windows.h>
 #include <Python.h>
 
 char* python_main = "print 'hello world'\n"
@@ -12,5 +12,11 @@ main(int argc, char** argv)
     (void)Py_Initialize();
     (int)PyRun_SimpleString(python_main);
     (void)Py_Finalize();
+    return 0;
+}
+
+int
+test(void)
+{
     return 0;
 }

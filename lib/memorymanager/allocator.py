@@ -266,6 +266,8 @@ if sys.platform == 'win32':
             return res != 0
 
         def read(self, address, length):
+            assert type(address) in (int,long), "Invalid address type %s"% repr(address)
+            assert type(length) in (int,long)
             NumberOfBytesRead = ctypes.c_int()
             res = ctypes.c_char*length
             Buffer = res()
@@ -279,6 +281,7 @@ if sys.platform == 'win32':
             return str(Buffer.raw)
 
         def write(self, address, value):
+            assert type(address) in (int,long), "Invalid address type %s"% repr(address)
             assert type(value) is str
             NumberOfBytesWritten = ctypes.c_int()
 

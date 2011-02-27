@@ -1,4 +1,5 @@
 from WinNT import *
+import logging
 
 NT_SUCCESS = lambda Status: ((int(Status)) >= 0)
 NT_INFORMATION = lambda Status: (((int(Status)) >> 30) == 1)
@@ -32,8 +33,8 @@ class NTSTATUS(LONG): pass
 #class PNTSTATUS(dyn.pointer(LONG)): pass
 class PNTSTATUS(dyn.pointer(NTSTATUS)): pass
 
-class PSTR(pstr.szstring): pass
-class WSTR(pstr.szwstring): pass
+class PSTR(pstr.string): pass
+class WSTR(pstr.wstring): pass
 
 class UNICODE_STRING(pstruct.type):
     _fields_ = [
@@ -45,7 +46,11 @@ class UNICODE_STRING(pstruct.type):
     ]
 
     def get(self):
-        return self['Buffer'].d.load().get()[:int(self['Length'])]
+        logging.warn('UNICODE_STRING.get() has been deprecated in favor of .str()')
+        return self.str()
+
+    def str(self):
+        return self['Buffer'].d.l.str()[:int(self['Length'])]
 
 class PUNICODE_STRING(dyn.pointer(UNICODE_STRING)): pass
 
@@ -56,7 +61,11 @@ class STRING(pstruct.type):
         (lambda s: dyn.pointer(dyn.clone(PSTR, length=int(s['Length'].load()))), 'Buffer')
     ]
     def get(self):
-        return self['Buffer'].get().load().get()[:int(self['Length'])]
+        logging.warn('STRING.get() has been deprecated in favor of .str()')
+        return self.str()
+
+    def str(self):
+        return self['Buffer'].d.l.str()[:int(self['Length'])]
 
 class PSTRING(dyn.pointer(STRING)): pass
 

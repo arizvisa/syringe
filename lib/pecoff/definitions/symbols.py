@@ -92,11 +92,16 @@ class ShortName(pstruct.type):
     ]
 
     def get(self):
-        stringtable = self.parent.parent.parent['Strings']
+        import warnings
+        warnings.warn('%s.get() is deprecated'%(self.__class__.__name__), DeprecationWarning, stacklevel=2)
+        return self.str()
+
+    def str(self):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
+        stringtable = self.parent.parent.parent['Strings']
         if int(self['IsShort']) != 0x00000000:
             return ptypes.utils.strdup( self.serialize(), terminator='\x00')
-        return stringtable.get( int(self['Offset']) )
+        return stringtable.extract( int(self['Offset']) )
 
     def set(self, string):
         if len(string) <= 8:
@@ -119,13 +124,26 @@ class Symbol(pstruct.type):
         (uint8, 'NumberOfAuxSymbols')
     ]
 
+    def friendly(self):
+        return '<%s section:%s storageclass:%d aux:%d>'%(self['Name'].str(), self['SectionNumber'].get(), int(self['StorageClass']), int(self['NumberOfAuxSymbols']) )
+
     def __repr__(self):
         if self.initialized:
             kwds = ['SectionNumber', 'Type', 'StorageClass', 'NumberOfAuxSymbols']
             res = ', '.join(['%s:%d'% (k, int(self[k])) for k in kwds])
             #print self['Name'].get(), self['Value']
-            return '[%x] %s %s {%s} Value: 0x%x'% (self.getoffset(), self.__class__, self['Name'].get(), res, int(self['Value']))
+            return '[%x] %s %s {%s} Value: 0x%x'% (self.getoffset(), self.__class__, self['Name'].str(), res, int(self['Value']))
         return super(Symbol, self).__repr__()
+
+    def getentire(self):
+        p = self.parent
+        index = p.index(self)
+        return p[index : index+1 + int(self['NumberOfAuxSymbols'])]
+
+    def getaux(self):
+        p = self.parent
+        index = p.index(self)+1
+        return p[index : index + int(self['NumberOfAuxSymbols'])]
 
 class SymbolTable(parray.type):
     lastsymbol = Symbol()
@@ -155,7 +173,7 @@ class SymbolTable(parray.type):
 
     _object_ = nextSymbol
 
-    def fetchsymbol(self, symbol):
+    def getsymbolandaux(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
         return self.value[index : index+1 + int(symbol['NumberOfAuxSymbols'])]
@@ -254,6 +272,11 @@ class StringTable(pstruct.type):
     ]
 
     def get(self, offset):
+        import warnings
+        warnings.warn('%s.get(offset) is deprecated for %s.extract(offset)'%(self.__class__.__name__,self.__class__.__name__), DeprecationWarning, stacklevel=2)
+        return self.extract(offset)
+
+    def extract(self, offset):
         '''return the string associated with a particular offset'''
         string = self.serialize()
         string = string[offset:]
@@ -286,16 +309,28 @@ class SymbolTableAndStringTable(pstruct.type):
         if name:
             for x in self.get():
                 if x['Name'].get() == name:
-                    return self['Symbols'].fetchsymbol(x)[0]
+                    return self['Symbols'].getsymbolandaux(x)[0]
                 continue
                     
             raise KeyError('symbol %s not found'% name)
         return [x for x in self['Symbols'] if type(x) is Symbol]
 
+    def walk(self):
+        for x in self['Symbols']:
+            if type(x) is Symbol:
+                yield x
+            continue
+        return
+
+    def fetch(self, name):
+        for x in self.walk():
+            if x['Name'].str() == name:
+                return self['Symbols'].getsymbolandaux(x)[0]
+
     def getaux(self, name):
         for x in self.get():
             if int(x['NumberOfAuxSymbols']) > 0 and x['Name'].get() == name:
-                return self['Symbols'].fetchsymbol(x)[1:]
+                return self['Symbols'].getsymbolandaux(x)[1:]
             continue
         return ()
 

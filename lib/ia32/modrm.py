@@ -1,12 +1,13 @@
 import decoder
 
-def extract(instruction):
+def decode(instruction):
     '''Extract the modrm tuple out of the provided instruction'''
     modrm = instruction[2]
     if len(modrm) > 0:
         modrm = decoder.decodeInteger(modrm)
         return decoder.extractmodrm(modrm)
     return None
+extract = decode
 
 def isSib(modrm):
     '''[sib],[sib+u8], or [sib+u32]'''
