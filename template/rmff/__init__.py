@@ -1,4 +1,4 @@
-import ptypes
+import ptypes,logging
 from ptypes import *
 # ripped from https://common.helixcommunity.org/2003/HCS_SDK_r5/htmfiles/rmff.htm
 
@@ -19,22 +19,28 @@ class Str8(pstruct.type):
 ### General Types
 class RealMedia_Header(pstruct.type):
     def __object(self):
-        id = self['object_id'].l.serialize()
-        ver = int(self['object_version'].l)
+        global realmedia_header
+        id,ver = self['object_id'].l.serialize(),int(self['object_version'].l)
 
-        lookup = globals()['RealMedia_Header_Lookup']
         try:
-            res = lookup[ (id,ver) ]
+            res = realmedia_header.lookup((ver,id))
         except KeyError:
+            logging.warn("%s:%s:(id:%s,ver:%d): Unable to identify header type at offset %x"%(self.__module__, self.shortname(), id, ver, self.getoffset()))
             res = dyn.block( int(self['size'].l) - 10 )
         return res
 
-    def __extra(s):
-        l = int(s['size'].l)
-        s = s['object'].size() + 4 + 4 + 2
+    def __extra(self):
+        l = int(self['size'].l)
+        s = self['object'].size() + 4 + 4 + 2
         if l > s:
-            print 'hit some untested code'
+            id,ver = self['object_id'].serialize(),int(self['object_version'])
+            logging.warn('%s:%s:(id:%s,ver:%x): Decoded only %d bytes at offset %x'%(self.__module__, self.shortname(), id, ver, l-s, self.getoffset()))
             return dyn.block( l - s )
+
+        if s != l: 
+            id,ver = self['object_id'].serialize(),int(self['object_version'])
+            logging.warn('%s:%s:(id:%s,ver:%x): Attempted to read %x bytes past parent block at offset %x'%(self.__module__, self.shortname(), id, ver, s-l, self.getoffset()))
+
         return dyn.block(0)
 
     def blocksize(self):
@@ -47,8 +53,6 @@ class RealMedia_Header(pstruct.type):
         (__object, 'object'),
         (__extra, 'extra')
     ]
-
-class RealMedia_Header_Type(object): pass
 
 class RealMedia_Structure(pstruct.type):
     def getobject(self):
@@ -72,44 +76,71 @@ class RealMedia_Record(pstruct.type):
     ]
 
 ### non general types
+class record(object):
+    cache = None
+    @classmethod
+    def lookup(cls, id):
+        return cls.cache[id]
+
+    @classmethod
+    def define(cls, type):
+        assert type not in cls.cache
+        cls.cache[type.type] = type
+        return type
+
+class realmedia_header(record): cache = {}
 
 ### type specific codec data
-class Codec_Data(object):
-    __lookup = {}
-    @classmethod
-    def add(cls, type):
-        t = type.fourcc
-        v = type.version
-        p = (t,v)
-        assert p not in cls.__lookup
-        cls.__lookup[p] = type
+class codec(record): pass
+class audio_codec(codec): cache = {}
+class video_codec(codec): cache = {}
 
-    @classmethod
-    def lookup(cls, fourcc, version):
-        return cls.__lookup[(fourcc,version)]
-
+@audio_codec.define
 class Codec_Data_cook_v4(pstruct.type):
-    fourcc = 'cook'
-    version = 4
+    type = (4, 'cook')
     _fields_ = [
         (UINT16, 'unknown_0'),
         (UINT8, 'unknown_2'),
         (ULONG32, 'length'),
         (lambda s: dyn.block(int(s['length'].l)), 'data')
     ]
-Codec_Data.add(Codec_Data_cook_v4)
 
+@audio_codec.define
 class Codec_Data_cook_v5(pstruct.type):
-    fourcc = 'cook'
-    version = 5
+    # taken from ffmpeg/libavcodec/cook.c
+    type = (5, 'cook')
+
+    MONO=0x1000001
+    STEREO=0x1000002
+    JOINT_STEREO=0x1000003
+    MULTICHANNEL_COOK=0x2000000
+
     _fields_ = [
-        (UINT16, 'unknown_0'),
-        (UINT8, 'unknown_2'),
-        (UINT8, 'unknown_3'),
-        (ULONG32, 'length'),
-        (lambda s: dyn.block(int(s['length'].l)), 'data')
+        (UINT32, 'cookversion'),
+        (UINT16, 'samples_per_frame'),
+        (UINT16, 'subbands'),
+#        (UINT16, 'unknown_0'),
+#        (UINT8, 'unknown_2'),
+#        (UINT8, 'unknown_3'),
+#        (ULONG32, 'length'),
+#        (lambda s: dyn.block(int(s['length'].l)), 'data')
     ]
-Codec_Data.add(Codec_Data_cook_v5)
+
+@video_codec.define
+class Codec_Data_RV30(pstruct.type):
+    type = 'RV30'
+    _fields_ = [
+    ]
+
+@video_codec.define
+class Codec_Data_RV20(pstruct.type):
+    type = 'RV20'
+    _fields_ = [
+        (UINT16, 'frame size count'),
+        (UINT16, 'unknown[1]'),
+        (UINT32, 'colorinfo'),
+        (lambda s: dyn.array(UINT16, s['frame size count'].l.int()), 'framesize'),
+    ]
 
 ### type specific
 # http://git.ffmpeg.org/?p=ffmpeg;a=blob;f=libavformat/rmdec.c;h=436a7e08f2a593735d50e15ba38ed34c5f8eede1;hb=HEAD
@@ -149,8 +180,8 @@ class Type_Specific_v4_Audio(pstruct.type):
         (Str8, 'desc2'),
     ]
     def codec(self):
-        print hex(self.getoffset())
-        print self['desc1'], self['desc2']
+#        print hex(self.getoffset())
+#        print self['desc1'], self['desc2']
         return self['desc2'].serialize()
 
 class Type_Specific_vAny_Audio(Type_Specific_v4_Audio): pass
@@ -162,33 +193,36 @@ class Type_Specific_v5_Audio(pstruct.type):
         (UINT32, '.ra5'),
         (UINT32, 'data_size'),
         (UINT16, 'version2'),
-        (UINT32, 'header_size'),
+
+        (UINT16, 'header_size?'),
+        (UINT16, 'header_size'),
 
         (UINT16, 'flavor'),
         (UINT32, 'coded_frame_size'),
 
-        (UINT32, 'unknown[7]'),
-        (UINT32, 'unknown[8]'),
+        (UINT16, 'unknown[7]'),
+        (UINT16, 'unknown[8]'),
         (UINT32, 'unknown[9]'),
+        (UINT32, 'unknown[a]'),
 
         (UINT16, 'sub_packet_h'),
         (UINT16, 'frame_size'),
         (UINT16, 'sub_packet_size'),
 
-        (UINT16, 'unknown[d]'),
         (UINT16, 'unknown[e]'),
         (UINT16, 'unknown[f]'),
         (UINT16, 'unknown[10]'),
+        (UINT16, 'unknown[11]'),
 
         (UINT16, 'sample_rate'),
-        (UINT16, 'unknown[12]'),
+        (UINT16, 'unknown[13]'),
         (UINT16, 'bitpersample'),
         (UINT16, 'channels'),
 
         (UINT32, 'genr'),
         (dyn.block(4), 'codec'),
 
-        (dyn.block(4), 'unknown[17]'),
+        (dyn.block(4), 'unknown[18]'),
     ]
 
     def codec(self):
@@ -230,19 +264,16 @@ class Type_Specific_RealAudio(pstruct.type):
         raise NotImplementedError( 'Unknown Type at %x: %x'% (self.getoffset(), ver))
 
     def __codec(self):
-        h = self.getparent(RealMedia_Header_Type)
         fourcc = self['object'].l.codec()
         version = int(self['object_version'].l)
-        type = Codec_Data.lookup(fourcc, version)
-
-        return dyn.block(int(self['i_codec'].l))
 
         try:
+            type = audio_codec.lookup((fourcc, version))
             return dyn.clone(type, blocksize=lambda s: int(self['i_codec'].l))
         except KeyError:
-            pass
+            logging.warn('%s:%s: Unable to find codec "%s" version %d'%(self.__module__, self.shortname(), fourcc, version))
 
-        return dyn.block( l - (self['object'].size()+6) )
+        return ptype.empty   #XXX
 
     _fields_ = [
         (UINT32, 'object_id'),
@@ -252,26 +283,43 @@ class Type_Specific_RealAudio(pstruct.type):
         (__codec, 'codec')
     ]
 
-# FIXME: this was ripped from someone's code. It doesn't support multiple versions.
-class Type_Specific_vAny_RealVideo(pstruct.type):
+class Type_Specific_RealVideo(pstruct.type):
+    def __object(self):
+        # XXX: just a check that doesn't belong here
+        v = self['version'].l.int()
+        if v != 0:
+            raise NotImplementedError('Unknown Video Type Version at %x: %x'% (self.getoffset(), v))
+
+        id = self['id'].l.serialize()
+        try:
+            result = video_codec.lookup(id)
+        except KeyError:
+            logging.warn('%s:%s: Unable to find codec "%s"'%(self.__module__, self.shortname(), id))
+            result = ptype.empty
+        return result
+
     _fields_ = [
         (UINT16, 'version'),
         (UINT16, 'size'),
-        (dyn.block(4), 'type'),
-        (dyn.block(4), 'codec'),
-        (dyn.block(4), 'codec2'),
+        (dyn.block(4), 'tag'),
+        (dyn.block(4), 'id'),
         (UINT16, 'width'),
         (UINT16, 'height'),
-        (dyn.block(6), 'unknown'),
-        (pfloat.double, 'fps'),
+        (UINT16, 'fps'),
+
+        (dyn.block(4), 'unknown_block'),
+        (UINT16, 'frame_rate'),
+        (UINT16, 'unknown_u16'),
+        
+#        (dyn.block(8), 'unknown_block'),
+        (__object, 'object'),
+        (lambda s: dyn.block(s['size'].l.int() - s.size()), '__unknown'),
     ]
-
-class Type_Specific_RealVideo(Type_Specific_vAny_RealVideo): pass
-
+    
 ### sub-headers
-class RealMedia_File_Header_v0(pstruct.type, RealMedia_Header_Type):
-    object_id = '.RMF'
-    object_version = 0
+@realmedia_header.define
+class RealMedia_File_Header_v0(pstruct.type):
+    type = (0, '.RMF')
     _fields_ = [
         (UINT32, 'file_version'),
         (UINT32, 'num_headers'),
@@ -280,9 +328,10 @@ class RealMedia_File_Header_v0(pstruct.type, RealMedia_Header_Type):
 class RealMedia_File_Header_v1(RealMedia_File_Header_v0):
     object_version = 1
 
-class RealMedia_Properties_Header_v0(pstruct.type, RealMedia_Header_Type):
-    object_id = 'PROP'
-    object_version = 0
+@realmedia_header.define
+class RealMedia_Properties_Header_v0(pstruct.type):
+    type = (0, 'PROP')
+
     _fields_ = [
         (UINT32, 'max_bit_rate'),
         (UINT32, 'avg_bit_rate'),
@@ -297,18 +346,19 @@ class RealMedia_Properties_Header_v0(pstruct.type, RealMedia_Header_Type):
         (UINT16, 'flags'),
     ]
 
-class RealMedia_MediaProperties_Header_v0(pstruct.type, RealMedia_Header_Type):
-    object_id = 'MDPR'
-    object_version = 0
+@realmedia_header.define
+class RealMedia_MediaProperties_Header_v0(pstruct.type):
+    type = (0, 'MDPR')
 
     def __type_specific_data(self):
-        mimetype = self['mime_type'].l.get()
+        mimetype = self['mime_type'].l.str()
+        typesize = self['type_specific_len'].l.int()
         if mimetype == 'video/x-pn-realvideo':
-            return Type_Specific_RealVideo
+            return dyn.clone(Type_Specific_RealVideo, blocksize=lambda s: typesize)
         elif mimetype == 'audio/x-pn-realaudio':
-            return Type_Specific_RealAudio
-        print 'Unknown mimetype: %s'% mimetype
-        return dyn.block(int(self['type_specific_len'].l))
+            return dyn.clone(Type_Specific_RealAudio, blocksize=lambda s: typesize)
+        logging.warn('%s:%s: Unable to identify mimetype "%s"'%(self.__module__, self.shortname(), mimetype))
+        return dyn.block(typesize)
 
     _fields_ = [
         (UINT16, 'stream_number'),
@@ -328,9 +378,9 @@ class RealMedia_MediaProperties_Header_v0(pstruct.type, RealMedia_Header_Type):
         (__type_specific_data, 'type_specific_data')
     ]
 
-class RealMedia_Content_Description_Header(pstruct.type, RealMedia_Header_Type):
-    object_id = 'CONT'
-    object_version = 0
+@realmedia_header.define
+class RealMedia_Content_Description_Header(pstruct.type):
+    type = (0, 'CONT')
 
     _fields_ = [
         (UINT16, 'title_len'),
@@ -343,18 +393,18 @@ class RealMedia_Content_Description_Header(pstruct.type, RealMedia_Header_Type):
         (lambda s: dyn.clone(pstr.string, length=int(s['comment_len'].l)), 'comment'),
     ]
 
-class RealMedia_Data_Chunk_Header(pstruct.type, RealMedia_Header_Type):
-    object_id = 'DATA'
-    object_version = -1
+@realmedia_header.define
+class RealMedia_Data_Chunk_Header(pstruct.type):
+    type = (-1, 'DATA')
     _fields_ = [
         (UINT32, 'num_packets'),
         (UINT32, 'next_data_header'),
         (lambda s: dyn.array( Media_Packet_Header_v0, int(s['num_packets'].l) ), 'packets')
     ]
 
-class RealMedia_Index_Chunk_Header(pstruct.type, RealMedia_Header_Type):
-    object_id = 'INDX'
-    object_version = 0
+@realmedia_header.define
+class RealMedia_Index_Chunk_Header(pstruct.type):
+    type = (0, 'INDX')
     _fields_ = [
         (UINT32, 'num_indices'),
         (UINT16, 'stream_number'),
@@ -424,18 +474,6 @@ class IndexRecord_v0(pstruct.type):
 
 class IndexRecord(RealMedia_Record):
     _object_ = { 0 : IndexRecord_v0 }
-
-### make search lists
-def getparentclasslookup(parent, key):
-    import inspect
-    res = {}
-    for cls in globals().values():
-        if inspect.isclass(cls) and cls is not parent and issubclass(cls, parent):
-            res[ key(cls) ] = cls
-        continue
-    return res
-
-RealMedia_Header_Lookup = getparentclasslookup(RealMedia_Header_Type, lambda cls: (cls.object_id, cls.object_version))
 
 ###
 class File(parray.terminated):

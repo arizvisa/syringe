@@ -1,7 +1,7 @@
 '''base array element'''
-import ptype,utils
+import ptype,utils,logging
 
-class __parray_generic(ptype.pcontainer):
+class __parray_generic(ptype.container):
     '''provides the generic features expected out of an array'''
     def __contains__(self,v):
         for x in self.value:
@@ -39,7 +39,7 @@ class __parray_generic(ptype.pcontainer):
         return
 
     def pop(self, index=-1):
-        raise NotImplementedError('Implemented, but untested...')
+        raise NotImplementedError('Implemented, but untested (offsets might be off)...')
         res = self.value[index]
         del(self.value[index])
         return res
@@ -72,7 +72,7 @@ class __parray_generic(ptype.pcontainer):
 
 class type(__parray_generic):
     '''
-    A pcontainer for managing ranges of a particular object.
+    A container for managing ranges of a particular object.
 
     Settable properties:
         _object_:ptype.type<w>
@@ -82,6 +82,9 @@ class type(__parray_generic):
     '''
     _object_ = None     # subclass of ptype.type
     length = 0          # int
+
+    def contains(self, offset):
+        return super(ptype.container, self).contains(offset)
 
     # load ourselves lazily
     def load_block(self):
@@ -107,10 +110,10 @@ class type(__parray_generic):
         self.value = []
 
         # which kind of load are we
-        if ptype.isptype(obj) and not ptype.ispcontainer(obj):
+        if ptype.istype(obj) and not ptype.iscontainer(obj):
             self.load_block()
 
-        elif ptype.ispcontainer(obj) or ptype.isresolveable(obj):
+        elif ptype.iscontainer(obj) or ptype.isresolveable(obj):
             self.load_container()
 
         return super(type, self).load()
@@ -128,7 +131,7 @@ class type(__parray_generic):
 
         ofs = '[%x]'%( self.getoffset() )
 
-        if ptype.isptype(self._object_):
+        if ptype.istype(self._object_):
             obj = repr(self._object_)
         else:
             obj = repr(self._object_.__class__)
@@ -163,8 +166,8 @@ class terminated(type):
             self.value.append(n)
             if self.isTerminator(n.load()):
                 break
-            ofs += n.blocksize()
-        return super(type, self).load()
+            s = n.blocksize(); assert s > 0; ofs += s
+        return self #super(type, self).load()
 
     def __repr__(self):
         # copied..
@@ -176,7 +179,7 @@ class terminated(type):
 
         ofs = '[%x]'%( self.getoffset() )
 
-        if ptype.isptype(self._object_):
+        if ptype.istype(self._object_):
             obj = repr(self._object_)
         else:
             obj = repr(self._object_.__class__)
@@ -189,68 +192,80 @@ class infinite(terminated):
     an array that consumes as much data as possible, and neatly leaves when out of data
     '''
     def isTerminator(self, v):
-        if v.initialized:
-            return False
-        return True
+        return False
 
     def load(self):
         forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
         obj = self._object_
         self.value = []
+        ofs = self.getoffset()
 
         try:
-            ofs = self.getoffset()
             for index in forever:
                 n = self.newelement(obj, str(index), ofs)
                 self.value.append(n.load())
+                if not n.initialized:
+                    break
+
                 if self.isTerminator(n):
                     break
-                ofs += n.blocksize()
-            return super(type, self).load()
+
+                s = n.blocksize(); assert s > 0; ofs += s
 
         except StopIteration:
             if self.parent is not None:
                 path = ' ->\n\t'.join(self.backtrace())
-                print "Stopped reading %s at offset %x\n\t%s"%(self.name(), self.getoffset(), path)
+                logging.warn("<parray.infinite> Stopped reading %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
+            return self
             
         return self
 
 class block(terminated):
-    __current = 0
     def isTerminator(self, value):
-        if value.initialized and self.__current < self.blocksize():
-            self.__current += value.blocksize()
-            return False
-        return True
+        return False
 
     def load(self):
-        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
         obj = self._object_
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
         self.value = []
 
-        # FIXME: i'm having a problem with exceptions being raised from another parray.block defined in _object_
-        #        to remedy that, should we add a special case for all _object_ instances that subclass parray.terminated?
-        #        XXX: this version of parray.block breaks a bunch of my testcases
-
         ofs = self.getoffset()
-        self.__current = 0
+        current = 0
         for index in forever:
             n = self.newelement(obj, str(index), ofs)
+
             try:
-                if self.isTerminator(n.load()):
-                    break
-                self.value.append(n)
+                s = n.load().blocksize()
+
             except StopIteration, e:
-                print "<parray.block> Non-fatal error while decoding _object_ %s[%d] at offset %x from %x:+%x -> %s"%(n.shortname(), index, n.getoffset(), self.getoffset(), self.blocksize(), e)
+                # if we error'd while decoding too much, then let us know
+                if current >= self.blocksize():
+                    path = ' ->\n\t'.join(n.backtrace())
+                    logging.warn("<parray.block> Stopped reading %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
                 break
 
-            ofs += n.blocksize()
-            continue
+            # if our child element pushes us past the blocksize
+            if (current + s >= self.blocksize()):
+                path = ' ->\n\t'.join(n.backtrace())
+                logging.info("<parray.block> Terminated %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
+                self.value.append(n)
+                break
+
+            # add to list, and check if we're done.
+            self.value.append(n)
+            if self.isTerminator(n):
+                break
+
+            s = n.blocksize(); assert s > 0; ofs += s
+            current += s
         return self
 
 if __name__ == '__main__':
     import ptype,parray
     import pstruct,parray,pint,provider
+
+    import logging
+    logging.root=logging.RootLogger(logging.DEBUG)
 
     class Result(Exception): pass
     class Success(Result): pass
@@ -444,6 +459,44 @@ if __name__ == '__main__':
         print a[1].v
         if len(a) == 0x100 / subarray().alloc().size():
             raise Success
+
+#    @TestCase
+    def Test11():
+        import random
+        from ptypes import parray,dyn,ptype,pint,provider
+
+        random.seed(0)
+
+        class rootcontainer(parray.block):
+            blocksize = lambda x: x._object_.a.size() * 8
+
+        class leaf(pint.uint32_t): pass
+
+        class acontainer(rootcontainer):
+            _object_ = leaf
+            blocksize = lambda x: 8
+
+        class bcontainer(rootcontainer):
+            _object_ = leaf
+            blocksize = lambda x: 4
+
+        class ccontainer(rootcontainer):
+            _object_ = pint.uint8_t
+            blocksize = lambda x: 8
+
+        class arr(parray.infinite):
+            def randomcontainer(self):
+                l = [ acontainer, bcontainer, ccontainer ]
+                return random.sample(l, 1)[0]
+
+            _object_ = randomcontainer
+
+        string = ''.join([ chr(random.randint(ord('A'),ord('Z'))) for x in range(0x100) ])
+        a = arr(source=provider.string(string))
+        a=a.l
+        print a
+        for x in a:
+            print x
 
 if __name__ == '__main__':
     results = []

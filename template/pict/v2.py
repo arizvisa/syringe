@@ -262,7 +262,6 @@ class DefHilite(ptype.type):
 class CompressedQuickTime(pstruct.type):
     type = 0x8200
     _fields_ = [
-        raise NotImplementedError
         (Long, 'size'),
         (Integer, 'version'),
         (dyn.array(Long, 9), 'matrix'),
@@ -278,6 +277,8 @@ class CompressedQuickTime(pstruct.type):
 #        (lambda s: dyn.block(s['maskSize'].l.int()), 'maskRgn'),
 #        (lambda s: s, 'imageData'),
     ]
+    def __init__(self, **attrs):
+        raise NotImplementedError('CompressedQuickTime not implemented')
 
 #@OpStash.Define
 #class UncompressedQuickTime(pstruct.type):

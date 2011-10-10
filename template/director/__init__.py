@@ -9,7 +9,27 @@ class UWORD(pint.uint16_t): pass
 class LONG(pint.int32_t): pass
 class ULONG(pint.uint32_t): pass
 
-class ID( dyn.block(4) ): pass
+class ID(pint.uint32_t):
+    def str(self):
+        n = int(self)
+        string = ''
+        for x in range(4):
+            string += chr((n&0xff000000)>>24)
+            n *= 0x100
+        return string
+
+    def __repr__(self):
+        ofs = '[%x]'% self.getoffset()
+        if self.initialized:
+            res = repr(self.str())
+        else:
+            res = '???'
+        name = [lambda:'__name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
+        return  ' '.join([ofs, self.name(), name, res])
+
+class HEX(pint.integer_t):
+    def __int__(self):
+        return int(self.serialize(),16)
 
 ### yay
 class Chunk_Type(object): pass
@@ -19,23 +39,15 @@ class Chunk(pstruct.type):
         realsize = self['ckData'].blocksize()
         return dyn.block( expectedsize - realsize )
 
-    if False:
-        def ckData(self):
-            t = self['ckID'].l.serialize()
-            try:
-                return Record.Lookup(t)
-            except KeyError:
-                pass
-
-            res = dyn.clone( Record.Unknown, blocksize=lambda s:int(self['ckSize'].l) )
-            res.type = t
-            return res
-
     def blocksize(self):
         size = int(self['ckSize']) + 8
         if size & 1:
             size += 1
         return size
+    
+    def ckData(self):
+        size = int(self['ckSize'].l)
+        return Record.Generate(self['ckID'].l.str(), blocksize=lambda s:size)
 
     def ckSize(self):
         return self.endian(LONG)
@@ -44,7 +56,7 @@ class Chunk(pstruct.type):
         (ID, 'ckID'),
         (ckSize, 'ckSize'),
 #        (ckData, 'ckData'),
-        (lambda self: Record.Generate(self['ckID'].l.serialize(), blocksize=lambda s:int(self['ckSize'])), 'ckData'),
+        (lambda self: Record.Generate(self['ckID'].l.str(), blocksize=lambda s:int(self['ckSize'])), 'ckData'),
         (ckExtra, 'ckExtra'),
     ]
 
@@ -79,7 +91,7 @@ class Record(object):
     @classmethod
     def Generate(cls, t, **attrs):
         try:
-            return cls.Lookup(t)
+            return dyn.clone( cls.Lookup(t), **attrs )
         except KeyError:
             pass
 
@@ -94,36 +106,38 @@ class File(pstruct.type):
         if self['Type'].l.serialize() == 'XFIR':
             byteorder = pint.littleendian
 
-        self.attrs['endian'] = byteorder
+        self.attrs['endian'] = byteorder    # FIXME: i should probably do this in the respective header for RIFX or XFIR
         return byteorder(pint.uint32_t)
 
+    def __Data(self):
+        type = self['Type'].l.serialize()
+        size = int(self['Size'].l)
+        return Record.Generate(type, blocksize=lambda s:size)
+
     _fields_ = [
-        (ID, 'Type'),
+        (dyn.block(4), 'Type'),
         (__Size, 'Size'),
-        (lambda self: Record.Generate(self['Type'].l.serialize(), blocksize=lambda s:int(self['Size'])), 'Data'),
+        (lambda self: Record.Generate(self['Type'].l.serialize(), blocksize=lambda s:int(self['Size'].l)), 'Data'),
+#        (__Data, 'Data'),
     ]
-
-if False:
-    class CFile(pstruct.type):
-        def __Size(self):
-            byteorder = pint.bigendian
-            if self['Type'].l.serialize() == 'XFIR':
-                byteorder = pint.littleendian
-
-            self.attrs['endian'] = byteorder
-            return byteorder(pint.uint32_t)
-
-        _fields_ = [
-            (ID, 'Type'),
-            (__Size, 'Size'),
-            (lambda self: Record.Generate(self['Type'].l.serialize(), blocksize=lambda s:int(self['Size'])), 'Data'),
-        ]
 
 @Record.Define
 class RIFX(pstruct.type):
     type = 'RIFX'
     def __Data(self):
-        l = int(self.parent['Size'].l)
+        l = int(self.blocksize() - self['Format'].l.size())
+        return dyn.clone(ChunkList, blocksize=lambda s: l)
+
+    _fields_ = [
+        (ID, 'Format'),
+        (__Data, 'Elements'),
+    ]
+
+@Record.Define
+class XFIR(pstruct.type):
+    type = 'XFIR'
+    def __Data(self):
+        l = int(self.blocksize() - self['Format'].l.size())
         return dyn.clone(ChunkList, blocksize=lambda s: l)
 
     _fields_ = [
@@ -165,6 +179,17 @@ class pamm(pstruct.type):
         (lambda x: dyn.array(IndexNode, int(x['header'].l['numIndexNodes'])), 'nodes'),
     ]
 
+@Record.Define
+class demx(parray.block):
+    type = 'XMED'
+    class chunk(pstruct.type):
+        _fields_ = [
+            (dyn.clone(HEX,length=4),'type'),
+            (dyn.clone(HEX,length=8),'size'),
+            (dyn.clone(HEX,length=8),'count'),
+            (lambda s: dyn.block(int(s['size'].l)),'data')         # FIXME: add a chunktype lookup for this too
+        ]
+    _object_ = chunk
 
 if __name__ == '__main__':
     import ptypes,director; reload(director)

@@ -1,19 +1,19 @@
 '''base ptype element'''
-__all__ = 'isptype,ispcontainer,type,pcontainer,rethrow'.split(',')
+__all__ = 'istype,iscontainer,type,container,rethrow,none'.split(',')
 import bitmap,provider,utils
-import types
+import types,logging
 
 ## this is all a horrible and slow way to do this...
 def isiterator(t):
     return hasattr(t, '__iter__') and hasattr(t, 'next')
 
-def isptype(t):
+def istype(t):
     ''' returns true if specified type is a class and inherits from ptype.type '''
     return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
 
-def ispcontainer(t):
-    ''' returns true if specified type inherits from pcontainer '''
-    return isptype(t) and issubclass(t, pcontainer)
+def iscontainer(t):
+    ''' returns true if specified type inherits from container '''
+    return istype(t) and issubclass(t, container)
 
 def isresolveable(p):
     return isinstance(p, (types.FunctionType, types.MethodType)) or isiterator(p)
@@ -22,7 +22,7 @@ def forceptype(p, self):
     ''' as long as value is a function, keep calling it with a context until we get a "ptype" '''
 
     # of type ptype
-    if isinstance(p, type) or isptype(p):
+    if isinstance(p, type) or istype(p):
         return p
 
     # functions
@@ -67,12 +67,11 @@ def rethrow(fn):
             res = []
             res.append('')
             res.append('Caught exception: %s\n'% exception)
-            res.append(path + ' =>')
-
+            res.append('%s<%x:+??> %s =>'%(self.shortname(),self.getoffset(), path))
             res.append('\t<method name> %s'% fn.__name__)
 
             if self.initialized:
-                if ispcontainer(self.__class__):
+                if iscontainer(self.__class__):
                     if self.value:
                         res.append('\t<container length> %x'% len(self.value))
                     else:
@@ -93,7 +92,7 @@ def rethrow(fn):
 
 def debug(ptype):
     '''Will clone ptype into one containing more detailed debugging information'''
-    assert isptype(ptype), '%s is not a ptype'% repr(ptype)
+    assert istype(ptype), '%s is not a ptype'% repr(ptype)
     class newptype(ptype):
         @rethrow
         def deserialize_block(self, block):
@@ -120,7 +119,7 @@ def debugrecurse(ptype):
         @rethrow
         def newelement(self, ptype, name='', ofs=0, **attrs):
             res = forceptype(ptype, self)
-            assert isptype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
+            assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
             return super(newptype,self).newelement( debug(res), name, ofs, **attrs )
 
     newptype.__name__ = 'debugrecurse(%s)'% ptype.__name__
@@ -153,20 +152,29 @@ class type(object):
 
     initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.length)    # bool
     source = None   # ptype.provider
+    p = property(fget=lambda s: s.parent)   # abbr to get to .parent
     parent = type   # ptype.type
 
     attrs = None    # dict of attributes that will get assigned to any child elements
     __name__ = None # default to unnamed
     
     ## initialization
-    def __init__(self, **attrs):
+    def __init__(self, recurse={}, **attrs):
         '''Create a new instance of object. Will assign provided named arguments to self.attrs'''
-        self.source = self.source or provider.memory()
+        try:
+            self.source = self.source or provider.memory()
+        except AttributeError:
+            self.source = provider.memory()
         self.parent = None
-        if attrs:
-            self.attrs = attrs
-        if self.attrs is None:
-            self.attrs = {}
+
+        # FIXME: the next block is responsible for conditionally propogating
+        #        attributes. i think that some code in pecoff propogates data
+        #        to children elements. that code should be rewritten to use the
+        #        new 'recurse' parameter.
+        if not recurse:
+            recurse=attrs   # XXX: copy attrs into recurse, since we conditionaly propogate
+        a = set( ('offset','length','value','_fields_', 'parent', '__name__') )
+        self.attrs = dict(((k,v) for k,v in recurse.iteritems() if k not in a))
 
         # update self if user specified
         for k,v in attrs.items():
@@ -207,14 +215,14 @@ class type(object):
 
         raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
 
-    def traverse(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
+    def traverse(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None), *args, **kwds):
         '''
         Will walk the elements returned by the generator branches(visitee)
         defaults to getting the path to the root node
         '''
-        for self in branches(self):
+        for self in branches(self, *args, **kwds):
             yield self
-            for y in self.traverse(branches):
+            for y in self.traverse(branches, *args, **kwds):
                 yield y
             continue
         return
@@ -234,13 +242,14 @@ class type(object):
         self.length = len(res)
         return res
 
-    def alloc(self):
+    a = property(fget=lambda s: s.alloc())   # abbr
+    def alloc(self, **kwds):
         '''will initialize a ptype with zeroes'''
-        # XXX: should we actually allocate space for a remote provider?
-        source = self.source
-        self.source = provider.empty()
+        kwds.setdefault('source', provider.empty())        
+        state = dict(( (k,getattr(self,k)) for k,v in kwds.iteritems() ))
+        [ setattr(self,k,v) for k,v in kwds.iteritems() ]
         self.load()
-        self.source = source
+        [ setattr(self,k,v) for k,v in state.iteritems()]
         return self
 
     ## operator overloads
@@ -264,12 +273,14 @@ class type(object):
         attribute. this will also pass the self.attrs property to the child constructor.
         '''
         res = forceptype(ptype, self)
-        assert isptype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
+        assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
 
-        if isptype(res):
+        if istype(res):
 #            res.name = lambda s: name
-            attrs.update(self.attrs)
-            res = res(**attrs)     # all children will inherit too
+            updateattrs = dict(self.attrs)
+            updateattrs.update(attrs)
+            res = res(**updateattrs)     # all children will inherit too
+
         res.parent = self
         if 'source' not in self.attrs:
             res.source = self.source
@@ -318,18 +329,21 @@ class type(object):
         return self
 
     def deserialize_block(self, block):
+        # size tracking
         bs = self.blocksize()
-        sz = self.size()
         if len(block) < bs:
             path = ' ->\n\t'.join(self.backtrace())
-            print Warning("%d bytes left, expected %d"%( len(block), bs))   # XXX
+            logging.warn("%s - %d bytes left, expected %d\n\t%s", self.shortname(), len(block), bs, path)   # XXX
 
+        # if type will be incomplete
+        sz = self.size()
         if len(block) < sz:
             self.value = block[:sz]
             path = ' ->\n\t'.join(self.backtrace())
             raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), sz, path))
 
-        self.value = block[:self.size()]
+        # all is good.
+        self.value = block[:sz]
         return self
 
     ## representation
@@ -350,7 +364,9 @@ class type(object):
         return  ' '.join([ofs, self.name(), name, res])
 
     def hexdump(self, **kwds):
-        return utils.hexdump( self.serialize(), offset=self.getoffset(), **kwds )
+        if self.initialized:
+            return utils.hexdump( self.serialize(), offset=self.getoffset(), **kwds )
+        raise ValueError('%s is uninitialized'% self.name())
 
     def new(self, type, **kwds):
         '''Instantiate a new type as a child of the current ptype'''
@@ -367,14 +383,11 @@ class type(object):
 
     def cast(self, t):
         '''Cast the contents of the current ptype to a different ptype'''
-        result = self.newelement( t, 'cast(%s, %s)'% (self.name(), repr(t.__class__)), self.getoffset() )
-        try:
-            result.alloc().deserialize_block( self.serialize() )
-        except StopIteration:
-            result.l # try to load it anyways
+        result = self.newelement( t, self.__name__, self.getoffset() )
+        result.alloc(source=provider.string(self.serialize()), offset=0, blocksize=lambda : self.blocksize())
         return result
 
-class pcontainer(type):
+class container(type):
     '''
     This class is capable of containing other ptypes
 
@@ -403,7 +416,7 @@ class pcontainer(type):
     def getoffset(self, field=None, **attrs):
         '''fetch the offset of the specified field'''
         if not field:
-            return super(pcontainer, self).getoffset()
+            return super(container, self).getoffset()
 
         if field.__class__ is list:
             name,res = (field[0], field[1:])
@@ -416,13 +429,20 @@ class pcontainer(type):
         '''intended to be overloaded. should return the index into self.value of the specified name'''
         raise NotImplementedError('Developer forgot to overload this method')
 
+    def contains(self, offset):
+        for x in self.value:
+            if x.contains(offset):
+                logging.warn("structure %s is unaligned. found element %s to contain offset %x", self.shortname(), x.shortname(), offset)
+                return True
+        return False
+
     def __repr__(self):
         ofs = '[%x]'% self.getoffset()
         if self.initialized:
             res = repr(''.join(self.serialize()))
         else:
             res = '???'
-        return  ' '.join([self.name(), res])
+        return  ' '.join([ofs, self.name(), res])
 
     def at(self, offset, recurse=True, **kwds):
         if not recurse:
@@ -430,9 +450,13 @@ class pcontainer(type):
                 if n.contains(offset):
                     return n
                 continue
-            raise ValueError('Specified offset %x not found'%offset)
+            raise ValueError('%s (%x:+%x) - Offset 0x%x not found in a child element. returning encompassing parent.'%(self.shortname(), self.getoffset(), self.blocksize(), offset))
     
-        res = self.at(offset, False, **kwds)
+        try:
+            res = self.at(offset, False, **kwds)
+        except ValueError, msg:
+            print 'non-fatal exception raised',ValueError,msg
+            return self
 
         # drill into containees for more detail
         try:
@@ -457,7 +481,7 @@ class pcontainer(type):
 
     def setoffset(self, value, recurse=False):
         '''modifies the current offset, set recurse=True to update all offsets in all children'''
-        res = super(pcontainer, self).setoffset(value)
+        res = super(container, self).setoffset(value)
         if recurse:
             assert self.initialized
             for n in self.value:
@@ -496,6 +520,57 @@ class pcontainer(type):
             ofs += bs
         return self
 
+class empty(type):
+    '''empty ptype that occupies no space'''
+    length = 0
+
+class none(empty): pass
+
+class block(none):
+    def __getslice__(self, i, j):
+        return self.serialize()[i:j]
+    def __getitem__(self, index):
+        return self.serialize()[index]
+    def shortname(self):
+        return 'block(%d)'% self.length
+
+# FIXME: would be cool to remove the pointer class' reliance on pint, so we can somehow
+#        fit pointer creation in this module.
+if False:
+    if sys.byteorder == 'big':
+        byteorder = pint.bigendian
+    elif sys.byteorder == 'little':
+        byteorder = pint.littleendian
+
+    def setbyteorder(endianness):
+        '''Set the global byte order for all pointer types'''
+        global byteorder
+        byteorder = endianness
+
+    class pointer(byteorder(type)):
+        _target_ = None
+        def shortname(self):
+            return 'pointer<%s>'% (parentname)
+        def dereference(self):
+            name = '*%s'% self.name()
+            p = int(self)
+            return self.newelement(self._target_, name, p)
+        
+        deref=lambda s: s.dereference()
+        d = property(fget=deref)
+
+        def __cmp__(self, other):
+            if issubclass(other.__class__, self.__class__):
+                return cmp(int(self),int(other))
+            return super(pointer, self).__cmp__(other)
+
+    import dyn  # XXX
+    def addr_t(type):
+        global byteorder
+        parent = byteorder(type)        # XXX: this is how we enforce the byte order
+        parentname = parent().shortname()
+        return dyn.clone(pointer, _target_=type)
+
 if __name__ == '__main__':
     import ptype
     if True:
@@ -530,7 +605,7 @@ if __name__ == '__main__':
         class u16(ptype.type): length=2
         class u32(ptype.type): length=4
         
-        x = ptype.pcontainer(value=[])
+        x = ptype.container(value=[])
         x.v.append( u8() )
         x.v.append( u32() )
         x.v.append( u16() )

@@ -1,9 +1,89 @@
-import pickle,marshal
+import cPickle as pickle,marshal
+
+def dumps(object, **kwds):
+    '''Serialize objects (i.e. convert from an object to a string)'''
+    return lookup.dumps(object, **kwds).encode('bz2')
+def loads(s, **kwds):
+    '''Deserialize objects (i.e. convert from a string back to an object)'''
+    return lookup.loads(s.decode('bz2'), **kwds)
+
+def closure(l, **kwds):
+    '''Return a closure that will pass the specified named arguments to function l.'''
+    # XXX: need some way of specfying/changing the global namespace
+    def result(*args):
+        return l(*args, **kwds)
+    return result
+
+### type serialization
+# if i rewrite this as more of a protocol, i should consider the following or read what people have done with rpc
+#    references: it'd be neat if each rpc object can have a reference id so that deserialization can just reference
+#                the object that was created. this will prevent a list of references from being serialized twice.
+#    namespaces: currently, if we serialize the .__module__ property, we can use __import__(module).__dict__ to attempt
+#                to import the specified module, and snag it's namespace. this is handled by the 'namespace' parameter.
+#    class:  it should be an option to serialize the code belonging to a class. if the namespace is known, we should be
+#            able to copy methods from the object in the source namespace.
+#    class instancemethod: in order for this to be instantiated, the 'class' needs to be known for im_self, and
+#                          im_class to be assigned.
+#    instance: this should be serializeable. currently the dictionary lookup searches only by types. this might be
+#              really simple to work around
+#    performance: this is pretty slow. i should probably benchmark this.. before that though, i should try to localize
+#                 all the conditional branches and ensure use tuples for everything. only marshal necessary objects,
+#                 and pack everything with cPickle
+
+# protocol components:
+#   Reference,Id,number id
+#   Reference,Namespace,module name,symbol name
+#   Store,Packed Type,number id,packed data
+#   Store,Packed Object,number id,packed data
+
+class lookup(dict):
+    '''Used to search the marshall table'''
+    class cache:
+        id = {}
+        type = {}
+
+    @classmethod
+    def define(cls, definition):
+        id = hash(definition.__name__)
+        type = definition.get()
+
+        cls.cache.type[type] = definition
+        cls.cache.id[id] = definition
+        definition.id = id
+        return definition
+
+    @classmethod
+    def byid(cls, id):
+        return cls.cache.id[id]
+    @classmethod
+    def byclass(cls, type):
+        return cls.cache.type[type]
+
+    @classmethod
+    def loads(cls, s, **kwds):
+        id,data = marshal.loads(s)
+        t = kwds.get('type', cls.byid(id))
+        return t.loads(data, **kwds)
+
+    @classmethod
+    def dumps(cls, object, **kwds):
+        try:
+            t = kwds.get('type', cls.byclass(object.__class__))
+            return marshal.dumps((t.id, t.dumps(object, **kwds)))
+        except KeyError:
+            # if this exception is raised, then assume that we're serializing an object instance
+            raise
+
+            # TODO: walk an instance object or pickle this in order to serialize it
+            # TODO: assign these to kwds too
+            kwds.get('instance', None)
+            kwds.get('class', None)
+        return
 
 class __type__(object):
     '''Every marshallable type should inherit from this'''
     @classmethod
-    def getclass(cls):
+    def get(cls):
         '''Return the class that can be used to construct the object'''
         raise NotImplementedError(cls)
 
@@ -20,6 +100,11 @@ class __type__(object):
         '''Default method for displaying a repr of the object'''
         return repr(object)
 
+    @classmethod
+    def new(cls, *args):
+        return cls.get()(*args)
+
+##
 class marshallable(__type__):
     import marshal
     @classmethod
@@ -53,126 +138,6 @@ class container(marshallable):  ## heh, again? really?
         '''Should expand serializeable object back into it's native type'''
         raise NotImplementedError(cls)
 
-class lookup(object):
-    '''Used to search the marshall table'''
-
-    __lookupbyidcache = {}
-    __lookupbyclasscache = {}
-
-    @classmethod
-    def byid(cls, id):
-        return cls.__lookupbyidcache[id]
-
-    @classmethod
-    def byclass(cls, type):
-        return cls.__lookupbyclasscache[type]
-
-    @classmethod
-    def add(cls, type):
-        t = type.getclass()
-        assert type.id not in cls.__lookupbyidcache, 'attempted duplicate id %s for %s. original type was %s'% (repr(type.id), repr(type), cls.__lookupbyidcache[type.id])
-        assert t not in cls.__lookupbyclasscache, 'attempted duplicate class %s for %s. original type was %s'% (repr(t), repr(type), cls.__lookupbyidcache[type.id])
-        cls.__lookupbyidcache[type.id] = cls.__lookupbyclasscache[t] = type
-
-    @classmethod
-    def loads(cls, s, **kwds):
-        id,data = marshal.loads(s)
-        t = kwds.get('type', cls.byid(id))
-        return t.loads(data, **kwds)
-
-    @classmethod
-    def dumps(cls, object, **kwds):
-        t = kwds.get('type', cls.byclass(__builtins__['type'](object)))
-        return marshal.dumps((t.id, t.dumps(object, **kwds)))
-
-### atomic marshallable types
-class int(marshallable):
-    id = 1
-    @classmethod
-    def getclass(cls):
-        return (0).__class__
-
-class str(marshallable):
-    id = 2
-    @classmethod
-    def getclass(cls):
-        return ''.__class__
-
-class none(marshallable):
-    id = 0
-    @classmethod
-    def getclass(cls):
-        return None.__class__
-
-class long(marshallable):
-    id = 3
-    @classmethod
-    def getclass(cls):
-        return (0L).__class__
-
-### containers of types
-class list(container):
-    id = 4
-    @classmethod
-    def getclass(cls):
-        return [].__class__
-
-    @classmethod
-    def serialize(cls, object, **kwds):
-        return [ lookup.dumps(x, **kwds) for x in object ]
-
-    @classmethod
-    def deserialize(cls, object, **kwds):
-        return [ lookup.loads(x, **kwds) for x in object ]
-
-class tuple(container):
-    id = 5
-    @classmethod
-    def getclass(cls):
-        return ().__class__
-
-    @classmethod
-    def serialize(cls, object, **kwds):
-        return __builtins__['tuple']([lookup.dumps(x, **kwds) for x in object])
-
-    @classmethod
-    def deserialize(cls, object, **kwds):
-        return __builtins__['tuple']([lookup.loads(x) for x in object])
-
-class dict(container):
-    id = 6
-    @classmethod
-    def getclass(cls):
-        return {}.__class__
-
-    @classmethod
-    def serialize(cls, object, **kwds):
-        return [ (lookup.dumps(k, **kwds), lookup.dumps(v, **kwds)) for k,v in object.items() ]
-
-    @classmethod
-    def deserialize(cls, object, **kwds):
-        return __builtins__['dict']( (lookup.loads(k, **kwds), lookup.loads(v, **kwds)) for k,v in object )
-
-if False:
-    class module(container):
-        id = 7
-        @classmethod
-        def getclass(cls):
-            return __builtins__.__class__
-
-        # TODO: need to store each module's contents along with its name
-        @classmethod
-        def serialize(cls, object, **kwds):
-            return [ (lookup.dumps(k, **kwds), lookup.dumps(v, **kwds)) for k,v in object.__dict__.items() ]
-
-        # TODO: instantiate a new module, and then set all of its attributes
-        #       (or modify it's __dict__)
-        @classmethod
-        def deserialize(cls, object, **kwds):
-            c = cls.getclass()
-            return __builtins__['dict']( (lookup.loads(k, **kwds), lookup.loads(v, **kwds)) for k,v in object )
-
-### special types
 class special(container):
     @classmethod
     def serialize(cls, object, **kwds):
@@ -184,9 +149,97 @@ class special(container):
         object = __builtins__['dict'](object)
         return cls.deserialize_dict(object, **kwds)
 
+### atomic marshallable types
+@lookup.define
+class int(marshallable):
+    @classmethod
+    def get(cls):
+        return (0).__class__
+
+@lookup.define
+class str(marshallable):
+    @classmethod
+    def get(cls):
+        return ''.__class__
+
+@lookup.define
+class none(marshallable):
+    @classmethod
+    def get(cls):
+        return None.__class__
+
+@lookup.define
+class long(marshallable):
+    @classmethod
+    def get(cls):
+        return (0L).__class__
+
+### containers of types
+@lookup.define
+class list(container):
+    @classmethod
+    def get(cls):
+        return [].__class__
+
+    @classmethod
+    def serialize(cls, object, **kwds):
+        return [ lookup.dumps(x, **kwds) for x in object ]
+
+    @classmethod
+    def deserialize(cls, object, **kwds):
+        return [ lookup.loads(x, **kwds) for x in object ]
+
+@lookup.define
+class tuple(container):
+    @classmethod
+    def get(cls):
+        return ().__class__
+
+    @classmethod
+    def serialize(cls, object, **kwds):
+        return __builtins__['tuple']([lookup.dumps(x, **kwds) for x in object])
+
+    @classmethod
+    def deserialize(cls, object, **kwds):
+        return __builtins__['tuple']([lookup.loads(x) for x in object])
+
+@lookup.define
+class dict(container):
+    @classmethod
+    def get(cls):
+        return {}.__class__
+
+    @classmethod
+    def serialize(cls, object, **kwds):
+        return [ (lookup.dumps(k, **kwds), lookup.dumps(v, **kwds)) for k,v in object.items() ]
+
+    @classmethod
+    def deserialize(cls, object, **kwds):
+        return __builtins__['dict']( (lookup.loads(k, **kwds), lookup.loads(v, **kwds)) for k,v in object )
+
+if False:
+    @lookup.define
+    class module(container):
+        @classmethod
+        def get(cls):
+            return __builtins__.__class__
+
+        # TODO: need to store each module's contents along with its name
+        @classmethod
+        def serialize(cls, object, **kwds):
+            return [ (lookup.dumps(k, **kwds), lookup.dumps(v, **kwds)) for k,v in object.__dict__.items() ]
+
+        # TODO: instantiate a new module, and then set all of its attributes
+        #       (or modify it's __dict__)
+        @classmethod
+        def deserialize(cls, object, **kwds):
+            c = cls.get()
+            return __builtins__['dict']( (lookup.loads(k, **kwds), lookup.loads(v, **kwds)) for k,v in object )
+
+### special types
+@lookup.define
 class function(special):
-    id = 8
-    attributes = ['func_code', 'func_name', 'func_defaults']
+    attributes = ['func_code', 'func_name', 'func_defaults', '__module__']
 
     @classmethod
     def serialize(cls, object, **kwds):
@@ -198,7 +251,7 @@ class function(special):
         return result + [(lookup.dumps('func_closure'), lookup.dumps(func_closure, type=cell))]
 
     @classmethod
-    def getclass(cls):
+    def get(cls):
         return (lambda:False).__class__
 
     @classmethod
@@ -207,17 +260,17 @@ class function(special):
         name = kwds.get('name', code.co_name)
         argdefs = kwds.get('argdefs', ())
         closure = kwds.get('closure', ())
-        c = cls.getclass()
+        c = cls.get()
         return c(code, globals, name, argdefs, closure)
 
     @classmethod
     def deserialize_dict(cls, object, **kwds):
         '''Create a new function based on supplied attributes'''
-        namespace = kwds.get('namespace', globals())
+        namespace = kwds.get('namespace', __import__(object['__module__']).__dict__)
         return cls.new( object['func_code'], namespace, name=object['func_name'], argdefs=object['func_defaults'], closure=object['func_closure'])
 
+@lookup.define
 class code(special):
-    id = 9
     attributes = [
         'co_argcount', 'co_nlocals', 'co_stacksize', 'co_flags', 'co_code',
         'co_consts', 'co_names', 'co_varnames', 'co_filename', 'co_name',
@@ -225,7 +278,7 @@ class code(special):
     ]
 
     @classmethod
-    def getclass(cls):
+    def get(cls):
         return eval('lambda:False').func_code.__class__
 
     @classmethod
@@ -243,34 +296,33 @@ class code(special):
         for i,t in enumerate(types):
             values[i] = t( values[i] )
 
-        return cls.getclass()(*values)
+        return cls.get()(*values)
 
+@lookup.define
 class instancemethod(special):
-    id = 10
 #    attributes = ['im_func', 'im_self', 'im_class']
     attributes = ['im_func']
     @classmethod
-    def getclass(cls):
-        return instancemethod.getclass.__class__
+    def get(cls):
+        return cls.get.__class__
 
     @classmethod
     def deserialize_dict(cls, object, **kwds):
-        c = cls.getclass()
-        namespace = kwds.get('namespace', globals())
+        c = cls.get()
         return c( object['im_func'], kwds.get('instance', None), kwds.get('class', None) )
 
     @classmethod
     def new(cls, func, inst, class_):
-        return cls.getclass()(function, instance, class_)
+        return cls.get()(function, instance, class_)
 
+@lookup.define
 class type(special):
     '''A class....fuck'''
-    id = 11
     attributes = ['__name__', '__bases__']
-    exclude = set(['__doc__'])
+    exclude = __builtins__['set'](['__class__','__doc__'])
 
     @classmethod
-    def getclass(cls):
+    def get(cls):
         return type.__class__
 
     @classmethod
@@ -280,6 +332,22 @@ class type(special):
 
     @classmethod
     def serialize(cls, object, **kwds):
+        try:
+            id,type = 0,lookup.byclass(object)
+            result = type.id
+        except KeyError:
+            id,result = 1,cls.serialize_class(object, **kwds)
+        return marshal.dumps((id,result))
+
+    @classmethod
+    def deserialize(cls, object, **kwds):
+        id,data = marshal.loads(object)
+        if id == 0:
+            return lookup.byid(data).get()
+        return cls.deserialize_class(data, **kwds)
+
+    @classmethod
+    def serialize_class(cls, object, **kwds):
         # all the attributes we care about
         attrs = [(lookup.dumps(k,**kwds), lookup.dumps(getattr(object, k),**kwds)) for k in cls.attributes]
 
@@ -292,21 +360,26 @@ class type(special):
             except KeyError:
                 continue
 
-            if (t is type) or (n in cls.exclude):
+#            if (t is type) or (n in cls.exclude):
+            if n in cls.exclude:
                 continue
 
             n,v = lookup.dumps(n, **kwds), lookup.dumps(v, **kwds)
             props.append( (n,v) )
-        
-        return marshal.dumps( (attrs,props) )
+
+        module = object.__module__
+        return marshal.dumps( (module,(attrs,props)) )
 
     @classmethod
-    def deserialize(cls, object, **kwds):
-        attrs,props = marshal.loads(object)
+    def deserialize_class(cls, object, **kwds):
+        module,(attrs,props) = marshal.loads(object)
         attrs = [((lookup.loads(k,**kwds)), (lookup.loads(v,**kwds))) for k,v in attrs]
 
-        res = cls.deserialize_dict(attrs, **kwds)
+        if 'namespace' not in kwds:
+            kwds = {}.__class__(kwds)
+            kwds['namespace'] = __import__(module).__dict__
 
+        res = cls.deserialize_dict(attrs, **kwds)
         kwds['class'] = res
 
         for k,v in props:
@@ -314,38 +387,48 @@ class type(special):
             setattr(res, k, v)
         return res
 
-class classobj(type):
+@lookup.define
+class classobj(marshallable):
     '''A class....fuck'''
-    id = 12
-
     @classmethod
-    def getclass(cls):
+    def get(cls):
         t = cls.__class__.__class__
         class obj: pass
         return t(obj)
 
-class bool(marshallable):
-    id = 13
+@lookup.define
+class objectclass(__type__):
     @classmethod
-    def getclass(cls):
+    def get(cls):
+        return __builtins__['object']
+
+    def loads(self, string, **kwds):
+        return self.new()
+
+    def dumps(self, object, **kwds):
+        return ''
+
+@lookup.define
+class bool(marshallable):
+    @classmethod
+    def get(cls):
         return True.__class__
 
+@lookup.define     # FIXME: does looking up a cell object really work?
 class cell(marshallable):
-    id = 14
-
     class tuple(object):
         '''class that always produces a cell container'''
         def __new__(name, *args):
             return cell.new(*args)
 
     @classmethod
-    def getclass(cls):
-        return cell.tuple
+    def get(cls):
+        return cls.tuple
 
     @classmethod
     def loads(cls, s, **kwds):
         cells = lookup.loads(s)
-        return cell.new( *cells )
+        return cls.new( *cells )
 
     @classmethod
     def dumps(cls, object, **kwds):
@@ -377,7 +460,7 @@ class cell(marshallable):
         result.append(newinstruction(LOAD_CONST, 0))
         result.append(RETURN_VALUE)
 
-        freevars = tuple.getclass()( chr(x+65) for x in range(len(args)) )
+        freevars = __builtins__['tuple']( chr(x+65) for x in range(len(args)) )
         innercodeobj = code.new(0, 0, 0, 0, ''.join(result), (None,), (), (), '', '<closure>', 0, '', freevars, ())
     
         # generate outer code object for >= 2.5
@@ -395,27 +478,26 @@ class cell(marshallable):
         outercodestring = ''.join(result)
 
         # build constants list
-        result = list.getclass()(args)
+        result = list.get()(args)
         result.insert(0, innercodeobj)
-        constants = tuple.getclass()(result)
+        constants = __builtins__['tuple'](result)
 
         # names within outer code object
-        cellvars = tuple.getclass()( chr(x+65) for x in range(len(args)) )
+        cellvars = __builtins__['tuple']( chr(x+65) for x in range(len(args)) )
         outercodeobj = code.new(0, 0, 0, 0, outercodestring, constants, (), (), '', '<function>', 0, '', (), cellvars)
 
         # finally fucking got it
-        namespace = globals()
-        fn = function.new(outercodeobj, namespace)
+        fn = function.new(outercodeobj, {})
         return fn().func_closure
 
+@lookup.define
 class generator(special):
-    id = 15
     attributes = [
         'gi_code', 'gi_frame', 'gi_running'
     ]
 
     @classmethod
-    def getclass(cls):
+    def get(cls):
         return (x for x in []).__class__
 
     @classmethod
@@ -431,54 +513,47 @@ class generator(special):
 
     @classmethod
     def new(cls, codeobj, frame, running):
-        return cls.getclass()(codeobj, frame, running)
+        return cls.get()(codeobj, frame, running)
 
+@lookup.define
 class frame(special):
-    id = 16
     attributes = [
         'f_back', 'f_builtins', 'f_code', 'f_exc_traceback', 'f_exc_type', 'f_exc_value',
         'f_globals', 'f_lasti', 'f_lineno', 'f_locals', 'f_restricted', 'f_trace'
     ]
 
     @classmethod
-    def getclass(cls):
+    def get(cls):
         return (x for x in []).gi_frame.__class__
 
     @classmethod
     def deserialize_dict(cls, object, **kwds):
         raise NotImplementedError('Not possible yet to instantiate a frame object')
 
+@lookup.define
+class set(container):
     @classmethod
-    def new(cls, *args):
-        return cls.getclass()(*args)
+    def get(cls):
+        return __builtins__['set']().__class__
 
-lookup.add(int)
-lookup.add(str)
-lookup.add(none)
-lookup.add(long)
-lookup.add(list)
-lookup.add(tuple)
-lookup.add(dict)
-lookup.add(function)
-lookup.add(code)
-lookup.add(instancemethod)
-lookup.add(type)
-lookup.add(classobj)
-lookup.add(bool)
-lookup.add(cell)
+    @classmethod
+    def serialize(cls, object, **kwds):
+        return [ lookup.dumps(x, **kwds) for x in object ]
 
-def dumps(object, **kwds):
-    '''Serialize objects (i.e. convert from an object to a string)'''
-    return lookup.dumps(object, **kwds)
-def loads(s, **kwds):
-    '''Deserialize objects (i.e. convert from a string back to an object)'''
-    return lookup.loads(s, **kwds)
+    @classmethod
+    def deserialize(cls, object, **kwds):
+        return set.new(lookup.loads(x, **kwds) for x in object)
 
-def closure(l, **kwds):
-    '''Return a closure that will pass the specified named arguments to function l.'''
-    def result(*args):
-        return l(*args, **kwds)
-    return result
+@lookup.define
+class property(special):
+    attributes=['fdel','fset','fget']
+    @classmethod
+    def get(cls):
+        return __builtins__['property']().__class__
+
+    @classmethod
+    def deserialize_dict(cls, object, **kwds):
+        return cls.get()(fget=object['fget'], fset=object['fset'], fdel=object['fdel'])
 
 if __name__ == '__main__':
     import fu; reload(fu)

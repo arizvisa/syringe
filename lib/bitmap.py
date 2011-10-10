@@ -4,7 +4,7 @@ import sys
 ## start somewhere
 def new(value, size):
     '''creates a new bitmap object. Bitmaps "grow" to the left.'''
-    return (value & (2**size-1), size)
+    return (value & (2**abs(size)-1), size)
 
 def isinteger(v):
     '''returns true if provided variable is of type int or long'''
@@ -23,7 +23,7 @@ def empty(bitmap):
 def count(bitmap, value=False):
     '''returns the number of bits that are set to value and returns the count'''
     integer,size = bitmap
-    count = 0
+    count,size = 0,abs(size)
     while size > 0:
         if bool(integer & 1) == value:
             count += 1
@@ -41,7 +41,7 @@ def size(integer):
 def string(bitmap):
     '''returns bitmap as a formatted binary string'''
     integer, size = bitmap
-
+    size = abs(size)
     res = []
     for position in range(size):
         res.append(['0', '1'][integer & 1 != 0])
@@ -53,6 +53,8 @@ def scan(bitmap, value=True, position=0):
     assert position >= 0
 
     integer, size = bitmap
+    size = abs(size)
+
     bitmask = 1 << position
     for i in range(size):
         if bool(integer & bitmask) == value:
@@ -82,7 +84,7 @@ def run(bitmap, position=0):
     assert position >= 0
 
     integer, size = bitmap
-    value = integer & 1
+    value,size = integer & 1, abs(size)
     while size > 0:
         length = runlength( (integer,size), value, position)
         yield get(bitmap, position, length)
@@ -95,7 +97,7 @@ def set(bitmap, position, value=True, count=1):
     assert count >= 0 and position >= 0
 
     integer, size = bitmap
-    mask = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0)
+    mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
     if value:
         return (integer | mask, size)
     return (integer & ~mask, size)
@@ -103,7 +105,7 @@ def set(bitmap, position, value=True, count=1):
 def get(bitmap, position, count):
     '''fetch /count/ number of bits from /bitmap/ starting at /position/'''
     integer, size = bitmap
-    mask = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0)
+    mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
     return ((integer & mask) >> position, count)
 
 def add(bitmap, integer):
@@ -132,13 +134,13 @@ def grow(bitmap, count):
     '''Grow bitmap by some specified number of bits'''
     assert count >= 0
     integer,size = bitmap
-    return (integer << count, size + count)
+    return (integer << count, size + (count*(1,-1)[size<0]))
 
 def shrink(bitmap, count):
     '''Shrink a bitmap by some specified size'''
     assert count >= 0
     integer,size = bitmap
-    return (integer >> count, size - count)
+    return (integer >> count, size - (count*(-1,1)[size<0]))
 
 ## for treating a bitmap like an integer stream
 def push(bitmap, operand):
@@ -169,16 +171,27 @@ def consume(bitmap, bits):
     '''Consume some number of bits off of the end of a bitmap. Returns tuple(new bitmap, integer consumed)'''
     assert bits >= 0
     bmask = 2**bits - 1
-    res = bitmap[0] & bmask
-    return ( (bitmap[0] >> bits, bitmap[1] - bits), res)
+    integer,size = bitmap
+    res = integer & bmask
+    if size < 0:
+        return ( (integer >> bits, size + bits), res)
+    return ( (integer >> bits, size - bits), res)
 
 def shift(bitmap, bits):
     '''Shift some number of bits off of the beginning of a bitmap. Returns tuple(new bitmap, integer shifted off)'''
-    assert bits >= 0 and bitmap[1] >= bits
-    shifty = bitmap[1] - bits
+    assert bits >= 0
+    bmask = 2**bits - 1
+    integer,size = bitmap
+    total = abs(size)
+    if bits > total:
+        return shift(bitmap, total)
+
+    shifty = total - bits
     bmask = (2**bits-1) << shifty
-    res = (bitmap[0] & bmask) >> shifty
-    return ((bitmap[0] & ~bmask, shifty), res)
+    res = (integer & bmask) >> shifty
+    if size < 0:
+        return ((integer & ~bmask, shifty), res*-1)
+    return ((integer & ~bmask, shifty), res)
 
 class consumer(object):
     '''Given an iterable, provide an interface to supply bits'''
@@ -211,8 +224,9 @@ def repr(object):
 def data(bitmap, flipendian=False):
     '''Convert a bitmap to a string left-aligned to 8-bits'''
     fn = [shift,consume][int(flipendian)]
+    integer,size = bitmap
 
-    l = bitmap[1] % 8
+    l = size % 8
     if l > 0:
         if flipendian:
             bitmap = insert( bitmap, (0, 8-l))  # i probably should pull this out of this loop...
@@ -221,10 +235,58 @@ def data(bitmap, flipendian=False):
         pass
 
     res = []
-    while bitmap[1] > 0:
+    while bitmap[1] != 0:
         bitmap,b = fn(bitmap, 8)
         res.append(b)
     return ''.join(map(chr,res))
+
+def signed(bitmap):
+    integer,size = bitmap
+    return size < 0
+
+if False:
+    # are bits clear
+    # are bits set
+    # check bit
+    # clear all bits
+    # clear bits
+    # find clear bits
+    # find clear bits and set
+    # find clear runs
+    # find first run clear
+    # find last backward run clear
+    # find longest run clear
+    # find next forward run clear
+    # find set bits
+    # find set bits and clear
+    # number of clear bits, number of set bits
+    # set all bits, set bits
+    pass
+
+if __name__ == '__main__':
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
 
 if __name__ == '__main__':
     import bitmap; reload(bitmap)
@@ -250,7 +312,7 @@ if __name__ == '__main__':
     x = bitmap.insert(x, (0x4,4) )
     print x,bitmap.string(x)
 
-    x = consumer('\x12\x34')
+    x = bitmap.consumer('\x12\x34')
     print x.consume(4)
     print x.consume(4)
     print x.consume(4)
@@ -265,21 +327,16 @@ if __name__ == '__main__':
         print x
         x = bitmap.sub(x, 6)
 
-if False:
-    # are bits clear
-    # are bits set
-    # check bit
-    # clear all bits
-    # clear bits
-    # find clear bits
-    # find clear bits and set
-    # find clear runs
-    # find first run clear
-    # find last backward run clear
-    # find longest run clear
-    # find next forward run clear
-    # find set bits
-    # find set bits and clear
-    # number of clear bits, number of set bits
-    # set all bits, set bits
-    pass
+if __name__ == '__main__':
+    import bitmap
+    result = bitmap.new(0, -32)
+    freeslot = 0
+    count = 3
+    result = bitmap.set(result, freeslot, 1, count)
+    print bitmap.string(result)
+
+
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )

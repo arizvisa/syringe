@@ -36,6 +36,12 @@ class PNTSTATUS(dyn.pointer(NTSTATUS)): pass
 class PSTR(pstr.string): pass
 class WSTR(pstr.wstring): pass
 
+class CLIENT_ID(pstruct.type):
+    _fields_ = [
+        (HANDLE, 'UniqueProcess'),
+        (HANDLE, 'UniqueThread'),
+    ]
+
 class UNICODE_STRING(pstruct.type):
     _fields_ = [
         (USHORT, 'Length'),

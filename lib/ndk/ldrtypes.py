@@ -44,6 +44,13 @@ class PEB_LDR_DATA(pstruct.type):
             yield x
         return
 
+    def search(self, string):
+        for x in self.walk():
+            if string == x['FullDllName'].str():
+                return x
+            continue
+        raise KeyError
+
 class PPEB_LDR_DATA(dyn.pointer(PEB_LDR_DATA)): pass
 
 import pecoff
@@ -58,6 +65,33 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
     class __TimeDateStampUnion(dyn.union):
         _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
 
+    class __Flags(pbinary.struct):
+        _fields_ = list(reversed([
+            (1, 'LDRP_RESERVED'),   # 0x00000001
+            (1, 'LDRP_STATIC_LINK'),    # 0x00000002
+            (1, 'LDRP_IMAGE_DLL'),  # 0x00000004
+            (1, 'LDRP_LOAD_IN_PROGRESS'),   # 0x00001000
+            (1, 'LDRP_UNLOAD_IN_PROGRESS'), # 0x00002000
+            (1, 'LDRP_ENTRY_PROCESSED'),    # 0x00004000
+            (1, 'LDRP_ENTRY_INSERTED'), # 0x00008000
+            (1, 'LDRP_CURRENT_LOAD'),   # 0x00010000
+            (1, 'LDRP_FAILED_BUILTIN_LOAD'),    # 0x00020000
+            (1, 'LDRP_DONT_CALL_FOR_THREADS'),  # 0x00040000
+            (1, 'LDRP_PROCESS_ATTACH_CALLED'),  # 0x00080000
+            (1, 'LDRP_DEBUG_SYMBOLS_LOADED'),   # 0x00100000
+            (1, 'LDRP_IMAGE_NOT_AT_BASE'),  # 0x00200000
+            (1, 'LDRP_COR_IMAGE'),  # 0x00400000
+            (1, 'LDR_COR_OWNS_UNMAP'),  # 0x00800000
+            (1, 'LDRP_SYSTEM_MAPPED'),  # 0x01000000
+            (1, 'LDRP_IMAGE_VERIFYING'),    # 0x02000000
+            (1, 'LDRP_DRIVER_DEPENDENT_DLL'),   # 0x04000000
+            (1, 'LDRP_ENTRY_NATIVE'),   # 0x08000000
+            (1, 'LDRP_REDIRECTED'), # 0x10000000
+            (1, 'LDRP_NON_PAGED_DEBUG_INFO'),   # 0x20000000
+            (1, 'LDRP_MM_LOADED'),  # 0x40000000
+            (1, 'LDRP_COMPAT_DATABASE_PROCESSED'),  # 0x80000000
+        ]))
+
     _fields_ = [
         (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
         (_LDR_DATA_TABLE_ENTRY_LIST, 'InMemoryOrderModuleList'),
@@ -68,7 +102,8 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         (ULONG, 'SizeOfImage'),
         (UNICODE_STRING, 'FullDllName'),
         (UNICODE_STRING, 'BaseDllName'),
-        (ULONG, 'Flags'),   # !!!
+#        (ULONG, 'Flags'),   # !!!
+        (__Flags, 'Flags'),   # !!!
         (USHORT, 'LoadCount'),
         (USHORT, 'TlsIndex'),
         (__SectionPointerUnion, 'SectionPointerUnion'),
@@ -77,3 +112,8 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         (PVOID, 'EntryPointActivationContext'),
         (PVOID, 'PatchInformation'),
     ]
+
+    def contains(self, address):
+        left = self['DllBase'].long()
+        right = left + self['SizeOfImage'].long()
+        return (address >= left) and (address < right)

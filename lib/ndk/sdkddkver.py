@@ -40,3 +40,5 @@ NTDDI_WIN7 = 0x06010000
 
 # TODO: should probably automatically identify which NTDDI_VERSION to use by default
 NTDDI_VERSION = 0x06010000
+
+WIN64 = 0

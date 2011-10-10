@@ -1,5 +1,35 @@
 from ptypes import *
 
+ONLY_LONG_SEQUENCE = 0
+LONG_START_SEQUENCE = 1
+LONG_STOP_SEQUENCE = 2
+EIGHT_SHORT_SEQUENCE = 3
+
+def get_variables(sampling_frequency_index, window_sequence, scale_factor_grouping, max_sfb):
+    '''returns num_windows, num_window_groups, window_group_length, num_swb, swb_offset, sect_sfb_offset'''
+    # XXX: from page 59 of 206 in aac iso13818-7.pdf
+    num_swb = swb_offset = sect_sfb_offset = 0
+
+    if window_sequence in (ONLY_LONG_SEQUENCE, LONG_START_SEQUENCE, LONG_STOP_SEQUENCE):
+        num_windows = 1
+        num_window_groups = 1
+        window_group_length = None  # XXX
+        num_swb = None
+    elif window_sequence == EIGHT_SHORT_SEQUENCE:
+        num_windows = 8
+        num_window_groups = 1
+        window_group_length = None  # XXX
+        for i in range(num_windows):
+            if bitset(scale_factor_grouping, 6-i):
+                num_window_groups -= 1    
+            else:
+                window_group_length     # += 1      # XXX
+            continue
+
+        for g in range(num_window_groups):
+            pass
+    return num_windows, num_window_groups, window_group_length, num_swb, swb_offset, sect_sfb_offset
+
 class adif_header(pbinary.struct):
     _fields_ = [
         (32, 'adif_id'),
@@ -59,10 +89,11 @@ class adts_raw_data_block_error_check(adts_error_check): pass
 class raw_data_block(pbinary.struct):
     def __element(self):
         try:
-            return Element.Lookup( self['id'] )
+            result = Element.Lookup( self['id_syn_ele'] )
         except KeyError:
-            pass
-        return 0
+            print 'unable to find', self['id_syn_ele']
+            result = 0
+        return result
         
     _fields_ = [
         (3, 'id_syn_ele'),
@@ -72,7 +103,6 @@ class raw_data_block(pbinary.struct):
 class raw_data_stream(pbinary.terminatedarray):
     _object_ = raw_data_block
     def isTerminator(self, value):
-#        return False
         return type(v) is _END
 
 class adts_frame(pbinary.struct):
@@ -87,12 +117,44 @@ class adts_frame(pbinary.struct):
             (adts_raw_data_block_error_check, 'adts_raw_data_block_error_check'),
         ]
 
+    def __data(self):
+        #FIXME
+#        raise NotImplementedError
+        self.sampling_frequency_index = self['adts_fixed_header']
+        self.window_sequence = 0
+        self.scale_factor_grouping = 0
+        self.max_sfb = 0
+        self.common_window = 0
+
+        num_windows,num_window_groups,window_group_length,num_swb,swb_offset,sect_sfb_offset = get_variables(self.sampling_frequency_index, self.window_sequence, self.scale_factor_grouping, self.max_sfb)
+        attrs = {
+            'num_windows' : num_windows,
+            'num_window_groups' : num_window_groups,
+            'window_group_length' : window_group_length,
+            'num_swb' : num_swb,
+            'swb_offset' : swb_offset,
+            'sect_sfb_offset' : sect_sfb_offset,
+
+            'sampling_frequency_index' : self.sampling_frequency_index,
+            'window_sequence' : self.window_sequence,
+            'scale_factor_grouping' : self.scale_factor_grouping,
+            'max_sfb' : self.max_sfb,
+
+            'common_window' : self.common_window,
+        }
+
+        count = self['adts_variable_header']['number_of_raw_data_blocks_in_frame']
+        if count == 0:
+            return dyn.clone(pbinary.array, length=1, _object_=self.data_block_0, attrs=attrs)
+        return dyn.clone(pbinary.array, length=count, _object_=self.data_block_1, attrs=attrs)
+
     _fields_ = [
         (adts_fixed_header, 'adts_fixed_header'),
         (adts_variable_header, 'adts_variable_header'),
 
         (lambda s: [adts_error_check, adts_header_error_check][s['adts_variable_header']['number_of_raw_data_blocks_in_frame']==1], 'adts_error_check'),
-        (lambda s: dyn.clone(pbinary.array, length=s['adts_variable_header']['number_of_raw_data_blocks_in_frame'], _object_=[s.data_block_0,s.data_block_1][s['adts_variable_header']['number_of_raw_data_blocks_in_frame']==1]), 'data')
+#        (lambda s: dyn.clone(pbinary.array, length=s['adts_variable_header']['number_of_raw_data_blocks_in_frame'], _object_=[s.data_block_0,s.data_block_1][s['adts_variable_header']['number_of_raw_data_blocks_in_frame']==1]), 'data')
+        (__data, 'data')
     ]
 
     def blocksize(self):
@@ -143,7 +205,9 @@ class scale_factor_data(pbinary.struct):
 
 # XXX
 class tns_data(pbinary.struct):
-    _fields_ = []
+    _fields_ = [
+        
+    ]
 
 # XXX
 class spectral_data(pbinary.struct):
@@ -151,6 +215,9 @@ class spectral_data(pbinary.struct):
 
 # XXX
 class dynamic_range_info(pbinary.struct):
+    _fields_ = []
+
+class gain_control_data(pbinary.struct):
     _fields_ = []
 
 class individual_channel_stream(pbinary.struct):
@@ -209,7 +276,7 @@ class single_channel_element(pbinary.struct):
 
     _fields_ = [
         (4, 'element_instance_tag'),
-        (dyn.clone(individual_channel_stream, common_window=0), 'stream'),
+        (dyn.clone(individual_channel_stream, attrs={'common_window':0}), 'stream'),
     ]
 
 @Element.Define
@@ -222,9 +289,14 @@ class channel_pair_element(pbinary.struct):
         (common_window, 'window'),
         
         # ???
-        (lambda s:dyn.clone(individual_channel_stream, common_window=s['common_window']), 'stream_0'),
-        (lambda s:dyn.clone(individual_channel_stream, common_window=s['common_window']), 'stream_1'),
+        (lambda s:dyn.clone(individual_channel_stream, attrs={'common_window':s['common_window']}), 'stream_0'),
+        (lambda s:dyn.clone(individual_channel_stream, attrs={'common_window':s['common_window']}), 'stream_1'),
     ]
+
+    def load(self):
+        result = super(channel_pair_element, self)
+        result.attrs['window_sequence'] = result['window']['ics_info']['window_sequence']
+        return result.load()
 
 @Element.Define
 class coupling_channel_element(pbinary.struct):
@@ -241,7 +313,7 @@ class coupling_channel_element(pbinary.struct):
         (2, 'gain_element_scale'),
 
         # ???: individual_channel_stream(0)
-        (dyn.clone(individual_channel_stream, common_window=0), 'stream'),
+        (dyn.clone(individual_channel_stream, attrs={'common_window':0}), 'stream'),
 
         # XXX: some array here
     ]
@@ -332,6 +404,36 @@ class program_config_element(pbinary.struct):
         (lambda s: dyn.clone(pbinary.array, length=s['comment_field_bytes'], _object_=8), 'comment_field')
     ]
 
+class extension_payload(pbinary.struct):
+    class fill_data(pbinary.struct):
+        _fields_ = [
+            (4, 'fill_nibble'),
+            (lambda s: dyn.clone(pbinary.array, length=s.cnt, _object_=8), 'fill_byte')
+        ]
+
+    def __data(self):
+#        print self.attrs
+#        return dyn.clone(pbinary.array, _object_=8, length=self.cnt)
+        return dyn.clone(pbinary.array, _object_=8, length=0)
+
+        t = self['extension_type']
+        if t == EXT_DYNAMIC_RANGE:
+            return dynamic_range_info   # XXX
+        elif t == EXT_SBR_DATA:
+            return dyn.clone(pbinary.array, _object_=8, length=self.cnt)
+            return sbr_extension_data   # XXX
+        elif t == EXT_SBR_DATA_CRC:
+            return dyn.clone(pbinary.array, _object_=8, length=self.cnt)
+            return sbr_extension_data   # XXX
+        elif t == EXT_FILL_DATA:
+            return self.fill_data            
+        return dyn.clone(pbinary.array, length=self.cnt, _object_=8)
+
+    _fields_ = [
+        (4, 'extension_type'),
+        (__data, 'extension_data'),
+    ]
+
 @Element.Define
 class fill_element(pbinary.struct):
     type = 6
@@ -339,7 +441,8 @@ class fill_element(pbinary.struct):
     def extension_payload(self):
         c = self['count']
         count = c['cnt'] + c['esc_count'] - 1
-        return dyn.clone(pbinary.array, length=count, _object_=extension_payload)
+#        return dyn.clone(pbinary.array, length=count/8, _object_=extension_payload, cnt=count)
+        return dyn.clone(pbinary.array, length=count/8, _object_=extension_payload, attrs={'cnt':count})
 
     class __count(pbinary.struct):
         _fields_ = [

@@ -1,30 +1,5 @@
 from primitives import *
 
-### for searching and creating atoms out of our defined
-if False:
-    def newAtom(atomType, atomLength):
-        res = []
-        for k,v in globals().items():
-            if type(v) == type and v is not AtomType and issubclass(v):
-                if atomType == v.type:
-                    return dyn.clone(v, blocksize=lambda s:atomLength)
-                pass
-            continue
-
-        try:
-            return dyn.clone(AtomType.Lookup(atomType), blocksize=lambda s:atomLength)
-
-        except KeyError:
-            pass
-
-        class unkunkunk(Unknown):
-            type = atomType
-            length = atomLength
-
-        unkunkunk.__name__ = 'Unknown<%s>'% repr(atomType.serialize())
-        return unkunkunk
-
-### main atom structures
 class AtomType(object):
     cache = {}
     @classmethod
@@ -56,12 +31,6 @@ class Atom(pstruct.type):
         s = self.blocksize() - self.getheadersize()
         return AtomType.New(t, s)
 
-    def __extended_size(self):
-        s = int(self['size'].l)
-        if s == 1:
-            return pint.uint64_t
-        return dyn.clone(pint.uint_t, length=0)
-
     def getheadersize(self):
         return 4 + 4 + self['extended_size'].size()
 
@@ -89,7 +58,7 @@ class Atom(pstruct.type):
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
-        (__extended_size, 'extended_size'),
+        (lambda s: (ptype.empty, pint.uint64_t)[int(s['size'].l) == 1], 'extended_size'),
         (__data, 'data'),
     ]
 
@@ -131,9 +100,8 @@ class MINF(AtomList): type = 'minf'
 @AtomType.Define
 class DINF(AtomList): type = 'dinf'
 
-if False:
-    @AtomType.Define
-    class UDTA(Atom): type = 'udta'
+#@AtomType.Define
+class UDTA(Atom): type = 'udta'
 
 @AtomType.Define
 class STBL(AtomList): type = 'stbl'
@@ -143,6 +111,12 @@ class GMHD(AtomList): type = 'gmhd'
 
 @AtomType.Define
 class META(AtomList): type = 'meta'
+
+@AtomType.Define
+class RMRA(AtomList): type = 'rmra'
+
+@AtomType.Define
+class RMRA(AtomList): type = 'rmda'
 
 #@AtomType.Define
 #class MDAT(AtomList): type = 'mdat'  # XXX: sometimes this is not a container
@@ -154,7 +128,14 @@ class MDAT(dyn.block(0)):
 
 ## empty atoms
 @AtomType.Define
-class WIDE(ptype.type): type = 'wide'
+class WIDE(ptype.type):
+    type = 'wide'
+    def load(self):
+        # this error is raised only because i don't quite understand how this element works
+        #   does it make sense for a wide element to be a structure that contains an Atom maybe?
+        print "%s(%x:+%x) 'wide' loading of 64-bit elements is unimplemented at offset 0x%x ->"%(self.shortname(), self.getoffset(), self.blocksize(), self.getoffset())
+        print '\t' + '\n\t'.join(self.backtrace())
+        return super(WIDE, self).load()
 
 ## WLOC
 @AtomType.Define
@@ -270,8 +251,9 @@ class HDLR(pstruct.type):
     ]
 
 ## stsd
-#@AtomType.Define
+#@MediaType.Define
 class MediaVideo(pstruct.type):   #XXX: might need to be renamed
+    type = 'vide'
     _fields_ = [
         (pint.uint16_t, 'Version'),
         (pint.uint16_t, 'Revision level'),
@@ -289,7 +271,47 @@ class MediaVideo(pstruct.type):   #XXX: might need to be renamed
         (pint.uint16_t, 'Color table ID')
     ]
 
-#@AtomType.Define
+# FIXME: this isn't decoding mpeg audio yet.
+class esds(pstruct.type):
+    type = 'esds'
+    _fields_ = [
+        (pint.uint32_t, 'Version'),
+        (ptype.empty, 'Elementary Stream Descriptor'),
+    ]
+
+#@MediaType.Define
+class MediaAudio_v0(pstruct.type):
+    type = 'soun'
+    version = 0
+    _fields_ = [
+        (pint.uint16_t, 'Version'),
+        (pint.uint16_t, 'Revision level'),
+        (pQTType, 'Vendor'),
+        (pint.uint16_t, 'Number of channels'),
+        (pint.uint16_t, 'Sample size'),
+        (pint.uint16_t, 'Compression ID'),
+        (pint.uint16_t, 'Packet size'),
+        (pint.uint32_t, 'Sample rate'),
+    ]
+class MediaAudio_v1(pstruct.type):
+    type = 'soun'
+    version = 1
+    _fields_ = [
+        (pint.uint16_t, 'Version'),
+        (pint.uint16_t, 'Revision level'),
+        (pQTType, 'Vendor'),
+        (pint.uint16_t, 'Number of channels'),
+        (pint.uint16_t, 'Sample size'),
+        (pint.uint16_t, 'Compression ID'),
+        (pint.uint16_t, 'Packet size'),
+        (pint.uint32_t, 'Sample rate'),
+        (pint.uint32_t, 'Samples per packet'),
+        (pint.uint32_t, 'Bytes per packet'),
+        (pint.uint32_t, 'Bytes per frame'),
+        (pint.uint32_t, 'Bytes per sample'),
+    ]
+
+@AtomType.Define
 class stsd(pstruct.type):
     '''Sample description atom'''
     type = 'stsd'
@@ -354,6 +376,11 @@ class stsz(pstruct.type):
 
     def __Entries(self):
         count = int(self['Number of entries'].l)
+        s = self.blocksize() - self.size()
+        if s <= 0:
+            print '%s(%x:+%x) - blocksize(%d-%d) <= 0 while trying to read sample entry table ->'%(self.shortname(), self.getoffset(), self.blocksize(), self.blocksize(), self.size())
+            print '\t' + '\n\t'.join(self.backtrace())
+            return ptype.empty
         return dyn.array(pQTInt, count)
         
     _fields_ = [

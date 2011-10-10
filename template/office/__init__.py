@@ -1,3 +1,4 @@
+import logging
 from ptypes import *
 class RecordUnknown(dyn.block(0)):
     def __repr__(self):
@@ -8,7 +9,7 @@ class RecordUnknown(dyn.block(0)):
     def shortname(self):
         s = super(RecordUnknown, self).shortname()
         names = s.split('.')
-        names[-1] = '%s<%x>[size:%d]'%(names[-1], self.type, self.blocksize())
+        names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
         return '.'.join(names)
 
 class RecordHeader(pstruct.type):
@@ -23,7 +24,7 @@ class RecordHeader(pstruct.type):
 
     def __repr__(self):
         if self.initialized:
-            v = self['ver/inst'].getinteger()
+            v = self['ver/inst'].number()
             t = int(self['type'])
             l = int(self['length'])
             return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
@@ -45,6 +46,20 @@ class Record(object):
         cls.Add(pt)
         return pt
 
+    @classmethod
+    def Update(cls, record):
+        a = set(cls.cache.keys())
+        b = set(record.cache.keys())
+        if a.intersection(b):
+            logging.warning('%s : Unable to import module %s due to multiple definitions of the same record'%(cls.__module__, repr(record)))
+            logging.debug(repr(a.intersection(b)))
+            return False
+
+        # merge record caches into a single one
+        cls.cache.update(record.cache)
+        record.cache = cls.cache
+        return True
+
 class RecordGeneral(pstruct.type):
     def __data(self):
         t = int(self['header'].l['type'])
@@ -61,20 +76,20 @@ class RecordGeneral(pstruct.type):
         t = int(self['header'].l['type'])
         name = '[%s]'% ','.join(self.backtrace()[1:])
 
-        total = int(self['header']['length'])
-        used = self['data'].blocksize()
+        total = self.blocksize()
+        used = self.size()
+        leftover = self.blocksize() - self.size()
 
-        if total >= used:
-            l = total-used
-#            print "record at %x (type %x) %s has %x bytes unused"% (self.getoffset(), t, name, l)
-            return dyn.block(l)
-        print "record at %x (type %x) %s's contents are larger than expected (%x>%x)"% (self.getoffset(), t, name, used, total)
+        if leftover > 0:
+#            print "record at %x (type %x) %s has %x bytes unused"% (self.getoffset(), t, name, leftover)
+            return dyn.block(leftover)
+#        print "record at %x (type %x) %s's contents are larger than expected (%x>%x)"% (self.getoffset(), t, name, used, total)
         return dyn.block(0)
 
     _fields_ = [
         (RecordHeader, 'header'),
         (__data, 'data'),
-        (__extra, 'extra'),
+#        (__extra, 'extra'),
     ]
 
     def blocksize(self):
@@ -146,9 +161,6 @@ class RecordContainer(parray.block):
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
     _object_ = None
-
-    def isTerminator(self, value):
-        return False
 
     def __repr__(self):
         if self.initialized:

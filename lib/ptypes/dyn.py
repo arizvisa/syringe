@@ -7,23 +7,28 @@ __all__ = []
 ## FIXME: might want to raise an exception or warning if we have too large of an array or a block
 def block(size, **kwds):
     '''
-    returns a single ptype using the specified size
+    returns a general block type of the specified size
     '''
-    count = int(size)
-    assert count >= 0, 'dyn.block(%d): argument cannot be < 0'% (count)
+    size = int(size)
+    assert size >= 0, 'dyn.block(%d): argument cannot be < 0'% (size)
+    return clone(ptype.block, length=size)
 
-    class _block(ptype.type):
-        length = count
-        def __getslice__(self, i, j):
-            return self.serialize()[i:j]
-        def __getitem__(self, index):
-            return self.serialize()[index]
+def blockarray(type, size, **kwds):
+    '''
+    returns an array of the specified byte size containing elements of the specified type
+    '''
+    size = int(size)
+    assert size >= 0, 'dyn.block(%d): argument cannot be < 0'% (size)
 
-    _block.__name__ = kwds.get('name', 'block(%d)'% size)
-    return _block
+    class _blockarray(parray.block):
+        _object_ = type
+    _blockarray.blocksize = lambda s: size
+
+    _blockarray.__name__ = kwds.get('name', 'blockarray(%s, %d)'% (type().shortname(), size))
+    return _blockarray
 
 def align(s, **kwds):
-    '''Return a block that will align definitions in a structure'''
+    '''return a block that will align definitions in a structure'''
     class _align(block(0)):
         initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.size())
         def size(self):
@@ -39,19 +44,19 @@ def align(s, **kwds):
     _align.__name__ = kwds.get('name', 'align<%d>'% s)
     return _align
 
-def array(obj, elements, **kwds):
+def array(type, count, **kwds):
     '''
-    returns an array based on the length specified
+    returns an array of the specified length containing elements of the specified type
     '''
-    count = int(elements)
-    assert count >= 0, 'dyn.array(elements=%d): argument cannot be < 0'% (count)
+    count = int(count)
+    assert count >= 0, 'dyn.array(count=%d): argument cannot be < 0'% (count)
 
     class _dynarray(parray.type):
-        _object_ = obj
+        _object_ = type
         length = count
 
-    if obj is not None:
-        _dynarray.__name__ = kwds.get('name', 'array(%s.%s, %d)'% (obj.__module__, obj.__name__, count))
+    if type is not None:
+        _dynarray.__name__ = kwds.get('name', 'array(%s.%s, %d)'% (type.__module__, type.__name__, count))
     return _dynarray
 
 def clone(cls, **newattrs):
@@ -62,12 +67,14 @@ def clone(cls, **newattrs):
     class __clone(cls): pass
     for k,v in newattrs.items():
         setattr(__clone, k, v)
+
+    # FIXME: figure out why some object names are inconsistent
 #    __clone.__name__ = 'clone(%s.%s)'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
     __clone.__name__ = '%s.%s'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
 #    __clone.__name__ = cls.__name__
     return __clone
 
-class __union_generic(ptype.pcontainer):
+class __union_generic(ptype.container):
     __fastindex = dict  # our on-demand index lookup for .value
 
     def getindex(self, name):
@@ -123,11 +130,9 @@ class union(__union_generic):
         self.value = __import__('array').array('c')
 
     def __create_objects(self):
-        self.object = [ self.newelement(t, n, 0) for t,n in self._fields_ ]
         source = provider.string('')
         source.value = self.value
-        for n in self.object:
-            n.source = source
+        self.object = [ self.newelement(t, n, 0, source=source) for t,n in self._fields_ ]
         return
 
     def __init__(self, **attrs):
@@ -150,26 +155,25 @@ class union(__union_generic):
         self.value[:] = __import__('array').array('c')
         self.value.fromstring( block[:self.size()] )
         self.__create_objects()
-
-        # try loading everything as quietly as possible
+        # try loading everything as quietly as possible 
         # [n.load() for n in self.object] 
-
         return self
 
     def __getitem__(self, key):
-        # load items on demand
+        # load items on demand in order to seem fast
         result = super(union,self).__getitem__(key)
         if not result.initialized:
             return result.l
         return result
 
     def __repr__(self):
+        ofs = '[%x]'% self.getoffset()
         if self.initialized:
             res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
             return ' '.join([self.name(), 'union', res, repr(self.serialize())])
 
         res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
-        return ' '.join([self.name(), 'union', res])
+        return ' '.join([ofs, self.name(), 'union', res])
 
     def size(self):
         return self.__root.size()

@@ -38,11 +38,10 @@ else:
 
 ## some things people people might find useful
 from ptype import debug,debugrecurse
-from ptype import isptype,ispcontainer
+from ptype import istype,iscontainer
 
 from provider import file,memory
 from utils import hexdump
 
-#
 #__all__+= 'setsource,littleendian,bigendian,setbyteorder'.split(',')
-#__all__+= 'debug,debugrecurse,isptype,ispcontainer,file,memory,hexdump'.split(',')
+#__all__+= 'debug,debugrecurse,istype,iscontainer,file,memory,hexdump'.split(',')

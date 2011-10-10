@@ -1,5 +1,5 @@
 from ptypes import *
-import art
+import art,graph
 
 import __init__
 class Record(__init__.Record): cache = {}
@@ -434,6 +434,9 @@ class MSODRAWING(art.SpContainer):
 class EOF(pstruct.type):
     type = 10
     _fields_ = []
+
+Record.Update(art.Record)
+Record.Update(graph.Record)
 
 if __name__ == '__main__':
     import ptypes

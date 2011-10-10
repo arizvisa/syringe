@@ -186,7 +186,7 @@ class Managed(MemoryManager):
     def __alloc_from_bucket(self, bucket, size):
         for i,n in zip(range(len(bucket)), bucket):
             pointer,(chunksize,layout) = n
-            count = size / chunksize
+            count = (size / chunksize)+1
 
             try:
                 freeslot = bitmap.runscan(layout, 0, count)
@@ -244,7 +244,7 @@ class Managed(MemoryManager):
         # perhaps zero the buffer out?
         return
 
-if __name__ == '__main__':
+if False and __name__ == '__main__':
     import sys
     import memorymanager,debugger
 
@@ -272,3 +272,11 @@ if __name__ == '__main__':
     print 'free(%x)'% page
 
 #    debugger.detach()
+
+if __name__ == '__main__':
+    import memorymanager
+    mm = memorymanager.new()
+
+    a = mm.alloc(84)
+    b = mm.alloc(88)
+    print hex(a),hex(b)

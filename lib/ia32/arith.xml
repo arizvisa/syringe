@@ -1,0 +1,1197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<stack>
+  <opcode repr="ADD" value="00" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="01" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="02" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="03" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="10" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="11" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="12" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="13" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="18" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="19" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="1A" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="1B" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="DAA" value="27" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>szapc</defined>
+      <undefined>o</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="28" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="29" ext="">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="2A" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="2B" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="DAS" value="2F" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>szapc</defined>
+      <undefined>o</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="AAA" value="37" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no">AH</dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>ac</defined>
+      <undefined>oszp</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="38" ext="">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="39" ext="">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="3A" ext="">
+    <store />
+    <load>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="3B" ext="">
+    <store />
+    <load>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="AAS" value="3F" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no">AH</dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>ac</defined>
+      <undefined>oszp</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="INC" value="40" ext="">
+    <store>
+      <dst>
+        <a>Z</a>
+        <t>v</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszap</modified>
+      <defined>oszap</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="DEC" value="48" ext="">
+    <store>
+      <dst>
+        <a>Z</a>
+        <t>v</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszap</modified>
+      <defined>oszap</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="80" ext="0">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="80" ext="2">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="80" ext="3">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="80" ext="5">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="80" ext="7">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="81" ext="0">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>vds</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="81" ext="2">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>vds</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="81" ext="3">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>vds</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="81" ext="5">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>vds</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="81" ext="7">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+      <src>
+        <a>I</a>
+        <t>vds</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="82" ext="0">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="82" ext="2">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="82" ext="3">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="82" ext="5">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="82" ext="7">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADD" value="83" ext="0">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>bs</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="ADC" value="83" ext="2">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>bs</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SBB" value="83" ext="3">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>bs</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SUB" value="83" ext="5">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>bs</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMP" value="83" ext="7">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+      <src>
+        <a>I</a>
+        <t>bs</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="TEST" value="84" ext="">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszpc</defined>
+      <undefined>a</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="TEST" value="85" ext="">
+    <store />
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszpc</defined>
+      <undefined>a</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="CMPS" value="A6" ext="">
+    <store />
+    <load>
+      <src type="b" address="Y">(ES:)[rDI]</src>
+      <src type="b" address="X">(DS:)[rSI]</src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="CMPS" value="A7" ext="">
+    <store />
+    <load>
+      <src type="wo" address="Y">ES:[DI]</src>
+      <src type="wo" address="X">DS:[SI]</src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SCAS" value="AE" ext="">
+    <store />
+    <load>
+      <src type="b" address="Y">(ES:)[rDI]</src>
+      <src nr="0" group="gen" type="b" displayed="no">AL</src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="SCAS" value="AF" ext="">
+    <store />
+    <load>
+      <src type="wo" address="Y">ES:[DI]</src>
+      <src nr="0" group="gen" type="wo" displayed="no">AX</src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="AAM" value="D4" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no" depend="no">
+      AH</dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>szp</defined>
+      <undefined>oac</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="AMX" value="D4" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no" depend="no">
+      AH</dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>szp</defined>
+      <undefined>oac</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="AAD" value="D5" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no">AH</dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>szp</defined>
+      <undefined>oac</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="ADX" value="D5" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no">AH</dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>szp</defined>
+      <undefined>oac</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="NEG" value="F6" ext="3">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="MUL" value="F6" ext="4">
+    <store>
+      <dst nr="0" group="gen" type="w" displayed="no">AX</dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="b" displayed="no">AL</src>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oc</defined>
+      <undefined>szap</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="IMUL" value="F6" ext="5">
+    <store>
+      <dst nr="0" group="gen" type="w" displayed="no">AX</dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="b" displayed="no">AL</src>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oc</defined>
+      <undefined>szap</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="DIV" value="F6" ext="6">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no">AH</dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="w" displayed="no">AX</src>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined />
+      <undefined>oszapc</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="IDIV" value="F6" ext="7">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+      <dst nr="4" group="gen" type="b" displayed="no">AH</dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="w" displayed="no">AX</src>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined />
+      <undefined>oszapc</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="NEG" value="F7" ext="3">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oszapc</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="MUL" value="F7" ext="4">
+    <store>
+      <dst nr="2" group="gen" type="vqp" depend="no"
+      displayed="no">rDX</dst>
+      <dst nr="0" group="gen" type="vqp" displayed="no">rAX</dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oc</defined>
+      <undefined>szap</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="IMUL" value="F7" ext="5">
+    <store>
+      <dst nr="2" group="gen" type="vqp" depend="no"
+      displayed="no">rDX</dst>
+      <dst nr="0" group="gen" type="vqp" displayed="no">rAX</dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined>oc</defined>
+      <undefined>szap</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="DIV" value="F7" ext="6">
+    <store>
+      <dst nr="2" group="gen" type="vqp" displayed="no">rDX</dst>
+      <dst nr="0" group="gen" type="vqp" displayed="no">rAX</dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined />
+      <undefined>oszapc</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="IDIV" value="F7" ext="7">
+    <store>
+      <dst nr="2" group="gen" type="vqp" displayed="no">rDX</dst>
+      <dst nr="0" group="gen" type="vqp" displayed="no">rAX</dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+    <flags>
+      <modified>oszapc</modified>
+      <defined />
+      <undefined>oszapc</undefined>
+    </flags>
+  </opcode>
+  <opcode repr="INC" value="FE" ext="0">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszap</modified>
+      <defined>oszap</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="DEC" value="FE" ext="1">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszap</modified>
+      <defined>oszap</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="INC" value="FF" ext="0">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszap</modified>
+      <defined>oszap</defined>
+      <undefined />
+    </flags>
+  </opcode>
+  <opcode repr="DEC" value="FF" ext="1">
+    <store>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load />
+    <flags>
+      <modified>oszap</modified>
+      <defined>oszap</defined>
+      <undefined />
+    </flags>
+  </opcode>
+</stack>

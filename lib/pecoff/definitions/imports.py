@@ -2,6 +2,7 @@ import ptypes,headers
 from ptypes import pstruct,parray,pbinary,pstr,dyn,utils
 from __base__ import *
 import array
+from headers import virtualaddress
 
 class IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
     _fields_ = [
@@ -82,12 +83,11 @@ class IMAGE_IMPORT_HINT(pstruct.type):
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
-        ( dyn.opointer(IMAGE_IMPORT_NAME_TABLE, headers.RelativeAddress), 'INT'),
+        ( virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'INT'),
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
-        ( dyn.opointer(pstr.szstring, headers.RelativeAddress), 'Name'),
-#        ( dyn.opointer(lambda s: dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(s.parent['INT'].d.load())), headers.RelativeAddress), 'IAT')
-        ( dyn.opointer(IMAGE_IMPORT_ADDRESS_TABLE, headers.RelativeAddress), 'IAT')
+        ( virtualaddress(pstr.szstring), 'Name'),
+        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'IAT')
     ]
 
     def links(self):
@@ -140,3 +140,14 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         for x in self[:-1]:
             yield x
         return
+
+    def search(self, key):
+        '''
+        search the import list for an import dll that matches key
+        return the rva
+        '''
+        for n in self.walk():
+            if key == n['Name'].d.l.str():
+                return n
+            continue
+        raise KeyError(key)

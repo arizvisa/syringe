@@ -6,19 +6,15 @@ from warnings import warn
 
 def findBase(self):
     try:
-#        nth = self.getparent(cmp=lambda x: issubclass(x.__class__, BaseHeader))
         nth = self.getparent(BaseHeader)
     except ValueError, msg:
-#        nth = self.getparent(cmp=lambda x: x.parent is None)
         nth = list(self.walk())[-1]
     return nth
 
 def findHeader(self):
     try:
-#        nth = self.getparent(cmp=lambda x: issubclass(x.__class__, Header))
         nth = self.getparent(Header)
     except ValueError, msg:
-#        nth = self.getparent(cmp=lambda x: x.parent is None)
         nth = list(self.walk())[-1]
     return nth
 
@@ -52,6 +48,30 @@ def RelativeOffset(self, offset=None):
     section = pe['Sections'].getsectionbyoffset(offset)
     o = offset - int(section['PointerToRawData'])
     return base + int(section['VirtualAddress']) + o
+
+def RealAddress(self, address=None):
+    '''given an rva, return offset relative to the baseaddress'''
+    if address is None:
+        address = int(self)
+    base = findBase(self)
+    address -= base['Pe']['OptionalHeader']['ImageBase'].int()
+    base=base.getoffset()
+
+    # file
+    if issubclass(self.source.__class__, ptypes.provider.file):
+        pe = findHeader(self)
+        section = pe['Sections'].getsectionbyaddress(address)
+        return base + section.getoffsetbyaddress(address)
+
+    # memory
+    return base + address
+
+def realaddress(type):
+    return dyn.opointer(type, RealAddress)
+def fileoffset(type):
+    return dyn.opointer(type, RelativeOffset)
+def virtualaddress(type):
+    return dyn.opointer(type, RelativeAddress)
 
 ### DosHeader
 class DosHeader(pstruct.type):
@@ -165,7 +185,6 @@ class FileHeader(pstruct.type):
         return res
 
 class OptionalHeader(pstruct.type):
-
     class __DllCharacteristics(pbinary.littleendian(pbinary.struct)):
         _fields_ = [
             (1, 'TERMINAL_SERVER_AWARE'),
@@ -262,9 +281,12 @@ class SectionTable(pstruct.type):
         (uint32, 'VirtualSize'),
         (uint32, 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
-        (dyn.opointer(lambda s:dyn.block(s.parent.getreadsize()), RelativeOffset), 'PointerToRawData'),
-        (dyn.opointer(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations'])), RelativeOffset), 'PointerToRelocations'),
-        (dyn.opointer(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers'])), RelativeOffset), 'PointerToLinenumbers'),
+#        (dyn.opointer(lambda s:dyn.block(s.parent.getreadsize()), RelativeOffset), 'PointerToRawData'),
+#        (dyn.opointer(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations'])), RelativeOffset), 'PointerToRelocations'),
+#        (dyn.opointer(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers'])), RelativeOffset), 'PointerToLinenumbers'),
+        (fileoffset(lambda s:dyn.block(s.parent.getreadsize())), 'PointerToRawData'),
+        (fileoffset(lambda s:dyn.array(relocations.Relocation, int(s.parent['NumberOfRelocations']))), 'PointerToRelocations'),
+        (fileoffset(lambda s:dyn.array(linenumbers.LineNumber, int(s.parent['NumberOfLinenumbers']))), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
         (uint16, 'NumberOfLinenumbers'),
         (IMAGE_SCN, 'Characteristics'),
@@ -362,23 +384,6 @@ class SectionTableArray(parray.type):
         if len(sections):
             return sections[0]
         raise KeyError('offset %x not in a known section'% (offset))
-
-    if False:
-        def getoffsetbyaddress(self, address):
-            s = self.getsectionbyaddress(address)
-            return address - int(s['VirtualAddress']) + int(s['PointerToRawData'])
-
-        def getaddressbyoffset(self, offset):
-            s = self.getsectionbyoffset(offset)
-            return offset - int(s['PointerToRawData']) + int(s['VirtualAddress'])
-
-        def getoffsetbyoffset(self, x):
-            ''' i thought it'd be funny. it wasn't. '''
-            return x
-
-        def getaddressbyaddress(self, x):
-            ''' i thought the second time it'd be funny. it still wasn't. '''
-            return x
 
     def getstringbyoffset(self, offset):
         return self.newelement(pstr.szstring, 'string[%x]'% offset, offset + self.getparent(NtHeader).getoffset()).load().serialize()

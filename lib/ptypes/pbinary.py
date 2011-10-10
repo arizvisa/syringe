@@ -1,5 +1,17 @@
+import logging,types
 import ptype,utils,bitmap
-import types
+
+# todo:
+# sometimes a structure member should be considered signed.
+#   when reading from _fields_, we can check to see if a negative
+#   was specified, assume that's the number of bits, and it's
+#   signed.
+#   XXX: i added support for the sign flag, but now how to figure out storing it
+#        in order to display properly..
+#   
+# struct.__repr__ could be improved to display the bit offset within
+#   a byte and render vertically like pstruct.type instead of outputting
+#   it all on one line
 
 def setbyteorder(endianness):
     '''
@@ -96,7 +108,7 @@ def littleendian(p):
             
     return littleendianpbinary
 
-class type(ptype.pcontainer):
+class type(ptype.container):
     def isInitialized(self):
         if self.value is None or None in self.value:
             return False
@@ -149,7 +161,7 @@ class type(ptype.pcontainer):
                 self.value[i] = value,source
             return self
 
-    def getinteger(self):
+    def number(self):
         '''Return the binary structure as it's integer value'''
         return self.getbitmap()[0]
 
@@ -285,10 +297,10 @@ class type(ptype.pcontainer):
 
     def alloc(self):
         zero = ( 0 for x in utils.infiniterange(0) )
-        class allocator(object):
+        class zeroprovider(object):
             def consume(self, v):
                 return zero.next()
-        return self.deserialize_consumer( allocator() )
+        return self.deserialize_consumer( zeroprovider() )
 
     def blockbits(self):
         '''return the minimum number of bits required to read the pbinary.type'''
@@ -302,6 +314,22 @@ class type(ptype.pcontainer):
                 continue
             raise ValueError('Unknown type %s stored in %s'% (repr(x), repr(self)))
         return result
+
+    # FIXME: needs a better name
+    def blockbits_element(self, type, source):
+        '''
+        calculate the total number of bits required to load type.
+        returns sign flag,size
+        '''
+        if bitmap.isbitmap(type):
+            n = type[1]
+            result = abs(n)
+            return n == result, result
+
+        n = type.blockbits()
+        result = abs(n)
+        source.consume(result - type.bits())
+        return n == result, result
 
 class __struct_generic(type):
     __fastindex = dict  # our on-demand index lookup for .value
@@ -371,7 +399,7 @@ class __struct_generic(type):
             if bitmap.isbitmap(val):
                 v,s = (hex(val[0]), val[1])
             else:
-                v,s = ''.join(['struct[', hex(val.getinteger()), ']']),val.bits()
+                v,s = ''.join(['struct[', hex(val.number()), ']']),val.bits()
 
             result.append( '%s%s=%s'% (name, ['', '{%d}'%s][s>1], v) )
         return ' '.join(result)
@@ -434,7 +462,7 @@ class __array_generic(type):
             name = bitmap.repr(obj)
         else:
             name = obj.__class__
-        return '%s[%d] value=%x,bits=%x'% (name, len(self), self.getinteger(), self.bits())
+        return '%s[%d] value=%x,bits=%x'% (name, len(self), self.number(), self.bits())
 
 class struct(__struct_generic):
     def deserialize_consumer(self, source):
@@ -444,13 +472,7 @@ class struct(__struct_generic):
         for t,name in self._fields_:
             n = self.newelement_consumer(t, name, position, source)
             self.value.append(n)
-
-            # calculate size
-            if bitmap.isbitmap(n):
-                s = n[1]
-            else:
-                s = n.blockbits()
-                source.consume(s - n.bits())
+            sf,s = self.blockbits_element(n, source)
 
             # fixup the offset
             a,b=position
@@ -470,13 +492,7 @@ class array(__array_generic):
         for index in xrange(self.length):
             n = self.newelement_consumer(obj, str(index), position, source)
             self.value.append(n)
-
-            # calculate size
-            if bitmap.isbitmap(n):
-                s = n[1]
-            else:
-                s = n.blockbits()
-                source.consume(s - n.bits())
+            sf,s = self.blockbits_element(n, source)
 
             # fixup the offset
             a,b=position
@@ -500,13 +516,7 @@ class terminatedarray(__array_generic):
                 self.value.append(n)
                 if self.isTerminator(self.value[-1]):
                     break
-
-                # calculate size
-                if bitmap.isbitmap(n):
-                    s = n[1]
-                else:
-                    s = n.blockbits()
-                    source.consume(s - n.bits())
+                sf,s = self.blockbits_element(n, source)
 
                 # fixup the offset
                 a,b=position
@@ -521,6 +531,50 @@ class terminatedarray(__array_generic):
     def isTerminator(self, v):
         '''intended to be overloaded. should return True if value /v/ represents the end of the array.'''
         raise NotImplementedError
+
+class blockarray(terminatedarray):
+    def isTerminator(self, value):
+        return False
+
+    def deserialize_consumer(self, source):
+        forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+        position = self.getposition()
+
+        obj = self._object_
+        self.value = []
+
+        current = 0
+        for index in forever:
+            try:
+                n = self.newelement_consumer(obj, str(index), position, source)
+                sf,s = self.blockbits_element(n, source)
+
+            except StopIteration:
+                if current >= self.blockbits():
+                    path = ' ->\n\t'.join(n.backtrace())
+                    logging.warn("<pbinary.blockarray> Stopped reading %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
+                break
+
+            if (current + s >= self.blockbits()):
+                path = ' ->\n\t'.join(n.backtrace())
+                logging.info("<pbinary.blockarray> Terminated %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
+                self.value.append(n)
+                break
+
+            self.value.append(n)
+            if self.isTerminator(n):
+                break
+
+            # fixup the offset
+            a,b=position
+            b += s
+            a,b = (a + b/8, b % 8)
+            position = (a,b)
+
+            s = n.blockbits(); assert s > 0
+            current += s
+
+        return self
 
 struct = bigendian(struct)
 array = bigendian(array)
@@ -1057,7 +1111,6 @@ if __name__ == '__main__':
         a = bitmap.push(a, (0xd, 4))
 
         s = bitmap.data(a)
-#        print repr(s)
 
         i = iter(s)
         z = pbinary.bigendian(RECT)(source=provider.string(s)).l
@@ -1090,7 +1143,7 @@ if __name__ == '__main__':
             ]
 
         z = mystruct(source=provider.string('\x41\x40')).l
-        if z.getinteger() == 0x4140:
+        if z.number() == 0x4140:
             raise Success
 
     @TestCase

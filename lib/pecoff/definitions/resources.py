@@ -1,6 +1,7 @@
 import ptypes,headers
 from ptypes import pstruct,parray,pbinary,dyn,pstr
 from __base__ import *
+from headers import virtualaddress
 
 class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
     _fields_ = [
@@ -22,7 +23,7 @@ class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
 
 class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
     _fields_ = [
-        (dyn.opointer(lambda s: dyn.block(s.parent['Size'].l), headers.RelativeAddress), 'Data RVA'),
+        (virtualaddress(lambda s: dyn.block(s.parent['Size'].l)), 'Data RVA'),
         (dword, 'Size'),
         (dword, 'Codepage'),
         (dword, 'Reserved'),       
@@ -41,7 +42,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(pbinary.littleendian(pbinary.struct)):
 
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_NAME(pstruct.type):
     _fields_ = [
-        (dyn.opointer(IMAGE_RESOURCE_DIRECTORY_STRING, headers.RelativeAddress), 'Name RVA'),
+        (virtualaddress(IMAGE_RESOURCE_DIRECTORY_STRING), 'Name RVA'),
         (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA, 'RVA'),
     ]
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_ID(pstruct.type):

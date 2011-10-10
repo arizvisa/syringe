@@ -1,6 +1,6 @@
 from ptypes import *
 from stypes import *
-import as3
+import as3,action
 
 class Tag(pstruct.type):
     '''this wraps around a tag'''
@@ -26,10 +26,19 @@ class Tag(pstruct.type):
             return UI32
         return Empty
 
+    def autotag(self, tagid, size):
+        global Taglookup
+        try:
+            res = Taglookup[tagid]
+
+        except KeyError:
+            res = createUnknown(tagid, size)
+        return res
+
     _fields_ = [
         (RECORDHEADER, 'Header'),
         (islongheader, 'HeaderLongLength'),
-        (lambda self: autotag(self['Header']['type']), 'data'),
+        (lambda self: self.autotag(self['Header']['type'], self.blocksize() - self.getheadersize()), 'data'),
         (autopad, 'unknown')
     ]
 
@@ -50,6 +59,29 @@ class TagList(parray.terminated):
     def isTerminator(self, n):
         return type(n['data']) == End
 
+    def __repr__(self):
+        # FIXME: lol, i probably should've planned this out functionally
+        result, count = [], 0
+        for x in ((x['data'].shortname(),None)[issubclass(type(x['data']), Unknown)] for x in self):
+            if count == 0:
+                if x is None:
+                    count += 1
+                else:
+                    result.append(x)
+            elif count > 0:
+                if x is None:
+                    count += 1
+                else:
+                    s = '..(repeats %d times)..'% (count-4)
+                    if count - len(s) > 0:
+                        result.append(s)
+                    else:
+                        result.append('.'*count)
+                    result.append(x)
+                    count = 0
+            continue
+        return '%s %d records\n[%s]'%(self.name(), len(self), ','.join(result))
+
 class SWFT(object):
     '''all tags are derived from this class'''
     tag = None
@@ -62,12 +94,16 @@ class TagB(pbinary.struct, SWFT):
 
 ######## display list
 class Unknown(ptype.type):
-    def __repr__(self):
-        return "%s tagid: %d"%(self.__class__, self.tag);
+    def shortname(self):
+        s = super(Unknown, self).shortname()
+        names = s.split('.')
+        names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.tag, self.blocksize())
+        return '.'.join(names)
 
-def createUnknown(tagid):
+def createUnknown(tagid, size):
     class _Unknown(Unknown):
         tag = tagid
+        length = size
     return _Unknown
 
 class DoInitAction(TagS):
@@ -75,14 +111,14 @@ class DoInitAction(TagS):
     version = 3
     _fields_ = [
         (UI16, 'SpriteId'),
-        (Empty, 'Actions')
+        (action.Array, 'Actions'),
     ]
 
 class DoAction(TagS):
     tag = 12
     version = 3
     _fields_ = [
-        (Empty, 'Actions')
+        (action.Array, 'Actions')
     ]
 
 class DoABC(TagS):
@@ -567,11 +603,3 @@ def istype(obj):
 classes = [ n for n in locals().values() if istype(n) ]
 Tags = [ n for n in classes if issubclass(n, SWFT) ]
 Taglookup = dict([ (n.tag, n) for n in Tags ])
-
-def autotag(tagid):
-    try:
-        res = Taglookup[tagid]
-
-    except KeyError:
-        res = createUnknown(tagid)
-    return res

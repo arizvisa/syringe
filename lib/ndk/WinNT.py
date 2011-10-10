@@ -22,6 +22,8 @@ class PCHAR(dyn.pointer(CHAR)): pass
 class WCHAR(pint.uint16_t): pass
 class PWCHAR(dyn.pointer(WCHAR)): pass
 
+class LCID(DWORD): pass
+
 class PWSTR(dyn.pointer(pstr.wstring)): pass
 class LPWSTR(dyn.pointer(pstr.wstring)): pass
 
@@ -90,9 +92,38 @@ class LIST_ENTRY(pstruct.type):
 class UCHAR(pint.uint8_t): pass
 
 ###
+class NT_TIB(pstruct.type):
+    _fields_ = [
+        (dyn.block(4), 'ExceptionList'),
+        (PVOID, 'StackBase'),
+        (PVOID, 'StackLimit'),
+        (PVOID, 'SubSystemTib'),
+        (PVOID, 'FiberData'),
+        (PVOID, 'ArbitraryUserPointer'),
+        (lambda s: dyn.pointer(NT_TIB), 'Self'),
+    ]
+
+###
 import sdkddkver
 class versioned(ptype.type):
     '''will update the attrs with the operating systems NTDDI_VERSION'''
     def __init__(self, **attrs):
         attrs['NTDDI_VERSION'] = attrs.setdefault('NTDDI_VERSION', sdkddkver.NTDDI_VERSION)
+        attrs['WIN64'] = attrs.setdefault('WIN64', sdkddkver.WIN64)
         super(versioned, self).__init__(**attrs)
+
+class SIZE_T(ULONG): pass
+
+class GUID(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'Data1'),
+        (pint.uint16_t, 'Data2'),
+        (pint.uint16_t, 'Data3'),
+        (pint.littleendian(pint.uint64_t), 'Data4'),
+    ]
+
+class CLIENT_ID(pstruct.type):
+    _fields_ = [
+        (PVOID, 'UniqueProcess'),
+        (PVOID, 'UniqueThread'),
+    ]

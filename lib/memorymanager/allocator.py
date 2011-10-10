@@ -179,8 +179,8 @@ if sys.platform == 'win32':
         handle = int
 
         def setMemoryPermission(self, address, count, permission):
-
             # O(1), baby
+
             allocatorToKernel = {
                 0: PAGE_NOACCESS,
                 1: PAGE_EXECUTE,

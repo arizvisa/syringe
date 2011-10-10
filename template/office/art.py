@@ -1,50 +1,7 @@
 from ptypes import *
 import __init__
 class Record(__init__.Record): cache = {}
-class RecordGeneral(__init__.RecordGeneral):
-    Record=Record
-    class __header(pbinary.littleendian(pbinary.struct)):
-        _fields_ = [
-            (12, 'instance'),
-            (4, 'version'),
-        ]
-
-    def __data(self):
-        t = int(self['type'].l)
-        l = int(self['length'].l)
-        try:
-            cls = self.Record.Lookup(t)
-        except KeyError:
-            return dyn.clone(__init__.RecordUnknown, type=t, length=l)
-        return dyn.clone(cls, blocksize=lambda s:l)
-
-    def __extra(self):
-        t = int(self['type'].l)
-        name = '[%s]'% ','.join(self.backtrace()[1:])
-
-        used = self['data'].size()
-        total = int(self['length'].l)
-
-        if total > used:
-            l = total-used
-            print "art object at %x (type %x) %s has %x bytes unused"% (self.getoffset(), t, name, l)
-            return dyn.block(l)
-
-        if used > total:
-            print "art object at %x (type %x) %s's contents are larger than expected (%x>%x)"% (self.getoffset(), t, name, used, total)
-        return dyn.block(0)
-
-    _fields_ = [
-        (__header, 'version'),
-        (pint.littleendian(pint.uint16_t), 'type'),
-        (pint.uint32_t, 'length'),
-        (__data, 'data'),
-        (__extra, 'extra'),
-    ]
-
-    def blocksize(self):
-        return 8 + int(self['length'])
-
+class RecordGeneral(__init__.RecordGeneral): Record=Record
 class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
 class File(__init__.File): _object_ = RecordGeneral
 
@@ -67,7 +24,7 @@ class FSP(pstruct.type):
 class FOPT(pstruct.type):
     type = 0xf00b
     _fields_ = [
-        (lambda s: dyn.array(FOPTE, int(s.parent['rh']['recLen']) / 6), 'fopt')
+        (lambda s: dyn.array(FOPTE, s.blocksize()/6), 'fopt')
     ]
 
 class FOPTE(pstruct.type):
@@ -244,6 +201,46 @@ class msofbtTimeBehavior(pstruct.type):
         (pint.uint32_t, 'tbaddAdditive'),
         (pint.uint32_t, 'tbaccAccmulate'),
         (pint.uint32_t, 'tbbtTransformType'),
+    ]
+
+@Record.Define
+class msofbtDgContainer(RecordContainer):
+    type = 0xf002
+    type = 61442
+
+@Record.Define
+class msofbtSpgrContainer(RecordContainer):
+    type = 0xf003
+    type = 61443
+
+@Record.Define
+class msofbtClientAnchor(pstruct.type):
+    type = 0xf010
+    type = 61456
+    _fields_ = [
+        (pint.uint16_t, 'Flag'),
+
+        (pint.uint16_t, 'Col1'),
+        (pint.uint16_t, 'DX1'),
+        (pint.uint16_t, 'Row1'),
+        (pint.uint16_t, 'DY1'),
+
+        (pint.uint16_t, 'Col2'),
+        (pint.uint16_t, 'DX2'),
+        (pint.uint16_t, 'Row2'),
+        (pint.uint16_t, 'DY2'),
+    ]
+    
+
+@Record.Define
+class OfficeArtBlipDIB(pstruct.type):
+    type = 0xf01f
+    type = 61471
+    _fields_ = [
+        (dyn.block(16), 'rgbUid1'),
+#        (dyn.block(16), 'rgbUid2'),     # XXX: this is conditional?
+        (pint.uint8_t, 'tag'),
+        (dyn.block(0), 'BLIPFileData'), # FIXME: this isn't right..
     ]
 
 if False:

@@ -1,7 +1,7 @@
 '''base structure element'''
 import ptype
 
-class __pstruct_generic(ptype.pcontainer):
+class __pstruct_generic(ptype.container):
     __fastindex = dict  # our on-demand index lookup for .value
 
     def getindex(self, name):
@@ -44,7 +44,7 @@ class __pstruct_generic(ptype.pcontainer):
 
 class type(__pstruct_generic):
     '''
-    A pcontainer for managing structured/named data
+    A container for managing structured/named data
 
     Settable properties:
         _fields_:array( tuple( ptype, name ), ... )<w>
@@ -54,6 +54,9 @@ class type(__pstruct_generic):
 
     initialized = property(fget=lambda s: super(type, s).initialized and len(s.value) == len(s._fields_))
 
+    def contains(self, offset):
+        return super(ptype.container, self).contains(offset)
+
     def load(self):
         self.value = []
 
@@ -62,7 +65,7 @@ class type(__pstruct_generic):
         for t,name in self._fields_:
             n = self.newelement(t, name, ofs, source=self.source)
             self.value.append(n)
-            if ptype.ispcontainer(t) or ptype.isresolveable(t):
+            if ptype.iscontainer(t) or ptype.isresolveable(t):
                 n.load()
             ofs += n.blocksize()
         return super(type, self).load()
@@ -77,11 +80,14 @@ class type(__pstruct_generic):
 
         if len(result) > 0:
             return '\n'.join(result)
-        return '[]'
+        return '[%x] ??? []'%self.getoffset()
 
     def __repr__initialized(self):
         row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, repr(value.serialize())])
-        return '\n'.join([row(name,value) for (t,name),value in zip(self._fields_, self.value)])
+        result = [row(name,value) for (t,name),value in zip(self._fields_, self.value)]
+        if len(result) > 0:
+            return '\n'.join(result)
+        return '[%x] empty []'%self.getoffset()
 
     def __repr__(self):
         name = [lambda:' __name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
@@ -89,8 +95,55 @@ class type(__pstruct_generic):
             return self.name() + name + '\n' + self.__repr__uninitialized()
         return self.name() + name + '\n' + self.__repr__initialized()
 
-    def name(self):
-        return repr(self.__class__)
+    def set(self, *tuples, **allocator):
+        # allocate type if we're asked to
+        for name,cls in allocator.items():
+            try:
+                value = self.newelement(cls, 0, name)        
+                value = value.a
+            except AssertionError:      # newelement raises one of python's stupid assertions
+                value = cls
+            self[name] = value
+
+        # set each value in tuple
+        for name,value in tuples:
+            self[name].set(value)
+
+        self.setoffset( self.getoffset(), recurse=True )
+        return self
+
+import dyn
+def make(fields, **attrs):
+    '''
+    Given a set of initialized ptype objects, return a pstruct object
+    describing it. This will create padding in the structure for any
+    holes that were found.
+    '''
+    fields = set(fields)
+
+    # FIXME: instead of this assert, if more than one structure occupies the
+    # same location, then we should promote them all into a union.
+    assert len(set([x.getoffset() for x in fields])) == len(fields),'more than one field is occupying the same location'
+
+    types = list(fields)
+    types.sort(cmp=lambda a,b: cmp(a.getoffset(),b.getoffset()))
+
+    ofs,result = 0,[]
+    for object in types:
+        o,n,s = object.getoffset(), object.__name__, object.blocksize()
+        assert o >= ofs
+
+        delta = o-ofs
+        if delta > 0:
+            result.append((dyn.block(delta), '__padding_%x'%ofs))
+            ofs += delta
+
+        if s > 0:
+            n = (n, 'unknown_%x'%ofs)[n is None]
+            result.append((object.__class__, n))
+            ofs += s
+        continue
+    return dyn.clone(type, _fields_=result, **attrs)
 
 if __name__ == '__main__':
     import pstruct

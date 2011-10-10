@@ -1,0 +1,411 @@
+<?xml version="1.0" encoding="utf-8"?>
+<stack>
+  <opcode repr="XCHG" value="86" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>b</t>
+      </dst>
+      <dst>
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load />
+  </opcode>
+  <opcode repr="XCHG" value="87" ext="">
+    <store>
+      <dst>
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+      <dst>
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load />
+  </opcode>
+  <opcode repr="MOV" value="88" ext="">
+    <store>
+      <dst depend="no">
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>b</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="89" ext="">
+    <store>
+      <dst depend="no">
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>G</a>
+        <t>vqp</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="8A" ext="">
+    <store>
+      <dst depend="no">
+        <a>G</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>b</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="8B" ext="">
+    <store>
+      <dst depend="no">
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>vqp</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="8C" ext="">
+    <store>
+      <dst depend="no">
+        <a>M</a>
+        <t>w</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>S</a>
+        <t>w</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="LEA" value="8D" ext="">
+    <store>
+      <dst depend="no">
+        <a>G</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src depend="no">
+        <a>M</a>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="8E" ext="">
+    <store>
+      <dst depend="no">
+        <a>S</a>
+        <t>w</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>w</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="SAHF" value="9E" ext="">
+    <store />
+    <load>
+      <src nr="4" group="gen" type="b" displayed="no">AH</src>
+    </load>
+  </opcode>
+  <opcode repr="LAHF" value="9F" ext="">
+    <store>
+      <dst nr="4" group="gen" type="b" displayed="no" depend="no">
+      AH</dst>
+    </store>
+    <load />
+  </opcode>
+  <opcode repr="MOV" value="A0" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" depend="no">AL</dst>
+    </store>
+    <load>
+      <src>
+        <a>O</a>
+        <t>b</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="A1" ext="">
+    <store>
+      <dst nr="0" group="gen" type="vqp" depend="no">rAX</dst>
+    </store>
+    <load>
+      <src>
+        <a>O</a>
+        <t>vqp</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="A2" ext="">
+    <store>
+      <dst depend="no">
+        <a>O</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="b">AL</src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="A3" ext="">
+    <store>
+      <dst depend="no">
+        <a>O</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="vqp">rAX</src>
+    </load>
+  </opcode>
+  <opcode repr="MOVS" value="A4" ext="">
+    <store>
+      <dst type="b" address="Y" depend="no">(ES:)[rDI]</dst>
+    </store>
+    <load>
+      <src type="b" address="X">(DS:)[rSI]</src>
+    </load>
+  </opcode>
+  <opcode repr="MOVS" value="A5" ext="">
+    <store>
+      <dst type="wo" address="Y" depend="no">ES:[DI]</dst>
+    </store>
+    <load>
+      <src type="wo" address="X">DS:[SI]</src>
+    </load>
+  </opcode>
+  <opcode repr="STOS" value="AA" ext="">
+    <store>
+      <dst type="b" address="Y" depend="no">(ES:)[rDI]</dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="b" displayed="no">AL</src>
+    </load>
+  </opcode>
+  <opcode repr="STOS" value="AB" ext="">
+    <store>
+      <dst type="wo" address="Y" depend="no">ES:[DI]</dst>
+    </store>
+    <load>
+      <src nr="0" group="gen" type="wo" displayed="no">AX</src>
+    </load>
+  </opcode>
+  <opcode repr="LODS" value="AC" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" depend="no" displayed="no">
+      AL</dst>
+    </store>
+    <load>
+      <src type="b" address="X">(DS:)[rSI]</src>
+    </load>
+  </opcode>
+  <opcode repr="LODS" value="AD" ext="">
+    <store>
+      <dst nr="0" group="gen" type="wo" depend="no" displayed="no">
+      AX</dst>
+    </store>
+    <load>
+      <src type="wo" address="X">DS:[SI]</src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="B0" ext="">
+    <store>
+      <dst depend="no">
+        <a>Z</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="B8" ext="">
+    <store>
+      <dst depend="no">
+        <a>Z</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>vqp</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="LES" value="C4" ext="">
+    <store>
+      <dst nr="0" group="seg" type="w" displayed="no">ES</dst>
+      <dst depend="no">
+        <a>G</a>
+        <t>v</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>M</a>
+        <t>p</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="LDS" value="C5" ext="">
+    <store>
+      <dst nr="3" group="seg" type="w" displayed="no">DS</dst>
+      <dst depend="no">
+        <a>G</a>
+        <t>v</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>M</a>
+        <t>p</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="C6" ext="0">
+    <store>
+      <dst depend="no">
+        <a>E</a>
+        <t>b</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>b</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOV" value="C7" ext="0">
+    <store>
+      <dst depend="no">
+        <a>E</a>
+        <t>vqp</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>I</a>
+        <t>vds</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="XLAT" value="D7" ext="">
+    <store>
+      <dst nr="0" group="gen" type="b" displayed="no">AL</dst>
+    </store>
+    <load>
+      <src type="b" address="BB">(DS:)[rBX+AL]</src>
+    </load>
+  </opcode>
+  <opcode repr="MOVD" value="6E" ext="">
+    <store>
+      <dst>
+        <a>P</a>
+        <t>q</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>d</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOVD" value="6E" ext="">
+    <store>
+      <dst>
+        <a>P</a>
+        <t>q</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>E</a>
+        <t>d</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOVQ" value="6F" ext="">
+    <store>
+      <dst depend="no">
+        <a>P</a>
+        <t>q</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>Q</a>
+        <t>q</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOVD" value="7E" ext="">
+    <store>
+      <dst depend="no">
+        <a>E</a>
+        <t>d</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>P</a>
+        <t>q</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOVD" value="7E" ext="">
+    <store>
+      <dst depend="no">
+        <a>E</a>
+        <t>d</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>P</a>
+        <t>q</t>
+      </src>
+    </load>
+  </opcode>
+  <opcode repr="MOVQ" value="7F" ext="">
+    <store>
+      <dst depend="no">
+        <a>Q</a>
+        <t>q</t>
+      </dst>
+    </store>
+    <load>
+      <src>
+        <a>P</a>
+        <t>q</t>
+      </src>
+    </load>
+  </opcode>
+</stack>

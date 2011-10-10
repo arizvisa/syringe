@@ -5,6 +5,9 @@ class File(ptypes.parray.infinite):
     _object_ = Atom
 
     def blocksize(self):
+        return self.getsize()
+
+    def getsize(self):
         return self.source.size()
 
     def search(self, type):

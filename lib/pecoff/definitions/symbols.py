@@ -257,7 +257,7 @@ class StringTable(pstruct.type):
             self['Size'].load()
         count = int(self['Size'])
         cls = dyn.block(count - 4)
-        return cls()
+        return self.newelement(cls, cls.__name__)
 
     def initialized(cls, value):
         def fn(self):

@@ -1,12 +1,13 @@
-import ptypes,headers
+import ptypes
 from ptypes import pstruct,parray,provider,dyn
 from __base__ import *
 
 import exports,relocations,imports,resources
+from headers import virtualaddress,realaddress
 
 class Entry(pstruct.type):
     _fields_ = [
-        (dyn.opointer(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load())), headers.RelativeAddress), 'VirtualAddress'),
+        (virtualaddress(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load()))), 'VirtualAddress'),
         (uint32, 'Size')
     ]
 
@@ -41,8 +42,48 @@ class BaseReloc(Entry):
 class Debug(Entry): pass
 class Architecture(Entry): pass
 class GlobalPtr(Entry): pass
-class Tls(Entry): pass
-class LoadConfig(Entry): pass
+class Tls(Entry):
+    class IMAGE_TLS_DIRECTORY(pstruct.type):
+        _fields_ = [
+            (uint32, 'Raw Data Start VA'),
+            (uint32, 'Raw Data End VA'),
+            (uint32, 'Address of Index'),
+#            (uint32, 'Address of Callbacks'),
+#            (dyn.pointer(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32)), 'Address of Callbacks'),
+            (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32)), 'Address of Callbacks'),
+            (uint32, 'Size of Zero Fill'),
+            (uint32, 'Characteristics'),
+        ]
+
+    _object_ = IMAGE_TLS_DIRECTORY
+
+class LoadConfig(Entry):
+    class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
+        _fields_ = [
+            (uint32, 'Characteristics'),
+            (uint32, 'TimeDateStamp'),
+            (uint16, 'MajorVersion'),
+            (uint16, 'MinorVersion'),
+            (uint32, 'GlobalFlagsClear'),
+            (uint32, 'GlobalFlagsSet'),
+            (uint32, 'CriticalSectionDefaultTimeout'),
+            (uint32, 'DeCommitFreeBlockThreshold'),
+            (uint32, 'DeCommitTotalFreeThreshold'),
+            (realaddress(uint32), 'LockPrefixTable'),
+            (uint32, 'MaximumAllocationSize'),
+            (uint32, 'VirtualMemoryThreshold'),
+            (uint32, 'ProcessAffinityMask'),
+            (uint32, 'ProcessHeapFlags'),
+            (uint16, 'CSDVersion'),
+            (uint16, 'Reserved'),
+            (realaddress(uint32), 'EditList'),           # FIXME
+            (realaddress(uint32), 'SecurityCookie'),
+#            (virtualaddress(uint32), 'SEHandlerTable'),     # FIXME
+            (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].l.int())), 'SEHandlerTable'),     # FIXME
+            (uint32, 'SEHandlerCount'),
+        ]
+    _object_ = IMAGE_LOADCONFIG_DIRECTORY
+
 class BoundImport(Entry): pass
 class IAT(Entry):
     _object_ = imports.IMAGE_IMPORT_ADDRESS_TABLE

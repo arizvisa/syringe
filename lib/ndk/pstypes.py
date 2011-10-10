@@ -2,6 +2,7 @@ from WinNT import *
 from ptypes import *
 from umtypes import *
 from ldrtypes import *
+from Ntddk import *
 import heaptypes,sdkddkver
 
 class PEB_FREE_BLOCK(pstruct.type): pass
@@ -18,6 +19,56 @@ class PEB(pstruct.type, versioned):
             (1, 'SkipPatchingUser32Forwarders'),
             (1, 'SpareBits'),
         ]
+
+    class NtGlobalFlag(pbinary.struct):
+        def __init__(self, **attrs):
+            super(PEB.NtGlobalFlag, self).__init__(**attrs)
+
+            f = []
+            f.extend([
+                (1, 'FLG_STOP_ON_EXCEPTION'),   # 0x00000001
+                (1, 'FLG_SHOW_LDR_SNAPS'),  # 0x00000002
+                (1, 'FLG_DEBUG_INITIAL_COMMAND'),   # 0x00000004
+                (1, 'FLG_STOP_ON_HUNG_GUI'),    # 0x00000008
+                (1, 'FLG_HEAP_ENABLE_TAIL_CHECK'),  # 0x00000010
+                (1, 'FLG_HEAP_ENABLE_FREE_CHECK'),  # 0x00000020
+                (1, 'FLG_HEAP_VALIDATE_PARAMETERS'),    # 0x00000040
+                (1, 'FLG_HEAP_VALIDATE_ALL'),   # 0x00000080
+                (1, 'FLG_POOL_ENABLE_TAIL_CHECK'),  # 0x00000100
+                (1, 'FLG_POOL_ENABLE_FREE_CHECK'),  # 0x00000200
+                (1, 'FLG_POOL_ENABLE_TAGGING'), # 0x00000400
+                (1, 'FLG_HEAP_ENABLE_TAGGING'), # 0x00000800
+                (1, 'FLG_USER_STACK_TRACE_DB'), # 0x00001000
+                (1, 'FLG_KERNEL_STACK_TRACE_DB'),   # 0x00002000
+                (1, 'FLG_MAINTAIN_OBJECT_TYPELIST'),    # 0x00004000
+                (1, 'FLG_HEAP_ENABLE_TAG_BY_DLL'),  # 0x00008000
+                (1, 'FLG_IGNORE_DEBUG_PRIV'),   # 0x00010000
+                (1, 'FLG_ENABLE_CSRDEBUG'), # 0x00020000
+                (1, 'FLG_ENABLE_KDEBUG_SYMBOL_LOAD'),   # 0x00040000
+                (1, 'FLG_DISABLE_PAGE_KERNEL_STACKS'),  # 0x00080000
+            ])
+
+            if self.NTDDI_VERSION < sdkddkver.NTDDI_WINXP:
+                f.append((1, 'FLG_HEAP_ENABLE_CALL_TRACING'))   #0x00100000
+            else:
+                f.append((1, 'FLG_ENABLE_SYSTEM_CRIT_BREAKS'))   #0x00100000
+
+            f.extend([
+                (1, 'FLG_HEAP_DISABLE_COALESCING'), # 0x00200000
+                (1, 'FLG_ENABLE_CLOSE_EXCEPTIONS'), # 0x00400000
+                (1, 'FLG_ENABLE_EXCEPTION_LOGGING'),    # 0x00800000
+                (1, 'FLG_ENABLE_HANDLE_TYPE_TAGGING'),  # 0x01000000
+                (1, 'FLG_HEAP_PAGE_ALLOCS'),    # 0x02000000
+                (1, 'FLG_DEBUG_INITIAL_COMMAND_EX'),    # 0x04000000
+            ])
+            f.append((1+1+1+1+1, 'FLG_RESERVED'))
+            f = list(reversed(f))
+            self._fields_ = f
+
+        def __repr__(self):
+            ofs = '[%x]'% self.getoffset()
+            names = '|'.join((k for k,v in self.items() if v))
+            return ' '.join([ofs, self.name(), names, repr(self.serialize())])
 
     def __init__(self, **attrs):
         super(PEB, self).__init__(**attrs)
@@ -84,7 +135,8 @@ class PEB(pstruct.type, versioned):
             (PVOID, 'OemCodePageData'),
             (PVOID, 'UnicodeCaseTableData'),
             (ULONG, 'NumberOfProcessors'),
-            (ULONG, 'NtGlobalFlag'),
+#            (ULONG, 'NtGlobalFlag'),
+            (PEB.NtGlobalFlag, 'NtGlobalFlag'),
             (ULONG, 'Reserved'),
             (LARGE_INTEGER, 'CriticalSectionTimeout'),
             (ULONG, 'HeapSegmentReserve'),
@@ -183,6 +235,186 @@ class PEB(pstruct.type, versioned):
                 return m
             continue
         raise KeyError(name)
+
+class TEB_ACTIVE_FRAME_CONTEXT(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Flags'),
+        (dyn.pointer(PSTR), 'FrameName'),
+    ]
+
+class TEB_ACTIVE_FRAME(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Flags'),
+        (lambda s: dyn.pointer(TEB_ACTIVE_FRAME), 'Previous'),
+        (dyn.pointer(TEB_ACTIVE_FRAME_CONTEXT), 'Context'),
+    ]
+class PTEB_ACTIVE_FRAME(dyn.pointer(TEB_ACTIVE_FRAME)): pass
+
+class GDI_TEB_BATCH(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Offset'),
+        (HANDLE, 'HDC'),
+        (dyn.array(ULONG,0x136), 'Buffer'),
+    ]
+
+class TEB(pstruct.type, versioned):
+    class __SameTebFlags(pbinary.struct):
+        _fields_ = [
+            (1, 'DbgSafeThunkCall'),
+            (1, 'DbgInDebugPrint'),
+            (1, 'DbgHasFiberData'),
+            (1, 'DbgSkipThreadAttach'),
+            (1, 'DbgWerInShipAssertCode'),
+            (1, 'DbgIssuedInitialBp'),
+            (1, 'DbgClonedThread'),
+            (9, 'SpareSameTebBits'),
+        ]
+
+    def __init__(self, **attrs):
+        super(TEB, self).__init__(**attrs)
+        f = []
+
+        f.extend([
+            (NT_TIB, 'Tib'),
+            (PVOID, 'EnvironmentPointer'),
+            (CLIENT_ID, 'Cid'),
+            (PVOID, 'ActiveRpcHandle'),
+            (PVOID, 'ThreadLocalStoragePointer'),
+            (dyn.pointer(PEB), 'ProcessEnvironmentBlock'),
+            (ULONG, 'LastErrorValue'),
+            (ULONG, 'CountOfOwnedCriticalSections'),
+            (PVOID, 'CsrClientThread'),
+            (dyn.pointer(W32THREAD), 'Win32ThreadInfo'),
+            (dyn.array(ULONG,0x1a), 'User32Reserved'),
+            (dyn.array(ULONG,5), 'UserReserved'),
+            (PVOID, 'WOW32Reserved'),
+            (LCID, 'CurrentLocale'),
+            (ULONG, 'FpSoftwareStatusRegister'),
+            (dyn.array(PVOID,0x36), 'SystemReserved1'),
+            (LONG, 'ExceptionCode'),
+            (dyn.pointer(ACTIVATION_CONTEXT_STACK), 'ActivationContextStackPointer'),
+        ])
+
+        if self.WIN64:
+            f.append((dyn.block(24), 'SpareBytes1'))
+        else:
+            f.append((dyn.block(0x24), 'SpareBytes1'))
+
+        f.extend([
+            (ULONG, 'TxFsContext'),
+            (GDI_TEB_BATCH, 'GdiTebBatch'),
+            (CLIENT_ID, 'RealClientId'),
+            (PVOID, 'GdiCachedProcessHandle'),
+            (ULONG, 'GdiClientPID'),
+            (ULONG, 'GdiClientTID'),
+            (PVOID, 'GdiThreadLocalInfo'),
+            (dyn.array(SIZE_T,62), 'Win32ClientInfo'),
+            (dyn.array(PVOID,0xe9), 'glDispatchTable'),
+            (dyn.array(SIZE_T,0x1d), 'glReserved1'),
+            (PVOID, 'glReserved2'),
+            (PVOID, 'glSectionInfo'),
+            (PVOID, 'glSection'),
+            (PVOID, 'glTable'),
+            (PVOID, 'glCurrentRC'),
+            (PVOID, 'glContext'),
+            (NTSTATUS, 'LastStatusValue'),
+            (UNICODE_STRING, 'StaticUnicodeString'),
+#            (WCHAR, 'StaticUnicodeBuffer[0x105]'),
+            (dyn.clone(pstr.wstring, length=0x106), 'StaticUnicodeBuffer'),
+            (PVOID, 'DeallocationStack'),
+            (dyn.array(PVOID,0x40), 'TlsSlots'),
+            (LIST_ENTRY, 'TlsLinks'),
+            (PVOID, 'Vdm'),
+            (PVOID, 'ReservedForNtRpc'),
+            (dyn.array(PVOID,0x2), 'DbgSsReserved'),
+            (ULONG, 'HardErrorDisabled'),
+        ])
+
+        if self.WIN64:
+            f.append((dyn.array(PVOID,11), 'Instrumentation'))
+        else:
+            f.append((dyn.array(PVOID,9), 'Instrumentation'))
+
+        f.extend([
+            (GUID, 'ActivityId'),
+            (PVOID, 'SubProcessTag'),
+            (PVOID, 'EtwTraceData'),
+        ])
+
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_LONGHORN:
+            f.append((PVOID, 'EtwLocalData'))
+
+        f.extend([
+            (PVOID, 'WinSockData'),
+            (ULONG, 'GdiBatchCount'),
+        ])
+
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_LONGHORN:
+            f.extend([
+                (UCHAR, 'SpareBool0'),
+                (UCHAR, 'SpareBool1'),
+                (UCHAR, 'SpareBool2'),
+            ])
+        else:
+            f.extend([
+                (UCHAR, 'InDbgPrint'),
+                (UCHAR, 'FreeStackOnTermination'),
+                (UCHAR, 'HasFiberData'),
+            ])
+
+        f.extend([
+            (UCHAR, 'IdealProcessor'),
+            (ULONG, 'GuaranteedStackBytes'),
+            (PVOID, 'ReservedForPerf'),
+            (PVOID, 'ReservedForOle'),
+            (ULONG, 'WaitingOnLoaderLock'),
+        ])
+
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_LONGHORN:
+            f.append((PVOID, 'SavedPriorityState'))
+        else:
+            f.append((ULONG, 'SparePointer1'))
+        
+        f.extend([
+            (ULONG, 'SoftPatchPtr1'),
+            (PVOID, 'ThreadPoolData'),
+            (PVOID, 'TlsExpansionSlots'),
+            (ULONG, 'ImpersonationLocale'),
+            (ULONG, 'IsImpersonating'),
+            (PVOID, 'NlsCache'),
+            (PVOID, 'pShimData'),
+            (ULONG, 'HeapVirualAffinity'),
+            (PVOID, 'CurrentTransactionHandle'),
+            (PTEB_ACTIVE_FRAME, 'ActiveFrame'),
+        ])
+
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_WS03:
+            f.append((PVOID, 'FlsData'))
+
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_LONGHORN:
+            f.extend([
+                (PVOID, 'PreferredLangauges'),
+                (PVOID, 'UserPrefLanguages'),
+                (PVOID, 'MergedPrefLanguages'),
+                (ULONG, 'MuiImpersonation'),
+                (USHORT, 'CrossTebFlags'),
+                (self.__SameTebFlags, 'SameTebFlags'),   # XXX
+                (PVOID, 'TxnScopeEntercallback'),
+                (PVOID, 'TxnScopeExitCAllback'),
+                (PVOID, 'TxnScopeContext'),
+                (ULONG, 'LockCount'),
+                (ULONG, 'ProcessRundown'),
+                (ULONGLONG, 'LastSwitchTime'),
+                (ULONGLONG, 'TotalSwitchOutTime'),
+                (LARGE_INTEGER, 'WaitReasonBitMap'),
+            ])
+        else:
+            f.extend([
+                (UCHAR, 'SafeThunkCall'),
+                (dyn.block(UCHAR,3), 'BooleanSpare'),
+            ])
+
+        self._fields_ = f
 
 if __name__ == '__main__':
     import ctypes

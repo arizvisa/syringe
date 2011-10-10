@@ -16,7 +16,7 @@ def bigendian(ptype):
         def shortname(self):
             return 'bigendian(%s)'% self.__class__.__name__
 
-        def __int__(self):  #XXX: should this be renamed to .get()?
+        def number(self):
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
 
         def set(self, integer):
@@ -46,7 +46,7 @@ def littleendian(ptype):
         def shortname(self):
             return 'littleendian(%s)'% self.__class__.__name__
 
-        def __int__(self):
+        def number(self):
             return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
 
         def set(self, integer):
@@ -70,10 +70,22 @@ def littleendian(ptype):
 
 class integer_t(ptype.type):
     '''Provides basic integer-like support'''
+
+    def int(self): return int(self.number())
+    def long(self): return long(self.number())
+    def __int__(self): return self.int()
+    def __long__(self): return self.long()
+
     def get(self):
+        raise DeprecationWarning('.get has been replaced with .number')
         return int(self)
 
+    def number(self):
+        '''Convert integer type into a number'''
+        raise NotImplementedError('Unknown integer conversion')
+
     def __repr__(self):
+        ofs = '[%x]'% self.getoffset()
         if self.initialized:
             res = int(self)
 
@@ -81,7 +93,7 @@ class integer_t(ptype.type):
             res = fmt% (res, res)
         else:
             res = '???'
-        return ' '.join([self.name(), res])
+        return ' '.join([ofs,self.name(), res])
 
     def flip(self):
         '''Returns an integer with the endianness flipped'''
@@ -95,9 +107,9 @@ integer_t = bigendian(integer_t)
 
 class sint_t(integer_t):
     '''Provides signed integer support'''
-    def __int__(self):
+    def number(self):
         signmask = 1 << 8*self.size()
-        res = super(sint_t, self).__int__()
+        res = super(sint_t, self).long()
         
         res = res & (signmask-1)
         return [res, res*-1][bool(res&signmask)]
@@ -169,9 +181,6 @@ class enum(integer_t):
             raise AttributeError("'%s' object has no attribute '%s'"% (self.name(), name))
         raise Exception('wtf')
 
-    def __str__(self):
-        return self.get()
-
     def get(self):
         '''Return value as a string'''
         res = int(self)
@@ -192,7 +201,7 @@ class enum(integer_t):
 
             res = '(' + str(res) + ')'
             return ' '.join([repr(self.__class__), value, res])
-        return ' '.join([repr(self.__class__), '???'])
+        return ' '.join([ofs, repr(self.__class__), '???'])
 
     def __getitem__(self, name):
         return self.lookupByName(name)

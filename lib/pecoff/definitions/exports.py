@@ -3,25 +3,27 @@ from ptypes import pstruct,parray,ptype,dyn,pstr,utils
 from __base__ import *
 import struct
 
+from headers import virtualaddress
+
 # FuncPointer can also point to some code too
-#class FuncPointer(dyn.opointer(ptype.type, headers.RelativeAddress)): pass
-class FuncPointer(dyn.opointer(pstr.szstring, headers.RelativeAddress)):
+#class FuncPointer(virtualaddress(ptype.type, headers.RelativeAddress)): pass
+class FuncPointer(virtualaddress(pstr.szstring)):
     def getModuleName(self):
         module,name = self.d.l.get().split('.', 1)
         if name.startswith('#'):
             name = 'Ordinal%d'% int(n[1:])
         return module.lower() + '.dll',name
 
-class NamePointer(dyn.opointer(pstr.szstring, headers.RelativeAddress)): pass
+class NamePointer(virtualaddress(pstr.szstring)): pass
 class Ordinal(word):
     def getExportIndex(self):
         '''Returns the Ordinal's index for things'''
         return int(self) - int(self.parent.parent.parent['Base'])
 
 class IMAGE_EXPORT_DIRECTORY(pstruct.type):
-    _p_AddressOfFunctions =    lambda self: dyn.opointer(dyn.array(FuncPointer, int(self['NumberOfFunctions'].load())), headers.RelativeAddress)
-    _p_AddressOfNames =        lambda self: dyn.opointer(dyn.array(NamePointer, int(self['NumberOfNames'].load())), headers.RelativeAddress)
-    _p_AddressOfNameOrdinals = lambda self: dyn.opointer(dyn.array(Ordinal,     int(self['NumberOfNames'].load())), headers.RelativeAddress)
+    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, int(self['NumberOfFunctions'].load())))
+    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, int(self['NumberOfNames'].load())))
+    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     int(self['NumberOfNames'].load())))
 
     _fields_ = [
         ( dword, 'Flags' ),
@@ -84,18 +86,19 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             if exportdirectory.contains(va):
                 offset = va-sectionva
                 result.append( utils.strdup(data[offset:]) )
-                continue
-            result.append( va )
-        return result
+            else:
+                result.append( va )
+        return address,result
 
     def enumerateAllExports(self):
         result = []
-        eat = self.getExportAddressTable()
+        ofs,eat = self.getExportAddressTable()
         try:
             for name,ordinal in zip(self.getNames(), self.getNameOrdinals()):
                 value = eat[ordinal]
                 ordinalstring = 'Ordinal%d'% (ordinal + int(self['Base']))
-                yield (ordinal, name, ordinalstring, value)
+                yield (ofs, ordinal, name, ordinalstring, value)
+                ofs += 4
 
         except KeyError:
             print 'Error resolving exports...quitting early.'
@@ -103,39 +106,13 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             pass
         return
 
-    if False:
-        def getFunctions(self):
-            return list(self.getExportAddressTable())
-
-        def lookupByName(self):
-            result, eat = [], self.getFunctions()
-            for name,ordinal in zip( self.getNames(), self.getNameOrdinals() ):
-                v = eat[ordinal]
-                result.append((name, (ordinal, v)))
-            return result
-
-    if False:
-        def lookupByOrdinal(self):
-            result = []
-            for index,va in enumerate( self.iterateExportAddressTable ):
-                result.append((index+int(self['Base']), va))
-            return result
-
-
-    if False:
-        def getNameLookup(self):
-            '''returns a list of all symbols and their rva's'''    
-            result = []
-            eat = self.getFunctions()
-            for name,ordinal in zip( self.getNames(), self.getNameOrdinals() ):
-    #            print name,hex(int(eat[ordinal])),ordinal
-                result.append((name, eat[ordinal]))
-            return result
-
-        def getOrdinalLookup(self):
-            '''returns a list of all ordinals and their rva's'''    
-            result = []
-            eat = self.getFunctions()
-            for index,va in enumerate(eat):
-                result.append((index+int(self['Base']), va))
-            return result
+    def search(self, key):
+        '''
+        search the export list for an export that wildly matches key to everything.
+        return the rva
+        '''
+        for ofs,ordinal,name,ordinalstring,value in self.enumerateAllExports():
+            if key == ordinal or key == name or key == ordinalstring:
+                return value
+            continue
+        raise KeyError(key)

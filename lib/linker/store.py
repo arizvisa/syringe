@@ -66,7 +66,7 @@ import logging,warnings,array,bisect
 class DuplicateSymbol(Warning): pass
 class UninitializedSymbol(Warning): pass
 
-logging.root=logging.RootLogger(logging.INFO)
+logging.root=logging.RootLogger(logging.DEBUG)
 
 # symbol scopes
 class Scope(object): pass
@@ -228,6 +228,7 @@ class symboltable(dict):
     ### operations
     def updatesymbols(self, dict, symbolnames=None):
         '''Update specified symbols using the provided dictionary as input. Return the symbolnames updated.'''
+        raise NotImplementedError
         dictnames = [symbolnames, dict.iterkeys()][symbolnames is None]
         symbolnames = self.__alias_expand(dict.iterkeys())
         for name,source in zip(symbolnames,dictnames):
@@ -235,10 +236,11 @@ class symboltable(dict):
         return symbolnames
 
     def merge(self, store, symbolnames=None):
+        '''merge symboltables'''
         if symbolnames is None:
             symbolnames = store.aliases.keys()
-        symbolnames = set(self.__alias_expand(symbolnames))
-        localnames = set((([module,store.modulename][module is None],symbolname) for module,symbolname in symbolnames))
+        localnames = symbolnames = set(self.__alias_expand(symbolnames))
+        #localnames = set((([module,store.modulename][module is None],symbolname) for module,symbolname in symbolnames))
 
         def generate_key2alias_lookup(st, symbolnames):
             for key in symbolnames:
@@ -297,13 +299,7 @@ class symboltable(dict):
     def __repr__(self):
        return ' '.join((self.name(), repr(dict((([([k,(self.modulename,k[1])][k[0] is None],v) for k,v in self.iteritems()]))))))
 
-    def dump(self):
-        g = [(k, self[k]) for k in self.getglobals()]
-        l = [(k, self[k]) for k in self.getlocals()]
-        gs = "globals:%s"% repr(g)
-        ls = "locals:%s"% repr(l)
-        return '\n'.join((gs,ls))
-
+#####################
 class base(symboltable):
     '''
     Abstraction over a file-source that contains segmented symbol information
@@ -311,13 +307,13 @@ class base(symboltable):
     if a segment of None is provided, this will be a segment of all unallocated data in the store
     '''
 
-    segments = None     # dict keyed by segmentname of sets of strings that contain symbolnames
+    scopesegment = None     # dict keyed by segmentname of sets of strings that contain symbolnames
     scope = None        # dict keyed by scope of symbolnames
 
     ## initialization
     def __init__(self, **kwds):
         super(base, self).__init__(**kwds)
-        self.segments = {}      # cache for organizing symbolname by segment
+        self.scopesegment = {}      # cache for organizing symbolname by segment
 
         self.scope = {}         # cache for searching symbolname by scope
         for x in (LocalScope,GlobalScope,ExternalScope):
@@ -350,21 +346,21 @@ class base(symboltable):
         raise NotImplementedError
         result = cls()
         result.modulename = path
-        return result.parse()
+        return result.do()
 
     @classmethod
     def load(cls, pointer, modulename):
         raise NotImplementedError
         self.modulename = modulename
         result = cls()
-        return result.parse()
+        return result.do()
 
     def loadsymbols(self, segmentname):
         '''initialize each symbol to contain the offset into the segment'''
         raise NotImplementedError('This should be inherited by a subclass')
 
     ## symboltable updating and enforcement
-    def parse(self):
+    def do(self):
         '''
         Read symbols and .add each one to the symbol table
         Adds hooks for updating symbols on segment relocation
@@ -373,8 +369,8 @@ class base(symboltable):
             '''hook: If a segmentname is updated, reinitialize it's symbols with the new base'''
             assert self == s, 'break if our self changes from our closure''s version'
 
-            symbols = self.segments[name[1]]
-            baseaddress = s[name]
+            symbols = self.scopesegment[name[1]]
+            baseaddress = self[name]
             if baseaddress is None:
                 logging.debug('%s : relocating %d symbols in %s to None'% (s.name(), len(symbols), name[1]))
                 for n in symbols:      
@@ -387,11 +383,6 @@ class base(symboltable):
             for n in symbols:      
                 self[n] = baseaddress + self[n]
             return
-
-        # initialize each segment
-        for segmentname in self.listsegments():
-            sym = self.loadsymbols(segmentname)
-            logging.debug('%s : parsed %d symbols in segment %s'%(self.name(), len(sym), segmentname))
 
         # add hooks to update each segment
         for segmentname in self.listsegments():
@@ -421,9 +412,9 @@ class base(symboltable):
 
         # store in our segment index
         try:
-            self.segments[segment].add((module,symbolname))
+            self.scopesegment[segment].add((module,symbolname))
         except KeyError:
-            self.segments[segment] = set([(module,symbolname)])
+            self.scopesegment[segment] = set([(module,symbolname)])
 
         # store it in our scope index
         try:
@@ -443,20 +434,35 @@ class base(symboltable):
         return super(object, self).__repr__()
 
     def getglobals(self):
-        result = set().union(*(self.segments.values()))
+        result = set().union(*(self.scopesegment.values()))
         return list(result.intersection(self.scope[GlobalScope]))
     def getlocals(self):
-        result = set().union(*(self.segments.values()))
+        result = set().union(*(self.scopesegment.values()))
         return list(result.intersection(self.scope[LocalScope]))
     def getexternals(self):
-        result = set().union(*(self.segments.values()))
+        result = set().union(*(self.scopesegment.values()))
         return list(result.intersection(self.scope[ExternalScope]))
 
+    def dump(self):
+        g = [(k, (lambda:repr(self[k]),lambda:hex(self[k]))[type(self[k]) in (int,long)]()) for k in self.getglobals()]
+        l = [(k, (lambda:repr(self[k]),lambda:hex(self[k]))[type(self[k]) in (int,long)]()) for k in self.getlocals()]
+        gs = "globals:%s"% repr(g)
+        ls = "locals:%d"% len(l)
+        return '\n'.join((gs,ls))
+
+    def getundefined(self):
+        return [ k for k,v in self.iteritems() if v is None ]
+
+    globals = property(fget=lambda s:set(s.getglobals()))
+    locals = property(fget=lambda s:set(s.getlocals()))
+    externals = property(fget=lambda s:set(s.getexternals()))
+    undefined = property(fget=lambda s:set(s.getundefined()))
+
     def getglobalsbysegmentname(self, segmentname):
-        result = self.segments[segmentname]
+        result = self.scopesegment[segmentname]
         return list(result.intersection(self.scope[GlobalScope]))
     def getlocalsbysegmentname(self, segmentname):
-        result = self.segments[segmentname]
+        result = self.scopesegment[segmentname]
         return list(result.intersection(self.scope[LocalScope]))
 
     ## for peering at what info is given to us
@@ -464,6 +470,8 @@ class base(symboltable):
         '''Intended to be overloaded. list names of all available segments that are contained in this store'''
         warnings.warn('default method called', UserWarning)
         return []
+    segments = property(fget=lambda s:s.listsegments())
+
     def getsegmentlength(self, name):
         '''Intended to be overloaded. get a segment's length so one can allocate for it...'''
         raise NotImplementedError
@@ -473,37 +481,49 @@ class base(symboltable):
     def getsegment(self, name):
         '''Intended to be overloaded. get a segment from this store, relocated, and then return a string representing the segment data'''
         raise NotImplementedError
-    def relocatesegment(self, name, data, baseaddress):
+    def relocatesegment(self, name, data):
         raise NotImplementedError
 
     def merge(self, store, symbolnames=None):
+        '''
+        import the specified symbolnames from store into self.
+        XXX: ensure your segment symbolnames exist before calling this.
+        '''
         if symbolnames is None:
             symbolnames = store.aliases.keys()
         symbolnames = set(symbolnames)
 
         # segments
-        store_segments = set((None,x) for x in store.segments.iterkeys() if x is not None)
+        store_segments = set((None,x) for x in store.scopesegment.iterkeys() if x is not None)
 
         # now actually merge the symbol values
-        symbolnames = super(base,self).merge(store,symbolnames)
-        storenames = set((([module, None][module == store.modulename],name) for module,name in symbolnames))
+        storenames = symbolnames = super(base,self).merge(store,symbolnames)
+        #storenames = set((([module, None][module == store.modulename],name) for module,name in symbolnames))
 
         # copy scopes that we share from the store into ourselves
         my_scope = set(self.scope.keys())
         store_scope = set(store.scope.keys())
         for sc in my_scope.intersection(store_scope):        # (Local,Global,External)
             common = storenames.intersection(store.scope[sc])
-            mynames = set((([module,store.modulename][module is None],name) for module,name in common))
-            self.scope[sc] = self.scope[sc].union(mynames)
+            #common = set((([module,store.modulename][module is None],name) for module,name in common))
+            self.scope[sc] = self.scope[sc].union(common)
 
         # copy segment scopes
-        self_segments = set((None,x) for x in self.segments.iterkeys())
+        self_segments = set((None,x) for x in self.scopesegment.iterkeys())
         for m,n in store_segments.intersection(self_segments):
-            common = storenames.intersection(store.segments[n])
-            mynames = set((([module,store.modulename][module is None],name) for module,name in common))
-            self.segments[n] = self.segments[n].union(mynames)
+            common = storenames.intersection(store.scopesegment[n])
+            #common = set((([module,store.modulename][module is None],name) for module,name in common))
+            self.scopesegment[n] = self.scopesegment[n].union(common)
 
         return symbolnames
+
+    def findsegment(self, address):
+        '''Searches the symbol table for the segment containing the specified address'''
+        for name in self.segments:
+            b,l = self[None,name], self.getsegmentlength(name)
+            if address >= b and address < b+l:
+                return name
+        raise ValueError("Unable to locate a segment containing address %x"% address)
 
 class container(base):
     '''
@@ -524,19 +544,26 @@ class container(base):
     def addstore(self, store):
         '''add a store to a container'''
         self.stores.append(store)
-        self.process(store)
+        self.prepare(store)
 
-    def process(self, store):
-        '''parse the store, merge globals. add segments'''
-        result = store.parse()
+    def do(self):
+        '''Execute something when initializing this container'''
+        raise NotImplementedError
 
-        # globals for the container
-        self.merge(store, store.getglobals())
-
+    def prepare(self, store):
+        '''Imports symbol/segment info from the provided store'''
         # segments
         for n in store.listsegments():
             self.addsegment(n, -1, n, store)
-        return result
+
+        # import some globals from a store
+        self.merge(store, store.getglobals())
+
+        externals = store.getexternals()
+        # now import externals from the store
+        self.merge(store, externals)
+        self.scopesegment[None].update(externals)
+        return self
 
     ## ordered segment stuff
     storesegments = None
@@ -605,12 +632,25 @@ class container(base):
         return protections[0]
 
     def relocatesegment(self, segmentname, data):
-        segments = self.storesegments[segmentname]
+        assert self[segmentname] is not None, '%s : segment %s address is undefined'%(self.name(), segmentname)
 
-        offset, baseaddress = 0, self[segmentname]
+        # reset our symbol addresses
+        self[segmentname] = self[segmentname]
+
+        # preppin..
+        segments = self.storesegments[segmentname]
+        data = array.array('c',data)
+        offset,baseaddress = 0,self[segmentname]
+
         for index,name,store in segments:
+
             size = store.getsegmentlength(name)
             globals = store.getglobalsbysegmentname(name)
+            externals = store.getexternals()
+
+            # merge in externals
+            print index,store,externals
+            store.merge(self, externals)
 
             # grab chunk
             chunk = data[offset:offset+size]
@@ -622,18 +662,20 @@ class container(base):
             chunk = store.relocatesegment(name, chunk)
 
             # write it back
-            data[offset:offset+size] = chunk
+            data[offset:offset+size] = array.array('c',chunk)
 
             # import any globals that were calculated
-            self.update(store, globals)
+            localnames = set((([module,store.modulename][module is None],symbolname) for module,symbolname in globals))
+            for gname,lname in zip(globals,localnames):
+                self[lname] = store[gname]
 
             offset += size
             baseaddress += size
-        return data
+        return data.tostring()
 
     def loadsymbols(self, segmentname):
         segments = self.storesegments[segmentname]
-        symbols = self.segments[segmentname]
+        symbols = self.scopesegment[segmentname]
 
         logging.debug('%s : reloading %d symbols'% (self.name(),len(symbols)))
         result = set()
@@ -762,7 +804,7 @@ if __name__ == '__main__':
 
     if False:
         import coff
-        a = coff.object.open('../../obj/test.obj').parse()
+        a = coff.object.open('../../obj/test.obj').do()
 
         a['.text'] = 0x10000000
         a['.data'] = 0xdeaddead
@@ -772,7 +814,7 @@ if __name__ == '__main__':
 
     if True:
         import coff
-        a = coff.library.open('../../obj/test.lib').parse()
+        a = coff.library.open('../../obj/test.lib').do()
         raise NotImplementedError("I need to write an actual test for coff.library, instead of doing it all at the command prompt")
 
         # need to confirm that when updating a segment in the main coff.library, it will update the segment in each of the container's stores

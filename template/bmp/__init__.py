@@ -66,6 +66,15 @@ class BITMAPINFO(pstruct.type):
         (__bmiColors, 'bmiColors'),
     ]
 
+class BITMAPCOREHEADER(pstruct.type):
+    _fields_ = [
+        (DWORD, 'bcSize'),
+        (WORD, 'bcWidth'),
+        (WORD, 'bcHeight'),
+        (WORD, 'bcPlanes'),
+        (WORD, 'bcBitcount'),
+    ]
+
 class File(pstruct.type):
     _fields_ = [
         ( BITMAPFILEHEADER, 'header'),

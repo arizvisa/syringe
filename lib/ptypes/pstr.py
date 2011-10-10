@@ -3,6 +3,8 @@ import pint,pstr,dyn,utils
 
 class _char_t(pint.integer_t):
     length = 1
+    def str(self):
+        return self.v
 
 class char_t(_char_t):
     def set(self, value):
@@ -38,8 +40,8 @@ class string(ptype.type):
     _object_ = pstr.char_t
     initialized = property(fget=lambda self: self.value is not None)    # bool
 
-    def at(self, offset):
-        raise AttributeError    # we don't exist..
+    def at(self, offset, **kwds):
+        raise NotImplementedError
 
     def size(self):
         return self._object_.length * len(self)
@@ -90,16 +92,16 @@ class string(ptype.type):
         return
 
     def set(self, value):
-        result = dyn.array(self._object_, len(value))()
-        result.alloc()
-        for element,character in zip(result, value):
+        result = dyn.array(self._object_, len(self))()
+
+        for element,character in zip(result.alloc(), value):
             element.set(character)
         self.value = result.serialize()
         return self
 
     def get(self):
         import warnings
-        warnings.warn('%s.str() is deprecated'%(self.__class__.__name__), DeprecationWarning, stacklevel=2)
+        warnings.warn('%s.get() is deprecated in favor of %s.str()'%(self.__class__.__name__, self.__class__.__name__), DeprecationWarning, stacklevel=2)
         return self.str()
 
     def str(self):
@@ -124,7 +126,7 @@ class string(ptype.type):
 
     def __repr__(self):
         if self.initialized:
-            return ' '.join([self.name(), self.str()])
+            return ' '.join([self.name(), repr(self.str())])
         return ' '.join([self.name()])
 
 class szstring(string):
@@ -135,31 +137,40 @@ class szstring(string):
         return int(v) == 0
 
     def set(self, value):
-        o = self._object_().alloc().serialize()
-        return super(szstring, self).set(value+'\x00')
+        if not value.endswith('\x00'):
+            value += '\x00'
+
+        result = dyn.array(self._object_, len(value))().alloc()
+        for element,character in zip(result, value):
+            element.set(character)
+        self.value = result.serialize()
+        return self
 
     def deserialize_block(self, block):
         return self.deserialize_stream(iter(block))
 
     def load(self):
-        sz = self._object_.length
         self.source.seek(self.getoffset())
-        producer = (self.source.consume(sz) for x in utils.infiniterange(0))
+        producer = (self.source.consume(1) for x in utils.infiniterange(0))
         return self.deserialize_stream(producer)
 
     def deserialize_stream(self, stream):
         o = self.getoffset()
         obj = self.newelement(self._object_, '', o)
+        sz = obj.blocksize()
+
+        getchar = lambda: ''.join([stream.next() for x in range(sz)])
 
         self.value = ''
-        for char in stream:
-            self.value += char
+        while True:
+            char = getchar()
 
             obj.setoffset(o)
             obj.deserialize_block(char)
+            self.value += obj.serialize()
             if self.isTerminator(obj):
                 break
-            o += len(char)
+            o += sz
         return self
 
     def blocksize(self):
@@ -175,6 +186,16 @@ class wstring(string):
 class szwstring(szstring, wstring):
     '''Standard null-terminated string of wide-characters'''
     _object_ = wchar_t
+
+    def set(self, value):
+        if not value.endswith('\x00'):
+            value += '\x00'
+
+        result = dyn.array(self._object_, len(value))().alloc()
+        for element,character in zip(result, value):
+            element.set(character)
+        self.value = result.serialize()
+        return self
 
 if __name__ == '__main__':
     import provider
@@ -279,15 +300,44 @@ if __name__ == '__main__':
 
     @TestCase
     def Test8():
-        h = '43 00 3a 00 5c 00 50 00 79 00 74 00 68 00 6f 00 6e 00 32 00 36 00 5c 00 44 00 4c 00 4c 00 73 00 5c 00 5f 00 63 00 74 00 79 00 70 00 65 00 73 00 2e 00 70 00 79 00 64 00 00 00'
-        h = h.split(' ')
-        h = [int(x,16) for x in h]
-        h = ''.join( [chr(x) for x in h] )
-
         s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
         v = pstr.szwstring(source=provider.string(s)).l
         if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
+
+    @TestCase
+    def Test9():
+        data = ' '.join(map(lambda x:x.strip(),'''
+            00 57 00 65 00 6c 00 63 00 6f 00 6d 00 65 00 00
+        '''.split('\n'))).strip()
+        data = map(lambda x: chr(int(x,16)), data.split(' '))
+        data = ''.join(data)
+
+        import pstruct,pstr,provider,utils
+        class wbechar_t(pstr.wchar_t):
+            def set(self, value):
+                self.value = '\x00' + value
+                return self
+
+            def get(self):
+                return unicode(self.value, 'utf-16-be').encode('utf-8')
+
+        class unicodestring(pstr.szwstring):
+            _object_ = wbechar_t
+            def str(self):
+                s = unicode(self.value, 'utf-16-be').encode('utf-8')
+                return utils.strdup(s)[:len(self)]
+
+        class unicodespeech_packet(pstruct.type):
+            _fields_ = [
+                (unicodestring, 'msg'),
+            ]
+
+        a = unicodestring(source=provider.string(data)).l
+        if a.l.str() == 'Welcome':
+            raise Success
+        raise Failure
+
 
 if __name__ == '__main__':
     results = []

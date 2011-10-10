@@ -48,11 +48,11 @@ class Relocation(pstruct.type):
             targetsection = currentsection.parent[symbolsectionnumber]
             targetsectionname = targetsection['Name'].str()
         
-        return self.__relocate(data, symbol, sectionarray, currentsectionname, targetsectionname, namespace)
+        data = array.array('c',data)
+        return self.__relocate(data, symbol, sectionarray, currentsectionname, targetsectionname, namespace).tostring()
 
     def __relocate(self, data, symbol, sectionarray, currentsectionname, targetsectionname, namespace):
         relocationva,relocationtype = int(self['VirtualAddress']),int(self['Type'])
-#        storageclass,value = int(symbol['StorageClass']), int(symbol['Value'])
         name = symbol['Name'].str()
         storageclass,value = int(symbol['StorageClass']), namespace[name]
 
@@ -62,7 +62,7 @@ class Relocation(pstruct.type):
         result = bitmap.new(0,0)
         generator = ( bitmap.new(ord(x),8) for x in data[relocationva:relocationva+4] )
         for x in generator:
-            result = bitmap.push(result, x)
+            result = bitmap.insert(result, x)
         result = result[0]
 
         currentva = relocationva + 4
@@ -82,20 +82,20 @@ class Relocation(pstruct.type):
             result = (value+result+4) - (currentva)
             raise NotImplementedError(relocationtype)
         elif relocationtype == 7:                                           # use real virtual address (???)
-            result = (value+result)
-            raise NotImplementedError(relocationtype)
+            result = value
         elif relocationtype in [0xA, 0xB]:                                  # [section index, offset from section]
             raise NotImplementedError(relocationtype)
         else:
             raise NotImplementedError(relocationtype)
 
-        result,serialized = bitmap.new(result, 32),''
+        result,serialized = bitmap.new(result, 32),array.array('c','')
         while result[1] > 0:
             result,value = bitmap.consume(result, 8)
-            serialized += chr(value)
+            serialized.append(chr(value))
         assert len(serialized) == 4
 
-        return data[:relocationva] + serialized + data[relocationva+len(serialized):]
+        data[relocationva:relocationva+len(serialized)] = serialized
+        return data
 
 ## per data directory relocations
 class BaseRelocationEntry(pbinary.struct):
@@ -197,18 +197,19 @@ class IMAGE_BASERELOC_DIRECTORY(parray.terminated):
         return ( entry for entry in self if section.containsaddress(int(entry['Page RVA'])) )
 
     def relocate(self, data, section, namespace):
-        sectionname = section['Name'].get()
+        assert data.__class__ is array.array, 'data argument must be formed as an array'
+
+        sectionname = section['Name'].str()
         imagebase = int(self.getparent(headers.NtHeader)['OptionalHeader']['ImageBase'])
 
         sectionarray = section.parent
-        sectionvaLookup = dict( ((s['Name'].get(),int(s['VirtualAddress'])) for s in sectionarray) )
+        sectionvaLookup = dict( ((s['Name'].str(),int(s['VirtualAddress'])) for s in sectionarray) )
 
         # relocation type 3
         t = relocationtype()
         t.length = 4
         t.write = lambda o, b: t._write(o+b)
 
-        data = array.array('c', data)
         for entry in self.getbysection(section):
             for type,offset in entry.getrelocations(section):
                 if type != 3:
@@ -229,7 +230,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.terminated):
                     #      'mz' header into this? that only fixes that case...but why else would you legitimately need something outside a section?
                     continue
 
-                targetsectionname = targetsection['Name'].get()
+                targetsectionname = targetsection['Name'].str()
                 targetoffset = targetva - sectionvaLookup[targetsectionname]
 
 #                relo = t.write(targetva, imagebase)
@@ -237,4 +238,4 @@ class IMAGE_BASERELOC_DIRECTORY(parray.terminated):
                 data[offset:offset+len(relo)] = array.array('c',relo)
             continue
 
-        return data.tostring()
+        return data

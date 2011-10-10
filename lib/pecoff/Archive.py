@@ -7,16 +7,31 @@ import Object
 class ulong(bigendian(uint32_t)): pass
 
 class stringinteger(pstr.string):
-    def __int__(self):
+    def int(self):
         return int(self.str())
+    def long(self):
+        return long(self.str())
+    def __int__(self):
+        return self.int()
+    def __long__(self):
+        return self.long()
 
 class newline(pstr.szstring):
+    # XXX: this type is kind of magical in that it's using undocumented stuff
+
     def isTerminator(self, value):
         if value.serialize() != '\n':
             self.value=''
             return False
         return True
 
+    def deserialize_stream(self, stream):
+        try:
+            result = super(newline, self).deserialize_stream(stream)
+        except StopIteration:
+#            logging.warning('%s : terminated at %x'%(self.name(), self.getoffset()))
+            result = self
+        return result
 #
 class MemberHeaderName(pstr.string):
     length = 16
@@ -55,12 +70,14 @@ class FirstLinker(dyn.union):
 
         def get(self):
             return [(str(k), int(v)) for k,v in zip(self['String Table'], self['Offsets'])]
+
     _fields_ = [(__FirstLinker, 'Data')]
 
 class FirstLinkerMember(pstruct.type):
     _fields_ = [
         (MemberHeader, 'Header'),
-        (FirstLinker, 'Member'),
+        #(FirstLinker, 'Member'),       # XXX
+        (lambda s: dyn.clone(FirstLinker, root=dyn.block(s['Header'].l['Size'].int())), 'Member'),
         (pstr.char_t, 'newline')
     ]
 
@@ -72,7 +89,7 @@ class SecondLinker(dyn.union):
     class __SecondLinker(pstruct.type):
         _fields_ = [
             (uint32_t, 'Number of Members'),
-            (lambda self: dyn.array(uint32_t, int(self['Number of Members'].load()))(), 'Offsets'),
+            (lambda self: dyn.array(uint32_t, int(self['Number of Members'].load())), 'Offsets'),
             (uint32_t, 'Number of Symbols'),
             (lambda self: dyn.array(Index, int(self['Number of Symbols'].load())), 'Indices'),
             (lambda self: dyn.array(pstr.szstring, int(self['Number of Symbols'])), 'String Table')
@@ -80,12 +97,23 @@ class SecondLinker(dyn.union):
 
         def get(self):
             return [(k.get(), int(self['Offsets'][i.get()])) for k,i in zip(self['String Table'], self['Indices'])]
-    _fields_ = [(__SecondLinker, 'Data')]    
+
+    class __SecondLinker_Lazy(pstruct.type):
+        _fields_ = [
+            (uint32_t, 'Number of Members'),
+            (lambda self: dyn.array(uint32_t, self['Number of Members'].l.int()), 'Offsets'),
+        ]
+
+    _fields_ = [
+        (__SecondLinker_Lazy, 'Lazy'),
+        (__SecondLinker, 'Data')
+    ]
 
 class SecondLinkerMember(pstruct.type):
     _fields_ = [
         (MemberHeader, 'Header'),
-        (SecondLinker, 'Member'),
+#        (SecondLinker, 'Member'),
+        (lambda s: dyn.clone(SecondLinker, root=dyn.block(s['Header'].l['Size'].int())), 'Member'),
         (pstr.char_t, 'newline')
     ]
 
@@ -210,10 +238,9 @@ class Members(parray.terminated):
 
         if len(self.queue) == 0:
             if name == '/':
-                logging.info('..loading the SecondLinker data')
-                self.SecondLinker = value['Member']['Data']
-            
-                self.__count = int(self.SecondLinker['Number of Members'].l)-1
+                logging.info('..reading the SecondLinker data')
+                self.SecondLinker = value['Member']['Lazy']
+                self.__count = self.SecondLinker['Number of Members'].l.int()-1
                 logging.info('.loading %d total members'% (self.__count+1))
                 return False
 
@@ -313,16 +340,18 @@ def open(filename, **kwds):
 if __name__ == '__main__':
     import Archive
     from ptypes import *
+    source = ptypes.file('c:/python26/libs/python26.lib')
 
     print 'Reading .lib header'
+#    Archive.File = ptypes.debugrecurse(Archive.File)
     self = Archive.File()
 #    self.source = provider.file('../../obj/test.lib')
-    self.source = provider.file('c:/python25/libs/python25.lib')
+    self.source = ptypes.file('c:/python26/libs/python26.lib')
     self.load()
 
-    print self['SymbolNames']['Header']
+#    print self['SymbolNames']['Header']
 #    print self['SymbolNames']['Member'].get()
-    print self['MemberNames']['Header']
+#    print self['MemberNames']['Header']
 #    print self['MemberNames']['Member'].get()
 #    print self['LongNames']['Header']
 #    print self['LongNames']['Member']
@@ -331,7 +360,9 @@ if __name__ == '__main__':
     ## enumerate all objects that are dll imports
     ## enumerate all objects that are actual object files
 
-    print 'enumberating all members'
+    print 'enumerating all members'
     for index in xrange( self.getmembercount() ):
         print self.getmember(index).load()
         print ptypes.utils.hexdump(self.getmemberdata(index))
+
+#    a = Archive.File(offset=19912)

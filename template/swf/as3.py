@@ -379,7 +379,7 @@ class trait_slot(pstruct.type):
         (u30, 'slot_id'),
         (u30, 'type_name'),
         (u30, 'vindex'),
-        (__vkind, 'vkind'),
+        (__vkind, 'vkind'), # XXX: only exists when vindex is nonzero
     ]
 
     def get(self):

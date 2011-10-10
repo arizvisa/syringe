@@ -87,5 +87,6 @@ class STRING(pstr.szstring): pass
 
 class Empty(ptype.type):
     initialized = property(fget=lambda x: True, fset=lambda x,v: None)
-    value = []
+    value = ''
 
+class Zero(pint.uint_t,Empty): pass

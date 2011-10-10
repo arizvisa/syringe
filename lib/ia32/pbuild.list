@@ -12,6 +12,17 @@ transform()
     return $?
 }
 
+query()
+{
+    TARGET=$1
+    SOURCE=$2
+    shift 2
+
+    Query "$SOURCE" | tidy -q -xml -indent >| $TARGET
+    # XXX: this might not return true on success
+    return $?
+}
+
 generate()
 {
     TARGET=$1
@@ -25,3 +36,6 @@ generate()
 resolve operand-table.xml transform generate-table.xslt test.xml
 #resolve operand-table.xml transform generate-table.xslt x86reference.xml
 resolve _optable.py generate operand-table.xml
+
+resolve arith.xml query arith.xql
+resolve datamov.xml query datamov.xql

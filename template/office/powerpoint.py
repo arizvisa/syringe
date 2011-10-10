@@ -1,4 +1,5 @@
 from ptypes import *
+import art,graph
 
 import __init__
 class Record(__init__.Record): cache = {}
@@ -70,7 +71,7 @@ class PersistDirectoryEntry(pstruct.type):
             yield n.d.l['data']
         return
 
-@Record.Define
+#@Record.Define
 class PersistDirectoryAtom(parray.block):
     type = 6002
     type = 0x1772
@@ -87,6 +88,11 @@ class PersistDirectoryAtom(parray.block):
 @Record.Define
 class Document(RecordContainer):
     type = 1000
+
+@Record.Define
+class EndDocument(pstruct.type):
+    type = 1002
+    _fields_ = []
 
 @Record.Define
 class OEPlaceholderAtom(pstruct.type):
@@ -123,7 +129,7 @@ class SlideAtom(pstruct.type):
     ]
 
 @Record.Define
-class List(RecordContainer):
+class MainMaster(RecordContainer):
     type = 1016
 
 @Record.Define
@@ -147,26 +153,26 @@ class ProgTags(RecordContainer):
     type = 5000
 
 @Record.Define
-class PST_Notes(RecordContainer):
+class Notes(RecordContainer):
     type = 1008
 
 @Record.Define
-class PST_PPDrawing(RecordContainer):
+class PPDrawing(RecordContainer):
     type = 1036
 
-#@Record.Define
+@Record.Define
 class PST_DrawingContainer(RecordContainer):
     type = 61442
 
-#@Record.Define
+@Record.Define
 class PST_GroupShapeContainer(RecordContainer):
     type = 61443
 
-#@Record.Define
+@Record.Define
 class PST_ShapeContainer(RecordContainer):
     type = 61444
 
-#@Record.Define
+@Record.Define
 class PST_ShapeClientContainer(RecordContainer):
     type = 61457
 
@@ -175,7 +181,7 @@ class Handout(RecordContainer):
     type = 4041
     type = 0x0fc9
 
-#@Record.Define
+@Record.Define
 class PSR_ColorSchemeAtom(parray.type):
     type = 0x7f0
     type = 2032
@@ -194,7 +200,7 @@ class PSR_SlideTimeAtom10(pstruct.type):
     type = 12011
     _fields_ = [(uint4, 'dwHighDateTime'),(uint4, 'dwLowDateTime')]
 
-#@Record.Define
+@Record.Define
 class msofbtTimeNode(pstruct.type):
     type = 0xf127
     type = 61735
@@ -230,6 +236,9 @@ class PSR_VisualShapeAtom(pstruct.type):
         (sint4, 'data0'),
         (sint4, 'data1'),
     ]
+
+Record.Update(art.Record)
+Record.Update(graph.Record)
 
 if False:
     import ptypes,powerpoint
