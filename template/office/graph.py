@@ -48,7 +48,7 @@ class RecordGeneral(__init__.RecordGeneral):
 class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
 class File(__init__.File): _object_ = RecordGeneral
 
-@Record.Define
+@Record.define
 class DataFormat(pstruct.type):
     type = 0x1006
     _fields_ = [

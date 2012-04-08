@@ -18,10 +18,8 @@ def findHeader(self):
         nth = list(self.walk())[-1]
     return nth
 
-def RelativeAddress(self, address=None):
+def RelativeAddress(self, address):
     '''given a va, returns offset relative to the baseaddress'''
-    if address is None:
-        address = int(self)
     base = findBase(self).getoffset()
 
     # file
@@ -33,10 +31,8 @@ def RelativeAddress(self, address=None):
     # memory
     return base + address
 
-def RelativeOffset(self, offset=None):
+def RelativeOffset(self, offset):
     '''return an offset relative to the baseaddress'''
-    if offset is None:
-        offset = int(self)
     base = findBase(self).getoffset()
 
     # file
@@ -46,13 +42,11 @@ def RelativeOffset(self, offset=None):
     # memory
     pe = findHeader(self)
     section = pe['Sections'].getsectionbyoffset(offset)
-    o = offset - int(section['PointerToRawData'])
+    o = offset - section['PointerToRawData'].int()
     return base + int(section['VirtualAddress']) + o
 
-def RealAddress(self, address=None):
+def RealAddress(self, address):
     '''given an rva, return offset relative to the baseaddress'''
-    if address is None:
-        address = int(self)
     base = findBase(self)
     address -= base['Pe']['OptionalHeader']['ImageBase'].int()
     base=base.getoffset()
@@ -318,13 +312,13 @@ class SectionTable(pstruct.type):
         return rsize
 
     def containsaddress(self, address):
-        start = int(self['VirtualAddress'])
+        start = self['VirtualAddress'].int()
         if (address >= start) and (address < start + self.getloadedsize()):
             return True
         return False
 
     def containsoffset(self, offset):
-        start = int(self['PointerToRawData'])
+        start = self['PointerToRawData'].int()
         if (offset >= start) and (offset < start + self.getreadsize()):
             return True
         return False
@@ -360,10 +354,10 @@ class SectionTable(pstruct.type):
 
     ## offset means section offset
     def getoffsetbyaddress(self, address):
-        return address - int(self['VirtualAddress']) + int(self['PointerToRawData'])
+        return address - self['VirtualAddress'].int() + self['PointerToRawData'].int()
 
     def getaddressbyoffset(self, offset):
-        return offset - int(self['PointerToRawData']) + int(self['VirtualAddress'])
+        return offset - self['PointerToRawData'].int() + self['VirtualAddress'].int()
 
 class SectionTableArray(parray.type):
     _object_ = SectionTable

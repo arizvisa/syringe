@@ -41,7 +41,7 @@ def hexdump(value, offset=0, length=16, rows=None, **kwds):
     '''return a formatted hexdump'''
 
     if 'lines' in kwds:
-        rows = kwds['lines']
+        rows = kwds.pop('lines')
 
     # TODO: should prolly make this an iterator somehow...
     value = iter(value)
@@ -102,3 +102,73 @@ def indent(string, tabsize=4, char=' ', newline='\n'):
     strings = [(indent + x) for x in string.split(newline)]
     return newline.join(strings)
 
+def forever():
+    '''stupid function that enables more single-line style coding'''
+    while True:
+        yield True
+    return
+
+class assign(object):
+    def __init__(self, *objects, **attrs):
+        self.objects = objects
+        self.attributes = attrs
+
+    def __enter__(self):
+        objects,attrs = self.objects,self.attributes
+        self.states = tuple( dict((k,getattr(o,k)) for k,v in attrs.iteritems()) for o in objects)
+        [o.update_attributes(attrs) for o in objects]
+        return objects
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        [o.update_attributes(a) for o,a in zip(self.objects,self.states)]
+        return
+
+if False:
+    class lock(object):
+        def __init__(self, *objects):
+            self.objects = objects
+
+        def __enter__blocksize(self, size):
+            return lambda:size
+            
+        def __enter__(self):
+            objects,attrs = self.objects,('blocksize',)
+            self.states = tuple( dict((k,getattr(o,k)) for k in attrs) for o in objects)
+            [o.update_attributes({'blocksize':self.__enter__blocksize(o.blocksize())}) for o in objects]
+            return objects
+                    
+        def __exit__(self, exc_type, exc_value, traceback):
+            [o.update_attributes(a) for o,a in zip(self.objects,self.states)]
+            return
+
+class padding:
+    class source:
+        @classmethod
+        def repeat(cls,value):
+            def generator():
+                while True:
+                    for x in iter(value):
+                        yield x
+            return (x for x in generator())
+
+        @classmethod
+        def source(cls,iterable):
+            return (x for x in iter(iterable))
+
+        @classmethod
+        def file(cls,file):
+            return (file.read(1) for x in forever())
+
+        @classmethod
+        def prng(cls,seed=None):
+            import random   # hide this module's dependency in here. ;)
+            random.seed(seed)
+            return (chr(random.randint(0,0xff)) for x in forever())
+
+        @classmethod
+        def zero(cls):
+            return cls.repeat('\x00')
+
+    @classmethod
+    def fill(cls, amount, source):
+        return ''.join(x for i,x in zip(xrange(amount),source))

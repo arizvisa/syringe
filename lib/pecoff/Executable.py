@@ -51,21 +51,30 @@ class File(pstruct.type, definitions.__base__.BaseHeader):
 
 if __name__ == '__main__':
     import Executable
-    v = Executable.open('./test.dll')
+    v = Executable.open('obj/kernel32.dll')
+#    v = Executable.open('obj/test.dll')
     sections = v['Pe']['Sections']
 
+    exports = v['Pe']['OptionalHeader']['DataDirectory'][0]
+    while exports['VirtualAddress'].int() != 0:
+        exports = exports.get()
+        print exports.l
+        break
+
+    if True:
+        imports = v['Pe']['OptionalHeader']['DataDirectory'][1]
+        while imports['VirtualAddress'].int() != 0:
+            imports = imports.get()
+            print imports.l
+            break
+
     if False:
-        exports = v['Pe']['OptionalHeader']['DataDirectory'][0].get()
-        print exports.load()
-        print exports.get()
-
-    relo = v['Pe']['OptionalHeader']['DataDirectory'][5].get().load()
-
-
-    baseaddress = v['Pe']['OptionalHeader']['ImageBase']
-    section = sections[0]
-    data = section.get()
-    for a,r in relo.getrelocationsbysection(section):
-        print hex(a), repr(r)
-        data = r.relocate(data, 0, section)
+        relo = v['Pe']['OptionalHeader']['DataDirectory'][5].get().load()
+        baseaddress = v['Pe']['OptionalHeader']['ImageBase']
+        section = sections[0]
+        data = section.get()
+        for e in relo.getbysection(section):
+            for a,r in e.getrelocations(section):
+                print e
+                data = r.relocate(data, 0, section)
 

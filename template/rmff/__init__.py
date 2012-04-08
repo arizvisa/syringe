@@ -196,6 +196,7 @@ class Type_Specific_v5_Audio(pstruct.type):
 
         (UINT16, 'header_size?'),
         (UINT16, 'header_size'),
+#        (UINT32, 'header_size'),
 
         (UINT16, 'flavor'),
         (UINT32, 'coded_frame_size'),
@@ -222,7 +223,10 @@ class Type_Specific_v5_Audio(pstruct.type):
         (UINT32, 'genr'),
         (dyn.block(4), 'codec'),
 
-        (dyn.block(4), 'unknown[18]'),
+        (UINT32, 'unknown[18]'),
+        (UINT32, 'unknown[19]'),
+        (UINT32, 'unknown[1a]'),
+        (UINT16, 'unknown[1b]'),
     ]
 
     def codec(self):
@@ -325,8 +329,9 @@ class RealMedia_File_Header_v0(pstruct.type):
         (UINT32, 'num_headers'),
     ]
     
+@realmedia_header.define
 class RealMedia_File_Header_v1(RealMedia_File_Header_v0):
-    object_version = 1
+    type = (1, '.RMF')
 
 @realmedia_header.define
 class RealMedia_Properties_Header_v0(pstruct.type):

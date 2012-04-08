@@ -30,47 +30,15 @@ class RecordHeader(pstruct.type):
             return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
         return super(RecordHeader, self).__repr__()
 
-class Record(object):
+class Record(ptype.definition):
     cache = {}
-    @classmethod
-    def Add(cls, object):
-        t = object.type
-        cls.cache[t] = object
-
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
-
-    @classmethod
-    def Define(cls, pt):
-        cls.Add(pt)
-        return pt
-
-    @classmethod
-    def Update(cls, record):
-        a = set(cls.cache.keys())
-        b = set(record.cache.keys())
-        if a.intersection(b):
-            logging.warning('%s : Unable to import module %s due to multiple definitions of the same record'%(cls.__module__, repr(record)))
-            logging.debug(repr(a.intersection(b)))
-            return False
-
-        # merge record caches into a single one
-        cls.cache.update(record.cache)
-        record.cache = cls.cache
-        return True
+    unknown = RecordUnknown
 
 class RecordGeneral(pstruct.type):
     def __data(self):
         t = int(self['header'].l['type'])
         l = int(self['header']['length'])
-        try:
-            cls = self.Record.Lookup(t)
-            if len(self.backtrace()) > 20:
-                raise KeyError
-        except KeyError:
-            return dyn.clone(RecordUnknown, type=t, length=l)
-        return dyn.clone(cls, blocksize=lambda s:l)
+        return dyn.clone(self.Record.get(t, length=l, type=t), blocksize=lambda s:l)
         
     def __extra(self):
         t = int(self['header'].l['type'])

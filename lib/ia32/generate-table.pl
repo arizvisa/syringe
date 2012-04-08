@@ -206,6 +206,12 @@ EOF
 }
 
 ############################
+if (0) {
+    my $string = join("", map{chr}@result);
+    print "$string";
+}
+
+############################
 if (1) {
     my $string = join("", map{chr}@result);
     print "OperandLookupTable = ''.join([\n";
@@ -224,3 +230,4 @@ if (1) {
     
     print "])\n";
 }
+

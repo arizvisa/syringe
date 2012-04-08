@@ -163,6 +163,12 @@ class str(marshallable):
         return ''.__class__
 
 @lookup.define
+class unicode(marshallable):
+    @classmethod
+    def get(cls):
+        return u''.__class__
+
+@lookup.define
 class none(marshallable):
     @classmethod
     def get(cls):

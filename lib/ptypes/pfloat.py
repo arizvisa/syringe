@@ -34,8 +34,8 @@ class float_t(pint.integer_t):
             return -1 * mantissa * (2**e)
         return mantissa * (2**e)
 
-    def __repr__(self):
-        return '%s %s (%x)'% (self.name(), float(self), int(self))
+    def summary(self):
+        return '%s (%x)'% (float(self), int(self))
 
 if False:
     class half(float_t):

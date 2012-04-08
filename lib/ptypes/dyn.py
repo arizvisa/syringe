@@ -9,7 +9,8 @@ def block(size, **kwds):
     '''
     returns a general block type of the specified size
     '''
-    size = int(size)
+    assert type(size) in (int,long), 'dyn.block(%s): argument must be integral'% repr(size)
+    #size = int(size)
     assert size >= 0, 'dyn.block(%d): argument cannot be < 0'% (size)
     return clone(ptype.block, length=size)
 
@@ -17,7 +18,8 @@ def blockarray(type, size, **kwds):
     '''
     returns an array of the specified byte size containing elements of the specified type
     '''
-    size = int(size)
+    assert type(size) in (int,long), 'dyn.block(%s): argument must be integral'% repr(size)
+    #size = int(size)
     assert size >= 0, 'dyn.block(%d): argument cannot be < 0'% (size)
 
     class _blockarray(parray.block):
@@ -30,15 +32,15 @@ def blockarray(type, size, **kwds):
 def align(s, **kwds):
     '''return a block that will align definitions in a structure'''
     class _align(block(0)):
-        initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.size())
-        def size(self):
+        initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.blocksize())
+        def blocksize(self):
             p = self.parent
             i = p.value.index(self)
-            offset = reduce(lambda x,y:x+int(y.size()), p.value[:i], 0)
+            offset = reduce(lambda x,y:x+int(y.blocksize()), p.value[:i], 0)
             return (-offset) & (s-1)
 
         def shortname(self):
-            sz = self.size()
+            sz = self.blocksize()
             return '%s{size=%d}'% (super(_align, self).shortname(), sz)
     
     _align.__name__ = kwds.get('name', 'align<%d>'% s)
@@ -64,15 +66,7 @@ def clone(cls, **newattrs):
     Will clone a class, and set its attributes to **newattrs
     Intended to aid with single-line coding.
     '''
-    class __clone(cls): pass
-    for k,v in newattrs.items():
-        setattr(__clone, k, v)
-
-    # FIXME: figure out why some object names are inconsistent
-#    __clone.__name__ = 'clone(%s.%s)'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
-    __clone.__name__ = '%s.%s'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
-#    __clone.__name__ = cls.__name__
-    return __clone
+    return ptype.clone(cls, **newattrs)
 
 class __union_generic(ptype.container):
     __fastindex = dict  # our on-demand index lookup for .value
@@ -117,9 +111,10 @@ class union(__union_generic):
 
     initialized = property(fget=lambda self: self.__root is not None and self.__root.initialized)    # bool
     __root = None
-    def alloc(self):
-        self.__create_root()
-        self.__create_objects()
+    def alloc(self, **attrs):
+        with utils.assign(*self, **attrs):
+            self.__create_root()
+            self.__create_objects()
         return self
 
     def __create_root(self):
@@ -146,7 +141,7 @@ class union(__union_generic):
     def serialize(self):
         return self.value.tostring()
 
-    def load(self):
+    def load(self, **kwds):
         self.__create_root()
         r = self.__root.l
         return self.deserialize_block(r.serialize())
@@ -167,14 +162,18 @@ class union(__union_generic):
         return result
 
     def __repr__(self):
-        ofs = '[%x]'% self.getoffset()
+        return self.summary()
+
+    def summary(self):
         if self.initialized:
             res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
             return ' '.join([self.name(), 'union', res, repr(self.serialize())])
 
         res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
-        return ' '.join([ofs, self.name(), 'union', res])
+        return ' '.join(('union', res))
 
+    def blocksize(self):
+        return self.__root.blocksize()
     def size(self):
         return self.__root.size()
 
@@ -189,109 +188,135 @@ def setbyteorder(endianness):
     global byteorder
     byteorder = endianness
 
-def addr_t(type):
-    '''Will instantiate a pointer'''
+integral = pint.uint32_t
+def pointer(target, type=integral, **attrs):
     global byteorder
-    parent = byteorder(type)        # XXX: this is how we enforce the byte order
-    parentname = parent().shortname()
+    m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
+    return ptype.clone(ptype.pointer_t, _target_=target, _type_=type, _byteorder_=m(byteorder), **attrs)
 
-    class pointer(parent):
-        _target_ = None
-        def shortname(self):
-            return 'pointer<%s>'% (parentname)
-        def dereference(self):
-            name = '*%s'% self.name()
-            p = int(self)
-            return self.newelement(self._target_, name, p)
-        
-        deref=lambda s: s.dereference()
-        d = property(fget=deref)
+def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
+    global byteorder
+    m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
+    return ptype.clone(ptype.rpointer_t, _target_=target, _baseobject_=object, _type_=type, _byteorder_=m(byteorder), **attrs)
 
-        def __cmp__(self, other):
-            if issubclass(other.__class__, self.__class__):
-                return cmp(int(self),int(other))
-            return super(pointer, self).__cmp__(other)
+def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
+    global byteorder
+    m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
+    return ptype.clone(ptype.opointer_t, _target_=target, _calculate_=calculate, _type_=type, _byteorder_=m(byteorder), **attrs)
 
-    pointer._target_ = type
-    return pointer
+def addr_t(target, **attrs):
+    return pointer(target, type=type, **attrs)
 
-def pointer(target, type=pint.uint32_t):
-    '''Will return a pointer to the specified target using the provided base type'''
-    parent = addr_t(type)
-    parent._target_ = target
-    parentname = parent().shortname()
+if False:
+    class padding_t(ptype.empty):
+        @classmethod
+        def generate_repeat(cls,value):
+            def generator():
+                while True:
+                    for x in iter(value):
+                        yield x
+            return (x for x in generator())
 
-    class pointer(parent):
-        _target_ = None
-        def shortname(self):
-            return '%s(%s)'%(parentname, target.__name__)
-        pass
+        @classmethod
+        def generate_source(cls,iterable):
+            return (x for x in iter(iterable))
 
-    pointer._target_ = target
-    return pointer
+        fill = generate_repeat('\x00')
 
-def rpointer(target, object=lambda s: list(s.walk())[-1], type=pint.uint32_t):
-    '''Will return a pointer to target using the object return from the provided function as the base address'''
-    parent = addr_t(type)
-    parent._target_ = target
-    parentname = parent().shortname()
+        def serialize(self):
+            return ''.join(x for i,x in zip(xrange(bs),self.fill))
 
-    class rpointer(parent):
-        _object_ = None
-        def dereference(self):
-            name = '*%s'% self.name()
-            base = self._object_().getoffset()
-            p = base+int(self)
-            return self.newelement(self._target_, name, p)
+    def padding(object, size, source):
+        '''modify object to pad object to the specified size'''
+        difference = size - object.blocksize()
+        assert size >= 0, 'unable to pad object (object %x > requested %x)'%(object.blocksize(),size)
+        return dyn.clone(pstruct.type, _fields_=[(object.__class__, 'data'),(dyn.clone(padding_t,length=difference),'padding')])
 
-        def shortname(self):
-            return 'r%s(%s, %s)'%(parentname, self._target_.__name__, self._object_.__name__)
-        pass
-    
-    rpointer._object_ = object  # promote to a method
-    return rpointer
-
-def opointer(target, calculate=lambda s: s.getoffset(), type=pint.uint32_t):
-    '''Return a pointer to target using the provided method to calculate its address'''
-    parent = addr_t(type)
-    parent._target_ = target
-    parentname = parent().shortname()
-
-    class opointer(parent):
-        _calculate_ = None
-        def dereference(self):
-            name = '*%s'% self.name()
-            p = self._calculate_()
-            return self.newelement(self._target_, name, p)
-
-        def shortname(self):
-            return 'o%s(%s, %s)'%(parentname, self._target_.__name__, self._calculate_.__name__)
-        pass
-    
-    opointer._calculate_ = calculate    # promote it to a method
-    return opointer
-
-__all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
+__all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer,padding'.split(',')
 
 if __name__ == '__main__':
+    import ptype,parray
+    import pstruct,parray,pint,provider
+
+    import logging
+    logging.root=logging.RootLogger(logging.DEBUG)
+
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
+
+if __name__ == '__main__':
+    import logging
+    logging.root=logging.RootLogger(logging.DEBUG)
+
     import ptypes,zlib
     from ptypes import *
 
-    if False:
-        s = 'the quick brown fox jumped over the lazy dog'
-        
-        class zlibstring(pstr.string):
-            length = 44
+    string1='ABCD'  # bigendian
+    string2='DCBA'  # littleendian
 
-        t = dyn.transform(zlibstring, lambda s,v: zlib.decompress(v), lambda s,v: zlib.compress(v))
+    s1 = 'the quick brown fox jumped over the lazy dog'
+    s2 = s1.encode('zlib')
 
-        data = zlib.compress(s)
+    @TestCase
+    def Test0():
+        class zlibstring(ptype.encoded_t):
+            def decode(self, **attr):
+                s = provider.string(self.serialize().decode('zlib'))
+                name = '*%s'% self.name()
+                return self.newelement(dyn.block(len(s.value)), name, 0, source=s, **attr)
 
-        z = t()
-        z.source = ptypes.provider.string(data)
-        print z.l
+            def blocksize(self):
+                return len(s2)
 
-    if False:
+        z = zlibstring(source=provider.string(s2))
+        if z.l.decode().l.serialize() == s1:
+            raise Success
+
+    @TestCase
+    def Test1():
+        class zlibstring(ptype.encoded_t):
+            length = 128
+            def decode(self, **attr):
+                s = provider.string(self.serialize().decode('zlib'))
+                name = '*%s'% self.name()
+                return self.newelement(pstr.szstring, name, 0, source=s, **attr)
+
+            def encode(self, object, **attr):
+                s = object.serialize().encode('zlib')
+                self.length = len(s)
+                self.value = s
+                return self
+
+        thestring = pstr.szstring().set(s1)
+
+        z = zlibstring(source=provider.string('\x00'*128))
+        z.encode(thestring)
+        if z.decode().l.str() == thestring.str():
+            raise Success
+
+    @TestCase
+    def Test2():
         import dyn,pint,parray
         class test(dyn.union): 
             root = dyn.array(pint.uint8_t,4)
@@ -302,9 +327,14 @@ if __name__ == '__main__':
 
         a = test(source=ptypes.provider.string('A'*4))
         a=a.l
-        print a
+        if a._union__root[0].int() != 0x41:
+            raise Failure
 
-    if False:
+        if a['block'].size() == 4 and a['int'].int() == 0x41414141:
+            raise Success
+
+    @TestCase
+    def Test3():
         import dyn,pint,pstruct
         class test(pstruct.type):
             _fields_ = [
@@ -316,5 +346,72 @@ if __name__ == '__main__':
 
         a = test(source=ptypes.provider.string('A'*12))
         a=a.l
-        print a
+        if a.size() == 12:
+            raise Success
+
+    @TestCase
+    def Test4():
+        dyn.setbyteorder(pint.bigendian)
+        s = ptype.provider.string(string1)
+
+        t = dyn.pointer(dyn.block(0))
+        x = t(source=s).l
+        if x.d.getoffset() == 0x41424344 and x.serialize() == string1:
+            raise Success
+
+    @TestCase
+    def Test5():
+        dyn.setbyteorder(pint.littleendian)
+        s = ptype.provider.string(string2)
+
+        t = dyn.pointer(dyn.block(0))
+        x = t(source=s).l
+        if x.d.getoffset() == 0x41424344 and x.serialize() == string2:
+            raise Success
+
+    @TestCase
+    def Test6():
+        dyn.setbyteorder(pint.littleendian)
+        string = '\x26\xf8\x1a\x77'
+        s = ptype.provider.string(string)
         
+        t = dyn.pointer(dyn.block(0))
+        x = t(source=s).l
+        if x.d.getoffset() == 0x771af826 and x.serialize() ==  string:
+            raise Success
+
+    @TestCase
+    def Test7():
+        dyn.setbyteorder(pint.bigendian)
+        global x
+
+        s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
+        t = dyn.pointer(dyn.block(4))
+        x = t(source=s)
+        if x.l.d.getoffset() == 4:
+            raise Success
+
+    @TestCase
+    def Test8():
+        dyn.setbyteorder(pint.littleendian)
+
+        s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
+        t = dyn.pointer(dyn.block(4))
+        x = t(source=s)
+        if x.l.d.getoffset() == 4:
+            raise Success
+
+    @TestCase
+    def Test9():
+        dyn.setbyteorder(pint.littleendian)
+        t = dyn.pointer(dyn.block(4), type=pint.uint64_t)
+        x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
+
+        if x.l.d.getoffset() == 8:
+            raise Success
+
+        
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )

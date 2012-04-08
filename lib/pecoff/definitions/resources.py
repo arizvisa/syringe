@@ -23,7 +23,7 @@ class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
 
 class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda s: dyn.block(s.parent['Size'].l)), 'Data RVA'),
+        (virtualaddress(lambda s: dyn.block(s.parent['Size'].l.int())), 'Data RVA'),
         (dword, 'Size'),
         (dword, 'Codepage'),
         (dword, 'Reserved'),       
@@ -60,7 +60,8 @@ class IMAGE_RESOURCE_DIRECTORY_TABLE_ID(parray.type):
 
 if __name__ == '__main__':
     import pecoff
-    z = pecoff.Executable.open('c:/Program Files (x86)/Debugging Tools for Windows (x86)/windbg.exe')
+#    z = pecoff.Executable.open('c:/Program Files (x86)/Debugging Tools for Windows (x86)/windbg.exe', mode='r')
+    z = pecoff.Executable.open('obj/windbg.exe')
 
     a = z['Pe']['OptionalHeader']['DataDirectory'][2]['VirtualAddress'].d.l
     b = a['Ids'][0]

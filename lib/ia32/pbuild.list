@@ -33,9 +33,10 @@ generate()
     return $?
 }
 
-resolve operand-table.xml transform generate-table.xslt test.xml
-#resolve operand-table.xml transform generate-table.xslt x86reference.xml
+#resolve operand-table.xml transform generate-table.xslt test.xml
+resolve operand-table.xml transform generate-table.xslt x86reference.xml
 resolve _optable.py generate operand-table.xml
+resolve _optable.bin generate operand-table.xml
 
 resolve arith.xml query arith.xql
 resolve datamov.xml query datamov.xql

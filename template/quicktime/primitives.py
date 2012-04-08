@@ -11,6 +11,9 @@ class pQTType(pQTInt):
             return cmp('%c%c%c%c'% tuple(self.value[:4]), x)
         return cmp(int(self), x)
 
+    def set(self, value):
+        return super(pQTType,self).set( reduce(lambda x,y:x*0x100+ord(y), value, 0) )
+
 class pQTIntArray(parray.terminated):
     _object_ = pQTInt
     currentsize = maxsize = 0   # copied from powerpoint

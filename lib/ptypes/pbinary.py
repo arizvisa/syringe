@@ -120,12 +120,14 @@ class type(ptype.container):
         raise NotImplementedError(self.name())
 
     # initialization
-    def load(self):
-        self.source.seek( self.getoffset() )
-        # cheat, and fall back to a byte stream since we won't know our full length until
-        #   we read some bits
-        producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
-        return self.deserialize_stream(producer)
+    def load(self, **attrs):
+        with utils.assign(self, **attrs):
+            self.source.seek( self.getoffset() )
+            # cheat, and fall back to a byte stream since we won't know our full length until
+            #   we read some bits
+            producer = ( self.source.consume(1) for x in utils.infiniterange(0) )
+            result = self.deserialize_stream(producer)
+        return result
 
     def deserialize_block(self, string):
         return self.deserialize_stream( iter(string) )
@@ -135,10 +137,11 @@ class type(ptype.container):
         bc.consume(self.getposition()[1])     # skip some number of bits
         return self.deserialize_consumer(bc)
 
-    def alloc(self):
+    def alloc(self, **attrs):
         '''will initialize a pbinary.type with zeroes'''
-        # XXX: should we actually allocate space for a remote provider?
-        return self.deserialize_stream( ('\x00' for x in utils.infiniterange(0)) )
+        with utils.assign(self, **attrs):
+            result = self.deserialize_stream( ('\x00' for x in utils.infiniterange(0)) )
+        return result
 
     if False:
         def set(self, integer):
@@ -177,6 +180,9 @@ class type(ptype.container):
                 continue
             raise ValueError('Unknown type %s stored in %s'% (repr(x), repr(self)))
         return result
+
+    def contains(self, offset):
+        return (offset >= self.getoffset()) and (offset < self.getoffset()+self.size())
 
     def getbitmap(self):
         '''Return the structure as a tuple (integral value, bits)'''
@@ -252,42 +258,47 @@ class type(ptype.container):
         '''Return the loaded size occupied by the structure'''
         return (self.bits()+7)/8
 
+    def blocksize(self):
+        '''Return the loaded size occupied by the structure'''
+        return self.size()
+
     def set(self, value):
         return self.alloc().deserialize_block(bitmap.data((value, self.bits())))
 
-    def commit(self):
-        raise NotImplementedError("this hasn't really been tested")
-        newdata = self.getbitmap()
-        offset,bitoffset = self.getposition()
+    def commit(self, **attrs):
+        raise NotImplementedError("this hasn't really been tested thorougly")
+        with utils.assign(self, **attrs):
+            newdata = self.getbitmap()
+            offset,bitoffset = self.getposition()
 
-        # read original data that we're gonna update
-        self.source.seek(offset)
-        olddata = self.source.consume( self.size() )
-        bc = bitmap.consumer(iter(olddata))
+            # read original data that we're gonna update
+            self.source.seek(offset)
+            olddata = self.source.consume( self.size() )
+            bc = bitmap.consumer(iter(olddata))
 
-        # calculate offsets
-        leftbits,middlebits = bitoffset, self.bits() - bitoffset, 
-        rightbits = (self.size()*8 - middlebits)
+            # calculate offsets
+            leftbits,middlebits = bitoffset, self.bits() - bitoffset, 
+            rightbits = (self.size()*8 - middlebits)
 
-        left,middle,right = bc.consume(leftbits),bc.consume(middlebits),bc.consume(rightbits)
+            left,middle,right = bc.consume(leftbits),bc.consume(middlebits),bc.consume(rightbits)
 
-        # handle each chunk
-        result = bitmap.new(0, 0)
-        result = bitmap.push(result, (left, leftbits))
-        result = bitmap.push(result, newdata)
-        result = bitmap.push(result, (right, rightbits))
-        
-        # convert to serialized data
-        res = []
-        while result[1] > 0:
-            result,v = bitmap.consume(result,8)
-            res.append(v)
-        
-        data = ''.join(map(chr,reversed(res)))
+            # handle each chunk
+            result = bitmap.new(0, 0)
+            result = bitmap.push(result, (left, leftbits))
+            result = bitmap.push(result, newdata)
+            result = bitmap.push(result, (right, rightbits))
+            
+            # convert to serialized data
+            res = []
+            while result[1] > 0:
+                result,v = bitmap.consume(result,8)
+                res.append(v)
+            
+            data = ''.join(map(chr,reversed(res)))
 
-        # write it finally
-        self.source.seek(offset)
-        self.source.store(data)
+            # write it finally
+            self.source.seek(offset)
+            self.source.store(data)
         return self
 
     def copy(self):
@@ -295,12 +306,14 @@ class type(ptype.container):
         result.deserialize_block( self.serialize() )
         return result
 
-    def alloc(self):
-        zero = ( 0 for x in utils.infiniterange(0) )
-        class zeroprovider(object):
-            def consume(self, v):
-                return zero.next()
-        return self.deserialize_consumer( zeroprovider() )
+    def alloc(self, **attrs):
+        with utils.assign(self, **attrs):
+            zero = ( 0 for x in utils.infiniterange(0) )
+            class zeroprovider(object):
+                def consume(self, v):
+                    return zero.next()
+            result = self.deserialize_consumer( zeroprovider() )
+        return result
 
     def blockbits(self):
         '''return the minimum number of bits required to read the pbinary.type'''
@@ -387,11 +400,10 @@ class __struct_generic(type):
         integer,bits = self.value[index]
         self.value[index] = (value, bits)
 
-    def __repr__(self):
-        ofs = '[%x]'% self.getoffset()
+    def summary(self):
         if not self.initialized:
-            return ' '.join([ofs, repr(self.__class__), self.__repr__uninitialized()])
-        return ' '.join([ofs, repr(self.__class__), self.__repr__initialized()])
+            return self.__repr__uninitialized()
+        return self.__repr__initialized()
 
     def __repr__initialized(self):
         result = []
@@ -443,10 +455,10 @@ class __array_generic(type):
 
         raise ValueError('Unknown type %s while trying to assign to index %d'% (value.__class_, index))
 
-    def __repr__(self):
+    def summary(self):
         if not self.initialized:
-            return repr(self.__class__) + ' ' + self.__repr__uninitialized()
-        return repr(self.__class__) + ' ' + self.__repr__initialized()
+            return self.__repr__uninitialized()
+        return self.__repr__initialized()
 
     def __repr__uninitialized(self):
         obj = self._object_

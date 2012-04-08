@@ -11,7 +11,7 @@ class Entry(pstruct.type):
         (uint32, 'Size')
     ]
 
-    def contains(self, addr):
+    def containsaddress(self, addr):
         '''if an address is within our boundaries'''
         start = int(self['VirtualAddress'])
         end = start + int(self['Size'])

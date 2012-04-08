@@ -10,7 +10,7 @@ def setbyteorder(endianness):
 
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
-    assert type(ptype) is type and issubclass(ptype, integer_t)
+    assert type(ptype) is type and issubclass(ptype, integer_t), 'type %s not of an integer_t'%ptype.__name__
     class newptype(ptype):
         byteorder = property(fget=lambda s:bigendian)
         def shortname(self):
@@ -20,17 +20,17 @@ def bigendian(ptype):
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
 
         def set(self, integer):
-            mask = (1<<self.size()*8) - 1
+            mask = (1<<self.blocksize()*8) - 1
             integer &= mask
 
-            bc = bitmap.new(integer, self.size() * 8)
+            bc = bitmap.new(integer, self.blocksize() * 8)
             res = []
     
             while bc[1] > 0:
                 bc,x = bitmap.consume(bc,8)
                 res.append(x)
 
-            res = res + [0]*(self.size() - len(res))
+            res = res + [0]*(self.blocksize() - len(res))
             res = ''.join(map(chr, reversed(res)))
             self.value = res
             return self
@@ -40,7 +40,7 @@ def bigendian(ptype):
 
 def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
-    assert type(ptype) is type and issubclass(ptype, integer_t)
+    assert type(ptype) is type and issubclass(ptype, integer_t), 'type %s not of an integer_t'%ptype.__name__
     class newptype(ptype):
         byteorder = property(fget=lambda s:littleendian)
         def shortname(self):
@@ -50,17 +50,17 @@ def littleendian(ptype):
             return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
 
         def set(self, integer):
-            mask = (1<<self.size()*8) - 1
+            mask = (1<<self.blocksize()*8) - 1
             integer &= mask
 
-            bc = bitmap.new(integer, self.size() * 8)
+            bc = bitmap.new(integer, self.blocksize() * 8)
             res = []
     
             while bc[1] > 0:
                 bc,x = bitmap.consume(bc,8)
                 res.append(x)
 
-            res = res + [0]*(self.size() - len(res))
+            res = res + [0]*(self.blocksize() - len(res))
             res = ''.join(map(chr, res))
             self.value = res
             return self
@@ -84,16 +84,13 @@ class integer_t(ptype.type):
         '''Convert integer type into a number'''
         raise NotImplementedError('Unknown integer conversion')
 
-    def __repr__(self):
-        ofs = '[%x]'% self.getoffset()
+    def summary(self):
         if self.initialized:
             res = int(self)
 
             fmt = '0x%%0%dx (%%d)'% (int(self.length)*2)
-            res = fmt% (res, res)
-        else:
-            res = '???'
-        return ' '.join([ofs,self.name(), res])
+            return fmt% (res, res)
+        return '???'
 
     def flip(self):
         '''Returns an integer with the endianness flipped'''
@@ -108,14 +105,14 @@ integer_t = bigendian(integer_t)
 class sint_t(integer_t):
     '''Provides signed integer support'''
     def number(self):
-        signmask = 1 << 8*self.size()
+        signmask = 1 << 8*self.blocksize()
         res = super(sint_t, self).long()
         
         res = res & (signmask-1)
         return [res, res*-1][bool(res&signmask)]
 
     def set(self, integer):
-        signmask = 1 << 8*self.size()
+        signmask = 1 << 8*self.blocksize()
         res = integer & (signmask-1)
         if integer < 0:
             res |= signmask
@@ -190,8 +187,7 @@ class enum(integer_t):
             value = '0x%x'% res
         return value
 
-    def __repr__(self):
-        ofs = '[%x]'% self.getoffset()
+    def summary(self):
         if self.initialized:
             res = int(self)
             try:
@@ -200,8 +196,8 @@ class enum(integer_t):
                 value = '0x%x'% res
 
             res = '(' + str(res) + ')'
-            return ' '.join([repr(self.__class__), value, res])
-        return ' '.join([ofs, repr(self.__class__), '???'])
+            return ' '.join((value, res))
+        return '???'
 
     def __getitem__(self, name):
         return self.lookupByName(name)
@@ -219,17 +215,90 @@ class enum(integer_t):
         return [v for k,v in cls._values_]
 
 if __name__ == '__main__':
+    import ptype,parray
+    import pstruct,parray,pint,provider
+
+    import logging
+    logging.root=logging.RootLogger(logging.DEBUG)
+
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
+
+if __name__ == '__main__':
+    from ptypes import *
     import provider,utils
+    string1 = '\x0a\xbc\xde\xf0'
+    string2 = '\xf0\xde\xbc\x0a'
 
-    string = '\x0a\xbc\xde\xf0'
+    @TestCase
+    def Test1():
+        a = pint.bigendian(pint.uint32_t)(source=provider.string(string1)).l
+        if a.int() == 0x0abcdef0 and a.serialize() == string1:
+            raise Success
+        print b, repr(b.serialize())
 
-    a = bigendian(uint32_t)(source=provider.string(string)).l
-    print a, repr(a.serialize())
-    a.set(0x0abcdef0)
-    print a, repr(a.serialize())
+    @TestCase
+    def Test2():
+        a = pint.bigendian(pint.uint32_t)(source=provider.string(string1)).l
+        a.set(0x0abcdef0)
+        if a.int() == 0x0abcdef0 and a.serialize() == string1:
+            raise Success
+        print b, repr(b.serialize())
 
-    b = littleendian(uint32_t)(source=provider.string(string)).l
-    print b, repr(b.serialize())
-    b.set(0x0abcdef0)
-    print b, repr(b.serialize())
+    @TestCase
+    def Test3():
+        b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
+        if b.int() == 0x0abcdef0 and b.serialize() == string2:
+            raise Success
+        print b, repr(b.serialize())
 
+    @TestCase
+    def Test4():
+        b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
+        b.set(0x0abcdef0)
+
+        if b.int() == 0x0abcdef0 and b.serialize() == string2:
+            raise Success
+        print b, repr(b.serialize())
+
+    @TestCase
+    def Test5():
+        pint.setbyteorder(pint.bigendian)
+        a = pint.uint32_t(source=provider.string(string1)).l
+        if a.int() == 0x0abcdef0 and a.serialize() == string1:
+            raise Success
+        print a, repr(a.serialize())
+
+    @TestCase
+    def Test6():
+        pint.setbyteorder(pint.littleendian)
+        a = pint.uint32_t(source=provider.string(string2)).l
+        if a.int() == 0x0abcdef0 and a.serialize() == string2:
+            raise Success
+        print a, repr(a.serialize())
+
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )

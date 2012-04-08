@@ -26,7 +26,7 @@ class RecordGeneral(__init__.RecordGeneral):
         t = int(s['type'].l)
         l = int(s['length'].l)
         try:
-            cls = s.Record.Lookup(t)
+            cls = s.Record.lookup(t)
         except KeyError:
             return dyn.clone(__init__.RecordUnknown, type=t, length=l)
         return dyn.clone(cls, blocksize=lambda s:l)
@@ -95,7 +95,7 @@ class File(__init__.File):
         return super(File, self).__repr__()
 
 ###
-@Record.Define
+@Record.define
 class CatSerRange(pstruct.type):
     type = 0x1020
     type = 4128
@@ -116,7 +116,7 @@ class CatSerRange(pstruct.type):
     ]
 
 ###
-#@Record.Define
+#@Record.define
 class RRTabId(parray.block):
     _object_ = USHORT
     type = 317
@@ -138,7 +138,7 @@ class FrtHeader(pstruct.type):
         (dyn.block(8), 'reserved')
     ]
 
-@Record.Define
+@Record.define
 class MTRSettings(pstruct.type):
     type = 2202
     _fields_ = [
@@ -148,7 +148,7 @@ class MTRSettings(pstruct.type):
         (pint.uint32_t, 'cUserThreadCount')
     ]
 ###
-@Record.Define
+@Record.define
 class Compat12(pstruct.type):
     type = 2188
     _fields_ = [
@@ -162,7 +162,7 @@ class Cell(pstruct.type):
         (pint.uint16_t, 'col'),
         (pint.uint16_t, 'ixfe')
     ]
-@Record.Define
+@Record.define
 class LabelSst(pstruct.type):
     type = 253
     _fields_ = [
@@ -182,7 +182,7 @@ class RkRec(pstruct.type):
         (pint.uint16_t, 'ixfe'),
         (RkNumber, 'RK')
     ]
-@Record.Define
+@Record.define
 class RK(pstruct.type):
     type = 638
     _fields_ = [
@@ -193,7 +193,7 @@ class RK(pstruct.type):
 ###
 class Xnum(pfloat.double): pass
 
-@Record.Define
+@Record.define
 class Number(pstruct.type):
     type = 515
     _fields_ = [
@@ -209,7 +209,7 @@ class Ref8(pstruct.type):
         (pint.uint16_t, 'colLast'),
     ]
 
-@Record.Define
+@Record.define
 class MergeCells(pstruct.type):
     type = 229
     _fields_ = [
@@ -217,7 +217,7 @@ class MergeCells(pstruct.type):
         (lambda s: dyn.array(Ref8, int(s['cmcs'].l)), 'rgref')
     ]
 ###
-@Record.Define
+@Record.define
 class CrtLayout12(pstruct.type):
     class __CrtLayout12Auto(pbinary.struct):
         _fields_ = [
@@ -243,7 +243,7 @@ class CrtLayout12(pstruct.type):
     ]
 
 ###
-@Record.Define
+@Record.define
 class Frame(pstruct.type):
     class __FrameAuto(pbinary.struct):
         _fields_ = [
@@ -259,7 +259,7 @@ class Frame(pstruct.type):
     ]
 
 ###
-@Record.Define
+@Record.define
 class Pos(pstruct.type):
     type = 4175
     _fields_ = [
@@ -289,7 +289,7 @@ class XLUnicodeString(pstruct.type):
         (lambda s: dyn.clone(pstr.wstring, length=[int(s['cch'].l), int(s['cch'])*2][int(s['fHighByte'].l)>>7]), 'rgb')
     ]
 
-@Record.Define
+@Record.define
 class SupBook(pstruct.type):
     type = 430
     _fields_ = [
@@ -298,7 +298,7 @@ class SupBook(pstruct.type):
     ]
 
 #DataValidationCriteria
-@Record.Define
+@Record.define
 class DVAL(pstruct.type):
     type = 434
     type = 0x1b2
@@ -332,7 +332,7 @@ class CellRange(pstruct.type):
         (lambda s: dyn.array(s.Address, int(s['number'].l)), 'addresses'),
     ]
 
-@Record.Define
+@Record.define
 class DV(pstruct.type):
     type = 0x1be
     type = 446
@@ -384,7 +384,7 @@ class DV(pstruct.type):
     ]
 
 ###
-@Record.Define
+@Record.define
 class BOF(pstruct.type):
     class __BOFFlags(pbinary.struct):
         _fields_ = [
@@ -425,18 +425,18 @@ class BOF(pstruct.type):
         (__BOFFlags, 'f')
     ]
 
-#@Record.Define
+#@Record.define
 class MSODRAWING(art.SpContainer):
     type = 0x00ec
     type = 236
 
-@Record.Define
+@Record.define
 class EOF(pstruct.type):
     type = 10
     _fields_ = []
 
-Record.Update(art.Record)
-Record.Update(graph.Record)
+Record.update(art.Record)
+Record.update(graph.Record)
 
 if __name__ == '__main__':
     import ptypes

@@ -15,7 +15,7 @@ class sint2(pint.int16_t): pass
 class sint4(pint.int32_t): pass
 
 ### Current User Stream
-@Record.Define
+@Record.define
 class PSR_UserEditAtom(pstruct.type):
     type = 0x0ff5
     type = 4085
@@ -32,7 +32,7 @@ class PSR_UserEditAtom(pstruct.type):
         (dyn.block(2), 'unused'),
     ]
 
-@Record.Define
+@Record.define
 class RT_CurrentUserAtom(pstruct.type):
     type = 0x0ff6
     type = 4086
@@ -71,7 +71,7 @@ class PersistDirectoryEntry(pstruct.type):
             yield n.d.l['data']
         return
 
-#@Record.Define
+#@Record.define
 class PersistDirectoryAtom(parray.block):
     type = 6002
     type = 0x1772
@@ -85,16 +85,16 @@ class PersistDirectoryAtom(parray.block):
             continue
         return
 
-@Record.Define
+@Record.define
 class Document(RecordContainer):
     type = 1000
 
-@Record.Define
+@Record.define
 class EndDocument(pstruct.type):
     type = 1002
     _fields_ = []
 
-@Record.Define
+@Record.define
 class OEPlaceholderAtom(pstruct.type):
     type = 3011
     _fields_ = [
@@ -103,14 +103,14 @@ class OEPlaceholderAtom(pstruct.type):
         (ubyte1, 'size')
     ]
 
-@Record.Define
+@Record.define
 class ExObjRefAtom(pstruct.type):
     type = 3009
     _fields_ = [
         (uint4, 'exObjId')
     ]
 
-@Record.Define
+@Record.define
 class SSlideLayout(pstruct.type):
     type = 1015
     _fields_ = [
@@ -118,89 +118,91 @@ class SSlideLayout(pstruct.type):
         (dyn.array(ubyte1, 8), 'placeholderId'),
     ]
 
-@Record.Define
+@Record.define
 class SlideAtom(pstruct.type):
     type = 1007
     _fields_ = [
         (SSlideLayout, 'layout'),
-        (sint4, 'masterId'),
-        (sint4, 'notesId'),
-        (uint2, 'Flags')
+        (sint4, 'masterIdRef'),
+        (sint4, 'notesIdRef'),
+        (uint2, 'slideFlags'),
+        (uint2, 'unused')
     ]
 
-@Record.Define
+@Record.define
 class MainMaster(RecordContainer):
     type = 1016
 
-@Record.Define
+@Record.define
 class Slide(RecordContainer):
     type = 1006
 
-@Record.Define
-class CString(ptype.type):
+@Record.define
+class CString(pstr.string):
     type = 4026
+    length = property(fget=lambda s:self.blocksize())
 
-@Record.Define
+@Record.define
 class BinaryTagData(RecordContainer):
     type = 5003
 
-@Record.Define
+@Record.define
 class ProgBinaryTag(RecordContainer):
     type = 5002
 
-@Record.Define
+@Record.define
 class ProgTags(RecordContainer):
     type = 5000
 
-@Record.Define
+@Record.define
 class Notes(RecordContainer):
     type = 1008
 
-@Record.Define
+@Record.define
 class PPDrawing(RecordContainer):
     type = 1036
 
-@Record.Define
-class PST_DrawingContainer(RecordContainer):
-    type = 61442
+#@Record.define
+#class PST_DrawingContainer(RecordContainer):
+#    type = 61442
 
-@Record.Define
-class PST_GroupShapeContainer(RecordContainer):
-    type = 61443
+#@Record.define
+#class PST_GroupShapeContainer(RecordContainer):
+#    type = 61443
 
-@Record.Define
-class PST_ShapeContainer(RecordContainer):
-    type = 61444
+#@Record.define
+#class PST_ShapeContainer(RecordContainer):
+#    type = 61444
 
-@Record.Define
+@Record.define
 class PST_ShapeClientContainer(RecordContainer):
     type = 61457
 
-@Record.Define
+@Record.define
 class Handout(RecordContainer):
     type = 4041
     type = 0x0fc9
 
-@Record.Define
+@Record.define
 class PSR_ColorSchemeAtom(parray.type):
     type = 0x7f0
     type = 2032
     length = 8
     _object_ = uint4
 
-@Record.Define
+@Record.define
 class PSR_HashCodeAtom(pstruct.type):
     type = 0x2b00
     type = 11008
     _fields_ = [(uint4, 'hash')]
 
-@Record.Define
+@Record.define
 class PSR_SlideTimeAtom10(pstruct.type):
     type = 0x2eeb
     type = 12011
     _fields_ = [(uint4, 'dwHighDateTime'),(uint4, 'dwLowDateTime')]
 
-@Record.Define
+@Record.define
 class msofbtTimeNode(pstruct.type):
     type = 0xf127
     type = 61735
@@ -214,17 +216,17 @@ class msofbtTimeNode(pstruct.type):
         (pint.uint32_t, 'propertiesSet'),
     ]
 
-@Record.Define
+@Record.define
 class PSR_ParaBuild(RecordContainer):
     type = 0x2b08
     type = 11016
 
-@Record.Define
+@Record.define
 class PSR_BuildList(RecordContainer):
     type = 0x2b02
     type = 11010
 
-@Record.Define
+@Record.define
 class PSR_VisualShapeAtom(pstruct.type):
     type = 11003
     type = 0x2afb
@@ -237,8 +239,8 @@ class PSR_VisualShapeAtom(pstruct.type):
         (sint4, 'data1'),
     ]
 
-Record.Update(art.Record)
-Record.Update(graph.Record)
+Record.update(art.Record)
+Record.update(graph.Record)
 
 if False:
     import ptypes,powerpoint

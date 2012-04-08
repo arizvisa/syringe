@@ -5,11 +5,11 @@ class RecordGeneral(__init__.RecordGeneral): Record=Record
 class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
 class File(__init__.File): _object_ = RecordGeneral
 
-@Record.Define
+@Record.define
 class SpContainer(RecordContainer):
     type = 0xf004
 
-@Record.Define
+@Record.define
 class FSP(pstruct.type):
     type = 0xf00a
     class __flags(pbinary.struct):
@@ -20,7 +20,7 @@ class FSP(pstruct.type):
         (__flags, 'f')
     ]
 
-@Record.Define
+@Record.define
 class FOPT(pstruct.type):
     type = 0xf00b
     _fields_ = [
@@ -33,22 +33,22 @@ class FOPTE(pstruct.type):
         (pint.uint32_t, 'op')
     ]
 
-@Record.Define
+@Record.define
 class msofbtExtTimeNodeContainer(RecordContainer):
     type = 0xf144
     type = 61764
 
-@Record.Define
+@Record.define
 class msofbtTimeConditionContainer(RecordContainer):
     type = 0xf125
     type = 61733
 
-@Record.Define
+@Record.define
 class msofbtTimeAnimateBehaviorContainer(RecordContainer):
     type = 0xf12b
     type = 61739
 
-@Record.Define
+@Record.define
 class msofbtTimeColorBehaviorContainer(RecordContainer):
     type = 0xf12c
     type = 61740
@@ -81,13 +81,13 @@ class msofbtTimeAnimationValue(pstruct.type):
         (pstr.szwstring, 'Formula'),
     ]
 
-@Record.Define
+@Record.define
 class msofbtTimeVariantList(parray.block):
     type = 0xf13f
     type = 61759
     _object_ = msofbtTimeAnimationValue
 
-@Record.Define
+@Record.define
 class msofbtTimeCondition(pstruct.type):
     type = 0xf128
     type = 61736
@@ -125,37 +125,37 @@ class msofbtTimeCondition(pstruct.type):
         (pint.int32_t, 'delay'),
     ]
 
-@Record.Define
+@Record.define
 class msofbtTimeSetBehaviorContainer(RecordContainer):
     type = 0xf131
     type = 61745
 
-@Record.Define
+@Record.define
 class msofbtTimePropertyList(RecordContainer):
     type = 0xf13d
     type = 61757
 
-@Record.Define
+@Record.define
 class msofbtTimeSetBehaviorContainer(RecordContainer):
     type = 0xf131
     type = 61745
 
-@Record.Define
+@Record.define
 class msofbtTimeEffectBehaviorContainer(RecordContainer):
     type = 0xf12d
     type = 61741
 
-@Record.Define
+@Record.define
 class msofbtTimeBehaviorContainer(RecordContainer):
     type = 0xf12a
     type = 61738
 
-@Record.Define
+@Record.define
 class msofbtClientVisualElement(RecordContainer):
     type = 0xf13c
     type = 61756
 
-@Record.Define
+@Record.define
 class msofbtTimeEffectBehavior(pstruct.type):
     type = 0xf136
     type = 61750
@@ -164,7 +164,7 @@ class msofbtTimeEffectBehavior(pstruct.type):
         (pint.uint32_t, 'taetTransition'),
     ]
 
-@Record.Define
+@Record.define
 class msofbtTimeVariant(pstruct.type):
     type = 0xf142
     type = 61762
@@ -191,7 +191,7 @@ class msofbtTimeVariant(pstruct.type):
         (__Value, 'Value'),
     ]
 
-@Record.Define
+@Record.define
 class msofbtTimeBehavior(pstruct.type):
     type = 0xf133
     type = 61747
@@ -203,17 +203,17 @@ class msofbtTimeBehavior(pstruct.type):
         (pint.uint32_t, 'tbbtTransformType'),
     ]
 
-@Record.Define
+@Record.define
 class msofbtDgContainer(RecordContainer):
     type = 0xf002
     type = 61442
 
-@Record.Define
+@Record.define
 class msofbtSpgrContainer(RecordContainer):
     type = 0xf003
     type = 61443
 
-@Record.Define
+@Record.define
 class msofbtClientAnchor(pstruct.type):
     type = 0xf010
     type = 61456
@@ -232,7 +232,7 @@ class msofbtClientAnchor(pstruct.type):
     ]
     
 
-@Record.Define
+@Record.define
 class OfficeArtBlipDIB(pstruct.type):
     type = 0xf01f
     type = 61471

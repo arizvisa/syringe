@@ -169,20 +169,8 @@ class adts_sequence(pbinary.terminatedarray):
     def isTerminator(self, value):
         return False
 
-class Element(object):
+class Element(ptype.definition):
     cache = {}
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
-
-    @classmethod
-    def Add(cls, object):
-        cls.cache[object.type] = object
-
-    @classmethod
-    def Define(cls, t):
-        cls.Add(t)
-        return t
 
 #######
 class pulse_data(pbinary.struct):
@@ -270,7 +258,7 @@ class common_window(pbinary.struct):
         (lambda s: [0,s.num_window_groups * s.max_sfb][s['ms_mask_present']==1], 'ms_used'),
     ]
 
-@Element.Define
+@Element.define
 class single_channel_element(pbinary.struct):
     type = 0
 
@@ -279,7 +267,7 @@ class single_channel_element(pbinary.struct):
         (dyn.clone(individual_channel_stream, attrs={'common_window':0}), 'stream'),
     ]
 
-@Element.Define
+@Element.define
 class channel_pair_element(pbinary.struct):
     type = 1
 
@@ -298,7 +286,7 @@ class channel_pair_element(pbinary.struct):
         result.attrs['window_sequence'] = result['window']['ics_info']['window_sequence']
         return result.load()
 
-@Element.Define
+@Element.define
 class coupling_channel_element(pbinary.struct):
     type = 2
     _fields_ = [
@@ -318,7 +306,7 @@ class coupling_channel_element(pbinary.struct):
         # XXX: some array here
     ]
 
-@Element.Define
+@Element.define
 class lfe_channel_element(pbinary.struct):
     type = 3
     _fields_ = [
@@ -327,7 +315,7 @@ class lfe_channel_element(pbinary.struct):
         (dyn.clone(individual_channel_stream, common_window=0), 'stream'),
     ]
 
-@Element.Define
+@Element.define
 class data_stream_element(pbinary.struct):
     type = 4
     def data_stream(self):
@@ -351,7 +339,7 @@ class data_stream_element(pbinary.struct):
         (data_stream, 'data_stream'),
     ]
 
-@Element.Define
+@Element.define
 class program_config_element(pbinary.struct):
     type = 5
 
@@ -434,7 +422,7 @@ class extension_payload(pbinary.struct):
         (__data, 'extension_data'),
     ]
 
-@Element.Define
+@Element.define
 class fill_element(pbinary.struct):
     type = 6
 
@@ -455,7 +443,7 @@ class fill_element(pbinary.struct):
         (extension_payload, 'payload'),
     ]
 
-@Element.Define
+@Element.define
 class end_element(pbinary.array):
     type = 7
     _object_ = length = 0

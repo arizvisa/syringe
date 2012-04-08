@@ -1,5 +1,5 @@
 '''base structure element'''
-import ptype
+import ptype,utils
 
 class __pstruct_generic(ptype.container):
     __fastindex = dict  # our on-demand index lookup for .value
@@ -34,6 +34,8 @@ class __pstruct_generic(ptype.container):
         return self.value[index]
 
     def __setitem__(self, name, value):
+        assert isinstance(value, ptype.type), 'Cannot assign a non-ptype to an element of a container. Use .set instead.'
+
         index = self.getindex(name)
         offset = self.value[index].getoffset()
 
@@ -57,18 +59,20 @@ class type(__pstruct_generic):
     def contains(self, offset):
         return super(ptype.container, self).contains(offset)
 
-    def load(self):
-        self.value = []
+    def load(self, **attrs):
+        with utils.assign(self, **attrs):
+            self.value = []
 
-        # create each element
-        ofs = self.getoffset()
-        for t,name in self._fields_:
-            n = self.newelement(t, name, ofs, source=self.source)
-            self.value.append(n)
-            if ptype.iscontainer(t) or ptype.isresolveable(t):
-                n.load()
-            ofs += n.blocksize()
-        return super(type, self).load()
+            # create each element
+            ofs = self.getoffset()
+            for t,name in self._fields_:
+                n = self.newelement(t, name, ofs, source=self.source)
+                self.value.append(n)
+                if ptype.iscontainer(t) or ptype.isresolveable(t):
+                    n.load()
+                ofs += n.blocksize()
+            result = super(type, self).load()
+        return result
 
     def __repr__uninitialized(self):
         result = []
@@ -89,11 +93,16 @@ class type(__pstruct_generic):
             return '\n'.join(result)
         return '[%x] empty []'%self.getoffset()
 
+    def summary(self):
+        if self.initialized:
+            return self.__repr__initialized()
+        return self.__repr__uninitialized()
+
     def __repr__(self):
-        name = [lambda:' __name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
-        if not self.initialized:
-            return self.name() + name + '\n' + self.__repr__uninitialized()
-        return self.name() + name + '\n' + self.__repr__initialized()
+        # print out a friendly header for the structure
+        if self.__name__ is None:
+            return '%s\n%s'%(self.name(),self.summary())
+        return '%s %s\n%s'%(self.name(),self.__name__,self.summary())
 
     def set(self, *tuples, **allocator):
         # allocate type if we're asked to
@@ -101,7 +110,7 @@ class type(__pstruct_generic):
             try:
                 value = self.newelement(cls, 0, name)        
                 value = value.a
-            except AssertionError:      # newelement raises one of python's stupid assertions
+            except AssertionError:      # XXX: newelement raises one of python's stupid assertions
                 value = cls
             self[name] = value
 

@@ -6,6 +6,11 @@ class _char_t(pint.integer_t):
     def str(self):
         return self.v
 
+    def summary(self):
+        if self.initialized:
+            return repr(self.str())
+        return '???'
+
 class char_t(_char_t):
     def set(self, value):
         self.value = value
@@ -13,9 +18,6 @@ class char_t(_char_t):
 
     def get(self):
         return str(self.value)
-
-    def __repr__(self):
-        return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.str())])
 
 uchar_t = char_t    # yeah, secretly there's no difference..
 
@@ -27,12 +29,7 @@ class wchar_t(_char_t):
         return self
 
     def get(self):
-        return unicode(self.value, 'utf-16').encode('utf-8')
-
-    def __repr__(self):
-        if self.initialized:
-            return ' '.join([super(_char_t, self).__repr__(), ' ', repr(self.str())])
-        return ' '.join([super(_char_t, self).__repr__(), ' ???'])
+        return __builtins__['unicode'](self.value, 'utf-16').encode('utf-8')
 
 class string(ptype.type):
     '''String of characters'''
@@ -41,9 +38,10 @@ class string(ptype.type):
     initialized = property(fget=lambda self: self.value is not None)    # bool
 
     def at(self, offset, **kwds):
-        raise NotImplementedError
+        ofs = offset - self.getoffset()
+        return self[ ofs / self._object_.length ]
 
-    def size(self):
+    def blocksize(self):
         return self._object_.length * len(self)
 
     def __insert(self, index, string):
@@ -72,7 +70,7 @@ class string(ptype.type):
         self.__delete(index)
     def __getitem__(self, index):
         offset = index * self._object_.length
-        return self.newelement(self._object_, str(index), self.getoffset() + offset)
+        return self.newelement(self._object_, str(index), self.getoffset() + offset).alloc(offset=0,source=ptype.provider.string(self.serialize()[index]))
     def __setitem__(self, index, value):
         assert value.__class__ is self._object_
         self.__replace(index, value.serialize())
@@ -109,25 +107,27 @@ class string(ptype.type):
         s = self.value
         return utils.strdup(s)[:len(self)]
 
-    def load(self):
-        sz = self._object_.length
-        self.source.seek(self.getoffset())
-        block = self.source.consume( self.blocksize() )
-        return self.deserialize_block(block)
+    def load(self, **attrs):
+        with utils.assign(self, **attrs):
+            sz = self._object_.length
+            self.source.seek(self.getoffset())
+            block = self.source.consume( self.blocksize() )
+            result = self.deserialize_block(block)
+        return result
 
     def deserialize_block(self, block):
         if len(block) != self.blocksize():
-            raise StopIteration("unable to continue reading (byte %d out of %d)"% (len(self.value), self.size()))
+            raise StopIteration("unable to continue reading (byte %d out of %d)"% (len(block), self.blocksize()))
         self.value = block
         return self
 
     def serialize(self):
         return str(self.value)
 
-    def __repr__(self):
+    def summary(self):
         if self.initialized:
-            return ' '.join([self.name(), repr(self.str())])
-        return ' '.join([self.name()])
+            return repr(self.str())
+        return '???'
 
 class szstring(string):
     '''Standard null-terminated string'''
@@ -149,10 +149,12 @@ class szstring(string):
     def deserialize_block(self, block):
         return self.deserialize_stream(iter(block))
 
-    def load(self):
-        self.source.seek(self.getoffset())
-        producer = (self.source.consume(1) for x in utils.infiniterange(0))
-        return self.deserialize_stream(producer)
+    def load(self, **attrs):
+        with utils.assign(self, **attrs):
+            self.source.seek(self.getoffset())
+            producer = (self.source.consume(1) for x in utils.infiniterange(0))
+            result = self.deserialize_stream(producer)
+        return result
 
     def deserialize_stream(self, stream):
         o = self.getoffset()
@@ -179,8 +181,9 @@ class szstring(string):
 class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
+#    unicode = __builtins__['unicode']
     def str(self):
-        s = unicode(self.value, 'utf-16').encode('utf-8')
+        s = __builtins__['unicode'](self.value, 'utf-16').encode('utf-8')
         return utils.strdup(s)[:len(self)]
 
 class szwstring(szstring, wstring):
@@ -196,6 +199,10 @@ class szwstring(szstring, wstring):
             element.set(character)
         self.value = result.serialize()
         return self
+
+## aliases that should probably be improved
+unicode=wstring
+szunicode=szwstring
 
 if __name__ == '__main__':
     import provider
@@ -325,7 +332,7 @@ if __name__ == '__main__':
         class unicodestring(pstr.szwstring):
             _object_ = wbechar_t
             def str(self):
-                s = unicode(self.value, 'utf-16-be').encode('utf-8')
+                s = __builtins__.unicode(self.value, 'utf-16-be').encode('utf-8')
                 return utils.strdup(s)[:len(self)]
 
         class unicodespeech_packet(pstruct.type):

@@ -2,8 +2,8 @@ from ptypes import *
 
 short = pint.int16_t
 
-class PVOID(dyn.pointer(dyn.block(0))): pass
-class PVOID64(dyn.pointer(dyn.block(0))): pass
+class PVOID(dyn.pointer(ptype.empty, type=dyn.byteorder(pint.uint32_t))): pass
+class PVOID64(dyn.pointer(ptype.empty, type=dyn.byteorder(pint.uint64_t))): pass
 
 class BYTE(pint.uint8_t): pass
 class WORD(pint.uint16_t): pass

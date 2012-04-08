@@ -2,6 +2,7 @@ from ptypes import *
 
 ####333
 class ChunkUnknown(dyn.block(0)):
+    type = None
     def __repr__(self):
         if self.initialized:
             return self.name()
@@ -10,38 +11,44 @@ class ChunkUnknown(dyn.block(0)):
     def shortname(self):
         s = super(ChunkUnknown, self).shortname()
         names = s.split('.')
-        names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
+        names[-1] = '%s<%s>[size:0x%x]'%(names[-1], self.type, self.blocksize())
         return '.'.join(names)
 
-class ChunkHeader(pstruct.type):
-    class __verinstance(pbinary.littleendian(pbinary.struct)) :
-        _fields_=[(12,'instance'),(4,'ver')]
+if False:
+    class ChunkHeader(pstruct.type):
+        class __verinstance(pbinary.littleendian(pbinary.struct)) :
+            _fields_=[(12,'instance'),(4,'ver')]
 
-    _fields_ = [
-        (__verinstance, 'ver/inst'),
-        (pint.littleendian(pint.uint16_t), 'type'),
-        (pint.littleendian(pint.uint32_t), 'length')
-    ]
+        _fields_ = [
+            (__verinstance, 'ver/inst'),
+            (pint.littleendian(pint.uint16_t), 'type'),
+            (pint.littleendian(pint.uint32_t), 'length')
+        ]
 
-    def __repr__(self):
-        if self.initialized:
-            v = self['ver/inst'].number()
-            t = int(self['type'])
-            l = int(self['length'])
-            return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
-        return super(ChunkHeader, self).__repr__()
+        def __repr__(self):
+            if self.initialized:
+                v = self['ver/inst'].number()
+                t = int(self['type'])
+                l = int(self['length'])
+                return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
+            return super(ChunkHeader, self).__repr__()
 
-class Chunk(object):
+if False:
+    class Chunk(object):
+        cache = {}
+        @classmethod
+        def Lookup(cls, type):
+            return cls.cache[type]
+
+        @classmethod
+        def Define(cls, pt):
+            t = pt.type
+            cls.cache[t] = pt
+            return pt
+
+class Chunk(ptype.definition):
     cache = {}
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
-
-    @classmethod
-    def Define(cls, pt):
-        t = pt.type
-        cls.cache[t] = pt
-        return pt
+    unknown = ChunkUnknown
 
 ######
 class signature(dyn.block(8)):
@@ -57,8 +64,14 @@ class chunk(pstruct.type):
             result = dyn.block(s)
         return result
 
+    def __data(self):
+        id = self['type'].l.serialize()
+        length = self['length'].l.int()
+        result = Chunk.get(id, length=length)
+        return dyn.clone(result, blocksize=lambda s:length)
+
     _fields_ = [
-        (pint.uint32_t, 'length'),
+        (pint.bigendian(pint.uint32_t), 'length'),
         (dyn.block(4), 'type'),
         (__data, 'data'),
         (pint.uint32_t, 'crc'),
@@ -68,14 +81,24 @@ class File(pstruct.type):
     class chunks(parray.terminated):
         _object_ = chunk
         def isTerminator(self, value):
-            return type(value) is IEND
+            return value['data'].type == IEND.type
+
+        def shortname(self):
+            return 'dyn.array(chunk,%d)'% len(self)
+
+        def summary(self):
+            return repr(self.serialize()[:20])+'...'
 
     _fields_ = [
         (signature, 'signature'),
         (chunks, 'data'),
     ]
 
-@Chunk.Define
+    def summary(self):
+        data = self['data']
+        return '\n'.join(( repr(self['signature']), '[%x] %s data %s...'%(data.getoffset(),data.name(), repr(data.serialize()[:20]))))
+
+@Chunk.define
 class IHDR(pstruct.type):
     type = 'IHDR'
 
@@ -89,14 +112,14 @@ class IHDR(pstruct.type):
         (pint.uint8_t, 'Interlace method'),
     ]
 
-@Chunk.Define
+@Chunk.define
 class PLTE(parray.block):
     type = 'PLTE'
     class entry(pstruct.type):
         _fields_ = [(pint.uint8_t,x) for x in 'rgb']
     _object_ = entry
 
-@Chunk.Define
+@Chunk.define
 class IEND(ptype.empty):
     type = 'IEND'
 

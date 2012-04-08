@@ -1,35 +1,13 @@
 from primitives import *
 
-class AtomType(object):
+class AtomType(ptype.definition):
     cache = {}
-    @classmethod
-    def Add(cls, object):
-        t = object.type
-        cls.cache[t] = object
-
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
-
-    @classmethod
-    def Define(cls, pt):
-        cls.Add(pt)
-        return pt
-
-    @classmethod
-    def New(cls, type, size):
-        try:
-            t = cls.Lookup(type)
-        except KeyError:
-            t = dyn.block(size)
-            t.__name__ = 'Unknown<%s>'% repr(type)
-        return dyn.clone(t, blocksize=lambda s:size)        
 
 class Atom(pstruct.type):
     def __data(self):
-        t = self['type'].l.serialize()
-        s = self.blocksize() - self.getheadersize()
-        return AtomType.New(t, s)
+        type = self['type'].l.serialize()
+        size = self.blocksize() - self.getheadersize()
+        return dyn.clone(AtomType.get(type, __name__='Unknown<%s>'% repr(type), length=size), blocksize=lambda s:size)
 
     def getheadersize(self):
         return 4 + 4 + self['extended_size'].size()
@@ -62,6 +40,12 @@ class Atom(pstruct.type):
         (__data, 'data'),
     ]
 
+    def __repr__(self):
+        discrepancy = self.size() != self.blocksize()
+        if discrepancy:
+            return "[%x] %s '%s' ERR size:0x%x expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), self['type'].serialize(), self.size(), self.getsize(), ','.join(self.keys()))
+        return "[%x] %s %s size:0x%x (%s)"%( self.getoffset(), self.name(), self['type'].serialize(), self.getsize(), ','.join(self.keys()))
+
 class AtomList(parray.block):
     _object_ = Atom
 
@@ -82,52 +66,52 @@ class AtomList(parray.block):
         return ' '.join([self.name(), 'atoms[%d] ->'% len(self), types])
 
 ## container atoms
-@AtomType.Define
+@AtomType.define
 class MOOV(AtomList): type = 'moov'
 
-@AtomType.Define
+@AtomType.define
 class TRAK(AtomList): type = 'trak'
 
-@AtomType.Define
+@AtomType.define
 class EDTS(AtomList): type = 'edts'
 
-@AtomType.Define
+@AtomType.define
 class MDIA(AtomList): type = 'mdia'
 
-@AtomType.Define
+@AtomType.define
 class MINF(AtomList): type = 'minf'
 
-@AtomType.Define
+@AtomType.define
 class DINF(AtomList): type = 'dinf'
 
-#@AtomType.Define
+#@AtomType.define
 class UDTA(Atom): type = 'udta'
 
-@AtomType.Define
+@AtomType.define
 class STBL(AtomList): type = 'stbl'
 
-@AtomType.Define
+@AtomType.define
 class GMHD(AtomList): type = 'gmhd'
 
-@AtomType.Define
+@AtomType.define
 class META(AtomList): type = 'meta'
 
-@AtomType.Define
+@AtomType.define
 class RMRA(AtomList): type = 'rmra'
 
-@AtomType.Define
+@AtomType.define
 class RMRA(AtomList): type = 'rmda'
 
-#@AtomType.Define
+#@AtomType.define
 #class MDAT(AtomList): type = 'mdat'  # XXX: sometimes this is not a container
 
-@AtomType.Define
+@AtomType.define
 class MDAT(dyn.block(0)):
     type = 'mdat'
     length = property(fget=lambda s: s.blocksize())
 
 ## empty atoms
-@AtomType.Define
+@AtomType.define
 class WIDE(ptype.type):
     type = 'wide'
     def load(self):
@@ -138,7 +122,7 @@ class WIDE(ptype.type):
         return super(WIDE, self).load()
 
 ## WLOC
-@AtomType.Define
+@AtomType.define
 class WLOC(pstruct.type):
     type = 'WLOC'
     _fields_ = [
@@ -147,7 +131,7 @@ class WLOC(pstruct.type):
     ]
 
 ## ftyp
-@AtomType.Define
+@AtomType.define
 class FileType(pstruct.type):
     type = 'ftyp'
     _fields_ = [
@@ -156,7 +140,7 @@ class FileType(pstruct.type):
         (lambda s: dyn.clone(pQTIntArray,blocksize=lambda s: s.parent.blocksize()-8), 'Compatible_Brands')      # XXX: this isn't working
     ]
 
-@AtomType.Define
+@AtomType.define
 class MVHD(pstruct.type):
     type = 'mvhd'
     _fields_ = [
@@ -179,7 +163,7 @@ class MVHD(pstruct.type):
         (pint.uint32_t, 'Next track ID'),
     ]
 
-@AtomType.Define
+@AtomType.define
 class TKHD(pstruct.type):
     type = 'tkhd'
     _fields_ = [
@@ -200,7 +184,7 @@ class TKHD(pstruct.type):
         (pint.uint32_t, 'Track height'),
     ]
 
-@AtomType.Define
+@AtomType.define
 class ELST(pstruct.type):
     type = 'elst'
 
@@ -222,7 +206,7 @@ class ELST(pstruct.type):
         (lambda s: dyn.array(s.Entry, int(s['Number of entries'].l)), 'Entry')
     ]
 
-@AtomType.Define
+@AtomType.define
 class MDHD(pstruct.type):
     type = 'mdhd'
     _fields_ = [
@@ -236,7 +220,7 @@ class MDHD(pstruct.type):
         (pint.uint16_t, 'Quality')
     ]
 
-@AtomType.Define
+@AtomType.define
 class HDLR(pstruct.type):
     type = 'hdlr'
     _fields_ = [
@@ -311,7 +295,7 @@ class MediaAudio_v1(pstruct.type):
         (pint.uint32_t, 'Bytes per sample'),
     ]
 
-@AtomType.Define
+@AtomType.define
 class stsd(pstruct.type):
     '''Sample description atom'''
     type = 'stsd'
@@ -327,11 +311,12 @@ class stsd(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of Entries'),
-        (lambda x: dyn.array(stsd.entry, int(x['Number of Entries'].l)), 'Entries')
+        (lambda x: dyn.array(stsd.entry, int(x['Number of Entries'].l)), 'Entries'),
+        (lambda s: dyn.block(s.blocksize()-s.size()), 'codec-specific') # XXX: it'd be cool to keep track of this too
     ]
 
 ### stts
-@AtomType.Define
+@AtomType.define
 class stts(pstruct.type):
     '''Time-to-sample atom'''
     type = 'stts'
@@ -350,7 +335,7 @@ class stts(pstruct.type):
     ]
 
 ## stsc
-@AtomType.Define
+@AtomType.define
 class stsc(pstruct.type):
     '''Sample-to-chunk atom'''
     type = 'stsc'
@@ -369,7 +354,7 @@ class stsc(pstruct.type):
     ]
 
 ## stsz
-@AtomType.Define
+@AtomType.define
 class stsz(pstruct.type):
     '''Sample size atom'''
     type = 'stsz'
@@ -392,7 +377,7 @@ class stsz(pstruct.type):
     ]
 
 ## stco
-@AtomType.Define
+@AtomType.define
 class stco(pstruct.type):
     '''Chunk offset atom'''
     type = 'stco'
@@ -405,7 +390,7 @@ class stco(pstruct.type):
 
 if False:
     # XXX: this doesn't exist (?)
-    @AtomType.Define
+    @AtomType.define
     class stsh(pstruct.type):
         '''Shadow sync atom'''
         _fields_ = [
@@ -415,7 +400,7 @@ if False:
             (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
         ]
 
-@AtomType.Define
+@AtomType.define
 class gmin(pstruct.type):
     '''Base media info atom'''
     type = 'gmin'
@@ -429,7 +414,7 @@ class gmin(pstruct.type):
         (pint.uint16_t, 'Reserved'),
     ]
 
-@AtomType.Define
+@AtomType.define
 class dref(pstruct.type):
     '''Chunk offset atom'''
     type = 'dref'
