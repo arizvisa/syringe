@@ -13,11 +13,16 @@ class SpContainer(RecordContainer):
 class FSP(pstruct.type):
     type = 0xf00a
     class __flags(pbinary.struct):
-        _fields_ = [(1, 'fGroup'),(1,'fChild'),(1,'fPatriarch'),(1,'fDeleted'),(1,'fOleShape'),(1,'fHaveMaster'),(1,'fFlipH'),(1,'fFlipV'),(1,'fConnector'),(1,'fHaveAnchor'),(1,'fBackground'),(1,'fHaveSpt'),(20,'unused1')]
+        _fields_ = [
+            (20,'unused1'),
+            (1,'fHaveSpt'),(1,'fBackground'),(1,'fHaveAnchor'),(1,'fConnector'),
+            (1,'fFlipV'),(1,'fFlipH'),(1,'fHaveMaster'),(1,'fOleShape'),
+            (1,'fDeleted'),(1,'fPatriarch'),(1,'fChild'),(1,'fGroup'),
+        ]
         
     _fields_ = [
         (pint.uint32_t, 'spid'),
-        (__flags, 'f')
+        (pbinary.littleendian(__flags), 'f')
     ]
 
 @Record.define
@@ -217,20 +222,44 @@ class msofbtSpgrContainer(RecordContainer):
 class msofbtClientAnchor(pstruct.type):
     type = 0xf010
     type = 61456
+
+    #copied from http://svn.apache.org/viewvc/poi/trunk/src/java/org/apache/poi/ddf/EscherClientAnchorRecord.java?view=annotate
+
     _fields_ = [
         (pint.uint16_t, 'Flag'),
-
         (pint.uint16_t, 'Col1'),
         (pint.uint16_t, 'DX1'),
         (pint.uint16_t, 'Row1'),
-        (pint.uint16_t, 'DY1'),
 
+        (pint.uint16_t, 'DY1'),
         (pint.uint16_t, 'Col2'),
         (pint.uint16_t, 'DX2'),
         (pint.uint16_t, 'Row2'),
         (pint.uint16_t, 'DY2'),
     ]
-    
+
+    class __short(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'Flag'),
+            (pint.uint16_t, 'Col1'),
+            (pint.uint16_t, 'DX1'),
+            (pint.uint16_t, 'Row1'),
+        ]
+
+    class __long(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'DY1'),
+            (pint.uint16_t, 'Col2'),
+            (pint.uint16_t, 'DX2'),
+            (pint.uint16_t, 'Row2'),
+            (pint.uint16_t, 'DY2'),
+        ]
+
+    _fields_ = [
+        (lambda s: pint.uint64_t if s.blocksize() == 8 else s.__short, 'short'),
+        (lambda s: s.__long if s.blocksize() >= 18 else ptype.empty, 'long'),
+        (lambda s: dyn.clone(ptype.block, length=s.blocksize()-s.size()), 'extra'),
+    ]
 
 @Record.define
 class OfficeArtBlipDIB(pstruct.type):

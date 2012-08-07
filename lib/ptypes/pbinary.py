@@ -400,12 +400,12 @@ class __struct_generic(type):
         integer,bits = self.value[index]
         self.value[index] = (value, bits)
 
-    def summary(self):
+    def details(self):
         if not self.initialized:
-            return self.__repr__uninitialized()
-        return self.__repr__initialized()
+            return self.__details_uninitialized()
+        return self.__details_initialized()
 
-    def __repr__initialized(self):
+    def __details_initialized(self):
         result = []
         for name,val in zip(self.keys(), self.value):
             if bitmap.isbitmap(val):
@@ -416,7 +416,7 @@ class __struct_generic(type):
             result.append( '%s%s=%s'% (name, ['', '{%d}'%s][s>1], v) )
         return ' '.join(result)
 
-    def __repr__uninitialized(self):
+    def __details_uninitialized(self):
         res = [ '%s=?'% (name) for name in self.keys() ]
         return ' '.join(res)
 
@@ -455,12 +455,12 @@ class __array_generic(type):
 
         raise ValueError('Unknown type %s while trying to assign to index %d'% (value.__class_, index))
 
-    def summary(self):
+    def details(self):
         if not self.initialized:
-            return self.__repr__uninitialized()
-        return self.__repr__initialized()
+            return self.__details_uninitialized()
+        return self.__details_initialized()
 
-    def __repr__uninitialized(self):
+    def __details_uninitialized(self):
         obj = self._object_
         if bitmap.isbitmap(obj):
             name = bitmap.repr(obj)
@@ -468,7 +468,7 @@ class __array_generic(type):
             name = obj.__class__
         return '%s[%d] length=?'% (name, len(self))
 
-    def __repr__initialized(self):
+    def __details_initialized(self):
         obj = self._object_
         if bitmap.isbitmap(obj):
             name = bitmap.repr(obj)

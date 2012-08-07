@@ -122,7 +122,7 @@ class type(__parray_generic):
             result = super(type, self).load()
         return result
 
-    def summary(self):
+    def details(self):
         res = '???'
         if self.initialized:
             res = repr(''.join(self.serialize()))
@@ -159,12 +159,11 @@ class terminated(type):
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
-            obj = self._object_
 
             self.value = []
             ofs = self.getoffset()
             for index in forever:
-                n = self.newelement(obj,str(index),ofs)
+                n = self.newelement(self._object_,str(index),ofs)
                 self.value.append(n)
                 if self.isTerminator(n.load()):
                     break
@@ -172,7 +171,7 @@ class terminated(type):
 
         return self
 
-    def summary(self):
+    def details(self):
         # copied..
         res = '???'
         index = '...'
@@ -200,7 +199,6 @@ class infinite(terminated):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            obj = self._object_
             self.value = []
             self.__offset = self.getoffset()
 
@@ -227,7 +225,6 @@ class infinite(terminated):
     def loadstream(self, **attr):
         '''an iterator that incrementally populates the array'''
         with utils.assign(self, **attr):
-            obj = self._object_
             self.value = []
             self.__offset = self.getoffset()
 
@@ -260,14 +257,13 @@ class block(terminated):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            obj = self._object_
             forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
             self.value = []
 
             ofs = self.getoffset()
             current = 0
             for index in forever:
-                n = self.newelement(obj, str(index), ofs)
+                n = self.newelement(self._object_, str(index), ofs)
 
                 try:
                     s = n.load().blocksize()
@@ -277,6 +273,7 @@ class block(terminated):
                     if current >= self.blocksize():
                         path = ' ->\n\t'.join(n.backtrace())
                         logging.warn("<parray.block> Stopped reading %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), s, path))
+                    logging.debug("<parray.block> StopIteration raised from sub-element while performing writing %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), e))
                     break
 
                 # if our child element pushes us past the blocksize
@@ -475,7 +472,7 @@ if __name__ == '__main__':
             def int(self):
                 return reduce(lambda x,y:x*256+int(y), self.v, 0)
 
-            def __repr__(self):
+            def repr(self):
                 if self.initialized:
                     return self.name() + ' %x'% self.int()
                 return self.name() + ' ???'

@@ -77,14 +77,14 @@ def dumpexecutable(filename):
 
     print 'Module: %s'% os.path.basename(filename)
     print 'ImageBase: %x'% imagebase
-    print 'Imports: %s'% ', '.join([x['Name'].d.l.get() for x in imports.l[:-1]])
+    print 'Imports: %s'% ', '.join([x['Name'].d.l.str() for x in imports.l[:-1]])
 
     mz.setoffset(imagebase,recurse=True)
     print pe
     for x in sections:
-        name = x['Name'].get()
+        name = x['Name'].str()
         address = int(x['VirtualAddress']) + imagebase
-        print x['Name'].get(), hex(address), hex(address + x.getloadedsize())
+        print x['Name'].str(), hex(address), hex(address + x.getloadedsize())
     mz.setoffset(0,recurse=True)
     return
 

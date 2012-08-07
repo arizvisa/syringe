@@ -441,7 +441,7 @@ Record.update(graph.Record)
 if __name__ == '__main__':
     import ptypes
     from ptypes import *
-    ptypes.setsource( provider.file('./poc.wb') )
+    ptypes.setsource( ptypes.file('data-xls/workbook.stream') )
 
     streams = dyn.array(BiffSubStream, 4)()
     streams.l

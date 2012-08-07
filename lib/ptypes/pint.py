@@ -10,7 +10,8 @@ def setbyteorder(endianness):
 
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
-    assert type(ptype) is type and issubclass(ptype, integer_t), 'type %s not of an integer_t'%ptype.__name__
+#    assert type(ptype) is type and issubclass(ptype, integer_t), 'type %s not of an integer_t'%ptype.__name__
+    assert type(ptype) is type
     class newptype(ptype):
         byteorder = property(fget=lambda s:bigendian)
         def shortname(self):
@@ -40,7 +41,8 @@ def bigendian(ptype):
 
 def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
-    assert type(ptype) is type and issubclass(ptype, integer_t), 'type %s not of an integer_t'%ptype.__name__
+#    assert type(ptype) is type and issubclass(ptype, integer_t), 'type %s not of an integer_t'%ptype.__name__
+    assert type(ptype) is type
     class newptype(ptype):
         byteorder = property(fget=lambda s:littleendian)
         def shortname(self):
@@ -84,7 +86,7 @@ class integer_t(ptype.type):
         '''Convert integer type into a number'''
         raise NotImplementedError('Unknown integer conversion')
 
-    def summary(self):
+    def details(self):
         if self.initialized:
             res = int(self)
 
@@ -187,7 +189,7 @@ class enum(integer_t):
             value = '0x%x'% res
         return value
 
-    def summary(self):
+    def details(self):
         if self.initialized:
             res = int(self)
             try:

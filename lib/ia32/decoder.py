@@ -312,3 +312,11 @@ if __name__ == '__main__':
             if res is True:
                 continue
             print n, 1
+
+    if True:
+        code = "\x9b\xd9\x7d\xfc"
+        source = iter(code)
+        insn = decoder.consume(source)
+        print insn
+        lookup = optable.Lookup('\x9b')
+        print optable.HasModrm(lookup),optable.HasImmediate(lookup)

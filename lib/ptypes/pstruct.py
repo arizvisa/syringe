@@ -74,7 +74,7 @@ class type(__pstruct_generic):
             result = super(type, self).load()
         return result
 
-    def __repr__uninitialized(self):
+    def __details_uninitialized(self):
         result = []
         startofs = self.getoffset()
         ofs = '[%x]'% startofs
@@ -86,23 +86,24 @@ class type(__pstruct_generic):
             return '\n'.join(result)
         return '[%x] ??? []'%self.getoffset()
 
-    def __repr__initialized(self):
-        row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, repr(value.serialize())])
+    def __details_initialized(self):
+#        row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, repr(value.serialize())])
+        row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, value.summary()])
         result = [row(name,value) for (t,name),value in zip(self._fields_, self.value)]
         if len(result) > 0:
             return '\n'.join(result)
         return '[%x] empty []'%self.getoffset()
 
-    def summary(self):
+    def details(self):
         if self.initialized:
-            return self.__repr__initialized()
-        return self.__repr__uninitialized()
+            return self.__details_initialized()
+        return self.__details_uninitialized()
 
-    def __repr__(self):
+    def repr(self):
         # print out a friendly header for the structure
         if self.__name__ is None:
-            return '%s\n%s'%(self.name(),self.summary())
-        return '%s %s\n%s'%(self.name(),self.__name__,self.summary())
+            return '%s\n%s'%(self.name(),self.details())
+        return '%s %s\n%s'%(self.name(),self.__name__,self.details())
 
     def set(self, *tuples, **allocator):
         # allocate type if we're asked to

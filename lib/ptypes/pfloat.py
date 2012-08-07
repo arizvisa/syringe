@@ -34,7 +34,7 @@ class float_t(pint.integer_t):
             return -1 * mantissa * (2**e)
         return mantissa * (2**e)
 
-    def summary(self):
+    def details(self):
         return '%s (%x)'% (float(self), int(self))
 
 if False:

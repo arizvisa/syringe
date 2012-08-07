@@ -1,6 +1,7 @@
 '''Provides a dynamic kind of feel'''
 import ptype,parray,pstruct
 import utils,provider
+import logging
 
 __all__ = []
 
@@ -10,27 +11,30 @@ def block(size, **kwds):
     returns a general block type of the specified size
     '''
     assert type(size) in (int,long), 'dyn.block(%s): argument must be integral'% repr(size)
-    #size = int(size)
-    assert size >= 0, 'dyn.block(%d): argument cannot be < 0'% (size)
+    if size < 0:
+        logging.error('dyn.block(%d): argument cannot be < 0. Defaulting to 0.'% size)
+        size = 0
     return clone(ptype.block, length=size)
 
-def blockarray(type, size, **kwds):
+def blockarray(typ, size, **kwds):
     '''
     returns an array of the specified byte size containing elements of the specified type
     '''
     assert type(size) in (int,long), 'dyn.block(%s): argument must be integral'% repr(size)
     #size = int(size)
-    assert size >= 0, 'dyn.block(%d): argument cannot be < 0'% (size)
-
+    if size < 0:
+        logging.error('dyn.blockarray(%s, %d): argument cannot be < 0. defaulting to 0.'% (repr(typ),size))
+        size = 0
+ 
     class _blockarray(parray.block):
-        _object_ = type
+        _object_ = typ
     _blockarray.blocksize = lambda s: size
 
     _blockarray.__name__ = kwds.get('name', 'blockarray(%s, %d)'% (type().shortname(), size))
     return _blockarray
 
 def align(s, **kwds):
-    '''return a block that will align definitions in a structure'''
+    '''return a block that will align a structure to a multiple of the specified number of bytes'''
     class _align(block(0)):
         initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.blocksize())
         def blocksize(self):
@@ -51,7 +55,9 @@ def array(type, count, **kwds):
     returns an array of the specified length containing elements of the specified type
     '''
     count = int(count)
-    assert count >= 0, 'dyn.array(count=%d): argument cannot be < 0'% (count)
+    if count < 0:
+        logging.error('dyn.array(%s, count=%d): argument cannot be < 0. Defaulting to 0.'% (repr(type),count))
+        size = 0
 
     class _dynarray(parray.type):
         _object_ = type
@@ -161,10 +167,7 @@ class union(__union_generic):
             return result.l
         return result
 
-    def __repr__(self):
-        return self.summary()
-
-    def summary(self):
+    def details(self):
         if self.initialized:
             res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
             return ' '.join([self.name(), 'union', res, repr(self.serialize())])
@@ -195,44 +198,18 @@ def pointer(target, type=integral, **attrs):
     return ptype.clone(ptype.pointer_t, _target_=target, _type_=type, _byteorder_=m(byteorder), **attrs)
 
 def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
+    '''a pointer relative to a particular object'''
     global byteorder
     m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
     return ptype.clone(ptype.rpointer_t, _target_=target, _baseobject_=object, _type_=type, _byteorder_=m(byteorder), **attrs)
 
 def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
+    '''a pointer relative to a particular offset'''
     global byteorder
     m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
     return ptype.clone(ptype.opointer_t, _target_=target, _calculate_=calculate, _type_=type, _byteorder_=m(byteorder), **attrs)
 
-def addr_t(target, **attrs):
-    return pointer(target, type=type, **attrs)
-
-if False:
-    class padding_t(ptype.empty):
-        @classmethod
-        def generate_repeat(cls,value):
-            def generator():
-                while True:
-                    for x in iter(value):
-                        yield x
-            return (x for x in generator())
-
-        @classmethod
-        def generate_source(cls,iterable):
-            return (x for x in iter(iterable))
-
-        fill = generate_repeat('\x00')
-
-        def serialize(self):
-            return ''.join(x for i,x in zip(xrange(bs),self.fill))
-
-    def padding(object, size, source):
-        '''modify object to pad object to the specified size'''
-        difference = size - object.blocksize()
-        assert size >= 0, 'unable to pad object (object %x > requested %x)'%(object.blocksize(),size)
-        return dyn.clone(pstruct.type, _fields_=[(object.__class__, 'data'),(dyn.clone(padding_t,length=difference),'padding')])
-
-__all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer,padding'.split(',')
+__all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
 
 if __name__ == '__main__':
     import ptype,parray

@@ -367,44 +367,55 @@ class type(object):
         return self.__class__.__name__
 
     def __repr__(self):
+        return self.repr()
+
+    def repr(self):
         if self.__name__ is None:
-            return '[%x] %s %s'%( self.getoffset(), self.name(), self.summary())
-        return '[%x] %s %s %s'%( self.getoffset(), self.name(), self.__name__, self.summary())
+            return '[%x] %s %s'%( self.getoffset(), self.name(), self.details())
+        return '[%x] %s %s %s'%( self.getoffset(), self.name(), self.__name__, self.details())
+
+    def details(self):
+        '''return a detailed description of the type's value'''
+        if self.initialized:
+            return repr(''.join(self.serialize()))
+        return '???'
 
     def summary(self):
+        '''return a summary of the type's value'''
         if self.initialized:
             return repr(''.join(self.serialize()))
         return '???'
 
     def hexdump(self, **kwds):
+        '''return a hexdump of the type's value'''
         if self.initialized:
             return utils.hexdump( self.serialize(), offset=self.getoffset(), **kwds )
         raise ValueError('%s is uninitialized'% self.name())
 
     def new(self, type, **kwds):
-        '''Instantiate a new type as a child of the current ptype'''
+        '''instantiate a new type as a child of the current ptype'''
         result = self.newelement(type, None, kwds.get('offset', 0))
         result.__name__ = kwds.get('__name__', hex(id(result)) )
         # FIXME: we should probably do something to prevent this from being committed
         return result
 
     def copy(self, **kwds):
-        '''Return a duplicated instance of the current ptype'''
+        '''return a duplicated instance of the current type'''
         result = self.newelement( self.__class__, self.name(), self.getoffset(), **kwds )
         result.deserialize_block( self.serialize() )
         return result
 
-    def cast(self, t):
-        '''Cast the contents of the current ptype to a different ptype'''
+    def cast(self, t, **kwds):
+        '''cast the contents of the current ptype to a differing ptype'''
         source = provider.string(self.serialize())
         size = self.blocksize()
         result = self.newelement( t, self.__name__, self.getoffset() )
 
         ### XXX: need some better way to catch exceptions
-#        return result.load(source=source, offset=0, blocksize=lambda : size)
+#        return result.load(source=source, offset=0, blocksize=lambda:size, **kwds)
 
         try:
-            result.load(source=source, offset=0, blocksize=lambda : size)
+            result.load(source=source, offset=0, blocksize=lambda:size, **kwds)
         except Exception,e:
             logging.fatal('%s.cast(%s) -- %s'%(self.name(),repr(t), repr(e)))
         return result
@@ -668,7 +679,7 @@ class definition(object):
             return cls.cache[_]
         except KeyError:
             pass
-        return clone(cls.unknown, **unknownattrs)
+        return clone(cls.unknown, type=_, **unknownattrs)
 
     @classmethod
     def update(cls, otherdefinition):
@@ -754,7 +765,8 @@ class pointer_t(encoded_t):
         raise NotImplementedError
 
     def shortname(self):
-        return 'pointer_t<%s>'% self._target_().shortname()
+        target = forceptype(self._target_, self)
+        return 'pointer_t<%s>'% target().shortname()
     
     deref = lambda s,**attrs: s.decode(**attrs)
     dereference = lambda s,**attrs: s.decode(**attrs)
@@ -763,6 +775,10 @@ class pointer_t(encoded_t):
         if issubclass(other.__class__, self.__class__):
             return cmp(int(self),int(other))
         return super(pointer_t, self).__cmp__(other)
+
+    def details(self):
+        return '(void*)0x%x'% self.int()
+    summary = details
 
 class rpointer_t(pointer_t):
     '''a pointer_t that's an offset relative to a specific object'''
@@ -784,6 +800,66 @@ class opointer_t(pointer_t):
 
     def decode_offset(self):
         return self._calculate_(self.int())
+
+try:
+    import pymsasid as udis
+    import pymsasid.syn_att as udis_att
+    raise ImportError
+
+    class _udis_glue(udis.input.FileHook):
+        def __init__(self, source, base_address):
+            udis.input.FileHook.__init__(self, source, base_address)
+            self.entry_point = base_address
+            self.source = source
+
+        def hook(self):
+            '''returns a byte as an integer'''
+            ch = self.source.consume(1)
+            return ord(ch)
+
+        def seek(self, offset):
+            self.source.seek(offset)
+
+        @classmethod
+        def new(cls, type, mode):
+            return udis.Pymsasid(hook=cls, source=type.source, mode=mode)
+
+    class code_t(block):
+        '''code_t is always referenced by a pointer'''
+        mode = 32
+
+        def __init__(self, **kwds):
+            super(code_t, self).__init__(**kwds)
+            self.u = _udis_glue.new(self, self.mode)
+
+        def details(self):
+            sz = self.blocksize()
+            if sz == 0: 
+                count = 5
+                result = []
+                pc = self.getoffset()
+                while len(result) < count:
+                    n = self.u.disassemble(pc)
+                    result.append(n)
+                    pc = n.next_add()
+                return ';'.join([str(x).strip() for x in result])
+
+            result = []
+            st = pc = self.getoffset()
+            while pc < st+sz:
+                n = self.u.disassemble(pc)
+                result.append(n)
+                pc = n.next_add()
+            return ';'.join([str(x).strip() for x in result])
+
+except ImportError:
+    class code_t(block):
+        machine,mode = 'i386',32
+
+    def call(address):
+        # returns a python function that when provided a dict containing the register state
+        # calls the specified address and returns the register state upon return
+        pass
 
 if __name__ == '__main__':
     import ptype
@@ -832,3 +908,14 @@ if __name__ == '__main__':
         x.source=provider.empty()
         print x.l
 
+    if False:
+        import ptypes
+        from ptypes import *
+        a = dyn.block(0x100)
+        b = a(source=ptypes.provider.string())
+        print b.set('\xcc'*100)
+        b.commit()
+
+        self = b
+        a = ptype.code_t(source=self.source, offset=self.getoffset())
+        b = b.cast(ptype.code_t)

@@ -1,46 +1,21 @@
 from primitives import *
 from ptypes import *
 
-class Action(object):
+class action(ptype.definition):
     cache = {}
-    @classmethod
-    def Add(cls, object):
-        t = object.type
-        cls.cache[t] = object
 
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
+    class command(pstruct.type):
+        _fields_ = []
 
-    @classmethod
-    def Define(cls, pt):
-        cls.Add(pt)
-        return pt
-
-    @classmethod
-    def Update(cls, record):
-        a = set(cls.cache.keys())
-        b = set(record.cache.keys())
-        if a.intersection(b):
-            logging.warning('%s : Unable to import module %s due to multiple definitions of the sam erecord')
-            return False
-
-        # merge record caches into a single one
-        cls.cache.update(record.cache)
-        record.cache = cls.cache
-        return True
-
-    class Command(pstruct.type): _fields_ = []
-
-    class Unknown(Command):
+    class unknown(ptype.block):
         _fields_=[]
         def __repr__(self):
             if self.initialized:
                 return self.name()
-            return super(Unknown, self).__repr__()
+            return super(action.unknown, self).__repr__()
 
         def shortname(self):
-            s = super(Unknown, self).shortname()
+            s = super(action.unknown, self).shortname()
             names = s.split('.')
             names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
             return '.'.join(names)
@@ -53,82 +28,80 @@ class ACTIONRECORDHEADER(pstruct.type):
 
 class ACTIONRECORD(pstruct.type):
     def __record(self):
-        code = self['header'].l['ActionCode'].int()
-        try:
-            res = Action.Lookup(code)
-        except KeyError:
-            res = dyn.clone(Action.Unknown, type=code)
-        return dyn.clone(res, blocksize=lambda s:s.parent['header']['Length'].int())
+        hdr = self['header'].l
+        code = hdr['ActionCode'].int()
+        sz = hdr['Length'].int()
+        return action.get(code, length=sz)
 
     _fields_ = [
         (ACTIONRECORDHEADER, 'header'),
         (__record, 'record'),
     ]
 
-@Action.Define
-class ActionEnd(Action.Command):
+@action.define
+class ActionEnd(action.command):
     type=0
     _fields_ = []
 
-@Action.Define
-class ActionGotoFrame(Action.Command):
+@action.define
+class ActionGotoFrame(action.command):
     type=0x81
     _fields_ = [(UI16,'Frame')]
 
-@Action.Define
-class ActionGetURL(Action.Command):
+@action.define
+class ActionGetURL(action.command):
     type=0x83
     _fields_ = [(STRING,'UrlString'),(STRING,'TargetString')]
 
-@Action.Define
-class ActionNextFrame(Action.Command):
+@action.define
+class ActionNextFrame(action.command):
     type=0x04
     _fields_ = [(STRING,'UrlString'),(STRING,'TargetString')]
 
-@Action.Define
-class ActionConstantPool(Action.Command):
+@action.define
+class ActionConstantPool(action.command):
     type=0x88
     _fields_ = [(UI16, 'Count'), (lambda s: dyn.array(STRING, s['Count'].l.int()), 'ConstantPool')]
 
-@Action.Define
-class ActionPush(Action.Command):
+@action.define
+class ActionPush(action.command):
     type=0x96
     def __Value(self):
         n = self['Type'].l.int()
         lookup = {
             0:STRING, 1:FLOAT, 4:UI8, 5:UI8, 6:DOUBLE, 7:UI32, 8:UI8, 9:UI16
         }
-        return lookup[n]
+        return lookup.get(n, ptype.empty)
 
     _fields_ = [(UI8, 'Type'),(__Value, 'Value')]
 
-@Action.Define
-class ActionStoreRegister(Action.Command):
+@action.define
+class ActionStoreRegister(action.command):
     type=0x87
     _fields_ = [(UI8, 'RegisterNumber')]
 
-@Action.Define
-class ActionPop(Action.Command):
+@action.define
+class ActionPop(action.command):
     type=0x17
 
-@Action.Define
-class ActionGetVariable(Action.Command):
+@action.define
+class ActionGetVariable(action.command):
     type=0x1c
 
-@Action.Define
-class ActionToggleQuality(Action.Command):
+@action.define
+class ActionToggleQuality(action.command):
     type=0x08
 
-@Action.Define
-class ActionNot(Action.Command):
+@action.define
+class ActionNot(action.command):
     type=0x12
 
-@Action.Define
-class ActionIf(Action.Command):
+@action.define
+class ActionIf(action.command):
     type=0x9d
     _fields_ = [(SI16, 'BranchOffset')]
 
-@Action.Define
+@action.define
 class ActionDefineFunction2(pstruct.type):
     type=0x8e
 

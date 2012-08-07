@@ -1,7 +1,7 @@
 import ptypes,headers
 from ptypes import ptype,pstruct,pbinary,dyn,parray
 from __base__ import *
-import struct,array,bitmap
+import array,bitmap
 
 ## per symbol relocations
 class IMAGE_REL_I386(ptypes.pint.enum, uint16):
@@ -98,25 +98,26 @@ class Relocation(pstruct.type):
         return data
 
 ## per data directory relocations
-class BaseRelocationEntry(pbinary.struct):
+class BaseRelocationEntry(pbinary.littleendian(pbinary.struct)):
     _fields_ = [
         (4, 'Type'),
         (12, 'Offset'),
     ]
-    def load(self):
-        self.source.seek( self.getoffset() )
-        string = self.source.consume(2)
-        return self.deserialize_stream(reversed(string))
 
 class BaseRelocationArray(parray.type):
     _object_ = BaseRelocationEntry
+
+class BaseRelocationBlock(ptype.block):
+    def get(self):
+        return self.cast(BaseRelocationArray, length=self.length/2)
 
 class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
         (addr_t, 'Page RVA'),
         (uint32, 'Block Size'),
 #        (lambda s: dyn.clone(BaseRelocationArray, length=(int(s['Block Size'].load())-8)/2), 'Relocations'),   # XXX: this is too slow, heh...
-        (lambda s: dyn.block(int(s['Block Size'].load())-8), 'Relocations')
+#        (lambda s: dyn.block(int(s['Block Size'].load())-8), 'Relocations')
+        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Block Size'].l.int()-8), 'Relocations'),
     ]
 
     def fetchrelocations(self):
@@ -156,8 +157,7 @@ class relocationtype(object):
             string += chr(value)
         return string
 
-if False:       # deprecated because we would like to be able to separate
-                #  segments from one another
+if False:       # deprecated because we would like to be able to separate segments from one another
     class relocation_1(relocationtype):
         length = 2
         def write(self, address, sectiondelta):

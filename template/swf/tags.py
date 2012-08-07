@@ -2,6 +2,17 @@ from ptypes import *
 from stypes import *
 import as3,action
 
+class Unknown(ptype.type):
+    def shortname(self):
+        s = super(Unknown, self).shortname()
+        names = s.split('.')
+        names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
+        return '.'.join(names)
+
+class TagDef(ptype.definition):
+    cache = {}
+    unknown = Unknown
+
 class Tag(pstruct.type):
     '''this wraps around a tag'''
     def autopad(self):
@@ -27,13 +38,7 @@ class Tag(pstruct.type):
         return Empty
 
     def autotag(self, tagid, size):
-        global Taglookup
-        try:
-            res = Taglookup[tagid]
-
-        except KeyError:
-            res = createUnknown(tagid, size)
-        return res
+        return TagDef.get(tagid, length=size)
 
     _fields_ = [
         (RECORDHEADER, 'Header'),
@@ -44,7 +49,7 @@ class Tag(pstruct.type):
 
     def serialize(self):
         # fix up header
-        tag, size = self['data'].tag, self['data'].size()
+        tag, size = self['data'].type, self['data'].size()
         self['Header']['type'] = tag
         if size >= 0x3f:
             self['Header']['length'] = 0x3f
@@ -82,47 +87,27 @@ class TagList(parray.terminated):
             continue
         return '%s %d records\n[%s]'%(self.name(), len(self), ','.join(result))
 
-class SWFT(object):
-    '''all tags are derived from this class'''
-    tag = None
-
-class TagS(pstruct.type, SWFT):
-    pass
-
-class TagB(pbinary.struct, SWFT):
-    pass
-
 ######## display list
-class Unknown(ptype.type):
-    def shortname(self):
-        s = super(Unknown, self).shortname()
-        names = s.split('.')
-        names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.tag, self.blocksize())
-        return '.'.join(names)
-
-def createUnknown(tagid, size):
-    class _Unknown(Unknown):
-        tag = tagid
-        length = size
-    return _Unknown
-
-class DoInitAction(TagS):
-    tag = 59
+@TagDef.define
+class DoInitAction(pstruct.type):
+    type = 59
     version = 3
     _fields_ = [
         (UI16, 'SpriteId'),
         (action.Array, 'Actions'),
     ]
 
-class DoAction(TagS):
-    tag = 12
+@TagDef.define
+class DoAction(pstruct.type):
+    type = 12
     version = 3
     _fields_ = [
         (action.Array, 'Actions')
     ]
 
-class DoABC(TagS):
-    tag = 82
+@TagDef.define
+class DoABC(pstruct.type):
+    type = 82
     version = 9
     _fields_ = [
         (UI32, 'Flags'),
@@ -130,8 +115,9 @@ class DoABC(TagS):
         (as3.abcFile, 'ABCData')
     ]
 
-#class PlaceObject(TagS):
-#    tag = 4
+#@TagDef.define
+#class PlaceObject(pstruct.type):
+#    type = 4
 #    version = 1
 #    _fields_ = [
 #        (UI16, 'CharacterId'),
@@ -153,8 +139,9 @@ class _PlaceObject_Flag(pbinary.struct):
         (1, 'Move')
     ]
 
-class PlaceObject2(TagS):
-    tag = 26
+@TagDef.define
+class PlaceObject2(pstruct.type):
+    type = 26
     version = 3
     def _iff(flag, typ):
         def fn(self):
@@ -184,8 +171,9 @@ class _PlaceObject3_Flag(pbinary.struct):
         (1, 'HasFilterList')
     ]
 
-class PlaceObject3(TagS):
-    tag = 70
+@TagDef.define
+class PlaceObject3(pstruct.type):
+    type = 70
     version = 8
     def _iff(flag, typ):
         def fn(self):
@@ -217,57 +205,64 @@ class PlaceObject3(TagS):
         (_iff('HasClipActions', CLIPACTIONS), 'ClipActions')
     ]
 
-class RemoveObject(TagS):
-    tag = 5
+@TagDef.define
+class RemoveObject(pstruct.type):
+    type = 5
     version = 1
     _fields_ = [
         (UI16, 'CharacterId'),
         (UI16, 'Depth')
     ]
 
-#class RemoveObject2(TagS):
-#    tag = 28
+#class RemoveObject2(pstruct.type):
+#    type = 28
 #    version = 3
 #    _fields_ = [
 #        (UI16, 'Depth')
 #    ]
 
-class ShowFrame(TagS):
-    tag = 1
+@TagDef.define
+class ShowFrame(pstruct.type):
+    type = 1
     version = 1
     _fields_ = []
 
 ######## control tags
-class SetBackgroundColor(TagS):
-    tag = 9
+@TagDef.define
+class SetBackgroundColor(pstruct.type):
+    type = 9
     version = 1
     _fields_ = [
         (RGB, 'BackgroundColor')
     ]
 
-#class FrameLabel(TagS):
-#    tag = 43
+#@TagDef.define
+#class FrameLabel(pstruct.type):
+#    type = 43
 #    version = 3
 #    _fields_ = [
 #        (STRING, 'Name')
 #    ]
 
 if False:
-    class NamedAnchor(TagS):
-        tag = 43
+    @TagDef.define
+    class NamedAnchor(pstruct.type):
+        type = 43
         version = 6
         _fields_ = [
             (STRING, 'Name'),
             (UI8, 'NamedAnchor')
         ]
 
-class Protect(TagS):
-    tag = 24
+@TagDef.define
+class Protect(pstruct.type):
+    type = 24
     version = 2
     _fields_ = []
 
-class End(TagS):
-    tag = 0
+@TagDef.define
+class End(pstruct.type):
+    type = 0
     version = 1
     _fields_ = []
 
@@ -277,8 +272,9 @@ class _asset(pstruct.type):
         (STRING, 'Name')
     ]
 
-class ImportAssets(TagS):
-    tag = 57
+@TagDef.define
+class ImportAssets(pstruct.type):
+    type = 57
     version = 5
     _fields_ = [
         (STRING, 'URL'),
@@ -286,8 +282,9 @@ class ImportAssets(TagS):
         (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
     ]
 
-class ExportAssets(TagS):
-    tag = 56
+@TagDef.define
+class ExportAssets(pstruct.type):
+    type = 56
     version = 5
 
     _fields_ = [
@@ -295,8 +292,9 @@ class ExportAssets(TagS):
         (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
     ]
 
-class ImportAssets2(TagS):
-    tag = 71
+@TagDef.define
+class ImportAssets2(pstruct.type):
+    type = 71
     version = 8
     _fields_ = [
         (STRING, 'URL'),
@@ -306,39 +304,44 @@ class ImportAssets2(TagS):
         (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
     ]
 
-class EnableDebugger(TagS):
-    tag = 58
+@TagDef.define
+class EnableDebugger(pstruct.type):
+    type = 58
     version = 5
     _fields_ = [
         (STRING, 'Password')
     ]
 
-class EnableDebugger2(TagS):
-    tag = 64
+@TagDef.define
+class EnableDebugger2(pstruct.type):
+    type = 64
     version = 6
     _fields_ = [
         (UI16, 'Reserved'),
         (STRING, 'Password')
     ]
 
-class ScriptLimits(TagS):
-    tag = 65
+@TagDef.define
+class ScriptLimits(pstruct.type):
+    type = 65
     version = 7
     _fields_ = [
         (UI16, 'MaxRecursionDepth'),
         (UI16, 'ScriptTimeoutSeconds')
     ]
 
-class SetTabIndex(TagS):
-    tag = 66
+@TagDef.define
+class SetTabIndex(pstruct.type):
+    type = 66
     version = 7
     _fields_ = [
         (UI16, 'Depth'),
         (UI16, 'TabIndex')
     ]
 
-class FileAttributes(TagB):
-    tag = 69
+@TagDef.define
+class FileAttributes(pbinary.struct):
+    type = 69
     version = 8
     _fields_ = [
         (3, 'Reserved1'),
@@ -348,17 +351,19 @@ class FileAttributes(TagB):
         (24, 'Reserved3')
     ]
 
-class Metadata(TagS):
-    tag = 77
+@TagDef.define
+class Metadata(pstruct.type):
+    type = 77
     version = 1
     _fields_ = [
         (STRING, 'Metadata')
     ]
 
-class DefineButton2(TagS):
+@TagDef.define
+class DefineButton2(pstruct.type):
     class __Flags(pbinary.struct):
         _fields_ = [(7,'Reserved'), (1,'TrackAsMenu')]
-    tag = 34
+    type = 34
     version = 3
     _fields_ = [
         (UI16, 'ButtonId'),
@@ -367,16 +372,18 @@ class DefineButton2(TagS):
         (Empty, 'incomplete')
     ]
 
-class DefineScalingGrid(TagS):
-    tag = 78
+@TagDef.define
+class DefineScalingGrid(pstruct.type):
+    type = 78
     version = 8
     _fields_ = [
         (UI16, 'CharacterId'),
         (RECT, 'Splitter')
     ]
 
-class DefineShape(TagS):
-    tag = 2
+@TagDef.define
+class DefineShape(pstruct.type):
+    type = 2
     version = 1
     _fields_ = [
         (UI16, 'ShapeId'),
@@ -384,8 +391,9 @@ class DefineShape(TagS):
         (Empty, 'Shapes')   #XXX
     ]
 
-class DefineShape2(TagS):
-    tag = 22
+@TagDef.define
+class DefineShape2(pstruct.type):
+    type = 22
     version = 2
     _fields_ = [
         (UI16, 'ShapeId'),
@@ -393,8 +401,9 @@ class DefineShape2(TagS):
         (Empty, 'Shapes')   #XXX
     ]
 
-class DefineShape3(TagS):
-    tag = 32
+@TagDef.define
+class DefineShape3(pstruct.type):
+    type = 32
     version = 3
     _fields_ = [
         (UI16, 'ShapeId'),
@@ -402,11 +411,12 @@ class DefineShape3(TagS):
         (Empty, 'Shapes')
     ]
 
-class DefineShape4(TagS):
+@TagDef.define
+class DefineShape4(pstruct.type):
     class __Flags(pbinary.struct):
         _fields_ = [(6,'Reserved'), (1, 'UsesNonScalingStrokes'), (1, 'UsesScalingStrokes')]
 
-    tag = 83
+    type = 83
     version = 8
     _fields_ = [
         (UI16, 'ShapeId'),
@@ -416,8 +426,9 @@ class DefineShape4(TagS):
         (Empty, 'Shapes')
     ]
 
-class DefineSprite(TagS):
-    tag = 39
+@TagDef.define
+class DefineSprite(pstruct.type):
+    type = 39
     version = 3
     _fields_ = [
         (UI16, 'SpriteId'),
@@ -425,15 +436,17 @@ class DefineSprite(TagS):
         (Empty, 'ControlTags')
     ]
 
-class DefineBits(TagS):
-    tag = 6
+@TagDef.define
+class DefineBits(pstruct.type):
+    type = 6
     version = 1
     _fields_ = [
         (UI16, 'CharacterID')
     ]
 
-class DefineFont(TagS):
-    tag = 10
+@TagDef.define
+class DefineFont(pstruct.type):
+    type = 10
     version = 1
     _fields_ = [
         (UI16, 'FontID'),
@@ -441,16 +454,18 @@ class DefineFont(TagS):
         (Empty, 'GlyphShapeTable')
     ]
 
-class DefineFont2(TagS):
-    tag = 48
+@TagDef.define
+class DefineFont2(pstruct.type):
+    type = 48
     version = 3
     _fields_ = [
         (UI16, 'FontID'),
         (Empty, 'incomplete')
     ]
 
-class DefineEditText(TagS):
-    tag = 37
+@TagDef.define
+class DefineEditText(pstruct.type):
+    type = 37
     version = 4
     _fields_ = [
         (UI16, 'CharacterID'),
@@ -458,8 +473,9 @@ class DefineEditText(TagS):
         (Empty, 'incomplete')
     ]
 
-class DefineFontInfo(TagS):
-    tag = 13
+@TagDef.define
+class DefineFontInfo(pstruct.type):
+    type = 13
     version = 1
 
     class __FontFlags(pbinary.struct):
@@ -484,11 +500,11 @@ class DefineFontInfo(TagS):
 
 class GLYPHENTRY(pbinary.struct):
     def __Index(self):
-        p = self.getparent(TagS)    # DefineText
+        p = self.getparent(pstruct.type)    # DefineText
         return int(p['GlyphBits'].l)
         
     def __Advance(self):
-        p = self.getparent(TagS)    # DefineText
+        p = self.getparent(pstruct.type)    # DefineText
         return int(p['AdvanceBits'].l)
 
     _fields_ = [
@@ -532,8 +548,9 @@ class TEXTRECORD(pstruct.type):
         (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].l)), 'GlyphEntries'),
     ]
 
-class DefineText(TagS):
-    tag = 11
+@TagDef.define
+class DefineText(pstruct.type):
+    type = 11
     version = 1
 
     class __TextRecords(parray.terminated):
@@ -553,17 +570,19 @@ class DefineText(TagS):
     ]
 
 class DefineText2(DefineText):
-    tag = 33
+    type = 33
     version = 3
 
-class JPEGTables(TagS):
-    tag = 8
+@TagDef.define
+class JPEGTables(pstruct.type):
+    type = 8
     version = 1
     _fields_ = []   # XXX: the rest of the tag contains the JET
 
-class FileAttributes(TagB):
+@TagDef.define
+class FileAttributes(pbinary.struct):
     version = 8
-    tag = 69
+    type = 69
     _fields_ = [
         (1, 'Reserved[0]'),
         (1, 'UseDirectBlit'),
@@ -576,8 +595,9 @@ class FileAttributes(TagB):
     ]
 
 if False:
-    class DefineSceneAndFrameLabelData(TagS):
-        tag = 86
+    @TagDef.define
+    class DefineSceneAndFrameLabelData(pstruct.type):
+        type = 86
         class Scene(pstruct.type):
             _fields_ = [
                 (as3.u32, 'Name'),
@@ -599,7 +619,3 @@ if False:
 ##############################################
 def istype(obj):
     return type(obj) == type(int)
-
-classes = [ n for n in locals().values() if istype(n) ]
-Tags = [ n for n in classes if issubclass(n, SWFT) ]
-Taglookup = dict([ (n.tag, n) for n in Tags ])

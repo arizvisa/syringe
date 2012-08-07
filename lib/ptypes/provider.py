@@ -1,3 +1,4 @@
+import __builtin__
 import utils
 import os,logging
 import array
@@ -31,8 +32,13 @@ class file(base):
     '''Basic file provider'''
     file = None
     def __init__(self, filename, mode='rb'):
-        # lie to the user, and always ensure we can
-        #   read from the file in binary
+        self.open(filename, mode)
+
+    def open(self, filename, mode='rb'):
+
+        # lie to the user, and always ensure we
+        #   read from the file in binary mode
+
         mode = set(list(mode))
         if 'w' in mode:
             if os.access(filename,6):
@@ -48,9 +54,7 @@ class file(base):
         else:
             # lie to the user, don't give them a choice
             mode = 'r+b'
-
-        ## XXX: i thought __builtins__ was a module...
-        self.file = __builtins__['file'](filename, mode)
+        self.file = __builtin__.file(filename, mode)
 
     def seek(self, offset):
         self.file.seek(offset)
@@ -87,7 +91,7 @@ class string(base):
 
     offset = int
     value = str     # this is backed by an array.array type
-    def __init__(self, string):
+    def __init__(self, string=''):
         self.value = array.array('c', string)
     def seek(self, offset):
         self.offset = offset
@@ -194,7 +198,7 @@ class mmap_readonly(localstring):
     def __init__(self, filename, mode='rb'):
         if 'w' in mode:
             raise NotImplementedError('Writing is not implemented for this provider')
-        return super(mmap_readonly, self).__init__( __builtins__['file'](filename,mode).read() )
+        return super(mmap_readonly, self).__init__( __builtin__.file(filename,mode).read() )
 
 import sys
 if sys.platform == 'win32':
@@ -281,17 +285,18 @@ if sys.platform == 'win32':
             FILE_SHARE_READ,FILE_SHARE_WRITE = 1,2
             OPEN_EXISTING,OPEN_ALWAYS = 3,4
             FILE_ATTRIBUTE_NORMAL = 0x80
-            INVALID_HANDLE_VALUE = 0xffffffff
+            INVALID_HANDLE_VALUE = -1
 
-            raise NotImplementedError("These are not the correct permissions")
+#            raise NotImplementedError("These are not the correct permissions")
 
-            smode = FILE_SHARE_READ|FILE_SHARE_WRITE
             cmode = OPEN_EXISTING
 
             if 'w' in mode:
+                smode = FILE_SHARE_READ|FILE_SHARE_WRITE
                 amode = GENERIC_READ|GENERIC_WRITE
             else:
-                amode = GENERIC_READ
+                smode = FILE_SHARE_READ
+                amode = GENERIC_READ|GENERIC_WRITE
 
             result = k32.CreateFileA(
                 filename, amode, smode, None, cmode,

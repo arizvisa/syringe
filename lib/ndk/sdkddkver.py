@@ -42,3 +42,8 @@ NTDDI_WIN7 = 0x06010000
 NTDDI_VERSION = 0x06010000
 
 WIN64 = 0
+
+def NTDDI_MAJOR(dword):
+    return dword & 0xffff0000
+def NTDDI_MINOR(dword):
+    return dword & 0x0000ffff

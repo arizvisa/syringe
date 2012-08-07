@@ -8,6 +8,14 @@ class KSEMAPHORE(pstruct.type):
         (LONG, 'Limit'),
     ]
 
+class _TL(pstruct.type):
+    _fields_ = [
+        (dyn.pointer(lambda s:_TL), 'next'),
+        (PVOID,'pobj'),
+        (PVOID,'pfnFree'),
+    ]
+class PTL(dyn.pointer(_TL)): pass
+
 class W32THREAD(pstruct.type, versioned):
     def __init__(self, **attrs):
         super(W32THREAD, self).__init__(**attrs)

@@ -69,29 +69,12 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         return (address >= left) and (address < right)
 
 ## declarations, heh. 
-class _LDR_DATA_TABLE_ENTRY_LIST(dyn.clone(LIST_ENTRY, _object_=LDR_DATA_TABLE_ENTRY)):
-    LinkHeader = None
-    def walk(self, direction='Flink'):
-        nextentry = self[direction]
-        while (nextentry.load().int() != 0):
-            res = nextentry.dereference()
-            if res.load()['DllBase'].int() == 0:
-                break
+class _LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
+    _object_ = LDR_DATA_TABLE_ENTRY
 
-            yield res
-
-            nextentry = res[self.LinkHeader][direction]
-            if nextentry.int() == self.getoffset():
-                break
-            continue
-        return
-
-    def moonwalk(self):
-        return self.walk('Blink')
-
-class _LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(_LDR_DATA_TABLE_ENTRY_LIST): LinkHeader = 'InLoadOrderLinks'
-class _LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(_LDR_DATA_TABLE_ENTRY_LIST): LinkHeader = 'InMemoryOrderModuleList'
-class _LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(_LDR_DATA_TABLE_ENTRY_LIST): LinkHeader = 'InInitializationOrderModuleList'
+class _LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InLoadOrderLinks',)
+class _LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InMemoryOrderModuleList',)
+class _LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InInitializationOrderModuleList',)
 
 class PEB_LDR_DATA(pstruct.type):
     _fields_ = [
@@ -100,8 +83,11 @@ class PEB_LDR_DATA(pstruct.type):
         (PVOID, 'SsHandle'),
         (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
         (_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
+        (_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
 
         (PVOID, 'EntryInProgress'),
+        (PVOID, 'ShutdownInProgress'),
+        (ULONG, 'ShutdownThreadId'),
     ]
     def walk(self):
         for x in self['InLoadOrderModuleList'].walk():

@@ -112,20 +112,11 @@ class ns_set_info(pstruct.type):
         return ' '.join([self.name(), sets])
 
 ###
-class MultiNameTypes(object):
-    types = {}
-    @classmethod
-    def Add(cls, multiname_type):
-        t = multiname_type.kind
-        assert t not in cls.types
-        cls.types[t] = multiname_type
-
-    @classmethod
-    def Lookup(cls, kind):
-        return cls.types[kind]
+class MultiNameTypes(ptype.definition):
+    cache = {}
 
 class multiname_kind_QName(pstruct.type):
-    kind = 0x07
+    type = 0x07
     _fields_ = [(u30, 'ns'), (u30, 'name')]
     def __repr__(self):
         return ' '.join([self.name(), self.get()])
@@ -141,10 +132,10 @@ class multiname_kind_QName(pstruct.type):
         return '%s.%s'% (ns.get(), name.get())
 
 class multiname_kind_QNameA(multiname_kind_QName):
-    kind = 0x0d
+    type = 0x0d
 
 class multiname_kind_RTQName(pstruct.type):
-    kind = 0x0f
+    type = 0x0f
     _fields_ = [(u30, 'name')]
     def __repr__(self):
         return ' '.join([self.name(), self.get()])
@@ -158,11 +149,11 @@ class multiname_kind_RTQName(pstruct.type):
         return name.get()
 
 class multiname_kind_RTQNameA(multiname_kind_RTQName):
-    kind = 0x10
+    type = 0x10
 class multiname_kind_RTQNameL(pstruct.type):
-    kind = 0x11
+    type = 0x11
 class multiname_kind_Multiname(pstruct.type):
-    kind = 0x09
+    type = 0x09
     _fields_ = [(u30, 'name'),(u30, 'ns_set')]
     def __repr__(self):
         b = int(self['ns_set'])
@@ -186,7 +177,7 @@ class multiname_kind_Multiname(pstruct.type):
         return name
 
 class multiname_kind_MultinameL(pstruct.type):
-    kind = 0x1b
+    type = 0x1b
     _fields_ = [(u30, 'ns_set')]
     def __repr__(self):
         s = int(self['ns_set'])
@@ -194,19 +185,19 @@ class multiname_kind_MultinameL(pstruct.type):
         return ' '.join([self.name(), repr(nssets[s])])
 
 class multiname_kind_MultinameLA(multiname_kind_MultinameL):
-    kind = 0x1c
+    type = 0x1c
 
 class multiname_kind_MultinameA(multiname_kind_Multiname):
-    kind = 0x0e
+    type = 0x0e
 
-MultiNameTypes.Add(multiname_kind_QName)
-MultiNameTypes.Add(multiname_kind_QNameA)
-MultiNameTypes.Add(multiname_kind_RTQName)
-MultiNameTypes.Add(multiname_kind_RTQNameA)
-MultiNameTypes.Add(multiname_kind_Multiname)
-MultiNameTypes.Add(multiname_kind_MultinameL)
-MultiNameTypes.Add(multiname_kind_MultinameLA)
-MultiNameTypes.Add(multiname_kind_MultinameA)
+MultiNameTypes.define(multiname_kind_QName)
+MultiNameTypes.define(multiname_kind_QNameA)
+MultiNameTypes.define(multiname_kind_RTQName)
+MultiNameTypes.define(multiname_kind_RTQNameA)
+MultiNameTypes.define(multiname_kind_Multiname)
+MultiNameTypes.define(multiname_kind_MultinameL)
+MultiNameTypes.define(multiname_kind_MultinameLA)
+MultiNameTypes.define(multiname_kind_MultinameA)
 
 class multiname_info(pstruct.type):
     class __kind(pint.enum, u8):
@@ -224,7 +215,7 @@ class multiname_info(pstruct.type):
         ]
 
     def __data(self):
-        return MultiNameTypes.Lookup( int(self['kind'].l) )
+        return MultiNameTypes.lookup( int(self['kind'].l) )
 
     _fields_ = [
         (__kind, 'kind'),
@@ -292,22 +283,13 @@ class metadata_info(pstruct.type):
         (lambda s: dyn.array(item_info, int(s['item_count'])), 'items')
     ]
 
-class TraitTypes(object):
-    types = {}
-    @classmethod
-    def Add(cls, trait_type):
-        t = trait_type.kind
-        assert t not in cls.types
-        cls.types[t] = trait_type
-
-    @classmethod
-    def Lookup(cls, kind):
-        return cls.types[kind]
+class TraitTypes(ptype.definition):
+    cache = {}
 
 class traits_info(pstruct.type):
     def __data(self):
         kind = self['kind'].l
-        return TraitTypes.Lookup(kind['k'])
+        return TraitTypes.lookup(kind['k'])
 
     class __kind(pbinary.struct):
         _fields_ = [(4,'a'),(4,'k')]
@@ -428,21 +410,21 @@ class trait_method(pstruct.type):
         (u30, 'method'),
     ]
 
-class Trait_Slot(trait_slot): kind = 0
-class Trait_Method(trait_method): kind = 1
-class Trait_Getter(trait_method): kind = 2
-class Trait_Setter(trait_method): kind = 3
-class Trait_Class(trait_class): kind = 4
-class Trait_Function(trait_function): kind = 5
-class Trait_Const(trait_slot): kind = 6
+class Trait_Slot(trait_slot): type = 0
+class Trait_Method(trait_method): type = 1
+class Trait_Getter(trait_method): type = 2
+class Trait_Setter(trait_method): type = 3
+class Trait_Class(trait_class): type = 4
+class Trait_Function(trait_function): type = 5
+class Trait_Const(trait_slot): type = 6
 
-TraitTypes.Add(Trait_Slot)
-TraitTypes.Add(Trait_Method)
-TraitTypes.Add(Trait_Getter)
-TraitTypes.Add(Trait_Setter)
-TraitTypes.Add(Trait_Class)
-TraitTypes.Add(Trait_Function)
-TraitTypes.Add(Trait_Const)
+TraitTypes.define(Trait_Slot)
+TraitTypes.define(Trait_Method)
+TraitTypes.define(Trait_Getter)
+TraitTypes.define(Trait_Setter)
+TraitTypes.define(Trait_Class)
+TraitTypes.define(Trait_Function)
+TraitTypes.define(Trait_Const)
 
 class instance_info(pstruct.type):
     def _row(type, fieldlength):

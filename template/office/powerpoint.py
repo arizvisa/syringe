@@ -97,10 +97,21 @@ class EndDocument(pstruct.type):
 @Record.define
 class OEPlaceholderAtom(pstruct.type):
     type = 3011
+
+    class __placeholderid(pint.enum, ubyte1):
+        _values_ = [
+            ('None', 0), ('MasterTitle', 1), ('MasterBody', 2), ('MasterCenteredTitle', 3), ('MasterNotesSlideImage', 4),
+            ('MasterNotesBodyImage', 5), ('MasterDate', 6), ('MasterSlideNumber', 7), ('MasterFooter', 8), ('MasterHeader', 9),
+            ('MasterSubtitle', 10), ('GenericTextObject', 11), ('Title', 12), ('Body', 13), ('NotesBody', 14), ('CenteredTitle', 15),
+            ('Subtitle', 16), ('VerticalTextTitle', 17), ('VerticalTextBody', 18), ('NotesSlideImage', 19), ('Object', 20),
+            ('Graph', 21), ('Table', 22), ('ClipArt', 23), ('OrganizationChart', 24), ('MediaClip', 25),
+        ]
+        
     _fields_ = [
         (uint4, 'placementId'),
-        (ubyte1, 'placeholderId'),
-        (ubyte1, 'size')
+        (__placeholderid, 'placeholderId'),
+        (ubyte1, 'size'),
+        (lambda s: dyn.block(s.blocksize() - 6), 'unused'),
     ]
 
 @Record.define
@@ -266,6 +277,7 @@ if False:
 
 if __name__ == '__main__':
     import powerpoint as pp
+    import ptypes
     from ptypes import *
 
     if False:
@@ -300,6 +312,6 @@ if __name__ == '__main__':
         container += s
 
         z = pp.RecordGeneral()
-        z.source = provider.string(container)
+        z.source = ptypes.provider.string(container)
         z.size = lambda:len(container)
         print z.l

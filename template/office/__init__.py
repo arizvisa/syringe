@@ -38,7 +38,7 @@ class RecordGeneral(pstruct.type):
     def __data(self):
         t = int(self['header'].l['type'])
         l = int(self['header']['length'])
-        return dyn.clone(self.Record.get(t, length=l, type=t), blocksize=lambda s:l)
+        return dyn.clone(self.Record.get(t, length=l), blocksize=lambda s:l)
         
     def __extra(self):
         t = int(self['header'].l['type'])

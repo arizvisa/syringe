@@ -94,7 +94,19 @@ class PEB(pstruct.type, versioned):
             (dyn.pointer(heaptypes.HEAP), 'ProcessHeap'),
         ])
 
-        if self.NTDDI_VERSION >= sdkddkver.NTDDI_LONGHORN:
+        if self.NTDDI_VERSION >= sdkddkver.NTDDI_WIN7:
+            f.extend([
+                (pint.uint32_t, 'FastPebLock'),
+                (PVOID, 'AltThunkSListPtr'),
+                (PVOID, 'IFEOKey'),
+                (ULONG, 'CrossProcessFlags'),
+                (PVOID, 'UserSharedInfoPtr'),
+                (ULONG, 'SystemReserved'),
+                (ULONG, 'SpareUlong'),
+                (ULONG, 'ApiSetMap'),
+            ])
+
+        elif self.NTDDI_VERSION >= sdkddkver.NTDDI_LONGHORN:
             f.extend([
                 (pint.uint32_t, 'FastPebLock'),
                 (PVOID, 'AltThunkSListPtr'),

@@ -1,3 +1,4 @@
+import __builtin__
 import ptype,parray
 import pint,pstr,dyn,utils
 
@@ -6,7 +7,7 @@ class _char_t(pint.integer_t):
     def str(self):
         return self.v
 
-    def summary(self):
+    def details(self):
         if self.initialized:
             return repr(self.str())
         return '???'
@@ -29,7 +30,7 @@ class wchar_t(_char_t):
         return self
 
     def get(self):
-        return __builtins__['unicode'](self.value, 'utf-16').encode('utf-8')
+        return __builtin__.unicode(self.value, 'utf-16').encode('utf-8')
 
 class string(ptype.type):
     '''String of characters'''
@@ -42,7 +43,7 @@ class string(ptype.type):
         return self[ ofs / self._object_.length ]
 
     def blocksize(self):
-        return self._object_.length * len(self)
+        return self._object_.length * self.length
 
     def __insert(self, index, string):
         l = self._object_.length
@@ -69,8 +70,11 @@ class string(ptype.type):
     def __delitem__(self, index):
         self.__delete(index)
     def __getitem__(self, index):
+        if index < -len(self) or index >= len(self):
+            raise IndexError('list index out of range')
+        index &= len(self)-1
         offset = index * self._object_.length
-        return self.newelement(self._object_, str(index), self.getoffset() + offset).alloc(offset=0,source=ptype.provider.string(self.serialize()[index]))
+        return self.newelement(self._object_, str(index), self.getoffset() + offset).alloc(offset=0,source=ptype.provider.string(self.serialize()[offset:offset+self._object_.length]))
     def __setitem__(self, index, value):
         assert value.__class__ is self._object_
         self.__replace(index, value.serialize())
@@ -85,8 +89,11 @@ class string(ptype.type):
             self.append(x)
         return
     def __iter__(self):
-        for x in self.value:
-            yield x
+        obj = self._object_
+        ofs = self.getoffset()
+        for i in xrange(len(self)):
+            yield self.newelement(self._object_, str(i), ofs).l
+            ofs += obj.length
         return
 
     def set(self, value):
@@ -124,7 +131,7 @@ class string(ptype.type):
     def serialize(self):
         return str(self.value)
 
-    def summary(self):
+    def details(self):
         if self.initialized:
             return repr(self.str())
         return '???'
@@ -181,9 +188,8 @@ class szstring(string):
 class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
-#    unicode = __builtins__['unicode']
     def str(self):
-        s = __builtins__['unicode'](self.value, 'utf-16').encode('utf-8')
+        s = __builtin__.unicode(self.value, 'utf-16').encode('utf-8')
         return utils.strdup(s)[:len(self)]
 
 class szwstring(szstring, wstring):
@@ -332,7 +338,7 @@ if __name__ == '__main__':
         class unicodestring(pstr.szwstring):
             _object_ = wbechar_t
             def str(self):
-                s = __builtins__.unicode(self.value, 'utf-16-be').encode('utf-8')
+                s = __builtin__.unicode(self.value, 'utf-16-be').encode('utf-8')
                 return utils.strdup(s)[:len(self)]
 
         class unicodespeech_packet(pstruct.type):
