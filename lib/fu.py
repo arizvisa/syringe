@@ -2,9 +2,6 @@
 
 # TODO: add a decorator that can transform anything into an object that will pass an instance of self
 #          to serialization service
-#       perhaps the (module,name) should be stored for every type implicitly instead of explicitly
-#          this would remove the need for try-catch exception that is defined type_.u_instance
-#          and would also enable the usage of 'module.name' syntax for the exclude attribute
 
 import __builtin__
 import cPickle as pickle
@@ -14,7 +11,6 @@ VERSION = '0.6'
 # attribute[ignore=list of fu type names] -- ignore serializing/deserializing these types
 # attribute[globals=dict] -- use the provided dict as the globals for deserialized objects
 
-## FIXME: would be pretty cool to use __module__.__name__ syntax for the var names
 # attribute[exclude=list of var names] -- ignore serializing/deserializing these specific names
 
 ## FIXME: none of the recurse attributes have been implemented
@@ -124,7 +120,8 @@ class package:
             getset_descriptor = cls.__weakref__.__class__
             method_descriptor = cls.__reduce_ex__.__class__
             wrapper_descriptor = cls.__setattr__.__class__
-            if t in (getset_descriptor,method_descriptor,wrapper_descriptor):
+            member_descriptor = type(lambda:wat).func_globals.__class__
+            if t in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,generator.getclass()):
                 raise KeyError(instance)
 
             # catch-all
@@ -167,7 +164,7 @@ class package:
             if data.__class__ is __builtin__.tuple:
                 return __builtin__.tuple(self.store(x,**attributes) for x in data)
             elif data.__class__ is __builtin__.dict:
-                return __builtin__.dict([(self.store(k,**attributes),self.store(v,**attributes)) for k,v in data.iteritems()])
+                return __builtin__.dict([(self.store(k,**attributes),self.store(v,**attributes)) for k,v in data.items()])
             return data
 
         def unpack_references(self, data, **attributes):
@@ -175,7 +172,7 @@ class package:
             if data.__class__ is __builtin__.tuple:
                 return __builtin__.tuple([self.fetch(x,**attributes) for x in data])
             elif data.__class__ is __builtin__.dict:
-                return __builtin__.dict((self.fetch(k,**attributes),self.fetch(v,**attributes)) for k,v in data.iteritems())
+                return __builtin__.dict((self.fetch(k,**attributes),self.fetch(v,**attributes)) for k,v in data.items())
             return data
 
         def identify(self, object):
@@ -193,16 +190,20 @@ class package:
                 return identity
             cls = package.cache.byinstance(object)
 
+            # get naming info
+            module,name = getattr(object,'__module__',None),getattr(object,'__name__',None)
+            fullname = ('%s.%s'% (module,name)) if module else name
+
             # attribute[ignore=list of types,exclude=list of names]
             if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
-                (getattr(object,'__name__',None) in __builtin__.set(attributes.get('exclude',()))):
+                (fullname in __builtin__.set(attributes.get('exclude',()))):
                 cls = partial
 
             # store constructor info
             data = cls.p_constructor(object,**attributes)
             self.store_cache.add(identity)
             data = self.pack_references(data,**attributes)
-            self.cons_data[identity] = cls.id,data
+            self.cons_data[identity] = cls.id,(module,name),data
 
             # recurse into instance data
             data = cls.p_instance(object,**attributes)
@@ -216,21 +217,37 @@ class package:
                 return self.fetch_cache[identity]
 
             # unpack constructor
-            _,data = self.cons_data[identity]
+            _,modulename,data = self.cons_data[identity]
             cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
+
+            # naming info
+            module,name = modulename
+            fullname = ('%s.%s'% (module,name)) if module else name
 
             # attribute[ignore=list of types,exclude=list of names]
             if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
-                (getattr(object,'__name__',None) in __builtin__.set(attributes.get('exclude',()))):
+                (fullname in __builtin__.set(attributes.get('exclude',()))):
                 cls = partial
                 instance = partial.new()
                 self.fetch_cache[identity] = instance
                 return instance
 
+            # create an instance of packed object
             instance = cls.u_constructor(data,**attributes)
             self.fetch_cache[identity] = instance
 
-            # update instance
+            # try really hard to assign naming info
+            try:
+                instance.__module__ = module
+            except (TypeError,AttributeError):
+                pass
+
+            try:
+                instance.__name__ = name
+            except (TypeError,AttributeError):
+                pass
+
+            # update instance with packed attributes
             _,data = self.inst_data[identity]
             cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
             _ = cls.u_instance(instance,data,**attributes)
@@ -416,26 +433,19 @@ if 'core':
         @classmethod
         def p_instance(cls, object, **attributes):
             result = {}
-            for k in dir(object):
-                v = getattr(object, k)
+            for k,v in object.__dict__.iteritems():
                 try:
                     _ = package.cache.byinstance(v)
-                    result[k] = v
 
                 except (KeyError,TypeError):
-                    pass
-                continue
+                    continue
+
+                result[k] = v
             return result
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
-            for k,v in data.iteritems():
-                # XXX: try really hard to assign naming info for the members of the object
-                try:
-                    v.__name__ = k
-                except (AttributeError,TypeError):
-                    pass
-
+            for k,v in data.items():
                 try:
                     setattr(instance, k, v)
                 except (TypeError,AttributeError):
@@ -449,7 +459,7 @@ if 'core':
             return __builtin__.type(package)
 
     @package.cache.register
-    class object_(__marshallable):
+    class object_(type_):
         @classmethod
         def p_constructor(cls, object, **attributes):
             name,type = getattr(object,'__name__',None),object.__class__
@@ -459,17 +469,18 @@ if 'core':
         def u_constructor(cls, data, **attributes):
             name,type = data
             # FIXME: figure out some elegant way to instantiate a type when doing so will raise an exception
+            #argcount = type.__init__.func_code.co_argcount  # XXX
+            #argh = __builtin__.tuple(None for x in range(argcount-1))
+            init = type.__init__ 
+            #result = type(*arghs)
+
+            # XXX: create an instance illegitimately
+            type.__init__ = lambda s: None
             result = type()
+            type.__init__ = init
+
             result.__name__ = name
             return result
-
-        @classmethod
-        def p_instance(cls, object, **attributes):
-            return ()
-
-        @classmethod
-        def u_instance(cls, instance, data, **attributes):
-            return instance
 
 if 'builtin':
     @package.cache.register_type(True.__class__)
@@ -669,6 +680,8 @@ if 'special':
         @classmethod
         def u_constructor(cls, data, **attributes):
             module,code,closure = data
+            if module is None:  # XXX: default module
+                module = '__main__'
             namespace = attributes.get('globals', __import__(module).__dict__)    # XXX: due to order-of-operations, this __import__ gets executed
             result = cls.__new_closure(*closure)
             return cls.new(code, namespace, closure=result)
@@ -756,7 +769,7 @@ if 'special':
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
-            for k,v in data.iteritems():
+            for k,v in data.items():
                 setattr(instance, k, v)
             return instance
 
@@ -776,6 +789,32 @@ if True:
         def u_constructor(cls, data, **attributes):
             m,n = data
             return getattr(__import__(m),n)
+
+#    @package.cache.register_type( (x for x in (0,)) )
+    @package.cache.register
+    class generator(__marshallable):
+        @classmethod
+        def getclass(cls):
+            return (x for x in (0,)).__class__
+
+#    @package.cache.register_type( (x for x in (0,)).gi_frame.__class__ )
+    @package.cache.register
+    class frame(__marshallable):
+        @classmethod
+        def getclass(cls):
+            return (x for x in (0,)).gi_frame.__class__
+
+    @package.cache.register_type(__builtin__.staticmethod)
+    class staticmethod_(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.staticmethod
+
+    @package.cache.register_type(__builtin__.classmethod)
+    class classmethod_(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.classmethod
 
 def dumps(object, **attributes):
     '''convert a python object to a string'''
@@ -825,7 +864,8 @@ if __name__ == '__main__':
 
     # lame helpers for testcases
     def make_package(cls, cons, inst):
-        result = (fu.VERSION, 0, ({0:(cls.id,cons)},{0:(cls.id,inst)})) 
+        m,n = '__main__', 'unnamed'
+        result = (fu.VERSION, 0, ({0:(cls.id,(m,n),cons)},{0:(cls.id,inst)})) 
         return result
     def extract_package(package):
         _,id,(cons,inst) = package
@@ -865,7 +905,7 @@ if __name__ == '__main__':
         input = 0x40
         result = fu.package.pack(input)
         id,cons,inst = extract_package(result)
-        if cons[id][1] == input:
+        if cons[id][-1] == input:
             raise Success
 
     @TestCase

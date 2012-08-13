@@ -1,5 +1,5 @@
 '''base structure element'''
-import ptype,utils
+import ptype,utils,logging
 
 class __pstruct_generic(ptype.container):
     __fastindex = dict  # our on-demand index lookup for .value
@@ -74,30 +74,12 @@ class type(__pstruct_generic):
             result = super(type, self).load()
         return result
 
-    def __details_uninitialized(self):
-        result = []
-        startofs = self.getoffset()
-        ofs = '[%x]'% startofs
-        for t,name in self._fields_:
-            result.append(' '.join([ofs, repr(t), name, '???']))
-            ofs = '[%x+??]'% startofs
-
-        if len(result) > 0:
-            return '\n'.join(result)
-        return '[%x] ??? []'%self.getoffset()
-
-    def __details_initialized(self):
-#        row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, repr(value.serialize())])
+    def details(self):
         row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, value.summary()])
         result = [row(name,value) for (t,name),value in zip(self._fields_, self.value)]
         if len(result) > 0:
             return '\n'.join(result)
         return '[%x] empty []'%self.getoffset()
-
-    def details(self):
-        if self.initialized:
-            return self.__details_initialized()
-        return self.__details_uninitialized()
 
     def repr(self):
         # print out a friendly header for the structure
@@ -124,11 +106,10 @@ class type(__pstruct_generic):
 
 import dyn
 def make(fields, **attrs):
-    '''
-    Given a set of initialized ptype objects, return a pstruct object
-    describing it. This will create padding in the structure for any
-    holes that were found.
-    '''
+    """Given a set of initialized ptype objects, return a pstruct object describing it.
+
+    This will automatically create padding in the structure for any holes that were found.
+    """
     fields = set(fields)
 
     # FIXME: instead of this assert, if more than one structure occupies the

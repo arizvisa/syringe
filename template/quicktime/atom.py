@@ -10,12 +10,16 @@ class Atom(pstruct.type):
         return dyn.clone(AtomType.get(type, __name__='Unknown<%s>'% repr(type), length=size), blocksize=lambda s:size)
 
     def getheadersize(self):
-        return 4 + 4 + self['extended_size'].size()
+        try:
+            return 4 + 4 + self['extended_size'].size()
+        except IndexError:
+            pass
+        return 8
 
     def getsize(self):
-        s = int(self['size'])
+        s = self['size'].int()
         if s == 1:
-            s = int(self['extended_size'])
+            s = self['extended_size'].int()
 
         if s >= self.getheadersize():
             return s
@@ -36,11 +40,13 @@ class Atom(pstruct.type):
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
-        (lambda s: (ptype.empty, pint.uint64_t)[int(s['size'].l) == 1], 'extended_size'),
+        (lambda s: (ptype.empty, pint.uint64_t)[s['size'].l.int() == 1], 'extended_size'),
         (__data, 'data'),
     ]
 
     def __repr__(self):
+        if not self.initialized and self.v is None:
+            return "[%x] %s UNINITIALIZED expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), 0, ','.join(self.keys()))
         discrepancy = self.size() != self.blocksize()
         if discrepancy:
             return "[%x] %s '%s' ERR size:0x%x expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), self['type'].serialize(), self.size(), self.getsize(), ','.join(self.keys()))
@@ -112,14 +118,9 @@ class MDAT(dyn.block(0)):
 
 ## empty atoms
 @AtomType.define
-class WIDE(ptype.type):
+class WIDE(pstruct.type):
     type = 'wide'
-    def load(self):
-        # this error is raised only because i don't quite understand how this element works
-        #   does it make sense for a wide element to be a structure that contains an Atom maybe?
-        print "%s(%x:+%x) 'wide' loading of 64-bit elements is unimplemented at offset 0x%x ->"%(self.shortname(), self.getoffset(), self.blocksize(), self.getoffset())
-        print '\t' + '\n\t'.join(self.backtrace())
-        return super(WIDE, self).load()
+    _fields_ = []
 
 ## WLOC
 @AtomType.define
@@ -190,7 +191,7 @@ class ELST(pstruct.type):
 
     def __Entry(self):
         count = self['Number of entries'].l
-        return dyn.array(pint.uint32_t, int(count))
+        return dyn.array(pint.uint32_t, count.int())
 
     class Entry(pstruct.type):
         _fields_ = [
@@ -203,7 +204,7 @@ class ELST(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(s.Entry, int(s['Number of entries'].l)), 'Entry')
+        (lambda s: dyn.array(s.Entry, s['Number of entries'].l.int()), 'Entry')
     ]
 
 @AtomType.define
@@ -311,7 +312,7 @@ class stsd(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of Entries'),
-        (lambda x: dyn.array(stsd.entry, int(x['Number of Entries'].l)), 'Entries'),
+        (lambda x: dyn.array(stsd.entry, x['Number of Entries'].l.int()), 'Entries'),
         (lambda s: dyn.block(s.blocksize()-s.size()), 'codec-specific') # XXX: it'd be cool to keep track of this too
     ]
 
@@ -330,8 +331,8 @@ class stts(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-#        (lambda x: dyn.array(stts.entry, int(x['Number of entries'].l) - 1), 'Entries')
-        (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
+#        (lambda x: dyn.array(stts.entry, x['Number of entries'].l.int() - 1), 'Entries')
+        (lambda x: dyn.array(pQTInt, x['Number of entries'].l.int()), 'Entries')
     ]
 
 ## stsc
@@ -350,7 +351,7 @@ class stsc(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(s.entry, int(s['Number of entries'].l)), 'Entries')
+        (lambda s: dyn.array(s.entry, s['Number of entries'].l.int()), 'Entries')
     ]
 
 ## stsz
@@ -360,14 +361,14 @@ class stsz(pstruct.type):
     type = 'stsz'
 
     def __Entries(self):
-        count = int(self['Number of entries'].l)
+        count = self['Number of entries'].l.int()
         s = self.blocksize() - self.size()
         if s <= 0:
             print '%s(%x:+%x) - blocksize(%d-%d) <= 0 while trying to read sample entry table ->'%(self.shortname(), self.getoffset(), self.blocksize(), self.blocksize(), self.size())
             print '\t' + '\n\t'.join(self.backtrace())
             return ptype.empty
         return dyn.array(pQTInt, count)
-        
+
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
@@ -385,7 +386,7 @@ class stco(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
+        (lambda x: dyn.array(pQTInt, x['Number of entries'].l.int()), 'Entries')
     ]
 
 if False:
@@ -397,7 +398,7 @@ if False:
             (pint.uint8_t, 'Version'),
             (dyn.block(3), 'Flags'),
             (pQTInt, 'Number of entries'),
-            (lambda x: dyn.array(pQTInt, int(x['Number of entries'].l)), 'Entries')
+            (lambda x: dyn.array(pQTInt, x['Number of entries'].l.int()), 'Entries')
         ]
 
 @AtomType.define
@@ -423,5 +424,5 @@ class dref(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(Atom, int(s['Number of entries'].l)), 'Data references')
+        (lambda s: dyn.array(Atom, s['Number of entries'].l.int()), 'Data references')
     ]

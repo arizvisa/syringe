@@ -4,7 +4,9 @@ from ptypes import *
 class pQTInt(pint.bigendian(pint.uint32_t)): pass
 class pQTType(pQTInt):
     def __repr__(self):
-        return "%s '%c%c%c%c' (%08x)"% ( repr(self.__class__), self.value[0], self.value[1], self.value[2], self.value[3], int(self) )
+        if self.value:
+            return "%s '%c%c%c%c' (%08x)"% ( self.name(), self.value[0], self.value[1], self.value[2], self.value[3], int(self) )
+        return "%s uninitialized"%(self.name())
 
     def __cmp__(self, x):
         if type(x) is str:
@@ -50,5 +52,5 @@ class pQTString(pstruct.type):
         (lambda s: dyn.clone(pstr.string, length=int(s['c'].l)), 's'),
     ]
 
-    def get(self):
-        return self['s'].get()
+    def str(self):
+        return self['s'].str()

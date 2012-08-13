@@ -201,6 +201,9 @@ class enum(integer_t):
             return ' '.join((value, res))
         return '???'
 
+    def summary(self):
+        return self.details()
+
     def __getitem__(self, name):
         return self.lookupByName(name)
 

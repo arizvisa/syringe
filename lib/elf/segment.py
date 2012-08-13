@@ -1,40 +1,69 @@
+import header,dynamic
 from base import *
-import header
 
-### some misc types
-class Elf32_Dyn(pstruct.type):
-    class __d_un(dyn.union):
+class Elf32_Phdr(pstruct.type):
+    class __p_type(pint.enum, Elf32_Word):
+        _values_ = [
+            ('PT_NULL', 0),
+            ('PT_LOAD', 1),
+            ('PT_DYNAMIC', 2),
+            ('PT_INTERP', 3),
+            ('PT_NOTE', 4),
+            ('PT_SHLIB', 5),
+            ('PT_PHDR', 6),
+            ('PT_GNU_EH_FRAME', 0x6474e550),
+            ('PT_GNU_STACK', 0x6474e551),
+            ('PT_LOPROC', 0x70000000),
+            ('PT_HIPROC', 0x7fffffff),
+        ]
+
+    def __p_offset(self):
+        t = int(self['p_type'].l)
+        type = Type.get(t)
+        # XXX: there's that difference here between the filesz and memsz
+        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(Elf32_Phdr)['p_filesz'].l)), lambda s: s.getparent(Elf32_Ehdr), type=Elf32_Off)
+
+    class __p_flags(pbinary.struct):
+        # Elf32_Word
         _fields_ = [
-            (Elf32_Word, 'd_val'),
-            (Elf32_Addr, 'd_ptr'),
+            (4, 'PF_MASKPROC'),
+            (1+8+16, 'SHF_RESERVED'),
+            (1, 'PF_R'),
+            (1, 'PF_W'),
+            (1, 'PF_X'),
         ]
 
     _fields_ = [
-        (Elf32_Sword, 'd_tag'),
-#        (__d_un, 'd_un'),
-        (Elf32_Word, 'd_val'),
+        (__p_type, 'p_type'),
+        (__p_offset, 'p_offset'),
+        (Elf32_Addr, 'p_vaddr'),
+        (Elf32_Addr, 'p_paddr'),
+        (Elf32_Word, 'p_filesz'),
+        (Elf32_Word, 'p_memsz'),
+        (__p_flags, 'p_flags'),
+        (Elf32_Word, 'p_align'),
     ]
 
-    # FIXME: this union can be dynamic based on the d_tag field
-
 ### segment type definitions
-class Type(Record):
+class Type(ptype.definition):
     cache = {}
 
-class PT_LOAD(object): type=1
+@Type.define
+class PT_LOAD(ptype.block):
+    type=1
 
-@Type.Define
+@Type.define
 class PT_DYNAMIC(parray.block):
     type=2
-    _object_=Elf32_Dyn
+    _object_=dynamic.Elf32_Dyn
     def isTerminator(self, value):
-        return int(value['d_tag']) == 0
+        return value['d_tag'].int() == 0
 
-@Type.Define
+@Type.define
 class PT_INTERP(pstr.szstring):
     type=3
 
-@Type.Define
+@Type.define
 class PT_NOTE(parray.block):
     type=4
     class __note(pstruct.type):
@@ -52,18 +81,22 @@ class PT_NOTE(parray.block):
             (Elf32_Word, 'namesz'),
             (Elf32_Word, 'descsz'),
             (Elf32_Word, 'type'),
-#            (lambda s: dyn.clone(tr.szstring, length=int(s['namesz'].l) - ), 'name'),
             (__name, 'name'),
             (lambda s: dyn.block(int(s['descsz'].l)), 'desc'),
         ]
 
     _object_ = __note
     
-class PT_SHLIB(object): type=5
+@Type.define
+class PT_SHLIB(ptype.block):
+    type=5
+    # FIXME
 
-@Type.Define
-class PT_PHDR(header.Elf32_Phdr):
+@Type.define
+class PT_PHDR(Elf32_Phdr):
     type=6
 
-class PT_GNU_EH_FRAME(object):
+@Type.define
+class PT_GNU_EH_FRAME(ptype.block):
     type = 0x6474e550
+    # FIXME

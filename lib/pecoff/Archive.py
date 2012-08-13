@@ -16,22 +16,6 @@ class stringinteger(pstr.string):
     def __long__(self):
         return self.long()
 
-class newline(pstr.szstring):
-    # XXX: this type is kind of magical in that it's using undocumented stuff
-
-    def isTerminator(self, value):
-        if value.serialize() != '\n':
-            self.value=''
-            return False
-        return True
-
-    def deserialize_stream(self, stream):
-        try:
-            result = super(newline, self).deserialize_stream(stream)
-        except StopIteration:
-#            logging.warning('%s : terminated at %x'%(self.name(), self.getoffset()))
-            result = self
-        return result
 #
 class MemberHeaderName(pstr.string):
     length = 16
@@ -185,12 +169,19 @@ class MemberData(dyn.union):
 
 class ArchiveMember(pstruct.type):
     def __Member(self):
-        return dyn.clone(MemberData, root=dyn.block(int(self['Header'].l['Size'])))
+        return dyn.clone(MemberData, root=dyn.block(self['Header'].l['Size'].int()))
+
+    def __newline(self):
+        o = self.getoffset('newline')
+        a = self.newelement(pstr.char_t, 'temp', o).l
+        if a.serialize() == '\n':
+            return pstr.char_t
+        return ptype.empty
 
     _fields_ = [
         (MemberHeader, 'Header'),
         (__Member, 'Member'),
-        (newline, 'newline'),
+        (__newline, 'newline'),
     ]
 
     def isImport(self):

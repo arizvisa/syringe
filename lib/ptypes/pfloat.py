@@ -51,6 +51,7 @@ class double(float_t):
     components = (1, 11, 52)
 
 if __name__ == '__main__':
+    import struct
 
     def test(integer, f1, f2):
         if f1 == f2:
@@ -66,17 +67,20 @@ if __name__ == '__main__':
         #        (0x80000000, -0.0),
         #        (0x7f800000, 0),
         #        (0xff800000, -0),
-        (0x3eaaaaaa, 1.0/3),
+        (0x3eaaaaab, 1.0/3),
         (0x41c80000, 25.0),
     ]
 
     self = single()
     for number,result in singles:
+        # pack and unpack to normalize precision
+        result=struct.pack('f',result)
+        result,=struct.unpack('f',result)
+
         self.set(number)
         test( number, float(self), result )
 
-
-    ######3#
+    ########
     doubles = [
         (0x3ff0000000000000, 1.0),
         (0x3ff0000000000001, 1.0000000000000002),

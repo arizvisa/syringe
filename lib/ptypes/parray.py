@@ -123,15 +123,12 @@ class type(__parray_generic):
         return result
 
     def details(self):
-        res = '???'
         if self.initialized:
             res = repr(''.join(self.serialize()))
             length = len(self)
         else:
-            if self.value is None:
-                length = 0
-            else:
-                length = len(self.value)
+            res = '???'
+            length = 0 if self.value is None else len(self.value)
 
         if ptype.istype(self._object_):
             obj = self._object_().name()
@@ -192,7 +189,11 @@ class infinite(terminated):
         '''method that returns a new element at a specified offset and loads it. intended to be overloaded.'''
         index = len(self.value)
         n = self.newelement(self._object_, str(index), self.__offset)
-        return n.load(**attrs)
+        try:
+            n.load(**attrs)
+        except StopIteration:
+            logging.warn("%s.infinite : unable to read %x:+%x bytes for %s in %s", self.__module__, n.getoffset(), n.blocksize(), n.name(), self.name())
+        return n
         
     def isTerminator(self, value):
         return False
@@ -219,7 +220,6 @@ class infinite(terminated):
                     path = ' ->\n\t'.join(self.backtrace())
                     logging.warn("<parray.infinite> Stopped reading %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
                 pass
-            pass
         return self
 
     def loadstream(self, **attr):
@@ -272,8 +272,9 @@ class block(terminated):
                     # if we error'd while decoding too much, then let us know
                     if current >= self.blocksize():
                         path = ' ->\n\t'.join(n.backtrace())
-                        logging.warn("<parray.block> Stopped reading %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), s, path))
-                    logging.debug("<parray.block> StopIteration raised from sub-element while performing writing %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), e))
+#                        logging.warn("<parray.block> Stopped reading %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), s, path))
+                    logging.debug("<parray.block> StopIteration raised from sub-element while performing load %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), e))
+                    self.value.append(n)
                     break
 
                 # if our child element pushes us past the blocksize
@@ -405,7 +406,7 @@ if __name__ == '__main__':
         string = string[:-1]
 
         z = RecordContainer(source=provider.string(string)).l
-        if len(z) == int(len(string)/2.0) and len(string)%2 == 1:
+        if len(z)-1 == int(len(string)/2.0) and len(string)%2 == 1:
             raise Success
 
     @TestCase
@@ -414,7 +415,8 @@ if __name__ == '__main__':
             _object_ = RecordGeneral
 
         z = RecordContainer(source=provider.string('A'*5)).l
-        if z.size() == 4 and len(z) == 2:
+        s = RecordGeneral().a.blocksize()
+        if z.size() == len(z)*s and len(z) == 3 and not z[-1].initialized:
             raise Success
 
     @TestCase
@@ -445,7 +447,7 @@ if __name__ == '__main__':
         block = '\x00'*block_length
 
         n = container_type(source=provider.string(block)).l
-        if len(n) == count:
+        if len(n)-1 == count and not n[-1].initialized:
             raise Success
 
     @TestCase
@@ -474,7 +476,7 @@ if __name__ == '__main__':
 
             def repr(self):
                 if self.initialized:
-                    return self.name() + ' %x'% self.int()
+                    return self4name() + ' %x'% self.int()
                 return self.name() + ' ???'
 
         class extreme(parray.infinite):
@@ -545,11 +547,11 @@ if __name__ == '__main__':
         class argh(parray.infinite):
             _object_ = stoofoo
         
+        global a,x
         x = argh(source=strm)
-        a = x.loadstream()
         for a in x.loadstream():
             pass
-        if a.serialize() == '\xde\xad\xde\xad':
+        if not a.initialized and x[-2].serialize() == '\xde\xad\xde\xad':
             raise Success
 
 if __name__ == '__main__':

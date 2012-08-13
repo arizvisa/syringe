@@ -1,7 +1,5 @@
 def printable(s):
-    '''
-    return a string of only printable characters
-    '''
+    """Return a string of only printable characters"""
     r = ''
     for c in s:
         if ord(c) >= 32 and ord(c) < 127:
@@ -12,10 +10,7 @@ def printable(s):
     return r
 
 def hexrow(value, offset=0, length=16, breaks=[8]):
-    '''
-    return a formatted hexrow.
-    guaranteed to always return the same length string...i hope.
-    '''
+    """Returns ``value as a formatted hexadecimal str"""
     value = str(value)[:length]
     extra = length - len(value)
 
@@ -38,7 +33,12 @@ def hexrow(value, offset=0, length=16, breaks=[8]):
     return '%s  %s  %s'% (left, middle, right)
 
 def hexdump(value, offset=0, length=16, rows=None, **kwds):
-    '''return a formatted hexdump'''
+    """Returns ``value`` as a formatted hexdump
+
+    If ``offset`` is specified, then the hexdump will start there.
+    If ``rows`` or it's alias ``lines`` is specified, only that number of rows
+    will be displayed.
+    """
 
     if 'lines' in kwds:
         rows = kwds.pop('lines')
@@ -72,6 +72,7 @@ def hexdump(value, offset=0, length=16, rows=None, **kwds):
     return '\n'.join(res)
 
 def infiniterange(start, stop=None, step=1):
+    """Returns a generator that will count infinitely from ``start`` to ``stop`` by step ``step``"""
     assert step != 0
 
     if step > 0:
@@ -88,7 +89,7 @@ def infiniterange(start, stop=None, step=1):
     return
 
 def strdup(string, terminator='\x00'):
-    '''will convert string to a string ended by terminator'''
+    """Will return a copy of ``string`` up to the provided ``terminated``"""
     string = iter(string)
     res = ''
     for x in string:
@@ -98,17 +99,19 @@ def strdup(string, terminator='\x00'):
     return res
 
 def indent(string, tabsize=4, char=' ', newline='\n'):
+    """Indent each line of ``string`` with the specified tabsize"""
     indent = char*tabsize
     strings = [(indent + x) for x in string.split(newline)]
     return newline.join(strings)
 
 def forever():
-    '''stupid function that enables more single-line style coding'''
+    """A generator that yield's True forever"""
     while True:
         yield True
     return
 
 class assign(object):
+    """Will temporarily assign the provided attributes to the specified to all code within it's scope"""
     def __init__(self, *objects, **attrs):
         self.objects = objects
         self.attributes = attrs
@@ -124,6 +127,7 @@ class assign(object):
         return
 
 class padding:
+    """Used for providing padding."""
     class source:
         @classmethod
         def repeat(cls,value):
@@ -153,4 +157,5 @@ class padding:
 
     @classmethod
     def fill(cls, amount, source):
+        """Returns a string of ``amount`` elements, from the specified ``source``"""
         return ''.join(x for i,x in zip(xrange(amount),source))

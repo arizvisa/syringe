@@ -70,7 +70,7 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
 
 ## declarations, heh. 
 class _LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
-    _object_ = LDR_DATA_TABLE_ENTRY
+    _object_ = dyn.pointer(LDR_DATA_TABLE_ENTRY)
 
 class _LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InLoadOrderLinks',)
 class _LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InMemoryOrderModuleList',)

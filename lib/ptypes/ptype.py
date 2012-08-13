@@ -7,50 +7,53 @@ from utils import assign
 
 ## this is all a horrible and slow way to do this...
 def isiterator(t):
+    """True if type ``t`` is iterable"""
     return hasattr(t, '__iter__') and hasattr(t, 'next')
 
 def istype(t):
-    ''' returns true if specified type is a class and inherits from ptype.type '''
+    """True if type ``t`` inherits from ptype.type"""
     return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
 
 def iscontainer(t):
-    ''' returns true if specified type inherits from container '''
+    """True if type ``t`` inherits from ptype.container """
     return istype(t) and issubclass(t, container)
 
-def isresolveable(p):
-    return isinstance(p, (types.FunctionType, types.MethodType)) or isiterator(p)
+def isresolveable(t):
+    """True if type ``t`` can be descended into"""
+    return isinstance(t, (types.FunctionType, types.MethodType)) or isiterator(t)
 
-def forceptype(p, self):
-    ''' as long as value is a function, keep calling it with a context until we get a "ptype" '''
+def forceptype(t, self):
+    """Resolve type ``t`` into a ptype.type for the provided object ``self``"""
 
     # of type ptype
-    if isinstance(p, type) or istype(p):
-        return p
+    if isinstance(t, type) or istype(t):
+        return t
 
     # functions
-    if isinstance(p, types.FunctionType):
-        res = p(self)
+    if isinstance(t, types.FunctionType):
+        res = t(self)
         return forceptype(res, self)
 
     # bound methods
-    if isinstance(p, types.MethodType):
-        return forceptype(p(), self)
+    if isinstance(t, types.MethodType):
+        return forceptype(t(), self)
 
-    if inspect.isgenerator(p):
-        return forceptype(p.next(), self)
+    if inspect.isgenerator(t):
+        return forceptype(t.next(), self)
 
     if False:
         # and lastly iterators
-        if isiterator(p):
-            return forceptype(p.next(), self)
+        if isiterator(t):
+            return forceptype(t.next(), self)
 
-    raise ValueError('forceptype %s could not be resolved as asked by %s'% (repr(p), self.name()))
+    raise ValueError('forceptype %s could not be resolved as asked by %s'% (repr(t), self.name()))
 
 ## ...and yeah... now it's done.
 
 # fn must be a method, so args[0] will fetch self
 import sys,traceback
 def rethrow(fn):
+    """A decorator that logs any exceptions that are thrown by function ``fn``"""
     def catch(*args, **kwds):
         try:
             return fn(*args, **kwds)
@@ -96,7 +99,7 @@ def rethrow(fn):
     return catch
 
 def debug(ptype):
-    '''Will clone ptype into one containing more detailed debugging information'''
+    """``rethrow`` all exceptions that occur during initialization of ``ptype``"""
     assert istype(ptype), '%s is not a ptype'% repr(ptype)
     class newptype(ptype):
         @rethrow
@@ -119,7 +122,7 @@ def debug(ptype):
     return newptype
 
 def debugrecurse(ptype):
-    '''Will clone ptype into one containing recursive debugging information'''
+    """``rethrow`` all exceptions that occur during initialization of ``ptype`` and any sub-elements"""
     class newptype(debug(ptype)):
         @rethrow
         def newelement(self, ptype, name='', ofs=0, **attrs):
@@ -131,8 +134,7 @@ def debugrecurse(ptype):
     return newptype
 
 class type(object):
-    '''
-    A very most atomical ptype.
+    """A very most atomical ptype.
     
     Contains the following settable properties:
         length:int<w>
@@ -149,7 +151,7 @@ class type(object):
 
         initialized:bool(r)
             if ptype has been initialized yet
-    '''
+    """
     offset = 0
     length = 0      # int
     value = None    # str
@@ -167,7 +169,7 @@ class type(object):
     
     ## initialization
     def __init__(self, **attrs):
-        '''Create a new instance of object. Will assign provided named arguments to self.attrs'''
+        """Create a new instance of object. Will assign provided named arguments to self.attrs"""
         try:
             self.source = self.source or provider.memory()
         except AttributeError:
@@ -177,6 +179,7 @@ class type(object):
         self.update_attributes(attrs)
 
     def update_attributes(self, attrs):
+        """Update the attributes that will be assigned to sub-elements using the ``attrs`` dict"""
         if 'recurse' not in attrs:
             recurse=attrs   # XXX: copy all attrs into recurse, since we conditionaly propogate
         else:
@@ -199,29 +202,40 @@ class type(object):
         return self
 
     def __nonzero__(self):
+        """True if initialized"""
         return self.initialized
 
     def size(self):
-        '''returns the number of bytes used by type'''
+        """Returns the number of bytes that have been loaded into the type"""
         if self.initialized:
             return len(self.value)
 
-        logging.debug("%s.size() -- object is uninitialized, returning 0."%self.name())
-        return 0
+        logging.debug("ptype.type.size : %s : unable to get size of type, as object is still uninitialized. returning the blocksize instead."%(self.name()))
+        return self.blocksize()
 
     def blocksize(self):
-        '''Can be overloaded to define the block's size. This MUST return an integral type'''
+        """Returns the expected size of the type
+    
+        By default this returns self.length, but can be overloaded to define the
+        size of the type. This *must* return an integral type.
+        """
 
         # XXX: overloading will always provide a side effect of modifying the .source's offset
-        #        make sure to fetch the blocksize first before you .getoffset() on something
+        #        make sure to fetch the blocksize first before you .getoffset() on something.
         return int(self.length)
 
     def contains(self, offset):
+        """True if the specified ``offset`` is contained within"""
         nmin = self.getoffset()
         nmax = nmin + self.blocksize()
         return (offset >= nmin) and (offset < nmax)
 
     def getparent(self, type=None):
+        """Returns the creator of the current type.
+
+        If the ``type`` argument is specified, will descend into .parent
+        elements until encountering an instance that inherits from it.
+        """
         if type is None:
             return self.parent
 
@@ -233,13 +247,15 @@ class type(object):
                 return x
             continue
 
-        raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
+#        raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
+        raise ValueError("ptype.type.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse())))
 
     def traverse(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None), *args, **kwds):
-        '''
-        Will walk the elements returned by the generator branches(visitee)
-        defaults to getting the path to the root node
-        '''
+        """Will walk the elements returned by the generator ``branches -> node -> ptype.type``
+
+        By default this will follow the .parent attribute until it is None,
+        effectively returning a backtrace.
+        """
         for self in branches(self, *args, **kwds):
             yield self
             for y in self.traverse(branches, *args, **kwds):
@@ -248,13 +264,13 @@ class type(object):
         return
 
     def backtrace(self):
-        '''Return a backtrace to the root element'''
+        """Return a backtrace to the root element"""
         path = self.traverse()
         path = [ 'type:%s name:%s offset:%x'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
         return list(reversed(path))
 
     def set(self, string, **kwds):
-        '''set entire type equal to string'''
+        """Set entire type equal to ``string``"""
         assert string.__class__ is str
         last = self.value
 
@@ -264,32 +280,39 @@ class type(object):
         return self
 
     a = property(fget=lambda s: s.alloc())   # abbr
-    def alloc(self, **kwds):
-        '''will initialize a ptype with zeroes'''
-        kwds.setdefault('source', provider.empty())        
-        return self.load(**kwds)
+    def alloc(self, **attrs):
+        """Will zero the ptype instance with the provided ``attrs``.
+
+        This can be overloaded in order to allocate space for the new ptype.
+        """
+        attrs.setdefault('source', provider.empty())
+        return self.load(**attrs)
 
     ## operator overloads
     def __cmp__(self, x):
-        '''true only if being compared to self. see .compare for comparing content'''
+        """True if ``x`` is being compared to self.
+
+        If one wants to compare the content of a type, see .compare(x)
+        """
         return [-1,0][id(self) is id(x)]
 
-    def setoffset(self, value, **kwds):
-        '''modifies the current offset (should probably be deprecated)'''
+    def setoffset(self, ofs, **_):
+        """Changes the current offset to ``ofs``"""
         res = self.offset
-        self.offset = value
+        self.offset = ofs
         return res
 
-    def getoffset(self, **kwds):
-        '''returns the current offset (should probably be deprecated)'''
+    def getoffset(self, **_):
+        """Returns the current offset"""
         return int(self.offset)
 
     def newelement(self, ptype, name='', ofs=0, **attrs):
-        '''
-        create a new element of type ptype with the specified name and offset.
-        this will duplicate the source, and set the new element's .parent
-        attribute. this will also pass the self.attrs property to the child constructor.
-        '''
+        """Create a new element of type ``ptype`` with the provided ``name`` and ``ofs``
+
+        If any ``attrs`` are provided, this will assign them to the new instance.
+        The newly created instance will inherit the current object's .source and
+        any .attrs designated by the current instance.
+        """
         res = forceptype(ptype, self)
         assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
 
@@ -298,7 +321,6 @@ class type(object):
 
         # instantiate an instance if we're given a type
         if istype(res):
-#            res.name = lambda s: name
             res = res(**updateattrs)
 
         # update the instance's properties
@@ -308,14 +330,13 @@ class type(object):
 
         if 'source' not in updateattrs:
             res.source = self.source
-
         return res
 
     ## reading/writing to memory provider
     l = property(fget=lambda s: s.load())   # abbr
 
     def load(self, **attrs):
-        '''sync self with some specified data source'''
+        """Synchronize the current instance with data from the .source attributes"""
 
         with utils.assign(self, **attrs):
             bs = self.blocksize()
@@ -327,7 +348,7 @@ class type(object):
         return result
 
     def commit(self, **attrs):
-        '''write self to self.source'''
+        """Commit the current state back to the .source attribute"""
         with utils.assign(self, **attrs):
             self.source.seek( self.getoffset() )
             self.source.store( self.serialize() )
@@ -335,7 +356,7 @@ class type(object):
 
     ## byte stream input/output
     def serialize(self):
-        '''return self as a byte stream'''
+        """Return contents of type as a string"""
         if self.initialized:
             result = str(self.value)
             bs = self.blocksize()
@@ -345,9 +366,12 @@ class type(object):
                 return result + padding
             assert len(result) == bs, 'value of %s is larger than blocksize (%d>%d)'%(self.shortname(), len(result), bs)
             return result
-        raise ValueError('%s is uninitialized'% self.name())
+        logging.warn('%s.type : %s is uninitialized during serialization (%x:+%x)', self.__module__, self.name(), self.getoffset(), self.blocksize())
+#        raise ValueError('%s is uninitialized'% self.name())
+        return utils.padding.fill(self.blocksize(), self.padding)
 
     def deserialize_block(self, block):
+        """Load type using the string provided by ``block``"""
         bs = self.blocksize()
         if len(block) < bs:
             self.value = block[:bs]
@@ -360,53 +384,55 @@ class type(object):
 
     ## representation
     def name(self):
+        """Return a name similar to Python's standard __repr__() output"""
         return "<class '%s'>"% self.shortname()
 
     def shortname(self):
-        '''intended to be overloaded. should return the short name of the current ptype.'''
+        """Return a shorter version of the type's name. Intended to be overloaded"""
         return self.__class__.__name__
 
     def __repr__(self):
         return self.repr()
 
     def repr(self):
+        """Return a __repr__ of the type"""
         if self.__name__ is None:
             return '[%x] %s %s'%( self.getoffset(), self.name(), self.details())
         return '[%x] %s %s %s'%( self.getoffset(), self.name(), self.__name__, self.details())
 
     def details(self):
-        '''return a detailed description of the type's value'''
+        """Return a detailed __repr__ of the type"""
         if self.initialized:
             return repr(''.join(self.serialize()))
         return '???'
 
     def summary(self):
-        '''return a summary of the type's value'''
+        """Return a summary __repr__ of the type"""
         if self.initialized:
             return repr(''.join(self.serialize()))
         return '???'
 
-    def hexdump(self, **kwds):
-        '''return a hexdump of the type's value'''
+    def hexdump(self, **options):
+        """Return a hexdump of the type using utils.hexdump(**options)"""
         if self.initialized:
-            return utils.hexdump( self.serialize(), offset=self.getoffset(), **kwds )
+            return utils.hexdump( self.serialize(), offset=self.getoffset(), **options )
         raise ValueError('%s is uninitialized'% self.name())
 
-    def new(self, type, **kwds):
-        '''instantiate a new type as a child of the current ptype'''
-        result = self.newelement(type, None, kwds.get('offset', 0))
-        result.__name__ = kwds.get('__name__', hex(id(result)) )
+    def new(self, type, **attrs):
+        """Instantiate a new instance of ``type`` from the current ptype with the provided ``attrs``"""
+        result = self.newelement(type, None, attrs.get('offset', 0))
+        result.__name__ = attrs.get('__name__', hex(id(result)) )
         # FIXME: we should probably do something to prevent this from being committed
         return result
 
     def copy(self, **kwds):
-        '''return a duplicated instance of the current type'''
+        """Return a duplicate instance of the current one"""
         result = self.newelement( self.__class__, self.name(), self.getoffset(), **kwds )
         result.deserialize_block( self.serialize() )
         return result
 
     def cast(self, t, **kwds):
-        '''cast the contents of the current ptype to a differing ptype'''
+        """Cast the contents of the current instance into a differing ptype"""
         source = provider.string(self.serialize())
         size = self.blocksize()
         result = self.newelement( t, self.__name__, self.getoffset() )
@@ -417,7 +443,8 @@ class type(object):
         try:
             result.load(source=source, offset=0, blocksize=lambda:size, **kwds)
         except Exception,e:
-            logging.fatal('%s.cast(%s) -- %s'%(self.name(),repr(t), repr(e)))
+            logging.fatal("ptype.type.cast : %s : %s : raised an exception : %s"%(self.name(),repr(t), repr(e)))
+
         return result
 
 class container(type):
@@ -430,27 +457,34 @@ class container(type):
     '''
     value = None    # list
 
-    def isInitialized(self):
+    def __isInitialized(self):
+        """True if the type is fully initialized"""
         if self.value is None or None in self.value:
             return False
         return not(False in [x.initialized for x in self.value])
-    initialized = property(fget=isInitialized)  # bool
+    initialized = property(fget=__isInitialized)  # bool
 
     def commit(self, **kwds):
-        '''will commit values of all children back to source'''
+        """Commit the current state of all children back to the .source attribute"""
         for n in self.value:
             n.commit(**kwds)
         return self
 
     def size(self):
-        '''Calculate the total used size of a container'''
+        """Returns a sum of the number of bytes that are in use by all sub-elements"""
         return reduce(lambda x,y: x+y.size(), self.value, 0)
 
     def blocksize(self):
+        """Returns a sum of the bytes that are expected to be read"""
         return reduce(lambda x,y: x+y.blocksize(), self.value, 0)
 
-    def getoffset(self, field=None, **attrs):
+    def getoffset(self, field=None):
         '''fetch the offset of the specified field'''
+        """Returns the current offset.
+
+        If ``field`` is specified as a ``str``, return the offset of the sub-element with the provided name.
+        If specified as a ``list``, descend into sub-elements using ``field`` as the path.
+        """
         if not field:
             return super(container, self).getoffset()
 
@@ -462,10 +496,14 @@ class container(type):
         return self.getoffset() + reduce(lambda x,y: x+y, [ x.size() for x in self.value[:index]], 0)
 
     def getindex(self, name):
-        '''intended to be overloaded. should return the index into self.value of the specified name'''
+        """Searches the .value attribute for an element with the provided ``name``
+
+        This is intended to overloaded by any type that inherits from ptype.container.
+        """
         raise NotImplementedError('Developer forgot to overload this method')
 
     def contains(self, offset):
+        """True if the specified ``offset`` is contained within"""
         for x in self.value:
             if x.contains(offset):
                 logging.warn("structure %s is unaligned. found element %s to contain offset %x", self.shortname(), x.shortname(), offset)
@@ -473,6 +511,11 @@ class container(type):
         return False
     
     def at(self, offset, recurse=True, **kwds):
+        """Returns element that contains the specified offset
+
+        If ``recurse`` is True, then recursively descend into all sub-elements
+        until an atomic type is encountered.
+        """
         if not recurse:
             for i,n in enumerate(self.value):
                 if n.contains(offset):
@@ -494,7 +537,7 @@ class container(type):
         return res
         
     def walkto(self, offset, **kwds):
-        '''will walk all the objects needed to reach a particular offset'''
+        """Will return each element along the path to reach the specified ``offset``"""
         obj = self
 
         # drill into containees for more detail
@@ -508,7 +551,10 @@ class container(type):
         return
 
     def setoffset(self, value, recurse=False):
-        '''modifies the current offset, set recurse=True to update all offsets in all children'''
+        """Changes the current offset to ``ofs``
+
+        If ``recurse`` is True, the update all offsets in sub-elements.
+        """
         res = super(container, self).setoffset(value)
         if recurse:
             assert self.initialized
@@ -519,6 +565,7 @@ class container(type):
         return res
 
     def serialize(self):
+        """Return contents of all sub-elements concatenated as a string"""
         result = ''.join( (x.serialize() for x in self.value) )
         bs = self.blocksize()
         if len(result) < bs:
@@ -532,6 +579,7 @@ class container(type):
         return result
 
     def load(self, **attrs):
+        """Synchronize the current instance with data from the .source attributes"""
         with utils.assign(self, **attrs):
             assert self.value is not None, 'Parent must initialize self.value'
             bs = self.blocksize()
@@ -541,6 +589,7 @@ class container(type):
         return result
 
     def deserialize_block(self, block):
+        """Load type using the string provided by ``block``"""
         assert self.value is not None, 'Parent must initialize self.value'
         ofs = self.getoffset()
         for n in self.value:
@@ -552,7 +601,7 @@ class container(type):
         return self
 
     def copy(self, **kwds):
-        '''return a duplicated instance of the current ptype'''
+        """Return a duplicate instance of the current one"""
         result = self.newelement( self.__class__, self.name(), self.getoffset() )
 
         # assign to self
@@ -576,12 +625,13 @@ class container(type):
         return result
 
 class empty(type):
-    '''empty ptype that occupies no space'''
+    """Empty ptype that occupies no space"""
     length = 0
 
 class none(empty): pass
 
 class block(none):
+    """A ptype that can be accessed an array"""
     def __getslice__(self, i, j):
         return self.serialize()[i:j]
     def __getitem__(self, index):
@@ -605,85 +655,86 @@ def clone(cls, **newattrs):
     return __clone
 
 class definition(object):
-    '''
-        this object should be used to simplify returning a ptype
-        that is identified by a 'type' value which is commonly
-        used in file formats that use a (type,length,value) tuple
-        as their containers.
+    """Used to store ptype definitions that are determined by a specific value
 
-        to use this properly, in your definition file create a
-        class that inherits from ptype.definition, and assign
-        an empty dictionary to the `.cache` variable.
+    This object should be used to simplify returning a ptype that is
+    identified by a 'type' value which is commonly used in file formats
+    that use a (type,length,value) tuple as their containers.
 
-        another thing to define is the `.unknown` variable. this
-        will be the default type that is returned when an
-        identifier is not located in the cache that was defined.
+    To use this properly, in your definition file create a class that inherits
+    from ptype.definition, and assign an empty dictionary to the `.cache`
+    variable.
 
-        i.e.
-        class mytypelookup(ptype.definition):
-            cache = {}
-            unknown = ptype.block
+    Another thing to define is the `.unknown` variable. This will be the
+    default type that is returned when an identifier is not located in the
+    cache that was defined.
 
-        in order to add entries to the cache, one can use the
-        `.add` classmethod to add a ptype-entry to the cache by a
-        specific type. however, it is recommended to use the
-        `.define` method which takes it's lookup-key from the
-        `.type` property.
+    i.e.
+    class mytypelookup(ptype.definition):
+        cache = {}
+        unknown = ptype.block
 
-        @mytypelookup.define
-        class myptype(ptype.type):
-            type = 66
-            length = 10
+    In order to add entries to the cache, one can use the `.add` classmethod
+    to add a ptype-entry to the cache by a specific type. However, it is
+    recommended to use the `.define` method which takes it's lookup-key from
+    the `.type` property.
 
-        with this we can query the cache via `.lookup`, or `.get`.
-        the `.get` method is guaranteed to always return a type.
-        optionally one can assign attributes to a clone of the
-        fetched type.
+    @mytypelookup.define
+    class myptype(ptype.type):
+        type = 66
+        length = 10
 
-        i.e.
-        theptype = mytypelookup.lookup(66)
-        
-        or
+    With this we can query the cache via `.lookup`, or `.get`.
+    The `.get` method is guaranteed to always return a type.
+    optionally one can assign attributes to a clone of the
+    fetched type.
 
-        class structure(pstruct.type):
-            def __value(self):
-                id = self['type'].int()
-                thelength = self['length'].int()
-                return myptypelookup.get(id, length=thelength)
+    i.e.
+    theptype = mytypelookup.lookup(66)
 
-            _fields_ = [
-                (uint32_t, 'type'),
-                (uint32_t, 'size')
-                (__value, 'unknown')
-            ]
+    or
 
-    '''
+    class structure(pstruct.type):
+        def __value(self):
+            id = self['type'].int()
+            thelength = self['length'].int()
+            return myptypelookup.get(id, length=thelength)
+
+        _fields_ = [
+            (uint32_t, 'type'),
+            (uint32_t, 'size')
+            (__value, 'unknown')
+        ]
+    """
 
     cache = None        # children must assign this empty dictionary
     unknown = block     # default type to return an unknown class
 
     @classmethod
     def add(cls, type, object):
-        '''add object to cache and key it by type'''
+        """Add ``object`` to cache and key it by ``type``"""
         cls.cache[type] = object
 
     @classmethod
     def lookup(cls, type):
-        '''lookup a ptype by a particular value'''
+        """Lookup a ptype by a particular ``type``"""
         return cls.cache[type]
 
     @classmethod
-    def get(cls, _, **unknownattrs):
-        '''lookup a ptype by a particular value. return cls.unknown with specified attributes if not found'''
+    def get(cls, type, **unknownattrs):
+        """Lookup a ptype by a particular value.
+
+        Returns cls.unknown with the provided ``unknownattrs`` if ``type`` is not found.
+        """
         try:
-            return cls.cache[_]
+            return cls.cache[type]
         except KeyError:
             pass
-        return clone(cls.unknown, type=_, **unknownattrs)
+        return clone(cls.unknown, type=type, **unknownattrs)
 
     @classmethod
     def update(cls, otherdefinition):
-        '''import the definition cache from another, effectively merging the contents into the current definition'''
+        """Import the definition cache from ``otherdefinition``, effectively merging the contents into the current definition"""
         a = set(cls.cache.keys())
         b = set(otherdefinition.cache.keys())
         if a.intersection(b):
@@ -698,7 +749,7 @@ class definition(object):
 
     @classmethod
     def merge(cls, otherdefinition):
-        '''merge contents of record cache and assign them to both the present definition and the other definition'''
+        """Merge contents of current ptype.definition with ``otherdefinition`` and update both with the resulting union"""
         if cls.update(otherdefinition):
             otherdefinition.cache = cls.cache
             return True
@@ -706,13 +757,14 @@ class definition(object):
 
     @classmethod
     def define(cls, type):
-        '''add a type to the cache keyed by `type`.type (this is intended to be used as a decorator to your class definition)'''
+        """Add a type to the cache keyed by .type attribute of ``type``.type"""
         cls.add(type.type, type)
         return type
 
 class encoded_t(block):
+    """A type that is used to abstract over elements that are in some sort of encoded format"""
     def decode(self, **attr):
-        '''decodes an object from specified block into a new element'''
+        """Decodes an object from specified block into a new element"""
         if 'source' in attr:
             logging.warn('%s.encoded_t : user attempted to change the .source attribute of an encoded block', cls.__module__)
             del(attr['source'])
@@ -721,7 +773,7 @@ class encoded_t(block):
         return self.newelement(empty, name, 0, source=provider.string(s), **attr)
 
     def encode(self, object):
-        '''encodes initialized object to block'''
+        """Encodes current initialized object into block"""
         self.value = object.serialize()
         self.length = len(self.value)
         return self
@@ -729,29 +781,35 @@ class encoded_t(block):
     d = property(fget=lambda s: s.decode())
 
 class pointer_t(encoded_t):
+    """A pointer to a particular type"""
     _type_ = None
     _target_ = None
     _byteorder_ = lambda s,x:x  # passthru
 
     def blocksize(self):
+        """Returns the size"""
         return self._type_().blocksize()
 
     def newtype(self, **attrs):
+        """Returns a new instance of ._type_"""
         t = self._byteorder_(self._type_)
         return t(**attrs)
 
     def int(self):
+        """Return pointer offset as an int"""
         s = self.serialize()
         return self.newtype(source=provider.string(s)).l.int()
     def long(self):
+        """Return pointer offset as a long"""
         s = self.serialize()
         return self.newtype(source=provider.string(s)).l.long()
 
     def decode_offset(self):
-        '''Returns an integer representing the resulting object's real offset'''
+        """Returns an integer representing the resulting object's real offset"""
         return self.long()
 
     def set(self, value):
+        """Sets the pointer_t value to ``value```"""
         assert value.__class__ in (int,long)
         n = self._type_().alloc().set(value)
         self.value = n.serialize()
@@ -781,7 +839,7 @@ class pointer_t(encoded_t):
     summary = details
 
 class rpointer_t(pointer_t):
-    '''a pointer_t that's an offset relative to a specific object'''
+    """a pointer_t that's at an offset relative to a specific object"""
     _baseobject_ = None
 
     def shortname(self):
@@ -792,7 +850,7 @@ class rpointer_t(pointer_t):
         return base + self.int()
 
 class opointer_t(pointer_t):
-    '''a pointer_t that's calculated via a user-provided function that takes an integer value as an argument'''
+    """a pointer_t that's calculated via a user-provided function that takes an integer value as an argument"""
     _calculate_ = lambda s,x: x
 
     def shortname(self):
