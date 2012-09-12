@@ -1,10 +1,10 @@
 import logging
 from ptypes import *
 class RecordUnknown(dyn.block(0)):
-    def __repr__(self):
+    def details(self):
         if self.initialized:
             return self.name()
-        return super(RecordUnknown, self).__repr__()
+        return super(RecordUnknown, self).details()
 
     def shortname(self):
         s = super(RecordUnknown, self).shortname()
@@ -22,13 +22,13 @@ class RecordHeader(pstruct.type):
         (pint.littleendian(pint.uint32_t), 'length')
     ]
 
-    def __repr__(self):
+    def details(self):
         if self.initialized:
             v = self['ver/inst'].number()
             t = int(self['type'])
             l = int(self['length'])
             return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
-        return super(RecordHeader, self).__repr__()
+        return super(RecordHeader, self).details()
 
 class Record(ptype.definition):
     cache = {}
@@ -66,14 +66,14 @@ class RecordGeneral(pstruct.type):
 class RecordContainer(parray.block):
     _object_ = None
 
-    def __repr__(self):
+    def details(self):
         if self.initialized:
             records = []
             for v in self.walk():
                 n = '%s[%x]'%(v.__class__.__name__,v.type)
                 records.append(n)
-            return '[%x] %s records=%d [%s]'%(self.getoffset(),self.name(), len(self), ','.join(records))
-        return super(RecordContainer, self).__repr__()
+            return 'records=%d [%s]'%(len(self), ','.join(records))
+        return '[uninitialized] records=%d [%s]'%(len(self), ','.join(x['data'].shortname() for x in self.v))
 
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
@@ -130,14 +130,14 @@ class RecordContainer(parray.block):
 class File(RecordContainer):
     _object_ = None
 
-    def __repr__(self):
+    def details(self):
         if self.initialized:
             records = []
             for v in self.walk():
                 n = '%s[%x]'%(v.__class__.__name__,v.type)
                 records.append(n)
             return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
-        return super(File, self).__repr__()
+        return super(File, self).details()
 
     def blocksize(self):
         return self.source.size()

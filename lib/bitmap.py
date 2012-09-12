@@ -229,9 +229,9 @@ def data(bitmap, flipendian=False):
     l = size % 8
     if l > 0:
         if flipendian:
-            bitmap = insert( bitmap, (0, 8-l))  # i probably should pull this out of this loop...
+            bitmap = insert( bitmap, (0, 8-l))
         else:
-            bitmap = push( bitmap, (0, 8-l))  # i probably should pull this out of this loop...
+            bitmap = push( bitmap, (0, 8-l))
         pass
 
     res = []
@@ -241,8 +241,24 @@ def data(bitmap, flipendian=False):
     return ''.join(map(chr,res))
 
 def signed(bitmap):
+    '''returns true if bitmap is signed'''
     integer,size = bitmap
     return size < 0
+
+def number(bitmap):
+    '''return the integral part of a bitmap, handling signedness if necessary'''
+    v,s = bitmap
+    if s < 0:
+        signmask = 2**(abs(s)-1)
+        res = v & (signmask-1)
+        if v&signmask:
+            return (signmask-res)*-1
+        return res & (signmask-1)
+    return v
+
+# jspelman. he's everywhere.
+ror = lambda (value, bits), shift=1,: (((value & (2**shift-1)) << bits-shift) | (value >> shift), bits)
+rol = lambda (value, bits), shift=1,: ( (value << shift) | ((value & ((2**bits-1) ^ (2**(bits-shift)-1))) >> (bits-shift)), bits)
 
 if False:
     # are bits clear
@@ -326,6 +342,9 @@ if __name__ == '__main__':
     for i in range(6):
         print x
         x = bitmap.sub(x, 6)
+
+    x = bitmap.new(4,4)
+    print bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x))))
 
 if __name__ == '__main__':
     import bitmap

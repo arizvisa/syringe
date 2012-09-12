@@ -450,6 +450,17 @@ class iter(stream):
         logging.info('%s._write : tried to write %x bytes to an iterator'%(type(self), len(data)))
         return len(data)
 
+import random as randommodule
+class random(base):
+    def seek(self, offset):
+        randommodule.seed(offset)   # lol
+
+    def consume(self, amount):
+        return ''.join(chr(x) for x in randommodule.sample(range(0x100),amount))
+
+    def store(self, data):
+        raise OSError('Attempted to write to read-only medium %s'% repr(self))
+
 if __name__ == '__main__':
     import array
     import ptypes,ptypes.provider as provider

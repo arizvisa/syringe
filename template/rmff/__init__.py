@@ -491,7 +491,7 @@ class File(parray.terminated):
         return False
 
 if __name__ == '__main__':
-    ptypes.setsource( provider.file('./poc.rma', mode='rb') )
+    ptypes.setsource( ptypes.provider.file('./poc.rma', mode='rb') )
 
     self = File()   
     self.l

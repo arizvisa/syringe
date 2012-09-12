@@ -12,6 +12,7 @@ VERSION = '0.6'
 # attribute[globals=dict] -- use the provided dict as the globals for deserialized objects
 
 # attribute[exclude=list of var names] -- ignore serializing/deserializing these specific names
+# attribute[local=list of module names] -- use the local versions of these modules
 
 ## FIXME: none of the recurse attributes have been implemented
 # attribute[recurse={type name : [list of types]}] -- only recurse into these types from this type
@@ -52,9 +53,13 @@ class package:
         class registration:
             id,type = {},{}
 
+            @staticmethod
+            def hash(data):
+                return reduce(lambda x,y: (((x<<5)+x)^ord(y)) & 0xffffffff, iter(data), 5381)
+
         @classmethod
         def register(cls, definition):
-            id = hash(definition.__name__)
+            id = cls.registration.hash(definition.__name__)
             if id in cls.registration.id:
                 raise KeyError("Duplicate id %x in cache"% id)
 
@@ -88,29 +93,35 @@ class package:
         def byinstance(cls, instance):
             '''iterate through all registered definitions to determine which one can work for serialization/deserialization'''
 
-            global package,type_,object_
-            type,object = __builtin__.type,__builtin__.object
+            global package,type_,object_,module_
+            type,object,module = __builtin__.type,__builtin__.object,__builtin__.__class__
             t = type(instance)
 
-            # specials
-            if instance in (type, object):
+            # special constants
+            if instance in (type, object, module):
                 return package.cache.byclass(instance)
+
+            # special types
             if t is type:
                 return type_
+            elif t is module:
+                # FIXME: differentiate between binary modules and pythonic modules
+                raise KeyError('module serialization has not been tested to completion yet : %s'% repr(instance))
+                return module_
 
-            # type
+            # any constant
+            try:
+                return package.cache.byclass(instance)
+            except (KeyError,TypeError):
+                pass
+
+            # by type
             try:
                 return package.cache.byclass(t)
             except (KeyError,TypeError):
                 pass
 
-            # constants
-            try:
-                return package.cache.byclass(instance)
-            except KeyError:
-                pass
-
-            # builtins for known-modules
+            # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
                     raise KeyError(instance)
@@ -121,11 +132,22 @@ class package:
             method_descriptor = cls.__reduce_ex__.__class__
             wrapper_descriptor = cls.__setattr__.__class__
             member_descriptor = type(lambda:wat).func_globals.__class__
-            if t in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,generator.getclass()):
+            classmethod_descriptor = type(__builtin__.float.__dict__['fromhex'])
+            if t in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator.getclass()):
                 raise KeyError(instance)
 
-            # catch-all
-            return object_
+            # catch-all object
+            if hasattr(instance, '__dict__'):
+                return object_
+
+            # FIXME: if it follows the pickle protocol..
+            if hasattr(instance, '__getstate__'):
+                print 'pickled',instance
+                import cPickle as pickle
+                pickle.loads(pickle.dumps(instance))
+                return partial
+
+            raise KeyError(instance)
 
     class stash(__builtin__.object):
         def __init__(self):
@@ -190,20 +212,25 @@ class package:
                 return identity
             cls = package.cache.byinstance(object)
 
-            # get naming info
-            module,name = getattr(object,'__module__',None),getattr(object,'__name__',None)
-            fullname = ('%s.%s'% (module,name)) if module else name
+            if True:
+                # get naming info
+                modulename,name = getattr(object,'__module__',None),getattr(object,'__name__',None)
+                fullname = ('%s.%s'% (modulename,name)) if modulename else name
 
-            # attribute[ignore=list of types,exclude=list of names]
-            if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
-                (fullname in __builtin__.set(attributes.get('exclude',()))):
-                cls = partial
+                # attribute[ignore=list of types,exclude=list of names]
+                if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
+                    (fullname in __builtin__.set(attributes.get('exclude',()))):
+                    cls = partial
+                # attribute[local=list of names]
+                if name in __builtin__.set(attributes.get('local',())):
+                    cls = module
 
             # store constructor info
             data = cls.p_constructor(object,**attributes)
             self.store_cache.add(identity)
             data = self.pack_references(data,**attributes)
-            self.cons_data[identity] = cls.id,(module,name),data
+            self.cons_data[identity] = cls.id,data
+#            self.cons_data[identity] = cls.id,(modulename,name),data
 
             # recurse into instance data
             data = cls.p_instance(object,**attributes)
@@ -217,35 +244,29 @@ class package:
                 return self.fetch_cache[identity]
 
             # unpack constructor
-            _,modulename,data = self.cons_data[identity]
+#            _,(modulename,name),data = self.cons_data[identity]
+            _,data = self.cons_data[identity]
             cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
 
-            # naming info
-            module,name = modulename
-            fullname = ('%s.%s'% (module,name)) if module else name
+            if False:
+                # naming info
+                fullname = ('%s.%s'% (modulename,name)) if modulename else name
 
-            # attribute[ignore=list of types,exclude=list of names]
-            if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
-                (fullname in __builtin__.set(attributes.get('exclude',()))):
-                cls = partial
-                instance = partial.new()
-                self.fetch_cache[identity] = instance
-                return instance
+                # attribute[ignore=list of types,exclude=list of names]
+                if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
+                    (fullname in __builtin__.set(attributes.get('exclude',()))):
+                    cls = partial
+                    instance = partial.new()
+                    self.fetch_cache[identity] = instance
+                    return instance
+
+                # attribute[local=list of names]
+                if name in __builtin__.set(attributes.get('local',())):
+                    cls = module
 
             # create an instance of packed object
             instance = cls.u_constructor(data,**attributes)
             self.fetch_cache[identity] = instance
-
-            # try really hard to assign naming info
-            try:
-                instance.__module__ = module
-            except (TypeError,AttributeError):
-                pass
-
-            try:
-                instance.__name__ = name
-            except (TypeError,AttributeError):
-                pass
 
             # update instance with packed attributes
             _,data = self.inst_data[identity]
@@ -351,7 +372,7 @@ class __special(__marshallable):
     def p_instance(cls, object, **attributes):
         return ()
 
-@package.cache.register
+@package.cache.register_type(package.partialinstance)
 class partial(__marshallable):
     '''just a general type for incomplete objects'''
     @classmethod
@@ -399,6 +420,12 @@ if 'constants':
         def getclass(cls):
             return __builtin__.object
 
+    @package.cache.register_type(__builtin__.__class__)
+    class module(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.__class__
+
     @package.cache.register_type(__builtin__.NotImplemented)
     class notImplemented(__constant):
         @classmethod
@@ -433,6 +460,7 @@ if 'core':
         @classmethod
         def p_instance(cls, object, **attributes):
             result = {}
+
             for k,v in object.__dict__.iteritems():
                 try:
                     _ = package.cache.byinstance(v)
@@ -468,16 +496,17 @@ if 'core':
         @classmethod
         def u_constructor(cls, data, **attributes):
             name,type = data
-            # FIXME: figure out some elegant way to instantiate a type when doing so will raise an exception
+
+            # FIXME: figure out some elegant way to instantiate a type when doing so will actually raise an exception
             #argcount = type.__init__.func_code.co_argcount  # XXX
             #argh = __builtin__.tuple(None for x in range(argcount-1))
-            init = type.__init__ 
             #result = type(*arghs)
 
-            # XXX: create an instance illegitimately
+            # create an instance illegitimately
+            _ = type.__init__ 
             type.__init__ = lambda s: None
             result = type()
-            type.__init__ = init
+            type.__init__ = _
 
             result.__name__ = name
             return result
@@ -605,6 +634,16 @@ if 'muteable':
             instance.update(data)
             return instance
 
+    @package.cache.register_type(__builtin__.frozenset)
+    class frozenset(__muteable):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.frozenset
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            '''return attributes of type that will be used to update'''
+            return __builtin__.tuple(object)
+
 if 'special':
     @package.cache.register_type(package.cache.register.__class__)
     class instancemethod(__special):
@@ -675,16 +714,21 @@ if 'special':
         def p_constructor(cls, object, **attributes):
             # so...it turns out that only the closure property is immuteable
             func_closure = object.func_closure if object.func_closure is not None else ()
+
+            assert object.__module__ is not None, 'FIXME: Unable to serialize an unbound function'
+#            return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure),object.func_globals
             return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            module,code,closure = data
-            if module is None:  # XXX: default module
-                module = '__main__'
-            namespace = attributes.get('globals', __import__(module).__dict__)    # XXX: due to order-of-operations, this __import__ gets executed
+#            modulename,code,closure,globals = data
+            modulename,code,closure = data
+            assert object.__module__ is not None, 'FIXME: Unable to deserialize an unbound function'
+
+            # XXX: assign the globals from commandline
+            globals = attributes['globals'] if 'globals' in attributes else module_.search(modulename).__dict__
             result = cls.__new_closure(*closure)
-            return cls.new(code, namespace, closure=result)
+            return cls.new(code, globals, closure=result)
        
         @classmethod
         def p_instance(cls, object, **attributes):
@@ -750,18 +794,33 @@ if 'special':
             fn = function.new(outercodeobj, {})
             return fn().func_closure
 
-    @package.cache.register_type(__builtin__.__class__)
-    class module(__special):
-        attributes = ['__name__','__doc__']
-
+    @package.cache.register
+    class module_local(__constant):
+        # module that is locally stored
         @classmethod
-        def getclass(cls):
-            type = __builtin__.type
-            return type(__builtin__)
+        def p_constructor(cls, object, **attributes):
+            return object.__name__,object.__doc__
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return cls.new(data['__name__'], data['__doc__'])
+            name,doc = data
+            return __import__(name)
+
+        @classmethod
+        def search(cls, modulename, doc=None):
+            try:
+                return __import__(modulename)
+            except ImportError:
+                pass
+            return cls.new(modulename, doc)
+
+    @package.cache.register
+    class module_(module_local):
+        # a module and it's attributes
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name,doc = data
+            return cls.new(name,doc)
 
         @classmethod
         def p_instance(cls, object, **attributes):
@@ -865,7 +924,8 @@ if __name__ == '__main__':
     # lame helpers for testcases
     def make_package(cls, cons, inst):
         m,n = '__main__', 'unnamed'
-        result = (fu.VERSION, 0, ({0:(cls.id,(m,n),cons)},{0:(cls.id,inst)})) 
+        result = (fu.VERSION, 0, ({0:(cls.id,cons)},{0:(cls.id,inst)})) 
+#        result = (fu.VERSION, 0, ({0:(cls.id,(m,n),cons)},{0:(cls.id,inst)})) 
         return result
     def extract_package(package):
         _,id,(cons,inst) = package
@@ -1115,9 +1175,31 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
+    def test_ignore_modulepack():
+        import sys
+        a = fu.package.pack(sys, local=('sys',))
+        _,x,y = a
+        if y[0][x][0] is not fu.module.id:
+            raise Failure
+
+        b = fu.package.unpack(a)
+        if sys.winver is b.winver:
+            raise Success
+
+    @TestCase
+    def test_ignore_moduleunpack():
+        import _ast
+        a = fu.package.pack(_ast)
+        _,x,y = a
+        if y[0][x][0] is not fu.module_.id:
+            raise Failure
+
+        b = fu.package.unpack(a, local=('_ast',))
+        if b is _ast:
+            raise Success
+
+    @TestCase
     def test_ptype_pack():
-        # FIXME
-        global a,b
         from ptypes import pint
         a = pint.uint32_t()
         a.setoffset(id(__builtin__.type))
@@ -1125,6 +1207,15 @@ if __name__ == '__main__':
         b = fu.package.unpack(fu.package.pack(a))
         if b.value == result:
             raise Success
+
+    @TestCase
+    def test_unknown_type():
+        # error while serializing a 'TypeInfo' object which comes from a module implemented in C
+        #   if we can 
+        import xml.dom.minidom
+        global a,b
+        a = fu.package.pack(xml.dom.minidom)
+        b = fu.package.unpack(a)
 
 if __name__ == '__main__':
     results = []

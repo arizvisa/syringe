@@ -17,7 +17,7 @@ def bigendian(ptype):
         def shortname(self):
             return 'bigendian(%s)'% self.__class__.__name__
 
-        def number(self):
+        def bytenumber(self):
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
 
         def set(self, integer):
@@ -48,7 +48,7 @@ def littleendian(ptype):
         def shortname(self):
             return 'littleendian(%s)'% self.__class__.__name__
 
-        def number(self):
+        def bytenumber(self):
             return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
 
         def set(self, integer):
@@ -82,15 +82,21 @@ class integer_t(ptype.type):
         raise DeprecationWarning('.get has been replaced with .number')
         return int(self)
 
-    def number(self):
+    def bytenumber(self):
         '''Convert integer type into a number'''
         raise NotImplementedError('Unknown integer conversion')
+
+    def number(self):
+        return self.bytenumber()
 
     def details(self):
         if self.initialized:
             res = int(self)
-
-            fmt = '0x%%0%dx (%%d)'% (int(self.length)*2)
+            if res >= 0:
+                fmt = '0x%%0%dx (%%d)'% (int(self.length)*2)
+            else:
+                fmt = '-0x%%0%dx (-%%d)'% (int(self.length)*2)
+                res = abs(res)
             return fmt% (res, res)
         return '???'
 
@@ -107,14 +113,15 @@ integer_t = bigendian(integer_t)
 class sint_t(integer_t):
     '''Provides signed integer support'''
     def number(self):
-        signmask = 1 << 8*self.blocksize()
-        res = super(sint_t, self).long()
-        
-        res = res & (signmask-1)
-        return [res, res*-1][bool(res&signmask)]
+        signmask = 2**(8*self.blocksize()-1)
+        num = self.bytenumber()
+        res = num&(signmask-1)
+        if num&signmask:
+            return (signmask-res)*-1
+        return res & (signmask-1)
 
     def set(self, integer):
-        signmask = 1 << 8*self.blocksize()
+        signmask = 2**(8*self.blocksize())
         res = integer & (signmask-1)
         if integer < 0:
             res |= signmask
@@ -127,10 +134,12 @@ class uint8_t(uint_t): length = 1
 class uint16_t(uint_t): length = 2
 class uint32_t(uint_t): length = 4
 class uint64_t(uint_t): length = 8
-class int8_t(int_t): length = 1
-class int16_t(int_t): length = 2
-class int32_t(int_t): length = 4
-class int64_t(int_t): length = 8
+class sint8_t(int_t): length = 1
+class sint16_t(int_t): length = 2
+class sint32_t(int_t): length = 4
+class sint64_t(int_t): length = 8
+
+int8_t,int16_t,int32_t,int64_t = sint8_t,sint16_t,sint32_t,sint64_t
 
 class enum(integer_t):
     '''
@@ -252,7 +261,7 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     from ptypes import *
-    import provider,utils
+    import provider,utils,struct
     string1 = '\x0a\xbc\xde\xf0'
     string2 = '\xf0\xde\xbc\x0a'
 
@@ -302,6 +311,46 @@ if __name__ == '__main__':
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
         print a, repr(a.serialize())
+
+    @TestCase
+    def Test7():
+        pint.setbyteorder(pint.littleendian)
+        s = '\xff\xff\xff\xff'
+        a = pint.int32_t(source=provider.string(s)).l
+        b, = struct.unpack('l',s)
+        if a.int() == b and a.serialize() == s:
+            raise Success
+        print b,a, repr(a.serialize())
+
+    @TestCase
+    def Test8():
+        pint.setbyteorder(pint.littleendian)
+        s = '\x00\x00\x00\x80'
+        a = pint.int32_t(source=provider.string(s)).l
+        b, = struct.unpack('l',s)
+        if a.int() == b and a.serialize() == s:
+            raise Success
+        print b,a, repr(a.serialize())
+
+    @TestCase
+    def Test9():
+        pint.setbyteorder(pint.littleendian)
+        s = '\xff\xff\xff\x7f'
+        a = pint.int32_t(source=provider.string(s)).l
+        b, = struct.unpack('l',s)
+        if a.int() == b and a.serialize() == s:
+            raise Success
+        print b,a, repr(a.serialize())
+
+    @TestCase
+    def Test10():
+        pint.setbyteorder(pint.littleendian)
+        s = '\x00\x00\x00\x00'
+        a = pint.int32_t(source=provider.string(s)).l
+        b, = struct.unpack('l',s)
+        if a.int() == b and a.serialize() == s:
+            raise Success
+        print b,a, repr(a.serialize())
 
 if __name__ == '__main__':
     results = []

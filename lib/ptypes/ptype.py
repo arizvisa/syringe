@@ -22,6 +22,17 @@ def isresolveable(t):
     """True if type ``t`` can be descended into"""
     return isinstance(t, (types.FunctionType, types.MethodType)) or isiterator(t)
 
+def isrelated(t, t2):
+    """True if type ``t`` is related to ``t2``"""
+    def getbases(result, bases):
+        for x in bases:
+            if not istype(x) or x in (type,container):
+                continue
+            result.add(x)
+            getbases(result, x.__bases__)
+        return result
+    return getbases(set(), t.__bases__).intersection( getbases(set(), t.__bases__) )
+
 def forceptype(t, self):
     """Resolve type ``t`` into a ptype.type for the provided object ``self``"""
 
@@ -250,15 +261,22 @@ class type(object):
 #        raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
         raise ValueError("ptype.type.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse())))
 
-    def traverse(self, branches=lambda node:(node.parent for x in range(1) if node.getparent() is not None), *args, **kwds):
-        """Will walk the elements returned by the generator ``branches -> node -> ptype.type``
+    def traverse(self, edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None), filter=lambda node:True, *args, **kwds):
+        """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
+
+        This will iterate in a top-down approach.
 
         By default this will follow the .parent attribute until it is None,
         effectively returning a backtrace.
         """
-        for self in branches(self, *args, **kwds):
-            yield self
-            for y in self.traverse(branches, *args, **kwds):
+        for self in edges(self, *args, **kwds):
+            if not isinstance(self, type):
+                continue
+
+            if filter(self):
+                yield self
+
+            for y in self.traverse(edges=edges, filter=filter, *args, **kwds):
                 yield y
             continue
         return
@@ -447,6 +465,12 @@ class type(object):
 
         return result
 
+    def compare(self, value):
+        """Returns Truth if ``self`` is equivalent to `value``"""
+        if not isrelated(self.__class__, value.__class__):
+            return False
+        return self.serialize() == value.serialize()
+
 class container(type):
     '''
     This class is capable of containing other ptypes
@@ -623,6 +647,17 @@ class container(type):
             x.setoffset( x.getoffset()+ofs )
             x.source = result.source
         return result
+
+    def compare(self, value):
+        """Compare ``self`` to ``value`` returning truth when the types are the same"""
+        if (not isrelated(self.__class__, value.__class__)) or (len(self.value) != len(value.value)):
+            return False
+
+        for l,r in zip(self.value,value.value):
+            if not l.compare(r):
+                return False
+            continue
+        return True
 
 class empty(type):
     """Empty ptype that occupies no space"""
@@ -859,7 +894,7 @@ class opointer_t(pointer_t):
     def decode_offset(self):
         return self._calculate_(self.int())
 
-try:
+if False:
     import pymsasid as udis
     import pymsasid.syn_att as udis_att
     raise ImportError
@@ -909,15 +944,23 @@ try:
                 result.append(n)
                 pc = n.next_add()
             return ';'.join([str(x).strip() for x in result])
+try:
+    import pyasm
+    raise ImportError
 
 except ImportError:
+    # XXX: i'm not sure why i'm implementing this in this module, as it actually
+    #       makes sense to put this all in a separate module for the different
+    #       types and calling conventions
+
     class code_t(block):
         machine,mode = 'i386',32
+        convention = None
 
-    def call(address):
-        # returns a python function that when provided a dict containing the register state
-        # calls the specified address and returns the register state upon return
-        pass
+        def call(self, *args, **registers):
+            # returns a python function that when provided a dict containing the register state
+            # calls the specified address and returns the register state upon return
+            pass
 
 if __name__ == '__main__':
     import ptype
@@ -977,3 +1020,55 @@ if __name__ == '__main__':
         self = b
         a = ptype.code_t(source=self.source, offset=self.getoffset())
         b = b.cast(ptype.code_t)
+
+    if True:
+        import ptypes
+        from ptypes import *
+        reload(ptypes)
+
+        class u8(pint.uint8_t): pass
+        class u16(pint.uint16_t): pass
+        class u24(dyn.clone(pint.uint_t, length=3)): pass
+        class u32(pint.uint32_t): pass
+
+        s = ptypes.provider.string
+        s1 = s('A'*8 + 'B'*8)
+        s2 = s('A'*4 + 'B'*8 + 'C'*4)
+
+        if False:
+            a = u8(source=s1).l
+            b = u8(source=s2).l
+    #        print a,b
+            print a.compare(b)
+
+            a = dyn.array(u8, 16)(source=s1).l
+            b = dyn.array(u8, 16)(source=s1).l
+            print a.compare(b)
+
+            a = dyn.array(u8, 16)(source=s1).l
+            b = dyn.array(u8, 16)(source=s2).l
+            print a.compare(b)
+
+            a = dyn.array(u16, 8)(source=s1).l
+            b = dyn.array(u32, 4)(source=s1).l
+            print a.compare(b)
+
+            a = dyn.array(u16, 8)(source=s1).l
+            b = dyn.array(u32, 4)(source=s2).l
+            print a.compare(b)
+
+        if True:
+            def iterate_differences(o1, o2):
+                """Compare ``o1`` to ``o2`` yielding each element that differs"""
+                leafs = lambda s: s.traverse(edges=lambda x:x.v, filter=lambda x: not iscontainer(x))
+
+                for l,r in zip(leafs(o1),leafs(o2)):
+                    yield l.compare(r),(l,r)
+                    continue
+                return
+
+            a = dyn.array(u32, 4)(source=s1).l
+            b = dyn.array(u32, 4)(source=s2).l
+            c = [ {'l':x,'r':y} for t,(x,y) in iterate_differences(a,b) if not t ]
+            print c[0]['l'].getoffset() == 4 and c[0]['r'].getoffset() == 4
+            print c[1]['l'].getoffset() == 0xc and c[1]['r'].getoffset() == 0xc

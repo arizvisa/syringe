@@ -299,7 +299,7 @@ if __name__ == '__main__':
     import pstruct,parray,pint,provider
 
     import logging
-    logging.root=logging.RootLogger(logging.DEBUG)
+#    logging.root=logging.RootLogger(logging.DEBUG)
 
     class Result(Exception): pass
     class Success(Result): pass
@@ -410,7 +410,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test6():
+    def Test5():
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
@@ -420,7 +420,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test7():
+    def Test6():
         import pint
         class container(parray.block):
             _object_ = pint.uint8_t
@@ -434,7 +434,7 @@ if __name__ == '__main__':
         print a
 
     @TestCase
-    def Test8():
+    def Test7():
         b = ''.join(map(chr,range(ord('a'), ord('z')) + range(ord('A'), ord('Z')) + range(ord('0'), ord('9'))))
 
         count = 0x10
@@ -451,7 +451,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test9():
+    def Test8():
         count = 8
 
         child_type = pint.uint32_t
@@ -467,7 +467,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test10():
+    def Test9():
         class subarray(parray.type):
             length = 4
             _object_ = pint.uint8_t
@@ -489,25 +489,23 @@ if __name__ == '__main__':
         if len(a) == (0x100 / subarray.length)+1:
             raise Success
 
-#    @TestCase
-    def Test11():
+    @TestCase
+    def Test10():
         import random
         from ptypes import parray,dyn,ptype,pint,provider
 
         random.seed(0)
 
-        class rootcontainer(parray.block):
-            blocksize = lambda x: x._object_.a.size() * 8
-
         class leaf(pint.uint32_t): pass
+        class rootcontainer(parray.block):
+            _object_ = leaf
 
         class acontainer(rootcontainer):
-            _object_ = leaf
             blocksize = lambda x: 8
 
         class bcontainer(rootcontainer):
-            _object_ = leaf
-            blocksize = lambda x: 4
+            _object_ = pint.uint16_t
+            blocksize = lambda x: 8
 
         class ccontainer(rootcontainer):
             _object_ = pint.uint8_t
@@ -523,13 +521,12 @@ if __name__ == '__main__':
         string = ''.join([ chr(random.randint(ord('A'),ord('Z'))) for x in range(0x100) ])
         a = arr(source=provider.string(string))
         a=a.l
-        print a
-        for x in a:
-            print x
+        if a.blocksize() == 0x108:
+            raise Success
 
     import array
     @TestCase
-    def Test12():
+    def Test11():
         class fakefile(object):
             d = array.array('L', ((0xdead*x)&0xffffffff for x in range(0x100)))
             d = array.array('c', d.tostring() + '\xde\xad\xde\xad')
@@ -547,11 +544,77 @@ if __name__ == '__main__':
         class argh(parray.infinite):
             _object_ = stoofoo
         
-        global a,x
         x = argh(source=strm)
         for a in x.loadstream():
             pass
         if not a.initialized and x[-2].serialize() == '\xde\xad\xde\xad':
+            raise Success
+
+    @TestCase
+    def Test12():
+        class szstring(parray.terminated):
+            _object_ = pint.uint8_t
+            def isTerminator(self, value):
+                return value.int() == 0
+
+        data = provider.string("hello world\x00not included\x00")
+        a = szstring(source=data).l
+        if len(a) == len('hello world\x00'):
+            raise Success
+
+    @TestCase
+    def Test13():
+        class szstring(parray.terminated):
+            _object_ = pint.uint8_t
+            def isTerminator(self, value):
+                return value.int() == 0
+
+        class argh(parray.terminated):
+            _object_ = szstring
+            def isTerminator(self, value):
+                return value.serialize() == 'end\x00'
+
+        data = provider.string("hello world\x00is included\x00end\x00not\x00")
+        a = argh(source=data).l
+        if len(a) == 3:
+            raise Success
+
+    @TestCase
+    def Test14():
+        class szstring(parray.terminated):
+            _object_ = pint.uint16_t
+            def isTerminator(self, value):
+                return value.int() == 0
+
+        class ninethousand(parray.block):
+            _object_ = szstring
+            blocksize = lambda x: 9000
+
+        s = (('A'*498) + '\x00\x00') + (('B'*498)+'\x00\x00')
+        a = ninethousand(source=provider.string(s*9000)).l
+        if len(a) == 18 and a.size() == 9000:
+            raise Success
+
+    @TestCase
+    def Test15():
+        class fiver(parray.block):
+            _object_ = pint.uint8_t
+            blocksize = lambda s: 5
+
+        class feiverfrei(parray.terminated):
+            _object_ = fiver
+            def isTerminator(self, value):
+                return value.serialize() == '\x00\x00\x00\x00\x00'
+
+        class dundundun(parray.block):
+            _object_ = feiverfrei
+            blocksize = lambda x: 50
+
+        dat = 'A'*5
+        end = '\x00'*5
+        s = (dat*4)+end + (dat*4)+end
+        a = dundundun(source=provider.string(s*5)).l
+        if len(a) == 2 and len(a[0]) == 5 and len(a[1]) == 5:
             raise Success
 
 if __name__ == '__main__':

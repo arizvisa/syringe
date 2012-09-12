@@ -49,7 +49,7 @@ def forcepbinary(p, self):
 ### endianness
 def bigendian(p):
     class bigendianpbinary(p):
-        byteorder=bigendian
+        byteorder=property(fget=lambda s:bigendian)
         def shortname(self):
 #            return 'bigendian(%s)'% self.__class__.__name__
             return self.__class__.__name__
@@ -78,7 +78,7 @@ def bigendian(p):
 
 def littleendian(p):
     class littleendianpbinary(p):
-        byteorder=littleendian
+        byteorder=property(fget=lambda s:littleendian)
         def shortname(self):
             return 'littleendian(%s)'% self.__class__.__name__
 
@@ -143,27 +143,6 @@ class type(ptype.container):
             result = self.deserialize_stream( ('\x00' for x in utils.infiniterange(0)) )
         return result
 
-    if False:
-        def set(self, integer):
-            raise NotImplementedError("This method is untested")
-            bmp = bitmap.new(integer, self.bits())
-            return self.deserialize_bitmap(bmp)
-
-        def deserialize_bitmap(self, source):
-            '''Initialize container using the bitmap provided by source'''
-            assert bitmap.isbitmap(source)
-            for i in range(len(self.value)):
-                n = self.value[i]
-                if ispbinaryinstance(n):
-                    source,value = bitmap.consume(source, n.bits())
-                    n.set(value)
-                    continue
-
-                value,source = self.value[i]
-                source,value = bitmap.consume(source,n.bits())
-                self.value[i] = value,source
-            return self
-
     def number(self):
         '''Return the binary structure as it's integer value'''
         return self.getbitmap()[0]
@@ -173,7 +152,7 @@ class type(ptype.container):
         result = 0
         for x in self.value:
             if bitmap.isbitmap(x):
-                result += x[1]
+                result += abs(x[1])
                 continue
             if ispbinaryinstance(x):
                 result += x.bits()
@@ -193,7 +172,7 @@ class type(ptype.container):
                 continue
 
             if bitmap.isbitmap(n):
-                result = bitmap.push(result, n)
+                result = bitmap.push(result, (n[0],abs(n[1])))
                 continue
 
             raise ValueError('Unknown type %s stored in %s'% (repr(n), repr(self)))
@@ -224,7 +203,7 @@ class type(ptype.container):
     def newelement_consumer(self, pbinarytype, name, offset, consumer):
         n = self.newelement(pbinarytype, name, offset)
         if bitmap.isbitmap(n):
-            return bitmap.new(consumer.consume(n[1]), n[1])
+            return bitmap.new(consumer.consume( abs(n[1]) ), n[1])
         return n.deserialize_consumer(consumer)
 
     ## position for dealing with an index into a binary number
@@ -248,8 +227,23 @@ class type(ptype.container):
             pass
         return (a,b)
 
-    def getposition(self):
-        return ( super(type, self).getoffset(), self.__boffset )
+    def getposition(self, index=None):
+        if index is None:
+            return ( super(type, self).getoffset(), self.__boffset )
+        n = self.value[index]
+        if ispbinaryinstance(n):
+            return n.getposition()
+
+        l = [self.value[i] for i in range(index)]
+        result = 0
+        for i in xrange(index):
+            n = self.value[i]
+            if ispbinaryinstance(n):
+                result += n.bits()
+                continue
+            result += abs(n[1])
+        o,p = self.getposition()
+        return (o+result/8,p+result%8)
 
     def setoffset(self, offset, recurse=False):
         return self.setposition(offset, 0, recurse=recurse)
@@ -320,7 +314,7 @@ class type(ptype.container):
         result = 0
         for x in self.value:
             if bitmap.isbitmap(x):
-                result += x[1]
+                result += abs(x[1])
                 continue
             if ispbinaryinstance(x):
                 result += x.blockbits()
@@ -344,13 +338,27 @@ class type(ptype.container):
         source.consume(result - type.bits())
         return n == result, result
 
+    def getindex(self, index):
+        value = self.value[index]
+        if ispbinaryinstance(value):
+            return value
+        return bitmap.number(value)
+
 class __struct_generic(type):
     __fastindex = dict  # our on-demand index lookup for .value
 
     def __iter__(self):
         return iter(self.keys())
 
-    def getindex(self, name):
+    def getposition(self, name=None):
+        if name is None:
+            return type.getposition(self)
+#            return super(__struct_generic,self).getposition()
+        index = self.__getindex(name)
+        return type.getposition(self,index)
+#        return super(__struct_generic,self).getposition(index)
+
+    def __getindex(self, name):
         try:
             return self.__fastindex[name]
         except TypeError:
@@ -384,16 +392,12 @@ class __struct_generic(type):
         return [(k,v) for k,v in zip(self.keys(), self.values())]
 
     def __getitem__(self, name):
-        index = self.getindex(name)
-        value = self.value[index]
-        if ispbinaryinstance(value):
-            return value
-        integer,bits = value
-        return integer & ((1<<bits)-1)
+        index = self.__getindex(name)
+        return self.getindex(index)
 
     def __setitem__(self, name, value):
 #        raise NotImplementedError('Implemented, but untested...')
-        index = self.getindex(name)
+        index = self.__getindex(name)
         if ispbinaryinstance(value):
             self.value[index] = value
             return
@@ -409,11 +413,17 @@ class __struct_generic(type):
         result = []
         for name,val in zip(self.keys(), self.value):
             if bitmap.isbitmap(val):
-                v,s = (hex(val[0]), val[1])
+                v = bitmap.number(val)
+                s = abs(val[1])
             else:
-                v,s = ''.join(['struct[', hex(val.number()), ']']),val.bits()
+                v,s = val.number(),val.bits()
 
-            result.append( '%s%s=%s'% (name, ['', '{%d}'%s][s>1], v) )
+            if not bitmap.isbitmap(val):
+                v = 'struct[%s]'%(hex(v))
+            else:
+                v = hex(v)
+
+            result.append( '%s%s=%s'% (name, ('', '{%d}'%s)[s>1], v) )
         return ' '.join(result)
 
     def __details_uninitialized(self):
@@ -436,9 +446,9 @@ class __array_generic(type):
         return
 
     def __getitem__(self, index):
-        n = self.value[index]
+        n = self.getindex(index)
         if bitmap.isbitmap(n):
-            return n[0]
+            return bitmap.number(n)
         return n
 
     def __setitem__(self, index, value):
@@ -807,6 +817,7 @@ if __name__ == '__main__':
         if list(x) == [5, 2, 5]:
             raise Success
 
+    @TestCase
     def test9():
 #        print "test9"
         # print out bit offsets for a pbinary.struct
@@ -819,30 +830,20 @@ if __name__ == '__main__':
             _object_ = halfnibble
             length = 4
 
-        class blah(pbinary.struct):
-            _fields_ = [
-                (nibble, 'first-nibble'),
-                (nibble, 'second-nibble'),
-                (tribble, '3bits')
-            ]
-
         class largearray(pbinary.array):
-            _object_ = blah
+            _object_ = byte
             length = 16
 
         res = reduce(lambda x,y: x<<1 | [0,1][int(y)], ('11001100'), 0)
-        print hex(res)
 
-        x = largearray(provider.string(chr(res)*63)).l
-        print x
-        print x[1]
-        print x[1].getposition()
+        x = largearray(source=provider.string(chr(res)*63)).l
+        if x[5].number() == res:
+            raise Success
 
+    @TestCase
     def test10():
-        print "test10"
         # test out bit offset loads for an array
 
-        class halfnibble(pbinary.struct): _fields_ = [(2, 'value')]
         class tribble(pbinary.struct): _fields_ = [(3, 'value')]
 
         class blah(pbinary.array):
@@ -855,40 +856,33 @@ if __name__ == '__main__':
         x.source = provider.string(TESTDATA)
         x.setposition(0, 3)
         x.load()
-        print repr(x)
-        res = [ (x.getposition(), repr(x)) for x in x ]
-        print '\n'.join(map(repr,res))
 
-        # wow, that really worked...
+        if x.getposition(0) == (0,3) and x.getposition(1) == (0,6) and x.getposition(2) == (1,1):
+            raise Success
 
+    @TestCase
     def test11():
-        print "test11"
-        # test out bit offset loads for a pbinary.struct
-
         class halfnibble(pbinary.struct): _fields_ = [(2, 'value')]
-        class tribble(pbinary.struct): _fields_ = [(3, 'value')]
 
         class blah(pbinary.array):
-            _object_ = tribble
+            _object_ = halfnibble
             length = 16
 
         from ptypes import provider
         x = blah()
-        x.source = provider.file('blah.data', 'rb')
+        x.source = provider.string('\x19\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99\x99')
         x.setposition(0, 3)
         x.load()
-        print repr(x)
-        res = [ (x.getposition(), repr(x)) for x in x ]
-        print '\n'.join(map(repr,res))
 
-        # holy shit, that one worked too
+        if x[0].getposition('value') == (0,3) and x[1].getposition('value') == (0,5) and x[2].getposition('value') == (0,7):
+            raise Success
 
     def testold():
         print 'old shitty tests'
         class blah1(pbinary.struct):
             bigendian = False
             _fields_ = [
-                (6, 'padding'), #000000
+                (7, 'padding'), #000000
                 (8, 'byte'),    #11111111
                 (4, 'nibble1'), #1101
                 (4, 'nibble2'), #1011
@@ -1062,8 +1056,8 @@ if __name__ == '__main__':
         if l == [ ord(TESTDATA[i]) for i,x in enumerate(l) ]:
             raise Success
 
+    @TestCase
     def test19():
-        print "test19"
         class blah(pbinary.array):
             length = 12
             _object_ = nibble
@@ -1074,11 +1068,12 @@ if __name__ == '__main__':
         self.source = provider.string(TESTDATA)
         self.setposition(0, 4)
         self.load()
-        print repr(self)
-        print '\n'.join(map(repr,self))
 
+        if self[0]['value'] == ord(TESTDATA[0])&0x0f and self[1]['value'] == (ord(TESTDATA[1])&0xf0) >> 4 and self[2]['value'] == ord(TESTDATA[1])&0x0f and self[3]['value'] == (ord(TESTDATA[2])&0xf0) >> 4:
+            raise Success
+
+    @TestCase
     def test20():
-        print "test20"
         class blah(pbinary.struct):
             _fields_ = [
                 (4, 'heh'),
@@ -1090,15 +1085,9 @@ if __name__ == '__main__':
         self = blah()
         self.source = provider.string(TESTDATA)
         self.setoffset(0)
-        #print self
         self.load()
-        print self
-        #print '\n'.join(map(repr,self.value))
-        #self.alloc()
-        #print self.value[0]
-        #print self.value[1].getposition()
-        #print self.value[2]
-        #print self
+        if self['heh'] == 4 and self['dw']['high'] == 0x1424 and self['dw']['low'] == 0x3444 and self['hehhh'] == 9:
+            raise Success
 
     @TestCase
     def test21():
@@ -1246,6 +1235,104 @@ if __name__ == '__main__':
         if x['a'] == 13 and x['b'] == 14 and x['c'] == 10:
             raise Success
         raise Failure
+
+    import struct
+    class blah(pbinary.struct):
+        _fields_ = [
+            (-16, 'a'),
+        ]
+
+    @TestCase
+    def test29():
+        s = '\xff\xff'
+        a = blah(source=provider.string(s)).l
+        b, = struct.unpack('>h',s)
+        if a['a'] == b:
+            raise Success
+        print repr(s),a['a']
+
+    @TestCase
+    def test30():
+        global a,b
+        s = '\x80\x00'
+        a = blah(source=provider.string(s)).l
+        b, = struct.unpack('>h',s)
+        if a['a'] == b:
+            raise Success
+        print repr(s),a['a']
+
+    @TestCase
+    def test31():
+        s = '\x7f\xff'
+        a = blah(source=provider.string(s)).l
+        b, = struct.unpack('>h',s)
+        if a['a'] == b:
+            raise Success
+        print repr(s),a['a']
+
+    @TestCase
+    def test32():
+        s = '\x00\x00'
+        a = blah(source=provider.string(s)).l
+        b, = struct.unpack('>h',s)
+        if a['a'] == b:
+            raise Success
+        print repr(s),a['a']
+
+    @TestCase
+    def test33():
+        class blah2(pbinary.struct):
+            _fields_ = [
+                (4, 'a0'),
+                (1, 'a1'),
+                (1, 'a2'),
+                (1, 'a3'),
+                (1, 'a4'),
+                (8, 'b'),
+                (8, 'c'),
+                (8, 'd'),
+            ]
+
+        s = '\x00\x00\x00\x04'
+        a = pbinary.littleendian(blah2)(source=provider.string(s)).l
+        if a['a2'] == 1:
+            raise Success
+
+    @TestCase
+    def test34():
+        s = '\x04\x00'
+        pbinary.setbyteorder(pbinary.bigendian)
+        class fuq(pbinary.struct):
+            _fields_ = [
+                (4, 'zero'),
+                (1, 'a'),
+                (1, 'b'),
+                (1, 'c'),
+                (1, 'd'),
+                (8, 'padding'),
+            ]
+
+        a = fuq(source=provider.string(s)).l
+        if a['b'] == 1:
+            raise Success
+
+    @TestCase
+    def test35():
+        s = '\x00\x04'
+        pbinary.setbyteorder(pbinary.littleendian)
+        class fuq(pbinary.struct):
+            _fields_ = [
+                (4, 'zero'),
+                (1, 'a'),
+                (1, 'b'),
+                (1, 'c'),
+                (1, 'd'),
+                (8, 'padding'),
+            ]
+
+        a = fuq(source=provider.string(s)).l
+        if a['b'] == 1:
+            raise Success
 
 if __name__ == '__main__':
     results = []

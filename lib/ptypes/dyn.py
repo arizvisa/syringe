@@ -59,13 +59,15 @@ def array(type, count, **kwds):
         logging.error('dyn.array(%s, count=%d): argument cannot be < 0. Defaulting to 0.'% (repr(type),count))
         size = 0
 
-    class _dynarray(parray.type):
-        _object_ = type
-        length = count
+    if type is None:
+        name = 'array(None, %d)'%count
+    else:
+        module,name = type.__module__,type.__name__
+        name = 'array(%s.%s, %d)'%(module, name, count )
 
-    if type is not None:
-        _dynarray.__name__ = kwds.get('name', 'array(%s.%s, %d)'% (type.__module__, type.__name__, count))
-    return _dynarray
+    result = ptype.clone(parray.type, _object_=type, length=count)
+    result.__name__=kwds.get('name', name)
+    return result
 
 def clone(cls, **newattrs):
     '''
@@ -387,6 +389,20 @@ if __name__ == '__main__':
         if x.l.d.getoffset() == 8:
             raise Success
 
+    @TestCase
+    def Test10():
+        v = dyn.array(pint.int32_t, 4)
+        if len(v().a) == 4:
+            raise Success
+
+    @TestCase
+    def Test11():
+        v = dyn.array(pint.int32_t, 8)
+        i = range(0x40,0x40+v.length)
+        x = ptype.provider.string(''.join(chr(x)+'\x00\x00\x00' for x in i))
+        z = v(source=x).l
+        if z[4].number() == 0x44:
+            raise Success
         
 if __name__ == '__main__':
     results = []
