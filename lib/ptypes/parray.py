@@ -82,7 +82,7 @@ class type(__parray_generic):
         length:int<w>
             The length of the array used during initialization of the object
     '''
-    _object_ = None     # subclass of ptype.type
+    #_object_ = None     # subclass of ptype.type
     length = 0          # int
 
     def contains(self, offset):
@@ -155,7 +155,7 @@ class terminated(type):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+            forever = utils.infiniterange(0) if self.length is None else xrange(self.length)
 
             self.value = []
             ofs = self.getoffset()
@@ -219,7 +219,7 @@ class infinite(terminated):
                 if self.parent is not None:
                     path = ' ->\n\t'.join(self.backtrace())
                     logging.warn("<parray.infinite> Stopped reading %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
-                pass
+                raise
         return self
 
     def loadstream(self, **attr):
@@ -247,7 +247,7 @@ class infinite(terminated):
                 if self.parent is not None:
                     path = ' ->\n\t'.join(self.backtrace())
                     logging.warn("<parray.infinite> Stopped reading %s<%x:+%x> at %s<%x:+??>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), path))
-                pass
+                raise
             pass
         return
         
@@ -257,7 +257,7 @@ class block(terminated):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            forever = [lambda:xrange(self.length), lambda:utils.infiniterange(0)][self.length is None]()
+            forever = utils.infiniterange(0) if self.length is None else xrange(self.length)
             self.value = []
 
             ofs = self.getoffset()
@@ -266,21 +266,31 @@ class block(terminated):
                 n = self.newelement(self._object_, str(index), ofs)
 
                 try:
-                    s = n.load().blocksize()
+                    n = n.load()
 
                 except StopIteration, e:
-                    # if we error'd while decoding too much, then let us know
-                    if current >= self.blocksize():
+                    o = current + n.blocksize()
+
+                    # if we error'd while decoding too much, then let user know
+                    if o > self.blocksize():
                         path = ' ->\n\t'.join(n.backtrace())
-#                        logging.warn("<parray.block> Stopped reading %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), s, path))
-                    logging.debug("<parray.block> StopIteration raised from sub-element while performing load %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), e))
-                    self.value.append(n)
+                        logging.warn("parray.block.load : %s<%x:+%x> : Refusing to read %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), path))
+                        self.value.append(n)
+
+                    # otherwise add the incomplete element to the array
+                    elif o < self.blocksize():
+                        logging.warn("parray.block.load : %s<%x:+%x> : StopIteration raised while performing load %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), e))
+                        self.value.append(n)
+
                     break
 
+                s = n.blocksize()
+                assert s > 0
+
                 # if our child element pushes us past the blocksize
-                if (current + s >= self.blocksize()):
+                if current + s >= self.blocksize():
                     path = ' ->\n\t'.join(n.backtrace())
-                    logging.info("<parray.block> Terminated %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), s, path))
+                    logging.info("parray.block.load : %s : Terminated %s<%x:+%x> at %s<%x:+%x>\n\t%s"%(self.shortname(), self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), s, path))
                     self.value.append(n)
                     break
 
@@ -288,9 +298,8 @@ class block(terminated):
                 self.value.append(n)
                 if self.isTerminator(n):
                     break
+                ofs,current = ofs+s,current+s
 
-                s = n.blocksize(); assert s > 0; ofs += s
-                current += s
             pass
         return self
 

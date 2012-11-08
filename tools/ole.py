@@ -66,7 +66,7 @@ def dumpstreams(stream, paths, out):
             log('%s : stream %s error : %s', filename,stream,msg)
             continue
 
-        file(path,'w').write(stm.read())
+        file(path,'wb').write(stm.read())
     return
 
 if __name__ == '__main__':

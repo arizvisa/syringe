@@ -194,6 +194,13 @@ class OptionalHeader(pstruct.type):
             (6, 'reserved_10'),
         ]
 
+    def __DataDirectory(self):
+        length = self['NumberOfRvaAndSizes'].load().int()
+        if length > 0x10:   # XXX
+            warn('OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries (0x%x) for the DataDirectory. Assuming the maximum of 0x10'% length)
+            length = 0x10
+        return dyn.clone(datadirectory.DataDirectory, length=length)
+
     _fields_ = [
         ( uint16, 'Magic' ),
         ( uint8, 'MajorLinkerVersion' ),
@@ -225,7 +232,7 @@ class OptionalHeader(pstruct.type):
         ( uint32, 'SizeOfHeapCommit' ),
         ( uint32, 'LoaderFlags' ),
         ( uint32, 'NumberOfRvaAndSizes' ),
-        ( lambda s: dyn.clone(datadirectory.DataDirectory, length=int(s['NumberOfRvaAndSizes'].load())), 'DataDirectory' ),
+        ( __DataDirectory, 'DataDirectory' ),
     ]
 
 class IMAGE_SCN(pint.enum, dword):

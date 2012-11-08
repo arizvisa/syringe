@@ -1,7 +1,7 @@
 import atom,ptypes
 from atom import AtomType,Atom,AtomList
 
-class File(ptypes.parray.infinite):
+class File(ptypes.parray.block):
     _object_ = Atom
 
     def blocksize(self):

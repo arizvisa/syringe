@@ -63,14 +63,18 @@ class type(__pstruct_generic):
         with utils.assign(self, **attrs):
             self.value = []
 
-            # create each element
-            ofs = self.getoffset()
-            for t,name in self._fields_:
-                n = self.newelement(t, name, ofs, source=self.source)
-                self.value.append(n)
-                if ptype.iscontainer(t) or ptype.isresolveable(t):
-                    n.load()
-                ofs += n.blocksize()
+            try:
+                ofs = self.getoffset()
+                for t,name in self._fields_:
+                    # create each element
+                    n = self.newelement(t, name, ofs, source=self.source)
+                    self.value.append(n)
+                    if ptype.iscontainer(t) or ptype.isresolveable(t):
+                        n.load()
+                    ofs += n.blocksize()
+
+            except StopIteration, e:
+                raise
             result = super(type, self).load()
         return result
 
@@ -104,7 +108,6 @@ class type(__pstruct_generic):
         self.setoffset( self.getoffset(), recurse=True )
         return self
 
-import dyn
 def make(fields, **attrs):
     """Given a set of initialized ptype objects, return a pstruct object describing it.
 
@@ -126,7 +129,7 @@ def make(fields, **attrs):
 
         delta = o-ofs
         if delta > 0:
-            result.append((dyn.block(delta), '__padding_%x'%ofs))
+            result.append((ptype.clone(ptype.block,length=delta), '__padding_%x'%ofs))
             ofs += delta
 
         if s > 0:
@@ -134,14 +137,14 @@ def make(fields, **attrs):
             result.append((object.__class__, n))
             ofs += s
         continue
-    return dyn.clone(type, _fields_=result, **attrs)
+    return ptype.clone(type, _fields_=result, **attrs)
 
 if __name__ == '__main__':
     import pstruct
 
     import ptype,parray,provider
     import pint as p
-    import pstr
+    import pstr,dyn
 
     class Elf32_Half(p.bigendian(p.uint16_t)): pass
     class Elf32_Word(p.bigendian(p.uint32_t)): pass

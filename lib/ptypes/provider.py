@@ -41,19 +41,26 @@ class file(base):
 
         mode = set(list(mode))
         if 'w' in mode:
+            # if file exists and is writeable
             if os.access(filename,6):
                 logging.info("-> %s.%s(%s, %s) : opened file for write", self.__module__, type(self).__name__, repr(filename), repr(mode))
                 mode = 'r+b'
+            # if file doesn't exist, then create it
             else:
-                # overwrite
                 logging.info("-> %s.%s(%s, %s) : creating new file", self.__module__, type(self).__name__, repr(filename), repr(mode))
                 mode = 'wb'
-        elif 'r' not in mode:
+            self.file = __builtin__.file(filename, mode)
+            return
+
+        # if read isn't specified, then force user to open as read/write
+        if 'r' not in mode:
             logging.warn("-> %s.%s(%s, %s): you didn't ask for 'r', which is important. so, i'm fixing it for you by giving you 'r+b' instead", self.__module__, type(self).__name__, repr(filename), repr(mode))
             mode = 'r+b'
-        else:
-            # lie to the user, don't give them a choice
-            mode = 'r+b'
+            self.file = __builtin__.file(filename, mode)
+            return
+
+        # if nothing is specified, then open read/write if allowed
+        mode = 'r+b' if os.access(filename, 6) else 'rb'
         self.file = __builtin__.file(filename, mode)
 
     def seek(self, offset):
@@ -62,11 +69,14 @@ class file(base):
     def consume(self, amount):
         offset = self.file.tell()
         assert amount >= 0, 'tried to consume a negative number of bytes. %d:+%s from %s'%(offset,amount,self)
-
         logging.debug('%s - attempting to consume %x:+%x'%(self.__module__, offset,amount))
-        result = self.file.read(amount)
-        if len(result) == amount:
-            return result
+
+        try:
+            result = self.file.read(amount)
+            if len(result) == amount:
+                return result
+        except OverflowError:
+            pass
         raise StopIteration('unable to complete read. %d:+%x from %s'%(offset,amount,self))
 
     def store(self, data):
@@ -87,7 +97,7 @@ class file(base):
 
 import array
 class string(base):
-    '''Basic string provider'''
+    '''Basic writeable string provider'''
 
     offset = int
     value = str     # this is backed by an array.array type
@@ -461,7 +471,21 @@ class random(base):
     def store(self, data):
         raise OSError('Attempted to write to read-only medium %s'% repr(self))
 
-if __name__ == '__main__':
+class proxy(string):
+    '''proxy to the source of a specific ptype'''
+    def __init__(self, source):
+        self.type = source
+
+    def seek(self, offset):
+        return self.type.source.seek(offset)
+
+    def consume(self, amount):
+        return self.type.source.consume(amount)
+
+    def store(self, data):
+        return self.type.source.store(data)
+
+if __name__ == '__main__' and 0:
     import array
     import ptypes,ptypes.provider as provider
 #    x = provider.WindowsFile('c:/users/arizvisa/a.out')
@@ -497,4 +521,115 @@ if __name__ == '__main__':
      pint.uint32_t(offset=0x10,source=strm).l.serialize() + \
      pint.uint32_t(offset=0x14,source=strm).l.serialize() + \
      pint.uint32_t(offset=0x18,source=strm).l.serialize() )
+
+if __name__ == '__main__':
+    # test cases are found at next instance of '__main__'
+    import logging
+    logging.root=logging.RootLogger(logging.DEBUG)
+
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
+
+if __name__ == '__main__':
+    import ptype,parray
+    import pstruct,parray,pint,provider
+
+    a = provider.virtual()
+    a.available = [0,6]
+    a.data = {0:'hello',6:'world'}
+    print a.available
+    print a.data
+
+    @TestCase
+    def test_first():
+        if a._find(0) == 0:
+            raise Success
+
+    @TestCase
+    def test_first_2():
+        if a._find(3) == 0:
+            raise Success
+
+    @TestCase
+    def test_first_3():
+        if a._find(4) == 0:
+            raise Success
+
+    @TestCase
+    def test_hole():
+        if a._find(5) == -1:
+            raise Success
+    
+    @TestCase
+    def test_second():
+        if a.available[a._find(6)] == 6:
+            raise Success
+    @TestCase
+    def test_second_2():
+        if a.available[a._find(9)] == 6:
+            raise Success
+
+    @TestCase
+    def test_second_3():
+        if a.available[a._find(10)] == 6:
+            raise Success
+
+    @TestCase
+    def test_less():
+        if a.find(-1) == -1:
+            raise Success
+    
+    @TestCase
+    def test_tail():
+        if a.find(11) == -1:
+            raise Success
+
+    @TestCase
+    def test_flatten():
+        from array import array
+        s = lambda x:array('c',x)
+        a = provider.virtual()
+        a.available = [0,5]
+        a.data = {0:s('hello'),5:s('world')}
+        a.flatten(0,5)
+        if len(a.data[0]) == 10:
+            raise Success
+
+    @TestCase
+    def test_consume():
+        s = lambda x:array.array('c',x)
+
+        global a
+        a = provider.virtual()
+        a.available = [0, 5, 10, 15, 20]
+        a.data = {0:s('hello'),5:s('world'),10:s('55555'),15:s('66666'),20:s('77777')}
+        a.seek(17)
+        if a.consume(5) == '66677':
+            raise Success
+
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )
 

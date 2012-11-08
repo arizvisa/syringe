@@ -95,10 +95,11 @@ class DataDirectory(parray.type):
     length = 16
 
     def _object_(self):
-        return [
-            Export, Import, Resource, Exception, Security, BaseReloc,
-            Debug, Architecture, GlobalPtr, Tls, LoadConfig,
-            BoundImport, IAT, DelayLoad, ComHeader, Reserved,
-            None        # hopefully it dies here since we only know about 16 dirs
-        ][len(self.value)]
+        entries = (
+            Export, Import, Resource, Exception, Security,
+            BaseReloc, Debug, Architecture, GlobalPtr,
+            Tls, LoadConfig, BoundImport, IAT,
+            DelayLoad, ComHeader, Reserved
+        )
+        return entries[len(self.value)]
 

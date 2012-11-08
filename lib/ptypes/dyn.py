@@ -116,50 +116,54 @@ class union(__union_generic):
     root = None         # root type. determines block size.
     _fields_ = []       # aliases of root type that will act on the same data
     object = None       # objects associated with each alias
+    value = None
 
-    initialized = property(fget=lambda self: self.__root is not None and self.__root.initialized)    # bool
-    __root = None
+    initialized = property(fget=lambda self: self.value is not None and self.value.initialized)    # bool
     def alloc(self, **attrs):
-        with utils.assign(*self, **attrs):
-            self.__create_root()
-            self.__create_objects()
+        self.__alloc_objects()
+        t = self.__choose_root()
+        self.value = t(source=provider.proxy(self))
+        self.value.alloc(*attrs)
         return self
 
-    def __create_root(self):
-        assert self.root, 'Need to define an element or a root element in order to create a union'
-        offset = self.getoffset()
-        r = self.newelement(self.root, self.shortname(), offset)
-        self.__root = r
-        self.value = __import__('array').array('c')
-
-    def __create_objects(self):
-        source = provider.string('')
-        source.value = self.value
+    def __alloc_objects(self):
+        source = provider.proxy(self.value)
         self.object = [ self.newelement(t, n, 0, source=source) for t,n in self._fields_ ]
-        return
+        return self
 
-    def __init__(self, **attrs):
-        super(union, self).__init__(**attrs)
-        if not self.root and len(self._fields_) > 0:
-            t,n = self._fields_[0]
-            self.root = t
-        self.__create_root()
-        return
+    def __choose_root(self):
+        if self.root:
+            return self.root
+
+        assert self.object, 'Need to define some elements'
+        size = 0
+        for x in self.object:
+            try:
+                s = x.blocksize()
+                if s > size:
+                    size = s
+            except:
+                pass
+            continue
+        return clone(ptype.block, length=size)
 
     def serialize(self):
-        return self.value.tostring()
+        return self.value.serialize()
+#        return self.value.tostring()
 
     def load(self, **kwds):
-        self.__create_root()
-        r = self.__root.l
+        self.alloc(**kwds)
+        r = self.value.l
         return self.deserialize_block(r.serialize())
 
     def deserialize_block(self, block):
-        self.value[:] = __import__('array').array('c')
-        self.value.fromstring( block[:self.size()] )
-        self.__create_objects()
+#        self.value[:] = array.array('c')
+#        self.value.fromstring( block[:self.size()] )
+
+        self.__alloc_objects()
+
         # try loading everything as quietly as possible 
-        # [n.load() for n in self.object] 
+        [n.load() for n in self.object] 
         return self
 
     def __getitem__(self, key):
@@ -178,9 +182,11 @@ class union(__union_generic):
         return ' '.join(('union', res))
 
     def blocksize(self):
-        return self.__root.blocksize()
+        return self.value.blocksize()
     def size(self):
-        return self.__root.size()
+        return self.value.size()
+
+union_t = union # alias
 
 import sys,pint
 if sys.byteorder == 'big':
@@ -251,6 +257,8 @@ if __name__ == '__main__':
     import ptypes,zlib
     from ptypes import *
 
+    ptypes.setsource(ptypes.provider.string('A'*50000))
+
     string1='ABCD'  # bigendian
     string2='DCBA'  # littleendian
 
@@ -306,7 +314,7 @@ if __name__ == '__main__':
 
         a = test(source=ptypes.provider.string('A'*4))
         a=a.l
-        if a._union__root[0].int() != 0x41:
+        if a.value[0].int() != 0x41:
             raise Failure
 
         if a['block'].size() == 4 and a['int'].int() == 0x41414141:
@@ -403,8 +411,21 @@ if __name__ == '__main__':
         z = v(source=x).l
         if z[4].number() == 0x44:
             raise Success
+
+    @TestCase
+    def Test11():
+        class test(dyn.union):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint16_t, 'b'),
+                (pint.uint8_t, 'c'),
+            ]
+
+        global a
+        a = test()
         
 if __name__ == '__main__':
     results = []
     for t in TestCaseList:
         results.append( t() )
+

@@ -185,9 +185,9 @@ class PPDrawing(RecordContainer):
 #class PST_ShapeContainer(RecordContainer):
 #    type = 61444
 
-@Record.define
-class PST_ShapeClientContainer(RecordContainer):
-    type = 61457
+#@Record.define
+#class PST_ShapeClientContainer(RecordContainer):
+#    type = 61457
 
 @Record.define
 class Handout(RecordContainer):

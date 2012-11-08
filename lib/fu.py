@@ -4,9 +4,8 @@
 #          to serialization service
 
 import __builtin__
-import cPickle as pickle
 
-VERSION = '0.6'
+VERSION = '0.7'
 
 # attribute[ignore=list of fu type names] -- ignore serializing/deserializing these types
 # attribute[globals=dict] -- use the provided dict as the globals for deserialized objects
@@ -36,27 +35,17 @@ class package:
         st.unpack(data)
         return st.fetch(id,**attributes)
 
-    ### friendly interfaces
-    @classmethod
-    def dumps(cls, object, **attributes):
-        '''convert any python object into a bzip2 encoded string'''
-        return pickle.dumps(cls.pack(object,**attributes)).encode('bz2')
-
-    @classmethod
-    def loads(cls, data, **attributes):
-        '''convert a bzip2 encoded string back into a python object'''
-        return cls.unpack(pickle.loads(data.decode('bz2')), **attributes)
-
     ### stuff that's hidden within this namespace
     class cache(object):
         '''static class for looking up a class used for serializing a particular object'''
         class registration:
-            id,type = {},{}
+            id,const,type = {},{},{}
 
             @staticmethod
             def hash(data):
                 return reduce(lambda x,y: (((x<<5)+x)^ord(y)) & 0xffffffff, iter(data), 5381)
 
+        ## registration of a cls into cache
         @classmethod
         def register(cls, definition):
             id = cls.registration.hash(definition.__name__)
@@ -68,17 +57,26 @@ class package:
             return definition
 
         @classmethod
-        def register_type(cls, type):
+        def register_type(cls, definition):
             '''registers the definition with the specified builtin type'''
-            def __register_type_closure(definition):
-                if type in cls.registration.type:
-                    raise KeyError("Duplicate type %s in cache"% repr(type))
+            type = definition.getclass()
+            if type in cls.registration.type:
+                raise KeyError("Duplicate type %s in cache"% repr(type))
 
-                definition = cls.register(definition)
-                cls.registration.type[type] = definition
-                return definition
-            return __register_type_closure
+            definition = cls.register(definition)
+            cls.registration.type[type] = definition
+            return definition
 
+        @classmethod
+        def register_const(cls, definition):
+            const = definition.getclass()
+            if const in cls.registration.const:
+                raise KeyError("Duplicate constant %s in cache"% repr(const))
+            definition = cls.register(definition)
+            cls.registration.const[const] = definition
+            return definition
+
+        ## determining a registered cls from various types
         @classmethod
         def byid(cls, id):
             '''search through globastate.id for a definition'''
@@ -90,30 +88,34 @@ class package:
             return cls.registration.type[type]
 
         @classmethod
+        def byconst(cls, const):
+            '''search through registration.const for a definition'''
+            result = cls.registration.const[const]
+            if result.getclass() is not const:
+                raise KeyError(const)
+            return result
+
+        @classmethod
         def byinstance(cls, instance):
             '''iterate through all registered definitions to determine which one can work for serialization/deserialization'''
-
-            global package,type_,object_,module_
+            global package,object_,module_
             type,object,module = __builtin__.type,__builtin__.object,__builtin__.__class__
             t = type(instance)
 
-            # special constants
-            if instance in (type, object, module):
-                return package.cache.byclass(instance)
-
-            # special types
-            if t is type:
-                return type_
-            elif t is module:
-                # FIXME: differentiate between binary modules and pythonic modules
-                raise KeyError('module serialization has not been tested to completion yet : %s'% repr(instance))
-                return module_
-
             # any constant
             try:
-                return package.cache.byclass(instance)
+                return package.cache.byconst(instance)
             except (KeyError,TypeError):
                 pass
+
+            # special types
+            if t is module and instance is not module:
+                # XXX: implement binary modules
+                if hasattr(instance, '__file__'):
+                    if instance.__file__.endswith('.pyd'):
+                        raise NotImplementedError('binary modules not supported')
+                    return module_
+                return module_local
 
             # by type
             try:
@@ -124,6 +126,8 @@ class package:
             # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
+#                    return partial  # XXX
+                    globals()['error'] = instance
                     raise KeyError(instance)
                 return builtin_
 
@@ -133,20 +137,21 @@ class package:
             wrapper_descriptor = cls.__setattr__.__class__
             member_descriptor = type(lambda:wat).func_globals.__class__
             classmethod_descriptor = type(__builtin__.float.__dict__['fromhex'])
-            if t in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator.getclass()):
+            if t in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator_.getclass()):
+#                return partial  # XXX
+                globals()['error'] = instance
                 raise KeyError(instance)
 
             # catch-all object
-            if hasattr(instance, '__dict__'):
+            if hasattr(instance, '__dict__'): # or hasattr(instance, '__slots__'):  # XXX
                 return object_
 
             # FIXME: if it follows the pickle protocol..
             if hasattr(instance, '__getstate__'):
-                print 'pickled',instance
-                import cPickle as pickle
                 pickle.loads(pickle.dumps(instance))
                 return partial
 
+            globals()['error'] = instance
             raise KeyError(instance)
 
     class stash(__builtin__.object):
@@ -167,7 +172,7 @@ class package:
             inst = [(k,(package.cache.byid(clsid).__name__,v)) for k,(clsid,v) in self.inst_data.iteritems()]
             return "<class '%s'> %s"%(self.__class__.__name__, repr(__builtin__.dict(cons)))
 
-        ## packing
+        ## serializing/deserializing entire state
         def packed(self):
             return self.cons_data,self.inst_data
 
@@ -181,20 +186,26 @@ class package:
             self.inst_data.update(inst)
             return True
 
+        ## packing/unpacking of id's
         def pack_references(self, data, **attributes):
             '''converts object data into reference id's'''
             if data.__class__ is __builtin__.tuple:
                 return __builtin__.tuple(self.store(x,**attributes) for x in data)
             elif data.__class__ is __builtin__.dict:
-                return __builtin__.dict([(self.store(k,**attributes),self.store(v,**attributes)) for k,v in data.items()])
+                return __builtin__.dict((self.store(k,**attributes),self.store(v,**attributes)) for k,v in data.items())
+            elif data.__class__ is __builtin__.list:
+                # a list contains multiple packed objects
+                return [self.pack_references(x, **attributes) for x in data]
             return data
 
         def unpack_references(self, data, **attributes):
             '''converts packed references into objects'''
             if data.__class__ is __builtin__.tuple:
-                return __builtin__.tuple([self.fetch(x,**attributes) for x in data])
+                return __builtin__.tuple(self.fetch(x,**attributes) for x in data)
             elif data.__class__ is __builtin__.dict:
                 return __builtin__.dict((self.fetch(k,**attributes),self.fetch(v,**attributes)) for k,v in data.items())
+            elif data.__class__ is __builtin__.list:
+                return [self.unpack_references(x, **attributes) for x in data]
             return data
 
         def identify(self, object):
@@ -206,13 +217,14 @@ class package:
         def __getitem__(self, name):
             return self.identify(name)
 
+        ### stashing/fetching of objects
         def store(self, object, **attributes):
             identity = self.identify(object)
             if identity in self.store_cache:
                 return identity
             cls = package.cache.byinstance(object)
 
-            if True:
+            if False:       # XXX
                 # get naming info
                 modulename,name = getattr(object,'__module__',None),getattr(object,'__name__',None)
                 fullname = ('%s.%s'% (modulename,name)) if modulename else name
@@ -248,7 +260,7 @@ class package:
             _,data = self.cons_data[identity]
             cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
 
-            if False:
+            if False:   # XXX
                 # naming info
                 fullname = ('%s.%s'% (modulename,name)) if modulename else name
 
@@ -275,35 +287,25 @@ class package:
             assert instance is _, '%s.fetch(%d) : constructed instance is different from updated instance'% (__builtin__.object.__repr__(self), identity)
             return instance
 
-    class partialinstance(object):
-        __name__ = '--incomplete--'
-        def __getattr__(self, attribute):
-            message = 'unable to access attribute "%s" from partial type "%s"'
-            raise Exception(message% (attribute, self.__name__))
-        def __call__(self, *args, **kwds):
-            message = 'unable to call partial type "%s"'
-            raise Exception(message% (self.__name__))
-        def __repr__(self):
-            return "%s %s"%( self.__class__, self.__name__ )
-
 class __type__(__builtin__.object):
     @classmethod
-    def new(cls, *args, **kwds):
-        '''instantiate a new instance of the object'''
-        return cls.getclass()(*args, **kwds)
-    @classmethod
-    def getclass(cls):
+    def getclass(cls, *args, **kwds):
         raise NotImplementedError(cls)
+
+    @classmethod
+    def new(cls):
+        return cls.getclass()
+
     @classmethod
     def repr(cls, object):
         '''default method for displaying a repr of an object'''
         return repr(object)
 
-class __marshallable(__type__):
     @classmethod
     def p_constructor(cls, object, **attributes):
         '''returns all arguments required to construct this type'''
         return ()
+
     @classmethod
     def p_instance(cls, object, **attributes):
         '''return attributes of type that will be used to update'''
@@ -319,65 +321,23 @@ class __marshallable(__type__):
         '''update the object with the provided data'''
         return instance
 
-class __constant(__marshallable):
-    @classmethod
-    def new(cls, *args, **kwds):
-        return cls.getclass()
-    @classmethod
-    def p_instance(cls, object, **attributes):
-        return ()
-    @classmethod
-    def u_constructor(cls, data, **attributes):
-        return cls.new()
-
-class __builtin(__marshallable):
-    @classmethod
-    def new(cls, *args, **kwds):
-        return cls.getclass()(*args,**kwds)
-    @classmethod
-    def p_constructor(cls, object, **attributes):
-        return object
-    @classmethod
-    def u_constructor(cls, data, **attributes):
-        return cls.new(data)
-    @classmethod
-    def p_instance(cls, object, **attributes):
-        return ()
-
-class __muteable(__marshallable):
-    @classmethod
-    def p_constructor(cls, object, **attributes):
-        return ()
-    @classmethod
-    def u_constructor(cls, data, **attributes):
-        return cls.new(data)
-
-class __special(__marshallable):
-    attributes = None
-
-    @classmethod
-    def getclass(cls):
-        raise NotImplementedError(cls)
-
-    @classmethod
-    def p_constructor(cls, object, **attributes):
-        result = {}
-        if cls.attributes.__class__ == {}.__class__:
-            result.update((k,getattr(object,k, cls.attributes[k])) for k in cls.attributes)
-        else:
-            result.update((k,getattr(object,k)) for k in cls.attributes)
-        return result
-
-    @classmethod
-    def p_instance(cls, object, **attributes):
-        return ()
-
-@package.cache.register_type(package.partialinstance)
-class partial(__marshallable):
+@package.cache.register_type
+class partial(__type__):
     '''just a general type for incomplete objects'''
+    class partialinstance(object):
+        __name__ = '--incomplete--'
+        def __getattr__(self, attribute):
+            message = 'unable to access attribute "%s" from partial type "%s"'
+            raise Exception(message% (attribute, self.__name__))
+        def __call__(self, *args, **kwds):
+            message = 'unable to call partial type "%s"'
+            raise Exception(message% (self.__name__))
+        def __repr__(self):
+            return "%s %s"%( self.__class__, self.__name__ )
+
     @classmethod
     def getclass(cls):
-        return package.partialinstance
+        return cls.partialinstance
     @classmethod
     def p_constructor(cls, object, **attributes):
         return ()
@@ -390,60 +350,274 @@ class partial(__marshallable):
 
 ### constants
 if 'constants':
-    @package.cache.register_type(__builtin__.None)
-    class none(__constant):
+    class __constant(__type__):
         @classmethod
-        def getclass(cls):
-            return __builtin__.None
+        def new(cls, *args, **kwds):
+            '''instantiate a new instance of the object'''
+            return cls.getclass()(*args, **kwds)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return cls.getclass()
 
-    @package.cache.register_type(__builtin__.True)
-    class true(__constant):
-        @classmethod
-        def getclass(cls):
-            return __builtin__.True
-
-    @package.cache.register_type(__builtin__.False)
-    class false(__constant):
-        @classmethod
-        def getclass(cls):
-            return __builtin__.False
-        
-    @package.cache.register_type(__builtin__.type)
+    @package.cache.register_const
     class type(__constant):
         @classmethod
         def getclass(cls):
             return __builtin__.type
 
-    @package.cache.register_type(__builtin__.object)
+    @package.cache.register_const
     class object(__constant):
         @classmethod
         def getclass(cls):
             return __builtin__.object
 
-    @package.cache.register_type(__builtin__.__class__)
+    @package.cache.register_const
     class module(__constant):
         @classmethod
         def getclass(cls):
             return __builtin__.__class__
 
-    @package.cache.register_type(__builtin__.NotImplemented)
+        @classmethod
+        def instancelocal(cls, modulename, **kwds):
+            return __import__(modulename)
+
+        @classmethod
+        def instance(cls, modulename, doc=None):
+            try:
+                return cls.instancelocal(modulename, doc=doc)
+            except ImportError:
+                pass
+            return cls.new(modulename, doc)
+
+    @package.cache.register_const
+    class bool(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.True.__class__
+
+    @package.cache.register_const
+    class int(__constant):
+        @classmethod
+        def getclass(cls):
+            return (0).__class__
+
+    @package.cache.register_const
+    class float(__constant):
+        @classmethod
+        def getclass(cls):
+            return 0.0.__class__
+
+    @package.cache.register_const
+    class long(__constant):
+        @classmethod
+        def getclass(cls):
+            return 0L.__class__
+
+    @package.cache.register_const
+    class complex(__constant):
+        @classmethod
+        def getclass(cls):
+            return 0j.__class__
+
+    @package.cache.register_const
+    class str(__constant):
+        @classmethod
+        def getclass(cls):
+            return ''.__class__
+
+    @package.cache.register_const
+    class unicode(__constant):
+        @classmethod
+        def getclass(cls):
+            return u''.__class__
+
+    @package.cache.register_const
+    class buffer(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.buffer('').__class__
+
+    @package.cache.register_const
+    class tuple(__constant):
+        '''string buffer'''
+        @classmethod
+        def getclass(cls):
+            return (().__class__)
+
+    @package.cache.register_const
+    class list(__constant):
+        '''string buffer'''
+        @classmethod
+        def getclass(cls):
+            return [].__class__
+
+    @package.cache.register_const
+    class dict(__constant):
+        '''string buffer'''
+        @classmethod
+        def getclass(cls):
+            return {}.__class__
+
+    @package.cache.register_const
+    class set(__constant):
+        '''string buffer'''
+        @classmethod
+        def getclass(cls):
+            return __builtin__.set
+
+    @package.cache.register_const
+    class frozenset(__constant):
+        '''string buffer'''
+        @classmethod
+        def getclass(cls):
+            return __builtin__.frozenset
+
+    @package.cache.register_const
+    class instancemethod(__constant):
+        @classmethod
+        def getclass(cls):
+            return cls.getclass.__class__
+
+    @package.cache.register_const
+    class property(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.property
+
+    @package.cache.register_const
+    class code(__constant):
+        @classmethod
+        def getclass(cls):
+            return eval('lambda:fake').func_code.__class__
+
+        @classmethod
+        def new(cls, argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
+            i,s,t = __builtin__.int,__builtin__.str,__builtin__.tuple
+            optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
+            types = [ i, i, i, i, s, t, t, t, s, s, i, s, optional(t), optional(t) ]
+            values = [ argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
+            for i,t in enumerate(types):
+                values[i] = t( values[i] )
+            return cls.getclass()(*values)
+
+    @package.cache.register_const
+    class function(__constant):
+        @classmethod
+        def getclass(cls):
+            return (lambda:0).__class__
+
+        @classmethod
+        def new(cls, code, globals, **attributes):
+            '''Create a new function'''
+            name = attributes.get('name', code.co_name)
+            argdefs = attributes.get('argdefs', ())
+            closure = attributes.get('closure', ())
+            c = cls.getclass()
+            return c(code, globals, name, argdefs, closure)
+
+    @package.cache.register_const
+    class builtin(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.setattr.__class__
+
+    @package.cache.register_const
+    class generator(__constant):
+        @classmethod
+        def getclass(cls):
+            return (x for x in (0,)).__class__
+
+    @package.cache.register_const
+    class frame(__constant):
+        @classmethod
+        def getclass(cls):
+            return (x for x in (0,)).gi_frame.__class__
+
+    @package.cache.register_const
+    class Staticmethod(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.staticmethod
+
+    @package.cache.register_const
+    class Classmethod(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.classmethod
+
+    ## real constant
+    @package.cache.register_const
+    class none(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.None
+
+    @package.cache.register_const
+    class true(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.True
+
+    @package.cache.register_const
+    class false(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.False
+        
+    @package.cache.register_const
     class notImplemented(__constant):
         @classmethod
         def getclass(cls):
             return __builtin__.NotImplemented
 
-    @package.cache.register_type(__builtin__.Ellipsis)
+    @package.cache.register_const
     class ellipsis(__constant):
         @classmethod
         def getclass(cls):
             return __builtin__.Ellipsis
 
+    @package.cache.register_const
+    class file(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.file
+
+try:
+    import imp
+    @package.cache.register_const
+    class NullImporter(__constant):
+        @classmethod
+        def getclass(cls):
+            return imp.NullImporter
+
+except ImportError:
+    pass
+
 if 'core':
-    @package.cache.register
-    class type_(__marshallable):
+    @package.cache.register_type
+    class type_(__type__):
+        '''any generic python type'''
+
         # FIXME: when instantiating a hierarchy of types, this fails to associate
         #        the method with the proper parent class. this is apparent if you
         #        compare the help() of the original object to the deserialized object
+        @classmethod
+        def getclass(cls):
+            return type.getclass()
+
+        @classmethod
+        def subclasses(cls, type):
+            '''return all subclasses of type'''
+            assert __builtin__.type(type) is __builtin__.type
+            if type.__bases__ == ():
+                return ()
+            result = type.__bases__
+            for x in type.__bases__:
+                result += cls.subclasses(x)
+            return result
 
         @classmethod
         def p_constructor(cls, object, **attributes):
@@ -460,7 +634,6 @@ if 'core':
         @classmethod
         def p_instance(cls, object, **attributes):
             result = {}
-
             for k,v in object.__dict__.iteritems():
                 try:
                     _ = package.cache.byinstance(v)
@@ -480,14 +653,25 @@ if 'core':
                     pass
             return instance
 
-    @package.cache.register_type(__builtin__.type(package))
+    @package.cache.register_type
     class classobj(type_):
+        '''an old-style python class'''
         @classmethod
         def getclass(cls):
             return __builtin__.type(package)
 
+    @package.cache.register_type
+    class Object(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.object
+
+        def u_constructor(cls, data, **attributes):
+            return self.new()
+
     @package.cache.register
     class object_(type_):
+        '''a generic python object and all it's parentclass' properties'''
         @classmethod
         def p_constructor(cls, object, **attributes):
             name,type = getattr(object,'__name__',None),object.__class__
@@ -497,11 +681,7 @@ if 'core':
         def u_constructor(cls, data, **attributes):
             name,type = data
 
-            # FIXME: figure out some elegant way to instantiate a type when doing so will actually raise an exception
-            #argcount = type.__init__.func_code.co_argcount  # XXX
-            #argh = __builtin__.tuple(None for x in range(argcount-1))
-            #result = type(*arghs)
-
+#            class type(type): pass  # XXX: this type-change might mess up something
             # create an instance illegitimately
             _ = type.__init__ 
             type.__init__ = lambda s: None
@@ -511,67 +691,193 @@ if 'core':
             result.__name__ = name
             return result
 
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            c = type_
+            result = [(c.id,c.p_instance(object,**attributes))]
+
+            for t in type_.subclasses(__builtin__.type(object)):
+                try:
+                    c = package.cache.byclass(t)
+                except KeyError:
+                    continue
+                result.append( (c.id, c.p_instance(object, **attributes)) )
+            return result
+
+        @classmethod
+        def u_instance(cls, instance, data, **attributes):
+            if len(data) == 0:
+                return instance
+            for id,data in data:
+                c = package.cache.byid(id)
+                instance = c.u_instance(instance, data, **attributes)
+            return instance
+
+    @package.cache.register
+    class module_local(__constant):
+        '''module that is locally stored'''
+        @classmethod
+        def getclass(cls):
+            return module.getclass()
+            
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.__name__
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name = data
+            return module.instancelocal(name)
+
+    @package.cache.register_type
+    class module_(module_local):
+        '''a module and it's attributes'''
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.__name__,object.__doc__
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name,doc = data
+            return cls.new(name,doc)
+
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return object.__dict__
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name,doc = data
+            return module.new(name,doc)
+
+        @classmethod
+        def u_instance(cls, instance, data, **attributes):
+            for k,v in data.items():
+                setattr(instance, k, v)
+            return instance
+
 if 'builtin':
-    @package.cache.register_type(True.__class__)
-    class bool(__builtin):
+    class __builtin(__type__):
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return cls.new(data)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+        @classmethod
+        def new(cls, *args, **kwds):
+            return cls.getclass()(*args, **kwds)
+
+    @package.cache.register_type
+    class bool_(__builtin):
         '''standard boolean type'''
         @classmethod
         def getclass(cls):
-            return __builtin__.True.__class__
+            return bool.getclass()
 
-    @package.cache.register_type((0).__class__)
-    class int(__builtin):
+    @package.cache.register_type
+    class int_(__builtin):
         '''integral value'''
         @classmethod
         def getclass(cls):
-            return (0).__class__
+            return int.getclass()
 
-    @package.cache.register_type(0.0.__class__ )
-    class float(__builtin):
+    @package.cache.register_type
+    class float_(__builtin):
         '''float value'''
         @classmethod
         def getclass(cls):
-            return 0.0.__class__
+            return float.getclass()
 
-    @package.cache.register_type((0L).__class__)
-    class long(__builtin):
+    @package.cache.register_type
+    class long_(__builtin):
         '''long value'''
         @classmethod
         def getclass(cls):
-            return 0L.__class__
+            return long.getclass()
 
-    @package.cache.register_type(0j.__class__)
-    class complex(__builtin):
+    @package.cache.register_type
+    class complex_(__builtin):
         '''complex value'''
         @classmethod
         def getclass(cls):
-            return 0j.__class__
+            return complex.getclass()
 
     ## sequence types
-    @package.cache.register_type(''.__class__)
-    class str(__builtin):
+    @package.cache.register_type
+    class str_(__builtin):
         '''str value'''
         @classmethod
         def getclass(cls):
-            return ''.__class__
+            return str.getclass()
 
-    @package.cache.register_type(u''.__class__)
-    class unicode(__builtin):
+    @package.cache.register_type
+    class unicode_(__builtin):
         '''unicode string'''
         @classmethod
         def getclass(cls):
-            return u''.__class__
+            return unicode.getclass()
 
-    @package.cache.register_type(__builtin__.buffer('').__class__)
-    class buffer(__builtin):
+    @package.cache.register_type
+    class buffer_(__builtin):
         '''string buffer'''
         @classmethod
         def getclass(cls):
-            return __builtin__.buffer('').__class__
+            return buffer.getclass()
+
+if 'custom':
+    @package.cache.register_type
+    class NullImporter_(__builtin):
+        '''string buffer'''
+        @classmethod
+        def getclass(cls):
+            return NullImporter.getclass()
+
+    try:
+        import _sre
+        @package.cache.register_type
+        class SRE_Pattern(__builtin):
+            @classmethod
+            def getclass(cls):
+                return _sre.compile('', 0, [1], 0, {}, []).__class__
+
+            @classmethod
+            def p_constructor(cls, object, **attributes):
+                #pattern, flags, code
+                return (object.pattern, object.flags, code, )
+
+            @classmethod
+            def u_constructor(cls, data, **attributes):
+                pass
+    #            return _sre.compile(
+    #                pattern, flags | p.pattern.flags, code,
+    #                p.pattern.groups-1,
+    #                groupindex, indexgroup
+    #                )
+
+            @classmethod
+            def p_instance(cls, object, **attributes):
+                return ()
+
+            @classmethod
+            def u_instance(cls, instance, data, **attributes):
+                return instance
+        raise ImportError
+
+    except ImportError:
+        print 'unable to do _sre serialization'
 
 if 'immuteable':
-    @package.cache.register_type(().__class__)
-    class tuple(__marshallable):
+    @package.cache.register_type
+    class tuple_(__type__):
+        '''an immuteable tuple'''
+        @classmethod
+        def getclass(cls):
+            return tuple.getclass()
+
         @classmethod
         def p_constructor(cls, object, **attributes):
             return object
@@ -587,11 +893,23 @@ if 'immuteable':
             return instance
 
 if 'muteable':
-    @package.cache.register_type([].__class__)
-    class list(__muteable):
+    class __muteable(__type__):
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return ()
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return cls.new(data)
+        @classmethod
+        def new(cls, *args, **kwds):
+            return cls.getclass()(*args, **kwds)
+
+    @package.cache.register_type
+    class list_(__muteable):
+        '''a list'''
         @classmethod
         def getclass(cls):
-            return __builtin__.list
+            return list.getclass()
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
@@ -603,11 +921,12 @@ if 'muteable':
             instance.extend(data)
             return instance
 
-    @package.cache.register_type({}.__class__)
-    class dict(__muteable):
+    @package.cache.register_type
+    class dict_(__muteable):
+        '''a dictionary'''
         @classmethod
         def getclass(cls):
-            return __builtin__.dict
+            return dict.getclass()
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
@@ -619,11 +938,12 @@ if 'muteable':
             instance.update(data)
             return instance
 
-    @package.cache.register_type(__builtin__.set)
-    class set(__muteable):
+    @package.cache.register_type
+    class set_(__muteable):
+        '''a set'''
         @classmethod
         def getclass(cls):
-            return __builtin__.set
+            return set.getclass()
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
@@ -634,42 +954,66 @@ if 'muteable':
             instance.update(data)
             return instance
 
-    @package.cache.register_type(__builtin__.frozenset)
-    class frozenset(__muteable):
+    @package.cache.register_type
+    class frozenset_(__muteable):
+        '''a frozenset'''
         @classmethod
         def getclass(cls):
-            return __builtin__.frozenset
+            return frozenset.getclass()
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
             return __builtin__.tuple(object)
 
 if 'special':
-    @package.cache.register_type(package.cache.register.__class__)
-    class instancemethod(__special):
+    class __special(__type__):
+        attributes = None
+
+        @classmethod
+        def getclass(cls):
+            raise NotImplementedError(cls)
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            result = {}
+            if cls.attributes.__class__ == {}.__class__:
+                result.update((k,getattr(object,k, cls.attributes[k])) for k in cls.attributes)
+            else:
+                result.update((k,getattr(object,k)) for k in cls.attributes)
+            return result
+
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    @package.cache.register_type
+    class instancemethod_(__special):
+        '''a python class method'''
         attributes = ['im_func', 'im_self', 'im_class']
 
         @classmethod
         def getclass(cls):
-            return cls.getclass.__class__
+            return instancemethod.getclass()
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             return cls.new(data['im_func'], data['im_self'], data['im_class'])
 
-    @package.cache.register_type(__builtin__.property)
-    class property(__special):
+    @package.cache.register_type
+    class property_(__special):
+        '''a python class property'''
         attributes=['fdel','fset','fget']
         @classmethod
         def getclass(cls):
-            return __builtin__.property
+            return property.getclass()
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return cls.new(fget=data['fget'], fset=data['fset'], fdel=data['fdel'])
+            return property.new(fget=data['fget'], fset=data['fset'], fdel=data['fdel'])
 
-    @package.cache.register_type(eval('lambda:False').func_code.__class__)
-    class code(__special):
+    @package.cache.register_type
+    class code_(__special):
+        '''a python code type'''
         attributes = [
             'co_argcount', 'co_nlocals', 'co_stacksize', 'co_flags', 'co_code',
             'co_consts', 'co_names', 'co_varnames', 'co_filename', 'co_name',
@@ -678,37 +1022,19 @@ if 'special':
         
         @classmethod
         def getclass(cls):
-            return eval('lambda:fake').func_code.__class__
-
-        @classmethod
-        def new(cls, argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
-            i,s,t = __builtin__.int,__builtin__.str,__builtin__.tuple
-            optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
-            types = [ i, i, i, i, s, t, t, t, s, s, i, s, optional(t), optional(t) ]
-            values = [ argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
-            for i,t in enumerate(types):
-                values[i] = t( values[i] )
-            return cls.getclass()(*values)
+            return code.getclass()
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             result = (data[k] for k in cls.attributes)
-            return cls.new(*result)
+            return code.new(*result)
 
-    @package.cache.register_type((lambda:0).__class__)
-    class function(__marshallable):
+    @package.cache.register_type
+    class function_(__type__):
+        '''a python function'''
         @classmethod
         def getclass(cls):
-            return (lambda:0).__class__
-
-        @classmethod
-        def new(cls, code, globals, **attributes):
-            '''Create a new function'''
-            name = attributes.get('name', code.co_name)
-            argdefs = attributes.get('argdefs', ())
-            closure = attributes.get('closure', ())
-            c = cls.getclass()
-            return c(code, globals, name, argdefs, closure)
+            return function.getclass()
 
         @classmethod
         def p_constructor(cls, object, **attributes):
@@ -726,9 +1052,9 @@ if 'special':
             assert object.__module__ is not None, 'FIXME: Unable to deserialize an unbound function'
 
             # XXX: assign the globals from commandline
-            globals = attributes['globals'] if 'globals' in attributes else module_.search(modulename).__dict__
+            globals = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
             result = cls.__new_closure(*closure)
-            return cls.new(code, globals, closure=result)
+            return function.new(code, globals, closure=result)
        
         @classmethod
         def p_instance(cls, object, **attributes):
@@ -782,7 +1108,7 @@ if 'special':
             outercodestring = ''.join(result)
 
             # build constants list
-            result = list.new(args)
+            result = list_.new(args)
             result.insert(0, innercodeobj)
             constants = __builtin__.tuple(result)
 
@@ -795,50 +1121,11 @@ if 'special':
             return fn().func_closure
 
     @package.cache.register
-    class module_local(__constant):
-        # module that is locally stored
-        @classmethod
-        def p_constructor(cls, object, **attributes):
-            return object.__name__,object.__doc__
-
-        @classmethod
-        def u_constructor(cls, data, **attributes):
-            name,doc = data
-            return __import__(name)
-
-        @classmethod
-        def search(cls, modulename, doc=None):
-            try:
-                return __import__(modulename)
-            except ImportError:
-                pass
-            return cls.new(modulename, doc)
-
-    @package.cache.register
-    class module_(module_local):
-        # a module and it's attributes
-        @classmethod
-        def u_constructor(cls, data, **attributes):
-            name,doc = data
-            return cls.new(name,doc)
-
-        @classmethod
-        def p_instance(cls, object, **attributes):
-            return object.__dict__
-
-        @classmethod
-        def u_instance(cls, instance, data, **attributes):
-            for k,v in data.items():
-                setattr(instance, k, v)
-            return instance
-
-if True:
-#    @package.cache.register_type(__builtin__.setattr.__class__)
-    @package.cache.register
     class builtin_(__constant):
+        '''copy from local module and name'''
         @classmethod
         def getclass(cls):
-            return __builtin__.setattr.__class__
+            return builtin.getclass()
 
         @classmethod
         def p_constructor(cls, object, **attributes):
@@ -846,41 +1133,130 @@ if True:
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            m,n = data
-            return getattr(__import__(m),n)
+            mod,name = data
+            m = module.instancelocal(mod)
+            return getattr(m,name)
 
-#    @package.cache.register_type( (x for x in (0,)) )
     @package.cache.register
-    class generator(__marshallable):
+    class file_(__constant):
         @classmethod
         def getclass(cls):
-            return (x for x in (0,)).__class__
+            return file.getclass()
 
-#    @package.cache.register_type( (x for x in (0,)).gi_frame.__class__ )
+        @classmethod
+        def p_constructor(cls, file, **attributes):
+            offset = file.tell()
+            return file.name, file.mode, offset
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name,mode,offset = data
+            file = open(name, mode)
+            file.seek(offset)
+            return file
+
     @package.cache.register
-    class frame(__marshallable):
+    class file_contents(file_):
         @classmethod
         def getclass(cls):
-            return (x for x in (0,)).gi_frame.__class__
+            return file.getclass()
 
-    @package.cache.register_type(__builtin__.staticmethod)
+        @classmethod
+        def p_constructor(cls, file, **attributes):
+            offset = file.tell()
+            file.seek(0)
+            content = file.read()
+            file.seek(offset)
+            return (file.name, file.mode, offset, content)
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name,mode,offset,content = data
+            file = open(name, "w")
+            file.write(content)
+            file.close()
+
+            file = open(name,mode)
+            file.seek(offset)
+            return file
+
+    # XXX: the following aren't tested
+    raise NotImplementedError
+    @package.cache.register_type
+    class generator_(__type__):
+        @classmethod
+        def getclass(cls):
+            return generator.getclass()
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.gi_code,object.gi_frame
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            co,fr = data
+            result = function.new(co, fr.f_globals)
+            raise NotImplementedError
+            return result
+
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+        @classmethod
+        def u_instance(cls, instance, data, **attributes):
+            return instance
+
+    @package.cache.register_type
+    class frame_(partial):  # FIXME: can't construct these
+        attributes = ['f_back', 'f_builtins', 'f_code', 'f_exc_traceback', 'f_exc_type', 'f_exc_value', 'f_globals', 'f_lasti', 'f_lineno', 'f_locals', 'f_restricted', 'f_trace']
+        @classmethod
+        def getclass(cls):
+            return frame.getclass()
+
+    @package.cache.register_type
     class staticmethod_(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.staticmethod
+            return Staticmethod.getclass()
 
-    @package.cache.register_type(__builtin__.classmethod)
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.__func__
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return cls.new(data)
+
+    @package.cache.register_type
     class classmethod_(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.classmethod
+            return Classmethod.getclass()
 
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.__func__
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return cls.new(data)
+
+## regular functions
+import cPickle as pickle
 def dumps(object, **attributes):
-    '''convert a python object to a string'''
-    return package.dumps(object, **attributes)
-def loads(data, **attributes):
-    '''convert a string back into a python object'''
-    return package.loads(data, **attributes)
+    '''convert any python object into a bzip2 encoded string'''
+    return pickle.dumps(package.pack(object,**attributes)).encode('bz2')
+
+def loads(cls, data, **attributes):
+    '''convert a bzip2 encoded string back into a python object'''
+    return package.unpack(pickle.loads(data.decode('bz2')), **attributes)
+
+def pack(object, **attributes):
+    return package.pack(object, **attributes)
+
+def unpack(data, **attributes):
+    return package.unpack(data, **attributes)
 
 if __name__ == '__main__':
     import traceback
@@ -970,7 +1346,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_builtin_unpack():
-        input = make_package(fu.bool,True,())
+        input = make_package(fu.bool_,True,())
         result = fu.package.unpack(input)
         if result == True:
             raise Success
@@ -1174,7 +1550,67 @@ if __name__ == '__main__':
         if a(222) == int(c('6')):
             raise Success
 
+#    @TestCase  # FIXME
+    def test_unknown_type():
+        # error while serializing a 'TypeInfo' object which comes from a module implemented in C
+        #   if we can 
+        import xml.dom.minidom
+        global a,b
+        a = fu.package.pack(xml.dom.minidom)
+        b = fu.package.unpack(a)
+
     @TestCase
+    def test_inheritance_native():
+        class blah(list): pass
+        x = blah()
+        x.append(5)
+        a = fu.package.pack(x)
+        b = fu.package.unpack(a)
+        if len(x) == len(b):
+            raise Success
+
+    @TestCase
+    def test_const_list():
+        t = type([])
+        a = fu.package.pack(t)
+        b = fu.package.unpack(a)
+        if b is t:
+            raise Success
+
+    @TestCase
+    def test_type_intbool():
+        v = 1
+        a = fu.package.pack(v)
+        b = fu.package.unpack(a)
+        if b == v and type(b) == type(v):
+            raise Success
+
+    @TestCase
+    def test_module_builtin():
+        import sys
+        a = fu.pack(sys)
+        b = fu.unpack(a)
+        if b is sys:
+            raise Success
+
+    @TestCase
+    def test_module_general():
+        import re
+        a = re
+        b = fu.pack(a)
+        c = fu.unpack(b)
+        if c is not a:
+            raise Success
+
+#    @TestCase
+    def test_module():
+        import fu
+        a = fu.package.pack(fu)
+        b = fu.package.unpack(a)
+        if b.VERSION == fu.VERSION and b is not fu:
+            raise Success
+
+#    @TestCase
     def test_ignore_modulepack():
         import sys
         a = fu.package.pack(sys, local=('sys',))
@@ -1186,7 +1622,7 @@ if __name__ == '__main__':
         if sys.winver is b.winver:
             raise Success
 
-    @TestCase
+#    @TestCase
     def test_ignore_moduleunpack():
         import _ast
         a = fu.package.pack(_ast)
@@ -1209,16 +1645,19 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_unknown_type():
-        # error while serializing a 'TypeInfo' object which comes from a module implemented in C
-        #   if we can 
-        import xml.dom.minidom
-        global a,b
-        a = fu.package.pack(xml.dom.minidom)
-        b = fu.package.unpack(a)
+    def test_continuation_yield():
+        def fn():
+            yield 1
+            yield 2
+        global a,b,c
+        a = fn()
+        assert a.next() == 1
+        b = fu.package.pack(a)
+        c = fu.package.unpack(b)
+        if c.next() == 2:
+            raise Success
 
 if __name__ == '__main__':
     results = []
     for t in TestCaseList:
         results.append( t() )
-

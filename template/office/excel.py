@@ -49,9 +49,10 @@ class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
 
 ### primitive types
 class USHORT(pint.uint16_t): pass
-class Rw(pint.uint32_t): pass
+class Rw(pint.uint16_t): pass
 class ColByteU(pint.uint8_t): pass
-class RwU(pint.uint32_t): pass
+class RwU(pint.uint16_t): pass
+class ColU(pint.uint16_t): pass
 class Xnum(pfloat.double): pass
 class IFmt(pint.uint16_t): pass
 class FontIndex(pint.uint16_t): pass
@@ -175,7 +176,7 @@ class CatSerRange(pstruct.type):
     type = 0x1020
     type = 4128
 
-    class __flags(pbinary.struct):
+    class flags(pbinary.struct):
         _fields_ = [
             (1, 'fBetween'),
             (1, 'fMaxCross'),
@@ -187,7 +188,7 @@ class CatSerRange(pstruct.type):
         (pint.int16_t, 'catCross'),
         (pint.int16_t, 'catLabel'),
         (pint.int16_t, 'catMark'),
-        (__flags, 'catFlags')
+        (flags, 'catFlags')
     ]
 
 ###
@@ -212,6 +213,12 @@ class FrtHeader(pstruct.type):
         (pint.uint16_t, 'rt'),
         (FrtFlags, 'grbitFrt'),
         (dyn.block(8), 'reserved')
+    ]
+
+class FrtHeaderOld(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'rt'),
+        (FrtFlags, 'grbitFrt'),
     ]
 
 @Record.define
@@ -256,15 +263,21 @@ class RK(pstruct.type):
         (RkRec, 'rkrec')
     ]
 
-#@Record.define     # FIXME
+@Record.define
 class MulBlank(pstruct.type):
     type = 190
     type = 0xbe
+
+    def __rgixfe(self):
+        sz = self.size() + Col().size()
+        count = (self.blocksize()-sz) / IXFCell().size()
+        return dyn.array(IXFCell, count)
+
     _fields_ = [
         (Rw, 'rw'),
         (Col, 'colFirst'),
-        (lambda s: dyn.array(IXFCell,s['colLast'].l.int()-s['colFirst'].l.int()), 'rgixfe'), 
-        (Col, 'colLast'),   # FIXME
+        (__rgixfe, 'rgixfe'), 
+        (Col, 'colLast')
     ]
 
 ###
@@ -295,7 +308,7 @@ class MergeCells(pstruct.type):
 ###
 @Record.define
 class CrtLayout12(pstruct.type):
-    class __CrtLayout12Auto(pbinary.struct):
+    class CrtLayout12Auto(pbinary.struct):
         _fields_ = [
             (1, 'unused'),
             (4, 'autolayouttype'),
@@ -306,7 +319,7 @@ class CrtLayout12(pstruct.type):
     _fields_ = [
         (FrtHeader, 'frtHeader'),
         (pint.uint32_t, 'dwCheckSum'),
-        (__CrtLayout12Auto, 'auto'),
+        (CrtLayout12Auto, 'auto'),
         (pint.uint16_t, 'wXMode'),
         (pint.uint16_t, 'wYMode'),
         (pint.uint16_t, 'wWidthMode'),
@@ -321,7 +334,7 @@ class CrtLayout12(pstruct.type):
 ###
 @Record.define
 class Frame(pstruct.type):
-    class __FrameAuto(pbinary.struct):
+    class FrameAuto(pbinary.struct):
         _fields_ = [
             (1, 'fAutoSize'),
             (1, 'fAutoPosition'),
@@ -331,7 +344,7 @@ class Frame(pstruct.type):
     type = 4146
     _fields_ = [
         (pint.uint16_t, 'frt'),
-        (__FrameAuto, 'f')
+        (FrameAuto, 'f')
     ]
 
 ###
@@ -365,13 +378,25 @@ class XLUnicodeString(pstruct.type):
         (lambda s: dyn.clone(pstr.wstring, length=[int(s['cch'].l), int(s['cch'])*2][int(s['fHighByte'].l)>>7]), 'rgb')
     ]
 class VirtualPath(XLUnicodeString): pass
+class XLNameUnicodeString(XLUnicodeString): pass
 
 class ShortXLUnicodeString(pstruct.type):
+    def __rgb(self):
+        length = self['cch'].l.int()
+        high = self['fHighByte'].l.int()
+        if high == 0:
+            return dyn.clone(pstr.string, length=length)
+        elif high == 1:
+            return dyn.clone(pstr.wstring,length=length)
+        elif high == 7:
+            length = self.parent.blocksize()-self.parent.size()
+            return dyn.block(length)
+        raise NotImplementedError
+
     _fields_ = [
         (pint.uint8_t, 'cch'),
         (pint.uint8_t, 'fHighByte'),
-        (lambda s:dyn.block(s['cch'].l.int()*2) if s['fHighByte'].l.int()&0x80 else dyn.block(s['cch'].l.int()), 'rgb'),
-#        (lambda s:dyn.clone(pstr.wstring,length=s['cch'].l.int()) if s['fHighByte'].l.int()&0x80 else dyn.clone(pstr.string, length=s['cch'].l.int()), 'rgb'),
+        (__rgb, 'rgb'),
     ]
 
 @Record.define
@@ -388,7 +413,7 @@ class DVAL(pstruct.type):
     type = 434
     type = 0x1b2
 
-    class __wDviFlags(pbinary.struct):
+    class wDviFlags(pbinary.struct):
         _fields_ = [
             (1, 'fWnClosed'),
             (1, 'fWnPinned'),
@@ -397,7 +422,7 @@ class DVAL(pstruct.type):
         ]
 
     _fields_ = [
-        (pbinary.littleendian(__wDviFlags), 'wDviFlags'),
+        (pbinary.littleendian(wDviFlags), 'wDviFlags'),
         (pint.uint32_t, 'xLeft'),
         (pint.uint32_t, 'yTop'),
         (pint.uint32_t, 'idObj'),
@@ -422,7 +447,7 @@ class DV(pstruct.type):
     type = 0x1be
     type = 446
 
-    class __dwDvFlags(pbinary.struct):
+    class dwDvFlags(pbinary.struct):
         _fields_ = [
             (4, 'ValType'),
             (3, 'ErrStyle'),
@@ -436,7 +461,7 @@ class DV(pstruct.type):
             (8, 'Reserved'),
         ]
 
-    class __string(pstruct.type):
+    class string(pstruct.type):
         def __unicode(self):
             if int(self['unicode_flag'].l):
                 return dyn.clone(pstr.wstring, length=int(self['length'].l))
@@ -448,7 +473,7 @@ class DV(pstruct.type):
             (__unicode, 'string'),
         ]
 
-    class __formula(pstruct.type):
+    class formula(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'size'),
             (pint.uint16_t, 'reserved'),
@@ -456,14 +481,14 @@ class DV(pstruct.type):
         ]
 
     _fields_ = [
-        (__dwDvFlags, 'dwDvFlags'),
-        (__string, 'prompt_title'),
-        (__string, 'error_title'),
-        (__string, 'prompt_text'),
-        (__string, 'error_text'),
+        (dwDvFlags, 'dwDvFlags'),
+        (string, 'prompt_title'),
+        (string, 'error_title'),
+        (string, 'prompt_text'),
+        (string, 'error_text'),
 
-        (__formula, 'first'),
-        (__formula, 'second'),
+        (formula, 'first'),
+        (formula, 'second'),
 
         (CellRange, 'addresses'),
     ]
@@ -471,7 +496,7 @@ class DV(pstruct.type):
 ###
 @Record.define
 class BOF(pstruct.type):
-    class __BOFFlags(pbinary.struct):
+    class Flags(pbinary.struct):
         _fields_ = [
             (1, 'fWin'),
             (1, 'fRisc'),
@@ -493,7 +518,7 @@ class BOF(pstruct.type):
             (20, 'reserved2')
         ]
 
-    class __BOFDocType(pint.enum, pint.uint16_t):
+    class DocType(pint.enum, pint.uint16_t):
         _values_ = [
             ('workbook', 0x0005),
             ('worksheet', 0x0010),
@@ -504,10 +529,10 @@ class BOF(pstruct.type):
     type = 2057
     _fields_ = [
         (pint.uint16_t, 'vers'),
-        (__BOFDocType, 'dt'),
+        (DocType, 'dt'),
         (pint.uint16_t, 'rupBuild'),
         (pint.uint16_t, 'rupYear'),
-        (__BOFFlags, 'f')
+        (Flags, 'f')
     ]
 
 ###
@@ -703,12 +728,12 @@ class Blank(Cell):
     type = 513
     type = 0x201
 
-#@Record.define     # FIXME
+@Record.define
 class Row(pstruct.type):
     type = 520
     type = 0x208
 
-    class __flags(pbinary.struct):
+    class flags(pbinary.struct):
         _fields_ = [
             (3, 'iOutLevel'),
             (1, 'reserved2'),
@@ -726,12 +751,12 @@ class Row(pstruct.type):
 
     _fields_ = [
         (Rw, 'rw'),
-        (pint.uint32_t, 'colMic'),
-        (pint.uint32_t, 'colMac'),
-        (pint.uint32_t, 'miyRw'),
-        (pint.uint32_t, 'reserved1'),
-        (pint.uint32_t, 'unused1'),
-        (__flags, 'flags'),
+        (pint.uint16_t, 'colMic'),
+        (pint.uint16_t, 'colMac'),
+        (pint.uint16_t, 'miyRw'),
+        (pint.uint16_t, 'reserved1'),
+        (pint.uint16_t, 'unused1'),
+        (flags, 'flags'),
     ]
 
 ###
@@ -803,10 +828,11 @@ if True:
             (XLUnicodeString,'string'),
         ]
 
-#@Record.define # FIXME
+@Record.define
 class CRN(pstruct.type):
     type = 90
     type = 0x5a
+
     _fields_ = [
         (ColByteU, 'colLast'),
         (ColByteU, 'colFirst'),
@@ -893,11 +919,11 @@ class StyleXF(pbinary.struct):
         (2, 'reserved3'),
     ]
 
-#@Record.define
+@Record.define
 class XF(pstruct.type):
     type = 0xe0
     type = 224
-    class __flags(pbinary.struct):
+    class flags(pbinary.struct):
         _fields_ = [
             (1, 'fLocked'),
             (1, 'fHidden'),
@@ -908,7 +934,7 @@ class XF(pstruct.type):
     _fields_ = [
         (FontIndex, 'ifnt'),
         (IFmt, 'ifmt'),
-        (__flags, 'flags'),
+        (flags, 'flags'),
         (lambda s: CellXF if s['flags'].l['fStyle'] == 0 else StyleXF, 'data'),
     ]
 
@@ -916,10 +942,15 @@ class XF(pstruct.type):
 class MulRk(pstruct.type):
     type = 0xbd
     type = 189
+    def __rgrkrec(self):
+        sz = self.size() + Col().size()
+        count = (self.blocksize()-sz) / IXFCell().size()
+        return dyn.array(RkRec, count)
+
     _fields_ = [
         (Rw, 'rw'),
         (Col, 'colFirst'),
-        (lambda s: dyn.array(RkRec,s['colLast'].l.int() - s['colFirst'].l.int() + 1), 'rgrkrec'),
+        (__rgrkrec, 'rgrkrec'),
         (Col, 'colLast'),
     ]
 
@@ -943,7 +974,7 @@ if True:
         cache = {}
 
     class Ptg(pstruct.type):
-        class __type(pbinary.struct):
+        class type(pbinary.struct):
             _fields_=[(7,'ptg'),(1,'reserved0')]
 
         def __value(self):
@@ -951,7 +982,7 @@ if True:
             return PtgType.lookup(t)
 
         _fields_ = [
-            (__type, 'type'),
+            (type, 'type'),
             (__value, 'value'),
         ]
 
@@ -1047,7 +1078,7 @@ if True:
 
     class PtgRefN(RgceLocRel):
         ACTUAL_PTG_SIZE = 7
-        
+
     @PtgType.define
     class PtgRefN_REFERENCE(PtgRefN):
         type = 98
@@ -1071,7 +1102,7 @@ if True:
         type = 110
 
     class RevItab(pstruct.type):
-        class __type(pint.enum, pint.uint8_t):
+        class type(pint.enum, pint.uint8_t):
             _values_ = [
                 (0x00, 'same-workbook'),
                 (0x01, 'diff-workbook'),
@@ -1079,19 +1110,19 @@ if True:
                 (0x03, 'missing-sheet'),
             ]
         _fields_ = [
-            (__type, 'type'),
+            (type, 'type'),
             (pint.uint16_t, 'tabid'),
             (XLUnicodeString, 'sheet'),
         ]
 
     class RevExtern(pstruct.type):
-        class __book(pstruct.type):
+        class book(pstruct.type):
             _fields_ = [
                 (pint.uint8_t, 'type'),
                 (lambda s: pint.uint8_t if s['type'].l.int() == 1 else VirtualPath, 'book'),
             ]
         _fields_ = [
-            (__book, 'book'),
+            (book, 'book'),
             (RevItab, 'itabFirst'),
             (RevItab, 'itabLast'),
         ]
@@ -1183,6 +1214,7 @@ if True:
         type = 238
 
 if False:
+    # FIXME: parsething parsing
     class Rgce(parray.terminated):
         _object_ = Ptg
 
@@ -1190,7 +1222,6 @@ if False:
             size = reduce(lambda x,y: x+y.ACTUAL_PTG_SIZE,self.v, 0)
             return size <= self.total
 
-    # FIXME
     class RgbExtra(parray.infinite):
         def _object_(self):
             p = self.parent['rgce']
@@ -1228,7 +1259,7 @@ if False:
         type = 0x6
         type = 6
 
-        class __flags(pbinary.struct):
+        class flags(pbinary.struct):
             _fields_ = [
                 (1,'fAlwaysCalc'),
                 (1, 'reserved1'),
@@ -1242,7 +1273,7 @@ if False:
         _fields_ = [
             (Cell, 'cell'),
             (FormulaValue, 'val'),
-            (__flags, 'flags'),
+            (flags, 'flags'),
             (dyn.block(4), 'chn'),  # XXX: application-specific
             (CellParsedFormula, 'formula'),
         ]
@@ -1267,16 +1298,17 @@ class Style(pstruct.type):
     type = 659
     type = 0x293
 
-    class __flags(pbinary.struct):
+    class flags(pbinary.littleendian(pbinary.struct)):
         _fields_ = [
-            (12,'ixfe'),
-            (3, 'unused'),
             (1, 'fBuiltIn'),
+            (3, 'unused'),
+            (12,'ixfe'),
         ]
 
     _fields_ = [
-        (__flags, 'flags'),
-        (lambda s: BuiltInStyle if s['flags'].l['fBuiltIn'] else XLUnicodeString, 'data')
+        (flags, 'flags'),
+        (lambda s: BuiltInStyle if s['flags'].l['fBuiltIn'] else ptype.empty, 'builtInData'),
+        (lambda s: XLUnicodeString if not s['flags'].l['fBuiltIn'] else ptype.empty, 'user')
     ]
 
 class XColorType(pint.enum, pint.uint32_t):
@@ -1298,7 +1330,7 @@ class FullColorExt(pstruct.type):
         if t == 3:
             return ColorTheme
         raise NotImplementedError(t)
-        
+
     _fields_ = [
         (XColorType, 'xclrType'),
         (pint.uint16_t, 'nTintShade'),
@@ -1323,10 +1355,10 @@ class ColorTheme(pint.enum, pint.uint32_t):
     ]
 
 class XFPropGradient(pstruct.type):
-    class __type(pint.enum, pint.uint32_t):
+    class type(pint.enum, pint.uint32_t):
         _values_ = [ (0, 'linear'), (1,'rectangular') ]
     _fields_ = [
-        (__type, 'type'),
+        (type, 'type'),
         (Xnum, 'numDegree'),
         (Xnum, 'numFillToLeft'),
         (Xnum, 'numFillToRight'),
@@ -1396,17 +1428,34 @@ class ExtType_TextIndentation(pint.uint16_t):
     type = 15
 
 class ExtProp(pstruct.type):
-    class __extType(pint.enum,pint.uint16_t):
+    class extType(pint.enum,pint.uint16_t):
         _values_ = [
+            ('interior-fg-color', 0x0004), 
+            ('interior-bg-color', 0x0005), 
+            ('interior-igradient', 0x0006), 
+            ('top-border-color', 0x0007),
+            ('bottom-border-color', 0x0008),
+            ('left-border-color', 0x0009),
+            ('right-border-color', 0x000a),
+            ('diagonal-border-color', 0x000b),
+            ('text-color', 0x000d),
+            ('font-scheme', 0x000e),
+            ('text-indent', 0x000f),
         ]
 
+    def __extPropData(self):
+        t = self['extType'].l.int()
+        # FIXME: http://msdn.microsoft.com/en-us/library/dd906769(v=office.12).aspx
+        sz = self['cb'].l.int()
+        return ExtPropType.get(self['extType'].l.int(), blocksize=lambda s:sz)
+
     _fields_ = [
-        (__extType, 'extType'),
-        (pint.uint32_t, 'cb'),
-        (lambda s: ExtPropType.get(s['extType'].l.int(), blocksize=lambda:s['cb'].l.int()-6), 'extPropData')
+        (extType, 'extType'),
+        (pint.uint16_t, 'cb'),
+        (__extPropData, 'extPropData'),
     ]
 
-Record.define
+#@Record.define # FIXME
 class XFExt(pstruct.type):
     type = 0x87d
     type = 2173
@@ -1426,6 +1475,907 @@ class Format(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'ifmt'),
         (XLUnicodeString, 'stFormat'),
+    ]
+
+@Record.define
+class SerAuxErrBar(pstruct.type):
+    type = 4187
+    type = 0x105b
+
+    class sertm(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('horizontal+', 1),
+            ('horizontal-', 2),
+            ('vertical+', 3),
+            ('vertical-', 4),
+        ]
+
+    class ebsrc(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('percentage', 1),
+            ('fixed', 2),
+            ('standard', 3),
+            ('custom', 4),
+            ('error', 5),
+        ]
+
+    class fTeeTop(Boolean, pint.uint8_t): pass
+
+    _fields_ = [
+        (sertm, 'sertm'),
+        (ebsrc, 'ebsrc'),
+        (fTeeTop, 'fTeeTop'),
+        (pint.uint8_t, 'reserved'),
+        (Xnum, 'numValue'),
+        (pint.uint16_t, 'cnum'),
+    ]
+
+class SharedFeatureType(pint.enum, pint.uint16_t):
+    _values_ = [
+        ('ISFPROTECTION', 0x2),
+        ('ISFFEC2', 0x3),
+        ('ISFFACTOID', 0x4),
+        ('ISFLIST', 0x5),
+    ]
+
+class Ref8U(pstruct.type):
+    _fields_ = [
+        (RwU, 'rwFirst'),
+        (RwU, 'rwLast'),
+        (ColU, 'colFirst'),
+        (ColU, 'colLast'),
+    ]
+
+class SDContainer(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'cbSD'),    # GUARD: >20
+        (lambda s: dyn.block(s['cbSD'].l.int()), 'sd'),
+    ]
+
+class FeatProtection(pstruct.type):
+    _fields_ = [
+        (pint.uint8_t, 'fSD'),
+        (pint.uint32_t, 'wPassword'),
+        (XLUnicodeString, 'stTitle'),
+        (SDContainer, 'sdContainer'),
+    ]
+
+class FFErrorCheck(pbinary.struct):
+    _fields_ = [
+        (1, 'ffecCalcError'),
+        (1, 'ffecEmptyCellRef'),
+        (1, 'ffecNumStoredAsText'),
+        (1, 'ffecInconsistRange'),
+        (1, 'ffecInconsistFmla'),
+        (1, 'ffecTextDateInsuff'),
+        (1, 'ffecUnprotFmla'),
+        (1, 'ffecDateValidation'),
+        (24, 'reserved'),
+    ]
+
+class FeatFormulaErr2(FFErrorCheck): pass
+
+class Property(pstruct.type):
+    _fields_ = [(pint.uint32_t,'keyIndex'),(pint.uint32_t,'valueIndex')]
+
+class PropertyBag(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'id'),
+        (pint.uint16_t, 'cProp'),
+        (pint.uint16_t, 'cbUnknown'),
+        (lambda s: dyn.array(Property, s['cProp'].l.int()), 'properties'),
+    ]
+
+class FactoidData(pstruct.type):
+    class flags(pbinary.struct):
+        _fields_ = [(1,'fDelete'),(1,'fXMLBased'),(6,'reserved')]
+
+    _fields_ = [
+        (flags, 'flags'),
+        (PropertyBag, 'propertyBag'),
+    ]
+
+class FeatSmartTag(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'hashValue'),
+        (pint.uint8_t, 'cSmartTags'),
+        (lambda s: dyn.array(FactoidData,s['cSmartTags'].l.int()), 'rgFactoid'),
+    ]
+
+@Record.define
+class Feat(pstruct.type):
+    type = 0x868
+    type = 2152
+    def __rgbFeat(self):
+        isf = self['isf'].l
+        if isf == 'ISFPROTECTION':
+            return FeatProtection
+        elif isf == 'ISFFEC2':
+            return FeatFormulaErr2
+        elif isf == 'ISFFACTOID':
+            return FeatSmartTag
+        raise NotImplementedError(isf)
+
+    _fields_ =[
+        (FrtHeader, 'frtHeader'),
+        (SharedFeatureType, 'isf'),
+        (pint.uint8_t, 'reserved1'),
+        (pint.uint32_t, 'reserved2'),
+        (pint.uint16_t, 'cref'),
+        (pint.uint32_t, 'cbFeatData'),
+        (pint.uint16_t, 'reserved3'),
+        (lambda s: dyn.array(Reg8U, s['cref'].l.int()), 'refs'),
+        (__rgbFeat, 'rgbFeat'),
+    ]
+
+class EnhancedProtection(pbinary.struct):
+    _fields_ = [
+        (1, 'iprotObjects'),
+        (1, 'iprotScenarios'),
+        (1, 'iprotFormatCells'),
+        (1, 'iprotFormatColumns'),
+        (1, 'iprotFormatRows'),
+        (1, 'iprotInsertColumns'),
+        (1, 'iprotInsertRows'),
+        (1, 'iprotInsertHyperlinks'),
+        (1, 'iprotDeleteColumns'),
+        (1, 'iprotDeleteRows'),
+        (1, 'iprotSelLockedCells'),
+        (1, 'iprotSort'),
+        (1, 'iprotAutoFilter'),
+        (1, 'iprotPivotTables'),
+        (1, 'iprotSelUnlockedCells'),
+        (17, 'reserved'),
+    ]
+
+@Record.define
+class FeatHdr(pstruct.type):
+    type = 2151
+    type = 0x867
+    def __rgbHdrData(self):
+        isf = self['isf'].l
+        if self['cbHdrData'].l.int() == 0:
+            return ptype.empty
+        if isf == 'ISFPROTECTION':
+            return EnhancedProtection
+        elif isf == 'ISFFEC2':
+            return ptype.empty
+        raise NotImplementedError(isf)
+
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (SharedFeatureType, 'isf'),
+        (pint.uint8_t, 'reserved'),
+        (pint.uint32_t, 'cbHdrData'),
+        (__rgbHdrData, 'rgbHdrData'),
+    ]
+
+@Record.define
+class FeatHdr11(pstruct.type):
+    type = 2161
+    type = 0x871
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (SharedFeatureType, 'isf'), # GUARD: ISFLIST
+        (pint.uint8_t, 'reserved1'),
+        (pint.uint32_t, 'reserved2'),
+        (pint.uint32_t, 'reserved3'),
+        (pint.uint32_t, 'idListNext'),
+        (pint.uint16_t, 'reserved4'),
+    ]
+
+class FrtRefHeaderU(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'rt'),
+        (FrtFlags, 'grbitFrt'),
+        (Ref8U, 'ref8'),
+    ]
+
+
+@Record.define
+class ContinueFrt(pstruct.type):
+    type = 0x812
+    type = 2066
+
+    def __rgb(self):
+        return dyn.block(self.blocksize() - self.size())
+
+    _fields_ = [
+        (FrtHeaderOld, 'frtHeaderOld'),
+        (__rgb, 'rgb'),
+    ]
+
+class SourceType(pint.enum, pint.uint32_t):
+    _values_ = [
+        ('LTRANGE', 0),
+        ('LTSHAREPOINT', 1),
+        ('LTXML', 2),
+        ('LTEXTERNALDATA', 3),
+    ]
+
+class LEMMode(pint.enum, pint.uint32_t):
+    _values_ = [
+        ('LEMNORMAL', 0x00000000),
+        ('LEMREFRESHCOPY', 0x00000001),
+        ('LEMREFRESHCACHE', 0x00000002),
+        ('LEMREFRESHCACHEUNDO', 0x00000003),
+        ('LEMREFRESHLOADED', 0x00000004),
+        ('LEMREFRESHTEMPLATE', 0x00000005),
+        ('LEMREFRESHREFRESH', 0x00000006),
+        ('LEMNOINSROWSSPREQUIRED', 0x00000007),
+        ('LEMNOINSROWSSPDOCLIB', 0x00000008),
+        ('LEMREFRESHLOADDISCARDED', 0x00000009),
+        ('LEMREFRESHLOADHASHVALIDATION', 0x0000000A),
+        ('LEMNOEDITSPMODVIEW', 0x0000000B),
+    ]
+
+class XFExtNoFRT(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'reserved1'),
+        (pint.uint16_t, 'reserved2'),
+        (pint.uint16_t, 'reserved3'),
+        (pint.uint16_t, 'cexts'),
+        (lambda s: dyn.array(ExtProp,s['cexts'].l.int()), 'rgExt'),
+    ]
+
+# DXFN
+#http://msdn.microsoft.com/en-us/library/dd926759(v=office.12).aspx
+
+class DXFN12List(pstruct.type):
+    def DXFN(self):
+        return ptype.empty
+
+    _fields_ = [
+        (DXFN, 'dxfn'),
+        (XFExtNoFRT, 'xfext'),
+    ]
+
+class AFDOperRk(pstruct.type):
+    _fields_ = [
+        (RkNumber, 'rk'),
+        (pint.uint32_t, 'unused1'),
+    ]
+
+class AFDOperStr(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'unused1'),
+        (pint.uint8_t, 'cch'),
+        (pint.uint8_t, 'fCompare'),
+        (pint.uint8_t, 'reserved1'),
+        (pint.uint8_t, 'unused2'),
+        (pint.uint32_t, 'unused3'),
+    ]
+
+class Bes(pstruct.type):
+    _fields_ = [
+        (pint.uint8_t, 'bBoolErr'),
+        (pint.uint8_t, 'fError'),
+    ]
+class AFDOperBoolErr(pstruct.type):
+    _fields_ = [
+        (Bes, 'bes'),
+        (pint.uint16_t, 'unused1'),
+        (pint.uint32_t, 'unused2'),
+    ]
+class AFDOper(pstruct.type):
+    def __wtValue(self):    # XXX
+        vt = self['vt'].l.int()
+        if vt == 0:
+            return dyn.block(8)
+        elif vt == 2:
+            return AFDOperRK
+        elif vt == 4:
+            return Xnum
+        elif vt == 6:
+            return AFDOperStr
+        elif vt == 8:
+            return AFDOperBoolErr
+        elif vt == 0xc:
+            return dyn.block(8)
+        elif vt == 0xe:
+            return dyn.block(8)
+        raise NotImplementedError(vt)
+
+    _fields_ = [
+        (pint.uint8_t, 'vt'),
+        (pint.uint8_t, 'grbitSign'),
+        (__wtValue, 'wtValue'),
+    ]
+
+class AutoFilter(pstruct.type):
+    class flag(pbinary.struct):
+        _fields_ = [(2,'wJoin'),(1,'fSimple1'),(1,'fSimple2'),(1,'fTopN'),(1,'fTop'),(1,'fPercent'),(9,'wTopN')]
+
+    def __str1(self):
+        return XLUnicodeStringNoCch if self['doper1'].l['vt'].int() == 6 else ptype.type
+    def __str2(self):
+        return XLUnicodeStringNoCch if self['doper2'].l['vt'].int() == 6 else ptype.type
+
+    _fields_ = [
+        (pint.uint16_t, 'iEntry'),
+        (flag, 'flag'),
+        (AFDOper, 'doper1'),
+        (AFDOper, 'doper2'),
+        (__str1, 'str1'),
+        (__str2, 'str2'),
+    ]
+
+class Feat11FdaAutoFilter(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'cbAutoFilter'), #GUARD : <= 2080 bytes
+        (pint.uint16_t, 'unused'),
+        (lambda s: AutoFilter, 'recAutoFilter'),
+    ]
+
+class Feat11XMapEntry2(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t,'dwMapId'),
+        (XLUnicodeString,'rgbXPath'),
+    ]
+
+class Feat11XMapEntry(pstruct.type):
+    class flags(pbinary.struct):
+        _fields_ = [(1,'reserved1'),(1,'fLoadXMap'),(1,'fCanBeSingle'),(1,'reserved2'),(28,'reserved3')]
+    _fields_ = [
+        (flags, 'flags'),
+        (Feat11XMapEntry2, 'details'),
+    ]
+
+class Feat11XMap(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'iXmapMac'),
+        (lambda s: dyn.array(Feat11XMapEntry,s['iXmapMac'].l.int()), 'rgXmap'),
+    ]
+
+class ListParsedArrayFormula(pstruct.type):
+    def Rgce(self):
+        return dyn.block(self['cce'].l.int())
+
+    def RgbExtra(self):
+        bs = self.blocksize()
+        return dyn.block(bs-self.size())
+
+    _fields_ = [
+        (pint.uint16_t, 'cce'),
+        (Rgce, 'rgce'),
+        (RgbExtra, 'rgcb')
+    ]
+class ListParsedFormula(pstruct.type):
+    def Rgce(self): # FIXME
+        return dyn.block(self['cce'].l.int())
+    _fields_ = [
+        (pint.uint16_t, 'cce'),
+        (Rgce, 'rgce'),
+    ]
+
+class Feat11Fmla(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'cbFmla'),
+        (ListParsedFormula, 'rgbFmla'),
+    ]
+
+#class Feat11WSSListInfo(ptype.empty):       # FIXME
+#    pass
+
+class CachedDiskHeader(pstruct.type):
+    def __strStyleName(self):
+        p = self.getparent(type=Feat11FieldDataItem)
+        return XLUnicodeString if p['flags']['fSaveStyleName'].int() == 1 else ptype.empty
+
+    _fields_ = [
+        (pint.uint32_t, 'cbdxfHdrDisk'),
+        (DXFN12List, 'rgHdrDisk'),
+        (XLUnicodeString, 'strStyleName'),
+    ]
+
+####
+class Feat11FieldDataItem(pstruct.type):
+    class lfdt(pint.enum, pint.uint32_t):
+        _fields_ = [
+            ('Text', 0x00000001),
+            ('Number', 0x00000002),
+            ('Boolean', 0x00000003),
+            ('Date Time', 0x00000004),
+            ('Note', 0x00000005),
+            ('Currency', 0x00000006),
+            ('Lookup', 0x00000007),
+            ('Choice', 0x00000008),
+            ('URL', 0x00000009),
+            ('Counter', 0x0000000A),
+            ('Multiple Choices', 0x0000000B),
+        ]
+    class lfxidt(pint.enum, pint.uint32_t):
+        _fields_ = [
+            ('SOMITEM_SCHEMA', 0x00001000),
+            ('SOMITEM_ATTRIBUTE', 0x00001001),
+            ('SOMITEM_ATTRIBUTEGROUP', 0x00001002),
+            ('SOMITEM_NOTATION', 0x00001003),
+            ('SOMITEM_IDENTITYCONSTRAINT', 0x00001100),
+            ('SOMITEM_KEY', 0x00001101),
+            ('SOMITEM_KEYREF', 0x00001102),
+            ('SOMITEM_UNIQUE', 0x00001103),
+            ('SOMITEM_ANYTYPE', 0x00002000),
+            ('SOMITEM_DATATYPE', 0x00002100),
+            ('SOMITEM_DATATYPE_ANYTYPE', 0x00002101),
+            ('SOMITEM_DATATYPE_ANYURI', 0x00002102),
+            ('SOMITEM_DATATYPE_BASE64BINARY', 0x00002103),
+            ('SOMITEM_DATATYPE_BOOLEAN', 0x00002104),
+            ('SOMITEM_DATATYPE_BYTE', 0x00002105),
+            ('SOMITEM_DATATYPE_DATE', 0x00002106),
+            ('SOMITEM_DATATYPE_DATETIME', 0x00002107),
+            ('SOMITEM_DATATYPE_DAY', 0x00002108),
+            ('SOMITEM_DATATYPE_DECIMAL', 0x00002109),
+            ('SOMITEM_DATATYPE_DOUBLE', 0x0000210A),
+            ('SOMITEM_DATATYPE_DURATION', 0x0000210B),
+            ('SOMITEM_DATATYPE_ENTITIES', 0x0000210C),
+            ('SOMITEM_DATATYPE_ENTITY', 0x0000210D),
+            ('SOMITEM_DATATYPE_FLOAT', 0x0000210E),
+            ('SOMITEM_DATATYPE_HEXBINARY', 0x0000210F),
+            ('SOMITEM_DATATYPE_ID', 0x00002110),
+            ('SOMITEM_DATATYPE_IDREF', 0x00002111),
+            ('SOMITEM_DATATYPE_IDREFS', 0x00002112),
+            ('SOMITEM_DATATYPE_INT', 0x00002113),
+            ('SOMITEM_DATATYPE_INTEGER', 0x00002114),
+            ('SOMITEM_DATATYPE_LANGUAGE', 0x00002115),
+            ('SOMITEM_DATATYPE_LONG', 0x00002116),
+            ('SOMITEM_DATATYPE_MONTH', 0x00002117),
+            ('SOMITEM_DATATYPE_MONTHDAY', 0x00002118),
+            ('SOMITEM_DATATYPE_NAME', 0x00002119),
+            ('SOMITEM_DATATYPE_NCNAME', 0x0000211A),
+            ('SOMITEM_DATATYPE_NEGATIVEINTEGER', 0x0000211B),
+            ('SOMITEM_DATATYPE_NMTOKEN', 0x0000211C),
+            ('SOMITEM_DATATYPE_NMTOKENS', 0x0000211D),
+            ('SOMITEM_DATATYPE_NONNEGATIVEINTEGER', 0x0000211E),
+            ('SOMITEM_DATATYPE_NONPOSITIVEINTEGER', 0x0000211F),
+            ('SOMITEM_DATATYPE_NORMALIZEDSTRING', 0x00002120),
+            ('SOMITEM_DATATYPE_NOTATION', 0x00002121),
+            ('SOMITEM_DATATYPE_POSITIVEINTEGER', 0x00002122),
+            ('SOMITEM_DATATYPE_QNAME', 0x00002123),
+            ('SOMITEM_DATATYPE_SHORT', 0x00002124),
+            ('SOMITEM_DATATYPE_STRING', 0x00002125),
+            ('SOMITEM_DATATYPE_TIME', 0x00002126),
+            ('SOMITEM_DATATYPE_TOKEN', 0x00002127),
+            ('SOMITEM_DATATYPE_UNSIGNEDBYTE', 0x00002128),
+            ('SOMITEM_DATATYPE_UNSIGNEDINT', 0x00002129),
+            ('SOMITEM_DATATYPE_UNSIGNEDLONG', 0x0000212A),
+            ('SOMITEM_DATATYPE_UNSIGNEDSHORT', 0x0000212B),
+            ('SOMITEM_DATATYPE_YEAR', 0x0000212C),
+            ('SOMITEM_DATATYPE_YEARMONTH', 0x0000212D),
+            ('SOMITEM_DATATYPE_ANYSIMPLETYPE', 0x000021FF),
+            ('SOMITEM_SIMPLETYPE', 0x00002200),
+            ('SOMITEM_COMPLEXTYPE', 0x00002400),
+            ('SOMITEM_PARTICLE', 0x00004000),
+            ('SOMITEM_ANY', 0x00004001),
+            ('SOMITEM_ANYATTRIBUTE', 0x00004002),
+            ('SOMITEM_ELEMENT', 0x00004003),
+            ('SOMITEM_GROUP', 0x00004100),
+            ('SOMITEM_ALL', 0x00004101),
+            ('SOMITEM_CHOICE', 0x00004102),
+            ('SOMITEM_SEQUENCE', 0x00004103),
+            ('SOMITEM_EMPTYPARTICLE', 0x00004104),
+            ('SOMITEM_NULL', 0x00000800),
+            ('SOMITEM_NULL_TYPE', 0x00002800),
+            ('SOMITEM_NULL_ANY', 0x00004801),
+            ('SOMITEM_NULL_ANYATTRIBUTE', 0x00004802),
+            ('SOMITEM_NULL_ELEMENT', 0x00004803),
+        ]
+
+    class ilta(pint.enum, pint.uint32_t):
+        _fields_ = [
+            ('No formula (section 2.2.2)', 0x00000000),
+            ('Average', 0x00000001),
+            ('Count', 0x00000002),
+            ('Count Numbers', 0x00000003),
+            ('Max', 0x00000004),
+            ('Min', 0x00000005),
+            ('Sum', 0x00000006),
+            ('Standard Deviation', 0x00000007),
+            ('Variance', 0x00000008),
+            ('Custom formula<157>', 0x00000009),
+        ]
+
+    class flags(pbinary.struct):
+        _fields_ = [
+            (1,'fAutoFilter'),
+            (1,'fAutoFilterHidden'),
+            (1,'fLoadXmapi'),
+            (1,'fLoadFmla'),
+            (2,'unused1'),
+            (1,'reserved2'),
+            (1,'fLoadTotalFmla'),
+            (1,'fLoadTotalArray'),
+            (1,'fSaveStyleName'),
+            (1,'fLoadTotalStr'),
+            (1,'fAutoCreateCalcCol'),
+            (20, 'unused2'),
+        ]
+
+    def __dxfFmtAgg(self):
+        sz = self['cbFmtAgg'].l.int()
+        return dyn.clone(DXFN12List, blocksize=lambda s:sz)
+
+    def __dxfFmtInsertRow(self):
+        sz = self['cbFmtInsertRow'].l.int()
+        return dyn.clone(DXFN12List, blocksize=lambda s:sz)
+
+    def __AutoFilter(self):
+        tft = self['flag'].l
+        return Feat11FdaAutoFilter if tft['fAutoFilter'] else ptype.empty
+
+    def __rgXmap(self):
+        tft = self['flags'].l
+        return Feat11XMap if tft['fLoadXmapi'] else ptype.empty
+
+    def __fmla(self):
+        tft = self['flags'].l
+        return Feat11FdaAutoFilter if tft['fLoadFmla'] else ptype.empty
+
+    def __totalFmla(self):
+        tft = self['flags'].l
+        return ListParsedArrayFormula if tft['fLoadTotalArray'] else ListParsedFormula
+
+    def __strTotal(self):
+        tft = self['flags'].l
+        return XLUnicodeString if tft['fLoadTotalStr'] else ptype.empty
+
+    def __wssInfo(self):
+        lt = self.getparent(type=TableFeatureType)['lt'].l
+        return Feat11WSSListInfo if lt.int() == 1 else ptype.empty
+
+    def __qsif(self):
+        lt = self.getparent(type=TableFeatureType)['lt'].l
+        return pint.uint32_t if lt.int() == 3 else ptype.empty
+
+    def __dskHdrCache(self):
+        tft = self.getparent(type=TableFeatureType).l
+        return CachedDiskHeader if tft['crwHeader'].int() == 0 and tft['flags']['fSingleCell'].int() == 0 else ptype.empty
+
+    _fields_ = [
+        (pint.uint32_t, 'idField'),
+        (lfdt, 'lfdt'),
+        (lfxidt, 'lfxidt'),
+        (ilta, 'ilta'),
+        (pint.uint32_t, 'cbFmtAgg'),
+        (pint.uint32_t, 'istnAgg'),
+        (flags, 'flags'),
+        (pint.uint32_t, 'cbFmtInsertRow'),
+        (XLUnicodeString, 'strFieldName'),
+        (XLUnicodeString, 'strCaption'),    # GUARD : fSingleCell === 0
+        (__dxfFmtAgg, 'dxfFmtAgg'),
+        (__dxfFmtInsertRow, 'dxfFmtInsertRow'),
+        (__AutoFilter, 'AutoFilter'),
+        (__rgXmap, 'rgXmap'),
+        (__fmla, 'fmla'),
+        (__totalFmla, 'totalFmla'),
+        (__strTotal, 'strTotal'),
+        (__wssInfo, 'wssInfo'),
+        (__qsif, 'qsif'),   # GUARD: TableFeatureType
+        (__dskHdrCache, 'dskHdrCache'),   # GUARD: TableFeatureType
+    ]
+
+class Feat11RgSharepointId(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'cId'),
+        (lambda s: dyn.array(pint.uint32_t, s['cId'].l.int()), 'rgId'),
+    ]
+class Feat11RgSharepointIdDel(Feat11RgSharepointId): pass
+class Feat11RgSharepointIdChange(Feat11RgSharepointId): pass
+
+class Feat11CellStruct(pstruct.type):
+    _fields_ = [(pint.uint32_t, 'idxRow'),(pint.uint32_t,'idxField')]
+
+class Feat11RgInvalidCells(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'cCellInvalid'),
+        (lambda s: dyn.array(Feat11CellStruct, s['cCellInvalid'].l.int()), 'rgCellInvalid'),
+    ]
+
+class TableFeatureType(pstruct.type):
+    class crwHeader(Boolean, pint.uint32_t): pass
+    class crwTotals(Boolean, pint.uint32_t): pass
+
+    class flags(pbinary.struct):
+        _fields_ = [
+            (1, 'unused2'), (1, 'fAutoFilter'), (1, 'fPersistAutoFilter'),
+            (1, 'fShowInsertRow'), (1, 'fInsertRowInsCells'), (1, 'fLoadPldwIdDeleted'),
+            (1, 'fShownTotalRow'), (1, 'reserved1'), (1, 'fNeedsCommit'),
+            (1, 'fSingleCell'), (1, 'reserved2'), (1, 'fApplyAutoFilter'),
+            (1, 'fForceInsertToBeVis'), (1, 'fCompressedXml'), (1, 'fLoadCSPName'),
+            (1, 'fLoadPldwIdChanged'), (4, 'verXL'), (1, 'fLoadEntryId'),
+            (1, 'fLoadPllstclInvalid'), (1, 'fGoodRupBld'), (1, 'unused3'),
+            (1, 'fPublished'), (7, 'reserved3'),
+        ]
+
+    def __cSPName(self):
+        return XLUnicodeString if self['flags'].l['fLoadCSPName'] else ptype.empty
+    def __entryId(self):
+        return XLUnicodeString if self['flags'].l['fLoadEntryId'] else ptype.empty
+    def __idDeleted(self):
+        return Feat11RgSharepointIdDel if self['flags'].l['fLoadPldwIdDeleted'] else ptype.empty
+    def __idChanged(self):
+        return Feat11RgSharepointIdChange if self['flags'].l['fLoadPldwIdChanged'] else ptype.empty
+    def __cellInvalid(self):
+        return Feat11RgInvalidCells if self['flags'].l['fLoadPllstclInvalid'] else ptype.empty
+
+    _fields_ = [
+        (SourceType, 'lt'),
+        (pint.uint32_t, 'idList'),
+        (crwHeader, 'crwHeader'),
+        (crwTotals, 'crwTotals'),
+        (pint.uint32_t, 'idFieldNext'),
+        (pint.uint32_t, 'cbFSData'),    # GUARD: =64
+        (pint.uint16_t, 'rupBuild'),
+        (pint.uint16_t, 'unused1'),
+        (flags, 'flags'),
+        (pint.uint32_t, 'lPosStmCache'),
+        (pint.uint32_t, 'cbStmCache'),
+        (pint.uint32_t, 'cchStmCache'),
+        (LEMMode, 'lem'),
+
+        (dyn.array(pint.uint8_t, 16), 'rgbHashParam'),   
+        (XLUnicodeString, 'rgbName'),
+        (pint.uint16_t, 'cFieldData'),
+        (__cSPName, 'cSPName'),
+        (__entryId, 'entryId'),
+        (lambda s: dyn.array(Feat11FieldDataItem, s['cFieldData'].l.int()), 'fieldData'),
+        (__idDeleted, 'idDeleted'),
+        (__idChanged, 'idChanged'),
+        (__cellInvalid, 'cellInvalid'),
+    ]
+
+@Record.define
+class Feature11(pstruct.type):
+    type = 2162
+    type = 0x872
+
+    def __rgbFeat(self):
+        sz = self['cbFeatData'].l.int()
+        if sz == 0:
+            sz = self.blocksize() - (self['refs2'].l.size()+27)
+        return dyn.block(sz)
+
+    _fields_ = [
+        (FrtRefHeaderU, 'frtRefHeaderU'),
+        (SharedFeatureType, 'isf'),
+        (pint.uint8_t, 'reserved1'),
+        (pint.uint32_t, 'reserved2'),
+        (pint.uint16_t, 'cref2'),
+        (pint.uint32_t, 'cbFeatData'),
+        (pint.uint16_t, 'reserved3'),
+        (lambda s: dyn.array(Ref8U, s['cref2'].l.int()), 'refs2'),
+        (__rgbFeat, 'rgbFeat'),
+    ]
+
+@Record.define
+class Feature12(Feature11):
+    type = 2168
+    type = 0x878
+
+class List12BlockLevel(pstruct.type):
+    _fields_ = [
+        (pint.int32_t, 'cbdxfHeader'),  # GUARD : >=0
+        (pint.int32_t, 'istnHeader'),
+        (pint.int32_t, 'cbdxfData'),
+        (pint.int32_t, 'istnData'),
+        (pint.int32_t, 'cbdxfAgg'),
+        (pint.int32_t, 'istnAgg'),
+        (pint.int32_t, 'cbdxfBorder'),
+        (pint.int32_t, 'cbdxfHeaderBorder'),
+        (pint.int32_t, 'cbdxfAggBorder'),
+
+        (lambda s: (DXFN12List if s['cbdxfHeader'].l.int() > 0 else ptype.empty), 'dxfHeader'),
+        (lambda s: (DXFN12List if s['cbdxfData'].l.int() > 0 else ptype.empty), 'dxfData'),
+        (lambda s: (DXFN12List if s['cbdxfAgg'].l.int() > 0 else ptype.empty), 'dxfAgg'),
+        (lambda s: (DXFN12List if s['cbdxfBorder'].l.int() > 0 else ptype.empty), 'dxfBorder'),
+        (lambda s: (DXFN12List if s['cbdxfHeaderBorder'].l.int() > 0 else ptype.empty), 'dxfHeaderBorder'),
+        (lambda s: (DXFN12List if s['cbdxfAggBorder'].l.int() > 0 else ptype.empty), 'dxfAggBorder'),
+
+        (lambda s: (XLUnicodeString if s['istnHeader'].l.int() != -1 else ptype.empty), 'stHeader'),
+        (lambda s: (XLUnicodeString if s['istnData'].l.int() != -1 else ptype.empty), 'stData'),
+        (lambda s: (XLUnicodeString if s['istnAgg'].l.int() != -1 else ptype.empty), 'stAgg'),
+    ]
+
+class List12TableStyleClientInfo(pstruct.type):
+    class flags(pbinary.struct):
+        _fields_ = [
+            (1,'fFirstColumn'),
+            (1,'fLastColumn'),
+            (1,'fRowStripes'),
+            (1,'fColumnStripes'),
+            (2,'unused1'),
+            (1,'fDefaultStyle'),
+            (9,'unused2'),
+        ]
+
+    _fields_ = [
+        (flags, 'flags'),
+        (XLUnicodeString,'stListStyleName'),
+    ]
+
+class List12DisplayName(pstruct.type):
+    _fields_ = [
+        (XLNameUnicodeString, 'stListName'),
+        (XLUnicodeString, 'stListComment'),
+    ]
+
+#@Record.define
+class List12(pstruct.type):
+    type = 2167
+    type = 0x877
+
+    def __rgb(self):
+        v = self['lsd'].l.int()
+        if v == 0:
+            return List12BlockLevel
+        elif v == 1:
+            return List12TableStyleClientInfo
+        elif v == 2:
+            return List12DisplayName
+        raise NotImplementedError(v)
+
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (pint.uint16_t, 'lsd'),
+        (pint.uint32_t, 'idList'),
+        (__rgb, 'rgb'),
+    ]
+
+@Record.define
+class SerParent(pint.uint16_t):
+    type = 4170
+    type = 0x104a
+
+@Record.define
+class End(ptype.empty):
+    type = 4148
+    type = 0x1034
+
+@Record.define
+class StartBlock(ptype.empty):
+    type = 2130
+    type = 0x852
+
+@Record.define
+class EndBlock(ptype.empty):
+    type = 2131
+    type = 0x853
+
+#@Record.define
+class PublisherRecord(pstruct.type):
+    # XXX: undocumented
+    type = 137
+    type = 0x89
+
+    class SectionRecord(dyn.block(24)):
+        # XXX: also undocumented
+        pass
+
+    _fields_ = [
+        (pint.uint16_t, 'grbit'),
+        (Ref8U, 'Ref8u'),
+        (SectionRecord, 'sec'),
+    ]
+
+#@Record.define # FIXME
+class SST(pstruct.type):
+    type = 252
+    type = 0xfc
+    _fields_ = [
+        (pint.int32_t, 'cstTotal'),     # GUARD: >=0
+        (pint.int32_t, 'cstUnique'),    # GUARD: >=0
+        (lambda s: dyn.array(XLUnicodeRichExtendedString, s['cstUnique'].l.int()), 'rgb'),
+    ]
+
+class FontIndex(pint.enum, pint.uint16_t):
+    _values_ = [
+        (0, 'Default'),
+        (1, 'Default,Bold'),
+        (2, 'Default,Italic'),
+        (3, 'Default,Bold,Italic'),
+    ]
+
+class FormatRun(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'ich'),
+        (FontIndex, 'ifnt'),
+    ]
+
+class Phs(pstruct.type):
+    class formatinfo(pbinary.struct):
+        _fields_ = [(2,'phType'),(2,'alcH'),(12,'unused')]
+
+    _fields_ = [
+        (FontIndex, 'ifnt'),
+        (formatinfo, 'ph'),
+    ]
+
+if False:
+    # FIXME: http://msdn.microsoft.com/en-us/library/dd924700(v=office.12).aspx
+    # this type doesn't align with this structure definition
+    class LPWideString(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'cchCharacters'),
+            (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].l.int()), 'rgchData'),
+        ]
+
+class RPHSSub(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'crun'),
+        (pint.uint16_t, 'cch'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['cch'].l.int()), 'st'),
+    ]
+
+class PhRuns(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'ichFirst'),
+        (pint.uint16_t, 'ichMom'),
+        (pint.uint16_t, 'cchMom'),
+    ]
+
+class ExtRst(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'reserved'),
+        (pint.uint16_t, 'cb'),
+        (Phs, 'phs'),
+        (RPHSSub, 'rphssub'),
+        (lambda s: dyn.array(PhRuns, s['rphssub'].l['crun'].int()), 'rgphruns')
+    ]
+
+class XLUnicodeRichExtendedString(pstruct.type):
+    class flags(pbinary.struct):
+        _fields_ = [
+            (1, 'fHighByte'),
+            (1, 'reserved1'),
+            (1, 'fExtSt'),
+            (1, 'fRichSt'),
+            (4, 'reserved2'),
+        ]
+
+    def __cRun(self):
+        f = self['flags'].l
+        return pint.uint16_t if f['fRichSt'] else pint.uint_t
+    def __cbExtRst(self):
+        f = self['flags'].l
+        return pint.int32_t if f['fExtSt'] else pint.int_t
+    def __rgb(self):
+        f = self['flags'].l
+        if f['fHighByte']:
+            return dyn.clone(pstr.wstring, length=int(self['cch'].l))
+        return dyn.clone(pstr.string, length=int(self['cch'].l))
+    def __ExtRst(self):
+        f = self['flags'].l
+        return ExtRst if f['fExtSt'] else ptype.empty
+
+    _fields_ = [
+        (pint.uint16_t, 'cch'),
+        (flags, 'flags'),
+        (__cRun, 'cRun'),
+        (__cbExtRst, 'cbExtRst'),
+        (__rgb, 'rgb'),
+        (lambda s: dyn.array(FormatRun, s['cRun'].l.int()), 'rgRun'),
+        (__ExtRst, 'ExtRst'),
+    ]
+
+class FilePointer(pint.uint32_t): pass
+class ISSTInf(pstruct.type):
+    _fields_ = [
+        (FilePointer, 'ib'),
+        (pint.uint16_t, 'cbOffset'),
+        (pint.uint16_t, 'reserved'),
+    ]
+
+@Record.define
+class ExtSST(pstruct.type):
+    type = 255
+    type = 0xff
+    def __rgISSTInf(self):
+        bs = self.blocksize()
+#        return dyn.clone(parray.block, _object_=ISSTInf, blocksize=lambda s: bs-self.size())
+        return dyn.block(bs - self.size())
+
+    _fields_ = [
+        (pint.uint16_t, 'dsst'),
+        (__rgISSTInf, 'rgISSTInf'),
     ]
 
 #######

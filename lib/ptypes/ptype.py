@@ -33,8 +33,11 @@ def isrelated(t, t2):
         return result
     return getbases(set(), t.__bases__).intersection( getbases(set(), t.__bases__) )
 
-def forceptype(t, self):
+def force(t, self, chain=None):
     """Resolve type ``t`` into a ptype.type for the provided object ``self``"""
+    if chain is None:
+        chain = []
+    chain.append(t)
 
     # of type ptype
     if isinstance(t, type) or istype(t):
@@ -43,21 +46,21 @@ def forceptype(t, self):
     # functions
     if isinstance(t, types.FunctionType):
         res = t(self)
-        return forceptype(res, self)
+        return force(res, self, chain)
 
     # bound methods
     if isinstance(t, types.MethodType):
-        return forceptype(t(), self)
+        return force(t(), self, chain)
 
     if inspect.isgenerator(t):
-        return forceptype(t.next(), self)
+        return force(t.next(), self, chain)
 
     if False:
         # and lastly iterators
         if isiterator(t):
-            return forceptype(t.next(), self)
+            return force(t.next(), self, chain)
 
-    raise ValueError('forceptype %s could not be resolved as asked by %s'% (repr(t), self.name()))
+    raise ValueError('ptype.force : chain=%s : refusing request to resolve to a non-ptype : %s'% (repr(chain), ','.join(self.backtrace())))
 
 ## ...and yeah... now it's done.
 
@@ -137,7 +140,7 @@ def debugrecurse(ptype):
     class newptype(debug(ptype)):
         @rethrow
         def newelement(self, ptype, name='', ofs=0, **attrs):
-            res = forceptype(ptype, self)
+            res = force(ptype, self)
             assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
             return super(newptype,self).newelement( debug(res), name, ofs, **attrs )
 
@@ -221,7 +224,7 @@ class type(object):
         if self.initialized:
             return len(self.value)
 
-        logging.debug("ptype.type.size : %s : unable to get size of type, as object is still uninitialized. returning the blocksize instead."%(self.name()))
+        logging.debug("ptype.type.size : %s.%s : unable to get size of type, as object is still uninitialized. returning the blocksize instead."%(self.__module__,self.shortname()))
         return self.blocksize()
 
     def blocksize(self):
@@ -253,21 +256,19 @@ class type(object):
         if self.__class__ == type:
             return self
 
-        for x in self.traverse():
+        for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
             if issubclass(x.__class__,type) or x.__class__ == type:
                 return x
             continue
 
-#        raise ValueError('%s match %s not found in chain: %s'% (self.name(), self.new(type).shortname(), '\n'.join(self.backtrace())))
-        raise ValueError("ptype.type.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse())))
+        raise ValueError("ptype.type.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)))))
 
-    def traverse(self, edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None), filter=lambda node:True, *args, **kwds):
+    def traverse(self, edges=lambda node:tuple(node.v) if iscontainer(node.__class__) else (), filter=lambda node:True, *args, **kwds):
         """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
 
         This will iterate in a top-down approach.
-
-        By default this will follow the .parent attribute until it is None,
-        effectively returning a backtrace.
+    
+        By default this will traverse every sub-element from a given object.
         """
         for self in edges(self, *args, **kwds):
             if not isinstance(self, type):
@@ -281,10 +282,14 @@ class type(object):
             continue
         return
 
-    def backtrace(self):
-        """Return a backtrace to the root element"""
-        path = self.traverse()
-        path = [ 'type:%s name:%s offset:%x'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset()) for x in path ]
+    def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset())):
+        """
+        Return a backtrace to the root element applying ``fn`` to each parent
+
+        By default this returns a string describing the type and location of each structure.
+        """
+        path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None))
+        path = [ fn(x) for x in path ]
         return list(reversed(path))
 
     def set(self, string, **kwds):
@@ -331,7 +336,7 @@ class type(object):
         The newly created instance will inherit the current object's .source and
         any .attrs designated by the current instance.
         """
-        res = forceptype(ptype, self)
+        res = force(ptype, self)
         assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
 
         updateattrs = dict(self.attrs)
@@ -384,7 +389,7 @@ class type(object):
                 return result + padding
             assert len(result) == bs, 'value of %s is larger than blocksize (%d>%d)'%(self.shortname(), len(result), bs)
             return result
-        logging.warn('%s.type : %s is uninitialized during serialization (%x:+%x)', self.__module__, self.name(), self.getoffset(), self.blocksize())
+        logging.warn('ptype.type.serialize : %s.%s is uninitialized during serialization (%x:+%x)', self.__module__, self.shortname(), self.getoffset(), self.blocksize())
 #        raise ValueError('%s is uninitialized'% self.name())
         return utils.padding.fill(self.blocksize(), self.padding)
 
@@ -455,14 +460,10 @@ class type(object):
         size = self.blocksize()
         result = self.newelement( t, self.__name__, self.getoffset() )
 
-        ### XXX: need some better way to catch exceptions
-#        return result.load(source=source, offset=0, blocksize=lambda:size, **kwds)
-
         try:
             result.load(source=source, offset=0, blocksize=lambda:size, **kwds)
         except Exception,e:
-            logging.fatal("ptype.type.cast : %s : %s : raised an exception : %s"%(self.name(),repr(t), repr(e)))
-
+            logging.fatal("ptype.type.cast : %s.%s : %s : raised an exception : %s"%(self.__module__,self.shortname(),repr(t), repr(e)))
         return result
 
     def compare(self, value):
@@ -530,7 +531,7 @@ class container(type):
         """True if the specified ``offset`` is contained within"""
         for x in self.value:
             if x.contains(offset):
-                logging.warn("structure %s is unaligned. found element %s to contain offset %x", self.shortname(), x.shortname(), offset)
+                logging.warn("ptype.container.contains : structure %s.%s is unaligned. found element %s to contain offset %x", self.__module__, self.shortname(), x.shortname(), offset)
                 return True
         return False
     
@@ -550,7 +551,7 @@ class container(type):
         try:
             res = self.at(offset, False, **kwds)
         except ValueError, msg:
-            logging.info('non-fatal exception raised',ValueError,msg)
+            logging.info('ptype.container.at : non-fatal exception raised',ValueError,msg)
             return self
 
         # drill into containees for more detail
@@ -609,7 +610,14 @@ class container(type):
             bs = self.blocksize()
             self.source.seek(self.getoffset())
             block = self.source.consume(bs)
-            result = self.deserialize_block(block)
+            try:
+                result = self.deserialize_block(block)
+            except StopIteration:
+                s = self.size()
+                if bs > s:
+                    raise
+                logging.debug('ptype.container.load : %s.%s : +%x bytes cropped to (%x:+%x)', self.__module__, self.shortname(), s, self.getoffset(), bs)
+            return self
         return result
 
     def deserialize_block(self, block):
@@ -801,7 +809,7 @@ class encoded_t(block):
     def decode(self, **attr):
         """Decodes an object from specified block into a new element"""
         if 'source' in attr:
-            logging.warn('%s.encoded_t : user attempted to change the .source attribute of an encoded block', cls.__module__)
+            logging.warn('ptype.encoded_t.decode : %s.%s :user attempted to change the .source attribute of an encoded block', self.__module__, self.shortname())
             del(attr['source'])
         name = '*%s'% self.name()
         s = self.serialize()
@@ -858,7 +866,7 @@ class pointer_t(encoded_t):
         raise NotImplementedError
 
     def shortname(self):
-        target = forceptype(self._target_, self)
+        target = force(self._target_, self)
         return 'pointer_t<%s>'% target().shortname()
     
     deref = lambda s,**attrs: s.decode(**attrs)

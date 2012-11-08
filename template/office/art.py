@@ -2,12 +2,15 @@ from ptypes import *
 import __init__
 class Record(__init__.Record): cache = {}
 class RecordGeneral(__init__.RecordGeneral): Record=Record
-class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
+class RecordContainer(__init__.RecordContainer):
+    _object_ = RecordGeneral
 class File(__init__.File): _object_ = RecordGeneral
 
 @Record.define
 class SpContainer(RecordContainer):
     type = 0xf004
+
+class MSOSPID(pint.uint32_t): pass
 
 @Record.define
 class FSP(pstruct.type):
@@ -21,21 +24,40 @@ class FSP(pstruct.type):
         ]
         
     _fields_ = [
-        (pint.uint32_t, 'spid'),
+        (MSOSPID, 'spid'),
         (pbinary.littleendian(__flags), 'f')
+    ]
+
+class FOPTE(pstruct.type):
+    class OPID(pbinary.struct):
+        _fields_ = [
+            (1,'fComplex'),
+            (1,'fBid'),
+            (14, 'opid'),
+        ]
+
+    _fields_ = [
+        (pbinary.littleendian(OPID), 'opid'),
+        (pint.uint32_t, 'op')
     ]
 
 @Record.define
 class FOPT(pstruct.type):
     type = 0xf00b
-    _fields_ = [
-        (lambda s: dyn.array(FOPTE, s.blocksize()/6), 'fopt')
-    ]
+    def __fopt(self):
+        p = self.getparent(type=__init__.RecordGeneral)
+        count = p['header'].getinstance()
+        return dyn.array(FOPTE, count)
 
-class FOPTE(pstruct.type):
+    def __complex(self):
+        # FIXME this should be an array that corresponds to fopt
+        bs = self.blocksize()
+        s = self.size()
+        return dyn.block(bs-s)
+
     _fields_ = [
-        (pint.uint16_t, 'opid'),
-        (pint.uint32_t, 'op')
+        (__fopt, 'fopt'),
+        (__complex, 'complex'),
     ]
 
 @Record.define
@@ -262,6 +284,11 @@ class msofbtClientAnchor(pstruct.type):
     ]
 
 @Record.define
+class msofbtClientData(ptype.empty):
+    type = 0xf011
+    type = 61457
+
+#@Record.define
 class OfficeArtBlipDIB(pstruct.type):
     type = 0xf01f
     type = 61471
@@ -271,6 +298,11 @@ class OfficeArtBlipDIB(pstruct.type):
         (pint.uint8_t, 'tag'),
         (dyn.block(0), 'BLIPFileData'), # FIXME: this isn't right..
     ]
+
+@Record.define
+class FDG(pstruct.type):
+    type = 0xf008
+    _fields_ = [(pint.uint32_t,'csp'),(MSOSPID, 'spidCur')]
 
 if False:
     import ptypes    

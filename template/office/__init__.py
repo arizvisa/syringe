@@ -1,11 +1,6 @@
 import logging
 from ptypes import *
 class RecordUnknown(dyn.block(0)):
-    def details(self):
-        if self.initialized:
-            return self.name()
-        return super(RecordUnknown, self).details()
-
     def shortname(self):
         s = super(RecordUnknown, self).shortname()
         names = s.split('.')
@@ -21,6 +16,11 @@ class RecordHeader(pstruct.type):
         (pint.littleendian(pint.uint16_t), 'type'),
         (pint.littleendian(pint.uint32_t), 'length')
     ]
+
+    def getinstance(self):
+        return self['ver/inst']['instance']
+    def getversion(self):
+        return self['ver/inst']['ver']
 
     def details(self):
         if self.initialized:
@@ -40,24 +40,9 @@ class RecordGeneral(pstruct.type):
         l = int(self['header']['length'])
         return dyn.clone(self.Record.get(t, length=l), blocksize=lambda s:l)
         
-    def __extra(self):
-        t = int(self['header'].l['type'])
-        name = '[%s]'% ','.join(self.backtrace()[1:])
-
-        total = self.blocksize()
-        used = self.size()
-        leftover = self.blocksize() - self.size()
-
-        if leftover > 0:
-#            print "record at %x (type %x) %s has %x bytes unused"% (self.getoffset(), t, name, leftover)
-            return dyn.block(leftover)
-#        print "record at %x (type %x) %s's contents are larger than expected (%x>%x)"% (self.getoffset(), t, name, used, total)
-        return dyn.block(0)
-
     _fields_ = [
         (RecordHeader, 'header'),
         (__data, 'data'),
-#        (__extra, 'extra'),
     ]
 
     def blocksize(self):
