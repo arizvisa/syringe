@@ -12,11 +12,11 @@ def isiterator(t):
 
 def istype(t):
     """True if type ``t`` inherits from ptype.type"""
-    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
+    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, base)
 
 def iscontainer(t):
     """True if type ``t`` inherits from ptype.container """
-    return istype(t) and issubclass(t, container)
+    return (istype(t) and issubclass(t, container)) or pbinary.istype(t)
 
 def isresolveable(t):
     """True if type ``t`` can be descended into"""
@@ -38,6 +38,11 @@ def force(t, self, chain=None):
     if chain is None:
         chain = []
     chain.append(t)
+
+    # of type pbinary.type. we insert a partial node into the tree
+    if pbinary.istype(t):
+        t = clone(pbinary.partial, _object_=t)
+        return t
 
     # of type ptype
     if isinstance(t, type) or istype(t):
@@ -92,7 +97,7 @@ def rethrow(fn):
             res.append('%s<%x:+??> %s =>'%(self.shortname(),self.getoffset(), path))
             res.append('\t<method name> %s'% fn.__name__)
 
-            if self.initialized:
+            if self.initializedQ():
                 if iscontainer(self.__class__):
                     if self.value:
                         res.append('\t<container length> %x'% len(self.value))
@@ -147,7 +152,177 @@ def debugrecurse(ptype):
     newptype.__name__ = 'debugrecurse(%s)'% ptype.__name__
     return newptype
 
-class type(object):
+class base(object):
+    # FIXME: this class should implement
+    #           attribute inheritance
+    #           addition and removal of elements to trie
+    #           initial attribute creation
+    #           attributes not propagated during creation
+
+    source = None       # ptype.prov
+
+    attrs = None        # {...}
+    ignored = set(('source','parent','attrs','value','__name__'))
+
+    parent = None       # ptype.base
+    p = property(fget=lambda s: s.parent)   # abbr to get to .parent
+
+    value = None        # _
+    v = property(fget=lambda s: s.value)   # abbr to get to .value
+
+    def __init__(self, **attrs):
+        """Create a new instance of object. Will assign provided named arguments to self.attrs"""
+        try:
+            self.source = self.source or provider.memory()
+        except AttributeError:
+            self.source = provider.memory()
+        self.parent = None
+        self.attrs = {}
+        self.update_attributes(attrs)
+
+    position = None     # ()
+    def setposition(self, position, **kwds):
+        res = self.position
+        self.position = position
+        return res
+    def getposition(self):
+        return self.position
+
+    def update_attributes(self, attrs):
+        """Update the attributes that will be assigned to sub-elements using the ``attrs`` dict"""
+        if 'recurse' not in attrs:
+            recurse=attrs   # XXX: copy all attrs into recurse, since we conditionaly propogate
+        else:
+            recurse=attrs['recurse']
+            del(attrs['recurse'])
+
+        # disallow which attributes are not allowed to be recursed into any child elements
+        ignored = self.ignored
+        self.attrs.update(dict(((k,v) for k,v in recurse.iteritems() if k not in ignored and not callable(v))))
+
+        # update self if user specified
+        attrs.update(recurse)
+        for k,v in attrs.items():
+            setattr(self, k, v)
+        return self
+
+    initialized = property(fget=lambda s: s.initializedQ())
+    def initializedQ(self):
+        raise NotImplementedError
+
+    def __nonzero__(self):
+        raise self.initializedQ()
+
+    def traverse(self, edges, filter=lambda node:True, *args, **kwds):
+        """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
+
+        This will iterate in a top-down approach.
+        """
+        for self in edges(self, *args, **kwds):
+            if not isinstance(self, type):
+                continue
+
+            if filter(self):
+                yield self
+
+            for y in self.traverse(edges=edges, filter=filter, *args, **kwds):
+                yield y
+            continue
+        return
+
+    def serialize(self):
+        raise NotImplementedError
+    def load(self, **attrs):
+        raise NotImplementedError
+    def commit(self, **attrs):
+        raise NotImplementedError
+    def alloc(self, **attrs):
+        raise NotImplementedError
+
+    # abbreviations
+    a = property(fget=lambda s: s.alloc())
+    c = property(fget=lambda s: s.commit())
+    l = property(fget=lambda s: s.load())
+
+    def __repr__(self):
+        return self.repr()
+    def repr(self):
+        raise NotImplementedError
+
+    # naming
+    def name(self):
+        """Return a name similar to Python's standard __repr__() output"""
+        if hasattr(self, '__module__'):
+            module = self.__module__
+            return "<class '%s.%s'>"% (module, self.shortname())
+        return "<class '.%s'>"% (self.shortname())
+
+    def shortname(self):
+        """Return a shorter version of the type's name. Intended to be overloaded"""
+        return self.__class__.__name__
+
+    def deserialize_block(self, block):
+        raise NotImplementedError('Class %s must implement deserialize_block'% self.shortname())
+
+    def hexdump(self, **options):
+        """Return a hexdump of the type using utils.hexdump(**options)"""
+        if self.initializedQ():
+            return utils.hexdump( self.serialize(), offset=self.getoffset(), **options )
+        raise ValueError('%s is uninitialized'% self.name())
+
+    def properties(self):
+        """Return a tuple of properties/characteristics describing current state of object to the user"""
+        result = {}
+        if not self.initializedQ():
+            result['uninitialized'] = True
+        if not hasattr(self, '__name__') or len(self.__name__) == 0:
+            result['unnamed'] = True
+        else:
+            result['name'] = self.__name__
+        return result
+
+    def details(self):
+        """Return a detailed __repr__ of the type"""
+        if self.initializedQ():
+            return repr(''.join(self.serialize()))
+        return '???'
+
+    def summary(self):
+        """Return a summary __repr__ of the type"""
+        if self.initializedQ():
+            return repr(''.join(self.serialize()))
+        return '???'
+
+    def getparent(self, type=None):
+        """Returns the creator of the current type.
+
+        If the ``type`` argument is specified, will descend into .parent
+        elements until encountering an instance that inherits from it.
+        """
+        if type is None:
+            return self.parent
+
+        if self.__class__ == type:
+            return self
+
+        for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
+            if issubclass(x.__class__,type) or x.__class__ == type:
+                return x
+            continue
+
+        raise ValueError("ptype.base.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)))))
+
+    def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset())):
+        """
+        Return a backtrace to the root element applying ``fn`` to each parent
+
+        By default this returns a string describing the type and location of each structure.
+        """
+        path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None))
+        path = [ fn(x) for x in path ]
+        return list(reversed(path))
+
+class type(base):
     """A very most atomical ptype.
     
     Contains the following settable properties:
@@ -166,62 +341,18 @@ class type(object):
         initialized:bool(r)
             if ptype has been initialized yet
     """
-    offset = 0
     length = 0      # int
-    value = None    # str
-    v = property(fget=lambda s: s.value)   # abbr to get to .value
-
-    initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.blocksize())    # bool
-    source = None   # ptype.provider
-    p = property(fget=lambda s: s.parent)   # abbr to get to .parent
-    parent = type   # ptype.type
-
+    initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()    # bool
     padding = utils.padding.source.zero()
-
     attrs = None    # dict of attributes that will get assigned to any child elements
-    __name__ = None # default to unnamed
-    
+    ignored = base.ignored.union(('source','parent','attrs','value','__name__'))
+    position = 0,
+    #__name__ = '[unnamed-type]'
+
     ## initialization
-    def __init__(self, **attrs):
-        """Create a new instance of object. Will assign provided named arguments to self.attrs"""
-        try:
-            self.source = self.source or provider.memory()
-        except AttributeError:
-            self.source = provider.memory()
-        self.parent = None
-        self.attrs = {}
-        self.update_attributes(attrs)
-
-    def update_attributes(self, attrs):
-        """Update the attributes that will be assigned to sub-elements using the ``attrs`` dict"""
-        if 'recurse' not in attrs:
-            recurse=attrs   # XXX: copy all attrs into recurse, since we conditionaly propogate
-        else:
-            recurse=attrs['recurse']
-            del(attrs['recurse'])
-
-        # FIXME: the next block is responsible for conditionally propogating
-        #        attributes. i think that some code in pecoff propogates data
-        #        to children elements. that code should be rewritten to use the
-        #        new 'recurse' parameter.
-
-        # disallow which attributes are not allowed to be recursed into any child elements
-        a = set( ('source','offset','length','value','_fields_','parent','__name__', 'size', 'blocksize') )
-        self.attrs.update(dict(((k,v) for k,v in recurse.iteritems() if k not in a)))
-
-        # update self if user specified
-        attrs.update(recurse)
-        for k,v in attrs.items():
-            setattr(self, k, v)
-        return self
-
-    def __nonzero__(self):
-        """True if initialized"""
-        return self.initialized
-
     def size(self):
         """Returns the number of bytes that have been loaded into the type"""
-        if self.initialized:
+        if self.initializedQ() or self.value is not None:
             return len(self.value)
 
         logging.debug("ptype.type.size : %s.%s : unable to get size of type, as object is still uninitialized. returning the blocksize instead."%(self.__module__,self.shortname()))
@@ -244,53 +375,13 @@ class type(object):
         nmax = nmin + self.blocksize()
         return (offset >= nmin) and (offset < nmax)
 
-    def getparent(self, type=None):
-        """Returns the creator of the current type.
-
-        If the ``type`` argument is specified, will descend into .parent
-        elements until encountering an instance that inherits from it.
-        """
-        if type is None:
-            return self.parent
-
-        if self.__class__ == type:
-            return self
-
-        for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
-            if issubclass(x.__class__,type) or x.__class__ == type:
-                return x
-            continue
-
-        raise ValueError("ptype.type.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)))))
-
     def traverse(self, edges=lambda node:tuple(node.v) if iscontainer(node.__class__) else (), filter=lambda node:True, *args, **kwds):
-        """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
-
-        This will iterate in a top-down approach.
+        """
+        This will traverse a tree in a top-down approach.
     
         By default this will traverse every sub-element from a given object.
         """
-        for self in edges(self, *args, **kwds):
-            if not isinstance(self, type):
-                continue
-
-            if filter(self):
-                yield self
-
-            for y in self.traverse(edges=edges, filter=filter, *args, **kwds):
-                yield y
-            continue
-        return
-
-    def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset())):
-        """
-        Return a backtrace to the root element applying ``fn`` to each parent
-
-        By default this returns a string describing the type and location of each structure.
-        """
-        path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None))
-        path = [ fn(x) for x in path ]
-        return list(reversed(path))
+        return super(type,self).traverse(edges, filter, *args, **kwds)
 
     def set(self, string, **kwds):
         """Set entire type equal to ``string``"""
@@ -302,7 +393,6 @@ class type(object):
         self.length = len(res)
         return self
 
-    a = property(fget=lambda s: s.alloc())   # abbr
     def alloc(self, **attrs):
         """Will zero the ptype instance with the provided ``attrs``.
 
@@ -321,13 +411,12 @@ class type(object):
 
     def setoffset(self, ofs, **_):
         """Changes the current offset to ``ofs``"""
-        res = self.offset
-        self.offset = ofs
-        return res
-
+        return self.setposition((ofs,))
     def getoffset(self, **_):
         """Returns the current offset"""
-        return int(self.offset)
+        o, = self.getposition()
+        return o
+    offset = property(fget=getoffset, fset=setoffset)
 
     def newelement(self, ptype, name='', ofs=0, **attrs):
         """Create a new element of type ``ptype`` with the provided ``name`` and ``ofs``
@@ -356,8 +445,6 @@ class type(object):
         return res
 
     ## reading/writing to memory provider
-    l = property(fget=lambda s: s.load())   # abbr
-
     def load(self, **attrs):
         """Synchronize the current instance with data from the .source attributes"""
 
@@ -380,7 +467,7 @@ class type(object):
     ## byte stream input/output
     def serialize(self):
         """Return contents of type as a string"""
-        if self.initialized:
+        if self.initializedQ():
             result = str(self.value)
             bs = self.blocksize()
             if len(result) < bs:
@@ -406,40 +493,10 @@ class type(object):
         return self
 
     ## representation
-    def name(self):
-        """Return a name similar to Python's standard __repr__() output"""
-        return "<class '%s'>"% self.shortname()
-
-    def shortname(self):
-        """Return a shorter version of the type's name. Intended to be overloaded"""
-        return self.__class__.__name__
-
-    def __repr__(self):
-        return self.repr()
-
     def repr(self):
         """Return a __repr__ of the type"""
-        if self.__name__ is None:
-            return '[%x] %s %s'%( self.getoffset(), self.name(), self.details())
-        return '[%x] %s %s %s'%( self.getoffset(), self.name(), self.__name__, self.details())
-
-    def details(self):
-        """Return a detailed __repr__ of the type"""
-        if self.initialized:
-            return repr(''.join(self.serialize()))
-        return '???'
-
-    def summary(self):
-        """Return a summary __repr__ of the type"""
-        if self.initialized:
-            return repr(''.join(self.serialize()))
-        return '???'
-
-    def hexdump(self, **options):
-        """Return a hexdump of the type using utils.hexdump(**options)"""
-        if self.initialized:
-            return utils.hexdump( self.serialize(), offset=self.getoffset(), **options )
-        raise ValueError('%s is uninitialized'% self.name())
+        prop = '{%s}'% ','.join('%s=%s'%(k,repr(v)) for k,v in self.properties().iteritems())
+        return '[%x] %s %s %s'%( self.getoffset(), self.name(), prop, self.details())
 
     def new(self, type, **attrs):
         """Instantiate a new instance of ``type`` from the current ptype with the provided ``attrs``"""
@@ -480,14 +537,12 @@ class container(type):
         value:str<r>
             list of all elements that are being contained
     '''
-    value = None    # list
-
-    def __isInitialized(self):
+    #__name__ = '[unnamed-container]'
+    def initializedQ(self):
         """True if the type is fully initialized"""
         if self.value is None or None in self.value:
             return False
-        return not(False in [x.initialized for x in self.value])
-    initialized = property(fget=__isInitialized)  # bool
+        return not(False in [x.initializedQ() for x in self.value])
 
     def commit(self, **kwds):
         """Commit the current state of all children back to the .source attribute"""
@@ -627,7 +682,9 @@ class container(type):
         for n in self.value:
             bs = n.blocksize()
             n.setoffset(ofs)
-            n.deserialize_block(block[:bs])
+            # if element in container is already initialized, skip
+            if not n.initializedQ():
+                n.deserialize_block(block[:bs])
             block = block[bs:]
             ofs += bs
         return self
@@ -674,7 +731,8 @@ class empty(type):
 class none(empty): pass
 
 class block(none):
-    """A ptype that can be accessed an array"""
+    """A ptype that can be accessed as an array"""
+    #__name__ = '[unnamed-block]'
     def __getslice__(self, i, j):
         return self.serialize()[i:j]
     def __getitem__(self, index):
@@ -809,7 +867,7 @@ class encoded_t(block):
     def decode(self, **attr):
         """Decodes an object from specified block into a new element"""
         if 'source' in attr:
-            logging.warn('ptype.encoded_t.decode : %s.%s :user attempted to change the .source attribute of an encoded block', self.__module__, self.shortname())
+            logging.warn('ptype.encoded_t.decode : %s.%s : user attempted to change the .source attribute of an encoded block', self.__module__, self.shortname())
             del(attr['source'])
         name = '*%s'% self.name()
         s = self.serialize()
@@ -822,30 +880,31 @@ class encoded_t(block):
         return self
 
     d = property(fget=lambda s: s.decode())
+    #__name__ = '[unnamed-encoded]'
 
 class pointer_t(encoded_t):
     """A pointer to a particular type"""
     _type_ = None
     _target_ = None
-    _byteorder_ = lambda s,x:x  # passthru
 
+    #__name__ = '[unnamed-pointer]'
     def blocksize(self):
         """Returns the size"""
         return self._type_().blocksize()
 
-    def newtype(self, **attrs):
-        """Returns a new instance of ._type_"""
-        t = self._byteorder_(self._type_)
-        return t(**attrs)
+    def number(self):
+        t = self._type_(source=provider.string(self.value))
+        return t.l.number()
 
     def int(self):
         """Return pointer offset as an int"""
-        s = self.serialize()
-        return self.newtype(source=provider.string(s)).l.int()
+        t = self._type_(source=provider.string(self.value))
+        return t.l.int()
+
     def long(self):
         """Return pointer offset as a long"""
-        s = self.serialize()
-        return self.newtype(source=provider.string(s)).l.long()
+        t = self._type_(source=provider.string(self.value))
+        return t.l.long()
 
     def decode_offset(self):
         """Returns an integer representing the resulting object's real offset"""
@@ -878,12 +937,13 @@ class pointer_t(encoded_t):
         return super(pointer_t, self).__cmp__(other)
 
     def details(self):
-        return '(void*)0x%x'% self.int()
+        return '(pointer_t*)0x%x'% self.int()
     summary = details
 
 class rpointer_t(pointer_t):
     """a pointer_t that's at an offset relative to a specific object"""
     _baseobject_ = None
+    #__name__ = '[unnamed-rpointer]'
 
     def shortname(self):
         return 'rpointer_t(%s, %s)'%(self._target_.__name__, self._baseobject_.__name__)
@@ -895,6 +955,7 @@ class rpointer_t(pointer_t):
 class opointer_t(pointer_t):
     """a pointer_t that's calculated via a user-provided function that takes an integer value as an argument"""
     _calculate_ = lambda s,x: x
+    #__name__ = '[unnamed-opointer]'
 
     def shortname(self):
         return 'opointer_t(%s, %s)'%(self._target_.__name__, self._calculate_.__name__)
@@ -969,6 +1030,8 @@ except ImportError:
             # returns a python function that when provided a dict containing the register state
             # calls the specified address and returns the register state upon return
             pass
+
+import pbinary  # XXX: recursive. yay.
 
 if __name__ == '__main__':
     import ptype

@@ -16,21 +16,6 @@ class pQTType(pQTInt):
     def set(self, value):
         return super(pQTType,self).set( reduce(lambda x,y:x*0x100+ord(y), value, 0) )
 
-class pQTIntArray(parray.terminated):
-    _object_ = pQTInt
-    currentsize = maxsize = 0   # copied from powerpoint
-
-    def isTerminator(self, value):
-        s = value.size()
-        self.currentsize += s
-        if (self.currentsize < self.maxsize):
-            return False
-        return True
-
-    def load(self):
-        currentsize = 0
-        return super(pQTIntArray, self).load()
-
 class Fixed(pint.uint32_t): pass
 
 class Matrix(pstruct.type):

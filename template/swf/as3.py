@@ -64,7 +64,7 @@ class s32(_vle):
 class string_info(pstruct.type):
     _fields_ = [
         (u30, 'size'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['size'].l)), 'utf8')
+        (lambda s: dyn.clone(pstr.string, length=s['size'].l.number()), 'utf8')
     ]
     def __repr__(self):
         return ' '.join([self.name(), self.get()])
@@ -102,7 +102,7 @@ class namespace_info(pstruct.type):
 class ns_set_info(pstruct.type):
     _fields_ = [
         (u30, 'count'),
-        (lambda s: dyn.array(u30, int(s['count'].l)), 'ns')
+        (lambda s: dyn.array(u30, s['count'].l.number()), 'ns')
     ]
 
     def __repr__(self):
@@ -266,7 +266,7 @@ class method_info(pstruct.type):
     _fields_ = [
         (u30, 'param_count'),
         (u30, 'return_type'),
-        (lambda s: dyn.array(u30, int(s['param_count'])), 'param_type'),
+        (lambda s: dyn.array(u30, s['param_count'].number()), 'param_type'),
         (u30, 'name'),
         (__flags, 'flags'),
         (__option_info, 'options'),
@@ -429,7 +429,7 @@ TraitTypes.define(Trait_Const)
 class instance_info(pstruct.type):
     def _row(type, fieldlength):
         def fn(self):
-            s = int(self[fieldlength])
+            s = self[fieldlength].number()
             if s > 0:
                 s -= 1
             return dyn.array(type, s)
@@ -465,14 +465,14 @@ class class_info(pstruct.type):
     _fields_ = [
         (u30, 'cinit'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, int(s['trait_count'].l)), 'traits')
+        (lambda s: dyn.array(traits_info, s['trait_count'].l.number()), 'traits')
     ]
 
 class script_info(pstruct.type):
     _fields_ = [
         (u30, 'init'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, int(s['trait_count'].l)), 'traits')
+        (lambda s: dyn.array(traits_info, s['trait_count'].l.number()), 'traits')
     ]
 
 class exception_info(pstruct.type):
@@ -492,18 +492,18 @@ class method_body_info(pstruct.type):
         (u30, 'init_scope_depth'),
         (u30, 'max_scope_depth'),
         (u30, 'code_length'),
-        (lambda s: dyn.block(int(s['code_length'].l)), 'code'),
+        (lambda s: dyn.block(s['code_length'].l.number()), 'code'),
         (u30, 'exception_count'),
-        (lambda s: dyn.array(exception_info, int(s['exception_count'].l)), 'exception'),
+        (lambda s: dyn.array(exception_info, s['exception_count'].l.number()), 'exception'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, int(s['trait_count'].l)), 'trait'),
+        (lambda s: dyn.array(traits_info, s['trait_count'].l.number()), 'trait'),
     ]
 
 ###
 class cpool_info(pstruct.type):
     def _row(type, fieldlength):
         def fn(self):
-            s = int(self[fieldlength])
+            s = self[fieldlength].number()
             if s > 0:
                 s -= 1
             return dyn.array(type, s)
@@ -530,7 +530,7 @@ class cpool_info(pstruct.type):
 class abcFile(pstruct.type):
     def _row(type, fieldlength):
         def fn(self):
-            s = int(self[fieldlength])
+            s = self[fieldlength].number()
             return dyn.array(type, s)
         return fn
 

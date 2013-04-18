@@ -28,7 +28,7 @@ class module(object):
         address,length,protection = self.segments[name]
         if protection == 6:
             return mm.free(address)
-        elif protection == 5:   
+        elif protection == 5:
             return mm.unload(address)
         raise NotImplementedError
 
@@ -66,7 +66,7 @@ class module(object):
         sectionbases = dict([(name,address) for name,(address,length) in loadedsegments.items()])
         for k in sectionbases:
             ld[k] = sectionbases[k]
-        
+
         # fill sections
         for name,(address,length) in loadedsegments.items():
             print 'allocated %x:+%x bytes for segment %s'%(address,length,name)
@@ -82,7 +82,7 @@ class module(object):
             # lock it
             protection,allocator = segments[name]
             address,length = allocator.next()
-            
+
             segments[name] = (address, length, protection)
 
             print 'wrote segment %s to %x:%x'%(name,address,address+length)
@@ -93,7 +93,7 @@ class module(object):
         segments = self.__allocatesegments(mm)
         self.segments = self.__writesegments(segments, mm)
         return
-        
+
     def unload(self, mm):
         for name in self.segments.keys():
             self.__deallocatesegment(name, mm)

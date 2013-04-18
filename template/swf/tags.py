@@ -115,16 +115,22 @@ class DoABC(pstruct.type):
         (as3.abcFile, 'ABCData')
     ]
 
-#@TagDef.define
-#class PlaceObject(pstruct.type):
-#    type = 4
-#    version = 1
-#    _fields_ = [
-#        (UI16, 'CharacterId'),
-#        (UI16, 'Depth'),
-#        (MATRIX, 'Matrix'),
-#        (CXFORM, 'ColorTransform')
-#    ]
+@TagDef.define
+class PlaceObject(pstruct.type):
+    type = 4
+    version = 1
+
+    def __ColorTransform(self):
+        bs = self.p.blocksize() - self.p.size()
+        raise NotImplementedError
+        return CXFORM
+
+    _fields_ = [
+        (UI16, 'CharacterId'),
+        (UI16, 'Depth'),
+        (MATRIX, 'Matrix'),
+        (__ColorTransform, 'ColorTransform')
+    ]
 
 #thank you macromedia for keeping this struct a multiple of 8 bits
 class _PlaceObject_Flag(pbinary.struct):
@@ -214,12 +220,13 @@ class RemoveObject(pstruct.type):
         (UI16, 'Depth')
     ]
 
-#class RemoveObject2(pstruct.type):
-#    type = 28
-#    version = 3
-#    _fields_ = [
-#        (UI16, 'Depth')
-#    ]
+@TagDef.define
+class RemoveObject2(pstruct.type):
+    type = 28
+    version = 3
+    _fields_ = [
+        (UI16, 'Depth')
+    ]
 
 @TagDef.define
 class ShowFrame(pstruct.type):
@@ -236,13 +243,23 @@ class SetBackgroundColor(pstruct.type):
         (RGB, 'BackgroundColor')
     ]
 
-#@TagDef.define
-#class FrameLabel(pstruct.type):
-#    type = 43
-#    version = 3
-#    _fields_ = [
-#        (STRING, 'Name')
-#    ]
+@TagDef.define
+class FrameLabel(pstruct.type):
+    type = 43
+    version = 3
+    _fields_ = [
+        (STRING, 'Name')
+    ]
+
+@TagDef.define
+class StartSound(pstruct.type):
+    version = 1
+    type = 15
+
+    _fields_ = [
+        (UI16, 'SoundId'),
+        (SOUNDINFO, 'SoundInfo'),
+    ]
 
 if False:
     @TagDef.define
@@ -408,7 +425,7 @@ class DefineShape3(pstruct.type):
     _fields_ = [
         (UI16, 'ShapeId'),
         (RECT, 'ShapeBounds'),
-        (Empty, 'Shapes')
+        (Empty, 'Shapes')   # XXX
     ]
 
 @TagDef.define
@@ -423,17 +440,25 @@ class DefineShape4(pstruct.type):
         (RECT, 'ShapeBounds'),
         (RECT, 'EdgeBounds'),
         (__Flags, 'Flags'),
-        (Empty, 'Shapes')
+        (Empty, 'Shapes')   # XXX
     ]
 
 @TagDef.define
 class DefineSprite(pstruct.type):
     type = 39
     version = 3
+
+    class __ControlTags(TagList):
+        allowed = (ShowFrame,
+            PlaceObject, PlaceObject2, RemoveObject, RemoveObject2, 
+            StartSound, FrameLabel,
+#            SoundStreamHead, SoundStreamHead2, SoundStreamBlock,   # FIXME
+            End)
+
     _fields_ = [
         (UI16, 'SpriteId'),
         (UI16, 'FrameCount'),
-        (Empty, 'ControlTags')
+        (__ControlTags, 'ControlTags')
     ]
 
 @TagDef.define
@@ -498,56 +523,6 @@ class DefineFontInfo(pstruct.type):
         (__CodeTable, 'CodeTable'),
     ]
 
-class GLYPHENTRY(pbinary.struct):
-    def __Index(self):
-        p = self.getparent(pstruct.type)    # DefineText
-        return int(p['GlyphBits'].l)
-        
-    def __Advance(self):
-        p = self.getparent(pstruct.type)    # DefineText
-        return int(p['AdvanceBits'].l)
-
-    _fields_ = [
-        (__Index, 'Index'),
-        (__Advance, 'Advance'),
-    ]
-
-class TEXTRECORD(pstruct.type):
-    class __StyleFlags(pbinary.struct):
-        _fields_ = [
-            (1, 'Type'),
-            (3, 'Reserved'),
-            (1, 'HasFont'),
-            (1, 'HasColor'),
-            (1, 'HasYOffset'),
-            (1, 'HasXOffset'),
-        ]
-    import tags
-    def __TextColor(self):
-        if int(self['StyleFlags'].l['HasColor']):
-            try:
-                self.getparent(DefineText2)
-            except ValueError:
-                return RGB
-            return RGBA
-        return Empty
-
-    __FontID = lambda s: [Empty, UI16][ int(s['StyleFlags'].l['HasFont']) ]
-    __XOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasXOffset']) ]
-    __YOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasYOffset']) ]
-    __TextHeight = lambda s: [Empty, UI16][ int(s['StyleFlags']['HasFont']) ]
-
-    _fields_ = [
-        (__StyleFlags, 'StyleFlags'),
-        (__FontID, 'FontID'),
-        (__TextColor, 'TextColor'),
-        (__XOffset, 'XOffset'),
-        (__YOffset, 'YOffset'),
-        (__TextHeight, 'TextHeight'),
-        (UI8, 'GlyphCount'),
-        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].l)), 'GlyphEntries'),
-    ]
-
 @TagDef.define
 class DefineText(pstruct.type):
     type = 11
@@ -569,6 +544,7 @@ class DefineText(pstruct.type):
 #        (__TextRecords, 'TextRecord')
     ]
 
+#@TagDef.define
 class DefineText2(DefineText):
     type = 33
     version = 3
@@ -593,6 +569,50 @@ class FileAttributes(pbinary.struct):
         (1, 'UseNetwork'),
         (24, 'Reserved[7]'),
     ]
+
+@TagDef.define
+class SymbolClass(pstruct.type):
+    version = 9
+    type = 76
+
+    class Symbol(pstruct.type):
+        _fields_ = [(UI16, 'Tag'),(STRING,'Name')]
+
+    _fields_ = [
+        (UI16, 'NumSymbols'),
+        (lambda s:dyn.array(s.Symbol, s['NumSymbols'].l.int()), 'Symbols')
+    ]
+
+## XXX font stuff
+@TagDef.define
+class DefineFont(Empty):
+    version = 1
+    type = 10
+
+@TagDef.define
+class DefineFontInfo(Empty):
+    version = 1
+    type = 13
+
+@TagDef.define
+class DefineFont2(Empty):
+    version = 3
+    type = 48
+
+@TagDef.define
+class DefineFontInfo2(Empty):
+    version = 6
+    type = 62
+
+@TagDef.define
+class DefineFont3(Empty):
+    version = 8
+    type = 75
+
+@TagDef.define
+class DefineFontAlignZones(Empty):
+    version = 8
+    type = 73
 
 if False:
     @TagDef.define

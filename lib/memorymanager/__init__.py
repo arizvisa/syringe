@@ -135,7 +135,7 @@ class Managed(MemoryManager):
 
     def __alloc_dochunks(self, size):
         # initialize an arena if it doesn't exist
-        k = 1<<bitmap.size(size-1)
+        k = 1<<bitmap.fit(size-1)
 
         try:
             self.arenas[k]

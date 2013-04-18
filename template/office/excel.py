@@ -1298,12 +1298,13 @@ class Style(pstruct.type):
     type = 659
     type = 0x293
 
-    class flags(pbinary.littleendian(pbinary.struct)):
+    class flags(pbinary.struct):
         _fields_ = [
             (1, 'fBuiltIn'),
             (3, 'unused'),
             (12,'ixfe'),
         ]
+    flags = pbinary.littleendian(flags)
 
     _fields_ = [
         (flags, 'flags'),
@@ -2364,7 +2365,7 @@ class ISSTInf(pstruct.type):
         (pint.uint16_t, 'reserved'),
     ]
 
-@Record.define
+#@Record.define
 class ExtSST(pstruct.type):
     type = 255
     type = 0xff

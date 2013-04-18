@@ -36,7 +36,7 @@ def blockarray(typ, size, **kwds):
 def align(s, **kwds):
     '''return a block that will align a structure to a multiple of the specified number of bytes'''
     class _align(block(0)):
-        initialized = property(fget=lambda self: self.value is not None and len(self.value) == self.blocksize())
+        initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()
         def blocksize(self):
             p = self.parent
             i = p.value.index(self)
@@ -118,26 +118,15 @@ class union(__union_generic):
     object = None       # objects associated with each alias
     value = None
 
-    initialized = property(fget=lambda self: self.value is not None and self.value.initialized)    # bool
-    def alloc(self, **attrs):
-        self.__alloc_objects()
-        t = self.__choose_root()
-        self.value = t(source=provider.proxy(self))
-        self.value.alloc(*attrs)
-        return self
-
-    def __alloc_objects(self):
-        source = provider.proxy(self.value)
-        self.object = [ self.newelement(t, n, 0, source=source) for t,n in self._fields_ ]
-        return self
-
-    def __choose_root(self):
+    initializedQ = lambda self: self.value is not None and self.value.initialized
+    def __choose_root(self, objects):
+        """return a ptype.block of a size that contain /objects/"""
         if self.root:
             return self.root
 
-        assert self.object, 'Need to define some elements'
         size = 0
-        for x in self.object:
+        for t in objects:
+            x = t().a
             try:
                 s = x.blocksize()
                 if s > size:
@@ -147,23 +136,36 @@ class union(__union_generic):
             continue
         return clone(ptype.block, length=size)
 
+    def __alloc_root(self, **attrs):
+        t = self.__choose_root(t for t,n in self._fields_)
+        ofs = self.getoffset()
+        self.value = t(offset=ofs)
+        self.value.alloc(**attrs)
+        return self.value
+
+    def __alloc_objects(self, value):
+        # XXX: each newelement will write into the offset occupied by value
+        source = provider.proxy(value)
+        self.object = [ self.newelement(t, n, 0, source=source) for t,n in self._fields_ ]
+        return self
+
+    def alloc(self, **attrs):
+        value = self.__alloc_root(**attrs) if self.value is None else self.value
+        self.__alloc_objects(value)
+        return self
+
     def serialize(self):
         return self.value.serialize()
-#        return self.value.tostring()
 
-    def load(self, **kwds):
-        self.alloc(**kwds)
-        r = self.value.l
-        return self.deserialize_block(r.serialize())
+    def load(self, **attrs):
+        value = self.__alloc_root(**attrs) if self.value is None else self.value
+        self.__alloc_objects(value)
+        r = self.value.load(source=self.source)
+        return self.__deserialize_block(r.serialize())
 
-    def deserialize_block(self, block):
-#        self.value[:] = array.array('c')
-#        self.value.fromstring( block[:self.size()] )
-
-        self.__alloc_objects()
-
+    def __deserialize_block(self, block):
         # try loading everything as quietly as possible 
-        [n.load() for n in self.object] 
+        [n.load() for n in self.object]
         return self
 
     def __getitem__(self, key):
@@ -202,20 +204,15 @@ def setbyteorder(endianness):
 integral = pint.uint32_t
 def pointer(target, type=integral, **attrs):
     global byteorder
-    m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
-    return ptype.clone(ptype.pointer_t, _target_=target, _type_=type, _byteorder_=m(byteorder), **attrs)
+    return ptype.clone(ptype.pointer_t, _target_=target, _type_=byteorder(type), **attrs)
 
 def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
     '''a pointer relative to a particular object'''
-    global byteorder
-    m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
-    return ptype.clone(ptype.rpointer_t, _target_=target, _baseobject_=object, _type_=type, _byteorder_=m(byteorder), **attrs)
+    return ptype.clone(ptype.rpointer_t, _target_=target, _baseobject_=object, _type_=byteorder(type), **attrs)
 
 def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
     '''a pointer relative to a particular offset'''
-    global byteorder
-    m = lambda v: (lambda v:v,lambda v:lambda s,*args,**kwds:v(*args,**kwds))[callable(v) and not ptype.istype(v)](v)
-    return ptype.clone(ptype.opointer_t, _target_=target, _calculate_=calculate, _type_=type, _byteorder_=m(byteorder), **attrs)
+    return ptype.clone(ptype.opointer_t, _target_=target, _calculate_=calculate, _type_=byteorder(type), **attrs)
 
 __all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
 
@@ -413,7 +410,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test11():
+    def Test12():
         class test(dyn.union):
             _fields_ = [
                 (pint.uint32_t, 'a'),
@@ -422,7 +419,9 @@ if __name__ == '__main__':
             ]
 
         global a
-        a = test()
+        a = test().a
+        if a['a'].blocksize() == 4 and a['b'].size() == 2 and a['c'].size() == 1 and a.blocksize() == 4:
+            raise Success
         
 if __name__ == '__main__':
     results = []

@@ -16,8 +16,9 @@ class ChunkUnknown(dyn.block(0)):
 
 if False:
     class ChunkHeader(pstruct.type):
-        class __verinstance(pbinary.littleendian(pbinary.struct)) :
+        class __verinstance(pbinary.struct):
             _fields_=[(12,'instance'),(4,'ver')]
+        __verinstance = pbinary.littleendian(__verinstance)
 
         _fields_ = [
             (__verinstance, 'ver/inst'),

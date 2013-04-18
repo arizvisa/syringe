@@ -164,7 +164,7 @@ def verify_bitsize(integertype, bitsize):
 
         def __verify(self):
             n = int(self)
-            if bitmap.size(n) > bitsize:
+            if bitmap.fit(n) > bitsize:
                 print '|warning| %x is larger than %d bits. using 1 instead.'% (n, bitsize)
                 self.set(1)
 

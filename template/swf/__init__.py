@@ -1,6 +1,7 @@
 import zlib
 from tags import *
 from stypes import *
+pbinary.setbyteorder(pbinary.bigendian)
 
 class Header(pstruct.type):
     _fields_ = [

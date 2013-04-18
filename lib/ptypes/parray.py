@@ -10,7 +10,7 @@ class __parray_generic(ptype.container):
         return False
 
     def __len__(self):
-        if not self.initialized:
+        if not self.initializedQ():
             return int(self.length)
         return len(self.value)
 
@@ -119,11 +119,15 @@ class type(__parray_generic):
             elif ptype.iscontainer(obj) or ptype.isresolveable(obj):
                 self.load_container()
 
+            else:
+                # XXX: should never be encountered
+                raise NotImplementedError('Unknown load type -> %s'% (repr(obj)))
+
             result = super(type, self).load()
         return result
 
     def details(self):
-        if self.initialized:
+        if self.initializedQ():
             res = repr(''.join(self.serialize()))
             length = len(self)
         else:
@@ -207,7 +211,7 @@ class infinite(terminated):
                 while True:
                     n = self.nextelement()
                     self.value.append(n)
-                    if not n.initialized:
+                    if not n.initializedQ():
                         break
 
                     if self.isTerminator(n):
@@ -234,7 +238,7 @@ class infinite(terminated):
                     self.value.append(n)
                     yield n
 
-                    if not n.initialized:
+                    if not n.initializedQ():
                         break
 
                     if self.isTerminator(n):
@@ -274,7 +278,7 @@ class block(terminated):
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
                         path = ' ->\n\t'.join(n.backtrace())
-                        logging.warn("parray.block.load : %s<%x:+%x> : Refusing to read %s<%x:+%x>\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), path))
+                        logging.warn("parray.block.load : %s<%x:+%x> : Refusing to initialize element %s<%x:+%x> due to blocksize() constraint.\n\t%s"%(self.shortname(), self.getoffset(), self.blocksize(), n.shortname(), n.getoffset(), n.blocksize(), path))
                         self.value.append(n)
 
                     # otherwise add the incomplete element to the array
@@ -624,6 +628,23 @@ if __name__ == '__main__':
         s = (dat*4)+end + (dat*4)+end
         a = dundundun(source=provider.string(s*5)).l
         if len(a) == 2 and len(a[0]) == 5 and len(a[1]) == 5:
+            raise Success
+
+    @TestCase
+    def test16():
+        # ??? parray.block is not respecting .blocksize
+        class blocked(parray.block):
+            _object_ = pint.uint32_t
+        
+            def blocksize(self):
+                return 16
+
+        data = '\xAA\xAA\xAA\xAA'*4
+        data+= '\xBB'*4
+
+        x = blocked(source=provider.string(data))
+        x = x.l
+        if len(x) == 4 and x.size() == 16:
             raise Success
 
 if __name__ == '__main__':

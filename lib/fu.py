@@ -178,10 +178,10 @@ class package:
 
         def unpack(self, data):
             cons,inst = data
-     
+
             self.cons_data.clear()
             self.inst_data.clear()
-     
+
             self.cons_data.update(cons)
             self.inst_data.update(inst)
             return True
@@ -566,7 +566,7 @@ if 'constants':
         @classmethod
         def getclass(cls):
             return __builtin__.False
-        
+
     @package.cache.register_const
     class notImplemented(__constant):
         @classmethod
@@ -683,7 +683,7 @@ if 'core':
 
 #            class type(type): pass  # XXX: this type-change might mess up something
             # create an instance illegitimately
-            _ = type.__init__ 
+            _ = type.__init__
             type.__init__ = lambda s: None
             result = type()
             type.__init__ = _
@@ -719,7 +719,7 @@ if 'core':
         @classmethod
         def getclass(cls):
             return module.getclass()
-            
+
         @classmethod
         def p_constructor(cls, object, **attributes):
             return object.__name__
@@ -1018,8 +1018,8 @@ if 'special':
             'co_argcount', 'co_nlocals', 'co_stacksize', 'co_flags', 'co_code',
             'co_consts', 'co_names', 'co_varnames', 'co_filename', 'co_name',
             'co_firstlineno', 'co_lnotab', 'co_freevars', 'co_cellvars'
-        ] 
-        
+        ]
+
         @classmethod
         def getclass(cls):
             return code.getclass()
@@ -1055,7 +1055,7 @@ if 'special':
             globals = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
             result = cls.__new_closure(*closure)
             return function.new(code, globals, closure=result)
-       
+
         @classmethod
         def p_instance(cls, object, **attributes):
             return object.func_code,object.func_name,object.func_defaults
@@ -1092,7 +1092,7 @@ if 'special':
 
             freevars = __builtin__.tuple( chr(x+65) for x in range(len(args)) )
             innercodeobj = code.new(0, 0, 0, 0, ''.join(result), (None,), (), (), '', '<closure>', 0, '', freevars, ())
-        
+
             # generate outer code object for >= 2.5
             result = []
             for i in range(len(args)):
@@ -1300,8 +1300,8 @@ if __name__ == '__main__':
     # lame helpers for testcases
     def make_package(cls, cons, inst):
         m,n = '__main__', 'unnamed'
-        result = (fu.VERSION, 0, ({0:(cls.id,cons)},{0:(cls.id,inst)})) 
-#        result = (fu.VERSION, 0, ({0:(cls.id,(m,n),cons)},{0:(cls.id,inst)})) 
+        result = (fu.VERSION, 0, ({0:(cls.id,cons)},{0:(cls.id,inst)}))
+#        result = (fu.VERSION, 0, ({0:(cls.id,(m,n),cons)},{0:(cls.id,inst)}))
         return result
     def extract_package(package):
         _,id,(cons,inst) = package
@@ -1437,7 +1437,7 @@ if __name__ == '__main__':
         b = fu.package.unpack(a)
         if func.func_code.co_name == b.co_name and func.func_code is not b:
             raise Success
-        
+
     @TestCase
     def test_func_packunpack():
         def func(*args):
@@ -1553,7 +1553,7 @@ if __name__ == '__main__':
 #    @TestCase  # FIXME
     def test_unknown_type():
         # error while serializing a 'TypeInfo' object which comes from a module implemented in C
-        #   if we can 
+        #   if we can
         import xml.dom.minidom
         global a,b
         a = fu.package.pack(xml.dom.minidom)

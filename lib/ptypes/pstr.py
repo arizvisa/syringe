@@ -36,7 +36,7 @@ class string(ptype.type):
     '''String of characters'''
     length = 0
     _object_ = pstr.char_t
-    initialized = property(fget=lambda self: self.value is not None)    # bool
+    initializedQ = lambda self: self.value is not None    # bool
 
     def at(self, offset, **kwds):
         ofs = offset - self.getoffset()

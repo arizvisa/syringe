@@ -88,6 +88,20 @@ def dumpexecutable(filename):
     mz.setoffset(0,recurse=True)
     return
 
+def dumpversion(filename):
+    global mz,pe,imagebase,sections,datadirectory,imports
+    opt = pe['OptionalHeader']
+    print 'OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].number(), opt['MinorOperatingSystemVersion'].number()))
+    print 'ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].number(), opt['MinorImageVersion'].number()))
+    print 'SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].number(), opt['MinorSubsystemVersion'].number()))
+    print opt['Win32VersionValue']
+
+    global root
+    rsrc = pe['OptionalHeader']['DataDirectory'][2]
+    root = rsrc['VirtualAddress'].d.l
+    global a,b
+    a,b = root['Ids']
+
 if __name__ == '__main__':
     import sys
     zerobase = False
@@ -114,7 +128,7 @@ if __name__ == '__main__':
 
     exports = datadirectory[0].get()
     imports = datadirectory[1].get()
-#    resources = datadirectory[2].get()
+    resources = datadirectory[2].get()
 
     if len(sys.argv) == 2:
         dumpexecutable(filename)

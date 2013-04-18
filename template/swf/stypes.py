@@ -14,11 +14,12 @@ def _ifeq(field, value, t, f):
         return f
     return fn
 
-class RECORDHEADER(pbinary.littleendian(pbinary.struct)):
+class RECORDHEADER(pbinary.struct):
     _fields_ = [
         (10, 'type'),
         (6, 'length')
     ]
+RECORDHEADER = pbinary.littleendian(RECORDHEADER)
 
 class RGB(pstruct.type):
     _fields_ = [
@@ -78,6 +79,57 @@ class MATRIX(pbinary.struct):
         (5, 'NTranslateBits'),
         (lambda self: self['NTranslateBits'], 'TranslateX'),
         (lambda self: self['NTranslateBits'], 'TranslateY')
+    ]
+
+#### text records
+class GLYPHENTRY(pbinary.struct):
+    def __Index(self):
+        p = self.getparent(pstruct.type)    # DefineText
+        return p['GlyphBits'].l.number()
+        
+    def __Advance(self):
+        p = self.getparent(pstruct.type)    # DefineText
+        return p['AdvanceBits'].l.number()
+
+    _fields_ = [
+        (__Index, 'Index'),
+        (__Advance, 'Advance'),
+    ]
+
+class TEXTRECORD(pstruct.type):
+    class __StyleFlags(pbinary.struct):
+        _fields_ = [
+            (1, 'Type'),
+            (3, 'Reserved'),
+            (1, 'HasFont'),
+            (1, 'HasColor'),
+            (1, 'HasYOffset'),
+            (1, 'HasXOffset'),
+        ]
+
+    def __TextColor(self):
+        if int(self['StyleFlags'].l['HasColor']):
+            try:
+                self.getparent(DefineText2)
+            except ValueError:
+                return RGB
+            return RGBA
+        return Empty
+
+    __FontID = lambda s: [Empty, UI16][ int(s['StyleFlags'].l['HasFont']) ]
+    __XOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasXOffset']) ]
+    __YOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasYOffset']) ]
+    __TextHeight = lambda s: [Empty, UI16][ int(s['StyleFlags']['HasFont']) ]
+
+    _fields_ = [
+        (__StyleFlags, 'StyleFlags'),
+        (__FontID, 'FontID'),
+        (__TextColor, 'TextColor'),
+        (__XOffset, 'XOffset'),
+        (__YOffset, 'YOffset'),
+        (__TextHeight, 'TextHeight'),
+        (UI8, 'GlyphCount'),
+        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].l)), 'GlyphEntries'),
     ]
 
 ###
@@ -154,7 +206,7 @@ class CXFORMWITHALPHA(pbinary.struct):
         (lambda self: _ifelse('HasAddTerms', self['Nbits'], 0), 'AlphaAddTerm'),
     ]
 
-###
+### filters
 class _DROPSHADOWFILTER_Flags(pbinary.struct):
     _fields_ = [
         (1, 'InnerShadow'),
@@ -284,7 +336,7 @@ class GRADIENTBEVELFILTER(pstruct.type):
         (_GRADIENTBEVELFILTER_Flags, 'Flags')
     ]
 
-###
+### XXX filters
 class FILTER(pstruct.type):
     def _iff(field, value, typ):
         def fn(self):
@@ -318,7 +370,7 @@ class CLIPACTIONS(pstruct.type):
         (UI32, 'ClipActionEndFlag')
     ]
 
-####
+#### XXX gradient structures
 class GRADRECORD(pstruct.type):
     def dyn_shape(self):
 #        if self.stash('shape') == 3:
@@ -350,105 +402,13 @@ class FOCALGRADIENT(pstruct.type):
         (FIXED8, 'FocalPoint')
     ]
 
-############
-class ENDSHAPERECORD(pbinary.struct):
-    pass
-
-class FILLSTYLE(pstruct.type):
-    def dyn_shape(self):
-#        if self.stash('shape') == 3:
-#            return RGBA
-
-        return RGB       
-
-    def color(self):
-        if int(self['FillStyleType']) == 0:
-            return self.dyn_shape()
-        return Empty
-
-    def gradient(self):
-        if int(self['FillStyleType']) in [0x10,0x12]:
-            return GRADIENT
-        if int(self['FillStyleType']) == 0x13:
-            return FOCALGRADIENT
-        return Empty
-
-    def iftypes(value, typ):
-        def fn(self):
-            if int(self['FillStyleType']) in value:
-                return typ
-            return Empty
-        return fn
-
-    _fields_ = [
-        (UI8, 'FillStyleType'),
-        (color, 'Color'),
-        (iftypes([0x10,0x12], MATRIX), 'GradientMatrix'),
-        (gradient, 'Gradient'),
-        (iftypes([0x40,0x41,0x42,0x43], UI16), 'BitmapId'),
-        (iftypes([0x40,0x41,0x42,0x43], MATRIX), 'BitmapMatrix')
-    ]
-
-class LINESTYLE(pstruct.type):
-    def dyn_shape(self):
-#        if self.stash('shape') == 3:
-#            return RGBA
-        return RGB       
-
-    _fields_ = [
-        (UI16, 'Width'),
-        (dyn_shape, 'Color'),
-    ]
-
-class FILLSTYLEARRAY(pstruct.type):
-    def _iff(field, value, typ):
-        def fn(self):
-            if self[field] == value:
-                return typ
-            return Empty
-        return fn
-
-    _fields_ = [
-        (UI8, 'FillStyleCount'),
-        (_iff('FillStyleCount', 0xff, UI16), 'FillStyleCountExtended'),
-        (lambda self: dyn.array(FILLSTYLE, self['FillStyleCount'])(), 'FillStyles')
-    ]
-
-class LINESTYLEARRAY(FILLSTYLEARRAY):
-    def _iff(field, value, typ):
-        def fn(self):
-            if self[field] == value:
-                return typ
-            return Empty
-        return fn
-
-    _fields_ = [
-        (UI8, 'LineStyleCount'),
-        (_iff('LineStyleCount', 0xff, UI16), 'LineStyleCountExtended'),
-        (lambda self: dyn.array(LINESTYLE, self['LineStyleCount'])(), 'LineStyles')
-    ]
-
-
-class _SHAPEWITHSTYLE_Num(pbinary.struct):
-    _fields_ = [
-        (4, 'FillBits'),
-        (4, 'LineBits')
-    ]
-
-class SHAPEWITHSTYLE(pstruct.type):
-    _fields_ = [
-        (FILLSTYLEARRAY, 'FillStyles'),
-        (LINESTYLEARRAY, 'LineStyles'),
-        (_SHAPEWITHSTYLE_Num, 'Num'),
-        (Empty, 'ShapeRecords')
-    ]
+### XXX shapes
+class SHAPERECORD(pbinary.struct):
+    id = 0
 
 if False:
     '''
     # FIXME: please implement this....
-    class SHAPERECORD(pbinary.struct):
-        id = 0
-
     class ENDSHAPERECORD(SHAPERECORD):
         _fields_ = [
             (1, 'TypeFlag'),
@@ -491,87 +451,155 @@ if False:
                 nextbit(fillbits)
     '''
 
-class FILLSTYLE(pstruct.type):
-    def _ifcolor(self):
-        if self['FillStyleType'] == 0:
-            if type(self.parent) == DefineShape3:
-                return RGBA
-            else:
-                return RGB
-        return Empty
+class SHAPERECORDLIST(pbinary.terminatedarray):
+    _object_ = SHAPERECORD
 
-    def _ifgradient(self):
-        if int(self['FillStyleType']) in [0x10, 0x12]:
+    def isTerminator(self, value):
+        raise NotImplemenetedError
+
+### shape styles
+class FILLSTYLE(pstruct.type):
+    def __Color(self):
+        type = self['FillStyleType'].l.number()
+        tag = DefineShape   # FIXME
+        if type != 0:
+            return Empty
+
+        if tag.type in (DefineShape.type,DefineShape2.type):
+            return RGB
+        return RGBA
+
+    def __has(types, result):
+        def has(self):
+            if self['FillStyleType'].l.number() in types:
+                return result
+            return Empty
+        return has
+
+    def __Gradient(self):
+        type = self['FillStyleType'].l.number()
+        if type in (0x10,0x12):
             return GRADIENT
-        elif int(self['FillStyleType']) == 0x13:
+        if type == 0x13:
             return FOCALGRADIENT
         return Empty
 
     _fields_ = [
         (UI8, 'FillStyleType'),
-        (_ifcolor, 'Color'),
-        ( _ifelse(lambda x: int(x['FillStyleType']) in [0x10, 0x12], MATRIX, Empty), 'GradientMatrix'),
-        ( _ifgradient, 'Gradient'),
-        ( _ifelse( lambda x: int(x['FillStyleType']) in [0x40, 0x41, 0x42, 0x43], UI16, Empty), 'BitmapId' ),
-        ( _ifelse( lambda x: int(x['FillStyletype']) in [0x40, 0x41, 0x42, 0x43], MATRIX, Empty), 'BitmapMatrix' )
+        (__Color, 'Color'),
+        (__has((0x10,0x12,0x13), MATRIX), 'GradientMatrix'),
+        (__Gradient, 'Gradient'),
+        (__has((0x40,0x41,0x42,0x43), UI16), 'BitmapId'),
+        (__has((0x40,0x41,0x42,0x43), MATRIX), 'BitmapMatrix'),
     ]
 
+
 class LINESTYLE(pstruct.type):
-    def _ifshape(self):
-        if type(self.parent) == DefineShape3:
+    def __Color(self):
+        type = DefineShape.type  # FIXME
+        if type == DefineShape3.type:
             return RGBA
-        return RGB
+        if type in (DefineShape.type,DefineShape2.type):
+            return RGB
+        raise NotImplementedError
 
     _fields_ = [
         (UI16, 'Width'),
-        (_ifshape, 'Color'),
-    ]
-
-class _LINESTYLE2_style(pbinary.struct):
-    _fields_ = [
-        (2, 'StartCapStyle'),
-        (2, 'JoinStyle'),
-        (1, 'HasFillFlag'),
-        (1, 'NoHScaleFlag'),
-        (1, 'NoVScaleFlag'),
-        (1, 'PixelHintingFlag'),
-        (5, 'Reserved'),
-        (1, 'NoClose'),
-        (2, 'EndCapStyle')
+        (__Color, 'Color'),
     ]
 
 class LINESTYLE2(pstruct.type):
-    def _ifshape(self):
-        if type(self.parent) == DefineShape3:
-            return RGBA
-        return RGB
-
+    class __Style(pbinary.struct):
+        _fields_ = [
+            (2, 'StartCapStyle'),
+            (2, 'JoinStyle'),
+            (1, 'HasFillFlag'),
+            (1, 'NoHScaleFlag'),
+            (1, 'NoVScaleFlag'),
+            (1, 'PixelHintingFlag'),
+            (5, 'Reserved'),
+            (1, 'NoClose'),
+            (2, 'EndCapStyle'),
+        ]
     _fields_ = [
         (UI16, 'Width'),
-        (_LINESTYLE2_style, 'Style'),
-        (_ifelse( lambda x: x['Style']['JoinStyle'] == 2, UI16, Empty), 'MiterLimitFactor'),
-        (_ifelse( lambda x: x['Style']['HasFillFlag'] == 0, RGBA, Empty), 'Color'),
-        (_ifelse( lambda x: x['Style']['HasFillFlag'] == 1, FILLSTYLE, Empty), 'FillType')
+        (__Style, 'Style'), 
+        (lambda s: UI16 if s['Style'].l['JoinStyle'] == 2 else Empty, 'MiterLimitFactor'),
+        (lambda s: RGBA if s['Style'].l['HasFillFlag'] == 0 else Empty, 'Color'),
+        (lambda s: FILLSTYLE if s['Style'].l['HasFillFlag'] == 1 else Empty, 'FillType'),
     ]
 
 class FILLSTYLEARRAY(pstruct.type):
     _fields_ = [
         (UI8, 'FillStyleCount'),
-        (_ifeq('FillStylecount', 0xff, UI16, Empty), 'FillStyleCountExtended'),
-        (lambda self: dyn.array(FILLSTYLE, self['FillStyleCount'])(), 'FillStyles' )
+        (lambda s: UI16 if s['FillStyleCount'].l.number() == 0xff else Empty, 'FillStyleCountExtended'),
+        (lambda s: dyn.array(FILLSTYLE, s.getcount()), 'FillStyles'),
     ]
 
+    def getcount(self):
+        return self['FillStyleCountExtended'] if self['FillStyleCount'].number() == 0xff else self['FillStyleCount']
+
 class LINESTYLEARRAY(pstruct.type):
-    def _dynstyles(self):
-        if type(self.parent) == DefineShape4:
-            return dyn.array(LINESTYLE2, self['LineStyleCount'])()
-        return dyn.array(LINESTYLE, self['LineStyleCount'])()
+    def __LineStyles(self):
+        type = DefineShape.type  # FIXME
+        if type == DefineShape4.type:
+            return dyn.array(LINESTYLE2, s.getcount())
+        if type in (DefineShape.type,DefineShape2.type,DefineShape3.type):
+            return dyn.array(LINESTYLE, s.getcount())
+        raise NotImplementedError
 
     _fields_ = [
         (UI8, 'LineStyleCount'),
-        (_ifeq('LineStylecount', 0xff, UI16, Empty), 'LineStyleCountExtended'),
-        ( _dynstyles, 'LineStyles' )
+        (lambda s: UI16 if s['LineStyleCount'].l.int() == 0xff else Empty, 'LineStyleCountExtended'),
+        (__LineStyles, 'LineStyles'),
     ]
+
+    def getcount(self):
+        return self['FillStyleCountExtended'] if self['FillStyleCount'] == 0xff else self['FillStyleCount']
+
+class SHAPEWITHSTYLE(pstruct.type):
+    class __NumBits(pbinary.struct):
+        _fields_ = [
+            (4, 'NumFillBits'),
+            (4, 'NumLineBits'),
+        ]
+
+    _fields_ = [
+        (FILLSTYLEARRAY, 'FillStyles'),
+        (LINESTYLEARRAY, 'LineStyles'),
+        (__NumBits, 'NumBits'),
+        (SHAPERECORDLIST, 'ShapeRecords'),
+    ]
+
+#### sound
+class SOUNDENVELOPE(pstruct.type):
+    _fields_ = [
+        (UI32, 'Pos44'),
+        (UI16, 'LeftLevel'),
+        (UI16, 'RightLevel'),
+    ]
+
+class SOUNDINFO(pstruct.type):
+    class __flags(pbinary.struct):
+        _fields_ = [
+            (2, 'Reserved'),
+            (1, 'SyncStop'),
+            (1, 'SyncNoMultiple'),
+            (1, 'HasEnvelope'),
+            (1, 'HasLoops'),
+            (1, 'HasOutPoint'),
+            (1, 'HasInPoint'),
+        ]
+    _fields_ = [
+        (__flags, 'Flags'),
+        (lambda s: UI32 if s['Flags'].l['HasInPoint'] else Empty, 'InPoint'),
+        (lambda s: UI32 if s['Flags']['HasOutPoint'] else Empty, 'OutPoint'),
+        (lambda s: UI16 if s['Flags']['HasLoops'] else Empty, 'LoopCount'),
+        (lambda s: UI8 if s['Flags']['HasEnvelope'] else Empty, 'EnvPoints'),
+        (lambda s: dyn.array(SOUNDENVELOPE, s['EnvPoints'].l.int()) if s['Flags']['HasEnvelope'] else Empty, 'EnvelopeRecords'),
+    ]
+
+## XXX font
 
 if __name__ == '__main__':
     import ptypes

@@ -347,11 +347,12 @@ if __name__ == '__main__':
         print z.l
 
     if False:
-        class header(pbinary.littleendian(pbinary.struct)):
+        class header(pbinary.struct):
             _fields_ = [
                 (12, 'instance'),
                 (4, 'version'),
             ]
+        header = pbinary.littleendian(header)
 
         class wtf(pstruct.type):
             _fields_ = [

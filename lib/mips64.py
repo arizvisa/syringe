@@ -7,17 +7,17 @@ def consume(iterable, bits=(32-6,)):
     result = []
     for b in bits:
         s = abs(b)
-        
+
         sf,mask = 2**(s-1), (2**(s-1))-1
         x = source.consume(s)
-        
+
         if b < 0:
             if x & sf:
                 x = x & mask
                 x *= -1
             else:
                 x &= mask
-                
+
         result.append(x)
 
     return special,tuple(result)
@@ -28,7 +28,7 @@ def decode(string, *args, **kwds):
 if True:
     a = bitmap.new(0x0b058547, 32)
     b = bitmap.data(a)
-        
+
     print bitmap.string(a)
     j,(instr_index,) = decode(b)
     print hex(instr_index<<2)

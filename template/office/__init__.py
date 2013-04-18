@@ -8,8 +8,9 @@ class RecordUnknown(dyn.block(0)):
         return '.'.join(names)
 
 class RecordHeader(pstruct.type):
-    class __verinstance(pbinary.littleendian(pbinary.struct)) :
+    class __verinstance(pbinary.struct):
         _fields_=[(12,'instance'),(4,'ver')]
+    __verinstance = pbinary.littleendian(__verinstance)
 
     _fields_ = [
         (__verinstance, 'ver/inst'),
@@ -39,10 +40,18 @@ class RecordGeneral(pstruct.type):
         t = int(self['header'].l['type'])
         l = int(self['header']['length'])
         return dyn.clone(self.Record.get(t, length=l), blocksize=lambda s:l)
+
+    def __extra(self):
+        bs = self.blocksize()
+        s = self.size()
+        if bs > s:
+            return dyn.block(bs - s)
+        return ptype.empty
         
     _fields_ = [
         (RecordHeader, 'header'),
         (__data, 'data'),
+        (__extra, 'extra'),
     ]
 
     def blocksize(self):

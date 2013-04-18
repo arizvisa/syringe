@@ -474,16 +474,31 @@ class random(base):
 class proxy(string):
     '''proxy to the source of a specific ptype'''
     def __init__(self, source):
+        assert self.value is not None
         self.type = source
+        self.offset = 0
+        self.baseoffset = source.getoffset()
+        self.size = source.blocksize()
 
     def seek(self, offset):
-        return self.type.source.seek(offset)
+        ofs = self.offset
+        self.offset = offset
+        return ofs
 
     def consume(self, amount):
-        return self.type.source.consume(amount)
+        bo,ofs = self.baseoffset,self.offset
+        self.type.source.seek(bo+ofs)
+        result = self.type.source.consume(amount)
+        self.offset += amount
+        return result
 
     def store(self, data):
+        self.type.source.seek(bo+ofs)
+        self.offset += amount
         return self.type.source.store(data)
+
+    def __repr__(self):
+        return '%s -> %x -> %s'% (super(proxy, self).__repr__(), self.baseoffset, self.name())
 
 if __name__ == '__main__' and 0:
     import array

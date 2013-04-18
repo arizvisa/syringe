@@ -135,10 +135,16 @@ class WLOC(pstruct.type):
 @AtomType.define
 class FileType(pstruct.type):
     type = 'ftyp'
+    class __Compatible_Brands(parray.block):
+        _object_ = pQTInt
+        def blocksize(self):
+            bs = self.p.blocksize()
+            return bs-self.size()
+        
     _fields_ = [
         (pQTInt, 'Major_Brand'),
         (pQTInt, 'Minor_Version'),
-        (lambda s: dyn.clone(pQTIntArray,blocksize=lambda s: s.parent.blocksize()-8), 'Compatible_Brands')      # XXX: this isn't working
+        (__Compatible_Brands, 'Compatible_Brands')      # XXX: this isn't working
     ]
 
 @AtomType.define
@@ -331,8 +337,7 @@ class stts(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-#        (lambda x: dyn.array(stts.entry, x['Number of entries'].l.int() - 1), 'Entries')
-        (lambda x: dyn.array(pQTInt, x['Number of entries'].l.int()), 'Entries')
+        (lambda x: dyn.array(stts.entry, x['Number of entries'].l.int()), 'Entries')
     ]
 
 ## stsc

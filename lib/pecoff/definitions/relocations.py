@@ -98,11 +98,12 @@ class Relocation(pstruct.type):
         return data
 
 ## per data directory relocations
-class BaseRelocationEntry(pbinary.littleendian(pbinary.struct)):
+class BaseRelocationEntry(pbinary.struct):
     _fields_ = [
         (4, 'Type'),
         (12, 'Offset'),
     ]
+BaseRelocationEntry = pbinary.littleendian(BaseRelocationEntry)
 
 class BaseRelocationArray(parray.type):
     _object_ = BaseRelocationEntry

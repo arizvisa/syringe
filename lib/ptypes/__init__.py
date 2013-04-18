@@ -2,8 +2,9 @@ import ptype,parray,pstruct
 import pint,pfloat,pstr
 import pbinary
 
-import dyn,provider
+import dyn,provider as prov
 import utils
+provider = prov
 
 #__all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn,provider,utils'.split(',')
 __all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn'.split(',')
@@ -11,11 +12,11 @@ __all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn'.split(',')
 ## globally changing the ptype provider
 def setsource(prov):
     '''Sets the default ptype provider to the one specified'''
-#    assert issubclass(prov.__class__, provider.provider), 'Needs to be of type %s'% repr(provider.provider)
+#    assert issubclass(prov.__class__, prov.provider), 'Needs to be of type %s'% repr(prov.provider)
     prov.seek
     prov.consume
     prov.store
-    ptype.type.source = prov
+    ptype.base.source = prov
 
 ## globally changing the endianness of all new pint types
 from pint import bigendian,littleendian

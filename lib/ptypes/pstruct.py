@@ -1,5 +1,5 @@
 '''base structure element'''
-import ptype,utils,logging
+import ptype,utils,logging,pbinary
 
 class __pstruct_generic(ptype.container):
     __fastindex = dict  # our on-demand index lookup for .value
@@ -53,8 +53,8 @@ class type(__pstruct_generic):
             This contains which elements the structure is composed of
     '''
     _fields_ = None     # list of (type,name) tuples
-
-    initialized = property(fget=lambda s: super(type, s).initialized and len(s.value) == len(s._fields_))
+    initializedQ = lambda s: super(type, s).initializedQ() and len(s.value) == len(s._fields_)
+    ignored = ptype.container.ignored.union(('_fields_',))
 
     def contains(self, offset):
         return super(ptype.container, self).contains(offset)
@@ -71,6 +71,7 @@ class type(__pstruct_generic):
                     self.value.append(n)
                     if ptype.iscontainer(t) or ptype.isresolveable(t):
                         n.load()
+                    
                     ofs += n.blocksize()
 
             except StopIteration, e:
@@ -79,17 +80,20 @@ class type(__pstruct_generic):
         return result
 
     def details(self):
-        row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, value.summary()])
-        result = [row(name,value) for (t,name),value in zip(self._fields_, self.value)]
-        if len(result) > 0:
-            return '\n'.join(result)
-        return '[%x] empty []'%self.getoffset()
+        if self.initializedQ():
+            row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, value.summary()])
+            result = [row(name,value) for (t,name),value in zip(self._fields_, self.value)]
+            if len(result) > 0:
+                return '\n'.join(result)
+            return '[%x] empty []'%self.getoffset()
+
+        result = ['[%x] %s ???'%(self.getoffset(), name) for t,name in self._fields_]
+        return '\n'.join(result)
 
     def repr(self):
         # print out a friendly header for the structure
-        if self.__name__ is None:
-            return '%s\n%s'%(self.name(),self.details())
-        return '%s %s\n%s'%(self.name(),self.__name__,self.details())
+        prop = '{%s}'% ','.join('%s=%s'%(k,repr(v)) for k,v in super(type,self).properties().iteritems())
+        return '%s %s\n%s'%(self.name(),prop,self.details())
 
     def set(self, *tuples, **allocator):
         # allocate type if we're asked to

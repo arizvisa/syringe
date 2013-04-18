@@ -3,11 +3,12 @@ import __init__
 class Record(__init__.Record): cache = {}
 class RecordGeneral(__init__.RecordGeneral):
     Record=Record
-    class __header(pbinary.littleendian(pbinary.struct)):
+    class __header(pbinary.struct):
         _fields_ = [
             (12, 'instance'),
             (4, 'version'),
         ]
+    __header = pbinary.littleendian(__header)
 
     def __data(self):
         t = int(self['type'].l)

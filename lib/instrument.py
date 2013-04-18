@@ -33,7 +33,7 @@ class instruction(object):
 
         hooks = total_hooks + total_glue
         lifted = total_lifted + total_glue
-        
+
         self.__codearena = self.memorymanager.load( hooks + lifted )
 
         # start populating memory
@@ -253,7 +253,7 @@ if __name__ == '__main__':
         self = instrument.instruction(mm)
 
         #address = 0x00402f64
-        #address = 0x00401f0d 
+        #address = 0x00401f0d
         address = int(sys.argv[2],16)
         self[address] = '\xcc\xcc\xcc\xcc\xcc'
         self.commit()

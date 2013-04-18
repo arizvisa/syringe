@@ -352,6 +352,26 @@ if __name__ == '__main__':
             raise Success
         print b,a, repr(a.serialize())
 
+    @TestCase
+    def Test11():
+        raise NotImplementedError
+
+#       >>> y[3][2]['data']
+#       Traceback (most recent call last):
+#         File "<stdin>", line 1, in <module>
+#         File "c:\Users\user\work\syringe\lib\ptypes\ptype.py", line 247, in __repr__
+#           return self.repr()
+#         File "c:\Users\user\work\syringe\lib\ptypes\ptype.py", line 498, in repr
+#           return '[%x] %s %s %s'%( self.getoffset(), self.name(), prop, self.details())
+#         File "c:\Users\user\work\syringe\lib\ptypes\pint.py", line 205, in details
+#           value = self.lookupByValue(res)
+#         File "c:\Users\user\work\syringe\lib\ptypes\pint.py", line 158, in lookupByValue
+#           for k,v in cls._values_:
+#       ValueError: too many values to unpack
+#       >>> y[3][2]['data']._values_
+#       ['name', 'constant']
+
+
 if __name__ == '__main__':
     results = []
     for t in TestCaseList:

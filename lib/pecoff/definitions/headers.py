@@ -141,7 +141,7 @@ if False:   # this hasn't ever really been tested
 
 ### NtHeader
 class FileHeader(pstruct.type):
-    class __Characteristics(pbinary.littleendian(pbinary.struct)):
+    class __Characteristics(pbinary.struct):
         _fields_ = [
             (1, 'BYTES_REVERSED_HI'),
             (1, 'UP_SYSTEM_ONLY'),
@@ -160,6 +160,7 @@ class FileHeader(pstruct.type):
             (1, 'EXECUTABLE_IMAGE'),
             (1, 'RELOCS_STRIPPED'),
         ]
+    __Characteristics = pbinary.littleendian(__Characteristics)
         
     _fields_ = [
         (word, 'Machine'),
@@ -179,7 +180,7 @@ class FileHeader(pstruct.type):
         return res
 
 class OptionalHeader(pstruct.type):
-    class __DllCharacteristics(pbinary.littleendian(pbinary.struct)):
+    class __DllCharacteristics(pbinary.struct):
         _fields_ = [
             (1, 'TERMINAL_SERVER_AWARE'),
             (1, 'reserved_1'),
@@ -193,6 +194,7 @@ class OptionalHeader(pstruct.type):
             (1, 'DYNAMIC_BASE'),
             (6, 'reserved_10'),
         ]
+    __DllCharacteristics = pbinary.littleendian(__DllCharacteristics)
 
     def __DataDirectory(self):
         length = self['NumberOfRvaAndSizes'].load().int()

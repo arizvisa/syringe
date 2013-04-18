@@ -52,8 +52,9 @@ class RT_CurrentUserAtom(pstruct.type):
 
 ## PowerPoint Document stream
 class PersistDirectoryEntry(pstruct.type):
-    class __info(pbinary.littleendian(pbinary.struct)):
+    class __info(pbinary.struct):
         _fields_ = [(12, 'cPersist'), (20,'persistId')]
+    __info = pbinary.littleendian(__info)
 
     _fields_ = [
         (__info, 'info'),
