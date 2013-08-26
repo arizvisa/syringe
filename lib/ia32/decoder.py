@@ -1,5 +1,6 @@
 #instruction = (prefix, opcode, modrm, sib, disp, immediate)
-import bitmap,optable,typesize
+from ptypes import bitmap
+import optable,typesize
 
 prefix_string = "\x26\x2e\x36\x3e\x64\x65\x66\x67\xf0\xf2\xf3"
 prefix_lookup = dict([(_,None) for _ in prefix_string])

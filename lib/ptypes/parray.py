@@ -127,12 +127,8 @@ class type(__parray_generic):
         return result
 
     def details(self):
-        if self.initializedQ():
-            res = repr(''.join(self.serialize()))
-            length = len(self)
-        else:
-            res = '???'
-            length = 0 if self.value is None else len(self.value)
+        res = super(type,self).details()
+        length = len(self)
 
         if ptype.istype(self._object_):
             obj = self._object_().name()

@@ -1,6 +1,4 @@
 import os,sys
-sys.path.append('f:/work/syringe.git/lib')
-
 import pecoff
 from ptypes import utils
 

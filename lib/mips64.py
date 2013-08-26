@@ -1,4 +1,4 @@
-import bitmap
+from ptypes import bitmap
 
 def consume(iterable, bits=(32-6,)):
     source = bitmap.consumer(iterable)

@@ -1,28 +1,33 @@
 import ptypes
-from ptypes import pint,pstruct,dyn
+from ptypes import pint,pfloat,dyn
 
 ## primitives
-class byte(pint.uint8_t): pass
-class word(pint.uint16_t): pass
-class dword(pint.uint32_t): pass
-class float(pint.int32_t): pass     # XXX: not implemented yet
-class double(pint.int64_t): pass     # XXX: not implemented yet
+byte = dyn.clone(pint.uint8_t, summary=lambda s:s.details())
+word = dyn.clone(pint.uint16_t, summary=lambda s:s.details())
+dword = dyn.clone(pint.uint32_t, summary=lambda s:s.details())
+float = dyn.clone(pfloat.single, summary=lambda s:s.details())
+double = dyn.clone(pfloat.double, summary=lambda s:s.details())
 
-uint8 = pint.uint8_t
-int8 = pint.int8_t
-int16 = pint.int16_t
-uint16 = pint.uint16_t
-int32 = pint.int32_t
-uint32 = pint.uint32_t
-off_t = pint.uint32_t
-addr_t = pint.uint32_t
+uint8 = dyn.clone(pint.uint8_t, summary=lambda s:s.details())
+int8 = dyn.clone(pint.int8_t, summary=lambda s:s.details())
+int16 = dyn.clone(pint.int16_t, summary=lambda s:s.details())
+uint16 = dyn.clone(pint.uint16_t, summary=lambda s:s.details())
+int32 = dyn.clone(pint.int32_t, summary=lambda s:s.details())
+uint32 = dyn.clone(pint.uint32_t, summary=lambda s:s.details())
+
+class off_t(pint.uint32_t):
+    def summary(self):
+        return self.details()
+class addr_t(pint.uint32_t):
+    def summary(self):
+        return self.details()
 
 import datetime
 class TimeDateStamp(uint32):
     epoch = datetime.datetime(1970, 1, 1, 0, 0, 0)
-    def __repr__(self):
+    def details(self):
         x = self.epoch + datetime.timedelta( seconds=int(self) )
-        return '%s %s'%(self.__class__, x.strftime('%F %T'))
+        return x.strftime('%Y-%m-%d %H:%M:%S')
 
 class IMAGE_COMDAT_SELECT(ptypes.pint.enum, byte):
     _values_ = [

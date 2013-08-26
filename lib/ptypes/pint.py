@@ -1,11 +1,21 @@
-'''ptypes with a numerical sort of feel'''
-import ptype,bitmap
+import ptype,bitmap,config
 
+# FIXME: this is bad form and will leak a few more bytes of memory everytime the byteorder is set.
 def setbyteorder(endianness):
+    global littleendian,bigendian
+    assert endianness in (config.byteorder.bigendian,config.byteorder.littleendian), repr(endianness)
+    xform = bigendian if endianness is config.byteorder.bigendian else littleendian
+
+    # fetch all integer_t classes in this module
+    res = []
     for k,v in globals().items():
         if hasattr(v, '__bases__') and issubclass(v, integer_t) and v is not integer_t:
-            globals()[k] = endianness(v)
+            res.append((k,v))
         continue
+
+    # set their endianness
+    for k,v in res:
+        globals()[k] = xform(v)
     return
 
 def bigendian(ptype):
@@ -102,9 +112,9 @@ class integer_t(ptype.type):
 
     def flip(self):
         '''Returns an integer with the endianness flipped'''
-        if self.byteorder is bigendian:
+        if self.byteorder is config.byteorder.bigendian:
             return self.cast(littleendian(self.__class__))
-        elif self.byteorder is littleendian:
+        elif self.byteorder is config.byteorder.littleendian:
             return self.cast(bigendian(self.__class__))
         assert False is True, 'Unexpected byte order'''
 
@@ -153,7 +163,7 @@ class enum(integer_t):
     _values_ = list( tuple(('name', 'constant')) )
 
     @classmethod
-    def lookupByValue(cls, value):
+    def byValue(cls, value):
         '''Lookup the string in an enumeration by it's first-defined value'''
         for k,v in cls._values_:
             if v == value:
@@ -161,7 +171,7 @@ class enum(integer_t):
         raise KeyError
 
     @classmethod
-    def lookupByName(cls, name):
+    def byName(cls, name):
         '''Lookup the value in an enumeration by it's first-defined name'''
         for k,v in cls._values_:
             if k == name:
@@ -172,7 +182,7 @@ class enum(integer_t):
         '''Can compare an enumeration as it's string or integral representation'''
         try:
             if type(value) == str:
-                return cmp(self.lookupByValue(int(self)), value)
+                return cmp(self.byValue(int(self)), value)
 
         except KeyError:
             pass
@@ -183,7 +193,7 @@ class enum(integer_t):
         try:
             # if getattr fails, then assume the user wants the value of
             #     a particular enum value
-            return self.lookupByName(name)
+            return self.byName(name)
 
         except KeyError:
             raise AttributeError("'%s' object has no attribute '%s'"% (self.name(), name))
@@ -193,7 +203,7 @@ class enum(integer_t):
         '''Return value as a string'''
         res = int(self)
         try:
-            value = self.lookupByValue(res) + '(0x%x)'% res
+            value = self.byValue(res) + '(0x%x)'% res
         except KeyError:
             value = '0x%x'% res
         return value
@@ -202,7 +212,7 @@ class enum(integer_t):
         if self.initialized:
             res = int(self)
             try:
-                value = self.lookupByValue(res)
+                value = self.byValue(res)
             except KeyError:
                 value = '0x%x'% res
 
@@ -214,7 +224,7 @@ class enum(integer_t):
         return self.details()
 
     def __getitem__(self, name):
-        return self.lookupByName(name)
+        return self.byName(name)
 
     ## XXX: not sure what to name these 2 methods, but i've needed them on numerous occasions
     ##      for readability purposes
@@ -227,6 +237,8 @@ class enum(integer_t):
     def enumerations(cls):
         '''Return all values that have been defined in this'''
         return [v for k,v in cls._values_]
+
+setbyteorder(config.integer.byteorder)
 
 if __name__ == '__main__':
     import ptype,parray
@@ -298,7 +310,7 @@ if __name__ == '__main__':
 
     @TestCase
     def Test5():
-        pint.setbyteorder(pint.bigendian)
+        pint.setbyteorder(config.byteorder.bigendian)
         a = pint.uint32_t(source=provider.string(string1)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
@@ -306,7 +318,7 @@ if __name__ == '__main__':
 
     @TestCase
     def Test6():
-        pint.setbyteorder(pint.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         a = pint.uint32_t(source=provider.string(string2)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
@@ -314,7 +326,7 @@ if __name__ == '__main__':
 
     @TestCase
     def Test7():
-        pint.setbyteorder(pint.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         s = '\xff\xff\xff\xff'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('l',s)
@@ -324,7 +336,7 @@ if __name__ == '__main__':
 
     @TestCase
     def Test8():
-        pint.setbyteorder(pint.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         s = '\x00\x00\x00\x80'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('l',s)
@@ -334,7 +346,7 @@ if __name__ == '__main__':
 
     @TestCase
     def Test9():
-        pint.setbyteorder(pint.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         s = '\xff\xff\xff\x7f'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('l',s)
@@ -344,7 +356,7 @@ if __name__ == '__main__':
 
     @TestCase
     def Test10():
-        pint.setbyteorder(pint.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         s = '\x00\x00\x00\x00'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('l',s)

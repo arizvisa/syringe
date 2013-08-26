@@ -493,12 +493,13 @@ class proxy(string):
         return result
 
     def store(self, data):
+        bo,ofs = self.baseoffset,self.offset
         self.type.source.seek(bo+ofs)
-        self.offset += amount
+        self.offset += len(data)
         return self.type.source.store(data)
 
     def __repr__(self):
-        return '%s -> %x -> %s'% (super(proxy, self).__repr__(), self.baseoffset, self.name())
+        return '%s -> %x -> %s'% (super(proxy, self).__repr__(), self.baseoffset, self.type.name())
 
 if __name__ == '__main__' and 0:
     import array

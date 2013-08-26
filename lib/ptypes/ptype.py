@@ -1,6 +1,6 @@
 '''base ptype element'''
 __all__ = 'istype,iscontainer,type,container,rethrow,none,assign'.split(',')
-import bitmap,provider,utils
+import bitmap,provider,utils,config
 import types,logging
 import inspect
 from utils import assign
@@ -161,8 +161,8 @@ class base(object):
 
     source = None       # ptype.prov
 
-    attrs = None        # {...}
-    ignored = set(('source','parent','attrs','value','__name__'))
+    attributes = None        # {...}
+    ignored = set(('source','parent','attrs','value','__name__','offset'))
 
     parent = None       # ptype.base
     p = property(fget=lambda s: s.parent)   # abbr to get to .parent
@@ -171,13 +171,13 @@ class base(object):
     v = property(fget=lambda s: s.value)   # abbr to get to .value
 
     def __init__(self, **attrs):
-        """Create a new instance of object. Will assign provided named arguments to self.attrs"""
+        """Create a new instance of object. Will assign provided named arguments to self.attributes"""
         try:
             self.source = self.source or provider.memory()
         except AttributeError:
             self.source = provider.memory()
         self.parent = None
-        self.attrs = {}
+        self.attributes = {}
         self.update_attributes(attrs)
 
     position = None     # ()
@@ -188,22 +188,34 @@ class base(object):
     def getposition(self):
         return self.position
 
-    def update_attributes(self, attrs):
-        """Update the attributes that will be assigned to sub-elements using the ``attrs`` dict"""
-        if 'recurse' not in attrs:
-            recurse=attrs   # XXX: copy all attrs into recurse, since we conditionaly propogate
-        else:
-            recurse=attrs['recurse']
-            del(attrs['recurse'])
+    def update_attributes(self, attrs={}, **moreattrs):
+        """Update the attributes that will be assigned to object.
 
-        # disallow which attributes are not allowed to be recursed into any child elements
+        Any attributes defined under the 'recurse' key will be propogated to any sub-elements.
+        """
+        attrs = dict(attrs)
+        attrs.update(moreattrs)
+        recurse = dict(attrs.pop('recurse')) if attrs.has_key('recurse') else {}
         ignored = self.ignored
-        self.attrs.update(dict(((k,v) for k,v in recurse.iteritems() if k not in ignored and not callable(v))))
 
-        # update self if user specified
-        attrs.update(recurse)
-        for k,v in attrs.items():
+        # update self with all attributes
+        res = {}
+        res.update(recurse)
+        res.update(attrs)
+        for k,v in res.iteritems():
             setattr(self, k, v)
+
+        # filter out ignored attributes from the recurse dictionary
+        recurse = dict(((k,v) for k,v in recurse.iteritems() if k not in ignored and not callable(v)))
+
+        # update self (for instantiated elements)
+        self.attributes.update(recurse)
+
+        # update sub-elements with recursive attributes
+        if recurse and issubclass(self.__class__, container) and self.value is not None:
+            for x in self.value:
+                x.update_attributes(recurse=recurse)
+
         return self
 
     initialized = property(fget=lambda s: s.initializedQ())
@@ -211,7 +223,7 @@ class base(object):
         raise NotImplementedError
 
     def __nonzero__(self):
-        raise self.initializedQ()
+        return self.initializedQ()
 
     def traverse(self, edges, filter=lambda node:True, *args, **kwds):
         """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
@@ -265,10 +277,48 @@ class base(object):
         raise NotImplementedError('Class %s must implement deserialize_block'% self.shortname())
 
     def hexdump(self, **options):
-        """Return a hexdump of the type using utils.hexdump(**options)"""
-        if self.initializedQ():
-            return utils.hexdump( self.serialize(), offset=self.getoffset(), **options )
-        raise ValueError('%s is uninitialized'% self.name())
+        """Return a hexdump of the type using utils.hexdump(**options)
+
+        options can provide formatting specifiers
+        max=x -- sets the maximum character length to the one specified
+        summary=1 -- return a hexdump clamped to a height specified by /max/
+        oneline=1 -- returns a string repr clamped to a width specified by /max/
+        """
+        if not self.initializedQ():
+            raise ValueError('%s is uninitialized'% self.name())
+
+        ofs,buf = self.getoffset(),self.serialize()
+        bs = self.blocksize()
+
+        # return a summary of the entire block.
+        if 'summary' in options:
+            rows = bs / 16
+            max = options.get('max', config.summary.multiline)    # XXX: maximum number of rows to display
+            if rows > max:
+                result = []
+                half = max/2
+                bottom = len(buf)-(half*16)
+                skip = len(buf) - half*16*2
+                result.append( utils.hexdump(buf[:half*16], offset=ofs, lines=half) )
+                result.append('%04x  ...skipping %d rows (0x%x bytes)...'% (ofs+half*16, skip/16, skip))
+                result.append( utils.hexdump(buf[-half*16:], offset=ofs+bottom, lines=half) )
+                return utils.indent('\n'.join(result))
+
+            del options['summary']
+        elif 'oneline' in options:
+            max = options.get('max', config.summary.oneline)    # XXX: maximum width
+            if bs > max:
+                left = repr(buf[:max/2])
+                right = repr(buf[-max/2:])
+                x = bs-max                  # FIXME: not only is the width /max/ hardcoded, but
+                                            #        this doesn't actually apply the length 
+                                            #        constraint to the outputted string.
+                                            #        
+                return '%s ... skipped %d bytes ... %s'% (left, x, right)
+            del options['oneline']
+
+        options.setdefault('offset', ofs)
+        return utils.indent( utils.hexdump(buf, **options) )
 
     def properties(self):
         """Return a tuple of properties/characteristics describing current state of object to the user"""
@@ -284,13 +334,13 @@ class base(object):
     def details(self):
         """Return a detailed __repr__ of the type"""
         if self.initializedQ():
-            return repr(''.join(self.serialize()))
+            return repr(self.serialize())
         return '???'
 
     def summary(self):
         """Return a summary __repr__ of the type"""
         if self.initializedQ():
-            return repr(''.join(self.serialize()))
+            return repr(self.serialize())
         return '???'
 
     def getparent(self, type=None):
@@ -305,12 +355,12 @@ class base(object):
         if self.__class__ == type:
             return self
 
-        for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)):
+        for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)):
             if issubclass(x.__class__,type) or x.__class__ == type:
                 return x
             continue
 
-        raise ValueError("ptype.base.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None)))))
+        raise ValueError("ptype.base.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))))
 
     def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset())):
         """
@@ -318,9 +368,33 @@ class base(object):
 
         By default this returns a string describing the type and location of each structure.
         """
-        path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.getparent() is not None))
+        path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None))
         path = [ fn(x) for x in path ]
         return list(reversed(path))
+
+    def new(self, ptype, **attrs):
+        """Create a new instance of ``type`` from the current ptype with the provided ``attrs``"""
+        offset = attrs.get('offset',0)
+        res = force(ptype, self)
+        assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
+
+        if 'recurse' in attrs:
+            attrs['recurse'].update(self.attributes)
+        else:
+            attrs['recurse'] = self.attributes
+
+        # instantiate an instance if we're given a type
+        if istype(res):
+            res = res(**attrs)
+
+        # update the instance's properties
+        res.parent = self
+        res.__name__ = attrs.get('__name__', hex(id(res)) )
+        res.setoffset(offset)
+
+        if 'source' not in attrs:
+            res.source = self.source
+        return res
 
 class type(base):
     """A very most atomical ptype.
@@ -344,8 +418,8 @@ class type(base):
     length = 0      # int
     initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()    # bool
     padding = utils.padding.source.zero()
-    attrs = None    # dict of attributes that will get assigned to any child elements
-    ignored = base.ignored.union(('source','parent','attrs','value','__name__'))
+    attributes = None    # dict of attributes that will get assigned to any child elements
+    ignored = base.ignored.union(('source','parent','attrs','value','__name__','length','position'))
     position = 0,
     #__name__ = '[unnamed-type]'
 
@@ -419,30 +493,13 @@ class type(base):
     offset = property(fget=getoffset, fset=setoffset)
 
     def newelement(self, ptype, name='', ofs=0, **attrs):
-        """Create a new element of type ``ptype`` with the provided ``name`` and ``ofs``
+        """Create a sub-element of ``ptype`` with the provided ``name`` and ``ofs``
 
         If any ``attrs`` are provided, this will assign them to the new instance.
         The newly created instance will inherit the current object's .source and
-        any .attrs designated by the current instance.
+        any .attributes designated by the current instance.
         """
-        res = force(ptype, self)
-        assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
-
-        updateattrs = dict(self.attrs)
-        updateattrs.update(attrs)
-
-        # instantiate an instance if we're given a type
-        if istype(res):
-            res = res(**updateattrs)
-
-        # update the instance's properties
-        res.parent = self
-        res.__name__ = name
-        res.setoffset(ofs)
-
-        if 'source' not in updateattrs:
-            res.source = self.source
-        return res
+        return self.new(ptype, __name__=name, offset=ofs, **attrs)
 
     ## reading/writing to memory provider
     def load(self, **attrs):
@@ -471,7 +528,7 @@ class type(base):
             result = str(self.value)
             bs = self.blocksize()
             if len(result) < bs:
-#                padding = (bs - len(result)) * self.attrs.get('padding', '\x00')
+#                padding = (bs - len(result)) * self.attributes.get('padding', '\x00')
                 padding = utils.padding.fill(bs-len(result), self.padding)
                 return result + padding
             assert len(result) == bs, 'value of %s is larger than blocksize (%d>%d)'%(self.shortname(), len(result), bs)
@@ -497,13 +554,6 @@ class type(base):
         """Return a __repr__ of the type"""
         prop = '{%s}'% ','.join('%s=%s'%(k,repr(v)) for k,v in self.properties().iteritems())
         return '[%x] %s %s %s'%( self.getoffset(), self.name(), prop, self.details())
-
-    def new(self, type, **attrs):
-        """Instantiate a new instance of ``type`` from the current ptype with the provided ``attrs``"""
-        result = self.newelement(type, None, attrs.get('offset', 0))
-        result.__name__ = attrs.get('__name__', hex(id(result)) )
-        # FIXME: we should probably do something to prevent this from being committed
-        return result
 
     def copy(self, **kwds):
         """Return a duplicate instance of the current one"""
@@ -584,10 +634,11 @@ class container(type):
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
-        for x in self.value:
+        for i,x in enumerate(self.value):
             if x.contains(offset):
                 logging.warn("ptype.container.contains : structure %s.%s is unaligned. found element %s to contain offset %x", self.__module__, self.shortname(), x.shortname(), offset)
                 return True
+            continue
         return False
     
     def at(self, offset, recurse=True, **kwds):
@@ -596,12 +647,15 @@ class container(type):
         If ``recurse`` is True, then recursively descend into all sub-elements
         until an atomic type is encountered.
         """
+        if not self.contains(offset):
+            raise ValueError('%s (%x:+%x) - offset 0x%x can not be located within container.'%(self.shortname(), self.getoffset(), self.blocksize(), offset))
+
         if not recurse:
             for i,n in enumerate(self.value):
                 if n.contains(offset):
                     return n
                 continue
-            raise ValueError('%s (%x:+%x) - Offset 0x%x not found in a child element. returning encompassing parent.'%(self.shortname(), self.getoffset(), self.blocksize(), offset))
+            raise ValueError('%s (%x:+%x) - offset 0x%x not found in a child element. returning encompassing parent.'%(self.shortname(), self.getoffset(), self.blocksize(), offset))
     
         try:
             res = self.at(offset, False, **kwds)
@@ -614,6 +668,7 @@ class container(type):
             return res.at(offset, recurse=recurse, **kwds)
         except (NotImplementedError, AttributeError):
             pass
+
         return res
         
     def walkto(self, offset, **kwds):
@@ -649,7 +704,7 @@ class container(type):
         result = ''.join( (x.serialize() for x in self.value) )
         bs = self.blocksize()
         if len(result) < bs:
-#            padding = (bs - len(result)) * self.attrs.get('padding', '\x00')
+#            padding = (bs - len(result)) * self.attributes.get('padding', '\x00')
             padding = utils.padding.fill(bs-len(result), self.padding)
             return result + padding
         if len(result) > bs:
@@ -724,6 +779,9 @@ class container(type):
             continue
         return True
 
+    def summary(self):
+        return self.details()
+
 class empty(type):
     """Empty ptype that occupies no space"""
     length = 0
@@ -734,11 +792,30 @@ class block(none):
     """A ptype that can be accessed as an array"""
     #__name__ = '[unnamed-block]'
     def __getslice__(self, i, j):
-        return self.serialize()[i:j]
+        buffer = self.serialize()
+        base = self.getoffset()
+        return buffer[i-base:j-base]
     def __getitem__(self, index):
-        return self.serialize()[index]
+        buffer = self.serialize()
+        base = self.getoffset()
+        return buffer[index-base]
     def shortname(self):
         return 'block(%d)'% self.length
+    def summary(self):
+        return self.hexdump(oneline=1)
+    def details(self):
+        if self.initializedQ():
+            return '\n'+self.hexdump(summary=1)
+        return '???'
+
+    def __setitem__(self, index, value):
+        v = self.value
+        self.value = v[:index] + value + v[index:]
+    def __setslice__(self, i, j, value):
+        v = self.value
+        if len(value) != j-i:
+            raise ValueError
+        self.value = v[:i] + value + v[j:]
 
 def clone(cls, **newattrs):
     '''
@@ -862,82 +939,137 @@ class definition(object):
         cls.add(type.type, type)
         return type
 
-class encoded_t(block):
-    """A type that is used to abstract over elements that are in some sort of encoded format"""
-    def decode(self, **attr):
-        """Decodes an object from specified block into a new element"""
-        if 'source' in attr:
-            logging.warn('ptype.encoded_t.decode : %s.%s : user attempted to change the .source attribute of an encoded block', self.__module__, self.shortname())
-            del(attr['source'])
-        name = '*%s'% self.name()
-        s = self.serialize()
-        return self.newelement(empty, name, 0, source=provider.string(s), **attr)
+class wrapper_t(type):
+    _value_ = None     # type used to back wrapper_t
+    __object = None       # instance
+    object = property(fget=lambda s:s.__object)
+    value = property(fget=lambda s:s.__object.serialize() if s.__object else None, fset=lambda s,x:s.__object.load(source=provider.string(x)))
 
-    def encode(self, object):
-        """Encodes current initialized object into block"""
-        self.value = object.serialize()
-        self.length = len(self.value)
+    def shortname(self):
+        name = self.__object.shortname() if self.initializedQ() else self.newelement(self._value_, 'wrapper_t', 0).shortname()
+        return 'wrapper_t(%s)'% name
+
+    def contains(self, offset):
+        left = self.getoffset()
+        right = left + self.blocksize()
+        return left <= offset < right
+
+    def size(self):
+        return self.__object.size()
+
+    def blocksize(self):
+        name = self.shortname()
+        return self.__object.blocksize() if self.initializedQ() else self.newelement(self._value_, name, self.getoffset()).blocksize()
+
+    def commit(self, **kwds):
+        void = self.__object.commit(**kwds)
         return self
 
-    d = property(fget=lambda s: s.decode())
-    #__name__ = '[unnamed-encoded]'
+    def deserialize_block(self, block):
+        return self.alloc().__object.deserialize_block(block)
+
+    def load(self, **attrs):
+        self.__object = None
+
+        obj,ofs = self._value_,self.getoffset()
+        source = provider.proxy(self)
+        res = self.newelement(self._value_, 'element', ofs, source=source)
+
+        self.__object = res.load(**attrs)
+        return self
+
+    def initializedQ(self):
+        return self.__object and self.__object.initializedQ()
+
+class encoded_t(wrapper_t):
+    _object_ = None
+
+    ## string encoding
+    def encode(self, string):
+        return string
+    def decode(self, string):
+        return string
+
+    ## object dereferencing
+    def reference(self, object, **attrs):
+        assert object.__class__ == self._object_
+        self.value = self.encode(object.serialize())
+        return self
+
+    def dereference(self, **attrs):
+        if 'source' in attrs:
+            logging.warn('ptype.encoded_t.decode : %s.%s : user attempted to change the .source attribute of an encoded block', self.__module__, self.shortname())
+            del(attrs['source'])
+
+        string = self.decode(self.value)
+
+        object = self.newelement(self._object_, self.shortname(), 0, source=provider.string(string))
+        object = object.l
+
+        name = '*%s'% self.shortname()
+        return self.newelement(self._object_, name, 0, source=provider.proxy(object), **attrs)
+
+    d = property(fget=lambda s,**a: s.dereference(**a), fset=lambda s,*x,**a:s.reference(*x,**a))
+    deref = lambda s,**a: s.dereference(**a)
+    ref = lambda s,*x,**a: s.reference(*x,**a)
+
+def setbyteorder(endianness):
+    '''Sets the byte order for any pointer_t
+    can be either .bigendian or .littleendian
+    '''
+    global pointer_t
+    assert endianness in (config.byteorder.bigendian,config.byteorder.littleendian), repr(endianness)
+    pointer_t.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
 
 class pointer_t(encoded_t):
-    """A pointer to a particular type"""
-    _type_ = None
-    _target_ = None
+    _value_ = clone(block, length=config.integer.wordsize)
+    _object_ = None
+    byteorder = config.integer.byteorder
 
-    #__name__ = '[unnamed-pointer]'
-    def blocksize(self):
-        """Returns the size"""
-        return self._type_().blocksize()
+    def dereference(self, **attrs):
+        name = '*%s'% self.name()
+        return self.newelement(self._object_, name, self.decode_offset(), **attrs)
+
+    def reference(self, object, **attrs):
+        ofs = object.getoffset()
+        self._object_ = object.__class__
+        self.set(ofs)
+        return self
+
+    def set(self, offset):
+        bs = self.blocksize()
+        x = bitmap.new(offset, bs*8)
+        self.a.object.set( bitmap.data(x, reversed=(self.byteorder is config.byteorder.littleendian)) )
+        return self
 
     def number(self):
-        t = self._type_(source=provider.string(self.value))
-        return t.l.number()
+        assert self.initialized
+        bs = self.blocksize()
+        res = bitmap.zero
+        value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
+        for x in value:
+            res = bitmap.push(res, (ord(x),8))
+        return bitmap.number(res)
 
     def int(self):
-        """Return pointer offset as an int"""
-        t = self._type_(source=provider.string(self.value))
-        return t.l.int()
-
+        return int(self.number())
     def long(self):
-        """Return pointer offset as a long"""
-        t = self._type_(source=provider.string(self.value))
-        return t.l.long()
-
+        return long(self.number())
     def decode_offset(self):
         """Returns an integer representing the resulting object's real offset"""
         return self.long()
 
-    def set(self, value):
-        """Sets the pointer_t value to ``value```"""
-        assert value.__class__ in (int,long)
-        n = self._type_().alloc().set(value)
-        self.value = n.serialize()
-        return self
-
-    def decode(self, **attr):
-        name = '*%s'%self.shortname()
-        return self.newelement(self._target_, name, self.decode_offset(), **attr)
-
-    def encode(self, object, **attr):
-        raise NotImplementedError
-
     def shortname(self):
-        target = force(self._target_, self)
+        target = force(self._object_, self)
         return 'pointer_t<%s>'% target().shortname()
-    
-    deref = lambda s,**attrs: s.decode(**attrs)
-    dereference = lambda s,**attrs: s.decode(**attrs)
-
     def __cmp__(self, other):
         if issubclass(other.__class__, self.__class__):
-            return cmp(int(self),int(other))
+            return cmp(self.number(),other.number())
         return super(pointer_t, self).__cmp__(other)
-
     def details(self):
-        return '(pointer_t*)0x%x'% self.int()
+        if self.initializedQ():
+            return '(pointer_t*)0x%x'% self.number()
+        return '(pointer_t*) ???'
     summary = details
 
 class rpointer_t(pointer_t):
@@ -946,7 +1078,7 @@ class rpointer_t(pointer_t):
     #__name__ = '[unnamed-rpointer]'
 
     def shortname(self):
-        return 'rpointer_t(%s, %s)'%(self._target_.__name__, self._baseobject_.__name__)
+        return 'rpointer_t(%s, %s)'%(self._object_.__name__, self._baseobject_.__name__)
 
     def decode_offset(self):
         base = self._baseobject_().getoffset()
@@ -958,78 +1090,12 @@ class opointer_t(pointer_t):
     #__name__ = '[unnamed-opointer]'
 
     def shortname(self):
-        return 'opointer_t(%s, %s)'%(self._target_.__name__, self._calculate_.__name__)
+        return 'opointer_t(%s, %s)'%(self._object_.__name__, self._calculate_.__name__)
 
     def decode_offset(self):
         return self._calculate_(self.int())
 
-if False:
-    import pymsasid as udis
-    import pymsasid.syn_att as udis_att
-    raise ImportError
-
-    class _udis_glue(udis.input.FileHook):
-        def __init__(self, source, base_address):
-            udis.input.FileHook.__init__(self, source, base_address)
-            self.entry_point = base_address
-            self.source = source
-
-        def hook(self):
-            '''returns a byte as an integer'''
-            ch = self.source.consume(1)
-            return ord(ch)
-
-        def seek(self, offset):
-            self.source.seek(offset)
-
-        @classmethod
-        def new(cls, type, mode):
-            return udis.Pymsasid(hook=cls, source=type.source, mode=mode)
-
-    class code_t(block):
-        '''code_t is always referenced by a pointer'''
-        mode = 32
-
-        def __init__(self, **kwds):
-            super(code_t, self).__init__(**kwds)
-            self.u = _udis_glue.new(self, self.mode)
-
-        def details(self):
-            sz = self.blocksize()
-            if sz == 0: 
-                count = 5
-                result = []
-                pc = self.getoffset()
-                while len(result) < count:
-                    n = self.u.disassemble(pc)
-                    result.append(n)
-                    pc = n.next_add()
-                return ';'.join([str(x).strip() for x in result])
-
-            result = []
-            st = pc = self.getoffset()
-            while pc < st+sz:
-                n = self.u.disassemble(pc)
-                result.append(n)
-                pc = n.next_add()
-            return ';'.join([str(x).strip() for x in result])
-try:
-    import pyasm
-    raise ImportError
-
-except ImportError:
-    # XXX: i'm not sure why i'm implementing this in this module, as it actually
-    #       makes sense to put this all in a separate module for the different
-    #       types and calling conventions
-
-    class code_t(block):
-        machine,mode = 'i386',32
-        convention = None
-
-        def call(self, *args, **registers):
-            # returns a python function that when provided a dict containing the register state
-            # calls the specified address and returns the register state upon return
-            pass
+setbyteorder(config.integer.byteorder)
 
 import pbinary  # XXX: recursive. yay.
 
@@ -1092,7 +1158,32 @@ if __name__ == '__main__':
         a = ptype.code_t(source=self.source, offset=self.getoffset())
         b = b.cast(ptype.code_t)
 
-    if True:
+    if False:
+        import pint
+        class wr(ptype.wrapper_t):
+            _object_ = pint.uint32_t
+
+        x = wr(source=provider.string('\xde\xad\xde\xad\x00\x00\x00\x00'))
+        x = x.l
+
+    if False:
+        import zlib,dyn,ptype,pint
+        class zlib(ptype.encoded_t):
+            _value_ = dyn.clone(ptype.block, length=512)
+            _object_ = dyn.array(pint.uint32_t, 4)
+            def decode(self, string):
+                string = string.decode('zlib')
+                res = self.newelement(self._object_, 'zlib-encoded', 0, source=provider.string(string))
+                return res
+
+            def encode(self, object):
+                return object.serialize().encode('zlib')
+
+        s = '\xde\xad\xde\xad'*4
+        x = zlib(source=provider.string(s.encode('zlib')+'\x00'*500))
+        x = x.l
+
+    if False:
         import ptypes
         from ptypes import *
         reload(ptypes)
@@ -1143,3 +1234,317 @@ if __name__ == '__main__':
             c = [ {'l':x,'r':y} for t,(x,y) in iterate_differences(a,b) if not t ]
             print c[0]['l'].getoffset() == 4 and c[0]['r'].getoffset() == 4
             print c[1]['l'].getoffset() == 0xc and c[1]['r'].getoffset() == 0xc
+
+if __name__ == '__main__':
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+
+            except Success:
+                print '%s: Success'% name
+                return True
+
+            except Failure,e:
+                pass
+
+            print '%s: Failure'% name
+            return False
+
+        TestCaseList.append(harness)
+        return fn
+
+if __name__ == '__main__':
+    import ptypes
+    from ptypes import *
+
+    @TestCase
+    def test_wrapper_read():
+        class wrap(ptype.wrapper_t):
+            _value_ = ptype.clone(ptype.block, length=0x10)
+
+        s = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        a = wrap(source=ptypes.prov.string(s))
+        a = a.l
+        if a.serialize() == 'ABCDEFGHIJKLMNOP':
+            raise Success
+        
+    @TestCase
+    def test_wrapper_write():
+        class wrap(ptype.wrapper_t):
+            _value_ = ptype.clone(ptype.block, length=0x10)
+
+        s = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        a = wrap(source=ptypes.prov.string(s))
+        a = a.l
+        a.object[:0x10] = s[:0x10].lower()
+        a.commit()
+
+        if a.l.serialize() == 'abcdefghijklmnop':
+            raise Success
+    
+    @TestCase
+    def test_encoded_b64():
+        s = 'AAAABBBBCCCCDDDD'.encode('base64').replace('\n','\x00') + 'A'*20
+        class b64(ptype.encoded_t):
+            _value_ = pstr.szstring
+            _object_ = dyn.array(pint.uint32_t, 4)
+
+            def encode(self, string):
+                return string.encode('base64')
+
+            def decode(self, string):
+                return string.decode('base64')
+                
+        x = b64(source=ptypes.prov.string(s))
+        x = x.l
+        y = x.d.l
+        if x.size() == 25 and y[0].serialize() == 'AAAA' and y[1].serialize() == 'BBBB' and y[2].serialize() == 'CCCC' and y[3].serialize() == 'DDDD':
+            raise Success
+
+    @TestCase
+    def test_encoded_xorenc():
+        k = 0x80
+        s = ''.join(chr(ord(x)^k) for x in 'hello world')
+        class xor(ptype.encoded_t):
+            _value_ = dyn.block(len(s))
+            _object_ = dyn.block(len(s))
+
+            key = k
+
+            def encode(self, string):
+                return ''.join(chr(ord(x)^k) for x in string)
+            def decode(self, string):
+                return ''.join(chr(ord(x)^k) for x in string)
+        
+        x = xor(source=ptypes.prov.string(s))
+        x = x.l
+        if x.d.l.serialize() == 'hello world':
+            raise Success
+
+    @TestCase
+    def test_shared_user_data_pointer():
+        ptypes.setsource(ptypes.prov.memory())
+        from ptypes import dyn,pint,pstruct
+        from ptypes import pstr
+
+        LONG,ULONG = pint.int32_t,pint.uint32_t
+        WORD = pint.uint16_t
+        WCHAR = pint.uint16_t
+        UCHAR = pint.uint8_t
+        UINT64 = pint.uint64_t
+
+        class KSYSTEM_TIME(pstruct.type):
+            _fields_ = [
+                (ULONG, 'LowPart'),
+                (LONG, 'High1Time'),
+                (LONG, 'High2Time'),
+            ]
+
+        class NT_PRODUCT_TYPE(ULONG): pass
+        class ALTERNATIVE_ARCHITECTURE_TYPE(pstruct.type):
+            _fields_ = [(ULONG, 'something'),(ULONG,'pad')]
+        class LARGE_INTEGER(pstruct.type):
+            _fields_ = [    
+                (ULONG, 'LowPart'),
+                (LONG, 'HighPart'),
+            ]
+
+        class _XSTATE_FEATURE(pstruct.type):
+            _fields_ = [(ULONG,'Offset'),(ULONG,'Size')]
+
+        class _XSTATE_CONFIGURATION(pstruct.type):
+            _fields_ = [
+                (LONG, 'EnabledFeatures'),
+                (ULONG, 'Size'),
+                (ULONG, 'OptimizedSave'),
+                (dyn.array(_XSTATE_FEATURE,64), 'Features'),
+            ]
+
+        class _KUSER_SHARED_DATA(pstruct.type):
+            _fields_ = [
+                (ULONG, 'TickCountLowDeprecated'),
+                (ULONG, 'TickCountMultiplier'),
+                (KSYSTEM_TIME, 'InterruptTime'),
+                (KSYSTEM_TIME, 'SystemTime'),
+                (KSYSTEM_TIME, 'TimeZoneBias'),
+                (WORD, 'ImageNumberLow'),
+                (WORD, 'ImageNumberHigh'),
+                (dyn.clone(pstr.wstring, length=260), 'NtSystemRoot'),
+                (ULONG, 'MaxStackTraceDepth'),
+                (ULONG, 'CryptoExponent'),
+                (ULONG, 'TimeZoneId'),
+                (ULONG, 'LargePageMinimum'),
+                (dyn.array(ULONG,7), 'Reserved2'),
+                (NT_PRODUCT_TYPE, 'NtProductType'),
+                (UCHAR, 'ProductTypeIsValid'),
+                (ULONG, 'NtMajorVersion'),
+                (ULONG, 'NtMinorVersion'),
+                (dyn.array(UCHAR,64), 'ProcessorFeatures'),
+                (ULONG, 'Reserved1'),
+                (ULONG, 'Reserved3'),
+                (ULONG, 'TimeSlip'),
+                (ALTERNATIVE_ARCHITECTURE_TYPE, 'AlternativeArchitecture'),
+                (LARGE_INTEGER, 'SystemExpirationDate'),
+                (ULONG, 'SuiteMask'),
+                (UCHAR, 'KdDebuggerEnabled'),
+                (UCHAR, 'NXSupportPolicy'),
+                (ULONG, 'ActiveConsoleId'),
+                (ULONG, 'DismountCount'),
+                (ULONG, 'ComPlusPackage'),
+                (ULONG, 'LastSystemRITEventTickCount'),
+                (ULONG, 'NumberOfPhysicalPages'),
+                (UCHAR, 'SafeBootMode'),
+
+                (UCHAR, 'TscQpcData'),
+                (dyn.array(UCHAR,2), 'TscQpcPad'),
+                (ULONG, 'SharedDataFlags'),
+                (ULONG, 'DataFlagsPad'),
+                (UINT64, 'TestRetInstruction'),
+                (ULONG, 'SystemCall'),
+                (ULONG, 'SystemCallReturn'),
+                (dyn.array(ULONG,3), 'SystemCallPad'),
+                (UINT64, 'TickCount')
+            ]
+
+        p = dyn.pointer(_KUSER_SHARED_DATA)
+        KERNEL_BASE = 0x7fff0000
+        z = p()
+        z.set(KERNEL_BASE-0x10000)
+        a = z.d.l['NtSystemRoot'].str()
+        if 'windows' in a.lower():      # probably not the greatest test...
+            raise Success
+
+#    @TestCase
+    def test_pecoff():
+        # this test sucks, but whatever
+        import pecoff,ctypes,sys
+        v = sys.version_info
+        a = ctypes.CDLL('python%d%d.dll'% (v.major,v.minor))._handle
+
+        x = pecoff.Executable.File(offset=a)
+        x=x.l
+        if x['Pe']['Signature'].serialize() == 'PE\x00\x00':
+            raise Success
+
+    @TestCase
+    def test_attributes_static_1():
+        from ptypes import pint
+        argh = pint.uint32_t
+
+        x = argh(a1=5).a
+        if 'a1' not in x.attributes and x.a1 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_recurse_1():
+        from ptypes import pint
+
+        argh = pint.uint32_t
+
+        x = argh(recurse={'a1':5}).a
+        if 'a1' in x.attributes and x.a1 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_static_2():
+        from ptypes import pint,parray
+        class argh(parray.type):
+            length = 5
+            _object_ = pint.uint32_t
+
+        x = argh(a1=5).a
+        if 'a1' not in x.attributes and 'a1' not in x.v[0].attributes and 'a1' not in dir(x.v[0]) and x.a1 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_recurse_2():
+        from ptypes import pint,parray
+        global argh,x
+        class argh(parray.type):
+            length = 5
+            _object_ = pint.uint32_t
+
+        x = argh(recurse={'a1':5}).a
+        if 'a1' in x.attributes and 'a1' in x.v[0].attributes and 'a1' in dir(x.v[0]) and x.v[0].a1 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_static_3():
+        from ptypes import pint
+        argh = pint.uint32_t
+
+        x = argh().a
+        x.update_attributes({'a2':5})
+        if 'a2' not in x.attributes and x.a2 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_recurse_3():
+        from ptypes import pint
+
+        argh = pint.uint32_t
+
+        x = argh().a
+        x.update_attributes(recurse={'a2':5})
+        if 'a2' in x.attributes and x.a2 == 5:
+            raise Success
+    
+    @TestCase
+    def test_attributes_static_4():
+        from ptypes import pint,parray
+        class argh(parray.type):
+            length = 5
+            _object_ = pint.uint32_t
+
+        x = argh().a
+        x.update_attributes({'a2':5})
+        if 'a2' not in x.attributes and 'a2' not in x.v[0].attributes and 'a2' not in dir(x.v[0]) and x.a2 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_recurse_4():
+        from ptypes import pint,parray
+        class argh(parray.type):
+            length = 5
+            _object_ = pint.uint32_t
+
+        x = argh().a
+        x.update_attributes(recurse={'a2':5})
+        if 'a2' in x.attributes and 'a2' in x.v[0].attributes and 'a2' in dir(x.v[0]) and x.v[0].a2 == 5:
+            raise Success
+
+    @TestCase
+    def test_attributes_static_5():
+        from ptypes import pint
+        argh = pint.uint32_t
+
+        a = argh(a1=5).a
+        x = a.new(argh)
+        if 'a1' not in a.attributes and 'a1' not in x.attributes and 'a1' not in dir(x):
+            raise Success
+
+    @TestCase
+    def test_attributes_recurse_5():
+        from ptypes import pint
+
+        argh = pint.uint32_t
+
+        a = argh(recurse={'a1':5}).a
+        x = a.new(argh)
+        if 'a1' in a.attributes and 'a1' in x.attributes and x.a1 == 5:
+            raise Success
+
+if __name__ == '__main__':
+#    logging.root=logging.RootLogger(logging.DEBUG)
+
+    results = []
+    for t in TestCaseList:
+        results.append( t() )
+

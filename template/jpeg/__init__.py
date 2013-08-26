@@ -1,64 +1,113 @@
 import ptypes
 from ptypes import *
+from ptypes import utils
 
-raise NotImplementedError('outdated')
+ptypes.setbyteorder(ptypes.bigendian)
 
 def CBinary(args):
     class _CBinary(pbinary.struct):
         _fields_ = args[:]
     return _CBinary
 
-def jpegerator(iterable):
-    iterable=iter(iterable)
-    while True:
-        x = iterable.next()
-        if x == '\xff':
+if False:
+    def jpegerator(iterable):
+        iterable=iter(iterable)
+        while True:
             x = iterable.next()
-            if x == '\x00':
-                yield x
-                continue
             if x == '\xff':
+                x = iterable.next()
+                if x == '\x00':
+                    yield x
+                    continue
+                if x == '\xff':
+                    yield '\xff'
+                    continue
                 yield '\xff'
-                continue
-            yield '\xff'
 
-        # FIXME: check to see if we need to do anything else with \xff's,
-        # because this hack doesn't feel right.
-        yield x
+            # FIXME: check to see if we need to do anything else with \xff's,
+            # because this hack doesn't feel right.
+            yield x
 
+    class header(pstruct.type):
+        marker = ''
+
+        _fields_ = [
+            (pint.uint16_t, 'marker'),
+            (pint.uint16_t, 'length'),
+            (lambda self: dyn.block(self['length'].l - 2), 'data'),
+        ]
+
+        @classmethod
+        def lookupByMarker(cls, marker):
+            res = globals().values()
+            res = [ x for x in res if type(x) is type ]
+            res = [ x for x in res if issubclass(x, header) and x is not cls ]
+            for x in res:
+                if x.marker == marker:
+                    return x
+            if marker[0] == '\xff':
+                return unknown
+            raise KeyError(marker)
+
+        def deserialize(self, iterable):
+            iterable = jpegerator(iterable)
+            super(header, self).deserialize(iterable)
+
+### markers
+class marker(ptype.definition):
+    cache = {}
+    unknown = ptype.block
+
+class markerlength(ptype.definition):
+    cache = {}
+    unknown = ptype.block
+
+### header chunks
 class header(pstruct.type):
-    marker = ''
+    def __data(self):
+        m = self['marker'].l.serialize()
+        try:
+            return marker.lookup(m)
+        except KeyError:
+            pass
+        return dyn.clone(headerlength, type=m)
 
     _fields_ = [
         (pint.uint16_t, 'marker'),
-        (pint.uint16_t, 'length'),
-        (lambda self: dyn.block(self['length'].l - 2), 'data'),
+        (__data, 'data'),
     ]
 
-    @classmethod
-    def lookupByMarker(cls, marker):
-        res = globals().values()
-        res = [ x for x in res if type(x) is type ]
-        res = [ x for x in res if issubclass(x, header) and x is not cls ]
-        for x in res:
-            if x.marker == marker:
-                return x
-        if marker[0] == '\xff':
-            return unknown
-        raise KeyError(marker)
+class headerlength(pstruct.type):
+    def __data(self):
+        bs = self['length'].l.int() - 2
+        t = self.type
+        return dyn.clone(coded, _object_=markerlength.get(t, length=bs), blocksize=lambda s:bs)
 
-    def deserialize(self, iterable):
-        iterable = jpegerator(iterable)
-        super(header, self).deserialize(iterable)
-
-class unknown(header):
-    pass
-
-class JFIF(header):
-    marker = '\xff\xe0'
     _fields_ = [
-        (pint.uint16_t, 'marker'),
         (pint.uint16_t, 'length'),
+        (__data, 'data'),
+    ]
+
+class coded(ptype.encoded_t):
+    _object_ = None
+    def decode(self, **attr):
+        name = '*%s'% self.name()
+        s = self.serialize()
+        return self.newelement(self._object_, name, 0, source=provider.string(s))
+    def encode(self, object):
+        raise NotImplementedError
+
+### entire file
+class File(parray.terminated):
+    _object_ = header
+    def isTerminator(self, value):
+        return type(value) is SOS
+
+### list of headers
+@markerlength.define
+class JFIF(pstruct.type):
+    type = '\xff\xe0'
+    _fields_ = [
         (dyn.block(5), 'identiier'),
         (pint.uint16_t, 'version'),
         (pint.uint8_t, 'units'),
@@ -66,19 +115,20 @@ class JFIF(header):
         (pint.uint16_t, 'Ydensity'),
         (pint.uint8_t, 'Xthumbnail'),
         (pint.uint8_t, 'Ythumbnail'),
-        (lambda self: dyn.block( 3 * (self['Xthumbnail'].l*self['Ythumbnail'].l)), 'RGB')
+        (lambda self: dyn.block( 3 * (self['Xthumbnail'].l.int()*self['Ythumbnail'].l.int())), 'RGB')
     ]
 
-class SOI(header):
-    marker = '\xff\xd8'
-    _fields_ = [(pint.uint16_t, 'marker')]
+@marker.define
+class SOI(ptype.empty):
+    type = '\xff\xd8'
 
-class EOI(header):
-    marker = '\xff\xd9'
-    _fields_ = [(pint.uint16_t, 'marker')]
+@marker.define
+class EOI(ptype.empty):
+    type = '\xff\xd9'
 
-class SOF(header):
-    marker = '\xff\xc0'
+@markerlength.define
+class SOF(pstruct.type):
+    type = '\xff\xc0'
 
     class component(pstruct.type):
         _fields_ = [
@@ -88,8 +138,6 @@ class SOF(header):
         ]
 
     _fields_ = [
-        (pint.uint16_t, 'marker'),
-        (pint.uint16_t, 'length'),
         (pint.uint8_t, 'precision'),
         (pint.uint16_t, 'height'),
         (pint.uint16_t, 'width'),
@@ -97,11 +145,13 @@ class SOF(header):
         (lambda self: dyn.array( SOF.component, self['number of components'].l), 'components')
     ]
 
-class APP12(header):
-    marker = '\xff\xec'
+#@markerlength.define   # XXX
+class APP12(ptype.block):
+    type = '\xff\xec'
 
-class APP14(header):
-    marker = '\xff\xee'
+#@markerlength.define   # XXX
+class APP14(ptype.block):
+    type = '\xff\xee'
 
 class DQTPrecisionAndIndex(pbinary.struct):
     _fields_ = [
@@ -119,11 +169,11 @@ class DQTTable(pstruct.type):
         return utils.hexdump(self['value'].value, length=8)
 
     def __repr__(self):
-        res = ['[%08x] %s %s'% (self.getOffset(k), k, v) for k,v in self.items()]
+        res = ['[%08x] %s %s'% (self.getoffset(k), k, v) for k,v in self.items()]
         res = []
-        res.append('[%x<0..3>] precision: %d'% (self.getOffset('precision/index'), self['precision/index']['precision']))
-        res.append('[%x<4..7>] index: %d'% (self.getOffset('precision/index'), self['precision/index']['index']))
-        res.append('[%x] value ->'% (self.getOffset('value')))
+        res.append('[%x<0..3>] precision: %d'% (self.getoffset('precision/index'), self['precision/index']['precision']))
+        res.append('[%x<4..7>] index: %d'% (self.getoffset('precision/index'), self['precision/index']['index']))
+        res.append('[%x] value ->'% (self.getoffset('value')))
         res.append( self.dumpValue() )
         return '%s\n%s\n'% (repr(type(self)), '\n'.join(res))
 
@@ -132,11 +182,10 @@ class DQTTableArray(parray.terminated):
     def isTerminator(self, value):
         return False
 
-class DQT(header):
-    marker = '\xff\xdb'
+#@markerlength.define   # XXX
+class DQT(pstruct.type):
+    type = '\xff\xdb'
     _fields_ = [
-        (pint.uint16_t, 'marker'),
-        (pint.uint16_t, 'length'),
         (lambda self: dyn.clone(DQTTableArray, blocksize=lambda:self['length'].l-2), 'table')    # FIXME: get this shit working too
     ]
 
@@ -174,16 +223,16 @@ class HuffmanTable(pstruct.type):
 class HuffmanTableArray(parray.terminated):
     _object_ = HuffmanTable
 
-class DHT(header):
-    marker = '\xff\xc4'
+#@markerlength.define   # XXX
+class DHT(pstruct.type):
+    type = '\xff\xc4'
     _fields_ = [
-        (pint.uint16_t, 'marker'),
-        (pint.uint16_t, 'length'),
         (lambda self: dyn.clone(HuffmanTableArray,blocksize=lambda:self['length'].l-2), 'table')
     ]
 
-class SOS(header):
-    marker = '\xff\xda'
+@markerlength.define
+class SOS(pstruct.type):
+    type = '\xff\xda'
 
     class component(pbinary.struct):
         _fields_ = [
@@ -193,8 +242,6 @@ class SOS(header):
         ]
 
     _fields_ = [
-        (pint.uint16_t, 'marker'),
-        (pint.uint16_t, 'length'),
         (pint.uint8_t, 'number of components'),
         (lambda self: dyn.array(SOS.component, self['number of components'].l), 'component'),
         (pint.uint8_t, 'start of spectral selection'),
@@ -202,70 +249,72 @@ class SOS(header):
         (CBinary([(4,'high'),(4,'low')]), 'successive approximation')
     ]
 
-class Comment(header):
-    marker = '\xff\xfe'
+@markerlength.define
+class Comment(pstruct.type):
+    type = '\xff\xfe'
     _fields_ = [
-        (pint.uint16_t, 'marker'),
-        (pint.uint16_t, 'length'),
         (lambda self: dyn.block( self['length'] - 2 ), 'data')
     ]
 
-class Jpeg(parray.type):
-    length = 0
+if False:
+    class Jpeg(parray.type):
+        length = 0
 
-    def deserialize(self, string):
-        ## yes, i know i'm doing this clumsily
-        self.value = []
-        ofs = 0
-        self._fields_ = []
+        def deserialize(self, string):
+            ## yes, i know i'm doing this clumsily
+            self.value = []
+            ofs = 0
+            self._fields_ = []
 
-        while string:
-            x = header.lookupByMarker(string[:2])()
+            while string:
+                x = header.lookupByMarker(string[:2])()
+                x.deserialize(string)
+                x.setoffset(ofs)
+                self.append(x)
+
+                ofs += x.size()
+                string = string[x.size():]
+                if type(x) is SOS:
+                    break
+
+            iterable = iter(string)
+            count = 0
+            for count,v in enumerate(iterable):
+                count += 1
+                if v == '\xff':
+                    v = iterable.next()
+                    if v == '\xda':
+                        break
+
+            sosdata = dyn.block(count, name='SCANDATA')()
+            sosdata.deserialize(string[:count])
+            sosdata.setoffset(ofs)
+            self.append(sosdata)
+
+            string = string[count:]
+            ofs += count
+
+            x = header.lookupByMarker(string)()
             x.deserialize(string)
             x.setoffset(ofs)
             self.append(x)
 
-            ofs += x.size()
-            string = string[x.size():]
-            if type(x) is SOS:
-                break
+if False:
+    class File(Jpeg): pass
 
-        iterable = iter(string)
-        count = 0
-        for count,v in enumerate(iterable):
-            count += 1
-            if v == '\xff':
-                v = iterable.next()
-                if v == '\xda':
-                    break
+if False:
+    def getFileContents(path):
+        f = file(path, 'rb')
+        res = f.read()
+        f.close()
+        return res
 
-        sosdata = dyn.block(count, name='SCANDATA')()
-        sosdata.deserialize(string[:count])
-        sosdata.setoffset(ofs)
-        self.append(sosdata)
+    def writeFileContents(path, value):
+        f = file(path, 'wb')
+        f.write(value)
+        f.close()
 
-        string = string[count:]
-        ofs += count
-
-        x = header.lookupByMarker(string)()
-        x.deserialize(string)
-        x.setoffset(ofs)
-        self.append(x)
-
-class File(Jpeg): pass
-
-def getFileContents(path):
-    f = file(path, 'rb')
-    res = f.read()
-    f.close()
-    return res
-
-def writeFileContents(path, value):
-    f = file(path, 'wb')
-    f.write(value)
-    f.close()
-
-if __name__ == '__main__':
+if __name__ == '__main__' and False:
     #input = getFileContents('Q100-2.JPG')
     input = getFileContents('huff_simple0.jpg')
     input = str(input.replace('\xff\x00', '\xff'))
@@ -328,3 +377,11 @@ if __name__ == '__main__':
 
     self = lookup['SOF']
     self = lookup['SOS']
+
+if __name__ == '__main__':
+    import sys
+    import ptypes,jpeg
+    ptypes.setsource( ptypes.file(sys.argv[1]) )
+
+    z = jpeg.File()
+    z = z.l

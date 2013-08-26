@@ -1,5 +1,6 @@
+import logging
 import ptypes
-from ptypes import pstruct,parray,dyn
+from ptypes import pstruct,parray,dyn,ptype
 from __base__ import *
 
 class IMAGE_SYM(ptypes.pint.enum, int16):
@@ -92,8 +93,6 @@ class ShortName(pstruct.type):
     ]
 
     def get(self):
-        import warnings
-        warnings.warn('%s.get() is deprecated'%(self.__class__.__name__), DeprecationWarning, stacklevel=2)
         return self.str()
 
     def str(self):
@@ -272,7 +271,7 @@ class StringTable(pstruct.type):
     ]
 
     def get(self, offset):
-        import warnings
+        import logging
         warnings.warn('%s.get(offset) is deprecated for %s.extract(offset)'%(self.__class__.__name__,self.__class__.__name__), DeprecationWarning, stacklevel=2)
         return self.extract(offset)
 
@@ -346,8 +345,8 @@ class SymbolTableAndStringTable(pstruct.type):
         return
 
     def add(self, name):
-        warn('adding new symbol %s'% name)
-        if ptype.is_ptype(name):
+        logging.info('pecoff.definitions.symbols.SymbolTablesAndString : adding new symbol %s'% name)
+        if ptype.istype(name):
             name = name.serialize()
         else:
             name = str(name)

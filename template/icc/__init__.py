@@ -150,7 +150,7 @@ class ProfileFile(pstruct.type):
 
 
 def verify_bitsize(integertype, bitsize):
-    import bitmap
+    from ptypes import bitmap
     class verifiedtype(integertype):
         def load(self):
             res = super(verifiedtype, self).load()

@@ -103,7 +103,7 @@ class BaseRelocationEntry(pbinary.struct):
         (4, 'Type'),
         (12, 'Offset'),
     ]
-BaseRelocationEntry = pbinary.littleendian(BaseRelocationEntry)
+BaseRelocationEntry = pbinary.new(BaseRelocationEntry, byteorder=pbinary.littleendian)
 
 class BaseRelocationArray(parray.type):
     _object_ = BaseRelocationEntry

@@ -1,5 +1,5 @@
 '''Provides a dynamic kind of feel'''
-import ptype,parray,pstruct
+import ptype,parray,pstruct,config
 import utils,provider
 import logging
 
@@ -139,7 +139,7 @@ class union(__union_generic):
     def __alloc_root(self, **attrs):
         t = self.__choose_root(t for t,n in self._fields_)
         ofs = self.getoffset()
-        self.value = t(offset=ofs)
+        self.value = t(offset=ofs, source=self.source)
         self.value.alloc(**attrs)
         return self.value
 
@@ -190,29 +190,18 @@ class union(__union_generic):
 
 union_t = union # alias
 
-import sys,pint
-if sys.byteorder == 'big':
-    byteorder = pint.bigendian
-elif sys.byteorder == 'little':
-    byteorder = pint.littleendian
-
-def setbyteorder(endianness):
-    '''Set the global byte order for all pointer types'''
-    global byteorder
-    byteorder = endianness
-
-integral = pint.uint32_t
+import pint
+integral = ptype.clone(pint.uint32_t, byteorder=config.integer.byteorder)
 def pointer(target, type=integral, **attrs):
-    global byteorder
-    return ptype.clone(ptype.pointer_t, _target_=target, _type_=byteorder(type), **attrs)
+    return ptype.clone(ptype.pointer_t, _object_=target, _type_=type, **attrs)
 
 def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
     '''a pointer relative to a particular object'''
-    return ptype.clone(ptype.rpointer_t, _target_=target, _baseobject_=object, _type_=byteorder(type), **attrs)
+    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _type_=type, **attrs)
 
 def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
     '''a pointer relative to a particular offset'''
-    return ptype.clone(ptype.opointer_t, _target_=target, _calculate_=calculate, _type_=byteorder(type), **attrs)
+    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _type_=type, **attrs)
 
 __all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
 
@@ -263,44 +252,7 @@ if __name__ == '__main__':
     s2 = s1.encode('zlib')
 
     @TestCase
-    def Test0():
-        class zlibstring(ptype.encoded_t):
-            def decode(self, **attr):
-                s = provider.string(self.serialize().decode('zlib'))
-                name = '*%s'% self.name()
-                return self.newelement(dyn.block(len(s.value)), name, 0, source=s, **attr)
-
-            def blocksize(self):
-                return len(s2)
-
-        z = zlibstring(source=provider.string(s2))
-        if z.l.decode().l.serialize() == s1:
-            raise Success
-
-    @TestCase
     def Test1():
-        class zlibstring(ptype.encoded_t):
-            length = 128
-            def decode(self, **attr):
-                s = provider.string(self.serialize().decode('zlib'))
-                name = '*%s'% self.name()
-                return self.newelement(pstr.szstring, name, 0, source=s, **attr)
-
-            def encode(self, object, **attr):
-                s = object.serialize().encode('zlib')
-                self.length = len(s)
-                self.value = s
-                return self
-
-        thestring = pstr.szstring().set(s1)
-
-        z = zlibstring(source=provider.string('\x00'*128))
-        z.encode(thestring)
-        if z.decode().l.str() == thestring.str():
-            raise Success
-
-    @TestCase
-    def Test2():
         import dyn,pint,parray
         class test(dyn.union): 
             root = dyn.array(pint.uint8_t,4)
@@ -318,7 +270,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test3():
+    def Test2():
         import dyn,pint,pstruct
         class test(pstruct.type):
             _fields_ = [
@@ -334,18 +286,19 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test4():
-        dyn.setbyteorder(pint.bigendian)
-        s = ptype.provider.string(string1)
+    def Test3():
+        ptype.setbyteorder(config.byteorder.bigendian)
 
-        t = dyn.pointer(dyn.block(0))
-        x = t(source=s).l
+        global x
+        s = ptype.provider.string(string1)
+        p = dyn.pointer(dyn.block(0))
+        x = p(source=s).l
         if x.d.getoffset() == 0x41424344 and x.serialize() == string1:
             raise Success
 
     @TestCase
-    def Test5():
-        dyn.setbyteorder(pint.littleendian)
+    def Test4():
+        ptype.setbyteorder(config.byteorder.littleendian)
         s = ptype.provider.string(string2)
 
         t = dyn.pointer(dyn.block(0))
@@ -354,8 +307,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test6():
-        dyn.setbyteorder(pint.littleendian)
+    def Test5():
+        ptype.setbyteorder(config.byteorder.littleendian)
         string = '\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
         
@@ -365,9 +318,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test7():
-        dyn.setbyteorder(pint.bigendian)
-        global x
+    def Test6():
+        ptype.setbyteorder(config.byteorder.bigendian)
 
         s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
         t = dyn.pointer(dyn.block(4))
@@ -376,8 +328,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test8():
-        dyn.setbyteorder(pint.littleendian)
+    def Test7():
+        ptype.setbyteorder(config.byteorder.littleendian)
 
         s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
         t = dyn.pointer(dyn.block(4))
@@ -386,8 +338,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test9():
-        dyn.setbyteorder(pint.littleendian)
+    def Test8():
+        ptype.setbyteorder(config.byteorder.littleendian)
         t = dyn.pointer(dyn.block(4), type=pint.uint64_t)
         x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
 
@@ -395,13 +347,13 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test10():
+    def Test9():
         v = dyn.array(pint.int32_t, 4)
         if len(v().a) == 4:
             raise Success
 
     @TestCase
-    def Test11():
+    def Test10():
         v = dyn.array(pint.int32_t, 8)
         i = range(0x40,0x40+v.length)
         x = ptype.provider.string(''.join(chr(x)+'\x00\x00\x00' for x in i))
@@ -410,7 +362,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test12():
+    def Test11():
         class test(dyn.union):
             _fields_ = [
                 (pint.uint32_t, 'a'),
@@ -418,7 +370,6 @@ if __name__ == '__main__':
                 (pint.uint8_t, 'c'),
             ]
 
-        global a
         a = test().a
         if a['a'].blocksize() == 4 and a['b'].size() == 2 and a['c'].size() == 1 and a.blocksize() == 4:
             raise Success

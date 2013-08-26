@@ -12,7 +12,7 @@ memorymanager.new(handle=yourhandle)
 ### this includes things like allocations, frees, file mappings, code page creation...(using that one module or whatever that i wrote)
 
 import allocator
-import bitmap
+from ptypes import bitmap
 
 # XXX: it might be cool to add an option to duplicate attributes from
 #      another MemoryManager instance

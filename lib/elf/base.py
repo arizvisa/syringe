@@ -2,7 +2,6 @@ import ptypes
 from ptypes import *
 
 ptypes.setbyteorder( ptypes.littleendian )
-pbinary.setbyteorder( pbinary.littleendian )
 
 class Elf32_Addr(pint.uint32_t):
     def summary(self):

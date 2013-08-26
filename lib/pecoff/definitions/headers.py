@@ -160,21 +160,44 @@ class FileHeader(pstruct.type):
             (1, 'EXECUTABLE_IMAGE'),
             (1, 'RELOCS_STRIPPED'),
         ]
-    __Characteristics = pbinary.littleendian(__Characteristics)
+
+    class __Machine(word, pint.enum):
+        _values_ = [
+            ('UNKNOWN', 0x0000),
+            ('AM33', 0x01d3),
+            ('AMD64', 0x8664),
+            ('ARM', 0x01c0),
+            ('EBC', 0x0ebc),
+            ('I386', 0x014c),
+            ('IA64', 0x0200),
+            ('M32R', 0x9041),
+            ('MIPS16', 0x0266),
+            ('MIPSFPU', 0x0366),
+            ('MIPSFPU16', 0x0466),
+            ('POWERPC', 0x01f0),
+            ('POWERPCFP', 0x01f1),
+            ('R4000', 0x0166),
+            ('SH3', 0x01a2),
+            ('SH3DSP', 0x01a3),
+            ('SH4', 0x01a6),
+            ('SH5', 0x01a8),
+            ('THUMB', 0x01c2),
+            ('WCEMIPSV2', 0x0169),
+        ]
         
     _fields_ = [
-        (word, 'Machine'),
+        (__Machine, 'Machine'),
         (uint16, 'NumberOfSections'),
         (TimeDateStamp, 'TimeDateStamp'),
         (dyn.pointer(symbols.SymbolTableAndStringTable), 'PointerToSymbolTable'),
         (uint32, 'NumberOfSymbols'),
         (word, 'SizeOfOptionalHeader'),
-        (__Characteristics, 'Characteristics')
+        (pbinary.littleendian(__Characteristics), 'Characteristics')
     ]
 
     def getsymbols(self):
         '''fetch the symbol and string table'''
-        ofs,length = (int(self['PointerToSymbolTable']), int(self['NumberOfSymbols']))
+        ofs,length = (self['PointerToSymbolTable'].int(), self['NumberOfSymbols'].int())
         res = self.newelement(symbols.SymbolTableAndStringTable, 'Symbols', ofs + self.parent.getoffset() )
         res.length = length
         return res
@@ -194,7 +217,23 @@ class OptionalHeader(pstruct.type):
             (1, 'DYNAMIC_BASE'),
             (6, 'reserved_10'),
         ]
-    __DllCharacteristics = pbinary.littleendian(__DllCharacteristics)
+
+    class __Subsystem(uint16, pint.enum):
+        _values_ = [
+            ('UNKNOWN', 0),
+            ('NATIVE', 1),
+            ('WINDOWS_GUI', 2),
+            ('WINDOWS_CUI', 3),
+            ('OS2_CUI', 5),
+            ('POSIX_CUI', 7),
+            ('NATIVE_WINDOWS', 8),
+            ('WINDOWS_CE_GUI', 9),
+            ('EFI_APPLICATION', 10),
+            ('EFI_BOOT_SERVICE_DRIVER', 11),
+            ('EFI_RUNTIME_DRIVER', 12),
+            ('EFI_ROM', 13),
+            ('XBOX', 14),
+        ]
 
     def __DataDirectory(self):
         length = self['NumberOfRvaAndSizes'].load().int()
@@ -226,8 +265,8 @@ class OptionalHeader(pstruct.type):
         ( uint32, 'SizeOfImage' ),
         ( uint32, 'SizeOfHeaders' ),
         ( uint32, 'CheckSum' ),
-        ( uint16, 'Subsystem' ),
-        ( __DllCharacteristics, 'DllCharacteristics' ),
+        ( __Subsystem, 'Subsystem' ),
+        ( pbinary.littleendian(__DllCharacteristics), 'DllCharacteristics' ),
         ( uint32, 'SizeOfStackReserve' ),
         ( uint32, 'SizeOfStackCommit' ),
         ( uint32, 'SizeOfHeapReserve' ),

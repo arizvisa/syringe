@@ -1,5 +1,6 @@
 import ptypes
 import definitions
+import definitions.__base__
 from warnings import warn
 
 def open(filename, **kwds):
@@ -22,7 +23,7 @@ if __name__ == '__main__':
 
     print '-'*20 + 'loading file..'
     coff = pecoff.Object.File()
-    coff.source = provider.file('../../obj/inject-helper.obj')
+    coff.source = provider.file('../../obj/test.obj')
     coff.load()
     print coff['Header']
     print coff['Sections']
@@ -90,7 +91,7 @@ if __name__ == '__main__':
     print '-'*20 + 'printing all relocations'
     for section in coff['Sections']:
         relocations = section.getrelocations()
-        data = section.getdata().load()
+        data = section.get().load()
         section.data, section.relocations = data.serialize(), relocations   # save for later
         continue
         

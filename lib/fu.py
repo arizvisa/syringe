@@ -1181,7 +1181,7 @@ if 'special':
             return file
 
     # XXX: the following aren't tested
-    raise NotImplementedError
+#    raise NotImplementedError
     @package.cache.register_type
     class generator_(__type__):
         @classmethod

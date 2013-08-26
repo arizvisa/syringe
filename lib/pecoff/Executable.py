@@ -1,8 +1,11 @@
+import logging
+
 import ptypes
 from ptypes import *
+
+ptypes.setbyteorder(ptypes.littleendian)
 import definitions
 from definitions import *
-import logging
 
 def open(filename, **kwds):
     res = File()
@@ -20,11 +23,31 @@ class File(pstruct.type, definitions.__base__.BaseHeader):
         logging.info("%s : Stub : PE Offset is uninitialized. Defaulting Stub Size to 0"% (self.name()))
         return dyn.block(0)
 
+    def __MemData(self):
+        '''Calculate the size of executable in memory'''
+        optionalheader = self['Pe'].l['OptionalHeader']
+        alignment = optionalheader['SectionAlignment'].number()
+        s = optionalheader['SizeOfImage'].number()
+        return dyn.block(s - self.size())
+#        return dyn.block(s - self.size(), summary=lambda s:s.hexdump(oneline=1))
+
+    def __FileData(self):
+        '''Calculate the size of executable on disk'''
+        pe = self['Pe'].l
+        endings = sorted(((x['PointerToRawData'].number()+x['SizeOfRawData'].number()) for x in pe['Sections']))
+        s = endings[-1]
+        return dyn.block(s - self.size())
+
+    def __Data(self):
+        if issubclass(self.source.__class__, ptypes.provider.file):
+            return self.__FileData()
+        return self.__MemData()
+
     _fields_ = [
         (headers.DosHeader, 'Dos'),
-#        (lambda s: dyn.block( int(s['Dos']['e_lfanew']) - s['Dos'].size()), 'Stub'),
         (__Stub, 'Stub'),
-        (headers.NtHeader, 'Pe')
+        (headers.NtHeader, 'Pe'),
+        (__Data, 'Data')
     ]
 
     def loadconfig(self):
@@ -50,9 +73,22 @@ class File(pstruct.type, definitions.__base__.BaseHeader):
         return 'FORCE_INTEGRITY' in characteristics
 
 if __name__ == '__main__':
+    import sys
     import Executable
-    v = Executable.open('obj/kernel32.dll')
-#    v = Executable.open('obj/test.dll')
+    if len(sys.argv) == 2:
+        filename = sys.argv[1]
+        v = Executable.open(filename)
+    else:
+        filename = 'obj/kernel32.dll'
+        for x in range(10):
+            print filename
+            try:
+                v = Executable.open(filename)
+                break
+            except IOError:
+                pass
+            filename = '../'+filename
+
     sections = v['Pe']['Sections']
 
     exports = v['Pe']['OptionalHeader']['DataDirectory'][0]
@@ -61,20 +97,18 @@ if __name__ == '__main__':
         print exports.l
         break
 
-    if True:
-        imports = v['Pe']['OptionalHeader']['DataDirectory'][1]
-        while imports['VirtualAddress'].int() != 0:
-            imports = imports.get()
-            print imports.l
-            break
+    imports = v['Pe']['OptionalHeader']['DataDirectory'][1]
+    while imports['VirtualAddress'].int() != 0:
+        imports = imports.get()
+        print imports.l
+        break
 
-    if False:
-        relo = v['Pe']['OptionalHeader']['DataDirectory'][5].get().load()
-        baseaddress = v['Pe']['OptionalHeader']['ImageBase']
-        section = sections[0]
-        data = section.get()
-        for e in relo.getbysection(section):
-            for a,r in e.getrelocations(section):
-                print e
-                data = r.relocate(data, 0, section)
+    relo = v['Pe']['OptionalHeader']['DataDirectory'][5].get().load()
+    baseaddress = v['Pe']['OptionalHeader']['ImageBase']
+    section = sections[0]
+    data = section.get()
+    for e in relo.getbysection(section):
+        for a,r in e.getrelocations(section):
+            print e
+            data = r.relocate(data, 0, section)
 

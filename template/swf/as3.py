@@ -10,7 +10,7 @@ class d64(pfloat.double): pass
 # The variable-length encoding for u30, u32, and s32 uses one to five bytes, depending on the magnitude of the value encoded. Each byte contributes its low seven bits to the value. If the high (eighth) bit of a byte is set, then the next byte of the abcFile is also part of the value. In the case of s32, sign extension is applied: the seventh bit of the last byte of the encoding is propagated to fill out the 32-bits of the decoded value.
 
 # wtf, does this mean we're always a 35-bit number, discarding 3?
-import bitmap
+from ptypes import bitmap
 class _vle(pbinary.terminatedarray):
     class _object_(pbinary.struct):
         _fields_ = [

@@ -36,14 +36,14 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(pbinary.struct):
         base = self.getparent(headers.datadirectory.Resource)['VirtualAddress'].d
         makepointer = lambda x: dyn.rpointer(x, object=lambda s: base)
         p = makepointer(IMAGE_RESOURCE_DIRECTORY_TABLE) if self['type'] == 1 else makepointer(IMAGE_RESOURCE_DATA_ENTRY)
-        return self.parent.newelement(p, 'RVA', self.getoffset()).set(n).d
+        return self.parent.new(p, __name__='RVA', offset=self.getoffset()).set(n).d
 
     d = property(fget=deref)
 IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA = pbinary.littleendian(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA)
 
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_NAME(pstruct.type):
     _fields_ = [
-        (virtualaddress(IMAGE_RESOURCE_DIRECTORY_STRING), 'Name RVA'),
+        (virtualaddress(IMAGE_RESOURCE_DIRECTORY_STRING), 'Name RVA'),      # FIXME: this is a (1,31) binary structure and not a 32-bit address. dereferencing this is as a pointer without grabbing lower 31-bits is incorrect
         (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA, 'RVA'),
     ]
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_ID(pstruct.type):

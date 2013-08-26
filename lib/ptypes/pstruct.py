@@ -79,6 +79,9 @@ class type(__pstruct_generic):
             result = super(type, self).load()
         return result
 
+    def summary(self):
+        return super(ptype.container,self).summary()
+
     def details(self):
         if self.initializedQ():
             row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, value.summary()])

@@ -1,7 +1,25 @@
 import pint
 import bitmap,math
 
-class float_t(pint.integer_t):
+class type(pint.integer_t):
+    def details(self):
+        return '%s (%x)'% (self.getf(), self.number())
+
+    def setf(self, value):
+        raise NotImplementedError
+
+    def getf(self):
+        raise NotImplementedError
+
+    float = __float__ = lambda s: s.getf()
+    set = lambda s,v: s.setf(v)
+
+class float_t(type):
+    """Represents a packed floating point number
+
+    components = (signflag, exponent, fraction)
+    """
+
     # FIXME: include support for NaN, and {+,-}infinity (special exponents)
     #        include support for unsignedness (binary32)
     #        round up as per ieee-754
@@ -9,11 +27,8 @@ class float_t(pint.integer_t):
 
     components = None    #(sign, exponent, fraction)
 
-    def details(self):
-        return '%s (%x)'% (float(self), int(self))
-
     def round(self, bits):
-        # round the floating point number to the specified number of bits
+        """round the floating point number to the specified number of bits"""
         raise NotImplementedError
 
     def setf(self, value):
@@ -37,7 +52,7 @@ class float_t(pint.integer_t):
         result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
         result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
 
-        return super(float_t, self).set( result[0] )
+        return super(type, self).set( result[0] )
 
     def getf(self):
         """convert the stored floating point number into a python native float"""
@@ -59,9 +74,49 @@ class float_t(pint.integer_t):
         # done
         return math.ldexp( math.copysign(m,s), e)
 
-    float = __float__ = getf
-    set = setf
+class fixed_t(type):
+    fractional = 0      # number of bits to represent fractional part
+    length = 0          # size in bytes of integer
 
+    def details(self):
+        return '%s (%x)'% (self.getf(), self.number())
+
+    def getf(self):
+        n = self.number()
+        shift = 2**self.fractional
+        return float(n) / shift
+
+    def setf(self, value):
+        integral,fraction = math.trunc(value),value-math.trunc(value)
+        shift = 2**self.fractional
+        magnitude = (self.length*8)-self.fractional
+
+        integral &= int(2**magnitude-1)  # clamp
+        integral *= 2**magnitude
+
+        n = integral + math.trunc(fraction*shift)
+        return super(type, self).set(n)
+
+class sfixed_t(type):
+    def getf(self):
+        raise NotImplementedError
+        n = self.number()
+        shift = 2**self.fractional
+        return float(n) / shift
+
+    def setf(self, value):
+        raise NotImplementedError
+        integral,fraction = math.trunc(value),value-math.trunc(value)
+        shift = 2**self.fractional
+        magnitude = (self.length*8)-self.fractional
+
+        integral &= int(2**magnitude-1)  # clamp
+        integral *= 2**magnitude
+
+        n = integral + math.trunc(fraction*shift)
+        return super(type, self).set(n)
+
+###
 class half(float_t):
     length = 2
     components = (1, 5, 10)
@@ -108,7 +163,7 @@ if __name__ == '__main__':
             i = 0
 
         a = cls()
-        super(float_t, a).set(integer)
+        super(type, a).set(integer)
         n = a.getf()
 
         result = bool(n == expected)
@@ -172,3 +227,24 @@ if __name__ == '__main__':
     print '[double precision assignments]'
     _=try_assignments(double, double_precision)
     print 'Success\n' if _ else 'Failure\n'
+
+    ## fixed
+    class word(fixed_t):
+        length,fractional = 2,8
+    class dword(fixed_t):
+        length,fractional = 4,16
+
+    print '[fixed-point word]'
+    x = word()
+    x.set(30.5)
+    _ = x.serialize()
+    print 'word : 30.5 : integral :', 'Success' if _[0] == '\x1e' else 'Failure'
+    print 'word : 30.5 : fractional :', 'Success' if _[1] == '\x80' else 'Failure'
+    print ''
+
+    print '[fixed-point dword]'
+    x = dword()
+    x.set(1.25)
+    _ = x.serialize()
+    print 'dword : 1.25 : integral :', 'Success' if _[:2] == '\x00\x01' else 'Failure'
+    print 'dword : 1.25 : fractional :', 'Success' if _[2:] == '\x40\x00' else 'Failure'

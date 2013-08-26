@@ -8,6 +8,13 @@ class UINT8( pint.bigendian(pint.uint8_t) ): pass
 class INT32( pint.bigendian(pint.int32_t) ): pass
 class ULONG32( pint.bigendian(pint.uint32_t) ): pass
 
+class object_id(UINT32):
+    def str(self):
+        return self.serialize()
+
+    def details(self):
+        return self.summary()
+
 class Str8(pstruct.type):
     _fields_ = [
         (UINT8, 'len'),
@@ -47,7 +54,7 @@ class RealMedia_Header(pstruct.type):
         return int(self['size'])
 
     _fields_ = [
-        (UINT32, 'object_id'),
+        (object_id, 'object_id'),
         (UINT32, 'size'),
         (UINT16, 'object_version'),
         (__object, 'object'),
@@ -119,11 +126,12 @@ class Codec_Data_cook_v5(pstruct.type):
         (UINT32, 'cookversion'),
         (UINT16, 'samples_per_frame'),
         (UINT16, 'subbands'),
-#        (UINT16, 'unknown_0'),
-#        (UINT8, 'unknown_2'),
-#        (UINT8, 'unknown_3'),
-#        (ULONG32, 'length'),
-#        (lambda s: dyn.block(int(s['length'].l)), 'data')
+
+        (UINT16, 'unused'),
+        (UINT8, 'subband_start'),
+        (UINT8, 'vlc_bits'),
+
+        (ULONG32, 'channel_mask'),
     ]
 
 @video_codec.define
@@ -194,9 +202,7 @@ class Type_Specific_v5_Audio(pstruct.type):
         (UINT32, 'data_size'),
         (UINT16, 'version2'),
 
-        (UINT16, 'header_size?'),
-        (UINT16, 'header_size'),
-#        (UINT32, 'header_size'),
+        (UINT32, 'header_size'),
 
         (UINT16, 'flavor'),
         (UINT32, 'coded_frame_size'),
@@ -223,10 +229,13 @@ class Type_Specific_v5_Audio(pstruct.type):
         (UINT32, 'genr'),
         (dyn.block(4), 'codec'),
 
-        (UINT32, 'unknown[18]'),
-        (UINT32, 'unknown[19]'),
-        (UINT32, 'unknown[1a]'),
-        (UINT16, 'unknown[1b]'),
+        (dyn.block(3), 'unknown[18]'),
+        (UINT8, 'unknown[19]'),
+
+#        (UINT32, 'unknown[18]'),
+#        (UINT32, 'unknown[19]'),
+#        (UINT32, 'unknown[1a]'),
+#        (UINT16, 'unknown[1b]'),
     ]
 
     def codec(self):
@@ -272,15 +281,14 @@ class Type_Specific_RealAudio(pstruct.type):
         version = int(self['object_version'].l)
 
         try:
-            type = audio_codec.lookup((fourcc, version))
-            return dyn.clone(type, blocksize=lambda s: int(self['i_codec'].l))
+            type = audio_codec.lookup((version, fourcc))
         except KeyError:
             logging.warn('%s:%s: Unable to find codec "%s" version %d'%(self.__module__, self.shortname(), fourcc, version))
-
-        return ptype.empty   #XXX
+            return ptype.empty   #XXX
+        return dyn.clone(type, blocksize=lambda s: int(self['i_codec'].l))
 
     _fields_ = [
-        (UINT32, 'object_id'),
+        (object_id, 'object_id'),
         (UINT16, 'object_version'),
         (__object, 'object'),
         (UINT32, 'i_codec'),
@@ -362,6 +370,8 @@ class RealMedia_MediaProperties_Header_v0(pstruct.type):
             return dyn.clone(Type_Specific_RealVideo, blocksize=lambda s: typesize)
         elif mimetype == 'audio/x-pn-realaudio':
             return dyn.clone(Type_Specific_RealAudio, blocksize=lambda s: typesize)
+        elif mimetype == 'logical-fileinfo':
+            return LogicalStream
         logging.warn('%s:%s: Unable to identify mimetype "%s"'%(self.__module__, self.shortname(), mimetype))
         return dyn.block(typesize)
 
@@ -417,6 +427,15 @@ class RealMedia_Index_Chunk_Header(pstruct.type):
         (lambda s: dyn.array( IndexRecord, int(s['num_indices'].l) ), 'packets')
     ]
 
+@realmedia_header.define
+class RealMedia_Data_Chunk_Header(pstruct.type):
+    type = (0, 'DATA')
+    _fields_ = [
+        (UINT32, 'num_packets'),
+        (UINT32, 'next_data_header'),
+        (lambda s: dyn.array(Media_Packet_Header, s['num_packets'].l.int()), 'packets')
+    ]
+
 ### logical stream structures
 class LogicalStream_v0(RealMedia_Structure):
     object_version = 0
@@ -434,12 +453,25 @@ class LogicalStream(RealMedia_Structure):
     _object_ = { 0 : LogicalStream_v0 }
 
 class NameValueProperty_v0(pstruct.type):
+    def __value_data(self):
+        v = self['type'].l.int()
+        l = self['value_length'].l.int()
+
+        if v == 0:
+            assert l == 4
+            return UINT32
+        elif v == 2:
+            return dyn.clone(pstr.string, length=l)
+        else:
+            logging.warn('%s:%s: Unknown Value type %x size +%x'%(self.__module__, self.p.shortname(), v, l))
+        return dyn.block(l)
+
     _fields_ = [
         (UINT8, 'name_length'),
         (lambda s: dyn.clone(pstr.string, length=int(s['name_length'].l)), 'name'),
         (INT32, 'type'),
         (UINT16, 'value_length'),
-        (lambda s: dyn.block(int(s['value_length'])), 'value_data')
+        (__value_data, 'value_data')
     ]
 
 class NameValueProperty(RealMedia_Structure):
@@ -447,13 +479,15 @@ class NameValueProperty(RealMedia_Structure):
 
 ### data packets
 class Media_Packet_Header_v0(pstruct.type):
+    PN_RELIABLE_FLAG = 0x0001
+    PN_KEYFRAME_FLAG = 0x0002
     _fields_ = [
         (UINT16, 'length'),
         (UINT16, 'stream_number'),
         (UINT32, 'timestamp'),
         (UINT8, 'packet_group'),
         (UINT8, 'flags'),
-        (lambda s: dyn.block( int(s['length'].l) ), 'data'),
+        (lambda s: dyn.block( int(s['length'].l) - s.p.size()), 'data'),
     ]
 
 class Media_Packet_Header_v1(pstruct.type):
@@ -463,7 +497,7 @@ class Media_Packet_Header_v1(pstruct.type):
         (UINT32, 'timestamp'),
         (UINT16, 'asm_rule'),
         (UINT8, 'asm_flags'),
-        (lambda s: dyn.block( int(s['length'].l) ), 'data'),
+        (lambda s: dyn.block( int(s['length'].l) - s.p.size()), 'data'),
     ]
 
 class Media_Packet_Header(RealMedia_Record):
@@ -491,13 +525,19 @@ class File(parray.terminated):
         return False
 
 if __name__ == '__main__':
-    ptypes.setsource( ptypes.provider.file('./poc.rma', mode='rb') )
+    import sys
+    import ptypes,rmff
+    ptypes.setsource( ptypes.file(sys.argv[1], mode='rb') )
 
-    self = File()   
-    self.l
+    self = rmff.File()   
+    z = self.l
     print len(self.value)
 
-    offset = 0x16f
-    print self.at(offset)
+#    offset = 0x16f
+#    print self.at(offset)
 
-    typespecific = self[3]['object']['type_specific_data']
+#    typespecific = self[3]['object']['type_specific_data']
+
+    mdpr = [x for x in self.traverse(filter=lambda x: type(x) == rmff.RealMedia_Header) if x['object_id'].serialize() == 'MDPR']
+    for x in mdpr:
+        print x.__name__, x['object']['mime_type']

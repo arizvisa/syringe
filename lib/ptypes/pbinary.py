@@ -1,5 +1,5 @@
 import logging,types
-import ptype,utils,bitmap
+import ptype,utils,bitmap,config
 import inspect
 
 # todo:
@@ -14,22 +14,13 @@ import inspect
 #   a byte and render vertically like pstruct.type instead of outputting
 #   it all on one line
 
-class byteorder:
-    bigendian = object()
-    littleendian = object()
-
 def setbyteorder(endianness):
-    '''
-Sets the _global_ byte order for any pbinary.type.
+    '''Sets the _global_ byte order for any pbinary.type.
     can be either .bigendian or .littleendian
     '''
     global partial
-    if endianness is bigendian:
-        partial.byteorder = byteorder.bigendian
-    else:
-        assert endianness is littleendian
-        partial.byteorder = byteorder.littleendian
-    return
+    assert endianness in (config.byteorder.bigendian,config.byteorder.littleendian), repr(endianness)
+    partial.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
 
 # instance tests
 def istype(t):
@@ -114,16 +105,18 @@ class type(ptype.base):
         '''Given a valid type that we can contain, instantiate a new element'''
         res = force(pbinarytype, self)
 
-        updateattrs = dict(self.attrs)
-        updateattrs.update(attrs)
+        if 'recurse' in attrs:
+            attrs['recurse'].update(self.attributes)
+        else:
+            attrs['recurse'] = self.attributes
 
-        res = res(**updateattrs)
+        res = res(**attrs)
 
         res.parent = self
         res.__name__ = name
         res.setposition(position)
 
-        if 'source' not in updateattrs:
+        if 'source' not in attrs:
             res.source = self.source
         return res
 
@@ -138,7 +131,9 @@ class type(ptype.base):
         return '???'
 
     def contains(self, offset):
-        return (offset >= self.getoffset()) and (offset < self.getoffset()+self.size())
+        nmin = self.getoffset()
+        nmax = nmin+self.blocksize()
+        return (offset >= nmin) and (offset < nmax)
 
     # default methods
     def load(self, **attrs):
@@ -524,13 +519,13 @@ class partial(ptype.container):
 
     initializedQ = lambda s:s.value is not None
     def load(self, **attrs):
-        result = self.__load_bigendian(**attrs) if self.byteorder is byteorder.bigendian else self.__load_littleendian(**attrs)
+        result = self.__load_bigendian(**attrs) if self.byteorder is config.byteorder.bigendian else self.__load_littleendian(**attrs)
         result.setposition(result.getposition(), recurse=True)
         return result
 
     def __load_bigendian(self, **attrs):
         # big-endian. stream-based
-        assert self.byteorder is byteorder.bigendian, '<partial.load> byteorder %s is invalid'% self.byteorder
+        assert self.byteorder is config.byteorder.bigendian, '<partial.load> byteorder %s is invalid'% self.byteorder
         with utils.assign(self, **attrs):
             o = self.getoffset()
             self.source.seek(o)
@@ -542,7 +537,7 @@ class partial(ptype.container):
 
     def __load_littleendian(self, **attrs):
         # little-endian. block-based
-        assert self.byteorder is byteorder.littleendian, '<partial.load> byteorder %s is invalid'% self.byteorder
+        assert self.byteorder is config.byteorder.littleendian, '<partial.load> byteorder %s is invalid'% self.byteorder
         with utils.assign(self, **attrs):
             o,s = self.getoffset(),self.blocksize()
             self.source.seek(o)
@@ -570,10 +565,11 @@ class partial(ptype.container):
     def binaryobject(self, **attrs):
         ofs = self.getoffset()
         obj = force(self._object_, self)
-        updateattrs = dict(self.attrs)
+        updateattrs = dict(self.attributes)
         updateattrs.update(attrs)
         updateattrs['source'] = self.source
         updateattrs['offset'] = ofs
+        updateattrs['parent'] = self
         return obj(**updateattrs)
 
     def bits(self):
@@ -592,11 +588,11 @@ class partial(ptype.container):
         return self.a.blocksize()
 
     def serialize(self):
-        if self.byteorder is byteorder.bigendian:
+        if self.byteorder is config.byteorder.bigendian:
             bmp = self.value.bitmap()
             return bitmap.data(bmp)
 
-        assert self.byteorder is byteorder.littleendian, 'byteorder %s is invalid'% self.byteorder
+        assert self.byteorder is config.byteorder.littleendian, 'byteorder %s is invalid'% self.byteorder
         bmp = self.value.bitmap()
         return ''.join(reversed(bitmap.data(bmp)))
 
@@ -609,10 +605,10 @@ class partial(ptype.container):
         result['partial'] = True
 
         # endianness
-        if self.byteorder is byteorder.bigendian:
+        if self.byteorder is config.byteorder.bigendian:
             result['byteorder'] = 'bigendian'
         else:
-            assert self.byteorder is byteorder.littleendian, 'byteorder %s is invalid'% self.byteorder
+            assert self.byteorder is config.byteorder.littleendian, 'byteorder %s is invalid'% self.byteorder
             result['byteorder'] = 'littleendian'
         return result
 
@@ -658,24 +654,32 @@ class partial(ptype.container):
     def shortname(self):
         return 'pbinary.partial(%s)'% self.value.shortname()
 
-def new(type, **kwds):
-    if istype(type):
-        logging.debug("pbinary.new : Promoting type %s to type partial", repr(type))
-        t = ptype.clone(partial, _object_=type)
-        return t(**kwds)
-    return type(**kwds)
+    def contains(self, offset):
+        """True if the specified ``offset`` is contained within"""
+        nmin = self.getoffset()
+        nmax = nmin+self.blocksize()
+        return (offset >= nmin) and (offset < nmax)
 
+def new(type, **attrs):
+    '''Create a new instance of /type/ applying the attributes specified by /attrs/'''
+    if istype(type):
+        logging.debug("pbinary.new : Instantiating type %s as type partial", repr(type))
+        t = ptype.clone(partial, _object_=type)
+        return t(**attrs)
+    return type(**attrs)
+
+## force type /p/ to a particular endianness
 def bigendian(p):
     if not issubclass(p, partial):
-        logging.warn("pbinary.bigendian : Promoting type %s to type partial", repr(p))
-        p = ptype.clone(partial, _object_=p, byteorder=byteorder.bigendian)
+        logging.debug("pbinary.bigendian : Promoting type %s to type partial", repr(p))
+        p = ptype.clone(partial, _object_=p, byteorder=config.byteorder.bigendian)
     p.__name__ = 'bigendian(%s)'% p._object_.__name__
     return p
 
 def littleendian(p):
     if not issubclass(p, partial):
-        logging.warn("pbinary.littleendian : Promoting type %s to type partial", repr(p))
-        p = ptype.clone(partial, _object_=p, byteorder=byteorder.littleendian)
+        logging.debug("pbinary.littleendian : Promoting type %s to type partial", repr(p))
+        p = ptype.clone(partial, _object_=p, byteorder=config.byteorder.littleendian)
     p.__name__ = 'littleendian(%s)'% p._object_.__name__
     return p
 
@@ -767,7 +771,7 @@ if __name__ == '__main__' and False:
     x = argh2(source=ptypes.prov.string('\xac\x0f'))
     x=x.l
 
-setbyteorder(bigendian)
+setbyteorder(config.integer.byteorder)
 
 if __name__ == '__main__':
     import ptypes,pbinary
@@ -812,7 +816,7 @@ if __name__ == '__main__':
 #        print "test1"
 #        print "size = 4, value1 = 'a', value2 = 'b', value3 = 'c'"
 
-        pbinary.setbyteorder(pbinary.bigendian)
+        pbinary.setbyteorder(config.byteorder.bigendian)
 #        x = RECT(source=provider.string('\x4a\xbc\xde\xf0')).l
         x = pbinary.new(RECT,source=provider.string('\x4a\xbc\xde\xf0')).l
 #        print repr(x)
@@ -1345,7 +1349,6 @@ if __name__ == '__main__':
     @TestCase
     def test31():
         s = '\x04\x00'
-#        pbinary.setbyteorder(pbinary.bigendian)
         class fuq(pbinary.struct):
             _fields_ = [
                 (4, 'zero'),
@@ -1363,7 +1366,7 @@ if __name__ == '__main__':
     @TestCase
     def test32():
         s = '\x00\x04'
-        pbinary.setbyteorder(pbinary.littleendian)
+        pbinary.setbyteorder(config.byteorder.littleendian)
         class fuq(pbinary.struct):
             _fields_ = [
                 (4, 'zero'),
@@ -1417,7 +1420,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test36():
-        pbinary.setbyteorder(pbinary.bigendian)
+        pbinary.setbyteorder(config.byteorder.bigendian)
 
         # terminated-array
         class part(pbinary.struct):
@@ -1442,7 +1445,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test37():
-        pbinary.setbyteorder(pbinary.bigendian)
+        pbinary.setbyteorder(config.byteorder.bigendian)
 
         string = "ABCDEFGHIJKL"
         src = provider.string(string)
@@ -1460,7 +1463,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test38():
-        pbinary.setbyteorder(pbinary.littleendian)
+        pbinary.setbyteorder(config.byteorder.littleendian)
 
         string = "ABCDEFGHIJKL"
         src = provider.string(string)
@@ -1478,7 +1481,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test39():
-        pbinary.setbyteorder(pbinary.bigendian)
+        pbinary.setbyteorder(config.byteorder.bigendian)
 
         class st(pbinary.struct):
             _fields_ = [
@@ -1501,7 +1504,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test40():
-        pbinary.setbyteorder(pbinary.bigendian)
+        pbinary.setbyteorder(config.byteorder.bigendian)
 
         class argh(pbinary.blockarray):
             _object_ = 32
