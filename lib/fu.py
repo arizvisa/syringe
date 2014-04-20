@@ -1,19 +1,25 @@
 '''serialize/deserialize almost any kind of python object'''
 
+# TODO:
+#       memoryview -- not possible? .tolist or .tobytes will return the data, but i haven't found a way to get the object that it references
+#       bytearray -- use str() to get the data
+#       operator.methodcaller -- can be done by using an object with __getattr__ for the name, and grabbing the method's *args,**kwds for the default args. hopefully doing this doesn't influence state...
+
 # TODO: add a decorator that can transform anything into an object that will pass an instance of self
 #          to serialization service
 
-import __builtin__
+import __builtin__,logging,sys
+__all__ = ['caller','pack','unpack','loads','dumps']
 
 VERSION = '0.7'
 
+## FIXME: none of these are enabled due to their hackiness, search for XXX
 # attribute[ignore=list of fu type names] -- ignore serializing/deserializing these types
 # attribute[globals=dict] -- use the provided dict as the globals for deserialized objects
 
 # attribute[exclude=list of var names] -- ignore serializing/deserializing these specific names
 # attribute[local=list of module names] -- use the local versions of these modules
 
-## FIXME: none of the recurse attributes have been implemented
 # attribute[recurse={type name : [list of types]}] -- only recurse into these types from this type
 # attribute[norecurse={type name : [list of types]}] -- don't recurse into these types from this type
 
@@ -126,9 +132,9 @@ class package:
             # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
-#                    return partial  # XXX
+                    return partial  # XXX
                     globals()['error'] = instance
-                    raise KeyError(instance)
+                    raise KeyError,(instance, 'Unable to determine module from builtin method')
                 return builtin_
 
             # non-serializeable descriptors
@@ -143,11 +149,12 @@ class package:
                 raise KeyError(instance)
 
             # catch-all object
-            if hasattr(instance, '__dict__'): # or hasattr(instance, '__slots__'):  # XXX
+            if hasattr(instance, '__dict__') or hasattr(instance, '__slots__'):     # is this an okay assumption?
                 return object_
 
             # FIXME: if it follows the pickle protocol..
             if hasattr(instance, '__getstate__'):
+                raise NotImplementedError
                 pickle.loads(pickle.dumps(instance))
                 return partial
 
@@ -163,9 +170,6 @@ class package:
             # caches for .store
             self.cons_data = {}
             self.inst_data = {}
-
-            # id lookup for .identify
-            self.__identity = []
 
         def __repr__(self):
             cons = [(k,(package.cache.byid(clsid).__name__,v)) for k,(clsid,v) in self.cons_data.iteritems()]
@@ -209,10 +213,16 @@ class package:
             return data
 
         def identify(self, object):
-            if object in self.__identity:
-                return self.__identity.index(object)
-            self.__identity.append(object)
-            return self.identify(object)
+            return id(object)
+
+            # unique id generator for .identify if id is not guaranteed to be unique (python 2.6?)
+            #if not hasattr(self, '__identity'):
+            #    self.__identity = []
+
+            #if object in self.__identity:
+            #    return self.__identity.index(object)
+            #self.__identity.append(object)
+            #return self.identify(object)
 
         def __getitem__(self, name):
             return self.identify(name)
@@ -224,7 +234,7 @@ class package:
                 return identity
             cls = package.cache.byinstance(object)
 
-            if False:       # XXX
+            if False:       # XXX: if we want to make the module and name part of the protocol. (for assistance with attributes)
                 # get naming info
                 modulename,name = getattr(object,'__module__',None),getattr(object,'__name__',None)
                 fullname = ('%s.%s'% (modulename,name)) if modulename else name
@@ -242,7 +252,7 @@ class package:
             self.store_cache.add(identity)
             data = self.pack_references(data,**attributes)
             self.cons_data[identity] = cls.id,data
-#            self.cons_data[identity] = cls.id,(modulename,name),data
+#            self.cons_data[identity] = cls.id,(modulename,name),data   # XXX: for attributes by name
 
             # recurse into instance data
             data = cls.p_instance(object,**attributes)
@@ -256,11 +266,11 @@ class package:
                 return self.fetch_cache[identity]
 
             # unpack constructor
-#            _,(modulename,name),data = self.cons_data[identity]
+#            _,(modulename,name),data = self.cons_data[identity]    # XXX: for attributes by name
             _,data = self.cons_data[identity]
             cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
 
-            if False:   # XXX
+            if False:   # XXX: attributes
                 # naming info
                 fullname = ('%s.%s'% (modulename,name)) if modulename else name
 
@@ -442,35 +452,30 @@ if 'constants':
 
     @package.cache.register_const
     class tuple(__constant):
-        '''string buffer'''
         @classmethod
         def getclass(cls):
             return (().__class__)
 
     @package.cache.register_const
     class list(__constant):
-        '''string buffer'''
         @classmethod
         def getclass(cls):
             return [].__class__
 
     @package.cache.register_const
     class dict(__constant):
-        '''string buffer'''
         @classmethod
         def getclass(cls):
             return {}.__class__
 
     @package.cache.register_const
     class set(__constant):
-        '''string buffer'''
         @classmethod
         def getclass(cls):
             return __builtin__.set
 
     @package.cache.register_const
     class frozenset(__constant):
-        '''string buffer'''
         @classmethod
         def getclass(cls):
             return __builtin__.frozenset
@@ -510,13 +515,13 @@ if 'constants':
             return (lambda:0).__class__
 
         @classmethod
-        def new(cls, code, globals, **attributes):
+        def new(cls, code, globs, **attributes):
             '''Create a new function'''
             name = attributes.get('name', code.co_name)
             argdefs = attributes.get('argdefs', ())
             closure = attributes.get('closure', ())
             c = cls.getclass()
-            return c(code, globals, name, argdefs, closure)
+            return c(code, globs, name, argdefs, closure)
 
     @package.cache.register_const
     class builtin(__constant):
@@ -585,6 +590,26 @@ if 'constants':
         def getclass(cls):
             return __builtin__.file
 
+    import _weakref
+    @package.cache.register_const
+    class weakref(__constant):
+        @classmethod
+        def getclass(cls):
+            return _weakref.ReferenceType
+
+    @package.cache.register_const
+    class super(__constant):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.super
+
+    import thread
+    @package.cache.register_const
+    class threadlock(__constant):
+        @classmethod
+        def getclass(cls):
+            return thread.LockType
+
 try:
     import imp
     @package.cache.register_const
@@ -601,7 +626,7 @@ if 'core':
     class type_(__type__):
         '''any generic python type'''
 
-        # FIXME: when instantiating a hierarchy of types, this fails to associate
+        # FIXME: when instantiating the hierarchy of types, this fails to associate
         #        the method with the proper parent class. this is apparent if you
         #        compare the help() of the original object to the deserialized object
         @classmethod
@@ -621,20 +646,27 @@ if 'core':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            name,bases = (object.__name__,object.__bases__)
-            result = [name]
+            name,bases,slots = (object.__name__,object.__bases__,__builtin__.tuple(getattr(object,'__slots__')) if hasattr(object,'__slots__') else None)
+            result = [slots,name]
             result.extend(bases)
             return __builtin__.tuple(result)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             result = __builtin__.list(data)
-            return __builtin__.type(result.pop(0), __builtin__.tuple(result), {})
+            slots,name = result.pop(0),result.pop(0)
+            if slots is None:
+                return __builtin__.type(name, __builtin__.tuple(result), {})
+            return __builtin__.type(name, __builtin__.tuple(result), {'__slots__':slots})
 
         @classmethod
         def p_instance(cls, object, **attributes):
+            state = __builtin__.dict(getattr(object,'__dict__', {}))
+            if hasattr(object,'__slots__'):
+                state.update((k,getattr(object,k)) for k in object.__slots__ if hasattr(object,k))
+
             result = {}
-            for k,v in object.__dict__.iteritems():
+            for k,v in state.iteritems():
                 try:
                     _ = package.cache.byinstance(v)
 
@@ -665,9 +697,9 @@ if 'core':
         @classmethod
         def getclass(cls):
             return __builtin__.object
-
+        @classmethod
         def u_constructor(cls, data, **attributes):
-            return self.new()
+            return cls.new()
 
     @package.cache.register
     class object_(type_):
@@ -682,13 +714,14 @@ if 'core':
             name,type = data
 
 #            class type(type): pass  # XXX: this type-change might mess up something
-            # create an instance illegitimately
+            # FIXME: create an instance illegitimately
+            # TODO: bniemczyk would like a hint here for customizing __new__
             _ = type.__init__
             type.__init__ = lambda s: None
             result = type()
             type.__init__ = _
 
-            result.__name__ = name
+            #result.__name__ = name
             return result
 
         @classmethod
@@ -715,7 +748,7 @@ if 'core':
 
     @package.cache.register
     class module_local(__constant):
-        '''module that is locally stored'''
+        '''module that is locally stored in the filesystem'''
         @classmethod
         def getclass(cls):
             return module.getclass()
@@ -731,7 +764,7 @@ if 'core':
 
     @package.cache.register_type
     class module_(module_local):
-        '''a module and it's attributes'''
+        '''a module and it's attributes in memory'''
         @classmethod
         def p_constructor(cls, object, **attributes):
             return object.__name__,object.__doc__
@@ -868,7 +901,7 @@ if 'custom':
         raise ImportError
 
     except ImportError:
-        print 'unable to do _sre serialization'
+        print '_sre serialization not really completed yet'
 
 if 'immuteable':
     @package.cache.register_type
@@ -1036,11 +1069,12 @@ if 'special':
         def getclass(cls):
             return function.getclass()
 
+      # FIXME: having to include the globals for an unbound function (__module__ is undefined) might be weird
+
         @classmethod
         def p_constructor(cls, object, **attributes):
             # so...it turns out that only the closure property is immuteable
             func_closure = object.func_closure if object.func_closure is not None else ()
-
             assert object.__module__ is not None, 'FIXME: Unable to serialize an unbound function'
 #            return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure),object.func_globals
             return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure)
@@ -1051,10 +1085,10 @@ if 'special':
             modulename,code,closure = data
             assert object.__module__ is not None, 'FIXME: Unable to deserialize an unbound function'
 
-            # XXX: assign the globals from commandline
-            globals = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
+            # XXX: assign the globals from hints if requested
+            globs = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
             result = cls.__new_closure(*closure)
-            return function.new(code, globals, closure=result)
+            return function.new(code, globs, closure=result)
 
         @classmethod
         def p_instance(cls, object, **attributes):
@@ -1139,6 +1173,7 @@ if 'special':
 
     @package.cache.register
     class file_(__constant):
+        '''A file..for serializing the contents of the file look at file_contents'''
         @classmethod
         def getclass(cls):
             return file.getclass()
@@ -1157,6 +1192,7 @@ if 'special':
 
     @package.cache.register
     class file_contents(file_):
+        # FIXME: save the whole file.. (should be selected via a hint)
         @classmethod
         def getclass(cls):
             return file.getclass()
@@ -1180,7 +1216,61 @@ if 'special':
             file.seek(offset)
             return file
 
-    # XXX: the following aren't tested
+    import _weakref
+    @package.cache.register_type
+    class weakref_(__type__):
+        @classmethod
+        def getclass(cls):
+            return _weakref.ReferenceType
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return (object(),)
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            object, = data
+            class extref(_weakref.ref):
+                def __new__(self, object):
+                    self.__cycle__ = object
+                    return _weakref.ref(object)
+#                    return super(extref,self)(object)
+            return extref(object)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    @package.cache.register_type
+    class super_(__type__):
+        @classmethod
+        def getclass(cls):
+            return __builtin__.super
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return (object.__thisclass__, object.__self__)
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            thisclass,self = data
+            return __builtin__.super(thisclass,self)
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    import thread
+    @package.cache.register_type
+    class threadlock_(__type__):
+        @classmethod
+        def getclass(cls):
+            return thread.LockType
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return ()
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            return thread.allocate_lock()
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return ()
+
+    # XXX: the following aren't completed...maybe never will be
 #    raise NotImplementedError
     @package.cache.register_type
     class generator_(__type__):
@@ -1190,13 +1280,16 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
+            #logging.warning('fu : Not allowed to store generator_ objects : %s'% repr(object))
+            raise NotImplementedError('Not allowed to store generator_ objects')
             return object.gi_code,object.gi_frame
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             co,fr = data
             result = function.new(co, fr.f_globals)
-            raise NotImplementedError
+            #logging.warning('fu : Not allowed to create generator_ objects')
+            raise NotImplementedError('Not allowed to create generator_ objects')
             return result
 
         @classmethod
@@ -1208,11 +1301,21 @@ if 'special':
             return instance
 
     @package.cache.register_type
-    class frame_(partial):  # FIXME: can't construct these
+    class frame_(partial):  # FIXME: can't construct these, we can create a shell object for these tho maybe
         attributes = ['f_back', 'f_builtins', 'f_code', 'f_exc_traceback', 'f_exc_type', 'f_exc_value', 'f_globals', 'f_lasti', 'f_lineno', 'f_locals', 'f_restricted', 'f_trace']
         @classmethod
         def getclass(cls):
             return frame.getclass()
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            raise NotImplementedError('Not allowed to store frame_ objects')
+            #logging.warning('fu : Not allowed to store frame_ objects : %s'% repr(object))
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            raise NotImplementedError('Not allowed to create frame_ objects')
+            #logging.warning('fu : Not allowed to create frame_ objects')
 
     @package.cache.register_type
     class staticmethod_(__constant):
@@ -1222,11 +1325,12 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            return object.__func__
+            return object.__func__,
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return cls.new(data)
+            fn, = data
+            return cls.new(fn)
 
     @package.cache.register_type
     class classmethod_(__constant):
@@ -1236,27 +1340,42 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            return object.__func__
+            return object.__func__,
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return cls.new(data)
+            fn, = data
+            return cls.new(fn)
 
 ## regular functions
-import cPickle as pickle
+#import cPickle as pickle
+import marshal as pickle
 def dumps(object, **attributes):
-    '''convert any python object into a bzip2 encoded string'''
-    return pickle.dumps(package.pack(object,**attributes)).encode('bz2')
+    '''Convert any python object into a string.'''
+    return pickle.dumps(package.pack(object,**attributes))
 
-def loads(cls, data, **attributes):
-    '''convert a bzip2 encoded string back into a python object'''
-    return package.unpack(pickle.loads(data.decode('bz2')), **attributes)
+def loads(data, **attributes):
+    '''Convert a string back into a python object.'''
+    return package.unpack(pickle.loads(data), **attributes)
 
 def pack(object, **attributes):
+    '''Serialize an instance of a python object into a tuple'''
     return package.pack(object, **attributes)
 
 def unpack(data, **attributes):
+    '''Deserialize a tuple back into an instance'''
     return package.unpack(data, **attributes)
+
+def caller(frame=None):
+    """Return the (module,name) of the requested frame.
+
+    This will default to the calling function if a frame is not supplied.
+    """
+    fr = sys._getframe().f_back if frame is None else frame
+    source,name = fr.f_code.co_filename,fr.f_code.co_name
+    module = [x for x in sys.modules.itervalues() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
+    module, = (None,) if not module else module
+    return module,name
 
 if __name__ == '__main__':
     import traceback
@@ -1555,7 +1674,6 @@ if __name__ == '__main__':
         # error while serializing a 'TypeInfo' object which comes from a module implemented in C
         #   if we can
         import xml.dom.minidom
-        global a,b
         a = fu.package.pack(xml.dom.minidom)
         b = fu.package.unpack(a)
 
@@ -1634,7 +1752,7 @@ if __name__ == '__main__':
         if b is _ast:
             raise Success
 
-    @TestCase
+    #@TestCase
     def test_ptype_pack():
         from ptypes import pint
         a = pint.uint32_t()
@@ -1644,7 +1762,7 @@ if __name__ == '__main__':
         if b.value == result:
             raise Success
 
-    @TestCase
+    #@TestCase
     def test_continuation_yield():
         def fn():
             yield 1
@@ -1655,6 +1773,84 @@ if __name__ == '__main__':
         b = fu.package.pack(a)
         c = fu.package.unpack(b)
         if c.next() == 2:
+            raise Success
+
+    @TestCase
+    def test_weakref_packunpack():
+        import fu,_weakref
+        reload(fu)
+        a = set(('hello',))
+        b = _weakref.ref(a)
+        c = fu.pack(b)
+        d = fu.unpack(c)
+        if list(b()) == list(d()):
+            raise Success
+
+    @TestCase
+    def test_super_packunpack():
+        import fu,__builtin__
+        class blah(set):
+            def huh(self):
+                return 5
+        class blahsub(blah):
+            def huh(self):
+                return super(blahsub, self)
+        a = blahsub((20,40,60))
+        b = a.huh()
+        c = fu.pack(b)
+        d = fu.unpack(c)
+        if d.huh() == b.huh():
+            raise Success
+
+    @TestCase
+    def test_threadlock_packunpack():
+        import thread,fu
+        a = thread.allocate_lock()
+        b = fu.pack(a)
+        c = fu.unpack(b)
+        if type(a) == type(c):
+            raise Success
+
+    @TestCase
+    def test_object_instance_packunpack():
+        import fu
+        a = object()
+        b = fu.pack(a)
+        c = fu.unpack(b)
+        if type(a) == type(c) and isinstance(c,type(a)):
+            raise Success
+
+    @TestCase
+    def test_instancevalue_slots_packunpack():
+        import fu
+        class mytype(object):
+            __slots__ = ['blargh','huh']
+            readonly = 20
+            #blargh = 500
+            #huh = 20
+
+        a = mytype()
+        b = fu.unpack(fu.pack(a))
+
+        try:
+            b.blargh = 500
+            b.huh = 500
+        except AttributeError:
+            raise Failure("Unable to assign to slots")
+
+        try:
+            b.readonly = 20
+            raise Failure("Successfully assigned to a readonly property")
+        except AttributeError:
+            pass
+
+        try:
+            b.nope = None
+            raise Failure("Assigned a property to a __dict__ instead of an allocated slot")
+        except AttributeError:
+            pass
+
+        if b.blargh == b.huh == 500 and b.readonly == 20:
             raise Success
 
 if __name__ == '__main__':

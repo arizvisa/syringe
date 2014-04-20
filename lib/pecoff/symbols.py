@@ -10,9 +10,9 @@ class IMAGE_SYM(ptypes.pint.enum, int16):
         ('DEBUG', 0xfffe)       #-2)
     ]
 
-    def get(self):
+    def getSection(self):
         '''Returns the physical section number index if defined, otherwise None'''
-        n = int(self)
+        n = self.num()
         if n in [0, 0xffff, 0xfffe, -1, -2]:
             return None
         return n - 1
@@ -79,7 +79,7 @@ class IMAGE_SYM_CLASS(ptypes.pint.enum, uint8):
 
     def getauxtype(self):
         '''return the pType constructor for the symbol storage class type'''
-        res = int(self)
+        res = self.num()
         try:
             res = AuxiliaryRecord.lookupByStorageClass(res)
         except KeyError:
@@ -92,15 +92,15 @@ class ShortName(pstruct.type):
         (off_t, 'Offset')
     ]
 
-    def get(self):
-        return self.str()
-
     def str(self):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
         stringtable = self.parent.parent.parent['Strings']
-        if int(self['IsShort']) != 0x00000000:
+        if self['IsShort'].num() != 0x00000000:
             return ptypes.utils.strdup( self.serialize(), terminator='\x00')
-        return stringtable.extract( int(self['Offset']) )
+        return stringtable.extract( self['Offset'].num() )
+
+    def get(self):
+        return self.str()
 
     def set(self, string):
         if len(string) <= 8:
@@ -124,25 +124,25 @@ class Symbol(pstruct.type):
     ]
 
     def friendly(self):
-        return '<%s section:%s storageclass:%d aux:%d>'%(self['Name'].str(), self['SectionNumber'].get(), int(self['StorageClass']), int(self['NumberOfAuxSymbols']) )
+        return '<%s section:%s storageclass:%d aux:%d>'%(self['Name'].str(), self['SectionNumber'].num(), self['StorageClass'].num(), self['NumberOfAuxSymbols'].num() )
 
-    def __repr__(self):
+    def repr(self):
         if self.initialized:
             kwds = ['SectionNumber', 'Type', 'StorageClass', 'NumberOfAuxSymbols']
-            res = ', '.join(['%s:%d'% (k, int(self[k])) for k in kwds])
+            res = ', '.join(['%s:%d'% (k, self[k].num()) for k in kwds])
             #print self['Name'].get(), self['Value']
-            return '[%x] %s %s {%s} Value: 0x%x'% (self.getoffset(), self.__class__, self['Name'].str(), res, int(self['Value']))
+            return '[%x] %s %s {%s} Value: 0x%x'% (self.getoffset(), self.__class__, self['Name'].str(), res, self['Value'].num())
         return super(Symbol, self).__repr__()
 
     def getentire(self):
         p = self.parent
         index = p.index(self)
-        return p[index : index+1 + int(self['NumberOfAuxSymbols'])]
+        return p[index : index+1 + self['NumberOfAuxSymbols'].num()]
 
     def getaux(self):
         p = self.parent
         index = p.index(self)+1
-        return p[index : index + int(self['NumberOfAuxSymbols'])]
+        return p[index : index + self['NumberOfAuxSymbols'].num()]
 
 class SymbolTable(parray.type):
     lastsymbol = Symbol()
@@ -156,18 +156,18 @@ class SymbolTable(parray.type):
             res = self.value[-1]
             if type(res) is Symbol:
                 res.load()
-                self.auxleft = int(res['NumberOfAuxSymbols']) - 1
+                self.auxleft = res['NumberOfAuxSymbols'].num() - 1
 
             cls = self.lastsymbol['StorageClass'].getauxtype()
-            res = self.newelement(cls, str(index), offset)
+            res = self.new(cls, __name__=str(index), offset=offset)
             res.load()
             return res
 
         # start with a symbol
-        res = self.newelement(Symbol, str(index), offset)
+        res = self.new(Symbol, __name__=str(index), offset=offset)
         res.load()
         self.lastsymbol = res
-        self.auxleft = int(res['NumberOfAuxSymbols'])
+        self.auxleft = res['NumberOfAuxSymbols'].num()
         return res
 
     _object_ = nextSymbol
@@ -175,7 +175,7 @@ class SymbolTable(parray.type):
     def getsymbolandaux(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
-        return self.value[index : index+1 + int(symbol['NumberOfAuxSymbols'])]
+        return self.value[index : index+1 + symbol['NumberOfAuxSymbols'].num()]
 
 class AuxiliaryRecord(pstruct.type):
     @classmethod
@@ -226,7 +226,7 @@ class FileAuxiliaryRecord(AuxiliaryRecord):
         (dyn.block(18), 'File Name')
     ]
 
-    def __repr__(self):
+    def repr(self):
         return ' '.join([self.name(), ptypes.utils.strdup(self['File Name'], terminator='\x00')])
 
 class SectionAuxiliaryRecord(AuxiliaryRecord):
@@ -254,13 +254,13 @@ class StringTable(pstruct.type):
     def fetchData(self):
         if not self['Size'].initialized:    # XXX: this doesn't seem right
             self['Size'].load()
-        count = int(self['Size'])
+        count = self['Size'].num()
         cls = dyn.block(count - 4)
-        return self.newelement(cls, cls.__name__)
+        return self.new(cls, __name__=cls.__name__)
 
     def initialized(cls, value):
         def fn(self):
-            res = self.newelement(cls, cls.__name__, self.getoffset() + self.size())
+            res = self.new(cls, __name__=cls.__name__, offset=self.getoffset() + self.size())
             res.set(value)
             return res
         return fn
@@ -270,10 +270,11 @@ class StringTable(pstruct.type):
         (fetchData, 'Data')
     ]
 
-    def get(self, offset):
-        import logging
-        warnings.warn('%s.get(offset) is deprecated for %s.extract(offset)'%(self.__class__.__name__,self.__class__.__name__), DeprecationWarning, stacklevel=2)
-        return self.extract(offset)
+    if False:
+        def get(self, offset):
+            import logging
+            warnings.warn('%s.get(offset) is deprecated for %s.extract(offset)'%(self.__class__.__name__,self.__class__.__name__), DeprecationWarning, stacklevel=2)
+            return self.extract(offset)
 
     def extract(self, offset):
         '''return the string associated with a particular offset'''
@@ -290,24 +291,24 @@ class StringTable(pstruct.type):
         return ofs
 
 class SymbolTableAndStringTable(pstruct.type):
-    length = 0
+    count = 0
 
     _fields_ = [
-        (lambda s: dyn.clone(SymbolTable, length=s.length), 'Symbols'),
+        (lambda s: dyn.clone(SymbolTable, length=s.count), 'Symbols'),
         (StringTable, 'Strings'),
     ]
 
     ## this is all done in O(n) time...   FIXME: pull this functionality into an object that manages symbols instead of using ptypes
     def names(self):
-        return [x['Name'].get() for x in self['Symbols'] if type(x) is Symbol]
+        return [x['Name'].str() for x in self['Symbols'] if type(x) is Symbol]
 
-    def get(self, name=None):
+    def getSymbol(self, name=None):
         if not self.initialized:
             self.load()
 
         if name:
-            for x in self.get():
-                if x['Name'].get() == name:
+            for x in self.getSymbol():
+                if x['Name'].str() == name:
                     return self['Symbols'].getsymbolandaux(x)[0]
                 continue
                     
@@ -327,15 +328,15 @@ class SymbolTableAndStringTable(pstruct.type):
                 return self['Symbols'].getsymbolandaux(x)[0]
 
     def getaux(self, name):
-        for x in self.get():
-            if int(x['NumberOfAuxSymbols']) > 0 and x['Name'].get() == name:
+        for x in self.getSymbol():
+            if x['NumberOfAuxSymbols'].num() > 0 and x['Name'].str() == name:
                 return self['Symbols'].getsymbolandaux(x)[1:]
             continue
         return ()
 
     def assign(self, name, value):
         try:
-            sym = self.get(name)
+            sym = self.getSymbol(name)
             sym['Value'].set(value)
             sym['SectionNumber'].set(-1)    # absolute address
 
@@ -345,7 +346,7 @@ class SymbolTableAndStringTable(pstruct.type):
         return
 
     def add(self, name):
-        logging.info('pecoff.definitions.symbols.SymbolTablesAndString : adding new symbol %s'% name)
+        logging.info('pecoff.symbols.SymbolTablesAndString : adding new symbol %s'% name)
         if ptype.istype(name):
             name = name.serialize()
         else:
@@ -353,7 +354,7 @@ class SymbolTableAndStringTable(pstruct.type):
 
         symbols = self['Symbols']
 
-        v = symbols.newelement(Symbol, len(self.value), self.getoffset() + self.size())
+        v = symbols.new(Symbol, __name__=len(self.value), offset=self.getoffset() + self.size())
         v.source = None
         v.alloc()
         v['Name'].set(name)

@@ -1,14 +1,18 @@
 '''base ptype element'''
-__all__ = 'istype,iscontainer,type,container,rethrow,none,assign'.split(',')
-import bitmap,provider,utils,config
-import types,logging
-import inspect
-from utils import assign
+import sys,types,inspect,functools,itertools
+from . import bitmap,provider,utils,config,error
+Config = config.defaults
+
+__all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
 
 ## this is all a horrible and slow way to do this...
 def isiterator(t):
     """True if type ``t`` is iterable"""
     return hasattr(t, '__iter__') and hasattr(t, 'next')
+
+def iscallable(t):
+    """True if type ``t`` is a code object that can be called"""
+    return callable(t) and hasattr(t, '__call__')
 
 def istype(t):
     """True if type ``t`` inherits from ptype.type"""
@@ -65,12 +69,11 @@ def force(t, self, chain=None):
         if isiterator(t):
             return force(t.next(), self, chain)
 
-    raise ValueError('ptype.force : chain=%s : refusing request to resolve to a non-ptype : %s'% (repr(chain), ','.join(self.backtrace())))
-
-## ...and yeah... now it's done.
+    path = ','.join(self.backtrace())
+    raise error.TypeError(self, 'force<ptype>', message='chain=%s : refusing request to resolve %s to a type that does not inherit from ptype.type : %s'% (repr(chain), repr(t), path))
 
 # fn must be a method, so args[0] will fetch self
-import sys,traceback
+import traceback
 def rethrow(fn):
     """A decorator that logs any exceptions that are thrown by function ``fn``"""
     def catch(*args, **kwds):
@@ -94,7 +97,7 @@ def rethrow(fn):
             res = []
             res.append('')
             res.append('Caught exception: %s\n'% exception)
-            res.append('%s<%x:+??> %s =>'%(self.shortname(),self.getoffset(), path))
+            res.append('%s<%x:+??> %s =>'%(self.classname(),self.getoffset(), path))
             res.append('\t<method name> %s'% fn.__name__)
 
             if self.initializedQ():
@@ -112,57 +115,86 @@ def rethrow(fn):
             res.append('')
             sys.stderr.write('\n'.join(res))
             raise
+            # FIXME: these exceptions look ugly as hell
 
         pass
-    catch.__name__ = 'catching(%s)'% fn.__name__
+    functools.update_wrapper(catch, fn)
+    catch.__name__ = 'catching(%s)'% catch.__name__
     return catch
 
 def debug(ptype):
     """``rethrow`` all exceptions that occur during initialization of ``ptype``"""
-    assert istype(ptype), '%s is not a ptype'% repr(ptype)
-    class newptype(ptype):
+    if not istype(ptype):
+        raise error.TypeError(ptype, 'debug', message='%s is not a ptype'% repr(ptype))
+
+    # FIXME: when loading, display the current offset and position
+    class decorated(ptype):
+        __doc__ = ptype.__doc__
         @rethrow
         def deserialize_block(self, block):
-            return super(newptype, self).deserialize_block(block)
+            return super(decorated, self).deserialize_block(block)
 
         @rethrow
         def serialize(self):
-            return super(newptype, self).serialize()
+            return super(decorated, self).serialize()
 
         @rethrow
         def load(self, **kwds):
-            return super(newptype, self).load(**kwds)
+#            print 'loading', self.classname(), self.name()
+            return super(decorated, self).load(**kwds)
 
         @rethrow
         def commit(self, **kwds):
-            return super(newptype, self).commit(**kwds)
+            return super(decorated, self).commit(**kwds)
 
-    newptype.__name__ = 'debug(%s)'% ptype.__name__
-    return newptype
+    decorated.__name__ = 'debug(%s)'% ptype.__name__
+    return decorated
 
 def debugrecurse(ptype):
     """``rethrow`` all exceptions that occur during initialization of ``ptype`` and any sub-elements"""
-    class newptype(debug(ptype)):
+    class decorated(debug(ptype)):
+        __doc__ = ptype.__doc__
         @rethrow
-        def newelement(self, ptype, name='', ofs=0, **attrs):
-            res = force(ptype, self)
-            assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
-            return super(newptype,self).newelement( debug(res), name, ofs, **attrs )
+        def new(self, t, **attrs):
+            res = force(t, self)
+#            print 'creating', self.classname(), self.name(), res
 
-    newptype.__name__ = 'debugrecurse(%s)'% ptype.__name__
-    return newptype
+            if istype(res) or isinstance(res,type):
+                debugres = debug(res)
+                return super(decorated,self).new(debugres, **attrs)
 
-class base(object):
-    # FIXME: this class should implement
+            raise error.TypeError(self, 'debug(new)', message='%s is not a ptype class'% repr(res.__class__))
+
+    decorated.__name__ = 'debugrecurse(%s)'% ptype.__name__
+    return decorated
+
+source = provider.memory()
+class _base_generic(object):
+    # XXX: this class should implement
     #           attribute inheritance
     #           addition and removal of elements to trie
     #           initial attribute creation
     #           attributes not propagated during creation
 
-    source = None       # ptype.prov
+    __slots__ = ('__source','attributes','ignored','parent','value','position')
+
+    # FIXME: it'd probably be a good idea to have this not depend on globals.source,
+    #        and instead have globals.source depend on this. 
+    __source = None      # ptype.prov
+    @property
+    def source(self):
+        if self.parent is None:
+            global source
+            return source if self.__source is None else self.__source 
+        if self.__source is None:
+            return self.parent.source
+        return self.__source
+    @source.setter
+    def source(self, value):
+        self.__source = value
 
     attributes = None        # {...}
-    ignored = set(('source','parent','attrs','value','__name__','offset'))
+    ignored = set(('source','parent','attrs','value','__name__','offset','position'))
 
     parent = None       # ptype.base
     p = property(fget=lambda s: s.parent)   # abbr to get to .parent
@@ -172,12 +204,7 @@ class base(object):
 
     def __init__(self, **attrs):
         """Create a new instance of object. Will assign provided named arguments to self.attributes"""
-        try:
-            self.source = self.source or provider.memory()
-        except AttributeError:
-            self.source = provider.memory()
-        self.parent = None
-        self.attributes = {}
+        self.attributes = {} if self.attributes is None else self.attributes
         self.update_attributes(attrs)
 
     position = None     # ()
@@ -191,7 +218,8 @@ class base(object):
     def update_attributes(self, attrs={}, **moreattrs):
         """Update the attributes that will be assigned to object.
 
-        Any attributes defined under the 'recurse' key will be propogated to any sub-elements.
+        Any attributes defined under the 'recurse' key will be propogated to any
+        sub-elements.
         """
         attrs = dict(attrs)
         attrs.update(moreattrs)
@@ -206,7 +234,8 @@ class base(object):
             setattr(self, k, v)
 
         # filter out ignored attributes from the recurse dictionary
-        recurse = dict(((k,v) for k,v in recurse.iteritems() if k not in ignored and not callable(v)))
+        #recurse = dict(((k,v) for k,v in recurse.iteritems() if k not in ignored and not callable(v)))
+        recurse = dict((k,v) for k,v in recurse.iteritems() if k not in ignored)
 
         # update self (for instantiated elements)
         self.attributes.update(recurse)
@@ -218,38 +247,50 @@ class base(object):
 
         return self
 
+    def properties(self):
+        """Return a tuple of properties/characteristics describing the current state of the object to the user"""
+        result = {}
+        if not self.initializedQ():
+            result['uninitialized'] = True
+        if not hasattr(self, '__name__') or len(self.__name__) == 0:
+            result['unnamed'] = True
+        return result
+
     initialized = property(fget=lambda s: s.initializedQ())
     def initializedQ(self):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.initializedQ')
 
     def __nonzero__(self):
         return self.initializedQ()
 
-    def traverse(self, edges, filter=lambda node:True, *args, **kwds):
+    def traverse(self, edges, filter=lambda node:True, **kwds):
         """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
 
         This will iterate in a top-down approach.
         """
-        for self in edges(self, *args, **kwds):
-            if not isinstance(self, type):
+        for self in edges(self, **kwds):
+            if not isinstance(self, base):
                 continue
 
             if filter(self):
                 yield self
 
-            for y in self.traverse(edges=edges, filter=filter, *args, **kwds):
+            for y in self.traverse(edges=edges, filter=filter, **kwds):
                 yield y
             continue
         return
 
+    def deserialize_block(self, block):
+        raise error.ImplementationError(self, 'base.deserialize_block', message='Subclass %s must implement deserialize_block'% self.classname())
     def serialize(self):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.serialize')
+
     def load(self, **attrs):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.load')
     def commit(self, **attrs):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.commit')
     def alloc(self, **attrs):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.alloc')
 
     # abbreviations
     a = property(fget=lambda s: s.alloc())
@@ -257,91 +298,110 @@ class base(object):
     l = property(fget=lambda s: s.load())
 
     def __repr__(self):
-        return self.repr()
-    def repr(self):
-        raise NotImplementedError
+        """Calls .repr() to display the details of a specific object"""
+        prop = '%s'% ','.join('%s=%s'%(k,repr(v)) for k,v in self.properties().iteritems())
+        result = self.repr()
+
+        # multiline
+        if result.count('\n') > 0:
+            if prop:
+                return "%s '%s' {%s}\n%s"%(utils.repr_class(self.classname()),self.name(),prop,result)
+            return "%s '%s'\n%s"%(utils.repr_class(self.classname()),self.name(),result)
+
+        # single-line
+        descr = "%s '%s'"%(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        if prop:
+            return "[%s] %s {%s} %s"%(utils.repr_position(self.getposition()), descr, prop, result)
+        return "[%s] %s %s"%(utils.repr_position(self.getposition()), descr, result)
 
     # naming
-    def name(self):
-        """Return a name similar to Python's standard __repr__() output"""
-        if hasattr(self, '__module__'):
-            module = self.__module__
-            return "<class '%s.%s'>"% (module, self.shortname())
-        return "<class '.%s'>"% (self.shortname())
-
+    @classmethod
+    def typename(cls):
+        """Return the name of the ptype"""
+        if Config.display.show_module_name and hasattr(cls, '__module__') and cls.__module__ is not None:
+            return '%s.%s'%( cls.__module__, cls.__name__ )
+        return cls.__name__
+    def classname(self):
+        """Return the dynamic classname. Can be overwritten."""
+        return self.typename()
     def shortname(self):
-        """Return a shorter version of the type's name. Intended to be overloaded"""
-        return self.__class__.__name__
-
-    def deserialize_block(self, block):
-        raise NotImplementedError('Class %s must implement deserialize_block'% self.shortname())
+        return getattr(self, '__name__', 'unnamed_x%x'%id(self))
+    def name(self):
+        """Return the loaded name of the instance"""
+        name = self.shortname()
+        if Config.display.show_parent_name and self.parent is not None:
+            return '%s.%s'%( self.parent.name(), name )
+        return name
+    def instance(self):
+        name,ofs = self.classname(),self.getoffset()
+        try:
+            bs = self.blocksize()
+            return '%s[%x:+%x]'% (name, ofs, bs)
+        except:
+            pass
+        return '%s[%x:+?]'% (name, ofs)
+        #return '(%s)%s'%( self.classname(), self.name() )
 
     def hexdump(self, **options):
         """Return a hexdump of the type using utils.hexdump(**options)
 
-        options can provide formatting specifiers
-        max=x -- sets the maximum character length to the one specified
-        summary=1 -- return a hexdump clamped to a height specified by /max/
-        oneline=1 -- returns a string repr clamped to a width specified by /max/
+        Options can provide formatting specifiers
+        terse -- display the hexdump tersely if larger than a specific threshold
+        threshold -- maximum number of rows to display
         """
         if not self.initializedQ():
-            raise ValueError('%s is uninitialized'% self.name())
+            raise error.InitializationError(self, 'base.hexdump')
 
-        ofs,buf = self.getoffset(),self.serialize()
-        bs = self.blocksize()
+        ofs,bs,buf = self.getoffset(),self.blocksize(),self.serialize()
+        #ofs,bs,buf = self.getoffset(),self.blocksize(),''.join((x.serialize() if x.initialized else '?'*x.blocksize()) for x in self.value)
+        length = options.pop('length', Config.display.hexdump.width)
+        if 'terse' not in options:
+            return utils.hexdump(buf, offset=ofs, length=length, **options)
+        del options['terse']
 
-        # return a summary of the entire block.
-        if 'summary' in options:
-            rows = bs / 16
-            max = options.get('max', config.summary.multiline)    # XXX: maximum number of rows to display
-            if rows > max:
-                result = []
-                half = max/2
-                bottom = len(buf)-(half*16)
-                skip = len(buf) - half*16*2
-                result.append( utils.hexdump(buf[:half*16], offset=ofs, lines=half) )
-                result.append('%04x  ...skipping %d rows (0x%x bytes)...'% (ofs+half*16, skip/16, skip))
-                result.append( utils.hexdump(buf[-half*16:], offset=ofs+bottom, lines=half) )
-                return utils.indent('\n'.join(result))
+        threshold = options.pop('threshold', Config.display.hexdump.threshold)
+        if threshold > 0 and bs/length > threshold:
+            return '\n'.join( utils.emit_hexrows(buf, threshold, message, width=length) )
+        return utils.hexdump(buf, offset=ofs, length=length, **options)
 
-            del options['summary']
-        elif 'oneline' in options:
-            max = options.get('max', config.summary.oneline)    # XXX: maximum width
-            if bs > max:
-                left = repr(buf[:max/2])
-                right = repr(buf[-max/2:])
-                x = bs-max                  # FIXME: not only is the width /max/ hardcoded, but
-                                            #        this doesn't actually apply the length 
-                                            #        constraint to the outputted string.
-                                            #        
-                return '%s ... skipped %d bytes ... %s'% (left, x, right)
-            del options['oneline']
-
-        options.setdefault('offset', ofs)
-        return utils.indent( utils.hexdump(buf, **options) )
-
-    def properties(self):
-        """Return a tuple of properties/characteristics describing current state of object to the user"""
-        result = {}
+    def details(self, **options):
+        """Return details of the object. This can be displayed in multiple-lines."""
         if not self.initializedQ():
-            result['uninitialized'] = True
-        if not hasattr(self, '__name__') or len(self.__name__) == 0:
-            result['unnamed'] = True
-        else:
-            result['name'] = self.__name__
-        return result
+            return '???'
+        length = options.pop('length', Config.display.hexdump.width)
 
-    def details(self):
-        """Return a detailed __repr__ of the type"""
-        if self.initializedQ():
-            return repr(self.serialize())
-        return '???'
+        ofs,bs,buf = self.getoffset(),self.blocksize(),self.serialize()
+        if not options.get('terse', False):
+            return utils.hexdump(buf, offset=ofs, length=length)
+        if options.has_key('terse'): del options['terse']
 
-    def summary(self):
-        """Return a summary __repr__ of the type"""
-        if self.initializedQ():
-            return repr(self.serialize())
-        return '???'
+        # if larger than threshold...
+        threshold = options.pop('threshold', Config.display.threshold.details)
+        message = options.pop('threshold_message', Config.display.threshold.details_message)
+        if threshold > 0 and bs/length > threshold:
+            return '\n'.join( utils.emit_hexrows(buf, threshold, message, width=length) )
+        return utils.hexdump(buf, offset=ofs, length=length)
+
+    def summary(self, **options):
+        """Return a summary of the object. This can be displayed on a single-line."""
+        if not self.initializedQ():
+            return '???'
+
+        ofs,bs,buf = self.getoffset(),self.blocksize(),self.serialize()
+        if not options.get('terse', False):
+            return '"{}"'.format(utils.emit_repr(buf))
+        if options.has_key('terse'): del options['terse']
+
+        # if larger than threshold...
+        threshold = options.get('threshold', Config.display.threshold.summary)
+        message = options.pop('threshold_message', Config.display.threshold.summary_message)
+        if threshold > 0 and bs > threshold:
+            return '"{}"'.format(utils.emit_repr(buf, threshold, message))
+        return '"{}"'.format(utils.emit_repr(buf))
+
+    def repr(self, **options):
+        """The output that __repr__ displays"""
+        raise error.ImplementationError(self, 'base.repr')
 
     def getparent(self, type=None):
         """Returns the creator of the current type.
@@ -356,48 +416,88 @@ class base(object):
             return self
 
         for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)):
-            if issubclass(x.__class__,type) or x.__class__ == type:
+            if isinstance(x,type) or issubclass(x.__class__,type):
                 return x
             continue
 
-        raise ValueError("ptype.base.getparent : %s : match %s not found in chain : %s"%(self.name(),self.new(type).shortname(), ';'.join(x.shortname() for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))))
+        # XXX
+        chain = ';'.join(utils.repr_instance(x.classname(),x.name()) for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))
+        raise error.NotFoundError(self, 'base.getparent', message="match %s not found in chain : %s[%x:+%x] : %s"%(type.typename(), self.classname(), self.getoffset(), self.blocksize(), chain))
 
-    def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.shortname(), getattr(x, '__name__', repr(None.__class__)), x.getoffset())):
+    def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.classname(), x.name(), x.getoffset())):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
 
-        By default this returns a string describing the type and location of each structure.
+        By default this returns a string describing the type and location of
+        each structure.
         """
         path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None))
         path = [ fn(x) for x in path ]
         return list(reversed(path))
 
     def new(self, ptype, **attrs):
-        """Create a new instance of ``type`` from the current ptype with the provided ``attrs``"""
+        """Create a new instance of ``ptype`` with the provided ``attrs``
+
+        If any ``attrs`` are provided, this will assign them to the new instance.
+        The newly created instance will inherit the current object's .source and
+        any .attributes designated by the current instance.
+        """
         offset = attrs.get('offset',0)
         res = force(ptype, self)
-        assert istype(res) or isinstance(res, type), '%s is not a ptype class'% (res.__class__)
+
+        if not(istype(res) or isinstance(res,type)):
+            raise error.TypeError(self, 'base.new', message='%s is not a ptype class'% repr(res.__class__))
 
         if 'recurse' in attrs:
             attrs['recurse'].update(self.attributes)
         else:
             attrs['recurse'] = self.attributes
 
+        attrs.setdefault('parent', self)
+
         # instantiate an instance if we're given a type
+        assert istype(res) or isinstance(res,type), 'Type %s is not a ptype'% repr(res)
         if istype(res):
             res = res(**attrs)
 
         # update the instance's properties
-        res.parent = self
         res.__name__ = attrs.get('__name__', hex(id(res)) )
-        res.setoffset(offset)
-
-        if 'source' not in attrs:
-            res.source = self.source
+        res.setposition((offset,))
         return res
 
+    def get(self):
+        """Return a representation of a type.
+
+        This value should be able to be passed to .set
+        """
+        raise error.ImplementationError(self, 'base.get')
+
+    def set(self, value, **attrs):
+        """Set value of type to ``value``.
+        
+        Should be the same value as returned by .get
+        """
+        raise error.ImplementationError(self, 'base.set')
+
+    def __eq__(self, other):
+        return id(self) == id(other)
+    def __ne__(self, other):
+        return not(self == other)
+    def __getstate__(self):
+        return ()
+    def __setstate__(self, state):
+        return
+
+class base(_base_generic):
+    # FIXME: move all generic functions that are shared between type and
+    #        container into this class.
+    #        like methods that use only things like position,value,initialized
+    #        or things unimplemented methods/metaclass-like stuff
+    pass
+    
+
 class type(base):
-    """A very most atomical ptype.
+    """The most atomical type.. all container types are composed of these.
     
     Contains the following settable properties:
         length:int<w>
@@ -421,16 +521,101 @@ class type(base):
     attributes = None    # dict of attributes that will get assigned to any child elements
     ignored = base.ignored.union(('source','parent','attrs','value','__name__','length','position'))
     position = 0,
-    #__name__ = '[unnamed-type]'
 
-    ## initialization
+    ## position
+    def setoffset(self, ofs, **_):
+        """Changes the current offset to ``ofs``"""
+        return self.setposition((ofs,))
+    def getoffset(self, **_):
+        """Returns the current offset"""
+        o, = self.getposition()
+        return o
+    offset = property(fget=getoffset, fset=setoffset)
+
+    ## byte stream input/output
+    def deserialize_block(self, block):
+        """Load type using the string provided by ``block``"""
+        bs = self.blocksize()
+        if len(block) < bs:
+            self.value = block[:bs]
+            raise StopIteration(self, len(block))
+
+        # all is good.
+        self.value = block[:bs]
+        return self
+
+    def serialize(self):
+        """Return contents of type as a string"""
+        ofs,bs = self.getoffset(),self.blocksize()
+        if not self.initializedQ():
+            Config.log.warn('type.serialize : %s : Uninitialized during serialization', self.instance())
+            return utils.padding.fill(self.blocksize(), self.padding)
+
+        result = str(self.value)
+        if len(result) < bs:
+            Config.log.info('type.serialize : %s : Partially initialized during serialization', self.instance())
+            padding = utils.padding.fill(bs-len(result), self.padding)
+            result += padding
+
+        if len(result) != bs:
+            raise StopIteration(self, len(result))
+        return result
+
+    ## set/get
+    def set(self, value, **attrs):
+        """Set entire type equal to ``value``"""
+        if value.__class__ is not str:
+            raise error.TypeError(self, 'type.set', message='type %s is not serialized data'% repr(value.__class__))
+        last = self.value
+
+        res = str(value)
+        self.value = res
+        self.length = len(res)
+        return self
+
+    def get(self):
+        return self.serialize()
+
+    ## reading/writing to provider
+    def load(self, **attrs):
+        """Synchronize the current instance with data from the .source attributes"""
+        with utils.assign(self, **attrs):
+            ofs,bs = self.getoffset(),self.blocksize()
+            try:
+                self.source.seek(ofs)
+                block = self.source.consume(bs)
+                self = self.deserialize_block(block)
+            except (StopIteration,error.ProviderError), e:
+                raise error.LoadError(self, consumed=bs, exception=e)
+        return self
+            
+    def commit(self, **attrs):
+        """Commit the current state back to the .source attribute"""
+        try:
+            with utils.assign(self, **attrs):
+                ofs,data = self.getoffset(),self.serialize()
+                self.source.seek(ofs)
+                self.source.store(data)
+            return self
+
+        except (StopIteration,error.ProviderError), e:
+            raise error.CommitError(self, exception=e)
+
+    def alloc(self, **attrs):
+        """Will zero the ptype instance with the provided ``attrs``.
+
+        This can be overloaded in order to allocate space for the new ptype.
+        """
+        attrs.setdefault('source', provider.empty())
+        return self.load(**attrs)
+
+    ## size boundaries
     def size(self):
         """Returns the number of bytes that have been loaded into the type"""
         if self.initializedQ() or self.value is not None:
             return len(self.value)
-
-        logging.debug("ptype.type.size : %s.%s : unable to get size of type, as object is still uninitialized. returning the blocksize instead."%(self.__module__,self.shortname()))
-        return self.blocksize()
+        Config.log.debug("type.size : %s : Unable to get size of type, as object is still uninitialized."% self.instance())
+        return 0
 
     def blocksize(self):
         """Returns the expected size of the type
@@ -443,142 +628,143 @@ class type(base):
         #        make sure to fetch the blocksize first before you .getoffset() on something.
         return int(self.length)
 
+    ## utils
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
         nmin = self.getoffset()
         nmax = nmin + self.blocksize()
         return (offset >= nmin) and (offset < nmax)
 
-    def traverse(self, edges=lambda node:tuple(node.v) if iscontainer(node.__class__) else (), filter=lambda node:True, *args, **kwds):
+    def traverse(self, edges=lambda node:tuple(node.value) if iscontainer(node.__class__) else (), filter=lambda node:True, **kwds):
         """
         This will traverse a tree in a top-down approach.
     
         By default this will traverse every sub-element from a given object.
         """
-        return super(type,self).traverse(edges, filter, *args, **kwds)
+        return super(type,self).traverse(edges, filter, **kwds)
 
-    def set(self, string, **kwds):
-        """Set entire type equal to ``string``"""
-        assert string.__class__ is str
-        last = self.value
+    if False:
+        def collect(self, filter=lambda node:True, **kwds):
+            """Return all contiguous nodes in a trie"""
+            edges = lambda node:tuple(node.value) if iscontainer(node.__class__) else ()
+            encoded = lambda node: (node.d,) if isinstance(node, encoded_t) else ()
+            for node in itertools.chain(self.traverse(edges, filter=filter, **kwds), self.traverse(encoded, filter=filter, **kwds)):
+                parent = node.getparent(encoded_t)
 
-        res = str(string)
-        self.value = res
-        self.length = len(res)
-        return self
+    def collect(self, *args, **kwds):
+        global encoded_t
+        class parentTester(object):
+            def __eq__(self, other):
+                return other.parent is None or isinstance(other, encoded_t) or issubclass(other.__class__, encoded_t)
+        parentTester = parentTester()
 
-    def alloc(self, **attrs):
-        """Will zero the ptype instance with the provided ``attrs``.
-
-        This can be overloaded in order to allocate space for the new ptype.
-        """
-        attrs.setdefault('source', provider.empty())
-        return self.load(**attrs)
-
-    ## operator overloads
-    def __cmp__(self, x):
-        """True if ``x`` is being compared to self.
-
-        If one wants to compare the content of a type, see .compare(x)
-        """
-        return [-1,0][id(self) is id(x)]
-
-    def setoffset(self, ofs, **_):
-        """Changes the current offset to ``ofs``"""
-        return self.setposition((ofs,))
-    def getoffset(self, **_):
-        """Returns the current offset"""
-        o, = self.getposition()
-        return o
-    offset = property(fget=getoffset, fset=setoffset)
-
-    def newelement(self, ptype, name='', ofs=0, **attrs):
-        """Create a sub-element of ``ptype`` with the provided ``name`` and ``ofs``
-
-        If any ``attrs`` are provided, this will assign them to the new instance.
-        The newly created instance will inherit the current object's .source and
-        any .attributes designated by the current instance.
-        """
-        return self.new(ptype, __name__=name, offset=ofs, **attrs)
-
-    ## reading/writing to memory provider
-    def load(self, **attrs):
-        """Synchronize the current instance with data from the .source attributes"""
-
-        with utils.assign(self, **attrs):
-            bs = self.blocksize()
-            self.source.seek(self.getoffset())
-            block = self.source.consume(bs)
-
-            self.value = ''
-            result = self.deserialize_block(block)
-        return result
-
-    def commit(self, **attrs):
-        """Commit the current state back to the .source attribute"""
-        with utils.assign(self, **attrs):
-            self.source.seek( self.getoffset() )
-            self.source.store( self.serialize() )
-        return self
-
-    ## byte stream input/output
-    def serialize(self):
-        """Return contents of type as a string"""
-        if self.initializedQ():
-            result = str(self.value)
-            bs = self.blocksize()
-            if len(result) < bs:
-#                padding = (bs - len(result)) * self.attributes.get('padding', '\x00')
-                padding = utils.padding.fill(bs-len(result), self.padding)
-                return result + padding
-            assert len(result) == bs, 'value of %s is larger than blocksize (%d>%d)'%(self.shortname(), len(result), bs)
-            return result
-        logging.warn('ptype.type.serialize : %s.%s is uninitialized during serialization (%x:+%x)', self.__module__, self.shortname(), self.getoffset(), self.blocksize())
-#        raise ValueError('%s is uninitialized'% self.name())
-        return utils.padding.fill(self.blocksize(), self.padding)
-
-    def deserialize_block(self, block):
-        """Load type using the string provided by ``block``"""
-        bs = self.blocksize()
-        if len(block) < bs:
-            self.value = block[:bs]
-            path = ' ->\n\t'.join(self.backtrace())
-            raise StopIteration("Failed reading %s at offset %x byte %d of %d\n\t%s"%(self.name(), self.getoffset(), len(block), bs, path))
-
-        # all is good.
-        self.value = block[:bs]
-        return self
-
-    ## representation
-    def repr(self):
-        """Return a __repr__ of the type"""
-        prop = '{%s}'% ','.join('%s=%s'%(k,repr(v)) for k,v in self.properties().iteritems())
-        return '[%x] %s %s %s'%( self.getoffset(), self.name(), prop, self.details())
+        #edges = lambda node:tuple(node.value) if iscontainer(node.__class__) else ()
+        #encoded = lambda node: (node.d,) if isinstance(node, encoded_t) else ()
+        #itertools.chain(self.traverse(edges, filter=filter, *args, **kwds), self.traverse(encoded, filter=filter, *args, **kwds)):
+        duplicates = set()
+        if parentTester == self:
+            yield self
+            duplicates.add(self)
+        for n in self.traverse(filter=lambda n: parentTester == n):
+            if n.parent is None:
+                if n not in duplicates:
+                    yield n 
+                    duplicates.add(n)
+                continue
+            try:
+                result = n.d.l
+            except Exception:
+                continue
+            if result not in duplicates:
+                yield result
+                duplicates.add(result)
+            duplicates.add(result)
+            for o in result.collect():
+                result = o.getparent(parentTester)
+                if result not in duplicates:
+                    yield result
+                    duplicates.add(result)
+                continue
+            continue
+        return
 
     def copy(self, **kwds):
-        """Return a duplicate instance of the current one"""
-        result = self.newelement( self.__class__, self.name(), self.getoffset(), **kwds )
-        result.deserialize_block( self.serialize() )
-        return result
+        """Return a duplicate instance of the current one."""
+        name = kwds.pop('__name__', self.shortname())
+        ofs = kwds.pop('offset', self.getoffset())
+        result = self.new(self.__class__, __name__=name, offset=ofs, **kwds)
+        return result.deserialize_block(self.serialize()) if self.initializedQ() else result
 
     def cast(self, t, **kwds):
         """Cast the contents of the current instance into a differing ptype"""
+        kwds.setdefault('parent', self.parent)
+
         source = provider.string(self.serialize())
-        size = self.blocksize()
-        result = self.newelement( t, self.__name__, self.getoffset() )
+        result = self.new( t, offset=self.getoffset(), **kwds)
 
         try:
-            result.load(source=source, offset=0, blocksize=lambda:size, **kwds)
+            result = result.load(source=source, offset=0)
+
+            a,b = self.size(),result.size()
+            if a > b:
+                Config.log.info("type.cast : %s : Result %s size is smaller than source : %x < %x", self.classname(), result.classname(), result.size(), self.size())
+            elif a < b:
+                Config.log.warning("type.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
+
         except Exception,e:
-            logging.fatal("ptype.type.cast : %s.%s : %s : raised an exception : %s"%(self.__module__,self.shortname(),repr(t), repr(e)))
+            Config.log.fatal("type.cast : %s : %s : Error during cast resulted in a partially initialized instance : %s"%(self.classname(), t.typename(), repr(e)))
         return result
 
-    def compare(self, value):
-        """Returns Truth if ``self`` is equivalent to `value``"""
-        if not isrelated(self.__class__, value.__class__):
-            return False
-        return self.serialize() == value.serialize()
+    def compare(self, other):
+        """Returns an iterable containing the difference between ``self`` and ``other``
 
+        Each value in the iterable is composed of (index,(self.serialize(),other.serialize()))
+        """
+        if False in (self.initializedQ(),other.initializedQ()):
+            Config.log.fatal('type.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
+            return
+
+        s,o = self.serialize(),other.serialize()
+        if s == o:
+            return
+
+        comparison = [bool(ord(x)^ord(y)) for x,y in zip(s,o)]
+        result = [(different,len(list(times))) for different,times in itertools.groupby(comparison)]
+        index = 0
+        for diff,length in result:
+            #if diff: yield index,length
+            if diff: yield index,(s[index:index+length],o[index:index+length])
+            index += length
+
+        if len(s) != len(o):
+            #yield index,max(len(s),len(o))-index
+            yield index,(s[index:],'') if len(s) > len(o) else ('',o[index:])
+        return
+
+    ## operator overloads
+    def __cmp__(self, other):
+        """Returns 0 if ``other`` represents the same data as ``self``
+
+        To compare the actual contents, see .compare(other)
+        """
+        if self.initializedQ() != other.initializedQ():
+            return -1
+        if self.initializedQ():
+            return 0 if (self.getoffset(),self.serialize()) == (other.getoffset(),other.serialize()) else -1
+        return 0 if (self.getoffset(),self.blocksize()) == (other.getoffset(),other.blocksize()) else +1
+
+    def repr(self, **options):
+        """Display all ptype.type instances as a single-line hexstring"""
+        return self.summary(**options)
+
+    def __getstate__(self):
+        return (super(type,self).__getstate__(),self.length,self.value,)
+    def __setstate__(self, state):
+        state,self.length,self.value = state
+        super(type,self).__setstate__(state)
+
+# FIXME: the common parts of type and container need to be put in a separate class
+#        that way we don't inherit things from ptype.type like .length and such..
 class container(type):
     '''
     This class is capable of containing other ptypes
@@ -587,18 +773,11 @@ class container(type):
         value:str<r>
             list of all elements that are being contained
     '''
-    #__name__ = '[unnamed-container]'
     def initializedQ(self):
         """True if the type is fully initialized"""
-        if self.value is None or None in self.value:
+        if self.value is None:
             return False
-        return not(False in [x.initializedQ() for x in self.value])
-
-    def commit(self, **kwds):
-        """Commit the current state of all children back to the .source attribute"""
-        for n in self.value:
-            n.commit(**kwds)
-        return self
+        return all(x is not None and x.initializedQ() for x in self.value)
 
     def size(self):
         """Returns a sum of the number of bytes that are in use by all sub-elements"""
@@ -609,37 +788,38 @@ class container(type):
         return reduce(lambda x,y: x+y.blocksize(), self.value, 0)
 
     def getoffset(self, field=None):
-        '''fetch the offset of the specified field'''
         """Returns the current offset.
 
-        If ``field`` is specified as a ``str``, return the offset of the sub-element with the provided name.
-        If specified as a ``list``, descend into sub-elements using ``field`` as the path.
+        If ``field`` is specified as a ``str``, return the offset of the
+        sub-element with the provided name. If specified as a ``list`` or
+        ``tuple``, descend into sub-elements using ``field`` as the path.
         """
-        if not field:
-            return super(container, self).getoffset()
+        if field is None:
+            return super(container,self).getoffset()
 
-        if field.__class__ is list:
-            name,res = (field[0], field[1:])
-            return self.getoffset(name) + self[name].getoffset(res)
+        if field.__class__ in (tuple,list):
+            #name,res = (field[0], field[1:])
+            name,res = (lambda hd,*tl:(hd,tl))(*field)
+            return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
         index = self.getindex(field)
-        return self.getoffset() + reduce(lambda x,y: x+y, [ x.size() for x in self.value[:index]], 0)
+        return self.getoffset() + reduce(lambda x,y: x+y, [ x.size() if x.initializedQ() else x.blocksize() for x in self.value[:index]], 0)
 
     def getindex(self, name):
         """Searches the .value attribute for an element with the provided ``name``
 
-        This is intended to overloaded by any type that inherits from ptype.container.
+        This is intended to be overloaded by any type that inherits from
+        ptype.container.
         """
-        raise NotImplementedError('Developer forgot to overload this method')
+        raise error.ImplementationError(self, 'container.getindex', 'Developer forgot to overload this method')
+
+    def __getitem__(self, key):
+        index = self.getindex(key)
+        return self.value[index]
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
-        for i,x in enumerate(self.value):
-            if x.contains(offset):
-                logging.warn("ptype.container.contains : structure %s.%s is unaligned. found element %s to contain offset %x", self.__module__, self.shortname(), x.shortname(), offset)
-                return True
-            continue
-        return False
+        return any(x.contains(offset) for x in self.value)
     
     def at(self, offset, recurse=True, **kwds):
         """Returns element that contains the specified offset
@@ -648,31 +828,32 @@ class container(type):
         until an atomic type is encountered.
         """
         if not self.contains(offset):
-            raise ValueError('%s (%x:+%x) - offset 0x%x can not be located within container.'%(self.shortname(), self.getoffset(), self.blocksize(), offset))
+            raise error.NotFoundError(self, 'container.at', 'offset 0x%x can not be located within container.'%offset)
 
         if not recurse:
-            for i,n in enumerate(self.value):
+            for n in self.value:
                 if n.contains(offset):
                     return n
                 continue
-            raise ValueError('%s (%x:+%x) - offset 0x%x not found in a child element. returning encompassing parent.'%(self.shortname(), self.getoffset(), self.blocksize(), offset))
+            raise error.NotFoundError(self, 'container.at', 'offset 0x%x not found in a child element. returning encompassing parent.'%offset)
     
         try:
             res = self.at(offset, False, **kwds)
+
         except ValueError, msg:
-            logging.info('ptype.container.at : non-fatal exception raised',ValueError,msg)
+            Config.log.info('container.at : %s : Non-fatal exception raised : %s'% (self.instance(), repr(ValueError,msg)))
             return self
 
         # drill into containees for more detail
         try:
             return res.at(offset, recurse=recurse, **kwds)
-        except (NotImplementedError, AttributeError):
+        except (error.ImplementationError, AttributeError):
             pass
 
         return res
         
     def walkto(self, offset, **kwds):
-        """Will return each element along the path to reach the specified ``offset``"""
+        """Will return each element along the path to reach the requested ``offset``"""
         obj = self
 
         # drill into containees for more detail
@@ -681,116 +862,208 @@ class container(type):
                 yield obj
                 obj = obj.at(offset, recurse=False, **kwds)
             assert False is True
-        except (NotImplementedError, AttributeError):
+        except (error.ImplementationError, AttributeError):
             pass
         return
 
-    def setoffset(self, value, recurse=False):
+    def setoffset(self, ofs, recurse=False):
         """Changes the current offset to ``ofs``
 
         If ``recurse`` is True, the update all offsets in sub-elements.
         """
-        res = super(container, self).setoffset(value)
+        res = super(container, self).setoffset(ofs)
         if recurse:
-            assert self.initialized
+            if self.value is None:  # if we're not initialized at all...
+                raise error.InitializationError(self, 'container.setoffset')
+
             for n in self.value:
-                n.setoffset(value, recurse=recurse)
-                value += n.blocksize()
+                n.setoffset(ofs, recurse=recurse)
+                ofs += n.blocksize()
             pass
         return res
+
+    def deserialize_block(self, block):
+        """Load type using the string provided by ``block``"""
+        if self.value is None:
+            raise error.SyntaxError(self, 'container.deserialize_block', message='caller is responsible for allocation of elements in self.value')
+
+        total = 0
+        ofs = self.getoffset()
+        for n in self.value:
+            bs = n.blocksize()
+            n.setoffset(ofs)
+
+            # if element in container is already initialized, skip
+            data = block[:bs]
+            if not n.initializedQ():
+                n.deserialize_block(data)
+
+            block = block[bs:]
+            ofs += bs
+            total += bs
+
+        expected = self.blocksize()
+        if total < expected:
+            path = ' -> '.join(self.backtrace())
+            Config.log.warn('container.deserialize_block : %s : Container less than expected blocksize : %x < %x : %s'%(self.instance(), total, expected, path))
+        elif total > expected:
+            path = ' -> '.join(self.backtrace())
+            Config.log.debug('container.deserialize_block : %s : Container larger than expected blocksize : %x > %x : %s'%(self.instance(), total, expected, path))
+        return self
 
     def serialize(self):
         """Return contents of all sub-elements concatenated as a string"""
         result = ''.join( (x.serialize() for x in self.value) )
         bs = self.blocksize()
+
         if len(result) < bs:
-#            padding = (bs - len(result)) * self.attributes.get('padding', '\x00')
             padding = utils.padding.fill(bs-len(result), self.padding)
             return result + padding
+
         if len(result) > bs:
-            #XXX: serialized contents is larger than user allowed us to be
-            #result = result[:bs]
-            pass
+            Config.log.debug('container.serialize : %s : Container larger than expected blocksize : %x > %x'%(self.instance(), len(result), bs))
         return result
 
     def load(self, **attrs):
-        """Synchronize the current instance with data from the .source attributes"""
-        with utils.assign(self, **attrs):
-            assert self.value is not None, 'Parent must initialize self.value'
-            bs = self.blocksize()
-            self.source.seek(self.getoffset())
-            block = self.source.consume(bs)
-            try:
-                result = self.deserialize_block(block)
-            except StopIteration:
-                s = self.size()
-                if bs > s:
-                    raise
-                logging.debug('ptype.container.load : %s.%s : +%x bytes cropped to (%x:+%x)', self.__module__, self.shortname(), s, self.getoffset(), bs)
+        """Allocate the current instance with data from the .source attributes"""
+        if self.value is None and 'value' not in attrs:
+            raise error.UserError(self, 'container.load', message='Parent must initialize self.value')
+
+        try:
+            result = super(container,self).load(**attrs)
+
+        except error.LoadError, e:
+            ofs,s,bs = self.getoffset(),self.size(),self.blocksize()
+            if s < bs:
+                Config.log.warning('container.load : %s : Unable to complete read : read {%x:+%x}', self.instance(), ofs, s)
+            else:
+                Config.log.debug('container.load : %s : Cropped to {%x:+%x}', self.instance(), ofs, s)
             return self
         return result
 
-    def deserialize_block(self, block):
-        """Load type using the string provided by ``block``"""
-        assert self.value is not None, 'Parent must initialize self.value'
-        ofs = self.getoffset()
-        for n in self.value:
-            bs = n.blocksize()
-            n.setoffset(ofs)
-            # if element in container is already initialized, skip
-            if not n.initializedQ():
-                n.deserialize_block(block[:bs])
-            block = block[bs:]
-            ofs += bs
-        return self
+    def commit(self, **kwds):
+        """Commit the current state of all children back to the .source attribute"""
+        try:
+            for n in self.value:
+                n.commit(**kwds)
+            return self
+
+        except error.CommitError, e:
+            raise error.CommitError(self, exception=e)
 
     def copy(self, **kwds):
-        """Return a duplicate instance of the current one"""
-        result = self.newelement( self.__class__, self.name(), self.getoffset() )
+        """Performs a deep-copy of self repopulating the new instance if self is initialized
 
-        # assign to self
-        kwds.setdefault('parent', self.parent)
-        kwds.setdefault('source', self.source)
+        If a recurse=False is passed, a shallow-copy will be performed and an
+        uninitialized object will be returned.
+        """
+
+        # create an instance of self and update with requested attributes
+        result = self.new(self.__class__, __name__=self.classname(), offset=self.getoffset())
+        kwds.setdefault('value', self.value)
         result.update_attributes(kwds)
 
-        def all(node, **attrs):
-            if node.v.__class__ is list:
-                for x in node.v:
-                    yield x
-            return
-
-        # update attributes in all children too
-        result = result.alloc(offset=0,source=provider.string(self.serialize()))
-
-        ofs = result.getoffset()
-        for x in result.traverse(all):
-            x.setoffset( x.getoffset()+ofs )
-            x.source = result.source
+        # reinitialize new object using contents of old object
+        if self.initializedQ():
+            return result.load(offset=0,source=provider.string(self.serialize()))
         return result
 
-    def compare(self, value):
-        """Compare ``self`` to ``value`` returning truth when the types are the same"""
-        if (not isrelated(self.__class__, value.__class__)) or (len(self.value) != len(value.value)):
-            return False
+    def compare(self, other):
+        """Returns an iterable containing the difference between ``self`` and ``other``
 
-        for l,r in zip(self.value,value.value):
-            if not l.compare(r):
-                return False
+        Each value in the iterable is composed of (index,(self,other))
+        """
+        if False in (self.initializedQ(),other.initializedQ()):
+            Config.log.fatal('container.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
+            return
+
+        if self.value == other.value:
+            return
+
+        def between(object,(left,right)):
+            (left,right) = (left,right) if right > left else (right,left)
+            l,r = object.at(left),object.at(right)
+            li,ri = object.value.index(l),object.value.index(r)
+            for i in xrange(li,ri):
+                yield i
+            return
+
+        sofs,oofs=self.getoffset(),other.getoffset()
+        for ofs,(s,o) in super(container,self).compare(other):
+            if len(s) == 0:
+                i = other.value.index(other.at(oofs+ofs))
+                yield ofs, (None,tuple(other.value[i:]))
+            elif len(o) == 0:
+                i = self.value.index(self.at(sofs+ofs))
+                yield ofs, (tuple(self.value[i:]), None)
+            else:
+                assert len(s) == len(o)
+                length = len(s)
+                s = (self.value[i] for i in between(self, (sofs+ofs,sofs+ofs+length)))
+                o = (other.value[i] for i in between(other, (oofs+ofs,oofs+ofs+length)))
+                yield ofs, (tuple(s), tuple(o))
             continue
-        return True
+        return
 
-    def summary(self):
-        return self.details()
+    def repr(self, **options):
+        """Display all ptype.container types as a hexstring"""
+        if self.initializedQ():
+            return self.summary()
+        if self.value is not None:
+            #return ''.join((x.serialize() if x.initializedQ() else '?'*x.blocksize()) for x in self.value)
+            return ''.join((x.serialize() if x.initializedQ() else '?'*x.blocksize()) for x in self.value)
+        return '???'
 
-class empty(type):
-    """Empty ptype that occupies no space"""
-    length = 0
+    def append(self, object):
+        """Add an element to a ptype.container. Return it's index."""
+        current = len(self.value)
+        self.value.append(object)
+        return current
 
-class none(empty): pass
+    def __iter__(self):
+        if self.value is None:
+            raise error.InitializationError(self, 'container.__iter__')
 
-class block(none):
+        for res in self.value:
+            yield res
+        return
+
+    def set(self, *elements):
+        """Set ``self`` with instances or copies of the types provided in the iterable ``elements``.
+
+        If uninitialized, this will make a copy of all the instances in ``elements`` and update the
+        'parent' and 'source' attributes to match. All the offsets will be
+        recursively updated.
+
+        If initialized, this will pass the argument to .set using the current contents.
+
+        This is an internal function and is not intended to be used outside of ptypes.
+        """
+        if self.initializedQ() and len(self.value) == len(elements):
+            [x.set(v) for x,v in zip(self.value,elements)]
+            self.setoffset(self.getoffset(), recurse=True)
+            return self
+
+        self.value = [x.copy(parent=self.parent) if isinstance(x,type) else self.new(x).a for x in elements]
+        self.setoffset(self.getoffset(), recurse=True)
+        return self
+
+    def get(self):
+        return [v.get() for v in self.value]
+
+    def __getstate__(self):
+        return (super(container,self).__getstate__(),self.source, self.attributes, self.ignored, self.parent, self.position)
+    def __setstate__(self, state):
+        state,self.source,self.attributes,self.ignored,self.parent,self.position = state
+        super(container,self).__setstate__(state)
+
+class undefined(type):
+    """An empty ptype that is eternally undefined"""
+
+class block(type):
     """A ptype that can be accessed as an array"""
-    #__name__ = '[unnamed-block]'
+    def classname(self):
+        return 'block(%d)'% self.length
     def __getslice__(self, i, j):
         buffer = self.serialize()
         base = self.getoffset()
@@ -799,15 +1072,9 @@ class block(none):
         buffer = self.serialize()
         base = self.getoffset()
         return buffer[index-base]
-    def shortname(self):
-        return 'block(%d)'% self.length
-    def summary(self):
-        return self.hexdump(oneline=1)
-    def details(self):
-        if self.initializedQ():
-            return '\n'+self.hexdump(summary=1)
-        return '???'
-
+    def repr(self, **options):
+        """Display all ptype.block instances as a hexdump"""
+        return self.details(terse=1, **options)
     def __setitem__(self, index, value):
         v = self.value
         self.value = v[:index] + value + v[index:]
@@ -822,14 +1089,12 @@ def clone(cls, **newattrs):
     will clone a class, and set its attributes to **newattrs
     intended to aid with single-line coding.
     '''
-    class __clone(cls): pass
+    class __clone(cls):
+        __doc__ = cls.__doc__
+
+    newattrs.setdefault('__name__', cls.__name__)
     for k,v in newattrs.items():
         setattr(__clone, k, v)
-
-    # FIXME: figure out why some object names are inconsistent
-#    __clone.__name__ = 'clone(%s.%s)'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
-#    __clone.__name__ = '%s.%s'% (cls.__module__, cls.__name__)   # perhaps display newattrs all formatted pretty too?
-    __clone.__name__ = cls.__name__
     return __clone
 
 class definition(object):
@@ -902,7 +1167,8 @@ class definition(object):
     def get(cls, type, **unknownattrs):
         """Lookup a ptype by a particular value.
 
-        Returns cls.unknown with the provided ``unknownattrs`` if ``type`` is not found.
+        Returns cls.unknown with the provided ``unknownattrs`` if ``type`` is
+        not found.
         """
         try:
             return cls.cache[type]
@@ -916,8 +1182,8 @@ class definition(object):
         a = set(cls.cache.keys())
         b = set(otherdefinition.cache.keys())
         if a.intersection(b):
-            logging.warn('%s : Unable to import module %s due to multiple definitions of the same record',cls.__module__, repr(otherdefinition))
-            logging.warn('%s : duplicate records %s', cls.__module__, repr(a.intersection(b)))
+            Config.log.warn('definition.update : %s : Unable to import module %s due to multiple definitions of the same record',cls.__module__, repr(otherdefinition))
+            Config.log.warn('definition.update : %s : Duplicate records : %s', cls.__module__, repr(a.intersection(b)))
             return False
 
         # merge record caches into a single one
@@ -939,75 +1205,126 @@ class definition(object):
         cls.add(type.type, type)
         return type
 
+# FIXME: it'd be cool if the .length of _value_ would be automatically figured out either by checking
+#        .length or .blocksize() or something. maybe only if ._value_ is a ptype.type
 class wrapper_t(type):
-    _value_ = None     # type used to back wrapper_t
-    __object = None       # instance
-    object = property(fget=lambda s:s.__object)
-    value = property(fget=lambda s:s.__object.serialize() if s.__object else None, fset=lambda s,x:s.__object.load(source=provider.string(x)))
+    '''This type represents a block that is defined by another ptype.
 
-    def shortname(self):
-        name = self.__object.shortname() if self.initializedQ() else self.newelement(self._value_, 'wrapper_t', 0).shortname()
-        return 'wrapper_t(%s)'% name
+    Settable properties:
+        _value_:ptype
+            The type that the wrapper_t will use for it's backing.
+
+    Readable properties:
+        object:instance
+            The object that the wrapper_t is using.
+    '''
+    _value_ = None
+    @property
+    def value(self):
+        return self.object.serialize()
+    # this setter shouldn't really ever be used...but...it's available.
+    @value.setter
+    def value(self, data):
+        return self.object.load(source=provider.string(data))
+
+    def __create_instance(self, name):
+        return self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
+    def __copy_instance(self, instance):
+        result = instance.copy()
+        self.__value_ = result.__class__
+        return result
+
+    __object = None
+    @property
+    def object(self):
+        if self._value_ is None:
+            raise error.UserError(self, 'wrapper_t.object', message='wrapper_t._value_ is undefined.')
+        if (self.__object is None) or (self.__object.__class__ != self._value_):
+            self.__object = self.__create_instance('wrapped_object<%s>'% self._value_.typename())
+        return self.__object
+    @object.setter
+    def object(self, value):
+        self.__object = self.__copy_instance(value)
+
+    def initializedQ(self):
+        return (self._value_ is not None) and (self.__object is not None) and (self.__object.initializedQ())
+
+    def blocksize(self):
+        if self.initializedQ():
+            return self.__object.blocksize()
+        if self._value_ is None:
+            raise error.InitializationError(self, 'wrapper_t.blocksize')
+        return self.new(self._value_, offset=self.getoffset(), source=self.source).blocksize()
+
+    def deserialize_block(self, block):
+        if self._value_ is None:
+            self._value_ = clone(block, length=len(block))
+        return self.alloc().object.deserialize_block(block)
+
+    # forwarded methods 
+    def load(self, **attrs):
+        self.object.load(**attrs)
+        return self
+
+    def serialize(self):
+        if self.initializedQ():
+            return self.object.serialize()
+        raise error.InitializationError(self, 'wrapper_t.serialize')
+        
+    def size(self):
+        if self.initializedQ():
+            return self.object.size()
+        raise error.InitializationError(self, 'wrapper_t.size')
+
+    def classname(self):
+        if self.initializedQ():
+            return '%s<%s>'% (self.typename(),self.object.classname())
+        if self._value_ is None:
+            return '%s<?>'% self.typename()
+        return '%s<%s>'% (self.typename(),self._value_.typename())
 
     def contains(self, offset):
         left = self.getoffset()
         right = left + self.blocksize()
         return left <= offset < right
 
-    def size(self):
-        return self.__object.size()
+    def get(self):
+        raise error.ImplementationError(self, 'wrapper_t.get')
 
-    def blocksize(self):
-        name = self.shortname()
-        return self.__object.blocksize() if self.initializedQ() else self.newelement(self._value_, name, self.getoffset()).blocksize()
+    def set(self, value, **attrs):
+        raise error.ImplementationError(self, 'wrapper_t.set')
 
-    def commit(self, **kwds):
-        void = self.__object.commit(**kwds)
-        return self
+    def __getstate__(self):
+        return super(wrapper_t,self).__getstate__(),self._value_,self.__object
 
-    def deserialize_block(self, block):
-        return self.alloc().__object.deserialize_block(block)
-
-    def load(self, **attrs):
-        self.__object = None
-
-        obj,ofs = self._value_,self.getoffset()
-        source = provider.proxy(self)
-        res = self.newelement(self._value_, 'element', ofs, source=source)
-
-        self.__object = res.load(**attrs)
-        return self
-
-    def initializedQ(self):
-        return self.__object and self.__object.initializedQ()
+    def __setstate__(self, state):
+        state,self._value_,self.__object = state
+        super(wrapper_t,self).__setstate__(state)
 
 class encoded_t(wrapper_t):
-    _object_ = None
-
     ## string encoding
-    def encode(self, string):
-        return string
+    def encode(self, object):
+        """Take object and serialize it to an encoded string"""
+        return object.serialize()
+
     def decode(self, string):
-        return string
+        """Take a string and decode it into a ptype.block object"""
+        return clone(block, length=len(string), source=provider.string(string))
 
     ## object dereferencing
     def reference(self, object, **attrs):
-        assert object.__class__ == self._object_
-        self.value = self.encode(object.serialize())
+        data = self.encode(object)
+        self._value_ = clone(block, length=len(data))
+        self.value = data
         return self
 
     def dereference(self, **attrs):
         if 'source' in attrs:
-            logging.warn('ptype.encoded_t.decode : %s.%s : user attempted to change the .source attribute of an encoded block', self.__module__, self.shortname())
+            Config.log.warn('encoded_t.decode : %s : User attempted to change the .source attribute of an encoded block', self.classname())
             del(attrs['source'])
 
-        string = self.decode(self.value)
-
-        object = self.newelement(self._object_, self.shortname(), 0, source=provider.string(string))
-        object = object.l
-
-        name = '*%s'% self.shortname()
-        return self.newelement(self._object_, name, 0, source=provider.proxy(object), **attrs)
+        object = self.decode(self.value)
+        return self.new(object, __name__='*%s'%self.shortname())
 
     d = property(fget=lambda s,**a: s.dereference(**a), fset=lambda s,*x,**a:s.reference(*x,**a))
     deref = lambda s,**a: s.dereference(**a)
@@ -1018,32 +1335,46 @@ def setbyteorder(endianness):
     can be either .bigendian or .littleendian
     '''
     global pointer_t
-    assert endianness in (config.byteorder.bigendian,config.byteorder.littleendian), repr(endianness)
-    pointer_t.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
+    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
+        pointer_t.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
+        return
+    elif getattr(endianness, '__name__', '').startswith('big'):
+        return setbyteorder(config.byteorder.bigendian)
+    elif getattr(endianness, '__name__', '').startswith('little'):
+        return setbyteorder(config.byteorder.littleendian)
+    raise ValueError("Unknown integer endianness %s"% repr(endianness))
 
 class pointer_t(encoded_t):
-    _value_ = clone(block, length=config.integer.wordsize)
+    _value_ = clone(block, length=Config.integer.size)
     _object_ = None
-    byteorder = config.integer.byteorder
+    byteorder = Config.integer.order
 
     def dereference(self, **attrs):
         name = '*%s'% self.name()
-        return self.newelement(self._object_, name, self.decode_offset(), **attrs)
+        return self.new(self._object_, __name__=name, offset=self.decode_offset(), **attrs)
 
     def reference(self, object, **attrs):
-        ofs = object.getoffset()
         self._object_ = object.__class__
-        self.set(ofs)
+        self.set(object.getoffset())
+
+        # make a child of current object
+        object.parent = self
         return self
 
+    def get(self):
+        return self.num()
+
     def set(self, offset):
+        """Sets the value of pointer to the specified offset"""
         bs = self.blocksize()
         x = bitmap.new(offset, bs*8)
         self.a.object.set( bitmap.data(x, reversed=(self.byteorder is config.byteorder.littleendian)) )
         return self
 
-    def number(self):
-        assert self.initialized
+    def num(self):
+        if not self.initializedQ():
+            raise error.InitializationError(self, 'pointer_t.num')
+
         bs = self.blocksize()
         res = bitmap.zero
         value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
@@ -1051,189 +1382,122 @@ class pointer_t(encoded_t):
             res = bitmap.push(res, (ord(x),8))
         return bitmap.number(res)
 
+    def number(self):
+        """Return the value of pointer as an integral"""
+        return self.num()
+
     def int(self):
-        return int(self.number())
+        return int(self.num())
     def long(self):
-        return long(self.number())
+        return long(self.num())
     def decode_offset(self):
         """Returns an integer representing the resulting object's real offset"""
-        return self.long()
+        return self.num()
 
-    def shortname(self):
-        target = force(self._object_, self)
-        return 'pointer_t<%s>'% target().shortname()
-    def __cmp__(self, other):
-        if issubclass(other.__class__, self.__class__):
-            return cmp(self.number(),other.number())
-        return super(pointer_t, self).__cmp__(other)
-    def details(self):
+    def classname(self):
         if self.initializedQ():
-            return '(pointer_t*)0x%x'% self.number()
-        return '(pointer_t*) ???'
-    summary = details
+            return '%s<%s>'% (self.typename(),self.object.classname())
+        target = force(self._object_, self) if istype(self._object_) else self._object_.__name__
+        return '%s<%s>'% (self.typename(),target.typename())
+
+    def summary(self, **options):
+        if self.initializedQ():
+            return '*0x%x'% self.num()
+        return '*???'
+    def repr(self, **options):
+        """Display all pointer_t instances as an integer"""
+        return self.summary(**options)
+    def __getstate__(self):
+        return super(pointer_t,self).__getstate__(),self._object_,self.byteorder
+    def __setstate__(self, state):
+        state,self._object_,self.byteorder = state
+        super(wrapper_t,self).__setstate__(state)
 
 class rpointer_t(pointer_t):
     """a pointer_t that's at an offset relative to a specific object"""
     _baseobject_ = None
-    #__name__ = '[unnamed-rpointer]'
 
-    def shortname(self):
-        return 'rpointer_t(%s, %s)'%(self._object_.__name__, self._baseobject_.__name__)
+    def classname(self):
+        if self.initializedQ():
+            baseobject = self._baseobject_
+            basename = baseobject.classname() if isinstance(self._baseobject_, base) else baseobject.__name__
+            return '%s(%s, %s)'%(self.typename(), self.object.classname(), basename)
+
+        objectname = force(self._object_,self).typename() if istype(self._object_) else self._object_.__name__
+        return '%s(%s, ...)'%(self.typename(), objectname)
 
     def decode_offset(self):
-        base = self._baseobject_().getoffset()
-        return base + self.int()
+        root = self._baseobject_
+        base = root.getoffset() if isinstance(root,type) else root().getoffset()
+        return base + self.num()
+
+    def __getstate__(self):
+        return super(rpointer_t,self).__getstate__(),self._baseobject_
+    def __setstate__(self, state):
+        state,self._baseobject_, = state
+        super(rpointer_t,self).__setstate__(state)
 
 class opointer_t(pointer_t):
     """a pointer_t that's calculated via a user-provided function that takes an integer value as an argument"""
     _calculate_ = lambda s,x: x
-    #__name__ = '[unnamed-opointer]'
 
-    def shortname(self):
-        return 'opointer_t(%s, %s)'%(self._object_.__name__, self._calculate_.__name__)
+    def classname(self):
+        calcname = self._calculate_.__name__
+        if self.initializedQ():
+            return '%s(%s, %s)'%(self.typename(), self.object.classname(), calcname)
+        objectname = force(self._object_,self).typename() if istype(self._object_) else self._object_.__name__
+        return '%s(%s, %s)'%(self.typename(), objectname, calcname)
 
     def decode_offset(self):
-        return self._calculate_(self.int())
+        return self._calculate_(self.num())
 
-setbyteorder(config.integer.byteorder)
+class boundary(base):
+    """Used to mark a boundary in a ptype tree. Can be used to make .getparent() stop."""
 
-import pbinary  # XXX: recursive. yay.
+class constant(type):
+    """A ptype that uses .__doc__ to describe a string constant
 
-if __name__ == '__main__':
-    import ptype
-    if False:
-        class p10bytes(ptype.type):
-            length = 10
+    This will log a warning if the loaded data does not match the expected string.
+    """
+    length = property(fget=lambda s: len(s.__doc__),fset=lambda s,v:None)
 
-        import provider
+    def __init__(self, **attrs):
+        if self.__doc__ is None:
+            Config.log.warn('constant.__init__ : %s : Constant was not initialized', self.classname())
+            self.__doc__ = ''
+        return super(constant,self).__init__(**attrs)
 
-        x = p10bytes()
-        print repr(x)
-    #    x.load()
-    #    print repr(x)
+    def set(self, string):
+        bs,data = self.blocksize(),self.__doc__
 
-        x.source = provider.memory()
-        x.setoffset(id(x))
-        x.load()
-        print repr(x)
+        if (data != string) or (bs != len(string)):
+            Config.log.warn('constant.set : %s : Data did not match expected value : %s != %s', self.classname(), repr(string), repr(data))
 
-    if False:
-        x.value = '\x7fHAI\x01\x01\x01\x00\x00\x00'
-        x.commit()
+        if len(string) < bs:
+            self.value = string + utils.padding.fill(bs-len(string), self.padding)
+            return self
 
-        x.alloc()
-        x.deserialize(input.file.read())
-        x.set('hello there okay')
+        self.value = string[:bs]
+        return self
 
-        x.set("okay, what the fuck. please work. i'm tired.")
-        x.commit()
+    def deserialize_block(self, block):
+        data = self.__doc__
+        if data != block:
+            Config.log.warn('constant.deserialize_block : %s : Data loaded from source did not match expected value. forced. : %s != %s', self.instance(), repr(block), repr(data))
+        return super(constant,self).deserialize_block(data)
 
-    if False:
-        class u8(ptype.type): length=1
-        class u16(ptype.type): length=2
-        class u32(ptype.type): length=4
-        
-        x = ptype.container(value=[])
-        x.v.append( u8() )
-        x.v.append( u32() )
-        x.v.append( u16() )
-        x.v.append( u16() )
-        x.v.append( u32() )
-        x.v.append( u16() )
-        x.v.append( u8() )
-        x.v.append( u8() )
-        x.v.append( u16() )
-        x.source=provider.empty()
-        print x.l
+    def alloc(self, **attrs):
+        """Allocate the ptype instance with requested string"""
+        attrs.setdefault('source', provider.string(self.__doc__))
+        return self.load(**attrs)
 
-    if False:
-        import ptypes
-        from ptypes import *
-        a = dyn.block(0x100)
-        b = a(source=ptypes.provider.string())
-        print b.set('\xcc'*100)
-        b.commit()
+    def __getstate__(self):
+        return super(constant,self).__getstate__(),self.__doc__
+    def __setstate__(self, state):
+        state,self.__doc__ = state
+        super(constant,self).__setstate__(state)
 
-        self = b
-        a = ptype.code_t(source=self.source, offset=self.getoffset())
-        b = b.cast(ptype.code_t)
-
-    if False:
-        import pint
-        class wr(ptype.wrapper_t):
-            _object_ = pint.uint32_t
-
-        x = wr(source=provider.string('\xde\xad\xde\xad\x00\x00\x00\x00'))
-        x = x.l
-
-    if False:
-        import zlib,dyn,ptype,pint
-        class zlib(ptype.encoded_t):
-            _value_ = dyn.clone(ptype.block, length=512)
-            _object_ = dyn.array(pint.uint32_t, 4)
-            def decode(self, string):
-                string = string.decode('zlib')
-                res = self.newelement(self._object_, 'zlib-encoded', 0, source=provider.string(string))
-                return res
-
-            def encode(self, object):
-                return object.serialize().encode('zlib')
-
-        s = '\xde\xad\xde\xad'*4
-        x = zlib(source=provider.string(s.encode('zlib')+'\x00'*500))
-        x = x.l
-
-    if False:
-        import ptypes
-        from ptypes import *
-        reload(ptypes)
-
-        class u8(pint.uint8_t): pass
-        class u16(pint.uint16_t): pass
-        class u24(dyn.clone(pint.uint_t, length=3)): pass
-        class u32(pint.uint32_t): pass
-
-        s = ptypes.provider.string
-        s1 = s('A'*8 + 'B'*8)
-        s2 = s('A'*4 + 'B'*8 + 'C'*4)
-
-        if False:
-            a = u8(source=s1).l
-            b = u8(source=s2).l
-    #        print a,b
-            print a.compare(b)
-
-            a = dyn.array(u8, 16)(source=s1).l
-            b = dyn.array(u8, 16)(source=s1).l
-            print a.compare(b)
-
-            a = dyn.array(u8, 16)(source=s1).l
-            b = dyn.array(u8, 16)(source=s2).l
-            print a.compare(b)
-
-            a = dyn.array(u16, 8)(source=s1).l
-            b = dyn.array(u32, 4)(source=s1).l
-            print a.compare(b)
-
-            a = dyn.array(u16, 8)(source=s1).l
-            b = dyn.array(u32, 4)(source=s2).l
-            print a.compare(b)
-
-        if True:
-            def iterate_differences(o1, o2):
-                """Compare ``o1`` to ``o2`` yielding each element that differs"""
-                leafs = lambda s: s.traverse(edges=lambda x:x.v, filter=lambda x: not iscontainer(x))
-
-                for l,r in zip(leafs(o1),leafs(o2)):
-                    yield l.compare(r),(l,r)
-                    continue
-                return
-
-            a = dyn.array(u32, 4)(source=s1).l
-            b = dyn.array(u32, 4)(source=s2).l
-            c = [ {'l':x,'r':y} for t,(x,y) in iterate_differences(a,b) if not t ]
-            print c[0]['l'].getoffset() == 4 and c[0]['r'].getoffset() == 4
-            print c[1]['l'].getoffset() == 0xc and c[1]['r'].getoffset() == 0xc
+from . import pbinary  # XXX: recursive. yay.
 
 if __name__ == '__main__':
     class Result(Exception): pass
@@ -1288,25 +1552,6 @@ if __name__ == '__main__':
 
         if a.l.serialize() == 'abcdefghijklmnop':
             raise Success
-    
-    @TestCase
-    def test_encoded_b64():
-        s = 'AAAABBBBCCCCDDDD'.encode('base64').replace('\n','\x00') + 'A'*20
-        class b64(ptype.encoded_t):
-            _value_ = pstr.szstring
-            _object_ = dyn.array(pint.uint32_t, 4)
-
-            def encode(self, string):
-                return string.encode('base64')
-
-            def decode(self, string):
-                return string.decode('base64')
-                
-        x = b64(source=ptypes.prov.string(s))
-        x = x.l
-        y = x.d.l
-        if x.size() == 25 and y[0].serialize() == 'AAAA' and y[1].serialize() == 'BBBB' and y[2].serialize() == 'CCCC' and y[3].serialize() == 'DDDD':
-            raise Success
 
     @TestCase
     def test_encoded_xorenc():
@@ -1318,10 +1563,11 @@ if __name__ == '__main__':
 
             key = k
 
-            def encode(self, string):
-                return ''.join(chr(ord(x)^k) for x in string)
+            def encode(self, object):
+                return ''.join(chr(ord(x)^k) for x in object.serialize())
             def decode(self, string):
-                return ''.join(chr(ord(x)^k) for x in string)
+                data = ''.join(chr(ord(x)^k) for x in string)
+                return dyn.clone(self._object_, source=prov.string(data))
         
         x = xor(source=ptypes.prov.string(s))
         x = x.l
@@ -1329,108 +1575,73 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_shared_user_data_pointer():
-        ptypes.setsource(ptypes.prov.memory())
-        from ptypes import dyn,pint,pstruct
+    def test_decoded_xorenc():
         from ptypes import pstr
 
-        LONG,ULONG = pint.int32_t,pint.uint32_t
-        WORD = pint.uint16_t
-        WCHAR = pint.uint16_t
-        UCHAR = pint.uint8_t
-        UINT64 = pint.uint64_t
+        k = 0x80
+        data = 'hello world'
+        match = ''.join(chr(ord(x)^k) for x in data)
 
-        class KSYSTEM_TIME(pstruct.type):
-            _fields_ = [
-                (ULONG, 'LowPart'),
-                (LONG, 'High1Time'),
-                (LONG, 'High2Time'),
-            ]
+        class xor(ptype.encoded_t):
+            _value_ = dyn.block(len(data))
+            _object_ = dyn.block(len(match))
 
-        class NT_PRODUCT_TYPE(ULONG): pass
-        class ALTERNATIVE_ARCHITECTURE_TYPE(pstruct.type):
-            _fields_ = [(ULONG, 'something'),(ULONG,'pad')]
-        class LARGE_INTEGER(pstruct.type):
-            _fields_ = [    
-                (ULONG, 'LowPart'),
-                (LONG, 'HighPart'),
-            ]
+            key = k
 
-        class _XSTATE_FEATURE(pstruct.type):
-            _fields_ = [(ULONG,'Offset'),(ULONG,'Size')]
+            def encode(self, object):
+                return ''.join(chr(ord(x)^k) for x in object.serialize())
+            def decode(self, string):
+                data = ''.join(chr(ord(x)^k) for x in string)
+                return dyn.clone(self._object_, source=prov.string(data))
 
-        class _XSTATE_CONFIGURATION(pstruct.type):
-            _fields_ = [
-                (LONG, 'EnabledFeatures'),
-                (ULONG, 'Size'),
-                (ULONG, 'OptimizedSave'),
-                (dyn.array(_XSTATE_FEATURE,64), 'Features'),
-            ]
+        instance = pstr.string().set(match)
 
-        class _KUSER_SHARED_DATA(pstruct.type):
-            _fields_ = [
-                (ULONG, 'TickCountLowDeprecated'),
-                (ULONG, 'TickCountMultiplier'),
-                (KSYSTEM_TIME, 'InterruptTime'),
-                (KSYSTEM_TIME, 'SystemTime'),
-                (KSYSTEM_TIME, 'TimeZoneBias'),
-                (WORD, 'ImageNumberLow'),
-                (WORD, 'ImageNumberHigh'),
-                (dyn.clone(pstr.wstring, length=260), 'NtSystemRoot'),
-                (ULONG, 'MaxStackTraceDepth'),
-                (ULONG, 'CryptoExponent'),
-                (ULONG, 'TimeZoneId'),
-                (ULONG, 'LargePageMinimum'),
-                (dyn.array(ULONG,7), 'Reserved2'),
-                (NT_PRODUCT_TYPE, 'NtProductType'),
-                (UCHAR, 'ProductTypeIsValid'),
-                (ULONG, 'NtMajorVersion'),
-                (ULONG, 'NtMinorVersion'),
-                (dyn.array(UCHAR,64), 'ProcessorFeatures'),
-                (ULONG, 'Reserved1'),
-                (ULONG, 'Reserved3'),
-                (ULONG, 'TimeSlip'),
-                (ALTERNATIVE_ARCHITECTURE_TYPE, 'AlternativeArchitecture'),
-                (LARGE_INTEGER, 'SystemExpirationDate'),
-                (ULONG, 'SuiteMask'),
-                (UCHAR, 'KdDebuggerEnabled'),
-                (UCHAR, 'NXSupportPolicy'),
-                (ULONG, 'ActiveConsoleId'),
-                (ULONG, 'DismountCount'),
-                (ULONG, 'ComPlusPackage'),
-                (ULONG, 'LastSystemRITEventTickCount'),
-                (ULONG, 'NumberOfPhysicalPages'),
-                (UCHAR, 'SafeBootMode'),
+        x = xor(source=ptypes.prov.string('\x00'*0x100)).l
+        x = x.reference(instance)
+        if x.serialize() == data:
+            raise Success        
 
-                (UCHAR, 'TscQpcData'),
-                (dyn.array(UCHAR,2), 'TscQpcPad'),
-                (ULONG, 'SharedDataFlags'),
-                (ULONG, 'DataFlagsPad'),
-                (UINT64, 'TestRetInstruction'),
-                (ULONG, 'SystemCall'),
-                (ULONG, 'SystemCallReturn'),
-                (dyn.array(ULONG,3), 'SystemCallPad'),
-                (UINT64, 'TickCount')
-            ]
+    @TestCase
+    def test_encoded_b64():
+        s = 'AAAABBBBCCCCDDDD'.encode('base64').strip() + '\x00' + 'A'*20
+        class b64(ptype.encoded_t):
+            _value_ = pstr.szstring
+            _object_ = dyn.array(pint.uint32_t, 4)
 
-        p = dyn.pointer(_KUSER_SHARED_DATA)
-        KERNEL_BASE = 0x7fff0000
-        z = p()
-        z.set(KERNEL_BASE-0x10000)
-        a = z.d.l['NtSystemRoot'].str()
-        if 'windows' in a.lower():      # probably not the greatest test...
+            def encode(self, object):
+                return object.serialize().encode('base64')
+
+            def decode(self, string):
+                data = string.decode('base64')
+                return dyn.clone(self._object_, source=prov.string(data))
+                
+        x = b64(source=ptypes.prov.string(s))
+        x = x.l
+        y = x.d.l
+        if x.size() == 25 and y[0].serialize() == 'AAAA' and y[1].serialize() == 'BBBB' and y[2].serialize() == 'CCCC' and y[3].serialize() == 'DDDD':
             raise Success
 
-#    @TestCase
-    def test_pecoff():
-        # this test sucks, but whatever
-        import pecoff,ctypes,sys
-        v = sys.version_info
-        a = ctypes.CDLL('python%d%d.dll'% (v.major,v.minor))._handle
+    @TestCase
+    def test_decoded_b64():
+        input = 'AAAABBBBCCCCDDDD\x00'
+        result = 'AAAABBBBCCCCDDDD\x00'.encode('base64')
 
-        x = pecoff.Executable.File(offset=a)
-        x=x.l
-        if x['Pe']['Signature'].serialize() == 'PE\x00\x00':
+        class b64(ptype.encoded_t):
+            _value_ = dyn.block(len(result))
+            _object_ = dyn.array(pint.uint32_t, 4)
+
+            def encode(self, object):
+                return object.serialize().encode('base64')
+
+            def decode(self, string):
+                data = string.decode('base64')
+                return dyn.clone(self._object_, source=prov.string(data))
+
+        instance = pstr.szstring().set(input)
+
+        x = b64(source=ptypes.prov.string('A'*0x100+'\x00')).l
+        x = x.reference(instance)
+        if x.serialize() == result:
             raise Success
 
     @TestCase
@@ -1466,7 +1677,6 @@ if __name__ == '__main__':
     @TestCase
     def test_attributes_recurse_2():
         from ptypes import pint,parray
-        global argh,x
         class argh(parray.type):
             length = 5
             _object_ = pint.uint32_t
@@ -1541,9 +1751,442 @@ if __name__ == '__main__':
         if 'a1' in a.attributes and 'a1' in x.attributes and x.a1 == 5:
             raise Success
 
-if __name__ == '__main__':
-#    logging.root=logging.RootLogger(logging.DEBUG)
+    @TestCase
+    def test_constant_load_correct():
+        data = "MARK"
+        class placeholder(ptype.constant):
+            __doc__ = data
 
+        a = placeholder(source=provider.string(data))
+        if a.l.serialize() == "MARK":
+            raise Success
+
+    @TestCase
+    def test_constant_alloc_ignored():
+        class placeholder(ptype.constant):
+            """MARK"""
+
+        a = placeholder(source=provider.random())
+        if a.a.serialize() == "MARK":
+            raise Success
+
+    @TestCase
+    def test_constant_load_ignored():
+        class placeholder(ptype.constant):
+            """MARK"""
+
+        a = placeholder(source=provider.random())
+        if a.l.serialize() == "MARK":
+            raise Success
+
+    @TestCase
+    def test_constant_set_length():
+        class placeholder(ptype.constant):
+            """MARK"""
+
+        a = placeholder(source=provider.random())
+        a.set("ADFA")
+        if a.serialize() == 'ADFA':
+            raise Success
+
+    @TestCase
+    def test_constant_set_data():
+        class placeholder(ptype.constant):
+            """MARK"""
+
+        a = placeholder(source=provider.random())
+        a.set("ASDFASDF")
+        if a.serialize() == "ASDF":
+            raise Success
+
+    @TestCase
+    def test_constant_set():
+        class placeholder(ptype.constant):
+            """MARK"""
+
+        a = placeholder(source=provider.random())
+        a.set("MARK")
+        if a.serialize() == "MARK":
+            raise Success
+
+    @TestCase
+    def test_pointer_deref():
+        from ptypes import pint
+        data = '\x04\x00\x00\x00AAAA'
+
+        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t)
+        a = a.l
+        b = a.dereference()
+        if b.l.num() == 0x41414141:
+            raise Success
+
+    @TestCase
+    def test_pointer_ref():
+        from ptypes import pint,dyn
+        src = prov.string('\x04\x00\x00\x00AAAAAAAA')
+        a = ptype.pointer_t(source=src, offset=0, _object_=dyn.block(4)).l
+        b = a.d.l
+        assert b.serialize() == '\x41\x41\x41\x41'
+
+        c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
+        a = a.reference(c)
+        if a.num() == c.getoffset() and a.d.l.num() == 0x42424242:
+            raise Success
+
+    @TestCase
+    def test_type_cast_same():
+        from ptypes import pint,dyn
+        t1 = dyn.clone(ptype.type, length=4)
+        t2 = pint.uint32_t
+
+        data = prov.string('AAAA')
+        a = t1(source=data).l
+        b = a.cast(t2)
+        if a.serialize() == b.serialize():
+            raise Success
+
+    @TestCase
+    def test_container_cast_same():
+        from ptypes import pint,dyn
+        t1 = dyn.clone(ptype.type, length=4)
+        t2 = dyn.array(pint.uint8_t, 4)
+
+        data = prov.string('AAAA')
+        a = t1(source=data).l
+        b = a.cast(t2)
+        if a.serialize() == b.serialize():
+            raise Success
+
+    @TestCase
+    def test_type_cast_diff_large_to_small():
+        from ptypes import ptype
+        t1 = ptype.clone(ptype.type, length=4)
+        t2 = ptype.clone(ptype.type, length=2)
+        data = prov.string('ABCD')
+        a = t1(source=data).l
+        b = a.cast(t2)
+        if b.serialize() == 'AB':
+            raise Success
+
+    @TestCase
+    def test_type_cast_diff_small_to_large():
+        from ptypes import ptype
+        t1 = ptype.clone(ptype.type, length=2)
+        t2 = ptype.clone(ptype.type, length=4)
+        data = prov.string('ABCD')
+        a = t1(source=data).l
+        b = a.cast(t2)
+        if a.size() == b.size() and not b.initialized:
+            raise Success
+
+    @TestCase
+    def test_container_cast_large_to_small():
+        from ptypes import pint,dyn
+        t1 = dyn.array(pint.uint8_t, 8)
+        t2 = dyn.array(pint.uint8_t, 4)
+        data = prov.string('ABCDEFGH')
+
+        a = t1(source=data).l
+        b = a.cast(t2)
+        if b.size() == 4 and b.serialize() == 'ABCD':
+            raise Success
+
+    @TestCase
+    def test_container_cast_small_to_large():
+        from ptypes import pint,dyn
+        t1 = dyn.array(pint.uint8_t, 4)
+        t2 = dyn.array(pint.uint8_t, 8)
+        data = prov.string('ABCDEFGH')
+        a = t1(source=data).l
+        b = a.cast(t2)
+        if b.size() == 4 and not b.initialized and b.blocksize() == 8:
+            raise Success
+
+    @TestCase
+    def test_type_copy():
+        from ptypes import pint
+        data = prov.string("WIQIWIQIWIQIWIQI")
+        a = pint.uint32_t(source=data).a
+        b = a.copy()
+        if b.l.serialize() == a.l.serialize() and a is not b:
+            raise Success
+
+    @TestCase
+    def test_container_copy():
+        class leaf_sr(ptype.type):
+            length = 4
+        class leaf_jr(ptype.type):
+            length = 2
+
+        class branch(ptype.container): pass
+            
+        a = branch(source=prov.empty())
+        a.set(leaf_sr, leaf_jr, branch().set(leaf_jr,leaf_jr,leaf_jr))
+        b = a.copy()
+        if b.v[2].v[1].size() == leaf_jr.length:
+            raise Success
+
+    # XXX: test casting between block types and stream types (szstring) as this
+    #      might've been broken at some point...
+
+    @TestCase
+    def test_type_getoffset():
+        class bah(ptype.type): length=2
+        data = prov.string(map(chr,xrange(ord('a'),ord('z'))))
+        a = bah(offset=0,source=data)
+        if a.getoffset() == 0 and a.l.serialize()=='ab':
+            raise Success
+
+    @TestCase
+    def test_type_setoffset():
+        class bah(ptype.type): length=2
+        data = prov.string(map(chr,xrange(ord('a'),ord('z'))))
+        a = bah(offset=0,source=data)
+        a.setoffset(20)
+        if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == 'uv':
+            raise Success
+
+    @TestCase
+    def test_container_setoffset_recurse():
+        class bah(ptype.type): length=2
+        class cont(ptype.container): getindex = lambda s,i: i
+        a = cont()
+        a.set(bah(), bah(), bah())
+        a.setoffset(a.getoffset(), recurse=True)
+        if tuple(x.getoffset() for x in a.value) == (0,2,4):
+            raise Success
+
+    @TestCase
+    def test_container_getoffset_field():
+        class bah(ptype.type): length=2
+        class cont(ptype.container): getindex = lambda s,i: i
+
+        a = cont()
+        a.set(bah(), bah(), bah())
+        a.a
+        if tuple(a.getoffset(i) for i in range(len(a.v))) == (0,2,4):
+            raise Success
+
+    @TestCase
+    def test_container_getoffset_iterable():
+        class bah(ptype.type): length=2
+        class cont(ptype.container): getindex = lambda s,i: i
+
+        a = cont()
+        a.set(bah(), bah(), bah())
+        a.set(bah(), a.copy(), bah())
+        a.setoffset(a.getoffset(), recurse=True)
+        if a.getoffset((1,2)) == 6:
+            raise Success
+
+    @TestCase
+    def test_decompression_block():
+        from ptypes import dyn,pint,pstruct,ptype
+        class cblock(pstruct.type):
+            class _zlibblock(ptype.encoded_t):
+                def encode(self, object):
+                    return object.serialize().encode('zlib')
+                def decode(self, string):
+                    return super(cblock._zlibblock,self).decode(string.decode('zlib'))
+
+            def __zlibblock(self):
+                return ptype.clone(self._zlibblock, _value_=dyn.block(self['size'].l.int()))
+                
+            _fields_ = [
+                (pint.uint32_t, 'size'),
+                (__zlibblock, 'data'),
+            ]
+        message = 'hi there.'
+        cmessage = message.encode('zlib')
+        data = pint.uint32_t().set(len(cmessage)).serialize()+cmessage
+        a = cblock(source=prov.string(data))            
+        if a.l['data'].d.l.serialize() == message:
+            raise Success
+
+    @TestCase
+    def test_compression_block():
+        from ptypes import dyn,pint,pstruct,ptype
+        class zlibblock(ptype.encoded_t):
+            def encode(self, object):
+                return object.serialize().encode('zlib')
+            def decode(self, string):
+                return super(zlibblock,self).decode(string.decode('zlib'))
+
+        class mymessage(ptype.block): pass
+        message = 'hi there.'
+        data = mymessage().set(message)
+
+        source = prov.string('\x00'*1000)
+        a = zlibblock(source=source).reference(data)
+        if a.d.l.serialize() == message:
+            raise Success
+
+    @TestCase
+    def test_equality_type_same():
+        from ptypes import ptype,provider as prov
+        class type1(ptype.type): length=4
+        class type2(ptype.type): length=4
+        data = 'ABCDEFGHIJKLMNOP'
+        a = type1(source=prov.string(data)).l
+        b = type2(source=prov.string(data), offset=a.getoffset()).l
+        if cmp(a,b) == 0:
+            raise Success
+        
+    @TestCase
+    def test_equality_type_different():
+        from ptypes import ptype,provider as prov
+        class type1(ptype.type): length=4
+        data = 'ABCDEFGHIJKLMNOP'
+        a = type1(source=prov.string(data))
+        b = a.copy(offset=1)
+        c = a.copy().l
+        d = c.copy().load(offset=1)
+        if cmp(a,b) != 0 and cmp(c,d) != 0:
+            raise Success
+
+    @TestCase
+    def test_compare_type():
+        from ptypes import pstr,provider as prov
+        a = pstr.string().set('this sentence is over the top!')
+        b = pstr.string().set('this sentence is unpunctuaTed')
+        getstr = lambda s,(i,(x,y)): s[i:i+len(x)].serialize()
+        result = list(a.compare(b))
+        c,d = result
+        if getstr(a, c) == 'over the top' and getstr(b,c) == 'unpunctuaTed' and d[0] >= b.size() and getstr(a,d) == '!':
+            raise Success
+
+    @TestCase
+    def test_compare_container_types():
+        from ptypes import ptype,provider as prov,pint
+        a = pint.uint8_t().set(20)
+        b = pint.uint8_t().set(40)
+        c = pint.uint8_t().set(60)
+        d = pint.uint8_t().set(80)
+        e = pint.uint8_t().set(100)
+
+        y = ptype.container(value=[], __name__='y')
+        z = ptype.container(value=[], __name__='z')
+        y.value.extend( (a,b,c,d,e) )
+        z.value.extend( (a,b,a,a,e) )
+        y.value = [_.copy() for _ in y.value]
+        z.value = [_.copy() for _ in z.value]
+        y.setoffset(y.getoffset()+10, recurse=True)
+        z.setoffset(z.getoffset(), recurse=True)
+
+        result = dict(y.compare(z))
+        if result.keys() == [2]:
+            s,o = result[2]
+            if c.serialize()+d.serialize() == ''.join(_.serialize() for _ in s) and a.serialize()+a.serialize() == ''.join(_.serialize() for _ in o):
+                raise Success
+
+    @TestCase
+    def test_compare_container_sizes():
+        from ptypes import ptype,provider as prov,pint
+        a = pint.uint8_t().set(20)
+        b = pint.uint8_t().set(40)
+        c = pint.uint8_t().set(60)
+        d = pint.uint8_t().set(80)
+        e = pint.uint8_t().set(100)
+        f = pint.uint8_t().set(120)
+        g = pint.uint32_t().set(0xdead)
+
+        y = ptype.container(value=[], __name__='y')
+        z = ptype.container(value=[], __name__='z')
+        y.value.extend( (a,g,f) )
+        z.value.extend( (a,b,c,d,e,f) )
+        y.value = [_.copy() for _ in y.value]
+        z.value = [_.copy() for _ in z.value]
+        y.setoffset(y.getoffset(), recurse=True)
+        z.setoffset(z.getoffset()+0x1000, recurse=True)
+
+        result = dict(y.compare(z))
+        if result.keys() == [1]:
+            s,o = tuple(reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),'') for X in result[1])
+            if s == g.serialize() and o == ''.join(map(chr,(40,60,80,100))):
+                raise Success
+
+    @TestCase
+    def test_compare_container_tail():
+        from ptypes import ptype,provider as prov,pint
+        a = pint.uint8_t().set(20)
+        b = pint.uint8_t().set(40)
+        c = pint.uint8_t().set(60)
+        d = pint.uint8_t().set(80)
+        e = pint.uint8_t().set(100)
+        f = pint.uint8_t().set(120)
+        g = pint.uint32_t().set(0xdead)
+
+        y = ptype.container(value=[], __name__='y')
+        z = ptype.container(value=[], __name__='z')
+        y.value.extend( (a,b,c) )
+        z.value.extend( (a,b,c,g,c.copy().set(0x40)) )
+        y.value = [_.copy() for _ in y.value]
+        z.value = [_.copy() for _ in z.value]
+        y.setoffset(y.getoffset()+100, recurse=True)
+        z.setoffset(z.getoffset()-0x1000, recurse=True)
+
+        result = dict(y.compare(z))
+        if result.keys() == [3]:
+            s,o = result[3]
+            if s is None and reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),'') == g.serialize()+'\x40':
+                raise Success
+
+    #@TestCase
+    def test_collect_pointers():
+        from ptypes import ptype,pint,provider
+        ptype.source = provider.string(provider.random().consume(0x1000))
+        a = pint.uint32_t
+        b = ptype.clone(ptype.pointer_t, _object_=a)
+        c = ptype.clone(ptype.pointer_t, _object_=b)
+        d = ptype.clone(ptype.pointer_t, _object_=c)
+
+        z = ptype.container(value=[], __name__='z')
+        z.value.append(a())
+        z.value.append(b())
+        z.value.append(c())
+        z.value.append(d())
+        z.setoffset(z.getoffset(), True)
+
+        a = z.value[0].set(0xfeeddead)
+        b = z.value[1].set(a.getoffset())
+        c = z.value[2].set(b.getoffset())
+        d = z.value[3].set(c.getoffset())
+        z.commit()
+
+        result = [z.v[-1].num()]
+        for x in z.v[-1].collect():
+            result.append(x.l.num())
+
+        if result == [8,4,0,0xfeeddead]:
+            raise Success
+
+    #@TestCase
+    def test_collect_pointers2():
+        import pecoff
+        from ptypes import pint,ptype
+        #a = pint.uint32_t()
+        #b = a.new(ptype.pointer_t)
+        class parentTester(object):
+            def __eq__(self, other):
+                return other.parent is None or isinstance(other, ptype.encoded_t) or issubclass(other.__class__, ptype.encoded_t)
+        parentTester = parentTester()
+        #c = b.getparent(parentTester())
+        #print isinstance(b, ptype.encoded_t)
+        a = pecoff.Executable.open('c:/users/user/mshtml.dll')
+
+        global result
+        result = list(a.collect())
+        for n in result:
+            print n
+        #for n in a.traverse(filter=lambda n: parentTester == n):
+        #    if isinstance(n, ptype.encoded_t):
+        #        b = n.d.getparent(parentTester)
+        #        print b.l
+        #        continue
+        #    assert n.parent is None
+        #    print n.l
+
+if __name__ == '__main__':
     results = []
     for t in TestCaseList:
         results.append( t() )

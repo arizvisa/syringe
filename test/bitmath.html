@@ -1,0 +1,54 @@
+<script language="javascript">
+    /*
+        type -- sign, exponent, fraction
+        half -- 1,5,10
+        single -- 1,8,23
+        double -- 1,11,52
+        quadra -- 1,15,112
+    */
+
+    function extract(integral, position, size)
+    { return (integral&(Math.pow(2,position)*(Math.pow(2,size)-1)))>>position; }
+    function store(value, position, size)
+    { return (value&(Math.pow(2,size)-1))<<position; }
+
+    /** store floating point number to packed ieee format */
+    function toInteger(float, signflag, exponent, fraction)
+    {
+        var bits,exponentbias;
+        bits = signflag+exponent+fraction;
+        exponentbias = Math.pow(2,exponent)/2 - 1;
+
+        var sf_pos,exp_pos,fr_pos;
+        sf_pos = bits-signflag;
+        exp_pos = sf_pos-exponent;
+        fr_pos = exp_pos-fraction;
+
+        var f,s,e,m;
+        f = Math.abs(float);
+        s = float<0? 1 : 0;
+        e = Math.floor(Math.log(f)/Math.log(2))
+        m = f/Math.pow(2,e)
+
+        return store(s,sf_pos,signflag)|store(e+exponentbias,exp_pos,exponent)|store(m*Math.pow(2,fraction),fr_pos,fraction);
+    }
+
+    /** load packed ieee integer into a floating point number */
+    function toFloat(integral, signflag, exponent, fraction)
+    {
+        var bits,exponentbias;
+        bits = signflag+exponent+fraction;
+        exponentbias = Math.pow(2,exponent)/2 - 1;
+
+        var sf_pos,exp_pos,fr_pos;
+        sf_pos = bits-signflag;
+        exp_pos = sf_pos-exponent;
+        fr_pos = exp_pos-fraction;
+
+        var s,e,m;
+        s = extract(integral, sf_pos, signflag)? -1 : +1;
+        e = extract(integral, exp_pos, exponent) - exponentbias;
+        m = 1.0 + extract(integral, fr_pos, fraction)/Math.pow(2,fraction);
+        return m * Math.pow(2,e) * s;
+    }
+</script>

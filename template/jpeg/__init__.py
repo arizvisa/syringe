@@ -90,10 +90,9 @@ class headerlength(pstruct.type):
 
 class coded(ptype.encoded_t):
     _object_ = None
-    def decode(self, **attr):
+    def decode(self, string, **attr):
         name = '*%s'% self.name()
-        s = self.serialize()
-        return self.newelement(self._object_, name, 0, source=provider.string(s))
+        return self.newelement(self._object_, name, 0, source=provider.string(string))
     def encode(self, object):
         raise NotImplementedError
 
@@ -119,11 +118,11 @@ class JFIF(pstruct.type):
     ]
 
 @marker.define
-class SOI(ptype.empty):
+class SOI(ptype.type):
     type = '\xff\xd8'
 
 @marker.define
-class EOI(ptype.empty):
+class EOI(ptype.type):
     type = '\xff\xd9'
 
 @markerlength.define

@@ -4,8 +4,7 @@ import ptypes
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.littleendian)
-import definitions
-from definitions import *
+import __base__,headers
 
 def open(filename, **kwds):
     res = File()
@@ -14,9 +13,10 @@ def open(filename, **kwds):
     res.filename = filename     # ;)
     return res
 
-class File(pstruct.type, definitions.__base__.BaseHeader):
+class File(pstruct.type, ptype.boundary):
     def __Stub(self):
-        ofs = int(self['Dos']['e_lfanew'])
+        #ofs = self['Dos']['e_misc']['General']['e_lfanew'].num()
+        ofs = self['Dos']['e_misc']['e_lfanew'].num()
         sz = self['Dos'].size()
         if (ofs >= sz):
             return dyn.block(ofs - sz)
@@ -26,15 +26,15 @@ class File(pstruct.type, definitions.__base__.BaseHeader):
     def __MemData(self):
         '''Calculate the size of executable in memory'''
         optionalheader = self['Pe'].l['OptionalHeader']
-        alignment = optionalheader['SectionAlignment'].number()
-        s = optionalheader['SizeOfImage'].number()
+        alignment = optionalheader['SectionAlignment'].num()
+        s = optionalheader['SizeOfImage'].num()
         return dyn.block(s - self.size())
 #        return dyn.block(s - self.size(), summary=lambda s:s.hexdump(oneline=1))
 
     def __FileData(self):
         '''Calculate the size of executable on disk'''
         pe = self['Pe'].l
-        endings = sorted(((x['PointerToRawData'].number()+x['SizeOfRawData'].number()) for x in pe['Sections']))
+        endings = sorted(((x['PointerToRawData'].num()+x['SizeOfRawData'].num()) for x in pe['Sections']))
         s = endings[-1]
         return dyn.block(s - self.size())
 
@@ -111,4 +111,5 @@ if __name__ == '__main__':
         for a,r in e.getrelocations(section):
             print e
             data = r.relocate(data, 0, section)
+        continue
 

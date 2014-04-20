@@ -28,7 +28,7 @@ if False:
 
         def __repr__(self):
             if self.initialized:
-                v = self['ver/inst'].number()
+                v = self['ver/inst'].num()
                 t = int(self['type'])
                 l = int(self['length'])
                 return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
@@ -121,7 +121,7 @@ class PLTE(parray.block):
     _object_ = entry
 
 @Chunk.define
-class IEND(ptype.empty):
+class IEND(ptype.type):
     type = 'IEND'
 
 if __name__ == '__main__':

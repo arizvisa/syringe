@@ -1,5 +1,7 @@
 from primitives import *
 
+class ShapeDefinition(ptype.boundary): pass
+
 def _ifelse(field, t, f):
     def fn(self):
         if self[field]:
@@ -85,11 +87,11 @@ class MATRIX(pbinary.struct):
 class GLYPHENTRY(pbinary.struct):
     def __Index(self):
         p = self.getparent(pstruct.type)    # DefineText
-        return p['GlyphBits'].l.number()
+        return p['GlyphBits'].l.num()
         
     def __Advance(self):
         p = self.getparent(pstruct.type)    # DefineText
-        return p['AdvanceBits'].l.number()
+        return p['AdvanceBits'].l.num()
 
     _fields_ = [
         (__Index, 'Index'),
@@ -403,81 +405,98 @@ class FOCALGRADIENT(pstruct.type):
     ]
 
 ### XXX shapes
+# 4 types of shape records
+#####
 class SHAPERECORD(pbinary.struct):
-    id = 0
+    def __Type(self):
+        if self['TypeFlag'] == 0:
+            return STYLECHANGERECORD
+        return EDGERECORD
 
-if False:
-    '''
-    # FIXME: please implement this....
-    class ENDSHAPERECORD(SHAPERECORD):
+    class STYLECHANGE(pbinary.struct):
+        # TypeFlag == 0
         _fields_ = [
-            (1, 'TypeFlag'),
-            (5, 'EndOfshape')
-        ]
-
-    class _STYLECHANGERECORD_bits(pbinary.struct):
-        _fields_ = [
-            (1, 'TypeFlag'),
             (1, 'StateNewStyles'),
             (1, 'StateLineStyle'),
             (1, 'StateFillStyle1'),
             (1, 'StateFillStyle0'),
-            (1, 'StateMoveTo')
-            (lambda self: self['StateMoveTo'] and 5 or 0, 'MoveBits'),
-            (lambda self: self['StateMoveTo'] and self['MoveBits'] or 0, 'MoveDeltaX'),
-            (lambda self: self['StateMoveTo'] and self['MoveBits'] or 0, 'MoveDeltaX'),
+            (1, 'StateMoveTo'),
+            (lambda s: s['StateMoveTo'] and 5 or 0, 'MoveBits'),
+            (lambda s: -s['MoveBits'], 'MoveDeltaX'),
+            (lambda s: -s['MoveBits'], 'MoveDeltaY'),
+            (lambda s: s.getparent(ShapeDefinition)['NumBits']['NumFillBits'] if s['StateFillStyle0'] else 0, 'FillStyle0'),
+            (lambda s: s.getparent(ShapeDefinition)['NumBits']['NumFillBits'] if s['StateFillStyle1'] else 0, 'FillStyle1'),
+            (lambda s: s.getparent(ShapeDefinition)['NumBits']['NumLineBits'] if s['StateLineStyle'] else 0, 'LineStyle'),
+
+            #(lambda s: FILLSTYLEARRAY if s['StateNewStyles'] else 0, 'FillStyles'),
+            #(lambda s: LINESTYLEARRAY if s['StateNewStyles'] else 0, 'LineStyles'),
+            #(lambda s: 4 if s['StateNewStyles'] else 0, 'NumFillBits'),
+            #(lambda s: 4 if s['StateNewStyles'] else 0, 'NumLineBits'),
         ]
 
-        def debit(self, nextbit):
-            fillbits = self.parent['Num']['FillBits']
-            linebits = self.parent['Num']['LineBits']
+        def isEndShapeRecord(self):
+            return all(self[x] == 0 for x in ('StateNewStyles','StateLineStyle','StateFillStyle1','StateFillStyle0','StateMoveTo'))
 
-            nextbit(6)
-           
-            if self['StateMoveTo']:
-                self._fields_.append( (5, 'MoveBits') )
-                nextbit(5)
+    class EDGE(pbinary.struct):
+        class STRAIGHT(pbinary.struct):
+            # TypeFlag == 1, StraightFlag == 1
+            _fields_ = [
+                (1, 'GeneralLineFlag'),
+                (lambda s: -(s.p['NumBits']+2) if s['GeneralLineFlag'] else 0, 'DeltaX'),
+                (lambda s: -(s.p['NumBits']+2) if s['GeneralLineFlag'] else 0, 'DeltaY'),
+                (lambda s: 1 if s['GeneralLineFlag'] else 0, 'VertLineFlag'),
+                (lambda s: -(s.p['NumBits']+2) if s['VertLineFlag'] else 0, 'VertDeltaX'),
+                (lambda s: -(s.p['NumBits']+2) if s['VertLineFlag'] else 0, 'VertDeltaY'),
+            ]
+        class CURVED(pbinary.struct):
+            # TypeFlag == 1, StraightFlag == 0
+            _fields_ = [
+                (lambda s: -(s.p['NumBits']+2), 'ControlDeltaX'),
+                (lambda s: -(s.p['NumBits']+2), 'ControlDeltaY'),
+                (lambda s: -(s.p['NumBits']+2), 'AnchorDeltaX'),
+                (lambda s: -(s.p['NumBits']+2), 'AnchorDeltaY'),
+            ]
 
-                self._fields_.append( (self['MoveBits'], 'MoveDeltaX') )
-                self._fields_.append( (self['MoveBits'], 'MoveDeltaY') )
-                nextbit( self['MoveBits']*2 )
-            
-            if self['StateFillStyle0']:
-                self._fields_.append( (fillbits, 'FillStyle0') )
-                nextbit(fillbits)
+        _fields_ = [
+            (1, 'StraightFlag'),
+            (4, 'NumBits'),
+            (lambda s: s.STRAIGHT if s['StraightFlag'] else s.CURVED, 'Edge'),
+        ]
 
-            if self['StateFillStyle1']:
-                self._fields_.append( (fillbits, 'FillStyle1') )
-                nextbit(fillbits)
-    '''
+    _fields_ = [
+        (1, 'TypeFlag'),
+        (lambda s: s.EDGE if s['TypeFlag'] else s.STYLECHANGE, 'Shape'),
+    ]
+
+    def isEndShapeRecord(self):
+        return self['TypeFlag'] == 0 and self['Shape'].isEndShapeRecord()
 
 class SHAPERECORDLIST(pbinary.terminatedarray):
     _object_ = SHAPERECORD
-
     def isTerminator(self, value):
-        raise NotImplemenetedError
+        return value.isEndShapeRecord()
 
 ### shape styles
 class FILLSTYLE(pstruct.type):
     def __Color(self):
-        type = self['FillStyleType'].l.number()
-        tag = DefineShape   # FIXME
+        type = self['FillStyleType'].l.num()
+        tag = tags.DefineShape   # FIXME
         if type != 0:
             return Empty
 
-        if tag.type in (DefineShape.type,DefineShape2.type):
+        if tag.type in (tags.DefineShape.type,tags.DefineShape2.type):
             return RGB
         return RGBA
 
     def __has(types, result):
         def has(self):
-            if self['FillStyleType'].l.number() in types:
+            if self['FillStyleType'].l.num() in types:
                 return result
             return Empty
         return has
 
     def __Gradient(self):
-        type = self['FillStyleType'].l.number()
+        type = self['FillStyleType'].l.num()
         if type in (0x10,0x12):
             return GRADIENT
         if type == 0x13:
@@ -496,10 +515,10 @@ class FILLSTYLE(pstruct.type):
 
 class LINESTYLE(pstruct.type):
     def __Color(self):
-        type = DefineShape.type  # FIXME
-        if type == DefineShape3.type:
+        type = tags.DefineShape.type  # FIXME
+        if type == tags.DefineShape3.type:
             return RGBA
-        if type in (DefineShape.type,DefineShape2.type):
+        if type in (tags.DefineShape.type,tags.DefineShape2.type):
             return RGB
         raise NotImplementedError
 
@@ -532,20 +551,20 @@ class LINESTYLE2(pstruct.type):
 class FILLSTYLEARRAY(pstruct.type):
     _fields_ = [
         (UI8, 'FillStyleCount'),
-        (lambda s: UI16 if s['FillStyleCount'].l.number() == 0xff else Empty, 'FillStyleCountExtended'),
+        (lambda s: UI16 if s['FillStyleCount'].l.num() == 0xff else Empty, 'FillStyleCountExtended'),
         (lambda s: dyn.array(FILLSTYLE, s.getcount()), 'FillStyles'),
     ]
 
     def getcount(self):
-        return self['FillStyleCountExtended'] if self['FillStyleCount'].number() == 0xff else self['FillStyleCount']
+        return self['FillStyleCountExtended'] if self['FillStyleCount'].num() == 0xff else self['FillStyleCount']
 
 class LINESTYLEARRAY(pstruct.type):
     def __LineStyles(self):
-        type = DefineShape.type  # FIXME
-        if type == DefineShape4.type:
-            return dyn.array(LINESTYLE2, s.getcount())
-        if type in (DefineShape.type,DefineShape2.type,DefineShape3.type):
-            return dyn.array(LINESTYLE, s.getcount())
+        type = tags.DefineShape.type  # FIXME
+        if type == tags.DefineShape4.type:
+            return dyn.array(LINESTYLE2, self.getcount())
+        if type in (tags.DefineShape.type,tags.DefineShape2.type,tags.DefineShape3.type):
+            return dyn.array(LINESTYLE, self.getcount())
         raise NotImplementedError
 
     _fields_ = [
@@ -555,9 +574,9 @@ class LINESTYLEARRAY(pstruct.type):
     ]
 
     def getcount(self):
-        return self['FillStyleCountExtended'] if self['FillStyleCount'] == 0xff else self['FillStyleCount']
+        return self['LineStyleCountExtended'] if self['LineStyleCount'] == 0xff else self['LineStyleCount']
 
-class SHAPEWITHSTYLE(pstruct.type):
+class SHAPEWITHSTYLE(pstruct.type, ShapeDefinition):
     class __NumBits(pbinary.struct):
         _fields_ = [
             (4, 'NumFillBits'),
@@ -600,6 +619,7 @@ class SOUNDINFO(pstruct.type):
     ]
 
 ## XXX font
+import tags
 
 if __name__ == '__main__':
     import ptypes

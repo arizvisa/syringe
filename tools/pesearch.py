@@ -89,9 +89,9 @@ def dumpexecutable(filename):
 def dumpversion(filename):
     global mz,pe,imagebase,sections,datadirectory,imports
     opt = pe['OptionalHeader']
-    print 'OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].number(), opt['MinorOperatingSystemVersion'].number()))
-    print 'ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].number(), opt['MinorImageVersion'].number()))
-    print 'SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].number(), opt['MinorSubsystemVersion'].number()))
+    print 'OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].num(), opt['MinorOperatingSystemVersion'].num()))
+    print 'ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].num(), opt['MinorImageVersion'].num()))
+    print 'SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].num(), opt['MinorSubsystemVersion'].num()))
     print opt['Win32VersionValue']
 
     global root

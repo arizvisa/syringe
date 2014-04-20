@@ -1,6 +1,5 @@
 import ptypes
-import definitions
-import definitions.__base__
+import __base__,headers
 from warnings import warn
 
 def open(filename, **kwds):
@@ -10,7 +9,7 @@ def open(filename, **kwds):
     res.filename = filename     # ;)
     return res
 
-class File(definitions.headers.CoffHeader, definitions.__base__.BaseHeader): pass
+class File(headers.CoffHeader, ptypes.ptype.boundary): pass
 
 if __name__ == '__main__':
     import sys

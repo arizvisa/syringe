@@ -10,7 +10,7 @@ class uword(pint.uint32_t): pass
 
 class LEB128(pbinary.terminatedarray):
     def isTerminator(self, value):
-        return value['continue'].number() == 0
+        return value['continue'].num() == 0
 
 class ULEB128(LEB128):
     class _object_(pbinary.struct):

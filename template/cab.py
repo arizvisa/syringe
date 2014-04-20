@@ -78,17 +78,17 @@ class CFHEADER(pstruct.type):
         if self['flags']['RESERVE_PRESENT']:
             s = self['cbCFHeader'].int()
             return dyn.block(s)
-        return ptype.empty
+        return ptype.undefined
     def reserve_folder(self):
         if self['flags']['RESERVE_PRESENT']:
             s = self['cbCFFolder'].int()
             return dyn.block(s)
-        return ptype.empty
+        return ptype.undefined
     def reserve_data(self):
         if self['flags']['RESERVE_PRESENT']:
             s = self['cbCFData'].int()
             return dyn.block(s)
-        return ptype.empty
+        return ptype.undefined
 
     _fields_ = [
         (dyn.clone(pstr.string, length=4), 'signature'),

@@ -15,12 +15,10 @@ class pFixed(ptype.type):
         low = utils.h2i(v[center:]) / float(divisor)
         return float(high)+low
 
-    def __repr__(self):
+    def details(self):
         if self.initialized:
-            res = '%f'%self.__float__()
-        else:
-            res = '???'
-        return '%s %s'% (self.__class__, res)
+            return '%f'%self.__float__()
+        return '???'
 
 ## float types
 #TODO: define __repr__ for each of these types

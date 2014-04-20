@@ -279,12 +279,12 @@ class msofbtClientAnchor(pstruct.type):
 
     _fields_ = [
         (lambda s: pint.uint64_t if s.blocksize() == 8 else s.__short, 'short'),
-        (lambda s: s.__long if s.blocksize() >= 18 else ptype.empty, 'long'),
+        (lambda s: s.__long if s.blocksize() >= 18 else ptype.type, 'long'),
         (lambda s: dyn.clone(ptype.block, length=s.blocksize()-s.size()), 'extra'),
     ]
 
 @Record.define
-class msofbtClientData(ptype.empty):
+class msofbtClientData(ptype.type):
     type = 0xf011
     type = 61457
 

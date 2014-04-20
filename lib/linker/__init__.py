@@ -34,8 +34,8 @@ def new(**kwds):
     return linker()
 
 if __name__ == '__main__':
-    import pecoff,ptypes,bitmap,os
-    root = bitmap.__file__
+    import pecoff,ptypes,fu,os
+    root = fu.__file__
     root = root[:root.rindex(os.sep)] + os.sep + '..' + os.sep
     root = root.replace('\\','/')
 

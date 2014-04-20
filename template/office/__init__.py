@@ -1,8 +1,8 @@
 import logging
 from ptypes import *
 class RecordUnknown(dyn.block(0)):
-    def shortname(self):
-        s = super(RecordUnknown, self).shortname()
+    def classname(self):
+        s = self.shortname()
         names = s.split('.')
         names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
         return '.'.join(names)
@@ -25,7 +25,7 @@ class RecordHeader(pstruct.type):
 
     def details(self):
         if self.initialized:
-            v = self['ver/inst'].number()
+            v = self['ver/inst'].num()
             t = int(self['type'])
             l = int(self['length'])
             return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
@@ -46,7 +46,7 @@ class RecordGeneral(pstruct.type):
         s = self.size()
         if bs > s:
             return dyn.block(bs - s)
-        return ptype.empty
+        return ptype.type
         
     _fields_ = [
         (RecordHeader, 'header'),
@@ -67,7 +67,7 @@ class RecordContainer(parray.block):
                 n = '%s[%x]'%(v.__class__.__name__,v.type)
                 records.append(n)
             return 'records=%d [%s]'%(len(self), ','.join(records))
-        return '[uninitialized] records=%d [%s]'%(len(self), ','.join(x['data'].shortname() for x in self.v))
+        return '[uninitialized] records=%d [%s]'%(len(self), ','.join(x['data'].classname() for x in self.v))
 
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
@@ -117,7 +117,7 @@ class RecordContainer(parray.block):
     def dumperrors(self):
         result = []
         for i,x in enumerate(self.errors()):
-            result.append('%d\t%s\t%d\t%d'%(i,x.shortname(),x.size(),x.blocksize()))
+            result.append('%d\t%s\t%d\t%d'%(i,x.classname(),x.size(),x.blocksize()))
         return '\n'.join(result)
 
 # yea, a file really is usually just a gigantic list of records...

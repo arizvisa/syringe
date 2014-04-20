@@ -31,10 +31,10 @@ class ip4_hdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        return self['ip_p'].l.number()
+        return self['ip_p'].l.num()
     def nextlayer_size(self):
         headersize = self['ip_h'].l['hlen']*4
-        return self['ip_len'].l.number() - headersize
+        return self['ip_len'].l.num() - headersize
 
 @datalink.layer.define
 class datalink_ip4(ip4_hdr):

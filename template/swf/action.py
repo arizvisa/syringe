@@ -9,13 +9,13 @@ class action(ptype.definition):
 
     class unknown(ptype.block):
         _fields_=[]
-        def __repr__(self):
+        def details(self):
             if self.initialized:
-                return self.name()
-            return super(action.unknown, self).__repr__()
+                return self.classname()
+            return super(action.unknown, self).details()
 
-        def shortname(self):
-            s = super(action.unknown, self).shortname()
+        def classname(self):
+            s = self.typename()
             names = s.split('.')
             names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
             return '.'.join(names)
@@ -71,7 +71,7 @@ class ActionPush(action.command):
         lookup = {
             0:STRING, 1:FLOAT, 4:UI8, 5:UI8, 6:DOUBLE, 7:UI32, 8:UI8, 9:UI16
         }
-        return lookup.get(n, ptype.empty)
+        return lookup.get(n, ptype.undefined)
 
     _fields_ = [(UI8, 'Type'),(__Value, 'Value')]
 

@@ -1,16 +1,21 @@
-import __builtin__
-import ptype,parray
-import pint,pstr,dyn,utils
+import __builtin__,itertools
+from . import ptype,parray,pint,dyn,utils,error,pstruct,provider
 
 class _char_t(pint.integer_t):
     length = 1
     def str(self):
         return self.v
 
-    def details(self):
+    def summary(self, **options):
         if self.initialized:
             return repr(self.str())
         return '???'
+    def repr(self, **options):
+        return self.summary(**options)
+
+    @classmethod
+    def typename(cls):
+        return cls.__name__
 
 class char_t(_char_t):
     def set(self, value):
@@ -35,7 +40,7 @@ class wchar_t(_char_t):
 class string(ptype.type):
     '''String of characters'''
     length = 0
-    _object_ = pstr.char_t
+    _object_ = char_t
     initializedQ = lambda self: self.value is not None    # bool
 
     def at(self, offset, **kwds):
@@ -68,46 +73,71 @@ class string(ptype.type):
         return len(self.value) / self._object_.length
 
     def __delitem__(self, index):
+        if index.__class__ is slice:
+            raise error.ImplementationError(self, 'string.__delitem__', message='slice support not implemented')
         self.__delete(index)
     def __getitem__(self, index):
+        if index.__class__ is slice:
+            result = [self[_] for _ in xrange(*index.indices(len(self)))]
+
+            # ..and now it's an array
+            type = dyn.clone(parray.type, typename=lambda s:self.typename(), length=len(result), _object_=self._object_)
+            return self.new(type, offset=result[0].getoffset(), value=result)
+
         if index < -len(self) or index >= len(self):
-            raise IndexError('list index out of range')
-        index &= len(self)-1
-        offset = index * self._object_.length
-        return self.newelement(self._object_, str(index), self.getoffset() + offset).alloc(offset=0,source=ptype.provider.string(self.serialize()[offset:offset+self._object_.length]))
+            raise error.UserError(self, 'string.__getitem__', message='list index %d out of range'% index)
+
+        index %= len(self)
+        res = self.new(self._object_, __name__=str(index))
+        ofs = index*res.blocksize()
+        res.setoffset(self.getoffset()+ofs)
+        return res.load(offset=ofs,source=provider.string(self.serialize()))
+
     def __setitem__(self, index, value):
-        assert value.__class__ is self._object_
+        if index.__class__ is slice:
+            raise error.ImplementationError(self, 'string.__setitem__', message='slice support not implemented')
+        if value.__class__ is not self._object_:
+            raise error.TypeError(self, 'string.__setitem__', message='expected value of type %s. received %s'% (repr(self._object_),repr(value.__class__)))
         self.__replace(index, value.serialize())
     def insert(self, index, object):
-        assert object.__class__ is self._object_
+        if object.__class__ is not self._object_:
+            raise error.TypeError(self, 'string.insert', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
         self.__insert(index, value.serialize())
     def append(self, object):
-        assert object.__class__ is self._object_
+        if object.__class__ is not self._object_:
+            raise error.TypeError(self, 'string.append', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
         self.value += object.serialize()
     def extend(self, iterable):
         for x in iterable:
             self.append(x)
         return
     def __iter__(self):
-        obj = self._object_
-        ofs = self.getoffset()
+        if not self.initializedQ():
+            raise ptype.InitializationError(self, 'string.__iter__')
+
+        source = provider.string(self.serialize())
+        baseoffset,object = self.getoffset(),self._object_
+
+        o = 0
         for i in xrange(len(self)):
-            yield self.newelement(self._object_, str(i), ofs).l
-            ofs += obj.length
+            res = self.new(object, __name__=str(i), offset=baseoffset+o)
+            yield res.load(offset=o)
+            o += res.size()
         return
 
     def set(self, value):
-        result = dyn.array(self._object_, len(self))()
+        chararray = [x for x in value]
+        _ = dyn.array(self._object_, len(chararray))
+        result = _()
 
-        for element,character in zip(result.alloc(), value):
+        for character,element in zip(value,result.alloc()):
             element.set(character)
+        self.length = len(result)
         self.value = result.serialize()
         return self
 
     def get(self):
-        import warnings
-        warnings.warn('%s.get() is deprecated in favor of %s.str()'%(self.__class__.__name__, self.__class__.__name__), DeprecationWarning, stacklevel=2)
-        return self.str()
+        return self.serialize()
 
     def str(self):
         '''return type as a str'''
@@ -117,31 +147,37 @@ class string(ptype.type):
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             sz = self._object_.length
-            self.source.seek(self.getoffset())
-            block = self.source.consume( self.blocksize() )
+            source = self.source or self.parent is not None and self.parent.source
+            source.seek(self.getoffset())
+            block = source.consume( self.blocksize() )
             result = self.deserialize_block(block)
         return result
 
     def deserialize_block(self, block):
         if len(block) != self.blocksize():
-            raise StopIteration("unable to continue reading (byte %d out of %d)"% (len(block), self.blocksize()))
+            raise error.LoadError(self, len(block))
         self.value = block
         return self
 
     def serialize(self):
-        return str(self.value)
+        if self.initializedQ():
+            return str(self.value)
+        raise error.InitializationError(self, 'string.serialize')
 
-    def details(self):
-        if self.initialized:
+    def summary(self, **options):
+        if self.initializedQ():
             return repr(self.str())
         return '???'
+
+    def repr(self, **options):
+        return self.summary(**options)
 
 class szstring(string):
     '''Standard null-terminated string'''
     _object_ = char_t
     length=None
     def isTerminator(self, v):
-        return int(v) == 0
+        return v.num() == 0
 
     def set(self, value):
         if not value.endswith('\x00'):
@@ -158,14 +194,15 @@ class szstring(string):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.source.seek(self.getoffset())
-            producer = (self.source.consume(1) for x in utils.infiniterange(0))
+            source = self.source or self.parent is not None and self.parent.source
+            source.seek(self.getoffset())
+            producer = (source.consume(1) for x in itertools.count())
             result = self.deserialize_stream(producer)
         return result
 
     def deserialize_stream(self, stream):
         o = self.getoffset()
-        obj = self.newelement(self._object_, '', o)
+        obj = self.new(self._object_, offset=o)
         sz = obj.blocksize()
 
         getchar = lambda: ''.join([stream.next() for x in range(sz)])
@@ -183,7 +220,7 @@ class szstring(string):
         return self
 
     def blocksize(self):
-        return self.load().size()       # XXX: heh
+        return self.size() if self.initializedQ() else self.load().size() # XXX: heh
 
 class wstring(string):
     '''String of wide-characters'''
@@ -201,7 +238,7 @@ class szwstring(szstring, wstring):
             value += '\x00'
 
         result = dyn.array(self._object_, len(value))().alloc()
-        for element,character in zip(result, value):
+        for characeter,element in zip(value, result):
             element.set(character)
         self.value = result.serialize()
         return self
@@ -239,19 +276,19 @@ if __name__ == '__main__':
         return fn
 
     @TestCase
-    def Test1():
+    def test_str_char():
         x = pstr.char_t(source=provider.string('hello')).l
         if x.get() == 'h':
             raise Success
 
     @TestCase
-    def Test2():
+    def test_str_wchar():
         x = pstr.wchar_t(source=provider.string('\x43\x00')).l
         if x.get() == '\x43':
             raise Success
 
     @TestCase
-    def Test3():
+    def test_str_string():
         x = pstr.string()
         string = "helllo world ok, i'm hungry for some sushi\x00"
         x.length = len(string)/2
@@ -261,7 +298,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test4():
+    def test_str_wstring():
         x = pstr.wstring()
         oldstring = "ok, this is unicode"
         string = oldstring
@@ -273,14 +310,14 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test5():
+    def test_str_szstring():
         string = 'null-terminated\x00ok'
         x = pstr.szstring(source=provider.string(string)).l
         if x.str() == 'null-terminated':
             raise Success
 
     @TestCase
-    def Test6():
+    def test_str_array_szstring():
         import parray
         data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
 
@@ -297,7 +334,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test7():
+    def test_str_struct_szstring():
         import pstruct,pint,pstr
         class IMAGE_IMPORT_HINT(pstruct.type):
             _fields_ = [
@@ -312,14 +349,14 @@ if __name__ == '__main__':
 
 
     @TestCase
-    def Test8():
+    def test_str_szwstring():
         s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
         v = pstr.szwstring(source=provider.string(s)).l
         if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
 
     @TestCase
-    def Test9():
+    def test_str_szwstring_customchar():
         data = ' '.join(map(lambda x:x.strip(),'''
             00 57 00 65 00 6c 00 63 00 6f 00 6d 00 65 00 00
         '''.split('\n'))).strip()
@@ -351,6 +388,17 @@ if __name__ == '__main__':
             raise Success
         raise Failure
 
+    @TestCase
+    def test_str_szstring_customterm():
+        class fuq(pstr.szstring):
+            def isTerminator(self, value):
+                return value.num() == 0x3f
+
+        s = provider.string('hello world\x3f..................')
+        a = fuq(source=s)
+        a = a.l
+        if a.size() == 12:
+            raise Success
 
 if __name__ == '__main__':
     results = []

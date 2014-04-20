@@ -41,8 +41,8 @@ class dictionary(object):   # ptype.dictionary?
         return False
 
     class unknown(dyn.block(0)):
-        def shortname(self):
-            return '%s<%x>'%(super(unknown, self).shortname(), self.type)
+        def classname(self):
+            return '%s<%x>'%(self.typename(), self.type)
 
 class layer(dictionary):
     cache = {}

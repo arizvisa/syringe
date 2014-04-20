@@ -2,7 +2,7 @@ import logging
 from ptypes import *
 
 class UNKNOWN(dyn.block(0)):
-    def shortname(self):
+    def classname(self):
         return 'Unknown<%d,%d>'%(self.type[0], self.type[1])
 
 class AbstractClass(object):

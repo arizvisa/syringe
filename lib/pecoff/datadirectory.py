@@ -19,9 +19,6 @@ class Entry(pstruct.type):
             return True
         return False
 
-    def get(self):
-        return self['VirtualAddress'].d
-
     def valid(self):
         return bool(int(self['Size']) != 0)
 
@@ -58,6 +55,7 @@ class Tls(Entry):
     _object_ = IMAGE_TLS_DIRECTORY
 
 class LoadConfig(Entry):
+    # FIXME: in some dlls this table has been incorrect
     class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
         _fields_ = [
             (uint32, 'Characteristics'),
@@ -81,6 +79,12 @@ class LoadConfig(Entry):
 #            (virtualaddress(uint32), 'SEHandlerTable'),     # FIXME
             (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].l.int())), 'SEHandlerTable'),     # FIXME
             (uint32, 'SEHandlerCount'),
+
+            (uint32, 'GuardCFCheckFunctionPointer'),
+            (uint32, 'Reserved2'),
+            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].l.num())), 'GuardCFFunctionTable'),
+            (uint32, 'GuardCFFunctionCount'),
+            (uint32, 'GuardFlags'),     # CF_INSTRUMENTED=0x100,CFW_INSTRUMENTED=0x200,CF_FUNCTION_TABLE_PRESENT=0x400
         ]
     _object_ = IMAGE_LOADCONFIG_DIRECTORY
 

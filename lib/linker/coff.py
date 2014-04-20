@@ -1,5 +1,5 @@
 import os,array
-import pecoff,ptypes,bitmap
+import pecoff,ptypes
 import logging,warnings
 import store
 
@@ -181,7 +181,7 @@ class executable(coff):
 
     @classmethod
     def open(cls, path):    
-        p = pecoff.Executable.open(path, mode='rb')
+        p = pecoff.Executable.open(path, mode='r')
 
         result = cls()
         result.modulename = os.path.basename(path)
@@ -427,7 +427,7 @@ class object(coff):
 
     @classmethod
     def open(cls, path):    
-        p = pecoff.Object.open(path, mode='rb')
+        p = pecoff.Object.open(path, mode='r')
 
         result = cls()
         result.modulename = os.path.basename(path)
@@ -599,7 +599,7 @@ class library(store.container, coff):
 
     @classmethod
     def open(cls, path):    
-        p = pecoff.Archive.open(path, mode='rb')
+        p = pecoff.Archive.open(path, mode='r')
 
         result = cls()
         result.modulename = os.path.basename(path)

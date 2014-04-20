@@ -284,7 +284,7 @@ class Type_Specific_RealAudio(pstruct.type):
             type = audio_codec.lookup((version, fourcc))
         except KeyError:
             logging.warn('%s:%s: Unable to find codec "%s" version %d'%(self.__module__, self.shortname(), fourcc, version))
-            return ptype.empty   #XXX
+            return ptype.undefined   #XXX
         return dyn.clone(type, blocksize=lambda s: int(self['i_codec'].l))
 
     _fields_ = [
@@ -307,7 +307,7 @@ class Type_Specific_RealVideo(pstruct.type):
             result = video_codec.lookup(id)
         except KeyError:
             logging.warn('%s:%s: Unable to find codec "%s"'%(self.__module__, self.shortname(), id))
-            result = ptype.empty
+            return ptype.undefined
         return result
 
     _fields_ = [

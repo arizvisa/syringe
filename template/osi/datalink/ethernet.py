@@ -16,4 +16,4 @@ class header(pstruct.type, __base__.stackable):
     ]
 
     def nextlayer_id(self):
-        return self['type'].number()
+        return self['type'].num()

@@ -169,7 +169,7 @@ class TPKT(pstruct.type):
             return dyn.clone(TPDU, blocksize=lambda s: n)
 
         _fields_ = [
-            (ptype.empty, '(version)'),  # 1 byte version
+            (ptype.type, '(version)'),  # 1 byte version
             (bigendian(pint.uint8_t), 'reserved'),
             (bigendian(pint.uint16_t), 'length'),
             (__data, 'data'),
@@ -186,7 +186,7 @@ class TPKT(pstruct.type):
 
         # XXX: maybe length is being decoded wrong, but whatever
         _fields_ = [
-            (ptype.empty, '(version)'),
+            (ptype.type, '(version)'),
             (bigendian(pint.uint16_t), 'length'),
             (__data, 'data'),
         ]

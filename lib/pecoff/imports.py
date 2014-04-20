@@ -15,8 +15,8 @@ class IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
         string = self.source.consume(4)
         return self.deserialize_stream(reversed(string))
 
-    def get(self):
-        hint = int(self['Ordinal Number'])
+    def getOrdinal(self):
+        hint = self['Ordinal Number'].num()
         return (hint, 'Ordinal%d'% hint)      # microsoft-convention
 
 class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
@@ -29,9 +29,9 @@ class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
         string = self.source.consume(4)
         return self.deserialize_stream(reversed(string))
 
-    def get(self):
-        offset = headers.RelativeAddress(self, int(self['Name']))
-        return self.newelement(IMAGE_IMPORT_HINT, 'ImportName', offset).load().get()
+    def getImport(self):
+        offset = headers.calculateRelativeAddress(self, self['Name'].num())
+        return self.newelement(IMAGE_IMPORT_HINT, 'ImportName', offset).l.getHint()
 
 class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
     root = dyn.block(4)
@@ -40,16 +40,16 @@ class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
         (IMAGE_IMPORT_NAME_TABLE_ORDINAL, 'Ordinal'),
     ]
 
-#    def __repr__(self):
+#    def repr(self):
 #        if int(self['Name']['OrdinalFlag']) == 1:
 #            return 'Ordinal -> %s'% repr(self['Ordinal'])
 #        return 'Name -> %s'% repr(self['Name'])
 
-    def get(self):
+    def getImport(self):
         '''Will return a tuple of (iat index, name)'''
         if int(self['Name']['OrdinalFlag']) == 1:
-            return self['Ordinal'].get()
-        return self['Name'].get()
+            return self['Ordinal'].getOrdinal()
+        return self['Name'].getImport()
 
 #class IMAGE_IMPORT_ADDRESS_TABLE(dyn.array(addr_t,0)): pass
 class IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
@@ -78,8 +78,8 @@ class IMAGE_IMPORT_HINT(pstruct.type):
             l = super(IMAGE_IMPORT_HINT, self).size()
             return [l, l+1][l&1]
 
-    def get(self):
-        return ( int(self['Hint']), self['String'].get() )
+    def getHint(self):
+        return ( self['Hint'].num(), self['String'].str() )
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
@@ -95,13 +95,13 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
 
     def fetchimports(self):
         '''[(hint,importname,importtableaddress),...]'''
-        address = int(self['IAT'])
+        address = self['IAT'].num()
         NtHeader = self.getparent(headers.NtHeader)
         section = NtHeader['Sections'].getsectionbyaddress(address)
-        data = array.array('c',section.get().load().serialize())
+        data = array.array('c',section.data().l.serialize())
 
-        sectionva = int(section['VirtualAddress'])
-        nametable = int(self['INT'])-sectionva
+        sectionva = section['VirtualAddress'].num()
+        nametable = self['INT'].num()-sectionva
 
         while nametable < len(data):
             # get name

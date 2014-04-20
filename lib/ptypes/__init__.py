@@ -1,14 +1,5 @@
-import ptype,parray,pstruct,pbinary
-import pint,pfloat,pstr
-import config
-littleendian,bigendian = config.byteorder.littleendian,config.byteorder.bigendian
-
-import dyn,provider as prov
-import utils
-provider = prov
-
-#__all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn,provider,utils'.split(',')
-#__all__ = 'ptype,parray,pstruct,pint,pfloat,pstr,pbinary,dyn'.split(',')
+from . import ptype,parray,pstruct,pbinary,pint,pfloat,pstr,config,utils,dyn,provider
+prov = provider
 
 ## globally changing the ptype provider
 def setsource(prov):
@@ -17,13 +8,14 @@ def setsource(prov):
     prov.seek
     prov.consume
     prov.store
-    ptype.base.source = prov
+    ptype.type.source = prov
 
 ## globally changing the byte order
+bigendian,littleendian = config.byteorder.bigendian,config.byteorder.littleendian
 def setbyteorder(endianness):
     '''
         _Globally_ sets the integer byte order to the endianness specified.
-        can be either .bigendian or .littleendian
+        can be either config.byteorder.bigendian or config.byteorder.littleendian
     '''
     ptype.setbyteorder(endianness)
     pint.setbyteorder(endianness)
@@ -36,8 +28,28 @@ from ptype import istype,iscontainer
 from provider import file,memory
 from utils import hexdump
 
-#__all__+= 'setsource,littleendian,bigendian,setbyteorder'.split(',')
-#__all__+= 'debug,debugrecurse,istype,iscontainer,file,memory,hexdump'.split(',')
-
 ## default to byte order detected by python
-setbyteorder( config.integer.byteorder )
+setbyteorder( config.defaults.integer.order )
+
+if __name__ == '__main__':
+    import __init__ as ptypes
+    class a(ptypes.ptype.type):
+        length = 4
+
+    data = '\x41\x41\x41\x41'
+
+    import ctypes
+    b = ctypes.cast(ctypes.pointer(ctypes.c_buffer(data,4)), ctypes.c_void_p)
+
+    ptypes.setsource(ptypes.prov.memory())
+    print 'ptype-class-memory', type(ptypes.ptype.type.source) == ptypes.prov.memory
+    print 'ptype-instance-memory', type(ptypes.ptype.type().source) == ptypes.prov.memory
+    c = a(offset=b.value).l
+    print 'type-instance-memory', c.serialize() == data
+
+    ptypes.setsource(ptypes.prov.empty())
+    print 'ptype-class-empty', type(ptypes.ptype.type.source) == ptypes.prov.empty
+    print 'ptype-instance-empty', type(ptypes.ptype.type().source) == ptypes.prov.empty
+    c = a(offset=b.value).l
+    print 'type-instance-empty', c.serialize() == '\x00\x00\x00\x00'
+    ptypes.setsource(ptypes.prov.memory())

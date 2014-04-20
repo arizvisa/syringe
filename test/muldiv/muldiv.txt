@@ -1,0 +1,51 @@
+IF SRC = 0
+THEN #DE; (* Divide error *) 
+FI;
+IF OperandSize = 8 (* Word/byte operation *)
+THEN
+temp ? AX / SRC; (* Signed division *)
+IF (temp > 7FH) or (temp < 80H) 
+(* If a positive result is greater than 7FH or a negative result is less than 80H *)
+THEN #DE; (* Divide error *) 
+ELSE
+AL ? temp;
+AH ? AX SignedModulus SRC;
+FI;
+ELSE IF OperandSize = 16 (* Doubleword/word operation *)
+THEN
+temp ? DX:AX / SRC; (* Signed division *)
+IF (temp > 7FFFH) or (temp < 8000H) 
+(* If a positive result is greater than 7FFFH 
+or a negative result is less than 8000H *)
+THEN
+#DE; (* Divide error *) 
+ELSE
+AX ? temp;
+DX ? DX:AX SignedModulus SRC;
+FI;
+FI;
+ELSE IF OperandSize = 32 (* Quadword/doubleword operation *)
+temp ? EDX:EAX / SRC; (* Signed division *)
+IF (temp > 7FFFFFFFH) or (temp < 80000000H) 
+(* If a positive result is greater than 7FFFFFFFH 
+or a negative result is less than 80000000H *)
+THEN 
+#DE; (* Divide error *) 
+ELSE
+EAX ? temp;
+EDX ? EDXE:AX SignedModulus SRC;
+FI;
+FI;
+ELSE IF OperandSize = 64 (* Doublequadword/quadword operation *)
+temp ? RDX:RAX / SRC; (* Signed division *)
+IF (temp > 7FFFFFFFFFFFFFFFH) or (temp < 8000000000000000H) 
+(* If a positive result is greater than 7FFFFFFFFFFFFFFFH 
+or a negative result is less than 8000000000000000H *)
+THEN 
+#DE; (* Divide error *) 
+ELSE
+RAX ? temp;
+RDX ? RDE:RAX SignedModulus SRC;
+FI;
+FI;
+FI;

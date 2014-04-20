@@ -28,11 +28,11 @@ class ip6_hdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        return self['ip6_nxt'].number()
+        return self['ip6_nxt'].num()
 
     def nextlayer(self):
         protocol = self.nextlayer_id()
-        sz = self['ip6_plen'].number()
+        sz = self['ip6_plen'].num()
 
         if protocol == 0:
             result = ip6_exthdr_hop
@@ -46,11 +46,11 @@ class layer_ip6(ip6_hdr):
 
 class ip6_opt(pstruct.type):
     def __ip6_len(self):
-        type = self['ip6o_type'].l.number()
+        type = self['ip6o_type'].l.num()
         return (u_int8_t,pint.integer_t)[type == 0]   # for Pad0
 
     def __ip6o_payload(self):
-        t,size = self['ip6o_type'].l.number(),self['ip6o_len'].l.number()
+        t,size = self['ip6o_type'].l.num(),self['ip6o_len'].l.num()
         return Option.get(t, blocksize=lambda s:size)
 
     _fields_ = [
@@ -63,8 +63,8 @@ class ip6_exthdr(pstruct.type, stackable):
     type = None
 
     def __ip6_payload(self):
-        t = self['ip6_nxt'].l.number()
-        size = self['ip6_len'].l.number() - 2
+        t = self['ip6_nxt'].l.num()
+        size = self['ip6_len'].l.num() - 2
         result = layer.get(self.type, length=size)
         return dyn.clone(result, blocksize=lambda s:size)
 
@@ -75,11 +75,11 @@ class ip6_exthdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        protocol = self['ip6_nxt'].number()
+        protocol = self['ip6_nxt'].num()
         return protocol
 
     def blocksize(self):
-        return 8+self['ip6_len'].l.number()
+        return 8+self['ip6_len'].l.num()
 
 ### options
 if True:
@@ -108,8 +108,8 @@ if True:
         _fields_ = [
             (u_int8_t, 'ip6on_src_nsap_len'),
             (u_int8_t, 'ip6on_dst_nsap_len'),
-            (lambda s: dyn.block(self['ip6on_src_nsap_len'].l.number()), 'ip6on_src_nsap'),
-            (lambda s: dyn.block(self['ip6on_dst_nsap_len'].l.number()), 'ip6on_dst_nsap'),
+            (lambda s: dyn.block(self['ip6on_src_nsap_len'].l.num()), 'ip6on_src_nsap'),
+            (lambda s: dyn.block(self['ip6on_dst_nsap_len'].l.num()), 'ip6on_dst_nsap'),
         ]
 
     @Option.define
@@ -171,7 +171,7 @@ if True:
         ]
 
 #    @layer.define
-    class ip6_nomoreheaders(ptype.empty):
+    class ip6_nomoreheaders(ptype.type):
         type = 59
 
     ####

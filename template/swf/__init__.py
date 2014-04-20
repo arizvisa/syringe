@@ -17,43 +17,40 @@ class FrameInfo(pstruct.type):
         (UI16, 'FrameCount')
     ]
 
-class File(pstruct.type):
-    class cdata(pstruct.type):
-        _fields_ = [
-            (FrameInfo, 'frameinfo'),
-            (TagList, 'tags')
-        ]
+class Data(pstruct.type):
+    _fields_ = [
+        (FrameInfo, 'frameinfo'),
+        (TagList, 'tags')
+    ]
 
-        def load(self):
-            self.source.seek(self.getoffset())
-            block = self.source.consume(self.blocksize())
+class File(pstruct.type, ptype.boundary):
+    class cdata(ptype.encoded_t):
+        def encode(self, object):
+            block = object.serialize()
+            compressed_block = zlib.compress(block)
+            print 'zlib: compressed %x to %x bytes'%(len(block),len(compressed_block))
+            return compressed_block
+        def decode(self, block):
+            decompressed_block = zlib.decompress(block)
+            print 'zlib: decompressed %x to %x bytes'%(len(block),len(decompressed_block))
+            return dyn.clone(Data, source=ptypes.prov.string(decompressed_block))
 
-            # XXX: modify ours and our parent's source with the new decompressed file
-            self.parent.source = self.source = ptypes.provider.string(self.parent['header'].serialize() + zlib.decompress(block))
-            print 'zlib: decompressed %x to %x bytes'%(len(block),self.source.size())
-            return super(File.cdata, self).load()
+        def summary(self):
+            return self.hexdump(oneline=1)
 
-        def blocksize(self):
-            raise NotImplementedError
+        def details(self):
+            return self.hexdump(summary=1)
 
-    class data(pstruct.type):
-        _fields_ = [
-            (FrameInfo, 'frameinfo'),
-            (TagList, 'tags')
-        ]
-
+    class data(ptype.encoded_t):
+        def decode(self, block):    
+            return dyn.clone(Data, source=ptypes.prov.string(block))
+            
     def __data(self):
         # if it's compressed then use the 'cdata' structure
         if int( self['header'].l['Signature'][0]) == ord('C'):
-            r = int(self['header'].l['FileLength'])
-            size = r - self['header'].size()
-            current = self.source.size() - self['header'].size() + self['header'].getoffset()
-
-            # File.cdata decompresses and changes our source, so we fix our header here
-            self['header']['Signature'][0].set( ord('F') )
-            return dyn.clone(File.cdata, blocksize=lambda x:current)
-
-        return self.data
+            length = self.source.size() - self['header'].size()
+            return dyn.clone(self.cdata, _value_=dyn.clone(self.cdata._value_,length=length))
+        return Data
     
     _fields_ = [
         (Header, 'header'),

@@ -263,7 +263,7 @@ class RK(pstruct.type):
         (RkRec, 'rkrec')
     ]
 
-@Record.define
+#@Record.define
 class MulBlank(pstruct.type):
     type = 190
     type = 0xbe
@@ -665,7 +665,7 @@ class CodePage(pint.uint16_t):
     type = 66
 
 @Record.define
-class Excel9File(ptype.empty):
+class Excel9File(ptype.type):
     type = 0x1c0
     type = 448
 
@@ -713,7 +713,7 @@ class DSF(pint.uint16_t):
     type = 353
     type = 0x161
 
-@Record.define
+#@Record.define
 class MSODRAWING(art.SpContainer):
     type = 0x00ec
     type = 236
@@ -1308,8 +1308,8 @@ class Style(pstruct.type):
 
     _fields_ = [
         (flags, 'flags'),
-        (lambda s: BuiltInStyle if s['flags'].l['fBuiltIn'] else ptype.empty, 'builtInData'),
-        (lambda s: XLUnicodeString if not s['flags'].l['fBuiltIn'] else ptype.empty, 'user')
+        (lambda s: BuiltInStyle if s['flags'].l['fBuiltIn'] else ptype.undefined, 'builtInData'),
+        (lambda s: XLUnicodeString if not s['flags'].l['fBuiltIn'] else ptype.undefined, 'user')
     ]
 
 class XColorType(pint.enum, pint.uint32_t):
@@ -1583,7 +1583,7 @@ class FeatSmartTag(pstruct.type):
         (lambda s: dyn.array(FactoidData,s['cSmartTags'].l.int()), 'rgFactoid'),
     ]
 
-@Record.define
+#@Record.define
 class Feat(pstruct.type):
     type = 0x868
     type = 2152
@@ -1636,11 +1636,11 @@ class FeatHdr(pstruct.type):
     def __rgbHdrData(self):
         isf = self['isf'].l
         if self['cbHdrData'].l.int() == 0:
-            return ptype.empty
+            return ptype.type
         if isf == 'ISFPROTECTION':
             return EnhancedProtection
         elif isf == 'ISFFEC2':
-            return ptype.empty
+            return ptype.type
         raise NotImplementedError(isf)
 
     _fields_ = [
@@ -1724,7 +1724,7 @@ class XFExtNoFRT(pstruct.type):
 
 class DXFN12List(pstruct.type):
     def DXFN(self):
-        return ptype.empty
+        return ptype.undefined
 
     _fields_ = [
         (DXFN, 'dxfn'),
@@ -1855,13 +1855,13 @@ class Feat11Fmla(pstruct.type):
         (ListParsedFormula, 'rgbFmla'),
     ]
 
-#class Feat11WSSListInfo(ptype.empty):       # FIXME
+#class Feat11WSSListInfo(ptype.undefined):       # FIXME
 #    pass
 
 class CachedDiskHeader(pstruct.type):
     def __strStyleName(self):
         p = self.getparent(type=Feat11FieldDataItem)
-        return XLUnicodeString if p['flags']['fSaveStyleName'].int() == 1 else ptype.empty
+        return XLUnicodeString if p['flags']['fSaveStyleName'].int() == 1 else ptype.type
 
     _fields_ = [
         (pint.uint32_t, 'cbdxfHdrDisk'),
@@ -2001,15 +2001,15 @@ class Feat11FieldDataItem(pstruct.type):
 
     def __AutoFilter(self):
         tft = self['flag'].l
-        return Feat11FdaAutoFilter if tft['fAutoFilter'] else ptype.empty
+        return Feat11FdaAutoFilter if tft['fAutoFilter'] else ptype.type
 
     def __rgXmap(self):
         tft = self['flags'].l
-        return Feat11XMap if tft['fLoadXmapi'] else ptype.empty
+        return Feat11XMap if tft['fLoadXmapi'] else ptype.type
 
     def __fmla(self):
         tft = self['flags'].l
-        return Feat11FdaAutoFilter if tft['fLoadFmla'] else ptype.empty
+        return Feat11FdaAutoFilter if tft['fLoadFmla'] else ptype.type
 
     def __totalFmla(self):
         tft = self['flags'].l
@@ -2017,19 +2017,19 @@ class Feat11FieldDataItem(pstruct.type):
 
     def __strTotal(self):
         tft = self['flags'].l
-        return XLUnicodeString if tft['fLoadTotalStr'] else ptype.empty
+        return XLUnicodeString if tft['fLoadTotalStr'] else ptype.type
 
     def __wssInfo(self):
         lt = self.getparent(type=TableFeatureType)['lt'].l
-        return Feat11WSSListInfo if lt.int() == 1 else ptype.empty
+        return Feat11WSSListInfo if lt.int() == 1 else ptype.type
 
     def __qsif(self):
         lt = self.getparent(type=TableFeatureType)['lt'].l
-        return pint.uint32_t if lt.int() == 3 else ptype.empty
+        return pint.uint32_t if lt.int() == 3 else ptype.type
 
     def __dskHdrCache(self):
         tft = self.getparent(type=TableFeatureType).l
-        return CachedDiskHeader if tft['crwHeader'].int() == 0 and tft['flags']['fSingleCell'].int() == 0 else ptype.empty
+        return CachedDiskHeader if tft['crwHeader'].int() == 0 and tft['flags']['fSingleCell'].int() == 0 else ptype.type
 
     _fields_ = [
         (pint.uint32_t, 'idField'),
@@ -2088,15 +2088,15 @@ class TableFeatureType(pstruct.type):
         ]
 
     def __cSPName(self):
-        return XLUnicodeString if self['flags'].l['fLoadCSPName'] else ptype.empty
+        return XLUnicodeString if self['flags'].l['fLoadCSPName'] else ptype.type
     def __entryId(self):
-        return XLUnicodeString if self['flags'].l['fLoadEntryId'] else ptype.empty
+        return XLUnicodeString if self['flags'].l['fLoadEntryId'] else ptype.type
     def __idDeleted(self):
-        return Feat11RgSharepointIdDel if self['flags'].l['fLoadPldwIdDeleted'] else ptype.empty
+        return Feat11RgSharepointIdDel if self['flags'].l['fLoadPldwIdDeleted'] else ptype.type
     def __idChanged(self):
-        return Feat11RgSharepointIdChange if self['flags'].l['fLoadPldwIdChanged'] else ptype.empty
+        return Feat11RgSharepointIdChange if self['flags'].l['fLoadPldwIdChanged'] else ptype.type
     def __cellInvalid(self):
-        return Feat11RgInvalidCells if self['flags'].l['fLoadPllstclInvalid'] else ptype.empty
+        return Feat11RgInvalidCells if self['flags'].l['fLoadPllstclInvalid'] else ptype.type
 
     _fields_ = [
         (SourceType, 'lt'),
@@ -2164,16 +2164,16 @@ class List12BlockLevel(pstruct.type):
         (pint.int32_t, 'cbdxfHeaderBorder'),
         (pint.int32_t, 'cbdxfAggBorder'),
 
-        (lambda s: (DXFN12List if s['cbdxfHeader'].l.int() > 0 else ptype.empty), 'dxfHeader'),
-        (lambda s: (DXFN12List if s['cbdxfData'].l.int() > 0 else ptype.empty), 'dxfData'),
-        (lambda s: (DXFN12List if s['cbdxfAgg'].l.int() > 0 else ptype.empty), 'dxfAgg'),
-        (lambda s: (DXFN12List if s['cbdxfBorder'].l.int() > 0 else ptype.empty), 'dxfBorder'),
-        (lambda s: (DXFN12List if s['cbdxfHeaderBorder'].l.int() > 0 else ptype.empty), 'dxfHeaderBorder'),
-        (lambda s: (DXFN12List if s['cbdxfAggBorder'].l.int() > 0 else ptype.empty), 'dxfAggBorder'),
+        (lambda s: (DXFN12List if s['cbdxfHeader'].l.int() > 0 else ptype.type), 'dxfHeader'),
+        (lambda s: (DXFN12List if s['cbdxfData'].l.int() > 0 else ptype.type), 'dxfData'),
+        (lambda s: (DXFN12List if s['cbdxfAgg'].l.int() > 0 else ptype.type), 'dxfAgg'),
+        (lambda s: (DXFN12List if s['cbdxfBorder'].l.int() > 0 else ptype.type), 'dxfBorder'),
+        (lambda s: (DXFN12List if s['cbdxfHeaderBorder'].l.int() > 0 else ptype.type), 'dxfHeaderBorder'),
+        (lambda s: (DXFN12List if s['cbdxfAggBorder'].l.int() > 0 else ptype.type), 'dxfAggBorder'),
 
-        (lambda s: (XLUnicodeString if s['istnHeader'].l.int() != -1 else ptype.empty), 'stHeader'),
-        (lambda s: (XLUnicodeString if s['istnData'].l.int() != -1 else ptype.empty), 'stData'),
-        (lambda s: (XLUnicodeString if s['istnAgg'].l.int() != -1 else ptype.empty), 'stAgg'),
+        (lambda s: (XLUnicodeString if s['istnHeader'].l.int() != -1 else ptype.type), 'stHeader'),
+        (lambda s: (XLUnicodeString if s['istnData'].l.int() != -1 else ptype.type), 'stData'),
+        (lambda s: (XLUnicodeString if s['istnAgg'].l.int() != -1 else ptype.type), 'stAgg'),
     ]
 
 class List12TableStyleClientInfo(pstruct.type):
@@ -2227,17 +2227,22 @@ class SerParent(pint.uint16_t):
     type = 0x104a
 
 @Record.define
-class End(ptype.empty):
+class Begin(ptype.type):
+    type = 4147
+    type = 0x1033
+
+@Record.define
+class End(ptype.type):
     type = 4148
     type = 0x1034
 
 @Record.define
-class StartBlock(ptype.empty):
+class StartBlock(ptype.type):
     type = 2130
     type = 0x852
 
 @Record.define
-class EndBlock(ptype.empty):
+class EndBlock(ptype.type):
     type = 2131
     type = 0x853
 
@@ -2345,7 +2350,7 @@ class XLUnicodeRichExtendedString(pstruct.type):
         return dyn.clone(pstr.string, length=int(self['cch'].l))
     def __ExtRst(self):
         f = self['flags'].l
-        return ExtRst if f['fExtSt'] else ptype.empty
+        return ExtRst if f['fExtSt'] else ptype.undefined
 
     _fields_ = [
         (pint.uint16_t, 'cch'),

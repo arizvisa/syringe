@@ -1,73 +1,103 @@
 '''Provides a dynamic kind of feel'''
-import ptype,parray,pstruct,config
-import utils,provider
-import logging
+from . import ptype,parray,pstruct,config,error,utils,provider
+Config = config.defaults
+__all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
 
-__all__ = []
-
-## FIXME: might want to raise an exception or warning if we have too large of an array or a block
+## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
-    '''
-    returns a general block type of the specified size
-    '''
-    assert type(size) in (int,long), 'dyn.block(%s): argument must be integral'% repr(size)
-    if size < 0:
-        logging.error('dyn.block(%d): argument cannot be < 0. Defaulting to 0.'% size)
-        size = 0
-    return clone(ptype.block, length=size)
+    """Returns a ptype.block type with the specified ``size``"""
+    if size.__class__ not in (int,long):
+        t = ptype.block(length=size)
+        raise error.UserError(t, 'block', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
 
-def blockarray(typ, size, **kwds):
-    '''
-    returns an array of the specified byte size containing elements of the specified type
-    '''
-    assert type(size) in (int,long), 'dyn.block(%s): argument must be integral'% repr(size)
-    #size = int(size)
     if size < 0:
-        logging.error('dyn.blockarray(%s, %d): argument cannot be < 0. defaulting to 0.'% (repr(typ),size))
+        t = ptype.block(length=size)
+        Config.log.error('block : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(), size))
+        size = 0
+
+    def classname(self):
+        return 'dyn.block(%d)'% size
+    kwds.setdefault('classname', classname)
+    #kwds.setdefault('__module__', 'ptypes.ptype')
+    kwds.setdefault('__module__', 'ptypes.dyn')
+    kwds.setdefault('__name__', 'block')
+    return clone(ptype.block, length=size, **kwds)
+
+def blockarray(type, size, **kwds):
+    """Returns a parray.block with the specified ``size`` and ``type``"""
+    if size.__class__ not in (int,long):
+        t = parray.block(_object_=type)
+        raise error.UserError(t, 'blockarray', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
+
+    if size < 0:
+        t = parray.block(_object_=type)
+        Config.log.error('blockarray : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(),size))
         size = 0
  
-    class _blockarray(parray.block):
-        _object_ = typ
-    _blockarray.blocksize = lambda s: size
+    class blockarray(parray.block):
+        _object_ = type
+        def blocksize(self):
+            return size
 
-    _blockarray.__name__ = kwds.get('name', 'blockarray(%s, %d)'% (type().shortname(), size))
-    return _blockarray
+        def classname(self):
+            t = type.typename() if ptype.istype(type) else type.__name__
+            return 'dyn.blockarray(%s,%d)'%(t, size)
+    blockarray.__module__ = 'ptypes.dyn'
+    blockarray.__name__ = 'blockarray'
+    blockarray.__getinitargs__ = lambda s: (type,size)
+    return blockarray
 
-def align(s, **kwds):
+def align(size, **kwds):
     '''return a block that will align a structure to a multiple of the specified number of bytes'''
-    class _align(block(0)):
-        initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()
+    if size.__class__ not in (int,long):
+        t = ptype.block(length=0)
+        raise error.UserError(t, 'align', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
+
+    class align(block(0)):
+        initializedQ = lambda self: self.value is not None
         def blocksize(self):
             p = self.parent
-            i = p.value.index(self)
-            offset = reduce(lambda x,y:x+int(y.blocksize()), p.value[:i], 0)
-            return (-offset) & (s-1)
+            if p is not None:
+                i = p.value.index(self)
+                offset = reduce(lambda x,y:x+int(y.blocksize()), p.value[:i], 0)
+                return (-offset) & (size-1)
+            return 0
 
-        def shortname(self):
+        def classname(self):
             sz = self.blocksize()
-            return '%s{size=%d}'% (super(_align, self).shortname(), sz)
-    
-    _align.__name__ = kwds.get('name', 'align<%d>'% s)
-    return _align
+            return 'dyn.align(size=%d)'% sz
 
+    align.__module__ = 'ptypes.dyn'
+    align.__name__ = 'align'
+    align.__getinitargs__ = lambda s: (type,size)
+    return align
+
+## FIXME: might want to raise an exception or warning if we have too large of an array
 def array(type, count, **kwds):
     '''
     returns an array of the specified length containing elements of the specified type
     '''
     count = int(count)
+    if count.__class__ not in (int,long):
+        t = parray.type(_object_=type,length=count)
+        raise error.UserError(t, 'array', message='Argument count must be integral : %s -> %s'% (count.__class__, repr(count)))
+
     if count < 0:
-        logging.error('dyn.array(%s, count=%d): argument cannot be < 0. Defaulting to 0.'% (repr(type),count))
+        t = parray.type(_object_=type,length=count)
+        Config.log.error('dyn.array : %s : Invalid argument count=%d cannot be < 0. Defaulting to 0.'%( t.typename(), count))
         size = 0
 
-    if type is None:
-        name = 'array(None, %d)'%count
-    else:
-        module,name = type.__module__,type.__name__
-        name = 'array(%s.%s, %d)'%(module, name, count )
+    def classname(self):
+        obj = type
+        t = obj.typename() if ptype.istype(obj) else obj.__name__
+        return 'dyn.array(%s,%d)'%(t, count)
 
-    result = ptype.clone(parray.type, _object_=type, length=count)
-    result.__name__=kwds.get('name', name)
-    return result
+    kwds.setdefault('classname', classname)
+    kwds.setdefault('length', count)
+    kwds.setdefault('_object_', type)
+    kwds.setdefault('__module__', 'ptypes.dyn')
+    kwds.setdefault('__name__', 'array')
+    return ptype.clone(parray.type, **kwds)
 
 def clone(cls, **newattrs):
     '''
@@ -76,24 +106,20 @@ def clone(cls, **newattrs):
     '''
     return ptype.clone(cls, **newattrs)
 
-class __union_generic(ptype.container):
-    __fastindex = dict  # our on-demand index lookup for .value
+class _union_generic(ptype.container):
+    def __init__(self, *args, **kwds):
+        super(_union_generic,self).__init__(*args, **kwds)
+        self.__fastindex = {}
 
-    def getindex(self, name):
-        try:
-            return self.__fastindex[name]
-        except TypeError:
-            self.__fastindex = {}
-        except KeyError:
-            pass
+    def append(self, object):
+        """Add an element as part of a union. Return it's index."""
+        name = object.name()
 
-        res = self.keys()
-        for i in range( len(res) ):
-            if name == res[i]:
-                self.__fastindex[name] = i
-                return i
-
-        raise KeyError(name)
+        current = len(self.object)
+        self.object.append(object)
+        
+        self.__fastindex[name.lower()] = current
+        return current
 
     def keys(self):
         return [name for type,name in self._fields_]
@@ -104,15 +130,18 @@ class __union_generic(ptype.container):
     def items(self):
         return [(k,v) for k,v in zip(self.keys(), self.values())]
 
+    def getindex(self, name):
+        return self.__fastindex[name.lower()]
+
     def __getitem__(self, name):
         index = self.getindex(name)
         return self.object[index]
 
-class union(__union_generic):
-    '''
+class union(_union_generic):
+    """
     Provides a data structure with Union-like characteristics
     If the root type isn't defined, it is assumed the first type in the union will be the root.
-    '''
+    """
     root = None         # root type. determines block size.
     _fields_ = []       # aliases of root type that will act on the same data
     object = None       # objects associated with each alias
@@ -120,7 +149,7 @@ class union(__union_generic):
 
     initializedQ = lambda self: self.value is not None and self.value.initialized
     def __choose_root(self, objects):
-        """return a ptype.block of a size that contain /objects/"""
+        """Return a ptype.block of a size that contain /objects/"""
         if self.root:
             return self.root
 
@@ -138,15 +167,14 @@ class union(__union_generic):
 
     def __alloc_root(self, **attrs):
         t = self.__choose_root(t for t,n in self._fields_)
-        ofs = self.getoffset()
-        self.value = t(offset=ofs, source=self.source)
-        self.value.alloc(**attrs)
-        return self.value
+        self.value = self.new(t,offset=self.getoffset())
+        return self.value.alloc(**attrs)
 
     def __alloc_objects(self, value):
-        # XXX: each newelement will write into the offset occupied by value
-        source = provider.proxy(value)
-        self.object = [ self.newelement(t, n, 0, source=source) for t,n in self._fields_ ]
+        source = provider.proxy(value)      # each element will write into the offset occupied by value
+        self.object = []
+        for t,n in self._fields_:
+            self.append(self.new(t, __name__=n, offset=0, source=source))
         return self
 
     def alloc(self, **attrs):
@@ -160,57 +188,85 @@ class union(__union_generic):
     def load(self, **attrs):
         value = self.__alloc_root(**attrs) if self.value is None else self.value
         self.__alloc_objects(value)
-        r = self.value.load(source=self.source)
+        r = self.value.load()
         return self.__deserialize_block(r.serialize())
 
     def __deserialize_block(self, block):
         # try loading everything as quietly as possible 
-        [n.load() for n in self.object]
+        for n in self.object:
+            try:
+                n.load()
+            except error.UserError, e:
+                Config.log.warning("union.__deserialize_block : %s : Ignoring exception %s"% (self.instance(), e))
+            continue
         return self
 
+    def properties(self):
+        result = super(union,self).properties()
+        if self.initializedQ():
+            result['object'] = ['%s<%s>'%(v.name(),v.classname()) for v in self.object]
+        else:
+            result['object'] = ['%s<%s>'%(n,t.typename()) for t,n in self._fields_]
+        return result
+
     def __getitem__(self, key):
-        # load items on demand in order to seem fast
         result = super(union,self).__getitem__(key)
-        if not result.initialized:
-            return result.l
+        try:
+            if not result.initializedQ():
+                result.l
+        except error.UserError, e:
+            Config.log.warning("union.__getitem__ : %s : Ignoring exception %s"% (self.instance(), e))
         return result
 
     def details(self):
-        if self.initialized:
-            res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
-            return ' '.join([self.name(), 'union', res, repr(self.serialize())])
-
-        res = '(' + ', '.join(['%s<%s>'%(n,t.__name__) for t,n in self._fields_]) + ')'
-        return ' '.join(('union', res))
+        if self.initializedQ():
+            res = repr(self.serialize())
+            root = self.value.classname()
+        else:
+            res = '???'
+            root = self.__choose_root(t for t,n in self._fields_).typename()
+        return '%s %s'%(root, res)
 
     def blocksize(self):
         return self.value.blocksize()
     def size(self):
         return self.value.size()
 
+    def setoffset(self, ofs, recurse=False):
+        if self.value is not None:
+            self.value.setoffset(ofs, recurse=recurse)
+        return super(ptype.container,self).setoffset(ofs, recurse=recurse)
+    def getoffset(self, **_):
+        return super(ptype.container,self).getoffset(**_)
+
 union_t = union # alias
 
 import pint
-integral = ptype.clone(pint.uint32_t, byteorder=config.integer.byteorder)
+integral = ptype.clone(pint.uint32_t, byteorder=Config.integer.order)
 def pointer(target, type=integral, **attrs):
+    def classname(self):
+        return 'dyn.pointer(%s)'% target.typename() if ptype.istype(target) else target.__name__
+#    attrs.setdefault('classname', classname)
     return ptype.clone(ptype.pointer_t, _object_=target, _type_=type, **attrs)
 
 def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
     '''a pointer relative to a particular object'''
+    def classname(self):
+        return 'dyn.rpointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
+#    attrs.setdefault('classname', classname)
     return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _type_=type, **attrs)
 
 def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
     '''a pointer relative to a particular offset'''
+    def classname(self):
+        return 'dyn.opointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
+#    attrs.setdefault('classname', classname)
     return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _type_=type, **attrs)
 
-__all__+= 'block,align,array,clone,union,cast,pointer,rpointer,opointer'.split(',')
-
 if __name__ == '__main__':
-    import ptype,parray
-    import pstruct,parray,pint,provider
-
-    import logging
-    logging.root=logging.RootLogger(logging.DEBUG)
+    import ptype,parray,pstruct,parray,pint,provider
+    import logging,config
+    config.defaults.log.setLevel(logging.DEBUG)
 
     class Result(Exception): pass
     class Success(Result): pass
@@ -237,9 +293,6 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import logging
-    logging.root=logging.RootLogger(logging.DEBUG)
-
     import ptypes,zlib
     from ptypes import *
 
@@ -252,7 +305,7 @@ if __name__ == '__main__':
     s2 = s1.encode('zlib')
 
     @TestCase
-    def Test1():
+    def test_dyn_union_rootstatic():
         import dyn,pint,parray
         class test(dyn.union): 
             root = dyn.array(pint.uint8_t,4)
@@ -270,7 +323,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test2():
+    def test_dyn_alignment():
         import dyn,pint,pstruct
         class test(pstruct.type):
             _fields_ = [
@@ -286,10 +339,9 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test3():
+    def test_dyn_pointer_bigendian():
         ptype.setbyteorder(config.byteorder.bigendian)
 
-        global x
         s = ptype.provider.string(string1)
         p = dyn.pointer(dyn.block(0))
         x = p(source=s).l
@@ -297,7 +349,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test4():
+    def test_dyn_pointer_littleendian_1():
         ptype.setbyteorder(config.byteorder.littleendian)
         s = ptype.provider.string(string2)
 
@@ -307,7 +359,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test5():
+    def test_dyn_pointer_littleendian_2():
         ptype.setbyteorder(config.byteorder.littleendian)
         string = '\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
@@ -318,7 +370,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test6():
+    def test_dyn_pointer_bigendian_deref():
         ptype.setbyteorder(config.byteorder.bigendian)
 
         s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
@@ -328,7 +380,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test7():
+    def test_dyn_pointer_littleendian_deref():
         ptype.setbyteorder(config.byteorder.littleendian)
 
         s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
@@ -338,31 +390,30 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def Test8():
+    def test_dyn_pointer_littleendian_64bit_deref():
         ptype.setbyteorder(config.byteorder.littleendian)
         t = dyn.pointer(dyn.block(4), type=pint.uint64_t)
         x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
-
         if x.l.d.getoffset() == 8:
             raise Success
 
     @TestCase
-    def Test9():
+    def test_dyn_array_1():
         v = dyn.array(pint.int32_t, 4)
         if len(v().a) == 4:
             raise Success
 
     @TestCase
-    def Test10():
+    def test_dyn_array_2():
         v = dyn.array(pint.int32_t, 8)
         i = range(0x40,0x40+v.length)
         x = ptype.provider.string(''.join(chr(x)+'\x00\x00\x00' for x in i))
         z = v(source=x).l
-        if z[4].number() == 0x44:
+        if z[4].num() == 0x44:
             raise Success
 
     @TestCase
-    def Test11():
+    def test_dyn_union_rootchoose():
         class test(dyn.union):
             _fields_ = [
                 (pint.uint32_t, 'a'),
@@ -370,7 +421,8 @@ if __name__ == '__main__':
                 (pint.uint8_t, 'c'),
             ]
 
-        a = test().a
+        a = test()
+        a=a.a
         if a['a'].blocksize() == 4 and a['b'].size() == 2 and a['c'].size() == 1 and a.blocksize() == 4:
             raise Success
         

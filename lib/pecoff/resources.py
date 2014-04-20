@@ -1,4 +1,4 @@
-import ptypes,headers
+import ptypes,headers,datadirectory
 from ptypes import pstruct,parray,pbinary,dyn,pstr
 from __base__ import *
 from headers import virtualaddress
@@ -33,7 +33,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(pbinary.struct):
     _fields_ = [(1,'type'),(31,'address')]
     def deref(self):
         n = self['address']
-        base = self.getparent(headers.datadirectory.Resource)['VirtualAddress'].d
+        base = self.getparent(datadirectory.Resource)['VirtualAddress'].d
         makepointer = lambda x: dyn.rpointer(x, object=lambda s: base)
         p = makepointer(IMAGE_RESOURCE_DIRECTORY_TABLE) if self['type'] == 1 else makepointer(IMAGE_RESOURCE_DATA_ENTRY)
         return self.parent.new(p, __name__='RVA', offset=self.getoffset()).set(n).d
@@ -137,7 +137,7 @@ if True:
             (word, 'wType'),
             (pstr.szwstring, 'szKey'),
             (dyn.align(4), 'Padding1'),
-            (lambda s: VS_FIXEDFILEINFO if s['wValueLength'].l.int() == 0x34 else ptype.empty, 'Value'),    # XXX
+            (lambda s: VS_FIXEDFILEINFO if s['wValueLength'].l.int() == 0x34 else ptype.type, 'Value'),    # XXX
             (dyn.align(4), 'Padding2'),
             (__Children, 'Children'),
         ]
@@ -152,7 +152,6 @@ if __name__ == '__main__':
     print b['Name RVA']
     print b['RVA']
 
-#    from pecoff.definitions.headers import RelativeAddress,RelativeOffset
-#    from pecoff.definitions.resources import DataDirectory
+#    from pecoff.resources import DataDirectory
 
 #    print DataDirectory(b['RVA']['address'])

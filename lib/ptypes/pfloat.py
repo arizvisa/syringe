@@ -1,18 +1,21 @@
-import pint
-import bitmap,math
+import math
+from . import pint,bitmap,config
 
 class type(pint.integer_t):
-    def details(self):
-        return '%s (%x)'% (self.getf(), self.number())
+    def summary(self, **options):
+        return '%s (%x)'% (self.getf(), self.num())
+    def repr(self, **options):
+        return self.summary(**options)
 
     def setf(self, value):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'type.setf')
 
     def getf(self):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'type.getf')
 
     float = __float__ = lambda s: s.getf()
-    set = lambda s,v: s.setf(v)
+    set = lambda s,v,**a: s.setf(v)
+    get = lambda s: s.getf()
 
 class float_t(type):
     """Represents a packed floating point number
@@ -29,7 +32,7 @@ class float_t(type):
 
     def round(self, bits):
         """round the floating point number to the specified number of bits"""
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'float_t.round')
 
     def setf(self, value):
         """store /value/ into a binary format"""
@@ -57,32 +60,35 @@ class float_t(type):
     def getf(self):
         """convert the stored floating point number into a python native float"""
         exponentbias = (2**self.components[1])/2 - 1
-        res = bitmap.new( self.number(), sum(self.components) )
+        res = bitmap.new( self.num(), sum(self.components) )
 
         # extract components
         res,sign = bitmap.shift(res, self.components[0])
         res,exponent = bitmap.shift(res, self.components[1])
         res,mantissa = bitmap.shift(res, self.components[2])
 
-        assert exponent > 0 and exponent < (2**self.components[2]-1)
+        if exponent > 0 and exponent < (2**self.components[2]-1):
+            # convert to float
+            s = -1 if sign else +1
+            e = exponent - exponentbias
+            m = 1.0 + (float(mantissa) / 2**self.components[2])
 
-        # convert to float
-        s = -1 if sign else +1
-        e = exponent - exponentbias
-        m = 1.0 + (float(mantissa) / 2**self.components[2])
+            # done
+            return math.ldexp( math.copysign(m,s), e)
 
-        # done
-        return math.ldexp( math.copysign(m,s), e)
+        # FIXME: this should return NaN or something
+        config.defaults.log.warn('float_t.getf : %s : Invalid exponent value : %d'% (self.instance(), exponent))
+        return 0.0
 
 class fixed_t(type):
     fractional = 0      # number of bits to represent fractional part
     length = 0          # size in bytes of integer
 
-    def details(self):
-        return '%s (%x)'% (self.getf(), self.number())
+    def summary(self, **options):
+        return '%s (%x)'% (self.getf(), self.num())
 
     def getf(self):
-        n = self.number()
+        n = self.num()
         shift = 2**self.fractional
         return float(n) / shift
 
@@ -99,13 +105,13 @@ class fixed_t(type):
 
 class sfixed_t(type):
     def getf(self):
-        raise NotImplementedError
-        n = self.number()
+        raise error.ImplementationError(self, 'sfixed_t.getf')
+        n = self.num()
         shift = 2**self.fractional
         return float(n) / shift
 
     def setf(self, value):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'sfixed_t.setf')
         integral,fraction = math.trunc(value),value-math.trunc(value)
         shift = 2**self.fractional
         magnitude = (self.length*8)-self.fractional
@@ -130,7 +136,9 @@ class double(float_t):
     components = (1, 11, 52)
 
 if __name__ == '__main__':
-    import struct
+    import struct,pint,config
+    pint.setbyteorder(config.byteorder.bigendian)
+
     def test_assignment(cls, float, expected):
         if cls.length == 4:
             float, = struct.unpack('f', struct.pack('f', float))

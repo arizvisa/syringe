@@ -37,9 +37,9 @@ class MemberHeader(pstruct.type):
         (dyn.clone(pstr.string, length=2), 'End of Header'),
     ]
 
-    def get(self):
-        size = int(self['Size'])
-        return self.newelement(dyn.block(int(self['Size'])), self['Name'].get(), self.getoffset()+self.size())
+    def data(self):
+        size = self['Size'].num()
+        return self.newelement(dyn.block(self['Size'].num()), self['Name'].str(), self.getoffset()+self.size())
 
 # FIXME: instead of making each of these a .union explicitly, I can probably transform them into
 #            union all in one place in the Members array
@@ -48,12 +48,12 @@ class FirstLinker(dyn.union):
     class __FirstLinker(pstruct.type):
         _fields_ = [
             (ulong, 'Number of Symbols'),
-            (lambda self: dyn.array(ulong, int(self['Number of Symbols'].load())), 'Offsets'),
-            (lambda self: dyn.array(pstr.szstring, int(self['Number of Symbols'])), 'String Table')
+            (lambda self: dyn.array(ulong, self['Number of Symbols'].l.num()), 'Offsets'),
+            (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].num()), 'String Table')
         ]
 
-        def get(self):
-            return [(str(k), int(v)) for k,v in zip(self['String Table'], self['Offsets'])]
+        def getTable(self):
+            return [(str(k), v.num()) for k,v in zip(self['String Table'], self['Offsets'])]
 
     _fields_ = [(__FirstLinker, 'Data')]
 
@@ -61,31 +61,31 @@ class FirstLinkerMember(pstruct.type):
     _fields_ = [
         (MemberHeader, 'Header'),
         #(FirstLinker, 'Member'),       # XXX
-        (lambda s: dyn.clone(FirstLinker, root=dyn.block(s['Header'].l['Size'].int())), 'Member'),
+        (lambda s: dyn.clone(FirstLinker, root=dyn.block(s['Header'].l['Size'].num())), 'Member'),
         (pstr.char_t, 'newline')
     ]
 
 class Index(uint16_t):
-    def get(self):
-        return int(self)-1      # 1 off
+    def getIndex(self):
+        return self.num()-1      # 1 off
 
 class SecondLinker(dyn.union):
     class __SecondLinker(pstruct.type):
         _fields_ = [
             (uint32_t, 'Number of Members'),
-            (lambda self: dyn.array(uint32_t, int(self['Number of Members'].load())), 'Offsets'),
+            (lambda self: dyn.array(uint32_t, self['Number of Members'].l.num()), 'Offsets'),
             (uint32_t, 'Number of Symbols'),
-            (lambda self: dyn.array(Index, int(self['Number of Symbols'].load())), 'Indices'),
-            (lambda self: dyn.array(pstr.szstring, int(self['Number of Symbols'])), 'String Table')
+            (lambda self: dyn.array(Index, self['Number of Symbols'].l.num()), 'Indices'),
+            (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].num()), 'String Table')
         ]
 
-        def get(self):
-            return [(k.get(), int(self['Offsets'][i.get()])) for k,i in zip(self['String Table'], self['Indices'])]
+        def getTable(self):
+            return [(k.str(), self['Offsets'][i.getIndex()].num()) for k,i in zip(self['String Table'], self['Indices'])]
 
     class __SecondLinker_Lazy(pstruct.type):
         _fields_ = [
             (uint32_t, 'Number of Members'),
-            (lambda self: dyn.array(uint32_t, self['Number of Members'].l.int()), 'Offsets'),
+            (lambda self: dyn.array(uint32_t, self['Number of Members'].l.num()), 'Offsets'),
         ]
 
     _fields_ = [
@@ -97,15 +97,15 @@ class SecondLinkerMember(pstruct.type):
     _fields_ = [
         (MemberHeader, 'Header'),
 #        (SecondLinker, 'Member'),
-        (lambda s: dyn.clone(SecondLinker, root=dyn.block(s['Header'].l['Size'].int())), 'Member'),
+        (lambda s: dyn.clone(SecondLinker, root=dyn.block(s['Header'].l['Size'].num())), 'Member'),
         (pstr.char_t, 'newline')
     ]
 
 class Longnames(ptype.type):
     length = 0
 
-    def get(self, index):
-        warnings.warn('.get has been deprecated in favor of .extract', DeprecationWarning)
+    #def get(self, index):
+    #    warnings.warn('.get has been deprecated in favor of .extract', DeprecationWarning)
 
     def extract(self, index):
         return utils.strdup(self.serialize()[index:])
@@ -113,7 +113,7 @@ class Longnames(ptype.type):
 class LongnamesMember(pstruct.type):
     _fields_ = [
         (MemberHeader, 'Header'),
-        (lambda s: dyn.clone(Longnames, length=int(s['Header'].l['Size'])), 'Member'),
+        (lambda s: dyn.clone(Longnames, length=s['Header'].l['Size'].num()), 'Member'),
         (pstr.char_t, 'newline')
     ]
 
@@ -137,7 +137,7 @@ class ImportHeader(pstruct.type):
     ]
 
     def valid(self):
-        sig1,sig2 = int(self['Sig1']), int(self['Sig2'])
+        sig1,sig2 = self['Sig1'].num(), self['Sig2'].num()
         return sig1 == 0 and sig2 == 0xffff
 
 class Import(pstruct.type):
@@ -145,7 +145,7 @@ class Import(pstruct.type):
         (pstr.szstring, 'Name'),
         (pstr.szstring, 'Module')
     ]
-    def __repr__(self):
+    def repr(self):
         return '%s!%s'%( self['Module'].str(), self['Name'].str() )
 
 class ImportMember(pstruct.type):
@@ -154,8 +154,8 @@ class ImportMember(pstruct.type):
         (Import, 'Member')
     ]
 
-    def get(self):
-        return self['Member']['Module'].get(), self['Member']['Name'].get(), int(self['Header']['Ordinal/Hint']), self['Header']['Type']
+    def getImport(self):
+        return self['Member']['Module'].str(), self['Member']['Name'].str(), self['Header']['Ordinal/Hint'].num(), self['Header']['Type']
 
 class MemberData(dyn.union):
     root=dyn.block(0)
@@ -169,14 +169,14 @@ class MemberData(dyn.union):
 
 class ArchiveMember(pstruct.type):
     def __Member(self):
-        return dyn.clone(MemberData, root=dyn.block(self['Header'].l['Size'].int()))
+        return dyn.clone(MemberData, root=dyn.block(self['Header'].l['Size'].num()))
 
     def __newline(self):
         o = self.getoffset('newline')
         a = self.newelement(pstr.char_t, 'temp', o).l
         if a.serialize() == '\n':
             return pstr.char_t
-        return ptype.empty
+        return ptype.type
 
     _fields_ = [
         (MemberHeader, 'Header'),
@@ -231,7 +231,7 @@ class Members(parray.terminated):
             if name == '/':
                 logging.info('..reading the SecondLinker data')
                 self.SecondLinker = value['Member']['Lazy']
-                self.__count = self.SecondLinker['Number of Members'].l.int()-1
+                self.__count = self.SecondLinker['Number of Members'].l.num()-1
                 logging.info('.loading %d total members'% (self.__count+1))
                 return False
 
@@ -258,7 +258,7 @@ class Members(parray.terminated):
             continue
         return
 
-    def __repr__(self):
+    def repr(self):
         return '%s %d members'%( self.name(), len(self) )
 
 class File(pstruct.type):
@@ -268,7 +268,7 @@ class File(pstruct.type):
         (Members, 'members'),
     ]
 
-    def __repr__(self):
+    def repr(self):
         return '%s signature:%s members:%d'% (self.name(), repr(self['signature'].serialize()), self.getmembercount())
     
     ## really slow interface
@@ -277,10 +277,10 @@ class File(pstruct.type):
         return self.newelement(MemberHeader, 'member[%d]'% index, offsets[index])
 
     def getmemberdata(self, index):
-        return self.getmember(index).load().get().load().serialize()
+        return self.getmember(index).l.data().l.serialize()
 
     def getmembercount(self):
-        return int(self['members'].SecondLinker['Number of Members'])
+        return self['members'].SecondLinker['Number of Members'].num()
 
     ## faster interface using ptypes to slide view
     def fetchimports(self):
@@ -300,7 +300,7 @@ class File(pstruct.type):
                 importheader.setoffset(o)
                 imp.setoffset(o+impblocksize)
                 imp.load()
-                yield (imp['Module'].str(), imp['Name'].str(), int(importheader['Ordinal/Hint']), tuple(importheader['Type'].values()[:2]))
+                yield (imp['Module'].str(), imp['Name'].str(), importheader['Ordinal/Hint'].num(), tuple(importheader['Type'].values()[:2]))
             continue
         return
 

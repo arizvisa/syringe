@@ -20,7 +20,7 @@ class exception(pstruct.type):
 
 class cxx_exception_frame(pstruct.type):
     _fields_ = [
-        (dyn.pointer(ptype.none), 'frame'), # XXX
+        (dyn.pointer(ptype.undefined), 'frame'), # XXX
         (pint.int32_t, 'trylevel'),
         (pint.uint32_t, 'ebp'),
     ]
@@ -56,8 +56,8 @@ class cxx_function_descr(pstruct.type):
         (pint.uint32_t, 'tryblock_count'),
         (lambda s: dyn.pointer(dyn.array(tryblock_info, s['unwind_count'].l.int())), 'tryblock'),
         (pint.uint32_t, 'ipmap_count'),
-        (dyn.pointer(ptype.none), 'ipmap'),       # XXX
-        (dyn.pointer(ptype.none), 'expect_list'),     # XXX
+        (dyn.pointer(ptype.undefined), 'ipmap'),       # XXX
+        (dyn.pointer(ptype.undefined), 'expect_list'),     # XXX
         (pint.uint32_t, 'flags'),
     ]
 

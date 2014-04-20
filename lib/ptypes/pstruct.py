@@ -1,24 +1,32 @@
 '''base structure element'''
-import ptype,utils,logging,pbinary
+from . import ptype,utils,config,pbinary,error
+Config = config.defaults
+__all__ = 'type,make'.split(',')
 
-class __pstruct_generic(ptype.container):
-    __fastindex = dict  # our on-demand index lookup for .value
+class _pstruct_generic(ptype.container):
+    def __init__(self, *args, **kwds):
+        super(_pstruct_generic,self).__init__(*args, **kwds)
+        self.clear()
+
+    def append(self, object):
+        """Add an element to a pstruct.type. Return it's index."""
+        name = object.shortname()
+        current = super(_pstruct_generic,self).append(object)
+        self.__fastindex[name.lower()] = current
+        return current
 
     def getindex(self, name):
-        try:
-            return self.__fastindex[name]
-        except TypeError:
-            self.__fastindex = {}
-        except KeyError:
-            pass
+        if name.__class__ is not str:
+            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
+        return self.__fastindex[name.lower()]
 
-        res = self.keys()
-        for i in range( len(res) ):
-            if name == res[i]:
-                self.__fastindex[name] = i
-                return i
+    def clear(self):
+        self.__fastindex = {}
 
-        raise KeyError(name)
+    def __contains__(self, name):
+        if name.__class__ is not str:
+            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
+        return name in self.__fastindex
 
     def keys(self):
         return [name for type,name in self._fields_]
@@ -30,21 +38,28 @@ class __pstruct_generic(ptype.container):
         return [(k,v) for k,v in zip(self.keys(), self.values())]
 
     def __getitem__(self, name):
-        index = self.getindex(name)
-        return self.value[index]
+        if name.__class__ is not str:
+            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
+        return super(_pstruct_generic, self).__getitem__(name)
 
     def __setitem__(self, name, value):
-        assert isinstance(value, ptype.type), 'Cannot assign a non-ptype to an element of a container. Use .set instead.'
+        if not isinstance(value, ptype.type):
+            raise error.TypeError(self, '_pstruct_generic.__setitem__', message='Cannot assign a non-ptype (%s) to an element of a container. Use .set instead.'% repr(value.__class__))
 
         index = self.getindex(name)
         offset = self.value[index].getoffset()
 
         value.setoffset(offset, recurse=True)
-        value.source = self.source
-
         self.value[index] = value
 
-class type(__pstruct_generic):
+    def __getstate__(self):
+        return super(_pstruct_generic,self).__getstate__(),self.__fastindex,
+
+    def __setstate__(self, state):
+        state,self.__fastindex, = state
+        super(_pstruct_generic,self).__setstate__(state)
+
+class type(_pstruct_generic):
     '''
     A container for managing structured/named data
 
@@ -61,51 +76,78 @@ class type(__pstruct_generic):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.value = []
+            self.value,path = [],' -> '.join(self.backtrace())
+            self.clear()
 
             try:
                 ofs = self.getoffset()
-                for t,name in self._fields_:
+                index = 0
+                for i,(t,name) in enumerate(self._fields_):
+                    if name in self:
+                        _,name = name,'%s_%x'%(name, len(self.value))
+                        Config.log.warn("type.load : %s : Duplicate element name %s. Using new name %s : %s", self.instance(), _, name, path)
+
                     # create each element
-                    n = self.newelement(t, name, ofs, source=self.source)
-                    self.value.append(n)
+                    n = self.new(t, __name__=name, offset=ofs)
+                    self.append(n)
                     if ptype.iscontainer(t) or ptype.isresolveable(t):
                         n.load()
-                    
                     ofs += n.blocksize()
 
-            except StopIteration, e:
-                raise
+            except KeyboardInterrupt:
+                # XXX: some of these variables might not be defined due to a race. who cares...
+                path = ' -> '.join(self.backtrace())
+                Config.log.warn("type.load : %s : User interrupt at element %s : %s", self.instance(), n.instance(), path)
+                return self
+
+            except error.LoadError, e:
+                raise error.LoadError(self, exception=e)
             result = super(type, self).load()
         return result
 
-    def summary(self):
-        return super(ptype.container,self).summary()
-
-    def details(self):
+    def details(self, **options):
         if self.initializedQ():
-            row = lambda name,value: ' '.join(['[%x]'% self.getoffset(name), value.name(), name, value.summary()])
-            result = [row(name,value) for (t,name),value in zip(self._fields_, self.value)]
-            if len(result) > 0:
-                return '\n'.join(result)
-            return '[%x] empty []'%self.getoffset()
+            return self.__details_initialized()
+        return self.__details_uninitialized()
 
-        result = ['[%x] %s ???'%(self.getoffset(), name) for t,name in self._fields_]
+    def repr(self, **options):
+        return self.details(**options)
+
+    def __details_uninitialized(self):
+        gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
+        if self.value is None:
+            return '\n'.join('[%x] %s %s ???'%(self.getoffset(), utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
+
+        result,o = [],self.getoffset()
+        for (t,name),value in map(None,self._fields_,self.value):
+            if value is None:
+                o = o
+                i = utils.repr_class(gettypename(t))
+                v = '???' 
+                result.append('[%x] %s %s %s'%( o, i, name, v ))
+                continue
+            o = self.getoffset(name)
+            i = utils.repr_instance(value.classname(), value.name())
+            v = value.summary(terse=True) if value.initializedQ() else '???' 
+            result.append('[%x] %s %s'%( o, i, v ))
         return '\n'.join(result)
 
-    def repr(self):
-        # print out a friendly header for the structure
-        prop = '{%s}'% ','.join('%s=%s'%(k,repr(v)) for k,v in super(type,self).properties().iteritems())
-        return '%s %s\n%s'%(self.name(),prop,self.details())
+    def __details_initialized(self):
+        result = ['[%x] %s %s'%(self.getoffset(name), utils.repr_instance(value.classname(),value.name()), value.summary(terse=True)) for (t,name),value in zip(self._fields_,self.value)]
+        if len(result) > 0:
+            return '\n'.join(result)
+        return '[%x] Empty []'%self.getoffset()
 
     def set(self, *tuples, **allocator):
         # allocate type if we're asked to
         for name,cls in allocator.items():
             try:
-                value = self.newelement(cls, 0, name)        
+                value = self.new(cls, offset=0, __name__=name)
                 value = value.a
-            except AssertionError:      # XXX: newelement raises one of python's stupid assertions
+
+            except error.TypeError,e:
                 value = cls
+
             self[name] = value
 
         # set each value in tuple
@@ -114,6 +156,26 @@ class type(__pstruct_generic):
 
         self.setoffset( self.getoffset(), recurse=True )
         return self
+
+    def set(self, value=(), **individual):
+        result = self
+        if result.initializedQ():
+            if value:
+                if len(result.value) != len(value):
+                    raise error.UserError(result, 'type.set', message='value to assign not of the same length as struct')
+                result = super(type,result).set(*value)
+            for k,v in individual.iteritems():
+                result[k].set(v)
+            result.setoffset(result.getoffset(), recurse=True)
+            return result
+        return result.a.set(value, **individual)
+
+    def __getstate__(self):
+        return super(type,self).__getstate__(),self._fields_,
+
+    def __setstate__(self, state):
+        state,self._fields_, = state
+        super(type,self).__setstate__(state)
 
 def make(fields, **attrs):
     """Given a set of initialized ptype objects, return a pstruct object describing it.
@@ -124,14 +186,15 @@ def make(fields, **attrs):
 
     # FIXME: instead of this assert, if more than one structure occupies the
     # same location, then we should promote them all into a union.
-    assert len(set([x.getoffset() for x in fields])) == len(fields),'more than one field is occupying the same location'
+    if len(set([x.getoffset() for x in fields])) != len(fields):
+        raise ValueError('more than one field is occupying the same location')
 
     types = list(fields)
     types.sort(cmp=lambda a,b: cmp(a.getoffset(),b.getoffset()))
 
     ofs,result = 0,[]
     for object in types:
-        o,n,s = object.getoffset(), object.__name__, object.blocksize()
+        o,n,s = object.getoffset(), object.shortname(), object.blocksize()
         assert o >= ofs
 
         delta = o-ofs
@@ -140,86 +203,159 @@ def make(fields, **attrs):
             ofs += delta
 
         if s > 0:
-            n = (n, 'unknown_%x'%ofs)[n is None]
             result.append((object.__class__, n))
             ofs += s
         continue
     return ptype.clone(type, _fields_=result, **attrs)
 
 if __name__ == '__main__':
-    import pstruct
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
 
-    import ptype,parray,provider
-    import pint as p
-    import pstr,dyn
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
 
-    class Elf32_Half(p.bigendian(p.uint16_t)): pass
-    class Elf32_Word(p.bigendian(p.uint32_t)): pass
-    class Elf32_Addr(p.bigendian(p.uint32_t)): pass
-    class Elf32_Off(p.bigendian(p.uint32_t)): pass
+            except Success:
+                print '%s: Success'% name
+                return True
 
-    EI_IDENT=16
-    class ident(parray.type):
-        length = EI_IDENT
-        _object_ = pstr.char_t
+            except Failure,e:
+                pass
 
-    import dyn
-    class ident(pstruct.type):
-        _fields_ = [
-            (Elf32_Word, 'EI_MAG'),
-            (pstr.uchar_t, 'EI_CLASS'),
-            (pstr.uchar_t, 'EI_DATA'),
-            (pstr.uchar_t, 'EI_VERSION'),
-            (dyn.block(EI_IDENT - 7), 'EI_PAD'),
-       ]
+            print '%s: Failure'% name
+            return False
 
-    class Elf32_Ehdr(pstruct.type):
-        _fields_ = [
-            (ident, 'e_ident'),
-            (Elf32_Half, 'e_type'),
-            (Elf32_Half, 'e_machine'),
-            (Elf32_Word, 'e_version'),
-            (Elf32_Addr, 'e_entry'),
-            (Elf32_Off, 'e_phoff'),
-            (Elf32_Off, 'e_shoff'),
-            (Elf32_Word, 'e_flags'),
-            (Elf32_Half, 'e_ehsize'),
-            (Elf32_Half, 'e_phentsize'),
-            (Elf32_Half, 'e_phnum'),
-            (Elf32_Half, 'e_shentsize'),
-            (Elf32_Half, 'e_shnum'),
-            (Elf32_Half, 'e_shstrndx'),
-            (lambda s: dyn.block( int(s['e_shentsize'].load()) ), 'e_shstrndx'),
-        ]
+        TestCaseList.append(harness)
+        return fn
 
-    class Elf32_Shdr(pstruct.type):
-        _fields_ = [
-            (Elf32_Word, 'sh_name'),
-            (Elf32_Word, 'sh_type'),
-            (Elf32_Word, 'sh_flags'),
-            (Elf32_Addr, 'sh_addr'),
-            (Elf32_Off, 'sh_offset'),
-            (Elf32_Word, 'sh_size'),
-            (Elf32_Word, 'sh_link'),
-            (Elf32_Word, 'sh_info'),
-            (Elf32_Word, 'sh_addralign'),
-            (Elf32_Word, 'sh_entsize'),
-        ]
+if __name__ == '__main__':
+    import ptype,pstruct,provider
 
-#    print 'Ehdr from alloc'
-#    self = Elf32_Ehdr()
-#    print self
-#    self.load()
-#    print self
+    class uint8(ptype.type):
+        length = 1
+    class uint16(ptype.type):
+        length = 2
+    class uint32(ptype.type):
+        length = 4
 
-#    print 'Ehdr from mem'
-    self = Elf32_Ehdr()
-    self.source = provider.memory()
-    self.setoffset(id(self))
-#    print self
-    self.load()
-    print self
+    @TestCase
+    def test_structure_serialize():
+        class st(pstruct.type):
+            _fields_ = [
+                (uint8, 'a'),
+                (uint8, 'b'),
+                (uint8, 'c'),
+            ]
 
-#    print self['e_ident']
-#    print self['e_ident']['EI_PAD']
+        source = provider.string('ABCDEFG')
+        x = st(source=source)
+        x = x.l
+        if x.serialize() == 'ABC':
+            raise Success
+
+    @TestCase
+    def test_structure_fetch():
+        class st(pstruct.type):
+            _fields_ = [
+                (uint8, 'a'),
+                (uint16, 'b'),
+                (uint8, 'c'),
+            ]
+
+        source = provider.string('ABCDEFG')
+        x = st(source=source)
+        x = x.l
+        if x['b'].serialize() == 'BC':
+            raise Success
+
+    @TestCase
+    def test_structure_assign_same():
+        class st(pstruct.type):
+            _fields_ = [
+                (uint8, 'a'),
+                (uint32, 'b'),
+                (uint8, 'c'),
+            ]
+
+        source = provider.string('ABCDEFG')
+        v = uint32().set('XXXX')
+        x = st(source=source)
+        x = x.l
+        x['b'] = v
+        if x.serialize() == 'AXXXXF':
+            raise Success
+
+    @TestCase
+    def test_structure_assign_diff():
+        class st(pstruct.type):
+            _fields_ = [
+                (uint8, 'a'),
+                (uint32, 'b'),
+                (uint8, 'c'),
+            ]
+
+        source = provider.string('ABCDEFG')
+        v = uint16().set('XX')
+        x = st(source=source)
+        x = x.l
+        x['b'] = v
+        x.setoffset(x.getoffset(),recurse=True)
+        if x.serialize() == 'AXXF' and x['c'].getoffset() == 3:
+            raise Success
+
+    @TestCase
+    def test_structure_assign_partial():
+        class st(pstruct.type):
+            _fields_ = [
+                (uint32, 'a'),
+                (uint32, 'b'),
+                (uint32, 'c'),
+            ]
+        source = provider.string('AAAABBBBCCC')
+        x = st(source=source)
+        x = x.l
+        if x.v is not None and not x.initialized and x['b'].serialize() == 'BBBB' and x['c'].size() == 3:
+            raise Success
+
+    @TestCase
+    def test_structure_set_uninitialized_flat():
+        import pint
+        class st(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        a = st(source=provider.empty())
+        a.set(a=5, b=10, c=20)
+        if a.serialize() == '\x05\x00\x00\x00\x0a\x00\x00\x00\x14\x00\x00\x00':
+            raise Success
+
+    @TestCase
+    def test_structure_set_uninitialized_complex():
+        import pint
+        class sa(pstruct.type):
+            _fields_ = [(pint.uint16_t,'b')]
+
+        class st(pstruct.type):
+            _fields_ = [(pint.uint32_t, 'a'),(sa,'b')]
+
+        a = st(source=provider.empty())
+        a.set((5, (10,)))
+        if a['b']['b'].num() == 10:
+            raise Success
+
+if __name__ == '__main__':
+    import logging,config
+    config.defaults.log.setLevel(logging.DEBUG)
+
+    results = []
+    for t in TestCaseList:
+        results.append( t() )
 

@@ -40,7 +40,7 @@ class Atom(pstruct.type):
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
-        (lambda s: (ptype.empty, pint.uint64_t)[s['size'].l.int() == 1], 'extended_size'),
+        (lambda s: (pint.uint_t, pint.uint64_t)[s['size'].l.int() == 1], 'extended_size'),
         (__data, 'data'),
     ]
 
@@ -267,7 +267,7 @@ class esds(pstruct.type):
     type = 'esds'
     _fields_ = [
         (pint.uint32_t, 'Version'),
-        (ptype.empty, 'Elementary Stream Descriptor'),
+        (ptype.type, 'Elementary Stream Descriptor'),
     ]
 
 #@MediaType.Define
@@ -371,7 +371,7 @@ class stsz(pstruct.type):
         if s <= 0:
             print '%s(%x:+%x) - blocksize(%d-%d) <= 0 while trying to read sample entry table ->'%(self.shortname(), self.getoffset(), self.blocksize(), self.blocksize(), self.size())
             print '\t' + '\n\t'.join(self.backtrace())
-            return ptype.empty
+            return ptype.undefined
         return dyn.array(pQTInt, count)
 
     _fields_ = [
