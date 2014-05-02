@@ -50,9 +50,13 @@ class integer_t(ptype.type):
     def classname(self):
         typename = self.typename()
         if self.byteorder is config.byteorder.bigendian:
-            return 'bigendian(%s)'% typename
+            #return 'bigendian(%s)'% typename
+            #return 'be(%s)'% typename
+            return config.defaults.pint.bigendian_name.format(typename)
         elif self.byteorder is config.byteorder.littleendian:
-            return 'littleendian(%s)'% typename
+            #return 'littleendian(%s)'% typename
+            #return 'le(%s)'% typename
+            return config.defaults.pint.littleendian_name.format(typename)
         else:
             raise error.SyntaxError(cls, 'integer_t.classname', message='Unknown integer endianness %s'% repr(self.byteorder))
         return typename
@@ -81,6 +85,9 @@ class integer_t(ptype.type):
 
     def num(self):
         '''Convert integer type into a number'''
+        if not self.initializedQ():
+            raise error.InitializationError(self, 'num')
+
         if self.byteorder is config.byteorder.bigendian:
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
         elif self.byteorder is config.byteorder.littleendian:
@@ -112,6 +119,8 @@ class integer_t(ptype.type):
 class sint_t(integer_t):
     '''Provides signed integer support'''
     def num(self):
+        if not self.initializedQ():
+            raise error.InitializationError(self, 'num')
         signmask = int(2**(8*self.blocksize()-1))
         num = super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0],self).num()
         res = num&(signmask-1)
@@ -126,16 +135,30 @@ class sint_t(integer_t):
             res |= signmask
         return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0], self).set(res)
 
-class uint_t(integer_t): pass
-class int_t(sint_t): pass
+class uinteger(ptype.definition): attribute,cache = 'length',{}
+class sinteger(ptype.definition): attribute,cache = 'length',{}
+uint,sint,integer = uinteger,sinteger,sinteger
 
+@uint.define
+class uint_t(integer_t): length = 0
+@uint.define
 class uint8_t(uint_t): length = 1
+@uint.define
 class uint16_t(uint_t): length = 2
+@uint.define
 class uint32_t(uint_t): length = 4
+@uint.define
 class uint64_t(uint_t): length = 8
+
+@sint.define
+class int_t(sint_t): length = 0
+@sint.define
 class sint8_t(int_t): length = 1
+@sint.define
 class sint16_t(int_t): length = 2
+@sint.define
 class sint32_t(int_t): length = 4
+@sint.define
 class sint64_t(int_t): length = 8
 
 int8_t,int16_t,int32_t,int64_t = sint8_t,sint16_t,sint32_t,sint64_t
@@ -171,7 +194,7 @@ class enum(integer_t):
         '''Can compare an enumeration as it's string or integral representation'''
         try:
             if type(value) == str:
-                return cmp(self.byValue(int(self)), value)
+                return cmp(self.byValue(self.num()), value)
 
         except KeyError:
             pass
@@ -189,23 +212,17 @@ class enum(integer_t):
 
     def str(self):
         '''Return value as a string'''
-        res = int(self)
+        res = self.num()
+        number = ('0x{:x}'.format(abs(res)) if res >= 0 else '-0x{:x}'.format(abs(res)))
         try:
-            value = self.byValue(res) + '(0x%x)'% res
+            value = self.byValue(res) + '(%s)'% number
         except KeyError:
-            value = '0x%x'% res
+            value = number
         return value
 
     def summary(self, **options):
         if self.initialized:
-            res = int(self)
-            try:
-                value = self.byValue(res)
-            except KeyError:
-                value = '0x%x'% res
-
-            res = '(' + str(res) + ')'
-            return ' '.join((value, res))
+            return self.str()
         return '???'
 
     def repr(self, **options):

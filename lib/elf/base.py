@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-ptypes.setbyteorder( ptypes.littleendian )
+ptypes.setbyteorder( ptypes.config.byteorder.littleendian )
 
 ### base
 class uchar(pint.uint8_t): pass

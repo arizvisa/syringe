@@ -1679,7 +1679,7 @@ class ContinueFrt(pstruct.type):
     type = 2066
 
     def __rgb(self):
-        return dyn.block(self.blocksize() - self.size())
+        return dyn.block(self.blocksize() - self.blocksize())
 
     _fields_ = [
         (FrtHeaderOld, 'frtHeaderOld'),
@@ -2377,7 +2377,7 @@ class ExtSST(pstruct.type):
     def __rgISSTInf(self):
         bs = self.blocksize()
 #        return dyn.clone(parray.block, _object_=ISSTInf, blocksize=lambda s: bs-self.size())
-        return dyn.block(bs - self.size())
+        return dyn.block(bs - self.blocksize())
 
     _fields_ = [
         (pint.uint16_t, 'dsst'),

@@ -311,8 +311,8 @@ class _base_generic(object):
         # single-line
         descr = "%s '%s'"%(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
         if prop:
-            return "[%s] %s {%s} %s"%(utils.repr_position(self.getposition()), descr, prop, result)
-        return "[%s] %s %s"%(utils.repr_position(self.getposition()), descr, result)
+            return "[%s] %s {%s} %s"%(utils.repr_position(self.getposition(), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0), descr, prop, result)
+        return "[%s] %s %s"%(utils.repr_position(self.getposition(), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0), descr, result)
 
     # naming
     @classmethod
@@ -352,35 +352,25 @@ class _base_generic(object):
         if not self.initializedQ():
             raise error.InitializationError(self, 'base.hexdump')
 
+        length = options.pop('length', Config.display.hexdump.width)
         ofs,bs,buf = self.getoffset(),self.blocksize(),self.serialize()
         #ofs,bs,buf = self.getoffset(),self.blocksize(),''.join((x.serialize() if x.initialized else '?'*x.blocksize()) for x in self.value)
-        length = options.pop('length', Config.display.hexdump.width)
-        if 'terse' not in options:
-            return utils.hexdump(buf, offset=ofs, length=length, **options)
-        del options['terse']
-
-        threshold = options.pop('threshold', Config.display.hexdump.threshold)
-        if threshold > 0 and bs/length > threshold:
-            return '\n'.join( utils.emit_hexrows(buf, threshold, message, width=length) )
         return utils.hexdump(buf, offset=ofs, length=length, **options)
 
     def details(self, **options):
         """Return details of the object. This can be displayed in multiple-lines."""
         if not self.initializedQ():
             return '???'
-        length = options.pop('length', Config.display.hexdump.width)
 
+        length = options.pop('length', Config.display.hexdump.width)
         ofs,bs,buf = self.getoffset(),self.blocksize(),self.serialize()
-        if not options.get('terse', False):
-            return utils.hexdump(buf, offset=ofs, length=length)
-        if options.has_key('terse'): del options['terse']
 
         # if larger than threshold...
         threshold = options.pop('threshold', Config.display.threshold.details)
         message = options.pop('threshold_message', Config.display.threshold.details_message)
         if threshold > 0 and bs/length > threshold:
-            return '\n'.join( utils.emit_hexrows(buf, threshold, message, width=length) )
-        return utils.hexdump(buf, offset=ofs, length=length)
+            return '\n'.join(utils.emit_hexrows(buf, threshold, message, width=length, **options))
+        return utils.hexdump(buf, offset=ofs, length=length, **options)
 
     def summary(self, **options):
         """Return a summary of the object. This can be displayed on a single-line."""
@@ -388,16 +378,13 @@ class _base_generic(object):
             return '???'
 
         ofs,bs,buf = self.getoffset(),self.blocksize(),self.serialize()
-        if not options.get('terse', False):
-            return '"{}"'.format(utils.emit_repr(buf))
-        if options.has_key('terse'): del options['terse']
 
         # if larger than threshold...
         threshold = options.get('threshold', Config.display.threshold.summary)
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
         if threshold > 0 and bs > threshold:
-            return '"{}"'.format(utils.emit_repr(buf, threshold, message))
-        return '"{}"'.format(utils.emit_repr(buf))
+            return '"{}"'.format(utils.emit_repr(buf, threshold, message, **options))
+        return '"{}"'.format(utils.emit_repr(buf, **options))
 
     def repr(self, **options):
         """The output that __repr__ displays"""
@@ -611,10 +598,13 @@ class type(base):
 
     ## size boundaries
     def size(self):
-        """Returns the number of bytes that have been loaded into the type"""
+        """Returns the number of bytes that have been loaded into the type.
+
+        If type is uninitialized, issue a warning and return 0.
+        """
         if self.initializedQ() or self.value is not None:
             return len(self.value)
-        Config.log.debug("type.size : %s : Unable to get size of type, as object is still uninitialized."% self.instance())
+        Config.log.warn("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
         return 0
 
     def blocksize(self):
@@ -780,7 +770,7 @@ class container(type):
         return all(x is not None and x.initializedQ() for x in self.value)
 
     def size(self):
-        """Returns a sum of the number of bytes that are in use by all sub-elements"""
+        """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
         return reduce(lambda x,y: x+y.size(), self.value, 0)
 
     def blocksize(self):
@@ -1074,7 +1064,9 @@ class block(type):
         return buffer[index-base]
     def repr(self, **options):
         """Display all ptype.block instances as a hexdump"""
-        return self.details(terse=1, **options)
+        if self.blocksize() > 0:
+            return self.details(**options)
+        return self.summary(**options)
     def __setitem__(self, index, value):
         v = self.value
         self.value = v[:index] + value + v[index:]
@@ -1092,7 +1084,9 @@ def clone(cls, **newattrs):
     class __clone(cls):
         __doc__ = cls.__doc__
 
-    newattrs.setdefault('__name__', cls.__name__)
+    #newattrs.setdefault('__name__', cls.__name__)
+    #newattrs.setdefault('__name__', 'clone({:s})'.format(cls.__name__))
+    newattrs.setdefault('__name__', Config.ptype.clone_name.format(cls.__name__))
     for k,v in newattrs.items():
         setattr(__clone, k, v)
     return __clone
@@ -1106,7 +1100,8 @@ class definition(object):
 
     To use this properly, in your definition file create a class that inherits
     from ptype.definition, and assign an empty dictionary to the `.cache`
-    variable.
+    variable. The .attribute property defines which attribute to key the
+    definition by. This defualts to 'type'
 
     Another thing to define is the `.unknown` variable. This will be the
     default type that is returned when an identifier is not located in the
@@ -1116,6 +1111,7 @@ class definition(object):
     class mytypelookup(ptype.definition):
         cache = {}
         unknown = ptype.block
+        attribute = 'type'
 
     In order to add entries to the cache, one can use the `.add` classmethod
     to add a ptype-entry to the cache by a specific type. However, it is
@@ -1152,6 +1148,7 @@ class definition(object):
 
     cache = None        # children must assign this empty dictionary
     unknown = block     # default type to return an unknown class
+    attribute = 'type'
 
     @classmethod
     def add(cls, type, object):
@@ -1202,7 +1199,7 @@ class definition(object):
     @classmethod
     def define(cls, type):
         """Add a type to the cache keyed by .type attribute of ``type``.type"""
-        cls.add(type.type, type)
+        cls.add(getattr(type,cls.attribute), type)
         return type
 
 # FIXME: it'd be cool if the .length of _value_ would be automatically figured out either by checking
@@ -1221,6 +1218,8 @@ class wrapper_t(type):
     _value_ = None
     @property
     def value(self):
+        if not self.object.initializedQ():
+            return None
         return self.object.serialize()
     # this setter shouldn't really ever be used...but...it's available.
     @value.setter
@@ -1231,7 +1230,7 @@ class wrapper_t(type):
         return self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
     def __copy_instance(self, instance):
         result = instance.copy()
-        self.__value_ = result.__class__
+        self._value_ = result.__class__
         return result
 
     __object = None
@@ -1302,7 +1301,7 @@ class wrapper_t(type):
         super(wrapper_t,self).__setstate__(state)
 
 class encoded_t(wrapper_t):
-    ## string encoding
+    ## string encoding (simulates ._object_)
     def encode(self, object):
         """Take object and serialize it to an encoded string"""
         return object.serialize()
@@ -1311,7 +1310,7 @@ class encoded_t(wrapper_t):
         """Take a string and decode it into a ptype.block object"""
         return clone(block, length=len(string), source=provider.string(string))
 
-    ## object dereferencing
+    ## object dereferencing, force .object to match the length for the provided data
     def reference(self, object, **attrs):
         data = self.encode(object)
         self._value_ = clone(block, length=len(data))
@@ -1336,7 +1335,7 @@ def setbyteorder(endianness):
     '''
     global pointer_t
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        pointer_t.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
+        pointer_t._value_.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
@@ -1345,9 +1344,22 @@ def setbyteorder(endianness):
     raise ValueError("Unknown integer endianness %s"% repr(endianness))
 
 class pointer_t(encoded_t):
-    _value_ = clone(block, length=Config.integer.size)
     _object_ = None
-    byteorder = Config.integer.order
+
+    class _value_(block):
+        '''Default pointer value that can return an integer in any byteorder'''
+        length,byteorder = Config.integer.size, Config.integer.order
+
+        def set(self, offset):
+            bs = self.blocksize()
+            res = bitmap.new(offset, bs*8)
+            return super(pointer_t._value_,self).set(bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian)))
+
+        def get(self):
+            bs = self.blocksize()
+            value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
+            res = reduce(lambda t,c: bitmap.push(t,(ord(c),8)), value, bitmap.zero)
+            return bitmap.number(res)
 
     def dereference(self, **attrs):
         name = '*%s'% self.name()
@@ -1362,30 +1374,20 @@ class pointer_t(encoded_t):
         return self
 
     def get(self):
-        return self.num()
+        return self.object.get()
 
     def set(self, offset):
         """Sets the value of pointer to the specified offset"""
-        bs = self.blocksize()
-        x = bitmap.new(offset, bs*8)
-        self.a.object.set( bitmap.data(x, reversed=(self.byteorder is config.byteorder.littleendian)) )
-        return self
+        return self.object.set(offset)
 
     def num(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'pointer_t.num')
-
-        bs = self.blocksize()
-        res = bitmap.zero
-        value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-        for x in value:
-            res = bitmap.push(res, (ord(x),8))
-        return bitmap.number(res)
+        return self.object.get()
 
     def number(self):
         """Return the value of pointer as an integral"""
         return self.num()
-
     def int(self):
         return int(self.num())
     def long(self):
@@ -1397,8 +1399,8 @@ class pointer_t(encoded_t):
     def classname(self):
         if self.initializedQ():
             return '%s<%s>'% (self.typename(),self.object.classname())
-        target = force(self._object_, self) if istype(self._object_) else self._object_.__name__
-        return '%s<%s>'% (self.typename(),target.typename())
+        targetname = force(self._object_, self).typename() if istype(self._object_) else getattr(self._object_, '__name__', 'None')
+        return '%s<%s>'% (self.typename(),targetname)
 
     def summary(self, **options):
         if self.initializedQ():
@@ -1408,9 +1410,9 @@ class pointer_t(encoded_t):
         """Display all pointer_t instances as an integer"""
         return self.summary(**options)
     def __getstate__(self):
-        return super(pointer_t,self).__getstate__(),self._object_,self.byteorder
+        return super(pointer_t,self).__getstate__(),self._object_
     def __setstate__(self, state):
-        state,self._object_,self.byteorder = state
+        state,self._object_ = state
         super(wrapper_t,self).__setstate__(state)
 
 class rpointer_t(pointer_t):
@@ -1558,8 +1560,8 @@ if __name__ == '__main__':
         k = 0x80
         s = ''.join(chr(ord(x)^k) for x in 'hello world')
         class xor(ptype.encoded_t):
-            _value_ = dyn.block(len(s))
-            _object_ = dyn.block(len(s))
+            _value_ = dynamic.block(len(s))
+            _object_ = dynamic.block(len(s))
 
             key = k
 
@@ -1567,7 +1569,7 @@ if __name__ == '__main__':
                 return ''.join(chr(ord(x)^k) for x in object.serialize())
             def decode(self, string):
                 data = ''.join(chr(ord(x)^k) for x in string)
-                return dyn.clone(self._object_, source=prov.string(data))
+                return dynamic.clone(self._object_, source=prov.string(data))
         
         x = xor(source=ptypes.prov.string(s))
         x = x.l
@@ -1583,8 +1585,8 @@ if __name__ == '__main__':
         match = ''.join(chr(ord(x)^k) for x in data)
 
         class xor(ptype.encoded_t):
-            _value_ = dyn.block(len(data))
-            _object_ = dyn.block(len(match))
+            _value_ = dynamic.block(len(data))
+            _object_ = dynamic.block(len(match))
 
             key = k
 
@@ -1592,7 +1594,7 @@ if __name__ == '__main__':
                 return ''.join(chr(ord(x)^k) for x in object.serialize())
             def decode(self, string):
                 data = ''.join(chr(ord(x)^k) for x in string)
-                return dyn.clone(self._object_, source=prov.string(data))
+                return dynamic.clone(self._object_, source=prov.string(data))
 
         instance = pstr.string().set(match)
 
@@ -1606,14 +1608,14 @@ if __name__ == '__main__':
         s = 'AAAABBBBCCCCDDDD'.encode('base64').strip() + '\x00' + 'A'*20
         class b64(ptype.encoded_t):
             _value_ = pstr.szstring
-            _object_ = dyn.array(pint.uint32_t, 4)
+            _object_ = dynamic.array(pint.uint32_t, 4)
 
             def encode(self, object):
                 return object.serialize().encode('base64')
 
             def decode(self, string):
                 data = string.decode('base64')
-                return dyn.clone(self._object_, source=prov.string(data))
+                return dynamic.clone(self._object_, source=prov.string(data))
                 
         x = b64(source=ptypes.prov.string(s))
         x = x.l
@@ -1627,15 +1629,15 @@ if __name__ == '__main__':
         result = 'AAAABBBBCCCCDDDD\x00'.encode('base64')
 
         class b64(ptype.encoded_t):
-            _value_ = dyn.block(len(result))
-            _object_ = dyn.array(pint.uint32_t, 4)
+            _value_ = dynamic.block(len(result))
+            _object_ = dynamic.array(pint.uint32_t, 4)
 
             def encode(self, object):
                 return object.serialize().encode('base64')
 
             def decode(self, string):
                 data = string.decode('base64')
-                return dyn.clone(self._object_, source=prov.string(data))
+                return dynamic.clone(self._object_, source=prov.string(data))
 
         instance = pstr.szstring().set(input)
 
@@ -1824,7 +1826,7 @@ if __name__ == '__main__':
     def test_pointer_ref():
         from ptypes import pint,dyn
         src = prov.string('\x04\x00\x00\x00AAAAAAAA')
-        a = ptype.pointer_t(source=src, offset=0, _object_=dyn.block(4)).l
+        a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4)).l
         b = a.d.l
         assert b.serialize() == '\x41\x41\x41\x41'
 
@@ -1836,7 +1838,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_cast_same():
         from ptypes import pint,dyn
-        t1 = dyn.clone(ptype.type, length=4)
+        t1 = dynamic.clone(ptype.type, length=4)
         t2 = pint.uint32_t
 
         data = prov.string('AAAA')
@@ -1848,8 +1850,8 @@ if __name__ == '__main__':
     @TestCase
     def test_container_cast_same():
         from ptypes import pint,dyn
-        t1 = dyn.clone(ptype.type, length=4)
-        t2 = dyn.array(pint.uint8_t, 4)
+        t1 = dynamic.clone(ptype.type, length=4)
+        t2 = dynamic.array(pint.uint8_t, 4)
 
         data = prov.string('AAAA')
         a = t1(source=data).l
@@ -1882,8 +1884,8 @@ if __name__ == '__main__':
     @TestCase
     def test_container_cast_large_to_small():
         from ptypes import pint,dyn
-        t1 = dyn.array(pint.uint8_t, 8)
-        t2 = dyn.array(pint.uint8_t, 4)
+        t1 = dynamic.array(pint.uint8_t, 8)
+        t2 = dynamic.array(pint.uint8_t, 4)
         data = prov.string('ABCDEFGH')
 
         a = t1(source=data).l
@@ -1894,8 +1896,8 @@ if __name__ == '__main__':
     @TestCase
     def test_container_cast_small_to_large():
         from ptypes import pint,dyn
-        t1 = dyn.array(pint.uint8_t, 4)
-        t2 = dyn.array(pint.uint8_t, 8)
+        t1 = dynamic.array(pint.uint8_t, 4)
+        t2 = dynamic.array(pint.uint8_t, 8)
         data = prov.string('ABCDEFGH')
         a = t1(source=data).l
         b = a.cast(t2)
@@ -1981,7 +1983,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_decompression_block():
-        from ptypes import dyn,pint,pstruct,ptype
+        from ptypes import dynamic,pint,pstruct,ptype
         class cblock(pstruct.type):
             class _zlibblock(ptype.encoded_t):
                 def encode(self, object):
@@ -1990,7 +1992,7 @@ if __name__ == '__main__':
                     return super(cblock._zlibblock,self).decode(string.decode('zlib'))
 
             def __zlibblock(self):
-                return ptype.clone(self._zlibblock, _value_=dyn.block(self['size'].l.int()))
+                return ptype.clone(self._zlibblock, _value_=dynamic.block(self['size'].l.int()))
                 
             _fields_ = [
                 (pint.uint32_t, 'size'),
@@ -2005,7 +2007,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compression_block():
-        from ptypes import dyn,pint,pstruct,ptype
+        from ptypes import dynamic,pint,pstruct,ptype
         class zlibblock(ptype.encoded_t):
             def encode(self, object):
                 return object.serialize().encode('zlib')

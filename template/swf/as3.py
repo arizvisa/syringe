@@ -2,7 +2,7 @@ import logging,ptypes
 from ptypes import *
 from primitives import *
 
-ptypes.setbyteorder(config.byteorder.littleendian)
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 class u8(pint.uint8_t): pass
 class u16(pint.uint16_t): pass
 class s24(pint.sint_t): length = 3

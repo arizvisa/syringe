@@ -1,6 +1,4 @@
-import array,store
-import coff,elf
-
+import store
 from store import BaseAddress
 
 class linker(store.container):

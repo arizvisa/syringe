@@ -51,7 +51,7 @@ class SerializationError(Base):
     def position(self):
         return '%x:+%x'%( self.object.getoffset(), self.object.blocksize() )
     def __str__(self):
-        return ' : '.join((self.objectname(), self.typename(), self.position(), self.path(), repr(self.exception)))
+        return ' : '.join((self.objectname(), self.typename(), self.position(), self.path(), str(self.exception)))
 
 class LoadError(SerializationError, exc.EnvironmentError):
     """Error while initializing object from source"""
@@ -62,13 +62,13 @@ class LoadError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         consumed, = self.args
         if consumed > 0:
-            return '%s : %s : %s : Unable to consume %x from source (%s)'%(self.typename(), self.position(), self.path(), consumed, repr(self.exception))
+            return '%s : %s : %s : Unable to consume %x from source (%s)'%(self.typename(), self.position(), self.path(), consumed, str(self.exception))
         return super(LoadError,self).__str__()
 
 class CommitError(SerializationError, exc.EnvironmentError):
     """Error while committing object to source"""
     def __init__(self, object, written=0, exception=Exception):
-        super(LoadError,self).__init__(object, exception)
+        super(CommitError,self).__init__(object, exception)
         self.args = written,
     
     def __str__(self):
@@ -86,15 +86,12 @@ class RequestError(Base):
         super(RequestError,self).__init__(exception=exception)
         self.object,self.message = object,message
         self.method = method
-
     def typename(self):
         return self.object.instance()
     def objectname(self):
         return self.object.__name__ if type(self.object) is type else self.object.shortname()
-
     def methodname(self):
         return '%s'% self.method
-
     def __str__(self):
         if self.message:
             return ' : '.join((self.methodname(), self.objectname(), self.typename(), self.message))

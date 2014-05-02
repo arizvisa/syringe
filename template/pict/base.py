@@ -1,6 +1,6 @@
 import ptypes
 from ptypes import *
-ptypes.setbyteorder(ptypes.bigendian)
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class int8(pint.int8_t): pass
 class uint8(pint.uint8_t): pass

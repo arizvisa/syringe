@@ -1,35 +1,31 @@
-from . import ptype,parray,pstruct,pbinary,pint,pfloat,pstr,config,utils,dyn,provider
+from . import ptype,parray,pstruct,pbinary,pint,pfloat,pstr
+from . import config,utils,dynamic,provider
+dyn = dynamic
 prov = provider
+
+__all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','dynamic','dyn','prov'
 
 ## globally changing the ptype provider
 def setsource(prov):
     '''Sets the default ptype provider to the one specified'''
 #    assert issubclass(prov.__class__, prov.provider), 'Needs to be of type %s'% repr(prov.provider)
-    prov.seek
-    prov.consume
-    prov.store
-    ptype.type.source = prov
+    prov.seek,prov.consume,prov.store
+    ptype.source = prov
 
 ## globally changing the byte order
-bigendian,littleendian = config.byteorder.bigendian,config.byteorder.littleendian
 def setbyteorder(endianness):
     '''
-        _Globally_ sets the integer byte order to the endianness specified.
-        can be either config.byteorder.bigendian or config.byteorder.littleendian
+    _Globally_ sets the integer byte order to the endianness specified.
+    Can be either config.byteorder.bigendian or config.byteorder.littleendian
     '''
-    ptype.setbyteorder(endianness)
-    pint.setbyteorder(endianness)
-    pbinary.setbyteorder(endianness)
+    [ module.setbyteorder(endianness) for module in (ptype,pint,pbinary) ]
 
 ## some things people people might find useful
-from ptype import debug,debugrecurse
+#from ptype import debug,debugrecurse
 from ptype import istype,iscontainer
 
 from provider import file,memory
 from utils import hexdump
-
-## default to byte order detected by python
-setbyteorder( config.defaults.integer.order )
 
 if __name__ == '__main__':
     import __init__ as ptypes

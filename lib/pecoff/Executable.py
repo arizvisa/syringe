@@ -3,7 +3,7 @@ import logging
 import ptypes
 from ptypes import *
 
-ptypes.setbyteorder(ptypes.littleendian)
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 import __base__,headers
 
 def open(filename, **kwds):
@@ -28,15 +28,15 @@ class File(pstruct.type, ptype.boundary):
         optionalheader = self['Pe'].l['OptionalHeader']
         alignment = optionalheader['SectionAlignment'].num()
         s = optionalheader['SizeOfImage'].num()
-        return dyn.block(s - self.size())
-#        return dyn.block(s - self.size(), summary=lambda s:s.hexdump(oneline=1))
+        return dyn.block(s - self.blocksize())
+#        return dyn.block(s - self.blocksize(), summary=lambda s:s.hexdump(oneline=1))
 
     def __FileData(self):
         '''Calculate the size of executable on disk'''
         pe = self['Pe'].l
         endings = sorted(((x['PointerToRawData'].num()+x['SizeOfRawData'].num()) for x in pe['Sections']))
         s = endings[-1]
-        return dyn.block(s - self.size())
+        return dyn.block(s - self.blocksize())
 
     def __Data(self):
         if issubclass(self.source.__class__, ptypes.provider.file):

@@ -433,13 +433,13 @@ class _struct_generic(container):
                     typename = 'unknown<%s>'%repr(t)
 
                 i = utils.repr_class(typename)
-                result.append('[%s] %s %s ???'%(utils.repr_position(self.getposition(name)),i,name,v))
+                result.append('[%s] %s %s ???'%(utils.repr_position(self.getposition(name), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0),i,name,v))
                 continue
 
             _,s = b = value.bitmap()
             i = utils.repr_instance(value.classname(),value.name())
             v = '(%s,%d)'%(bitmap.hex(b), s)
-            result.append('[%s] %s %s'%(utils.repr_position(self.getposition(name)),i,value.summary()))
+            result.append('[%s] %s %s'%(utils.repr_position(self.getposition(name), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0),i,value.summary()))
         return '\n'.join(result)
 
     def __details_uninitialized(self):
@@ -447,6 +447,7 @@ class _struct_generic(container):
         for t,name in self._fields_:
             if istype(t):
                 typename = t.typename()
+                s = t().blockbits()
             elif bitmap.isbitmap(t):
                 typename = 'signed' if bitmap.signed(t) else 'unsigned'
                 s = bitmap.size(s)
@@ -458,7 +459,7 @@ class _struct_generic(container):
                 s = 0
 
             i = utils.repr_class(typename)
-            result.append('[%s] %s %s{%d} ???'%(utils.repr_position(self.getposition()),i,name,s))
+            result.append('[%s] %s %s{%d} ???'%(utils.repr_position(self.getposition(), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0),i,name,s))
         return '\n'.join(result)
 
     #def __getstate__(self):
@@ -614,6 +615,10 @@ class partial(ptype.container):
         assert self.byteorder is config.byteorder.littleendian, 'byteorder %s is invalid'% self.byteorder
         bmp = self.value.bitmap()
         return ''.join(reversed(bitmap.data(bmp)))
+
+    def deserialize_block(self, block):
+        data = iter(block) if self.byteorder is config.byteorder.bigendian else reversed(block)
+        return self.value.deserialize_consumer(bitmap.consumer(data))
 
     def load(self, **attrs):
         try:

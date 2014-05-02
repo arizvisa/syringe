@@ -1,7 +1,8 @@
 import ptypes,headers,datadirectory
-from ptypes import pstruct,parray,pbinary,dyn,pstr
+from ptypes import pstruct,parray,pbinary,ptype,dyn,pstr,config
 from __base__ import *
 from headers import virtualaddress
+import itertools
 
 class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
     _fields_ = [
@@ -11,72 +12,95 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
         (word, 'MinorVersion'),
         (word, 'NumberOfNames'),
         (word, 'NumberOfIds'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_TABLE_NAME, length=int(s['NumberOfNames'].l)), 'Names'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_TABLE_ID, length=int(s['NumberOfIds'].l)), 'Ids'),
+        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=s['NumberOfNames'].l.num()), 'Names'),
+        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].l.num()), 'Ids'),
     ]
+
+    def list(self):
+        return list(itertools.chain((x['Name'].getEntryName() for x in self['Names']), (x['Name'].getEntryName() for x in self['Ids'])))
+
+    def getEntry(self, name):
+        for x in itertools.chain(iter(self['Names']),iter(self['Ids'])):
+            if name == x['Name'].getEntryName():
+                return x['Entry'].d
+            continue
+        return
 
 class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
     _fields_ = [
         (word, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring,length=int(s['Length'].l)), 'String')
+        (lambda s: dyn.clone(pstr.wstring,length=s['Length'].l.num()), 'String')
     ]
+    def str(self):
+        return self['String'].str()
 
 class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda s: dyn.block(s.parent['Size'].l.int())), 'Data RVA'),
+        (virtualaddress(lambda s: dyn.block(s.parent['Size'].l.num())), 'Data'),
         (dword, 'Size'),
         (dword, 'Codepage'),
         (dword, 'Reserved'),       
     ]
 
-class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(pbinary.struct):
-    _fields_ = [(1,'type'),(31,'address')]
-    def deref(self):
-        n = self['address']
-        base = self.getparent(datadirectory.Resource)['VirtualAddress'].d
-        makepointer = lambda x: dyn.rpointer(x, object=lambda s: base)
-        p = makepointer(IMAGE_RESOURCE_DIRECTORY_TABLE) if self['type'] == 1 else makepointer(IMAGE_RESOURCE_DATA_ENTRY)
-        return self.parent.new(p, __name__='RVA', offset=self.getoffset()).set(n).d
+class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.pointer_t):
+    class rva(pbinary.struct):
+        _fields_ = [(1,'type'),(31,'offset')]
+    _value_ = dyn.clone(pbinary.partial, _object_=rva, byteorder=config.byteorder.littleendian)
+    def num(self):
+        base = self.getparent(datadirectory.Resource)['VirtualAddress']
+        rva = base.num() + self.object['offset']
+        return headers.calculateRelativeAddress(base, rva)
+    def summary(self, **attrs):
+        return self.object.summary(**attrs)
 
-    d = property(fget=deref)
-IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA = pbinary.littleendian(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA)
-
-class IMAGE_RESOURCE_DIRECTORY_ENTRY_NAME(pstruct.type):
+class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA):
+    def _object_(self):
+        return IMAGE_RESOURCE_DIRECTORY_STRING if self.object['type'] else ptype.undefined
+    def getEntryName(self):
+        if self.object['type']:
+            return self.d.l.str()
+        return int(self.object['offset'])
+class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_DATA(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA):
+    def _object_(self):
+        return IMAGE_RESOURCE_DIRECTORY if self.object['type'] else IMAGE_RESOURCE_DATA_ENTRY
+class IMAGE_RESOURCE_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(IMAGE_RESOURCE_DIRECTORY_STRING), 'Name RVA'),      # FIXME: this is a (1,31) binary structure and not a 32-bit address. dereferencing this is as a pointer without grabbing lower 31-bits is incorrect
-        (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA, 'RVA'),
-    ]
-class IMAGE_RESOURCE_DIRECTORY_ENTRY_ID(pstruct.type):
-    _fields_ = [
-        (dword, 'IntegerID'),
-        (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA, 'RVA'),
+        (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME, 'Name'),
+        (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_DATA, 'Entry'),
     ]
 
-class IMAGE_RESOURCE_DIRECTORY_TABLE(IMAGE_RESOURCE_DIRECTORY):
-    pass
-class IMAGE_RESOURCE_DIRECTORY_TABLE_NAME(parray.type):
-    _object_ = IMAGE_RESOURCE_DIRECTORY_ENTRY_NAME
-class IMAGE_RESOURCE_DIRECTORY_TABLE_ID(parray.type):
-    _object_ = IMAGE_RESOURCE_DIRECTORY_ENTRY_NAME
+class IMAGE_RESOURCE_DIRECTORY_NAME(parray.type):
+    _object_ = IMAGE_RESOURCE_DIRECTORY_ENTRY
+class IMAGE_RESOURCE_DIRECTORY_ID(parray.type):
+    _object_ = IMAGE_RESOURCE_DIRECTORY_ENTRY
 
 ## specific resources
 if True:
     import ptypes.ptype as ptype
-    class VersionEntry(ptype.definition):
-        cache = {}
+    class VersionValue(ptype.definition): cache = {}
+    class VersionEntry(ptype.definition): cache = {}
 
     class Entry(pstruct.type):
-        def __Value(self):
-            bs = self['wValueLength'].l.int()
-            if bs == 0:
-                return pstr.szstring
+        def Value(self):
+            szkey = self['szKey'].l.str()
+            sz = self['wValueLength'].l.num()
+            return VersionValue.get(szkey, length=sz)
 
-            try:
-                t = getattr(self,'thetype') if hasattr(self, 'thetype') else VersionEntry.lookup(self['szKey'].l.str())
-                return dyn.clone(Entries, blocksize=lambda s:bs)
-            except KeyError:
-                pass
-            return dyn.block(bs)
+        def Child(self):
+            szkey = self['szKey'].l.str()
+            return VersionEntry.lookup(szkey)
+            #bs = self['wLength'].l.num() - self.blocksize()
+            #return VersionEntry.get(szkey, length=bs)
+
+        def __Children(self):
+            bs = self['wLength'].l.num() - self.blocksize()
+            assert bs >= 0,bs
+            class Member(pstruct.type):
+                _fields_ = [
+                    (dyn.align(4), 'Padding'),
+                    (self.Child(), 'Child'),
+                ]
+            return dyn.clone(parray.block, _object_=Member, blocksize=lambda s:bs)
 
         _fields_ = [
             (word, 'wLength'),
@@ -84,31 +108,37 @@ if True:
             (word, 'wType'),
             (pstr.szwstring, 'szKey'),
             (dyn.align(4), 'Padding'),
-            (__Value, 'Value'),
+            (lambda s: s.Value(), 'Value'),
+            (__Children, 'Children'),
         ]
 
-    class Entries(parray.block):
-        _object_ = Entry
-
-    class StringTable(Entries):
-        _object_ = dyn.clone(Entry, thetype=pstr.szstring)
-
     @VersionEntry.define
-    class StringFileInfo(Entries):
+    class StringTable(Entry):
         type = "StringFileInfo"
-        _object_ = dyn.clone(Entry, thetype=StringTable)
+        def Child(self):
+            return String
 
+    class String(Entry):
+        def Child(self):
+            return Empty
+        def Value(self):
+            # wValueLength = number of 16-bit words of wValue
+            l = self['wValueLength'].l.num()
+            return dyn.clone(pstr.wstring, length=l)
+    
     @VersionEntry.define
-    class Var(Entries):
-        type = "Translation"
-        _object_ = dyn.clone(Entry, thetype=dword)
-
-    @VersionEntry.define
-    class VarFileInfo(Entries):
+    class Var(Entry):
         type = "VarFileInfo"
+        def Value(self):
+            l = self['wValueLength'].l.num()
+            return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
+    @VersionEntry.define
+    class Empty(ptype.undefined):
+        type = "Translation"
 
-if True:
+    @VersionValue.define
     class VS_FIXEDFILEINFO(pstruct.type):
+        type = 'VS_VERSION_INFO'
         _fields_ = [
             (dword, 'dwSignature'),
             (dword, 'dwStrucVersion'),
@@ -125,22 +155,9 @@ if True:
             (dword, 'dwFileDateLS'),
         ]
 
-    class VS_VERSIONINFO(pstruct.type):
-        resourcedirectoryentry = 0x10
-        def __Children(self):
-            bs = self['wLength'].l.int() - self.size()
-            return dyn.clone(Entries, blocksize=lambda s:bs)
-
-        _fields_ = [
-            (word, 'wLength'),
-            (word, 'wValueLength'),
-            (word, 'wType'),
-            (pstr.szwstring, 'szKey'),
-            (dyn.align(4), 'Padding1'),
-            (lambda s: VS_FIXEDFILEINFO if s['wValueLength'].l.int() == 0x34 else ptype.type, 'Value'),    # XXX
-            (dyn.align(4), 'Padding2'),
-            (__Children, 'Children'),
-        ]
+    class VS_VERSIONINFO(Entry):
+        def Child(self):
+            return Entry
 
 if __name__ == '__main__':
     import pecoff
@@ -149,8 +166,8 @@ if __name__ == '__main__':
 
     a = z['Pe']['OptionalHeader']['DataDirectory'][2]['VirtualAddress'].d.l
     b = a['Ids'][0]
-    print b['Name RVA']
-    print b['RVA']
+    print b['Name']
+    print b['Entry']
 
 #    from pecoff.resources import DataDirectory
 

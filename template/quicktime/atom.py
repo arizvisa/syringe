@@ -367,7 +367,7 @@ class stsz(pstruct.type):
 
     def __Entries(self):
         count = self['Number of entries'].l.int()
-        s = self.blocksize() - self.size()
+        s = self.blocksize() - self.blocksize()
         if s <= 0:
             print '%s(%x:+%x) - blocksize(%d-%d) <= 0 while trying to read sample entry table ->'%(self.shortname(), self.getoffset(), self.blocksize(), self.blocksize(), self.size())
             print '\t' + '\n\t'.join(self.backtrace())

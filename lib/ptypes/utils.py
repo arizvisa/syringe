@@ -110,14 +110,19 @@ def repr_class(name):
     return "<class %s>"% name
 def repr_instance(classname, name):
     return "<instance %s '%s'>"% (classname, name)
-def repr_position(pos):
+def repr_position(pos, hex=True, precision=0):
     if len(pos) == 1:
-        byte, = pos
-        return '%x'% byte
-    byte,bit = pos
-    s = '0123456789abcdef'
-    #return '%x.%s'% (byte,s[bit*2])
-    return '%x.%s'% (byte,s[bit])
+        ofs, = pos
+        return '{:x}'.format(ofs)
+    ofs,bofs = pos
+    if precision > 0:
+        partial = bofs / 8.0
+        if hex:
+            return '{:x}.{:x}'.format(ofs,math.trunc(partial*0x10))
+        fraction = ':0{:d}d'.format(precision)
+        res = '{:x}.{'+fraction+'}'
+        return res.format(ofs,math.trunc(partial * 10**precision))
+    return '{:x}.{:x}'.format(ofs,bofs)
 
 ## hexdumping capability
 def printable(s):
@@ -206,6 +211,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)
 
+    # FIXME: the skipped/leftover bytes are being calculated incorrectly..
     msg = message.format(size=size, charwidth=charwidth, width=width, leftover=leftover)
 
     # figure out how many bytes we can print

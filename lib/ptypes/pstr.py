@@ -1,5 +1,5 @@
 import __builtin__,itertools
-from . import ptype,parray,pint,dyn,utils,error,pstruct,provider
+from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider
 
 class _char_t(pint.integer_t):
     length = 1
@@ -81,7 +81,7 @@ class string(ptype.type):
             result = [self[_] for _ in xrange(*index.indices(len(self)))]
 
             # ..and now it's an array
-            type = dyn.clone(parray.type, typename=lambda s:self.typename(), length=len(result), _object_=self._object_)
+            type = ptype.clone(parray.type, typename=lambda s:self.typename(), length=len(result), _object_=self._object_)
             return self.new(type, offset=result[0].getoffset(), value=result)
 
         if index < -len(self) or index >= len(self):
@@ -127,7 +127,7 @@ class string(ptype.type):
 
     def set(self, value):
         chararray = [x for x in value]
-        _ = dyn.array(self._object_, len(chararray))
+        _ = dynamic.array(self._object_, len(chararray))
         result = _()
 
         for character,element in zip(value,result.alloc()):
@@ -166,7 +166,12 @@ class string(ptype.type):
 
     def summary(self, **options):
         if self.initializedQ():
-            return repr(self.str())
+            try:
+                result = repr(self.str())
+            except UnicodeDecodeError:
+                Config.log.debug('%s.summary : %s : Unable to decode unicode string. Rendering as hexdump instead.'% (self.classname(),self.instance()))
+                return super(string,self).summary(**options)
+            return result
         return '???'
 
     def repr(self, **options):
@@ -183,7 +188,7 @@ class szstring(string):
         if not value.endswith('\x00'):
             value += '\x00'
 
-        result = dyn.array(self._object_, len(value))().alloc()
+        result = dynamic.array(self._object_, len(value))().alloc()
         for element,character in zip(result, value):
             element.set(character)
         self.value = result.serialize()
@@ -237,7 +242,7 @@ class szwstring(szstring, wstring):
         if not value.endswith('\x00'):
             value += '\x00'
 
-        result = dyn.array(self._object_, len(value))().alloc()
+        result = dynamic.array(self._object_, len(value))().alloc()
         for characeter,element in zip(value, result):
             element.set(character)
         self.value = result.serialize()

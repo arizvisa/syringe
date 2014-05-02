@@ -90,7 +90,7 @@ class type(_parray_generic):
         length:int<w>
             The length of the array only used during initialization of the object
     '''
-    #_object_ = None     # subclass of ptype.type
+    _object_ = None     # subclass of ptype.type
     length = 0          # int
 
     def contains(self, offset):
@@ -140,11 +140,14 @@ class type(_parray_generic):
     def summary(self, **options):
         res = super(type,self).summary(**options)
         length = len(self)
-        obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
+        if self._object_ is None:
+            obj = 'untyped'
+        else:
+            obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
         return '%s[%d] %s'% (obj, length, res)
 
     def repr(self, **options):
-        return self.summary(terse=True, **options)
+        return self.summary(**options)
 
     def set(self, value):
         """Update self with the contents of the list ``value``"""
@@ -190,7 +193,14 @@ class terminated(type):
                     self.value.append(n)
                     if self.isTerminator(n.load()):
                         break
-                    s = n.blocksize(); assert s > 0; ofs += s
+
+                    s = n.blocksize()
+                    if s <= 0 and Config.parray.break_on_zero_size:
+                        Config.log.warn("terminated.load : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
+                        break
+                    if s < 0:
+                        raise error.AssertionError(self, 'terminated.load', message="Element size for %s is < 0"% n.classname())
+                    ofs += s
 
             return self
 
@@ -248,12 +258,18 @@ class infinite(uninitialized):
                     if self.isTerminator(n):
                         break
 
-                    s = n.blocksize(); assert s > 0; self.__offset += s
+                    s = n.blocksize()
+                    if s <= 0 and Config.parray.break_on_zero_size:
+                        Config.log.warn("infinite.load : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
+                        break
+                    if s < 0:
+                        raise error.AssertionError(self, 'infinite.load', message="Element size for %s is < 0"% n.classname())
+                    self.__offset += s
 
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
-                Config.log.warn("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path))
+                Config.log.warn("infinite.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path))
                 return self
 
             except error.LoadError,e:
@@ -281,7 +297,13 @@ class infinite(uninitialized):
                     if self.isTerminator(n):
                         break
 
-                    s = n.blocksize(); assert s > 0; self.__offset += s
+                    s = n.blocksize()
+                    if s <= 0 and Config.parray.break_on_zero_size:
+                        Config.log.warn("infinite.loadstream : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
+                        break
+                    if s < 0:
+                        raise error.AssertionError(self, 'infinite.loadstream', message="Element size for %s is < 0"% n.classname())
+                    self.__offset += s
 
             except error.LoadError, e:
                 if self.parent is not None:
@@ -299,6 +321,9 @@ class block(uninitialized):
         with utils.assign(self, **attrs):
             forever = itertools.count() if self.length is None else xrange(self.length)
             self.value = []
+
+            if self.blocksize() == 0:   # if array is empty...
+                return self
 
             ofs = self.getoffset()
             current = 0
@@ -326,7 +351,11 @@ class block(uninitialized):
                     break
 
                 s = n.blocksize()
-                assert s > 0
+                if s <= 0 and Config.parray.break_on_zero_size:
+                    Config.log.warn("block.load : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
+                    break
+                if s < 0:
+                    raise error.AssertionError(self, 'block.load', message="Element size for %s is < 0"% n.classname())
 
                 # if our child element pushes us past the blocksize
                 if current + s >= self.blocksize():
@@ -545,7 +574,7 @@ if __name__ == '__main__':
     @TestCase
     def test_array_infinite_nested_block():
         import random
-        from ptypes import parray,dyn,ptype,pint,provider
+        from ptypes import parray,dynamic,ptype,pint,provider
 
         random.seed(0)
 

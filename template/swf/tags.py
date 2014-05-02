@@ -1,6 +1,6 @@
 import logging,ptypes
 from ptypes import *
-ptypes.setbyteorder(config.byteorder.bigendian)
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 import stypes
 from stypes import *

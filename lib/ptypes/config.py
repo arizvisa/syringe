@@ -40,6 +40,8 @@ class field:
 
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):
+            if not isinstance(value, bool):
+                logging.warn('rvalue \'%s\' is not of type bool. forcing to one. : (%s != %s)'%(repr(value), type(value).__name__, bool.__name__))
             return field.descriptor.__set__(self, instance, bool(value))
 
     @classmethod
@@ -180,19 +182,36 @@ class defaults:
         size = field.type('integersize', (int,long), 'The word-size of the architecture')
         order = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
 
+    class ptype:
+        clone_name = field.type('clone_name', str)
+        
+    class pint:
+        bigendian_name = field.type('bigendian_name', str)
+        littleendian_name = field.type('littleendian_name', str)
+
+    class parray:
+        break_on_zero_size = field.bool('Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')
+
     class display:
         show_module_name = field.bool('show_module_name', 'display the module name in the summary')
         show_parent_name = field.bool('show_parent_name', 'display the parent name in the summary')
 
         class hexdump:
+            '''Formatting for a hexdump'''
             width = field.type('width', int)
             threshold = field.type('threshold', int)
 
         class threshold:
+            '''Width and Row thresholds for displaying summaries'''
             summary = field.type('summary_threshold', int)
             summary_message = field.type('summary_threshold_message', str)
             details = field.type('details_threshold', int)
             details_message = field.type('details_threshold_message', str)
+
+        class partial:
+            '''How to display the offsets of an element that is non-byte-aligned'''
+            hex = field.bool('hex_offset', 'display the partial-offset in hexadecimal (0.0-0.9,0.a-0.f)')
+            fractional = field.bool('fractional_offset', 'display the offset as a fraction of a full bit, otherwise display just the bit number (0.0-0.7)')
 
     def __getsource():
         global ptype
@@ -223,6 +242,12 @@ defaults.display.threshold.summary = 80
 defaults.display.threshold.details = 8
 defaults.display.threshold.summary_message = ' ..skipped ~{leftover} bytes.. '
 defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipped} bytes.. '
+defaults.display.partial.hex = True
+defaults.display.partial.fractional = False
+defaults.parray.break_on_zero_size = False
+defaults.ptype.clone_name = 'clone({})'
+defaults.pint.bigendian_name = 'bigendian({})'
+defaults.pint.littleendian_name = 'littleendian({})'
 
 if __name__ == '__main__':
     @namespace
@@ -267,6 +292,6 @@ if __name__ == '__main__':
             ptype.source = value
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
-    #config.logger = logging.root
+    #ptypes.config.logger = logging.root
     print repr(consts)
     print repr(config)

@@ -29,7 +29,7 @@ def calculateRelativeAddress(self, address):
     base = locateBase(self).getoffset()
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.file):
+    if issubclass(self.source.__class__, ptypes.provider.filebase):
         pe = locateHeader(self)
         section = pe['Sections'].getsectionbyaddress(address)
         return base + section.getoffsetbyaddress(address)
@@ -156,18 +156,11 @@ class NtHeader(pstruct.type, Header):
             (Machine, 'Machine'),
             (uint16, 'NumberOfSections'),
             (TimeDateStamp, 'TimeDateStamp'),
-            (dyn.pointer(symbols.SymbolTableAndStringTable), 'PointerToSymbolTable'),
+            (fileoffset(symbols.SymbolTableAndStringTable), 'PointerToSymbolTable'),
             (uint32, 'NumberOfSymbols'),
             (word, 'SizeOfOptionalHeader'),
             (pbinary.littleendian(Characteristics), 'Characteristics')
         ]
-
-        def getsymbols(self):
-            '''fetch the symbol and string table'''
-            ofs,length = (self['PointerToSymbolTable'].num(), self['NumberOfSymbols'].num())
-            res = self.newelement(symbols.SymbolTableAndStringTable, 'Symbols', ofs + self.parent.getoffset() )
-            res.length = length
-            return res
 ## </class FileHeader>
 
     class OptionalHeader(pstruct.type):

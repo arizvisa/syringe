@@ -2,7 +2,7 @@ import ptypes
 from ptypes import *
 from ptypes import utils
 
-ptypes.setbyteorder(ptypes.bigendian)
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 def CBinary(args):
     class _CBinary(pbinary.struct):

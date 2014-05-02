@@ -16,10 +16,10 @@ def block(size, **kwds):
         size = 0
 
     def classname(self):
-        return 'dyn.block(%d)'% size
+        return 'dynamic.block(%d)'% (self.length if self.value is None else len(self.value))
     kwds.setdefault('classname', classname)
     #kwds.setdefault('__module__', 'ptypes.ptype')
-    kwds.setdefault('__module__', 'ptypes.dyn')
+    kwds.setdefault('__module__', 'ptypes.dynamic')
     kwds.setdefault('__name__', 'block')
     return clone(ptype.block, length=size, **kwds)
 
@@ -41,8 +41,9 @@ def blockarray(type, size, **kwds):
 
         def classname(self):
             t = type.typename() if ptype.istype(type) else type.__name__
-            return 'dyn.blockarray(%s,%d)'%(t, size)
-    blockarray.__module__ = 'ptypes.dyn'
+            return 'dynamic.blockarray(%s,%d)'%(t, self.blocksize())
+            #return 'dynamic.blockarray(%s,%d)'%(t, size)
+    blockarray.__module__ = 'ptypes.dynamic'
     blockarray.__name__ = 'blockarray'
     blockarray.__getinitargs__ = lambda s: (type,size)
     return blockarray
@@ -59,15 +60,18 @@ def align(size, **kwds):
             p = self.parent
             if p is not None:
                 i = p.value.index(self)
-                offset = reduce(lambda x,y:x+int(y.blocksize()), p.value[:i], 0)
+                offset = p.getoffset()+reduce(lambda x,y:x+y.blocksize(), p.value[:i], 0)
                 return (-offset) & (size-1)
             return 0
 
         def classname(self):
             sz = self.blocksize()
-            return 'dyn.align(size=%d)'% sz
+            return 'dynamic.align(size=%d)'% sz
 
-    align.__module__ = 'ptypes.dyn'
+        def repr(self, **options):
+            return self.summary(**options)
+
+    align.__module__ = 'ptypes.dynamic'
     align.__name__ = 'align'
     align.__getinitargs__ = lambda s: (type,size)
     return align
@@ -84,18 +88,19 @@ def array(type, count, **kwds):
 
     if count < 0:
         t = parray.type(_object_=type,length=count)
-        Config.log.error('dyn.array : %s : Invalid argument count=%d cannot be < 0. Defaulting to 0.'%( t.typename(), count))
+        Config.log.error('dynamic.array : %s : Invalid argument count=%d cannot be < 0. Defaulting to 0.'%( t.typename(), count))
         size = 0
 
     def classname(self):
         obj = type
         t = obj.typename() if ptype.istype(obj) else obj.__name__
-        return 'dyn.array(%s,%d)'%(t, count)
+        return 'dynamic.array(%s,%d)'%(t, len(self.value) if self.value is not None else count)
+        #return 'dynamic.array(%s,%d)'%(t, count)
 
     kwds.setdefault('classname', classname)
     kwds.setdefault('length', count)
     kwds.setdefault('_object_', type)
-    kwds.setdefault('__module__', 'ptypes.dyn')
+    kwds.setdefault('__module__', 'ptypes.dynamic')
     kwds.setdefault('__name__', 'array')
     return ptype.clone(parray.type, **kwds)
 
@@ -245,21 +250,21 @@ import pint
 integral = ptype.clone(pint.uint32_t, byteorder=Config.integer.order)
 def pointer(target, type=integral, **attrs):
     def classname(self):
-        return 'dyn.pointer(%s)'% target.typename() if ptype.istype(target) else target.__name__
+        return 'dynamic.pointer(%s)'% target.typename() if ptype.istype(target) else target.__name__
 #    attrs.setdefault('classname', classname)
     return ptype.clone(ptype.pointer_t, _object_=target, _type_=type, **attrs)
 
 def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
     '''a pointer relative to a particular object'''
     def classname(self):
-        return 'dyn.rpointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
+        return 'dynamic.rpointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
 #    attrs.setdefault('classname', classname)
     return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _type_=type, **attrs)
 
 def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
     '''a pointer relative to a particular offset'''
     def classname(self):
-        return 'dyn.opointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
+        return 'dynamic.opointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
 #    attrs.setdefault('classname', classname)
     return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _type_=type, **attrs)
 
@@ -295,6 +300,7 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes,zlib
     from ptypes import *
+    from ptypes import config
 
     ptypes.setsource(ptypes.provider.string('A'*50000))
 
@@ -305,12 +311,12 @@ if __name__ == '__main__':
     s2 = s1.encode('zlib')
 
     @TestCase
-    def test_dyn_union_rootstatic():
-        import dyn,pint,parray
-        class test(dyn.union): 
-            root = dyn.array(pint.uint8_t,4)
+    def test_dynamic_union_rootstatic():
+        import dynamic,pint,parray
+        class test(dynamic.union): 
+            root = dynamic.array(pint.uint8_t,4)
             _fields_ = [
-                (dyn.block(4), 'block'),
+                (dynamic.block(4), 'block'),
                 (pint.uint32_t, 'int'),
             ] 
 
@@ -323,13 +329,13 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_dyn_alignment():
-        import dyn,pint,pstruct
+    def test_dynamic_alignment():
+        import dynamic,pint,pstruct
         class test(pstruct.type):
             _fields_ = [
                 (pint.uint32_t, 'u32'),
                 (pint.uint8_t, 'u8'),
-                (dyn.align(4), 'alignment'),
+                (dynamic.align(4), 'alignment'),
                 (pint.uint32_t, 'end'),
             ]
 
@@ -339,73 +345,73 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_dyn_pointer_bigendian():
+    def test_dynamic_pointer_bigendian():
         ptype.setbyteorder(config.byteorder.bigendian)
 
         s = ptype.provider.string(string1)
-        p = dyn.pointer(dyn.block(0))
+        p = dynamic.pointer(dynamic.block(0))
         x = p(source=s).l
         if x.d.getoffset() == 0x41424344 and x.serialize() == string1:
             raise Success
 
     @TestCase
-    def test_dyn_pointer_littleendian_1():
+    def test_dynamic_pointer_littleendian_1():
         ptype.setbyteorder(config.byteorder.littleendian)
         s = ptype.provider.string(string2)
 
-        t = dyn.pointer(dyn.block(0))
+        t = dynamic.pointer(dynamic.block(0))
         x = t(source=s).l
         if x.d.getoffset() == 0x41424344 and x.serialize() == string2:
             raise Success
 
     @TestCase
-    def test_dyn_pointer_littleendian_2():
+    def test_dynamic_pointer_littleendian_2():
         ptype.setbyteorder(config.byteorder.littleendian)
         string = '\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
         
-        t = dyn.pointer(dyn.block(0))
+        t = dynamic.pointer(dynamic.block(0))
         x = t(source=s).l
         if x.d.getoffset() == 0x771af826 and x.serialize() ==  string:
             raise Success
 
     @TestCase
-    def test_dyn_pointer_bigendian_deref():
+    def test_dynamic_pointer_bigendian_deref():
         ptype.setbyteorder(config.byteorder.bigendian)
 
         s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
-        t = dyn.pointer(dyn.block(4))
+        t = dynamic.pointer(dynamic.block(4))
         x = t(source=s)
         if x.l.d.getoffset() == 4:
             raise Success
 
     @TestCase
-    def test_dyn_pointer_littleendian_deref():
+    def test_dynamic_pointer_littleendian_deref():
         ptype.setbyteorder(config.byteorder.littleendian)
 
         s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
-        t = dyn.pointer(dyn.block(4))
+        t = dynamic.pointer(dynamic.block(4))
         x = t(source=s)
         if x.l.d.getoffset() == 4:
             raise Success
 
     @TestCase
-    def test_dyn_pointer_littleendian_64bit_deref():
+    def test_dynamic_pointer_littleendian_64bit_deref():
         ptype.setbyteorder(config.byteorder.littleendian)
-        t = dyn.pointer(dyn.block(4), type=pint.uint64_t)
+        t = dynamic.pointer(dynamic.block(4), type=pint.uint64_t)
         x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
         if x.l.d.getoffset() == 8:
             raise Success
 
     @TestCase
-    def test_dyn_array_1():
-        v = dyn.array(pint.int32_t, 4)
+    def test_dynamic_array_1():
+        v = dynamic.array(pint.int32_t, 4)
         if len(v().a) == 4:
             raise Success
 
     @TestCase
-    def test_dyn_array_2():
-        v = dyn.array(pint.int32_t, 8)
+    def test_dynamic_array_2():
+        v = dynamic.array(pint.int32_t, 8)
         i = range(0x40,0x40+v.length)
         x = ptype.provider.string(''.join(chr(x)+'\x00\x00\x00' for x in i))
         z = v(source=x).l
@@ -413,8 +419,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_dyn_union_rootchoose():
-        class test(dyn.union):
+    def test_dynamic_union_rootchoose():
+        class test(dynamic.union):
             _fields_ = [
                 (pint.uint32_t, 'a'),
                 (pint.uint16_t, 'b'),

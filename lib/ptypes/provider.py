@@ -455,13 +455,12 @@ try:
 
         @staticmethod
         def _write(address, value):
-            length = len(value)
-            blockpointer = ctypes.POINTER(ctypes.c_char*length)
+            blockpointer = ctypes.POINTER(ctypes.c_char*len(value))
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
-            for i,c in zip(xrange(length), str(value)):
+            for i,c in enumerate(str(value)):
                 p.contents[i] = c
-            return i
+            return i+1
 
 except ImportError:
     Config.log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `memory` provider.")
@@ -764,7 +763,7 @@ if __name__ == '__main__' and 0:
 #    print strm.buffer_data
     
 #    print repr(fakefile().d[0:0x30].tostring())
-    x = dyn.array(pint.uint32_t, 3)(source=strm)
+    x = dynamic.array(pint.uint32_t, 3)(source=strm)
     x = x.l
 #    print repr(x.l.serialize())
 

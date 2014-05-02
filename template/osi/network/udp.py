@@ -18,4 +18,4 @@ class header(pstruct.type, stackable):
     ]
 
     def nextlayer_size(self):
-        return self['length'].int() - self.size()
+        return self['length'].int() - self.blocksize()

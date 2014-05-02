@@ -210,7 +210,7 @@ File=Stream
 if __name__ == '__main__':
     import ptypes,analyze
     reload(analyze)
-    ptypes.setbyteorder(ptypes.littleendian)
+    ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 #    ptypes.setsource(ptypes.file('./termdd_1.dat'))
     ptypes.setsource(ptypes.file('./blah.dat'))
 

@@ -1,0 +1,117 @@
+import itertools,logging,optparse
+import ptypes,pecoff
+from ptypes import *
+
+#Type = 16       # Version Info
+#Name = 1        # Name
+#Language = 1033 # English
+
+def parseResourceDirectory(filename):
+    mz = pecoff.Executable.open(filename, mode='r')
+    pe = mz['Pe']
+    sections = pe['Sections']
+    datadirectory = pe['OptionalHeader']['DataDirectory']
+    resourceDirectory = datadirectory[2]
+    return resourceDirectory['virtualaddress'].d
+
+def extractLgCpIds(versionInfo):
+    _,vfi = versionInfo['Children']
+    vfi = vfi['Child']
+    res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in vfi['Children']) ))
+    return tuple((cp.num(),lg.num()) for cp,lg in res)
+
+def getStringTable(versionInfo, (Lgid, Cp)):
+    sfi,_ = versionInfo['Children']
+    sfi = sfi['Child']
+    LgidCp = '{:04X}{:04X}'.format(Lgid,Cp)
+    for st in sfi['Children']:
+        st = st['Child']
+        if st['szKey'].str().upper() == LgidCp:
+            return [s['Child'] for s in st['Children']]
+        continue
+    raise KeyError, (Lgid,Cp)
+
+class help(optparse.OptionParser):
+    def __init__(self):
+        optparse.OptionParser.__init__(self)
+        self.usage = '%prog executable'
+
+        # resources
+        self.add_option('', '--dump-names', default=False, action='store_true', help='dump the VERSION_INFO name resources available')
+        self.add_option('', '--name', default=1, type='int', help='use the specified resource name')
+        self.add_option('', '--dump-languages', default=False, action='store_true', help='dump the VERSION_INFO language resources available')
+        self.add_option('', '--language', default=1033, type='int', help='use the specified resource language')
+    
+        # VS_VERSIONINFO
+        self.add_option('', '--list', default=False, action='store_true', help='dump the language-id+codepages available')
+        self.add_option('', '--langid', default=None, type='int', help='use the specified language-id')
+        self.add_option('', '--codepage', default=None, type='int', help='use the specified codepage')
+
+        # fields
+        self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
+        self.add_option('-f', '--format', default='{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format')
+        self.description = 'If path-format is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table'
+
+help = help()
+
+if __name__ == '__main__':
+    import sys,logging
+
+    opts,args = help.parse_args(sys.argv)
+    try:
+        filename = args.pop(1)
+
+    except:
+        print 'Usage: %s filename '% sys.argv[0]
+        sys.exit(0)
+    
+    # parse the executable
+    resource = parseResourceDirectory(filename)
+    if resource.getoffset() == 0:
+        print >>sys.stderr, 'File %s does not contain a resource datadirectory entry'% filename
+        sys.exit(1)
+    resource = resource.l
+
+    # parse the resource names
+    VERSION_INFO = 16
+    resource_Names = resource.getEntry(VERSION_INFO).l
+    if opts.dump_names:
+        print >>sys.stdout, '\n'.join(map(repr,resource_Names.list()))
+        sys.exit(0)
+
+    # parse the resource languages
+    resource_Languages = resource_Names.getEntry(opts.name).l
+    if opts.dump_languages:
+        print >>sys.stdout, '\n'.join(map(repr,resource_Languages.list()))
+        sys.exit(0)
+
+    # grab the version record
+    resource_Version = resource_Languages.getEntry(opts.language).l
+    versionInfo = resource_Version['Data'].d
+
+    # parse the version info
+    vi = versionInfo.l.cast(pecoff.resources.VS_VERSIONINFO)
+    lgcpids = extractLgCpIds(vi)
+    if opts.list:
+        print >>sys.stdout, '\n'.join(map(repr,lgcpids))
+        sys.exit(0)
+
+    # figure out which language,codepage to find
+    language = opts.language if opts.langid is None else opts.langid
+    codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
+    if (language,codepage) not in lgcpids:
+        print >>sys.stderr, 'Invalid (language,codepage) : %s not in %s'%((language,codepage), lgcpids)
+        sys.exit(1)
+
+    # extract the properties for the language and cp
+    st = getStringTable(vi, (language,codepage))
+    strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
+
+    # build the path
+    if opts.dump:
+        print >>sys.stdout, '\n'.join(repr(x) for x in strings.items())
+        sys.exit(0)
+
+    path = '{ProductVersion}/{InternalName}'.format(**strings)
+    print >>sys.stdout, path
+

@@ -107,13 +107,13 @@ class type(_pstruct_generic):
 
     def details(self, **options):
         if self.initializedQ():
-            return self.__details_initialized()
-        return self.__details_uninitialized()
+            return self.__details_initialized(**options)
+        return self.__details_uninitialized(**options)
 
     def repr(self, **options):
         return self.details(**options)
 
-    def __details_uninitialized(self):
+    def __details_uninitialized(self, **options):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
             return '\n'.join('[%x] %s %s ???'%(self.getoffset(), utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
@@ -124,16 +124,16 @@ class type(_pstruct_generic):
                 o = o
                 i = utils.repr_class(gettypename(t))
                 v = '???' 
-                result.append('[%x] %s %s %s'%( o, i, name, v ))
+                result.append('[%x] %s %s %s'%(o, i, name, v))
                 continue
             o = self.getoffset(name)
             i = utils.repr_instance(value.classname(), value.name())
-            v = value.summary(terse=True) if value.initializedQ() else '???' 
+            v = value.summary(**options) if value.initializedQ() else '???' 
             result.append('[%x] %s %s'%( o, i, v ))
         return '\n'.join(result)
 
-    def __details_initialized(self):
-        result = ['[%x] %s %s'%(self.getoffset(name), utils.repr_instance(value.classname(),value.name()), value.summary(terse=True)) for (t,name),value in zip(self._fields_,self.value)]
+    def __details_initialized(self, **options):
+        result = ['[%x] %s %s'%(self.getoffset(name), utils.repr_instance(value.classname(),value.name()), value.summary(**options)) for (t,name),value in zip(self._fields_,self.value)]
         if len(result) > 0:
             return '\n'.join(result)
         return '[%x] Empty []'%self.getoffset()

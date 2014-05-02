@@ -26,10 +26,10 @@ class Relocation(pstruct.type):
         (IMAGE_REL_I386, 'Type')
     ]
 
-    def repr(self):
+    def summary(self):
         fields = [('VirtualAddress', lambda v: '%x'% v), ('SymbolTableIndex', int), ('Type', str)]
         res = ', '.join(['%s=%s'% (k,t(self[k])) for k,t in fields])
-        return '%s {%s}'% (self.__class__, res)
+        return '{%s}'% res
 
     def relocate(self, data, symboltable, namespace):
         '''
