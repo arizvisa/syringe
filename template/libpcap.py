@@ -30,8 +30,8 @@ class pcaprec_hdr_s(pstruct.type):
             ts = self['sec'].int() + self['usec'].int()/1000000.0
             return datetime.fromtimestamp(ts)
 
-        def __repr__(self):
-            return '[%x] %s %s'%(self.getoffset(), self.name(), self.now().isoformat())
+        def summary(self):
+            return self.now().isoformat()
 
     _fields_ = [
         (timestamp, 'ts'),
@@ -42,11 +42,11 @@ class pcaprec_hdr_s(pstruct.type):
 class Packet(pstruct.type):
     _fields_ = [
         (pcaprec_hdr_s, 'header'),
-        (lambda s: dyn.block(s['header'].l['incl_len'].int()), 'data'),
+        (lambda s: dyn.block(s['header']['incl_len'].l.num()), 'data'),
     ]
 
 class List(parray.infinite):
-    _object_ = Packet    
+    _object_ = Packet
 
     def summary(self):
         l = len(self)
@@ -68,16 +68,9 @@ class File(pstruct.type):
         (List, 'packets'),
     ]
 
-    def __repr__(self):
-        result = []
-        result.append(self.name())
-        result.append('[%x] %s header'% (self['header'].getoffset(), self['header'].name()))
-        result.append('[%x] %s packets %s'% (self['packets'].getoffset(), self['packets'].name(), self['packets'].summary()))
-        return '\n'.join(result)
-
 if __name__ == '__main__':
     import ptypes,libpcap,osi
-    s = ptypes.file('e:/work/nezzwerk/pcap/win-2008.updates.restart.pcap')
+    s = ptypes.file('~/work/nezzwerk/pcap/win-2008.updates.restart.pcap')
     a = libpcap.File(source=s)
     b = a.l
     c = b['packets']

@@ -372,14 +372,18 @@ except ImportError:
 
             straccess = 'read/write' if access =='r+b' else 'write' if access == 'wb' else 'read-only' if access == 'rb' else 'unknown'
 
-            if os.access(filename,6):
+            if os.access(filename,0):
+                if 'wb' in access:
+                    Config.log.warn("%s(%s, %s) : Truncating file by user-request.", type(self).__name__, repr(filename), repr(access))
                 Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(access), straccess)
-            else:
-                access = 'w+b'
-                Config.log.info("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
+
+            else:  # file not found
+                if 'r+' in access:
+                    Config.log.warn("%s(%s, %s) : File not found. Modifying access to write-only.", type(self).__name__, repr(filename), repr(access))
+                    access = 'wb'
+                Config.log.warn("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
 
             self.file = __builtin__.open(filename, access, 0)
-    
 
 try:
     import tempfile
@@ -647,12 +651,46 @@ try:
             raise UserWarning("%s.%s is a static object and contains only staticmethods."%(self.__module__,self.__class__.__name__))
 
         @classmethod
+        def read(cls, offset, size):
+            half = size // 2
+            if half > 0:
+                lower = _idaapi.get_many_bytes(offset, half)
+                if lower is None:
+                    return cls.read(offset, half)
+                upper = _idaapi.get_many_bytes(offset+half, half)
+                if upper is None:
+                    return lower + cls.read(offset+half, half)
+                return lower+upper
+            return _idaapi.get_many_bytes(offset, size)
+
+        @classmethod
+        def within_segment(cls, offset):
+            s = _idaapi.getseg(offset)
+            return s is not None and s.startEA <= offset < s.endEA
+            
+        @classmethod
         def seek(cls, offset):
             cls.offset = offset
 
         @classmethod
         def consume(cls, amount):
-            result = _idaapi.get_many_bytes(cls.offset, amount)
+            #result = _idaapi.get_many_bytes(cls.offset, amount)
+            result = cls.read(cls.offset, amount)
+
+            if result is None:
+                # check if within bounds of a segment
+                if cls.within_segment(cls.offset):
+                    return '\x00'*amount
+
+                # nope, so we fail.
+                raise error.ConsumeError(cls, cls.offset, amount, amount=0)
+
+            # not the complete length, so pad if it's within a valid segment
+            if len(result) < amount:
+                if not cls.within_segment(cls.offset+amount):
+                    raise error.ConsumeError(cls, cls.offset, amount, amount=len(result))
+                result += '\x00'*(amount-len(result))
+
             cls.offset += len(result)
             return result
 
@@ -741,7 +779,7 @@ except ImportError:
 if __name__ == '__main__' and 0:
     import array
     import ptypes,ptypes.provider as provider
-#    x = provider.WindowsFile('c:/users/arizvisa/a.out')
+#    x = provider.WindowsFile('~/a.out')
 #    raise NotImplementedError("Stop being lazy and finish WindowsFile")
 
     import array
@@ -790,17 +828,15 @@ if __name__ == '__main__':
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
-            print '%s: Failure'% name
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
-
         TestCaseList.append(harness)
         return fn
 

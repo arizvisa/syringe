@@ -35,12 +35,6 @@ class File(pstruct.type, ptype.boundary):
             print 'zlib: decompressed %x to %x bytes'%(len(block),len(decompressed_block))
             return dyn.clone(Data, source=ptypes.prov.string(decompressed_block))
 
-        def summary(self):
-            return self.hexdump(oneline=1)
-
-        def details(self):
-            return self.hexdump(summary=1)
-
     class data(ptype.encoded_t):
         def decode(self, block):    
             return dyn.clone(Data, source=ptypes.prov.string(block))
@@ -48,8 +42,9 @@ class File(pstruct.type, ptype.boundary):
     def __data(self):
         # if it's compressed then use the 'cdata' structure
         if int( self['header'].l['Signature'][0]) == ord('C'):
-            length = self.source.size() - self['header'].size()
-            return dyn.clone(self.cdata, _value_=dyn.clone(self.cdata._value_,length=length))
+            #length = self.source.size() - self['header'].size()
+            length = min(self['header']['FileLength'].num(),self.source.size()) - self['header'].size()
+            return dyn.clone(self.cdata, _value_=dyn.block(length))
         return Data
     
     _fields_ = [

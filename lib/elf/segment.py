@@ -1,5 +1,5 @@
-import header,dynamic
-from base import *
+from .base import *
+from . import dynamic
 
 class Elf32_Phdr(pstruct.type):
     class __p_type(pint.enum, Elf32_Word):
@@ -21,7 +21,7 @@ class Elf32_Phdr(pstruct.type):
         t = int(self['p_type'].l)
         type = Type.get(t)
         # XXX: there's that difference here between the filesz and memsz
-        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(Elf32_Phdr)['p_filesz'].l)), lambda s: s.getparent(Elf32_Ehdr), type=Elf32_Off)
+        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(Elf32_Phdr)['p_filesz'].l)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
 
     class __p_flags(pbinary.struct):
         # Elf32_Word

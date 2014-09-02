@@ -129,12 +129,9 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-#    import sys
-#    sys.path.append('c:/users/arizvisa/syringe/lib')
-
-    import ptypes,cab
+    import sys,ptypes,cab
     reload(cab)
-    ptypes.setsource(ptypes.file('c:/users/arizvisa/shit/test/Windows6.1-KB2705219-x86.cab'))
+    ptypes.setsource(ptypes.file('~/shit/test/Windows6.1-KB2705219-x86.cab'))
 
     a = cab.File()
     a = a.l

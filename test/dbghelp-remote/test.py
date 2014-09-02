@@ -1,8 +1,4 @@
-if False:
-    import sys
-    sys.path.append('f:/work/syringe.git/lib')
-
-import ctypes,pydbgeng
+import sys,ctypes,pydbgeng
 
 ## types
 class GUID(ctypes.Structure):

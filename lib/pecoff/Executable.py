@@ -1,6 +1,4 @@
-import logging
-
-import ptypes
+import logging,ptypes
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -23,30 +21,43 @@ class File(pstruct.type, ptype.boundary):
         logging.info("%s : Stub : PE Offset is uninitialized. Defaulting Stub Size to 0"% (self.name()))
         return dyn.block(0)
 
-    def __MemData(self):
-        '''Calculate the size of executable in memory'''
-        optionalheader = self['Pe'].l['OptionalHeader']
-        alignment = optionalheader['SectionAlignment'].num()
-        s = optionalheader['SizeOfImage'].num()
-        return dyn.block(s - self.blocksize())
-#        return dyn.block(s - self.blocksize(), summary=lambda s:s.hexdump(oneline=1))
-
-    def __FileData(self):
+    def __Padding(self):
         '''Calculate the size of executable on disk'''
-        pe = self['Pe'].l
-        endings = sorted(((x['PointerToRawData'].num()+x['SizeOfRawData'].num()) for x in pe['Sections']))
-        s = endings[-1]
-        return dyn.block(s - self.blocksize())
+        opt = self['Pe'].l['OptionalHeader']
+        return dyn.block(opt['SizeOfHeaders'].num() - self.size())
 
     def __Data(self):
+        pe = self['Pe'].l
+        # file
         if issubclass(self.source.__class__, ptypes.provider.file):
-            return self.__FileData()
-        return self.__MemData()
+            sz = max(((x['PointerToRawData'].num()+x['SizeOfRawData'].num()) for x in pe['Sections']))
+            return dyn.block(sz - self.blocksize())
+
+        # memory
+        class result(parray.type):
+            length = len(pe['Sections'])
+            class _object_(pstruct.type):
+                def __Padding(self):
+                    p = self.getparent(File)['Pe']
+                    alignment = p['OptionalHeader']['SectionAlignment'].num()
+                    return dyn.align(alignment, undefined=True)
+                def __Data(self):
+                    p = self.getparent(File)['Pe']
+                    index = len(self.parent.value)
+                    sect = p['Sections'][index-1]
+                    return dyn.block(sect.getloadedsize())
+                _fields_ = [
+                    (__Padding, 'Padding'),
+                    (__Data, 'Data'),
+                ]
+        return result
 
     _fields_ = [
         (headers.DosHeader, 'Dos'),
         (__Stub, 'Stub'),
         (headers.NtHeader, 'Pe'),
+        (__Padding, 'Padding'),
+        (lambda s: dyn.align(1 if issubclass(s.source.__class__, ptypes.provider.file) else 0x1000), 'Alignment'),
         (__Data, 'Data')
     ]
 
@@ -90,7 +101,6 @@ if __name__ == '__main__':
             filename = '../'+filename
 
     sections = v['Pe']['Sections']
-
     exports = v['Pe']['OptionalHeader']['DataDirectory'][0]
     while exports['VirtualAddress'].int() != 0:
         exports = exports.get()

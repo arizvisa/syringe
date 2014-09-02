@@ -300,7 +300,7 @@ if __name__ == '__main__':
     
     if False:
         import sys
-        sys.path.append('f:/work/syringe.git/lib')
+        sys.path.append('~/work/syringe.git/lib')
 
     x = header()
     x.source = input

@@ -1,5 +1,4 @@
-import header,dynamic
-from base import *
+from .base import *
 
 ### generic
 class sh_name(Elf32_Word):
@@ -8,7 +7,7 @@ class sh_name(Elf32_Word):
 
     def str(self):
         ofs = self.num()
-        stringtable = self.getparent(header.Elf32_Ehdr).stringtable()
+        stringtable = self.getparent(ElfXX_Header).stringtable()
         return str(stringtable.get(ofs))
 
 class sh_type(pint.enum, Elf32_Word):
@@ -67,19 +66,19 @@ class sh_flags(pbinary.struct):
 ### 32-bit
 class Elf32_Shdr(pstruct.type):
     def __sh_offset(self):
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(header.Elf32_Ehdr), type=Elf32_Off), 'sh_offset'),
+#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
         t = int(self['sh_type'].l)
         type = Type.get(t)
-        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].l)), lambda s: s.getparent(header.Elf32_Ehdr), type=Elf32_Off)
+        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].l)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
 
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
         (Elf32_Addr, 'sh_addr'),
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(header.Elf32_Ehdr), type=Elf32_Off), 'sh_offset'),
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(header.Elf32_Ehdr), type=Elf32_Off), 'sh_offset'),
-#        (__sh_offset, 'sh_offset'),
+#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
+#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
+        (__sh_offset, 'sh_offset'),
         (Elf32_Word, 'sh_size'),
         (Elf32_Word, 'sh_link'),
         (Elf32_Word, 'sh_info'),
@@ -148,6 +147,7 @@ class SHT_HASH(pstruct.type):
         (lambda s: dyn.array(Elf32_Word, s['nchain'].l.int()), 'chain'),
     ]
 
+from . import dynamic
 @Type.define
 class SHT_DYNAMIC(dynamic.Elf32_DynArray):
     type = 6
@@ -184,5 +184,3 @@ class SHT_SHLIB(ptype.block):
 class SHT_DYNSYM(parray.block):
     type = 11
     _object_ = Elf32_Sym
-
-### 64-bit

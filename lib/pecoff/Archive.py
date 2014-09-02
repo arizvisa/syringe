@@ -331,13 +331,13 @@ def open(filename, **kwds):
 if __name__ == '__main__':
     import Archive
     from ptypes import *
-    source = ptypes.file('c:/python26/libs/python26.lib')
+    source = ptypes.file('~/python26/libs/python26.lib')
 
     print 'Reading .lib header'
 #    Archive.File = ptypes.debugrecurse(Archive.File)
     self = Archive.File()
 #    self.source = provider.file('../../obj/test.lib')
-    self.source = ptypes.file('c:/python26/libs/python26.lib')
+    self.source = ptypes.file('~/python26/libs/python26.lib')
     self.load()
 
 #    print self['SymbolNames']['Header']

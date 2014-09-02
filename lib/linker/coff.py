@@ -689,7 +689,7 @@ if __name__ == '__main__':
 
         importname = '__imp__<%s!%s>'%(globalname)
 
-        z = coff.executable.open('c:/windows/syswow64/kernel32.dll')
+        z = coff.executable.open('~/../../windows/syswow64/kernel32.dll')
         #a = z.value['OptionalHeader']['DataDirectory'][1].get().l[1]
         #b = z.value['OptionalHeader']['DataDirectory'][0].get().l
 
@@ -702,21 +702,21 @@ if __name__ == '__main__':
         # __imp__<kernel32.dll!VerSetConditionMask>
 
     if False:
-        a = coff.object.open('f:/work/syringe/obj/test.obj')
+        a = coff.object.open('~/work/syringe/obj/test.obj')
         print len(a.globals) == 3
         print len(a.externals) == 3
 
     if False:
         import ptypes,pecoff
-    #    ptypes.setsource(ptypes.provider.file('f:/work/syringe/src/blah.lib'))
-        ptypes.setsource(ptypes.provider.file('c:/python26/libs/python26.lib'))
+    #    ptypes.setsource(ptypes.provider.file('~/work/syringe/src/blah.lib'))
+        ptypes.setsource(ptypes.provider.file('~/python26/libs/python26.lib'))
         z = pecoff.Archive.File()
         z=z.l
         for x in z.fetchimports():
             print x
 
     if False:
-        z = coff.library.open('c:/python26/libs/python26.lib')
+        z = coff.library.open('~/python26/libs/python26.lib')
         print z.stores[2]
     #    z['.idata']=5
 
@@ -757,11 +757,11 @@ if __name__ == '__main__':
 
     if False:
         import coff
-        z = coff.executable.open('c:/windows/syswow64/kernel32.dll')
+        z = coff.executable.open('~/../../windows/syswow64/kernel32.dll')
 
     if False:
         import coff
-        z = coff.library.open('c:/python26/libs/python26.lib')
+        z = coff.library.open('~/python26/libs/python26.lib')
 
     if True:
         import coff

@@ -139,7 +139,7 @@ class type(_parray_generic):
 
     def summary(self, **options):
         res = super(type,self).summary(**options)
-        length = len(self)
+        length = len(self) if self.initializedQ() else (self.length or 0)
         if self._object_ is None:
             obj = 'untyped'
         else:
@@ -176,7 +176,9 @@ class terminated(type):
         raise error.ImplementationError(self, 'terminated.isTerminator')
 
     def __len__(self):
-        return len(self.value)
+        if self.initializedQ():
+            return len(self.value)
+        raise error.InitializationError(self, 'terminated.__len__')
 
     def blocksize(self):
         return reduce(lambda x,y: x+y.blocksize(), self.value, 0)
@@ -381,7 +383,9 @@ if __name__ == '__main__':
     import pstruct,parray,pint,provider
 
     import config,logging
-    config.defaults.log.setLevel(logging.DEBUG)
+    #config.defaults.log.setLevel(logging.DEBUG)
+    #config.defaults.log.setLevel(logging.WARN)
+    config.defaults.log.setLevel(logging.FATAL)
 
     class Result(Exception): pass
     class Success(Result): pass
@@ -393,17 +397,15 @@ if __name__ == '__main__':
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
-            print '%s: Failure'% name
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
-
         TestCaseList.append(harness)
         return fn
 

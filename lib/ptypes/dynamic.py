@@ -51,30 +51,35 @@ def blockarray(type, size, **kwds):
 def align(size, **kwds):
     '''return a block that will align a structure to a multiple of the specified number of bytes'''
     if size.__class__ not in (int,long):
-        t = ptype.block(length=0)
+        t = ptype.type(length=0)
         raise error.UserError(t, 'align', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
 
-    class align(block(0)):
+    # methods to get assigned
+    def repr(self, **options): return self.summary(**options)
+    def blocksize(self):
+        p = self.parent
+        if p is not None:
+            i = p.value.index(self)
+            offset = p.getoffset()+reduce(lambda x,y:x+y.blocksize(), p.value[:i], 0)
+            return (-offset) & (size-1)
+        return 0
+    getinitargs = lambda s: (type,kwds)
+
+    # if alignment is undefined
+    if kwds.get('undefined', False):
+        class result(ptype.undefined):
+            def classname(self): return 'dynamic.undefined(%d, size=%d)'% (size,self.blocksize())
+        result.repr,result.blocksize,result.__getinitargs__ = repr,blocksize,getinitargs
+        result.__module__,result.__name__ = 'ptypes.dynamic','undefined'
+        return result
+
+    # otherwise, padding
+    class result(ptype.block):
         initializedQ = lambda self: self.value is not None
-        def blocksize(self):
-            p = self.parent
-            if p is not None:
-                i = p.value.index(self)
-                offset = p.getoffset()+reduce(lambda x,y:x+y.blocksize(), p.value[:i], 0)
-                return (-offset) & (size-1)
-            return 0
-
-        def classname(self):
-            sz = self.blocksize()
-            return 'dynamic.align(size=%d)'% sz
-
-        def repr(self, **options):
-            return self.summary(**options)
-
-    align.__module__ = 'ptypes.dynamic'
-    align.__name__ = 'align'
-    align.__getinitargs__ = lambda s: (type,size)
-    return align
+        def classname(self): return 'dynamic.align(%d, size=%d)'% (size,self.blocksize())
+    result.repr,result.blocksize,result.__getinitargs__ = repr,blocksize,getinitargs
+    result.__module__,result.__name__ = 'ptypes.dynamic','align'
+    return result
 
 ## FIXME: might want to raise an exception or warning if we have too large of an array
 def array(type, count, **kwds):
@@ -247,26 +252,28 @@ class union(_union_generic):
 union_t = union # alias
 
 import pint
-integral = ptype.clone(pint.uint32_t, byteorder=Config.integer.order)
-def pointer(target, type=integral, **attrs):
+def pointer(target, type=None, **attrs):
+    t = ptype.pointer_t._value_ if type is None else type
     def classname(self):
         return 'dynamic.pointer(%s)'% target.typename() if ptype.istype(target) else target.__name__
 #    attrs.setdefault('classname', classname)
-    return ptype.clone(ptype.pointer_t, _object_=target, _type_=type, **attrs)
+    return ptype.clone(ptype.pointer_t, _object_=target, _value_=t, **attrs)
 
-def rpointer(target, object=lambda s: list(s.walk())[-1], type=integral, **attrs):
+def rpointer(target, object=lambda s: list(s.walk())[-1], type=None, **attrs):
     '''a pointer relative to a particular object'''
+    t = ptype.pointer_t._value_ if type is None else type
     def classname(self):
         return 'dynamic.rpointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
 #    attrs.setdefault('classname', classname)
-    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _type_=type, **attrs)
+    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _value_=t, **attrs)
 
-def opointer(target, calculate=lambda s: s.getoffset(), type=integral, **attrs):
+def opointer(target, calculate=lambda s: s.getoffset(), type=None, **attrs):
     '''a pointer relative to a particular offset'''
+    t = ptype.pointer_t._value_ if type is None else type
     def classname(self):
         return 'dynamic.opointer(%s, ...)'% target.typename() if ptype.istype(target) else target.__name__
 #    attrs.setdefault('classname', classname)
-    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _type_=type, **attrs)
+    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=t, **attrs)
 
 if __name__ == '__main__':
     import ptype,parray,pstruct,parray,pint,provider
@@ -283,17 +290,15 @@ if __name__ == '__main__':
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
-            print '%s: Failure'% name
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
-
         TestCaseList.append(harness)
         return fn
 

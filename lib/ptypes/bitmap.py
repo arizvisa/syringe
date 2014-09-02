@@ -72,7 +72,7 @@ def hex(bitmap):
 
 def scan(bitmap, value=True, position=0):
     '''Searches through bitmap for specified /value/ and returns it's position'''
-    assert position >= 0
+    assert position >= 0, 'invalid search position < 0 : %d'% position
 
     integer,size = bitmap
     size = abs(size)
@@ -98,12 +98,12 @@ def runscan(bitmap, value, length, position=0):
 
 def runlength(bitmap, value, position=0):
     '''Returns the count of bits, starting at /position/'''
-    assert position >= 0
+    assert position >= 0, 'invalid search position < 0 : %d'% position
     return scan(bitmap, not value, position) - position
 
 def run(bitmap, position=0):
     '''Iterates through all the runs in a given bitmap'''
-    assert position >= 0
+    assert position >= 0, 'invalid search position < 0 : %d'% position
 
     integer,size = bitmap
     value,size = integer & 1, abs(size)
@@ -116,7 +116,7 @@ def run(bitmap, position=0):
 
 def set(bitmap, position, value=True, count=1):
     '''Store /value/ into /bitmap/ starting at /position/'''
-    assert count >= 0 and position >= 0
+    assert count >= 0 and position >= 0, 'invalid count or position < 0 : %x : %x'%(count, position)
 
     integer,size = bitmap
     mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
@@ -224,7 +224,7 @@ def consume(bitmap, bits):
     
     If bitmap is signed, then return a signed integer.
     '''
-    assert bits >= 0
+    assert bits >= 0, 'invalid bit count < 0 : %d'% bits
     integersize,integermask = bits,2**bits
     bitmapinteger,bitmapsize = bitmap
 
@@ -248,7 +248,7 @@ def shift(bitmap, bits):
     
     If bitmap is signed, then return a signed integer.
     '''
-    assert bits >= 0
+    assert bits >= 0, 'invalid bit count < 0 : %d'% bits
     integersize,integermask = bits,2**bits
 
     bitmapinteger,bitmapsize = bitmap
@@ -291,7 +291,7 @@ class consumer(object):
 
     def read(self, bytes):
         '''read specified number of bytes from iterable'''
-        assert bytes > 0
+        assert bytes > 0, 'invalid byte count < 0 : %d'% bytes
         result,count = 0,0
         while bytes > 0:
             result *= 256
@@ -427,17 +427,15 @@ if __name__ == '__main__':
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
-            print '%s: Failure'% name
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
-
         TestCaseList.append(harness)
         return fn
 

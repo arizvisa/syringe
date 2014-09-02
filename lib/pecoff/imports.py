@@ -151,3 +151,15 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
                 return n
             continue
         raise KeyError(key)
+
+class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
+    _fields_ = [
+        ( dword, 'Attributes'),
+        ( virtualaddress(pstr.szstring), 'Name'),
+        ( virtualaddress(dword), 'ModuleHandle'),
+        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'DIAT'),
+        ( virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
+        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'BDIAT' ),
+        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'UDAT'),
+        ( TimeDateStamp, 'TimeStamp'),
+    ]

@@ -5,3 +5,5 @@ from heaptypes import *
 from rtltypes import *
 from mmtypes import *
 import sdkddkver as ver
+
+from WinNT import *

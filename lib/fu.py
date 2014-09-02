@@ -1387,28 +1387,19 @@ if __name__ == '__main__':
     TestCaseList = []
     def TestCase(fn):
         def harness(**kwds):
-            global Werror
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
+                print '%s: %r'% (name,e)
             except Exception,e:
-                print '%s: Exception raised'% name
-                if Werror:
-                    raise
-
-                print traceback.format_exc()
-
-            print '%s: Failure'% name
+                print '%s: %r : %r'% (name,Failure(), e)
+            print traceback.format_exc()
             return False
-
         TestCaseList.append(harness)
         return fn
 

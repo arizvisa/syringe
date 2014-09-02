@@ -146,7 +146,7 @@ if __name__ == '__main__':
             modulelookup[modulename] = module['DllBase'].d
         pass
 
-    searchpath = ['./', '../obj', 'c:/windows/syswow64']
+    searchpath = ['./', '../obj', '~/../../windows/syswow64']
     def openmodule(modulename, lnk):
         st = linker.coffexecutable()
 
@@ -245,7 +245,7 @@ if __name__ == '__main__':
 
     stores = [
         (linker.coffstore, '../obj/test.obj'),
-        (linker.coffcontainer, 'c:/python26/libs/python26.lib')
+        (linker.coffcontainer, '~/python26/libs/python26.lib')
     ]
 
     # add all initial symbols

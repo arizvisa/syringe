@@ -70,7 +70,7 @@ def force(t, self, chain=None):
             return force(t.next(), self, chain)
 
     path = ','.join(self.backtrace())
-    raise error.TypeError(self, 'force<ptype>', message='chain=%s : refusing request to resolve %s to a type that does not inherit from ptype.type : %s'% (repr(chain), repr(t), path))
+    raise error.TypeError(self, 'force<ptype>', message='chain=%r : refusing request to resolve %r to a type that does not inherit from ptype.type : %s'% (chain, t, path))
 
 # fn must be a method, so args[0] will fetch self
 import traceback
@@ -105,7 +105,7 @@ def rethrow(fn):
                     if self.value:
                         res.append('\t<container length> %x'% len(self.value))
                     else:
-                        res.append('\t<container value> %s'% repr(self.value))
+                        res.append('\t<container value> %r'% self.value)
                 else:
                     res.append('\t<type length> %x'% len(self))
 
@@ -125,7 +125,7 @@ def rethrow(fn):
 def debug(ptype):
     """``rethrow`` all exceptions that occur during initialization of ``ptype``"""
     if not istype(ptype):
-        raise error.TypeError(ptype, 'debug', message='%s is not a ptype'% repr(ptype))
+        raise error.TypeError(ptype, 'debug', message='%r is not a ptype'% ptype)
 
     # FIXME: when loading, display the current offset and position
     class decorated(ptype):
@@ -163,7 +163,7 @@ def debugrecurse(ptype):
                 debugres = debug(res)
                 return super(decorated,self).new(debugres, **attrs)
 
-            raise error.TypeError(self, 'debug(new)', message='%s is not a ptype class'% repr(res.__class__))
+            raise error.TypeError(self, 'debug(new)', message='%r is not a ptype class'% res.__class__)
 
     decorated.__name__ = 'debugrecurse(%s)'% ptype.__name__
     return decorated
@@ -175,6 +175,8 @@ class _base_generic(object):
     #           addition and removal of elements to trie
     #           initial attribute creation
     #           attributes not propagated during creation
+    #           XXX meta-related information
+    #           instance tree navigation
 
     __slots__ = ('__source','attributes','ignored','parent','value','position')
 
@@ -256,13 +258,6 @@ class _base_generic(object):
             result['unnamed'] = True
         return result
 
-    initialized = property(fget=lambda s: s.initializedQ())
-    def initializedQ(self):
-        raise error.ImplementationError(self, 'base.initializedQ')
-
-    def __nonzero__(self):
-        return self.initializedQ()
-
     def traverse(self, edges, filter=lambda node:True, **kwds):
         """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
 
@@ -279,23 +274,6 @@ class _base_generic(object):
                 yield y
             continue
         return
-
-    def deserialize_block(self, block):
-        raise error.ImplementationError(self, 'base.deserialize_block', message='Subclass %s must implement deserialize_block'% self.classname())
-    def serialize(self):
-        raise error.ImplementationError(self, 'base.serialize')
-
-    def load(self, **attrs):
-        raise error.ImplementationError(self, 'base.load')
-    def commit(self, **attrs):
-        raise error.ImplementationError(self, 'base.commit')
-    def alloc(self, **attrs):
-        raise error.ImplementationError(self, 'base.alloc')
-
-    # abbreviations
-    a = property(fget=lambda s: s.alloc())
-    c = property(fget=lambda s: s.commit())
-    l = property(fget=lambda s: s.load())
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
@@ -386,10 +364,6 @@ class _base_generic(object):
             return '"{}"'.format(utils.emit_repr(buf, threshold, message, **options))
         return '"{}"'.format(utils.emit_repr(buf, **options))
 
-    def repr(self, **options):
-        """The output that __repr__ displays"""
-        raise error.ImplementationError(self, 'base.repr')
-
     def getparent(self, type=None):
         """Returns the creator of the current type.
 
@@ -422,18 +396,13 @@ class _base_generic(object):
         path = [ fn(x) for x in path ]
         return list(reversed(path))
 
-    def new(self, ptype, **attrs):
+    def new(self, t, **attrs):
         """Create a new instance of ``ptype`` with the provided ``attrs``
 
         If any ``attrs`` are provided, this will assign them to the new instance.
         The newly created instance will inherit the current object's .source and
         any .attributes designated by the current instance.
         """
-        offset = attrs.get('offset',0)
-        res = force(ptype, self)
-
-        if not(istype(res) or isinstance(res,type)):
-            raise error.TypeError(self, 'base.new', message='%s is not a ptype class'% repr(res.__class__))
 
         if 'recurse' in attrs:
             attrs['recurse'].update(self.attributes)
@@ -443,14 +412,57 @@ class _base_generic(object):
         attrs.setdefault('parent', self)
 
         # instantiate an instance if we're given a type
-        assert istype(res) or isinstance(res,type), 'Type %s is not a ptype'% repr(res)
-        if istype(res):
-            res = res(**attrs)
+        if not(istype(t) or isinstance(t,type)):
+            raise error.TypeError(self, 'base.new', message='%r is not a ptype class'% t.__class__)
 
-        # update the instance's properties
-        res.__name__ = attrs.get('__name__', hex(id(res)) )
-        res.setposition((offset,))
-        return res
+        # if it's a type, then instantiate it
+        if istype(t):
+            t = t(**attrs)
+        # if already instantiated, then update it's attributes
+        elif isinstance(t,type):
+            t.update_attributes(**attrs)
+
+        # give the instance a default name
+        t.__name__ = attrs.get('__name__', hex(id(t)) )
+        return t
+
+class base(_base_generic):
+    initialized = property(fget=lambda s: s.initializedQ())
+
+    def initializedQ(self):
+        raise error.ImplementationError(self, 'base.initializedQ')
+    def __nonzero__(self):
+        return self.initializedQ()
+
+    def __eq__(self, other):
+        return id(self) == id(other)
+    def __ne__(self, other):
+        return not(self == other)
+    def __getstate__(self):
+        return ()
+    def __setstate__(self, state):
+        return
+
+    def repr(self, **options):
+        """The output that __repr__ displays"""
+        raise error.ImplementationError(self, 'base.repr')
+
+    def deserialize_block(self, block):
+        raise error.ImplementationError(self, 'base.deserialize_block', message='Subclass %s must implement deserialize_block'% self.classname())
+    def serialize(self):
+        raise error.ImplementationError(self, 'base.serialize')
+
+    def load(self, **attrs):
+        raise error.ImplementationError(self, 'base.load')
+    def commit(self, **attrs):
+        raise error.ImplementationError(self, 'base.commit')
+    def alloc(self, **attrs):
+        raise error.ImplementationError(self, 'base.alloc')
+
+    # abbreviations
+    a = property(fget=lambda s: s.alloc())
+    c = property(fget=lambda s: s.commit())
+    l = property(fget=lambda s: s.load())
 
     def get(self):
         """Return a representation of a type.
@@ -466,22 +478,9 @@ class _base_generic(object):
         """
         raise error.ImplementationError(self, 'base.set')
 
-    def __eq__(self, other):
-        return id(self) == id(other)
-    def __ne__(self, other):
-        return not(self == other)
-    def __getstate__(self):
-        return ()
-    def __setstate__(self, state):
-        return
-
-class base(_base_generic):
-    # FIXME: move all generic functions that are shared between type and
-    #        container into this class.
-    #        like methods that use only things like position,value,initialized
-    #        or things unimplemented methods/metaclass-like stuff
-    pass
-    
+    def copy(self):
+        """Return a new instance of self"""
+        raise error.ImplementationError(self, 'base.copy')
 
 class type(base):
     """The most atomical type.. all container types are composed of these.
@@ -509,15 +508,20 @@ class type(base):
     ignored = base.ignored.union(('source','parent','attrs','value','__name__','length','position'))
     position = 0,
 
+    ## new
+    def new(self, ptype, **attrs):
+        res = force(ptype, self)
+        return super(type,self).new(res, **attrs)
+
     ## position
+    offset = property(fget=lambda s: s.getoffset(), fset=lambda s,v: s.setoffset(v))
     def setoffset(self, ofs, **_):
         """Changes the current offset to ``ofs``"""
-        return self.setposition((ofs,))
+        return super(type,self).setposition((ofs,))
     def getoffset(self, **_):
         """Returns the current offset"""
-        o, = self.getposition()
+        o, = super(type,self).getposition()
         return o
-    offset = property(fget=getoffset, fset=setoffset)
 
     ## byte stream input/output
     def deserialize_block(self, block):
@@ -552,7 +556,7 @@ class type(base):
     def set(self, value, **attrs):
         """Set entire type equal to ``value``"""
         if value.__class__ is not str:
-            raise error.TypeError(self, 'type.set', message='type %s is not serialized data'% repr(value.__class__))
+            raise error.TypeError(self, 'type.set', message='type %r is not serialized data'% value.__class__)
         last = self.value
 
         res = str(value)
@@ -604,7 +608,7 @@ class type(base):
         """
         if self.initializedQ() or self.value is not None:
             return len(self.value)
-        Config.log.warn("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
+        Config.log.info("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
         return 0
 
     def blocksize(self):
@@ -702,7 +706,7 @@ class type(base):
                 Config.log.warning("type.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
 
         except Exception,e:
-            Config.log.fatal("type.cast : %s : %s : Error during cast resulted in a partially initialized instance : %s"%(self.classname(), t.typename(), repr(e)))
+            Config.log.fatal("type.cast : %s : %s : Error during cast resulted in a partially initialized instance : %r"%(self.classname(), t.typename(), e))
         return result
 
     def compare(self, other):
@@ -831,7 +835,7 @@ class container(type):
             res = self.at(offset, False, **kwds)
 
         except ValueError, msg:
-            Config.log.info('container.at : %s : Non-fatal exception raised : %s'% (self.instance(), repr(ValueError,msg)))
+            Config.log.info('container.at : %s : Non-fatal exception raised : %r'% (self.instance(), ValueError(msg)))
             return self
 
         # drill into containees for more detail
@@ -841,6 +845,10 @@ class container(type):
             pass
 
         return res
+
+    def field(self, offset):
+        """Returns the field at the specified offset relative to the structure"""
+        return self.at(self.getoffset()+offset, recurse=False)
         
     def walkto(self, offset, **kwds):
         """Will return each element along the path to reach the requested ``offset``"""
@@ -987,7 +995,8 @@ class container(type):
                 i = self.value.index(self.at(sofs+ofs))
                 yield ofs, (tuple(self.value[i:]), None)
             else:
-                assert len(s) == len(o)
+                if len(s) != len(o):
+                    raise error.AssertionError(self, 'container.compare', message='Invalid length between both objects : %x != %x'%(len(s), len(o)))
                 length = len(s)
                 s = (self.value[i] for i in between(self, (sofs+ofs,sofs+ofs+length)))
                 o = (other.value[i] for i in between(other, (oofs+ofs,oofs+ofs+length)))
@@ -1049,6 +1058,24 @@ class container(type):
 
 class undefined(type):
     """An empty ptype that is eternally undefined"""
+    def size(self):
+        return self.blocksize()
+    def load(self, **attrs):
+        self.value = ''
+        return self
+    def commit(self, **attrs):
+        return self
+    def initializedQ(self):
+        return False if self.value is None else True
+    def serialize(self):
+        return self.value
+        #return utils.padding.fill(self.blocksize(), self.padding)
+    def summary(self, **options):
+        return '...'
+    def details(self, **options):
+        return self.summary(**options)
+    def repr(self, **options):
+        return self.summary(**options)
 
 class block(type):
     """A ptype that can be accessed as an array"""
@@ -1084,8 +1111,6 @@ def clone(cls, **newattrs):
     class __clone(cls):
         __doc__ = cls.__doc__
 
-    #newattrs.setdefault('__name__', cls.__name__)
-    #newattrs.setdefault('__name__', 'clone({:s})'.format(cls.__name__))
     newattrs.setdefault('__name__', Config.ptype.clone_name.format(cls.__name__))
     for k,v in newattrs.items():
         setattr(__clone, k, v)
@@ -1179,8 +1204,8 @@ class definition(object):
         a = set(cls.cache.keys())
         b = set(otherdefinition.cache.keys())
         if a.intersection(b):
-            Config.log.warn('definition.update : %s : Unable to import module %s due to multiple definitions of the same record',cls.__module__, repr(otherdefinition))
-            Config.log.warn('definition.update : %s : Duplicate records : %s', cls.__module__, repr(a.intersection(b)))
+            Config.log.warn('definition.update : %s : Unable to import module %r due to multiple definitions of the same record',cls.__module__, otherdefinition)
+            Config.log.warn('definition.update : %s : Duplicate records : %r', cls.__module__, a.intersection(b))
             return False
 
         # merge record caches into a single one
@@ -1253,7 +1278,15 @@ class wrapper_t(type):
             return self.__object.blocksize()
         if self._value_ is None:
             raise error.InitializationError(self, 'wrapper_t.blocksize')
-        return self.new(self._value_, offset=self.getoffset(), source=self.source).blocksize()
+
+        # if blocksize can't be calculated by loading (invalid deref)
+        #   then guess the size using the unallocated version of the type
+        res = self.new(self._value_, offset=self.getoffset(), source=self.source)
+        try:
+            bs = res.l.blocksize()
+        except error.LoadError:
+            bs = res.a.blocksize()
+        return bs
 
     def deserialize_block(self, block):
         if self._value_ is None:
@@ -1273,7 +1306,8 @@ class wrapper_t(type):
     def size(self):
         if self.initializedQ():
             return self.object.size()
-        raise error.InitializationError(self, 'wrapper_t.size')
+        Config.log.info("wrapper_t.size : %s : Unable to get size of ptype.wrapper_t, as object is still uninitialized."% self.instance())
+        return 0
 
     def classname(self):
         if self.initializedQ():
@@ -1341,7 +1375,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.bigendian)
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness %s"% repr(endianness))
+    raise ValueError("Unknown integer endianness %r"% endianness)
 
 class pointer_t(encoded_t):
     _object_ = None
@@ -1473,7 +1507,7 @@ class constant(type):
         bs,data = self.blocksize(),self.__doc__
 
         if (data != string) or (bs != len(string)):
-            Config.log.warn('constant.set : %s : Data did not match expected value : %s != %s', self.classname(), repr(string), repr(data))
+            Config.log.warn('constant.set : %s : Data did not match expected value : %r != %r', self.classname(), string, data)
 
         if len(string) < bs:
             self.value = string + utils.padding.fill(bs-len(string), self.padding)
@@ -1485,7 +1519,7 @@ class constant(type):
     def deserialize_block(self, block):
         data = self.__doc__
         if data != block:
-            Config.log.warn('constant.deserialize_block : %s : Data loaded from source did not match expected value. forced. : %s != %s', self.instance(), repr(block), repr(data))
+            Config.log.warn('constant.deserialize_block : %s : Data loaded from source did not match expected value. forced. : %r != %r', self.instance(), block, data)
         return super(constant,self).deserialize_block(data)
 
     def alloc(self, **attrs):
@@ -1512,17 +1546,15 @@ if __name__ == '__main__':
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
-            print '%s: Failure'% name
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
-
         TestCaseList.append(harness)
         return fn
 
@@ -2174,7 +2206,7 @@ if __name__ == '__main__':
         parentTester = parentTester()
         #c = b.getparent(parentTester())
         #print isinstance(b, ptype.encoded_t)
-        a = pecoff.Executable.open('c:/users/user/mshtml.dll')
+        a = pecoff.Executable.open('~/mshtml.dll')
 
         global result
         result = list(a.collect())

@@ -310,18 +310,15 @@ class NtHeader(pstruct.type, Header):
                 return (self['SizeOfRawData'].num() + mask) & ~mask
 
             def getloadedsize(self):
-                try:
-                    nt = self.getparent(NtHeader)
-                    alignment = nt['OptionalHeader']['SectionAlignment'].num()
+                # XXX: even though the loadedsize is aligned to SectionAlignment,
+                #      the loader doesn't actually map data there and thus the
+                #      actual mapped size is rounded to pagesize
 
-                except ValueError:
-                    alignment = 0x1000   # XXX: pagesize
-
+                # nt = self.getparent(NtHeader)
+                # alignment = nt['OptionalHeader']['SectionAlignment'].num()
+                alignment = 0x1000  # pagesize
                 mask = alignment-1
-                vsize,rsize = self['VirtualSize'].num(), (self['SizeOfRawData'].num() + mask) & ~mask
-                if vsize > rsize:
-                    return vsize
-                return rsize
+                return (self['VirtualSize'].num()+mask) & ~mask
 
             def containsaddress(self, address):
                 start = self['VirtualAddress'].num()
@@ -409,12 +406,12 @@ class CoffHeader(pstruct.type, Header):
 class ExtraHeaders(object):
     class General(pstruct.type):
         _fields_ = [
-            ( dyn.block(30), 'e_padding'),
+            ( dyn.block(32), 'e_padding'),
             ( uint32, 'e_lfanew'),
         ]
     class PE(pstruct.type):
         _fields_ = [
-            ( dyn.array(uint16, 3), 'e_res' ),
+            ( dyn.array(uint16, 4), 'e_res' ),
             ( uint16, 'e_oemid' ),
             ( uint16, 'e_oeminfo' ),
             ( dyn.array(uint16, 10), 'e_res2' ),

@@ -81,9 +81,9 @@ if __name__ == '__main__':
 
     # smoke test for coff.executable
     if True:
-        #self = coff.executable.open('c:/windows/system32/kernel32.dll')
+        #self = coff.executable.open('~/../../windows/system32/kernel32.dll')
         #self.open('../obj/test.exe')
-        self = coff.executable.open('c:/windows/system32/python26.dll')
+        self = coff.executable.open('~/../../windows/system32/python26.dll')
 
         print self.listsegments()
 
@@ -141,7 +141,7 @@ if __name__ == '__main__':
 #    raise NotImplementedError
 
     if False:
-        self = coff.executable.open('c:/windows/system32/python26.dll')
+        self = coff.executable.open('~/../../windows/system32/python26.dll')
         data = self.getsegment('.rdata')
 
         for x in self.getexternals():
@@ -155,7 +155,7 @@ if __name__ == '__main__':
 
     if False:
         print 'opening file'
-        self = pecoff.Archive.open('c:/Python25/libs/python26.lib')
+        self = pecoff.Archive.open('~/../../python26/libs/python26.lib')
         print 'fetching members'
         for i in self.fetchmembers():
             print repr(i.load())
@@ -199,7 +199,7 @@ if __name__ == '__main__':
         print name,ugh[name]
 
     if False:
-        dllname = 'c:/windows/syswow64/user32.dll'
+        dllname = '~/../../windows/syswow64/user32.dll'
         self = coff.executable.open(dllname)
 
 #        raise NotImplementedError("Need to figure out how to import ordinal numbers, and enumerate import modules')
@@ -212,11 +212,11 @@ if __name__ == '__main__':
     if False:
         print '-'*50
         print 'loading .obj file'
-        obj = coff.object.open('f:/work/syringe/obj/test.obj')
+        obj = coff.object.open('~/../../work/syringe/obj/test.obj')
 
         print '-'*50
         print 'loading .lib file'
-        lib = coff.library.open('c:/python26/libs/python26.lib')
+        lib = coff.library.open('~/../../python26/libs/python26.lib')
 
         print '-'*50
         print 'linking them'
@@ -267,7 +267,7 @@ if __name__ == '__main__':
         lookup = {}
         for name in dllnames:
             print 'loading .dll file %s'% name
-            dll = coff.executable.open('c:/windows/syswow64/%s'%name)
+            dll = coff.executable.open('~/../../windows/syswow64/%s'%name)
             lookup[dll.modulename] = dll
 
             print 'linking .dll file %s'% name

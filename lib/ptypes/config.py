@@ -126,7 +126,14 @@ def namespace(cls):
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
 
+    def __setattr__(self, name, value):
+        if name in attrs.viewkeys():
+            object.__setattr__(self, name, value)
+            return
+        raise AttributeError('Configuration \'%s\' does not have field named \'%s\''%(cls.__name__,name))
+
     attrs['__repr__'] = __repr__
+    attrs['__setattr__'] = __setattr__
     attrs.update((k,property(fget=lambda s,k=k:properties[k])) for k in properties.viewkeys())
     attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in subclass.viewkeys())
     result = type(cls.__name__, cls.__bases__, attrs)
@@ -160,7 +167,14 @@ def configuration(cls):
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
 
+    def __setattr__(self, name, value):
+        if name in attrs.viewkeys():
+            object.__setattr__(self, name, value)
+            return
+        raise AttributeError('Namespace \'%s\' does not have a field named \'%s\''%(cls.__name__,name))
+
     attrs['__repr__'] = __repr__
+    attrs['__setattr__'] = __setattr__
     attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in subclass.viewkeys())
     result = type(cls.__name__, cls.__bases__, attrs)
     return result()
@@ -183,11 +197,11 @@ class defaults:
         order = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
 
     class ptype:
-        clone_name = field.type('clone_name', str)
+        clone_name = field.type('clone_name', str, 'This will only affect newly cloned types')
         
     class pint:
-        bigendian_name = field.type('bigendian_name', str)
-        littleendian_name = field.type('littleendian_name', str)
+        bigendian_name = field.type('bigendian_name', str, 'Modifies the name of any integers that are big-endian')
+        littleendian_name = field.type('littleendian_name', str, 'Modifies the name of any integers that are little-endian')
 
     class parray:
         break_on_zero_size = field.bool('Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')

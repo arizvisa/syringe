@@ -49,7 +49,9 @@ class SerializationError(Base):
     def path(self):
         return (' -> '.join(self.object.backtrace())) or '<root>'
     def position(self):
-        return '%x:+%x'%( self.object.getoffset(), self.object.blocksize() )
+        try: bs = '%x'% self.object.blocksize()
+        except: bs = '?'
+        return '%x:+%s'%( self.object.getoffset(), bs )
     def __str__(self):
         return ' : '.join((self.objectname(), self.typename(), self.position(), self.path(), str(self.exception)))
 

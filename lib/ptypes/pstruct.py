@@ -184,7 +184,7 @@ def make(fields, **attrs):
     """
     fields = set(fields)
 
-    # FIXME: instead of this assert, if more than one structure occupies the
+    # FIXME: instead of this explicit check, if more than one structure occupies the
     # same location, then we should promote them all into a union.
     if len(set([x.getoffset() for x in fields])) != len(fields):
         raise ValueError('more than one field is occupying the same location')
@@ -195,7 +195,6 @@ def make(fields, **attrs):
     ofs,result = 0,[]
     for object in types:
         o,n,s = object.getoffset(), object.shortname(), object.blocksize()
-        assert o >= ofs
 
         delta = o-ofs
         if delta > 0:
@@ -219,17 +218,15 @@ if __name__ == '__main__':
             name = fn.__name__
             try:
                 res = fn(**kwds)
-
-            except Success:
-                print '%s: Success'% name
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
                 return True
-
             except Failure,e:
-                pass
-
-            print '%s: Failure'% name
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
-
         TestCaseList.append(harness)
         return fn
 

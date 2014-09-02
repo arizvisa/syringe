@@ -407,7 +407,7 @@ if __name__ == '__main__':
     import ptypes,iso9660
     reload(iso9660)
     reload(ptypes.provider)
-    ptypes.setsource(ptypes.provider.WindowsFile('c:/users/arizvisa/downloads/6euj41uc.iso', 'r'))
+    ptypes.setsource(ptypes.provider.WindowsFile('~/downloads/6euj41uc.iso', 'r'))
 
     z = iso9660.File()
     z = z.l
@@ -428,7 +428,7 @@ if __name__ == '__main__':
         #    x = iso_volume_descriptor()
         #    x = block(32768)()
         #    print x.l.hexdump()
-        #    x = iso_volume_descriptor(source=ptypes.file('c:/users/arizvisa/downloads/6euj41uc.iso', 'r'))
+        #    x = iso_volume_descriptor(source=ptypes.file('~/downloads/6euj41uc.iso', 'r'))
         #    x.setoffset(32768)
         #    print x.l
         #    print iso_volume_descriptor().a.size()

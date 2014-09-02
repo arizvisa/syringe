@@ -49,7 +49,7 @@ class help(optparse.OptionParser):
 
         # fields
         self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
-        self.add_option('-f', '--format', default='{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format')
+        self.add_option('-f', '--format', default='{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {ProductVersion}/{OriginalFilename})')
         self.description = 'If path-format is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table'
 
 help = help()
@@ -62,11 +62,15 @@ if __name__ == '__main__':
         filename = args.pop(1)
 
     except:
-        print 'Usage: %s filename '% sys.argv[0]
+        help.print_help()
         sys.exit(0)
     
     # parse the executable
-    resource = parseResourceDirectory(filename)
+    try:
+        resource = parseResourceDirectory(filename)
+    except ptypes.error.LoadError, e:
+        print >>sys.stderr, 'File %s does not appear to be an executable'% filename
+        sys.exit(1)
     if resource.getoffset() == 0:
         print >>sys.stderr, 'File %s does not contain a resource datadirectory entry'% filename
         sys.exit(1)
@@ -96,12 +100,19 @@ if __name__ == '__main__':
         print >>sys.stdout, '\n'.join(map(repr,lgcpids))
         sys.exit(0)
 
-    # figure out which language,codepage to find
-    language = opts.language if opts.langid is None else opts.langid
-    codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
-    if (language,codepage) not in lgcpids:
-        print >>sys.stderr, 'Invalid (language,codepage) : %s not in %s'%((language,codepage), lgcpids)
-        sys.exit(1)
+    # if we have to choose, figure out which language,codepage to find
+    if len(lgcpids) > 1:
+        language = opts.language if opts.langid is None else opts.langid
+        try:
+            codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
+        except ValueError, e:
+            print >>sys.stderr, 'More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename
+            sys.exit(1)
+        if (language,codepage) not in lgcpids:
+            print >>sys.stderr, 'Invalid (language,codepage) in %s : %s not in %s'%(filename, (language,codepage), lgcpids)
+            sys.exit(1)
+    else:
+        (language,codepage), = lgcpids
 
     # extract the properties for the language and cp
     st = getStringTable(vi, (language,codepage))
@@ -112,6 +123,6 @@ if __name__ == '__main__':
         print >>sys.stdout, '\n'.join(repr(x) for x in strings.items())
         sys.exit(0)
 
-    path = '{ProductVersion}/{InternalName}'.format(**strings)
+    path = opts.format.format(**strings)
     print >>sys.stdout, path
 

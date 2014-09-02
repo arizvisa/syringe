@@ -428,6 +428,41 @@ class TEB(pstruct.type, versioned):
 
         self._fields_ = f
 
+class KAFFINITY(LONG): pass
+class KPRIORITY(LONG): pass
+
+class THREAD_BASIC_INFORMATION(pstruct.type):
+    _fields_ = [
+        (NTSTATUS, 'ExitStatus'),
+        (PVOID, 'TebBaseAddress'),
+        (CLIENT_ID, 'ClientId'),
+        (KAFFINITY, 'AffinityMask'),
+        (KPRIORITY, 'Priority'),
+        (KPRIORITY, 'BasePriority'),
+    ]
+
+class THREAD_INFORMATION_CLASS(pint.enum):
+    _fields_ = [
+        (0, 'ThreadBasicInformation'),
+        (1, 'ThreadTimes'),
+        (2, 'ThreadPriority'),
+        (3, 'ThreadBasePriority'),
+        (4, 'ThreadAffinityMask'),
+        (5, 'ThreadImpersonationToken'),
+        (6, 'ThreadDescriptorTableEntry'),
+        (7, 'ThreadEnableAlignmentFaultFixup'),
+        (8, 'ThreadEventPair'),
+        (9, 'ThreadQuerySetWin32StartAddress'),
+        (10, 'ThreadZeroTlsCell'),
+        (11, 'ThreadPerformanceCount'),
+        (12, 'ThreadAmILastThread'),
+        (13, 'ThreadIdealProcessor'),
+        (14, 'ThreadPriorityBoost'),
+        (15, 'ThreadSetTlsArrayAddress'),
+        (16, 'ThreadIsIoPending'),
+        (17, 'ThreadHideFromDebugger'),
+    ]
+
 if __name__ == '__main__':
     import ctypes
     def openprocess (pid):

@@ -2,12 +2,13 @@ import ptypes
 from ptypes import pstruct,parray,provider,dyn
 from __base__ import *
 
-import exports,relocations,imports,resources
+import exports,relocations,imports,resources,exceptions
 from headers import virtualaddress,realaddress
 
 class Entry(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda s: dyn.clone(s.parent._object_,maxsize=int(s.parent['Size'].load()))), 'VirtualAddress'),
+        #(virtualaddress(lambda s: dyn.clone(s.parent._object_,blocksize=lambda s:s.getparent(Entry)['Size'].l.num())), 'VirtualAddress'),
+        (virtualaddress(lambda s: dyn.clone(s.parent._object_)), 'VirtualAddress'),
         (uint32, 'Size')
     ]
 
@@ -31,7 +32,8 @@ class Import(Entry):
 class Resource(Entry):
     _object_ = resources.IMAGE_RESOURCE_DIRECTORY
 
-class Exception(Entry): pass
+class Exception(Entry):
+    _object_ = exceptions.IMAGE_EXCEPTION_DIRECTORY
 class Security(Entry): pass
 class BaseReloc(Entry):
     _object_ = relocations.IMAGE_BASERELOC_DIRECTORY
@@ -55,7 +57,10 @@ class Tls(Entry):
     _object_ = IMAGE_TLS_DIRECTORY
 
 class LoadConfig(Entry):
-    # FIXME: in some dlls this table has been incorrect
+    # FIXME: The size field in the DataDirectory is used to determine which
+    #        IMAGE_LOADCONFIG_DIRECTORY to use.
+    #        Determine the different structures that are available, and modify
+    #        _object_ to choose the correct one.
     class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
         _fields_ = [
             (uint32, 'Characteristics'),
@@ -74,10 +79,10 @@ class LoadConfig(Entry):
             (uint32, 'ProcessHeapFlags'),
             (uint16, 'CSDVersion'),
             (uint16, 'Reserved'),
-            (realaddress(uint32), 'EditList'),           # FIXME
+            (realaddress(uint32), 'EditList'),
             (realaddress(uint32), 'SecurityCookie'),
 #            (virtualaddress(uint32), 'SEHandlerTable'),     # FIXME
-            (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].l.int())), 'SEHandlerTable'),     # FIXME
+            (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].l.int())), 'SEHandlerTable'),
             (uint32, 'SEHandlerCount'),
 
             (uint32, 'GuardCFCheckFunctionPointer'),
@@ -91,7 +96,8 @@ class LoadConfig(Entry):
 class BoundImport(Entry): pass
 class IAT(Entry):
     _object_ = imports.IMAGE_IMPORT_ADDRESS_TABLE
-class DelayLoad(Entry): pass
+class DelayLoad(Entry):
+    _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY_ENTRY
 class ComHeader(Entry): pass
 class Reserved(Entry): pass
 

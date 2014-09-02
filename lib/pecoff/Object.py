@@ -12,12 +12,8 @@ def open(filename, **kwds):
 class File(headers.CoffHeader, ptypes.ptype.boundary): pass
 
 if __name__ == '__main__':
-    import sys
-    sys.path.append('f:/work')
-    sys.path.append('f:/work/syringe.git/lib')
-
     ## parse the file
-    import pecoff, ptypes
+    import sys, pecoff, ptypes
     from ptypes import provider
 
     print '-'*20 + 'loading file..'

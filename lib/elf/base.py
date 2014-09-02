@@ -1,6 +1,5 @@
 import ptypes
-from ptypes import *
-
+from ptypes import ptype,parray,pstruct,pint,pstr,dyn,pbinary
 ptypes.setbyteorder( ptypes.config.byteorder.littleendian )
 
 ### base
@@ -8,43 +7,34 @@ class uchar(pint.uint8_t): pass
 class ElfXX_Off(ptype.rpointer_t):
     _object_ = ptype.undefined
     def _baseobject_(self):
-        return self.getparent(ptype.boundary)
+        return self.getparent(ElfXX_File)
     @classmethod
     def typename(cls):
         return cls.__name__
     def classname(self):
         type = self._object_() if hasattr(self._object_, '__call__') else ptype.undefined
-        return '%s<%s>%(self.typename(), type.typename())
+        return '%s<%s>'%(self.typename(), type.typename())
+
+class ElfXX_Header(ptype.boundary): pass
+class ElfXX_File(ptype.boundary): pass
 
 ### elf32
-class Elf32_Addr(pint.uint32_t):
-    def summary(self):
-        return self.details()
+class Elf32_Addr(pint.uint32_t): pass
 class Elf32_Half(pint.uint16_t): pass
 class Elf32_Off(ElfXX_Off):
     type = pint.uint32_t
-    def summary(self):
-        return self.details()
 class Elf32_Sword(pint.int32_t): pass
 class Elf32_Word(pint.uint32_t): pass
 
 ### elf64
-class Elf64_Addr(pint.uint64_t):
-    def summary(self):
-        return self.details()
+class Elf64_Addr(pint.uint64_t): pass
 class Elf64_Off(ElfXX_Off):
     type = pint.uint64_t
-    def summary(self):
-        return self.details()
 class Elf64_Half(Elf32_Half): pass
 class Elf64_Word(Elf32_Word): pass
 class Elf64_Sword(Elf32_Sword): pass
-class Elf64_Xword(pint.uint64_t):
-    def summary(self):
-        return self.details()
-class Elf64_Sxword(pint.int64_t):
-    def summary(self):
-        return self.details()
+class Elf64_Xword(pint.uint64_t): pass
+class Elf64_Sxword(pint.int64_t): pass
 
 ### elf general
 class e_ident(pstruct.type):
@@ -55,7 +45,7 @@ class e_ident(pstruct.type):
             ('ELFCLASS64', 2),
         ]
     class EI_DATA(pint.enum, uchar):
-        # FIXME: switch the byteorder based on this value
+        # FIXME: switch the byteorder of everything based on this value
         _values_ = [
             ('ELFDATA2LSB', 1),
             ('ELFDATA2MSB', 2),

@@ -10,13 +10,14 @@ class d64(pfloat.double): pass
 
 ## variable length encoding...from the docs..
 # The variable-length encoding for u30, u32, and s32 uses one to five bytes, depending on the magnitude of the value encoded. Each byte contributes its low seven bits to the value. If the high (eighth) bit of a byte is set, then the next byte of the abcFile is also part of the value. In the case of s32, sign extension is applied: the seventh bit of the last byte of the encoding is propagated to fill out the 32-bits of the decoded value.
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class as3struct(pstruct.type):
     def repr(self):
         return super(ptype.container,self).repr()
 
-# wtf, does this mean we're always a 35-bit number, discarding 3?
-from ptypes import bitmap
+# wtf, does this mean we're always a 36-bit number, discarding 4?
+from ptypes import bitmap,config
 class _vle(pbinary.terminatedarray):
     class _object_(pbinary.struct):
         _fields_ = [
@@ -29,19 +30,6 @@ class _vle(pbinary.terminatedarray):
         if value['continue'] == 0:
             return True
         return False
-
-    def bitmap(self):
-        '''returns the array converted to a bitmap'''
-        result = bitmap.new(0,0)
-        for n in self:
-            result = bitmap.insert(result, (n['value'], 7))
-
-        # clamp to 32-bits...
-        if result[1] > 32:
-            result,v = bitmap.shift(result, result[1] - 32)
-            if v != 0:
-                print '%s -> some unexpected bits were set'% self.classname()
-        return result
 
     def details(self):
         bmp = self.bitmap()

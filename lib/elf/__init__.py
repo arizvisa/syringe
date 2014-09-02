@@ -1,8 +1,8 @@
 import ptypes
-import base,header,segment,section,dynamic
+from . import base
 
 ### base file type
-class File(ptypes.pstruct.type, ptypes.ptype.boundary):
+class File(ptypes.pstruct.type, base.ElfXX_File):
     def __e_data(self):
         type = self['e_ident'].l['EI_CLASS'].num()
         if type == 1:
@@ -15,3 +15,5 @@ class File(ptypes.pstruct.type, ptypes.ptype.boundary):
         (base.e_ident, 'e_ident'),
         (__e_data, 'e_data'),
     ]
+
+from . import header,segment,section,dynamic

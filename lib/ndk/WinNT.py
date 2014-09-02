@@ -4,6 +4,7 @@ short = pint.int16_t
 
 class PVOID(dyn.pointer(ptype.undefined, type=pint.uint32_t)): pass
 class PVOID64(dyn.pointer(ptype.undefined, type=pint.uint64_t)): pass
+class ULONG_PTR(ptype.pointer_t): pass
 
 class BYTE(pint.uint8_t): pass
 class WORD(pint.uint16_t): pass
@@ -64,98 +65,6 @@ class PLUID(dyn.pointer(LUID)): pass
 class BOOLEAN(pint.int32_t): pass
 class PBOOLEAN(dyn.pointer(BOOLEAN)): pass
 
-if False:
-    class _LIST_ENTRY(pstruct.type):
-        _fields_ = [
-            (lambda s: dyn.clone(LIST_ENTRY,_object_=s._object_), 'Entry'),
-            (lambda s: s._object_, 'Value')
-        ]
-
-    class LIST_ENTRY(_LIST_ENTRY):
-        '''_object_ represents the type of linked list it is'''
-
-        _fields_ = [
-            (lambda s: dyn.pointer(dyn.clone(_LIST_ENTRY,_object_=s._object_)), 'Flink'),
-            (lambda s: dyn.pointer(dyn.clone(_LIST_ENTRY,_object_=s._object_)), 'Blink'),
-        ]
-
-        def walk(self, direction='Flink', path=('Entry',)):
-            '''Walks through a circular linked list'''
-            def nextentry(state,path):
-                try:
-                    next = path.next()
-                    return nextentry(state[next], path)
-                except StopIteration:
-                    pass
-                return state
-
-            n = self[direction]
-            start = self.getoffset()
-            while True:
-                result = n.d
-                yield result.l
-                n = nextentry(result, iter(path))
-                n = n[direction]
-                if n.int() == start:
-                    break
-                continue
-            return
-
-        def moonwalk(self):
-            return self.walk('Blink')
-
-        def summary(self):
-            fwd,bak=self['Flink'].int(),self['Blink'].int()
-            return '[Flink=0x%x,Blink=0x%x]'%(fwd,bak)
-
-    LIST_ENTRY._object_ = ptype.undefined
-
-    class _LIST_ENTRY(pstruct.type):
-        _fields_ = [
-            (lambda s: dyn.pointer(s._object_), 'Flink'),
-            (lambda s: dyn.pointer(s._object_), 'Blink'),
-        ]
-
-    class _LIST_ENTRY(pstruct.type):
-        _object_ = None
-        _path_ = ()
-
-        _fields_ = [
-            (lambda s: dyn.pointer(s._object_), 'Flink'),
-            (lambda s: dyn.pointer(s._object_), 'Blink'),
-        ]
-        flink,blink = 'Flink','Blink'
-
-        def forward(self):
-            return self[self.flink].d
-        def backward(self):
-            return self[self.blink].d
-
-        def walk(self, direction=flink):
-            '''Walks through a circular linked list'''
-            def nextentry(state,path):
-                try:
-                    next = path.next()
-                    return nextentry(state[next], path)
-                except StopIteration:
-                    pass
-                return state
-
-            n = self[direction]
-            start = self.getoffset()
-            while True:
-                result = n.d
-                yield result.l
-                n = nextentry(result, iter(self._path_))
-                n = n[direction]
-                if n.int() == start:
-                    break
-                continue
-            return
-
-        def moonwalk(self):
-            return self.walk(direction=self.blink)
-
 class _LIST_ENTRY(pstruct.type):
     _object_ = None
     _path_ = ()
@@ -188,7 +97,7 @@ class _LIST_ENTRY(pstruct.type):
         '''Walks through a circular linked list'''
         n = self[direction]
         start = self.getoffset()
-        while True:
+        while n.num() != 0:
             result = n.d
             yield result.l
 
@@ -290,12 +199,29 @@ class versioned(ptype.type):
 
 class SIZE_T(ULONG): pass
 
-class GUID(pstruct.type):
+class rfc4122(pstruct.type):
     _fields_ = [
-        (pint.uint32_t, 'Data1'),
-        (pint.uint16_t, 'Data2'),
-        (pint.uint16_t, 'Data3'),
-        (pint.littleendian(pint.uint64_t), 'Data4'),
+        (pint.bigendian(pint.uint32_t), 'Data1'),
+        (pint.bigendian(pint.uint16_t), 'Data2'),
+        (pint.bigendian(pint.uint16_t), 'Data3'),
+        (pint.bigendian(pint.uint64_t), 'Data4'),
+    ]
+    def repr(self, **options):
+        return self.summary(**options)
+    def summary(self, **options):
+        if self.initialized:
+            d1 = '%08x'% self['Data1'].num()
+            d2 = '%04x'% self['Data2'].num()
+            d3 = '%04x'% self['Data3'].num()
+            _ = list(self['Data4'].serialize())
+            d4 = ''.join('%02x'%ord(ch) for ch in _[:2])
+            d5 = ''.join('%02x'%ord(ch) for ch in _[2:])
+            return '{' + '-'.join((d1,d2,d3,d4,d5)) + '}'
+        return '{????????-????-????-????-????????????}'
+
+class GUID(rfc4122):
+    _fields_ = [
+        (endian(t),n) for endian,(t,n) in zip((pint.littleendian,pint.littleendian,pint.littleendian,pint.bigendian),rfc4122._fields_)
     ]
 
 class CLIENT_ID(pstruct.type):

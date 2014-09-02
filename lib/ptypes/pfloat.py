@@ -1,5 +1,5 @@
 import math
-from . import pint,bitmap,config
+from . import ptype,pint,bitmap,config
 
 class type(pint.integer_t):
     def summary(self, **options):
@@ -123,79 +123,49 @@ class sfixed_t(type):
         return super(type, self).set(n)
 
 ###
+class ieee(ptype.definition): attribute,cache = 'length',{}
+
+@ieee.define
 class half(float_t):
     length = 2
     components = (1, 5, 10)
 
+@ieee.define
 class single(float_t):
     length = 4
     components = (1, 8, 23)
 
+@ieee.define
 class double(float_t):
     length = 8
     components = (1, 11, 52)
 
 if __name__ == '__main__':
+    class Result(Exception): pass
+    class Success(Result): pass
+    class Failure(Result): pass
+
+    TestCaseList = []
+    def TestCase(fn):
+        def harness(**kwds):
+            name = fn.__name__
+            try:
+                res = fn(**kwds)
+                raise Failure
+            except Success,e:
+                print '%s: %r'% (name,e)
+                return True
+            except Failure,e:
+                print '%s: %r'% (name,e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
+            return False
+        TestCaseList.append(harness)
+        return fn
+
+if __name__ == '__main__':
     import struct,pint,config
     pint.setbyteorder(config.byteorder.bigendian)
-
-    def test_assignment(cls, float, expected):
-        if cls.length == 4:
-            float, = struct.unpack('f', struct.pack('f', float))
-            f, = struct.unpack('f',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
-        elif cls.length == 8:
-            float, = struct.unpack('d', struct.pack('d', float))
-            f, = struct.unpack('d',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
-        else:
-            f = float('NaN')
-
-        a = cls()
-        a.setf(float)
-        n = a.long()
-
-        result = bool(n == expected)
-        if result:
-            print 'setf: %s == 0x%x? %s'%( float, expected, result)
-        else:
-            print 'setf: %s == 0x%x? %s (0x%x) %s'%( float, expected, result, n, f)
-        return result
-
-    def test_load(cls, integer, expected):
-        if cls.length == 4:
-            expected, = struct.unpack('f', struct.pack('f', expected))
-            i,_ = bitmap.join(bitmap.new(ord(x),8) for x in reversed(struct.pack('f',expected)))
-        elif cls.length == 8:
-            expected, = struct.unpack('d', struct.pack('d', expected))
-            i,_ = bitmap.join(bitmap.new(ord(x),8) for x in reversed(struct.pack('d',expected)))
-        else:
-            i = 0
-
-        a = cls()
-        super(type, a).set(integer)
-        n = a.getf()
-
-        result = bool(n == expected)
-        if result:
-            print 'getf: 0x%x == %s? %s'%( integer, expected, result)
-        else:
-            print 'getf: 0x%x == %s? %s (%s) %x'%( integer, expected, result, n, i)
-        return result
-
-    def try_assignments(cls, data):
-        result = True
-        for n,f in data:
-            _ = test_assignment(cls, f, n)
-            if not _:
-                result = False
-        return result
-
-    def try_loads(cls, data):
-        result = True
-        for n,f in data:
-            _ = test_load(cls, n, f)
-            if not _:
-                result = False
-        return result
 
     ## data
     single_precision = [
@@ -219,22 +189,60 @@ if __name__ == '__main__':
         (0x3fd5555555555555, 0.3333333333333333),
     ]
 
-    ## tests
-    print '[single precision loads]'
-    _=try_loads(single, single_precision)
-    print 'Success\n' if _ else 'Failure\n'
+    def test_assignment(cls, float, expected):
+        if cls.length == 4:
+            float, = struct.unpack('f', struct.pack('f', float))
+            f, = struct.unpack('f',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
+        elif cls.length == 8:
+            float, = struct.unpack('d', struct.pack('d', float))
+            f, = struct.unpack('d',bitmap.data(bitmap.new(expected,cls.length*8), reversed=True))
+        else:
+            f = float('NaN')
 
-    print '[single precision assignments]'
-    _=try_assignments(single, single_precision)
-    print 'Success\n' if _ else 'Failure\n'
+        a = cls()
+        a.setf(float)
+        n = a.long()
 
-    print '[double precision loads]'
-    _=try_loads(double, double_precision)
-    print 'Success\n' if _ else 'Failure\n'
+        if n == expected:
+            raise Success
+        raise Failure, 'setf: %s == 0x%x? %s (0x%x) %s'%(float, expected, result, n, f)
 
-    print '[double precision assignments]'
-    _=try_assignments(double, double_precision)
-    print 'Success\n' if _ else 'Failure\n'
+    def test_load(cls, integer, expected):
+        if cls.length == 4:
+            expected, = struct.unpack('f', struct.pack('f', expected))
+            i,_ = bitmap.join(bitmap.new(ord(x),8) for x in reversed(struct.pack('f',expected)))
+        elif cls.length == 8:
+            expected, = struct.unpack('d', struct.pack('d', expected))
+            i,_ = bitmap.join(bitmap.new(ord(x),8) for x in reversed(struct.pack('d',expected)))
+        else:
+            i = 0
+
+        a = cls()
+        super(type, a).set(integer)
+        n = a.getf()
+
+        if n == expected:
+            raise Success
+        raise Failure, 'getf: 0x%x == %s? %s (%s) %x'%( integer, expected, result, n, i)
+
+    ## tests for floating-point
+    for i,(n,f) in enumerate(single_precision):
+        testcase = lambda cls=single,integer=f,value=n:test_load(cls,value,integer)
+        testcase.__name__ = 'single_precision_load_%d'% i
+        TestCase(testcase)
+    for i,(n,f) in enumerate(single_precision):
+        testcase = lambda cls=single,integer=f,value=n:test_assignment(cls,integer,value)
+        testcase.__name__ = 'single_precision_assignment_%d'% i
+        TestCase(testcase)
+            
+    for i,(n,f) in enumerate(double_precision):
+        testcase = lambda cls=double,integer=f,value=n:test_load(cls,value,integer)
+        testcase.__name__ = 'double_precision_load_%d'% i
+        TestCase(testcase)
+    for i,(n,f) in enumerate(double_precision):
+        testcase = lambda cls=double,integer=f,value=n:test_assignment(cls,integer,value)
+        testcase.__name__ = 'double_precision_assignment_%d'% i
+        TestCase(testcase)
 
     ## fixed
     class word(fixed_t):
@@ -242,17 +250,30 @@ if __name__ == '__main__':
     class dword(fixed_t):
         length,fractional = 4,16
 
-    print '[fixed-point word]'
-    x = word()
-    x.set(30.5)
-    _ = x.serialize()
-    print 'word : 30.5 : integral :', 'Success' if _[0] == '\x1e' else 'Failure'
-    print 'word : 30.5 : fractional :', 'Success' if _[1] == '\x80' else 'Failure'
-    print ''
+    @TestCase
+    def fixed_point_word_integral():
+        x = word(byteorder=config.byteorder.bigendian)
+        x.set(30.5)
+        if x.serialize()[0] == '\x1e': raise Success
+    @TestCase
+    def fixed_point_word_fractional():
+        x = word(byteorder=config.byteorder.bigendian)
+        x.set(30.5)
+        if x.serialize()[1] == '\x80': raise Success
 
-    print '[fixed-point dword]'
-    x = dword()
-    x.set(1.25)
-    _ = x.serialize()
-    print 'dword : 1.25 : integral :', 'Success' if _[:2] == '\x00\x01' else 'Failure'
-    print 'dword : 1.25 : fractional :', 'Success' if _[2:] == '\x40\x00' else 'Failure'
+    @TestCase
+    def fixed_point_dword_integral():
+        x = dword(byteorder=config.byteorder.bigendian)
+        x.set(1.25)
+        if x.serialize()[:2] == '\x00\x01': raise Success
+    @TestCase
+    def fixed_point_dword_fractional():
+        x = dword(byteorder=config.byteorder.bigendian)
+        x.set(1.25)
+        if x.serialize()[2:] == '\x40\x00': raise Success
+
+if __name__ == '__main__':
+    results = []
+    for t in TestCaseList:
+        results.append( t() )
+
