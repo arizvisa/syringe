@@ -1,14 +1,14 @@
 import ptypes,headers
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils
 from __base__ import *
-import struct
+import struct,logging
 
 from headers import virtualaddress
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring)):
     def getModuleName(self):
-        module,name = self.d.l.get().split('.', 1)
+        module,name = self.d.l.str().split('.', 1)
         if name.startswith('#'):
             name = 'Ordinal%d'% int(name[1:])
         return module.lower() + '.dll',name
@@ -26,10 +26,10 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     _fields_ = [
         ( dword, 'Flags' ),
-        ( dword, 'TimeDateStamp' ),
+        ( TimeDateStamp, 'TimeDateStamp' ),
         ( word, 'MajorVersion' ),
         ( word, 'MinorVersion' ),
-        ( dword, 'Name' ),
+        ( virtualaddress(pstr.szstring), 'Name' ),
         ( dword, 'Base' ),
         ( dword, 'NumberOfFunctions' ),
         ( dword, 'NumberOfNames' ),
@@ -45,7 +45,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         sectionva = section['VirtualAddress'].int()
         offsets = [ (x.int()-sectionva) for x in self['AddressOfNames'].d.load() ]
 
-        data = section.get().load().serialize()
+        data = section.data().load().serialize()
 
         names = []
         for x in offsets:
@@ -61,7 +61,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         sectionva = section['VirtualAddress'].int()
         offset = address - sectionva
 
-        data = section.get().load().serialize()
+        data = section.data().load().serialize()
 
         block = data[offset: offset + 2*self['NumberOfNames'].int()]
         return [ struct.unpack_from('H', block, offset)[0] for offset in xrange(0, len(block), 2) ]
@@ -75,7 +75,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
         sectionva = section['VirtualAddress'].int()
         offset = address - sectionva
-        data = section.get().load().serialize()
+        data = section.data().load().serialize()
 
         block = data[offset: offset + 4*self['NumberOfFunctions'].int()]
         addresses = ( struct.unpack_from('L', block, offset)[0] for offset in xrange(0, len(block), 4) )
@@ -91,18 +91,24 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     def enumerateAllExports(self):
         result = []
-        ofs,eat = self.getExportAddressTable()
-        try:
-            for name,ordinal in zip(self.getNames(), self.getNameOrdinals()):
-                value = eat[ordinal]
-                ordinalstring = 'Ordinal%d'% (ordinal + self['Base'].int())
-                yield (ofs, ordinal, name, ordinalstring, value)
+        if 0 in (self['AddressOfNames'].num(),self['AddressOfNameOrdinals'].num()):
+            base = self['Base'].num()
+            ofs,eat = self.getExportAddressTable()
+            for i,e in enumerate(eat):
+                yield ofs,i+base,'','',e
                 ofs += 4
+            return
 
-        except KeyError:
-            print 'Error resolving exports...quitting early.'
-            # XXX: this one's for you shunimpl.dll
-            pass
+        ofs,eat = self.getExportAddressTable()
+        for name,ordinal in zip(self.getNames(), self.getNameOrdinals()):
+            if 0 <= ordinal <= len(eat):
+                value = eat[ordinal]
+            else:
+                logging.warning("Error resolving exports for %s : %d", name, ordinal)
+                value = 0
+            ordinalstring = 'Ordinal%d'% (ordinal + self['Base'].int())
+            yield (ofs, ordinal, name, ordinalstring, value)
+            ofs += 4
         return
 
     def search(self, key):

@@ -1,5 +1,5 @@
-import __builtin__,array,exceptions,sys,itertools
-import config,utils,error
+import __builtin__,array,exceptions,sys,itertools,operator
+from . import config,utils,error
 Config = config.defaults
 
 class base(object):
@@ -31,9 +31,15 @@ class empty(base):
 class string(base):
     '''Basic writeable string provider'''
     offset = int
-    value = str     # this is backed by an array.array type
+    data = str     # this is backed by an array.array type
+
+    @property
+    def value(self): return self.data.tostring()
+    @value.setter
+    def value(self, value): self.data = value
+
     def __init__(self, string=''):
-        self.value = array.array('c', string)
+        self.data = array.array('c', string)
     def seek(self, offset):
         self.offset = offset
 
@@ -41,7 +47,7 @@ class string(base):
     def consume(self, amount):
         if amount < 0:
             raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. %d:+%s from %s'%(self.offset,amount,self))
-        res = self.value[self.offset: self.offset+amount].tostring()
+        res = self.data[self.offset: self.offset+amount].tostring()
         if res == '' and amount > 0:
             raise error.ConsumeError(self,self.offset,amount,len(res))
         if len(res) == amount:
@@ -52,7 +58,7 @@ class string(base):
     def store(self, data):
         try:
             left, right = self.offset, self.offset + len(data)
-            self.value[left:right] = array.array('c',data)
+            self.data[left:right] = array.array('c',data)
             self.offset = right
             return len(data)
         except Exception,e:
@@ -61,9 +67,9 @@ class string(base):
 
     @utils.mapexception(any=error.ProviderError)
     def size(self):
-        return len(self.value)
+        return len(self.data)
 
-class proxy(string):
+class proxy(base):
     '''proxy to the source of a specific ptype. snapshots the instance offset and length at time of construction.'''
     def __init__(self, source):
         self.type = source
@@ -78,18 +84,19 @@ class proxy(string):
             return ofs
         raise error.UserError(self.type, 'seek', message='Requested offset 0x%x is outside bounds (0,%x)'% (offset, self.size))
 
-    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
-    def consume(self, amount):
-        bo,ofs = self.baseoffset,self.offset
-        left = ofs
-        right = left+amount
+    if False:
+        @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
+        def consume(self, amount):
+            bo,ofs = self.baseoffset,self.offset
+            left = ofs
+            right = left+amount
 
-        if left >= 0 and right <= self.size:
-            self.type.source.seek(bo+ofs)
-            result = self.type.source.consume(amount)
-            self.offset += amount
-            return result
-        raise error.ConsumeError(self, ofs, amount, amount=right-self.size)
+            if left >= 0 and right <= self.size:
+                self.type.source.seek(bo+ofs)
+                result = self.type.source.consume(amount)
+                self.offset += amount
+                return result
+            raise error.ConsumeError(self, ofs, amount, amount=right-self.size)
 
     def consume(self, amount):
         bo,ofs = self.baseoffset,self.offset
@@ -243,14 +250,10 @@ class iter(stream):
         return len(data)
 
 class filebase(base):
-    '''Basic file provider'''
+    '''Basic fileobj provider'''
     file = None
-    def __init__(self, filename, mode='r'):
-        self.open(filename, mode)
-
-    @utils.mapexception(any=error.ProviderError)
-    def open(self, filename, mode='r'):
-        raise error.ImplementationError(self, 'open', message='Developer forgot to overload this method')
+    def __init__(self, fileobj):
+        self.file = fileobj
 
     @utils.mapexception(any=error.ProviderError)
     def seek(self, offset):
@@ -278,12 +281,12 @@ class filebase(base):
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
     def store(self, data):
-        ofs = self.file.tell()
+        offset = self.file.tell()
         try:
             return self.file.write(data)
         except Exception, e:
             self.file.seek(offset)
-            raise error.StoreError(self, ofs,len(data), exception=e)
+        raise error.StoreError(self, offset, len(data), exception=e)
 
     @utils.mapexception(any=error.ProviderError)
     def close(self):
@@ -301,119 +304,118 @@ class filebase(base):
         return '%s -> %s'% (super(filebase, self).__repr__(), repr(self.file))
 
     def __del__(self):
-        self.close()
+        try: self.close()
+        except: pass
+        return
 
 ## optional providers
 import os
-try:
-    raise ImportError, "Skipping posix version of the `file` provider"
-    import os
+class posixfile(filebase):
+    '''Basic posix file provider'''
+    def __init__(self, *args, **kwds):
+        res = self.open(*args, **kwds)
+        super(posixfile,self).__init__(res)
 
-    class file(filebase):
-        '''Basic posix file provider'''
-        @utils.mapexception(any=error.ProviderError)
-        def open(self, filename, mode='rw', perms=0644):
-            mode = ''.join(sorted(list(x.lower() for x in mode)))
-            flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
+    @utils.mapexception(any=error.ProviderError)
+    def open(self, filename, mode='rw', perms=0644):
+        mode = ''.join(sorted(set(x.lower() for x in mode)))
+        flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
 
-            # this is always assumed
-            if mode.startswith('b'):
-                mode = mode[1:]
+        # this is always assumed
+        if mode.startswith('b'):
+            mode = mode[1:]
 
-            # setup access
-            flags = 0
-            if 'r' in mode:
-                flags |= os.O_RDONLY
-            if 'w' in mode:
-                flags |= os.O_WRONLY
+        # setup access
+        flags = 0
+        if 'r' in mode:
+            flags |= os.O_RDONLY
+        if 'w' in mode:
+            flags |= os.O_WRONLY
 
-            if (flags & os.O_RDONLY) and (flags & os.O_WRONLY):
-                flags ^= os.O_RDONLY|os.O_WRONLY
-                flags |= os.O_RDWR
+        if (flags & os.O_RDONLY) and (flags & os.O_WRONLY):
+            flags ^= os.O_RDONLY|os.O_WRONLY
+            flags |= os.O_RDWR
 
-            access = 'read/write' if (flags&os.O_RDWR) else 'write' if (flags&os.O_WRONLY) else 'read-only' if flags & os.O_RDONLY else 'unknown'
+        access = 'read/write' if (flags&os.O_RDWR) else 'write' if (flags&os.O_WRONLY) else 'read-only' if flags & os.O_RDONLY else 'unknown'
 
-            if os.access(filename,6):
-                Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(mode), access)
-            else:
-                flags |= os.O_CREAT|os.O_TRUNC
-                Config.log.info("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(mode), access)
+        if os.access(filename,6):
+            Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(mode), access)
+        else:
+            flags |= os.O_CREAT|os.O_TRUNC
+            Config.log.info("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(mode), access)
 
-            # mode defaults to rw-rw-r--
-            self.fd = os.open(filename, flags, perms)
-            self.file = os.fdopen(self.fd)
+        # mode defaults to rw-rw-r--
+        self.fd = os.open(filename, flags, perms)
+        return os.fdopen(self.fd)
 
     @utils.mapexception(any=error.ProviderError)
     def close(self):
         os.close(self.fd)
-        return super(file,self).close()
+        return super(posixfile,self).close()
 
-except ImportError:
-    Config.log.info("__module__ : Unable to import 'os' module. Using non-posix version of `file` provider.")
+class file(filebase):
+    '''Basic file provider'''
+    def __init__(self, *args, **kwds):
+        res = self.open(*args, **kwds)
+        return super(file,self).__init__(res)
 
-    class file(filebase):
-        '''Basic file provider'''
-        @utils.mapexception(any=error.ProviderError)
-        def open(self, filename, mode='rw'):
-            usermode = list(x.lower() for x in mode)
+    @utils.mapexception(any=error.ProviderError)
+    def open(self, filename, mode='rw'):
+        usermode = list(x.lower() for x in mode)
 
-            # this is always assumed
-            if 'b' in usermode:
-                usermode.remove('b')
+        # this is always assumed
+        if 'b' in usermode:
+            usermode.remove('b')
 
-            if '+' in usermode:
-                access = 'r+b'
-            elif 'r' in usermode and 'w' in usermode:
-                access = 'r+b'
-            elif 'w' in usermode:
+        if '+' in usermode:
+            access = 'r+b'
+        elif 'r' in usermode and 'w' in usermode:
+            access = 'r+b'
+        elif 'w' in usermode:
+            access = 'wb'
+        elif 'r' in usermode:
+            access = 'rb'
+
+        straccess = 'read/write' if access =='r+b' else 'write' if access == 'wb' else 'read-only' if access == 'rb' else 'unknown'
+
+        if os.access(filename,0):
+            if 'wb' in access:
+                Config.log.warn("%s(%s, %s) : Truncating file by user-request.", type(self).__name__, repr(filename), repr(access))
+            Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(access), straccess)
+
+        else:  # file not found
+            if 'r+' in access:
+                Config.log.warn("%s(%s, %s) : File not found. Modifying access to write-only.", type(self).__name__, repr(filename), repr(access))
                 access = 'wb'
-            elif 'r' in usermode:
-                access = 'rb'
+            Config.log.warn("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
 
-            straccess = 'read/write' if access =='r+b' else 'write' if access == 'wb' else 'read-only' if access == 'rb' else 'unknown'
-
-            if os.access(filename,0):
-                if 'wb' in access:
-                    Config.log.warn("%s(%s, %s) : Truncating file by user-request.", type(self).__name__, repr(filename), repr(access))
-                Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(access), straccess)
-
-            else:  # file not found
-                if 'r+' in access:
-                    Config.log.warn("%s(%s, %s) : File not found. Modifying access to write-only.", type(self).__name__, repr(filename), repr(access))
-                    access = 'wb'
-                Config.log.warn("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
-
-            self.file = __builtin__.open(filename, access, 0)
+        return __builtin__.open(filename, access, 0)
 
 try:
     import tempfile
     class filecopy(filebase):
         """Makes a temporary copy of a file"""
+        def __init__(self, *args, **kwds):
+            res = self.open(*args, **kwds)
+            return super(filecopy,self).__init__(res)
 
         @utils.mapexception(any=error.ProviderError)
-        def open(self, filename, mode):
-            input = open(filename, 'rb')
-            input.seek(0)
-
-            if input:
-                output = tempfile.TemporaryFile()
+        def open(self, filename):
+            with open(filename, 'rb') as input:
+                input.seek(0)
+                output = tempfile.TemporaryFile(mode='w+b')
                 for data in input:
                     output.write(data)
                 output.seek(0)
-                self.file = output
-
-            input.close()
             return output
 
         def save(self, filename):
             '''make a copy of file and save it to filename'''
             ofs = self.file.tell()
-            
-            output = file(filename, 'wb')
-            for data in self.file:
-                output.write(data)
-            output.close()
-
+            with file(filename, 'wb') as output:
+                self.file.seek(0)
+                for data in self.file:
+                    output.write(data)
             self.file.seek(ofs)
 
 except ImportError:
@@ -776,6 +778,22 @@ try:
 except ImportError:
     Config.log.info("__module__ : Unable to import 'pykd' module. Failed to load `Pykd` provider.")
 
+class base64(string):
+    def __init__(self, base64string, begin='', end=''):
+        result = map(operator.methodcaller('strip'),base64string.split('\n'))
+        if begin and begin in base64string:
+            res = [i for i,_ in enumerate(result) if _.startswith(begin)][0]
+            result[:] = result[res+1:]
+        if end and end in base64string:
+            res = [i for i,_ in enumerate(result) if _.startswith(end)][0]
+            result[:] = result[:res]
+        result = ''.join(result).translate(None, ' \t\n\r\v')
+        super(base64,self).__init__(result.decode('base64'))
+
+    @property
+    def value(self):
+        return self.data.tostring().encode('base64')
+
 if __name__ == '__main__' and 0:
     import array
     import ptypes,ptypes.provider as provider
@@ -846,7 +864,16 @@ if __name__ == '__main__':
     import provider
     import tempfile
 
-    class pythondevelopersarestupid(object):
+    class temporaryname(object):
+        def __enter__(self, *args):
+            self.name = tempfile.mktemp()
+            return self.name
+        def __exit__(self, *args):
+            try: os.unlink(self.name)
+            except: pass
+            del(self.name)
+
+    class temporaryfile(object):
         def __enter__(self, *args):
             name = tempfile.mktemp()
             self.file = file(name, 'w+b')
@@ -861,11 +888,13 @@ if __name__ == '__main__':
     @TestCase
     def test_file_readonly():
         data = 'A'*512
-        with pythondevelopersarestupid() as f:
+        with temporaryname() as filename:
+            f = open(filename, 'wb')
             f.write(data)
             f.seek(0)
+            f.close()
 
-            z = provider.file(f.name, mode='r')
+            z = provider.file(filename, mode='r')
             a = z.consume(len(data))
             assert a == data
 
@@ -880,11 +909,13 @@ if __name__ == '__main__':
     @TestCase
     def test_file_writeonly():
         data = 'A'*512
-        with pythondevelopersarestupid() as f:
+        with temporaryname() as filename:
+            f = open(filename, 'wb')
             f.write(data)
             f.seek(0)
+            f.close()
 
-            z = provider.file(f.name, mode='w')
+            z = provider.file(filename, mode='w')
             z.store(data)
             z.seek(0)
             try:
@@ -899,11 +930,13 @@ if __name__ == '__main__':
     @TestCase
     def test_file_readwrite():
         data = 'A'*512
-        with pythondevelopersarestupid() as f:
+        with temporaryname() as filename:
+            f = open(filename, 'wb')
             f.write(data)
             f.seek(0)
+            f.close()
 
-            z = provider.file(f.name, mode='rw')
+            z = provider.file(filename, mode='rw')
             z.store(data)
 
             z.seek(0)
@@ -915,30 +948,109 @@ if __name__ == '__main__':
 
     @TestCase
     def test_filecopy_read():
-        pass
-    @TestCase
-    def test_filecopy_write():
-        pass
-    @TestCase
-    def test_filecopy_readwrite():
-        pass
+        data = 'A'*512
+        with temporaryname() as filename:
+            f = open(filename, 'wb')
+            f.write(data)
+            f.seek(0)
+            f.close()
+
+            z = provider.filecopy(filename)
+            if z.consume(len(data)) == data:
+                raise Success
+        return
 
     @TestCase
-    def test_memory_read():
-        pass
+    def test_filecopy_write():
+        data = 'A'*512
+        with temporaryname() as filename:
+            f = open(filename, 'wb')
+            f.write(data)
+            f.seek(0)
+            f.close()
+
+            z = provider.filecopy(filename)
+            a = z.store('B' * len(data))
+
+            z.seek(0)
+            a = z.consume(len(data))
+            if a.count('B') == len(data):
+                raise Success
+        return
+            
     @TestCase
-    def test_memory_write():
-        pass
-    @TestCase
-    def test_memory_readwrite():
+    def test_filecopy_readwrite():
+        data = 'A'*512
+        with temporaryname() as filename:
+            f = open(filename, 'wb')
+            f.write(data)
+            f.seek(0)
+            f.close()
+
+            z = provider.filecopy(filename)
+            z.seek(len(data))
+            a = z.store('B' * len(data))
+
+            z.seek(0)
+            a = z.consume(len(data)*2)
+            if a.count('A') == len(data) and a.count('B') == len(data):
+                raise Success
+        return
+
+    try:
+        import ctypes
+        @TestCase
+        def test_memory_read():
+            data = 'A'*0x40
+            buf = ctypes.c_buffer(data)
+            ea = ctypes.addressof(buf)
+            z = provider.memory()
+            z.seek(ea)
+            if z.consume(len(data)) == data:
+                raise Success
+            raise Failure
+            
+        @TestCase
+        def test_memory_write():
+            data = 'A'*0x40
+            buf = ctypes.c_buffer(data)
+            ea = ctypes.addressof(buf)
+            z = provider.memory()
+            z.seek(ea)
+            z.store('B'*len(data))
+            if buf.value == 'B'*len(data):
+                raise Success
+            raise Failure
+
+        @TestCase
+        def test_memory_readwrite():
+            data = 'A'*0x40
+            buf = ctypes.c_buffer(data)
+            ea = ctypes.addressof(buf)
+            z = provider.memory()
+            z.seek(ea)
+            z.store('B'*len(data))
+            z.seek(ea)
+            if z.consume(len(data)) == 'B'*len(data):
+                raise Success
+
+    except ImportError:
+        Config.log.warning("__module__ : Skipping `memory` provider tests.")
         pass
 
     @TestCase
     def test_random_read():
-        pass
+        z = provider.random()
+        z.seek(0)
+        a = z.consume(0x40)
+        z.seek(0)
+        if a == z.consume(0x40):
+            raise Success
+
     @TestCase
     def test_random_write():
-        pass
+        raise Failure, 'Unable to write to provider.random()'
+
     @TestCase
     def test_random_readwrite():
         pass
@@ -953,12 +1065,10 @@ if __name__ == '__main__':
     def test_proxy_readwrite():
         pass
 
-    #@TestCase
-    def test_windows_remote_consume():
-        import multiprocessing,os,ctypes
-        q = multiprocessing.Queue()
-        string = "hola mundo"
 
+    try:
+        import nt
+        raise ImportError
         def stringalloc(string):
             v = ctypes.c_char*len(string)
             x = v(*string)
@@ -970,21 +1080,66 @@ if __name__ == '__main__':
             while True:
                 pass
 
-        p = multiprocessing.Process(target=stringspin, args=(q,string,))
-        p.start()
-        address = q.get()
-        print hex(address)
+        @TestCase
+        def test_windows_remote_consume():
+            import multiprocessing,os,ctypes
+            q = multiprocessing.Queue()
+            string = "hola mundo"
 
-        src = provider.WindowsProcessId(p.pid)
-        src.seek(address)
-        data = src.consume(len(string))
-        p.terminate()
-        if data == string:
-            raise Success
+            p = multiprocessing.Process(target=stringspin, args=(q,string,))
+            p.start()
+            address = q.get()
+            print hex(address)
+
+            src = provider.WindowsProcessId(p.pid)
+            src.seek(address)
+            data = src.consume(len(string))
+            p.terminate()
+            if data == string:
+                raise Success
         
+        @TestCase
+        def test_windows_remote_store():
+            pass
+
+    except ImportError:
+        Config.log.warning("__module__ : Skipping `WindowsProcessId` provider tests.")
+
+    testcert="""
+    -----BEGIN CERTIFICATE-----
+    MIIC+TCCArigAwIBAgIJAOLOwubF5bg3MAkGByqGSM44BAMwNjELMAkGA1UEBhMC
+    VVMxDjAMBgNVBAgMBVRleGFzMRcwFQYDVQQKDA50aHVua2Vyc0RPVG5ldDAeFw0x
+    NDA5MTAxOTUyMDJaFw0xNDEwMTAxOTUyMDJaMDYxCzAJBgNVBAYTAlVTMQ4wDAYD
+    VQQIDAVUZXhhczEXMBUGA1UECgwOdGh1bmtlcnNET1RuZXQwggG3MIIBLAYHKoZI
+    zjgEATCCAR8CgYEA9i7VTIaia1b5UljGzdonzMayj6bKmmbXqrw7XQcxagwOiR/w
+    HpJbD88h81VII4bQFcIKnlJ9jA8pisffLt9fG2L+9yHA8pB6C192INiloIePf1wK
+    lePuWpkAOuZQdA97XIaEwZYXTCvkgozhgp/j9Agcef/IeWaga7CiOCinJw8CFQDp
+    DJ0yhfywMk90ZaJVzpMld4FdHwKBgQCpxKWJbU7NUGWRBQY2TPzVuSwKpa+R1ezn
+    yiggGHQxb9S6kBKkarsHrmUfcgmmHcsI5ntRYD7ZeRKUgTasQsA3I8NlhmetxdaT
+    BKnSdZZAYvRdAxaxRKvMtSwSBGReflSedme0822z+/FNfJG9rMmiBaURNQIpIxb+
+    /ecM9MP8fwOBhAACgYA3O9CNln3zUnW8SyUqFovp0AFBFixrZhxRbFsASjk1dDqr
+    1GEhE9WGt6cRpLICMQZ80vsrWItc7PpV09OuivkL1oHRpwmeGUA43LV8Wp4FA64F
+    EkhbOgBcKlA1aM06bOlJhU26iGuGB4ZTgfyuWtMWFf7LE4bykOa8NOl83yo3FqNQ
+    ME4wHQYDVR0OBBYEFJLWL1FUKaTChKV0EgiYCwWzR3O9MB8GA1UdIwQYMBaAFJLW
+    L1FUKaTChKV0EgiYCwWzR3O9MAwGA1UdEwQFMAMBAf8wCQYHKoZIzjgEAwMwADAt
+    AhUAmftACaObx1+KUcHlzKw+iJI5CE4CFAQLG5nhjAlBzh3nNOMRIs4TDXOb
+    -----END CERTIFICATE-----
+    """
+
     @TestCase
-    def test_windows_remote_store():
-        pass
+    def test_base64_read():
+        a = base64(testcert, '-----BEGIN', '-----END')
+        a.seek(0)
+        if a.consume(4) == '0\x82\x02\xf9':
+            raise Success
+
+    @TestCase
+    def test_base64_write():
+        a = base64(testcert, '-----BEGIN', '-----END')
+        a.seek(0)
+        a.store('XXXXXX')
+        if a.value.startswith('XXXXXX'.encode('base64').strip()):
+            raise Success
 
 if __name__ == '__main__' and 0:
     import ptype,parray

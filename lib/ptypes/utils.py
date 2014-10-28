@@ -129,17 +129,17 @@ def printable(s):
     """Return a string of only printable characters"""
     return reduce(lambda t,c: t + (c if ord(c) >= 0x20 and ord(c) < 0x7f else '.'), iter(s), '')
 
-def hexrow(value, offset=0, length=16, breaks=[8]):
+def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
-    value = str(value)[:length]
-    extra = length - len(value)
+    value = str(value)[:width]
+    extra = width - len(value)
 
     ## left
     left = '%04x'% offset
 
     ## middle
     res = [ '%02x'%ord(x) for x in value ]
-    if len(value) < length:
+    if len(value) < width:
         res += ['  ' for x in range(extra)]
 
     for x in breaks:
@@ -152,7 +152,7 @@ def hexrow(value, offset=0, length=16, breaks=[8]):
 
     return '%s  %s  %s'% (left, middle, right)
 
-def hexdump(value, offset=0, length=16, rows=None, **kwds):
+def hexdump(value, offset=0, width=16, rows=None, **kwds):
     """Returns ``value`` as a formatted hexdump
 
     If ``offset`` is specified, then the hexdump will start there.
@@ -160,12 +160,10 @@ def hexdump(value, offset=0, length=16, rows=None, **kwds):
     will be displayed.
     """
 
-    if 'lines' in kwds:
-        rows = kwds.pop('lines')
+    rows = kwds.pop('rows', kwds.pop('lines', None))
 
-    # TODO: should prolly make this an iterator somehow...
+    # TODO: should prolly make this an iterator properly
     value = iter(value)
-
     def tryRead(iterable, length):
         res = ''
         try:
@@ -179,11 +177,11 @@ def hexdump(value, offset=0, length=16, rows=None, **kwds):
     getRow = lambda o: hexrow(data, offset=o, **kwds)
     
     res = []
-    (ofs, data) = offset, tryRead(value, length)
+    (ofs, data) = offset, tryRead(value, width)
     for i in (itertools.count(1) if rows is None else xrange(1, rows)):
         res.append( getRow(ofs) )
-        ofs, data = (ofs + length, tryRead(value, length))
-        if len(data) < length:
+        ofs, data = (ofs + width, tryRead(value, width))
+        if len(data) < width:
             break
         continue
 
@@ -191,7 +189,7 @@ def hexdump(value, offset=0, length=16, rows=None, **kwds):
         res.append( getRow(ofs) )
     return '\n'.join(res)
 
-def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding=' '):
+def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding=' ', **formats):
     """Return a string replaced with ``message`` if larger than ``width``
 
     Message can contain the following format operands:
@@ -200,6 +198,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     bytewidth = number of bytes that can fit within width
     length = number of bytes displayed
     leftover = approximate number of bytes skipped
+    **format = extra format specifiers for message
     """
     size = len(data)
     charwidth = len(r'\xFF')
@@ -212,7 +211,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
         return hexify(data)
 
     # FIXME: the skipped/leftover bytes are being calculated incorrectly..
-    msg = message.format(size=size, charwidth=charwidth, width=width, leftover=leftover)
+    msg = message.format(size=size, charwidth=charwidth, width=width, leftover=leftover, **formats)
 
     # figure out how many bytes we can print
     bytefrac,bytewidth = math.modf((width - len(msg)) * 1.0 / charwidth)
@@ -241,17 +240,18 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
     # display everything
     if height <= 0 or leftover <= 0:
         for o in xrange(0, size, width):
+            # offset, width, attrs
             yield hexrow(data[o:o+width], offset+o, width, **attrs)
         return
 
     # display rows
     o1 = offset
     for o in xrange(0, half*width, width):
-        yield hexrow(data[o:o+width], o+o1, width, **attrs)
+        yield hexrow(data[o:o+width], o+o1, **attrs)
     yield message.format(leftover=leftover, height=height, count=count, skipped=skipped, size=size)
     o2 = width*(count-half)
     for o in xrange(0, half*width, width):
-        yield hexrow(data[o+o2:o+o2+width], o+o2+offset, width, **attrs)
+        yield hexrow(data[o+o2:o+o2+width], o+o1+o2, **attrs)
     return
     
 if __name__ == '__main__':

@@ -29,43 +29,49 @@ class File(pstruct.type, ptype.boundary):
     def __Data(self):
         pe = self['Pe'].l
         # file
-        if issubclass(self.source.__class__, ptypes.provider.file):
+        if issubclass(self.source.__class__, ptypes.provider.filebase):
+            maxfilesize = self.source.size()
             sz = max(((x['PointerToRawData'].num()+x['SizeOfRawData'].num()) for x in pe['Sections']))
+            ## if there's a security entry, then this can also contain an offset
+            #sz = max((sz, 0 if pe['DataDirectory'][4]['Address'] == 0 else pe['DataDirectory'][4]['Address'].num()+pe['DataDirectory'][4]['Size'].num()))
             return dyn.block(sz - self.blocksize())
 
         # memory
         class result(parray.type):
             length = len(pe['Sections'])
-            class _object_(pstruct.type):
-                def __Padding(self):
-                    p = self.getparent(File)['Pe']
-                    alignment = p['OptionalHeader']['SectionAlignment'].num()
-                    return dyn.align(alignment, undefined=True)
-                def __Data(self):
-                    p = self.getparent(File)['Pe']
-                    index = len(self.parent.value)
-                    sect = p['Sections'][index-1]
-                    return dyn.block(sect.getloadedsize())
-                _fields_ = [
-                    (__Padding, 'Padding'),
-                    (__Data, 'Data'),
-                ]
+            def _object_(self):
+                sect = pe['Sections'][len(self.value)]
+                class result(pstruct.type):
+                    _fields_ = [
+                        (dyn.align(pe['OptionalHeader']['SectionAlignment'].num(), undefined=True), 'Padding'),
+                        (dyn.block(sect.getloadedsize()), 'Data'),
+                    ]
+                return result
         return result
+
+    def __Certificate(self):
+        res = self['Pe']['DataDirectory'][4]
+        if res['Address'].num() == 0 or issubclass(self.source.__class__,ptypes.provider.memory):
+            return ptype.undefined
+
+        eof = res['Address'].num()+res['Size'].num()
+        return dyn.block(eof-self.blocksize())
 
     _fields_ = [
         (headers.DosHeader, 'Dos'),
         (__Stub, 'Stub'),
         (headers.NtHeader, 'Pe'),
         (__Padding, 'Padding'),
-        (lambda s: dyn.align(1 if issubclass(s.source.__class__, ptypes.provider.file) else 0x1000), 'Alignment'),
-        (__Data, 'Data')
+        (lambda s: dyn.align(s['Pe']['OptionalHeader']['SectionAlignment'].num(), undefined=True) if issubclass(s.source.__class__, ptypes.provider.memory) else dyn.align(s['Pe']['OptionalHeader']['FileAlignment'].num()) , 'Alignment'),
+        (__Data, 'Data'),
+        (__Certificate, 'Certificate'),
     ]
 
     def loadconfig(self):
-        return self['Pe']['OptionalHeader']['DataDirectory'][10].get()
+        return self['Pe']['DataDirectory'][10]['Address'].d.l
 
     def tls(self):
-        return self['Pe']['OptionalHeader']['DataDirectory'][9].get()
+        return self['Pe']['DataDirectory'][9]['Address'].d.l
 
     def relocateable(self):
         characteristics = self['Pe']['OptionalHeader']['DllCharacteristics']
@@ -101,22 +107,22 @@ if __name__ == '__main__':
             filename = '../'+filename
 
     sections = v['Pe']['Sections']
-    exports = v['Pe']['OptionalHeader']['DataDirectory'][0]
-    while exports['VirtualAddress'].int() != 0:
-        exports = exports.get()
+    exports = v['Pe']['DataDirectory'][0]
+    while exports['Address'].int() != 0:
+        exports = exports['Address'].d.l
         print exports.l
         break
 
-    imports = v['Pe']['OptionalHeader']['DataDirectory'][1]
-    while imports['VirtualAddress'].int() != 0:
-        imports = imports.get()
+    imports = v['Pe']['DataDirectory'][1]
+    while imports['Address'].int() != 0:
+        imports = imports['Address'].d.l
         print imports.l
         break
 
-    relo = v['Pe']['OptionalHeader']['DataDirectory'][5].get().load()
+    relo = v['Pe']['DataDirectory'][5]['Address'].d.l
     baseaddress = v['Pe']['OptionalHeader']['ImageBase']
     section = sections[0]
-    data = section.get()
+    data = section.data().serialize()
     for e in relo.getbysection(section):
         for a,r in e.getrelocations(section):
             print e

@@ -31,7 +31,7 @@ class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
 
     def getImport(self):
         offset = headers.calculateRelativeAddress(self, self['Name'].num())
-        return self.newelement(IMAGE_IMPORT_HINT, 'ImportName', offset).l.getHint()
+        return self.new(IMAGE_IMPORT_HINT, __name__='ImportName', offset=offset).l.getHint()
 
 class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
     root = dyn.block(4)
@@ -134,7 +134,7 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         total = 0
         for n in v.serialize():
             total += ord(n)
-        return [True, False][total > 0]
+        return False if total > 0 else True
 
     def walk(self):
         for x in self[:-1]:

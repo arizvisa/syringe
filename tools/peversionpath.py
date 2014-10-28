@@ -10,7 +10,7 @@ def parseResourceDirectory(filename):
     mz = pecoff.Executable.open(filename, mode='r')
     pe = mz['Pe']
     sections = pe['Sections']
-    datadirectory = pe['OptionalHeader']['DataDirectory']
+    datadirectory = pe['DataDirectory']
     resourceDirectory = datadirectory[2]
     return resourceDirectory['virtualaddress'].d
 

@@ -52,7 +52,7 @@ def force(t, self, chain=None):
     path = ','.join(self.backtrace())
     raise error.TypeError(self, 'force<pbinary>', message='chain=%s : refusing request to resolve %s to a type that does not inherit from pbinary.type : %s'% (repr(chain), repr(t), path))
 
-class type(ptype.base):
+class type(ptype.generic):
     '''represents an atomic component of a pbinary structure'''
     value = None
     position = 0,0
@@ -580,6 +580,13 @@ class partial(ptype.container):
     byteorder = Config.integer.order
     initializedQ = lambda s:s.value is not None
 
+    def classname(self):
+        fmt = {
+            config.byteorder.littleendian : Config.pint.littleendian_name,
+            config.byteorder.bigendian : Config.pint.bigendian_name,
+        }
+        return fmt[self.byteorder].format(self._object_.classname())
+
     def serialize(self):
         if self.byteorder is config.byteorder.bigendian:
             bmp = self.value.bitmap()
@@ -761,6 +768,12 @@ class partial(ptype.container):
     #    state,self._object_,self.position,self.byteorder, = state
     #    super(type,self).__setstate__(state)
 
+    def setoffset(self, ofs, recurse=False):
+        if recurse:
+            self.value.setposition((ofs,0), recurse=True)
+            return super(partial,self).setoffset(ofs, recurse=False)
+        return super(partial,self).setoffset(ofs, recurse=False)
+
 class flags(struct):
     '''represents bit flags that can be toggled'''
     def details(self, **options):
@@ -775,7 +788,9 @@ class flags(struct):
                 flags.append( (name,value) )
                 continue
             flags.append( (name,value.num()) )
-        return '(flags) %s'% ','.join("'%s'%s"%(n, '?' if v is None else '') for n,v in flags if v is None or v > 0)
+
+        x = _,s = self.bitmap()
+        return '(%s, %d) %s'% (bitmap.hex(x), s, ','.join("'%s'%s"%(n, '?' if v is None else '') for n,v in flags if v is None or v > 0))
 
     def __details_uninitialized(self):
         return '(flags) %s'% ','.join("'%s?'"%name for t,name in self._fields_)
@@ -795,7 +810,7 @@ def new(type, **attrs):
 def bigendian(p, **attrs):
     '''Force binary type /p/ to be ordered in the bigendian integer format'''
     attrs.setdefault('byteorder', config.byteorder.bigendian)
-    attrs.setdefault('__name__', 'bigendian(%s)'% (p._object_.__name__ if issubclass(p,partial) else p.__name__))
+    attrs.setdefault('__name__', p._object_.__name__ if issubclass(p,partial) else p.__name__)
 
     if not issubclass(p, partial):
         Config.log.debug("bigendian : %s : Promoting type to partial"% p.typename())
@@ -807,7 +822,7 @@ def bigendian(p, **attrs):
 def littleendian(p, **attrs):
     '''Force binary type /p/ to be ordered in the littleendian integer format'''
     attrs.setdefault('byteorder', config.byteorder.littleendian)
-    attrs.setdefault('__name__', 'littleendian(%s)'% (p._object_.__name__ if issubclass(p,partial) else p.__name__))
+    attrs.setdefault('__name__', p._object_.__name__ if issubclass(p,partial) else p.__name__)
 
     if not issubclass(p, partial):
         Config.log.debug("littleendian : %s : Promoting type to partial"% p.typename())

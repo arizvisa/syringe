@@ -3,45 +3,57 @@ from ptypes import pstruct,parray,provider,dyn
 from __base__ import *
 
 import exports,relocations,imports,resources,exceptions
-from headers import virtualaddress,realaddress
+from headers import virtualaddress,realaddress,fileoffset
 
 class Entry(pstruct.type):
-    _fields_ = [
-        #(virtualaddress(lambda s: dyn.clone(s.parent._object_,blocksize=lambda s:s.getparent(Entry)['Size'].l.num())), 'VirtualAddress'),
-        (virtualaddress(lambda s: dyn.clone(s.parent._object_)), 'VirtualAddress'),
-        (uint32, 'Size')
-    ]
+    def _object_(self):
+        # called by 'Address'
+        sz = self['Size'].num()
+        return dyn.block(sz)
 
     def containsaddress(self, addr):
         '''if an address is within our boundaries'''
-        start = int(self['VirtualAddress'])
-        end = start + int(self['Size'])
+        start = self['Address'].num()
+        end = start + self['Size'].num()
         if (addr >= start) and (addr < end):
             return True
         return False
 
     def valid(self):
-        return bool(int(self['Size']) != 0)
+        return self['Size'].num() != 0
 
-class Export(Entry):
+class AddressEntry(Entry):
+    _fields_ = [
+        (lambda s: virtualaddress(s._object_), 'Address'),
+        (uint32, 'Size')
+    ]
+
+class OffsetEntry(Entry):
+    _fields_ = [
+        (lambda s: fileoffset(s._object_), 'Address'),
+        (uint32, 'Size')
+    ]
+
+class Export(AddressEntry):
     _object_ = exports.IMAGE_EXPORT_DIRECTORY
         
-class Import(Entry):
+class Import(AddressEntry):
     _object_ = imports.IMAGE_IMPORT_DIRECTORY
 
-class Resource(Entry):
+class Resource(AddressEntry):
     _object_ = resources.IMAGE_RESOURCE_DIRECTORY
 
-class Exception(Entry):
+class Exception(AddressEntry):
     _object_ = exceptions.IMAGE_EXCEPTION_DIRECTORY
-class Security(Entry): pass
-class BaseReloc(Entry):
+class Security(OffsetEntry):
+    pass
+class BaseReloc(AddressEntry):
     _object_ = relocations.IMAGE_BASERELOC_DIRECTORY
 
-class Debug(Entry): pass
-class Architecture(Entry): pass
-class GlobalPtr(Entry): pass
-class Tls(Entry):
+class Debug(AddressEntry): pass
+class Architecture(AddressEntry): pass
+class GlobalPtr(AddressEntry): pass
+class Tls(AddressEntry):
     class IMAGE_TLS_DIRECTORY(pstruct.type):
         _fields_ = [
             (uint32, 'Raw Data Start VA'),
@@ -56,7 +68,7 @@ class Tls(Entry):
 
     _object_ = IMAGE_TLS_DIRECTORY
 
-class LoadConfig(Entry):
+class LoadConfig(AddressEntry):
     # FIXME: The size field in the DataDirectory is used to determine which
     #        IMAGE_LOADCONFIG_DIRECTORY to use.
     #        Determine the different structures that are available, and modify
@@ -64,7 +76,7 @@ class LoadConfig(Entry):
     class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
         _fields_ = [
             (uint32, 'Characteristics'),
-            (uint32, 'TimeDateStamp'),
+            (TimeDateStamp, 'TimeDateStamp'),
             (uint16, 'MajorVersion'),
             (uint16, 'MinorVersion'),
             (uint32, 'GlobalFlagsClear'),
@@ -93,13 +105,13 @@ class LoadConfig(Entry):
         ]
     _object_ = IMAGE_LOADCONFIG_DIRECTORY
 
-class BoundImport(Entry): pass
-class IAT(Entry):
+class BoundImport(AddressEntry): pass
+class IAT(AddressEntry):
     _object_ = imports.IMAGE_IMPORT_ADDRESS_TABLE
-class DelayLoad(Entry):
+class DelayLoad(AddressEntry):
     _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY_ENTRY
-class ComHeader(Entry): pass
-class Reserved(Entry): pass
+class ComHeader(AddressEntry): pass
+class Reserved(AddressEntry): pass
 
 class DataDirectory(parray.type):
     length = 16

@@ -14,7 +14,6 @@ class _parray_generic(ptype.container):
             return int(self.length)
         return len(self.value)
 
-    # XXX: update offsets (?)
     def insert(self, index, object):
         offset = self.value[index].getoffset()
         object.setoffset(offset, recurse=True)
@@ -97,7 +96,7 @@ class type(_parray_generic):
         return super(ptype.container, self).contains(offset)
 
     # load ourselves lazily
-    def load_block(self, **attrs):
+    def __load_block(self, **attrs):
         ofs = self.getoffset()
         for index in xrange(self.length):
             n = self.new(self._object_, __name__=str(index), offset=ofs, **attrs)
@@ -106,7 +105,7 @@ class type(_parray_generic):
         return self
 
     # load ourselves incrementally
-    def load_container(self, **attrs):
+    def __load_container(self, **attrs):
         ofs = self.getoffset()
         for index in xrange(self.length):
             n = self.new(self._object_, __name__=str(index), offset=ofs, **attrs)
@@ -123,10 +122,10 @@ class type(_parray_generic):
 
                 # which kind of load are we
                 if ptype.istype(obj) and not ptype.iscontainer(obj):
-                    self.load_block()
+                    self.__load_block()
 
                 elif ptype.iscontainer(obj) or ptype.isresolveable(obj):
-                    self.load_container()
+                    self.__load_container()
 
                 else:
                     # XXX: should never be encountered
@@ -141,7 +140,7 @@ class type(_parray_generic):
         res = super(type,self).summary(**options)
         length = len(self) if self.initializedQ() else (self.length or 0)
         if self._object_ is None:
-            obj = 'untyped'
+            obj = '(untyped)'
         else:
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
         return '%s[%d] %s'% (obj, length, res)
@@ -207,7 +206,7 @@ class terminated(type):
             return self
 
         except KeyboardInterrupt:
-            # XXX: some of these variables might not be defined due to a race. who cares...
+            # XXX: some of these variables might not be defined due to my usage of KeyboardInterrupt being racy. who cares...
             path = ' -> '.join(self.backtrace())
             Config.log.warn("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path))
             return self
@@ -219,6 +218,7 @@ class terminated(type):
         return self.v is not None and len(self.v) > 0 and self.v[-1].initializedQ()
 
 class uninitialized(terminated):
+    '''An array that determines it's size dynamically.'''
     def size(self):
         if self.v is not None:
             value = (_ for _ in self.value if _.value is not None)
@@ -229,9 +229,10 @@ class uninitialized(terminated):
         return self.v is not None
 
 class infinite(uninitialized):
+    '''An array that reads elements until an exception or interrupt happens'''
     __offset = 0
 
-    def nextelement(self, **attrs):
+    def __next_element(self, **attrs):
         '''method that returns a new element at a specified offset and loads it. intended to be overloaded.'''
         index = len(self.value)
         n = self.new(self._object_, __name__=str(index), offset=self.__offset)
@@ -239,7 +240,7 @@ class infinite(uninitialized):
             n.load(**attrs)
         except error.LoadError,e:
             path = ' -> '.join(self.backtrace())
-            Config.log.warn("infinite.nextelement : %s : Unable to read element %s : %s"% (self.instance(), n.instance(), path))
+            Config.log.warn("infinite.__next_element : %s : Unable to read element %s : %s"% (self.instance(), n.instance(), path))
         return n
         
     def isTerminator(self, value):
@@ -252,7 +253,7 @@ class infinite(uninitialized):
 
             try:
                 while True:
-                    n = self.nextelement()
+                    n = self.__next_element()
                     self.value.append(n)
                     if not n.initializedQ():
                         break
@@ -289,7 +290,7 @@ class infinite(uninitialized):
 
             try:
                 while True:
-                    n = self.nextelement()
+                    n = self.__next_element()
                     self.value.append(n)
                     yield n
 
@@ -316,6 +317,7 @@ class infinite(uninitialized):
         return
 
 class block(uninitialized):
+    '''An array that reads elements until their size totals the same amount returned by .blocksize()'''
     def isTerminator(self, value):
         return False
 

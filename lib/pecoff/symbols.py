@@ -90,9 +90,6 @@ class ShortName(pstruct.type):
         stringtable = self.getparent(SymbolTableAndStringTable)
         return stringtable.extract( self['Offset'].num() )
 
-    def get(self):
-        return self.str()
-
     def set(self, string):
         if len(string) <= 8:
             data = string + '\x00'*(8-len(string))
@@ -279,12 +276,6 @@ class StringTable(pstruct.type):
         (initialized(uint32, 4), 'Size'),
         (fetchData, 'Data')
     ]
-
-    if False:
-        def get(self, offset):
-            import logging
-            warnings.warn('%s.get(offset) is deprecated for %s.extract(offset)'%(self.__class__.__name__,self.__class__.__name__), DeprecationWarning, stacklevel=2)
-            return self.extract(offset)
 
     def extract(self, offset):
         '''return the string associated with a particular offset'''

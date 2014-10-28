@@ -71,9 +71,9 @@ if __name__ == '__main__':
     import pecoff,ptypes
     a = pecoff.Executable.open('c:/windows/sysnative/wow64win.dll')
     print a['padding'].hexdump()
-    print a['pe']['sections'][0]
+    print a['Data']['Sections'][0]
     #b = a.new(dyn.block(0x5b74), offset=0x50e00)
-    b = a['pe']['optionalheader']['datadirectory'][3]['virtualaddress'].d
+    b = a['Data']['DataDirectory'][3]['virtualaddress'].d
     b=b.l
     #c = RUNTIME_FUNCTION(source=ptypes.prov.proxy(b))
     c = b[2]['UnwindData'].d.l

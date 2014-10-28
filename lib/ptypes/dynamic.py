@@ -58,11 +58,11 @@ def align(size, **kwds):
     def repr(self, **options): return self.summary(**options)
     def blocksize(self):
         p = self.parent
-        if p is not None:
-            i = p.value.index(self)
-            offset = p.getoffset()+reduce(lambda x,y:x+y.blocksize(), p.value[:i], 0)
-            return (-offset) & (size-1)
-        return 0
+        if p is None:
+            return 0
+        i = p.value.index(self) # XXX: why does this call __repr__?
+        offset = p.getoffset()+reduce(lambda x,y:x+y.blocksize(), p.value[:i], 0)
+        return (-offset) & (size-1)
     getinitargs = lambda s: (type,kwds)
 
     # if alignment is undefined

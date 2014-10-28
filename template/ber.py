@@ -1,76 +1,63 @@
-import logging
+import logging,math
+import ptypes.bitmap as bitmap
 from ptypes import *
 
-class UNKNOWN(dyn.block(0)):
-    def classname(self):
-        return 'Unknown<%d,%d>'%(self.type[0], self.type[1])
+class IdentifierLong(pbinary.terminatedarray):
+    class _object_(pbinary.struct):
+        _fields_ = [
+            (1, 'continue'),
+            (7, 'integer'),
+        ]
+    def isTerminator(self, value):
+        return value['continue'] == 0
 
-class AbstractClass(object):
-    cache = {}
-    @classmethod
-    def Add(cls, object):
-        t = object.type
-        cls.cache[t] = object
+class IndefiniteLength(pbinary.struct):
+    _fields_ = [(0,'unknown')]
 
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
+class Length(pbinary.struct):
+    def __form(self):
+        if self['form']:
+            if self['count'] == 0:
+                return IndefiniteLength
+            return self['count']*8
+        return 0
 
-    @classmethod
-    def Define(cls, pt):
-        cls.Add(pt)
-        return pt
+    def num(self):
+        if self['form']:
+            if self['count'] == 0:
+                raise Exception, 'Indefinite form not implemented'
+            return self['value']
+        return self['count']
 
-    @classmethod
-    def Update(cls, record):
-        a = set(cls.cache.keys())
-        b = set(record.cache.keys())
-        if a.intersection(b):
-            logging.warning('%s : Unable to import module %s due to multiple definitions of the same record'%(cls.__module__, repr(record)))
-            logging.debug(repr(a.intersection(b)))
-            return False
+    _fields_ = [
+        (1, 'form'),
+        (7, 'count'),
+        (__form, 'value'),
+    ]
 
-        # merge record caches into a single one
-        cls.cache.update(record.cache)
-        record.cache = cls.cache
-        return True
+    def summary(self):
+        res = super(Length,self).summary()
+        return '{:d} (0x{:x}) -- {:s}'.format(self.num(),self.num(), res)
 
 ###
 class Type(pbinary.struct):
     _fields_ = [
         (2, 'Class'),
         (1, 'Constructed?'),
-        (5, 'Number'),
+        (5, 'Tag'),
     ]
 
-class Length(pbinary.struct):
-    def __long(self):
-        if not self['islong']:
-            return 0
-        return self['length']*8
-
-    def get(self):
-        return (self['length'], self['longform'])[self['islong']]
-            
-    _fields_ = [
-        (1, 'islong'),
-        (7, 'length'),
-        (__long, 'longform'),
-    ]
+    def summary(self):
+        c,p,t = self['Class'],self['Constructed?'],self['Tag']
+        return 'class:{:d} tag:0x{:x} {:s}'.format(c,t, 'constructed' if p else 'primitive')
 
 class Record(pstruct.type):
     def __Value(self):
-        c,n = self['Type'].l['Class'],self['Type']['Number']
-        s = self['Length'].l.get()
-        
-        try:
-            result = dyn.clone(AbstractClass.Lookup((c,n)), blocksize=lambda x:s)
-        except KeyError:
-            result = dyn.clone(UNKNOWN, type=(c,n))
-        
-        if n not in set([0x10,0x11]):
-            result.length = s
-        return result
+        c,p,n = self['Type'].l['Class'],self['Type']['Constructed?'],self['Type']['Tag']
+        s = self['Length'].l.num()
+        if p:
+            return dyn.clone(AbstractConstruct.get(n, length=s), blocksize=lambda _:s, length=s)
+        return dyn.clone(AbstractPrimitive.get(n, length=s), blocksize=lambda _:s, length=s)
 
     _fields_ = [
         (Type, 'Type'),
@@ -78,52 +65,166 @@ class Record(pstruct.type):
         (__Value, 'Value')
     ]
 
+class AbstractPrimitive(ptype.definition):
+    cache = {}
+    attribute = 'type'
+    class unknown(ptype.block):
+        def classname(self):
+            return 'UnknownPrimitive<%d>'%(self.type)
+
+class AbstractConstruct(ptype.definition):
+    cache = {}
+    attribute = 'type'
+    class unknown(ptype.block):
+        _object_ = Record
+        def classname(self):
+            return 'UnknownConstruct<%d>'%(self.type)
+
 ### classes
-@AbstractClass.Define
-class BOOLEAN(ptype.type):
-    type = (0, 0x00)
+@AbstractConstruct.define
+@AbstractPrimitive.define
+class EOC(ptype.block):
+    type = 0x00
 
-@AbstractClass.Define
-class INTEGER(ptype.type):
-    type = (0, 0x02)
+@AbstractPrimitive.define
+class BOOLEAN(ptype.block):
+    type = 0x01
 
-@AbstractClass.Define
-class BITSTRING(ptype.type):
-    type = (0, 0x03)
+@AbstractPrimitive.define
+class INTEGER(pint.uint_t):
+    type = 0x02
 
-#@AbstractClass.Define
-class OCTETSTRING(ptype.type):
-    type = (0, 0x04)
+@AbstractPrimitive.define
+class BITSTRING(ptype.block):
+    type = 0x03
 
-@AbstractClass.Define
-class NULL(ptype.type):
-    type = (0, 0x05)
+@AbstractPrimitive.define
+class OCTETSTRING(pstr.string):
+    type = 0x04
+    def summary(self):
+        return ''.join('{:02X}'.format(ord(_)) for _ in self.serialize())
 
-@AbstractClass.Define
+@AbstractPrimitive.define
+class NULL(ptype.block):
+    type = 0x05
+
+@AbstractPrimitive.define
 class OBJECT_IDENTIFIER(ptype.type):
-    type = (0, 0x06)
+    type = 0x06
 
-@AbstractClass.Define
+    def set(self, string):
+        res = map(int,string.split('.'))
+        val = [res.pop(0)*40 + res.pop(0)]
+        for n in res:
+            if n <= 127:
+                val.append(n)
+                continue
+            
+            # convert integer to a bitmap
+            x = bitmap.new(0,0)
+            while n > 0:
+                x = bitmap.insert(x, (n&0xf,4))
+                n /= 0x10
+
+            # shuffle bitmap into oid components
+            y = []
+            while bitmap.size(x) > 0:
+                x,v = bitmap.consume(x, 7)
+                y.insert(0, v)
+
+            val.extend([x|0x80 for x in y[:-1]] + [y[-1]])
+        return super(OBJECT_IDENTIFIER).set(''.join(map(chr,val)))
+
+    def str(self):
+        data = map(ord,self.serialize())
+        res = [data[0]/40, data.pop(0)%40]
+        data = iter(data)
+        for n in data:
+            v = bitmap.new(0,0)
+            while n&0x80:
+                v = bitmap.push(v,(n&0x7f,7))
+                n = data.next()
+            v = bitmap.push(v,(n,7))
+            res.append(bitmap.number(v))
+        return '.'.join(map(str,res))
+
+    def summary(self):
+        data = self.serialize()
+        return '{:s} ({!r})'.format(self.str(),data)
+
+@AbstractPrimitive.define
+class EXTERNAL(ptype.block):
+    type = 0x08
+
+@AbstractPrimitive.define
+class REAL(ptype.block):
+    type = 0x09
+
+@AbstractPrimitive.define
+class ENUMERATED(ptype.block):
+    type = 0x0a
+
+@AbstractPrimitive.define
+class UTF8String(pstr.string):
+    type = 0x0c
+
+@AbstractConstruct.define
 class SEQUENCE(parray.block):
-    type = (0, 0x10)
+    type = 0x10
     _object_ = Record
 
-@AbstractClass.Define
+@AbstractConstruct.define
 class SET(parray.block):
-    type = (0, 0x11)
+    type = 0x11
     _object_ = Record
 
-@AbstractClass.Define
-class PrintableString(ptype.type):
-    type = (0, 0x13)
+@AbstractPrimitive.define
+class NumericString(ptype.block):
+    type = 0x12
 
-@AbstractClass.Define
-class IA5String(ptype.type):
-    type = (0, 0x16)
+@AbstractPrimitive.define
+class PrintableString(pstr.string):
+    type = 0x13
 
-@AbstractClass.Define
-class UTCTime(ptype.type):
-    type = (0, 0x17)
+@AbstractPrimitive.define
+class T61String(pstr.string):
+    type = 0x14
+    _fields_ = []
+
+@AbstractPrimitive.define
+class IA5String(pstr.string):
+    type = 0x16
+    _fields_ = []
+
+@AbstractPrimitive.define
+class UTCTime(pstr.string):
+    type = 0x17
+    _fields_ = []
+
+@AbstractPrimitive.define
+class VisibleString(ptype.block):
+    type = 0x1a
+    _fields_ = []
+
+@AbstractPrimitive.define
+class GeneralString(pstr.string):
+    type = 0x1b
+    _fields_ = []
+
+@AbstractPrimitive.define
+class UniversalString(pstr.string):
+    type = 0x1c
+    _fields_ = []
+
+@AbstractPrimitive.define
+class CHARACTER_STRING(pstr.string):
+    type = 0x1d
+    _fields_ = []
+
+@AbstractPrimitive.define
+class BMPString(pstr.string):
+    type = 0x1e
+    _fields_ = []
 
 if __name__ == '__main__':
     import ptypes,ber

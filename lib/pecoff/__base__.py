@@ -25,6 +25,8 @@ class TimeDateStamp(uint32):
     def details(self):
         x = self.epoch + datetime.timedelta( seconds=int(self) )
         return x.strftime('%Y-%m-%d %H:%M:%S')
+    def summary(self):
+        return '0x{:x} {!r}'.format(self.num(), self.details())
 
 class IMAGE_COMDAT_SELECT(ptypes.pint.enum, byte):
     _values_ = [

@@ -39,7 +39,7 @@ class MemberHeader(pstruct.type):
 
     def data(self):
         size = self['Size'].num()
-        return self.newelement(dyn.block(self['Size'].num()), self['Name'].str(), self.getoffset()+self.size())
+        return self.new(dyn.block(self['Size'].num()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
 
 # FIXME: instead of making each of these a .union explicitly, I can probably transform them into
 #            union all in one place in the Members array
@@ -103,9 +103,6 @@ class SecondLinkerMember(pstruct.type):
 
 class Longnames(ptype.type):
     length = 0
-
-    #def get(self, index):
-    #    warnings.warn('.get has been deprecated in favor of .extract', DeprecationWarning)
 
     def extract(self, index):
         return utils.strdup(self.serialize()[index:])
@@ -173,7 +170,7 @@ class ArchiveMember(pstruct.type):
 
     def __newline(self):
         o = self.getoffset('newline')
-        a = self.newelement(pstr.char_t, 'temp', o).l
+        a = self.new(pstr.char_t, __name__='temp', offset=o).l
         if a.serialize() == '\n':
             return pstr.char_t
         return ptype.type
@@ -274,7 +271,7 @@ class File(pstruct.type):
     ## really slow interface
     def getmember(self, index):
         offsets = self['members'].SecondLinker['Offsets']
-        return self.newelement(MemberHeader, 'member[%d]'% index, offsets[index])
+        return self.new(MemberHeader, __name__='member[%d]'% index, offset=offsets[index])
 
     def getmemberdata(self, index):
         return self.getmember(index).l.data().l.serialize()
@@ -285,11 +282,11 @@ class File(pstruct.type):
     ## faster interface using ptypes to slide view
     def fetchimports(self):
         offsets = self['members'].SecondLinker['Offsets']
-        memberheader = self.newelement(MemberHeader, 'header', 0)
-        importheader = self.newelement(ImportHeader, 'header', 0)
+        memberheader = self.new(MemberHeader, __name__='header', offset=0)
+        importheader = self.new(ImportHeader, __name__='header', offset=0)
 
-        p = self.newelement(dyn.block(4), 'magic', 0)
-        imp = self.newelement(Import, 'import', 0)
+        p = self.new(dyn.block(4), __name__='magic', offset=0)
+        imp = self.new(Import, __name__='import', offset=0)
         memblocksize = memberheader.alloc().size()
         impblocksize = importheader.alloc().size()
 
@@ -306,9 +303,9 @@ class File(pstruct.type):
 
     def fetchmembers(self):
         offsets = self['members'].SecondLinker['Offsets']
-        memberheader = self.newelement(MemberHeader, 'header', 0)
+        memberheader = self.new(MemberHeader, __name__='header', offset=0)
 
-        p = self.newelement(dyn.block(4), 'magic', 0)
+        p = self.new(dyn.block(4), __name__='magic', offset=0)
         memblocksize = memberheader.alloc().size()
 
         for index,o in enumerate(offsets):
@@ -317,8 +314,8 @@ class File(pstruct.type):
             if p.load().serialize() == '\x00\x00\xff\xff':
                 continue
 
-#            yield self.newelement(Object.File, 'Member[%d]'% index, o)
-            yield self.newelement(Object.File, None, o)
+#            yield self.new(Object.File, __name__='Member[%d]'% index, offset=o)
+            yield self.new(Object.File, offset=o)
         return
 
 def open(filename, **kwds):
@@ -341,9 +338,9 @@ if __name__ == '__main__':
     self.load()
 
 #    print self['SymbolNames']['Header']
-#    print self['SymbolNames']['Member'].get()
+#    print self['SymbolNames']['Member']
 #    print self['MemberNames']['Header']
-#    print self['MemberNames']['Member'].get()
+#    print self['MemberNames']['Member']
 #    print self['LongNames']['Header']
 #    print self['LongNames']['Member']
 #    print '-'*79

@@ -498,5 +498,5 @@ if __name__ == '__main__':
 
     Ldr = Peb['Ldr'].d.l
     for x in Ldr['InLoadOrderModuleList'].walk():
-        print x['BaseDllName'].get(),x['FullDllName'].get()
+        print x['BaseDllName'].str(),x['FullDllName'].str()
         print hex(int(x['DllBase'])), hex(int(x['SizeOfImage']))

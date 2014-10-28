@@ -123,7 +123,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
 
     def fetchrelocations(self):
         block = self['Relocations'].serialize()
-        #block = self.newelement(dyn.block(int(self['Block Size'])), 'Relocations', self.getoffset()+8).load().serialize()
+        #block = self.new(dyn.block(int(self['Block Size'])), __name__='Relocations', offset=self.getoffset()+8).load().serialize()
         relocations = array.array('H')
         relocations.fromstring(block)
         return [((v&0xf000)/0x1000, v&0x0fff) for v in relocations]

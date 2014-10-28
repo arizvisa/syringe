@@ -224,7 +224,7 @@ class executable(coff):
             
     def do_iat(self):
         '''preload the iat symbols from the binary'''
-        importDirectory = self.value['OptionalHeader']['DataDirectory'][1]
+        importDirectory = self.value['DataDirectory'][1]
         if not importDirectory.valid():
             return
         importDirectory = importDirectory.get().l
@@ -246,7 +246,7 @@ class executable(coff):
 
     def load_iat(self, symbolnames=None):
         '''initialize the iat with default values from the executable's import directory'''
-        importDirectory = self.value['OptionalHeader']['DataDirectory'][1]
+        importDirectory = self.value['DataDirectory'][1]
         if not importDirectory.valid():
             return
         importDirectory = importDirectory.get().l
@@ -264,7 +264,7 @@ class executable(coff):
 
 ###
     def do_imports(self):
-        importDirectory = self.value['OptionalHeader']['DataDirectory'][1]
+        importDirectory = self.value['DataDirectory'][1]
         if not importDirectory.valid():
             return
         importDirectory = importDirectory.get().l
@@ -279,7 +279,7 @@ class executable(coff):
         return
 
     def load_imports(self, symbolnames=None):
-        importDirectory = self.value['OptionalHeader']['DataDirectory'][1]
+        importDirectory = self.value['DataDirectory'][1]
         if not importDirectory.valid():
             return
         importDirectory = importDirectory.get().l
@@ -298,7 +298,7 @@ class executable(coff):
 ###
     def do_exports(self):
         '''Adds the symbolname as a global'''
-        exportDirectory = self.value['OptionalHeader']['DataDirectory'][0]
+        exportDirectory = self.value['DataDirectory'][0]
         if not exportDirectory.valid():
             return
         exportDirectory = exportDirectory.get().l
@@ -331,7 +331,7 @@ class executable(coff):
         return
 
     def load_exports(self, symbolnames=None):
-        exportDirectory = self.value['OptionalHeader']['DataDirectory'][0]
+        exportDirectory = self.value['DataDirectory'][0]
         if not exportDirectory.valid():
             return
 
@@ -359,7 +359,7 @@ class executable(coff):
         return symbols                
 ###
     def do_relocations(self):
-        relo = self.value['OptionalHeader']['DataDirectory'][5]
+        relo = self.value['DataDirectory'][5]
         if not relo.valid():
             return
         self.relocations = relo.get().load()
@@ -690,8 +690,8 @@ if __name__ == '__main__':
         importname = '__imp__<%s!%s>'%(globalname)
 
         z = coff.executable.open('~/../../windows/syswow64/kernel32.dll')
-        #a = z.value['OptionalHeader']['DataDirectory'][1].get().l[1]
-        #b = z.value['OptionalHeader']['DataDirectory'][0].get().l
+        #a = z.value['DataDirectory'][1].get().l[1]
+        #b = z.value['DataDirectory'][0].get().l
 
         for x in z.getexternals():
             z[x] = 1

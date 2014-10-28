@@ -33,7 +33,7 @@ if __name__ == '__main__':
     ## build list of external symbols
     sym_external = {}
     for name in sst.names():
-        v = sst.get(name)
+        v = sst.getSymbol(name)
         if int(v['StorageClass']) == 2:
             sym_external[name] = v
         continue
@@ -44,9 +44,9 @@ if __name__ == '__main__':
     ## build list of static symbols
     sym_static = {}
     for name in sst.names():
-        v = sst.get(name)
+        v = sst.getSymbol(name)
         if int(v['StorageClass']) == 3 and int(v['Value']) == 0:
-            num = v['SectionNumber'].get()
+            num = v['SectionNumber'].num()
             sym_static[num] = (v, sst.getaux(name))
         continue
 
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         if len(aux) > 0:
             symbolcount = int(aux[0]['NumberOfRelocations'])
             if sectioncount != symbolcount:
-                warn('number of relocations (%d) for section %s differs from section definition (%d)'% (symbolcount,sym['Name'].get(),sectioncount))
+                warn('number of relocations (%d) for section %s differs from section definition (%d)'% (symbolcount,sym['Name'].str(),sectioncount))
         print 'relocated section %s'% repr(section)
         continue
 
@@ -86,7 +86,7 @@ if __name__ == '__main__':
     print '-'*20 + 'printing all relocations'
     for section in coff['Sections']:
         relocations = section.getrelocations()
-        data = section.get().load()
+        data = section.data().load()
         section.data, section.relocations = data.serialize(), relocations   # save for later
         continue
         
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     ## print out results
     print '-'*20 + 'printing relocated sections'
     for section in coff['Sections']:
-        print section['Name'].get()
+        print section['Name'].str()
         print ptypes.utils.indent('\n'.join(map(lambda x: formatrelocation(x, symboltable), section.relocations)))
         print ptypes.utils.hexdump(section.data)
 
@@ -114,11 +114,11 @@ if __name__ == '__main__':
             print name,
             if index in sym_static.keys():
                 sym,aux = sym_static[index]
-                print sym['Name'].get(), sym['SectionNumber'].get(), int(sym['Value'])
+                print sym['Name'].str(), sym['SectionNumber'].num(), int(sym['Value'])
                 data = section.getrelocateddata(symboltable)
             else:
+                data = section.data().serialize()
                 print 
-                data = section.getdata().serialize()
 
     #        print ptypes.utils.hexdump( section.getdata().serialize() )
             print ptypes.utils.hexdump( data )

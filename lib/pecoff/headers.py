@@ -12,7 +12,7 @@ def locateBase(self):
     try:
         nth = self.getparent(ptype.boundary)
     except ValueError, msg:
-        nth = list(self.walk())[-1]
+        nth = list(self.backtrace(fn=lambda x:x))[-1]
     return nth
 
 def locateHeader(self):
@@ -20,7 +20,7 @@ def locateHeader(self):
     try:
         nth = self.getparent(Header)
     except ValueError, msg:
-        nth = list(self.walk())[-1]
+        nth = list(self.backtrace(fn=lambda x:x))[-1]
     return nth
 
 ## types of relative pointers in the executable
@@ -42,7 +42,7 @@ def calculateRelativeOffset(self, offset):
     base = locateBase(self).getoffset()
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.file):
+    if issubclass(self.source.__class__, ptypes.provider.filebase):
         return base + offset
 
     # memory
@@ -58,7 +58,7 @@ def calculateRealAddress(self, address):
     base=base.getoffset()
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.file):
+    if issubclass(self.source.__class__, ptypes.provider.filebase):
         pe = locateHeader(self)
         section = pe['Sections'].getsectionbyaddress(address)
         return base + section.getoffsetbyaddress(address)
@@ -133,7 +133,7 @@ class NtHeader(pstruct.type, Header):
     """PE Executable Header"""
     class FileHeader(pstruct.type):
         """PE Executable File Header"""
-        class Characteristics(pbinary.struct):
+        class Characteristics(pbinary.flags):
             _fields_ = [
                 (1, 'BYTES_REVERSED_HI'), (1, 'UP_SYSTEM_ONLY'), (1, 'DLL'), (1, 'SYSTEM'),
                 (1, 'NET_RUN_FROM_SWAP'), (1, 'REMOVABLE_RUN_FROM_SWAP'), (1, 'DEBUG_STRIPPED'),
@@ -165,7 +165,7 @@ class NtHeader(pstruct.type, Header):
 
     class OptionalHeader(pstruct.type):
         """PE Executable Optional Header"""
-        class DllCharacteristics(pbinary.struct):
+        class DllCharacteristics(pbinary.flags):
             _fields_ = [
                 (1, 'TERMINAL_SERVER_AWARE'), (1, 'reserved_1'), (1, 'WDM_DRIVER'),
                 (1, 'reserved_3'), (1, 'NO_BIND'), (1, 'NO_SEH'), (1, 'NO_ISOLATION'),
@@ -181,13 +181,6 @@ class NtHeader(pstruct.type, Header):
             ]
 
 ## <class OptionalHeader>
-        def DataDirectory(self):
-            length = self['NumberOfRvaAndSizes'].load().num()
-            if length > 0x10:   # XXX
-                warn('OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries (0x%x) for the DataDirectory. Assuming the maximum of 0x10'% length)
-                length = 0x10
-            return dyn.clone(datadirectory.DataDirectory, length=length)
-
         def __Is64(self):
             if len(self.v) > 0:
                 magic = self['Magic']
@@ -226,7 +219,6 @@ class NtHeader(pstruct.type, Header):
             ( lambda s: uint64 if s.__Is64() else uint32, 'SizeOfHeapCommit' ),
             ( uint32, 'LoaderFlags' ),
             ( uint32, 'NumberOfRvaAndSizes' ),
-            ( DataDirectory, 'DataDirectory' ),
         ]
 ## </class OptionalHeader>
 
@@ -369,11 +361,12 @@ class NtHeader(pstruct.type, Header):
 
         def getstringbyoffset(self, offset):
             """Fetch the string in the section specified by /offset/"""
-            return self.newelement(pstr.szstring, 'string[%x]'% offset, offset + self.getparent(NtHeader).getoffset()).load().serialize()
+            return self.new(pstr.szstring, __name__='string[%x]'% offset, offset=offset + self.getparent(NtHeader).getoffset()).load().serialize()
 
         def getstringbyaddress(self, address):
             """Fetch the string in the section specified by /address/"""
-            return self.getstringbyoffset( self.getoffsetbyaddress(address) )
+            section = self.getsectionbyaddress(address)
+            return self.getstringbyoffset( section.getoffsetbyaddress(address) )
 
         def getsectionbyname(self, name):
             """Return the `SectionTable` specified by /name/"""
@@ -386,12 +379,27 @@ class NtHeader(pstruct.type, Header):
 ## </class SectionTableArray>
 
 ## <class NtHeader>
+    def DataDirectory(self):
+        length = self['OptionalHeader'].l['NumberOfRvaAndSizes'].num()
+        if length > 0x10:   # XXX
+            warn('OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries (0x%x) for the DataDirectory. Assuming the maximum of 0x10'% length)
+            length = 0x10
+        return dyn.clone(datadirectory.DataDirectory, length=length)
+
     _fields_ = [
         ( uint32, 'Signature' ),
         ( FileHeader, 'Header' ),
         ( OptionalHeader, 'OptionalHeader' ),
+        ( DataDirectory, 'DataDirectory' ),
         ( lambda s: dyn.clone(s.SectionTableArray, length=s['Header'].load()['NumberOfSections'].num()), 'Sections' )
     ]
+
+    def getaddressbyoffset(self, offset):
+        section = self['Sections'].getsectionbyoffset(offset)
+        return section.getaddressbyoffset(offset)
+    def getoffsetbyaddress(self, address):
+        section = self['Sections'].getsectionbyaddress(address)
+        return section.getoffsetbyaddress(address)
 ## </class NtHeader>
 
 ### Coff Header
@@ -511,7 +519,7 @@ class DosHeader(pstruct.type):
         ( uint16, 'e_csum' ),
         ( uint16, 'e_ip' ),
         ( uint16, 'e_cs' ),
-        ( lambda s: fileoffset(dyn.array(DosHeader.Relocation,s['e_crlc'].l.num()), __name__='e_lfarlc', type=uint16), 'e_lfarlc' ), # relocation table
+        ( lambda s: fileoffset(dyn.array(DosHeader.Relocation,s['e_crlc'].l.num()), type=uint16), 'e_lfarlc' ), # relocation table
         ( uint16, 'e_ovno' ),        # overlay number
         ( ExtraHeaders.General, 'e_misc' ),
         #( lambda s: dyn.clone(s.__extra, root=s.__extra_space()), 'e_misc' ),

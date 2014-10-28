@@ -7,7 +7,7 @@ import itertools
 class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
     _fields_ = [
         (dword, 'Characteristics'),
-        (dword, 'TimeDateStamp'),
+        (TimeDateStamp, 'TimeDateStamp'),
         (word, 'MajorVersion'),
         (word, 'MinorVersion'),
         (word, 'NumberOfNames'),
@@ -47,7 +47,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.pointer_t):
         _fields_ = [(1,'type'),(31,'offset')]
     _value_ = dyn.clone(pbinary.partial, _object_=rva, byteorder=config.byteorder.littleendian)
     def num(self):
-        base = self.getparent(datadirectory.Resource)['VirtualAddress']
+        base = self.getparent(datadirectory.Resource)['Address']
         rva = base.num() + self.object['offset']
         return headers.calculateRelativeAddress(base, rva)
     def summary(self, **attrs):
@@ -164,7 +164,7 @@ if __name__ == '__main__':
 #    z = pecoff.Executable.open('c:/Program Files (x86)/Debugging Tools for Windows (x86)/windbg.exe', mode='r')
     z = pecoff.Executable.open('obj/windbg.exe')
 
-    a = z['Pe']['OptionalHeader']['DataDirectory'][2]['VirtualAddress'].d.l
+    a = z['Pe']['DataDirectory'][2]['Address'].d.l
     b = a['Ids'][0]
     print b['Name']
     print b['Entry']

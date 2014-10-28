@@ -50,12 +50,8 @@ class integer_t(ptype.type):
     def classname(self):
         typename = self.typename()
         if self.byteorder is config.byteorder.bigendian:
-            #return 'bigendian(%s)'% typename
-            #return 'be(%s)'% typename
             return config.defaults.pint.bigendian_name.format(typename)
         elif self.byteorder is config.byteorder.littleendian:
-            #return 'littleendian(%s)'% typename
-            #return 'le(%s)'% typename
             return config.defaults.pint.littleendian_name.format(typename)
         else:
             raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness %s'% repr(self.byteorder))

@@ -19,10 +19,10 @@ def modulename(filename):
 
 def iterate_imports(filename):
     z = pecoff.Executable.open(filename, mode='r')
-    importsDirectory = z['pe']['optionalheader']['datadirectory'][1]
-    if importsDirectory['VirtualAddress'].num() == 0:
+    importsDirectory = z['Pe']['DataDirectory'][1]
+    if importsDirectory['Address'].num() == 0:
         raise ValueError, "No imports found in {}".format(filename)
-    for imp in importsDirectory['VirtualAddress'].d.l[:-1]:
+    for imp in importsDirectory['Address'].d.l[:-1]:
         yield imp['Name'].d.l.str()
     return
 def iterate_loader(pid):
@@ -127,7 +127,7 @@ if __name__ == '__main__':
             continue
         characteristics = module['Pe']['Header']['Characteristics']
         dllcharacteristics = module['Pe']['OptionalHeader']['DllCharacteristics']
-        loadconfig = module['Pe']['OptionalHeader']['DataDirectory'][0xa]
+        loadconfig = module['Pe']['DataDirectory'][0xa]
 
         result = []
         result.append(module['Pe']['OptionalHeader']['ImageBase'].num())
@@ -136,11 +136,11 @@ if __name__ == '__main__':
         result.append(not bool(dllcharacteristics['NO_SEH']))
         result.append(bool(dllcharacteristics['NX_COMPAT']))
         result.append(bool(dllcharacteristics['DYNAMIC_BASE']))
-        if loadconfig['VirtualAddress'].num() == 0:
+        if loadconfig['Address'].num() == 0:
             result.extend((None,)* (len(columns)-len(result)))
         else:
             try:
-                l = loadconfig['VirtualAddress'].d.l
+                l = loadconfig['Address'].d.l
                 #result.append(l['GlobalFlagsClear'].num())
                 #result.append(l['GlobalFlagsSet'].num())
                 #result.append(l['ProcessHeapFlags'].num())

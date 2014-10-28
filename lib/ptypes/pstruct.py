@@ -85,7 +85,7 @@ class type(_pstruct_generic):
                 for i,(t,name) in enumerate(self._fields_):
                     if name in self:
                         _,name = name,'%s_%x'%(name, len(self.value))
-                        Config.log.warn("type.load : %s : Duplicate element name %s. Using new name %s : %s", self.instance(), _, name, path)
+                        Config.log.warn("type.load : %s : Duplicate element name %s. Using generated name %s : %s", self.instance(), _, name, path)
 
                     # create each element
                     n = self.new(t, __name__=name, offset=ofs)
@@ -249,6 +249,7 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
+        global x
         source = provider.string('ABCDEFG')
         x = st(source=source)
         x = x.l
