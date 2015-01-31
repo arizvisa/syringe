@@ -22,14 +22,14 @@ class ElfXX_File(ptype.boundary): pass
 class Elf32_Addr(pint.uint32_t): pass
 class Elf32_Half(pint.uint16_t): pass
 class Elf32_Off(ElfXX_Off):
-    type = pint.uint32_t
+    _value_ = pint.uint32_t
 class Elf32_Sword(pint.int32_t): pass
 class Elf32_Word(pint.uint32_t): pass
 
 ### elf64
 class Elf64_Addr(pint.uint64_t): pass
 class Elf64_Off(ElfXX_Off):
-    type = pint.uint64_t
+    _value_ = pint.uint64_t
 class Elf64_Half(Elf32_Half): pass
 class Elf64_Word(Elf32_Word): pass
 class Elf64_Sword(Elf32_Sword): pass

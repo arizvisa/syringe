@@ -16,8 +16,8 @@ class Local_file_header(pstruct.type):
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
 
-        (lambda s:dyn.clone(pstr.string, length=s['file name length'].l.int()), 'file name'),
-        (lambda s:dyn.block(s['extra field length'].l.int()), 'extra field'),
+        (lambda s:dyn.clone(pstr.string, length=s['file name length'].li.int()), 'file name'),
+        (lambda s:dyn.block(s['extra field length'].li.int()), 'extra field'),
     ]
 
 class Data_descriptor(pstruct.type):
@@ -32,7 +32,7 @@ class Archive_extra_data_record(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'archive extra data signature'),
         (pint.uint32_t, 'extra field length'),
-        (lambda s: dyn.block(s['extra field length'].l.int()), 'extra field data'),
+        (lambda s: dyn.block(s['extra field length'].li.int()), 'extra field data'),
     ]
 
 class Central_directory_File_header(pstruct.type):
@@ -56,9 +56,9 @@ class Central_directory_File_header(pstruct.type):
         (pint.uint32_t, 'external file attributes'),
         (pint.uint32_t, 'relative offset of local header'),
 
-        (lambda s: dyn.clone(pstr.string,length=s['file name length'].l.int()), 'file name'),
-        (lambda s: dyn.block(s['extra field length'].l.int()), 'extra field'),
-        (lambda s: dyn.clone(pstr.string,length=s['file comment length'].l.int()), 'file comment'),
+        (lambda s: dyn.clone(pstr.string,length=s['file name length'].li.int()), 'file name'),
+        (lambda s: dyn.block(s['extra field length'].li.int()), 'extra field'),
+        (lambda s: dyn.clone(pstr.string,length=s['file comment length'].li.int()), 'file comment'),
     ]
 
 class Central_directory_Digital_signature(pstruct.type):
@@ -66,7 +66,7 @@ class Central_directory_Digital_signature(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'header signature'), # 0x05054b50
         (pint.uint16_t, 'size of data'),
-        (lambda s: dyn.block(s['size of data'].l.int()), 'signature data'),
+        (lambda s: dyn.block(s['size of data'].li.int()), 'signature data'),
     ]
 
 class Zip64_end_of_central_directory_record(pstruct.type):
@@ -106,5 +106,5 @@ class Central_Directory_End_of_central_directory_record(pstruct.type):
         (pint.uint32_t, 'size of the central directory'),
         (pint.uint32_t, 'offset of start of central directory with respect to the starting disk number'),
         (pint.uint16_t, '.ZIP file comment length'),
-        (lambda s: dyn.clone(pstr.string, length=s['.ZIP file comment length'].l.int()), '.ZIP file comment'),
+        (lambda s: dyn.clone(pstr.string, length=s['.ZIP file comment length'].li.int()), '.ZIP file comment'),
     ]

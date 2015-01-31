@@ -61,7 +61,7 @@ def align(size, **kwds):
         if p is None:
             return 0
         i = p.value.index(self) # XXX: why does this call __repr__?
-        offset = p.getoffset()+reduce(lambda x,y:x+y.blocksize(), p.value[:i], 0)
+        offset = p.getoffset()+sum(n.blocksize() for n in p.value[:i])
         return (-offset) & (size-1)
     getinitargs = lambda s: (type,kwds)
 
@@ -94,7 +94,14 @@ def array(type, count, **kwds):
     if count < 0:
         t = parray.type(_object_=type,length=count)
         Config.log.error('dynamic.array : %s : Invalid argument count=%d cannot be < 0. Defaulting to 0.'%( t.typename(), count))
-        size = 0
+        count = 0
+
+    if Config.parray.max_count > 0 and count > Config.parray.max_count:
+        t = parray.type(_object_=type,length=count)
+        if Config.parray.break_on_max_count:
+            Config.log.fatal('dynamic.array : %s : Requested argument count=%d is larger than configuration max_count=%d.'%( t.typename(), count, Config.parray.max_count))
+            raise error.UserError(t, 'array', message='Requested array count=%d is larger than configuration max_count=%d'%(count, Config.parray.max_count))
+        Config.log.warn('dynamic.array : %s : Requested argument count=%d is larger than configuration max_count=%d.'%( t.typename(), count, Config.parray.max_count))
 
     def classname(self):
         obj = type
@@ -138,7 +145,7 @@ class _union_generic(ptype.container):
         return list(self.object)
 
     def items(self):
-        return [(k,v) for k,v in zip(self.keys(), self.values())]
+        return [(k,v) for (_,k),v in zip(self._fields_,self.object)]
 
     def getindex(self, name):
         return self.__fastindex[name.lower()]
@@ -149,8 +156,36 @@ class _union_generic(ptype.container):
 
 class union(_union_generic):
     """
-    Provides a data structure with Union-like characteristics
-    If the root type isn't defined, it is assumed the first type in the union will be the root.
+    Provides a data structure with Union-like characteristics. If the root type
+    isn't defined, it is assumed the first type in the union will be the root.
+
+    The `.object` property contains a list of the instantiated types for each
+    defined field. The `.value` property points to an instance of the `.root`
+    property.
+
+    i.e.
+    class myunion(dynamic.union):
+        _fields_ = [
+            (structure1, 'a'),
+            (structure2, 'b'),
+            (structure3, 'c'),
+        ]
+
+    In this example, each field 'a', 'b', and 'c' begin at the same offset. Since
+    a root object is not defined, it is determined by the size of the first
+    field. If `structure2` or `structure3` is larger than `structure1`, then
+    these fields will be left partially uninitialized when accessed.
+
+    i.e.
+    class myunion(dynamic.union)::
+        root = block(256)
+        _fields_ = [
+            (dyn.array(uint16_t,64), 'a'),
+            (dyn.array(uint8_t,64), 'b'),
+        ]
+
+    In this example, the union is backed by a `block(256)` object. This object
+    will be used to decode the structures used by field 'a' and field 'b'.
     """
     root = None         # root type. determines block size.
     _fields_ = []       # aliases of root type that will act on the same data
@@ -160,20 +195,11 @@ class union(_union_generic):
     initializedQ = lambda self: self.value is not None and self.value.initialized
     def __choose_root(self, objects):
         """Return a ptype.block of a size that contain /objects/"""
-        if self.root:
-            return self.root
-
-        size = 0
-        for t in objects:
-            x = t().a
-            try:
-                s = x.blocksize()
-                if s > size:
-                    size = s
-            except:
-                pass
-            continue
-        return clone(ptype.block, length=size)
+        res = self.root
+        if res is None:
+            size = max(t().a.blocksize() for t in objects)
+            self.root = res = clone(ptype.block, length=size)
+        return res
 
     def __alloc_root(self, **attrs):
         t = self.__choose_root(t for t,n in self._fields_)
@@ -198,17 +224,11 @@ class union(_union_generic):
     def load(self, **attrs):
         value = self.__alloc_root(**attrs) if self.value is None else self.value
         self.__alloc_objects(value)
-        r = self.value.load()
-        return self.__deserialize_block(r.serialize())
+        _ = self.value.load()
+        return self
 
-    def __deserialize_block(self, block):
-        # try loading everything as quietly as possible 
-        for n in self.object:
-            try:
-                n.load()
-            except error.UserError, e:
-                Config.log.warning("union.__deserialize_block : %s : Ignoring exception %s"% (self.instance(), e))
-            continue
+    def deserialize_block(self, block):
+        _ = self.value.deserialize_block(block)
         return self
 
     def properties(self):
@@ -241,6 +261,8 @@ class union(_union_generic):
         return self.value.blocksize()
     def size(self):
         return self.value.size()
+    def contains(self, offset):
+        return super(ptype.container,self).contains(offset)
 
     def setoffset(self, ofs, recurse=False):
         if self.value is not None:

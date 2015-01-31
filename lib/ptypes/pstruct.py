@@ -8,6 +8,16 @@ class _pstruct_generic(ptype.container):
         super(_pstruct_generic,self).__init__(*args, **kwds)
         self.clear()
 
+    def alias(self, alias, target):
+        """Add an alias from /alias/ to the field /target/"""
+        res = self.getindex(target)
+        self.__fastindex[alias.lower()] = res
+    def unalias(self, alias):
+        """Remove the alias /alias/ as long as it's not defined in self._fields_"""
+        if any(alias.lower() == n.lower() for _,n in self._fields_):
+            raise error.UserError(self, '_pstruct_generic.__contains__', message='Not allowed to remove %s from aliases'% alias.lower())
+        del self.__fastindex[alias.lower()]
+
     def append(self, object):
         """Add an element to a pstruct.type. Return it's index."""
         name = object.shortname()
@@ -35,7 +45,7 @@ class _pstruct_generic(ptype.container):
         return list(self.value)
 
     def items(self):
-        return [(k,v) for k,v in zip(self.keys(), self.values())]
+        return [(k,v) for (_,k),v in zip(self._fields_,self.value)]
 
     def __getitem__(self, name):
         if name.__class__ is not str:
@@ -68,11 +78,21 @@ class type(_pstruct_generic):
             This contains which elements the structure is composed of
     '''
     _fields_ = None     # list of (type,name) tuples
-    initializedQ = lambda s: super(type, s).initializedQ() and len(s.value) == len(s._fields_)
+    initializedQ = lambda s: super(type, s).initializedQ() or (s.blocksize.im_func is not ptype.container.blocksize.im_func and s.size() >= s.blocksize())
     ignored = ptype.container.ignored.union(('_fields_',))
 
-    def contains(self, offset):
-        return super(ptype.container, self).contains(offset)
+    def alloc(self, __attrs__={}, **fields):
+        """Allocate the current instance. Attach any elements defined in **fields to container."""
+        result = super(type, self).alloc(**__attrs__)
+        for k,v in fields.iteritems():
+            idx = result.getindex(k)
+            if ptype.isresolveable(v) or ptype.istype(v) or isinstance(v, ptype.generic):
+                result.value[idx] = self.new(v)
+            else:
+                result.value[idx].set(v)
+            continue
+        self.setoffset(self.getoffset(), recurse=True)
+        return result
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
@@ -347,6 +367,24 @@ if __name__ == '__main__':
         a = st(source=provider.empty())
         a.set((5, (10,)))
         if a['b']['b'].num() == 10:
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_set():
+        import pint
+        class st(pstruct.type):
+            _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
+        a = st().alloc(a=0xdead,b=0x0d0e0a0d)
+        if a['a'].num() == 0xdead and a['b'].num() == 0x0d0e0a0d:
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_container():
+        import pint
+        class st(pstruct.type):
+            _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
+        a = st().alloc(a=pint.uint32_t().set(0x0d0e0a0d),b=0x0d0e0a0d)
+        if a['a'].num() == 0x0d0e0a0d and a['b'].num() == 0x0d0e0a0d:
             raise Success
 
 if __name__ == '__main__':

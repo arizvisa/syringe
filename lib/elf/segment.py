@@ -13,17 +13,18 @@ class Elf32_Phdr(pstruct.type):
             ('PT_PHDR', 6),
             ('PT_GNU_EH_FRAME', 0x6474e550),
             ('PT_GNU_STACK', 0x6474e551),
+            ('PT_GNU_RELRO', 0x6474e552),
             ('PT_LOPROC', 0x70000000),
             ('PT_HIPROC', 0x7fffffff),
         ]
 
     def __p_offset(self):
-        t = int(self['p_type'].l)
+        t = self['p_type'].li.num()
         type = Type.get(t)
         # XXX: there's that difference here between the filesz and memsz
-        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(Elf32_Phdr)['p_filesz'].l)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
+        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(Elf32_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
 
-    class __p_flags(pbinary.struct):
+    class __p_flags(pbinary.flags):
         # Elf32_Word
         _fields_ = [
             (4, 'PF_MASKPROC'),
@@ -50,53 +51,55 @@ class Type(ptype.definition):
 
 @Type.define
 class PT_LOAD(ptype.block):
-    type=1
+    type = 1
 
 @Type.define
 class PT_DYNAMIC(parray.block):
-    type=2
-    _object_=dynamic.Elf32_Dyn
-    def isTerminator(self, value):
-        return value['d_tag'].int() == 0
+    type = 2
+    _object_ = dynamic.Elf32_Dyn
+
+    def search(self, entry):
+        if ptype.istype(entry):
+            entry = entry.type
+        return [x['d_val'] for x in self if x['d_tag'].int() == entry]
 
 @Type.define
 class PT_INTERP(pstr.szstring):
-    type=3
+    type = 3
 
 @Type.define
 class PT_NOTE(parray.block):
-    type=4
-    class __note(pstruct.type):
-        def __name(self):
-            padding = (4-(self.length%4))
-            length = int(self['namesz'].l)
-            class __name(pstr.szstring):
-                def blocksize(self):
-                    return padding + length
-                pass
-            __name.length = length
-            return __name
-
+    type = 4
+    class _object_(pstruct.type):
         _fields_ = [
             (Elf32_Word, 'namesz'),
             (Elf32_Word, 'descsz'),
             (Elf32_Word, 'type'),
-            (__name, 'name'),
-            (lambda s: dyn.block(int(s['descsz'].l)), 'desc'),
+            (lambda s: dyn.clone(pstr.string, length=s['namesz'].li.int()), 'name'),
+            (dyn.align(4), 'name_pad'),
+            (lambda s: dyn.array(Elf32_Word, s['descsz'].li.int()/4), 'desc'),
+            (dyn.align(4), 'desc_pad'),
         ]
-
-    _object_ = __note
     
 @Type.define
 class PT_SHLIB(ptype.block):
-    type=5
-    # FIXME
+    type = 5
+    # FIXME: this is platform-specific and not in the standard
 
 @Type.define
-class PT_PHDR(Elf32_Phdr):
-    type=6
+class PT_PHDR(parray.block):
+    type = 6
+    _object_ = Elf32_Phdr
 
 @Type.define
 class PT_GNU_EH_FRAME(ptype.block):
     type = 0x6474e550
-    # FIXME
+    # FIXME: this structure is part of the dwarf standard
+
+@Type.define
+class PT_GNU_STACK(ptype.block):
+    type = 0x6474e551
+
+@Type.define
+class PT_GNU_RELRO(ptype.block):
+    type = 0x6474e552

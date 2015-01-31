@@ -1,14 +1,16 @@
-import ptypes,headers
+import ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils
-from __base__ import *
-import struct,logging
+from ..__base__ import *
 
-from headers import virtualaddress
+from . import headers
+from .headers import virtualaddress
+
+import struct,logging
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring)):
     def getModuleName(self):
-        module,name = self.d.l.str().split('.', 1)
+        module,name = self.d.li.str().split('.', 1)
         if name.startswith('#'):
             name = 'Ordinal%d'% int(name[1:])
         return module.lower() + '.dll',name
@@ -20,9 +22,9 @@ class Ordinal(word):
         return self.int() - self.parent.parent.parent['Base'].int()
 
 class IMAGE_EXPORT_DIRECTORY(pstruct.type):
-    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, self['NumberOfFunctions'].load().int()))
-    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, self['NumberOfNames'].load().int()))
-    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     self['NumberOfNames'].load().int()))
+    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, self['NumberOfFunctions'].li.num()))
+    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, self['NumberOfNames'].li.num()))
+    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     self['NumberOfNames'].li.num()))
 
     _fields_ = [
         ( dword, 'Flags' ),
@@ -35,25 +37,26 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         ( dword, 'NumberOfNames' ),
         ( _p_AddressOfFunctions, 'AddressOfFunctions' ),
         ( _p_AddressOfNames, 'AddressOfNames' ),
-        ( _p_AddressOfNameOrdinals, 'AddressOfNameOrdinals' )
+        ( _p_AddressOfNameOrdinals, 'AddressOfNameOrdinals' ),
+#        ( lambda s: dyn.block( s.blocksize() - s.size() ), 'ExportData'),
     ]
 
     def getNames(self):
+        """Returns a list of all the export names"""
         Header = headers.locateHeader(self)
         section = Header['Sections'].getsectionbyaddress(self['AddressOfNames'].int())
 
         sectionva = section['VirtualAddress'].int()
         offsets = [ (x.int()-sectionva) for x in self['AddressOfNames'].d.load() ]
-
         data = section.data().load().serialize()
 
         names = []
         for x in offsets:
-            res = utils.strdup(data[x:])
-            names.append(res)
+            names.append(utils.strdup(data[x:]))
         return names
 
     def getNameOrdinals(self):
+        """Returns a list of all the Ordinals for each export"""
         Header = headers.locateHeader(self)
         address = self['AddressOfNameOrdinals'].int()
         section = Header['Sections'].getsectionbyaddress(address)
@@ -67,6 +70,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         return [ struct.unpack_from('H', block, offset)[0] for offset in xrange(0, len(block), 2) ]
 
     def getExportAddressTable(self):
+        """Returns (export address table offset,[virtualaddress of each export]) from the export address table"""
         Header = headers.locateHeader(self)
         exportdirectory = self.parent.parent
 
@@ -82,15 +86,11 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
         result = []
         for i,va in enumerate(addresses):
-            if exportdirectory.contains(va):
-                offset = va-sectionva
-                result.append( utils.strdup(data[offset:]) )
-            else:
-                result.append( va )
+            result.append( utils.strdup(data[va-sectionva:]) if exportdirectory.contains(va) else va )
         return address,result
 
-    def enumerateAllExports(self):
-        result = []
+    def iterateExports(self):
+        """For each export, yields (offset of export, ordinal, name, ordinalString, virtualaddress)"""
         if 0 in (self['AddressOfNames'].num(),self['AddressOfNameOrdinals'].num()):
             base = self['Base'].num()
             ofs,eat = self.getExportAddressTable()
@@ -112,11 +112,11 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         return
 
     def search(self, key):
+        '''Search the export list for an export that matches key.
+
+        Return it's rva.
         '''
-        search the export list for an export that wildly matches key to everything.
-        return the rva
-        '''
-        for ofs,ordinal,name,ordinalstring,value in self.enumerateAllExports():
+        for ofs,ordinal,name,ordinalstring,value in self.iterateExports():
             if key == ordinal or key == name or key == ordinalstring:
                 return value
             continue

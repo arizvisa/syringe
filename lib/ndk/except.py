@@ -89,13 +89,13 @@ class TryBlockMapEntry(pstruct.type):
         (pint.int32_t, 'tryHigh'),
         (pint.int32_t, 'catchHigh'),
         (pint.int32_t, 'nCatches'),
-        (lambda s: dyn.pointer(dyn.array(HandlerType, s['nCatches'].l.int())), 'pHandlerArray'),
+        (lambda s: dyn.pointer(dyn.array(HandlerType, s['nCatches'].li.int())), 'pHandlerArray'),
     ]
 
 class ESTypeList(pstruct.type):
     _fields_ = [
         (pint.int32_t, 'nCount'),
-        (lambda s: dyn.pointer(dyn.array(HandlerType, s['nCount'].l.int())), 'pHandlerArray'),
+        (lambda s: dyn.pointer(dyn.array(HandlerType, s['nCount'].li.int())), 'pHandlerArray'),
     ]
 
 class TypeDescriptor(pstruct.type):
@@ -108,7 +108,7 @@ class TypeDescriptor(pstruct.type):
 class CatchableTypeArray(pstruct.type):
     _fields_ = [
         (pint.int32_t, 'nCatchableTypes'),
-        (lambda s: dyn.pointer(dyn.array(CatchableType, s['nCatchableTypes'].l.int())), 'arrayOfCatchableTypes'),
+        (lambda s: dyn.pointer(dyn.array(CatchableType, s['nCatchableTypes'].li.int())), 'arrayOfCatchableTypes'),
     ]
 
 class PMD(pstruct.type):
@@ -186,7 +186,7 @@ class RTTIClassHierarchyDescriptor(pstruct.type):
         (DWORD, 'signature'),
         (DWORD, 'attributes'),
         (DWORD, 'numBaseClasses'),
-        (lambda s: dyn.pointer(dyn.clone(RTTIBaseClassArray, length=s['numBaseClasses'].l.int())), 'pBaseClassArray'),
+        (lambda s: dyn.pointer(dyn.clone(RTTIBaseClassArray, length=s['numBaseClasses'].li.int())), 'pBaseClassArray'),
     ]
 
 class RTTIBaseClassArray(parray.type):
@@ -212,7 +212,7 @@ if False:
 
         _fields_ = [
             (DWORD, 'Count'),
-            (lambda s: dyn.array(s._ScopeRecord, s['Count'].l.int()), 'ScopeRecord'),
+            (lambda s: dyn.array(s._ScopeRecord, s['Count'].li.int()), 'ScopeRecord'),
         ]
 
     class _GS_HANDLER_DATA(pstruct.type):

@@ -1,69 +1,11 @@
-import ptypes,headers
+import ptypes
 from ptypes import pstruct,parray,pbinary,pstr,dyn,utils
-from __base__ import *
+from ..__base__ import *
+
+from . import headers
+from .headers import virtualaddress
+
 import array
-from headers import virtualaddress
-
-class IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
-    _fields_ = [
-        (1, 'OrdinalFlag'),   # True if an ordinal
-        (15, 'Zero'),
-        (16, 'Ordinal Number'),
-    ]
-    def load(self):
-        self.source.seek( self.getoffset() )
-        string = self.source.consume(4)
-        return self.deserialize_stream(reversed(string))
-
-    def getOrdinal(self):
-        hint = self['Ordinal Number'].num()
-        return (hint, 'Ordinal%d'% hint)      # microsoft-convention
-
-class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
-    _fields_ = [
-        (1, 'OrdinalFlag'),
-        (31, 'Name'),
-    ]
-    def load(self):
-        self.source.seek( self.getoffset() )
-        string = self.source.consume(4)
-        return self.deserialize_stream(reversed(string))
-
-    def getImport(self):
-        offset = headers.calculateRelativeAddress(self, self['Name'].num())
-        return self.new(IMAGE_IMPORT_HINT, __name__='ImportName', offset=offset).l.getHint()
-
-class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
-    root = dyn.block(4)
-    _fields_ = [
-        (IMAGE_IMPORT_NAME_TABLE_NAME, 'Name'),
-        (IMAGE_IMPORT_NAME_TABLE_ORDINAL, 'Ordinal'),
-    ]
-
-#    def repr(self):
-#        if int(self['Name']['OrdinalFlag']) == 1:
-#            return 'Ordinal -> %s'% repr(self['Ordinal'])
-#        return 'Name -> %s'% repr(self['Name'])
-
-    def getImport(self):
-        '''Will return a tuple of (iat index, name)'''
-        if int(self['Name']['OrdinalFlag']) == 1:
-            return self['Ordinal'].getOrdinal()
-        return self['Name'].getImport()
-
-#class IMAGE_IMPORT_ADDRESS_TABLE(dyn.array(addr_t,0)): pass
-class IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
-    _object_ = addr_t
-    def isTerminator(self, value):
-        return int(value) == 0
-
-class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
-    _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
-
-    def isTerminator(self, v):
-        if int(v['Name']['Name']) == 0:
-            return True
-        return False
 
 class IMAGE_IMPORT_HINT(pstruct.type):
     _fields_ = [
@@ -72,14 +14,76 @@ class IMAGE_IMPORT_HINT(pstruct.type):
         ( dyn.align(2), 'Padding' )
     ]
 
-    if False:
-        def size(self):
-            # we're padded to be aligned along an even boundary
-            l = super(IMAGE_IMPORT_HINT, self).size()
-            return [l, l+1][l&1]
+    def hint(self):
+        return self['Hint'].li.num()
 
-    def getHint(self):
-        return ( self['Hint'].num(), self['String'].str() )
+    def str(self):
+        return self['String'].li.str()
+
+class IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
+    byteorder = ptypes.config.byteorder.bigendian
+    _fields_ = [
+        (1, 'OrdinalFlag'),   # True if an ordinal
+        (15, 'Zero'),
+        (16, 'Ordinal Number'),
+    ]
+
+    def getOrdinal(self):
+        """Returns (Ordinal Hint, Ordinal String)"""
+        hint = self['Ordinal Number']
+        return (hint, 'Ordinal%d'% hint)      # microsoft-convention
+
+    def summary(self):
+        return repr(self.getOrdinal())
+
+class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
+    byteorder = ptypes.config.byteorder.bigendian
+    _fields_ = [
+        (1, 'OrdinalFlag'),
+        (31, 'Name'),
+    ]
+
+    def deref(self):
+        """Dereferences Name into it's IMAGE_IMPORT_HINT structure""" 
+        offset = headers.calculateRelativeAddress(self, self['Name'])
+        return self.p.p.new(IMAGE_IMPORT_HINT, __name__='ImportName', offset=offset)
+
+    def getName(self):
+        """Returns (Import Hint, Import String)"""
+        res = self.deref().li
+        return (res.hint(), res.str())
+
+    def summary(self):
+        return repr(self.getName())
+
+class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
+    root = dyn.block(4)
+    _fields_ = [
+        (IMAGE_IMPORT_NAME_TABLE_NAME, 'Name'),
+        (IMAGE_IMPORT_NAME_TABLE_ORDINAL, 'Ordinal'),
+    ]
+
+    def summary(self):
+        if self['Name']['OrdinalFlag'] == 1:
+            return 'Ordinal -> %r'% (self['Ordinal'].summary(),)
+        return 'Name -> %r'% (self['Name'].summary(),)
+
+    def getImport(self):
+        '''Will return a tuple of (iat index, name)'''
+        if self['Name']['OrdinalFlag'].num() == 1:
+            return self['Ordinal'].getOrdinal()
+        return self['Name'].getName()
+
+class IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
+    _object_ = addr_t
+    def isTerminator(self, value):
+        return value.num() == 0
+
+class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
+    _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
+
+    def isTerminator(self, v):
+        return True if int(v['Name']['Name']) == 0 else False
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
@@ -90,14 +94,11 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'IAT')
     ]
 
-    def links(self):
-        return set(['INT', 'Name', 'IAT'])
-
-    def fetchimports(self):
+    def iterateImports(self):
         '''[(hint,importname,importtableaddress),...]'''
         address = self['IAT'].num()
-        NtHeader = self.getparent(headers.NtHeader)
-        section = NtHeader['Sections'].getsectionbyaddress(address)
+        header = self.getparent(Header)
+        section = header['Sections'].getsectionbyaddress(address)
         data = array.array('c',section.data().l.serialize())
 
         sectionva = section['VirtualAddress'].num()
@@ -131,10 +132,7 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
     _object_ = IMAGE_IMPORT_DIRECTORY_ENTRY
 
     def isTerminator(self, v):
-        total = 0
-        for n in v.serialize():
-            total += ord(n)
-        return False if total > 0 else True
+        return False if sum(ord(n) for n in v.serialize()) > 0 else True
 
     def walk(self):
         for x in self[:-1]:
@@ -147,7 +145,7 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         return the rva
         '''
         for n in self.walk():
-            if key == n['Name'].d.l.str():
+            if key == n['Name'].d.li.str():
                 return n
             continue
         raise KeyError(key)

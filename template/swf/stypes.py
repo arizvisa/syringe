@@ -87,11 +87,11 @@ class MATRIX(pbinary.struct):
 class GLYPHENTRY(pbinary.struct):
     def __Index(self):
         p = self.getparent(pstruct.type)    # DefineText
-        return p['GlyphBits'].l.num()
+        return p['GlyphBits'].li.num()
         
     def __Advance(self):
         p = self.getparent(pstruct.type)    # DefineText
-        return p['AdvanceBits'].l.num()
+        return p['AdvanceBits'].li.num()
 
     _fields_ = [
         (__Index, 'Index'),
@@ -110,7 +110,7 @@ class TEXTRECORD(pstruct.type):
         ]
 
     def __TextColor(self):
-        if int(self['StyleFlags'].l['HasColor']):
+        if int(self['StyleFlags'].li['HasColor']):
             try:
                 self.getparent(DefineText2)
             except ValueError:
@@ -118,7 +118,7 @@ class TEXTRECORD(pstruct.type):
             return RGBA
         return Empty
 
-    __FontID = lambda s: [Empty, UI16][ int(s['StyleFlags'].l['HasFont']) ]
+    __FontID = lambda s: [Empty, UI16][ int(s['StyleFlags'].li['HasFont']) ]
     __XOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasXOffset']) ]
     __YOffset = lambda s: [Empty, SI16][ int(s['StyleFlags']['HasYOffset']) ]
     __TextHeight = lambda s: [Empty, UI16][ int(s['StyleFlags']['HasFont']) ]
@@ -131,7 +131,7 @@ class TEXTRECORD(pstruct.type):
         (__YOffset, 'YOffset'),
         (__TextHeight, 'TextHeight'),
         (UI8, 'GlyphCount'),
-        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].l)), 'GlyphEntries'),
+        (lambda s: dyn.clone(pbinary.array, _object_=GLYPHENTRY,length=int(s['GlyphCount'].li)), 'GlyphEntries'),
     ]
 
 ###
@@ -479,7 +479,7 @@ class SHAPERECORDLIST(pbinary.terminatedarray):
 ### shape styles
 class FILLSTYLE(pstruct.type):
     def __Color(self):
-        type = self['FillStyleType'].l.num()
+        type = self['FillStyleType'].li.num()
         tag = tags.DefineShape   # FIXME
         if type != 0:
             return Empty
@@ -490,13 +490,13 @@ class FILLSTYLE(pstruct.type):
 
     def __has(types, result):
         def has(self):
-            if self['FillStyleType'].l.num() in types:
+            if self['FillStyleType'].li.num() in types:
                 return result
             return Empty
         return has
 
     def __Gradient(self):
-        type = self['FillStyleType'].l.num()
+        type = self['FillStyleType'].li.num()
         if type in (0x10,0x12):
             return GRADIENT
         if type == 0x13:
@@ -543,15 +543,15 @@ class LINESTYLE2(pstruct.type):
     _fields_ = [
         (UI16, 'Width'),
         (__Style, 'Style'), 
-        (lambda s: UI16 if s['Style'].l['JoinStyle'] == 2 else Empty, 'MiterLimitFactor'),
-        (lambda s: RGBA if s['Style'].l['HasFillFlag'] == 0 else Empty, 'Color'),
-        (lambda s: FILLSTYLE if s['Style'].l['HasFillFlag'] == 1 else Empty, 'FillType'),
+        (lambda s: UI16 if s['Style'].li['JoinStyle'] == 2 else Empty, 'MiterLimitFactor'),
+        (lambda s: RGBA if s['Style'].li['HasFillFlag'] == 0 else Empty, 'Color'),
+        (lambda s: FILLSTYLE if s['Style'].li['HasFillFlag'] == 1 else Empty, 'FillType'),
     ]
 
 class FILLSTYLEARRAY(pstruct.type):
     _fields_ = [
         (UI8, 'FillStyleCount'),
-        (lambda s: UI16 if s['FillStyleCount'].l.num() == 0xff else Empty, 'FillStyleCountExtended'),
+        (lambda s: UI16 if s['FillStyleCount'].li.num() == 0xff else Empty, 'FillStyleCountExtended'),
         (lambda s: dyn.array(FILLSTYLE, s.getcount()), 'FillStyles'),
     ]
 
@@ -569,7 +569,7 @@ class LINESTYLEARRAY(pstruct.type):
 
     _fields_ = [
         (UI8, 'LineStyleCount'),
-        (lambda s: UI16 if s['LineStyleCount'].l.int() == 0xff else Empty, 'LineStyleCountExtended'),
+        (lambda s: UI16 if s['LineStyleCount'].li.int() == 0xff else Empty, 'LineStyleCountExtended'),
         (__LineStyles, 'LineStyles'),
     ]
 
@@ -611,11 +611,11 @@ class SOUNDINFO(pstruct.type):
         ]
     _fields_ = [
         (__flags, 'Flags'),
-        (lambda s: UI32 if s['Flags'].l['HasInPoint'] else Empty, 'InPoint'),
+        (lambda s: UI32 if s['Flags'].li['HasInPoint'] else Empty, 'InPoint'),
         (lambda s: UI32 if s['Flags']['HasOutPoint'] else Empty, 'OutPoint'),
         (lambda s: UI16 if s['Flags']['HasLoops'] else Empty, 'LoopCount'),
         (lambda s: UI8 if s['Flags']['HasEnvelope'] else Empty, 'EnvPoints'),
-        (lambda s: dyn.array(SOUNDENVELOPE, s['EnvPoints'].l.int()) if s['Flags']['HasEnvelope'] else Empty, 'EnvelopeRecords'),
+        (lambda s: dyn.array(SOUNDENVELOPE, s['EnvPoints'].li.int()) if s['Flags']['HasEnvelope'] else Empty, 'EnvelopeRecords'),
     ]
 
 ## XXX font

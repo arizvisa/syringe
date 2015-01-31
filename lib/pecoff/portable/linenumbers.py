@@ -1,6 +1,6 @@
 import ptypes
 from ptypes import pstruct
-from __base__ import *
+from ..__base__ import *
 
 class LineNumber(pstruct.type):
     _fields_ = [

@@ -19,7 +19,7 @@ def modulename(filename):
 
 def iterate_imports(filename):
     z = pecoff.Executable.open(filename, mode='r')
-    importsDirectory = z['Pe']['DataDirectory'][1]
+    importsDirectory = z['Next']['Header']['DataDirectory'][1]
     if importsDirectory['Address'].num() == 0:
         raise ValueError, "No imports found in {}".format(filename)
     for imp in importsDirectory['Address'].d.l[:-1]:
@@ -125,12 +125,12 @@ if __name__ == '__main__':
         except ptypes.error.Base, e:
             print "Unable to parse %s (%s)"% (fullname if opts.full else shortname, type(e).__name__)
             continue
-        characteristics = module['Pe']['Header']['Characteristics']
-        dllcharacteristics = module['Pe']['OptionalHeader']['DllCharacteristics']
-        loadconfig = module['Pe']['DataDirectory'][0xa]
+        characteristics = module['Next']['Header']['FileHeader']['Characteristics']
+        dllcharacteristics = module['Next']['Header']['OptionalHeader']['DllCharacteristics']
+        loadconfig = module['Next']['Header']['DataDirectory'][0xa]
 
         result = []
-        result.append(module['Pe']['OptionalHeader']['ImageBase'].num())
+        result.append(module['Next']['Header']['OptionalHeader']['ImageBase'].num())
         result.append(module.getoffset())
         result.append(bool(characteristics['DLL']))
         result.append(not bool(dllcharacteristics['NO_SEH']))

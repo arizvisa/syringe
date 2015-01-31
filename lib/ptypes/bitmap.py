@@ -62,13 +62,12 @@ def hex(bitmap):
     '''Return bitmap as a hex string'''
     n,s = bitmap
     size = abs(s)
-    fmt = '0x%%0%dx'% math.ceil(size/4.0)
+    length = int(math.ceil(size/4.0))
     if s < 0:
         max,sf = 2**size,2**(size-1)
         n = (n-max) if n&sf else n&(sf-1)
-        res = fmt% (abs(n)&(max-1))
-        return '-%s'%res if n < 0 else '+%s'%res
-    return fmt% (n&(2**size)-1)
+        return '{:s}{:#0{:d}x}'.format('-' if n < 0 else '+', abs(n)&(max-1), length+2)
+    return '{:#0{:d}x}'.format(n&(2**size)-1, length+2)
 
 def scan(bitmap, value=True, position=0):
     '''Searches through bitmap for specified /value/ and returns it's position'''

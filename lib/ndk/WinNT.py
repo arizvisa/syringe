@@ -141,7 +141,7 @@ class EXCEPTION_RECORD32(pstruct.type):
         (lambda s: dyn.pointer(EXCEPTION_RECORD32), 'ExceptionRecord'),
         (PVOID, 'ExceptionAddress'),
         (DWORD, 'NumberParameters'),
-        (lambda s: dyn.array(DWORD, s['NumberParameters'].l.int()), 'ExceptionInformation'),
+        (lambda s: dyn.array(DWORD, s['NumberParameters'].li.int()), 'ExceptionInformation'),
     ]
 
 class EXCEPTION_RECORD(EXCEPTION_RECORD32): pass
@@ -156,7 +156,7 @@ if False:
             (PVOID, 'ExceptionAddress'),    # FIXME: 64
             (DWORD, 'NumberParameters'),
             (DWORD, '__unusedAlignment'),
-            (lambda s: dyn.array(DWORD64, s['NumberParameters'].l.int()), 'ExceptionInformation'),
+            (lambda s: dyn.array(DWORD64, s['NumberParameters'].li.int()), 'ExceptionInformation'),
         ]
 
 class EXCEPTION_REGISTRATION(pstruct.type):
@@ -174,7 +174,7 @@ class EXCEPTION_REGISTRATION(pstruct.type):
             result.append(self['Handler'])
             if self.isLast():
                 break
-            self = self['Next'].d.l
+            self = self['Next'].d.li
         return result
 
 class NT_TIB(pstruct.type):

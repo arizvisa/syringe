@@ -1,8 +1,9 @@
-import ptypes,headers
+import ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary
-from __base__ import *
+from ..__base__ import *
 
-from headers import virtualaddress
+from . import headers
+from .headers import virtualaddress
 
 class UNWIND_CODE(dyn.union):
     #http://msdn.microsoft.com/en-us/library/ck9asaa9.aspx
@@ -49,7 +50,7 @@ class UNWIND_INFO(pstruct.type):
         (byte, 'SizeOfProlog'),
         (byte, 'CountOfCodes'),
         (Frame, 'Frame'),
-        (lambda s: dyn.array(UNWIND_CODE, s['CountOfCodes'].l.num()), 'UnwindCode'),
+        (lambda s: dyn.array(UNWIND_CODE, s['CountOfCodes'].li.num()), 'UnwindCode'),
         (__ExceptionHandler, 'ExceptionHandler'),
         (__ChainedUnwindInfo, 'ChainedUnwindInfo'),
     ]

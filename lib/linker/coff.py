@@ -189,7 +189,7 @@ class executable(coff):
         return result
 
     def do(self):
-        self.value = self.value['Pe']
+        self.value = self.value['Next']
 
         logging.info('reading %s from %s'%(type(self).__name__, self.value.source))
         logging.info('%s : .....loading segments'% self.name())

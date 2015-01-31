@@ -42,7 +42,7 @@ class pcaprec_hdr_s(pstruct.type):
 class Packet(pstruct.type):
     _fields_ = [
         (pcaprec_hdr_s, 'header'),
-        (lambda s: dyn.block(s['header']['incl_len'].l.num()), 'data'),
+        (lambda s: dyn.block(s['header']['incl_len'].li.num()), 'data'),
     ]
 
 class List(parray.infinite):

@@ -1,4 +1,4 @@
-from . import ptype,bitmap,config,error
+from . import ptype,bitmap,config,error,utils
 
 def setbyteorder(endianness):
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
@@ -50,9 +50,9 @@ class integer_t(ptype.type):
     def classname(self):
         typename = self.typename()
         if self.byteorder is config.byteorder.bigendian:
-            return config.defaults.pint.bigendian_name.format(typename)
+            return config.defaults.pint.bigendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
         elif self.byteorder is config.byteorder.littleendian:
-            return config.defaults.pint.littleendian_name.format(typename)
+            return config.defaults.pint.littleendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
         else:
             raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness %s'% repr(self.byteorder))
         return typename
@@ -93,12 +93,7 @@ class integer_t(ptype.type):
     def summary(self, **options):
         if self.initialized:
             res = self.num()
-            if res >= 0:
-                fmt = '0x%%0%dx (%%d)'% (int(self.length)*2)
-            else:
-                fmt = '-0x%%0%dx (-%%d)'% (int(self.length)*2)
-                res = abs(res)
-            return fmt% (res, res)
+            return '{s}0x{n:0{l:d}x} ({s}{n:d})'.format(s='-' if res < 0 else '',n=abs(res),l=self.length*2)
         return '???'
 
     def repr(self, **options):
@@ -204,7 +199,8 @@ class enum(integer_t):
             return self.byName(name)
 
         except KeyError:
-            raise AttributeError("'%s' object has no attribute '%s'"% (self.classname(), name))
+            pass
+        raise AttributeError
 
     def str(self):
         '''Return value as a string'''

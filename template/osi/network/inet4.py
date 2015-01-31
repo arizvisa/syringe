@@ -31,18 +31,18 @@ class ip4_hdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        return self['ip_p'].l.num()
+        return self['ip_p'].li.num()
     def nextlayer_size(self):
-        headersize = self['ip_h'].l['hlen']*4
-        return self['ip_len'].l.num() - headersize
+        headersize = self['ip_h'].li['hlen']*4
+        return self['ip_len'].li.num() - headersize
 
-@datalink.layer.define
+@datalink.liayer.define
 class datalink_ip4(ip4_hdr):
     type = 0x0800
 
 class ip_timestamp(pstruct.type):
     def __timestamp(self):
-        l = self['ipt_len'].l.int()
+        l = self['ipt_len'].li.int()
         raise NotImplementedError
         n = l - 4
         return dyn.array(pint.uint32_t, n)

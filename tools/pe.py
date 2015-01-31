@@ -26,17 +26,17 @@ def dump_exe(t, output):
     return extract(_(offset=0).l, output)
 
 def dump_header(t, output):
-    t = t['Pe']
+    t = t['Next']['Header']
     global result; result = t
     if not output:
-        print >>sys.stdout, t['Signature'], repr(t['Signature'].serialize())
-        print >>sys.stdout, t['Header'].repr()
+        print >>sys.stdout, t.p['Signature'], repr(t.p['Signature'].serialize()+t['SignaturePadding'].serialize())
+        print >>sys.stdout, t['FileHeader'].repr()
         print >>sys.stdout, t['OptionalHeader'].repr()
         return
     return extract(t, output)
 
 def list_sections(t, output):
-    t = t['Pe']
+    t = t['Next']['Header']
     global result; result = t['Sections']
     if not output:
         summary = lambda n: '{!r} 0x{:x}:+0x{:x}'.format(n['Name'].str(), n['VirtualAddress'].num(), n['VirtualSize'].num())
@@ -45,7 +45,7 @@ def list_sections(t, output):
     return extract(t['Sections'], output)
 
 def extract_section(t, index, output):
-    t = t['Pe']
+    t = t['Next']['Header']
     assert 0 <= index < len(t['Sections']), 'Invalid section number'
     t = t['Sections'][index]
     global result; result = t
@@ -54,7 +54,7 @@ def extract_section(t, index, output):
     return extract(t['PointerToRawData'].d.l, output or 'raw')
 
 def list_entries(t, output):
-    t = t['Pe']
+    t = t['Next']['Header']
     global result; result = t['DataDirectory']
     summary = lambda n: '{:s} 0x{:x}:+0x{:x}'.format(n.classname(), n['Address'].num(), n['Size'].num())
     if not output:
@@ -63,7 +63,7 @@ def list_entries(t, output):
     return extract(t['DataDirectory'], output)
 
 def extract_entry(t, index, output):
-    t = t['Pe']['DataDirectory']
+    t = t['Next']['Header']['DataDirectory']
     assert 0 <= index < len(t), 'Invalid DataDirectory number'
     t = t[index]
     global result; result = t['Address'].d.l
@@ -74,7 +74,7 @@ def extract_entry(t, index, output):
     return extract(res.l, output or 'raw')
 
 def list_exports(t, output):
-    t = t['Pe']['DataDirectory'][0]
+    t = t['Next']['Header']['DataDirectory'][0]
     assert t['Address'].num() != 0, 'Invalid Exports directory'
     t = t['Address'].d.l
     global result; result = t
@@ -86,7 +86,7 @@ def list_exports(t, output):
     return extract(t, output)
 
 def list_imports(t, output):
-    t = t['Pe']['DataDirectory'][1]
+    t = t['Next']['Header']['DataDirectory'][1]
     assert t['Address'].num() != 0, 'Invalid Imports directory'
     t = t['Address'].d.l
     global result; result = t
@@ -97,7 +97,7 @@ def list_imports(t, output):
     return extract(t, output)
 
 def extract_import(t, index, output):
-    t = t['Pe']['DataDirectory'][1]
+    t = t['Next']['Header']['DataDirectory'][1]
     assert t['Address'].num() != 0, 'Invalid Imports directory'
     t = t['Address'].d.l
     assert 0 <= index < len(t), 'Invalid Import index'
@@ -110,7 +110,7 @@ def extract_import(t, index, output):
     return extract(t, output)
 
 def list_resources(t, output):
-    t = t['Pe']['DataDirectory'][2]
+    t = t['Next']['Header']['DataDirectory'][2]
     assert t['Address'].num() != 0, 'Invalid Resource directory'
     t = t['Address'].d.l
     global result; result = t
@@ -123,7 +123,7 @@ def list_resources(t, output):
     return extract(t, output)
 
 def extract_resource(t, path, output):
-    t = t['Pe']['DataDirectory'][2]
+    t = t['Next']['Header']['DataDirectory'][2]
     assert t['Address'].num() != 0, 'Invalid Resource directory'
     t = t['Address'].d.l
     p = map(int,path.split('/'))
@@ -134,7 +134,7 @@ def extract_resource(t, path, output):
     return extract(t['Data'].d.l, output or 'raw')
 
 def dump_loadconfig(t, output):
-    t = t['Pe']['DataDirectory'][10]
+    t = t['Next']['Header']['DataDirectory'][10]
     assert t['Address'].num() != 0, 'Invalid LoadConfig directory'
     t = t['Address'].d.l
     global result; result = t

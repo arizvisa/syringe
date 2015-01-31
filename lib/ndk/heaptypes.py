@@ -261,8 +261,8 @@ if False and 'HeapCache':
             (dyn.pointer(pint.uint8_t), 'pBitmap'), # XXX
 
             (dyn.pointer(HEAP_FREE_ENTRY), 'pBucket'),  # XXX
-            (lambda s: dyn.pointer(dyn.array(HEAP_FREE_ENTRY, s['NumBuckets'].l.int())), 'Buckets'),
-            (lambda s: dyn.array(pint.uint32_t, s['NumBuckets'].l.int()/32), 'Bitmap'),
+            (lambda s: dyn.pointer(dyn.array(HEAP_FREE_ENTRY, s['NumBuckets'].li.int())), 'Buckets'),
+            (lambda s: dyn.array(pint.uint32_t, s['NumBuckets'].li.int()/32), 'Bitmap'),
         ]
 
 if True:
@@ -289,9 +289,9 @@ if True:
             (pint.uint32_t, 'HighLowDifference'),
             (pint.uint64_t, 'pBitmap'),
 
-            (lambda s: dyn.array(dyn.pointer(HEAP_FREE_ENTRY), int(s['NumBuckets'].l)), 'Buckets'),
-            (lambda s: dyn.clone(pbinary.array, _object_=1, length=int(s['NumBuckets'].l)), 'Bitmask'),    # XXX: This array is too huge
-    #        (lambda s: dyn.block(int(s['NumBuckets'].l)/8), 'Bitmask'),
+            (lambda s: dyn.array(dyn.pointer(HEAP_FREE_ENTRY), int(s['NumBuckets'].li)), 'Buckets'),
+            (lambda s: dyn.clone(pbinary.array, _object_=1, length=int(s['NumBuckets'].li)), 'Bitmask'),    # XXX: This array is too huge
+    #        (lambda s: dyn.block(int(s['NumBuckets'].li)/8), 'Bitmask'),
         ]
 
     class LAL(parray.type):
@@ -489,7 +489,7 @@ if 'Heap':
             ]
 
         def __FrontEndHeap(self):
-            t = int(self['FrontEndHeapType'].l)
+            t = int(self['FrontEndHeapType'].li)
             if t == 0:
                 return LAL
             elif t == 2:

@@ -155,7 +155,7 @@ class PlaceObject2(pstruct.type):
     version = 3
     def _iff(flag, typ):
         def fn(self):
-            if self['PlaceFlag'].l[flag]:
+            if self['PlaceFlag'].li[flag]:
                 return typ
             return Empty
         return fn
@@ -187,7 +187,7 @@ class PlaceObject3(pstruct.type):
     version = 8
     def _iff(flag, typ):
         def fn(self):
-            if self['PlaceFlag'].l[flag]:
+            if self['PlaceFlag'].li[flag]:
                 return typ
             return Empty
 
@@ -195,7 +195,7 @@ class PlaceObject3(pstruct.type):
 
     def _iff3(flag, typ):
         def fn(self):
-            if self['PlaceFlag3'].l[flag]:
+            if self['PlaceFlag3'].li[flag]:
                 return typ
             return Empty
         return fn
@@ -300,7 +300,7 @@ class ImportAssets(pstruct.type):
     _fields_ = [
         (STRING, 'URL'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
+        (lambda s: dyn.array(_asset, int(s['Count'].li)), 'Asset')
     ]
 
 @TagDef.define
@@ -310,7 +310,7 @@ class ExportAssets(pstruct.type):
 
     _fields_ = [
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
+        (lambda s: dyn.array(_asset, int(s['Count'].li)), 'Asset')
     ]
 
 @TagDef.define
@@ -322,7 +322,7 @@ class ImportAssets2(pstruct.type):
         (UI8, 'Reserved1'),
         (UI8, 'Reserved2'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, int(s['Count'].l)), 'Asset')
+        (lambda s: dyn.array(_asset, int(s['Count'].li)), 'Asset')
     ]
 
 @TagDef.define
@@ -516,14 +516,14 @@ class DefineFontInfo(pstruct.type):
 
     def __CodeTable(self):
         nGlyphs = 0
-        if self['FontFlags'].l['WideCodes']:
+        if self['FontFlags'].li['WideCodes']:
             return dyn.array( UI16, nGlyphs )
         return dyn.array( UI8, nGlyphs )
     
     _fields_ = [
         (UI16, 'FontID'),
         (UI8, 'FontNameLen'),
-        (lambda s: dyn.clone(pstr.string,length=int(s['FontNameLen'].l)), 'FontName'),
+        (lambda s: dyn.clone(pstr.string,length=int(s['FontNameLen'].li)), 'FontName'),
         (__FontFlags, 'FontFlags'),
         (__CodeTable, 'CodeTable'),
     ]
@@ -549,7 +549,7 @@ class DefineText(pstruct.type):
 #        (__TextRecords, 'TextRecord')
     ]
 
-#@TagDef.define
+@TagDef.define
 class DefineText2(DefineText):
     type = 33
     version = 3
@@ -585,7 +585,7 @@ class SymbolClass(pstruct.type):
 
     _fields_ = [
         (UI16, 'NumSymbols'),
-        (lambda s:dyn.array(s.Symbol, s['NumSymbols'].l.int()), 'Symbols')
+        (lambda s:dyn.array(s.Symbol, s['NumSymbols'].li.int()), 'Symbols')
     ]
 
 ## XXX font stuff
@@ -635,9 +635,9 @@ class DefineSceneAndFrameLabelData(pstruct.type):
 
     _fields_ = [
         (as3.u32, 'SceneCount'),
-        (lambda s: dyn.array(s.Scene, s['SceneCount'].l.num()), 'Scene'),
+        (lambda s: dyn.array(s.Scene, s['SceneCount'].li.num()), 'Scene'),
         (as3.u32, 'FrameLabelCount'),
-        (lambda s: dyn.array(s.Frame, s['FrameLabelCount'].l.num()), 'Frame'),
+        (lambda s: dyn.array(s.Frame, s['FrameLabelCount'].li.num()), 'Frame'),
     ]
 
 @TagDef.define

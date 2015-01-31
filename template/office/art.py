@@ -82,7 +82,7 @@ class msofbtTimeColorBehaviorContainer(RecordContainer):
 
 class msofbtTimeVariant(pstruct.type):
     def __Value(self):
-        t = int(self['Type'].l)
+        t = int(self['Type'].li)
         if t == -1:
             return dyn.block(0)
         elif t == 0:
@@ -197,7 +197,7 @@ class msofbtTimeVariant(pstruct.type):
     type = 61762
 
     def __Value(self):
-        n = int(self['Type'].l)
+        n = int(self['Type'].li)
         if n == 0:
             return pint.uint32_t
         if n == 1:

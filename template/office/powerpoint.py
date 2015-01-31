@@ -271,9 +271,9 @@ class RT_CurrentUserAtom(pstruct.type):
         (ubyte1, 'majorVersion'),
         (ubyte1, 'minorVersion'),
         (dyn.block(2), 'unused'),
-        (lambda s: dyn.clone(pstr.string,length=int(s['lenUserName'].l)), 'ansiUserName'),
+        (lambda s: dyn.clone(pstr.string,length=int(s['lenUserName'].li)), 'ansiUserName'),
         (uint4, 'relVersion'),
-#        (lambda s: dyn.clone(pstr.wstring,length=int(s['lenUserName'].l)*2), 'unicodeUserName'),
+#        (lambda s: dyn.clone(pstr.wstring,length=int(s['lenUserName'].li)*2), 'unicodeUserName'),
     ]
 
 ## PowerPoint Document stream
@@ -284,7 +284,7 @@ class PersistDirectoryEntry(pstruct.type):
 
     _fields_ = [
         (__info, 'info'),
-        (lambda s: dyn.array( dyn.pointer(RecordGeneral), s['info'].l['cPersist'] ), 'offsets')
+        (lambda s: dyn.array( dyn.pointer(RecordGeneral), s['info'].li['cPersist'] ), 'offsets')
     ]
 
     def details(self):
@@ -295,7 +295,7 @@ class PersistDirectoryEntry(pstruct.type):
     def walk(self):
         # heh
         for n in self['offsets']:
-            yield n.d.l['data']
+            yield n.d.li['data']
         return
 
 #@Record.define
@@ -584,7 +584,7 @@ if False:
     persistdirectory = usereditatom['offsetPersistDirectory'].d
 
     # go through persist directory
-    for i,entry in enumerate(persistdirectory.l['data']):
+    for i,entry in enumerate(persistdirectory.li['data']):
         print '%s %x'%('-'*70, i)
         for obj in entry.walk():
             print obj

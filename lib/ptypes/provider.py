@@ -3,7 +3,7 @@ from . import config,utils,error
 Config = config.defaults
 
 class base(object):
-    '''Base provider class. Intended to be Inherited from'''
+    '''Base provider class. Intended to be inherited from'''
     def seek(self, offset):
         '''Seek to a particular offset'''
         raise error.ImplementationError(self, 'seek', message='Developer forgot to overload this method')
@@ -266,6 +266,7 @@ class filebase(base):
             raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. %d:+%s from %s'%(offset,amount,self))
         Config.log.debug('%s.consume : Attempting to consume %x:+%x'%(type(self).__name__, offset, amount))
 
+        result = ''
         try:
             result = self.file.read(amount)
         except OverflowError, e:
@@ -421,13 +422,16 @@ try:
 except ImportError:
     Config.log.warning("__module__ : Unable to import 'tempfile' module. Failed to load `filecopy` provider.")
 
+class memorybase(base):
+    '''Base provider class for reading/writing with memory. Intended to be inherited from'''
+
 try:
     import ctypes
 
     ## TODO: figure out an elegant way to catch exceptions we might cause
     ##       by dereferencing any of these pointers on both windows (veh) and posix (signals)
 
-    class memory(base):
+    class memory(memorybase):
         '''Basic in-process memory provider using ctypes'''
         address = 0
         def seek(self, offset):
@@ -503,7 +507,7 @@ try:
             code, string = getLastErrorTuple()
             return string
 
-    class WindowsProcessHandle(base):
+    class WindowsProcessHandle(memorybase):
         '''Given a process handle'''
         address = 0
         handle = None

@@ -8,7 +8,7 @@
 # TODO: add a decorator that can transform anything into an object that will pass an instance of self
 #          to serialization service
 
-import __builtin__,logging,sys
+import __builtin__,itertools
 __all__ = ['caller','pack','unpack','loads','dumps']
 
 VERSION = '0.7'
@@ -119,7 +119,7 @@ class package:
                 # XXX: implement binary modules
                 if hasattr(instance, '__file__'):
                     if instance.__file__.endswith('.pyd'):
-                        raise NotImplementedError('binary modules not supported')
+                        raise NotImplementedError, 'binary modules not supported'
                     return module_
                 return module_local
 
@@ -133,20 +133,8 @@ class package:
             if t == builtin_.getclass():
                 if instance.__module__ is None:
                     return partial  # XXX
-                    globals()['error'] = instance
                     raise KeyError,(instance, 'Unable to determine module from builtin method')
                 return builtin_
-
-            # non-serializeable descriptors
-            getset_descriptor = cls.__weakref__.__class__
-            method_descriptor = cls.__reduce_ex__.__class__
-            wrapper_descriptor = cls.__setattr__.__class__
-            member_descriptor = type(lambda:wat).func_globals.__class__
-            classmethod_descriptor = type(__builtin__.float.__dict__['fromhex'])
-            if t in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator_.getclass()):
-#                return partial  # XXX
-                globals()['error'] = instance
-                raise KeyError(instance)
 
             # catch-all object
             if hasattr(instance, '__dict__') or hasattr(instance, '__slots__'):     # is this an okay assumption?
@@ -158,8 +146,7 @@ class package:
                 pickle.loads(pickle.dumps(instance))
                 return partial
 
-            globals()['error'] = instance
-            raise KeyError(instance)
+            raise KeyError, instance
 
     class stash(__builtin__.object):
         def __init__(self):
@@ -171,9 +158,14 @@ class package:
             self.cons_data = {}
             self.inst_data = {}
 
+        @staticmethod
+        def clsbyid(n): return package.cache.byid(n)
+        @staticmethod
+        def clsbyinstance(n): return package.cache.byinstance(n)
+
         def __repr__(self):
-            cons = [(k,(package.cache.byid(clsid).__name__,v)) for k,(clsid,v) in self.cons_data.iteritems()]
-            inst = [(k,(package.cache.byid(clsid).__name__,v)) for k,(clsid,v) in self.inst_data.iteritems()]
+            cons = [(k,(self.clsbyid(clsid).__name__,v)) for k,(clsid,v) in self.cons_data.iteritems()]
+            inst = [(k,(self.clsbyid(clsid).__name__,v)) for k,(clsid,v) in self.inst_data.iteritems()]
             return "<class '%s'> %s"%(self.__class__.__name__, repr(__builtin__.dict(cons)))
 
         ## serializing/deserializing entire state
@@ -232,7 +224,7 @@ class package:
             identity = self.identify(object)
             if identity in self.store_cache:
                 return identity
-            cls = package.cache.byinstance(object)
+            cls = self.clsbyinstance(object)
 
             if False:       # XXX: if we want to make the module and name part of the protocol. (for assistance with attributes)
                 # get naming info
@@ -268,7 +260,7 @@ class package:
             # unpack constructor
 #            _,(modulename,name),data = self.cons_data[identity]    # XXX: for attributes by name
             _,data = self.cons_data[identity]
-            cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
+            cls,data = self.clsbyid(_),self.unpack_references(data,**attributes)
 
             if False:   # XXX: attributes
                 # naming info
@@ -292,7 +284,7 @@ class package:
 
             # update instance with packed attributes
             _,data = self.inst_data[identity]
-            cls,data = package.cache.byid(_),self.unpack_references(data,**attributes)
+            cls,data = self.clsbyid(_),self.unpack_references(data,**attributes)
             _ = cls.u_instance(instance,data,**attributes)
             assert instance is _, '%s.fetch(%d) : constructed instance is different from updated instance'% (__builtin__.object.__repr__(self), identity)
             return instance
@@ -636,7 +628,7 @@ if 'core':
         @classmethod
         def subclasses(cls, type):
             '''return all subclasses of type'''
-            assert __builtin__.type(type) is __builtin__.type
+            assert __builtin__.type(type) is __builtin__.type, '%s is not a valid python type'% __builtin__.type(type)
             if type.__bases__ == ():
                 return ()
             result = type.__bases__
@@ -665,14 +657,23 @@ if 'core':
             if hasattr(object,'__slots__'):
                 state.update((k,getattr(object,k)) for k in object.__slots__ if hasattr(object,k))
 
+            # non-serializeable descriptors
+            getset_descriptor = cls.__weakref__.__class__
+            method_descriptor = cls.__reduce_ex__.__class__
+            wrapper_descriptor = cls.__setattr__.__class__
+            member_descriptor = __builtin__.type(lambda:wat).func_globals.__class__
+            classmethod_descriptor = __builtin__.type(__builtin__.float.__dict__['fromhex'])
+
             result = {}
             for k,v in state.iteritems():
+                if __builtin__.type(v) in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator_.getclass()):
+                    continue
+
                 try:
                     _ = package.cache.byinstance(v)
 
                 except (KeyError,TypeError):
                     continue
-
                 result[k] = v
             return result
 
@@ -712,12 +713,17 @@ if 'core':
         @classmethod
         def u_constructor(cls, data, **attributes):
             name,type = data
+            type.__name__ = name
 
 #            class type(type): pass  # XXX: this type-change might mess up something
             # FIXME: create an instance illegitimately
             # TODO: bniemczyk would like a hint here for customizing __new__
             _ = type.__init__
             type.__init__ = lambda s: None
+            if hasattr(type, '__new__'):
+                # FIXME: abc.ABCMeta
+                raise Exception, 'Unable to support custom .__new__ operators'
+            type.__new__ = lambda *a: a
             result = type()
             type.__init__ = _
 
@@ -776,7 +782,8 @@ if 'core':
 
         @classmethod
         def p_instance(cls, object, **attributes):
-            return object.__dict__
+            ignored = ('__builtins__',)
+            return __builtin__.dict((k,v) for k,v in object.__dict__.items() if k not in ignored)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
@@ -1087,7 +1094,7 @@ if 'special':
 
             # XXX: assign the globals from hints if requested
             globs = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
-            result = cls.__new_closure(*closure)
+            result = cls.new_cellvars(*closure)
             return function.new(code, globs, closure=result)
 
         @classmethod
@@ -1100,7 +1107,7 @@ if 'special':
             return instance
 
         @classmethod
-        def __new_closure(cls, *args):
+        def new_cellvars(cls, *args):
             '''Convert args into a cell tuple'''
             # create a closure that we can rip its cell list from
             newinstruction = lambda op,i: op + chr(i&0x00ff) + chr((i&0xff00)/0x100)
@@ -1259,7 +1266,7 @@ if 'special':
     class threadlock_(__type__):
         @classmethod
         def getclass(cls):
-            return thread.LockType
+            return thread.LockType  # XXX
         @classmethod
         def p_constructor(cls, object, **attributes):
             return ()
@@ -1280,7 +1287,6 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            #logging.warning('fu : Not allowed to store generator_ objects : %s'% repr(object))
             raise NotImplementedError('Not allowed to store generator_ objects')
             return object.gi_code,object.gi_frame
 
@@ -1288,7 +1294,6 @@ if 'special':
         def u_constructor(cls, data, **attributes):
             co,fr = data
             result = function.new(co, fr.f_globals)
-            #logging.warning('fu : Not allowed to create generator_ objects')
             raise NotImplementedError('Not allowed to create generator_ objects')
             return result
 
@@ -1310,12 +1315,10 @@ if 'special':
         @classmethod
         def p_constructor(cls, object, **attributes):
             raise NotImplementedError('Not allowed to store frame_ objects')
-            #logging.warning('fu : Not allowed to store frame_ objects : %s'% repr(object))
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             raise NotImplementedError('Not allowed to create frame_ objects')
-            #logging.warning('fu : Not allowed to create frame_ objects')
 
     @package.cache.register_type
     class staticmethod_(__constant):
@@ -1366,11 +1369,13 @@ def unpack(data, **attributes):
     '''Deserialize a tuple back into an instance'''
     return package.unpack(data, **attributes)
 
+import sys
 def caller(frame=None):
     """Return the (module,name) of the requested frame.
 
     This will default to the calling function if a frame is not supplied.
     """
+    sys = __import__('sys')
     fr = sys._getframe().f_back if frame is None else frame
     source,name = fr.f_code.co_filename,fr.f_code.co_name
     module = [x for x in sys.modules.itervalues() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
@@ -1848,3 +1853,87 @@ if __name__ == '__main__':
     results = []
     for t in TestCaseList:
         results.append( t() )
+
+if __name__ == 'bootstrap':
+    import fu
+    from fu import package
+
+    ## figure out which type methods we need
+    st = package.stash()
+    n = st.store(package)
+
+    t1 = set()
+    t1.update(n for n,_ in st.cons_data.values())
+    t1.update(n for n,_ in st.inst_data.values())
+    print len(t1)
+    [st.store(fu.package.cache.byid(n)) for n in t]
+    t2 = set()
+    t2.update(n for n,_ in st.cons_data.values())
+    t2.update(n for n,_ in st.inst_data.values())
+    print len(t2)
+    print sum(map(len,(fu.package.cache.registration.id,fu.package.cache.registration.type,fu.package.cache.registration.const)))
+    t = t2
+
+    mymethod = type(fu.function.new)
+    myfunc = type(fu.function.new.im_func)
+
+    ## serialize the stash methods
+    stashed_up,stashed_fe = (getattr(st,attr).im_func.func_code for attr in ('unpack_references','fetch'))
+    res = stashed_up,stashed_fe,st.packed()
+    #marshal.dumps(res)
+    
+    class mystash:
+        cons_data = {}
+        inst_data = {}
+        def fetch(self, identity, **attributes):
+            _,data = self.cons_data[identity]
+            cls,data = self.byid(_),self.unpack_references(data,**attributes)
+            instance = cls.u_constructor(data,**attributes)
+            self.fetch_cache[identity] = instance
+            _,data = self.inst_data[identity]
+            cls,data = self.byid(_),self.unpack_References(data,**attributes)
+            _ = cls.u_instance(instance,data,**attributes)
+            assert instance is _
+            return instance
+
+    mystash.unpack_references = myfunc(stashed_up, namespace)
+    mystash.fetch = myfunc(stashed_fe, namespace)
+    x = mystash()
+    x.cons_data,x.inst_data = st.packed()
+
+    ## serialize the necessary type methods
+    classes = [(n,fu.package.cache.byid(n)) for n in t]
+    methods = [(n,(cls.__name__,cls.new.im_func.func_code,cls.getclass.im_func.func_code,cls.u_constructor.im_func.func_code,cls.u_instance.im_func.func_code)) for n,cls in classes]
+    marshal.dumps(methods)
+
+    ## ensure that we can recreate all these type methods
+    result,namespace = {},{}
+    namespace['thread'] = __import__('thread')
+    namespace['imp'] = __import__('imp')
+    namespace['_weakref'] = __import__('_weakref')
+    for n,(name,new,get,cons,inst) in methods:
+        objspace = {
+            'new' : myfunc(new,namespace),
+            'getclass' : myfunc(get,namespace),
+            'u_constructor' : myfunc(cons,namespace),
+            'u_instance' : myfunc(inst,namespace),
+        }
+        o = type(name, (object,), objspace)()
+        result[n] = namespace[name] = o
+
+    #for attr in ['func_closure', 'func_code', 'func_defaults', 'func_dict', 'func_doc', 'func_globals', 'func_name']:
+    #for n,(new,cons,inst) in methods:
+    #    if any(x.func_closure is not None for x in (cons,inst)):
+    #        raise Exception, n
+    #    if any(x.func_defaults is not None for x in (cons,inst)):
+    #        raise Exception, n
+    #    if any(len(x.func_dict) != 0 for x in (cons,inst)):
+    #        raise Exception, n
+    #    for attr in ['func_code', 'func_name']:
+    #        print n, attr, repr(getattr(cons, attr))
+    #        print n, attr, repr(getattr(inst, attr))
+
+    consdata = st.cons_data
+    instances = {}
+    for _,(t,v) in consdata.iteritems():
+        result[t].u_constructor(v, globals=namespace)

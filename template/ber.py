@@ -1,5 +1,5 @@
 import logging,math
-import ptypes.bitmap as bitmap
+import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
 
 class IdentifierLong(pbinary.terminatedarray):
@@ -11,14 +11,11 @@ class IdentifierLong(pbinary.terminatedarray):
     def isTerminator(self, value):
         return value['continue'] == 0
 
-class IndefiniteLength(pbinary.struct):
-    _fields_ = [(0,'unknown')]
-
 class Length(pbinary.struct):
     def __form(self):
         if self['form']:
             if self['count'] == 0:
-                return IndefiniteLength
+                return 0    # IndefiniteForm
             return self['count']*8
         return 0
 
@@ -28,6 +25,10 @@ class Length(pbinary.struct):
                 raise Exception, 'Indefinite form not implemented'
             return self['value']
         return self['count']
+
+    def isIndefinite(self):
+        assert self.initialized
+        return self['form'] == self['count'] == 0
 
     _fields_ = [
         (1, 'form'),
@@ -53,8 +54,9 @@ class Type(pbinary.struct):
 
 class Record(pstruct.type):
     def __Value(self):
-        c,p,n = self['Type'].l['Class'],self['Type']['Constructed?'],self['Type']['Tag']
-        s = self['Length'].l.num()
+        c,p,n = self['Type'].li['Class'],self['Type']['Constructed?'],self['Type']['Tag']
+        s = self['Length'].li.num()
+
         if p:
             return dyn.clone(AbstractConstruct.get(n, length=s), blocksize=lambda _:s, length=s)
         return dyn.clone(AbstractPrimitive.get(n, length=s), blocksize=lambda _:s, length=s)
@@ -83,7 +85,7 @@ class AbstractConstruct(ptype.definition):
 ### classes
 @AbstractConstruct.define
 @AbstractPrimitive.define
-class EOC(ptype.block):
+class EOC(ptype.type):
     type = 0x00
 
 @AbstractPrimitive.define
@@ -225,6 +227,10 @@ class CHARACTER_STRING(pstr.string):
 class BMPString(pstr.string):
     type = 0x1e
     _fields_ = []
+
+##
+class File(Record):
+    attributes = {'byteorder':ptypes.config.byteorder.bigendian}
 
 if __name__ == '__main__':
     import ptypes,ber

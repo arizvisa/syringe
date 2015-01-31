@@ -2,6 +2,7 @@ from . import ptype,parray,pstruct,pbinary,pint,pfloat,pstr
 from . import config,utils,dynamic,provider
 dyn = dynamic
 prov = provider
+Config = config.defaults
 
 __all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','dynamic','dyn','prov'
 

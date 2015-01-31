@@ -39,7 +39,7 @@ class cmap(pstruct.type):
     _fields_ = [
         (uint16, 'version'),
         (uint16, 'number'),
-        (lambda s: dyn.array(cmap.entry, s['number'].l.int()), 'entry'),
+        (lambda s: dyn.array(cmap.entry, s['number'].li.int()), 'entry'),
         (lambda s: dyn.block(s.blocksize()-s.size()), 'data'),
     ]
     class subtable(pstruct.type):
@@ -47,7 +47,7 @@ class cmap(pstruct.type):
             (uint16, 'format'),
             (uint16, 'length'),
             (uint16, 'version'),
-            (lambda s: cmap.table.get(s['format'].l.int(), length=s['length'].l.int()-6), 'data'),
+            (lambda s: cmap.table.get(s['format'].li.int(), length=s['length'].li.int()-6), 'data'),
         ]
     class table(ptype.definition):
         cache = {}
@@ -78,7 +78,7 @@ class cmap_format_4(pstruct.type):
         (uint16, 'searchRange'),
         (uint16, 'entrySelector'),
         (uint16, 'rangeShift'),
-        (lambda s: dyn.array(uint16,s['segCountX2'].l.int()/2), 'endCount'),
+        (lambda s: dyn.array(uint16,s['segCountX2'].li.int()/2), 'endCount'),
         (uint16, 'reservedPad'),
         (lambda s: dyn.array(uint16,s['segCountX2'].int()/2), 'startCount'),
         (lambda s: dyn.array(uint16,s['segCountX2'].int()/2), 'idDelta'),
@@ -91,7 +91,7 @@ class cmap_format_6(pstruct.type):
     _fields_ = [
         (uint16, 'firstCode'),
         (uint16, 'entryCount'),
-        (lambda s: dyn.array(uint16, s['entryCount'].l.int()), 'glyphIdArray'),
+        (lambda s: dyn.array(uint16, s['entryCount'].li.int()), 'glyphIdArray'),
     ]
 
 @Table.define
@@ -110,7 +110,7 @@ class gasp(pstruct.type):
     _fields_ = [
         (uint16, 'version'),
         (uint16, 'numRanges'),
-        (lambda s: dyn.array(gasp.range, s['numRanges'].l.int()), 'gaspRange'),
+        (lambda s: dyn.array(gasp.range, s['numRanges'].li.int()), 'gaspRange'),
     ]
     class range(pstruct.type):
         _fields_ = [(uint16,'rangeMaxPPEM'),(uint16,'rangeGaspBehaviour')]
@@ -176,9 +176,9 @@ class glyf(parray.block):
                 return int16
 
         _fields_ = [
-            (lambda s: dyn.array(uint16, abs(s.getparent(glyf.glyph)['numberOfContours'].l.int())), 'endPtsOfContours'),
+            (lambda s: dyn.array(uint16, abs(s.getparent(glyf.glyph)['numberOfContours'].li.int())), 'endPtsOfContours'),
             (uint16, 'instructionLength'),
-            (lambda s: dyn.block(s['instructionLength'].l.int()), 'instructions'),
+            (lambda s: dyn.block(s['instructionLength'].li.int()), 'instructions'),
             (_flags, 'flags'),
             (lambda s: dyn.clone(s._xCoords, length=s['flags'].getActualLength()), 'xCoordinates'),
             (lambda s: dyn.clone(s._yCoords, length=s['flags'].getActualLength()), 'yCoordinates'),
@@ -206,7 +206,7 @@ class glyf(parray.block):
                 _fields_ = [(FWord,'argument1'),(FWord,'argument2')]
             def __arg1and2(self):
                 res = self.arg1and2_fword if 1 else self.arg1and2_short
-                if self['flags'].l['ARG_1_AND_2_ARE_WORDS']:
+                if self['flags'].li['ARG_1_AND_2_ARE_WORDS']:
                     return res
                 return uint16
 
@@ -228,7 +228,7 @@ class glyf(parray.block):
             class _instr(pstruct.type):
                 _fields_ = [
                     (uint16, 'numInstr'),
-                    (lambda s: dyn.block(s['numInstr'].l.int()), 'instr'),
+                    (lambda s: dyn.block(s['numInstr'].li.int()), 'instr'),
                 ]
 
             def __instr(self):
@@ -246,7 +246,7 @@ class glyf(parray.block):
 
     class glyph(pstruct.type):
         def __data(self):
-            n = self['numberOfContours'].l.int()
+            n = self['numberOfContours'].li.int()
             if n >= 0:
                 return glyf.singleglyph
             if n == -1:
@@ -276,7 +276,7 @@ class File(pstruct.type):
 
         def __table(self):
             self = self.getparent(File.Entry)
-            rec,l = self['tag'].l.str(),self['length'].l.int()
+            rec,l = self['tag'].li.str(),self['length'].li.int()
             res = Table.get(rec, length=l)
             return dyn.clone(res, blocksize=lambda s:l)
 
@@ -292,7 +292,7 @@ class File(pstruct.type):
         (uint16, 'searchRange'),
         (uint16, 'entrySelector'),
         (uint16, 'rangeShift'),
-        (lambda s: dyn.array(s.Entry, s['numTables'].l.num()), 'tables'),
+        (lambda s: dyn.array(s.Entry, s['numTables'].li.num()), 'tables'),
     ]
 
 if __name__ == '__main__':

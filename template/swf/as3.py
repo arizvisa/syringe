@@ -57,7 +57,7 @@ class s32(_vle):
 class string_info(as3struct):
     _fields_ = [
         (u30, 'size'),
-        (lambda s: dyn.clone(pstr.string, length=s['size'].l.num()), 'utf8')
+        (lambda s: dyn.clone(pstr.string, length=s['size'].li.num()), 'utf8')
     ]
     def details(self):
         return self.str() if self.initialized else '???'
@@ -95,7 +95,7 @@ class namespace_info(as3struct):
 class ns_set_info(as3struct):
     _fields_ = [
         (u30, 'count'),
-        (lambda s: dyn.array(u30, s['count'].l.num()), 'ns')
+        (lambda s: dyn.array(u30, s['count'].li.num()), 'ns')
     ]
 
     def details(self):
@@ -204,7 +204,7 @@ class multiname_info(as3struct):
         ]
 
     def __data(self):
-        return MultiNameTypes.lookup( self['kind'].l.num() )
+        return MultiNameTypes.lookup( self['kind'].li.num() )
 
     _fields_ = [
         (__kind, 'kind'),
@@ -486,14 +486,14 @@ class class_info(pstruct.type):
     _fields_ = [
         (u30, 'cinit'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, s['trait_count'].l.num()), 'traits')
+        (lambda s: dyn.array(traits_info, s['trait_count'].li.num()), 'traits')
     ]
 
 class script_info(pstruct.type):
     _fields_ = [
         (u30, 'init'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, s['trait_count'].l.num()), 'traits')
+        (lambda s: dyn.array(traits_info, s['trait_count'].li.num()), 'traits')
     ]
 
 class exception_info(pstruct.type):
@@ -513,11 +513,11 @@ class method_body_info(pstruct.type):
         (u30, 'init_scope_depth'),
         (u30, 'max_scope_depth'),
         (u30, 'code_length'),
-        (lambda s: dyn.block(s['code_length'].l.num()), 'code'),
+        (lambda s: dyn.block(s['code_length'].li.num()), 'code'),
         (u30, 'exception_count'),
-        (lambda s: dyn.array(exception_info, s['exception_count'].l.num()), 'exception'),
+        (lambda s: dyn.array(exception_info, s['exception_count'].li.num()), 'exception'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, s['trait_count'].l.num()), 'trait'),
+        (lambda s: dyn.array(traits_info, s['trait_count'].li.num()), 'trait'),
     ]
 
 ###

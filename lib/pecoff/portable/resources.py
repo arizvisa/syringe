@@ -1,7 +1,11 @@
-import ptypes,headers,datadirectory
+import ptypes
 from ptypes import pstruct,parray,pbinary,ptype,dyn,pstr,config
-from __base__ import *
-from headers import virtualaddress
+from ..__base__ import *
+
+from . import headers
+
+from .headers import virtualaddress
+
 import itertools
 
 class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
@@ -12,8 +16,8 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
         (word, 'MinorVersion'),
         (word, 'NumberOfNames'),
         (word, 'NumberOfIds'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=s['NumberOfNames'].l.num()), 'Names'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].l.num()), 'Ids'),
+        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=s['NumberOfNames'].li.num()), 'Names'),
+        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].li.num()), 'Ids'),
     ]
 
     def list(self):
@@ -29,14 +33,14 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
 class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
     _fields_ = [
         (word, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring,length=s['Length'].l.num()), 'String')
+        (lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.num()), 'String')
     ]
     def str(self):
         return self['String'].str()
 
 class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda s: dyn.block(s.parent['Size'].l.num())), 'Data'),
+        (virtualaddress(lambda s: dyn.block(s.parent['Size'].li.num()), type=dword), 'Data'),
         (dword, 'Size'),
         (dword, 'Codepage'),
         (dword, 'Reserved'),       
@@ -47,7 +51,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.pointer_t):
         _fields_ = [(1,'type'),(31,'offset')]
     _value_ = dyn.clone(pbinary.partial, _object_=rva, byteorder=config.byteorder.littleendian)
     def num(self):
-        base = self.getparent(datadirectory.Resource)['Address']
+        base = self.getparent(IMAGE_RESOURCE_DIRECTORY).p.p['Address']
         rva = base.num() + self.object['offset']
         return headers.calculateRelativeAddress(base, rva)
     def summary(self, **attrs):
@@ -58,7 +62,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA
         return IMAGE_RESOURCE_DIRECTORY_STRING if self.object['type'] else ptype.undefined
     def getEntryName(self):
         if self.object['type']:
-            return self.d.l.str()
+            return self.d.li.str()
         return int(self.object['offset'])
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_DATA(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA):
     def _object_(self):
@@ -82,18 +86,18 @@ if True:
 
     class Entry(pstruct.type):
         def Value(self):
-            szkey = self['szKey'].l.str()
-            sz = self['wValueLength'].l.num()
+            szkey = self['szKey'].li.str()
+            sz = self['wValueLength'].li.num()
             return VersionValue.get(szkey, length=sz)
 
         def Child(self):
-            szkey = self['szKey'].l.str()
+            szkey = self['szKey'].li.str()
             return VersionEntry.lookup(szkey)
-            #bs = self['wLength'].l.num() - self.blocksize()
+            #bs = self['wLength'].li.num() - self.blocksize()
             #return VersionEntry.get(szkey, length=bs)
 
         def __Children(self):
-            bs = self['wLength'].l.num() - self.blocksize()
+            bs = self['wLength'].li.num() - self.blocksize()
             assert bs >= 0,bs
             class Member(pstruct.type):
                 _fields_ = [
@@ -123,14 +127,14 @@ if True:
             return Empty
         def Value(self):
             # wValueLength = number of 16-bit words of wValue
-            l = self['wValueLength'].l.num()
+            l = self['wValueLength'].li.num()
             return dyn.clone(pstr.wstring, length=l)
     
     @VersionEntry.define
     class Var(Entry):
         type = "VarFileInfo"
         def Value(self):
-            l = self['wValueLength'].l.num()
+            l = self['wValueLength'].li.num()
             return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
     @VersionEntry.define
     class Empty(ptype.undefined):
@@ -164,7 +168,7 @@ if __name__ == '__main__':
 #    z = pecoff.Executable.open('c:/Program Files (x86)/Debugging Tools for Windows (x86)/windbg.exe', mode='r')
     z = pecoff.Executable.open('obj/windbg.exe')
 
-    a = z['Pe']['DataDirectory'][2]['Address'].d.l
+    a = z['DataDirectory'][2]['Address'].d.l
     b = a['Ids'][0]
     print b['Name']
     print b['Entry']

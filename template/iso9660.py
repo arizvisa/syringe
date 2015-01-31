@@ -161,7 +161,7 @@ class iso_directory_record(pstruct.type):
         (uchar, 'interleave'),
         (dual_ushort, 'volume_sequence_number'),
         (uchar, 'name_len'),
-        (lambda s: dyn.clone(string, length=s['name_len'].l.int()), 'name'),
+        (lambda s: dyn.clone(string, length=s['name_len'].li.int()), 'name'),
         (dyn.align(2), 'padding'),
     ]
 
@@ -174,7 +174,7 @@ class iso_volume_descriptor(pstruct.type):
         (uchar, 'type'),
         (dyn.clone(string,length=5), 'id'),
         (uchar, 'version'),
-        (lambda s: volume_descriptor.get(s['type'].l.int()), 'data'),
+        (lambda s: volume_descriptor.get(s['type'].li.int()), 'data'),
     ]
 
 class volume_descriptor(ptype.definition):

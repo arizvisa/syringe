@@ -1,5 +1,4 @@
-import ptypes
-import __base__,headers
+import ptypes,portable
 from warnings import warn
 
 def open(filename, **kwds):
@@ -9,7 +8,22 @@ def open(filename, **kwds):
     res.filename = filename     # ;)
     return res
 
-class File(headers.CoffHeader, ptypes.ptype.boundary): pass
+class File(ptypes.pstruct.type, ptypes.ptype.boundary):
+    """Coff Object File"""
+    def __Data(self):
+        sections = self['Sections'].li
+        class result(ptypes.parray.type):
+            length = len(sections)
+            def _object_(self):
+                sect = sections[len(self.value)]
+                return ptypes.dynamic.clone(ptypes.dynamic.block(sect['SizeOfRawData'].li.num()), Section=sect, SectionName=sect['Name'].str())
+        return result
+
+    _fields_ = [
+        (portable.FileHeader, 'Header'),
+        (lambda s: ptypes.dynamic.clone(portable.SectionTableArray, length=s['Header'].li['NumberOfSections'].num()), 'Sections'),
+        (__Data, 'Data'),
+    ]
 
 if __name__ == '__main__':
     ## parse the file

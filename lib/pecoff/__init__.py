@@ -1,2 +1,2 @@
-import Archive,Object,Executable
-#import datadirectory,exports,headers,linenumbers,relocations,symbols
+from . import Archive,Object,Executable
+from . import portable

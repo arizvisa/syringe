@@ -1,8 +1,9 @@
 import ptypes
 from ptypes import *
 from ptypes.pint import *
-import logging
 import Object
+
+import logging,itertools
 
 class ulong(bigendian(uint32_t)): pass
 
@@ -15,231 +16,185 @@ class stringinteger(pstr.string):
         return self.int()
     def __long__(self):
         return self.long()
-
-#
-class MemberHeaderName(pstr.string):
-    length = 16
-
-    def str(self):
-        s = self.serialize().rstrip()
-#        if s[0] == '/':
-#            return self.parent.parent['LongNames']['Member'].get(int(s[1:]))
-        return s
-
-class MemberHeader(pstruct.type):
-    _fields_ = [
-        (MemberHeaderName, 'Name'),
-        (dyn.clone(pstr.string, length=12), 'Date'),
-        (dyn.clone(pstr.string, length=6), 'User ID'),
-        (dyn.clone(pstr.string, length=6), 'Group ID'),
-        (dyn.clone(pstr.string, length=8), 'Mode'),
-        (dyn.clone(stringinteger, length=10), 'Size'),
-        (dyn.clone(pstr.string, length=2), 'End of Header'),
-    ]
-
-    def data(self):
-        size = self['Size'].num()
-        return self.new(dyn.block(self['Size'].num()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
-
-# FIXME: instead of making each of these a .union explicitly, I can probably transform them into
-#            union all in one place in the Members array
-
-class FirstLinker(dyn.union):
-    class __FirstLinker(pstruct.type):
-        _fields_ = [
-            (ulong, 'Number of Symbols'),
-            (lambda self: dyn.array(ulong, self['Number of Symbols'].l.num()), 'Offsets'),
-            (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].num()), 'String Table')
-        ]
-
-        def getTable(self):
-            return [(str(k), v.num()) for k,v in zip(self['String Table'], self['Offsets'])]
-
-    _fields_ = [(__FirstLinker, 'Data')]
-
-class FirstLinkerMember(pstruct.type):
-    _fields_ = [
-        (MemberHeader, 'Header'),
-        #(FirstLinker, 'Member'),       # XXX
-        (lambda s: dyn.clone(FirstLinker, root=dyn.block(s['Header'].l['Size'].num())), 'Member'),
-        (pstr.char_t, 'newline')
-    ]
+    def num(self):
+        return int(self.str())
 
 class Index(uint16_t):
     def getIndex(self):
         return self.num()-1      # 1 off
 
-class SecondLinker(dyn.union):
-    class __SecondLinker(pstruct.type):
-        _fields_ = [
-            (uint32_t, 'Number of Members'),
-            (lambda self: dyn.array(uint32_t, self['Number of Members'].l.num()), 'Offsets'),
-            (uint32_t, 'Number of Symbols'),
-            (lambda self: dyn.array(Index, self['Number of Symbols'].l.num()), 'Indices'),
-            (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].num()), 'String Table')
-        ]
-
-        def getTable(self):
-            return [(k.str(), self['Offsets'][i.getIndex()].num()) for k,i in zip(self['String Table'], self['Indices'])]
-
-    class __SecondLinker_Lazy(pstruct.type):
-        _fields_ = [
-            (uint32_t, 'Number of Members'),
-            (lambda self: dyn.array(uint32_t, self['Number of Members'].l.num()), 'Offsets'),
-        ]
-
-    _fields_ = [
-        (__SecondLinker_Lazy, 'Lazy'),
-        (__SecondLinker, 'Data')
-    ]
-
-class SecondLinkerMember(pstruct.type):
-    _fields_ = [
-        (MemberHeader, 'Header'),
-#        (SecondLinker, 'Member'),
-        (lambda s: dyn.clone(SecondLinker, root=dyn.block(s['Header'].l['Size'].num())), 'Member'),
-        (pstr.char_t, 'newline')
-    ]
-
-class Longnames(ptype.type):
-    length = 0
-
-    def extract(self, index):
-        return utils.strdup(self.serialize()[index:])
-
-class LongnamesMember(pstruct.type):
-    _fields_ = [
-        (MemberHeader, 'Header'),
-        (lambda s: dyn.clone(Longnames, length=s['Header'].l['Size'].num()), 'Member'),
-        (pstr.char_t, 'newline')
-    ]
-
-class ImportHeaderType(pbinary.struct):
-    _fields_ = [
-        (2, 'Type'),
-        (3, 'Name Type'),
-        (11, 'Reserved')
-    ]
-
-class ImportHeader(pstruct.type):
-    _fields_ = [
-        (uint16_t, 'Sig1'),
-        (uint16_t, 'Sig2'),
-        (uint16_t, 'Version'),
-        (uint16_t, 'Machine'),
-        (uint32_t, 'Time-Date Stamp'),
-        (uint32_t, 'Size Of Data'),
-        (uint16_t, 'Ordinal/Hint'),
-        (ImportHeaderType, 'Type')
-    ]
-
-    def valid(self):
-        sig1,sig2 = self['Sig1'].num(), self['Sig2'].num()
-        return sig1 == 0 and sig2 == 0xffff
-
 class Import(pstruct.type):
-    _fields_ = [
-        (pstr.szstring, 'Name'),
-        (pstr.szstring, 'Module')
-    ]
-    def repr(self):
-        return '%s!%s'%( self['Module'].str(), self['Name'].str() )
+    class Header(pstruct.type):
+        class Type(pbinary.struct):
+            _fields_ = [
+                (2, 'Type'),
+                (3, 'Name Type'),
+                (11, 'Reserved')
+            ]
+        _fields_ = [
+            (uint16_t, 'Sig1'),
+            (uint16_t, 'Sig2'),
+            (uint16_t, 'Version'),
+            (uint16_t, 'Machine'),
+            (uint32_t, 'Time-Date Stamp'),
+            (uint32_t, 'Size Of Data'),
+            (uint16_t, 'Ordinal/Hint'),
+            (Type, 'Type')
+        ]
 
-class ImportMember(pstruct.type):
+    class Member(pstruct.type):
+        _fields_ = [
+            (pstr.szstring, 'Name'),
+            (pstr.szstring, 'Module')
+        ]
+
+        def valid(self):
+            sig1,sig2 = self['Sig1'].num(), self['Sig2'].num()
+            return sig1 == 0 and sig2 == 0xffff
+
+        def repr(self):
+            if self.initialized:
+                return '%s!%s'%( self['Module'].str(), self['Name'].str() )
+            return super(Import, self).repr()
+
     _fields_ = [
-        (ImportHeader, 'Header'),
-        (Import, 'Member')
+        (Header, 'Header'),
+        (Member, 'Member')
     ]
 
     def getImport(self):
         return self['Member']['Module'].str(), self['Member']['Name'].str(), self['Header']['Ordinal/Hint'].num(), self['Header']['Type']
 
-class MemberData(dyn.union):
-    root=dyn.block(0)
+#######
+class MemberType(ptype.definition):
+    attribute,cache = 'internalname',{}
+
+    class Data(dyn.union):
+        _fields_ = [
+            (Import, 'Import'),
+            (Object.File, 'Object'),
+            (ptype.block, 'Block'),
+        ]
+    
+        def isImport(self):
+            return self['Import']['Header'].valid()
+
+    unknown = Data
+
+## Linker objects
+@MemberType.define
+class Linker1(pstruct.type):
+    internalname = 0
     _fields_ = [
-        (ImportMember, 'Import'),
-        (Object.File, 'Object'),
+        (ulong, 'Number of Symbols'),
+        (lambda self: dyn.array(ulong, self['Number of Symbols'].li.num()), 'Offsets'),
+        (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].li.num()), 'Strings')
     ]
 
-    def isImport(self):
-        return self['Import']['Header'].valid()
+    def getTable(self):
+        return [(str(k), v.num()) for k,v in zip(self['Strings'], self['Offsets'])]
 
-class ArchiveMember(pstruct.type):
-    def __Member(self):
-        return dyn.clone(MemberData, root=dyn.block(self['Header'].l['Size'].num()))
+@MemberType.define
+class Linker2(pstruct.type):
+    internalname = 1
+    _fields_ = [
+        (uint32_t, 'Number of Members'),
+        (lambda self: dyn.array(uint32_t, self['Number of Members'].li.num()), 'Offsets'),
+        (uint32_t, 'Number of Symbols'),
+        (lambda self: dyn.array(Index, self['Number of Symbols'].li.num()), 'Indices'),
+        (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].num()), 'Strings')
+    ]
+
+    def getTable(self):
+        return [(k.str(), self['Offsets'][i.getIndex()].num()) for k,i in zip(self['Strings'], self['Indices'])]
+
+#@MemberType.define
+class LinkerMember1(Linker1):
+    internalname = "/"
+@MemberType.define
+class LinkerMember2(Linker2):
+    internalname = "/"
+
+@MemberType.define
+class Longnames(ptype.block):
+    internalname = "//"
+
+    def extract(self, index):
+        return utils.strdup(self.serialize()[index:])
+
+    def blocksize(self):
+        return self.p['Header'].li['Size'].num()
+
+#######
+class Member(pstruct.type):
+    internalname = None
+
+    @classmethod
+    def get(cls, internalname):
+        res = list(cls._fields_)
+        _,name = cls._fields_[1]
+        res[1] = (MemberType.lookup(internalname), name)
+        return dyn.clone(cls, _fields_=res)
+
+    class Header(pstruct.type):
+        class Name(pstr.string):
+            length = 16
+            str = lambda s: s.serialize().rstrip()
+    
+        _fields_ = [
+            (Name, 'Name'),
+            (dyn.clone(pstr.string, length=12), 'Date'),
+            (dyn.clone(stringinteger, length=6), 'User ID'),
+            (dyn.clone(stringinteger, length=6), 'Group ID'),
+            (dyn.clone(stringinteger, length=8), 'Mode'),
+            (dyn.clone(stringinteger, length=10), 'Size'),
+            (dyn.clone(pstr.string, length=2), 'End of Header'),
+        ]
+    
+        def data(self):
+            size = self['Size'].num()
+            return self.new(dyn.block(self['Size'].num()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
+
+    def __Data(self):
+        header = self['Header'].li
+        filename,size = header['Name'].str(),header['Size'].num()
+        res = MemberType.get(filename, root=dyn.block(size))
+        return dyn.clone(res, length=size) if ptype.isrelated(res, ptype.block) else res
 
     def __newline(self):
-        o = self.getoffset('newline')
-        a = self.new(pstr.char_t, __name__='temp', offset=o).l
-        if a.serialize() == '\n':
+        ofs = self.getoffset('Member') + self['Header'].li['Size'].num()
+        res = self.new(pstr.char_t, __name__='newline', offset=ofs)
+        if res.l.serialize() == '\n':
             return pstr.char_t
-        return ptype.type
+        return ptype.undefined
 
     _fields_ = [
-        (MemberHeader, 'Header'),
-        (__Member, 'Member'),
+        (Header, 'Header'),
+        (__Data, 'Member'),
         (__newline, 'newline'),
     ]
-
-    def isImport(self):
-        return self['Member']['Import']['Header'].valid()
 
 class Members(parray.terminated):
     # FIXME: it'd be supremely useful to cache all the import and object records somewhere
 
-    FirstLinker = SecondLinker = None
-    Longnames = None
+    Linker,Names = None,None
 
-    queue = None
-    def __ArchiveMember(self):
-        if self.queue:
-            return self.queue.pop(0)
-        return ArchiveMember
+    def _object_(self):
+        if len(self.value) < 2:
+            return Member.get(len(self.value))
+        return Member
 
-    def load(self):
-        self.queue = []
-        self.queue.append(FirstLinkerMember)
-        self.queue.append(SecondLinkerMember)
-
-        logging.info('loading %s.%s from %s'% (type(self).__module__, type(self).__name__, self.source) )
-        result = super(Members,self).load()
-        logging.info('done')
-#        print len(list(self.walk())),len(list(self.walkimports()))
-
-        return result
-
-    _object_ = __ArchiveMember
-
-    __count = 0
     def isTerminator(self, value):
         name = value['Header']['Name'].str()
-        if len(self.queue) == 1:
-            logging.info('...loaded FirstLinker record')
-            self.FirstLinker = value['Member']
-            return False
-
-        if name == '//':
-            assert self.Longnames is None, 'self.Longnames has already been defined'
-            self.Longnames = value['Member']
-            logging.info('..loaded Longnames record -> %d bytes'% len(self.Longnames))
-            return False
-
-        if len(self.queue) == 0:
+        if len(self.value) <= 2:
             if name == '/':
-                logging.info('..reading the SecondLinker data')
-                self.SecondLinker = value['Member']['Lazy']
-                self.__count = self.SecondLinker['Number of Members'].l.num()-1
-                logging.info('.loading %d total members'% (self.__count+1))
-                return False
+                self.Linker = value['Member']
+            return False
+        if name == '//':
+            self.Names = value
 
-            if self.__count > 0:
-                self.__count -= 1
-                return False
-
-            if self.__count == 0:
-                return True
-            pass
-        return False
+        res = self.Linker['Number of Members'].num()
+        return False if len(self.value) < res else True
 
     def walk(self):
         for m in (x['Member'] for x in self if type(x) is ArchiveMember):
@@ -256,7 +211,9 @@ class Members(parray.terminated):
         return
 
     def repr(self):
-        return '%s %d members'%( self.name(), len(self) )
+        if self.initialized:
+            return '%s %d members'%( self.name(), len(self) )
+        return super(Members,self).repr()
 
 class File(pstruct.type):
     '''A .LIB file'''
@@ -266,22 +223,25 @@ class File(pstruct.type):
     ]
 
     def repr(self):
-        return '%s signature:%s members:%d'% (self.name(), repr(self['signature'].serialize()), self.getmembercount())
+        if self.initialized:
+            return '%s signature:%s members:%d'% (self.name(), repr(self['signature'].serialize()), self.getmembercount())
+        return super(File,self).repr()
     
     ## really slow interface
     def getmember(self, index):
-        offsets = self['members'].SecondLinker['Offsets']
+        offsets = self['members'].Linker['Offsets']
         return self.new(MemberHeader, __name__='member[%d]'% index, offset=offsets[index])
 
     def getmemberdata(self, index):
-        return self.getmember(index).l.data().l.serialize()
+        return self.getmember(index).li.data().l.serialize()
 
     def getmembercount(self):
-        return self['members'].SecondLinker['Number of Members'].num()
+        return self['members'].Linker['Number of Members'].num()
 
     ## faster interface using ptypes to slide view
     def fetchimports(self):
-        offsets = self['members'].SecondLinker['Offsets']
+        offsets = self['members'].Linker['Offsets']
+                                                
         memberheader = self.new(MemberHeader, __name__='header', offset=0)
         importheader = self.new(ImportHeader, __name__='header', offset=0)
 
@@ -302,7 +262,7 @@ class File(pstruct.type):
         return
 
     def fetchmembers(self):
-        offsets = self['members'].SecondLinker['Offsets']
+        offsets = self['members'].Linker['Offsets']
         memberheader = self.new(MemberHeader, __name__='header', offset=0)
 
         p = self.new(dyn.block(4), __name__='magic', offset=0)

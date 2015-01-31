@@ -92,9 +92,6 @@ class type(_parray_generic):
     _object_ = None     # subclass of ptype.type
     length = 0          # int
 
-    def contains(self, offset):
-        return super(ptype.container, self).contains(offset)
-
     # load ourselves lazily
     def __load_block(self, **attrs):
         ofs = self.getoffset()
@@ -113,6 +110,27 @@ class type(_parray_generic):
             n.load()
             ofs += n.blocksize()
         return self
+
+    def alloc(self, *fields, **attrs):
+        result = super(type,self).alloc(**attrs)
+        if len(fields) > 0 and fields[0].__class__ is tuple:
+            for k,v in fields:
+                idx = result.getindex(k)
+                if ptype.istype(v) or isinstance(v, ptype.base) or ptype.isresolveable(v):
+                    result.value[idx] = result.new(v)
+                else:
+                    result.value[idx].set(v)
+                continue
+            self.setoffset(self.getoffset(), recurse=True)
+            return result
+        for idx,v in enumerate(fields):
+            if ptype.istype(v) or isinstance(v, ptype.base) or ptype.isresolveable(v):
+                result.value[idx] = result.new(v)
+            else:
+                result.value[idx].set(v)
+            continue
+        self.setoffset(self.getoffset(), recurse=True)
+        return result
 
     def load(self, **attrs):
         try:
@@ -175,12 +193,9 @@ class terminated(type):
         raise error.ImplementationError(self, 'terminated.isTerminator')
 
     def __len__(self):
-        if self.initializedQ():
-            return len(self.value)
-        raise error.InitializationError(self, 'terminated.__len__')
-
-    def blocksize(self):
-        return reduce(lambda x,y: x+y.blocksize(), self.value, 0)
+        if self.value is None:
+            raise error.InitializationError(self, 'terminated.__len__')
+        return len(self.value)
 
     def load(self, **attrs):
         try:
@@ -196,7 +211,7 @@ class terminated(type):
                         break
 
                     s = n.blocksize()
-                    if s <= 0 and Config.parray.break_on_zero_size:
+                    if s <= 0 and Config.parray.break_on_zero_sized_element:
                         Config.log.warn("terminated.load : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
                         break
                     if s < 0:
@@ -215,18 +230,19 @@ class terminated(type):
             raise error.LoadError(self, exception=e)
 
     def initializedQ(self):
-        return self.v is not None and len(self.v) > 0 and self.v[-1].initializedQ()
+        return self.value is not None and len(self.value) > 0 and self.value[-1].initializedQ()
 
 class uninitialized(terminated):
     '''An array that determines it's size dynamically.'''
     def size(self):
-        if self.v is not None:
+        if self.value is not None:
             value = (_ for _ in self.value if _.value is not None)
-            return reduce(lambda x,y: x+y.size(), value, 0)
+            #return reduce(lambda x,y: x+y.size(), value, 0)
+            return sum(n.size() for n in value)
         raise error.InitializationError(self, 'uninitialized.size')
 
     def initializedQ(self):
-        return self.v is not None
+        return self.value is not None
 
 class infinite(uninitialized):
     '''An array that reads elements until an exception or interrupt happens'''
@@ -262,7 +278,7 @@ class infinite(uninitialized):
                         break
 
                     s = n.blocksize()
-                    if s <= 0 and Config.parray.break_on_zero_size:
+                    if s <= 0 and Config.parray.break_on_zero_sized_element:
                         Config.log.warn("infinite.load : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
                         break
                     if s < 0:
@@ -301,7 +317,7 @@ class infinite(uninitialized):
                         break
 
                     s = n.blocksize()
-                    if s <= 0 and Config.parray.break_on_zero_size:
+                    if s <= 0 and Config.parray.break_on_zero_sized_element:
                         Config.log.warn("infinite.loadstream : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
                         break
                     if s < 0:
@@ -355,7 +371,7 @@ class block(uninitialized):
                     break
 
                 s = n.blocksize()
-                if s <= 0 and Config.parray.break_on_zero_size:
+                if s <= 0 and Config.parray.break_on_zero_sized_element:
                     Config.log.warn("block.load : %s : Terminated early due to zero-length element : %s"%( self.instance(), n.instance()))
                     break
                 if s < 0:
@@ -378,7 +394,7 @@ class block(uninitialized):
         return self
 
     def initializedQ(self):
-        return super(block,self).initializedQ() and self.size() == self.blocksize()
+        return super(block,self).initializedQ() and self.size() >= self.blocksize()
 
 if __name__ == '__main__':
     import ptype,parray
@@ -739,6 +755,38 @@ if __name__ == '__main__':
         a = argh(source=provider.empty(), length=69)
         a.a.set([42 for _ in range(69)])
         if sum(x.num() for x in a) == 2898:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_set_tuple():
+        import pint
+        class argh(parray.type):
+            _object_ = pint.int32_t
+        a = argh(length=4).alloc((0,0x77777777),(3,-1))
+        if a[0].num() == 0x77777777 and a[-1].num() == -1:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_set_iterable():
+        import pint
+        class argh(parray.type):
+            _object_ = pint.int32_t
+        a = argh(length=4).alloc(0,2,4)
+        if tuple(s.num() for s in a) == (0,2,4,0):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_container_tuple():
+        import pint
+        class aigh(parray.type):
+            _object_ = pint.uint8_t
+            length = 4
+        class argh(parray.type):
+            _object_ = pint.uint32_t
+        
+        x = aigh().alloc(*map(ord,'PE\0\0'))
+        a = argh(length=4).alloc((0,x),(-1,0x5a4d))
+        if a[0].serialize() == 'PE\0\0' and a[-1].serialize() == 'MZ\0\0':
             raise Success
 
 if __name__ == '__main__':

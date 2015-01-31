@@ -53,7 +53,7 @@ class sh_type(pint.enum, Elf32_Word):
         ('SHT_HIUSER', 0xffffffff),
     ]
 
-class sh_flags(pbinary.struct):
+class sh_flags(pbinary.flags):
     # Elf32_Word
     _fields_ = [
         (4, 'SHF_MASKPROC'),
@@ -67,9 +67,9 @@ class sh_flags(pbinary.struct):
 class Elf32_Shdr(pstruct.type):
     def __sh_offset(self):
 #        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
-        t = int(self['sh_type'].l)
+        t = int(self['sh_type'].li)
         type = Type.get(t)
-        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].l)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
+        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
 
     _fields_ = [
         (sh_name, 'sh_name'),
@@ -143,28 +143,18 @@ class SHT_HASH(pstruct.type):
     _fields_ = [
         (Elf32_Word, 'nbucket'),
         (Elf32_Word, 'nchain'),
-        (lambda s: dyn.array(Elf32_Word, s['nbucket'].l.int()), 'bucket'),
-        (lambda s: dyn.array(Elf32_Word, s['nchain'].l.int()), 'chain'),
+        (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.int()), 'bucket'),
+        (lambda s: dyn.array(Elf32_Word, s['nchain'].li.int()), 'chain'),
     ]
 
-from . import dynamic
+from . import segment
 @Type.define
-class SHT_DYNAMIC(dynamic.Elf32_DynArray):
+class SHT_DYNAMIC(segment.PT_DYNAMIC):
     type = 6
 
 @Type.define
-class SHT_NOTE(parray.block):
+class SHT_NOTE(segment.PT_NOTE):
     type = 7
-    class _object_(pstruct.type):
-        _fields_ = [
-            (Elf32_Word, 'namesz'),
-            (Elf32_Word, 'descsz'),
-            (Elf32_Word, 'type'),
-            (lambda s: dyn.clone(pstr.string, length=s['namesz'].l.int()), 'name'),
-            (dyn.align(4), 'name_pad'),
-            (lambda s: dyn.array(Elf32_Word, s['descsz'].l.int()/4), 'desc'),
-            (dyn.align(4), 'desc_pad'),
-        ]
 
 @Type.define
 class SHT_NOBITS(ptype.block):
@@ -176,9 +166,8 @@ class SHT_REL(parray.block):
     _object_ = Elf32_Rel
 
 @Type.define
-class SHT_SHLIB(ptype.block):
+class SHT_SHLIB(segment.PT_SHLIB):
     type = 10
-    # FIXME: this is platform-specific and not in the standard
 
 @Type.define
 class SHT_DYNSYM(parray.block):

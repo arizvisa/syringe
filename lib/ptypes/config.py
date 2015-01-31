@@ -115,7 +115,7 @@ def namespace(cls):
             doc = v.__doc__.split('\n')[0] if v.__doc__ else None
             col2 = max((col2,len(val)))
             result.append((k, val, doc))
-        return [(('{name:%d} : {val:%d} # {doc}' if d else '{name:%d} : {val:%d}')%(col1,col2)).format(name=k,val=v,doc=d) for k,v,d in result]
+        return [('{name:{}} : {val:{}} # {doc}' if d else '{name:{}} : {val:{}}').format(col1,col2,name=k,val=v,doc=d) for k,v,d in result]
 
     def __repr__(self):
         props = getprops(properties)
@@ -198,17 +198,21 @@ class defaults:
 
     class ptype:
         clone_name = field.type('clone_name', str, 'This will only affect newly cloned types')
+        noncontiguous = field.bool('noncontiguous', 'Disable optimization for loading ptype.container elements contiguously. Enabling this allows there to be \'holes\' within a list of elements in a container and disables an important optimization.')
         
     class pint:
         bigendian_name = field.type('bigendian_name', str, 'Modifies the name of any integers that are big-endian')
         littleendian_name = field.type('littleendian_name', str, 'Modifies the name of any integers that are little-endian')
 
     class parray:
-        break_on_zero_size = field.bool('Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')
+        break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')
+        break_on_max_count = field.bool('break_on_max_count', 'If a dynamically created array is larger than max_count, then fail it\'s creation. If not, then issue a warning.')
+        max_count = field.type('max_count', int, 'If max_count is larger than 0, then notify via a warning or an exception based on the value of \'break_on_max_count\'')
 
     class display:
-        show_module_name = field.bool('show_module_name', 'display the module name in the summary')
-        show_parent_name = field.bool('show_parent_name', 'display the parent name in the summary')
+        show_module_name = field.bool('show_module_name', 'include the full module name in the summary')
+        show_parent_name = field.bool('show_parent_name', 'include the parent name in the summary')
+        mangle_with_attributes = field.bool('mangle_with_attributes', 'when doing name-mangling, include all atomic attributes of a ptype as a formatstring keyword')
 
         class hexdump:
             '''Formatting for a hexdump'''
@@ -223,9 +227,12 @@ class defaults:
             details_message = field.type('details_threshold_message', str)
 
         class partial:
-            '''How to display the offsets of an element that is non-byte-aligned'''
+            '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
             hex = field.bool('hex_offset', 'display the partial-offset in hexadecimal (0.0-0.9,0.a-0.f)')
             fractional = field.bool('fractional_offset', 'display the offset as a fraction of a full bit, otherwise display just the bit number (0.0-0.7)')
+
+            bigendian_name = field.type('bigendian_name', str, 'format specifier defining an element that is read most-significant to least-significant')
+            littleendian_name = field.type('littleendian_name', str, 'format specifier defining an element that is read least-significant to most-significant')
 
     def __getsource():
         global ptype
@@ -258,10 +265,19 @@ defaults.display.threshold.summary_message = ' ..skipped ~{leftover} bytes.. '
 defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipped} bytes.. '
 defaults.display.partial.hex = True
 defaults.display.partial.fractional = False
-defaults.parray.break_on_zero_size = False
-defaults.ptype.clone_name = 'clone({})'
-defaults.pint.bigendian_name = 'bigendian({})'
-defaults.pint.littleendian_name = 'littleendian({})'
+defaults.display.partial.bigendian_name = 'pb({})'
+defaults.display.partial.littleendian_name = 'pble({})'
+defaults.display.mangle_with_attributes = False
+defaults.parray.break_on_zero_sized_element = False
+defaults.parray.break_on_max_count = False
+defaults.parray.max_count = 0
+defaults.ptype.noncontiguous = False
+#defaults.ptype.clone_name = 'clone({})'
+#defaults.pint.bigendian_name = 'bigendian({})'
+#defaults.pint.littleendian_name = 'littleendian({})'
+defaults.ptype.clone_name = 'c({})'
+defaults.pint.bigendian_name = 'be({})' if sys.byteorder.startswith('little') else '{}'
+defaults.pint.littleendian_name = 'le({})' if sys.byteorder.startswith('big') else '{}'
 
 if __name__ == '__main__':
     @namespace

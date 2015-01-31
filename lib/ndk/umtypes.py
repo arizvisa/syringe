@@ -56,7 +56,7 @@ class UNICODE_STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return self['Buffer'].d.l.str()[:int(self['Length'])]
+        return self['Buffer'].d.li.str()[:int(self['Length'])]
 
 class PUNICODE_STRING(dyn.pointer(UNICODE_STRING)): pass
 
@@ -71,7 +71,7 @@ class STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return self['Buffer'].d.l.str()[:int(self['Length'])]
+        return self['Buffer'].d.li.str()[:int(self['Length'])]
 
 class PSTRING(dyn.pointer(STRING)): pass
 

@@ -22,11 +22,11 @@ class Record(object):
 class Directory(pstruct.type):
     class Entry(pstruct.type):
         def _offset(self):
-            id = int(self['id'].l)
+            id = int(self['id'].li)
 
             t = self['type'].l
             type = t.lookup[int(t)]
-            c = int(self['count'].l)
+            c = int(self['count'].li)
 
             try:
                 return Record.Lookup(id)
@@ -77,13 +77,13 @@ class Directory(pstruct.type):
 
 Directory._fields_ = [
         (pint.uint16_t, 'count'),
-        (lambda s: dyn.array(s.Entry, int(s['count'].l)), 'entry'),
+        (lambda s: dyn.array(s.Entry, int(s['count'].li)), 'entry'),
         (dyn.pointer(Directory,type=pint.uint32_t), 'next')
     ]
 
 class Header(pstruct.type):
     def __directory(self):
-        signature = self['signature'].l.serialize()
+        signature = self['signature'].li.serialize()
         if signature == '\x4d\x4d\x00\x2a':     # bigendian
             return dyn.pointer(Directory)
         if signature == '\x49\x49\x2a\x00':     # little-endian

@@ -34,7 +34,7 @@ if False:
         _fields_ = [
             (pint.uint16_t, 'marker'),
             (pint.uint16_t, 'length'),
-            (lambda self: dyn.block(self['length'].l - 2), 'data'),
+            (lambda self: dyn.block(self['length'].li.num() - 2), 'data'),
         ]
 
         @classmethod
@@ -65,7 +65,7 @@ class markerlength(ptype.definition):
 ### header chunks
 class header(pstruct.type):
     def __data(self):
-        m = self['marker'].l.serialize()
+        m = self['marker'].li.serialize()
         try:
             return marker.lookup(m)
         except KeyError:
@@ -79,7 +79,7 @@ class header(pstruct.type):
 
 class headerlength(pstruct.type):
     def __data(self):
-        bs = self['length'].l.int() - 2
+        bs = self['length'].li.int() - 2
         t = self.type
         return dyn.clone(coded, _object_=markerlength.get(t, length=bs), blocksize=lambda s:bs)
 
@@ -114,7 +114,7 @@ class JFIF(pstruct.type):
         (pint.uint16_t, 'Ydensity'),
         (pint.uint8_t, 'Xthumbnail'),
         (pint.uint8_t, 'Ythumbnail'),
-        (lambda self: dyn.block( 3 * (self['Xthumbnail'].l.int()*self['Ythumbnail'].l.int())), 'RGB')
+        (lambda self: dyn.block( 3 * (self['Xthumbnail'].li.int()*self['Ythumbnail'].li.int())), 'RGB')
     ]
 
 @marker.define
@@ -141,7 +141,7 @@ class SOF(pstruct.type):
         (pint.uint16_t, 'height'),
         (pint.uint16_t, 'width'),
         (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array( SOF.component, self['number of components'].l), 'components')
+        (lambda self: dyn.array( SOF.component, self['number of components'].li.num()), 'components')
     ]
 
 #@markerlength.define   # XXX
@@ -185,14 +185,14 @@ class DQTTableArray(parray.terminated):
 class DQT(pstruct.type):
     type = '\xff\xdb'
     _fields_ = [
-        (lambda self: dyn.clone(DQTTableArray, blocksize=lambda:self['length'].l-2), 'table')    # FIXME: get this shit working too
+        (lambda self: dyn.clone(DQTTableArray, blocksize=lambda:self['length'].li.num()-2), 'table')    # FIXME: get this shit working too
     ]
 
 class HuffmanTable(pstruct.type):
     _fields_ = [
         (CBinary([(4, 'class'), (4, 'destination')]), 'table'),
         (dyn.block(16), 'count'),
-        (lambda self: dyn.block(reduce(lambda x,y:x+y, [ord(x) for x in self['count'].l.serialize()])), 'symbols') # FIXME: this needs to be calculated correctly somehow, but i can't find the docs for it
+        (lambda self: dyn.block(reduce(lambda x,y:x+y, [ord(x) for x in self['count'].li.serialize()])), 'symbols') # FIXME: this needs to be calculated correctly somehow, but i can't find the docs for it
     ]
 
     def dumpValue(self, indent=''):
@@ -226,7 +226,7 @@ class HuffmanTableArray(parray.terminated):
 class DHT(pstruct.type):
     type = '\xff\xc4'
     _fields_ = [
-        (lambda self: dyn.clone(HuffmanTableArray,blocksize=lambda:self['length'].l-2), 'table')
+        (lambda self: dyn.clone(HuffmanTableArray,blocksize=lambda:self['length'].li.num()-2), 'table')
     ]
 
 @markerlength.define
@@ -242,7 +242,7 @@ class SOS(pstruct.type):
 
     _fields_ = [
         (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array(SOS.component, self['number of components'].l), 'component'),
+        (lambda self: dyn.array(SOS.component, self['number of components'].li.num()), 'component'),
         (pint.uint8_t, 'start of spectral selection'),
         (pint.uint8_t, 'end of spectral selection'),
         (CBinary([(4,'high'),(4,'low')]), 'successive approximation')

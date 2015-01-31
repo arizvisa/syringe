@@ -145,7 +145,7 @@ class ProfileFile(pstruct.type):
     _fields_ = [
         (ProfileHeader, 'header'),
         (uInt32Number, 'count'),
-        (lambda s: dyn.array(TagEntry, int(s['count'].l)), 'tags')
+        (lambda s: dyn.array(TagEntry, int(s['count'].li)), 'tags')
     ]
 
 
@@ -176,7 +176,7 @@ class DevStruct(pstruct.type, TagStruct):
     signature = 'devs'
     _fields_ = [
         (verify_bitsize(uInt32Number, 8), 'NumOfPlatforms'),
-        (lambda s: dyn.array(PlatStruct, int(s['NumOfPlatforms'].l)), 'PlatformArray')
+        (lambda s: dyn.array(PlatStruct, int(s['NumOfPlatforms'].li)), 'PlatformArray')
     ]
 
 class PlatStruct(pstruct.type):
@@ -184,7 +184,7 @@ class PlatStruct(pstruct.type):
         (dyn.block(4), 'PlatformId'),
         (verify_bitsize(uInt32Number, 8), 'CombCount'),
         (uInt32Number, 'PlatformSize'),
-        (lambda s: dyn.array(CombStruct, int(s['CombCount'].l)), 'CombArray')
+        (lambda s: dyn.array(CombStruct, int(s['CombCount'].li)), 'CombArray')
         
     ]
 
@@ -192,7 +192,7 @@ class CombStruct(pstruct.type):
     _fields_ = [
         (uInt32Number, 'SetCount'),
         (verify_bitsize(uInt32Number, 8), 'CombSize'),
-        (lambda s: dyn.array(SetStruct, int(s['SetCount'].l)), 'SetArray')
+        (lambda s: dyn.array(SetStruct, int(s['SetCount'].li)), 'SetArray')
     ]
 
 class SetStruct(pstruct.type):
@@ -200,7 +200,7 @@ class SetStruct(pstruct.type):
         (dyn.block(4), 'SettingSig'),
         (uInt32Number, 'SettingSize'),
         (verify_bitsize(uInt32Number, 8), 'numSettings'),
-        (lambda s: dyn.array(uInt32Number, int(s['numSettings'].l)), 'Setting')
+        (lambda s: dyn.array(uInt32Number, int(s['numSettings'].li)), 'Setting')
     ]
 
 class TextDescStruct(pstruct.type, TagStruct):

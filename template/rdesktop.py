@@ -96,8 +96,8 @@ class X224Parameter(pstruct.type):
         (pint.uint8_t, 'code'),
         (pint.uint8_t, 'flags'),
         (pint.uint16_t, 'length'),
-#        (lambda s: dyn.block(s['length'].l.int()), 'value')
-        (lambda s: X224Param.Get(s['code'].l.int(),s['length'].l.int() - 4), 'value'),
+#        (lambda s: dyn.block(s['length'].li.int()), 'value')
+        (lambda s: X224Param.Get(s['code'].li.int(),s['length'].li.int() - 4), 'value'),
     ]
 
 class X224ParameterArray(parray.block):
@@ -134,19 +134,19 @@ class RDPNegotiationFailure(pint.uint32_t, pint.enum):
 ### T.123
 class TPDU(pstruct.type):
     def __data(self):
-        s = self['length'].l.int()
+        s = self['length'].li.int()
         if s < 2:
             logging.info("%s : length is (%d < 2)", self.shortname(), s)
             return dyn.block(0)
-        return X224.Get(self['type'].l['high'], s-2)
+        return X224.Get(self['type'].li['high'], s-2)
 
     def __data(self):
-        s = self['length'].l.int()
+        s = self['length'].li.int()
         if s < 2:
             logging.info("%s : length is (%d < 2)", self.shortname(), s)
             return dyn.block(0)
         try:
-            result = X224.Lookup(self['type'].l['high'])
+            result = X224.Lookup(self['type'].li['high'])
         except KeyError:
             result = dyn.block(s - 2)
         return result
@@ -165,7 +165,7 @@ class TPDU(pstruct.type):
 class TPKT(pstruct.type):
     class default(pstruct.type):
         def __data(self):
-            n=self['length'].l.int() - 4
+            n=self['length'].li.int() - 4
             return dyn.clone(TPDU, blocksize=lambda s: n)
 
         _fields_ = [
@@ -181,7 +181,7 @@ class TPKT(pstruct.type):
     class rdp5(pstruct.type):
         def __data(self):
             raise NotImplementedError("RDP5 isn't decoding its length correctly")
-            n = self['length'].l.int()
+            n = self['length'].li.int()
             return dyn.clone(TPDU, blocksize=lambda s: n)
 
         # XXX: maybe length is being decoded wrong, but whatever
@@ -193,7 +193,7 @@ class TPKT(pstruct.type):
 
     _fields_ = [
         (bigendian(pint.uint8_t), 'version'),
-        (lambda s: (s.default, s.rdp5)[ s['version'].l.int() != 3], 'data')
+        (lambda s: (s.default, s.rdp5)[ s['version'].li.int() != 3], 'data')
     ]
 
     def blocksize(self):

@@ -47,13 +47,13 @@ class SerializationError(Base):
     def objectname(self):
         return self.object.__name__ if type(self.object) is type else self.object.shortname()
     def path(self):
-        return (' -> '.join(self.object.backtrace())) or '<root>'
+        return '{%s}'% ' -> '.join(self.object.backtrace() or [])
     def position(self):
         try: bs = '%x'% self.object.blocksize()
         except: bs = '?'
         return '%x:+%s'%( self.object.getoffset(), bs )
     def __str__(self):
-        return ' : '.join((self.objectname(), self.typename(), self.position(), self.path(), str(self.exception)))
+        return ' : '.join((self.objectname(), self.typename(), self.path(), str(self.exception)))
 
 class LoadError(SerializationError, exc.EnvironmentError):
     """Error while initializing object from source"""
@@ -64,7 +64,7 @@ class LoadError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         consumed, = self.args
         if consumed > 0:
-            return '%s : %s : %s : Unable to consume %x from source (%s)'%(self.typename(), self.position(), self.path(), consumed, str(self.exception))
+            return '%s : %s : Unable to consume %x from source (%s)'%(self.typename(), self.path(), consumed, str(self.exception))
         return super(LoadError,self).__str__()
 
 class CommitError(SerializationError, exc.EnvironmentError):
@@ -76,7 +76,7 @@ class CommitError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         written, = self.args
         if written > 0:
-            return '%s : %s : wrote %x : %s'%(self.typename(), self.position(), written, self.path())
+            return '%s : wrote %x : %s'%(self.typename(), written, self.path())
         return super(CommitError,self).__str__()
 
 class MemoryError(SerializationError, exc.MemoryError):

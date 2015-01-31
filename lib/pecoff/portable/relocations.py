@@ -1,6 +1,9 @@
-import ptypes,headers
+import ptypes
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap
-from __base__ import *
+from ..__base__ import *
+
+from . import headers
+
 import array
 
 ## per symbol relocations
@@ -118,7 +121,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
         (uint32, 'Block Size'),
 #        (lambda s: dyn.clone(BaseRelocationArray, length=(int(s['Block Size'].load())-8)/2), 'Relocations'),   # XXX: this is too slow, heh...
 #        (lambda s: dyn.block(int(s['Block Size'].load())-8), 'Relocations')
-        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Block Size'].l.int()-8), 'Relocations'),
+        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Block Size'].li.num()-8), 'Relocations'),
     ]
 
     def fetchrelocations(self):
@@ -201,7 +204,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.terminated):
         assert data.__class__ is array.array, 'data argument must be formed as an array'
 
         sectionname = section['Name'].str()
-        imagebase = self.getparent(headers.NtHeader)['OptionalHeader']['ImageBase'].num()
+        imagebase = self.getparent(Header)['OptionalHeader']['ImageBase'].num()
 
         sectionarray = section.parent
         sectionvaLookup = dict( ((s['Name'].str(),s['VirtualAddress'].num()) for s in sectionarray) )

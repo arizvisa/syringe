@@ -253,6 +253,70 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
     for o in xrange(0, half*width, width):
         yield hexrow(data[o+o2:o+o2+width], o+o1+o2, **attrs)
     return
+
+def attributes(instance):
+    """Return all constant attributes of an instance.
+
+    This skips over things that require executing code such as properties.
+    """
+    i,t = ( set(dir(_)) for _ in (instance,instance.__class__))
+    result = {}
+    for k in i:
+        v = getattr(instance.__class__, k, callable)
+        if not (callable(v) or hasattr(v,'__delete__')):
+            result[k] = getattr(instance, k)
+        continue
+    for k in i.difference(t):
+        v = getattr(instance, k)
+        if not callable(v):
+            result[k] = getattr(instance, k)
+        continue
+    return result
+
+def memoize(*kargs,**kattrs):
+    '''Converts a function into a memoized callable
+    kargs = a list of positional arguments to use as a key
+    kattrs = a keyword-value pair describing attributes to use as a key
+
+    if key='string', use kattrs[key].string as a key
+    if key=callable(n)', pass kattrs[key] to callable, and use the returned value as key
+    '''
+    F_VARARG = 0x4
+    F_VARKWD = 0x8
+    F_VARGEN = 0x20
+    kattrs = tuple((o,a) for o,a in sorted(kattrs.items()))
+    def prepare_callable(fn):
+        cache = {}
+        co = fn.func_code
+        flags,varnames = co.co_flags,iter(co.co_varnames)
+        assert (flags & F_VARGEN) == 0, 'Not able to memoize %r generator function'% fn
+        argnames = itertools.islice(varnames, co.co_argcount)
+        c_positional = tuple(argnames)
+        c_attribute = kattrs
+        c_var = (varnames.next() if flags & F_VARARG else None, varnames.next() if flags & F_VARKWD else None)
+        def key(*args, **kwds):
+            res = iter(args)
+            p = dict(zip(c_positional,res))
+            p.update(kwds)
+            a,k = c_var
+            if a is not None: p[a] = tuple(res)
+            if k is not None: p[k] = dict(kwds)
+            k1 = (p.get(k, None) for k in kargs)
+            k2 = ((n(p[o]) if callable(n) else getattr(p[o],n,None)) for o,n in c_attribute)
+            return tuple(itertools.chain(k1, (None,), k2))
+        def callee(*args, **kwds):
+            res = key(*args, **kwds)
+            if res in cache:
+                return cache[res]
+            return cache.setdefault(res, fn(*args,**kwds))
+        # set some utils on the function
+        callee.key = key
+        callee.cache = cache
+        callee.func_name = fn.func_name
+        callee.func_doc = fn.func_doc
+        callee.callable = fn
+        return callee
+    return prepare_callable
     
 if __name__ == '__main__':
     # test cases are found at next instance of '__main__'
@@ -282,6 +346,7 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
+    import utils
 
     @mapexception({Failure:Success})
     def blah_failure_to_success():
@@ -344,6 +409,97 @@ if __name__ == '__main__':
         try:
             x = blah_pass()
         except OSError:
+            raise Success
+
+    @TestCase
+    def test_memoize_fn_1():
+        @utils.memoize('arg1','arg2')
+        def blah(arg1,arg2,arg3,arg4): 
+            blah.counter += 1
+            return arg1+arg2
+        blah.counter = 0
+        blah(15,20,0,0)
+        blah(35,30,0,0)
+        res = blah(15,20, 30,35)
+        if res == 35 and blah.counter == 2:
+            raise Success
+
+    @TestCase
+    def test_memoize_fn_2():
+        @utils.memoize('arg1','arg2', arg3='attribute')
+        def blah(arg1,arg2,arg3):
+            blah.counter += 1
+            return arg1+arg2
+        class f(object): attribute=10
+        class g(object): attribute=20
+        blah.counter = 0
+        blah(15,20,f)
+        blah(15,20,g)
+        res = blah(15,20,f)
+        if res == 35 and blah.counter == 2:
+            raise Success
+
+    @TestCase
+    def test_memoize_fn_3():
+        x,y,z = 10,15,20
+        @utils.memoize('arg1','arg2', kwds=lambda n: n['arg3'])
+        def blah(arg1,arg2,**kwds):
+            blah.counter += 1
+            return arg1+arg2
+        blah.counter = 0
+        blah(15,20,arg3=10)
+        blah(15,20,arg3=20)
+        res = blah(15,20,arg3=10)
+        if res == 35 and blah.counter == 2:
+            raise Success
+
+    @TestCase
+    def test_memoize_im_1():
+        class a(object):
+            counter = 0
+            @utils.memoize('self','arg')
+            def blah(self, arg):
+                a.counter += 1
+                return arg * arg
+        x = a()
+        x.blah(10)
+        x.blah(5)
+        res = x.blah(10)
+        if x.counter == 2 and res == 100:
+            raise Success
+
+    @TestCase
+    def test_memoize_im_2():
+        class a(object):
+            def __init__(self): self.counter = 0
+            @utils.memoize('self','arg', self='test')
+            def blah(self, arg):
+                self.counter += 1
+                return arg * arg
+            test = 100
+        x,y = a(),a()
+        x.blah(10)
+        x.blah(5)
+        y.blah(10)
+        res = x.blah(10)
+        if x.counter == 2 and y.counter == 1 and res == 100:
+            raise Success
+
+    @TestCase
+    def test_memoize_im_3():
+        class a(object):
+            def __init__(self): self.counter = 0
+            @utils.memoize('self','arg', self=lambda s: s.test)
+            def blah(self, arg):
+                self.counter += 1
+                return arg * arg
+            test = 100
+        x,y = a(),a()
+        x.blah(10)
+        x.blah(5)
+        y.blah(10)
+        res = x.blah( 10)
+        if x.counter == 2 and y.counter == 1 and res == 100:
             raise Success
 
 if __name__ == '__main__':

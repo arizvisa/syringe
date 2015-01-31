@@ -4,7 +4,7 @@ from . import base
 ### base file type
 class File(ptypes.pstruct.type, base.ElfXX_File):
     def __e_data(self):
-        type = self['e_ident'].l['EI_CLASS'].num()
+        type = self['e_ident'].li['EI_CLASS'].num()
         if type == 1:
             return header.Elf32_Ehdr
         elif type == 2:

@@ -84,7 +84,7 @@ class File(pstruct.type):
     _fields_ = [
         (ChunkHeader, 'header'),
         (FlicHeader, 'flicheader'),
-        (lambda s: dyn.clone(s._chunks, blocksize=lambda x: int(s['header'].l['size'])-s['flicheader'].size()-s['header'].size()), 'data'),
+        (lambda s: dyn.clone(s._chunks, blocksize=lambda x: int(s['header'].li['size'])-s['flicheader'].size()-s['header'].size()), 'data'),
     ]
 
     def __repr__(self):
@@ -160,7 +160,7 @@ class HUFFMAN_TABLE(Chunk):
         (WORD,  'codelength'),
         (WORD,  'numcodes'),
         (dyn.array(BYTE,6),  'reserved'),
-        (lambda s: dyn.array(HUFFMAN_CODE, int(s['numcodes'].l)), 'code')
+        (lambda s: dyn.array(HUFFMAN_CODE, int(s['numcodes'].li)), 'code')
     ]
 
 class FRAME_TYPE(Chunk):
@@ -171,7 +171,7 @@ class FRAME_TYPE(Chunk):
         (short, 'reserved'),
         (ushort, 'width'),
         (ushort, 'height'),
-        (lambda s: dyn.clone(ChunkArray, length=int(s['chunks'].l)), 'data')
+        (lambda s: dyn.clone(ChunkArray, length=int(s['chunks'].li)), 'data')
     ]
 
 class PSTAMP(Chunk):
@@ -194,7 +194,7 @@ class LABELEX(Chunk):
     _fields_ = [
         (WORD, 'label'),
         (dyn.array(BYTE, 2), 'reserved'),
-        (lambda s: dyn.block( int(s['size'].l) - 4 - 2 - 2 - 2), 'name')
+        (lambda s: dyn.block( int(s['size'].li) - 4 - 2 - 2 - 2), 'name')
     ]
 
 class REGION(Chunk):
@@ -231,27 +231,27 @@ class ColorPacket(pstruct.type):
     _fields_ = [
         (BYTE, 'skip'),
         (BYTE, 'count'),
-        (lambda s: dyn.array(RGB, int(s['count'].l) or 256), 'color')
+        (lambda s: dyn.array(RGB, int(s['count'].li) or 256), 'color')
     ]
 
 class COLOR_64(Chunk):
     type = 11
     _fields_ = [
         (WORD, 'numpackets'),
-        (lambda s: dyn.array(ColorPacket, int(s['numpackets'].l)), 'packets')
+        (lambda s: dyn.array(ColorPacket, int(s['numpackets'].li)), 'packets')
     ]
 
 class LinePacket(pstruct.type):
     _fields_ = [
         (BYTE, 'skip'),
         (BYTE, 'count'),
-        (lambda s: dyn.block((int(s['count'].l)&0x80) and 1 or int(s['count'].l)&0x7f ), 'data') #XXX
+        (lambda s: dyn.block((int(s['count'].li)&0x80) and 1 or int(s['count'].li)&0x7f ), 'data') #XXX
     ]
 
 class Line(pstruct.type):
     _fields_ = [
         (BYTE, 'numpackets'),
-        (lambda s: dyn.array(LinePacket, int(s['numpackets'].l)), 'packets')
+        (lambda s: dyn.array(LinePacket, int(s['numpackets'].li)), 'packets')
     ]
 
 class DELTA_FLI(Chunk):
@@ -259,7 +259,7 @@ class DELTA_FLI(Chunk):
     _fields_ = [
         (WORD, 'skip'),
         (WORD, 'numlines'),
-        (lambda s: dyn.array(Line, int(s['numlines'].l)), 'lines')
+        (lambda s: dyn.array(Line, int(s['numlines'].li)), 'lines')
     ]
 
 chunkLookup = dict([(cls.type, cls) for cls in globals().values() if type(cls) is type and cls is not Chunk and issubclass(cls, Chunk)])

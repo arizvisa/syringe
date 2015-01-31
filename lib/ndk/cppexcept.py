@@ -52,9 +52,9 @@ class cxx_function_descr(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'magic'),
         (pint.uint32_t, 'unwind_count'),
-        (lambda s: dyn.pointer(dyn.array(unwind_info, s['unwind_count'].l.int())), 'unwind_table'),
+        (lambda s: dyn.pointer(dyn.array(unwind_info, s['unwind_count'].li.int())), 'unwind_table'),
         (pint.uint32_t, 'tryblock_count'),
-        (lambda s: dyn.pointer(dyn.array(tryblock_info, s['unwind_count'].l.int())), 'tryblock'),
+        (lambda s: dyn.pointer(dyn.array(tryblock_info, s['unwind_count'].li.int())), 'tryblock'),
         (pint.uint32_t, 'ipmap_count'),
         (dyn.pointer(ptype.undefined), 'ipmap'),       # XXX
         (dyn.pointer(ptype.undefined), 'expect_list'),     # XXX

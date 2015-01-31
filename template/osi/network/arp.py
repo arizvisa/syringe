@@ -4,7 +4,7 @@ from ptypes import *
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 
-@datalink.layer.define
+@datalink.liayer.define
 class header(pstruct.type,terminal):
     type = 0x0806
     _fields_ = [
@@ -14,9 +14,9 @@ class header(pstruct.type,terminal):
         (u_char, 'ar_pln'),
         (u_short, 'ar_op'),
 
-        (lambda s: dyn.block(s['ar_hln'].l.int()), 'ar_sha'),
-        (lambda s: dyn.block(s['ar_pln'].l.int()), 'ar_spa'),
+        (lambda s: dyn.block(s['ar_hln'].li.int()), 'ar_sha'),
+        (lambda s: dyn.block(s['ar_pln'].li.int()), 'ar_spa'),
 
-        (lambda s: dyn.block(s['ar_hln'].l.int()), 'ar_tha'),
-        (lambda s: dyn.block(s['ar_pln'].l.int()), 'ar_tpa'),
+        (lambda s: dyn.block(s['ar_hln'].li.int()), 'ar_tha'),
+        (lambda s: dyn.block(s['ar_pln'].li.int()), 'ar_tpa'),
     ]

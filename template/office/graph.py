@@ -11,8 +11,8 @@ class RecordGeneral(__init__.RecordGeneral):
     __header = pbinary.littleendian(__header)
 
     def __data(self):
-        t = int(self['type'].l)
-        l = int(self['length'].l)
+        t = int(self['type'].li)
+        l = int(self['length'].li)
         try:
             cls = self.Record.Lookup(t)
         except KeyError:
@@ -20,11 +20,11 @@ class RecordGeneral(__init__.RecordGeneral):
         return dyn.clone(cls, blocksize=lambda s:l)
 
     def __extra(self):
-        t = int(self['type'].l)
+        t = int(self['type'].li)
         name = '[%s]'% ','.join(self.backtrace()[1:])
 
         used = self['data'].size()
-        total = int(self['length'].l)
+        total = int(self['length'].li)
 
         if total > used:
             l = total-used

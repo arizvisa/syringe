@@ -37,8 +37,8 @@ class Record(ptype.definition):
 
 class RecordGeneral(pstruct.type):
     def __data(self):
-        t = int(self['header'].l['type'])
-        l = int(self['header']['length'])
+        t = int(self['header'].li['type'])
+        l = int(self['header'].li['length'])
         return dyn.clone(self.Record.get(t, length=l), blocksize=lambda s:l)
 
     def __extra(self):

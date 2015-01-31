@@ -18,7 +18,7 @@ class OpStash(object):
 
 class OpRecord(pstruct.type):
     def __data(self):
-        return OpStash.Lookup( int(self['code'].l) )
+        return OpStash.Lookup( int(self['code'].li) )
 
     _fields_ = [
         (Opcode_v1, 'code'),

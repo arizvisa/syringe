@@ -27,7 +27,7 @@ class OpStash(object):
 
 class OpRecord(pstruct.type):
     def __data(self):
-        t = int(self['code'].l)
+        t = int(self['code'].li)
 
         if t <= 0x1f:
             res = OpStash.Lookup(t)
@@ -80,7 +80,7 @@ class directBitsRect(pstruct.type):
             
         _fields_ = [
             (__lineCount, 'stride'),
-            (lambda s: dyn.block(int(s['stride'].l)), 'data')
+            (lambda s: dyn.block(int(s['stride'].li)), 'data')
         ]
 
     def __pixData(self):
@@ -195,7 +195,7 @@ class LongComment(pstruct.type):
     _fields_ = [
         (Integer, 'kind'),
         (Integer, 'size'),
-        (lambda s: dyn.block(int(s['size'].l)), 'data')
+        (lambda s: dyn.block(int(s['size'].li)), 'data')
     ]
 
 @OpStash.Define
@@ -273,8 +273,8 @@ class CompressedQuickTime(pstruct.type):
         (Long, 'maskSize'),
 
         (lambda s: s, 'matteDescr'),
-#        (lambda s: dyn.block(s['matteSize'].l.int()), 'matteData'),
-#        (lambda s: dyn.block(s['maskSize'].l.int()), 'maskRgn'),
+#        (lambda s: dyn.block(s['matteSize'].li.int()), 'matteData'),
+#        (lambda s: dyn.block(s['maskSize'].li.int()), 'maskRgn'),
 #        (lambda s: s, 'imageData'),
     ]
     def __init__(self, **attrs):

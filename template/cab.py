@@ -12,7 +12,7 @@ class CFDATA(pstruct.type):
         (uint16_t, 'cbData'),
         (uint16_t, 'cbUncomp'),
         (lambda s: s.getparent(CFHEADER).reserve_data(), 'abReserve'),
-        (lambda s: dyn.block(s['cbData'].l.int()), 'ab'),
+        (lambda s: dyn.block(s['cbData'].li.int()), 'ab'),
     ]
 
 class CFFOLDER(pstruct.type):
@@ -26,7 +26,7 @@ class CFFOLDER(pstruct.type):
         ]
     _fields_ = [
 #        (uint32_t, 'coffCabStart'),
-        (lambda s: dyn.pointer(lambda x:dyn.array(CFDATA, s['cCFData'].l.int())), 'coffCabStart'),
+        (lambda s: dyn.pointer(lambda x:dyn.array(CFDATA, s['cCFData'].li.int())), 'coffCabStart'),
         (uint16_t, 'cCFData'),
         (__typeCompress, 'typeCompress'),
         (lambda s: s.getparent(File)['header'].reserve_folder(), 'abReserve'),
@@ -55,7 +55,7 @@ class CFFILE(pstruct.type):
     _fields_ = [
         (uint32_t, 'cbFile'),
 #        (uint32_t, 'uoffFolderStart'),
-        (lambda s: dyn.pointer( dyn.block(s['cbFile'].l.int()) ), 'uoffFolderStart'),
+        (lambda s: dyn.pointer( dyn.block(s['cbFile'].li.int()) ), 'uoffFolderStart'),
 #        (uint16_t, 'iFolder'),
         (__iFolder, 'iFolder'),
         (uint16_t, 'date'),
@@ -96,7 +96,7 @@ class CFHEADER(pstruct.type):
         (uint32_t, 'cbCabinet'),
         (uint32_t, 'reserved2'),
 #        (dyn.pointer(CFFILE), 'coffFiles'),
-        (lambda s: dyn.pointer(lambda x: dyn.array(CFFILE,s['cFiles'].l.int())), 'coffFiles'),
+        (lambda s: dyn.pointer(lambda x: dyn.array(CFFILE,s['cFiles'].li.int())), 'coffFiles'),
         (uint32_t, 'reserved3'),
         (uint8_t, 'versionMinor'),
         (uint8_t, 'versionMajor'),
@@ -106,23 +106,23 @@ class CFHEADER(pstruct.type):
         (uint16_t, 'setID'),
         (uint16_t, 'iCabinet'),
 
-        (lambda s: uint16_t if s['flags'].l['RESERVE_PRESENT'] else pint.uint_t, 'cbCFHeader'),
-        (lambda s: uint8_t if s['flags'].l['RESERVE_PRESENT'] else pint.uint_t, 'cbCFFolder'),
-        (lambda s: uint8_t if s['flags'].l['RESERVE_PRESENT'] else pint.uint_t, 'cbCFData'),
+        (lambda s: uint16_t if s['flags'].li['RESERVE_PRESENT'] else pint.uint_t, 'cbCFHeader'),
+        (lambda s: uint8_t if s['flags'].li['RESERVE_PRESENT'] else pint.uint_t, 'cbCFFolder'),
+        (lambda s: uint8_t if s['flags'].li['RESERVE_PRESENT'] else pint.uint_t, 'cbCFData'),
         (lambda s: s.reserve_header(), 'abReserve'),
 
 
-        (lambda s: pstr.szstring if s['flags'].l['PREV_CABINET'] else pstr.string, 'szCabinetPrev'),
-        (lambda s: pstr.szstring if s['flags'].l['PREV_CABINET'] else pstr.string, 'szDiskPrev'),
+        (lambda s: pstr.szstring if s['flags'].li['PREV_CABINET'] else pstr.string, 'szCabinetPrev'),
+        (lambda s: pstr.szstring if s['flags'].li['PREV_CABINET'] else pstr.string, 'szDiskPrev'),
 
-        (lambda s: pstr.szstring if s['flags'].l['NEXT_CABINET'] else pstr.string, 'szCabinetNext'),
-        (lambda s: pstr.szstring if s['flags'].l['NEXT_CABINET'] else pstr.string, 'szDiskNext'),
+        (lambda s: pstr.szstring if s['flags'].li['NEXT_CABINET'] else pstr.string, 'szCabinetNext'),
+        (lambda s: pstr.szstring if s['flags'].li['NEXT_CABINET'] else pstr.string, 'szDiskNext'),
     ]
 
 class File(pstruct.type):
     _fields_ = [
         (CFHEADER, 'header'),
-        (lambda s: dyn.array(CFFOLDER, s['header'].l['cFolders'].int()), 'folders'),
+        (lambda s: dyn.array(CFFOLDER, s['header'].li['cFolders'].int()), 'folders'),
 #        (lambda s: dyn.array(CFFILE, s['header']['cFiles'].int()), 'files'),
 #        (lambda s: dyn.block(s['header']['cbCabinet'].int() - s['header'].size()-s['folders'].size()-s['files'].size()), 'data'),
 #        (dyn.block(s['header']['cbCabinet'].int() - s['header'].size()-s['folders'].size()-s['files'].size()), 'data'),

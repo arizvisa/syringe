@@ -8,7 +8,7 @@ from ptypes import *
 
 def parseResourceDirectory(filename):
     mz = pecoff.Executable.open(filename, mode='r')
-    pe = mz['Pe']
+    pe = mz['Next']['Header']
     sections = pe['Sections']
     datadirectory = pe['DataDirectory']
     resourceDirectory = datadirectory[2]

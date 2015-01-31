@@ -23,7 +23,7 @@ class action(ptype.definition):
 class ACTIONRECORDHEADER(pstruct.type):
     _fields_ = [
         (UI8, 'ActionCode'),
-        (lambda s: (Zero, UI16)[s['ActionCode'].l.int() >= 0x80], 'Length'),
+        (lambda s: (Zero, UI16)[s['ActionCode'].li.int() >= 0x80], 'Length'),
     ]
 
 class ACTIONRECORD(pstruct.type):
@@ -61,13 +61,13 @@ class ActionNextFrame(action.command):
 @action.define
 class ActionConstantPool(action.command):
     type=0x88
-    _fields_ = [(UI16, 'Count'), (lambda s: dyn.array(STRING, s['Count'].l.int()), 'ConstantPool')]
+    _fields_ = [(UI16, 'Count'), (lambda s: dyn.array(STRING, s['Count'].li.int()), 'ConstantPool')]
 
 @action.define
 class ActionPush(action.command):
     type=0x96
     def __Value(self):
-        n = self['Type'].l.int()
+        n = self['Type'].li.int()
         lookup = {
             0:STRING, 1:FLOAT, 4:UI8, 5:UI8, 6:DOUBLE, 7:UI32, 8:UI8, 9:UI16
         }
@@ -129,14 +129,14 @@ class ActionDefineFunction2(pstruct.type):
         (UI16, 'NumParams'),
         (UI8, 'RegisterCount'),
         (__Flag, 'Flag'),
-        (lambda s: dyn.array(s.REGISTERPARAM, s['NumParams'].l.int()), 'Parameters'),
+        (lambda s: dyn.array(s.REGISTERPARAM, s['NumParams'].li.int()), 'Parameters'),
         (UI16, 'codeSize'),
-#        (lambda s: dyn.block(s['codeSize'].l.int()), 'code'),   # FIXME
+#        (lambda s: dyn.block(s['codeSize'].li.int()), 'code'),   # FIXME
     ]
     
 ###
 class Array(parray.terminated):
     _object_ = ACTIONRECORD
     def isTerminator(self, value):
-        return value['header']['ActionCode'].l.int() == 0
+        return value['header']['ActionCode'].li.int() == 0
 

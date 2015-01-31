@@ -41,7 +41,7 @@ class File(pstruct.type, ptype.boundary):
             
     def __data(self):
         # if it's compressed then use the 'cdata' structure
-        if int( self['header'].l['Signature'][0]) == ord('C'):
+        if int( self['header'].li['Signature'][0]) == ord('C'):
             #length = self.source.size() - self['header'].size()
             length = min(self['header']['FileLength'].num(),self.source.size()) - self['header'].size()
             return dyn.clone(self.cdata, _value_=dyn.block(length))
@@ -67,7 +67,7 @@ if __name__ == '__main__':
 
     a = z['data']['tags'][0]
     print a.hexdump()
-    print a.l.hexdump()
+    print a.li.hexdump()
     print repr(a.l['Header'].serialize())
 
     correct='\x44\x11\x08\x00\x00\x00'

@@ -3,7 +3,7 @@ from ptypes import *
 
 class pQTInt(pint.bigendian(pint.uint32_t)): pass
 class pQTType(pQTInt):
-    def __repr__(self):
+    def summary(self):
         if self.value:
             return "%s '%c%c%c%c' (%08x)"% ( self.name(), self.value[0], self.value[1], self.value[2], self.value[3], int(self) )
         return "%s uninitialized"%(self.name())
@@ -34,7 +34,7 @@ class Matrix(pstruct.type):
 class pQTString(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'c'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['c'].l)), 's'),
+        (lambda s: dyn.clone(pstr.string, length=int(s['c'].li)), 's'),
     ]
 
     def str(self):

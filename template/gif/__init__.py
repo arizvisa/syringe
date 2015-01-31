@@ -11,7 +11,7 @@ class LogicalScreenDescriptor(pstruct.type):
         _fields_ = [(1, 'Global Color Table'), (3, 'Color Resolution'), (1, 'Sort'), (3, 'Size')]
 
     def optional(self):
-        if self['Flags'].l['Global Color Table'] > 0:
+        if self['Flags'].li['Global Color Table'] > 0:
             return dyn.clone(ColorTable, length=2**(self['Flags']['Size']+1))
         return dyn.clone(ColorTable, length=0)
 
@@ -40,7 +40,7 @@ class ImageDescriptor(pstruct.type):
         _fields_ = [(1, 'Local Color Table'), (1, 'Interlace'), (1, 'Sort'), (2, 'Reserved'), (3, 'Size')]
 
     def optional(self):
-        if self['Flags'].l['Local Color Table'] > 0:
+        if self['Flags'].li['Local Color Table'] > 0:
             return dyn.clone(ColorTable, length=2**(self['Flags']['Size']+1))
         return dyn.clone(ColorTable, length=0)
 
@@ -66,7 +66,7 @@ class ImageTableData_Chunk(pstruct.type):
 class ImageData_Chunk(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'Block Size'),
-        (lambda s: dyn.block(int(s['Block Size'].l)), 'Data Values')
+        (lambda s: dyn.block(int(s['Block Size'].li)), 'Data Values')
     ]
 
 class ImageData( parray.type ):

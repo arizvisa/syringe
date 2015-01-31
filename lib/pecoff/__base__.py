@@ -1,6 +1,8 @@
 import ptypes
 from ptypes import pint,pfloat,dyn
 
+class Header(object): pass
+
 ## primitives
 byte = dyn.clone(pint.uint8_t)
 word = dyn.clone(pint.uint16_t)

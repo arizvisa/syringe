@@ -12,7 +12,7 @@ class Header(pstruct.type):
 
 class File(pstruct.type):
     def __file(self):
-        v = int(self['version'].l)
+        v = int(self['version'].li)
         if v == 0x1101:
             return v1.File
         elif v == 0x0011:

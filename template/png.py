@@ -57,8 +57,8 @@ class signature(dyn.block(8)):
 
 class chunk(pstruct.type):
     def __data(self):
-        s = self['length'].l.int()
-        t = self['type'].l.serialize()
+        s = self['length'].li.int()
+        t = self['type'].li.serialize()
         try:
             result = Chunk.Lookup(t)
         except KeyError:
@@ -66,8 +66,8 @@ class chunk(pstruct.type):
         return result
 
     def __data(self):
-        id = self['type'].l.serialize()
-        length = self['length'].l.int()
+        id = self['type'].li.serialize()
+        length = self['length'].li.int()
         result = Chunk.get(id, length=length)
         return dyn.clone(result, blocksize=lambda s:length)
 

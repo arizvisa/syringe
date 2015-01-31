@@ -130,7 +130,7 @@ class SubimageHeaderStream(pstruct.type):
     _fields_ = [
         (HEADER, 'header'),
         (SUBIMAGEHEADER, 'subimage'),
-        (lambda s: dyn.array(TILEHEADER, int(s['subimage'].l['number of tiles'])), 'tiles')
+        (lambda s: dyn.array(TILEHEADER, int(s['subimage'].li['number of tiles'])), 'tiles')
     ]
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ class PPEB_FREE_BLOCK(dyn.pointer(PEB_FREE_BLOCK)): pass
 PEB_FREE_BLOCK._fields_ = [(PPEB_FREE_BLOCK,'Next'),(ULONG,'Size')]
 
 class PEB(pstruct.type, versioned):
-    class BitField(pbinary.struct):
+    class BitField(pbinary.flags):
         _fields_ = [
             (1, 'ImageUsesLargePages'),
             (1, 'IsProtectedProcess'),
@@ -20,7 +20,7 @@ class PEB(pstruct.type, versioned):
             (1, 'SpareBits'),
         ]
 
-    class NtGlobalFlag(pbinary.struct):
+    class NtGlobalFlag(pbinary.flags):
         def __init__(self, **attrs):
             super(PEB.NtGlobalFlag, self).__init__(**attrs)
 
@@ -158,7 +158,7 @@ class PEB(pstruct.type, versioned):
             (ULONG, 'NumberOfHeaps'),
             (ULONG, 'MaximumNumberOfHeaps'),
 #            (PVOID, 'ProcessHeaps'),
-            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=int(s['NumberOfHeaps'].l)), PVOID), 'ProcessHeaps'),
+            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=int(s['NumberOfHeaps'].li)), PVOID), 'ProcessHeaps'),
             (PVOID, 'GdiSharedHandleTable'),
             (PVOID, 'ProcessStarterHelper'),
             (ULONG, 'GdiDCAttributeList'),
@@ -270,7 +270,7 @@ class GDI_TEB_BATCH(pstruct.type):
     ]
 
 class TEB(pstruct.type, versioned):
-    class __SameTebFlags(pbinary.struct):
+    class __SameTebFlags(pbinary.flags):
         _fields_ = [
             (1, 'DbgSafeThunkCall'),
             (1, 'DbgInDebugPrint'),
@@ -442,7 +442,7 @@ class THREAD_BASIC_INFORMATION(pstruct.type):
     ]
 
 class THREAD_INFORMATION_CLASS(pint.enum):
-    _fields_ = [
+    _values_ = [(n,v) for v,n in (
         (0, 'ThreadBasicInformation'),
         (1, 'ThreadTimes'),
         (2, 'ThreadPriority'),
@@ -461,7 +461,7 @@ class THREAD_INFORMATION_CLASS(pint.enum):
         (15, 'ThreadSetTlsArrayAddress'),
         (16, 'ThreadIsIoPending'),
         (17, 'ThreadHideFromDebugger'),
-    ]
+    )]
 
 if __name__ == '__main__':
     import ctypes

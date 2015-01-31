@@ -5,7 +5,7 @@ class Type(ptype.definition):
     cache = {}
 
 class Elf32_Dyn(pstruct.type):
-    class __d_tag(pint.enum, Elf32_Sword):
+    class d_tag(pint.enum, Elf32_Sword):
         _values_ = [
             ('DT_NULL', 0),
             ('DT_NEEDED', 1),
@@ -109,27 +109,18 @@ class Elf32_Dyn(pstruct.type):
         ]
 
     _fields_ = [
-        (__d_tag, 'd_tag'),
-        (lambda s: Type.get(s['d_tag'].l.int()), 'd_val'),
+        (d_tag, 'd_tag'),
+        (lambda s: Type.get(s['d_tag'].li.int()), 'd_val'),
     ]
 
-class Elf32_DynArray(parray.block):
-    _object_ = Elf32_Dyn
-
-    def search(self, entry):
-        if ptype.istype(entry):
-            entry = entry.type
-        return [x['d_val'] for x in self if x['d_tag'].int() == entry]
-
 ####
-class d_block(dyn.block(4)): pass
-class d_val(Elf32_Word):
-    def summary(self):
-        return self.details()
+class d_val(Elf32_Word): pass
 class d_ptr(Elf32_Addr): pass
+class d_ign(dyn.block(4)): pass
+
 ####
 @Type.define
-class DT_NULL(d_block): type = 0
+class DT_NULL(d_ign): type = 0
 
 @Type.define
 class DT_NEEDED(d_val): type = 1
@@ -178,7 +169,7 @@ class DT_SONAME(d_val): type = 14
 class DT_RPATH(d_val): type = 15
 
 @Type.define
-class DT_SYMBOLIC(d_block): type = 16
+class DT_SYMBOLIC(d_ign): type = 16
 
 @Type.define
 class DT_REL(d_ptr): type = 17
@@ -196,13 +187,13 @@ class DT_PLTREL(d_val): type = 20
 class DT_DEBUG(d_ptr): type = 21
 
 @Type.define
-class DT_TEXTREL(d_block): type = 22
+class DT_TEXTREL(d_ign): type = 22
 
 @Type.define
 class DT_JMPREL(d_ptr): type = 23
 
 @Type.define
-class DT_BIND_NOW(object): type = 24
+class DT_BIND_NOW(d_ign): type = 24
 
 @Type.define
 class DT_INIT_ARRAY(d_ptr): type = 25

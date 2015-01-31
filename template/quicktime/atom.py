@@ -5,21 +5,18 @@ class AtomType(ptype.definition):
 
 class Atom(pstruct.type):
     def __data(self):
-        type = self['type'].l.serialize()
+        type = self['type'].li.serialize()
         size = self.blocksize() - self.getheadersize()
-        return dyn.clone(AtomType.get(type, __name__='Unknown<%s>'% repr(type), length=size), blocksize=lambda s:size)
+        t = AtomType.get(type, __name__='Unknown<%s>'% repr(type), length=size)
+        return dyn.clone(t, blocksize=lambda s:size)
 
     def getheadersize(self):
-        try:
-            return 4 + 4 + self['extended_size'].size()
-        except IndexError:
-            pass
-        return 8
+        return 4 + 4 + self['extended_size'].li.size()
 
     def getsize(self):
-        s = self['size'].int()
+        s = self['size'].li.int()
         if s == 1:
-            s = self['extended_size'].int()
+            s = self['extended_size'].li.int()
 
         if s >= self.getheadersize():
             return s
@@ -40,17 +37,17 @@ class Atom(pstruct.type):
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
-        (lambda s: (pint.uint_t, pint.uint64_t)[s['size'].l.int() == 1], 'extended_size'),
+        (lambda s: pint.uint64_t if s['size'].li.int() == 1 else pint.uint_t, 'extended_size'),
         (__data, 'data'),
     ]
 
-    def __repr__(self):
+    def summary(self):
         if not self.initialized and self.v is None:
             return "[%x] %s UNINITIALIZED expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), 0, ','.join(self.keys()))
         discrepancy = self.size() != self.blocksize()
         if discrepancy:
-            return "[%x] %s '%s' ERR size:0x%x expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), self['type'].serialize(), self.size(), self.getsize(), ','.join(self.keys()))
-        return "[%x] %s %s size:0x%x (%s)"%( self.getoffset(), self.name(), self['type'].serialize(), self.getsize(), ','.join(self.keys()))
+            return "%r ERR size:0x%x expected:0x%x keys:(%s)"%( self['type'].serialize(), self.size(), self.getsize(), ','.join(self.keys()))
+        return "%r size:0x%x (%s)"%( self['type'].serialize(), self.getsize(), ','.join(self.keys()))
 
 class AtomList(parray.block):
     _object_ = Atom
@@ -67,9 +64,9 @@ class AtomList(parray.block):
         assert len(res) == 1, repr(res)
         return res[0]
 
-    def __repr__(self):
+    def summary(self):
         types = ','.join([x['type'].serialize() for x in self])
-        return ' '.join([self.name(), 'atoms[%d] ->'% len(self), types])
+        return ' '.join(['atoms[%d] ->'% len(self), types])
 
 ## container atoms
 @AtomType.define
@@ -90,7 +87,7 @@ class MINF(AtomList): type = 'minf'
 @AtomType.define
 class DINF(AtomList): type = 'dinf'
 
-#@AtomType.define
+@AtomType.define
 class UDTA(Atom): type = 'udta'
 
 @AtomType.define
@@ -112,7 +109,7 @@ class RMRA(AtomList): type = 'rmda'
 #class MDAT(AtomList): type = 'mdat'  # XXX: sometimes this is not a container
 
 @AtomType.define
-class MDAT(dyn.block(0)):
+class MDAT(ptype.block):
     type = 'mdat'
     length = property(fget=lambda s: s.blocksize())
 
@@ -138,13 +135,13 @@ class FileType(pstruct.type):
     class __Compatible_Brands(parray.block):
         _object_ = pQTInt
         def blocksize(self):
-            bs = self.p.blocksize()
-            return bs-self.size()
+            p = self.getparent(Atom)
+            return p.blocksize() - p.getheadersize() - 8
         
     _fields_ = [
         (pQTInt, 'Major_Brand'),
         (pQTInt, 'Minor_Version'),
-        (__Compatible_Brands, 'Compatible_Brands')      # XXX: this isn't working
+        (__Compatible_Brands, 'Compatible_Brands')
     ]
 
 @AtomType.define
@@ -195,10 +192,6 @@ class TKHD(pstruct.type):
 class ELST(pstruct.type):
     type = 'elst'
 
-    def __Entry(self):
-        count = self['Number of entries'].l
-        return dyn.array(pint.uint32_t, count.int())
-
     class Entry(pstruct.type):
         _fields_ = [
             (pint.uint32_t, 'duration'),
@@ -210,7 +203,7 @@ class ELST(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(s.Entry, s['Number of entries'].l.int()), 'Entry')
+        (lambda s: dyn.array(s.Entry, s['Number of entries'].li.int()), 'Entry')
     ]
 
 @AtomType.define
@@ -284,6 +277,7 @@ class MediaAudio_v0(pstruct.type):
         (pint.uint16_t, 'Packet size'),
         (pint.uint32_t, 'Sample rate'),
     ]
+#@MediaType.Define
 class MediaAudio_v1(pstruct.type):
     type = 'soun'
     version = 1
@@ -307,19 +301,22 @@ class stsd(pstruct.type):
     '''Sample description atom'''
     type = 'stsd'
     class entry(pstruct.type):
+        def __Data_specific(self):
+            sz = self['Sample description size'].li.num()
+            return dyn.block(sz - 4 - 4 - 6 - 2)
         _fields_ = [
             (pQTInt, 'Sample description size'),
             (pQTType, 'Data format'),
             (dyn.block(6), 'Reserved'),
-            (pint.uint16_t, 'Data reference index')
+            (pint.uint16_t, 'Data reference index'),
+            (__Data_specific, 'Data specific'),
         ]
 
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of Entries'),
-        (lambda x: dyn.array(stsd.entry, x['Number of Entries'].l.int()), 'Entries'),
-        (lambda s: dyn.block(s.blocksize()-s.size()), 'codec-specific') # XXX: it'd be cool to keep track of this too
+        (lambda x: dyn.array(stsd.entry, x['Number of Entries'].li.int()), 'Entries'),
     ]
 
 ### stts
@@ -337,7 +334,7 @@ class stts(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stts.entry, x['Number of entries'].l.int()), 'Entries')
+        (lambda x: dyn.array(stts.entry, x['Number of entries'].li.int()), 'Entries')
     ]
 
 ## stsc
@@ -356,7 +353,7 @@ class stsc(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(s.entry, s['Number of entries'].l.int()), 'Entries')
+        (lambda s: dyn.array(s.entry, s['Number of entries'].li.int()), 'Entries')
     ]
 
 ## stsz
@@ -365,21 +362,12 @@ class stsz(pstruct.type):
     '''Sample size atom'''
     type = 'stsz'
 
-    def __Entries(self):
-        count = self['Number of entries'].l.int()
-        s = self.blocksize() - self.blocksize()
-        if s <= 0:
-            print '%s(%x:+%x) - blocksize(%d-%d) <= 0 while trying to read sample entry table ->'%(self.shortname(), self.getoffset(), self.blocksize(), self.blocksize(), self.size())
-            print '\t' + '\n\t'.join(self.backtrace())
-            return ptype.undefined
-        return dyn.array(pQTInt, count)
-
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Sample size'),
         (pQTInt, 'Number of entries'),
-        (__Entries, 'Entries'),
+        (lambda s: dyn.array(pQTInt, s['Number of entries'].li.int()), 'Entries'),
     ]
 
 ## stco
@@ -391,20 +379,19 @@ class stco(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, x['Number of entries'].l.int()), 'Entries')
+        (lambda x: dyn.array(pQTInt, x['Number of entries'].li.int()), 'Entries')
     ]
 
-if False:
-    # XXX: this doesn't exist (?)
-    @AtomType.define
-    class stsh(pstruct.type):
-        '''Shadow sync atom'''
-        _fields_ = [
-            (pint.uint8_t, 'Version'),
-            (dyn.block(3), 'Flags'),
-            (pQTInt, 'Number of entries'),
-            (lambda x: dyn.array(pQTInt, x['Number of entries'].l.int()), 'Entries')
-        ]
+# XXX: this doesn't exist (?)
+@AtomType.define
+class stsh(pstruct.type):
+    '''Shadow sync atom'''
+    _fields_ = [
+        (pint.uint8_t, 'Version'),
+        (dyn.block(3), 'Flags'),
+        (pQTInt, 'Number of entries'),
+        (lambda x: dyn.array(pQTInt, x['Number of entries'].li.int()), 'Entries')
+    ]
 
 @AtomType.define
 class gmin(pstruct.type):
@@ -429,5 +416,5 @@ class dref(pstruct.type):
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
         (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(Atom, s['Number of entries'].l.int()), 'Data references')
+        (lambda s: dyn.array(Atom, s['Number of entries'].li.int()), 'Data references')
     ]

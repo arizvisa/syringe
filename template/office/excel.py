@@ -6,15 +6,18 @@ type id's to look u
 '''
 
 import __init__
-class Record(__init__.Record): cache = {}
+class Record(__init__.Record):
+    cache = {}
+    unknown = __init__.RecordUnknown
+
 class RecordGeneral(__init__.RecordGeneral):
     Record=Record
     def __extra(s):
-        t = int(s['type'].l)
+        t = int(s['type'].li)
         name = '[%s]'% ','.join(s.backtrace()[1:])
 
         used = s['data'].blocksize()
-        total = int(s['length'].l)
+        total = int(s['length'].li)
         if used == total:
             return dyn.block(0)
 
@@ -27,12 +30,9 @@ class RecordGeneral(__init__.RecordGeneral):
         return dyn.block(0)
 
     def __data(s):
-        t = int(s['type'].l)
-        l = int(s['length'].l)
-        try:
-            cls = s.Record.lookup(t)
-        except KeyError:
-            return dyn.clone(__init__.RecordUnknown, type=t, length=l)
+        t = int(s['type'].li)
+        l = int(s['length'].li)
+        cls = s.Record.get(t, length=l)
         return dyn.clone(cls, blocksize=lambda s:l)
 
     _fields_ = [
@@ -303,7 +303,7 @@ class MergeCells(pstruct.type):
     type = 229
     _fields_ = [
         (pint.uint16_t, 'cmcs'),
-        (lambda s: dyn.array(Ref8, int(s['cmcs'].l)), 'rgref')
+        (lambda s: dyn.array(Ref8, int(s['cmcs'].li)), 'rgref')
     ]
 ###
 @Record.define
@@ -368,22 +368,22 @@ class Pos(pstruct.type):
 class XLUnicodeStringNoCch(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'fHighByte'),
-        (lambda s: dyn.clone(pstr.wstring, length=[s.length, s.length*2][int(s['fHighByte'].l)>>7]), 'rgb')
+        (lambda s: dyn.clone(pstr.wstring, length=[s.length, s.length*2][int(s['fHighByte'].li)>>7]), 'rgb')
     ]
 
 class XLUnicodeString(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'cch'),
         (pint.uint8_t, 'fHighByte'),
-        (lambda s: dyn.clone(pstr.wstring, length=[int(s['cch'].l), int(s['cch'])*2][int(s['fHighByte'].l)>>7]), 'rgb')
+        (lambda s: dyn.clone(pstr.wstring, length=[int(s['cch'].li), int(s['cch'])*2][int(s['fHighByte'].li)>>7]), 'rgb')
     ]
 class VirtualPath(XLUnicodeString): pass
 class XLNameUnicodeString(XLUnicodeString): pass
 
 class ShortXLUnicodeString(pstruct.type):
     def __rgb(self):
-        length = self['cch'].l.int()
-        high = self['fHighByte'].l.int()
+        length = self['cch'].li.int()
+        high = self['fHighByte'].li.int()
         if high == 0:
             return dyn.clone(pstr.string, length=length)
         elif high == 1:
@@ -439,7 +439,7 @@ class CellRange(pstruct.type):
 
     _fields_ = [
         (pint.uint16_t, 'number'),
-        (lambda s: dyn.array(s.Address, int(s['number'].l)), 'addresses'),
+        (lambda s: dyn.array(s.Address, int(s['number'].li)), 'addresses'),
     ]
 
 @Record.define
@@ -463,9 +463,9 @@ class DV(pstruct.type):
 
     class string(pstruct.type):
         def __unicode(self):
-            if int(self['unicode_flag'].l):
-                return dyn.clone(pstr.wstring, length=int(self['length'].l))
-            return dyn.clone(pstr.string, length=int(self['length'].l))
+            if int(self['unicode_flag'].li):
+                return dyn.clone(pstr.wstring, length=int(self['length'].li))
+            return dyn.clone(pstr.string, length=int(self['length'].li))
 
         _fields_ = [
             (pint.uint16_t, 'length'),
@@ -477,7 +477,7 @@ class DV(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'size'),
             (pint.uint16_t, 'reserved'),
-            (lambda s: dyn.block(int(s['size'].l)), 'data'),
+            (lambda s: dyn.block(int(s['size'].li)), 'data'),
         ]
 
     _fields_ = [
@@ -637,7 +637,7 @@ class WriteAccess(pstruct.type):
     type = 92
     _fields_ = [
         (XLUnicodeString, 'userName'),
-        (lambda s: dyn.block(112-s['userName'].l.size()), 'unused')
+        (lambda s: dyn.block(112-s['userName'].li.size()), 'unused')
     ]
 
 @Record.define
@@ -764,7 +764,7 @@ if True:
     class SerAr(pstruct.type):
         _fields_ = [
             (pint.uint32_t,'reserved'),
-            (lambda s: SerArType.get(s['reserved1'].l.int()), 'Ser'),
+            (lambda s: SerArType.get(s['reserved1'].li.int()), 'Ser'),
         ]
 
     class SerArType(ptype.definition):
@@ -837,7 +837,7 @@ class CRN(pstruct.type):
         (ColByteU, 'colLast'),
         (ColByteU, 'colFirst'),
         (RwU, 'colLast'),
-        (lambda s: dyn.array(SerAr, s['colLast'].l.int()-s['colFirst'].l.int() + 1), 'crnOper'),
+        (lambda s: dyn.array(SerAr, s['colLast'].li.int()-s['colFirst'].li.int() + 1), 'crnOper'),
     ]
 
 class CellXF(pbinary.struct):
@@ -935,7 +935,7 @@ class XF(pstruct.type):
         (FontIndex, 'ifnt'),
         (IFmt, 'ifmt'),
         (flags, 'flags'),
-        (lambda s: CellXF if s['flags'].l['fStyle'] == 0 else StyleXF, 'data'),
+        (lambda s: CellXF if s['flags'].li['fStyle'] == 0 else StyleXF, 'data'),
     ]
 
 #@Record.define # FIXME
@@ -958,7 +958,7 @@ if False:
     class CellParsedFormula(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'cce'),
-            (lambda s: dyn.clone(Rgce, total=s['cce'].l.int()), 'rgce'),     # XXX: page 756. must not contain
+            (lambda s: dyn.clone(Rgce, total=s['cce'].li.int()), 'rgce'),     # XXX: page 756. must not contain
             (lambda s: RgbExtra, 'rgcb'),
         ]
 
@@ -978,7 +978,7 @@ if True:
             _fields_=[(7,'ptg'),(1,'reserved0')]
 
         def __value(self):
-            t = self['type'].l['ptg']
+            t = self['type'].li['ptg']
             return PtgType.lookup(t)
 
         _fields_ = [
@@ -994,7 +994,7 @@ if True:
         _fields_ = [
             (DColByteU, 'cols'),
             (DRw, 'rows'),
-            (lambda s: dyn.array(SerAr, s['cols'].l.int() * s['rows'].l.int()), 'array'),
+            (lambda s: dyn.array(SerAr, s['cols'].li.int() * s['rows'].li.int()), 'array'),
         ]
 
     class PtgArray(pstruct.type):
@@ -1119,7 +1119,7 @@ if True:
         class book(pstruct.type):
             _fields_ = [
                 (pint.uint8_t, 'type'),
-                (lambda s: pint.uint8_t if s['type'].l.int() == 1 else VirtualPath, 'book'),
+                (lambda s: pint.uint8_t if s['type'].li.int() == 1 else VirtualPath, 'book'),
             ]
         _fields_ = [
             (book, 'book'),
@@ -1308,8 +1308,8 @@ class Style(pstruct.type):
 
     _fields_ = [
         (flags, 'flags'),
-        (lambda s: BuiltInStyle if s['flags'].l['fBuiltIn'] else ptype.undefined, 'builtInData'),
-        (lambda s: XLUnicodeString if not s['flags'].l['fBuiltIn'] else ptype.undefined, 'user')
+        (lambda s: BuiltInStyle if s['flags'].li['fBuiltIn'] else ptype.undefined, 'builtInData'),
+        (lambda s: XLUnicodeString if not s['flags'].li['fBuiltIn'] else ptype.undefined, 'user')
     ]
 
 class XColorType(pint.enum, pint.uint32_t):
@@ -1323,7 +1323,7 @@ class XColorType(pint.enum, pint.uint32_t):
 
 class FullColorExt(pstruct.type):
     def __xclrValue(self):
-        t = self['xclrType'].l.int()
+        t = self['xclrType'].li.int()
         if t == 1:
             return IcvXF
         if t == 2:
@@ -1369,7 +1369,7 @@ class XFPropGradient(pstruct.type):
 
 class GradStop(pstruct.type):
     def __xclrValue(self):
-        t = self['xclrType'].l.int()
+        t = self['xclrType'].li.int()
         if t == 1:
             return IcvXF
         if t == 2:
@@ -1388,7 +1388,7 @@ class XFExtGradient(pstruct.type):
     _fields_ = [
         (XFPropGradient, 'gradient'),
         (pint.uint32_t, 'cGradSTops'),
-        (lambda s: dyn.array(GradStop, s['cGradStops'].l.int()), 'rgGradStops'),
+        (lambda s: dyn.array(GradStop, s['cGradStops'].li.int()), 'rgGradStops'),
     ]
 
 class ExtPropType(ptype.definition):
@@ -1445,10 +1445,10 @@ class ExtProp(pstruct.type):
         ]
 
     def __extPropData(self):
-        t = self['extType'].l.int()
+        t = self['extType'].li.int()
         # FIXME: http://msdn.microsoft.com/en-us/library/dd906769(v=office.12).aspx
-        sz = self['cb'].l.int()
-        return ExtPropType.get(self['extType'].l.int(), blocksize=lambda s:sz)
+        sz = self['cb'].li.int()
+        return ExtPropType.get(self['extType'].li.int(), blocksize=lambda s:sz)
 
     _fields_ = [
         (extType, 'extType'),
@@ -1466,7 +1466,7 @@ class XFExt(pstruct.type):
         (XFIndex, 'ixfe'),
         (pint.uint16_t, 'reserved2'),
         (pint.uint16_t, 'cexts'),
-        (lambda s: dyn.array(ExtProp, s['cexts'].l.int()), 'rgExt'),
+        (lambda s: dyn.array(ExtProp, s['cexts'].li.int()), 'rgExt'),
     ]
 
 #@Record.define # FIXME
@@ -1530,7 +1530,7 @@ class Ref8U(pstruct.type):
 class SDContainer(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'cbSD'),    # GUARD: >20
-        (lambda s: dyn.block(s['cbSD'].l.int()), 'sd'),
+        (lambda s: dyn.block(s['cbSD'].li.int()), 'sd'),
     ]
 
 class FeatProtection(pstruct.type):
@@ -1564,7 +1564,7 @@ class PropertyBag(pstruct.type):
         (pint.uint16_t, 'id'),
         (pint.uint16_t, 'cProp'),
         (pint.uint16_t, 'cbUnknown'),
-        (lambda s: dyn.array(Property, s['cProp'].l.int()), 'properties'),
+        (lambda s: dyn.array(Property, s['cProp'].li.int()), 'properties'),
     ]
 
 class FactoidData(pstruct.type):
@@ -1580,7 +1580,7 @@ class FeatSmartTag(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'hashValue'),
         (pint.uint8_t, 'cSmartTags'),
-        (lambda s: dyn.array(FactoidData,s['cSmartTags'].l.int()), 'rgFactoid'),
+        (lambda s: dyn.array(FactoidData,s['cSmartTags'].li.int()), 'rgFactoid'),
     ]
 
 #@Record.define
@@ -1605,7 +1605,7 @@ class Feat(pstruct.type):
         (pint.uint16_t, 'cref'),
         (pint.uint32_t, 'cbFeatData'),
         (pint.uint16_t, 'reserved3'),
-        (lambda s: dyn.array(Reg8U, s['cref'].l.int()), 'refs'),
+        (lambda s: dyn.array(Reg8U, s['cref'].li.int()), 'refs'),
         (__rgbFeat, 'rgbFeat'),
     ]
 
@@ -1635,7 +1635,7 @@ class FeatHdr(pstruct.type):
     type = 0x867
     def __rgbHdrData(self):
         isf = self['isf'].l
-        if self['cbHdrData'].l.int() == 0:
+        if self['cbHdrData'].li.int() == 0:
             return ptype.type
         if isf == 'ISFPROTECTION':
             return EnhancedProtection
@@ -1716,7 +1716,7 @@ class XFExtNoFRT(pstruct.type):
         (pint.uint16_t, 'reserved2'),
         (pint.uint16_t, 'reserved3'),
         (pint.uint16_t, 'cexts'),
-        (lambda s: dyn.array(ExtProp,s['cexts'].l.int()), 'rgExt'),
+        (lambda s: dyn.array(ExtProp,s['cexts'].li.int()), 'rgExt'),
     ]
 
 # DXFN
@@ -1760,7 +1760,7 @@ class AFDOperBoolErr(pstruct.type):
     ]
 class AFDOper(pstruct.type):
     def __wtValue(self):    # XXX
-        vt = self['vt'].l.int()
+        vt = self['vt'].li.int()
         if vt == 0:
             return dyn.block(8)
         elif vt == 2:
@@ -1788,9 +1788,9 @@ class AutoFilter(pstruct.type):
         _fields_ = [(2,'wJoin'),(1,'fSimple1'),(1,'fSimple2'),(1,'fTopN'),(1,'fTop'),(1,'fPercent'),(9,'wTopN')]
 
     def __str1(self):
-        return XLUnicodeStringNoCch if self['doper1'].l['vt'].int() == 6 else ptype.type
+        return XLUnicodeStringNoCch if self['doper1'].li['vt'].int() == 6 else ptype.type
     def __str2(self):
-        return XLUnicodeStringNoCch if self['doper2'].l['vt'].int() == 6 else ptype.type
+        return XLUnicodeStringNoCch if self['doper2'].li['vt'].int() == 6 else ptype.type
 
     _fields_ = [
         (pint.uint16_t, 'iEntry'),
@@ -1825,12 +1825,12 @@ class Feat11XMapEntry(pstruct.type):
 class Feat11XMap(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'iXmapMac'),
-        (lambda s: dyn.array(Feat11XMapEntry,s['iXmapMac'].l.int()), 'rgXmap'),
+        (lambda s: dyn.array(Feat11XMapEntry,s['iXmapMac'].li.int()), 'rgXmap'),
     ]
 
 class ListParsedArrayFormula(pstruct.type):
     def Rgce(self):
-        return dyn.block(self['cce'].l.int())
+        return dyn.block(self['cce'].li.int())
 
     def RgbExtra(self):
         bs = self.blocksize()
@@ -1843,7 +1843,7 @@ class ListParsedArrayFormula(pstruct.type):
     ]
 class ListParsedFormula(pstruct.type):
     def Rgce(self): # FIXME
-        return dyn.block(self['cce'].l.int())
+        return dyn.block(self['cce'].li.int())
     _fields_ = [
         (pint.uint16_t, 'cce'),
         (Rgce, 'rgce'),
@@ -1992,11 +1992,11 @@ class Feat11FieldDataItem(pstruct.type):
         ]
 
     def __dxfFmtAgg(self):
-        sz = self['cbFmtAgg'].l.int()
+        sz = self['cbFmtAgg'].li.int()
         return dyn.clone(DXFN12List, blocksize=lambda s:sz)
 
     def __dxfFmtInsertRow(self):
-        sz = self['cbFmtInsertRow'].l.int()
+        sz = self['cbFmtInsertRow'].li.int()
         return dyn.clone(DXFN12List, blocksize=lambda s:sz)
 
     def __AutoFilter(self):
@@ -2057,7 +2057,7 @@ class Feat11FieldDataItem(pstruct.type):
 class Feat11RgSharepointId(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'cId'),
-        (lambda s: dyn.array(pint.uint32_t, s['cId'].l.int()), 'rgId'),
+        (lambda s: dyn.array(pint.uint32_t, s['cId'].li.int()), 'rgId'),
     ]
 class Feat11RgSharepointIdDel(Feat11RgSharepointId): pass
 class Feat11RgSharepointIdChange(Feat11RgSharepointId): pass
@@ -2068,7 +2068,7 @@ class Feat11CellStruct(pstruct.type):
 class Feat11RgInvalidCells(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'cCellInvalid'),
-        (lambda s: dyn.array(Feat11CellStruct, s['cCellInvalid'].l.int()), 'rgCellInvalid'),
+        (lambda s: dyn.array(Feat11CellStruct, s['cCellInvalid'].li.int()), 'rgCellInvalid'),
     ]
 
 class TableFeatureType(pstruct.type):
@@ -2088,15 +2088,15 @@ class TableFeatureType(pstruct.type):
         ]
 
     def __cSPName(self):
-        return XLUnicodeString if self['flags'].l['fLoadCSPName'] else ptype.type
+        return XLUnicodeString if self['flags'].li['fLoadCSPName'] else ptype.type
     def __entryId(self):
-        return XLUnicodeString if self['flags'].l['fLoadEntryId'] else ptype.type
+        return XLUnicodeString if self['flags'].li['fLoadEntryId'] else ptype.type
     def __idDeleted(self):
-        return Feat11RgSharepointIdDel if self['flags'].l['fLoadPldwIdDeleted'] else ptype.type
+        return Feat11RgSharepointIdDel if self['flags'].li['fLoadPldwIdDeleted'] else ptype.type
     def __idChanged(self):
-        return Feat11RgSharepointIdChange if self['flags'].l['fLoadPldwIdChanged'] else ptype.type
+        return Feat11RgSharepointIdChange if self['flags'].li['fLoadPldwIdChanged'] else ptype.type
     def __cellInvalid(self):
-        return Feat11RgInvalidCells if self['flags'].l['fLoadPllstclInvalid'] else ptype.type
+        return Feat11RgInvalidCells if self['flags'].li['fLoadPllstclInvalid'] else ptype.type
 
     _fields_ = [
         (SourceType, 'lt'),
@@ -2118,7 +2118,7 @@ class TableFeatureType(pstruct.type):
         (pint.uint16_t, 'cFieldData'),
         (__cSPName, 'cSPName'),
         (__entryId, 'entryId'),
-        (lambda s: dyn.array(Feat11FieldDataItem, s['cFieldData'].l.int()), 'fieldData'),
+        (lambda s: dyn.array(Feat11FieldDataItem, s['cFieldData'].li.int()), 'fieldData'),
         (__idDeleted, 'idDeleted'),
         (__idChanged, 'idChanged'),
         (__cellInvalid, 'cellInvalid'),
@@ -2130,9 +2130,9 @@ class Feature11(pstruct.type):
     type = 0x872
 
     def __rgbFeat(self):
-        sz = self['cbFeatData'].l.int()
+        sz = self['cbFeatData'].li.int()
         if sz == 0:
-            sz = self.blocksize() - (self['refs2'].l.size()+27)
+            sz = self.blocksize() - (self['refs2'].li.size()+27)
         return dyn.block(sz)
 
     _fields_ = [
@@ -2143,7 +2143,7 @@ class Feature11(pstruct.type):
         (pint.uint16_t, 'cref2'),
         (pint.uint32_t, 'cbFeatData'),
         (pint.uint16_t, 'reserved3'),
-        (lambda s: dyn.array(Ref8U, s['cref2'].l.int()), 'refs2'),
+        (lambda s: dyn.array(Ref8U, s['cref2'].li.int()), 'refs2'),
         (__rgbFeat, 'rgbFeat'),
     ]
 
@@ -2164,16 +2164,16 @@ class List12BlockLevel(pstruct.type):
         (pint.int32_t, 'cbdxfHeaderBorder'),
         (pint.int32_t, 'cbdxfAggBorder'),
 
-        (lambda s: (DXFN12List if s['cbdxfHeader'].l.int() > 0 else ptype.type), 'dxfHeader'),
-        (lambda s: (DXFN12List if s['cbdxfData'].l.int() > 0 else ptype.type), 'dxfData'),
-        (lambda s: (DXFN12List if s['cbdxfAgg'].l.int() > 0 else ptype.type), 'dxfAgg'),
-        (lambda s: (DXFN12List if s['cbdxfBorder'].l.int() > 0 else ptype.type), 'dxfBorder'),
-        (lambda s: (DXFN12List if s['cbdxfHeaderBorder'].l.int() > 0 else ptype.type), 'dxfHeaderBorder'),
-        (lambda s: (DXFN12List if s['cbdxfAggBorder'].l.int() > 0 else ptype.type), 'dxfAggBorder'),
+        (lambda s: (DXFN12List if s['cbdxfHeader'].li.int() > 0 else ptype.type), 'dxfHeader'),
+        (lambda s: (DXFN12List if s['cbdxfData'].li.int() > 0 else ptype.type), 'dxfData'),
+        (lambda s: (DXFN12List if s['cbdxfAgg'].li.int() > 0 else ptype.type), 'dxfAgg'),
+        (lambda s: (DXFN12List if s['cbdxfBorder'].li.int() > 0 else ptype.type), 'dxfBorder'),
+        (lambda s: (DXFN12List if s['cbdxfHeaderBorder'].li.int() > 0 else ptype.type), 'dxfHeaderBorder'),
+        (lambda s: (DXFN12List if s['cbdxfAggBorder'].li.int() > 0 else ptype.type), 'dxfAggBorder'),
 
-        (lambda s: (XLUnicodeString if s['istnHeader'].l.int() != -1 else ptype.type), 'stHeader'),
-        (lambda s: (XLUnicodeString if s['istnData'].l.int() != -1 else ptype.type), 'stData'),
-        (lambda s: (XLUnicodeString if s['istnAgg'].l.int() != -1 else ptype.type), 'stAgg'),
+        (lambda s: (XLUnicodeString if s['istnHeader'].li.int() != -1 else ptype.type), 'stHeader'),
+        (lambda s: (XLUnicodeString if s['istnData'].li.int() != -1 else ptype.type), 'stData'),
+        (lambda s: (XLUnicodeString if s['istnAgg'].li.int() != -1 else ptype.type), 'stAgg'),
     ]
 
 class List12TableStyleClientInfo(pstruct.type):
@@ -2205,7 +2205,7 @@ class List12(pstruct.type):
     type = 0x877
 
     def __rgb(self):
-        v = self['lsd'].l.int()
+        v = self['lsd'].li.int()
         if v == 0:
             return List12BlockLevel
         elif v == 1:
@@ -2269,7 +2269,7 @@ class SST(pstruct.type):
     _fields_ = [
         (pint.int32_t, 'cstTotal'),     # GUARD: >=0
         (pint.int32_t, 'cstUnique'),    # GUARD: >=0
-        (lambda s: dyn.array(XLUnicodeRichExtendedString, s['cstUnique'].l.int()), 'rgb'),
+        (lambda s: dyn.array(XLUnicodeRichExtendedString, s['cstUnique'].li.int()), 'rgb'),
     ]
 
 class FontIndex(pint.enum, pint.uint16_t):
@@ -2301,14 +2301,14 @@ if False:
     class LPWideString(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'cchCharacters'),
-            (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].l.int()), 'rgchData'),
+            (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].li.int()), 'rgchData'),
         ]
 
 class RPHSSub(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'crun'),
         (pint.uint16_t, 'cch'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['cch'].l.int()), 'st'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['cch'].li.int()), 'st'),
     ]
 
 class PhRuns(pstruct.type):
@@ -2324,7 +2324,7 @@ class ExtRst(pstruct.type):
         (pint.uint16_t, 'cb'),
         (Phs, 'phs'),
         (RPHSSub, 'rphssub'),
-        (lambda s: dyn.array(PhRuns, s['rphssub'].l['crun'].int()), 'rgphruns')
+        (lambda s: dyn.array(PhRuns, s['rphssub'].li['crun'].int()), 'rgphruns')
     ]
 
 class XLUnicodeRichExtendedString(pstruct.type):
@@ -2346,8 +2346,8 @@ class XLUnicodeRichExtendedString(pstruct.type):
     def __rgb(self):
         f = self['flags'].l
         if f['fHighByte']:
-            return dyn.clone(pstr.wstring, length=int(self['cch'].l))
-        return dyn.clone(pstr.string, length=int(self['cch'].l))
+            return dyn.clone(pstr.wstring, length=int(self['cch'].li))
+        return dyn.clone(pstr.string, length=int(self['cch'].li))
     def __ExtRst(self):
         f = self['flags'].l
         return ExtRst if f['fExtSt'] else ptype.undefined
@@ -2358,7 +2358,7 @@ class XLUnicodeRichExtendedString(pstruct.type):
         (__cRun, 'cRun'),
         (__cbExtRst, 'cbExtRst'),
         (__rgb, 'rgb'),
-        (lambda s: dyn.array(FormatRun, s['cRun'].l.int()), 'rgRun'),
+        (lambda s: dyn.array(FormatRun, s['cRun'].li.int()), 'rgRun'),
         (__ExtRst, 'ExtRst'),
     ]
 

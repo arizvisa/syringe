@@ -46,8 +46,8 @@ class Chunk(pstruct.type):
         return size
     
     def ckData(self):
-        size = int(self['ckSize'].l)
-        return Record.Generate(self['ckID'].l.str(), blocksize=lambda s:size)
+        size = int(self['ckSize'].li)
+        return Record.Generate(self['ckID'].li.str(), blocksize=lambda s:size)
 
     def ckSize(self):
         return self.endian(LONG)
@@ -56,7 +56,7 @@ class Chunk(pstruct.type):
         (ID, 'ckID'),
         (ckSize, 'ckSize'),
 #        (ckData, 'ckData'),
-        (lambda self: Record.Generate(self['ckID'].l.str(), blocksize=lambda s:int(self['ckSize'])), 'ckData'),
+        (lambda self: Record.Generate(self['ckID'].li.str(), blocksize=lambda s:int(self['ckSize'])), 'ckData'),
         (ckExtra, 'ckExtra'),
     ]
 
@@ -103,21 +103,21 @@ class Record(object):
 class File(pstruct.type):
     def __Size(self):
         byteorder = pint.bigendian
-        if self['Type'].l.serialize() == 'XFIR':
+        if self['Type'].li.serialize() == 'XFIR':
             byteorder = pint.littleendian
 
         self.attrs['endian'] = byteorder    # FIXME: i should probably do this in the respective header for RIFX or XFIR
         return byteorder(pint.uint32_t)
 
     def __Data(self):
-        type = self['Type'].l.serialize()
-        size = int(self['Size'].l)
+        type = self['Type'].li.serialize()
+        size = int(self['Size'].li)
         return Record.Generate(type, blocksize=lambda s:size)
 
     _fields_ = [
         (dyn.block(4), 'Type'),
         (__Size, 'Size'),
-        (lambda self: Record.Generate(self['Type'].l.serialize(), blocksize=lambda s:int(self['Size'].l)), 'Data'),
+        (lambda self: Record.Generate(self['Type'].li.serialize(), blocksize=lambda s:int(self['Size'].li)), 'Data'),
 #        (__Data, 'Data'),
     ]
 
@@ -125,7 +125,7 @@ class File(pstruct.type):
 class RIFX(pstruct.type):
     type = 'RIFX'
     def __Data(self):
-        l = int(self.blocksize() - self['Format'].l.size())
+        l = int(self.blocksize() - self['Format'].li.size())
         return dyn.clone(ChunkList, blocksize=lambda s: l)
 
     _fields_ = [
@@ -137,7 +137,7 @@ class RIFX(pstruct.type):
 class XFIR(pstruct.type):
     type = 'XFIR'
     def __Data(self):
-        l = int(self.blocksize() - self['Format'].l.size())
+        l = int(self.blocksize() - self['Format'].li.size())
         return dyn.clone(ChunkList, blocksize=lambda s: l)
 
     _fields_ = [
@@ -176,7 +176,7 @@ class pamm(pstruct.type):
     type = 'mmap'
     _fields_ = [
         (ChunkHeader, 'header'),
-        (lambda x: dyn.array(IndexNode, int(x['header'].l['numIndexNodes'])), 'nodes'),
+        (lambda x: dyn.array(IndexNode, int(x['header'].li['numIndexNodes'])), 'nodes'),
     ]
 
 @Record.Define
@@ -187,7 +187,7 @@ class demx(parray.block):
             (dyn.clone(HEX,length=4),'type'),
             (dyn.clone(HEX,length=8),'size'),
             (dyn.clone(HEX,length=8),'count'),
-            (lambda s: dyn.block(int(s['size'].l)),'data')         # FIXME: add a chunktype lookup for this too
+            (lambda s: dyn.block(int(s['size'].li)),'data')         # FIXME: add a chunktype lookup for this too
         ]
     _object_ = chunk
 

@@ -140,7 +140,7 @@ class gnu_sparse_array(parray.terminated):
 
 class header_gnu(header_old):
     def __extended_data(self):
-        v = self['isextended'].l.str()
+        v = self['isextended'].li.str()
         if v == '\x00':
             return dyn.clone(parray.type,_object_=gnu_sparse_header)
         return gnu_sparse_array

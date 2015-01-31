@@ -3,22 +3,10 @@ from ptypes import *
 ptypes.setsource(ptypes.prov.file('c:/windows/sysnative/ntdll.dll', 'r'))
 z = pecoff.Executable.File()
 z=z.l
-a = z['pe']['datadirectory'][4]['Address'].d.l
-a = z['certificate']
-class certblock(parray.block):
-    class _object_(pstruct.type):
-        _fields_ = [
-            (pint.uint32_t, 'dwLength'),
-            (pint.uint16_t, 'wRevision'),
-            (pint.uint16_t, 'wCertificateType'),
-            (lambda s: dyn.block(s['dwLength'].l.num() - 8), 'bCertificate'),
-        ]
-    def blocksize(self):
-        return z['pe']['datadirectory'][4]['Size'].num()
-
-b = a.cast(certblock)
+a = z['next']['header']['datadirectory'][4]['Address'].d.l
+a = z['next']['header']['certificate']
 #print a['bCertificate'].hexdump()
-c = b[0]['bCertificate']
+c = a[0]['bCertificate']
 file('./ntdll.cert.pkcs7','wb').write(c.serialize())
 print c.hexdump(lines=1)
 

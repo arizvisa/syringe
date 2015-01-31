@@ -80,7 +80,7 @@ class File(pstruct.type):
         ( BITMAPFILEHEADER, 'header'),
         ( BITMAPINFO, 'info'),
         # XXX: this size is only valid for jpeg and png. but i'm trusting it for rle8 too
-        ( lambda s: dyn.block(int(s['info'].l['bmiHeader']['biSizeImage'])), 'data')
+        ( lambda s: dyn.block(int(s['info'].li['bmiHeader']['biSizeImage'])), 'data')
     ]
 
 if __name__ == '__main__':

@@ -1,7 +1,8 @@
-import logging,itertools
 import ptypes
 from ptypes import pstruct,parray,dyn,ptype,pstr
-from __base__ import *
+from ..__base__ import *
+
+import logging,itertools
 
 class IMAGE_SYM(ptypes.pint.enum, uint16):
     _values_ = [
@@ -87,33 +88,31 @@ class ShortName(pstruct.type):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
         if self['IsShort'].num() != 0x00000000:
             return ptypes.utils.strdup( self.serialize(), terminator='\x00')
-        stringtable = self.getparent(SymbolTableAndStringTable)
+        stringtable = self.getparent(SymbolTableAndStringTable)['Strings']
         return stringtable.extract( self['Offset'].num() )
 
     def set(self, string):
         if len(string) <= 8:
-            data = string + '\x00'*(8-len(string))
-            self.load(source=ptypes.provider.string(data), offset=0)
+            self.load(source=ptypes.provider.string(string + '\x00'*(8-len(string))), offset=0)
             return self
 
         stringtable = self.getparent(SymbolTableAndStringTable)
         self['IsShort'].set(0)
-        ofs = stringtable.add(string)
-        self['Offset'].set(ofs)
+        self['Offset'].set(stringtable.add(string))
         return self
 
 class Symbol(pstruct.type):
     _fields_ = [
         (ShortName, 'Name'),
         (uint32, 'Value'),
-        (IMAGE_SYM, 'SectionNumber'),   ## XXX: TODO -> would be neat to go from symbol to the actual physical section number
+        (IMAGE_SYM, 'SectionNumber'),   ## TODO: would be neat to go from symbol to the actual physical section number
         (IMAGE_SYM_TYPE, 'Type'),
         (IMAGE_SYM_CLASS, 'StorageClass'),
         (uint8, 'NumberOfAuxSymbols')
     ]
 
     def summary(self, **options):
-        if self.initialized:
+        if self.initializedQ():
             name = self['Name'].str()
             value = self['Value'].num()
             sym_section = self['SectionNumber']
@@ -121,7 +120,7 @@ class Symbol(pstruct.type):
             sym_class = self['StorageClass']
 
             aux = AuxiliaryRecord.lookup(sym_class.num())
-            return '"{}":0x{:x} Section:{} (Type:{}, Class:{}) Aux:{}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].num())
+            return '{!r}:0x{:x} Section:{:s} (Type:{:s}, Class:{:s}) Aux:{:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].num())
         return super(Symbol, self).summary()
 
     def repr(self):
@@ -158,13 +157,10 @@ class SymbolTable(parray.terminated):
             yield sym,aux
         return
 
-    def getsymbolandaux(self, symbol):
+    def getSymbolAndAuxiliary(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
         return self.value[index : index+1 + symbol['NumberOfAuxSymbols'].num()]
-
-    #def summary(self, **options):
-    #    return ', '.join('"{}":({},{},{})'.format(s['Name'].str(),s['SectionNumber'].summary(),s['Type'].str(),s['StorageClass'].str()) for s,a in self.iterate())
 
     def details(self, **options):
         result = []
@@ -172,6 +168,7 @@ class SymbolTable(parray.terminated):
             result.append(repr(s))
             if s['NumberOfAuxSymbols'].num() > 0:
                 result.extend(ptypes.utils.indent('\n'.join(map(repr,a))).split('\n'))
+            continue
         return '\n'.join(result)
         #return '\n'.join(repr(s) for s,a in self.iterate())
 
@@ -255,17 +252,8 @@ class CLRAuxiliaryRecord(pstruct.type):
         (dyn.block(12), 'Reserved')
     ]
 
-# XXX: the following code is a hack that should be rewritten
-
 class StringTable(pstruct.type):
-    def fetchData(self):
-        if not self['Size'].initialized:    # XXX: this doesn't seem right
-            self['Size'].load()
-        count = self['Size'].num()
-        cls = dyn.block(count - 4)
-        return self.new(cls, __name__=cls.__name__)
-
-    def initialized(cls, value):
+    def __default_value(cls, value):
         def fn(self):
             res = self.new(cls, __name__=cls.__name__, offset=self.getoffset() + self.size())
             res.set(value)
@@ -273,14 +261,13 @@ class StringTable(pstruct.type):
         return fn
 
     _fields_ = [
-        (initialized(uint32, 4), 'Size'),
-        (fetchData, 'Data')
+        (__default_value(uint32, 4), 'Size'),
+        (lambda s: dyn.block(s['Size'].li.num() - 4), 'Data')
     ]
 
     def extract(self, offset):
         '''return the string associated with a particular offset'''
-        string = self.serialize()
-        string = string[offset:]
+        string = self.serialize()[offset:]
         return ptypes.utils.strdup(string, terminator='\x00')
 
     def add(self, string):
@@ -288,22 +275,16 @@ class StringTable(pstruct.type):
         ofs, data = self.size(), self['Data']
         data.value = data.serialize() + string + '\x00'
         data.length = len(data.value)
-        self['Size'].set( data.size() + self['Size'].size() )
+        self['Size'].set(data.size() + self['Size'].size())
         return ofs
 
 class SymbolTableAndStringTable(pstruct.type):
-    def __Symbols(self):
-        res = self.getparent(headers.NtHeader.FileHeader)
-        return dyn.clone(SymbolTable, length=res['NumberOfSymbols'].num())
-
     _fields_ = [
-        (__Symbols, 'Symbols'),
+        (lambda s: dyn.clone(SymbolTable, length=s.p.p['NumberOfSymbols'].li.num()), 'Symbols'),
         (StringTable, 'Strings'),
     ]
 
-    # XXX: the following code is possible garbage. rewrite this when able...
-
-    ## this is all done in O(n) time...   FIXME: pull this functionality into an object that manages symbols instead of using ptypes
+    ## due to how the data stored, this is all done in O(n) time...
     def names(self):
         return [s['Name'].str() for s,_ in self['Symbols'].iterate()]
 
@@ -312,25 +293,22 @@ class SymbolTableAndStringTable(pstruct.type):
             yield s
         return
 
-    def getSymbol(self, name=None):
-        if not self.initialized:
-            self.load()
-        if name:
-            return self.fetch(name)[0]
-        return [s for s,a in self['Symbols'].iterate()]
-
     def fetch(self, name):
         for s,a in self['Symbols'].iterate():
             if s['Name'].str() == name:
-                return tuple(x for x in itertools.chain([x],a))
+                return tuple(itertools.chain([s],a))
             continue
         raise KeyError('symbol %s not found'% name)
 
-    def getaux(self, name):
+    def getSymbol(self, name=None):
+        if name:
+            return self.li.fetch(name)[0]
+        self.li
+        return [s for s,a in self['Symbols'].iterate()]
+
+    def getAuxiliary(self, name):
         res = self.fetch(name)
-        if len(res) > 1:
-            return tuple(res[1:])
-        return ()
+        return tuple(res[1:]) if len(res) > 1 else ()
 
     def assign(self, name, value):
         try:
@@ -344,19 +322,12 @@ class SymbolTableAndStringTable(pstruct.type):
         return
 
     def add(self, name):
-        logging.info('pecoff.symbols.SymbolTablesAndString : adding new symbol %s'% name)
-        if ptype.istype(name):
-            name = name.serialize()
-        else:
-            name = str(name)
-
+        name = name.serialize() if ptype.istype(name) else name.str()
         symbols = self['Symbols']
 
-        v = symbols.new(Symbol, __name__=len(self.value), offset=self.getoffset() + self.size())
-        v.source = None
-        v.alloc()
-        v['Name'].set(name)
-        v['SectionNumber'].set(0)      # XXX: set as undefined since we aren't gonna be placing it anywhere
-        symbols.append(v)
-
-import headers  # XXX: recursive
+        logging.info('pecoff.symbols.SymbolTablesAndString : adding new symbol %s'% name)
+        res = symbols.new(Symbol, __name__=len(self.value), offset=self.getoffset() + self.size(), source=None).alloc()
+        res['Name'].set(name)
+        res['SectionNumber'].set(0)      # set as undefined since we aren't gonna be placing it anywhere
+        symbols.append(res)
+        return res

@@ -63,7 +63,7 @@ class PixMap(pstruct.type):
 
 class Rgn(pstruct.type):
     def __data(self):
-        s = int(self['size'].l)
+        s = int(self['size'].li)
         return dyn.block(s - 10)
 
     _fields_ = [
@@ -73,7 +73,7 @@ class Rgn(pstruct.type):
     ]
 
     def blocksize(self):
-        return int(self['size'].l)
+        return int(self['size'].li)
 
 class Opcode_v1(pint.uint8_t): pass
 class Opcode_v2(pint.uint16_t): pass
@@ -81,7 +81,7 @@ class Opcode_v2(pint.uint16_t): pass
 class Int16Data(pstruct.type):
     _fields_ = [
         (Integer, 'size'),
-        (lambda s: dyn.block(int(s['size'].l)), 'data')
+        (lambda s: dyn.block(int(s['size'].li)), 'data')
     ]
 
 class RGBColor(pstruct.type):
@@ -102,7 +102,7 @@ class ColorTable(pstruct.type):
         (Long, 'ctSeed'),
         (Integer, 'ctFlags'),
         (Integer, 'ctSize'),
-        (lambda s: dyn.array(ColorSpec, int(s['ctSize'].l)), 'ctTable'),
+        (lambda s: dyn.array(ColorSpec, int(s['ctSize'].li)), 'ctTable'),
     ]
 
 class PixPatNonDithered(pstruct.type):
@@ -130,7 +130,7 @@ class PixPatNonDithered(pstruct.type):
 
 class PixPat(pstruct.type):
     def __data(self):
-        t = int(self['patType'].l)
+        t = int(self['patType'].li)
         if t == 2:
             return RGBColor
         elif t == 1:

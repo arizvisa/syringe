@@ -14,14 +14,17 @@ def iscallable(t):
     """True if type ``t`` is a code object that can be called"""
     return callable(t) and hasattr(t, '__call__')
 
+@utils.memoize('t')
 def istype(t):
     """True if type ``t`` inherits from ptype.type"""
     return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
 
+@utils.memoize('t')
 def iscontainer(t):
     """True if type ``t`` inherits from ptype.container """
     return (istype(t) and issubclass(t, container)) or pbinary.istype(t)
 
+@utils.memoize('t')
 def isresolveable(t):
     """True if type ``t`` can be descended into"""
     return isinstance(t, (types.FunctionType, types.MethodType)) or isiterator(t)
@@ -49,7 +52,7 @@ def force(t, self, chain=None):
         return t
 
     # of type ptype
-    if isinstance(t, base) or istype(t):
+    if istype(t) or isinstance(t, base):
         return t
 
     # functions
@@ -70,7 +73,7 @@ def force(t, self, chain=None):
             return force(t.next(), self, chain)
 
     path = ','.join(self.backtrace())
-    raise error.TypeError(self, 'force<ptype>', message='chain=%r : refusing request to resolve %r to a type that does not inherit from ptype.type : %s'% (chain, t, path))
+    raise error.TypeError(self, 'force<ptype>', message='chain=%r : refusing request to resolve %r to a type that does not inherit from ptype.type : {%s}'% (chain, t, path))
 
 # fn must be a method, so args[0] will fetch self
 import traceback
@@ -97,7 +100,7 @@ def rethrow(fn):
             res = []
             res.append('')
             res.append('Caught exception: %s\n'% exception)
-            res.append('%s<%x:+??> %s =>'%(self.classname(),self.getoffset(), path))
+            res.append('%s<%x:+??> {%s} =>'%(self.classname(),self.getoffset(), path))
             res.append('\t<method name> %s'% fn.__name__)
 
             if self.initializedQ():
@@ -188,9 +191,9 @@ class _base_generic(object):
         if self.parent is None:
             global source
             return source if self.__source is None else self.__source 
-        if self.__source is None:
-            return self.parent.source
-        return self.__source
+        #if self.__source is None:
+        return self.parent.source if self.__source is None else self.__source
+        #return self.__source
     @source.setter
     def source(self, value):
         self.__source = value
@@ -236,7 +239,6 @@ class _base_generic(object):
             setattr(self, k, v)
 
         # filter out ignored attributes from the recurse dictionary
-        #recurse = dict(((k,v) for k,v in recurse.iteritems() if k not in ignored and not callable(v)))
         recurse = dict((k,v) for k,v in recurse.iteritems() if k not in ignored)
 
         # update self (for instantiated elements)
@@ -244,9 +246,7 @@ class _base_generic(object):
 
         # update sub-elements with recursive attributes
         if recurse and issubclass(self.__class__, container) and self.value is not None:
-            for x in self.value:
-                x.update_attributes(recurse=recurse)
-
+            for x in self.value: x.update_attributes(recurse=recurse)
         return self
 
     def properties(self):
@@ -264,7 +264,7 @@ class _base_generic(object):
         This will iterate in a top-down approach.
         """
         for self in edges(self, **kwds):
-            if not isinstance(self, base):
+            if not isinstance(self, generic):
                 continue
 
             if filter(self):
@@ -296,8 +296,10 @@ class _base_generic(object):
     @classmethod
     def typename(cls):
         """Return the name of the ptype"""
-        if Config.display.show_module_name and hasattr(cls, '__module__') and cls.__module__ is not None:
-            return '%s.%s'%( cls.__module__, cls.__name__ )
+        if hasattr(cls, '__module__') and cls.__module__ is not None:
+            if Config.display.show_module_name:
+                return '%s.%s'%( cls.__module__, cls.__name__ )
+            return '%s.%s'%( cls.__module__.rsplit('.',1)[-1], cls.__name__ )
         return cls.__name__
     def classname(self):
         """Return the dynamic classname. Can be overwritten."""
@@ -367,6 +369,8 @@ class _base_generic(object):
             return '"{}"'.format(utils.emit_repr(buf, threshold, message, **options))
         return '"{}"'.format(utils.emit_repr(buf, **options))
 
+    #@utils.memoize('self', self='parent', args=lambda n:n, kwds=lambda n:tuple(sorted(n.items())))
+    @utils.memoize('self', self='parent', args=lambda n:(n[0],) if len(n) > 0 else (), kwds=lambda n:n.get('type',()))
     def getparent(self, *args, **kwds):
         """Returns the creator of the current type.
 
@@ -478,9 +482,10 @@ class generic(_base_generic):
         return self.load(**attrs)
 
     # abbreviations
-    a = property(fget=lambda s: s.alloc())
-    c = property(fget=lambda s: s.commit())
-    l = property(fget=lambda s: s.load())
+    a = property(fget=lambda s: s.alloc())  # alloc
+    c = property(fget=lambda s: s.commit()) # commit
+    l = property(fget=lambda s: s.load())   # load
+    li = property(fget=lambda s: s.load() if not s.initializedQ() else s) # load if uninitialized
 
     def get(self):
         """Return a representation of a type.
@@ -512,7 +517,7 @@ class generic(_base_generic):
         return 0 if (self.getposition(),self.blocksize()) == (other.getposition(),other.blocksize()) else +1
 
 class base(generic):
-    ignored = generic.ignored.union(('offset'))
+    ignored = generic.ignored.union(('offset',))
     padding = utils.padding.source.zero()
 
     ## offset
@@ -550,7 +555,7 @@ class base(generic):
         if s == o:
             return
 
-        comparison = [bool(ord(x)^ord(y)) for x,y in zip(s,o)]
+        comparison = (bool(ord(x)^ord(y)) for x,y in zip(s,o))
         result = [(different,len(list(times))) for different,times in itertools.groupby(comparison)]
         index = 0
         for diff,length in result:
@@ -677,8 +682,8 @@ class type(base):
             if ptype has been initialized yet
     """
     length = 0      # int
-    initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()    # bool
-    ignored = generic.ignored.union(('length'))
+    initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()
+    ignored = generic.ignored.union(('length',))
 
     ## byte stream input/output
     def deserialize_block(self, block):
@@ -765,19 +770,22 @@ class container(base):
         value:str<r>
             list of all elements that are being contained
     '''
+
     def initializedQ(self):
         """True if the type is fully initialized"""
         if self.value is None:
             return False
-        return all(x is not None and x.initializedQ() for x in self.value)
+        return all(x is not None and x.initializedQ() for x in self.value) and self.size() >= self.blocksize()
 
     def size(self):
         """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
-        return reduce(lambda x,y: x+y.size(), self.value or [], 0)
+        return sum(n.size() for n in self.value or [])
 
     def blocksize(self):
         """Returns a sum of the bytes that are expected to be read"""
-        return reduce(lambda x,y: x+y.blocksize(), self.value, 0)
+        if self.value is None:
+            raise error.InitializationError(self, 'container.blocksize')
+        return sum(n.blocksize() for n in self.value)
 
     def getoffset(self, field=None):
         """Returns the current offset.
@@ -795,7 +803,7 @@ class container(base):
             return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
         index = self.getindex(field)
-        return self.getoffset() + reduce(lambda x,y: x+y, [ x.size() if x.initializedQ() else x.blocksize() for x in self.value[:index]], 0)
+        return self.getoffset() + sum(x.blocksize() for x in self.value[:index])
 
     def getindex(self, name):
         """Searches the .value attribute for an element with the provided ``name``
@@ -893,16 +901,23 @@ class container(base):
         expected,total = self.blocksize(),ofs-self.getoffset()
         if total < expected:
             path = ' -> '.join(self.backtrace())
-            Config.log.warn('container.deserialize_block : %s : Container less than expected blocksize : %x < %x : %s'%(self.instance(), total, expected, path))
+            Config.log.warn('container.deserialize_block : %s : Container less than expected blocksize : %x < %x : {%s}'%(self.instance(), total, expected, path))
         elif total > expected:
             path = ' -> '.join(self.backtrace())
-            Config.log.debug('container.deserialize_block : %s : Container larger than expected blocksize : %x > %x : %s'%(self.instance(), total, expected, path))
+            Config.log.debug('container.deserialize_block : %s : Container larger than expected blocksize : %x > %x : {%s}'%(self.instance(), total, expected, path))
         return self
 
     def serialize(self):
         """Return contents of all sub-elements concatenated as a string"""
-        result = ''.join( (x.serialize() for x in self.value) )
+        #result = ''.join( (x.serialize() for x in self.value) )
         bs = self.blocksize()
+
+        result = ''
+        for x in self.value:
+            result += x.serialize()
+            if len(result) > bs:
+                break
+            continue
 
         if len(result) < bs:
             padding = utils.padding.fill(bs-len(result), self.padding)
@@ -919,9 +934,13 @@ class container(base):
 
         try:
             # if any of the sub-elements are undefined, load each element separately
-            if any(issubclass(n.__class__,container) or issubclass(n.__class__,undefined) for n in self.value):
-            #if any(issubclass(n.__class__,undefined) for n in self.value):
-                for n in self.value: n.load(**attrs)
+            if Config.ptype.noncontiguous and \
+                    any(issubclass(n.__class__,container) or issubclass(n.__class__,undefined) for n in self.value):
+
+                bs,sz = self.blocksize(),0
+                val = list(self.value)
+                while val and sz < bs:
+                    sz += val.pop(0).load(**attrs).size()
 
             # otherwise the contents are contiguous, load them as so
             else:
@@ -1096,21 +1115,24 @@ class block(type):
             raise ValueError
         self.value = v[:i] + value + v[j:]
 
+#@utils.memoize('cls', newattrs=lambda n:tuple(sorted(n.iteritems())))
 def clone(cls, **newattrs):
     '''
     will clone a class, and set its attributes to **newattrs
     intended to aid with single-line coding.
     '''
-    class __clone(cls):
+    class _clone(cls):
         __doc__ = cls.__doc__
         def classname(self):
-            typename = super(cls, self).classname()
-            return Config.ptype.clone_name.format(typename)
+            cn = super(_clone,self).classname()
+            return Config.ptype.clone_name.format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     newattrs.setdefault('__name__', cls.__name__)
+    if hasattr(cls, '__module__'):
+        newattrs.setdefault('__module__', cls.__module__)
     for k,v in newattrs.items():
-        setattr(__clone, k, v)
-    return __clone
+        setattr(_clone, k, v)
+    return _clone
 
 class definition(object):
     """Used to store ptype definitions that are determined by a specific value
@@ -1178,7 +1200,10 @@ class definition(object):
 
     @classmethod
     def lookup(cls, type):
-        """Lookup a ptype by a particular ``type``"""
+        """Search ``cls.cache`` for a ptype keyed by the specified value ``type``
+
+        Raises a KeyError if unable to find the ``type`` in it's cache.
+        """
         return cls.cache[type]
 
     @classmethod
@@ -1398,6 +1423,7 @@ class pointer_t(encoded_t):
             res = reduce(lambda t,c: bitmap.push(t,(ord(c),8)), value, bitmap.zero)
             return bitmap.number(res)
 
+    @utils.memoize('self', self=lambda n:(n._object_,n.decode_offset()), attrs=lambda n:tuple(sorted(n.items())))
     def dereference(self, **attrs):
         name = '*%s'% self.name()
         return self.new(self._object_, __name__=name, offset=self.decode_offset(), **attrs)
@@ -1434,8 +1460,6 @@ class pointer_t(encoded_t):
         return self.num()
 
     def classname(self):
-        if self.initializedQ():
-            return '%s<%s>'% (self.typename(),self.object.classname())
         targetname = force(self._object_, self).typename() if istype(self._object_) else getattr(self._object_, '__name__', 'None')
         return '%s<%s>'% (self.typename(),targetname)
 
@@ -1467,7 +1491,7 @@ class rpointer_t(pointer_t):
 
     def decode_offset(self):
         root = self._baseobject_
-        base = root.getoffset() if isinstance(root,type) else root().getoffset()
+        base = root.getoffset() if isinstance(root,generic) else root().getoffset()
         return base + self.num()
 
     def __getstate__(self):

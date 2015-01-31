@@ -14,7 +14,7 @@ class GUID(ndk.GUID): pass
 class BSTR(pstruct.type):
     _fields_ = [
         (Dword, 'length'),
-        (lambda s: A(Str, s['length'].l.int()), 'string'),
+        (lambda s: A(Str, s['length'].li.int()), 'string'),
     ]
 class Empty(ptype.undefined): pass
 A = dyn.array 
@@ -75,7 +75,7 @@ class ObjectTable(pstruct.type):
     _fields_ = [
  	    (PVOID, "lpHeapLink"),          # Unused after compilation, always 0.
 	    (PVOID, "lpExecProj"),          # Pointer to VB Project Exec COM Object.
-	    (P(lambda s: A(P(PrivateObjectDescriptor), s.getparent(ptype.pointer_t).p['dwCompiledObjects'].l.int())), "lpProjectInfo2"),      # Secondary Project Information.
+	    (P(lambda s: A(P(PrivateObjectDescriptor), s.getparent(ptype.pointer_t).p['dwCompiledObjects'].li.int())), "lpProjectInfo2"),      # Secondary Project Information.
 	    (Dword, "dwReserved"),          # Always set to -1 after compiling. Unused
 	    (Dword, "dwNull"),              # Not used in compiled mode.
 	    (PVOID, "lpProjectObject"),     # Pointer to in-memory Project Data.
@@ -84,7 +84,7 @@ class ObjectTable(pstruct.type):
 	    (Word, "dwTotalObjects"),       # Total objects present in Project.
 	    (Word, "dwCompiledObjects"),    # Equal to above after compiling.
 	    (Word, "dwObjectsInUse"),       # Usually equal to above after compile.
-	    (lambda s: P(A(PublicObjectDescriptor, s['dwTotalObjects'].l.int())), "lpObjectArray"),  # Pointer to Object Descriptors
+	    (lambda s: P(A(PublicObjectDescriptor, s['dwTotalObjects'].li.int())), "lpObjectArray"),  # Pointer to Object Descriptors
 	    (Dword, "fIdeFlag"),            # Flag/Pointer used in IDE only.
 	    (PVOID, "lpIdeData"),           # Flag/Pointer used in IDE only.
 	    (PVOID, "lpIdeData2"),          # Flag/Pointer used in IDE only.
@@ -107,7 +107,7 @@ class ProjectInformation(pstruct.type):
 	    (PVOID, "lpVbaSeh"),        # Pointer to VBA Exception Handler
 	    (PVOID, "lpNativeCode"),    # Pointer to .DATA section.
 	    (dyn.clone(Str, length=0x210), "szPathInformation"), # Contains Path and ID string. < SP6
-	    (P(lambda s: A(Dword, s.getparent(ptype.pointer_t).p['dwExternalCount'].l.int())), "lpExternalTable"), # Pointer to External Table.
+	    (P(lambda s: A(Dword, s.getparent(ptype.pointer_t).p['dwExternalCount'].li.int())), "lpExternalTable"), # Pointer to External Table.
 	    (Dword, "dwExternalCount"), # Objects in the External Table.
     ]
 
@@ -141,7 +141,7 @@ class PublicObjectDescriptor(pstruct.type):
 	    (PVOID, "lpModuleStatic"), # Pointer to Static Variables in DATA section
 	    (P(Str), "lpszObjectName"), # Name of the Object.
 	    (Dword, "dwMethodCount"), # Number of Methods in Object.
-	    (lambda s: P(A(P(STR), s['dwMethodCount'].l.int)()), "lpMethodNames"), # If present, pointer to Method names array.
+	    (lambda s: P(A(P(STR), s['dwMethodCount'].li.int)()), "lpMethodNames"), # If present, pointer to Method names array.
 	    (OD(Dword), "bStaticVars"), # Offset to where to copy Static Variables.
 	    (Dword, "fObjectType"), # Flags defining the Object Type.
 	    (Dword, "dwNull"), # Not valid after compilation.
@@ -160,7 +160,7 @@ class ObjectInformation(pstruct.type):
 	    (P(ProjectInformation), "lpProjectData"), # Pointer to in-memory Project Object.
 	    (Word, "wMethodCount"), # Number of Methods
 	    (Word, "wMethodCount2"), # Zeroed out after compilation. IDE only.
-	    (lambda s: P(A(PVOID, s['wMethodCount'].l.int())), "lpMethods"), # Pointer to Array of Methods.
+	    (lambda s: P(A(PVOID, s['wMethodCount'].li.int())), "lpMethods"), # Pointer to Array of Methods.
 	    (Word, "wConstants"), # Number of Constants in Constant Pool.
 	    (Word, "wMaxConstants"), # Constants to allocate in Constant Pool.
 	    (PVOID, "lpIdeData2"), # Valid in IDE only.
@@ -171,20 +171,20 @@ class ObjectInformation(pstruct.type):
 class OptionalObjectInformation(pstruct.type):
     _fields_ = [
         (Dword, "dwObjectGuids"), # How many GUIDs to Register. 2 = Designer
-	    (lambda s: P(A(GUID, s['dwObjectGuids'].l.int())), "lpObjectGuid"), # Unique GUID of the Object *VERIFY*
+	    (lambda s: P(A(GUID, s['dwObjectGuids'].li.int())), "lpObjectGuid"), # Unique GUID of the Object *VERIFY*
 	    (Dword, "dwNull"), # Unused.
 	    (Dword, "lpuuidObjectTypes"), # Pointer to Array of Object Interface GUIDs
 	    (Dword, "dwObjectTypeGuids"), # How many GUIDs in the Array above.
-	    (P(lambda s: A(ControlInformation, s.p.p['dwControlCount'].l.int())), "lpControls2"), # Usually the same as lpControls.
+	    (P(lambda s: A(ControlInformation, s.p.p['dwControlCount'].li.int())), "lpControls2"), # Usually the same as lpControls.
 	    (Dword, "dwNull2"), # Unused.
-	    (P(lambda s: A(GUID, s.p.p['dwObjectGuids'].l.int())), "lpObjectGuid2"), # Pointer to Array of Object GUIDs.
+	    (P(lambda s: A(GUID, s.p.p['dwObjectGuids'].li.int())), "lpObjectGuid2"), # Pointer to Array of Object GUIDs.
 	    (Dword, "dwControlCount"), # Number of Controls in array below.
-	    (lambda s: P(A(ControlInformation, s['dwControlCount'].l.int())), "lpControls"), # Pointer to Controls Array.
+	    (lambda s: P(A(ControlInformation, s['dwControlCount'].li.int())), "lpControls"), # Pointer to Controls Array.
 	    (Word, "wEventCount"), # Number of Events in Event Array.
 	    (Word, "wPCodeCount"), # Number of P-Codes used by this Object.
 	    (OW(PVOID), "bWInitializeEvent"), # Offset to Initialize Event from Event Table.
 	    (OW(PVOID), "bWTerminateEvent"), # Offset to Terminate Event in Event Table.
-	    (lambda s: P(EventHandlerTable, s['wEventCount'].l.int()), "lpEvents"), # Pointer to Events Array.
+	    (lambda s: P(EventHandlerTable, s['wEventCount'].li.int()), "lpEvents"), # Pointer to Events Array.
 	    (PVOID, "lpBasicClassObject"), # Pointer to in-memory Class Objects.
 	    (Dword, "dwNull3"), # Unused.
 	    (PVOID, "lpIdeData"), # Only valid in IDE.
@@ -198,7 +198,7 @@ class EventHandlerTable(pstruct.type):
 	    (Dword, "lpQuery"),         # Jump to EVENT_SINK_QueryInterface.
 	    (Dword, "lpAddRef"),        # Jump to EVENT_SINK_AddRef.
 	    (Dword, "lpRelease"),       # Jump to EVENT_SINK_Release.
-        (lambda s: A(EventHandlerType, s.getparent(OptionalObjectInformation)['wEventCount'].l.int()), 'Events'),
+        (lambda s: A(EventHandlerType, s.getparent(OptionalObjectInformation)['wEventCount'].li.int()), 'Events'),
     ]
 
 class EventHandlerType(ptype.pointer_t):
