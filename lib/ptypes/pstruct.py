@@ -53,14 +53,10 @@ class _pstruct_generic(ptype.container):
         return super(_pstruct_generic, self).__getitem__(name)
 
     def __setitem__(self, name, value):
-        if not isinstance(value, ptype.type):
-            raise error.TypeError(self, '_pstruct_generic.__setitem__', message='Cannot assign a non-ptype (%s) to an element of a container. Use .set instead.'% repr(value.__class__))
-
         index = self.getindex(name)
-        offset = self.value[index].getoffset()
-
-        value.setoffset(offset, recurse=True)
-        self.value[index] = value
+        result = super(_pstruct_generic, self).__setitem__(index, value)
+        result.__name__ = name
+        return result
 
     def __getstate__(self):
         return super(_pstruct_generic,self).__getstate__(),self.__fastindex,

@@ -75,100 +75,92 @@ def force(t, self, chain=None):
     path = ','.join(self.backtrace())
     raise error.TypeError(self, 'force<ptype>', message='chain=%r : refusing request to resolve %r to a type that does not inherit from ptype.type : {%s}'% (chain, t, path))
 
-# fn must be a method, so args[0] will fetch self
-import traceback
-def rethrow(fn):
-    """A decorator that logs any exceptions that are thrown by function ``fn``"""
-    def catch(*args, **kwds):
-        try:
-            return fn(*args, **kwds)
-
-        except:
-            # FIXME: this code is stupid.
-            #        what we want is when an exception is raised in
-            #          .load/.deserialize, to display the elements involved,
-            #          and display the fields that have been successfully
-            #          loaded. in order to debug those, all we care about is
-            #          what particular field caused the structure initialization
-            #          to fail.
-            tb = traceback.format_stack()
-            self = args[0]
-            type, exception = sys.exc_info()[:2]
-
-            path = ' ->\n\t'.join( self.backtrace() )
-
-            res = []
-            res.append('')
-            res.append('Caught exception: %s\n'% exception)
-            res.append('%s<%x:+??> {%s} =>'%(self.classname(),self.getoffset(), path))
-            res.append('\t<method name> %s'% fn.__name__)
-
-            if self.initializedQ():
-                if iscontainer(self.__class__):
-                    if self.value:
-                        res.append('\t<container length> %x'% len(self.value))
-                    else:
-                        res.append('\t<container value> %r'% self.value)
-                else:
-                    res.append('\t<type length> %x'% len(self))
-
-            res.append('')
-            res.append('Traceback (most recent call last):')
-            res.append( ''.join(tb) )
-            res.append('')
-            sys.stderr.write('\n'.join(res))
-            raise
-            # FIXME: these exceptions look ugly as hell
-
-        pass
-    functools.update_wrapper(catch, fn)
-    catch.__name__ = 'catching(%s)'% catch.__name__
-    return catch
-
-def debug(ptype):
+def debug(ptype, **attributes):
     """``rethrow`` all exceptions that occur during initialization of ``ptype``"""
     if not istype(ptype):
-        raise error.TypeError(ptype, 'debug', message='%r is not a ptype'% ptype)
+        raise error.UserError(ptype, 'debug', message='%r is not a ptype'% ptype)
 
-    # FIXME: when loading, display the current offset and position
-    class decorated(ptype):
+    import time,traceback
+    def logentry(string, *args):
+        return (time.time(),traceback.extract_stack(), string.format(*args))
+
+    if any((hasattr(n) for n in ('_debug_','_dump_'))):
+        raise error.UserError(ptype, 'debug', message='%r has a private method name that clashes')
+
+    class decorated_ptype(ptype):
         __doc__ = ptype.__doc__
-        @rethrow
-        def deserialize_block(self, block):
-            return super(decorated, self).deserialize_block(block)
+        _debug_ = {}
 
-        @rethrow
+        def __init__(self, *args, **kwds):
+            self._debug_['creation'] = time.time(),traceback.extract_stack(),self.backtrace(lambda s:s)
+            return super(decorated_ptype,self).__init__(*args,**kwds)
+
+        def _dump_(self, file):
+            dbg = self._debug_
+            if 'constructed' in dbg:
+                t,c = dbg['constructed']
+                _,st,bt = dbg['creation']
+                print >>file, "[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), self.__name__ if hasattr(self, '__name__') else '') 
+            else:
+                t,st,bt = dbg['creation']
+                print >>file, "[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), self.__name__ if hasattr(self, '__name__') else '') 
+            
+            print >>file, 'Created by:'
+            print >>file, format_stack(st)
+            print >>file, 'Located at:'
+            print >>file, '\n'.join('{:s} : {:s}'.format(x.instance(),x.name()) for x in bt)
+            print >>file, 'Loads from store'
+            print >>file, '\n'.join('[:d] [{:f}] {:s}'.format(i, t, string) for i,(t,_,string) in enumerate(dbg['load']))
+            print >>file, 'Writes to store'
+            print >>file, '\n'.join('[:d] [{:f}] {:s}'.format(i, t, string) for i,(t,_,string) in enumerate(dbg['commit']))
+            print >>file, 'Serialized to a string:'
+            print >>file, '\n'.join('[:d] [{:f}] {:s}'.format(i, t, string) for i,(t,_,string) in enumerate(dbg['serialize']))
+            return
+
         def serialize(self):
-            return super(decorated, self).serialize()
+            result = super(decorated, self).serialize()
+            size = len(result)
+            _ = logentry('serialize() -> __len__ -> 0x{:x}', self.instance(), len(size))
+            Config.log.debug(' : '.join(self.instance(),_[-1]))
+            self._debug_.setdefault('serialize',[]).append(_)
+            return result
 
-        @rethrow
         def load(self, **kwds):
-#            print 'loading', self.classname(), self.name()
-            return super(decorated, self).load(**kwds)
+            start = time.time()
+            result = super(decorated, self).load(**kwds)
+            end = time.time()
 
-        @rethrow
+            offset, size, source = self.getoffset(), self.blocksize(), self.source
+            _ = logentry('load({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'%(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            Config.log.debug(' : '.join(self.instance(),_[-1]))
+            self._debug_.setdefault('load',[]).append(_)
+            return result
+
         def commit(self, **kwds):
-            return super(decorated, self).commit(**kwds)
+            start = time.time()
+            result = super(decorated, self).commit(**kwds)
+            end = time.time()
+
+            _ = logentry('commit({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'%(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            Config.log.debug(' : '.join(self.instance(),_[-1]))
+            self._debug_.setdefault('commit',[]).append(_)
+            return result
 
     decorated.__name__ = 'debug(%s)'% ptype.__name__
+    decorated._debug_.update(attributes)
     return decorated
 
 def debugrecurse(ptype):
     """``rethrow`` all exceptions that occur during initialization of ``ptype`` and any sub-elements"""
+    import time,traceback
     class decorated(debug(ptype)):
         __doc__ = ptype.__doc__
-        @rethrow
         def new(self, t, **attrs):
             res = force(t, self)
-#            print 'creating', self.classname(), self.name(), res
-
-            if istype(res) or isinstance(res, generic):
-                debugres = debug(res)
-                return super(decorated,self).new(debugres, **attrs)
-
-            raise error.TypeError(self, 'debug(new)', message='%r is not a ptype class'% res.__class__)
-
-    decorated.__name__ = 'debugrecurse(%s)'% ptype.__name__
+            Config.log.debug(' '.join(('constructed :',repr(t),'->',self.classname(),self.name())))
+            debugres = debug(res, constructed=(time.time(),t))
+            return super(decorated,self).new(debugres, **attrs)
+    decorated.__name__ = 'debug(%s,recurse=True)'% ptype.__name__
     return decorated
 
 source = provider.memory()
@@ -313,6 +305,7 @@ class _base_generic(object):
             return '%s.%s'%( self.parent.name(), name )
         return name
     def instance(self):
+        """Returns a minimal string describing the type and it's location"""
         name,ofs = self.classname(),self.getoffset()
         try:
             bs = self.blocksize()
@@ -320,7 +313,6 @@ class _base_generic(object):
         except:
             pass
         return '%s[%x:+?]'% (name, ofs)
-        #return '(%s)%s'%( self.classname(), self.name() )
 
     def hexdump(self, **options):
         """Return a hexdump of the type using utils.hexdump(**options)
@@ -388,8 +380,11 @@ class _base_generic(object):
 
         t = args[0] if len(args) > 0 else kwds['type']
 
-        if self.__class__ == t:
+        if self.__class__ is t:
             return self
+
+        #if self.__class__ == t or self is t or (isinstance(t,__builtin__.type) and (isinstance(self,t) or issubclass(self.__class__,t))):
+        #    return self
 
         for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)):
             if x.parent is t or (isinstance(t,__builtin__.type) and (isinstance(x,t) or issubclass(x.__class__,t))):
@@ -578,15 +573,18 @@ class base(generic):
         try:
             result = result.load(source=provider.proxy(self), offset=0)
             result.setoffset(result.getoffset(), recurse=True)
-
-            a,b = self.size(),result.size()
-            if a > b:
-                Config.log.info("base.cast : %s : Result %s size is smaller than source : %x < %x", self.classname(), result.classname(), result.size(), self.size())
-            elif a < b:
-                Config.log.warning("base.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
+            result = result.deserialize_block(self.serialize())
 
         except Exception,e:
-            Config.log.fatal("base.cast : %s : %s : Error during cast resulted in a partially initialized instance : %r"%(self.classname(), t.typename(), e))
+            Config.log.info("base.cast : %s : %s : Error during cast resulted in a partially initialized instance : %r"%(self.classname(), t.typename(), e))
+            try: result = result.deserialize_block(self.serialize())
+            except StopIteration: pass
+
+        a,b = self.size(),result.size()
+        if a > b:
+            Config.log.info("base.cast : %s : Result %s size is smaller than source : %x < %x", self.classname(), result.classname(), result.size(), self.size())
+        elif a < b:
+            Config.log.warning("base.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
         return result
 
     def traverse(self, edges=lambda node:tuple(node.value) if iscontainer(node.__class__) else (), filter=lambda node:True, **kwds):
@@ -817,6 +815,15 @@ class container(base):
         index = self.getindex(key)
         return self.value[index]
 
+    def __setitem__(self, index, value):
+        if not isinstance(value, base):
+            raise error.TypeError(self, 'container.__setitem__',message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
+        offset = self.value[index].getoffset()
+        value.setoffset(offset, recurse=True)
+        value.parent,value.source = self,None
+        self.value[index] = value
+        return value
+
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
         return any(x.contains(offset) for x in self.value)
@@ -942,9 +949,10 @@ class container(base):
                 while val and sz < bs:
                     sz += val.pop(0).load(**attrs).size()
 
+                return self
+
             # otherwise the contents are contiguous, load them as so
-            else:
-                return super(container,self).load(**attrs)
+            return super(container,self).load(**attrs)
 
         except error.LoadError, e:
             ofs,s,bs = self.getoffset(),self.size(),self.blocksize()
@@ -952,7 +960,6 @@ class container(base):
                 Config.log.warning('container.load : %s : Unable to complete read : read {%x:+%x}', self.instance(), ofs, s)
             else:
                 Config.log.debug('container.load : %s : Cropped to {%x:+%x}', self.instance(), ofs, s)
-            return self
         return self
 
     def commit(self, **kwds):
@@ -1207,6 +1214,10 @@ class definition(object):
         return cls.cache[type]
 
     @classmethod
+    def contains(cls, type):
+        return type in cls.cache
+
+    @classmethod
     def get(cls, type, **unknownattrs):
         """Lookup a ptype by a particular value.
 
@@ -1231,8 +1242,18 @@ class definition(object):
 
         # merge record caches into a single one
         cls.cache.update(otherdefinition.cache)
-        otherdefinition.cache = cls.cache
         return True
+
+    @classmethod
+    def copy(cls, otherdefinition):
+        #assert issubclass(otherdefinition, cls), 'ptype.definition :%s is not inheriting from %s
+        if not issubclass(otherdefinition, cls):
+            raise error.AssertionError(cls, 'definition.copy', message='%s is not inheriting from %s'%(otherdefinition.__name__, cls.__name__))
+
+        otherdefinition.cache = dict(cls.cache)
+        otherdefinition.attribute = cls.attribute
+        otherdefinition.unknown = cls.unknown
+        return otherdefinition
 
     @classmethod
     def merge(cls, otherdefinition):
@@ -1317,7 +1338,7 @@ class wrapper_t(type):
     # forwarded methods 
     def load(self, **attrs):
         self.object.load(**attrs)
-        return self
+        return super(wrapper_t,self).deserialize_block(self.value)
 
     def serialize(self):
         if self.initializedQ():

@@ -89,7 +89,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             result.append( utils.strdup(data[va-sectionva:]) if exportdirectory.contains(va) else va )
         return address,result
 
-    def iterateExports(self):
+    def iterate(self):
         """For each export, yields (offset of export, ordinal, name, ordinalString, virtualaddress)"""
         if 0 in (self['AddressOfNames'].num(),self['AddressOfNameOrdinals'].num()):
             base = self['Base'].num()

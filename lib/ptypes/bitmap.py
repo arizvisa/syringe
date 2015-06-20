@@ -381,7 +381,7 @@ def split(bitmap, maxsize):
 
 def join(iterable):
     '''Join a list of bitmaps into a single one'''
-    return reduce(lambda x,y: push(x, y), iterable, (0,0))
+    return reduce(push, iterable, (0,0))
 
 import itertools
 def groupby(sequence, count):

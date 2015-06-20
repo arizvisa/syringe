@@ -1,4 +1,5 @@
-import itertools,logging,optparse
+#!/usr/bin/env python
+import itertools,logging,optparse,os.path
 import ptypes,pecoff
 from ptypes import *
 
@@ -12,7 +13,7 @@ def parseResourceDirectory(filename):
     sections = pe['Sections']
     datadirectory = pe['DataDirectory']
     resourceDirectory = datadirectory[2]
-    return resourceDirectory['virtualaddress'].d
+    return resourceDirectory['Address'].d
 
 def extractLgCpIds(versionInfo):
     _,vfi = versionInfo['Children']
@@ -94,7 +95,7 @@ if __name__ == '__main__':
     versionInfo = resource_Version['Data'].d
 
     # parse the version info
-    vi = versionInfo.l.cast(pecoff.resources.VS_VERSIONINFO)
+    vi = versionInfo.l.cast(pecoff.portable.resources.VS_VERSIONINFO)
     lgcpids = extractLgCpIds(vi)
     if opts.list:
         print >>sys.stdout, '\n'.join(map(repr,lgcpids))
@@ -117,6 +118,8 @@ if __name__ == '__main__':
     # extract the properties for the language and cp
     st = getStringTable(vi, (language,codepage))
     strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
+    strings.setdefault('__path__', filename)
+    strings.setdefault('__name__', os.path.split(filename)[1])
 
     # build the path
     if opts.dump:

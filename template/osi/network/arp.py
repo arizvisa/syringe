@@ -4,7 +4,7 @@ from ptypes import *
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 
-@datalink.liayer.define
+@datalink.layer.define
 class header(pstruct.type,terminal):
     type = 0x0806
     _fields_ = [

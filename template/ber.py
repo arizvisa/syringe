@@ -2,6 +2,9 @@ import logging,math
 import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
 
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
+
+### Primitive types for records
 class IdentifierLong(pbinary.terminatedarray):
     class _object_(pbinary.struct):
         _fields_ = [
@@ -12,105 +15,152 @@ class IdentifierLong(pbinary.terminatedarray):
         return value['continue'] == 0
 
 class Length(pbinary.struct):
-    def __form(self):
-        if self['form']:
-            if self['count'] == 0:
-                return 0    # IndefiniteForm
-            return self['count']*8
-        return 0
+    def __value(self):
+        return (self['count']*8) if self['form'] else 0
 
-    def num(self):
-        if self['form']:
-            if self['count'] == 0:
-                raise Exception, 'Indefinite form not implemented'
-            return self['value']
-        return self['count']
+    _fields_ = [
+        (1, 'form'),
+        (7, 'count'),
+        (__value, 'value'),
+    ]
+    def number(self):
+        #assert not self.isIndefinite()
+        return self['value'] if self['form'] else self['count']
+    __int__ = __long__ = number
 
     def isIndefinite(self):
         assert self.initialized
         return self['form'] == self['count'] == 0
 
+    def summary(self):
+        res = self.number()
+        return '{:d} (0x{:x}) -- {:s}'.format(res, res, super(Length,self).summary()) + (' Indefinite' if self.isIndefinite() else '')
+
+class Tag(pbinary.struct):
+    def __TagLong(self):
+        return IdentifierLong if self['Tag'] == 0x1f else dyn.clone(IdentifierLong, length=0)
+
     _fields_ = [
-        (1, 'form'),
-        (7, 'count'),
-        (__form, 'value'),
+        (5, 'Tag'),
+        (__TagLong, 'TagLong'),
     ]
 
-    def summary(self):
-        res = super(Length,self).summary()
-        return '{:d} (0x{:x}) -- {:s}'.format(self.num(),self.num(), res)
+    def number(self):
+        res = self['Tag']
+        res += sum(x['integer'] for x in self['TagLong'])
+        return res
+    __int__ = __long__ = number
 
-###
+    def summary(self):
+        res = self.number()
+        return '{:d} (0x{:x}) -- {:s}'.format(res,res,super(Tag,self).summary())
+
 class Type(pbinary.struct):
     _fields_ = [
         (2, 'Class'),
-        (1, 'Constructed?'),
-        (5, 'Tag'),
+        (1, 'Constructed'),
+        (Tag, 'Tag'),
     ]
 
     def summary(self):
-        c,p,t = self['Class'],self['Constructed?'],self['Tag']
-        return 'class:{:d} tag:0x{:x} {:s}'.format(c,t, 'constructed' if p else 'primitive')
+        c,p,t = self['Class'],self['Constructed'],self['Tag'].number()
+        return 'class:{:d} tag:0x{:x} {:s}'.format(c,t, 'Constructed' if p else 'Universal')
 
-class Record(pstruct.type):
+### Element structure
+class Protocol(ptype.definition):
+    attribute,cache = 'Class',{}
+    class UnknownConstruct(parray.block):
+        def classname(self):
+            return 'UnknownConstruct<{!r}>'.format(self.type)
+    class Unknown(ptype.block):
+        def classname(self):
+            return 'UnknownPrimitive<{!r}>'.format(self.type)
+
+class Element(pstruct.type):
+    protocol = Protocol
+    def Value(self):
+        t = self['Type'].li
+        cons,n = t['Constructed'],t['Tag'].number()
+        K = self.protocol.lookup(t['Class'])
+
+        # Lookup type by it's class
+        try:
+            result = K.lookup(n)
+        except KeyError:
+            result = self.protocol.UnknownConstruct if cons else self.protocol.Unknown
+            result = dyn.clone(result, type=(t['Class'],n))
+        return result
+
     def __Value(self):
-        c,p,n = self['Type'].li['Class'],self['Type']['Constructed?'],self['Type']['Tag']
-        s = self['Length'].li.num()
+        length,result = self['Length'].li, self.Value()
 
-        if p:
-            return dyn.clone(AbstractConstruct.get(n, length=s), blocksize=lambda _:s, length=s)
-        return dyn.clone(AbstractPrimitive.get(n, length=s), blocksize=lambda _:s, length=s)
+        # Assign ourself as the ber array's element if it inherits from
+        # us and ._object_ is undefined
+        if issubclass(result, parray.type):
+            cls = type(self)
+            parent = cls if cls.Value == Element.Value else cls.__base__
+            result._object_ = parent if result._object_ == None else result._object_
+
+        # Determine how to assign length
+        if issubclass(result, parray.block):
+            result = dyn.clone(result, blocksize=lambda _:length.number())
+        elif length.isIndefinite() and issubclass(result, parray.terminated):
+            result = dyn.clone(result, isTerminator=lambda s,v: type(v['Value']) == EOC)
+        elif ptype.iscontainer(result):
+            result = result
+        elif ptype.istype(result):
+            result = dyn.clone(result, length=length.number())
+        return result
 
     _fields_ = [
         (Type, 'Type'),
         (Length, 'Length'),
-        (__Value, 'Value')
+        (__Value, 'Value'),
     ]
 
-class AbstractPrimitive(ptype.definition):
-    cache = {}
-    attribute = 'type'
-    class unknown(ptype.block):
-        def classname(self):
-            return 'UnknownPrimitive<%d>'%(self.type)
+### Element classes
+@Protocol.define
+class Universal(ptype.definition):
+    Class,cache = 00, {}
+@Protocol.define
+class Application(ptype.definition):
+    Class,cache = 01, {}
+@Protocol.define
+class Context(ptype.definition):
+    Class,cache = 02, {}
+@Protocol.define
+class Private(ptype.definition):
+    Class,cache = 03, {}
 
-class AbstractConstruct(ptype.definition):
-    cache = {}
-    attribute = 'type'
-    class unknown(ptype.block):
-        _object_ = Record
-        def classname(self):
-            return 'UnknownConstruct<%d>'%(self.type)
-
-### classes
-@AbstractConstruct.define
-@AbstractPrimitive.define
+### Tag definitions (X.208)
+@Universal.define
 class EOC(ptype.type):
     type = 0x00
+    # Required only if the length field specifies it
 
-@AbstractPrimitive.define
+@Universal.define
 class BOOLEAN(ptype.block):
     type = 0x01
 
-@AbstractPrimitive.define
+@Universal.define
 class INTEGER(pint.uint_t):
     type = 0x02
 
-@AbstractPrimitive.define
+@Universal.define
 class BITSTRING(ptype.block):
     type = 0x03
 
-@AbstractPrimitive.define
+@Universal.define
 class OCTETSTRING(pstr.string):
     type = 0x04
     def summary(self):
         return ''.join('{:02X}'.format(ord(_)) for _ in self.serialize())
 
-@AbstractPrimitive.define
+@Universal.define
 class NULL(ptype.block):
     type = 0x05
 
-@AbstractPrimitive.define
+@Universal.define
 class OBJECT_IDENTIFIER(ptype.type):
     type = 0x06
 
@@ -154,89 +204,117 @@ class OBJECT_IDENTIFIER(ptype.type):
         data = self.serialize()
         return '{:s} ({!r})'.format(self.str(),data)
 
-@AbstractPrimitive.define
+@Universal.define
 class EXTERNAL(ptype.block):
     type = 0x08
 
-@AbstractPrimitive.define
+@Universal.define
 class REAL(ptype.block):
     type = 0x09
 
-@AbstractPrimitive.define
+@Universal.define
 class ENUMERATED(ptype.block):
     type = 0x0a
 
-@AbstractPrimitive.define
+@Universal.define
 class UTF8String(pstr.string):
     type = 0x0c
 
-@AbstractConstruct.define
+@Universal.define
 class SEQUENCE(parray.block):
     type = 0x10
-    _object_ = Record
 
-@AbstractConstruct.define
+@Universal.define
 class SET(parray.block):
     type = 0x11
-    _object_ = Record
 
-@AbstractPrimitive.define
+@Universal.define
 class NumericString(ptype.block):
     type = 0x12
 
-@AbstractPrimitive.define
+@Universal.define
 class PrintableString(pstr.string):
     type = 0x13
 
-@AbstractPrimitive.define
+@Universal.define
 class T61String(pstr.string):
     type = 0x14
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class IA5String(pstr.string):
     type = 0x16
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class UTCTime(pstr.string):
     type = 0x17
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class VisibleString(ptype.block):
     type = 0x1a
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class GeneralString(pstr.string):
     type = 0x1b
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class UniversalString(pstr.string):
     type = 0x1c
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class CHARACTER_STRING(pstr.string):
     type = 0x1d
-    _fields_ = []
 
-@AbstractPrimitive.define
+@Universal.define
 class BMPString(pstr.string):
     type = 0x1e
-    _fields_ = []
+### End of Universal definitions
 
-##
-class File(Record):
+### Base structures
+class Packet(Element):
     attributes = {'byteorder':ptypes.config.byteorder.bigendian}
+class File(Element):
+    attributes = {'byteorder':ptypes.config.byteorder.bigendian}
+
+# add an alias for exported objects
+protocol = Protocol
+packet = Packet
 
 if __name__ == '__main__':
     import ptypes,ber
+    import ptypes.bitmap as bitmap
     reload(ber)
     ptypes.setsource(ptypes.file('./test.3','rb'))
 
-    a = ber.Record
+    a = ber.Element
     a = a()
     a=a.l
+
+    def test_tag():
+        res = bitmap.new(0x1e, 5)
+
+        res = bitmap.zero
+        res = bitmap.push(res, (0x1f, 5))
+        res = bitmap.push(res, (0x1, 1))
+        res = bitmap.push(res, (0x10, 7))
+        res = bitmap.push(res, (0x1, 0))
+        res = bitmap.push(res, (0x0, 7))
+        x = pbinary.new(ber.Tag,source=ptypes.prov.string(bitmap.data(res)))
+        print x.l
+        print x['TagLong'][0]
+        print x.num()
+        print int(x['TagLong'])
+
+    def test_length():
+        res = bitmap.zero
+        res = bitmap.push(res, (0, 1))
+        res = bitmap.push(res, (38, 7))
+        x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
+        print x.l
+        print x.number()
+
+        res = bitmap.zero
+        res = bitmap.push(res, (0x81,8))
+        res = bitmap.push(res, (0xc9,8))
+        x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
+        print x.l
+        print x.number()

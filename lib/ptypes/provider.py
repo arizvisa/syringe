@@ -98,20 +98,17 @@ class proxy(base):
                 return result
             raise error.ConsumeError(self, ofs, amount, amount=right-self.size)
 
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
         bo,ofs = self.baseoffset,self.offset
-        left = ofs
-        right = left+amount
+        left,right = ofs,ofs+amount
 
-        if right < 0 or left > self.size or left < 0:
-            raise error.ConsumeError(self, ofs, amount, amount=right-self.size)
-
-        right = min(right, self.size)
-
-        self.type.source.seek(bo+ofs)
-        result = self.type.source.consume(right-left)
-        self.offset += amount
-        return result
+        if amount >= 0 and left >= 0 and right <= self.size:
+            self.type.source.seek(bo+ofs)
+            result = self.type.source.consume(right-left)
+            self.offset += amount
+            return result
+        raise error.ConsumeError(self, ofs, amount, amount=right-self.size)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
     def store(self, data):

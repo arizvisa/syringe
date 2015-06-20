@@ -31,15 +31,14 @@ class _parray_generic(ptype.container):
 
         This will make the instance of ``object`` owned by the array.
         """
-        offset = self.getoffset()+self.blocksize()
-        object.setoffset(offset, recurse=True)
+        offset = self.getoffset()+self.size()
+        if offset != object.getoffset():
+            object.setoffset(offset, recurse=True)
         object.parent,object.source = self,None
         return super(_parray_generic,self).append(object)
 
     def extend(self, iterable):
-        for x in iterable:
-            self.value.append(x)
-        return
+        map(self.append, iterable)
 
     def pop(self, index=-1):
         raise error.ImplementationError(self, '_parray_generic.pop')
@@ -55,14 +54,10 @@ class _parray_generic(ptype.container):
         del(self.value[index])
 
     def __setitem__(self, index, value):
-        if not isinstance(value, ptype.type):
-            raise error.TypeError(self, '_parray_generic.__setitem__',message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
-
         index = self.getindex(index)
-        offset = self.value[index].getoffset()
-        value.setoffset(offset, recurse=True)
-        value.parent,value.source = self,None
-        self.value[index] = value
+        result = super(_parray_generic, self).__setitem__(index, value)
+        result.__name__ = str(index)
+        return result
 
     def __getitem__(self, index):
         range(len(self))[index]     # make python raise the correct exception if so..
@@ -97,7 +92,7 @@ class type(_parray_generic):
         ofs = self.getoffset()
         for index in xrange(self.length):
             n = self.new(self._object_, __name__=str(index), offset=ofs, **attrs)
-            self.value.append(n)
+            self.append(n)
             ofs += n.blocksize()
         return self
 
@@ -106,7 +101,7 @@ class type(_parray_generic):
         ofs = self.getoffset()
         for index in xrange(self.length):
             n = self.new(self._object_, __name__=str(index), offset=ofs, **attrs)
-            self.value.append(n)
+            self.append(n)
             n.load()
             ofs += n.blocksize()
         return self
@@ -121,7 +116,7 @@ class type(_parray_generic):
                 else:
                     result.value[idx].set(v)
                 continue
-            self.setoffset(self.getoffset(), recurse=True)
+            result.setoffset(result.getoffset(), recurse=True)
             return result
         for idx,v in enumerate(fields):
             if ptype.istype(v) or isinstance(v, ptype.base) or ptype.isresolveable(v):
@@ -129,7 +124,9 @@ class type(_parray_generic):
             else:
                 result.value[idx].set(v)
             continue
-        self.setoffset(self.getoffset(), recurse=True)
+        for idx in xrange(len(fields), len(result)):
+            result.value[idx].alloc(**attrs)
+        result.setoffset(self.getoffset(), recurse=True)
         return result
 
     def load(self, **attrs):
@@ -148,11 +145,10 @@ class type(_parray_generic):
                 else:
                     # XXX: should never be encountered
                     raise error.ImplementationError(self, 'type.load', 'Unknown load type -> %s'% (repr(obj)))
-
-                return super(type, self).load()
-
+            return super(type, self).load(**attrs)
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
+        raise error.AssertionError(self, 'type.load')
 
     def summary(self, **options):
         res = super(type,self).summary(**options)
@@ -206,7 +202,7 @@ class terminated(type):
                 ofs = self.getoffset()
                 for index in forever:
                     n = self.new(self._object_,__name__=str(index),offset=ofs)
-                    self.value.append(n)
+                    self.append(n)
                     if self.isTerminator(n.load()):
                         break
 
@@ -218,16 +214,15 @@ class terminated(type):
                         raise error.AssertionError(self, 'terminated.load', message="Element size for %s is < 0"% n.classname())
                     ofs += s
 
-            return self
-
         except KeyboardInterrupt:
             # XXX: some of these variables might not be defined due to my usage of KeyboardInterrupt being racy. who cares...
             path = ' -> '.join(self.backtrace())
-            Config.log.warn("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path))
+            Config.log.warn("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
             return self
 
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
+        return self
 
     def initializedQ(self):
         return self.value is not None and len(self.value) > 0 and self.value[-1].initializedQ()
@@ -237,7 +232,6 @@ class uninitialized(terminated):
     def size(self):
         if self.value is not None:
             value = (_ for _ in self.value if _.value is not None)
-            #return reduce(lambda x,y: x+y.size(), value, 0)
             return sum(n.size() for n in value)
         raise error.InitializationError(self, 'uninitialized.size')
 
@@ -270,7 +264,7 @@ class infinite(uninitialized):
             try:
                 while True:
                     n = self.__next_element()
-                    self.value.append(n)
+                    self.append(n)
                     if not n.initializedQ():
                         break
 
@@ -288,7 +282,7 @@ class infinite(uninitialized):
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
-                Config.log.warn("infinite.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path))
+                Config.log.warn("infinite.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
                 return self
 
             except error.LoadError,e:
@@ -307,7 +301,7 @@ class infinite(uninitialized):
             try:
                 while True:
                     n = self.__next_element()
-                    self.value.append(n)
+                    self.append(n)
                     yield n
 
                     if not n.initializedQ():
@@ -330,7 +324,7 @@ class infinite(uninitialized):
                     Config.log.warn("infinite.loadstream : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=e)
             pass
-        return
+        super(type, self).load()
 
 class block(uninitialized):
     '''An array that reads elements until their size totals the same amount returned by .blocksize()'''
@@ -361,12 +355,12 @@ class block(uninitialized):
                     if o > self.blocksize():
                         path = ' -> '.join(n.backtrace())
                         Config.log.warn("block.load : %s : Reached end of blockarray at %s : %s"%(self.instance(), n.instance(), path))
-                        self.value.append(n)
+                        self.append(n)
 
                     # otherwise add the incomplete element to the array
                     elif o < self.blocksize():
                         Config.log.warn("block.load : %s : LoadError raised at %s : %s"%(self.instance(), n.instance(), repr(e)))
-                        self.value.append(n)
+                        self.append(n)
 
                     break
 
@@ -385,7 +379,7 @@ class block(uninitialized):
                     break
 
                 # add to list, and check if we're done.
-                self.value.append(n)
+                self.append(n)
                 if self.isTerminator(n):
                     break
                 ofs,current = ofs+s,current+s

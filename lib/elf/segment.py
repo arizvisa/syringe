@@ -1,48 +1,71 @@
 from .base import *
 from . import dynamic
 
-class Elf32_Phdr(pstruct.type):
-    class __p_type(pint.enum, Elf32_Word):
-        _values_ = [
-            ('PT_NULL', 0),
-            ('PT_LOAD', 1),
-            ('PT_DYNAMIC', 2),
-            ('PT_INTERP', 3),
-            ('PT_NOTE', 4),
-            ('PT_SHLIB', 5),
-            ('PT_PHDR', 6),
-            ('PT_GNU_EH_FRAME', 0x6474e550),
-            ('PT_GNU_STACK', 0x6474e551),
-            ('PT_GNU_RELRO', 0x6474e552),
-            ('PT_LOPROC', 0x70000000),
-            ('PT_HIPROC', 0x7fffffff),
-        ]
+class _p_type(pint.enum):
+    _values_ = [
+        ('PT_NULL', 0),
+        ('PT_LOAD', 1),
+        ('PT_DYNAMIC', 2),
+        ('PT_INTERP', 3),
+        ('PT_NOTE', 4),
+        ('PT_SHLIB', 5),
+        ('PT_PHDR', 6),
+        ('PT_GNU_EH_FRAME', 0x6474e550),
+        ('PT_GNU_STACK', 0x6474e551),
+        ('PT_GNU_RELRO', 0x6474e552),
+        ('PT_LOPROC', 0x70000000),
+        ('PT_HIPROC', 0x7fffffff),
+    ]
 
-    def __p_offset(self):
-        t = self['p_type'].li.num()
-        type = Type.get(t)
-        # XXX: there's that difference here between the filesz and memsz
-        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(Elf32_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
-
-    class __p_flags(pbinary.flags):
-        # Elf32_Word
-        _fields_ = [
-            (4, 'PF_MASKPROC'),
-            (1+8+16, 'SHF_RESERVED'),
-            (1, 'PF_R'),
-            (1, 'PF_W'),
-            (1, 'PF_X'),
-        ]
-
+class _p_flags(pbinary.flags):
+    # Elf32_Word
     _fields_ = [
-        (__p_type, 'p_type'),
-        (__p_offset, 'p_offset'),
+        (4, 'PF_MASKPROC'),
+        (1+8+16, 'SHF_RESERVED'),
+        (1, 'PF_R'),
+        (1, 'PF_W'),
+        (1, 'PF_X'),
+    ]
+
+def _p_offset(size):
+    def p_offset(self):
+        type = Type.get(self['p_type'].li.num())
+        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(ElfXX_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
+
+        base = s.getparent(ElfXX_File),
+        result = dyn.clone(type, blocksize=lambda _:self.getparent(ElfXX_Phdr)['p_filesz'].li.num())
+        return dyn.rpointer(result, base, type=size)
+    return p_offset
+
+class ElfXX_Phdr(ElfXX_Header): pass
+
+### Program Headers
+class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
+    class p_type(_p_type, Elf32_Word): pass
+    class p_flags(_p_flags): pass   # XXX
+    _fields_ = [
+        (p_type, 'p_type'),
+        (_p_offset(Elf32_Off), 'p_offset'),
         (Elf32_Addr, 'p_vaddr'),
         (Elf32_Addr, 'p_paddr'),
         (Elf32_Word, 'p_filesz'),
         (Elf32_Word, 'p_memsz'),
-        (__p_flags, 'p_flags'),
+        (p_flags, 'p_flags'),
         (Elf32_Word, 'p_align'),
+    ]
+
+class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
+    class p_type(_p_type, Elf64_Word): pass
+    class p_flags(_p_flags): pass   # XXX
+    _fields_ = [
+        (p_type, 'p_type'),
+        (_p_offset(Elf64_Off), 'p_offset'),
+        (Elf64_Addr, 'p_vaddr'),
+        (Elf64_Addr, 'p_paddr'),
+        (Elf64_Xword, 'p_filesz'),
+        (Elf64_Xword, 'p_memsz'),
+        (p_flags, 'p_flags'),
+        (Elf64_Xword, 'p_align'),
     ]
 
 ### segment type definitions
@@ -61,7 +84,7 @@ class PT_DYNAMIC(parray.block):
     def search(self, entry):
         if ptype.istype(entry):
             entry = entry.type
-        return [x['d_val'] for x in self if x['d_tag'].int() == entry]
+        return [x['d_val'] for x in self if x['d_tag'].num() == entry]
 
 @Type.define
 class PT_INTERP(pstr.szstring):
@@ -75,9 +98,9 @@ class PT_NOTE(parray.block):
             (Elf32_Word, 'namesz'),
             (Elf32_Word, 'descsz'),
             (Elf32_Word, 'type'),
-            (lambda s: dyn.clone(pstr.string, length=s['namesz'].li.int()), 'name'),
+            (lambda s: dyn.clone(pstr.string, length=s['namesz'].li.num()), 'name'),
             (dyn.align(4), 'name_pad'),
-            (lambda s: dyn.array(Elf32_Word, s['descsz'].li.int()/4), 'desc'),
+            (lambda s: dyn.array(Elf32_Word, s['descsz'].li.num()/4), 'desc'),
             (dyn.align(4), 'desc_pad'),
         ]
     

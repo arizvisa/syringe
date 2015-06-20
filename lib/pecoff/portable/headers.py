@@ -77,6 +77,9 @@ def virtualaddress(target, **kwds):
     kwds.setdefault('__name__', 'virtualaddress')
     return dyn.opointer(target, calculateRelativeAddress, **kwds)
 
+class DataDirectoryEntry(pstruct.type):
+    pass
+
 class SectionTable(pstruct.type):
     """PE Executable Section Table Entry"""
     class IMAGE_SCN(pbinary.flags):
@@ -235,6 +238,7 @@ class SectionTableArray(parray.type):
 class OptionalHeader(pstruct.type):
     """PE Executable Optional Header"""
     class DllCharacteristics(pbinary.flags):
+        # TODO: GUARD_CF
         _fields_ = [
             (1, 'TERMINAL_SERVER_AWARE'), (1, 'reserved_1'), (1, 'WDM_DRIVER'),
             (1, 'reserved_3'), (1, 'NO_BIND'), (1, 'NO_SEH'), (1, 'NO_ISOLATION'),

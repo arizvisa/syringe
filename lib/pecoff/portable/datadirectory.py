@@ -5,7 +5,7 @@ from ..__base__ import *
 from . import exports,relocations,imports,resources,exceptions,headers
 from .headers import virtualaddress,realaddress,fileoffset
 
-class Entry(pstruct.type):
+class Entry(headers.DataDirectoryEntry):
     def _object_(self):
         # called by 'Address'
         sz = self['Size'].num()

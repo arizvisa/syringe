@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import itertools,logging,argparse
 import pecoff,ptypes
 ptypes.config.defaults.ptype.clone_name = '{}'
@@ -11,9 +12,32 @@ def extract(obj, out):
         res = obj.hexdump()
     elif out == 'raw':
         res = obj.serialize()
+    elif len(out) > 0:
+        res = resolve(obj, out[0].split(':'))
     else:
         raise Exception, out
     print >>sys.stdout, res
+
+def resolve(result, path):
+    for p in path:
+        if p == '':
+            break
+        if p == '.':
+            continue
+        if p == '..':
+            result = result.p
+            continue
+        if hasattr(result, 'keys'):
+            result = result.__getitem__(p)
+            continue
+        result = result.__getitem__(int(p))
+    if not p:
+        return result.details()
+    if hasattr(result, 'num'):
+        return result.num()
+    if hasattr(result, 'str'):
+        return result.str()
+    return result.details()
 
 ## commands
 def dump_exe(t, output):
@@ -80,7 +104,7 @@ def list_exports(t, output):
     global result; result = t
     if not output:
         name = t['Name'].d.l.str()
-        for ofs,ordinal,name,ordinalstring,value in t.enumerateAllExports():
+        for ofs,ordinal,name,ordinalstring,value in t.iterate():
             print >>sys.stdout, '[{:d}] {!r} {!r} 0x{:x}'.format(ordinal, name, ordinalstring, value)
         return
     return extract(t, output)
@@ -91,7 +115,7 @@ def list_imports(t, output):
     t = t['Address'].d.l
     global result; result = t
     if not output:
-        for i,n in enumerate(t.walk()):
+        for i,n in enumerate(t.iterate()):
             print >>sys.stdout, '[{:d}] {!r}'.format(i, n['Name'].d.l.str())
         return
     return extract(t, output)
@@ -105,7 +129,7 @@ def extract_import(t, index, output):
     global result; result = t
     if not output:
         summary = lambda (h,n,a): '{:d} {:s} 0x{:x}'.format(h,n,a)
-        for n in t.fetchimports(): print >>sys.stdout, summary(n)
+        for n in t.iterate(): print >>sys.stdout, summary(n)
         return
     return extract(t, output)
 
@@ -161,6 +185,7 @@ def args():
     res.add_argument('--raw', action='store_const', dest='output', const='raw', help='output contents in raw mode')
     res.add_argument('--print', action='store_const', dest='output', const='print', help='output contents in a readable format')
     res.add_argument('--hex', action='store_const', dest='output', const='hex', help='output contents as a hex dump')
+    res.add_argument('--path', action='store', nargs=1, dest='output', help='output the field specifed by a \':\' separated path.')
     p.set_defaults(output='')
     return p
 

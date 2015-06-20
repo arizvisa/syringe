@@ -1,63 +1,10 @@
 from ptypes import *
 pbinary.setbyteorder( pbinary.bigendian )
 
-class dictionary(object):   # ptype.dictionary?
-    # should provide an interface for looking up ptypes by some specific id
-    #   need to implement __new__ in order to allocate .cache
-    #   needs a function to create a new packet of a specific id, falling back to
-    #       a user-defined unknown packet if able.
-
-    @classmethod
-    def lookup(cls, id):
-        try:
-            result = cls.cache[id]
-        except KeyError:
-            result = cls.unknown
-        return result
-        
-    @classmethod
-    def define(cls, definition):
-        t = definition.type
-        cls.cache[t] = definition
-        return definition
-
-    @classmethod
-    def update(cls, records):
-        a = set(cls.cache.keys())
-        b = set(records.cache.keys())
-        if a.intersection(b):
-            logging.warning('%s : Unable to import module %s due to multiple definitions of the same record'%(cls.__module__, repr(records)))
-            logging.debug(repr(a.intersection(b)))
-            return False
-        cls.cache.update(records.cache)
-        return True
-
-    @classmethod
-    def merge(cls, records):
-        if cls.Update(records):
-            # merge record caches into a single one
-            records.cache = cls.cache
-            return True
-        return False
-
-    class unknown(dyn.block(0)):
-        def classname(self):
-            return '%s<%x>'%(self.typename(), self.type)
-
-class layer(dictionary):
+class layer(ptype.definition):
     cache = {}
     class unknown(pbinary.array):
         _object_ = length = 0
-
-    @classmethod
-    def lookup(cls, id):
-        if id in set(xrange(0x101, 0x1b0)):
-            return slice
-        try:
-            result = cls.cache[id]
-        except KeyError:
-            result = cls.unknown
-        return result
 
 ###
 @layer.define
@@ -117,7 +64,7 @@ class picture(pbinary.struct):
 @layer.define
 class slice(pbinary.struct):
     # 0x100 - 0x1af
-    type = 0x1af
+    type = (0x100, 0x1b0)
 
     class extra_bit(pbinary.struct):
         _fields_ = [(1,'extra_bit_slice'), (8, 'extra_information_slice')]
@@ -126,6 +73,7 @@ class slice(pbinary.struct):
         (5, 'quantizer_scale'),
         (dyn.clone(pbinary.terminatedarray, _object_=extra_bit, isTerminator=lambda s,v: v['extra_bit_slice'] == 0), 'extra_bit'),
     ]
+map(layer.define, (dyn.clone(slice,type=_,__name__='{:s}<{:d}>'.format(slice.__name__,_)) for _ in xrange(*slice.type)))
 
 @layer.define
 class pack(pbinary.struct):

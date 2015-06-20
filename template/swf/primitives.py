@@ -2,84 +2,34 @@ import ptypes
 from ptypes import *
 from ptypes.pint import littleendian
 
-class pFixed(ptype.type):
-    length = 0
-
-    def __float__(self):
-        v = list(reversed(self.serialize()))
-
-        center = self.length / 2
-        divisor = 2**(center*8)
-
-        high = utils.h2i(v[:center])
-        low = utils.h2i(v[center:]) / float(divisor)
-        return float(high)+low
-
-    def details(self):
-        if self.initialized:
-            return '%f'%self.__float__()
-        return '???'
-
 ## float types
-#TODO: define __repr__ for each of these types
-# FIXME: if we modify pfloat.type, we can support this structure directly
-class FLOAT16(pbinary.struct):
-    _fields_ = [
-        (1, 'sign'),
-        (5, 'exponent'),
-        (10, 'mantissa')
-    ]
-
-class FLOAT(pbinary.struct):
-    _fields_ = [
-        (1, 'sign'),
-        (8, 'exponent'),
-        (23, 'mantissa')
-    ]
-
-class DOUBLE(pbinary.struct):
-    _fields_ = [
-        (1, 'sign'),
-        (11, 'exponent'),
-        (52, 'mantissa')
-    ]
+class FLOAT16(pfloat.half): pass
+class FLOAT(pfloat.single): pass
+class DOUBLE(pfloat.double): pass
 
 ## int types
-class SI8(pint.sint_t):
-    length = 1
-    signed = True
+class SI8(pint.int8_t): pass
+class SI16(pint.int16_t): pass
+class SI24(pint.int_t): length = 3
+class SI32(pint.int32_t): pass
+class SI64(pint.int64_t): pass
 
-class UI8(pint.uint_t):
-    length = 1
-    signed = False
-
-class SI16(pint.sint_t):
-    length = 2
-    signed = True
-
-class UI16(pint.uint_t):
-    length = 2
-    signed = False
-
-class SI32(pint.sint_t):
-    length = 4
-    signed = True
-
-class UI32(pint.uint_t):
-    length = 4
-    signed = False
-
-class UI64(pint.uint_t):
-    length = 8
-    signed = False
+class UI8(pint.int8_t): pass
+class UI16(pint.int16_t): pass
+class UI24(pint.int_t): length = 3
+class UI32(pint.int32_t): pass
+class UI64(pint.int64_t): pass
 
 (SI8, UI8, SI16, UI16, SI32, UI32, UI64) = ( littleendian(x) for x in (SI8,UI8,SI16,UI16,SI32,UI32,UI64) )
 
-class FIXED(pFixed):
-    length = 4
+## fixed-point types
+class SI8_8(pfloat.sfixed_t): length,fractional = 2,8
+class SI16_16(pfloat.sfixed_t): length,fractional = 4,16
+class UI8_8(pfloat.fixed_t): length,fractional = 2,8
+class UI16_16(pfloat.fixed_t): length,fractional = 4,16
 
-class FIXED8(pFixed):
-    length = 2
+class FIXED(UI16_16): pass
+class FIXED8(SI8_8): pass
 
 class STRING(pstr.szstring): pass
 

@@ -1,16 +1,16 @@
 from .base import *
 
 ### generic
-class sh_name(Elf32_Word):
+class _sh_name(pint.uint_t):
     def summary(self):
         return self.str()
 
     def str(self):
         ofs = self.num()
         stringtable = self.getparent(ElfXX_Header).stringtable()
-        return str(stringtable.get(ofs))
+        return stringtable.extract(ofs).str()
 
-class sh_type(pint.enum, Elf32_Word):
+class _sh_type(pint.enum):
     _values_ = [
         ('SHT_NULL', 0),
         ('SHT_PROGBITS', 1),
@@ -53,7 +53,7 @@ class sh_type(pint.enum, Elf32_Word):
         ('SHT_HIUSER', 0xffffffff),
     ]
 
-class sh_flags(pbinary.flags):
+class _sh_flags(pbinary.flags):
     # Elf32_Word
     _fields_ = [
         (4, 'SHF_MASKPROC'),
@@ -63,14 +63,24 @@ class sh_flags(pbinary.flags):
         (1, 'SHF_WRITE'),
     ]
 
-### 32-bit
-class Elf32_Shdr(pstruct.type):
-    def __sh_offset(self):
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
-        t = int(self['sh_type'].li)
-        type = Type.get(t)
-        return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
+def _sh_offset(size):
+    def sh_offset(self):
+        type = Type.get(self['sh_type'].li.num())   # XXX: not 64-bit
+        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
 
+        base = self.getparent(ElfXX_File)
+        result = dyn.clone(type, blocksize=lambda _:self.getparent(ElfXX_Shdr)['sh_size'].li.num())
+        return dyn.rpointer(result, base, type=size)
+    return sh_offset
+
+class ElfXX_Shdr(ElfXX_Header): pass
+
+### Section Headers
+class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
+    class sh_name(_sh_name, Elf32_Word): pass
+    class sh_type(_sh_type, Elf32_Word): pass
+    class sh_flags(_sh_flags):
+        _fields_ = _sh_flags._fields_
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
@@ -78,7 +88,7 @@ class Elf32_Shdr(pstruct.type):
         (Elf32_Addr, 'sh_addr'),
 #        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
 #        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
-        (__sh_offset, 'sh_offset'),
+        (_sh_offset(Elf32_Off), 'sh_offset'),
         (Elf32_Word, 'sh_size'),
         (Elf32_Word, 'sh_link'),
         (Elf32_Word, 'sh_info'),
@@ -86,7 +96,27 @@ class Elf32_Shdr(pstruct.type):
         (Elf32_Word, 'sh_entsize'),
     ]
 
+class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
+    class sh_name(_sh_name, Elf64_Word): pass
+    class sh_type(_sh_type, Elf64_Word): pass
+    class sh_flags(_sh_flags):
+        _fields_ = [(32,'SHF_RESERVED2')] + _sh_flags._fields_
+    _fields_ = [
+        (sh_name, 'sh_name'),
+        (sh_type, 'sh_type'),
+        (sh_flags, 'sh_flags'),
+        (Elf64_Addr, 'sh_addr'),
+        (_sh_offset(Elf64_Off), 'sh_offset'),
+        (Elf64_Xword, 'sh_size'),
+        (Elf64_Word, 'sh_link'),
+        (Elf64_Word, 'sh_info'),
+        (Elf64_Xword, 'sh_addralign'),
+        (Elf64_Xword, 'sh_entsize'),
+    ]
+
 ## some types
+class Elf32_Section(pint.uint16_t): pass
+class Elf64_Section(pint.uint16_t): pass
 class Elf32_Sym(pstruct.type):
     _fields_ = [
         (Elf32_Word, 'st_name'),
@@ -94,7 +124,16 @@ class Elf32_Sym(pstruct.type):
         (Elf32_Word, 'st_size'),
         (pint.uint8_t, 'st_info'),
         (pint.uint8_t, 'st_other'),
-        (Elf32_Half, 'st_shndx')
+        (Elf32_Section, 'st_shndx')
+    ]
+class Elf64_Sym(pstruct.type):
+    _fields_ = [
+        (Elf64_Word, 'st_name'),
+        (Elf64_Addr, 'st_value'),
+        (Elf64_Xword, 'st_size'),
+        (pint.uint8_t, 'st_info'),
+        (pint.uint8_t, 'st_other'),
+        (Elf64_Section, 'st_shndx')
     ]
 
 class Elf32_Rel(pstruct.type):
@@ -102,12 +141,34 @@ class Elf32_Rel(pstruct.type):
         (Elf32_Addr, 'r_offset'),
         (Elf32_Word , 'r_info'),
     ]
+class Elf64_Rel(pstruct.type):
+    _fields_ = [
+        (Elf64_Addr, 'r_offset'),
+        (Elf64_Word , 'r_info'),
+        (pint.uint8_t, 'r_type'),
+        (pint.uint8_t, 'r_type2'),
+        (pint.uint8_t, 'r_type3'),
+        (pint.uint8_t, 'r_ssym'),
+        (Elf64_Word, 'r_sym'),
+    ]
 
 class Elf32_Rela(pstruct.type):
     _fields_ = [
         (Elf32_Addr, 'r_offset'),
         (Elf32_Word, 'r_info'),
         (Elf32_Sword, 'r_addend'),
+    ]
+class Elf64_Rela(pstruct.type):
+    _fields_ = [
+        (Elf32_Addr, 'r_offset'),
+        (Elf32_Word, 'r_info'),
+        (Elf32_Sword, 'r_addend'),
+        (pint.uint8_t, 'r_type'),
+        (pint.uint8_t, 'r_type2'),
+        (pint.uint8_t, 'r_type3'),
+        (pint.uint8_t, 'r_ssym'),
+        (Elf64_Word, 'r_sym'),
+        (Elf64_Sxword, 'r_addend'),
     ]
 
 ### each section type
@@ -129,7 +190,7 @@ class SHT_STRTAB(parray.block):
     type = 3
     _object_ = pstr.szstring
 
-    def get(self, offset):
+    def extract(self, offset):
         return self.at(offset + self.getoffset(), recurse=False).str()
 
 @Type.define
@@ -143,8 +204,8 @@ class SHT_HASH(pstruct.type):
     _fields_ = [
         (Elf32_Word, 'nbucket'),
         (Elf32_Word, 'nchain'),
-        (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.int()), 'bucket'),
-        (lambda s: dyn.array(Elf32_Word, s['nchain'].li.int()), 'chain'),
+        (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.num()), 'bucket'),
+        (lambda s: dyn.array(Elf32_Word, s['nchain'].li.num()), 'chain'),
     ]
 
 from . import segment

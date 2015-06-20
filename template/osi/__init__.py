@@ -6,7 +6,7 @@ from ptypes import ptype,parray,pstruct
 import datalink,network
 from ptypes import dyn
 
-class __packet(parray.terminated):
+class layers(parray.terminated):
     protocol = ptype.block
     leftover = None
     def __nextlayer(self):
@@ -46,7 +46,7 @@ class __packet(parray.terminated):
 
     _object_ = __nextlayer
 
-def packet(layer):
-    return ptype.clone(__packet, protocol=layer)
+def protocol(layer):
+    return ptype.clone(layers, protocol=layer)
 
-default = packet(datalink.ethernet.header)
+default = packet = protocol(datalink.ethernet.header)

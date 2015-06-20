@@ -8,7 +8,26 @@ from __base__ import layer,datalink,stackable
 from ptypes import *
 pint.setbyteorder(pint.bigendian)
 
-class in_addr(dyn.array(pint.uint32_t, 4)): pass
+class in_addr(dyn.array(pint.uint32_t, 4)):
+    def summary(self):
+        num = bitmap.new(super(in_addr,self).num(), 128)
+        components = bitmap.split(num, 16)
+
+        # FIXME: there's got to be a more elegant way than a hacky state machine
+        result,counter = [],0
+        for n in map(bitmap.number,components):
+            if counter < 2:
+                if n == 0:
+                    counter = 1
+                    if len(result) == 0:
+                        result.append('')
+                    continue
+                elif counter > 0:
+                    result.extend(('','%x'%n))
+                    counter = 2
+                    continue
+            result.append('%x'%n)
+        return ':'.join(result)
 in6_addr = in_addr
 
 class u_int32_t(pint.uint32_t): pass

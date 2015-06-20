@@ -18,7 +18,7 @@ class type(pint.integer_t):
     get = lambda s: s.getf()
 
 class float_t(type):
-    """Represents a packed floating point number
+    """Represents a packed floating-point number.
 
     components = (signflag, exponent, fraction)
     """
@@ -31,7 +31,7 @@ class float_t(type):
     components = None    #(sign, exponent, fraction)
 
     def round(self, bits):
-        """round the floating point number to the specified number of bits"""
+        """round the floating-point number to the specified number of bits"""
         raise error.ImplementationError(self, 'float_t.round')
 
     def setf(self, value):
@@ -58,7 +58,7 @@ class float_t(type):
         return super(type, self).set( result[0] )
 
     def getf(self):
-        """convert the stored floating point number into a python native float"""
+        """convert the stored floating-point number into a python native float"""
         exponentbias = (2**self.components[1])/2 - 1
         res = bitmap.new( self.num(), sum(self.components) )
 
@@ -81,6 +81,11 @@ class float_t(type):
         return 0.0
 
 class fixed_t(type):
+    """Represents an unsigned fixed-point number.
+
+    fractional = number of bits for fractional component
+    length = size in bytes of type
+    """
     fractional = 0      # number of bits to represent fractional part
     length = 0          # size in bytes of integer
 
@@ -104,6 +109,11 @@ class fixed_t(type):
         return super(type, self).set(n)
 
 class sfixed_t(type):
+    """Represents a signed fixed-point number.
+
+    fractional = number of bits for fractional component
+    length = size in bytes of type
+    """
     def getf(self):
         raise error.ImplementationError(self, 'sfixed_t.getf')
         n = self.num()

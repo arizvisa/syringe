@@ -1,12 +1,20 @@
 import __base__
 from __base__ import layer,datalink,stackable
+
+import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
+
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 class u_long(pint.uint32_t): pass
 
-class in_addr(u_long): pass
+class in_addr(u_long):
+    def summary(self):
+        num = bitmap.new(super(in_addr,self).num(), 32)
+        octets = bitmap.split(num, 8)
+        return '0x{:x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.number,[num]+octets))
 
 @layer.define
 class ip4_hdr(pstruct.type, stackable):
@@ -36,7 +44,7 @@ class ip4_hdr(pstruct.type, stackable):
         headersize = self['ip_h'].li['hlen']*4
         return self['ip_len'].li.num() - headersize
 
-@datalink.liayer.define
+@datalink.layer.define
 class datalink_ip4(ip4_hdr):
     type = 0x0800
 

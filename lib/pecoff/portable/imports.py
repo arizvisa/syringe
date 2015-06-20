@@ -94,7 +94,7 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'IAT')
     ]
 
-    def iterateImports(self):
+    def iterate(self):
         '''[(hint,importname,importtableaddress),...]'''
         address = self['IAT'].num()
         header = self.getparent(Header)
@@ -134,7 +134,7 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
     def isTerminator(self, v):
         return False if sum(ord(n) for n in v.serialize()) > 0 else True
 
-    def walk(self):
+    def iterate(self):
         for x in self[:-1]:
             yield x
         return
@@ -144,7 +144,7 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         search the import list for an import dll that matches key
         return the rva
         '''
-        for n in self.walk():
+        for n in self.iterate():
             if key == n['Name'].d.li.str():
                 return n
             continue
