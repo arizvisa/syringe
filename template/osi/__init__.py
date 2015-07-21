@@ -50,3 +50,10 @@ def protocol(layer):
     return ptype.clone(layers, protocol=layer)
 
 default = packet = protocol(datalink.ethernet.header)
+
+if __name__ == '__main__':
+    import ptypes,osi,libpcap
+    filename = 'c:/users/user/work/audit/openldap-2.4.40/ldapsearch.anonymous-base.1.pcap'
+    a = libpcap.File(source=ptypes.prov.file(filename,mode='rb'))
+    a=a.l
+    b = a['packets'][7]['data'].cast(osi.packet)

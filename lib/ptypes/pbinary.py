@@ -87,11 +87,14 @@ class type(ptype.generic):
     def blockbits(self):
         return self.bits()
     def set(self, value):
+        if bitmap.isbitmap(value):
+            self.value = value
+            return self
         if not isinstance(value, (int,long)):
             raise error.UserError(self, 'type.set', message='tried to call .set with an unknown type %s'%value.__class__)
-        res = _,size = self.value
+        _,size = self.value or (0,0)
         self.value = value,size
-        return res
+        return self
     def bitmap(self):
         return tuple(self.value)
     def update(self, value):
@@ -99,8 +102,9 @@ class type(ptype.generic):
             raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type %s'%value.__class__)
         self.value = value
         return self
-    def copy(self):
+    def copy(self, **kwds):
         result = self.new(self.__class__, __name__=self.__name__ if hasattr(self,'__name__') else None, position=self.getposition())
+        result.update_attributes(kwds)
         result.deserialize_consumer(bitmap.consumer().push(self.bitmap()))
         return result
 
@@ -121,15 +125,11 @@ class type(ptype.generic):
         return super(type,self).new(res, **attrs)
 
     def summary(self, **options):
-        if self.initializedQ():
-            res = _,size = self.bitmap()
-            return '(%s, %d)'% (bitmap.hex(res), size)
-        return '???'
+        res = _,size = self.bitmap()
+        return '(%s, %d)'% (bitmap.hex(res), size)
 
     def details(self, **options):
-        if self.initializedQ():
-            return bitmap.string(self.bitmap())
-        return '???'
+        return bitmap.string(self.bitmap())
 
     def contains(self, offset):
         nmin = self.getoffset()
@@ -146,8 +146,7 @@ class type(ptype.generic):
         '''will initialize a pbinary.type with zeroes'''
         try:
             with utils.assign(self, **attrs):
-                result = self.deserialize_consumer( bitmap.consumer('\x00' for x in itertools.count()))
-
+                result = self.deserialize_consumer(bitmap.consumer(itertools.repeat('\x00')))
         except StopIteration, error:
             raise error.LoadError(self, exception=error)
         return result
@@ -159,7 +158,7 @@ class type(ptype.generic):
         return result
 
     def repr(self, **options):
-        return self.details(**options)
+        return self.details(**options) if self.initializedQ() else '???'
 
     #def __getstate__(self):
     #    return super(type,self).__getstate__(),self.value,self.position,
@@ -184,7 +183,7 @@ class container(type):
 
         if recurse and self.value is not None:
             for n in self.value:
-                n.setposition((offset,bofs), recurse=recurse)
+                n.setposition((ofs,bofs), recurse=recurse)
                 bofs += n.blockbits()
             pass
         return result
@@ -213,12 +212,12 @@ class container(type):
     def set(self, value):
         if not isinstance(value, (int,long)):
             raise error.UserError(self, 'container.set', message='tried to call .set with an unknown type %s'%value.__class__)
-        _,size = original = self.bitmap()
+        _,size = self.bitmap()
         result = value,size
         for element in self.value:
             result,number = bitmap.shift(result, element.bits())
             element.set(number)
-        return original
+        return self
 
     def update(self, value):
         if bitmap.size(value) != self.blockbits():
@@ -348,12 +347,14 @@ class _array_generic(container):
         return value
 
     def summary(self, **options):
-        if not self.initialized:
-            return self.__summary_uninitialized()
-        return self.__summary_initialized()
+        return self.__summary_initialized() if self.initializedQ() else self.__summary_uninitialized()
+
     def details(self, **options):
         # FIXME: make this display the array in a multiline format
         return self.summary(**options)
+
+    def repr(self, **options):
+        return self.__summary_initialized() if self.initializedQ() else self.__summary_uninitialized()
 
     def __getobject_name(self):
         if bitmap.isbitmap(self._object_):
@@ -435,9 +436,10 @@ class _struct_generic(container):
         return value
 
     def details(self, **options):
-        if not self.initialized:
-            return self.__details_uninitialized()
-        return self.__details_initialized()
+        return self.__details_initialized(**options) if self.initializedQ() else self.__details_uninitialized(**options)
+
+    def repr(self, **options):
+        return self.__details_initialized(**options) if self.initializedQ() else self.__details_uninitialized(**options)
 
     def __details_initialized(self):
         result = []
@@ -493,19 +495,51 @@ class array(_array_generic):
         if len(fields) > 0 and fields[0].__class__ is tuple:
             for k,v in fields:
                 idx = result.getindex(k)
-                if istype(v) or isinstance(v, type) or ptype.isresolveable(v):
-                    result.value[idx] = result.new(v)
+                #if any((istype(v),isinstance(v,type),ptype.isresolveable(v))):
+                if istype(v) or ptype.isresolveable(v):
+                    result.value[idx] = result.new(v, __name__=k).alloc(**attrs)
+                elif isinstance(v,type):
+                    result.value[idx] = result.new(v, __name__=k)
+                elif isbitmap(v):
+                    result.value[idx] = result.new(type, __name__=k).set(v)
                 else:
                     result.value[idx].set(v)
                 continue
             return result
         for idx,v in enumerate(fields):
-            if istype(v) or isinstance(v, type) or ptype.isresolveable(v):
-                result.value[idx] = result.new(v)
+            #if any((istype(v),isinstance(v,type),ptype.isresolveable(v))):
+            if istype(v) or ptype.isresolveable(v) or isinstance(v,type):
+                result.value[idx] = result.new(v, __name__=str(idx))
+            elif bitmap.isbitmap(v):
+                result.value[idx] = result.new(type, __name__=str(idx)).set(v)
             else:
                 result.value[idx].set(v)
             continue
         return result
+
+    def set(self, value):
+        if self.initializedQ():
+            iterable = iter(value) if len(value) > 0 and value[0].__class__ is tuple else iter(enumerate(value))
+            for idx,val in value:
+                if istype(val) or ptype.isresolveable(val) or isinstance(val,type):
+                    self.value[idx] = result.new(val, __name__=str(idx))
+                else:
+                    self[idx] = val
+                continue
+            self.setposition(self.getposition(), recurse=True)
+            return self
+
+        self.value = result = []
+        for idx,val in enumerate(value):
+            if istype(val) or ptype.isresolveable(val):
+                res = self.new(val, __name__=str(idx)).a
+            elif isinstance(val,type):
+                res = self.new(val, __name__=str(idx))
+            else:
+                res = self.new(self._object_,__name__=str(idx)).a.set(val)
+            self.value.append(res)
+        self.length = len(self.value)
+        return self
 
     def deserialize_consumer(self, consumer):
         position = self.getposition()
@@ -551,15 +585,25 @@ class struct(_struct_generic):
     _fields_ = None
 
     def alloc(self, __attrs__={}, **fields):
-        result = super(struct,self).alloc(**__attrs__)
-        for k,v in fields.iteritems():
-            idx = result.getindex(k)
-
-            if any((istype(v),isinstance(v,type),ptype.isresolveable(v))):
-                result.value[idx] = result.new(v)
-            else:
-                result.value[idx].set(v)
-            continue
+        attrs = __attrs__
+        result = super(struct,self).alloc(**attrs)
+        if fields:
+            for idx,(t,n) in enumerate(self._fields_):
+                if n not in fields:
+                    if ptype.isresolveable(t): result.value[idx] = result.new(t, __name__=n).alloc(**attrs)
+                    continue
+                v = fields[n]
+                #if any((istype(v),isinstance(v,type),ptype.isresolveable(v))):
+                if istype(v) or ptype.isresolveable(v):
+                    result.value[idx] = result.new(v, __name__=n).alloc(**attrs)
+                elif isinstance(v,type):
+                    result.value[idx] = result.new(v, __name__=n)
+                elif bitmap.isbitmap(v):
+                    result.value[idx] = result.new(type, __name__=n).set(v)
+                else:
+                    result.value[idx].set(v)
+                continue
+            self.setposition(self.getposition(), recurse=True)
         return result
 
     def deserialize_consumer(self, consumer):
@@ -571,11 +615,35 @@ class struct(_struct_generic):
     def blockbits(self):
         if self.initializedQ():
             return super(struct,self).blockbits()
-        return sum((t if isinstance(t,(int,long)) else bitmap.size(t) if bitmap.isbitmap(t) else self.new(t,self).blockbits()) for t,_ in self._fields_)
+        return sum((t if isinstance(t,(int,long)) else bitmap.size(t) if bitmap.isbitmap(t) else self.new(t).blockbits()) for t,_ in self._fields_)
 
     def __and__(self, field):
         '''Returns the specified /field/'''
         return self[field]
+
+    def set(self, value=(), **individual):
+        result = self
+
+        def assign((index, value)):
+            if istype(value) or ptype.isresolveable(value):
+                k = result.value[index].__name__
+                result.value[index] = result.new(value, __name__=k).a
+            elif isinstance(value,type):
+                k = result.value[index].__name__
+                result.value[index] = result.new(value, __name__=k)
+            else:
+                result.value[index].set(value)
+            return
+
+        if result.initializedQ():
+            if value:
+                if len(result._fields_) != len(value):
+                    raise error.UserError(result, 'struct.set', message='iterable value to assign with is not of the same length as struct')
+                map(assign, enumerate(value))
+            map(assign, ((self.getindex(k),v) for k,v in individual.iteritems()) )
+            result.setposition(result.getposition(), recurse=True)
+            return result
+        return result.a.set(value, **individual)
 
     #def __getstate__(self):
     #    return super(struct,self).__getstate__(),self._fields_,
@@ -692,8 +760,10 @@ class partial(ptype.container):
         return ''.join(reversed(bitmap.data(bmp)))
 
     def deserialize_block(self, block):
+        self.value = value = self.binaryobject()
         data = iter(block) if self.byteorder is config.byteorder.bigendian else reversed(block)
-        return self.value.deserialize_consumer(bitmap.consumer(data))
+        result = value.deserialize_consumer(bitmap.consumer(data))
+        return self
 
     def load(self, **attrs):
         try:
@@ -734,8 +804,9 @@ class partial(ptype.container):
     def commit(self, **attrs):
         try:
             with utils.assign(self, **attrs):
+                bs = self.blocksize()
                 self.source.seek( self.getoffset() )
-                data = self.serialize()
+                data = self.serialize()[:bs]
                 self.source.store(data)
             return self
 
@@ -746,7 +817,7 @@ class partial(ptype.container):
         try:
             with utils.assign(self, **attrs):
                 self.value = self.binaryobject()
-                result = self.value.deserialize_consumer( bitmap.consumer('\x00' for x in itertools.count()))
+                result = self.value.deserialize_consumer(bitmap.consumer(itertools.repeat('\x00')))
             return self
         except (StopIteration,error.ProviderError), e:
             raise error.LoadError(self, exception=e)
@@ -758,6 +829,8 @@ class partial(ptype.container):
         updateattrs.update(attrs)
         updateattrs['position'] = ofs,0
         updateattrs['parent'] = self
+        if self.blocksize.im_func is not partial.blocksize.im_func:
+            updateattrs.setdefault('blockbits', self.blockbits)
         return obj(**updateattrs)
 
     def bits(self):
@@ -804,14 +877,6 @@ class partial(ptype.container):
         return self.value.values()
     def num(self):
         return self.value.num()
-    def details(self, **options):
-        if self.initializedQ():
-            return self.value.details(**options)
-        return '???'
-    def summary(self, **options):
-        if self.initializedQ():
-            return self.value.summary(**options)
-        return '???'
     def __getattr__(self, name):
         if name in ('__module__','__name__'):
             raise AttributeError(name)
@@ -837,19 +902,13 @@ class partial(ptype.container):
         return (offset >= nmin) and (offset < nmax)
 
     def summary(self, **options):
-        if self.value is None:
-            return '???'
-        return self.value.summary(**options)
+        return '???' if self.value is None else self.value.summary(**options)
 
     def details(self, **options):
-        if self.value is None:
-            return '???'
-        return self.value.details(**options)
+        return '???' if self.value is None else self.value.details(**options)
 
     def repr(self, **options):
-        if self.value is None:
-            return '???'
-        return self.value.repr(**options)
+        return '???' if self.value is None else self.value.repr(**options)
 
     def get(self):
         return self.value.num()
@@ -865,18 +924,21 @@ class partial(ptype.container):
     #    state,self._object_,self.position,self.byteorder, = state
     #    super(type,self).__setstate__(state)
 
-    def setoffset(self, ofs, recurse=False):
+    def setoffset(self, offset, recurse=False):
         if recurse:
-            self.value.setposition((ofs,0), recurse=True)
-            return super(partial,self).setoffset(ofs, recurse=False)
-        return super(partial,self).setoffset(ofs, recurse=False)
+            return self.setposition((offset,), recurse=True)
+        return self.setposition((offset,), recurse=False)
+
+    def setposition(self, (offset,), recurse=False):
+        if recurse:
+            self.value.setposition((offset,0), recurse=True)
+            return super(partial,self).setposition((offset,), recurse=False)
+        return super(partial,self).setposition((offset,), recurse=False)
 
 class flags(struct):
     '''represents bit flags that can be toggled'''
     def summary(self, **options):
-        if not self.initialized:
-            return self.__summary_uninitialized()
-        return self.__summary_initialized()
+        return self.__summary_initialized() if self.initializedQ() else self.__summary_uninitialized()
 
     def __summary_initialized(self):
         flags = []
@@ -897,13 +959,22 @@ class flags(struct):
         return bool(self[field] > 0)
 
 ## binary type conversion/generation
-def new(type, **attrs):
-    '''Create a new instance of /type/ applying the attributes specified by /attrs/'''
-    if istype(type):
-        Config.log.debug("new : %s : Instantiating type as partial"% type.typename())
-        t = ptype.clone(partial, _object_=type)
+def new(pb, **attrs):
+    '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
+    # create a partial type
+    if istype(pb):
+        Config.log.debug("new : %s : Instantiating type as partial"% pb.typename())
+        t = ptype.clone(partial, _object_=pb)
         return t(**attrs)
-    return type(**attrs)
+
+    # create a partial type with the specified instance
+    if isinstance(pb, type):
+        attrs.setdefault('value', pb)
+        attrs.setdefault('offset', pb.getposition()[0])
+        t = ptype.clone(partial, _object_=pb.__class__)
+        return t(**attrs)
+
+    return pb(**attrs)
 
 def bigendian(p, **attrs):
     '''Force binary type /p/ to be ordered in the bigendian integer format'''
@@ -1761,7 +1832,7 @@ if __name__ == '__main__':
                 (4, 'a'),(4,'b')
             ]
         x = structure()
-        res = x.alloc(a=4,b=8)
+        res = x.set(a=4,b=8)
         if res.num() == 0x48:
             raise Success
 
@@ -1769,7 +1840,7 @@ if __name__ == '__main__':
         class array(pbinary.array):
             _object_ = 16
             length = 0
-        x = array(length=4).alloc((0,0xabcd),(3,0xdcba))
+        x = array(length=4).set((0,0xabcd),(3,0xdcba))
         if x[0].num() == 0xabcd and x[-1].num()==0xdcba:
             raise Success
 
@@ -1777,7 +1848,7 @@ if __name__ == '__main__':
         class array(pbinary.array):
             _object_ = 16
             length = 0
-        x = array(length=4).alloc(0xabcd,0xdcba)
+        x = array(length=4).set(0xabcd,0xdcba)
         if x[0].num() == 0xabcd and x[1].num()==0xdcba:
             raise Success
 
@@ -1791,13 +1862,13 @@ if __name__ == '__main__':
                 (array, 'a'),(4,'b')
             ]
 
-        x = array(length=2).alloc(0xdead,0xdead)
-        res = structure().alloc(a=x, b=4)
+        x = array(length=2).set([0xdead,0xdead])
+        res = structure().set(a=x, b=3)
         if res['a'].num() == 0xdeaddead:
             raise Success
 
     @TestCase
-    def test_pbinary_parray_set_container_50():
+    def test_pbinary_parray_set_container_51():
         class array(pbinary.array):
             _object_ = 16
             length = 0
@@ -1806,7 +1877,7 @@ if __name__ == '__main__':
                 (8, 'a'),(8,'b')
             ]
 
-        x = array(length=2).alloc((1,structure().alloc(a=0x41,b=0x42)))
+        x = array(length=2).set((1,structure().set(a=0x41,b=0x42)))
         if x[1].num() == 0x4142:
             raise Success
 

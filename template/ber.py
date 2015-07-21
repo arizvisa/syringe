@@ -201,8 +201,29 @@ class OBJECT_IDENTIFIER(ptype.type):
         return '.'.join(map(str,res))
 
     def summary(self):
-        data = self.serialize()
-        return '{:s} ({!r})'.format(self.str(),data)
+        oid,data = self.str(),self.serialize()
+        if oid in self.values:
+            return '{:s} ({:s}) ({!r})'.format(self._values_[oid],oid,data)
+        return '{:s} ({!r})'.format(oid,data)
+
+    _values_ = [
+        ('SPC_INDIRECT_DATA_OBJID', '1.3.6.1.4.1.311.2.1.4'),
+        ('SPC_STATEMENT_TYPE_OBJID', '1.3.6.1.4.1.311.2.1.11'),
+        ('SPC_SP_OPUS_INFO_OBJID', '1.3.6.1.4.1.311.2.1.12'),
+        ('SPC_INDIVIDUAL_SP_KEY_PURPOSE_OBJID', '1.3.6.1.4.1.311.2.1.21'),
+        ('SPC_COMMERCIAL_SP_KEY_PURPOSE_OBJID', '1.3.6.1.4.1.311.2.1.22'),
+        ('SPC_MS_JAVA_SOMETHING', '1.3.6.1.4.1.311.15.1'),
+        ('SPC_PE_IMAGE_DATA_OBJID', '1.3.6.1.4.1.311.2.1.15'),
+        ('SPC_CAB_DATA_OBJID', '1.3.6.1.4.1.311.2.1.25'),
+        ('SPC_TIME_STAMP_REQUEST_OBJID', '1.3.6.1.4.1.311.3.2.1'),
+        ('SPC_SIPINFO_OBJID', '1.3.6.1.4.1.311.2.1.30'),
+        ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1 */
+        ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256 */
+        ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
+        ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
+    ]
+    _values_ = dict(_values_)
+
 
 @Universal.define
 class EXTERNAL(ptype.block):

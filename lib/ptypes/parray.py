@@ -106,26 +106,33 @@ class type(_parray_generic):
             ofs += n.blocksize()
         return self
 
-    def alloc(self, *fields, **attrs):
+    def alloc(self, fields=(), **attrs):
         result = super(type,self).alloc(**attrs)
         if len(fields) > 0 and fields[0].__class__ is tuple:
             for k,v in fields:
                 idx = result.getindex(k)
-                if ptype.istype(v) or isinstance(v, ptype.base) or ptype.isresolveable(v):
+                if ptype.istype(v) or ptype.isresolveable(v):
+                    result.value[idx] = result.new(v).alloc(**attrs)
+                elif isinstance(v, ptype.generic):
                     result.value[idx] = result.new(v)
                 else:
                     result.value[idx].set(v)
                 continue
-            result.setoffset(result.getoffset(), recurse=True)
-            return result
-        for idx,v in enumerate(fields):
-            if ptype.istype(v) or isinstance(v, ptype.base) or ptype.isresolveable(v):
-                result.value[idx] = result.new(v)
-            else:
-                result.value[idx].set(v)
-            continue
-        for idx in xrange(len(fields), len(result)):
-            result.value[idx].alloc(**attrs)
+        else:
+            for idx,v in enumerate(fields):
+                name = str(idx)
+                if ptype.istype(v) or ptype.isresolveable(v):
+                    result.value[idx] = result.new(v,__name__=name).alloc(**attrs)
+                elif isinstance(v, ptype.generic):
+                    result.value[idx] = result.new(v,__name__=name)
+                else:
+                    result.value[idx].set(v)
+                continue
+
+            # re-alloc elements that exist in the rest of the array
+            for idx in xrange(len(fields), len(result)):
+                result.value[idx].alloc(**attrs)
+
         result.setoffset(self.getoffset(), recurse=True)
         return result
 
@@ -159,17 +166,24 @@ class type(_parray_generic):
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
         return '%s[%d] %s'% (obj, length, res)
 
-    def repr(self, **options):
-        return self.summary(**options)
-
     def set(self, value):
         """Update self with the contents of the list ``value``"""
-        if self.initializedQ() and self.length == len(value):
+        if self.initializedQ() and len(self) == len(value):
             return super(type,self).set(*value)
 
-        result = super(type,self).set(*(self._object_ for _ in xrange(len(value))))
-        result.length = len(result.value)
-        return result.set(value)
+        self.value = []
+        for idx,val in enumerate(value):
+            if ptype.isresolveable(val) or ptype.istype(val):
+                res = self.new(val, __name__=str(idx)).a
+            elif isinstance(val,ptype.generic):
+                res = val
+            else:
+                res = self.new(self._object_,__name__=str(idx)).a
+            self.value.append(res)
+    
+        result = super(type,self).set(*value)
+        result.length = len(self)
+        return self
 
     def __getstate__(self):
         return super(type,self).__getstate__(),self._object_,self.length
@@ -189,14 +203,16 @@ class terminated(type):
         raise error.ImplementationError(self, 'terminated.isTerminator')
 
     def __len__(self):
-        if self.value is None:
-            raise error.InitializationError(self, 'terminated.__len__')
-        return len(self.value)
+        if self.length is None:
+            if self.value is None:
+                raise error.InitializationError(self, 'terminated.__len__')
+            return len(self.value)
+        return super(terminated,self).__len__()
 
     def load(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                forever = itertools.count() if self.length is None else xrange(self.length)
+                forever = itertools.count() if self.length is None else xrange(len(self))
 
                 self.value = []
                 ofs = self.getoffset()
@@ -257,6 +273,10 @@ class infinite(uninitialized):
         return False
 
     def load(self, **attrs):
+        # fallback to regular loading if user has hardcoded the length
+        if self.length is not None:
+            return super(block,self).load(**attrs)
+
         with utils.assign(self, **attrs):
             self.value = []
             self.__offset = self.getoffset()
@@ -332,8 +352,12 @@ class block(uninitialized):
         return False
 
     def load(self, **attrs):
+        # fallback to regular loading if user has hardcoded the length
+        if self.length is not None:
+            return super(block,self).load(**attrs)
+
         with utils.assign(self, **attrs):
-            forever = itertools.count() if self.length is None else xrange(self.length)
+            forever = itertools.count() if self.length is None else xrange(len(self))
             self.value = []
 
             if self.blocksize() == 0:   # if array is empty...
@@ -388,7 +412,7 @@ class block(uninitialized):
         return self
 
     def initializedQ(self):
-        return super(block,self).initializedQ() and self.size() >= self.blocksize()
+        return super(block,self).initializedQ() and (self.size() >= self.blocksize() if self.length is None else len(self.value) == self.length)
 
 if __name__ == '__main__':
     import ptype,parray
@@ -752,11 +776,11 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_array_alloc_set_tuple():
+    def test_array_alloc_keyvalue_set():
         import pint
         class argh(parray.type):
             _object_ = pint.int32_t
-        a = argh(length=4).alloc((0,0x77777777),(3,-1))
+        a = argh(length=4).alloc(((0,0x77777777),(3,-1)))
         if a[0].num() == 0x77777777 and a[-1].num() == -1:
             raise Success
 
@@ -765,12 +789,12 @@ if __name__ == '__main__':
         import pint
         class argh(parray.type):
             _object_ = pint.int32_t
-        a = argh(length=4).alloc(0,2,4)
+        a = argh(length=4).alloc((0,2,4))
         if tuple(s.num() for s in a) == (0,2,4,0):
             raise Success
 
     @TestCase
-    def test_array_alloc_container_tuple():
+    def test_array_alloc_keyvalue_instance():
         import pint
         class aigh(parray.type):
             _object_ = pint.uint8_t
@@ -778,9 +802,121 @@ if __name__ == '__main__':
         class argh(parray.type):
             _object_ = pint.uint32_t
         
-        x = aigh().alloc(*map(ord,'PE\0\0'))
-        a = argh(length=4).alloc((0,x),(-1,0x5a4d))
+        x = aigh().alloc(map(ord,'PE\0\0'))
+        a = argh(length=4).alloc(((0,x),(-1,0x5a4d)))
         if a[0].serialize() == 'PE\0\0' and a[-1].serialize() == 'MZ\0\0':
+            raise Success
+
+    @TestCase
+    def test_array_set_initialized_value():
+        import pint
+        a = parray.type(_object_=pint.uint32_t,length=4).a
+        a.set((10,10,10,10))
+        if sum(x.num() for x in a) == 40:
+            raise Success
+
+    @TestCase
+    def test_array_set_initialized_type():
+        import pint
+        a = parray.type(_object_=pint.uint8_t,length=4).a
+        a.set((pint.uint32_t,)*4)
+        if sum(x.size() for x in a) == 16:
+            raise Success
+
+    @TestCase
+    def test_array_set_initialized_container():
+        import pint,ptype
+        b = ptype.clone(parray.type,_object_=pint.uint8_t,length=4)
+        a = parray.type(_object_=pint.uint8_t,length=4).a
+        a.set((b,)*4)
+        if sum(x.size() for x in a) == 16:
+            raise Success
+
+    @TestCase
+    def test_array_set_initialized_instance():
+        import pint,ptype
+        b = ptype.clone(parray.type,_object_=pint.uint8_t,length=4)
+        a = parray.type(_object_=pint.uint8_t,length=4).a
+        a.set(tuple(pint.uint32_t().set(0x40) for x in range(4)))
+        if sum(x.num() for x in a) == 256:
+            raise Success
+
+    @TestCase
+    def test_array_set_uninitialized_dynamic_value():
+        import pint,ptype
+        class blah(parray.type):
+            def _object_(self):
+                length = 0 if len(self.value) == 0 else (self.value[-1].length+1)%4
+                return ptype.clone(pint.uint_t,length=length)
+            length = 16
+        a = blah()
+        a.set((0,1,2,3,0,1,2,3,0,1,2,3,0,1,2,3))
+        if sum(x.size() for x in a) == 6*4:
+            raise Success
+
+    @TestCase
+    def test_array_set_uninitialized_dynamic_type():
+        import pint,ptype
+        class blah(parray.type):
+            def _object_(self):
+                length = 0 if len(self.value) == 0 else (self.value[-1].length+1)%4
+                return ptype.clone(pint.uint_t,length=length)
+            length = 4
+        a = blah()
+        a.set((pint.uint8_t,pint.uint8_t,pint.uint8_t,pint.uint8_t))
+        if sum(x.size() for x in a) == 4:
+            raise Success
+    @TestCase
+    def test_array_set_uninitialized_dynamic_instance():
+        import pint,ptype
+        class blah(parray.type):
+            def _object_(self):
+                length = 0 if len(self.value) == 0 else (self.value[-1].length+1)%4
+                return ptype.clone(pint.uint_t,length=length)
+            length = 4
+        a = blah()
+        a.set((pint.uint8_t().set(2),pint.uint8_t().set(2),pint.uint8_t().set(2),pint.uint8_t().set(2)))
+        if sum(x.num() for x in a) == 8:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_value():
+        import pint,ptype
+        class blah(parray.type):
+            _object_ = pint.uint32_t
+            length = 4
+        a = blah().alloc((4,8,0xc,0x10))
+        if all(x.size() == 4 for x in a) and tuple(x.num() for x in a) == (4,8,12,16):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_type():
+        import pint,ptype
+        class blah(parray.type):
+            _object_ = pint.uint32_t
+            length = 4
+        a = blah().alloc((pint.uint8_t,)*4)
+        if all(x.size() == 1 for x in a):
+            raise Success
+
+    @TestCase
+    def test_array_alloc_instance():
+        import pint,ptype
+        class blah(parray.type):
+            _object_ = pint.uint32_t
+            length = 4
+        a = blah().alloc([pint.uint8_t().set(i) for i in range(4)])
+        if all(x.size() == 1 for x in a) and sum(x.num() for x in a) == 6:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_partial():
+        import pint,ptype
+        class blah(parray.type):
+            _object_ = pint.uint32_t
+            length = 4
+        a = blah().alloc([pint.uint8_t])
+        if a[0].size() == 1 and all(a[x].size() == 4 for x in range(1,4)):
             raise Success
 
 if __name__ == '__main__':

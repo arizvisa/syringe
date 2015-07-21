@@ -97,6 +97,10 @@ class Type_Specific_RealVideo(pstruct.type):
         id = self['id'].li.serialize()
         return self.Video_Codec.get(id)
 
+    def __unknown(self):
+        fields = (n for _,n in self._fields_[:-1])
+        return dyn.block(s['size'].li.int() - sum(self[n].li.size() for n in fields))
+
     _fields_ = [
         (UINT16, 'version'),
         (UINT16, 'size'),
@@ -112,7 +116,7 @@ class Type_Specific_RealVideo(pstruct.type):
         
 #        (dyn.block(8), 'unknown_block'),
         (__object, 'object'),
-        (lambda s: dyn.block(s['size'].li.int() - s.size()), '__unknown'),
+        (__unknown, 'unknown'),
     ]
 
     class Video_Codec(ptype.definition):

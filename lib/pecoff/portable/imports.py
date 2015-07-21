@@ -77,7 +77,7 @@ class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
 class IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
     _object_ = addr_t
     def isTerminator(self, value):
-        return value.num() == 0
+        return value.num() == 0 if self.length is None else self.length < len(self.value)
 
 class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
@@ -86,12 +86,19 @@ class IMAGE_IMPORT_NAME_TABLE(parray.terminated):
         return True if int(v['Name']['Name']) == 0 else False
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
+    def __IAT(self):
+        if self.source in [getattr(ptypes.provider,'Ida',None)]:
+            entry = self.getparent(IMAGE_IMPORT_DIRECTORY_ENTRY)
+            int = entry['INT'].li.d.l
+            return dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(int))
+        return IMAGE_IMPORT_ADDRESS_TABLE
+
     _fields_ = [
         ( virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'INT'),
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
         ( virtualaddress(pstr.szstring), 'Name'),
-        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'IAT')
+        ( virtualaddress(__IAT), 'IAT')
     ]
 
     def iterate(self):
@@ -151,13 +158,30 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         raise KeyError(key)
 
 class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
+    def __IAT(self):
+        if self.source in [getattr(ptypes.provider,'Ida',None)]:
+            entry = self.getparent(IMAGE_DELAYLOAD_DIRECTORY_ENTRY)
+            int = entry['DINT'].li.d.l
+            return dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(int))
+        return IMAGE_IMPORT_ADDRESS_TABLE
     _fields_ = [
         ( dword, 'Attributes'),
         ( virtualaddress(pstr.szstring), 'Name'),
         ( virtualaddress(dword), 'ModuleHandle'),
-        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'DIAT'),
+        ( virtualaddress(__IAT), 'DIAT'),
         ( virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
-        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'BDIAT' ),
-        ( virtualaddress(IMAGE_IMPORT_ADDRESS_TABLE), 'UDAT'),
+        ( virtualaddress(__IAT), 'BDIAT' ),
+        ( virtualaddress(__IAT), 'UDAT'),
         ( TimeDateStamp, 'TimeStamp'),
     ]
+
+class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
+    _object_ = IMAGE_DELAYLOAD_DIRECTORY_ENTRY
+    def isTerminator(self, v):
+        return False if sum(ord(n) for n in v.serialize()) > 0 else True
+
+    def iterate(self):
+        for x in self[:-1]:
+            yield x
+        return
+

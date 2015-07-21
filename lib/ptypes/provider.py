@@ -20,6 +20,7 @@ class empty(base):
     def seek(self, offset):
         '''Seek to a particular offset'''
         offset=0
+        return 0
     def consume(self, amount):
         '''Read some number of bytes'''
         return '\x00'*amount
@@ -41,7 +42,8 @@ class string(base):
     def __init__(self, string=''):
         self.data = array.array('c', string)
     def seek(self, offset):
-        self.offset = offset
+        res,self.offset = self.offset,offset
+        return res
 
     @utils.mapexception(any=error.ProviderError,ignored=(error.ConsumeError,error.UserError))
     def consume(self, amount):
@@ -79,9 +81,8 @@ class proxy(base):
 
     def seek(self, offset):
         if offset >= 0 and offset <= self.size:
-            ofs = self.offset
-            self.offset = offset
-            return ofs
+            res,self.offset = self.offset,offset
+            return res
         raise error.UserError(self.type, 'seek', message='Requested offset 0x%x is outside bounds (0,%x)'% (offset, self.size))
 
     if False:
@@ -126,9 +127,12 @@ class proxy(base):
 
 import random as _random
 class random(base):
+    offset = 0
     @utils.mapexception(any=error.ProviderError)
     def seek(self, offset):
-        _random.seed(offset)   # lol
+        res,self.offset = self.offset,offset
+        _random.seed(self.offset)   # lol
+        return res
 
     @utils.mapexception(any=error.ProviderError)
     def consume(self, amount):
@@ -153,7 +157,8 @@ class stream(base):
         self.data_ofs = self.offset = offset
 
     def seek(self, offset):
-        self.offset = offset
+        res,self.offset = self.offset,offset
+        return res
     def _read(self, amount):
         '''how to read raw data from the source'''
         return self.source.read(amount)
@@ -254,7 +259,9 @@ class filebase(base):
 
     @utils.mapexception(any=error.ProviderError)
     def seek(self, offset):
+        res = self.file.tell()
         self.file.seek(offset)
+        return res
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
@@ -432,7 +439,8 @@ try:
         '''Basic in-process memory provider using ctypes'''
         address = 0
         def seek(self, offset):
-            self.address = offset
+            res,self.address = self.address,offset
+            return res
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
@@ -513,7 +521,8 @@ try:
 
         def seek(self, offset):
             '''Seek to a particular offset'''
-            self.address = offset
+            res,self.address = self.address,offset
+            return res
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
@@ -595,7 +604,8 @@ try:
             )
             if result == 0:
                 raise OSError(win32error.getLastErrorTuple())
-            self.offset = resultDistance.value
+            res,self.offset = self.offset,resultDistance.value
+            return res
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
@@ -654,17 +664,17 @@ try:
             raise UserWarning("%s.%s is a static object and contains only staticmethods."%(self.__module__,self.__class__.__name__))
 
         @classmethod
-        def read(cls, offset, size):
+        def read(cls, offset, size, padding='\x00'):
+            result = _idaapi.get_many_bytes(offset, size) or ''
+            if len(result) == size:
+                return result
+
             half = size // 2
             if half > 0:
-                lower = _idaapi.get_many_bytes(offset, half)
-                if lower is None:
-                    return cls.read(offset, half)
-                upper = _idaapi.get_many_bytes(offset+half, half)
-                if upper is None:
-                    return lower + cls.read(offset+half, half)
-                return lower+upper
-            return _idaapi.get_many_bytes(offset, size)
+                return ''.join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
+            if _idaapi.isEnabled(offset):
+                return '' if size == 0 else (padding*size) if (_idaapi.getFlags(offset) & _idaapi.FF_IVL) == 0 else _idaapi.get_many_bytes(offset, size)
+            raise Exception, offset
 
         @classmethod
         def within_segment(cls, offset):
@@ -673,27 +683,15 @@ try:
             
         @classmethod
         def seek(cls, offset):
-            cls.offset = offset
+            res,cls.offset = cls.offset,offset
+            return res
 
         @classmethod
         def consume(cls, amount):
-            #result = _idaapi.get_many_bytes(cls.offset, amount)
-            result = cls.read(cls.offset, amount)
-
-            if result is None:
-                # check if within bounds of a segment
-                if cls.within_segment(cls.offset):
-                    return '\x00'*amount
-
-                # nope, so we fail.
-                raise error.ConsumeError(cls, cls.offset, amount, amount=0)
-
-            # not the complete length, so pad if it's within a valid segment
-            if len(result) < amount:
-                if not cls.within_segment(cls.offset+amount):
-                    raise error.ConsumeError(cls, cls.offset, amount, amount=len(result))
-                result += '\x00'*(amount-len(result))
-
+            try:
+                result = cls.read(cls.offset, amount)
+            except Exception, (ofs,):
+                raise error.ConsumeError(cls, ofs, amount, ofs-cls.offset)
             cls.offset += len(result)
             return result
 
@@ -740,7 +738,8 @@ try:
 
         def seek(self, offset):
             '''Seek to a particular offset'''
-            self.offset = offset
+            res,self.offset = self.offset,offset
+            return res
 
         def consume(self, amount):
             '''Read some number of bytes'''
@@ -766,7 +765,8 @@ try:
 
         def seek(self, offset):
             # FIXME: check to see if we're at an invalid address
-            self.addr = offset
+            res,self.addr = self.addr,offset
+            return res
 
         def consume(self, amount):
             return ''.join(map(chr,_pykd.loadBytes(self.addr, amount)))

@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+import ptypes
 from ptypes import *
 
 class guint32(pint.uint32_t): pass
@@ -11,9 +12,19 @@ class pcap_hdr_t(pstruct.type):
     class version(pstruct.type):
         _fields_ = [(guint16,'major'),(guint16,'minor')]
 
+    def __version(self):
+        magic_number = self['magic_number'].li.serialize()
+        if magic_number == '\xa1\xb2\xc3\xd4':
+            self.attributes['byteorder'] = ptypes.config.byteorder.bigendian
+        elif magic_number == '\xd4\xc3\xb2\xa1':
+            self.attributes['byteorder'] = ptypes.config.byteorder.littleendian
+        else:
+            logging.warn("Unable to determine byteorder : {!r}".format(magic_number))
+        return self.version
+
     _fields_ = [
-        (guint32, 'magic_number'),
-        (version, 'version'),
+        (dyn.block(4), 'magic_number'),
+        (__version, 'version'),
         (gint32, 'thiszone'),
         (guint32, 'sigfigs'),
         (guint32, 'snaplen'),
@@ -63,9 +74,12 @@ class List(parray.infinite):
         return
 
 class File(pstruct.type):
+    def __packets(self):
+        self.attributes.update(self['header'].attributes)
+        return List
     _fields_ = [
         (pcap_hdr_t, 'header'),
-        (List, 'packets'),
+        (__packets, 'packets'),
     ]
 
 if __name__ == '__main__':

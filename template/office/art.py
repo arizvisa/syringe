@@ -52,7 +52,7 @@ class FOPT(pstruct.type):
     def __complex(self):
         # FIXME this should be an array that corresponds to fopt
         bs = self.blocksize()
-        s = self.size()
+        s = self['fopt'].li.size()
         return dyn.block(bs-s)
 
     _fields_ = [
@@ -280,7 +280,7 @@ class msofbtClientAnchor(pstruct.type):
     _fields_ = [
         (lambda s: pint.uint64_t if s.blocksize() == 8 else s.__short, 'short'),
         (lambda s: s.__long if s.blocksize() >= 18 else ptype.type, 'long'),
-        (lambda s: dyn.clone(ptype.block, length=s.blocksize()-s.size()), 'extra'),
+        (lambda s: dyn.clone(ptype.block, length=s.blocksize()-(s['short'].li.size()+s['long'].li.size())), 'extra'),
     ]
 
 @Record.define

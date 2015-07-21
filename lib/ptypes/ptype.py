@@ -8,6 +8,7 @@ __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definitio
 ## this is all a horrible and slow way to do this...
 def isiterator(t):
     """True if type ``t`` is iterable"""
+    # FIXME: also insure that it's not a class with these attributes
     return hasattr(t, '__iter__') and hasattr(t, 'next')
 
 def iscallable(t):
@@ -27,7 +28,7 @@ def iscontainer(t):
 @utils.memoize('t')
 def isresolveable(t):
     """True if type ``t`` can be descended into"""
-    return isinstance(t, (types.FunctionType, types.MethodType)) or isiterator(t)
+    return isinstance(t, (types.FunctionType, types.MethodType))    # or isiterator(t)
 
 def isrelated(t, t2):
     """True if type ``t`` is related to ``t2``"""
@@ -204,10 +205,8 @@ class _base_generic(object):
         self.attributes = {} if self.attributes is None else self.attributes
         self.update_attributes(attrs)
 
-    position = None     # ()
     def setposition(self, position, **kwds):
-        res = self.position
-        self.position = position
+        self.position,res = position,self.position
         return res
     def getposition(self):
         return self.position
@@ -246,7 +245,7 @@ class _base_generic(object):
         result = {}
         if not self.initializedQ():
             result['uninitialized'] = True
-        if not hasattr(self, '__name__') or len(self.__name__) == 0:
+        if not hasattr(self, '__name__') or not self.__name__:
             result['unnamed'] = True
         return result
 
@@ -518,13 +517,13 @@ class base(generic):
     ## offset
     position = 0,
     offset = property(fget=lambda s: s.getoffset(), fset=lambda s,v: s.setoffset(v))
-    def setoffset(self, ofs, **_):
-        """Changes the current offset to ``ofs``"""
-        return super(base,self).setposition((ofs,))
+    def setoffset(self, offset, **_):
+        """Changes the current offset to ``offset``"""
+        return self.setposition((offset,), **_)
     def getoffset(self, **_):
         """Returns the current offset"""
-        o, = super(base,self).getposition()
-        return o
+        offset, = self.getposition(**_)
+        return offset
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
@@ -568,7 +567,9 @@ class base(generic):
         kwds.setdefault('parent', self.parent)
         kwds.setdefault('offset', self.getoffset())
 
-        result = self.new(t, **kwds)
+        # disable propogating any attributes
+        with utils.assign(self, attributes={}):
+            result = self.new(t, **kwds)
 
         try:
             result = result.load(source=provider.proxy(self), offset=0)
@@ -752,10 +753,10 @@ class type(base):
     ## operator overloads
     def repr(self, **options):
         """Display all ptype.type instances as a single-line hexstring"""
-        return self.summary(**options)
+        return self.summary(**options) if self.initializedQ() else '???'
 
     def __getstate__(self):
-        return (super(type,self).__getstate__(),self.length,self.value,)
+        return (super(type,self).__getstate__(),self.blocksize(),self.value,)
     def __setstate__(self, state):
         state,self.length,self.value = state
         super(type,self).__setstate__(state)
@@ -859,9 +860,9 @@ class container(base):
 
         return res
 
-    def field(self, offset):
+    def field(self, offset, recurse=False):
         """Returns the field at the specified offset relative to the structure"""
-        return self.at(self.getoffset()+offset, recurse=False)
+        return self.at(self.getoffset()+offset, recurse=recurse)
         
     def walkto(self, offset, **kwds):
         """Will return each element along the path to reach the requested ``offset``"""
@@ -877,19 +878,22 @@ class container(base):
             pass
         return
 
-    def setoffset(self, ofs, recurse=False):
-        """Changes the current offset to ``ofs``
+    def setoffset(self, offset, recurse=False):
+        """Changes the current offset to ``offset``
 
         If ``recurse`` is True, the update all offsets in sub-elements.
         """
-        res = super(container, self).setoffset(ofs)
-        if recurse:
-            if self.value is None:  # if we're not initialized at all...
-                raise error.InitializationError(self, 'container.setoffset')
+        return self.setposition((offset,), recurse=recurse)
 
+    def setposition(self, offset, recurse=False):
+        offset, = offset
+        res = super(container, self).setposition((offset,), recurse=recurse)
+        if recurse and self.value is not None:
             for n in self.value:
-                n.setoffset(ofs, recurse=recurse)
-                ofs += n.blocksize()
+                n.setposition((offset,), recurse=recurse)
+                if n.initializedQ():
+                    offset += n.blocksize()
+                continue
             pass
         return res
 
@@ -942,7 +946,7 @@ class container(base):
         try:
             # if any of the sub-elements are undefined, load each element separately
             if Config.ptype.noncontiguous and \
-                    any(issubclass(n.__class__,container) or issubclass(n.__class__,undefined) for n in self.value):
+                    any(isinstance(n,container) or isinstance(n,undefined) for n in self.value):
 
                 bs,sz = self.blocksize(),0
                 val = list(self.value)
@@ -962,14 +966,28 @@ class container(base):
                 Config.log.debug('container.load : %s : Cropped to {%x:+%x}', self.instance(), ofs, s)
         return self
 
-    def commit(self, **kwds):
+    def commit(self, **attrs):
         """Commit the current state of all children back to the .source attribute"""
-        try:
-            for n in self.value: n.commit(**kwds)
-            return self
+        if not Config.ptype.noncontiguous and \
+                all(not (isinstance(n,container) or isinstance(n,undefined)) for n in self.value):
 
-        except error.CommitError, e:
-            raise error.CommitError(self, exception=e)
+            try:
+                return super(container,self).commit(**attrs)
+            except error.CommitError, e:
+                ofs,bs = self.getoffset(),self.blocksize()
+                Config.log.warning('container.commit : %s : Unable to complete contiguous store : write at {%x:+%x}', self.instance(), ofs, bs)
+
+        # commit all elements of container individually
+        with utils.assign(self, **attrs):
+            try:
+                sz,ofs,bs = 0,self.getoffset(),self.blocksize()
+                for n in self.value:
+                    n.commit()
+                    sz += n.blocksize()
+                    if sz > bs: break
+            except error.CommitError, e:
+                Config.log.fatal('container.commit : %s : Unable to complete noncontiguous store : write stopped at {%x:+%x}', self.instance(), ofs+sz, bs-sz)
+        return self
 
     def copy(self, **kwds):
         """Performs a deep-copy of self repopulating the new instance if self is initialized
@@ -1036,9 +1054,15 @@ class container(base):
 
     def append(self, object):
         """Add an element to a ptype.container. Return it's index."""
-        current = len(self.value)
-        self.value.append(object)
-        return current
+        if self.value is not None:
+            current = len(self.value)
+            self.value.append(object)
+            return current
+        self.value = []
+        return self.append(object)
+
+    def __len__(self):
+        return len(self.value)
 
     def __iter__(self):
         if self.value is None:
@@ -1060,11 +1084,19 @@ class container(base):
         This is an internal function and is not intended to be used outside of ptypes.
         """
         if self.initializedQ() and len(self.value) == len(elements):
-            [x.set(v) for x,v in zip(self.value,elements)]
-            self.setoffset(self.getoffset(), recurse=True)
-            return self
-
-        self.value = [x.copy(parent=self.parent) if isinstance(x,generic) else self.new(x).a for x in elements]
+            for idx,(val,ele) in enumerate(zip(self.value,elements)):
+                name = getattr(val,'__name__',None)
+                if isresolveable(ele) or istype(ele):
+                    self.value[idx] = self.new(ele, __name__=name).a
+                elif isinstance(ele,generic):
+                    self.value[idx] = self.new(ele, __name__=name) 
+                else:
+                    val.set(ele)
+                continue
+        elif all(isresolveable(x) or istype(x) or isinstance(x,generic) for x in elements):
+            self.value = [ self.new(x) if isinstance(x,generic) else self.new(x).a for x in elements ]
+        else:
+            raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(elements))
         self.setoffset(self.getoffset(), recurse=True)
         return self
 
@@ -1095,8 +1127,6 @@ class undefined(type):
         return '...'
     def details(self, **options):
         return self.summary(**options)
-    def repr(self, **options):
-        return self.summary(**options)
 
 class block(type):
     """A ptype that can be accessed as an array"""
@@ -1110,6 +1140,8 @@ class block(type):
         return buffer[index-base]
     def repr(self, **options):
         """Display all ptype.block instances as a hexdump"""
+        if not self.initializedQ():
+            return '???'
         if self.blocksize() > 0:
             return self.details(**options)
         return self.summary(**options)
@@ -1306,7 +1338,7 @@ class wrapper_t(type):
         if self._value_ is None:
             raise error.UserError(self, 'wrapper_t.object', message='wrapper_t._value_ is undefined.')
         if (self.__object is None) or (self.__object.__class__ != self._value_):
-            self.__object = self.__create_instance('wrapped_object<%s>'% self._value_.typename())
+            self.__object = self.__create_instance('wrapped_object<%s>'% self._value_.typename() if istype(self._value_) else self._value_.__name__)
         return self.__object
     @object.setter
     def object(self, value):
@@ -1356,7 +1388,7 @@ class wrapper_t(type):
             return '%s<%s>'% (self.typename(),self.object.classname())
         if self._value_ is None:
             return '%s<?>'% self.typename()
-        return '%s<%s>'% (self.typename(),self._value_.typename())
+        return '%s<%s>'% (self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
 
     def contains(self, offset):
         left = self.getoffset()
@@ -1377,7 +1409,7 @@ class wrapper_t(type):
         super(wrapper_t,self).__setstate__(state)
 
     def summary(self, **options):
-        options.setdefault(offset=self.getoffset())
+        options.setdefault('offset',self.getoffset())
         return super(wrapper_t,self).summary(**options)
     def details(self, **options):
         options.setdefault(offset=self.getoffset())
@@ -1391,12 +1423,12 @@ class encoded_t(wrapper_t):
 
     def decode(self, string):
         """Take a string and decode it into a ptype.block object"""
-        return clone(block, length=len(string), source=provider.string(string))
+        return clone(block, blocksize=lambda s:len(string), source=provider.string(string))
 
     ## object dereferencing, force .object to match the length for the provided data
     def reference(self, object, **attrs):
         data = self.encode(object)
-        self._value_ = clone(block, length=len(data))
+        self._value_ = clone(block, blocksize=lambda s: len(data))
         self.value = data
         return self
 
@@ -1406,7 +1438,8 @@ class encoded_t(wrapper_t):
             del(attrs['source'])
 
         object = self.decode(self.value)
-        return self.new(object, __name__='*%s'%self.shortname())
+        attrs.setdefault('__name__', '*'+self.shortname())
+        return self.new(object, **attrs)
 
     d = property(fget=lambda s,**a: s.dereference(**a), fset=lambda s,*x,**a:s.reference(*x,**a))
     deref = lambda s,**a: s.dereference(**a)
@@ -1446,8 +1479,9 @@ class pointer_t(encoded_t):
 
     @utils.memoize('self', self=lambda n:(n._object_,n.decode_offset()), attrs=lambda n:tuple(sorted(n.items())))
     def dereference(self, **attrs):
-        name = '*%s'% self.name()
-        return self.new(self._object_, __name__=name, offset=self.decode_offset(), **attrs)
+        attrs.setdefault('__name__', '*'+self.name())
+        attrs.setdefault('offset', self.decode_offset())
+        return self.new(self._object_, **attrs)
 
     def reference(self, object, **attrs):
         self._object_ = object.__class__
@@ -1485,12 +1519,11 @@ class pointer_t(encoded_t):
         return '%s<%s>'% (self.typename(),targetname)
 
     def summary(self, **options):
-        if self.initializedQ():
-            return '*0x%x'% self.num()
-        return '*???'
+        return '*0x%x'% self.num()
+
     def repr(self, **options):
         """Display all pointer_t instances as an integer"""
-        return self.summary(**options)
+        return self.summary(**options) if self.initializedQ() else '*???'
     def __getstate__(self):
         return super(pointer_t,self).__getstate__(),self._object_
     def __setstate__(self, state):
@@ -2033,7 +2066,7 @@ if __name__ == '__main__':
         class bah(ptype.type): length=2
         class cont(ptype.container): getindex = lambda s,i: i
         a = cont()
-        a.set(bah(), bah(), bah())
+        a.set(bah().a, bah().a, bah().a)
         a.setoffset(a.getoffset(), recurse=True)
         if tuple(x.getoffset() for x in a.value) == (0,2,4):
             raise Success
@@ -2044,8 +2077,7 @@ if __name__ == '__main__':
         class cont(ptype.container): getindex = lambda s,i: i
 
         a = cont()
-        a.set(bah(), bah(), bah())
-        a.a
+        a.set(bah().a, bah().a, bah().a)
         if tuple(a.getoffset(i) for i in range(len(a.v))) == (0,2,4):
             raise Success
 
@@ -2054,9 +2086,10 @@ if __name__ == '__main__':
         class bah(ptype.type): length=2
         class cont(ptype.container): getindex = lambda s,i: i
 
-        a = cont()
-        a.set(bah(), bah(), bah())
-        a.set(bah(), a.copy(), bah())
+        a,b = cont(),cont()
+        a.set(bah,bah,bah)
+        b.set(bah,bah,bah)
+        a.set(bah, b.copy(), bah)
         a.setoffset(a.getoffset(), recurse=True)
         if a.getoffset((1,2)) == 6:
             raise Success
@@ -2212,6 +2245,58 @@ if __name__ == '__main__':
             s,o = result[3]
             if s is None and reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),'') == g.serialize()+'\x40':
                 raise Success
+    @TestCase
+    def test_container_set_uninitialized_type():
+        from ptypes import ptype,pint,provider
+        class container(ptype.container): pass
+        a = container().set(pint.uint32_t,pint.uint32_t)
+        if a.size() == 8:
+            raise Success
+
+    @TestCase
+    def test_container_set_uninitialized_instance():
+        from ptypes import ptype,pint,provider
+        class container(ptype.container): pass
+        a = container().set(*(pint.uint8_t().set(1) for _ in range(10)))
+        if sum(x.num() for x in a) == 10:
+            raise Success
+
+    @TestCase
+    def test_container_set_initialized_value():
+        from ptypes import ptype,pint,provider
+        class container(ptype.container): pass
+        a = container().set(*((pint.uint8_t,)*4))
+        a.set(4,4,4,4)
+        if sum(x.num() for x in a) == 16:
+            raise Success
+
+    @TestCase
+    def test_container_set_initialized_type():
+        from ptypes import ptype,pint,provider
+        class container(ptype.container): pass
+        a = container().set(*((pint.uint8_t,)*4))
+        a.set(pint.uint32_t,pint.uint32_t,pint.uint32_t,pint.uint32_t)
+        if sum(x.size() for x in a) == 16:
+            raise Success
+
+    @TestCase
+    def test_container_set_initialized_instance():
+        from ptypes import ptype,pint,provider
+        class container(ptype.container): pass
+        a = container().set(pint.uint8_t,pint.uint32_t)
+        a.set(pint.uint32_t().set(0xfeeddead), pint.uint8_t().set(0x42))
+        if (a.v[0].size(),a.v[0].num()) == (4,0xfeeddead) and (a.v[1].size(),a.v[1].num()) == (1,0x42):
+            raise Success
+
+    @TestCase
+    def test_container_set_invalid():
+        from ptypes import ptype,pint,provider,error
+        class container(ptype.container): pass
+        a = container().set(ptype.type,ptype.type)
+        try: a.set(5,10,20)
+        except error.AssertionError,e:
+            raise Success
+        raise Failure
 
     #@TestCase
     def test_collect_pointers():

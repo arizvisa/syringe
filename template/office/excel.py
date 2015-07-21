@@ -1834,7 +1834,8 @@ class ListParsedArrayFormula(pstruct.type):
 
     def RgbExtra(self):
         bs = self.blocksize()
-        return dyn.block(bs-self.size())
+        sz = self['cce'].size() + self['cce'].li.int()
+        return dyn.block(bs-sz)
 
     _fields_ = [
         (pint.uint16_t, 'cce'),

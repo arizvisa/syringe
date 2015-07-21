@@ -106,29 +106,30 @@ class BaseRelocationEntry(pbinary.struct):
         (4, 'Type'),
         (12, 'Offset'),
     ]
-BaseRelocationEntry = pbinary.new(BaseRelocationEntry, byteorder=pbinary.littleendian)
 
-class BaseRelocationArray(parray.type):
-    _object_ = BaseRelocationEntry
+class BaseRelocationArray(parray.block):
+    _object_ = pbinary.littleendian(BaseRelocationEntry)
 
 class BaseRelocationBlock(ptype.block):
-    def getRelocations(self):
-        return self.cast(BaseRelocationArray, length=self.length/2)
+    def array(self):
+        return self.cast(pbinary.new(BaseRelocationArray), blocksize=self.blocksize)
+    def iterate(self):
+        for res in iter(self.array()):
+            yield res
+        return
 
 class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
         (addr_t, 'Page RVA'),
-        (uint32, 'Block Size'),
-#        (lambda s: dyn.clone(BaseRelocationArray, length=(int(s['Block Size'].load())-8)/2), 'Relocations'),   # XXX: this is too slow, heh...
-#        (lambda s: dyn.block(int(s['Block Size'].load())-8), 'Relocations')
-        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Block Size'].li.num()-8), 'Relocations'),
+        (uint32, 'Size'),
+        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Size'].li.num()-8), 'Relocations'),
+#        (lambda s: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _:(s['Size'].li.num()-8)*8), 'Relocations')
+#        (lambda s: dyn.clone(BaseRelocationArray, blocksize=lambda _:s['Size'].li.num()-8), 'Relocations')
     ]
 
     def fetchrelocations(self):
         block = self['Relocations'].serialize()
-        #block = self.new(dyn.block(int(self['Block Size'])), __name__='Relocations', offset=self.getoffset()+8).load().serialize()
-        relocations = array.array('H')
-        relocations.fromstring(block)
+        relocations = array.array('H').fromstring(block)
         return [((v&0xf000)/0x1000, v&0x0fff) for v in relocations]
 
     def getrelocations(self, section):
@@ -138,8 +139,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
         for type,offset in self.fetchrelocations():
             if type == 0:
                 continue
-            o = pageoffset + offset
-            yield type,o
+            yield type,pageoffset+offset
         return
 
 # yeah i really made this an object
@@ -186,17 +186,8 @@ if False:       # deprecated because we would like to be able to separate segmen
             value = address + (sectiondelta & 0xffffffffffffffff)
             return super(relocation_10, self)._write(value)
 
-class IMAGE_BASERELOC_DIRECTORY(parray.terminated):
+class IMAGE_BASERELOC_DIRECTORY(parray.block):
     _object_ = IMAGE_BASERELOC_DIRECTORY_ENTRY
-    currentsize = 0
-    maxsize = 0
-
-    def isTerminator(self, v):
-        self.currentsize += v.size()
-        if self.currentsize < self.maxsize:
-            return False
-        return True
-
     def getbysection(self, section):
         return ( entry for entry in self if section.containsaddress(entry['Page RVA'].num()) )
 

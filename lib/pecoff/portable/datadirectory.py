@@ -46,7 +46,10 @@ class Import(AddressEntry):
     _object_ = imports.IMAGE_IMPORT_DIRECTORY
 
 class Resource(AddressEntry):
-    _object_ = resources.IMAGE_RESOURCE_DIRECTORY
+    #_object_ = resources.IMAGE_RESOURCE_DIRECTORY
+    class _object_(resources.IMAGE_RESOURCE_DIRECTORY):
+        _fields_ = resources.IMAGE_RESOURCE_DIRECTORY._fields_[:]
+        _fields_.append((lambda s: dyn.block(s.blocksize() - (s.value[-1].getoffset()+s.value[-1].blocksize()-s.value[0].getoffset())),'ResourceData'))
 
 class Exception(AddressEntry):
     _object_ = exceptions.IMAGE_EXCEPTION_DIRECTORY
@@ -82,7 +85,7 @@ class Tls(AddressEntry):
         ]
     def _object_(self):
         opt = self.getparent(Header)['OptionalHeader'].li
-        return IMAGE_TLS_DIRECTORY64 if opt.is64() else IMAGE_TLS_DIRECTORY
+        return sself.IMAGE_TLS_DIRECTORY64 if opt.is64() else self.IMAGE_TLS_DIRECTORY
 
 class LoadConfig(AddressEntry):
     # FIXME: The size field in the DataDirectory is used to determine which
@@ -163,7 +166,7 @@ class BoundImport(AddressEntry): pass
 class IAT(AddressEntry):
     _object_ = imports.IMAGE_IMPORT_ADDRESS_TABLE
 class DelayLoad(AddressEntry):
-    _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY_ENTRY
+    _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY
 class ComHeader(AddressEntry): pass
 class Reserved(AddressEntry): pass
 

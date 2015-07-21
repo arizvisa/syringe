@@ -20,15 +20,18 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
         (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].li.num()), 'Ids'),
     ]
 
+    def iterate(self):
+        return itertools.chain((x['Name'].getEntryName() for x in self['Names']), (x['Name'].getEntryName() for x in self['Ids']))
     def list(self):
-        return list(itertools.chain((x['Name'].getEntryName() for x in self['Names']), (x['Name'].getEntryName() for x in self['Ids'])))
+        return list(self.iterate())
 
-    def getEntry(self, name):
+    def entry(self, name):
         for x in itertools.chain(iter(self['Names']),iter(self['Ids'])):
             if name == x['Name'].getEntryName():
                 return x['Entry'].d
             continue
         return
+    getEntry = entry
 
 class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
     _fields_ = [

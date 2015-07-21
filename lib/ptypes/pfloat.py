@@ -1,11 +1,43 @@
 import math
 from . import ptype,pint,bitmap,config
 
+def setbyteorder(endianness):
+    import __builtin__
+    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
+        for k,v in globals().iteritems():
+            if v is not type and isinstance(v,__builtin__.type) and issubclass(v,type) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
+                d = dict(v.__dict__)
+                d['byteorder'] = endianness
+                globals()[k] = __builtin__.type(v.__name__, v.__bases__, d)     # re-instantiate types
+            continue
+        return
+    elif getattr(endianness, '__name__', '').startswith('big'):
+        return setbyteorder(config.byteorder.bigendian)
+    elif getattr(endianness, '__name__', '').startswith('little'):
+        return setbyteorder(config.byteorder.littleendian)
+    raise ValueError("Unknown integer endianness %s"% repr(endianness))
+
+def bigendian(ptype):
+    '''Will convert an pfloat_t to bigendian form'''
+    import __builtin__
+    if not issubclass(ptype, type) or ptype is type:
+        raise error.TypeError(ptype, 'bigendian')
+    d = dict(ptype.__dict__)
+    d['byteorder'] = config.byteorder.bigendian
+    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
+
+def littleendian(ptype):
+    '''Will convert an pfloat_t to littleendian form'''
+    import __builtin__
+    if not issubclass(ptype, type) or ptype is type:
+        raise error.TypeError(ptype, 'littleendian')
+    d = dict(ptype.__dict__)
+    d['byteorder'] = config.byteorder.littleendian
+    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
+
 class type(pint.integer_t):
     def summary(self, **options):
         return '%s (%x)'% (self.getf(), self.num())
-    def repr(self, **options):
-        return self.summary(**options)
 
     def setf(self, value):
         raise error.ImplementationError(self, 'type.setf')
@@ -88,9 +120,6 @@ class fixed_t(type):
     """
     fractional = 0      # number of bits to represent fractional part
     length = 0          # size in bytes of integer
-
-    def summary(self, **options):
-        return '%s (%x)'% (self.getf(), self.num())
 
     def getf(self):
         n = self.num()

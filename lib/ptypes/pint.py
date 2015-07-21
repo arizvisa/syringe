@@ -1,9 +1,10 @@
 from . import ptype,bitmap,config,error,utils
 
 def setbyteorder(endianness):
+    import __builtin__
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
         for k,v in globals().iteritems():
-            if hasattr(v, '__bases__') and ptype.istype(v) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
+            if v is not integer_t and isinstance(v,__builtin__.type) and issubclass(v,integer_t) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
                 d = dict(v.__dict__)
                 d['byteorder'] = endianness
                 globals()[k] = type(v.__name__, v.__bases__, d)     # re-instantiate types
@@ -19,21 +20,19 @@ def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
     if type(ptype) is not type:
         raise error.TypeError(ptype, 'bigendian')
-    class newptype(ptype):
-        byteorder = config.byteorder.bigendian
-        __doc__ = ptype.__doc__
-    newptype.__name__ = ptype.__name__
-    return newptype
+    import __builtin__
+    d = dict(ptype.__dict__)
+    d['byteorder'] = config.byteorder.bigendian
+    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
 
 def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
     if type(ptype) is not type:
         raise error.TypeError(ptype, 'littleendian')
-    class newptype(ptype):
-        byteorder = config.byteorder.littleendian
-        __doc__ = ptype.__doc__
-    newptype.__name__ = ptype.__name__
-    return newptype
+    import __builtin__
+    d = dict(ptype.__dict__)
+    d['byteorder'] = config.byteorder.littleendian
+    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
 
 class integer_t(ptype.type):
     '''Provides basic integer-like support'''
@@ -91,13 +90,8 @@ class integer_t(ptype.type):
         raise error.SyntaxError(self, 'integer_t.num', message='Unknown integer endianness %s'% repr(self.byteorder))
 
     def summary(self, **options):
-        if self.initialized:
-            res = self.num()
-            return '{s}0x{n:0{l:d}x} ({s}{n:d})'.format(s='-' if res < 0 else '',n=abs(res),l=self.length*2)
-        return '???'
-
-    def repr(self, **options):
-        return self.summary(**options)
+        res = self.num()
+        return '{s}0x{n:0{l:d}x} ({s}{n:d})'.format(s='-' if res < 0 else '',n=abs(res),l=self.length*2)
 
     def flip(self):
         '''Returns an integer with the endianness flipped'''
@@ -200,7 +194,7 @@ class enum(integer_t):
 
         except KeyError:
             pass
-        raise AttributeError
+        raise AttributeError, (enum, self, name)
 
     def str(self):
         '''Return value as a string'''
@@ -213,12 +207,7 @@ class enum(integer_t):
         return value
 
     def summary(self, **options):
-        if self.initialized:
-            return self.str()
-        return '???'
-
-    def repr(self, **options):
-        return self.summary(**options)
+        return self.str()
 
     def __getitem__(self, name):
         return self.byName(name)

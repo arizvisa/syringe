@@ -79,15 +79,22 @@ class type(_pstruct_generic):
 
     def alloc(self, __attrs__={}, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
-        result = super(type, self).alloc(**__attrs__)
-        for k,v in fields.iteritems():
-            idx = result.getindex(k)
-            if ptype.isresolveable(v) or ptype.istype(v) or isinstance(v, ptype.generic):
-                result.value[idx] = self.new(v)
-            else:
-                result.value[idx].set(v)
-            continue
-        self.setoffset(self.getoffset(), recurse=True)
+        attrs = __attrs__
+        result = super(type, self).alloc(**attrs)
+        if fields:
+            for idx,(t,n) in enumerate(self._fields_):
+                if n not in fields:
+                    if ptype.isresolveable(t): result.value[idx] = self.new(t, __name__=n).alloc(**attrs)
+                    continue
+                v = fields[n]
+                if ptype.isresolveable(v) or ptype.istype(v):
+                    result.value[idx] = self.new(v, __name__=n).alloc(**attrs)
+                elif isinstance(v, ptype.generic):
+                    result.value[idx] = self.new(v, __name__=n)
+                else:
+                    result.value[idx].set(v)
+                continue
+            self.setoffset(self.getoffset(), recurse=True)
         return result
 
     def load(self, **attrs):
@@ -154,34 +161,22 @@ class type(_pstruct_generic):
             return '\n'.join(result)
         return '[%x] Empty []'%self.getoffset()
 
-    def set(self, *tuples, **allocator):
-        # allocate type if we're asked to
-        for name,cls in allocator.items():
-            try:
-                value = self.new(cls, offset=0, __name__=name)
-                value = value.a
-
-            except error.TypeError,e:
-                value = cls
-
-            self[name] = value
-
-        # set each value in tuple
-        for name,value in tuples:
-            self[name].set(value)
-
-        self.setoffset( self.getoffset(), recurse=True )
-        return self
-
     def set(self, value=(), **individual):
         result = self
         if result.initializedQ():
             if value:
-                if len(result.value) != len(value):
-                    raise error.UserError(result, 'type.set', message='value to assign not of the same length as struct')
+                if len(result._fields_) != len(value):
+                    raise error.UserError(result, 'type.set', message='iterable value to assign with is not of the same length as struct')
                 result = super(type,result).set(*value)
             for k,v in individual.iteritems():
-                result[k].set(v)
+                idx = self.getindex(k)
+                if ptype.isresolveable(v) or ptype.istype(v):
+                    result.value[idx] = self.new(v, __name__=k).a
+                elif isinstance(v,ptype.generic):
+                    result.value[idx] = self.new(v, __name__=k)
+                else:
+                    result.value[idx].set(v)
+                continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
         return result.a.set(value, **individual)
@@ -366,7 +361,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_structure_alloc_set():
+    def test_structure_alloc_value():
         import pint
         class st(pstruct.type):
             _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
@@ -375,12 +370,116 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_structure_alloc_container():
+    def test_structure_alloc_instance():
         import pint
         class st(pstruct.type):
             _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
         a = st().alloc(a=pint.uint32_t().set(0x0d0e0a0d),b=0x0d0e0a0d)
         if a['a'].num() == 0x0d0e0a0d and a['b'].num() == 0x0d0e0a0d:
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_dynamic_value():
+        import pint
+        class st(pstruct.type):
+            def __b(self):
+                return ptype.clone(pint.int_t, length=self['a'].li.num())
+            _fields_ = [
+                (pint.int8_t, 'a'),
+                (__b, 'b'),
+            ]
+        a = st().alloc(a=3)
+        if a['b'].size() == a['a'].num():
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_dynamic_instance():
+        import pint
+        class st(pstruct.type):
+            def __b(self):
+                return ptype.clone(pint.int_t, length=self['a'].li.num())
+            _fields_ = [
+                (pint.int_t, 'a'),
+                (__b, 'b'),
+            ]
+        a = st().alloc(a=pint.int32_t().set(4))
+        if a['b'].size() == a['a'].num():
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_container_dynamic_instance():
+        import pint
+        class st1(pstruct.type): _fields_=[(pint.int8_t,'a'),(lambda s: ptype.clone(pint.int_t,length=s['a'].li.num()), 'b')]
+        class st2(pstruct.type):
+            def __b(self):
+                if self['a'].li.num() == 2:
+                    return st1
+                return ptype.undefined
+            _fields_ = [
+                (pint.int8_t, 'a'),
+                (__b, 'b'),
+            ]
+
+        a = st2().alloc(b=st1().alloc(a=2))
+        if a['b']['a'].num() == a['b']['b'].size():
+            raise Success
+
+    @TestCase
+    def test_structure_set_initialized_value():
+        import pint
+        class st(pstruct.type):
+            _fields_ = [
+                (pint.int32_t, 'a'),
+            ]
+        a = st().a.set(a=20)
+        if a['a'].num() == 20:
+            raise Success
+
+    @TestCase
+    def test_structure_set_initialized_type():
+        import pint
+        class st(pstruct.type):
+            _fields_ = [
+                (pint.int_t, 'a'),
+            ]
+        a = st().a.set(a=pint.uint32_t)
+        if a['a'].size() == 4:
+            raise Success
+
+    @TestCase
+    def test_structure_set_initialized_instance():
+        import pint
+        class st(pstruct.type):
+            _fields_ = [
+                (pint.int_t, 'a'),
+            ]
+        a = st().a.set(a=pint.uint32_t().set(20))
+        if a['a'].size() == 4 and a['a'].num() == 20:
+            raise Success
+
+    @TestCase
+    def test_structure_set_initialized_container():
+        import pint
+        class st1(pstruct.type): _fields_=[(pint.int8_t,'a'),(pint.uint32_t,'b')]
+        class st2(pstruct.type):
+            _fields_ = [
+                (pint.int32_t, 'a'),
+                (ptype.undefined, 'b'),
+            ]
+        a = st2().a.set(b=st1)
+        if isinstance(a['b'],st1):
+            raise Success
+
+    @TestCase
+    def test_structure_set_uninitialized_value():
+        import pint
+        class st2(pstruct.type):
+            _fields_ = [
+                (pint.int32_t, 'a'),
+                (ptype.undefined, 'b'),
+            ]
+        a = st2().set(a=5)
+        if a['a'].num() == 5:
             raise Success
 
 if __name__ == '__main__':

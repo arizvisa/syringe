@@ -7,11 +7,7 @@ class _char_t(pint.integer_t):
         return self.v
 
     def summary(self, **options):
-        if self.initialized:
-            return repr(self.str())
-        return '???'
-    def repr(self, **options):
-        return self.summary(**options)
+        return repr(self.str())
 
     @classmethod
     def typename(cls):
@@ -165,17 +161,12 @@ class string(ptype.type):
         raise error.InitializationError(self, 'string.serialize')
 
     def summary(self, **options):
-        if self.initializedQ():
-            try:
-                result = repr(self.str())
-            except UnicodeDecodeError:
-                Config.log.debug('%s.summary : %s : Unable to decode unicode string. Rendering as hexdump instead.'% (self.classname(),self.instance()))
-                return super(string,self).summary(**options)
-            return result
-        return '???'
-
-    def repr(self, **options):
-        return self.summary(**options)
+        try:
+            result = repr(self.str())
+        except UnicodeDecodeError:
+            Config.log.debug('%s.summary : %s : Unable to decode unicode string. Rendering as hexdump instead.'% (self.classname(),self.instance()))
+            return super(string,self).summary(**options)
+        return result
 
 class szstring(string):
     '''Standard null-terminated string'''

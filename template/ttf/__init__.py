@@ -36,11 +36,15 @@ class cmap(pstruct.type):
             (uint16, 'encoding-id'),
             (lambda s: dyn.rpointer(cmap.subtable, s.getparent(cmap)), 'offset'),
         ]
+    def __data(self):
+        sz = sum(x.li.size() for x in (s['version'],s['number'],s['entry']))
+        return dyn.block(self.blocksize() - sz)
+
     _fields_ = [
         (uint16, 'version'),
         (uint16, 'number'),
         (lambda s: dyn.array(cmap.entry, s['number'].li.int()), 'entry'),
-        (lambda s: dyn.block(s.blocksize()-s.size()), 'data'),
+        (__data, 'data'),
     ]
     class subtable(pstruct.type):
         _fields_ = [

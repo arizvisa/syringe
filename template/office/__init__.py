@@ -43,7 +43,7 @@ class RecordGeneral(pstruct.type):
 
     def __extra(self):
         bs = self.blocksize()
-        s = self.size()
+        s = self['header'].li.size() + self['data'].li.size()
         if bs > s:
             return dyn.block(bs - s)
         return ptype.type
@@ -55,7 +55,7 @@ class RecordGeneral(pstruct.type):
     ]
 
     def blocksize(self):
-        return self['header'].size() + int(self['header']['length'])
+        return self['header'].li.size() + self['header']['length'].num()
 
 class RecordContainer(parray.block):
     _object_ = None

@@ -13,25 +13,27 @@ class ChunkHeader(pstruct.type):
         (DWORD, 'size'),
         (WORD, 'type')
     ]
-chunkLookup = dict()
 
-def createUnknownChunk(t, s):
-    class Unknown(dyn.block(0)):
-        pass
-    Unknown.__name__ = 'Unknown<0x%x>'% t
-    Unknown.length = s
-    return Unknown
+class ChunkType(ptype.definition):
+    cache = {}
+    class unknown(ptype.block):
+        def classname(self):
+            return 'Unknown<0x%x>'% self.type
+    chunkLookup = dict()
 
-class Chunk(pstruct.type): pass
+    def createUnknownChunk(t, s):
+        class Unknown(dyn.block(0)):
+            pass
+        Unknown.__name__ = 'Unknown<0x%x>'% t
+        Unknown.length = s
+        return Unknown
+
+    class Chunk(pstruct.type): pass
+
 class ChunkGeneral(pstruct.type):
     def __data(self):
-        t = int(self['header']['type'])
-        try:
-            y = chunkLookup[t]
-
-        except KeyError:
-            y = createUnknownChunk(t, self.blocksize() - self['header'].size())
-        return y
+        t = int(self['header'].li['type'])
+        return ChunkType.get(t, length=self.blocksize()-self['header'].size())
 
     _fields_ = [
         (ChunkHeader, 'header'),
@@ -87,7 +89,7 @@ class File(pstruct.type):
         (lambda s: dyn.clone(s._chunks, blocksize=lambda x: int(s['header'].li['size'])-s['flicheader'].size()-s['header'].size()), 'data'),
     ]
 
-    def __repr__(self):
+    def summary(self):
         if self.initialized:
             lookup = {}
             for n in self['data']:
@@ -98,17 +100,20 @@ class File(pstruct.type):
                     lookup[t] = 1
                 continue
             s = ','.join([ '(%x, %d)'% (k,v) for k,v in lookup.items() ])
-            return '%s header=%x flicheader=. data=%s'% (self.name(), int(self['header']['type']), s)
-        return super(File, self).__repr__()
+            return 'header=%x flicheader=. data=%s'% (int(self['header']['type']), s)
+        return super(File, self).summary()
+    repr = summary
 
-class PREFIX_TYPE(Chunk):
+@ChunkType.define
+class PREFIX_TYPE(pstruct.type):
     type = 0xf100
     _fields_ = [
         (WORD, 'chunks'),
         (dyn.array(BYTE, 8), 'reserved')
     ]
 
-class CEL_DATA(Chunk):
+@ChunkType.define
+class CEL_DATA(pstruct.type):
     type = 3
     _fields_ = [
         (short, 'center_x'),
@@ -125,13 +130,15 @@ class CEL_DATA(Chunk):
         (dyn.array(BYTE,6), 'reserved2')
     ]
 
-class SEGMENT_TABLE(Chunk):
+@ChunkType.define
+class SEGMENT_TABLE(pstruct.type):
     type = 0xf1fb
     _fields_ = [
         (WORD, 'segments')
     ]
 
-class SEGMENT(Chunk):
+@ChunkType.define
+class SEGMENT(pstruct.type):
     type = 34
     _fields_ = [
         (WORD,  'label'),
@@ -154,7 +161,8 @@ class HUFFMAN_CODE(pstruct.type):
         (BYTE, 'value')
     ]
 
-class HUFFMAN_TABLE(Chunk):
+@ChunkType.define
+class HUFFMAN_TABLE(pstruct.type):
     type = 0xf1fc
     _fields_ = [
         (WORD,  'codelength'),
@@ -163,7 +171,8 @@ class HUFFMAN_TABLE(Chunk):
         (lambda s: dyn.array(HUFFMAN_CODE, int(s['numcodes'].li)), 'code')
     ]
 
-class FRAME_TYPE(Chunk):
+@ChunkType.define
+class FRAME_TYPE(pstruct.type):
     type = 0xf1fa
     _fields_ = [
         (WORD,  'chunks'),
@@ -174,7 +183,8 @@ class FRAME_TYPE(Chunk):
         (lambda s: dyn.clone(ChunkArray, length=int(s['chunks'].li)), 'data')
     ]
 
-class PSTAMP(Chunk):
+@ChunkType.define
+class PSTAMP(pstruct.type):
     type = 18
     _fields_ = [
         (WORD,  'height'),
@@ -182,14 +192,16 @@ class PSTAMP(Chunk):
         (WORD,  'xlate'),
     ]
 
-class LABEL(Chunk):
+@ChunkType.define
+class LABEL(pstruct.type):
     type = 31
     _fields_ = [
         (WORD, 'label'),
         (dyn.array(BYTE, 2), 'reserved')
     ]
 
-class LABELEX(Chunk):
+@ChunkType.define
+class LABELEX(pstruct.type):
     type = 41
     _fields_ = [
         (WORD, 'label'),
@@ -197,7 +209,8 @@ class LABELEX(Chunk):
         (lambda s: dyn.block( int(s['size'].li) - 4 - 2 - 2 - 2), 'name')
     ]
 
-class REGION(Chunk):
+@ChunkType.define
+class REGION(pstruct.type):
     type = 37
     _fields_ = [
         (WORD, 'number'),
@@ -207,7 +220,8 @@ class REGION(Chunk):
         (WORD, 'height'),
     ]
 
-class WAVE(Chunk):
+@ChunkType.define
+class WAVE(pstruct.type):
     type = 38
     _fields_ = [
         (WORD,  'flags'),
@@ -216,7 +230,8 @@ class WAVE(Chunk):
         (dyn.array(BYTE,6),  'reserved'),
     ]
 
-class FRAMESHIFT(Chunk):
+@ChunkType.define
+class FRAMESHIFT(pstruct.type):
     type = 42
     _fields_ = [
         (BYTE,  'img_id'),
@@ -234,7 +249,8 @@ class ColorPacket(pstruct.type):
         (lambda s: dyn.array(RGB, int(s['count'].li) or 256), 'color')
     ]
 
-class COLOR_64(Chunk):
+@ChunkType.define
+class COLOR_64(pstruct.type):
     type = 11
     _fields_ = [
         (WORD, 'numpackets'),
@@ -254,15 +270,14 @@ class Line(pstruct.type):
         (lambda s: dyn.array(LinePacket, int(s['numpackets'].li)), 'packets')
     ]
 
-class DELTA_FLI(Chunk):
+@ChunkType.define
+class DELTA_FLI(pstruct.type):
     type = 12
     _fields_ = [
         (WORD, 'skip'),
         (WORD, 'numlines'),
         (lambda s: dyn.array(Line, int(s['numlines'].li)), 'lines')
     ]
-
-chunkLookup = dict([(cls.type, cls) for cls in globals().values() if type(cls) is type and cls is not Chunk and issubclass(cls, Chunk)])
 
 if __name__ == '__main__':
     import ptypes,flic

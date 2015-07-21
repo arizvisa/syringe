@@ -1,5 +1,6 @@
 import ptypes
 from ptypes import *
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class pQTInt(pint.bigendian(pint.uint32_t)): pass
 class pQTType(pQTInt):
@@ -16,7 +17,8 @@ class pQTType(pQTInt):
     def set(self, value):
         return super(pQTType,self).set( reduce(lambda x,y:x*0x100+ord(y), value, 0) )
 
-class Fixed(pint.uint32_t): pass
+class Fixed(pfloat.fixed_t):
+    fractional,length = 16,4
 
 class Matrix(pstruct.type):
     _fields_ = [

@@ -79,15 +79,19 @@ if __name__ == '__main__':
 
     # parse the resource names
     VERSION_INFO = 16
-    resource_Names = resource.getEntry(VERSION_INFO).l
+    if VERSION_INFO not in resource.list():
+        print >>sys.stderr, 'File %s does not appear to contain a VERSION_INFO entry within it\'s resources directory.'% filename
+        sys.exit(1)
+
+    resource_Names = resource.entry(VERSION_INFO).l
     if opts.dump_names:
-        print >>sys.stdout, '\n'.join(map(repr,resource_Names.list()))
+        print >>sys.stdout, '\n'.join(map(repr,resource_Names.iterate()))
         sys.exit(0)
 
     # parse the resource languages
     resource_Languages = resource_Names.getEntry(opts.name).l
     if opts.dump_languages:
-        print >>sys.stdout, '\n'.join(map(repr,resource_Languages.list()))
+        print >>sys.stdout, '\n'.join(map(repr,resource_Languages.iterate()))
         sys.exit(0)
 
     # grab the version record

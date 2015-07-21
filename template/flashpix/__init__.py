@@ -14,7 +14,7 @@ class CLSID(pstruct.type):
         (bigendian(dyn.clone(pint.uint_t, length=6)), 'e')
     ]
 
-    def __repr__(self):
+    def summary(self):
         result = []
         for k,v in self.items():
             count = v.size()*2
@@ -55,8 +55,8 @@ class PROPERTYSECTIONHEADER(pstruct.type):
     _fields_ = [
         (DWORD, 'cbSection'),
         (DWORD, 'cProperties'),
-        (lambda s: dyn.array(PROPERTYIDOFFSET, int(s['cProperties'].load())), 'rgprop'),
-        (lambda s: dyn.block( int(s['cbSection'].load()) - (8 + s['rgprop'].size())), 'data')
+        (lambda s: dyn.array(PROPERTYIDOFFSET, s['cProperties'].li.num()), 'rgprop'),
+        (lambda s: dyn.block( s['cbSection'].li.num() - (8+s['rgprop'].li.blocksize())), 'data')
     ]
 
     def __getslice__(self, i, j):
@@ -80,13 +80,13 @@ class ENTRY(pstruct.type):
     _fields_ = [
         (DWORD, 'propid'),
         (DWORD, 'cb'),
-        (lambda s: dyn.array(tchar, int(s['cb'])), 'tsz')
+        (lambda s: dyn.array(tchar, int(s['cb'].li)), 'tsz')
     ]
 
 class DICTIONARY(pstruct.type):
     _fields_ = [
         (DWORD, 'cEntries'),
-        (lambda s: dyn.array(ENTRY, int(s['cEntries'])), 'rgEntry')
+        (lambda s: dyn.array(ENTRY, int(s['cEntries'].li)), 'rgEntry')
     ]
 
 ###

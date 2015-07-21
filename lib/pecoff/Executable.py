@@ -1,10 +1,8 @@
-import logging,ptypes,itertools
+import logging,operator,itertools,array,ptypes
 from ptypes import *
 from .__base__ import *
 
 from . import portable
-
-import operator
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
@@ -131,7 +129,7 @@ class Portable(pstruct.type, Header):
         optionalheader = self['OptionalHeader'].li
 
         # memory
-        if issubclass(self.source.__class__, ptypes.provider.memorybase):
+        if isinstance(self.source, ptypes.provider.memorybase) or self.source in [getattr(ptypes.provider,'Ida',None)]:
             class sectionentry(pstruct.type):
                 noncontiguous = True
                 _fields_ = [
@@ -141,11 +139,15 @@ class Portable(pstruct.type, Header):
 
         # file (default)
         else:
+            if not isinstance(self.source, ptypes.provider.filebase):
+                logging.warn("Unknown ptype source.. treating as a fileobj : {!r}".format(self.source))
+                
             class sectionentry(pstruct.type):
                 _fields_ = [
                     (dyn.align(optionalheader['FileAlignment'].num()), 'Padding'),
                     (lambda s: dyn.block(s.Section.getreadsize()), 'Data'),
                 ]
+        
         sectionentry.properties = lambda s: dict(itertools.chain(super(pstruct.type,s).properties().iteritems(),{'SectionName':s.SectionName}.iteritems()))
         class result(parray.type):
             length = len(sections)
@@ -181,7 +183,7 @@ class Portable(pstruct.type, Header):
         (portable.OptionalHeader, 'OptionalHeader'),
         (__DataDirectory, 'DataDirectory'),
         (__Sections, 'Sections'),
-		(__Padding, 'Padding'),
+        (__Padding, 'Padding'),
         (__Data, 'Data'),
         (__Certificate, 'Certificate'),
     ]
@@ -217,6 +219,20 @@ class Portable(pstruct.type, Header):
 
     def is64(self):
         return self['OptionalHeader'].li.is64()
+
+    def checksum(self):
+        root = self.getparent(File)
+        res = self['OptionalHeader']['Checksum']
+        field = res.copy(offset=res.offset-root.offset).set(0)
+
+        data = list(root.serialize())
+        data[field.offset:field.offset+field.size()] = field.serialize()
+
+        # FIXME: somehow I'm off-by-one occasionally here
+        res = sum(array.array('L', ''.join(data) + '\x00'*(4-len(data)%4)))
+        checksum = (res&0xffff) + (res>>16)
+        checksum += (checksum>>16)
+        return (checksum&0xffff) + len(data)
 
 @NextHeader.define
 class DosExtender(pstruct.type, Header):

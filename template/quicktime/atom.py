@@ -68,6 +68,20 @@ class AtomList(parray.block):
         types = ','.join([x['type'].serialize() for x in self])
         return ' '.join(['atoms[%d] ->'% len(self), types])
 
+## atom templates
+class EntriesAtom(pstruct.type):
+    def __Entry(self):
+        t,n = self.Entry,self['Number of entries'].li.num()
+        return dyn.array(t,n)
+
+    _fields_ = [
+        (pint.uint8_t, 'Version'),
+        (dyn.block(3), 'Flags'),
+        (pQTInt, 'Number of entries'),
+        (__Entry, 'Entry')
+    ]
+
+
 ## container atoms
 @AtomType.define
 class MOOV(AtomList): type = 'moov'
@@ -184,12 +198,12 @@ class TKHD(pstruct.type):
         (pint.uint16_t, 'Volume'),
         (pint.uint16_t, 'Reserved'),
         (Matrix, 'Matrix structure'),
-        (pint.uint32_t, 'Track width'),
-        (pint.uint32_t, 'Track height'),
+        (Fixed, 'Track width'),
+        (Fixed, 'Track height'),
     ]
 
 @AtomType.define
-class ELST(pstruct.type):
+class ELST(EntriesAtom):
     type = 'elst'
 
     class Entry(pstruct.type):
@@ -198,13 +212,6 @@ class ELST(pstruct.type):
             (pint.uint32_t, 'time'),
             (pint.uint32_t, 'rate'),
         ]
-
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(s.Entry, s['Number of entries'].li.int()), 'Entry')
-    ]
 
 @AtomType.define
 class MDHD(pstruct.type):
@@ -235,24 +242,39 @@ class HDLR(pstruct.type):
     ]
 
 ## stsd
-#@MediaType.Define
-class MediaVideo(pstruct.type):   #XXX: might need to be renamed
-    type = 'vide'
+class MediaVideo(ptype.definition): attribute,cache = 'version',{}
+
+@MediaVideo.define
+class MediaVideo_v1(pstruct.type):   #XXX: might need to be renamed
+    version,type = 1,'vide'
+    class CompressorName(pstruct.type):
+        _fields_ = [(pint.uint8_t,'length'),(lambda s: dyn.clone(pstr.string,length=s['length'].li.num()),'string'),(lambda s: dyn.block(0x20 - s['length'].li.num()), 'padding')]
+    class ColorTable(pstruct.type):
+        class argb(pstruct.type):
+            _fields_ = [(pint.uint16_t,n) for n in ('i','r','g','b')]
+            def summary(self):
+                return '{:d} ({:04x},{:04x},{:04x})'.format(self['i'].num(),self['r'].num(),self['g'].num(),self['b'].num())
+            repr = summary
+        def __entries(self):
+            n = self['end'].li.num() - self['start'].li.num()
+            return dyn.array(self.argb, n+1)
+        _fields_ = [
+            (pint.uint32_t,'start'),
+            (pint.uint8_t,'count'),
+            (pint.uint16_t,'end'),
+            (__entries, 'entries'),
+        ]
+    def __ColorTable(self):
+        n = self['Depth'].li.num()
+        return self.ColorTable if n in (2,4,8) else ptype.undefined
+
     _fields_ = [
-        (pint.uint16_t, 'Version'),
-        (pint.uint16_t, 'Revision level'),
-        (pQTType, 'Vendor'),
-        (pQTInt, 'Temporal Quality'),
-        (pQTInt, 'Spatial Quality'),
-        (pint.uint16_t, 'Width'),
-        (pint.uint16_t, 'Height'),
-        (pQTInt, 'Horizontal Resolution'),
-        (pQTInt, 'Vertical Resolution'),
         (pQTInt, 'Data size'),
-        (pint.uint16_t, 'Frame count'),
-        (dyn.block(32), 'Compressor Name'),
-        (pint.uint16_t, 'Depth'),
-        (pint.uint16_t, 'Color table ID')
+        (pint.uint16_t, 'Frame Count'),
+        (CompressorName, 'Compressor Name'),
+        (pint.littleendian(pint.uint16_t), 'Depth'),
+        (pint.uint16_t, 'Color Table ID'),
+        (__ColorTable, 'Color Table'),
     ]
 
 # FIXME: this isn't decoding mpeg audio yet.
@@ -263,47 +285,72 @@ class esds(pstruct.type):
         (ptype.type, 'Elementary Stream Descriptor'),
     ]
 
-#@MediaType.Define
+class MediaAudio(ptype.definition): attribute,cache = 'version',{}
+@MediaAudio.define
 class MediaAudio_v0(pstruct.type):
-    type = 'soun'
-    version = 0
-    _fields_ = [
-        (pint.uint16_t, 'Version'),
-        (pint.uint16_t, 'Revision level'),
-        (pQTType, 'Vendor'),
-        (pint.uint16_t, 'Number of channels'),
-        (pint.uint16_t, 'Sample size'),
-        (pint.uint16_t, 'Compression ID'),
-        (pint.uint16_t, 'Packet size'),
-        (pint.uint32_t, 'Sample rate'),
-    ]
-#@MediaType.Define
+    version,type = 0,'soun'
+    _fields_ = []
+
+@MediaAudio.define
 class MediaAudio_v1(pstruct.type):
-    type = 'soun'
-    version = 1
+    version,type = 1,'soun'
     _fields_ = [
-        (pint.uint16_t, 'Version'),
-        (pint.uint16_t, 'Revision level'),
-        (pQTType, 'Vendor'),
-        (pint.uint16_t, 'Number of channels'),
-        (pint.uint16_t, 'Sample size'),
-        (pint.uint16_t, 'Compression ID'),
-        (pint.uint16_t, 'Packet size'),
-        (pint.uint32_t, 'Sample rate'),
         (pint.uint32_t, 'Samples per packet'),
         (pint.uint32_t, 'Bytes per packet'),
         (pint.uint32_t, 'Bytes per frame'),
         (pint.uint32_t, 'Bytes per sample'),
     ]
+@MediaAudio.define
+class MediaAudio_v2(pstruct.type):
+    version,type = 2,'soun'
+    _fields_ = [
+        (pint.uint32_t, 'Size'),
+        (pfloat.double, 'Sample rate2'),
+        (pint.uint32_t, 'Channels2'),
+        (pint.uint32_t, 'Reserved'),
+        (pint.uint32_t, 'Bits per coded sample'),
+        (pint.uint32_t, 'Lpcm'),
+        (pint.uint32_t, 'Bytes per frame'),
+        (pint.uint32_t, 'Samples per frame'),
+    ]
 
 @AtomType.define
-class stsd(pstruct.type):
+class stsd(EntriesAtom):
     '''Sample description atom'''
     type = 'stsd'
-    class entry(pstruct.type):
+
+    class Audio(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'Version'),
+            (pint.uint16_t, 'Revision level'),
+            (pQTType, 'Vendor'),
+            (pint.uint16_t, 'Number of channels'),
+            (pint.uint16_t, 'Sample size'),
+            (pint.uint16_t, 'Compression ID'),
+            (pint.uint16_t, 'Packet size'),
+            (pint.uint32_t, 'Sample rate'),
+            (lambda s: MediaAudio.get(s['Version'].li.num()), 'Versioned'),
+        ]
+
+    class Video(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'Version'),
+            (pint.uint16_t, 'Revision level'),
+            (pQTType, 'Vendor'),
+            (pQTInt, 'Temporal Quality'),
+            (pQTInt, 'Spatial Quality'),
+            (pint.uint16_t, 'Width'),
+            (pint.uint16_t, 'Height'),
+            (pQTInt, 'Horizontal Resolution'),
+            (pQTInt, 'Vertical Resolution'),
+            (lambda s: MediaVideo.get(s['Version'].li.num()), 'Versioned'),
+        ]
+
+    class Entry(pstruct.type):
         def __Data_specific(self):
             sz = self['Sample description size'].li.num()
             return dyn.block(sz - 4 - 4 - 6 - 2)
+
         _fields_ = [
             (pQTInt, 'Sample description size'),
             (pQTType, 'Data format'),
@@ -312,86 +359,56 @@ class stsd(pstruct.type):
             (__Data_specific, 'Data specific'),
         ]
 
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of Entries'),
-        (lambda x: dyn.array(stsd.entry, x['Number of Entries'].li.int()), 'Entries'),
-    ]
-
 ### stts
 @AtomType.define
-class stts(pstruct.type):
+class stts(EntriesAtom):
     '''Time-to-sample atom'''
     type = 'stts'
-    class entry(pstruct.type):
+    class Entry(pstruct.type):
         _fields_ = [
             (pQTInt, 'Sample count'),
             (pQTInt, 'Sample duration')
         ]
 
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(stts.entry, x['Number of entries'].li.int()), 'Entries')
-    ]
-
 ## stsc
 @AtomType.define
-class stsc(pstruct.type):
+class stsc(EntriesAtom):
     '''Sample-to-chunk atom'''
     type = 'stsc'
-    class entry(pstruct.type):
+    class Entry(pstruct.type):
         _fields_ = [
             (pQTInt, 'First chunk'),
             (pQTInt, 'Samples per chunk'),
             (pQTInt, 'Sample description ID')
         ]
 
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(s.entry, s['Number of entries'].li.int()), 'Entries')
-    ]
-
 ## stsz
 @AtomType.define
-class stsz(pstruct.type):
+class stsz(EntriesAtom):
     '''Sample size atom'''
     type = 'stsz'
 
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Sample size'),
-        (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(pQTInt, s['Number of entries'].li.int()), 'Entries'),
-    ]
+    class Entry(pQTInt): pass
+
+    _fields_ = EntriesAtom._fields_[:2]
+    _fields_+=[(pQTInt, 'Sample size')]
+    _fields_+= EntriesAtom._fields_[2:]
 
 ## stco
 @AtomType.define
-class stco(pstruct.type):
+class stco(EntriesAtom):
     '''Chunk offset atom'''
     type = 'stco'
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, x['Number of entries'].li.int()), 'Entries')
-    ]
+
+    class Entry(dyn.pointer(pQTInt)): pass
 
 # XXX: this doesn't exist (?)
 @AtomType.define
-class stsh(pstruct.type):
+class stsh(EntriesAtom):
     '''Shadow sync atom'''
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (lambda x: dyn.array(pQTInt, x['Number of entries'].li.int()), 'Entries')
-    ]
+    type = 'stsh'
+
+    class Entry(pQTInt): pass
 
 @AtomType.define
 class gmin(pstruct.type):
@@ -408,13 +425,7 @@ class gmin(pstruct.type):
     ]
 
 @AtomType.define
-class dref(pstruct.type):
+class dref(EntriesAtom):
     '''Chunk offset atom'''
     type = 'dref'
-
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (lambda s: dyn.array(Atom, s['Number of entries'].li.int()), 'Data references')
-    ]
+    class Entry(Atom): pass

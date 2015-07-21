@@ -18,18 +18,13 @@ class ID(pint.uint32_t):
             n *= 0x100
         return string
 
-    def __repr__(self):
-        ofs = '[%x]'% self.getoffset()
-        if self.initialized:
-            res = repr(self.str())
-        else:
-            res = '???'
-        name = [lambda:'__name__:%s'%self.__name__, lambda:''][self.__name__ is None]()
-        return  ' '.join([ofs, self.name(), name, res])
+    def summary(self):
+        return self.str()
 
-class HEX(pint.integer_t):
-    def __int__(self):
-        return int(self.serialize(),16)
+class HEX(pstr.string):
+    def num(self):
+        return int(self.str(),16)
+    __int__,__long__ = num,num
 
 ### yay
 class Chunk_Type(object): pass
@@ -46,8 +41,8 @@ class Chunk(pstruct.type):
         return size
     
     def ckData(self):
-        size = int(self['ckSize'].li)
-        return Record.Generate(self['ckID'].li.str(), blocksize=lambda s:size)
+        size = self['ckSize'].li.num()
+        return Record.get(self['ckID'].li.str(), blocksize=lambda s:size)
 
     def ckSize(self):
         return self.endian(LONG)
@@ -56,48 +51,23 @@ class Chunk(pstruct.type):
         (ID, 'ckID'),
         (ckSize, 'ckSize'),
 #        (ckData, 'ckData'),
-        (lambda self: Record.Generate(self['ckID'].li.str(), blocksize=lambda s:int(self['ckSize'])), 'ckData'),
+        (lambda self: Record.get(self['ckID'].li.str(), blocksize=lambda s:self['ckSize'].li.num()), 'ckData'),
         (ckExtra, 'ckExtra'),
     ]
 
 class ChunkList(parray.block):
     _object_ = Chunk
 
-    def __repr__(self):
-        ele = [ x['ckID'].serialize() for x in self.v ]
-        return ' '.join([ self.name(), '[%x]'% len(ele), ','.join(('%s'%x for x in ele))])
+    def summary(self):
+        ele = ( x['ckID'].serialize() for x in self.v )
+        return ','.join(ele)
 
 ### record definition class
-class Record(object):
+class Record(ptype.definition):
     cache = {}
-    @classmethod
-    def Add(cls, object):
-        t = object.type
-        cls.cache[t] = object
-
-    @classmethod
-    def Lookup(cls, type):
-        return cls.cache[type]
-
-    @classmethod
-    def Define(cls, pt):
-        cls.Add(pt)
-        return pt
-
-    class Unknown(dyn.block(0)):
-        length=property(fget=lambda s:s.blocksize())
-        shortname=lambda s: 'Unknown{%x}<%s>'% (s.length, s.type)
-
-    @classmethod
-    def Generate(cls, t, **attrs):
-        try:
-            return dyn.clone( cls.Lookup(t), **attrs )
-        except KeyError:
-            pass
-
-        res = dyn.clone(cls.Unknown, **attrs)
-        res.type = t
-        return res
+    class unknown(ptype.block):
+        def classname(self):
+            return 'Unknown{%x}<%s>'% (self.length, self.type)
 
 ###
 class File(pstruct.type):
@@ -111,29 +81,29 @@ class File(pstruct.type):
 
     def __Data(self):
         type = self['Type'].li.serialize()
-        size = int(self['Size'].li)
-        return Record.Generate(type, blocksize=lambda s:size)
+        size = self['Size'].li.num()
+        return Record.get(type, blocksize=lambda s:size)
 
     _fields_ = [
         (dyn.block(4), 'Type'),
         (__Size, 'Size'),
-        (lambda self: Record.Generate(self['Type'].li.serialize(), blocksize=lambda s:int(self['Size'].li)), 'Data'),
+        (lambda self: Record.get(self['Type'].li.serialize(), blocksize=lambda s:self['Size'].li.num()), 'Data'),
 #        (__Data, 'Data'),
     ]
 
-@Record.Define
+@Record.define
 class RIFX(pstruct.type):
     type = 'RIFX'
-    def __Data(self):
-        l = int(self.blocksize() - self['Format'].li.size())
+    def __Elements(self):
+        l = self.blocksize() - self['Format'].li.size()
         return dyn.clone(ChunkList, blocksize=lambda s: l)
 
     _fields_ = [
         (ID, 'Format'),
-        (__Data, 'Elements'),
+        (__Elements, 'Elements'),
     ]
 
-@Record.Define
+@Record.define
 class XFIR(pstruct.type):
     type = 'XFIR'
     def __Data(self):
@@ -147,7 +117,7 @@ class XFIR(pstruct.type):
 
 ### records
 if False:
-    @Record.Define
+    @Record.define
     class pami(pstruct.type):
         pass
 
@@ -171,7 +141,7 @@ class IndexNode(pstruct.type):
         (ULONG, 'reservedValue2'),
     ]
 
-@Record.Define
+@Record.define
 class pamm(pstruct.type):
     type = 'mmap'
     _fields_ = [
@@ -179,7 +149,7 @@ class pamm(pstruct.type):
         (lambda x: dyn.array(IndexNode, int(x['header'].li['numIndexNodes'])), 'nodes'),
     ]
 
-@Record.Define
+@Record.define
 class demx(parray.block):
     type = 'XMED'
     class chunk(pstruct.type):
@@ -187,7 +157,7 @@ class demx(parray.block):
             (dyn.clone(HEX,length=4),'type'),
             (dyn.clone(HEX,length=8),'size'),
             (dyn.clone(HEX,length=8),'count'),
-            (lambda s: dyn.block(int(s['size'].li)),'data')         # FIXME: add a chunktype lookup for this too
+            (lambda s: dyn.block(s['size'].li.num()),'data')         # FIXME: add a chunktype lookup for this too
         ]
     _object_ = chunk
 

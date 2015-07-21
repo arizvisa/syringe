@@ -18,7 +18,7 @@ def setbyteorder(endianness):
     _Globally_ sets the integer byte order to the endianness specified.
     Can be either config.byteorder.bigendian or config.byteorder.littleendian
     '''
-    [ module.setbyteorder(endianness) for module in (ptype,pint,pbinary) ]
+    [ module.setbyteorder(endianness) for module in (ptype,pint,pfloat,pbinary) ]
 
 ## some things people people might find useful
 #from ptype import debug,debugrecurse

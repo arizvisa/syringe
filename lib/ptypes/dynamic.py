@@ -16,9 +16,8 @@ def block(size, **kwds):
         size = 0
 
     def classname(self):
-        return 'dynamic.block(%d)'% (self.length if self.value is None else len(self.value))
+        return 'dynamic.block(%d)'% self.blocksize()
     kwds.setdefault('classname', classname)
-    #kwds.setdefault('__module__', 'ptypes.ptype')
     kwds.setdefault('__module__', 'ptypes.dynamic')
     kwds.setdefault('__name__', 'block')
     return clone(ptype.block, length=size, **kwds)
@@ -42,7 +41,6 @@ def blockarray(type, size, **kwds):
         def classname(self):
             t = type.typename() if ptype.istype(type) else type.__name__
             return 'dynamic.blockarray(%s,%d)'%(t, self.blocksize())
-            #return 'dynamic.blockarray(%s,%d)'%(t, size)
     blockarray.__module__ = 'ptypes.dynamic'
     blockarray.__name__ = 'blockarray'
     blockarray.__getinitargs__ = lambda s: (type,size)
@@ -106,8 +104,7 @@ def array(type, count, **kwds):
     def classname(self):
         obj = type
         t = obj.typename() if ptype.istype(obj) else obj.__name__
-        return 'dynamic.array(%s,%d)'%(t, len(self.value) if self.value is not None else count)
-        #return 'dynamic.array(%s,%d)'%(t, count)
+        return 'dynamic.array(%s,%s)'%(t, str(self.length))
 
     kwds.setdefault('classname', classname)
     kwds.setdefault('length', count)
