@@ -1,51 +1,25 @@
 from ptypes import *
 import art,graph
+from . import *
 
-'''maG
-type id's to look u
-'''
+@Record.define
+class RT_Excel(ptype.definition):
+    type,cache = __name__,{}
 
-import __init__
-class Record(__init__.Record):
-    cache = {}
-    unknown = __init__.RecordUnknown
+class RecordGeneral(RecordGeneral):
+    class Header(pstruct.type):
+        _fields_ = [
+            (pint.littleendian(pint.uint16_t), 'type'),
+            (pint.littleendian(pint.uint16_t), 'length'),
+        ]
+        def Type(self):
+            return RT_Excel.type
+        def Instance(self):
+            return self['type'].num()
+        def Length(self):
+            return self['length'].num()
 
-class RecordGeneral(__init__.RecordGeneral):
-    Record=Record
-    def __extra(s):
-        t = int(s['type'].li)
-        name = '[%s]'% ','.join(s.backtrace()[1:])
-
-        used = s['data'].blocksize()
-        total = int(s['length'].li)
-        if used == total:
-            return dyn.block(0)
-
-        if total >= used:
-            l = total-used
-            print "biff object at %x (type %x) %s has %x bytes unused"% (s.getoffset(), t, name, l)
-            return dyn.block(l)
-
-        print "biff object at %x (type %x) %s's contents are larger than expected (%x>%x)"% (s.getoffset(), t, name, used, total)
-        return dyn.block(0)
-
-    def __data(s):
-        t = int(s['type'].li)
-        l = int(s['length'].li)
-        cls = s.Record.get(t, length=l)
-        return dyn.clone(cls, blocksize=lambda s:l)
-
-    _fields_ = [
-        (pint.littleendian(pint.uint16_t), 'type'),
-        (pint.littleendian(pint.uint16_t), 'length'),
-        (__data, 'data'),
-        (__extra, 'extra')
-    ]
-
-    def blocksize(self):
-        return 4 + int(self['length'])
-
-class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
+class RecordContainer(RecordContainer): _object_ = RecordGeneral
 
 ### primitive types
 class USHORT(pint.uint16_t): pass
@@ -128,7 +102,7 @@ class BiffSubStream(parray.terminated):
     _object_ = RecordGeneral
     def isTerminator(self, value):
 #        print hex(value.getoffset()),value['data'].name(), value.blocksize()
-        if int(value['type']) == EOF.type:
+        if value['header'].Instance() == EOF.type:
             return True
         return False
 
@@ -153,25 +127,21 @@ class BiffSubStream(parray.terminated):
         return result
 
     def details(self):
-        if self.initialized:
-            bof = self[0]['data']
-            try:
-                return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof['dt']))
-            except (TypeError,KeyError):
-                pass
-            return '%s -> %d records -> document type %s'% (self.name(), len(self), repr(bof.serialize()))
-        return '%s [uninitialized] -> %d records'% (self.name(), len(self))
+        bof = self[0]['data']
+        try:
+            return '%s -> %d records -> document type %r'% (self.name(), len(self), bof['dt'])
+        except (TypeError,KeyError):
+            pass
+        return '%s -> %d records -> document type %r'% (self.name(), len(self), bof.serialize())
 
-class File(__init__.File):
+class File(File):
     _object_ = BiffSubStream
 
     def details(self):
-        if self.initialized:
-            return '%s streams=%d'%(self.name(), len(self))
-        return '%s [uninitialized] streams=%d'%(self.name(), len(self))
+        return '%s streams=%d'%(self.name(), len(self))
 
 ###
-@Record.define
+@RT_Excel.define
 class CatSerRange(pstruct.type):
     type = 0x1020
     type = 4128
@@ -192,7 +162,7 @@ class CatSerRange(pstruct.type):
     ]
 
 ###
-@Record.define
+@RT_Excel.define
 class RRTabId(parray.block):
     _object_ = USHORT
     type = 0x13d
@@ -221,7 +191,7 @@ class FrtHeaderOld(pstruct.type):
         (FrtFlags, 'grbitFrt'),
     ]
 
-@Record.define
+@RT_Excel.define
 class MTRSettings(pstruct.type):
     type = 2202
     _fields_ = [
@@ -231,7 +201,7 @@ class MTRSettings(pstruct.type):
         (pint.uint32_t, 'cUserThreadCount')
     ]
 ###
-@Record.define
+@RT_Excel.define
 class Compat12(pstruct.type):
     type = 2188
     _fields_ = [
@@ -245,7 +215,7 @@ class Cell(pstruct.type):
         (pint.uint16_t, 'col'),
         (pint.uint16_t, 'ixfe')
     ]
-@Record.define
+@RT_Excel.define
 class LabelSst(pstruct.type):
     type = 253
     _fields_ = [
@@ -253,7 +223,7 @@ class LabelSst(pstruct.type):
         (pint.uint32_t, 'isst')
     ]
 ###
-@Record.define
+@RT_Excel.define
 class RK(pstruct.type):
     type = 638
     type = 0x273
@@ -263,7 +233,7 @@ class RK(pstruct.type):
         (RkRec, 'rkrec')
     ]
 
-#@Record.define
+#@RT_Excel.define
 class MulBlank(pstruct.type):
     type = 190
     type = 0xbe
@@ -281,7 +251,7 @@ class MulBlank(pstruct.type):
     ]
 
 ###
-@Record.define
+@RT_Excel.define
 class Number(pstruct.type):
     type = 515
     type = 0x203
@@ -298,7 +268,7 @@ class Ref8(pstruct.type):
         (pint.uint16_t, 'colLast'),
     ]
 
-@Record.define
+@RT_Excel.define
 class MergeCells(pstruct.type):
     type = 229
     _fields_ = [
@@ -306,7 +276,7 @@ class MergeCells(pstruct.type):
         (lambda s: dyn.array(Ref8, int(s['cmcs'].li)), 'rgref')
     ]
 ###
-@Record.define
+@RT_Excel.define
 class CrtLayout12(pstruct.type):
     class CrtLayout12Auto(pbinary.struct):
         _fields_ = [
@@ -332,7 +302,7 @@ class CrtLayout12(pstruct.type):
     ]
 
 ###
-@Record.define
+@RT_Excel.define
 class Frame(pstruct.type):
     class FrameAuto(pbinary.struct):
         _fields_ = [
@@ -348,7 +318,7 @@ class Frame(pstruct.type):
     ]
 
 ###
-@Record.define
+@RT_Excel.define
 class Pos(pstruct.type):
     type = 4175
     _fields_ = [
@@ -399,7 +369,7 @@ class ShortXLUnicodeString(pstruct.type):
         (__rgb, 'rgb'),
     ]
 
-@Record.define
+@RT_Excel.define
 class SupBook(pstruct.type):
     type = 430
     _fields_ = [
@@ -408,7 +378,7 @@ class SupBook(pstruct.type):
     ]
 
 #DataValidationCriteria
-@Record.define
+@RT_Excel.define
 class DVAL(pstruct.type):
     type = 434
     type = 0x1b2
@@ -442,7 +412,7 @@ class CellRange(pstruct.type):
         (lambda s: dyn.array(s.Address, int(s['number'].li)), 'addresses'),
     ]
 
-@Record.define
+@RT_Excel.define
 class DV(pstruct.type):
     type = 0x1be
     type = 446
@@ -494,7 +464,7 @@ class DV(pstruct.type):
     ]
 
 ###
-@Record.define
+@RT_Excel.define
 class BOF(pstruct.type):
     class Flags(pbinary.struct):
         _fields_ = [
@@ -536,7 +506,7 @@ class BOF(pstruct.type):
     ]
 
 ###
-@Record.define
+@RT_Excel.define
 class Font(pstruct.type):
     type = 0x0031
     type = 49
@@ -553,7 +523,7 @@ class Font(pstruct.type):
         (ShortXLUnicodeString, 'fontName'),
     ]
 
-@Record.define
+@RT_Excel.define
 class BookBool(pbinary.struct):
     type = 0xda
     type = 218
@@ -569,7 +539,7 @@ class BookBool(pbinary.struct):
         (7, 'reserved2'),
     ]
 
-@Record.define
+@RT_Excel.define
 class RefreshAll(pint.enum, pint.uint16_t):
     type = 0x1b7
     type = 439
@@ -582,12 +552,12 @@ class Boolean(pint.enum):
         (0, 'False'),(1, 'True'),
     ]
 
-@Record.define
+@RT_Excel.define
 class CalcPrecision(Boolean, pint.uint16_t):
     type = 0xe
     type = 14
 
-@Record.define
+@RT_Excel.define
 class Date1904(pint.enum,pint.uint16_t):
     type = 0x22
     type = 34
@@ -604,34 +574,34 @@ class HideObjEnum(pint.enum):
         (2, 'HIDEALL'),
     ]
 
-@Record.define
+@RT_Excel.define
 class HideObj(HideObjEnum, pint.uint16_t):
     type = 0x8d
     type = 141
 
-@Record.define
+@RT_Excel.define
 class Backup(Boolean, pint.uint16_t):
     type = 0x40
     type = 64
 
 class TabIndex(pint.uint16_t): pass
 
-@Record.define
+@RT_Excel.define
 class Password(pint.uint16_t):
     type = 0x13
     type = 19
 
-@Record.define
+@RT_Excel.define
 class Protect(Boolean, pint.uint16_t):
     type = 0x12
     type = 18
 
-@Record.define
+@RT_Excel.define
 class WinProtect(Boolean, pint.uint16_t):
     type = 0x19
     type = 25
 
-@Record.define
+@RT_Excel.define
 class WriteAccess(pstruct.type):
     type = 0x5c
     type = 92
@@ -640,17 +610,17 @@ class WriteAccess(pstruct.type):
         (lambda s: dyn.block(112-s['userName'].li.size()), 'unused')
     ]
 
-@Record.define
+@RT_Excel.define
 class InterfaceHdr(pint.uint16_t):
     type = 0xe1
     type = 225
 
-@Record.define
+@RT_Excel.define
 class InterfaceEnd(pint.uint16_t):
     type = 0xe2
     type = 226
 
-@Record.define
+@RT_Excel.define
 class Mms(pstruct.type):
     type = 0xc1
     type = 193
@@ -659,17 +629,17 @@ class Mms(pstruct.type):
         (pint.uint8_t, 'reserved2'),
     ]
 
-@Record.define
+@RT_Excel.define
 class CodePage(pint.uint16_t):
     type = 0x42
     type = 66
 
-@Record.define
+@RT_Excel.define
 class Excel9File(ptype.type):
     type = 0x1c0
     type = 448
 
-@Record.define
+@RT_Excel.define
 class Window1(pstruct.type):
     type = 61
     type = 0x3d
@@ -685,7 +655,7 @@ class Window1(pstruct.type):
         (pint.uint16_t, 'wTabRatio'),
     ]
 
-@Record.define
+@RT_Excel.define
 class CalcMode(pint.enum, pint.uint16_t):
     type = 0xd
     type = 13
@@ -693,42 +663,42 @@ class CalcMode(pint.enum, pint.uint16_t):
         (0,'Manual'),(1,'Automatic'),(2,'No Tables'),
     ]
 
-@Record.define
+@RT_Excel.define
 class BuiltInFnGroupCount(pint.uint16_t):
     type = 156
     type = 0x9c
 
-@Record.define
+@RT_Excel.define
 class Prot4Rev(Boolean, pint.uint16_t):
     type = 431
     type = 0x1af
 
-@Record.define
+@RT_Excel.define
 class Prot4RevPass(pint.uint16_t):
     type = 444
     type = 0x1bc
 
-@Record.define
+@RT_Excel.define
 class DSF(pint.uint16_t):
     type = 353
     type = 0x161
 
-#@Record.define
-class MSODRAWING(art.SpContainer):
-    type = 0x00ec
-    type = 236
+#@RT_Excel.define
+#class MSODRAWING(art.SpContainer):
+#    type = 0x00ec
+#    type = 236
 
-@Record.define
+@RT_Excel.define
 class EOF(pstruct.type):
     type = 10
     _fields_ = []
 
-@Record.define
+@RT_Excel.define
 class Blank(Cell):
     type = 513
     type = 0x201
 
-@Record.define
+@RT_Excel.define
 class Row(pstruct.type):
     type = 520
     type = 0x208
@@ -828,7 +798,7 @@ if True:
             (XLUnicodeString,'string'),
         ]
 
-@Record.define
+@RT_Excel.define
 class CRN(pstruct.type):
     type = 90
     type = 0x5a
@@ -919,7 +889,7 @@ class StyleXF(pbinary.struct):
         (2, 'reserved3'),
     ]
 
-@Record.define
+@RT_Excel.define
 class XF(pstruct.type):
     type = 0xe0
     type = 224
@@ -938,7 +908,7 @@ class XF(pstruct.type):
         (lambda s: CellXF if s['flags'].li['fStyle'] == 0 else StyleXF, 'data'),
     ]
 
-#@Record.define # FIXME
+#@RT_Excel.define # FIXME
 class MulRk(pstruct.type):
     type = 0xbd
     type = 189
@@ -1254,7 +1224,7 @@ class FormulaValue(pstruct.type):
     ]
 
 if False:
-    #@Record.define
+    #@RT_Excel.define
     class Formula(pstruct.type):
         type = 0x6
         type = 6
@@ -1278,7 +1248,7 @@ if False:
             (CellParsedFormula, 'formula'),
         ]
 
-#@Record.define
+#@RT_Excel.define
 class XCT(pstruct.type):
     type = 89
     type = 0x59
@@ -1293,7 +1263,7 @@ class BuiltInStyle(pstruct.type):
         (pint.uint8_t, 'iLevel'),
     ]
 
-#@Record.define # FIXME
+#@RT_Excel.define # FIXME
 class Style(pstruct.type):
     type = 659
     type = 0x293
@@ -1456,7 +1426,7 @@ class ExtProp(pstruct.type):
         (__extPropData, 'extPropData'),
     ]
 
-#@Record.define # FIXME
+#@RT_Excel.define # FIXME
 class XFExt(pstruct.type):
     type = 0x87d
     type = 2173
@@ -1469,7 +1439,7 @@ class XFExt(pstruct.type):
         (lambda s: dyn.array(ExtProp, s['cexts'].li.int()), 'rgExt'),
     ]
 
-#@Record.define # FIXME
+#@RT_Excel.define # FIXME
 class Format(pstruct.type):
     type = 0x41e
     type = 1054
@@ -1478,7 +1448,7 @@ class Format(pstruct.type):
         (XLUnicodeString, 'stFormat'),
     ]
 
-@Record.define
+@RT_Excel.define
 class SerAuxErrBar(pstruct.type):
     type = 4187
     type = 0x105b
@@ -1583,7 +1553,7 @@ class FeatSmartTag(pstruct.type):
         (lambda s: dyn.array(FactoidData,s['cSmartTags'].li.int()), 'rgFactoid'),
     ]
 
-#@Record.define
+#@RT_Excel.define
 class Feat(pstruct.type):
     type = 0x868
     type = 2152
@@ -1629,7 +1599,7 @@ class EnhancedProtection(pbinary.struct):
         (17, 'reserved'),
     ]
 
-@Record.define
+@RT_Excel.define
 class FeatHdr(pstruct.type):
     type = 2151
     type = 0x867
@@ -1651,7 +1621,7 @@ class FeatHdr(pstruct.type):
         (__rgbHdrData, 'rgbHdrData'),
     ]
 
-@Record.define
+@RT_Excel.define
 class FeatHdr11(pstruct.type):
     type = 2161
     type = 0x871
@@ -1673,7 +1643,7 @@ class FrtRefHeaderU(pstruct.type):
     ]
 
 
-@Record.define
+@RT_Excel.define
 class ContinueFrt(pstruct.type):
     type = 0x812
     type = 2066
@@ -2125,7 +2095,7 @@ class TableFeatureType(pstruct.type):
         (__cellInvalid, 'cellInvalid'),
     ]
 
-@Record.define
+@RT_Excel.define
 class Feature11(pstruct.type):
     type = 2162
     type = 0x872
@@ -2148,7 +2118,7 @@ class Feature11(pstruct.type):
         (__rgbFeat, 'rgbFeat'),
     ]
 
-@Record.define
+@RT_Excel.define
 class Feature12(Feature11):
     type = 2168
     type = 0x878
@@ -2200,7 +2170,7 @@ class List12DisplayName(pstruct.type):
         (XLUnicodeString, 'stListComment'),
     ]
 
-#@Record.define
+#@RT_Excel.define
 class List12(pstruct.type):
     type = 2167
     type = 0x877
@@ -2222,32 +2192,32 @@ class List12(pstruct.type):
         (__rgb, 'rgb'),
     ]
 
-@Record.define
+@RT_Excel.define
 class SerParent(pint.uint16_t):
     type = 4170
     type = 0x104a
 
-@Record.define
+@RT_Excel.define
 class Begin(ptype.type):
     type = 4147
     type = 0x1033
 
-@Record.define
+@RT_Excel.define
 class End(ptype.type):
     type = 4148
     type = 0x1034
 
-@Record.define
+@RT_Excel.define
 class StartBlock(ptype.type):
     type = 2130
     type = 0x852
 
-@Record.define
+@RT_Excel.define
 class EndBlock(ptype.type):
     type = 2131
     type = 0x853
 
-#@Record.define
+#@RT_Excel.define
 class PublisherRecord(pstruct.type):
     # XXX: undocumented
     type = 137
@@ -2263,7 +2233,7 @@ class PublisherRecord(pstruct.type):
         (SectionRecord, 'sec'),
     ]
 
-#@Record.define # FIXME
+#@RT_Excel.define # FIXME
 class SST(pstruct.type):
     type = 252
     type = 0xfc
@@ -2371,7 +2341,7 @@ class ISSTInf(pstruct.type):
         (pint.uint16_t, 'reserved'),
     ]
 
-#@Record.define
+#@RT_Excel.define
 class ExtSST(pstruct.type):
     type = 255
     type = 0xff
@@ -2385,19 +2355,20 @@ class ExtSST(pstruct.type):
         (__rgISSTInf, 'rgISSTInf'),
     ]
 
-#######
-Record.update(art.Record)
-Record.update(graph.Record)
-
 if __name__ == '__main__':
     import sys
     import ptypes,office.excel as excel
     filename, = sys.argv[1:]
-    ptypes.setsource( ptypes.file(filename) )
+    ptypes.setsource( ptypes.file(filename,mode='r') )
+    #filename = './excel.stream'
 
-    y = ptypes.debugrecurse(excel.File)()
+    #y = ptypes.debugrecurse(excel.File)()
     z = excel.File()
     z = z.l
+    a = z[0]
+    print a[2]
+
+    print z[1]
 
     streams = z
 

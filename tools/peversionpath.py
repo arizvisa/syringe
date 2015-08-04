@@ -83,20 +83,33 @@ if __name__ == '__main__':
         print >>sys.stderr, 'File %s does not appear to contain a VERSION_INFO entry within it\'s resources directory.'% filename
         sys.exit(1)
 
-    resource_Names = resource.entry(VERSION_INFO).l
+    try:
+        resource_Names = resource.entry(VERSION_INFO).l
+    except AttributeError:
+        print >>sys.stderr, 'No resource entry in %s that matches VERSION_INFO : %r'%(filename, VERSION_INFO)
+        sys.exit(1)
     if opts.dump_names:
         print >>sys.stdout, '\n'.join(map(repr,resource_Names.iterate()))
         sys.exit(0)
 
     # parse the resource languages
-    resource_Languages = resource_Names.getEntry(opts.name).l
+    try:
+        resource_Languages = resource_Names.getEntry(opts.name).l
+    except AttributeError:
+        print >>sys.stderr, 'No resource found in %s with the requested name : %r'%(filename, opts.name)
+        sys.exit(1)
     if opts.dump_languages:
         print >>sys.stdout, '\n'.join(map(repr,resource_Languages.iterate()))
         sys.exit(0)
 
     # grab the version record
-    resource_Version = resource_Languages.getEntry(opts.language).l
-    versionInfo = resource_Version['Data'].d
+    try:
+        resource_Version = resource_Languages.getEntry(opts.language).l
+    except AttributeError:
+        print >>sys.stderr, 'No version record found in %s for the specified language : %r'%(filename, opts.language)
+        sys.exit(1)
+    else:
+        versionInfo = resource_Version['Data'].d
 
     # parse the version info
     vi = versionInfo.l.cast(pecoff.portable.resources.VS_VERSIONINFO)
@@ -114,16 +127,21 @@ if __name__ == '__main__':
             print >>sys.stderr, 'More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename
             sys.exit(1)
         if (language,codepage) not in lgcpids:
-            print >>sys.stderr, 'Invalid (language,codepage) in %s : %s not in %s'%(filename, (language,codepage), lgcpids)
+            print >>sys.stderr, 'Invalid (language,codepage) in %s : %r not in %s'%(filename, (language,codepage), lgcpids)
             sys.exit(1)
     else:
         (language,codepage), = lgcpids
 
     # extract the properties for the language and cp
-    st = getStringTable(vi, (language,codepage))
-    strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
-    strings.setdefault('__path__', filename)
-    strings.setdefault('__name__', os.path.split(filename)[1])
+    try:
+        st = getStringTable(vi, (language,codepage))
+    except KeyError:
+        print >>sys.stderr, '(language,codepage) in %s has no properties : %r'%(filename, (language,codepage))
+        sys.exit(1)
+    else:
+        strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
+        strings.setdefault('__path__', filename)
+        strings.setdefault('__name__', os.path.split(filename)[1])
 
     # build the path
     if opts.dump:
@@ -132,4 +150,5 @@ if __name__ == '__main__':
 
     path = opts.format.format(**strings)
     print >>sys.stdout, path
+    sys.exit(0)
 

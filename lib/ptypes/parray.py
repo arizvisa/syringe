@@ -106,6 +106,11 @@ class type(_parray_generic):
             ofs += n.blocksize()
         return self
 
+    def copy(self, **attrs):
+        attrs.setdefault('_object_', self._object_)
+        attrs.setdefault('length', self.length)
+        return super(type,self).copy(**attrs)
+
     def alloc(self, fields=(), **attrs):
         result = super(type,self).alloc(**attrs)
         if len(fields) > 0 and fields[0].__class__ is tuple:

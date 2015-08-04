@@ -1,20 +1,99 @@
 from ptypes import *
-import __init__
-class Record(__init__.Record): cache = {}
-class RecordGeneral(__init__.RecordGeneral): Record=Record
-class RecordContainer(__init__.RecordContainer):
-    _object_ = RecordGeneral
-class File(__init__.File): _object_ = RecordGeneral
+from . import *
 
-@Record.define
-class SpContainer(RecordContainer):
-    type = 0xf004
+# ripped from [MS-OART]
+recordType = [
+    ('FT_OfficeArgDgg', 0xf000),
+    ('FT_OfficeArtBStore', 0xf001),
+    ('FT_OfficeArtDg', 0xf002),
+    ('FT_OfficeArtSpgr', 0xf003),
+    ('FT_OfficeArtSp', 0xf004),
+    ('FT_OfficeArtSolver', 0xf005),
+    ('FT_OfficeArtFDGG', 0xf006),
+    ('FT_OfficeArtFBSE', 0xf007),
+    ('FT_OfficeArtFDG', 0xf008),
+    ('FT_OfficeArtFSPGR', 0xf009),
+    ('FT_OfficeArtFSP', 0xf00a),
+    ('FT_OfficeArtFOPT', 0xf00b),
+    ('FT_OfficeArtChildAnchor', 0xf00f),
+    ('FT_OfficeArtFConnectorRule', 0xf012),
+    ('FT_OfficeArtFArcRule', 0xf014),
+    ('FT_OfficeArtFCalloutRule', 0xf017),
+    ('FT_OfficeArtInlineSp', 0xf018),
+    ('FT_OfficeArtBlipEMF', 0xf01a),
+    ('FT_OfficeArtBlipWMF', 0xf01b),
+    ('FT_OfficeArtBlipPICT', 0xf01c),
+    ('FT_OfficeArtBlipJPEG', 0xf01d),
+    ('FT_OfficeArtBlipPNG', 0xf01e),
+    ('FT_OfficeArtBlipDIB', 0xf01f),
+    ('FT_OfficeArtBlipTIFF', 0xf020),
+    ('FT_OfficeArtBlipTIFF2', 0xf029),
+    ('FT_OfficeArtBlipJPEG', 0xf02a),
+    ('FT_OfficeArtFRIT', 0xf118),
+    ('FT_OfficeArtFDGSL', 0xf119),
+    ('FT_OfficeArtColorMRU', 0xf11a),
+    ('FT_OfficeArtFPSPL', 0xf11d),
+    ('FT_OfficeArtSplitMenuColor', 0xf11e),
+    ('FT_OfficeArtSecondaryFOPT', 0xf121),
+    ('FT_OfficeArtTertiaryFOPT', 0xf122),
+]
 
-class MSOSPID(pint.uint32_t): pass
+# Ripped from OfficeDrawing97-2007BinaryFormatSpecification.pdf
+recordType.extend([
+    ('FT_msofbtTimeNodeContainer', 0xf123),
+    ('FT_msofbtTimeConditionList', 0xf124),
+    ('FT_msofbtTimeConditionContainer', 0xf125),
+    ('FT_msofbtTimeModifierList', 0xf126),
+    ('FT_msofbtTimeNode', 0xf127),
+    ('FT_msofbtTimeCondition', 0xf128),
+    ('FT_msofbtTimeModifier', 0xf129),
+    ('FT_msofbtTimeBehaviorContainer', 0xf12a),
+    ('FT_msofbtTimeAnimateBehaviorContainer', 0xf12b),
+    ('FT_msofbtTimeColorBehaviorContainer', 0xf12c),
+    ('FT_msofbtTimeEffectBehaviorContainer', 0xf12d),
+    ('FT_msofbtTimeMotionBehaviorContainer', 0xf12e),
+    ('FT_msofbtTimeRotationBehaviorContainer', 0xf12f),
+    ('FT_msofbtTimeScaleBehaviorContainer', 0xf130),
+    ('FT_msofbtTimeSetBehaviorContainer', 0xf131),
+    ('FT_msofbtTimeCommandBehaviorContainer', 0xf132),
+    ('FT_msofbtTimeBehavior', 0xf133),
+    ('FT_msofbtTimeAnimateBehavior', 0xf134),
+    ('FT_msofbtTimeColorBehavior', 0xf135),
+    ('FT_msofbtTimeEffectBehavior', 0xf136),
+    ('FT_msofbtTimeMotionBehavior', 0xf137),
+    ('FT_msofbtTimeRotationBehavior', 0xf138),
+    ('FT_msofbtTimeScaleBehavior', 0xf139),
+    ('FT_msofbtTimeSetBehavior', 0xf13a),
+    ('FT_msofbtTimeCommandBehavior', 0xf13b),
+    ('FT_msofbtClientVisualElement', 0xf13c),
+    ('FT_msofbtTimePropertyList', 0xf13d),
+    ('FT_msofbtTimeVariantList', 0xf13e),
+    ('FT_msofbtTimeAnimationValueList', 0xf13f),
+    ('FT_msofbtTimeIterateData', 0xf140),
+    ('FT_msofbtTimeSequenceData', 0xf141),
+    ('FT_msofbtTimeVariant', 0xf142),
+    ('FT_msofbtTimeAnimationValue', 0xf143),
+    ('FT_msofbtExtTimeNodeContainer', 0xf144),
+    ('FT_msofbtSubNodeContainer', 0xf145),
+])
 
-@Record.define
-class FSP(pstruct.type):
-    type = 0xf00a
+# create a ptype.definition for each record type
+locals().update(map(RecordType.define,recordType))
+
+# record types from [MS-OART]
+@FT_OfficeArtSp.define
+class OfficeArtSpContainer(RecordContainer):
+    type = 15,0x000
+
+@FT_OfficeArtSolver.define
+class OfficeArtSolverContainer(RecordContainer):
+    type = 15,None      # OfficeArtSolverContainerFileBlock records
+
+class MSOSPID(uint4): pass
+
+@FT_OfficeArtFSP.define
+class OfficeArtFSP(pstruct.type):
+    type = 2,None       # MSOPT enumeration value
     class __flags(pbinary.struct):
         _fields_ = [
             (20,'unused1'),
@@ -28,7 +107,7 @@ class FSP(pstruct.type):
         (pbinary.littleendian(__flags), 'f')
     ]
 
-class FOPTE(pstruct.type):
+class OfficeArtFOPTE(pstruct.type):
     class OPID(pbinary.struct):
         _fields_ = [
             (1,'fComplex'),
@@ -38,12 +117,12 @@ class FOPTE(pstruct.type):
 
     _fields_ = [
         (pbinary.littleendian(OPID), 'opid'),
-        (pint.uint32_t, 'op')
+        (sint4, 'op')
     ]
 
-@Record.define
-class FOPT(pstruct.type):
-    type = 0xf00b
+@FT_OfficeArtFOPT.define
+class OfficeArtFOPT(pstruct.type):
+    type = 3,None           # Number of properties in the table
     def __fopt(self):
         p = self.getparent(type=__init__.RecordGeneral)
         count = p['header'].getinstance()
@@ -60,25 +139,54 @@ class FOPT(pstruct.type):
         (__complex, 'complex'),
     ]
 
-@Record.define
+@FT_OfficeArtDg.define
+class OfficeArtDgContainer(RecordContainer):
+    type = 15,0x000
+
+@FT_OfficeArtSpgr.define
+class OfficeArtSpgrContainer(RecordContainer):
+    type = 15,0x000
+
+@FT_OfficeArtBlipDIB.define
+class OfficeArtBlipDIB_Single(pstruct.type):
+    type = 0,0x7a8
+    _fields_ = [
+        (dyn.block(16), 'rgbUid1'),
+        (pint.uint8_t, 'tag'),
+        (dyn.block(0), 'BLIPFileData'), # FIXME: this isn't right..
+    ]
+
+@FT_OfficeArtBlipDIB.define
+class OfficeArtBlipDIB_Double(pstruct.type):
+    type = 0,0x7a9
+    _fields_ = [
+        (dyn.block(16), 'rgbUid1'),
+        (dyn.block(16), 'rgbUid2'),
+        (pint.uint8_t, 'tag'),
+        (dyn.block(0), 'BLIPFileData'), # FIXME: this isn't right..
+    ]
+
+@FT_OfficeArtFDG.define
+class OfficeArtFDG(pstruct.type):
+    type = 0,None       # drawing identifier
+    _fields_ = [(pint.uint32_t,'csp'),(MSOSPID, 'spidCur')]
+
+## ripped from OfficeDrawing97-2007BinaryFormatSpecification.pdf
+@FT_msofbtExtTimeNodeContainer.define  # FIXME
 class msofbtExtTimeNodeContainer(RecordContainer):
-    type = 0xf144
-    type = 61764
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimeConditionContainer.define  # FIXME
 class msofbtTimeConditionContainer(RecordContainer):
-    type = 0xf125
-    type = 61733
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimeAnimateBehaviorContainer.define  # FIXME
 class msofbtTimeAnimateBehaviorContainer(RecordContainer):
-    type = 0xf12b
-    type = 61739
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimeColorBehaviorContainer.define  # FIXME
 class msofbtTimeColorBehaviorContainer(RecordContainer):
-    type = 0xf12c
-    type = 61740
+    type = 15,None
 
 class msofbtTimeVariant(pstruct.type):
     def __Value(self):
@@ -108,16 +216,14 @@ class msofbtTimeAnimationValue(pstruct.type):
         (pstr.szwstring, 'Formula'),
     ]
 
-@Record.define
+@FT_msofbtTimeVariantList.define  # FIXME
 class msofbtTimeVariantList(parray.block):
-    type = 0xf13f
-    type = 61759
+    type = 0,None
     _object_ = msofbtTimeAnimationValue
 
-@Record.define
+@FT_msofbtTimeCondition.define  # FIXME
 class msofbtTimeCondition(pstruct.type):
-    type = 0xf128
-    type = 61736
+    type = 0,None   # ConditionType
 
     class __triggerType(pint.enum, pint.uint32_t):
         _values_ = [
@@ -152,49 +258,41 @@ class msofbtTimeCondition(pstruct.type):
         (pint.int32_t, 'delay'),
     ]
 
-@Record.define
+@FT_msofbtTimeSetBehaviorContainer.define  # FIXME
 class msofbtTimeSetBehaviorContainer(RecordContainer):
-    type = 0xf131
-    type = 61745
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimePropertyList.define  # FIXME
 class msofbtTimePropertyList(RecordContainer):
-    type = 0xf13d
-    type = 61757
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimeSetBehaviorContainer.define  # FIXME
 class msofbtTimeSetBehaviorContainer(RecordContainer):
-    type = 0xf131
-    type = 61745
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimeEffectBehaviorContainer.define  # FIXME
 class msofbtTimeEffectBehaviorContainer(RecordContainer):
-    type = 0xf12d
-    type = 61741
+    type = 15,None
 
-@Record.define
+@FT_msofbtTimeBehaviorContainer.define  # FIXME
 class msofbtTimeBehaviorContainer(RecordContainer):
-    type = 0xf12a
-    type = 61738
+    type = 15,None
 
-@Record.define
+@FT_msofbtClientVisualElement.define  # FIXME
 class msofbtClientVisualElement(RecordContainer):
-    type = 0xf13c
-    type = 61756
+    type = 15,None   # list of msofbtTimeVariantRecords
 
-@Record.define
+@FT_msofbtTimeEffectBehavior.define  # FIXME
 class msofbtTimeEffectBehavior(pstruct.type):
-    type = 0xf136
-    type = 61750
+    type = 0,None
     _fields_ = [
         (pint.uint32_t, 'propertiesUsed'),
         (pint.uint32_t, 'taetTransition'),
     ]
 
-@Record.define
+@FT_msofbtTimeVariant.define  # FIXME
 class msofbtTimeVariant(pstruct.type):
-    type = 0xf142
-    type = 61762
+    type = 0,None
 
     def __Value(self):
         n = int(self['Type'].li)
@@ -218,10 +316,9 @@ class msofbtTimeVariant(pstruct.type):
         (__Value, 'Value'),
     ]
 
-@Record.define
+@FT_msofbtTimeBehavior.define  # FIXME
 class msofbtTimeBehavior(pstruct.type):
-    type = 0xf133
-    type = 61747
+    type = 0,None
 
     _fields_ = [
         (pint.uint32_t, 'propertiesUsed'),
@@ -229,89 +326,6 @@ class msofbtTimeBehavior(pstruct.type):
         (pint.uint32_t, 'tbaccAccmulate'),
         (pint.uint32_t, 'tbbtTransformType'),
     ]
-
-@Record.define
-class msofbtDgContainer(RecordContainer):
-    type = 0xf002
-    type = 61442
-
-@Record.define
-class msofbtSpgrContainer(RecordContainer):
-    type = 0xf003
-    type = 61443
-
-@Record.define
-class msofbtClientAnchor(pstruct.type):
-    type = 0xf010
-    type = 61456
-
-    #copied from http://svn.apache.org/viewvc/poi/trunk/src/java/org/apache/poi/ddf/EscherClientAnchorRecord.java?view=annotate
-
-    _fields_ = [
-        (pint.uint16_t, 'Flag'),
-        (pint.uint16_t, 'Col1'),
-        (pint.uint16_t, 'DX1'),
-        (pint.uint16_t, 'Row1'),
-
-        (pint.uint16_t, 'DY1'),
-        (pint.uint16_t, 'Col2'),
-        (pint.uint16_t, 'DX2'),
-        (pint.uint16_t, 'Row2'),
-        (pint.uint16_t, 'DY2'),
-    ]
-
-    class __short(pstruct.type):
-        _fields_ = [
-            (pint.uint16_t, 'Flag'),
-            (pint.uint16_t, 'Col1'),
-            (pint.uint16_t, 'DX1'),
-            (pint.uint16_t, 'Row1'),
-        ]
-
-    class __long(pstruct.type):
-        _fields_ = [
-            (pint.uint16_t, 'DY1'),
-            (pint.uint16_t, 'Col2'),
-            (pint.uint16_t, 'DX2'),
-            (pint.uint16_t, 'Row2'),
-            (pint.uint16_t, 'DY2'),
-        ]
-
-    _fields_ = [
-        (lambda s: pint.uint64_t if s.blocksize() == 8 else s.__short, 'short'),
-        (lambda s: s.__long if s.blocksize() >= 18 else ptype.type, 'long'),
-        (lambda s: dyn.clone(ptype.block, length=s.blocksize()-(s['short'].li.size()+s['long'].li.size())), 'extra'),
-    ]
-
-@Record.define
-class msofbtClientData(ptype.type):
-    type = 0xf011
-    type = 61457
-
-#@Record.define
-class OfficeArtBlipDIB(pstruct.type):
-    type = 0xf01f
-    type = 61471
-    _fields_ = [
-        (dyn.block(16), 'rgbUid1'),
-#        (dyn.block(16), 'rgbUid2'),     # XXX: this is conditional?
-        (pint.uint8_t, 'tag'),
-        (dyn.block(0), 'BLIPFileData'), # FIXME: this isn't right..
-    ]
-
-@Record.define
-class FDG(pstruct.type):
-    type = 0xf008
-    _fields_ = [(pint.uint32_t,'csp'),(MSOSPID, 'spidCur')]
-
-if False:
-    import ptypes    
-    ptypes.setsource( ptypes.provider.file('poc.xls') )
-
-    x = SpContainer()
-#    x.setoffset(66100)
-    x.setoffset(66360)
-    print x.l
 
 if __name__ == '__main__':
     from ptypes import *
@@ -345,6 +359,15 @@ if __name__ == '__main__':
         z = art.RecordGeneral()
         z.source = provider.string(s)
         print z.l
+
+    if False:
+        import ptypes    
+        ptypes.setsource( ptypes.provider.file('poc.xls') )
+
+        x = SpContainer()
+    #    x.setoffset(66100)
+        x.setoffset(66360)
+        print x.l
 
     if False:
         class header(pbinary.struct):

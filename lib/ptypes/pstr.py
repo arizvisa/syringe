@@ -1,5 +1,6 @@
 import __builtin__,itertools
-from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider
+from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider,config
+Config = config.defaults
 
 class _char_t(pint.integer_t):
     length = 1

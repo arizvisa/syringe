@@ -156,6 +156,15 @@ class Portable(pstruct.type, Header):
                 return dyn.clone(sectionentry, Section=sect, SectionName=sect['Name'].str())
         return result
 
+    def __CertificatePadding(self):
+        if len(self['DataDirectory']) < 4:
+            return ptype.undefined
+        res = self['DataDirectory'][4]
+        if res['Address'].num() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
+            return ptype.undefined
+        lastoffset = self['Data'].li.getoffset() + self['Data'].blocksize()
+        return dyn.block(res['Address'].num() - lastoffset)
+
     def __Certificate(self):
         if len(self['DataDirectory']) < 4:
             return ptype.undefined
@@ -185,6 +194,7 @@ class Portable(pstruct.type, Header):
         (__Sections, 'Sections'),
         (__Padding, 'Padding'),
         (__Data, 'Data'),
+        (__CertificatePadding, 'CertificatePadding'),
         (__Certificate, 'Certificate'),
     ]
 

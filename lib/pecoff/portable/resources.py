@@ -53,7 +53,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.pointer_t):
     class rva(pbinary.struct):
         _fields_ = [(1,'type'),(31,'offset')]
     _value_ = dyn.clone(pbinary.partial, _object_=rva, byteorder=config.byteorder.littleendian)
-    def num(self):
+    def decode_offset(self):
         base = self.getparent(headers.DataDirectoryEntry)['Address']
         rva = base.num() + self.object['offset']
         return headers.calculateRelativeAddress(base, rva)
@@ -66,7 +66,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA
     def getEntryName(self):
         if self.object['type']:
             return self.d.li.str()
-        return int(self.object['offset'])
+        return self.object['offset']
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_DATA(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA):
     def _object_(self):
         return IMAGE_RESOURCE_DIRECTORY if self.object['type'] else IMAGE_RESOURCE_DATA_ENTRY

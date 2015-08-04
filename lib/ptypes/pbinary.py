@@ -102,9 +102,10 @@ class type(ptype.generic):
             raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type %s'%value.__class__)
         self.value = value
         return self
-    def copy(self, **kwds):
+
+    def copy(self, **attrs):
         result = self.new(self.__class__, __name__=self.__name__ if hasattr(self,'__name__') else None, position=self.getposition())
-        result.update_attributes(kwds)
+        result.update_attributes(attrs)
         result.deserialize_consumer(bitmap.consumer().push(self.bitmap()))
         return result
 
@@ -187,6 +188,16 @@ class container(type):
                 bofs += n.blockbits()
             pass
         return result
+
+    def copy(self, **attrs):
+        """Performs a deep-copy of self repopulating the new instance if self is initialized
+        """
+        # create an instance of self and update with requested attributes
+        if attrs.get('recurse', True):
+            attrs.setdefault('value', map(operator.methodcaller('copy', **attrs),self.value) if iscontainer(self) else self.value)
+        else:
+            attrs.setdefault('value', self.value)
+        return super(container,self).copy(**attrs)
 
     def initializedQ(self):
         if self.value is None:
@@ -490,6 +501,12 @@ class _struct_generic(container):
 class array(_array_generic):
     length = 0
 
+    def copy(self, **attrs):
+        """Performs a deep-copy of self repopulating the new instance if self is initialized"""
+        attrs.setdefault('_object_', self._object_)
+        attrs.setdefault('length', self.length)
+        return super(array,self).copy(**attrs)
+
     def alloc(self, *fields, **attrs):
         result = super(array,self).alloc(**attrs)
         if len(fields) > 0 and fields[0].__class__ is tuple:
@@ -583,6 +600,10 @@ class array(_array_generic):
 
 class struct(_struct_generic):
     _fields_ = None
+
+    def copy(self, **attrs):
+        attrs.setdefault('_fields_', self._fields_)
+        return super(type,self).copy(**attrs)
 
     def alloc(self, __attrs__={}, **fields):
         attrs = __attrs__
@@ -748,6 +769,11 @@ class partial(ptype.container):
     _object_ = None
     byteorder = Config.integer.order
     initializedQ = lambda s:s.value is not None
+
+    def copy(self, **attrs):
+        attrs.setdefault('_object_', self._object_)
+        attrs.setdefault('byteorder', self.byteorder)
+        return super(partial,self).copy(**attrs)
 
     def serialize(self):
         if self.byteorder is config.byteorder.bigendian:

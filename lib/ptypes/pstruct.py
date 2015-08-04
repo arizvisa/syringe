@@ -74,8 +74,16 @@ class type(_pstruct_generic):
             This contains which elements the structure is composed of
     '''
     _fields_ = None     # list of (type,name) tuples
-    initializedQ = lambda s: super(type, s).initializedQ() or (s.blocksize.im_func is not ptype.container.blocksize.im_func and s.size() >= s.blocksize())
     ignored = ptype.container.ignored.union(('_fields_',))
+
+    def initializedQ(self):
+        if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
+            return super(type,self).initializedQ()
+        return self.size() >= self.blocksize()
+
+    def copy(self, **attrs):
+        attrs.setdefault('_fields_', self._fields_)
+        return super(type,self).copy(**attrs)
 
     def alloc(self, __attrs__={}, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
@@ -104,7 +112,7 @@ class type(_pstruct_generic):
 
             try:
                 ofs = self.getoffset()
-                index = 0
+                current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
                 for i,(t,name) in enumerate(self._fields_):
                     if name in self:
                         _,name = name,'%s_%x'%(name, len(self.value))
@@ -115,7 +123,19 @@ class type(_pstruct_generic):
                     self.append(n)
                     if ptype.iscontainer(t) or ptype.isresolveable(t):
                         n.load()
-                    ofs += n.blocksize()
+                    bs = n.blocksize()
+                    if current is not None:
+                        try:
+                            _ = self.blocksize()
+                        except Exception, e:
+                            Config.log.debug("type.load : %s : Custom blocksize raised an exception at offset %x, field %s : %s", self.instance(), current, n.instance(), path, exc_info=True)
+                        else:
+                            if current+bs > _:
+                                path = ' -> '.join(self.backtrace())
+                                Config.log.info("type.load : %s : Custom blocksize caused structure to terminate at offset %x, field %s : %s", self.instance(), current, n.instance(), path)
+                                break
+                        current += bs
+                    ofs += bs
 
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
@@ -128,15 +148,10 @@ class type(_pstruct_generic):
             result = super(type, self).load()
         return result
 
-    def details(self, **options):
-        if self.initializedQ():
-            return self.__details_initialized(**options)
-        return self.__details_uninitialized(**options)
-
     def repr(self, **options):
         return self.details(**options)
 
-    def __details_uninitialized(self, **options):
+    def details(self, **options):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
             return '\n'.join('[%x] %s %s ???'%(self.getoffset(), utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
@@ -144,19 +159,16 @@ class type(_pstruct_generic):
         result,o = [],self.getoffset()
         for (t,name),value in map(None,self._fields_,self.value):
             if value is None:
-                o = o
                 i = utils.repr_class(gettypename(t))
-                v = '???' 
+                v = self.new(ptype.type).a.summary(**options)
                 result.append('[%x] %s %s %s'%(o, i, name, v))
                 continue
             o = self.getoffset(name)
             i = utils.repr_instance(value.classname(), value.name())
             v = value.summary(**options) if value.initializedQ() else '???' 
             result.append('[%x] %s %s'%( o, i, v ))
-        return '\n'.join(result)
+            o += value.blocksize()
 
-    def __details_initialized(self, **options):
-        result = ['[%x] %s %s'%(self.getoffset(name), utils.repr_instance(value.classname(),value.name()), value.summary(**options)) for (t,name),value in zip(self._fields_,self.value)]
         if len(result) > 0:
             return '\n'.join(result)
         return '[%x] Empty []'%self.getoffset()

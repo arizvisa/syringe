@@ -1,73 +1,106 @@
-import logging
 from ptypes import *
-class RecordUnknown(dyn.block(0)):
+
+### atomic types
+class bool1(pint.uint8_t): pass
+class ubyte1(pint.uint8_t): pass
+class uint2(pint.uint16_t): pass
+class uint4(pint.uint32_t): pass
+class sint2(pint.int16_t): pass
+class sint4(pint.int32_t): pass
+
+### record generalities
+class RecordUnknown(ptype.block):
+    length = 0
     def classname(self):
         s = self.shortname()
         names = s.split('.')
         names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
         return '.'.join(names)
 
-class RecordHeader(pstruct.type):
-    class __verinstance(pbinary.struct):
-        _fields_=[(12,'instance'),(4,'ver')]
-    __verinstance = pbinary.littleendian(__verinstance)
-
-    _fields_ = [
-        (__verinstance, 'ver/inst'),
-        (pint.littleendian(pint.uint16_t), 'type'),
-        (pint.littleendian(pint.uint32_t), 'length')
-    ]
-
-    def getinstance(self):
-        return self['ver/inst']['instance']
-    def getversion(self):
-        return self['ver/inst']['ver']
-
-    def details(self):
-        if self.initialized:
-            v = self['ver/inst'].num()
-            t = int(self['type'])
-            l = int(self['length'])
-            return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v,t,l)
-        return super(RecordHeader, self).details()
-
+# record type lookup
 class Record(ptype.definition):
     cache = {}
-    unknown = RecordUnknown
+    class RT_Unknown(ptype.definition): cache,unknown = {},RecordUnknown
+    unknown = RT_Unknown
 
+### Record type
+class RecordType(pint.enum, pint.littleendian(pint.uint16_t)):
+    _values_ = []
+
+    @classmethod
+    def define(cls,(name,value)):
+        res = type(name, (ptype.definition,), {'type':value, 'cache':{}})
+        cls._values_.append((res.__name__,res.type))
+        return (name,Record.define(res))
+
+### Record header
 class RecordGeneral(pstruct.type):
+    Record = Record
+
+    class Header(pstruct.type):
+        RecordType = RecordType
+        class VersionInstance(pbinary.struct):
+            _fields_=[(12,'instance'),(4,'version')]
+        _fields_ = [
+            (pbinary.littleendian(VersionInstance), 'Version/Instance'),
+            (lambda s: s.RecordType, 'Type'),
+            (pint.littleendian(pint.uint32_t), 'Length')
+        ]
+
+        def Type(self):
+            return self['Type'].num()
+        def Instance(self):
+            res = self['Version/Instance']
+            return res['version'].num(), res['instance'].num()
+        def Length(self):
+            return self['Length'].num()
+
+        def details(self):
+            v = self['Version/Instance'].num()
+            t,l = self['Type'].num(),self['Length'].num()
+            return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v, t, l)
+
     def __data(self):
-        t = int(self['header'].li['type'])
-        l = int(self['header'].li['length'])
-        return dyn.clone(self.Record.get(t, length=l), blocksize=lambda s:l)
+        res = self['header'].li
+        t,i,l = res.Type(), res.Instance(), res.Length()
+        Type = self.Record.get(t)
+
+        # look for an explicit instance
+        try:
+            res = Type.lookup(i, length=l)
+
+        # otherwise, the instance might modify the type in some way
+        except KeyError:
+            res = Type.get(None, length=l)
+
+        # something good had to come out of that
+        return dyn.clone(res, blocksize=lambda s: l)
 
     def __extra(self):
         bs = self.blocksize()
         s = self['header'].li.size() + self['data'].li.size()
         if bs > s:
             return dyn.block(bs - s)
-        return ptype.type
+        return ptype.undefined
         
     _fields_ = [
-        (RecordHeader, 'header'),
+        (lambda s: s.Header, 'header'),
         (__data, 'data'),
         (__extra, 'extra'),
     ]
 
     def blocksize(self):
-        return self['header'].li.size() + self['header']['length'].num()
+        return self['header'].li.size() + self['header'].Length()
 
 class RecordContainer(parray.block):
     _object_ = None
 
     def details(self):
-        if self.initialized:
-            records = []
-            for v in self.walk():
-                n = '%s[%x]'%(v.__class__.__name__,v.type)
-                records.append(n)
-            return 'records=%d [%s]'%(len(self), ','.join(records))
-        return '[uninitialized] records=%d [%s]'%(len(self), ','.join(x['data'].classname() for x in self.v))
+        records = []
+        for v in self.walk():
+            n = '%s[%x]'%(v.__class__.__name__,v.type)
+            records.append(n)
+        return 'records=%d [%s]'%(len(self), ','.join(records))
 
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
@@ -125,13 +158,11 @@ class File(RecordContainer):
     _object_ = None
 
     def details(self):
-        if self.initialized:
-            records = []
-            for v in self.walk():
-                n = '%s[%x]'%(v.__class__.__name__,v.type)
-                records.append(n)
-            return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
-        return super(File, self).details()
+        records = []
+        for v in self.walk():
+            n = '%s[%x]'%(v.__class__.__name__,v.type)
+            records.append(n)
+        return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
 
     def blocksize(self):
         return self.source.size()

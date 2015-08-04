@@ -392,7 +392,9 @@ class _base_generic(object):
 
         # XXX
         chain = ';'.join(utils.repr_instance(x.classname(),x.name()) for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))
-        raise error.NotFoundError(self, 'base.getparent', message="match %s not found in chain : %s[%x:+%x] : %s"%(type.typename(), self.classname(), self.getoffset(), self.blocksize(), chain))
+        try: bs = '%x'% self.blocksize()
+        except: bs = '???'
+        raise error.NotFoundError(self, 'base.getparent', message="match %s not found in chain : %s[%x:+%s] : %s"%(type.typename(), self.classname(), self.getoffset(), bs, chain))
 
     def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.classname(), x.name(), x.getoffset())):
         """
@@ -531,10 +533,11 @@ class base(generic):
         nmax = nmin + self.blocksize()
         return (offset >= nmin) and (offset < nmax)
 
-    def copy(self, **kwds):
+    def copy(self, **attrs):
         """Return a duplicate instance of the current one."""
-        result = self.new(self.__class__, **kwds)
-        return result.load(offset=0,source=provider.string(self.serialize())) if self.initializedQ() else result
+        result = self.new(self.__class__, __name__=self.classname(), position=self.getposition())
+        result.update_attributes(attrs)
+        return result.load(offset=0,source=provider.string(self.serialize()),blocksize=lambda:self.blocksize()) if self.initializedQ() else result
 
     def compare(self, other):
         """Returns an iterable containing the difference between ``self`` and ``other``
@@ -681,8 +684,16 @@ class type(base):
             if ptype has been initialized yet
     """
     length = 0      # int
-    initializedQ = lambda self: self.value is not None and len(self.value) == self.blocksize()
     ignored = generic.ignored.union(('length',))
+
+    def copy(self, **attrs):
+        attrs.setdefault('length',self.length)
+        return super(type,self).copy(**attrs)
+
+    def initializedQ(self):
+        if self.value is not None and len(self.value) == self.blocksize():
+            return True
+        return False
 
     ## byte stream input/output
     def deserialize_block(self, block):
@@ -825,10 +836,6 @@ class container(base):
         self.value[index] = value
         return value
 
-    def contains(self, offset):
-        """True if the specified ``offset`` is contained within"""
-        return any(x.contains(offset) for x in self.value)
-    
     def at(self, offset, recurse=True, **kwds):
         """Returns element that contains the specified offset
 
@@ -989,22 +996,15 @@ class container(base):
                 Config.log.fatal('container.commit : %s : Unable to complete noncontiguous store : write stopped at {%x:+%x}', self.instance(), ofs+sz, bs-sz)
         return self
 
-    def copy(self, **kwds):
+    def copy(self, **attrs):
         """Performs a deep-copy of self repopulating the new instance if self is initialized
-
-        If a recurse=False is passed, a shallow-copy will be performed and an
-        uninitialized object will be returned.
         """
-
         # create an instance of self and update with requested attributes
-        result = self.new(self.__class__, __name__=self.classname(), offset=self.getoffset())
-        kwds.setdefault('value', self.value)
-        result.update_attributes(kwds)
-
-        # reinitialize new object using contents of old object
-        if self.initializedQ():
-            return result.load(offset=0,source=provider.string(self.serialize()))
-        return result
+        if attrs.get('recurse', True):
+            attrs.setdefault('value', map(operator.methodcaller('copy', **attrs),self.value) if iscontainer(self) else self.value)
+        else:
+            attrs.setdefault('value', self.value)
+        return super(container,self).copy(**attrs)
 
     def compare(self, other):
         """Returns an iterable containing the difference between ``self`` and ``other``
@@ -1048,8 +1048,11 @@ class container(base):
         """Display all ptype.container types as a hexstring"""
         if self.initializedQ():
             return self.summary()
+        threshold = options.pop('threshold', Config.display.threshold.summary)
+        message = options.pop('threshold_message', Config.display.threshold.summary_message)
         if self.value is not None:
-            return ''.join((x.serialize() if x.initializedQ() else '?'*x.blocksize()) for x in self.value)
+            res = ''.join((x.serialize() if x.initializedQ() else '?'*x.blocksize()) for x in self.value)
+            return utils.emit_repr(res, threshold, message, **options)
         return '???'
 
     def append(self, object):
@@ -1317,20 +1320,15 @@ class wrapper_t(type):
     _value_ = None
     @property
     def value(self):
-        if not self.object.initializedQ():
-            return None
-        return self.object.serialize()
-    # this setter shouldn't really ever be used...but...it's available.
+        if self.object.initializedQ():
+            return self.object.serialize()
+        return None
+
     @value.setter
     def value(self, data):
-        return self.object.load(source=provider.string(data))
-
-    def __create_instance(self, name):
-        return self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
-    def __copy_instance(self, instance):
-        result = instance.copy()
-        self._value_ = result.__class__
-        return result
+        if self._value_ is None:
+            self._value_ = clone(block, length=len(data))
+        return self.object.load(source=provider.string(data), offset=0)
 
     __object = None
     @property
@@ -1338,11 +1336,14 @@ class wrapper_t(type):
         if self._value_ is None:
             raise error.UserError(self, 'wrapper_t.object', message='wrapper_t._value_ is undefined.')
         if (self.__object is None) or (self.__object.__class__ != self._value_):
-            self.__object = self.__create_instance('wrapped_object<%s>'% self._value_.typename() if istype(self._value_) else self._value_.__name__)
+            name = 'wrapped_object<%s>'% (self._value_.typename() if istype(self._value_) else self._value_.__name__)
+            self.__object = self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
         return self.__object
     @object.setter
     def object(self, value):
-        self.__object = self.__copy_instance(value)
+        name = 'wrapped_object<%s>'% value.name()
+        self._value_ = value.__class__
+        self.__object = value.copy(__name__=name, offset=0, source=provider.proxy(self), parent=self)
 
     def initializedQ(self):
         return (self._value_ is not None) and (self.__object is not None) and (self.__object.initializedQ())
@@ -1416,30 +1417,43 @@ class wrapper_t(type):
         return super(wrapper_t,self).details(**options)
 
 class encoded_t(wrapper_t):
-    ## string encoding (simulates ._object_)
-    def encode(self, object):
-        """Take object and serialize it to an encoded string"""
+    """This type represents an element that can be decoded/encoded to/from another element.
+
+    To change the way a type is decoded, overload the .decode() method to return a new type from self.object
+    To change the way a type is encoded to it, overwrite .encode() and return the type that self.object will become.
+
+    _value_ = the original element type
+    _object_ = the decoded element type
+
+    .object = the actual element object represented by self
+    """
+    _value_ = None      # source type
+    _object_ = None     # new type
+
+    @utils.memoize('self', self=lambda n:(n._object_,n.value), attrs=lambda n:tuple(sorted(n.items())))
+    def decode(self, **attrs):
+        """Take self and decode it into self._object_
+
+        To overload, return an instance of the new type.
+        Default method will instantiate a self._object_ based on self.object
+        """
+        attrs.setdefault('source', provider.string(self.value))
+        attrs.setdefault('offset', 0)
+        return self.new(self._object_, **attrs)
+
+    def encode(self, object, **attrs):
+        """Take object and convert it to an encoded string"""
         return object.serialize()
 
-    def decode(self, string):
-        """Take a string and decode it into a ptype.block object"""
-        return clone(block, blocksize=lambda s:len(string), source=provider.string(string))
-
     ## object dereferencing, force .object to match the length for the provided data
-    def reference(self, object, **attrs):
-        data = self.encode(object)
-        self._value_ = clone(block, blocksize=lambda s: len(data))
-        self.value = data
-        return self
-
     def dereference(self, **attrs):
-        if 'source' in attrs:
-            Config.log.warn('encoded_t.decode : %s : User attempted to change the .source attribute of an encoded block', self.classname())
-            del(attrs['source'])
+        attrs.setdefault('__name__', '*'+self.name())
+        return self.decode(**attrs)
 
-        object = self.decode(self.value)
-        attrs.setdefault('__name__', '*'+self.shortname())
-        return self.new(object, **attrs)
+    def reference(self, object, **attrs):
+        self._object_ = object.__class__
+        self.value = self.encode(object, **attrs)
+        return self
 
     d = property(fget=lambda s,**a: s.dereference(**a), fset=lambda s,*x,**a:s.reference(*x,**a))
     deref = lambda s,**a: s.dereference(**a)
@@ -1477,19 +1491,15 @@ class pointer_t(encoded_t):
             res = reduce(lambda t,c: bitmap.push(t,(ord(c),8)), value, bitmap.zero)
             return bitmap.number(res)
 
-    @utils.memoize('self', self=lambda n:(n._object_,n.decode_offset()), attrs=lambda n:tuple(sorted(n.items())))
-    def dereference(self, **attrs):
-        attrs.setdefault('__name__', '*'+self.name())
+    @utils.memoize('self', self=lambda n:(n.source, n._object_, n.decode_offset()), attrs=lambda n:tuple(sorted(n.items())))
+    def decode(self, **attrs):
+        attrs.setdefault('source', self.source)
         attrs.setdefault('offset', self.decode_offset())
-        return self.new(self._object_, **attrs)
+        return super(pointer_t,self).decode(**attrs)
 
-    def reference(self, object, **attrs):
-        self._object_ = object.__class__
-        self.set(object.getoffset())
-
-        # make a child of current object
-        object.parent = self
-        return self
+    def encode(self, object, **attrs):
+        self.object.set( object.getoffset() )
+        return super(pointer_t,self).encode(self.object, **attrs)
 
     def get(self):
         return self.object.get()
@@ -1498,21 +1508,18 @@ class pointer_t(encoded_t):
         """Sets the value of pointer to the specified offset"""
         return self.object.set(offset)
 
-    def num(self):
-        if not self.initializedQ():
-            raise error.InitializationError(self, 'pointer_t.num')
-        return self.object.get()
-
     def number(self):
         """Return the value of pointer as an integral"""
-        return self.num()
+        return self.object.get()
+    num = number
+
     def int(self):
         return int(self.num())
     def long(self):
         return long(self.num())
     def decode_offset(self):
         """Returns an integer representing the resulting object's real offset"""
-        return self.num()
+        return self.object.get()
 
     def classname(self):
         targetname = force(self._object_, self).typename() if istype(self._object_) else getattr(self._object_, '__name__', 'None')
@@ -1678,11 +1685,12 @@ if __name__ == '__main__':
 
             key = k
 
-            def encode(self, object):
-                return ''.join(chr(ord(x)^k) for x in object.serialize())
-            def decode(self, string):
-                data = ''.join(chr(ord(x)^k) for x in string)
-                return dynamic.clone(self._object_, source=prov.string(data))
+            def encode(self, object, **attrs):
+                data = ''.join(chr(ord(x)^k) for x in object.serialize())
+                return super(xor,self).encode(object, source=prov.string(data))
+            def decode(self, **attrs):
+                data = ''.join(chr(ord(x)^k) for x in self.object.serialize())
+                return super(xor,self).decode(source=prov.string(data))
         
         x = xor(source=ptypes.prov.string(s))
         x = x.l
@@ -1703,15 +1711,17 @@ if __name__ == '__main__':
 
             key = k
 
-            def encode(self, object):
-                return ''.join(chr(ord(x)^k) for x in object.serialize())
-            def decode(self, string):
-                data = ''.join(chr(ord(x)^k) for x in string)
-                return dynamic.clone(self._object_, source=prov.string(data))
+            def encode(self, object, **attrs):
+                data = ''.join(chr(ord(x)^k) for x in object.serialize())
+                return data
+            def decode(self, **attrs):
+                data = ''.join(chr(ord(x)^k) for x in self.object.serialize())
+                return super(xor,self).decode(source=prov.string(data))
 
         instance = pstr.string().set(match)
 
         x = xor(source=ptypes.prov.string('\x00'*0x100)).l
+        x.object = instance
         x = x.reference(instance)
         if x.serialize() == data:
             raise Success        
@@ -1723,12 +1733,13 @@ if __name__ == '__main__':
             _value_ = pstr.szstring
             _object_ = dynamic.array(pint.uint32_t, 4)
 
-            def encode(self, object):
-                return object.serialize().encode('base64')
+            def encode(self, object, **attrs):
+                data = object.serialize().encode('base64')
+                return super(b64,self).encode(object, source=prov.string(data))
 
-            def decode(self, string):
-                data = string.decode('base64')
-                return dynamic.clone(self._object_, source=prov.string(data))
+            def decode(self, **attrs):
+                data = self.object.serialize().decode('base64')
+                return super(b64,self).decode(source=prov.string(data))
                 
         x = b64(source=ptypes.prov.string(s))
         x = x.l
@@ -1745,12 +1756,13 @@ if __name__ == '__main__':
             _value_ = dynamic.block(len(result))
             _object_ = dynamic.array(pint.uint32_t, 4)
 
-            def encode(self, object):
-                return object.serialize().encode('base64')
+            def encode(self, object, **attrs):
+                data = object.serialize().encode('base64')
+                return data
 
-            def decode(self, string):
-                data = string.decode('base64')
-                return dynamic.clone(self._object_, source=prov.string(data))
+            def decode(self, **attrs):
+                data = self.object.serialize().decode('base64')
+                return super(b64,self).decode(source=prov.string(data))
 
         instance = pstr.szstring().set(input)
 
@@ -2099,10 +2111,14 @@ if __name__ == '__main__':
         from ptypes import dynamic,pint,pstruct,ptype
         class cblock(pstruct.type):
             class _zlibblock(ptype.encoded_t):
-                def encode(self, object):
-                    return object.serialize().encode('zlib')
-                def decode(self, string):
-                    return super(cblock._zlibblock,self).decode(string.decode('zlib'))
+                _object_ = ptype.block
+                def encode(self, object, **attrs):
+                    data = object.serialize().encode('zlib')
+                    return data
+                def decode(self, **attrs):
+                    data = self.object.serialize().decode('zlib')
+                    attrs['blocksize'] = lambda:len(data)
+                    return super(cblock._zlibblock,self).decode(source=prov.string(data), **attrs)
 
             def __zlibblock(self):
                 return ptype.clone(self._zlibblock, _value_=dynamic.block(self['size'].l.int()))
@@ -2122,17 +2138,20 @@ if __name__ == '__main__':
     def test_compression_block():
         from ptypes import dynamic,pint,pstruct,ptype
         class zlibblock(ptype.encoded_t):
-            def encode(self, object):
-                return object.serialize().encode('zlib')
-            def decode(self, string):
-                return super(zlibblock,self).decode(string.decode('zlib'))
+            def encode(self, object, **attrs):
+                data = object.serialize().encode('zlib')
+                return data
+            def decode(self, **attrs):
+                data = self.object.serialize().decode('zlib')
+                return super(zlibblock,self).decode(source=prov.string(data), length=len(data))
 
         class mymessage(ptype.block): pass
         message = 'hi there.'
         data = mymessage().set(message)
 
         source = prov.string('\x00'*1000)
-        a = zlibblock(source=source).reference(data)
+        a = zlibblock(source=source)
+        a = a.reference(data)
         if a.d.l.serialize() == message:
             raise Success
 

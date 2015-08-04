@@ -1,57 +1,68 @@
 from ptypes import *
-import __init__
-class Record(__init__.Record): cache = {}
-class RecordGeneral(__init__.RecordGeneral):
-    Record=Record
-    class __header(pbinary.struct):
-        _fields_ = [
-            (12, 'instance'),
-            (4, 'version'),
-        ]
-    __header = pbinary.littleendian(__header)
+from . import *
 
-    def __data(self):
-        t = int(self['type'].li)
-        l = int(self['length'].li)
-        try:
-            cls = self.Record.Lookup(t)
-        except KeyError:
-            return dyn.clone(__init__.RecordUnknown, type=t, length=l)
-        return dyn.clone(cls, blocksize=lambda s:l)
+recordType = [
+    ('FT_OfficeArtClientAnchorChart', 0xf010),
+    ('FT_OfficeArtClientData', 0xf011),
+    ('FT_OfficeArtClientTextBox', 0xf00d),
+]
 
-    def __extra(self):
-        t = int(self['type'].li)
-        name = '[%s]'% ','.join(self.backtrace()[1:])
+# create a ptype.definition for each record type
+locals().update(map(RecordType.define,recordType))
 
-        used = self['data'].size()
-        total = int(self['length'].li)
+# record types from [MS-OGRAPH]
+@FT_OfficeArtClientData.define
+class OfficeArtClientData(ptype.type):
+    type = 0,0x000
 
-        if total > used:
-            l = total-used
-            print "graph object at %x (type %x) %s has %x bytes unused"% (self.getoffset(), t, name, l)
-            return dyn.block(l)
+@FT_OfficeArtClientTextBox.define
+class OfficeArtClientTextBox(ptype.type):
+    type = 0,0x000
 
-        if used > total:
-            print "graph object at %x (type %x) %s's contents are larger than expected (%x>%x)"% (self.getoffset(), t, name, used, total)
-        return dyn.block(0)
+@FT_OfficeArtClientAnchorChart.define
+class OfficeArtclientAnchorChart(pstruct.type):
+    type = 0,0x000
+
+    #copied from http://svn.apache.org/viewvc/poi/trunk/src/java/org/apache/poi/ddf/EscherClientAnchorRecord.java?view=annotate
 
     _fields_ = [
-        (__header, 'version'),
-        (pint.littleendian(pint.uint16_t), 'type'),
-        (pint.uint32_t, 'length'),
-        (__data, 'data'),
-        (__extra, 'extra'),
+        (pint.uint16_t, 'Flag'),
+        (pint.uint16_t, 'Col1'),
+        (pint.uint16_t, 'DX1'),
+        (pint.uint16_t, 'Row1'),
+
+        (pint.uint16_t, 'DY1'),
+        (pint.uint16_t, 'Col2'),
+        (pint.uint16_t, 'DX2'),
+        (pint.uint16_t, 'Row2'),
+        (pint.uint16_t, 'DY2'),
     ]
 
-    def blocksize(self):
-        return 8 + int(self['length'])
+    class __short(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'Flag'),
+            (pint.uint16_t, 'Col1'),
+            (pint.uint16_t, 'DX1'),
+            (pint.uint16_t, 'Row1'),
+        ]
 
-class RecordContainer(__init__.RecordContainer): _object_ = RecordGeneral
-class File(__init__.File): _object_ = RecordGeneral
+    class __long(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'DY1'),
+            (pint.uint16_t, 'Col2'),
+            (pint.uint16_t, 'DX2'),
+            (pint.uint16_t, 'Row2'),
+            (pint.uint16_t, 'DY2'),
+        ]
 
-@Record.define
+    _fields_ = [
+        (lambda s: pint.uint64_t if s.blocksize() == 8 else s.__short, 'short'),
+        (lambda s: s.__long if s.blocksize() >= 18 else ptype.type, 'long'),
+        (lambda s: dyn.clone(ptype.block, length=s.blocksize()-(s['short'].li.size()+s['long'].li.size())), 'extra'),
+    ]
+
+# FIXME
 class DataFormat(pstruct.type):
-    type = 0x1006
     _fields_ = [
         (pint.uint16_t, 'xi'),
         (pint.uint16_t, 'yi'),

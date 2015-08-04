@@ -202,7 +202,7 @@ class OBJECT_IDENTIFIER(ptype.type):
 
     def summary(self):
         oid,data = self.str(),self.serialize()
-        if oid in self.values:
+        if oid in self._values_:
             return '{:s} ({:s}) ({!r})'.format(self._values_[oid],oid,data)
         return '{:s} ({!r})'.format(oid,data)
 
