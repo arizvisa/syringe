@@ -115,8 +115,8 @@ class type(_pstruct_generic):
                 current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
                 for i,(t,name) in enumerate(self._fields_):
                     if name in self:
-                        _,name = name,'%s_%x'%(name, len(self.value))
-                        Config.log.warn("type.load : %s : Duplicate element name %s. Using generated name %s : %s", self.instance(), _, name, path)
+                        _,name = name,'%s_%x'%(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+                        Config.log.warn("type.load : %s : Duplicate element name %r. Using generated name %r : %s", self.instance(), _, name, path)
 
                     # create each element
                     n = self.new(t, __name__=name, offset=ofs)
@@ -128,11 +128,11 @@ class type(_pstruct_generic):
                         try:
                             _ = self.blocksize()
                         except Exception, e:
-                            Config.log.debug("type.load : %s : Custom blocksize raised an exception at offset %x, field %s : %s", self.instance(), current, n.instance(), path, exc_info=True)
+                            Config.log.debug("type.load : %s : Custom blocksize raised an exception at offset %x, field %r : %s", self.instance(), current, n.instance(), path, exc_info=True)
                         else:
                             if current+bs > _:
                                 path = ' -> '.join(self.backtrace())
-                                Config.log.info("type.load : %s : Custom blocksize caused structure to terminate at offset %x, field %s : %s", self.instance(), current, n.instance(), path)
+                                Config.log.info("type.load : %s : Custom blocksize caused structure to terminate at offset %x, field %r : %s", self.instance(), current, n.instance(), path)
                                 break
                         current += bs
                     ofs += bs
@@ -163,7 +163,7 @@ class type(_pstruct_generic):
                 v = self.new(ptype.type).a.summary(**options)
                 result.append('[%x] %s %s %s'%(o, i, name, v))
                 continue
-            o = self.getoffset(name)
+            o = self.getoffset(value.__name__ or name)
             i = utils.repr_instance(value.classname(), value.name())
             v = value.summary(**options) if value.initializedQ() else '???' 
             result.append('[%x] %s %s'%( o, i, v ))

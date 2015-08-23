@@ -93,7 +93,7 @@ class MINIFAT(DIFAT):
     Pointer = lambda s: dyn.block(s._uSectorSize)
 
 ### Types
-class Directory(pstruct.type):
+class DirectoryEntry(pstruct.type):
     class Type(pint.enum, BYTE):
         _values_=[('Unknown',0),('Storage',1),('Stream',2),('Root',5)]
     class Flag(pint.enum, BYTE):
@@ -116,6 +116,25 @@ class Directory(pstruct.type):
         (SECT, 'sectLocation'),
         (QWORD, 'qwSize'),
     ]
+
+    def summary(self):
+        return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].num(), self['qwSize'].num(), self['clsid'].summary())
+
+class Directory(parray.block):
+    _object_ = DirectoryEntry
+    def blocksize(self):
+        return self._uSectorSize
+
+    def details(self):
+        res = []
+        maxoffsetlength = max(len('[%x]'%x.getoffset()) for x in self)
+        maxnamelength = max(len(repr(x['Name'].str())) for x in self)
+        for i,x in enumerate(self):
+            offset = '[%x]'% x.getoffset()
+            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, x.classname(), i, x['Name'].str(), x['Type'].summary(), x['sectLocation'].num(), x['qwSize'].num(), x['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
+        return '\n'.join(res)
+    def repr(self):
+        return self.details()
 
 class File(pstruct.type):
     class Header(pstruct.type):
@@ -179,7 +198,8 @@ class File(pstruct.type):
         length = sum(self[n].size() for n in ('Header','SectorShift','reserved','Fat','MiniFat','Difat'))
         return dyn.clone(DIFAT, length=109)
     def __Data(self):
-        return dyn.blockarray(dyn.block(self._uSectorSize), self.source.size() - self._uSectorSize)
+        self.Sector = dyn.block(self._uSectorSize, __name__='Sector')
+        return dyn.blockarray(self.Sector, self.source.size() - self._uSectorSize)
 
     _fields_ = [
         (Header, 'Header'),
@@ -192,11 +212,7 @@ class File(pstruct.type):
         (__Data, 'Data'),
     ]
 
-    def extract(self, iterable):
-        res = self.new(ptype.container)
-        map(res.append, map(self['Data'].__getitem__, iterable))
-        return res
-
+    @ptypes.utils.memoize(self=lambda s: s.source)
     def getDifat(self):
         '''Return an array containing the Difat'''
         count = self['Difat']['csectDifat'].num()
@@ -216,6 +232,7 @@ class File(pstruct.type):
             map(res.append, (p for p in table))
         return res
 
+    @ptypes.utils.memoize(self=lambda s: s.source)
     def getMiniFat(self):
         '''Return an array containing the MiniFAT'''
         mf = self['MiniFat']
@@ -225,6 +242,7 @@ class File(pstruct.type):
             map(res.append, (p for p in table))
         return res
 
+    @ptypes.utils.memoize(self=lambda s: s.source)
     def getFat(self):
         '''Return an array containing the FAT'''
         count,difat = self['Fat']['csectFat'].num(),self.getDifat()
@@ -233,8 +251,20 @@ class File(pstruct.type):
             map(res.append, (p for p in v.l.d.l))
         return res
 
+    def getDirectory(self):
+        fat = self.getFat()
+        dsect = self['Fat']['sectDirectory'].num()
+        res = self.extract( fat.chain(dsect) )
+        return res.cast(Directory, blocksize=lambda:res.size())
+
+    def extract(self, iterable):
+        res = self.new(ptype.container)
+        map(res.append, map(self['Data'].__getitem__, iterable))
+        return res
+
+
 if __name__ == '__main__':
-    import ptypes,storage; reload(storage)
+    import ptypes,storage
     filename = 'test.xls'
     filename = 'plant_types.ppt'
     ptypes.setsource(ptypes.prov.file(filename,mode='r'))
@@ -249,3 +279,4 @@ if __name__ == '__main__':
     fat = a.getFat()
     minifat = a.getMiniFat()
 
+    d = a.getDirectory()

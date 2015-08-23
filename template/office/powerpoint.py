@@ -238,7 +238,7 @@ class UserEditAtom(pstruct.type):
         (uint2, 'version'),
         (ubyte1, 'minorVersion'),
         (ubyte1, 'majorVersion'),
-        (lambda s: dyn.pointer(PSR_UserEditAtom), 'offsetLastEdit'),
+        (dyn.pointer(lambda s: UserEditAtom), 'offsetLastEdit'),
         (dyn.pointer(RecordGeneral), 'offsetPersistDirectory'),
         (uint4, 'docPersistIdRef'),
         (uint4, 'persistIdSeed'),
@@ -276,7 +276,7 @@ class PersistDirectoryEntry(pstruct.type):
 
     def details(self):
         id = 'info.persistId:%x'% self['info']['persistId']
-        addresses = [hex(int(o)) for o in self['offsets']]
+        addresses = [hex(o.num()) for o in self['offsets']]
         return ' '.join((id, 'offsets:{', ','.join(addresses), '}'))
 
     def walk(self):
@@ -501,7 +501,7 @@ class DocumentAtom(pstruct.type):
         (bool1, 'fShowComments'),
     ]
 
-@RT_Environment.define
+#@RT_Environment.define
 class DocumentTextInfoContainer(pstruct.type):
     type = 15,0x000
     _fields_ = [
@@ -515,7 +515,7 @@ class DocumentTextInfoContainer(pstruct.type):
         #(TextMasterStyleAtom, 'textMasterStyleAtom'),
     ]
 
-@RT_DrawingGroup.define
+#@RT_DrawingGroup.define
 class DrawingGroupContainer(pstruct.type):
     type = 15,0x000
     _fields_ = [
@@ -523,7 +523,7 @@ class DrawingGroupContainer(pstruct.type):
         #(OfficeArtDggContainer, 'OfficeArtDgg'),
     ]
 
-@RT_SlideListWithText.define
+#@RT_SlideListWithText.define
 class MasterListWithTextContainer(pstruct.type):
     type = 15,0x001
     _fields_ = [
@@ -531,7 +531,7 @@ class MasterListWithTextContainer(pstruct.type):
     #    (lambda s: parray.block(MasterPersistAtom, s.parent['rh']['recLen']), 'rgMasterPersistAtom'),
     ]
 
-@RT_List.define
+#@RT_List.define
 class DocInfoListContainer(pstruct.type):
     type = 15,0x000
     _fields_ = [
@@ -565,7 +565,7 @@ if __name__ == '__main__':
         z.size = lambda:(len(header)+len(data))*4
         print z.l
 
-    if True:
+    if False:
         header = '\x00\x00'+'\xc3\x0b' + '\x06\x00\x00\x00'
         data = '\x00'*6
         element = header+data
@@ -579,7 +579,7 @@ if __name__ == '__main__':
         z.size = lambda:len(container)
         print z.l
 
-    if True:
+    if False:
         z = pp.File(source=ptypes.prov.file('./powerpoint.stream',mode='r'))
         z=z.l
         print z[0].initialized

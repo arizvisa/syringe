@@ -51,7 +51,7 @@ class RecordGeneral(pstruct.type):
             return self['Type'].num()
         def Instance(self):
             res = self['Version/Instance']
-            return res['version'].num(), res['instance'].num()
+            return res['version'],res['instance']
         def Length(self):
             return self['Length'].num()
 
@@ -67,7 +67,7 @@ class RecordGeneral(pstruct.type):
 
         # look for an explicit instance
         try:
-            res = Type.lookup(i, length=l)
+            res = Type.lookup(i)
 
         # otherwise, the instance might modify the type in some way
         except KeyError:
@@ -93,7 +93,7 @@ class RecordGeneral(pstruct.type):
         return self['header'].li.size() + self['header'].Length()
 
 class RecordContainer(parray.block):
-    _object_ = None
+    _object_ = RecordGeneral
 
     def details(self):
         records = []
@@ -155,8 +155,6 @@ class RecordContainer(parray.block):
 
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
-    _object_ = None
-
     def details(self):
         records = []
         for v in self.walk():

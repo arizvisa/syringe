@@ -56,7 +56,7 @@ class package:
         def register(cls, definition):
             id = cls.registration.hash(definition.__name__)
             if id in cls.registration.id:
-                raise KeyError("Duplicate id %x in cache"% id)
+                raise KeyError, "Duplicate id %x in cache"% id
 
             cls.registration.id[id] = definition
             definition.id = id
@@ -67,7 +67,7 @@ class package:
             '''registers the definition with the specified builtin type'''
             type = definition.getclass()
             if type in cls.registration.type:
-                raise KeyError("Duplicate type %s in cache"% repr(type))
+                raise KeyError, "Duplicate type %r in cache"% type
 
             definition = cls.register(definition)
             cls.registration.type[type] = definition
@@ -77,7 +77,7 @@ class package:
         def register_const(cls, definition):
             const = definition.getclass()
             if const in cls.registration.const:
-                raise KeyError("Duplicate constant %s in cache"% repr(const))
+                raise KeyError, "Duplicate constant %r in cache"% const
             definition = cls.register(definition)
             cls.registration.const[const] = definition
             return definition
@@ -98,7 +98,7 @@ class package:
             '''search through registration.const for a definition'''
             result = cls.registration.const[const]
             if result.getclass() is not const:
-                raise KeyError(const)
+                raise KeyError, const
             return result
 
         @classmethod
@@ -119,7 +119,7 @@ class package:
                 # XXX: implement binary modules
                 if hasattr(instance, '__file__'):
                     if instance.__file__.endswith('.pyd'):
-                        raise NotImplementedError, 'binary modules not supported'
+                        raise NotImplementedError, 'Binary modules are un-supported'
                     return module_
                 return module_local
 
@@ -133,7 +133,7 @@ class package:
             if t == builtin_.getclass():
                 if instance.__module__ is None:
                     return partial  # XXX
-                    raise KeyError,(instance, 'Unable to determine module from builtin method')
+                    raise KeyError, (instance,'Unable to determine module name from builtin method')
                 return builtin_
 
             # catch-all object
@@ -142,7 +142,7 @@ class package:
 
             # FIXME: if it follows the pickle protocol..
             if hasattr(instance, '__getstate__'):
-                raise NotImplementedError
+                raise NotImplementedError, 'Pickle protocol for type %r is unimplemented'% instance
                 pickle.loads(pickle.dumps(instance))
                 return partial
 
@@ -292,7 +292,7 @@ class package:
 class __type__(__builtin__.object):
     @classmethod
     def getclass(cls, *args, **kwds):
-        raise NotImplementedError(cls)
+        raise NotImplementedError, cls
 
     @classmethod
     def new(cls):
@@ -311,12 +311,12 @@ class __type__(__builtin__.object):
     @classmethod
     def p_instance(cls, object, **attributes):
         '''return attributes of type that will be used to update'''
-        raise NotImplementedError(cls)
+        raise NotImplementedError, cls
 
     @classmethod
     def u_constructor(cls, data, **attributes):
         '''using the provided data, construct an instance of the object'''
-        raise NotImplementedError(cls)
+        raise NotImplementedError, cls
 
     @classmethod
     def u_instance(cls, instance, data, **attributes):
@@ -330,10 +330,10 @@ class partial(__type__):
         __name__ = '--incomplete--'
         def __getattr__(self, attribute):
             message = 'unable to access attribute "%s" from partial type "%s"'
-            raise Exception(message% (attribute, self.__name__))
+            raise Exception, message% (attribute, self.__name__)
         def __call__(self, *args, **kwds):
             message = 'unable to call partial type "%s"'
-            raise Exception(message% (self.__name__))
+            raise Exception, message% (self.__name__)
         def __repr__(self):
             return "%s %s"%( self.__class__, self.__name__ )
 
@@ -713,7 +713,7 @@ if 'core':
         @classmethod
         def u_constructor(cls, data, **attributes):
             name,type = data
-            type.__name__ = name
+            type.__name__ = name or ''
 
 #            class type(type): pass  # XXX: this type-change might mess up something
             # FIXME: create an instance illegitimately
@@ -722,7 +722,7 @@ if 'core':
             type.__init__ = lambda s: None
             if hasattr(type, '__new__'):
                 # FIXME: abc.ABCMeta
-                raise Exception, 'Unable to support custom .__new__ operators'
+                raise Exception, 'Unable to support custom-defined .__new__ operators'
             type.__new__ = lambda *a: a
             result = type()
             type.__init__ = _
@@ -1011,7 +1011,7 @@ if 'special':
 
         @classmethod
         def getclass(cls):
-            raise NotImplementedError(cls)
+            raise NotImplementedError, cls
 
         @classmethod
         def p_constructor(cls, object, **attributes):
@@ -1076,13 +1076,12 @@ if 'special':
         def getclass(cls):
             return function.getclass()
 
-      # FIXME: having to include the globals for an unbound function (__module__ is undefined) might be weird
-
+        # FIXME: having to include the globals for an unbound function (__module__ is undefined) might be weird
         @classmethod
         def p_constructor(cls, object, **attributes):
             # so...it turns out that only the closure property is immuteable
             func_closure = object.func_closure if object.func_closure is not None else ()
-            assert object.__module__ is not None, 'FIXME: Unable to serialize an unbound function'
+            assert object.__module__ is not None, 'FIXME: Unable to pack an unbound function'
 #            return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure),object.func_globals
             return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure)
 
@@ -1090,7 +1089,7 @@ if 'special':
         def u_constructor(cls, data, **attributes):
 #            modulename,code,closure,globals = data
             modulename,code,closure = data
-            assert object.__module__ is not None, 'FIXME: Unable to deserialize an unbound function'
+            assert object.__module__ is not None, 'FIXME: Unable to unpack an unbound function'
 
             # XXX: assign the globals from hints if requested
             globs = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
@@ -1278,7 +1277,6 @@ if 'special':
             return ()
 
     # XXX: the following aren't completed...maybe never will be
-#    raise NotImplementedError
     @package.cache.register_type
     class generator_(__type__):
         @classmethod
@@ -1287,14 +1285,14 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            raise NotImplementedError('Not allowed to store generator_ objects')
-            return object.gi_code,object.gi_frame
+            raise NotImplementedError, 'Unable to pack objects of type generator_'  # Due to the gi_frame property
+            return object.gi_running,object.gi_code,object.gi_frame
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             co,fr = data
             result = function.new(co, fr.f_globals)
-            raise NotImplementedError('Not allowed to create generator_ objects')
+            raise NotImplementedError, 'Unable to unpack objects of type generator_'
             return result
 
         @classmethod
@@ -1314,11 +1312,11 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            raise NotImplementedError('Not allowed to store frame_ objects')
+            raise NotImplementedError, 'Unable to pack objects of type frame_'
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            raise NotImplementedError('Not allowed to create frame_ objects')
+            raise NotImplementedError, 'Unable to unpack objects of type frame_'
 
     @package.cache.register_type
     class staticmethod_(__constant):
@@ -1832,17 +1830,17 @@ if __name__ == '__main__':
             b.blargh = 500
             b.huh = 500
         except AttributeError:
-            raise Failure("Unable to assign to slots")
+            raise Failure, "Unable to assign to slots"
 
         try:
             b.readonly = 20
-            raise Failure("Successfully assigned to a readonly property")
+            raise Failure, "Successfully assigned to a readonly property"
         except AttributeError:
             pass
 
         try:
             b.nope = None
-            raise Failure("Assigned a property to a __dict__ instead of an allocated slot")
+            raise Failure, "Assigned a property to a __dict__ instead of an allocated slot"
         except AttributeError:
             pass
 

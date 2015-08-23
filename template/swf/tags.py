@@ -19,36 +19,26 @@ class TagDef(ptype.definition):
 
 class Tag(pstruct.type):
     '''this wraps around a tag'''
-    def autopad(self):
-        total = self.blocksize() - self.getheadersize()
+    def __unknown(self):
+        total = self.blocksize() - (self['Header'].size() + self['HeaderLongLength'].size())
         used = self['data'].size()
-        if used < total:
+        if used > total:
             logging.warning('invalid size specified (%d > %d) : %s'%(used, total, self['data'].classname()))
             return Empty
         return dyn.block(total - used)
 
-    def getheadersize(self):
-        return self['Header'].size() + self['HeaderLongLength'].size()
-
     def blocksize(self):
-        size = int(self['Header']['length'])
-        if size == 0x3f:
-            size = int(self['HeaderLongLength'])
-        return size + self.getheadersize()
+        res = self['Header']['Length'] if self['Header'].li['Length'] < 0x3f else self['HeaderLongLength'].li.num()
+        return res + self['Header'].size() + self['HeaderLongLength'].size()
 
-    def islongheader(self):
-        if self['Header']['length'] == 0x3f:
-            return UI32
-        return Empty
-
-    def autotag(self, tagid, size):
-        return TagDef.get(tagid, length=size)
+    def __HeaderLongLength(self):
+        return UI32 if self['Header'].li['Length'] == 0x3f else pint.uint_t
 
     _fields_ = [
         (RECORDHEADER, 'Header'),
-        (islongheader, 'HeaderLongLength'),
-        (lambda self: self.autotag(self['Header']['type'], self.blocksize() - self.getheadersize()), 'data'),
-        (autopad, 'unknown')
+        (__HeaderLongLength, 'HeaderLongLength'),
+        (lambda s: TagDef.get(s['Header'].li['Type'], length=s.blocksize()-(s['Header'].size()+s['HeaderLongLength'].size())), 'data'),
+        (__unknown, 'unknown')
     ]
 
     def serialize(self):
@@ -59,7 +49,6 @@ class Tag(pstruct.type):
             self['Header']['length'] = 0x3f
             self['HeaderLongLength'] = self.new(UI32).set(size)     # this creates a bad reference but whatever..
             self['HeaderLongLength'].set(size)
-
         return super(Tag, self).serialize()
 
 class TagList(parray.terminated):
@@ -300,7 +289,7 @@ class ImportAssets(pstruct.type):
     _fields_ = [
         (STRING, 'URL'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, int(s['Count'].li)), 'Asset')
+        (lambda s: dyn.array(_asset, s['Count'].li.num()), 'Asset')
     ]
 
 @TagDef.define
@@ -310,7 +299,7 @@ class ExportAssets(pstruct.type):
 
     _fields_ = [
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, int(s['Count'].li)), 'Asset')
+        (lambda s: dyn.array(_asset, s['Count'].li.num()), 'Asset')
     ]
 
 @TagDef.define
@@ -322,7 +311,7 @@ class ImportAssets2(pstruct.type):
         (UI8, 'Reserved1'),
         (UI8, 'Reserved2'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, int(s['Count'].li)), 'Asset')
+        (lambda s: dyn.array(_asset, s['Count'].li.num()), 'Asset')
     ]
 
 @TagDef.define
@@ -523,7 +512,7 @@ class DefineFontInfo(pstruct.type):
     _fields_ = [
         (UI16, 'FontID'),
         (UI8, 'FontNameLen'),
-        (lambda s: dyn.clone(pstr.string,length=int(s['FontNameLen'].li)), 'FontName'),
+        (lambda s: dyn.clone(pstr.string,length=s['FontNameLen'].li.num()), 'FontName'),
         (__FontFlags, 'FontFlags'),
         (__CodeTable, 'CodeTable'),
     ]
@@ -689,7 +678,7 @@ if __name__ == '__main__':
     import ptypes,tags,stypes
     from ptypes import *
 
-    #@TestCase
+    @TestCase
     def test_DefineShape_load():
         s = '\xbf\x00$\x00\x00\x00\x01\x00`\x002\x00\x00\r\xc0\x01\x00\xff\xff\xff\x01\x01\x00\x00\x00\x00\x115\x8c\x807\x1fD\xe0p\xc9\x1d\x0c\x81\xc2\xdc\x00'
         ptypes.setsource( prov.string(s) )
@@ -701,7 +690,7 @@ if __name__ == '__main__':
         print b['shapebounds']
         print b['shapes']
 
-    #@TestCase
+    @TestCase
     def test_SHAPEWITHSTYLE_load():
         global a
         s = '\x01\x00\xff\xff\xff\x01\x01\x00\x00\x00\x00\x115\x8c\x807\x1fD\xe0p\xc9\x1d\x0c\x81\xc2\xdc\x00'

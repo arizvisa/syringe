@@ -310,8 +310,13 @@ def memoize(*kargs,**kattrs):
                 return cache[res]
             return cache.setdefault(res, fn(*args,**kwds))
         # set some utils on the function
-        callee.key = key
-        callee.cache = cache
+        callee.memoize_key = lambda: key
+        callee.memoize_key.__doc__ = """Generate a unique key based on the provided arguments"""
+        callee.memoize_cache = lambda: cache
+        callee.memoize_cache.__doc__ = """Return the current memoize cache"""
+        callee.memoize_clear = lambda: cache.clear()
+        callee.memoize_clear.__doc__ = """Empty the current memoize cache"""
+
         callee.func_name = fn.func_name
         callee.func_doc = fn.func_doc
         callee.callable = fn

@@ -252,8 +252,7 @@ class uninitialized(terminated):
     '''An array that determines it's size dynamically.'''
     def size(self):
         if self.value is not None:
-            value = (_ for _ in self.value if _.value is not None)
-            return sum(n.size() for n in value)
+            return sum(n.size() for n in self.value if n.value is not None)
         raise error.InitializationError(self, 'uninitialized.size')
 
     def initializedQ(self):

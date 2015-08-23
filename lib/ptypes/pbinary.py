@@ -200,9 +200,7 @@ class container(type):
         return super(container,self).copy(**attrs)
 
     def initializedQ(self):
-        if self.value is None:
-            return False
-        return all(x is not None and isinstance(x,type) and x.initializedQ() for x in self.value)
+        return self.value is not None and all(x is not None and isinstance(x,type) and x.initializedQ() for x in self.value)
 
     ### standard stuff
     def num(self):
@@ -472,7 +470,7 @@ class _struct_generic(container):
             _,s = b = value.bitmap()
             i = utils.repr_instance(value.classname(),value.name())
             v = '(%s,%d)'%(bitmap.hex(b), s)
-            result.append('[%s] %s %s'%(utils.repr_position(self.getposition(name), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0),i,value.summary()))
+            result.append('[%s] %s %s'%(utils.repr_position(self.getposition(value.__name__ or name), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0),i,value.summary()))
         return '\n'.join(result)
 
     def __details_uninitialized(self):

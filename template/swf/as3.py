@@ -466,7 +466,7 @@ class instance_info(pstruct.type):
         ]
 
     def __protectedNs(self):
-        if self['flags']['ClassProtectedNs']:
+        if self['flags'].li['ClassProtectedNs']:
             return u30
         return ptype.type
 

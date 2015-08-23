@@ -209,6 +209,9 @@ class defaults:
         break_on_max_count = field.bool('break_on_max_count', 'If a dynamically created array is larger than max_count, then fail it\'s creation. If not, then issue a warning.')
         max_count = field.type('max_count', int, 'If max_count is larger than 0, then notify via a warning or an exception based on the value of \'break_on_max_count\'')
 
+    class pstruct:
+        use_offset_on_duplicate = field.bool('use_offset_on_duplicate', 'If more than one field has the same name, then suffix the field by it\'s offset. Otherwise use the field\'s index.')
+
     class display:
         show_module_name = field.bool('show_module_name', 'include the full module name in the summary')
         show_parent_name = field.bool('show_parent_name', 'include the parent name in the summary')
@@ -271,6 +274,7 @@ defaults.display.mangle_with_attributes = False
 defaults.parray.break_on_zero_sized_element = True
 defaults.parray.break_on_max_count = False
 defaults.parray.max_count = 0
+defaults.pstruct.use_offset_on_duplicate = True
 defaults.ptype.noncontiguous = False
 #defaults.ptype.clone_name = 'clone({})'
 #defaults.pint.bigendian_name = 'bigendian({})'

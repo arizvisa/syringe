@@ -444,9 +444,6 @@ class generic(_base_generic):
 
     def initializedQ(self):
         raise error.ImplementationError(self, 'base.initializedQ')
-    def __nonzero__(self):
-        return self.initializedQ()
-
     def __eq__(self, other):
         return id(self) == id(other)
     def __ne__(self, other):
@@ -691,9 +688,7 @@ class type(base):
         return super(type,self).copy(**attrs)
 
     def initializedQ(self):
-        if self.value is not None and len(self.value) == self.blocksize():
-            return True
-        return False
+        return True if self.value is not None and len(self.value) == self.blocksize() else False
 
     ## byte stream input/output
     def deserialize_block(self, block):
@@ -745,7 +740,7 @@ class type(base):
 
         If type is uninitialized, issue a warning and return 0.
         """
-        if self.initializedQ() or self.value is not None:
+        if self.initializedQ() or self.value:
             return len(self.value)
         Config.log.info("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
         return 0
@@ -757,9 +752,9 @@ class type(base):
         size of the type. This *must* return an integral type.
         """
 
-        # XXX: overloading will always provide a side effect of modifying the .source's offset
+        # XXX: overloading will always provide a side effect o)f modifying the .source's offset
         #        make sure to fetch the blocksize first before you .getoffset() on something.
-        return int(self.length)
+        return self.length
 
     ## operator overloads
     def repr(self, **options):
@@ -1299,10 +1294,24 @@ class definition(object):
         return False
 
     @classmethod
-    def define(cls, type):
-        """Add a type to the cache keyed by .type attribute of ``type``.type"""
-        cls.add(getattr(type,cls.attribute), type)
-        return type
+    def define(cls, *definition, **attributes):
+        """Add a definition to the cache keyed by the .type attribute of the definition. Return the original definition.
+
+        If any ``attributes`` are defined, the definition is duplicated with the specified attributes before being added to the cache.
+        """
+        def clone(definition):
+            res = dict(definition.__dict__)
+            res.update(attributes)
+            res = __builtin__.type(definition.__name__, definition.__bases__, res)
+            cls.add(getattr(res,cls.attribute),res)
+            return definition
+
+        if attributes:
+            assert len(definition) == 0, 'Unexpected positional arguments'
+            return clone
+        res, = definition
+        cls.add(getattr(res,cls.attribute),res)
+        return res
 
 # FIXME: it'd be cool if the .length of _value_ would be automatically figured out either by checking
 #        .length or .blocksize() or something. maybe only if ._value_ is a ptype.type
@@ -1321,7 +1330,7 @@ class wrapper_t(type):
     @property
     def value(self):
         if self.object.initializedQ():
-            return self.object.serialize()
+            return self.__object.serialize()
         return None
 
     @value.setter
@@ -1346,7 +1355,7 @@ class wrapper_t(type):
         self.__object = value.copy(__name__=name, offset=0, source=provider.proxy(self), parent=self)
 
     def initializedQ(self):
-        return (self._value_ is not None) and (self.__object is not None) and (self.__object.initializedQ())
+        return self._value_ is not None and self.__object is not None and self.__object.initializedQ()
 
     def blocksize(self):
         if self.initializedQ():
@@ -1366,7 +1375,7 @@ class wrapper_t(type):
     def deserialize_block(self, block):
         if self._value_ is None:
             self._value_ = clone(block, length=len(block))
-        return self.alloc().object.deserialize_block(block)
+        return self.alloc().__object.deserialize_block(block)
 
     # forwarded methods 
     def load(self, **attrs):
@@ -1375,18 +1384,18 @@ class wrapper_t(type):
 
     def serialize(self):
         if self.initializedQ():
-            return self.object.serialize()
+            return self.__object.serialize()
         raise error.InitializationError(self, 'wrapper_t.serialize')
         
     def size(self):
         if self.initializedQ():
-            return self.object.size()
+            return self.__object.size()
         Config.log.info("wrapper_t.size : %s : Unable to get size of ptype.wrapper_t, as object is still uninitialized."% self.instance())
         return 0
 
     def classname(self):
         if self.initializedQ():
-            return '%s<%s>'% (self.typename(),self.object.classname())
+            return '%s<%s>'% (self.typename(),self.__object.classname())
         if self._value_ is None:
             return '%s<?>'% self.typename()
         return '%s<%s>'% (self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
@@ -1445,12 +1454,13 @@ class encoded_t(wrapper_t):
         """Take object and convert it to an encoded string"""
         return object.serialize()
 
-    ## object dereferencing, force .object to match the length for the provided data
     def dereference(self, **attrs):
+        """Dereference object into the target type specified by self._object_"""
         attrs.setdefault('__name__', '*'+self.name())
         return self.decode(**attrs)
 
     def reference(self, object, **attrs):
+        """Reference ``object`` and encode it into self"""
         self._object_ = object.__class__
         self.value = self.encode(object, **attrs)
         return self

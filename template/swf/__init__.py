@@ -5,7 +5,7 @@ pbinary.setbyteorder(pbinary.bigendian)
 
 class Header(pstruct.type):
     _fields_ = [
-        (dyn.array(UI8,3), 'Signature'),
+        (dyn.clone(pstr.string,length=3), 'Signature'),
         (UI8, 'Version'),
         (UI32, 'FileLength'),
     ]
@@ -25,25 +25,30 @@ class Data(pstruct.type):
 
 class File(pstruct.type, ptype.boundary):
     class cdata(ptype.encoded_t):
-        def encode(self, object):
+        _object_ = Data
+        def encode(self, object, **attrs):
             block = object.serialize()
             compressed_block = zlib.compress(block)
             print 'zlib: compressed %x to %x bytes'%(len(block),len(compressed_block))
             return compressed_block
-        def decode(self, block):
+        def decode(self, **attrs):
+            block = self.serialize()
             decompressed_block = zlib.decompress(block)
             print 'zlib: decompressed %x to %x bytes'%(len(block),len(decompressed_block))
-            return dyn.clone(Data, source=ptypes.prov.string(decompressed_block))
+            attrs['source'] = ptypes.prov.string(decompressed_block)
+            return super(File.cdata,self).decode(**attrs)
 
     class data(ptype.encoded_t):
-        def decode(self, block):    
-            return dyn.clone(Data, source=ptypes.prov.string(block))
+        _object_ = Data
+        def decode(self, **attrs):
+            attrs['source'] = ptypes.prov.string(block)
+            return super(File.data,self).decode(**attrs)
             
     def __data(self):
         # if it's compressed then use the 'cdata' structure
-        if int( self['header'].li['Signature'][0]) == ord('C'):
-            #length = self.source.size() - self['header'].size()
-            length = min(self['header']['FileLength'].num(),self.source.size()) - self['header'].size()
+        header = self['Header'].li
+        if header['Signature'][0].num() == ord('C'):
+            length = min(header['FileLength'].num(),self.source.size()) - header.size()
             return dyn.clone(self.cdata, _value_=dyn.block(length))
         return Data
     
@@ -55,7 +60,7 @@ class File(pstruct.type, ptype.boundary):
 if __name__ == '__main__':
     import sys
     import ptypes,__init__ as swf
-    ptypes.setsource(ptypes.file('./test.swf'))
+    ptypes.setsource(ptypes.file('./test.swf', mode='r'))
 
     z = File
 #    z = ptypes.debugrecurse(z)
