@@ -14,7 +14,7 @@ class RecordUnknown(ptype.block):
     def classname(self):
         s = self.shortname()
         names = s.split('.')
-        names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
+        names[-1] = '%s<%s>[size:0x%x]'%(names[-1], '?' if self.type is None else hex(self.type), self.blocksize())
         return '.'.join(names)
 
 # record type lookup
@@ -55,10 +55,10 @@ class RecordGeneral(pstruct.type):
         def Length(self):
             return self['Length'].num()
 
-        def details(self):
+        def summary(self):
             v = self['Version/Instance'].num()
             t,l = self['Type'].num(),self['Length'].num()
-            return '%s ver/inst=%04x type=0x%04x length=0x%08x'% (self.name(), v, t, l)
+            return 'ver/inst=%04x type=0x%04x length=0x%08x'% (v, t, l)
 
     def __data(self):
         res = self['header'].li
@@ -69,16 +69,18 @@ class RecordGeneral(pstruct.type):
         try:
             res = Type.lookup(i)
 
-        # otherwise, the instance might modify the type in some way
+        # otherwise, the instance might modify the Instance in some way
         except KeyError:
-            res = Type.get(None, length=l)
+            ver,instance = i
+            i = ver,None
+            res = Type.get(i, length=l)
 
         # something good had to come out of that
         return dyn.clone(res, blocksize=lambda s: l)
 
     def __extra(self):
-        bs = self.blocksize()
-        s = self['header'].li.size() + self['data'].li.size()
+        bs = self['header'].li.Length()
+        s = self['header'].size() + self['data'].li.size()
         if bs > s:
             return dyn.block(bs - s)
         return ptype.undefined

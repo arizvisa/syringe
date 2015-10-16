@@ -1,4 +1,4 @@
-import sys,itertools,_random,math
+import sys,itertools,_random,math,_weakref
 import functools,random
 
 ## string formatting
@@ -280,12 +280,19 @@ def memoize(*kargs,**kattrs):
 
     if key='string', use kattrs[key].string as a key
     if key=callable(n)', pass kattrs[key] to callable, and use the returned value as key
+
+    if no memoize arguments were provided, try keying the function's result by _all_ of it's arguments.
     '''
     F_VARARG = 0x4
     F_VARKWD = 0x8
     F_VARGEN = 0x20
+    kargs = map(None,kargs)
     kattrs = tuple((o,a) for o,a in sorted(kattrs.items()))
-    def prepare_callable(fn):
+    def prepare_callable(fn, kargs=kargs, kattrs=kattrs):
+        if hasattr(fn,'im_func'):
+            fn = fn.im_func
+        assert isinstance(fn,memoize.__class__), 'Callable {!r} is not of a function type'.format(fn)
+        functiontype = type(fn)
         cache = {}
         co = fn.func_code
         flags,varnames = co.co_flags,iter(co.co_varnames)
@@ -294,6 +301,8 @@ def memoize(*kargs,**kattrs):
         c_positional = tuple(argnames)
         c_attribute = kattrs
         c_var = (varnames.next() if flags & F_VARARG else None, varnames.next() if flags & F_VARKWD else None)
+        if not kargs and not kattrs:
+            kargs[:] = itertools.chain(c_positional,filter(None,c_var))
         def key(*args, **kwds):
             res = iter(args)
             p = dict(zip(c_positional,res))
@@ -309,7 +318,8 @@ def memoize(*kargs,**kattrs):
             if res in cache:
                 return cache[res]
             return cache.setdefault(res, fn(*args,**kwds))
-        # set some utils on the function
+
+        # set some utilies on the memoized function
         callee.memoize_key = lambda: key
         callee.memoize_key.__doc__ = """Generate a unique key based on the provided arguments"""
         callee.memoize_cache = lambda: cache
@@ -320,9 +330,9 @@ def memoize(*kargs,**kattrs):
         callee.func_name = fn.func_name
         callee.func_doc = fn.func_doc
         callee.callable = fn
-        return callee
-    return prepare_callable
-    
+        return callee if isinstance(callee,functiontype) else functiontype(callee)
+    return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
+
 if __name__ == '__main__':
     # test cases are found at next instance of '__main__'
     import config,logging

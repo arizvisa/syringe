@@ -107,9 +107,10 @@ class type(_parray_generic):
         return self
 
     def copy(self, **attrs):
-        attrs.setdefault('_object_', self._object_)
-        attrs.setdefault('length', self.length)
-        return super(type,self).copy(**attrs)
+        result = super(type,self).copy(**attrs)
+        result._object_ = self._object_
+        result.length = self.length
+        return result
 
     def alloc(self, fields=(), **attrs):
         result = super(type,self).alloc(**attrs)
@@ -268,7 +269,7 @@ class infinite(uninitialized):
         n = self.new(self._object_, __name__=str(index), offset=self.__offset)
         try:
             n.load(**attrs)
-        except error.LoadError,e:
+        except (error.LoadError,error.InitializationError),e:
             path = ' -> '.join(self.backtrace())
             Config.log.warn("infinite.__next_element : %s : Unable to read element %s : %s"% (self.instance(), n.instance(), path))
         return n

@@ -104,9 +104,9 @@ class type(ptype.generic):
         return self
 
     def copy(self, **attrs):
-        result = self.new(self.__class__, __name__=self.__name__ if hasattr(self,'__name__') else None, position=self.getposition())
+        result = self.new(self.__class__, position=self.getposition())
+        if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         result.update_attributes(attrs)
-        result.deserialize_consumer(bitmap.consumer().push(self.bitmap()))
         return result
 
     def __eq__(self, other):
@@ -193,11 +193,9 @@ class container(type):
         """Performs a deep-copy of self repopulating the new instance if self is initialized
         """
         # create an instance of self and update with requested attributes
-        if attrs.get('recurse', True):
-            attrs.setdefault('value', map(operator.methodcaller('copy', **attrs),self.value) if iscontainer(self) else self.value)
-        else:
-            attrs.setdefault('value', self.value)
-        return super(container,self).copy(**attrs)
+        result = super(container,self).copy(**attrs)
+        result.value = map(operator.methodcaller('copy', **attrs),self.value)
+        return result
 
     def initializedQ(self):
         return self.value is not None and all(x is not None and isinstance(x,type) and x.initializedQ() for x in self.value)
@@ -284,11 +282,6 @@ class container(type):
         if self.value is None: self.value = []
         self.value.append(object)
         return current
-
-    def __iter__(self):
-        for x in self.value:
-            yield x if isinstance(x,container) else x.num()
-        return
 
     def cast(self, container, **attrs):
         if not iscontainer(container):
@@ -420,6 +413,7 @@ class _struct_generic(container):
         del self.__fastindex[alias.lower()]
 
     def getindex(self, name):
+        assert isinstance(name,basestring)
         return self.__fastindex[name.lower()]
 
     def keys(self):
@@ -501,9 +495,10 @@ class array(_array_generic):
 
     def copy(self, **attrs):
         """Performs a deep-copy of self repopulating the new instance if self is initialized"""
-        attrs.setdefault('_object_', self._object_)
-        attrs.setdefault('length', self.length)
-        return super(array,self).copy(**attrs)
+        result = super(array,self).copy(**attrs)
+        result._object_ = self._object_
+        result.length = self.length
+        return result
 
     def alloc(self, *fields, **attrs):
         result = super(array,self).alloc(**attrs)
@@ -600,8 +595,9 @@ class struct(_struct_generic):
     _fields_ = None
 
     def copy(self, **attrs):
-        attrs.setdefault('_fields_', self._fields_)
-        return super(type,self).copy(**attrs)
+        result = super(struct,self).copy(**attrs)
+        result._fields_ = list(self._fields_)
+        return result
 
     def alloc(self, __attrs__={}, **fields):
         attrs = __attrs__
@@ -766,27 +762,38 @@ class partial(ptype.container):
     value = None
     _object_ = None
     byteorder = Config.integer.order
-    initializedQ = lambda s:s.value is not None
+    initializedQ = lambda s:isinstance(s.value,list) and len(s.value) > 0
 
     def copy(self, **attrs):
-        attrs.setdefault('_object_', self._object_)
-        attrs.setdefault('byteorder', self.byteorder)
-        return super(partial,self).copy(**attrs)
+        result = super(ptype.container,self).copy(**attrs)
+        result._object_ = self._object_
+        result.byteorder = self.byteorder
+        return result
+
+    @property
+    def object(self):
+        if not self.initializedQ():
+            return None
+        res, = self.value
+        return res
 
     def serialize(self):
-        if self.byteorder is config.byteorder.bigendian:
-            bmp = self.value.bitmap()
-            return bitmap.data(bmp)
+        if not self.initializedQ():
+            raise error.InitializationError(self, 'partial.serialize')
 
+        res, = self.value
+        bmp = res.bitmap()
+
+        if self.byteorder is config.byteorder.bigendian:
+            return bitmap.data(bmp)
         if self.byteorder is not config.byteorder.littleendian:
             raise error.AssertionError(self, 'partial.serialize', message='byteorder %s is invalid'% self.byteorder)
-        bmp = self.value.bitmap()
         return ''.join(reversed(bitmap.data(bmp)))
 
     def deserialize_block(self, block):
-        self.value = value = self.binaryobject()
+        self.value = res = [self.binaryobject()]
         data = iter(block) if self.byteorder is config.byteorder.bigendian else reversed(block)
-        result = value.deserialize_consumer(bitmap.consumer(data))
+        res = res[0].deserialize_consumer(bitmap.consumer(data))
         return self
 
     def load(self, **attrs):
@@ -806,9 +813,9 @@ class partial(ptype.container):
             o = self.getoffset()
             self.source.seek(o)
 
-            self.value = value = self.binaryobject()
+            self.value = res = [self.binaryobject()]
             bc = bitmap.consumer( self.source.consume(1) for x in itertools.count() )
-            value.deserialize_consumer(bc)
+            res[0].deserialize_consumer(bc)
         return self
 
     def __load_littleendian(self, **attrs):
@@ -820,9 +827,9 @@ class partial(ptype.container):
             self.source.seek(o)
             block = ''.join(reversed(self.source.consume(s)))
 
-            self.value = value = self.binaryobject()
+            self.value = res = [self.binaryobject()]
             bc = bitmap.consumer(x for x in block)
-            value.deserialize_consumer(bc)
+            res[0].deserialize_consumer(bc)
         return self
 
     def commit(self, **attrs):
@@ -840,8 +847,8 @@ class partial(ptype.container):
     def alloc(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                self.value = self.binaryobject()
-                result = self.value.deserialize_consumer(bitmap.consumer(itertools.repeat('\x00')))
+                self.value = res = [self.binaryobject()]
+                result = res[0].deserialize_consumer(bitmap.consumer(itertools.repeat('\x00')))
             return self
         except (StopIteration,error.ProviderError), e:
             raise error.LoadError(self, exception=e)
@@ -853,7 +860,7 @@ class partial(ptype.container):
         updateattrs.update(attrs)
         updateattrs['position'] = ofs,0
         updateattrs['parent'] = self
-        if self.blocksize.im_func is not partial.blocksize.im_func:
+        if hasattr(self.blocksize, 'im_func') and self.blocksize.im_func is not partial.blocksize.im_func:
             updateattrs.setdefault('blockbits', self.blockbits)
         return obj(**updateattrs)
 
@@ -863,12 +870,12 @@ class partial(ptype.container):
         return self.blocksize()*8
 
     def size(self):
-        v = self.value if self.initialized else self.binaryobject()
+        v = self.value[0] if self.initializedQ() else self.binaryobject()
         s = v.bits()
         res = (s) if (s&7) == 0x0 else ((s+8)&~7)
         return res / 8
     def blocksize(self):
-        v = self.value if self.initialized else self.binaryobject()
+        v = self.value[0] if self.initializedQ() else self.binaryobject()
         s = v.blockbits()
         res = (s) if (s&7) == 0x0 else ((s+8)&~7)
         return res / 8
@@ -876,9 +883,10 @@ class partial(ptype.container):
     def properties(self):
         result = super(partial,self).properties()
         if self.initialized:
-            if self.value.bits() != self.blockbits():
+            res, = self.value
+            if res.bits() != self.blockbits():
                 result['unaligned'] = True
-            result['bits'] = self.value.bits()
+            result['bits'] = res.bits()
         result['partial'] = True
 
         # endianness
@@ -890,33 +898,41 @@ class partial(ptype.container):
             result['byteorder'] = 'littleendian'
         return result
 
-    ### passthru
+    ### passthrough
     def __len__(self):
-        return len(self.value)
+        res, = self.value
+        return len(res)
     def __getitem__(self, name):
-        return self.value[name]
+        res, = self.value
+        return res[name]
     def __setitem__(self, name, value):
-        self.value[name] = value
+        res, = self.value
+        res[name] = value
     def values(self):
-        return self.value.values()
+        res, = self.value
+        return res.values()
     def num(self):
-        return self.value.num()
+        res, = self.value
+        return res.num()
     def __getattr__(self, name):
         if name in ('__module__','__name__'):
             raise AttributeError(name)
-        if self.value is None:
+        if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__getattr__')
-        return getattr(self.value, name)
+        res, = self.value
+        return getattr(res, name)
 
     def bitmap(self):
-        return self.value.bitmap()
+        res, = self.value
+        return res.bitmap()
 
     def classname(self):
         fmt = {
             config.byteorder.littleendian : Config.display.partial.littleendian_name,
             config.byteorder.bigendian : Config.display.partial.bigendian_name,
         }
-        cn = self.value.classname() if self.initializedQ() else self._object_.typename()
+        res, = self.value
+        cn = res.classname() if self.initializedQ() else self._object_.typename()
         return fmt[self.byteorder].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     def contains(self, offset):
@@ -926,19 +942,21 @@ class partial(ptype.container):
         return (offset >= nmin) and (offset < nmax)
 
     def summary(self, **options):
-        return '???' if self.value is None else self.value.summary(**options)
+        return '???' if not self.initializedQ() else self.value[0].summary(**options)
 
     def details(self, **options):
-        return '???' if self.value is None else self.value.details(**options)
+        return '???' if not self.initializedQ() else self.value[0].details(**options)
 
     def repr(self, **options):
-        return '???' if self.value is None else self.value.repr(**options)
+        return '???' if not self.initializedQ() else self.value[0].repr(**options)
 
     def get(self):
-        return self.value.num()
+        res, = self.value
+        return res.num()
 
     def set(self, value, **attrs):
-        self.value.set(value)
+        res, = self.value
+        res.set(value)
         return self
 
     #def __getstate__(self):
@@ -949,14 +967,12 @@ class partial(ptype.container):
     #    super(type,self).__setstate__(state)
 
     def setoffset(self, offset, recurse=False):
-        if recurse:
-            return self.setposition((offset,), recurse=True)
-        return self.setposition((offset,), recurse=False)
+        return self.setposition((offset,), recurse=recurse)
 
     def setposition(self, (offset,), recurse=False):
-        if recurse:
-            self.value.setposition((offset,0), recurse=True)
-            return super(partial,self).setposition((offset,), recurse=False)
+        if self.initializedQ():
+            res, = self.value
+            res.setposition((offset,0), recurse=recurse)
         return super(partial,self).setposition((offset,), recurse=False)
 
 class flags(struct):
@@ -1223,7 +1239,7 @@ if __name__ == '__main__':
         s = '\xaa\xbb\xcc'
 
         x = pbinary.new(blah,source=provider.string(s)).l
-        if list(x) == [5, 2, 5]:
+        if list(x.object) == [5, 2, 5]:
             raise Success
 
     @TestCase
@@ -1289,7 +1305,7 @@ if __name__ == '__main__':
         data = '\xab\xcd\xef\x12'
         self = pbinary.new(blah,source=provider.string(data)).l
 
-        if list(self) == [0xa,0xb,0xc,0xd,0xe,0xf,0x1,0x2]:
+        if list(self.object) == [0xa,0xb,0xc,0xd,0xe,0xf,0x1,0x2]:
             raise Success
 
     @TestCase
@@ -1302,7 +1318,7 @@ if __name__ == '__main__':
         data = '\xab\xcd\xef\x12'
         self = pbinary.new(blah,source=provider.string(data)).l
 
-        l = [ x['value'] for x in self ]
+        l = [ x['value'] for x in self.value[0] ]
         if [0xab,0xcd,0xef,0x12] == l:
             raise Success
 
@@ -1315,7 +1331,7 @@ if __name__ == '__main__':
         data = '\xab\xcd\xef\x12'
         self = pbinary.new(blah,source=provider.string(data)).l
 
-        l = [ x['value'] for x in self ]
+        l = [ x['value'] for x in self.value[0] ]
         if [0xab,0xcd,0xef,0x12] == l:
             raise Success
 
@@ -1429,7 +1445,7 @@ if __name__ == '__main__':
         z.l
 
         a,b = z['a'],z['b']
-        if (a.parent is b.parent) and (a.parent is z.v):
+        if (a.parent is b.parent) and (a.parent is z.object):
             raise Success
         raise Failure
 
@@ -1604,7 +1620,7 @@ if __name__ == '__main__':
 
         src = provider.string('\xaa'*2)
         x = pbinary.new(test,source=src).l
-        if tuple(x) == (1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0):
+        if tuple(x.object) == (1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0):
             raise Success
 
     @TestCase
@@ -1655,7 +1671,7 @@ if __name__ == '__main__':
         string = 'ABCD\xffEFGH\xffIJKL\xffMNOP\xffQRST\xffUVWX\xffYZ..\xff\x00!!!!!!!!\xffuhhh'
         a = pbinary.new(complete,source=ptypes.prov.string(string))
         a = a.l
-        if len(a) == 8 and a.v[-1][0].bitmap() == (0,8):
+        if len(a) == 8 and a.object[-1][0].bitmap() == (0,8):
             raise Success
 
     @TestCase
@@ -1673,7 +1689,7 @@ if __name__ == '__main__':
 
         a = pbinary.new(argh,source=src)
         a = a.l
-        if len(a.v) == 8 and a[-1].bitmap() == (0xb4c,12):
+        if len(a.object) == 8 and a[-1].bitmap() == (0xb4c,12):
             raise Success
 
     @TestCase
@@ -1691,7 +1707,7 @@ if __name__ == '__main__':
 
         a = pbinary.new(argh,source=src)
         a = a.l
-        if len(a.v) == 8 and a.v[-1].bitmap() == (0x241,12):
+        if len(a.object) == 8 and a.object[-1].bitmap() == (0x241,12):
             raise Success
 
     @TestCase
@@ -1767,7 +1783,7 @@ if __name__ == '__main__':
         data = '\xff\x01\x7f\x80'
         a = pbinary.new(argh, source=provider.string(data))
         a = a.l
-        if list(a) == [-1,1,127,-128]:
+        if list(a.object) == [-1,1,127,-128]:
             raise Success
 
     @TestCase
@@ -1782,8 +1798,8 @@ if __name__ == '__main__':
         a = pbinary.new(p1, source=prov.string(data))
         a = a.l
         b = a.cast(p2)
-        c = a.v
-        d = a.v.cast(p2)
+        c = a.object
+        d = a.object.cast(p2)
         if b['a'] == d['a'] and b['b'] == d['b'] and b['c'] == d['c']:
             raise Success
 
@@ -1797,7 +1813,7 @@ if __name__ == '__main__':
         data = '\x5f'
         a = pbinary.new(p1, source=prov.string(data))
         a = a.l
-        b = a.v.cast(p2)
+        b = a.object.cast(p2)
         x,_ = a.bitmap()
         if b['a'] == x:
             raise Success

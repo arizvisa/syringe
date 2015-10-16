@@ -28,7 +28,15 @@ class _pstruct_generic(ptype.container):
     def getindex(self, name):
         if name.__class__ is not str:
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
-        return self.__fastindex[name.lower()]
+        try:
+            return self.__fastindex[name.lower()]
+        except KeyError:
+            for i,(_,n) in enumerate(self._fields_):
+                if n.lower() == name.lower():
+                    self.__fastindex[name.lower()] = i
+                    return i
+                continue
+        raise KeyError, name
 
     def clear(self):
         self.__fastindex = {}
@@ -79,11 +87,19 @@ class type(_pstruct_generic):
     def initializedQ(self):
         if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
             return super(type,self).initializedQ()
-        return self.size() >= self.blocksize()
+
+        res = False
+        try:
+            res = self.size() >= self.blocksize()
+        except Exception,e:
+            Config.log.warn("type.initializedQ : %s : blocksize() raised an exception when determining whether the instance is initialized. : %s", self.instance(), e, ' -> '.join(self.backtrace()))
+        finally:
+            return res
 
     def copy(self, **attrs):
-        attrs.setdefault('_fields_', self._fields_)
-        return super(type,self).copy(**attrs)
+        result = super(type,self).copy(**attrs)
+        result._fields_ = list(self._fields_)
+        return result
 
     def alloc(self, __attrs__={}, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""

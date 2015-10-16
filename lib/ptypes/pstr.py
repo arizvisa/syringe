@@ -108,19 +108,6 @@ class string(ptype.type):
         for x in iterable:
             self.append(x)
         return
-    def __iter__(self):
-        if not self.initializedQ():
-            raise ptype.InitializationError(self, 'string.__iter__')
-
-        source = provider.string(self.serialize())
-        baseoffset,object = self.getoffset(),self._object_
-
-        o = 0
-        for i in xrange(len(self)):
-            res = self.new(object, __name__=str(i), offset=baseoffset+o)
-            yield res.load(offset=o)
-            o += res.size()
-        return
 
     def set(self, value):
         chararray = [x for x in value]

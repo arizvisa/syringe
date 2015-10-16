@@ -1,5 +1,5 @@
 '''base ptype element'''
-import sys,types,inspect,functools,itertools,__builtin__
+import sys,types,inspect,functools,itertools,operator,__builtin__
 from . import bitmap,provider,utils,config,error
 Config = config.defaults
 
@@ -184,9 +184,7 @@ class _base_generic(object):
         if self.parent is None:
             global source
             return source if self.__source is None else self.__source 
-        #if self.__source is None:
         return self.parent.source if self.__source is None else self.__source
-        #return self.__source
     @source.setter
     def source(self, value):
         self.__source = value
@@ -320,9 +318,6 @@ class _base_generic(object):
         terse -- display the hexdump tersely if larger than a specific threshold
         threshold -- maximum number of rows to display
         """
-        if not self.initializedQ():
-            raise error.InitializationError(self, 'base.hexdump')
-
         options.setdefault('width', Config.display.hexdump.width)
         options.setdefault('offset', self.getoffset())
         return utils.hexdump(self.serialize(), **options)
@@ -332,8 +327,11 @@ class _base_generic(object):
         if not self.initializedQ():
             return '???'
 
+        buf = self.serialize()
+        try: bs = self.blocksize()
+        except: bs = self.size()
+
         length = options.setdefault('width', Config.display.hexdump.width)
-        bs,buf = self.blocksize(),self.serialize()
         options.setdefault('offset',self.getoffset())
 
         # if larger than threshold...
@@ -349,7 +347,10 @@ class _base_generic(object):
         if not self.initializedQ():
             return '???'
 
-        bs,buf = self.blocksize(),self.serialize()
+        buf = self.serialize()
+        try: bs = self.blocksize()
+        except: bs = self.size()
+
         options.setdefault('offset', self.getoffset())
 
         # if larger than threshold...
@@ -435,7 +436,8 @@ class _base_generic(object):
             t.update_attributes(**attrs)
 
         # give the instance a default name
-        t.__name__ = attrs.get('__name__', hex(id(t)) )
+        if '__name__' in attrs:
+            t.__name__ = attrs['__name__']
         return t
 
 class generic(_base_generic):
@@ -532,9 +534,12 @@ class base(generic):
 
     def copy(self, **attrs):
         """Return a duplicate instance of the current one."""
-        result = self.new(self.__class__, __name__=self.classname(), position=self.getposition())
+        result = self.new(self.__class__, position=self.getposition())
+        if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
+        attrs.setdefault('value', self.value)
         result.update_attributes(attrs)
-        return result.load(offset=0,source=provider.string(self.serialize()),blocksize=lambda:self.blocksize()) if self.initializedQ() else result
+        return result
+        #return result.load(offset=0,source=provider.string(self.serialize()),blocksize=lambda sz=self.blocksize():sz) if self.initializedQ() else result
 
     def compare(self, other):
         """Returns an iterable containing the difference between ``self`` and ``other``
@@ -588,7 +593,7 @@ class base(generic):
             Config.log.warning("base.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
         return result
 
-    def traverse(self, edges=lambda node:tuple(node.value) if iscontainer(node.__class__) else (), filter=lambda node:True, **kwds):
+    def traverse(self, edges=lambda node:tuple(node.value) if isinstance(node, container) else (), filter=lambda node:True, **kwds):
         """
         This will traverse a tree in a top-down approach.
     
@@ -604,6 +609,7 @@ class base(generic):
         """Synchronize the current instance with data from the .source attributes"""
         with utils.assign(self, **attrs):
             ofs,bs = self.getoffset(),self.blocksize()
+
             try:
                 self.source.seek(ofs)
                 block = self.source.consume(bs)
@@ -628,7 +634,7 @@ class base(generic):
         global encoded_t
         class parentTester(object):
             def __eq__(self, other):
-                return other.parent is None or isinstance(other, encoded_t) or issubclass(other.__class__, encoded_t)
+                return other.parent is None or isinstance(other, encoded_t)
         parentTester = parentTester()
 
         #edges = lambda node:tuple(node.value) if iscontainer(node.__class__) else ()
@@ -637,7 +643,7 @@ class base(generic):
         duplicates = set()
         if parentTester == self:
             yield self
-            duplicates.add(self)
+        duplicates.add(self)
         for n in self.traverse(filter=lambda n: parentTester == n):
             if n.parent is None:
                 if n not in duplicates:
@@ -651,7 +657,6 @@ class base(generic):
             if result not in duplicates:
                 yield result
                 duplicates.add(result)
-            duplicates.add(result)
             for o in result.collect():
                 result = o.getparent(parentTester)
                 if result not in duplicates:
@@ -684,8 +689,9 @@ class type(base):
     ignored = generic.ignored.union(('length',))
 
     def copy(self, **attrs):
-        attrs.setdefault('length',self.length)
-        return super(type,self).copy(**attrs)
+        result = super(type,self).copy(**attrs)
+        result.length = self.length
+        return result
 
     def initializedQ(self):
         return True if self.value is not None and len(self.value) == self.blocksize() else False
@@ -707,7 +713,7 @@ class type(base):
         ofs,bs = self.getoffset(),self.blocksize()
         if not self.initializedQ():
             Config.log.warn('type.serialize : %s : Uninitialized during serialization', self.instance())
-            return utils.padding.fill(self.blocksize(), self.padding)
+            return utils.padding.fill(bs if bs > 0 else 0, self.padding)
 
         result = str(self.value)
         if len(result) < bs:
@@ -922,23 +928,26 @@ class container(base):
 
     def serialize(self):
         """Return contents of all sub-elements concatenated as a string"""
-        #result = ''.join( (x.serialize() for x in self.value) )
-        bs = self.blocksize()
+        try: bs = self.blocksize()
+        except:
+            result = ''.join(x.serialize() for x in self.value)
+        else:
+            result = ''
+            for x in self.value:
+                result += x.serialize()
+                if len(result) > bs:
+                    break
+                continue
 
-        result = ''
-        for x in self.value:
-            result += x.serialize()
+            if len(result) < bs:
+                padding = utils.padding.fill(bs-len(result), self.padding)
+                return result + padding
+
             if len(result) > bs:
-                break
-            continue
-
-        if len(result) < bs:
-            padding = utils.padding.fill(bs-len(result), self.padding)
-            return result + padding
-
-        if len(result) > bs:
-            Config.log.debug('container.serialize : %s : Container larger than expected blocksize : %x > %x'%(self.instance(), len(result), bs))
-        return result[:bs]
+                Config.log.debug('container.serialize : %s : Container larger than expected blocksize : %x > %x'%(self.instance(), len(result), bs))
+            result = result[:bs]
+        return result
+            
 
     def load(self, **attrs):
         """Allocate the current instance with data from the .source attributes"""
@@ -950,7 +959,6 @@ class container(base):
             if Config.ptype.noncontiguous and \
                     any(isinstance(n,container) or isinstance(n,undefined) for n in self.value):
 
-                bs,sz = self.blocksize(),0
                 val = list(self.value)
                 while val and sz < bs:
                     sz += val.pop(0).load(**attrs).size()
@@ -984,7 +992,7 @@ class container(base):
             try:
                 sz,ofs,bs = 0,self.getoffset(),self.blocksize()
                 for n in self.value:
-                    n.commit()
+                    n.commit(source=self.source)
                     sz += n.blocksize()
                     if sz > bs: break
             except error.CommitError, e:
@@ -992,14 +1000,11 @@ class container(base):
         return self
 
     def copy(self, **attrs):
-        """Performs a deep-copy of self repopulating the new instance if self is initialized
-        """
+        """Performs a deep-copy of self repopulating the new instance if self is initialized"""
         # create an instance of self and update with requested attributes
-        if attrs.get('recurse', True):
-            attrs.setdefault('value', map(operator.methodcaller('copy', **attrs),self.value) if iscontainer(self) else self.value)
-        else:
-            attrs.setdefault('value', self.value)
-        return super(container,self).copy(**attrs)
+        result = super(container,self).copy(**attrs)
+        result.value = map(operator.methodcaller('copy', **attrs),self.value)
+        return result
 
     def compare(self, other):
         """Returns an iterable containing the difference between ``self`` and ``other``
@@ -1046,7 +1051,12 @@ class container(base):
         threshold = options.pop('threshold', Config.display.threshold.summary)
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
         if self.value is not None:
-            res = ''.join((x.serialize() if x.initializedQ() else '?'*x.blocksize()) for x in self.value)
+            def blocksizeorelse(self):
+                try: res = self.blocksize()
+                except: res = 0
+                return res
+
+            res = ''.join((x.serialize() if x.initializedQ() else '?'*blocksizeorelse(x)) for x in self.value)
             return utils.emit_repr(res, threshold, message, **options)
         return '???'
 
@@ -1233,6 +1243,7 @@ class definition(object):
     @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
+        assert isinstance(cls.cache, dict), 'ptype.definition {!r} has an invalid .cache attribute : {!r}'.format(cls, cls.cache.__class__)
         cls.cache[type] = object
 
     @classmethod
@@ -1258,7 +1269,8 @@ class definition(object):
             return cls.cache[type]
         except KeyError:
             pass
-        return clone(cls.unknown, type=type, **unknownattrs)
+        unknownattrs.setdefault(cls.attribute,type)
+        return clone(cls.unknown, **unknownattrs)
 
     @classmethod
     def update(cls, otherdefinition):
@@ -1428,8 +1440,12 @@ class wrapper_t(type):
 class encoded_t(wrapper_t):
     """This type represents an element that can be decoded/encoded to/from another element.
 
-    To change the way a type is decoded, overload the .decode() method to return a new type from self.object
-    To change the way a type is encoded to it, overwrite .encode() and return the type that self.object will become.
+    To change the way a type is decoded, overload the .decode() method and then
+    call the super class' method with a dictionary of any attributes that you
+    want to modify.
+
+    To change the way a type is encoded to it, overwrite .encode() and convert
+    the object parameter to an encoded string.
 
     _value_ = the original element type
     _object_ = the decoded element type
@@ -1441,10 +1457,10 @@ class encoded_t(wrapper_t):
 
     @utils.memoize('self', self=lambda n:(n._object_,n.value), attrs=lambda n:tuple(sorted(n.items())))
     def decode(self, **attrs):
-        """Take self and decode it into self._object_
+        """Take self and decode it into self._object_ with the requested attributes
 
-        To overload, return an instance of the new type.
-        Default method will instantiate a self._object_ based on self.object
+        To overload, specify the attributes you want to modify and then call this methjod.
+        Default method will instantiate a self._object_ based on self.serialize()
         """
         attrs.setdefault('source', provider.string(self.value))
         attrs.setdefault('offset', 0)
