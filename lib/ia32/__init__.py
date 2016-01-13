@@ -362,7 +362,7 @@ if __name__ == '__main__':
         insn = decode(code)
         print repr(insn)
         print 'mem',isBranch(insn),isMemoryBranch(insn)
-    
+
     if False:
         code = '\x0f\x0f\xe1\xb4'
         insn = decode(code)
@@ -455,9 +455,9 @@ if __name__ == '__main__':
         a = decode('\x7f\x0c')
         b = decode('\x0f\x8f\x08\x00\x00\x00')
         if promoteBranch_32(a) == b:
-            raise Success        
+            raise Success
         return
-        
+
 #    @TestCase
     def promote_4():
         '''8b to 16b'''
@@ -483,7 +483,7 @@ if __name__ == '__main__':
     @TestCase
     def Test_0():
         code = '\xeb\xfe'
-        
+
         n = setRelativeAddress(0x77be0000, decode(code), 0x77be0000)
         if ''.join(n) == '\xeb\xfe':
             raise Success
@@ -577,7 +577,7 @@ if __name__ == '__main__':
     def Test_f():
         code = '\xe9\xa6\x00\x00\x00'
         test_set( 0x101dc252, code, 0x101dc2fd )
-        
+
     if False:
         code = '\x0f\x85\x7f\xff\xff\xff'
         n = setRelativeAddress(0, decode(code), -5)

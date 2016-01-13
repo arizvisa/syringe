@@ -5,6 +5,7 @@ ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### Primitive types
 class ULONG(pint.uint32_t): pass
+class LONG(pint.int32_t): pass
 class USHORT(pint.uint16_t): pass
 
 class BYTE(pint.uint8_t): pass
@@ -17,6 +18,11 @@ class CLSID(ndk.rfc4122): pass
 class FILETIME(pstruct.type):
     _fields_ = [(DWORD,'dwLowDateTime'),(DWORD,'dwHighDateTime')]
 TIME_T = FILETIME
+
+class LengthPrefixedAnsiString(pstruct.type):
+    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.string,length=s['Length'].li.num()),'String')]
+class LengthPrefixedUnicodeString(pstruct.type):
+    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.num()),'String')]
 
 ### Sector types
 class Sector(ptype.definition):
@@ -154,7 +160,7 @@ class File(pstruct.type):
     class Fat(pstruct.type):
         _fields_ = [
             (DWORD, 'csectDirectory'),      # Number of directory sectors
-            (DWORD, 'csectFat'),            # Number of fat sectors        
+            (DWORD, 'csectFat'),            # Number of fat sectors
             (SECT, 'sectDirectory'),        # First directory sector location
             (DWORD, 'dwTransaction'),
         ]
@@ -224,7 +230,7 @@ class File(pstruct.type):
         # Check if we need to find more
         next,count = self['Difat']['sectDifat'],self['Difat']['csectDifat'].num()
         if next.num() >= MAXREGSECT.type:
-            return res    
+            return res
 
         # Append the contents of the other entries
         next = next.d.l
@@ -262,6 +268,209 @@ class File(pstruct.type):
         map(res.append, map(self['Data'].__getitem__, iterable))
         return res
 
+class ClipboardFormatOrAnsiString(pstruct.type):
+    def __FormatOrAnsiString(self):
+        marker = self['MarkerOrLength'].li.num()
+        if marker in (0x00000000,):
+            return ptype.undefined
+        elif marker in (0xfffffffe, 0xffffffff):
+            return DWORD
+        return dyn.clone(pstr.string, length=marker)
+
+    _fields_ = [
+        (DWORD, 'MarkerOrLength'),
+        (__FormatOrAnsiString, 'FormatOrAnsiString'),
+    ]
+
+class ClipboardFormatOrUnicodeString(pstruct.type):
+    def __FormatOrUnicodeString(self):
+        marker = self['MarkerOrLength'].li.num()
+        if marker in (0x00000000,):
+            return ptype.undefined
+        elif marker in (0xfffffffe, 0xffffffff):
+            return DWORD
+        return dyn.clone(pstr.wstring, length=marker)
+
+    _fields_ = [
+        (DWORD, 'MarkerOrLength'),
+        (__FormatOrUnicodeString, 'FormatOrUnicodeString'),
+    ]
+
+class MONIKERSTREAM(pstruct.type):
+    class Stream(pstruct.type):
+        _fields_ = [
+            (CLSID, 'Clsid'),
+            (lambda s: dyn.block(s.blocksize() - s['Clsid'].li.size()), 'Data'),
+        ]
+    _fields_ = [
+        (DWORD, 'Size'),
+        (lambda s: ptype.undefined if s['Size'].li.num() == 0 else dyn.clone(MONIKERSTREAM.Stream, blocksize=lambda _:s['Size'].li.num()), 'Stream'),
+    ]
+
+class OLEStream(pstruct.type):
+    class StreamFlags(pint.enum, DWORD):
+        _values_ = [
+            ('Embedded', 0x00000000),
+            ('Linked', 0x00000001),
+            ('Implementation-Specific', 0x00001000),
+        ]
+
+    _fields_ = [
+        (DWORD, 'Version'),
+        (StreamFlags, 'Flags'),
+        (DWORD, 'LinkUpdateOption'),
+        (DWORD, 'Reserved1'),
+        (MONIKERSTREAM, 'ReservedMoniker'),
+        (MONIKERSTREAM, 'RelativeSourceMoniker'),
+        (MONIKERSTREAM, 'AbsoluteSourceMoniker'),
+        (LONG, 'ClsidIndicator'),
+        (CLSID, 'Clsid'),
+        (LengthPrefixedUnicodeString, 'ReservedDisplayName'),
+        (DWORD, 'Reserved2'),
+        (FILETIME, 'LocalUpdateTime'),
+        (FILETIME, 'LocalCheckUpdateTime'),
+        (FILETIME, 'RemoteUpdateTime'),
+    ]
+
+if False:
+    class DEVMODEA(pstruct.type):
+        class Fields(pstruct.type):
+            # FIXME: this can't be right, it doesn't even align
+            class dmFields(pbinary.flags):
+                _fields_ = []
+                _fields_+= [(1,_) for _ in ('DM_ORIENTATION', 'DM_PAPERSIZE', 'DM_PAPERLENGTH', 'DM_PAPERWIDTH', 'DM_SCALE')]
+                _fields_+= [(1,_) for _ in ('DM_COPIES', 'DM_DEFAULTSOURCE', 'DM_PRINTQUALITY', 'DM_COLOR', 'DM_DUPLEX', 'DM_YRESOLUTION', 'DM_TTOPTION', 'DM_COLLATE', 'DM_NUP')]
+                _fields_+= [(1,_) for _ in ('DM_ICMMETHOD', 'DM_ICMINTENT', 'DM_MEDIATYPE', 'DM_DITHERTYPE')]
+
+            __cond = lambda n,t: lambda s: t if s['dmFields'][n] else pint.uint_t
+
+            _fields_ = [
+                (dmFields, 'dmFields'),
+                (__cond('DM_ORIENTATION',WORD), 'dmOrientation'),
+                (__cond('DM_PAPERSIZE',WORD), 'dmPaperSize'),
+                (__cond('DM_PAPERLENGTH',WORD), 'dmPaperLength'),
+                (__cond('DM_PAPERWIDTH',WORD), 'dmPaperWidth'),
+                (__cond('DM_SCALE',WORD), 'dmScale'),
+                (__cond('DM_COPIES',WORD), 'dmCopies'),
+                (__cond('DM_DEFAULTSOURCE',WORD), 'dmDefaultSource'),
+                (__cond('DM_PRINTQUALITY',WORD), 'dmPrintQuality'),
+                (__cond('DM_COLOR',WORD), 'dmColor'),
+                (__cond('DM_DUPLEX',WORD), 'dmDuplex'),
+                (__cond('DM_YRESOLUTION',WORD), 'dmYResolution'),
+                (__cond('DM_TTOPTION',WORD), 'dmTTOptions'),
+                (__cond('DM_COLLATE',WORD), 'dmCollate'),
+                (WORD, 'reserved0'),
+                (DWORD, 'reserved1'),
+                (DWORD, 'reserved2'),
+                (DWORD, 'reserved3'),
+                (__cond('DM_NUP',DWORD), 'dmNup'),
+                (DWORD, 'reserved4'),
+                (__cond('DM_ICMMETHOD',DWORD), 'dmICMMethod'),
+                (__cond('DM_ICMINTENT',DWORD), 'dmICMIntent'),
+                (__cond('DM_MEDIATYPE',DWORD), 'dmMediaType'),
+                (__cond('DM_DITHERTYPE',DWORD), 'dmDitherType'),
+                (DWORD, 'reserved5'),
+                (DWORD, 'reserved6'),
+                (DWORD, 'reserved7'),
+                (DWORD, 'reserved8'),
+            ]
+
+        def __Padding(self):
+            sz = self['dmSize'].li.num()
+            total = 32+32+2+2+2+2
+            res = sz - (total+s['fields'].li.size())
+            return dyn.block(res)
+
+        _fields_ = [
+            (dyn.clone(pstr.string,length=32), 'dmDeviceName'),
+            (dyn.clone(pstr.string,length=32), 'dmFormName'),
+            (WORD, 'dmSpecVersion'),
+            (WORD, 'dmDriverVersion'),
+            (WORD, 'dmSize'),
+            (WORD, 'dmDriverExtra'),
+            (Fields, 'Fields'),
+            (__Padding, 'Padding'),
+            (lambda s: dyn.block(s['dmDriverExtra'].li.num()), 'PrinterData'),
+        ]
+
+class DVTARGETDEVICE(pstruct.type):
+    def __DeviceData(self):
+        sz = self.blocksize() - 8
+        return dyn.block(sz)
+
+    # FIXME: these WORDs are actually 16-bit rpointer types
+
+    _fields_ = [
+        (WORD, 'DriverNameOffset'),
+        (WORD, 'DeviceNameOffset'),
+        (WORD, 'PortNameOffset'),
+        (WORD, 'ExtDevModeOffset'),
+        (__DeviceData, 'DeviceData'),
+    ]
+
+class TOCENTRY(pstruct.type):
+    _fields_ = [
+        (ClipboardFormatOrAnsiString, 'AnsiClipboardFormat'),
+        (DWORD, 'TargetDeviceSize'),
+        (DWORD, 'Aspect'),
+        (DWORD, 'Lindex'),
+        (DWORD, 'Tymed'),
+        (dyn.block(12), 'Reserved1'),
+        (DWORD, 'Advf'),
+        (DWORD, 'Reserved2'),
+        (lambda s: dyn.clone(DVTARGETDEVICE, blocksize=lambda _:s['TargetDeviceSize'].li.num()), 'TargetDevice'),
+    ]
+
+class OLEPresentationStream(pstruct.type):
+    class Dimensions(pstruct.type):
+        _fields_ = [(DWORD,'Width'),(DWORD,'Height')]
+
+    class TOC(pstruct.type):
+        _fields_ = [
+            (DWORD, 'Signature'),
+            (DWORD, 'Count'),
+            (lambda s: dyn.array(TOCENTRY, s['Count'].li.num()), 'Entry'),
+        ]
+
+    _fields_ = [
+        (ClipboardFormatOrAnsiString, 'AnsiClipboardFormat'),
+        (DWORD, 'TargetDeviceSize'),
+        (DVTARGETDEVICE, 'TargetDevice'),
+        (DWORD, 'Aspect'),
+        (DWORD, 'Lindex'),
+        (DWORD, 'Advf'),
+        (DWORD, 'Reserved1'),
+        (Dimensions, 'Dimensions'),
+        (DWORD, 'Size'),
+        (lambda s: dyn.block(s['Size'].num()), 'Data'),
+        (dyn.block(18), 'Reserved2'),
+        (TOC, 'Toc'),
+    ]
+
+class OLENativeStream(pstruct.type):
+    _fields_ = [
+        (DWORD, 'NativeDataSize'),
+        (lambda s: dyn.block(s['NativeDataSize'].li.num()), 'NativeData'),
+    ]
+
+class CompObjHeader(pstruct.type):
+    _fields_ = [
+        (DWORD, 'Reserved1'),
+        (DWORD, 'Version'),
+        (dyn.block(20), 'Reserved2'),
+    ]
+
+class CompObjStream(pstruct.type):
+    _fields_ = [
+        (CompObjHeader, 'Header'),
+        (LengthPrefixedAnsiString, 'AnsiUserType'),
+        (ClipboardFormatOrAnsiString, 'AnsiClipboardFormat'),
+        (LengthPrefixedAnsiString, 'Reserved1'),
+        (DWORD, 'UnicodeMarker'),
+        (LengthPrefixedUnicodeString, 'UnicodeUserType'),
+        (ClipboardFormatOrUnicodeString, 'UnicodeUserType'),
+        (LengthPrefixedUnicodeString, 'Reserved2'),
+    ]
 
 if __name__ == '__main__':
     import ptypes,storage

@@ -119,7 +119,7 @@ movl %eax, hHooks(, %ecx, 4)
 _reenableWindowHooks:
     pushl $0xf
 1:
-    
+
     movl (%esp), %ecx
     pushl hHooks(, %ecx, 4)
     call _UnhookWindowsHookEx@4
@@ -151,11 +151,11 @@ _getLdrModuleByAddress:
     addl 0x20(%ecx), %eax
     cmpl %eax, 8(%ebp)
     ja 2f
-    
+
     movl %ecx, %eax
     popl %ebp
     ret
-    
+
     # check if matches original
 2:
     movl (%ecx), %ecx
@@ -237,7 +237,7 @@ memcpy:
     popl %esi
     popl %ebp
     ret
-    
+
 
 #######
 hookFunction:
@@ -259,4 +259,4 @@ hookFunction:
 
     popl %ebp
     popa
-    ret 
+    ret

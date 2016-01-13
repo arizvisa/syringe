@@ -151,7 +151,7 @@ class FileType(pstruct.type):
         def blocksize(self):
             p = self.getparent(Atom)
             return p.blocksize() - p.getheadersize() - 8
-        
+
     _fields_ = [
         (pQTInt, 'Major_Brand'),
         (pQTInt, 'Minor_Version'),

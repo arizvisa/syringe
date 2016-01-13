@@ -37,7 +37,7 @@ def iterate_loader(pid):
 
 def getProcessEnvironmentBlock(pid):
     k32 = ctypes.WinDLL('kernel32.dll')
-    handle = k32.OpenProcess(0x0400, False, pid) 
+    handle = k32.OpenProcess(0x0400, False, pid)
     if handle == 0:
         raise OSError, 'Unable to OpenProcess(0x400, 0, %x)'% pid
     nt = ctypes.WinDLL('ntdll.dll')
@@ -57,7 +57,10 @@ def getProcessEnvironmentBlock(pid):
 
 def walk_executable(filename):
     for f in iterate_imports(filename):
-        p = searchpath(f)
+        try: p = searchpath(f)
+        except OSError:
+            print 'Unable to load %s'% f
+            continue
         try:
             executable = pecoff.Executable.open(p, mode='r')
         except ptypes.error.Base, e:
@@ -68,7 +71,7 @@ def walk_executable(filename):
 def walk_process(pid):
     for module in iterate_loader(pid):
         yield module['BaseDllName'].str(), module['FullDllName'].str(), module['DllBase'].d
-    return        
+    return
 
 if __name__ == '__main__':
     import sys

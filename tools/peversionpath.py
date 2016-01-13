@@ -42,7 +42,7 @@ class help(optparse.OptionParser):
         self.add_option('', '--name', default=1, type='int', help='use the specified resource name')
         self.add_option('', '--dump-languages', default=False, action='store_true', help='dump the VERSION_INFO language resources available')
         self.add_option('', '--language', default=1033, type='int', help='use the specified resource language')
-    
+
         # VS_VERSIONINFO
         self.add_option('', '--list', default=False, action='store_true', help='dump the language-id+codepages available')
         self.add_option('', '--langid', default=None, type='int', help='use the specified language-id')
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     except:
         help.print_help()
         sys.exit(0)
-    
+
     # parse the executable
     try:
         resource = parseResourceDirectory(filename)

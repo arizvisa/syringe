@@ -1,3 +1,4 @@
+import ptypes
 from ptypes import *
 from . import *
 
@@ -1360,14 +1361,14 @@ class OfficeArtSolverContainer(RecordContainer):
 @FT_OfficeArtFSP.define
 class OfficeArtFSP(pstruct.type):
     type = 2,None       # MSOPT enumeration value
-    class __flags(pbinary.struct):
+    class __flags(pbinary.flags):
         _fields_ = [
             (20,'unused1'),
             (1,'fHaveSpt'),(1,'fBackground'),(1,'fHaveAnchor'),(1,'fConnector'),
             (1,'fFlipV'),(1,'fFlipH'),(1,'fHaveMaster'),(1,'fOleShape'),
             (1,'fDeleted'),(1,'fPatriarch'),(1,'fChild'),(1,'fGroup'),
         ]
-        
+
     _fields_ = [
         (MSOSPID, 'spid'),
         (pbinary.littleendian(__flags), 'f')
@@ -1404,6 +1405,16 @@ class OfficeArtBlipDIB_Double(pstruct.type):
 class OfficeArtFDG(pstruct.type):
     type = 0,None       # drawing identifier
     _fields_ = [(pint.uint32_t,'csp'),(MSOSPID, 'spidCur')]
+
+@FT_OfficeArtFSPGR.define
+class OfficeArtFSPGR(pstruct.type):
+    type = 1,0x000
+    _fields_ = [
+        (pint.int32_t,'xLeft'),
+        (pint.int32_t,'yTop'),
+        (pint.int32_t,'xRight'),
+        (pint.int32_t,'yBottom'),
+    ]
 
 ## ripped from OfficeDrawing97-2007BinaryFormatSpecification.pdf
 @FT_msofbtExtTimeNodeContainer.define  # FIXME
@@ -1564,8 +1575,11 @@ class msofbtTimeBehavior(pstruct.type):
 # Office art property records
 class OfficeArtRGFOPTE(pstruct.type):
     def __rgfopt(self):
-        p = self.getparent(type=RecordGeneral)
-        _,count = p['header'].Instance()
+        try:
+            p = self.getparent(type=RecordGeneral)
+            _,count = p['header'].Instance()
+        except ptypes.error.NotFoundError:
+            count = 0
         return dyn.array(OfficeArtFOPTE, count)
 
     class complexData(parray.type):
@@ -1586,7 +1600,7 @@ class OfficeArtRGFOPTE(pstruct.type):
         calculatedSize = sum(x['op'].li.num() for x in rgfopte if x['opid'].li['fComplex'])
         realSize = self.blocksize() - self['rgfopte'].li.size()
         if calculatedSize > realSize:
-            logging.warn("OfficeArtRGFOPTE.complexData : calculated size of complexData is larger than available : %x > %x"%(calculatedSize,realSize))
+            ptypes.Config.log.warn("OfficeArtRGFOPTE.complexData : calculated size of complexData is larger than available : %x > %x"%(calculatedSize,realSize))
             return dyn.block(realSize)
         return dyn.clone(self.complexData, length=sum(x['opid']['fComplex'] for x in rgfopte))
 
@@ -1662,7 +1676,7 @@ class equationXML(uint4):
 @OfficeArtFOPTEOP.define
 class shapeBooleanProperties(pbinary.flags):
     type = 0x33f
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fBackground'),
         (1, 'reserved1'),
         (1, 'fInitiator'),
@@ -1689,7 +1703,7 @@ class shapeBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (4, 'unused7'),
-    ]
+    ]))
 
 # Callout
 @OfficeArtFOPTEOP.define
@@ -1733,7 +1747,7 @@ class dxyCalloutLengthSpecified(pint.enum, sint4):
 @OfficeArtFOPTEOP.define
 class calloutShapeBoolean(pbinary.flags):
     type = 0x37f
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fCalloutLengthSpecified'),
         (1, 'fCalloutDropAuto'),
         (1, 'fCalloutMinusY'),
@@ -1750,7 +1764,7 @@ class calloutShapeBoolean(pbinary.flags):
         (1, 'fUsefCalloutAccentBar'),
         (1, 'fUsefCallout'),
         (9, 'unused2'),
-    ]
+    ]))
 
 # Group Shape
 @OfficeArtFOPTEOP.define
@@ -1823,7 +1837,7 @@ class posh(uint4):
 class posrelh(uint4):
     type = 0x390
     _values_ = [
-        ('msoprhMargin', 0x00000001), # The shape is horizontally positioned relative to the margins of the page: 
+        ('msoprhMargin', 0x00000001), # The shape is horizontally positioned relative to the margins of the page:
         ('msoprhPage', 0x00000002), # The shape is horizontally positioned relative to the edges of the page:
         ('msoprhText', 0x00000003), # The shape is horizontally positioned relative to the column of text underneath it:
         ('msoprhChar', 0x00000004), # The shape is horizontally positioned relative to the character of text underneath it:
@@ -1845,7 +1859,7 @@ class posv(uint4):
 class posrelv(uint4):
     type = 0x392
     _values_ = [
-        ('msoprvMargin', 0x00000001), # The shape is horizontally positioned relative to the margins of the page: 
+        ('msoprvMargin', 0x00000001), # The shape is horizontally positioned relative to the margins of the page:
         ('msoprvPage', 0x00000002), # The shape is horizontally positioned relative to the edges of the page:
         ('msoprvText', 0x00000003), # The shape is horizontally positioned relative to the column of text underneath it:
         ('msoprvLine', 0x00000004), # The shape is horizontally positioned relative to the character of text underneath it:
@@ -1929,7 +1943,7 @@ class dhgt(uint4):
 @OfficeArtFOPTEOP.define
 class groupShapeBoolean(pbinary.flags):
     type = 0x3bf
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fPrint'),
         (1, 'fHidden'),
         (1, 'fOneD'),
@@ -1962,7 +1976,7 @@ class groupShapeBoolean(pbinary.flags):
         (1, 'fUsefStandardHR'),
         (1, 'fUsefIsBullet'),
         (1, 'fUsefLayoutInCell'),
-    ]
+    ]))
 
 # Group Shape 2
 @OfficeArtFOPTEOP.define
@@ -2290,7 +2304,7 @@ class reserved423(uint4):
 @OfficeArtFOPTEOP.define
 class FillStyleBooleanProperties(pbinary.flags):
     type = 0x1bf
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fNoFillHitTest'),
         (1, 'fillUseRect'),
         (1, 'fillShape'),
@@ -2307,7 +2321,7 @@ class FillStyleBooleanProperties(pbinary.flags):
         (1, 'fUsefUseShapeAnchor'),
         (1, 'fUsefRecolorFillAsPicture'),
         (9, 'unused2'),
-    ]
+    ]))
 
 # Line Style
 @OfficeArtFOPTEOP.define
@@ -2452,7 +2466,7 @@ class reserved482(uint4):
 @OfficeArtFOPTEOP.define
 class LineStyleBooleanProperties(pbinary.flags):
     type = 0x1ff
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fNoLineDrawDash'),
         (1, 'fLineFillShape'),
         (1, 'fHitTestLine'),
@@ -2475,7 +2489,7 @@ class LineStyleBooleanProperties(pbinary.flags):
         (1, 'unused3'),
         (1, 'fUsefLineOpaqueBackColor'),
         (6, 'unused4'),
-    ]
+    ]))
 
 # Left Line Style
 @OfficeArtFOPTEOP.define
@@ -2619,7 +2633,7 @@ class reserved1378(uint4):
 @OfficeArtFOPTEOP.define
 class LeftLineStyleBooleanProperties(pbinary.flags):
     type = 0x57f
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fLeftNoLineDrawDash'),
         (1, 'fLineLeftFillShape'),
         (1, 'fLeftHitTestLine'),
@@ -2642,7 +2656,7 @@ class LeftLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]
+    ]))
 
 # Top Line Style
 @OfficeArtFOPTEOP.define
@@ -2787,7 +2801,7 @@ class reserved1442(uint4):
 @OfficeArtFOPTEOP.define
 class TopLineStyleBooleanProperties(pbinary.flags):
     type = 0x5bf
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fTopNoLineDrawDash'),
         (1, 'fLineTopFillShape'),
         (1, 'fTopHitTestLine'),
@@ -2810,7 +2824,7 @@ class TopLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]
+    ]))
 
 # Right Line Style
 @OfficeArtFOPTEOP.define
@@ -2955,7 +2969,7 @@ class reserved1506(uint4):
 @OfficeArtFOPTEOP.define
 class RightLineStyleBooleanProperties(pbinary.flags):
     type = 0x5ff
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fRightNoLineDrawDash'),
         (1, 'fLineRightFillShape'),
         (1, 'fRightHitTestLine'),
@@ -2978,7 +2992,7 @@ class RightLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]
+    ]))
 
 # Bottom Line Style
 @OfficeArtFOPTEOP.define
@@ -3123,7 +3137,7 @@ class reserved1570(uint4):
 @OfficeArtFOPTEOP.define
 class BottomLineStyleBooleanProperties(pbinary.flags):
     type = 0x63f
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fBottomNoLineDrawDash'),
         (1, 'fLineBottomFillShape'),
         (1, 'fBottomHitTestLine'),
@@ -3146,7 +3160,7 @@ class BottomLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]
+    ]))
 
 # Shadow Style
 @OfficeArtFOPTEOP.define
@@ -3240,14 +3254,14 @@ class shadowSoftness(sint4):
 @OfficeArtFOPTEOP.define
 class ShadowStyleBooleanProperties(pbinary.flags):
     type = 0x23f
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fshadowObscured'),
         (1, 'fShadow'),
         (14, 'unused1'),
         (1, 'fUsefshadowObscured'),
         (1, 'fUsefShadow'),
         (14, 'unused2'),
-    ]
+    ]))
 
 # Perspective Style
 @OfficeArtFOPTEOP.define
@@ -3301,19 +3315,48 @@ class perspectiveOriginY(FixedPoint):
 @OfficeArtFOPTEOP.define
 class PerspectiveStyleBooleanProperties(pbinary.flags):
     type = 0x27f
-    _fields_ = [
+    _fields_ = list(reversed([
         (1, 'fPerspective'),
         (15, 'unused1'),
         (1, 'fUsefPerspective'),
         (15, 'unused2'),
-    ]
+    ]))
 
 # 3D Object
 # 3D Style
 # Diagram
 # Transform
 # Relative Transform
+
 # Protection
+@OfficeArtFOPTEOP.define
+class ProtectionBooleanProperties(pbinary.flags):
+    type = 0x07f
+    _fields_ = list(reversed([
+        (1, 'fLockAgainstGrouping'),
+        (1, 'fLockAdjustHandles'),
+        (1, 'fLockText'),
+        (1, 'fLockVertices'),
+        (1, 'fLockCropping'),
+        (1, 'fLockAgainstSelect'),
+        (1, 'fLockPosition'),
+        (1, 'fLockAspectRatio'),
+        (1, 'fLockRotation'),
+        (1, 'fLockAgainstUngrouping'),
+        (6, 'unused1'),
+        (1, 'fUsefLockAgainstGrouping'),
+        (1, 'fUsefLockAdjustHandles'),
+        (1, 'fUsefLockText'),
+        (1, 'fUsefLockVertices'),
+        (1, 'fUsefLockCropping'),
+        (1, 'fUsefLockAgainstSelect'),
+        (1, 'fUsefLockPosition'),
+        (1, 'fUsefLockAspectRatio'),
+        (1, 'fUsefLockRotation'),
+        (1, 'fUsefLockAgainstUngrouping'),
+        (6, 'unused2'),
+    ]))
+
 # Text
 # Geometry Text
 # Blip
@@ -3344,7 +3387,7 @@ if __name__ == '__main__':
         z = art.RecordContainer()
         z.source = provider.string(s)
         z.size = lambda:len(s)
-    
+
     if True:
         s = '7ACqAA8AAvAWAQAAEAAI8AgAAAADAAAAEgQAAA8AA/D+AAAADwAE8CgAAAABAAnwEAAAAAAAAAAAAAAAAAAAAAAAAAACAArwCAAAAAAEAAAFAAAADwAE8FIAAACSDArwCAAAAAMEAAAACgAAQwAL8BgAAAB/AAQBBAG/AAgACAD/AQAACAC/AwAAAgAAABDwEgAAAAEAAAAAAAEAAAABAJoBAgAAAAAAEfAAAAAA'
         s = s.decode('base64')[4:] + '\x00'*800
@@ -3356,7 +3399,7 @@ if __name__ == '__main__':
         print z.l
 
     if False:
-        import ptypes    
+        import ptypes
         ptypes.setsource( ptypes.provider.file('poc.xls') )
 
         x = SpContainer()

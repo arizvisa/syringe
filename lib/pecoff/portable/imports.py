@@ -43,18 +43,25 @@ class IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
         (31, 'Name'),
     ]
 
-    def deref(self):
-        """Dereferences Name into it's IMAGE_IMPORT_HINT structure""" 
+    def dereference(self):
+        """Dereferences Name into it's IMAGE_IMPORT_HINT structure"""
         offset = headers.calculateRelativeAddress(self, self['Name'])
         return self.p.p.new(IMAGE_IMPORT_HINT, __name__='ImportName', offset=offset)
 
+    # set all the required attributes so that this is faking a ptype.pointer_t
+    d = property(fget=lambda s,**a: s.dereference(**a))
+    deref = lambda s,**a: s.dereference(**a)
+
     def getName(self):
         """Returns (Import Hint, Import String)"""
-        res = self.deref().li
-        return (res.hint(), res.str())
+        if self['Name'] != 0:
+            res = self.deref().li
+            return (res.hint(), res.str())
+        return (0, None)
 
     def summary(self):
-        return repr(self.getName())
+        hint,string = self.getName()
+        return '({:d}, {:s})'.format(hint, repr(string) if string is None else '"%s"'%string)
 
 class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
     root = dyn.block(4)
@@ -65,8 +72,8 @@ class IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
 
     def summary(self):
         if self['Name']['OrdinalFlag'] == 1:
-            return 'Ordinal -> %r'% (self['Ordinal'].summary(),)
-        return 'Name -> %r'% (self['Name'].summary(),)
+            return 'Ordinal -> '+ self['Ordinal'].summary()
+        return 'Name -> '+ self['Name'].summary()
 
     def getImport(self):
         '''Will return a tuple of (iat index, name)'''

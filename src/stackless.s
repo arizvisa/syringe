@@ -107,14 +107,14 @@ loader_4:
 # in: 4(%esp) -> pointer to unicode module name; out: %eax -> base address of module
 # mangles: everything due to the necessity of tampering with the stack as little as possible
 _getbaseaddress:
-    movl %fs:0x30, %eax     #_PEB 
+    movl %fs:0x30, %eax     #_PEB
     movl 0xc(%eax), %eax    #_PEB.Ldr
     movl 0xc(%eax), %eax    #_PEB_LDR_DATA.InLoadOrderModuleList.Flink
 
     # iterate through all _LDR_DATA_TABLE_ENTRYs
     movl %eax, %ebx         # _LIST_ENTRY.Flink
 1:
-    # check to see BaseDllName matches kernel32.dll (hopefully not kernel32.dll.txt :) 
+    # check to see BaseDllName matches kernel32.dll (hopefully not kernel32.dll.txt :)
     xorl %ecx, %ecx
     movw 0x2c(%ebx), %cx    # _LDR_DATA_TABLE_ENTRY.BaseDllName.Length
     shrl $1, %ecx
@@ -142,7 +142,7 @@ _getbaseaddress:
 _getimportmodulebyname:
     movl 4(%esp), %ebx
 
-    # get length of import name specified in argument 
+    # get length of import name specified in argument
     movl 4(%esp), %edi
     xorl %ecx, %ecx
     decl %ecx
@@ -150,7 +150,7 @@ _getimportmodulebyname:
     repnz scasb (%edi)
     incl %ecx
     neg %ecx
-    
+
     # navigate to the import table
     movl %ebx, %eax
     addl 0x3c(%eax), %eax   # PE header
@@ -197,7 +197,7 @@ _getimportmodulebyname:
 # in: 4(%esp) = base address, 8(%esp) = import module address, c(%esp) = import name
     .global _getimportbyname
 _getimportbyname:
-    
+
     movl 4(%esp), %ebx
     movl 8(%esp), %edx
     movl 0xc(%esp), %ebp
@@ -224,7 +224,7 @@ _getimportbyname:
     addl $2, %esi   # skip past the hint
     movl %ebp, %edi
     pushl %ecx      # stack + 1
-    
+
     repe cmpsb
     andl %ecx, %ecx
     popl %ecx       # stack - 1

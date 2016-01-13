@@ -56,7 +56,7 @@ def string(bitmap):
     for position in range(size):
         res.append(['0', '1'][integer & 1 != 0])
         integer >>= 1
-    return ''.join(reversed(res))
+    return str().join(reversed(res))
 
 def hex(bitmap):
     '''Return bitmap as a hex string'''
@@ -220,7 +220,7 @@ def insert(bitmap, operand):
 
 def consume(bitmap, bits):
     '''Consume some number of bits off of the end of a bitmap
-    
+
     If bitmap is signed, then return a signed integer.
     '''
     assert bits >= 0, 'invalid bit count < 0 : %d'% bits
@@ -244,7 +244,7 @@ def consume(bitmap, bits):
 
 def shift(bitmap, bits):
     '''Shift some number of bits off of the front of a bitmap
-    
+
     If bitmap is signed, then return a signed integer.
     '''
     assert bits >= 0, 'invalid bit count < 0 : %d'% bits
@@ -275,10 +275,6 @@ class consumer(object):
     def __init__(self, iterable=()):
         self.source = iter(iterable)
         self.cache = new(0, 0)
-
-    def push(self, bitmap):
-        self.cache = push(self.cache, bitmap)
-        return self
 
     def insert(self, bitmap):
         self.cache = insert(self.cache, bitmap)
@@ -331,7 +327,7 @@ def data(bitmap, reversed=False):
     while bitmap[1] != 0:
         bitmap,b = fn(bitmap, 8)
         res.append(b)
-    return ''.join(map(chr,res))
+    return str().join(map(chr,res))
 
 def size(bitmap):
     '''Return the size of the bitmap, ignoring signedness'''
@@ -395,6 +391,28 @@ def groupby(sequence, count):
 # jspelman. he's everywhere.
 ror = lambda (value, bits), shift=1,: (((value & (2**shift-1)) << bits-shift) | (value >> shift), bits)
 rol = lambda (value, bits), shift=1,: ( (value << shift) | ((value & ((2**bits-1) ^ (2**(bits-shift)-1))) >> (bits-shift)), bits)
+
+def reverse(bitmap):
+    '''Flip the bit order of the bitmap'''
+    res,(_,sz) = (0,0),bitmap
+    while size(res) < sz:
+        bitmap,value = consume(bitmap, 1)
+        res = push(res, (value,1))
+    return res
+
+def iterate(bitmap):
+    '''Iterate through the bitmap returning True or False for each bit'''
+    while size(bitmap) > 0:
+        bitmap,value = shift(bitmap, 1)
+        yield bool(value)
+    return
+
+def riterate(bitmap):
+    '''Reverse iterate through the bitmap returning True or False for each bit'''
+    while size(bitmap) > 0:
+        bitmap,value = consume(bitmap, 1)
+        yield bool(value)
+    return
 
 if False:
     # are bits clear

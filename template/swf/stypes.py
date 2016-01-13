@@ -88,7 +88,7 @@ class GLYPHENTRY(pbinary.struct):
     def __Index(self):
         p = self.getparent(pstruct.type)    # DefineText
         return p['GlyphBits'].li.num()
-        
+
     def __Advance(self):
         p = self.getparent(pstruct.type)    # DefineText
         return p['AdvanceBits'].li.num()
@@ -137,12 +137,12 @@ class TEXTRECORD(pstruct.type):
 ###
 class _CLIPEVENTFLAGS_Events(pbinary.struct):
     _fields_ = [
-        (1, 'ClipEventKeyUp'),   
-        (1, 'ClipEventKeyDown'),   
-        (1, 'ClipEventMouseUp'),   
-        (1, 'ClipEventMouseDown'),   
-        (1, 'ClipEventMouseMove'),   
-        (1, 'ClipEventUnload'),   
+        (1, 'ClipEventKeyUp'),
+        (1, 'ClipEventKeyDown'),
+        (1, 'ClipEventMouseUp'),
+        (1, 'ClipEventMouseDown'),
+        (1, 'ClipEventMouseMove'),
+        (1, 'ClipEventUnload'),
         (1, 'ClipEventEnterFrame'),
         (1, 'ClipEventLoad'),
         (1, 'ClipEventDragOver'),
@@ -173,14 +173,14 @@ class CLIPEVENTFLAGS(pstruct.type):
         (_CLIPEVENTFLAGS_Events, 'Events'),
         (_ifver(6, _CLIPEVENTFLAGS6_Events), 'Events6')
     ]
-    
+
 class CXFORM(pbinary.struct):
     '''fuck you swf'''
     _fields_ = [
         (1, 'HasAddTerms'),
         (1, 'HasMultTerms'),
         (4, 'Nbits'),
-    
+
         (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'RedMultTerm'),
         (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'GreenMultTerm'),
         (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'BlueMultTerm'),
@@ -196,7 +196,7 @@ class CXFORMWITHALPHA(pbinary.struct):
         (1, 'HasAddTerms'),
         (1, 'HasMultTerms'),
         (4, 'Nbits'),
-    
+
         (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'RedMultTerm'),
         (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'GreenMultTerm'),
         (lambda self: _ifelse('HasMultTerms', self['Nbits'], 0), 'BlueMultTerm'),
@@ -377,11 +377,11 @@ class GRADRECORD(pstruct.type):
     def dyn_shape(self):
 #        if self.stash('shape') == 3:
 #            return RGBA
-        return RGB       
+        return RGB
 
     _fields_ = [
         (UI8, 'Ratio'),
-        (dyn_shape, 'Color')       
+        (dyn_shape, 'Color')
     ]
 
 class _GRADIENT_bits(pbinary.struct):
@@ -542,7 +542,7 @@ class LINESTYLE2(pstruct.type):
         ]
     _fields_ = [
         (UI16, 'Width'),
-        (__Style, 'Style'), 
+        (__Style, 'Style'),
         (lambda s: UI16 if s['Style'].li['JoinStyle'] == 2 else Empty, 'MiterLimitFactor'),
         (lambda s: RGBA if s['Style'].li['HasFillFlag'] == 0 else Empty, 'Color'),
         (lambda s: FILLSTYLE if s['Style'].li['HasFillFlag'] == 1 else Empty, 'FillType'),

@@ -64,8 +64,8 @@ class padding:
 
     @classmethod
     def fill(cls, amount, source):
-        """Returns a string of ``amount`` elements, from the specified ``source``"""
-        return ''.join(itertools.islice(source, amount))
+        """Returns a bytearray of ``amount`` elements, from the specified ``source``"""
+        return str().join(itertools.islice(source, amount))
 
 ## exception remapping
 def mapexception(map={}, any=None, ignored=()):
@@ -78,7 +78,7 @@ def mapexception(map={}, any=None, ignored=()):
     /any/ describes the exception to raise if any exception is raised.
         use None to pass the original exception through
     /ignored/ will allow exceptions of these types to fall through
-    
+
     """
     assert type(map) is dict, 'exception /map/ expected to be of a dictionary type'
     assert hasattr(ignored, '__contains__'), '/ignored/ is expected to be a list of exceptions'
@@ -169,13 +169,13 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
         try:
             for x in itertools.islice(iterable, length):
                 res += x
-    
+
         except StopIteration:
             pass
         return res
 
     getRow = lambda o: hexrow(data, offset=o, **kwds)
-    
+
     res = []
     (ofs, data) = offset, tryRead(value, width)
     for i in (itertools.count(1) if rows is None else xrange(1, rows)):
@@ -216,7 +216,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     # figure out how many bytes we can print
     bytefrac,bytewidth = math.modf((width - len(msg)) * 1.0 / charwidth)
     padlength = math.trunc(charwidth*bytefrac)
-    
+
     msg = padding*math.trunc(padlength/2.0+0.5) + msg + padding*math.trunc(padlength/2)
     left,right = data[:math.trunc(bytewidth/2 + 0.5)], data[size-math.trunc(bytewidth/2):]
     return hexify(left) + msg + hexify(right)
@@ -429,7 +429,7 @@ if __name__ == '__main__':
     @TestCase
     def test_memoize_fn_1():
         @utils.memoize('arg1','arg2')
-        def blah(arg1,arg2,arg3,arg4): 
+        def blah(arg1,arg2,arg3,arg4):
             blah.counter += 1
             return arg1+arg2
         blah.counter = 0

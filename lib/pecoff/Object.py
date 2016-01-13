@@ -103,7 +103,7 @@ if __name__ == '__main__':
         data = section.data().load()
         section.data, section.relocations = data.serialize(), relocations   # save for later
         continue
-        
+
     ## do relocations for every section
     for section in coff['Sections']:
         data = section.data
@@ -111,7 +111,7 @@ if __name__ == '__main__':
             print r
             section.data = r.relocate(section.data, symboltable)
         continue
-        
+
     ## print out results
     print '-'*20 + 'printing relocated sections'
     for section in coff['Sections']:
@@ -132,7 +132,7 @@ if __name__ == '__main__':
                 data = section.getrelocateddata(symboltable)
             else:
                 data = section.data().serialize()
-                print 
+                print
 
     #        print ptypes.utils.hexdump( section.getdata().serialize() )
             print ptypes.utils.hexdump( data )

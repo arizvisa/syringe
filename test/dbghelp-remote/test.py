@@ -13,7 +13,7 @@ class GUID(ctypes.Structure):
         if string[0] != "{" and string[-1] != "}":
             raise ValueError
         string = string[1:-1]
-        
+
         # collect elements
         elements = string.split("-")
         if len(elements) != 5:
@@ -70,7 +70,7 @@ if __name__ == '__main__':
     dc = IDebugClient.QueryInterface(interface=pydbgeng.DbgEng.IDebugClient)
     print dc
     s = 'tcp:port=57005,server=172.22.22.107'
-    
+
     print dc.ConnectProcessServer
     print dc.ConnectProcessServer.restype
     print dc.ConnectProcessServer.argtypes

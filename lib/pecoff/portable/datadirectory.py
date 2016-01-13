@@ -41,7 +41,7 @@ class OffsetEntry(Entry):
 
 class Export(AddressEntry):
     _object_ = exports.IMAGE_EXPORT_DIRECTORY
-        
+
 class Import(AddressEntry):
     _object_ = imports.IMAGE_IMPORT_DIRECTORY
 

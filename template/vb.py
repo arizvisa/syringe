@@ -17,7 +17,7 @@ class BSTR(pstruct.type):
         (lambda s: A(Str, s['length'].li.int()), 'string'),
     ]
 class Empty(ptype.undefined): pass
-A = dyn.array 
+A = dyn.array
 P = dyn.pointer
 C = dyn.clone
 OD = lambda t: dyn.rpointer(t, object=lambda s: s.p, type=Dword)
@@ -225,7 +225,7 @@ class EventHandlerType(ptype.pointer_t):
 
 class Header(pstruct.type):
     _fields_ = [
-        (P(Str), 'szVbMagic'),      # "VB5!" String    
+        (P(Str), 'szVbMagic'),      # "VB5!" String
         (Word, 'wRuntimeBuild'),    # Build of the VB6 Runtime
         (C(Str, length=0xe), 'szLangDll'),        # Language Extension DLL
 	    (C(Str, length=0xe), 'szSecLangDll'),      # 2nd Language Extension DLL

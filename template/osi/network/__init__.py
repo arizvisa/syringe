@@ -21,7 +21,7 @@ if False:
                 if self.payload is not None:
                     logging.fatal('%s : overwriting payload-size %x with new size %x', self.name(), self.payload, sz)
                 self.payload = sz
-                
+
             except (AttributeError,NotImplementedError):    # XXX: yea, i know it's bad to use exceptions as substitutes for branches...
                 self.payload -= value.blocksize()
 

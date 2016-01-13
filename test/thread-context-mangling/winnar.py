@@ -2,7 +2,7 @@ import sys,time
 from ctypes import *
 
 guiThread = 0x98c
-address = 0x7C935288 
+address = 0x7C935288
 
 try:
     guiThread, address = [int(x,16) for x in sys.argv[1:]]
@@ -28,7 +28,7 @@ except:
     sys.stderr.write(blah)
 
     sys.exit(0)
-    
+
 # ctypes shit
 class CONTEXT(Structure):
     _fields_ = [
@@ -68,7 +68,7 @@ THREAD_SET_CONTEXT = 0x0010
 THREAD_GET_CONTEXT = 0x0008
 THREAD_SUSPEND_RESUME = 0x0002
 hThread = k32.OpenThread(
-    THREAD_SET_CONTEXT|THREAD_GET_CONTEXT|THREAD_SUSPEND_RESUME, 
+    THREAD_SET_CONTEXT|THREAD_GET_CONTEXT|THREAD_SUSPEND_RESUME,
     False,
     guiThread
 )

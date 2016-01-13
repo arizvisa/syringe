@@ -92,7 +92,7 @@ class type(_pstruct_generic):
         try:
             res = self.size() >= self.blocksize()
         except Exception,e:
-            Config.log.warn("type.initializedQ : %s : blocksize() raised an exception when determining whether the instance is initialized. : %s", self.instance(), e, ' -> '.join(self.backtrace()))
+            Config.log.warn("type.initializedQ : %s : .blocksize() raised an exception when attempting to determine the initialization state of the instance : %s : %s", self.instance(), e, ' -> '.join(self.backtrace()), exc_info=True)
         finally:
             return res
 
@@ -136,7 +136,7 @@ class type(_pstruct_generic):
 
                     # create each element
                     n = self.new(t, __name__=name, offset=ofs)
-                    self.append(n)
+                    self.value.append(n)
                     if ptype.iscontainer(t) or ptype.isresolveable(t):
                         n.load()
                     bs = n.blocksize()
@@ -181,9 +181,9 @@ class type(_pstruct_generic):
                 continue
             o = self.getoffset(value.__name__ or name)
             i = utils.repr_instance(value.classname(), value.name())
-            v = value.summary(**options) if value.initializedQ() else '???' 
+            v = value.summary(**options) if value.initializedQ() else '???'
             result.append('[%x] %s %s'%( o, i, v ))
-            o += value.blocksize()
+            o += value.size()
 
         if len(result) > 0:
             return '\n'.join(result)

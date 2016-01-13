@@ -39,7 +39,7 @@ class Chunk(pstruct.type):
         if size & 1:
             size += 1
         return size
-    
+
     def ckData(self):
         size = self['ckSize'].li.num()
         return Record.get(self['ckID'].li.str(), blocksize=lambda s:size)

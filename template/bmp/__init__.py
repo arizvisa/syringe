@@ -4,7 +4,7 @@ class BYTE(pint.uint8_t): pass
 class DWORD(pint.uint32_t): pass
 class LONG(pint.int32_t): pass
 class WORD(pint.uint16_t): pass
- 
+
 class BITMAPFILEHEADER(pstruct.type):
     _fields_ = [
         ( WORD, 'bfType' ),

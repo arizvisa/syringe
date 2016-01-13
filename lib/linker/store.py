@@ -9,7 +9,7 @@ definitions
     symbolname
         a tuple representing symbol.  i.e. symbolname = (modulename,localname)
         if modulename is None, then the symbol references locally to the current module
-    
+
 objects
     symboltable
         this is the the lowest-level class is intended to be inherited from.
@@ -111,7 +111,7 @@ class symboltable(dict):
         for k in self.iterkeys():
             yield k,self[k]
         return
-    
+
     ### overloads
     def clear(self):
         super(symboltable, self).clear()
@@ -186,7 +186,7 @@ class symboltable(dict):
         for x in ([(None,n),n][type(n) is tuple and len(n) == 2] for n in names):
             yield x
         return
-        
+
     def alias(self, name, target):
         '''Add an alias from one symbol name to another'''
         name,target = tuple(self.__alias_expand([name,target]))
@@ -373,14 +373,14 @@ class base(symboltable):
             baseaddress = self[name]
             if baseaddress is None:
                 logging.debug('%s : relocating %d symbols in %s to None'% (s.name(), len(symbols), name[1]))
-                for n in symbols:      
+                for n in symbols:
                     self[n] = None
                 return
 
             logging.debug('%s : relocating %d symbols in %s to %x'% (s.name(), len(symbols), name[1], baseaddress))
 
             symbols = self.loadsymbols(name[1])
-            for n in symbols:      
+            for n in symbols:
                 self[n] = baseaddress + self[n]
             return
 
@@ -702,7 +702,7 @@ if __name__ == '__main__':
         print 'blah',z['blah']
         print 'whee',z['whee']
         print 'whoo',z['whoo']
-            
+
     if False:
         import random
         names = '_main,start,init_scheduler,init_sound,init_display,run'.split(',')
@@ -718,7 +718,7 @@ if __name__ == '__main__':
         address = lambda:random.randint(0x6710000,0x6890000)
         b = store.symboltable()
         for x in externals:
-            b[x] = address() 
+            b[x] = address()
 
         print a.merge(b, a.getglobals()+a.getexternals())
         print a['GameInit'] == b['GameInit']
@@ -728,7 +728,7 @@ if __name__ == '__main__':
         names = '_main,start,init_scheduler,init_sound,init_display,run'.split(',')
         externals  = 'GameInit,GameRun,Blah'.split(',')
         address = lambda:random.randint(0,0x7fffffff)
-        
+
 
         a,b=store.symboltable(),store.symboltable()
         for x in names: a[x] = address()
@@ -808,7 +808,7 @@ if __name__ == '__main__':
 
         a['.text'] = 0x10000000
         a['.data'] = 0xdeaddead
-        
+
         b = a.getsegment('.data')
         b = a.relocatesegment('.data', b)
 

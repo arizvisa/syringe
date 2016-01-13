@@ -24,7 +24,7 @@ class ped_psapi(object):
     def __init__(self, host="./"):
         super(ped_psapi, self).__init__()
         self.wmi = com.GetObject("winmgmts://%s"% host)
-        
+
     def enumerateProcesses(self, verbose=False):
         res = self.wmi.InstancesOf('Win32_Process')
         return [ (x.ProcessId, x.Name, x.ExecutablePath, x.CommandLine) for x in res ]
@@ -131,7 +131,7 @@ def ped_poke(dbg, address, value, options=options):
     reg,offset = options['address']
     res[reg] = address - offset
 
-    ## 
+    ##
     res['Esp'] -= options['stack']
     res['Eip'] = write_address
 

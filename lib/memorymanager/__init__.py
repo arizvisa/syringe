@@ -223,7 +223,7 @@ class Managed(MemoryManager):
     def __free_arena(self, pointer):
         pagemask = self.allocator.getPageSize()-1
         page = pointer & ~pagemask
-        
+
         arena = self.allocations[page]
         basepointer,(chunksize,layout) = arena
 

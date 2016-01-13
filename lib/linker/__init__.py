@@ -98,7 +98,7 @@ if __name__ == '__main__':
             self[x] = 0xdeaddead
 
 #        self['msvcr71.dll!strstr'] = 0x42424242
-    
+
         # write file
         filename = "%s/obj/blah.bin"%root
         out = file(filename, 'wb')
@@ -180,7 +180,7 @@ if __name__ == '__main__':
 
         data = self.relocatesegment('.idata', data, 0xcccccccc)
         print self.getglobals()
-        
+
         print ptypes.utils.hexdump(data,offset=0xcccccccc)
 
     if False:

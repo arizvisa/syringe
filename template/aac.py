@@ -21,7 +21,7 @@ def get_variables(sampling_frequency_index, window_sequence, scale_factor_groupi
         window_group_length = None  # XXX
         for i in range(num_windows):
             if bitset(scale_factor_grouping, 6-i):
-                num_window_groups -= 1    
+                num_window_groups -= 1
             else:
                 window_group_length     # += 1      # XXX
             continue
@@ -85,7 +85,7 @@ class adts_error_check(pbinary.struct):
         (lambda s: [16,0][s.getparent(adts_frame)['adts_fixed_header']['protection_absent']], 'crc_check'),
     ]
 class adts_raw_data_block_error_check(adts_error_check): pass
-    
+
 class raw_data_block(pbinary.struct):
     def __element(self):
         try:
@@ -94,10 +94,10 @@ class raw_data_block(pbinary.struct):
             print 'unable to find', self['id_syn_ele']
             result = 0
         return result
-        
+
     _fields_ = [
         (3, 'id_syn_ele'),
-        (__element, 'ele'),        
+        (__element, 'ele'),
     ]
 
 class raw_data_stream(pbinary.terminatedarray):
@@ -194,7 +194,7 @@ class scale_factor_data(pbinary.struct):
 # XXX
 class tns_data(pbinary.struct):
     _fields_ = [
-        
+
     ]
 
 # XXX
@@ -275,7 +275,7 @@ class channel_pair_element(pbinary.struct):
         (4, 'element_instance_tag'),
         (1, 'common_window'),
         (common_window, 'window'),
-        
+
         # ???
         (lambda s:dyn.clone(individual_channel_stream, attrs={'common_window':s['common_window']}), 'stream_0'),
         (lambda s:dyn.clone(individual_channel_stream, attrs={'common_window':s['common_window']}), 'stream_1'),
@@ -414,7 +414,7 @@ class extension_payload(pbinary.struct):
             return dyn.clone(pbinary.array, _object_=8, length=self.cnt)
             return sbr_extension_data   # XXX
         elif t == EXT_FILL_DATA:
-            return self.fill_data            
+            return self.fill_data
         return dyn.clone(pbinary.array, length=self.cnt, _object_=8)
 
     _fields_ = [

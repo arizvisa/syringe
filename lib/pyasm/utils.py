@@ -27,7 +27,7 @@ def _hexdump(iterable, address=0, columns=16):
 
     except StopIteration:
         width = len(' '.join(['00' for x in range(columns)]))
-        col = []        
+        col = []
         col.append('%8x:'% address)
         col.append(' '.join(hexify(data)))
         col.append(''.join([ ['.', ch][isprint(ch)] for ch in data]))

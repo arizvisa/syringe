@@ -44,7 +44,7 @@ if __name__ == '__main__':
     header = myfile['header']
     frameinfo = myfile['data']['frameinfo']
     tags = myfile['data']['tags']
-    
+
     z = myfile
 
     print 'loaded 0x%x tags'%( len(tags) )

@@ -18,7 +18,7 @@ class File(pstruct.type):
         elif v == 0x0011:
             return v2.File
         raise NotImplementedError('Unknown version %x'% v)
-            
+
     _fields_ = [
         (dyn.block(0x200), 'padding'),
         (Header, 'header'),

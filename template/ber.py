@@ -171,7 +171,7 @@ class OBJECT_IDENTIFIER(ptype.type):
             if n <= 127:
                 val.append(n)
                 continue
-            
+
             # convert integer to a bitmap
             x = bitmap.new(0,0)
             while n > 0:

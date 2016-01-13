@@ -75,7 +75,7 @@ class MemberType(ptype.definition):
             (Object.File, 'Object'),
             (ptype.block, 'Block'),
         ]
-    
+
         def isImport(self):
             return self['Import']['Header'].valid()
 
@@ -140,7 +140,7 @@ class Member(pstruct.type):
         class Name(pstr.string):
             length = 16
             str = lambda s: s.serialize().rstrip()
-    
+
         _fields_ = [
             (Name, 'Name'),
             (dyn.clone(pstr.string, length=12), 'Date'),
@@ -150,7 +150,7 @@ class Member(pstruct.type):
             (dyn.clone(stringinteger, length=10), 'Size'),
             (dyn.clone(pstr.string, length=2), 'End of Header'),
         ]
-    
+
         def data(self):
             size = self['Size'].num()
             return self.new(dyn.block(self['Size'].num()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
@@ -226,7 +226,7 @@ class File(pstruct.type):
         if self.initialized:
             return '%s signature:%s members:%d'% (self.name(), repr(self['signature'].serialize()), self.getmembercount())
         return super(File,self).repr()
-    
+
     ## really slow interface
     def getmember(self, index):
         offsets = self['members'].Linker['Offsets']
@@ -241,7 +241,7 @@ class File(pstruct.type):
     ## faster interface using ptypes to slide view
     def fetchimports(self):
         offsets = self['members'].Linker['Offsets']
-                                                
+
         memberheader = self.new(MemberHeader, __name__='header', offset=0)
         importheader = self.new(ImportHeader, __name__='header', offset=0)
 

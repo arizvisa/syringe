@@ -70,12 +70,12 @@ class header_extended_t(pstruct.type):
         (dyn.clone(stringinteger,length=8), 'devmajor'),
         (dyn.clone(stringinteger,length=8), 'devminor'),
     ]
-    
+
 class member_t(pstruct.type):
     def iseof(self):
         n = reduce(lambda x,y:x+y, (ord(x) for x in self.serialize()), 0)
         return n == 0
-        
+
     def summary(self):
         common = self['header']['common']
         filename = common['name']
@@ -124,7 +124,7 @@ class gnu_sparse(pstruct.type):
            (dyn.clone(stringoctal,length=12), 'offset'),
            (dyn.clone(stringoctal,length=12), 'numbytes'),
     ]
-        
+
 class gnu_sparse_header(pstruct.type):
     _fields_ = [
         (dyn.array(gnu_sparse,21), 'sparse'),
@@ -197,4 +197,3 @@ if __name__ == '__main__':
 #    b = tar.old(offset=0)
 #
 #    c = tar.gnu(offset=0)
-   

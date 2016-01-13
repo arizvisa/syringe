@@ -246,7 +246,7 @@ class MulBlank(pstruct.type):
     _fields_ = [
         (Rw, 'rw'),
         (Col, 'colFirst'),
-        (__rgixfe, 'rgixfe'), 
+        (__rgixfe, 'rgixfe'),
         (Col, 'colLast')
     ]
 
@@ -1401,9 +1401,9 @@ class ExtType_TextIndentation(pint.uint16_t):
 class ExtProp(pstruct.type):
     class extType(pint.enum,pint.uint16_t):
         _values_ = [
-            ('interior-fg-color', 0x0004), 
-            ('interior-bg-color', 0x0005), 
-            ('interior-igradient', 0x0006), 
+            ('interior-fg-color', 0x0004),
+            ('interior-bg-color', 0x0005),
+            ('interior-igradient', 0x0006),
             ('top-border-color', 0x0007),
             ('bottom-border-color', 0x0008),
             ('left-border-color', 0x0009),
@@ -1559,11 +1559,11 @@ class Feat(pstruct.type):
     type = 2152
     def __rgbFeat(self):
         isf = self['isf'].l
-        if isf == 'ISFPROTECTION':
+        if isf['ISFPROTECTION']:
             return FeatProtection
-        elif isf == 'ISFFEC2':
+        elif isf['ISFFEC2']:
             return FeatFormulaErr2
-        elif isf == 'ISFFACTOID':
+        elif isf['ISFFACTOID']:
             return FeatSmartTag
         raise NotImplementedError(isf)
 
@@ -1607,9 +1607,9 @@ class FeatHdr(pstruct.type):
         isf = self['isf'].l
         if self['cbHdrData'].li.int() == 0:
             return ptype.type
-        if isf == 'ISFPROTECTION':
+        if isf['ISFPROTECTION']:
             return EnhancedProtection
-        elif isf == 'ISFFEC2':
+        elif isf['ISFFEC2']:
             return ptype.type
         raise NotImplementedError(isf)
 
@@ -2084,7 +2084,7 @@ class TableFeatureType(pstruct.type):
         (pint.uint32_t, 'cchStmCache'),
         (LEMMode, 'lem'),
 
-        (dyn.array(pint.uint8_t, 16), 'rgbHashParam'),   
+        (dyn.array(pint.uint8_t, 16), 'rgbHashParam'),
         (XLUnicodeString, 'rgbName'),
         (pint.uint16_t, 'cFieldData'),
         (__cSPName, 'cSPName'),

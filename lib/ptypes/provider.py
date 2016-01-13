@@ -49,12 +49,16 @@ class string(base):
     def consume(self, amount):
         if amount < 0:
             raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. %d:+%s from %s'%(self.offset,amount,self))
-        res = self.data[self.offset: self.offset+amount].tostring()
+        if self.offset >= len(self.data):
+            raise error.ConsumeError(self,self.offset,amount)
+
+        minimum = min((self.offset+amount, len(self.data)))
+        res = self.data[self.offset : minimum].tostring()
         if res == '' and amount > 0:
             raise error.ConsumeError(self,self.offset,amount,len(res))
         if len(res) == amount:
             self.offset += amount
-        return res
+        return str(res)
 
     @utils.mapexception(any=error.ProviderError,ignored=(error.StoreError,))
     def store(self, data):
@@ -136,7 +140,7 @@ class random(base):
 
     @utils.mapexception(any=error.ProviderError)
     def consume(self, amount):
-        return ''.join(chr(_random.randint(0,255)) for x in xrange(amount))
+        return str().join(chr(_random.randint(0,255)) for x in xrange(amount))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -190,7 +194,7 @@ class stream(base):
         del(self.data[:amount])
         self.data_ofs += amount
         return result
-    
+
     ###
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
@@ -209,8 +213,7 @@ class stream(base):
         elif (len(self.data) == 0) or (o <= len(self.data)):
             n = amount - (len(self.data) - o)
             self.preread(n)
-            result = self.consume(amount)
-            return result
+            return self.consume(amount)
 
         raise error.ConsumeError(self, self.offset,amount)
 
@@ -245,7 +248,7 @@ class stream(base):
 
 class iter(stream):
     def _read(self, amount):
-        return ''.join(itertools.islice(self.source, amount))
+        return str().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
         Config.log.info('iter._write : Tried to write %x bytes to an iterator'%(len(data)))
@@ -323,7 +326,7 @@ class posixfile(filebase):
 
     @utils.mapexception(any=error.ProviderError)
     def open(self, filename, mode='rw', perms=0644):
-        mode = ''.join(sorted(set(x.lower() for x in mode)))
+        mode = str().join(sorted(set(x.lower() for x in mode)))
         flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
 
         # this is always assumed
@@ -466,14 +469,14 @@ try:
             blockpointer = ctypes.POINTER(ctypes.c_char*length)
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
-            return ''.join(p.contents)
+            return str().join(p.contents)
 
         @staticmethod
         def _write(address, value):
             blockpointer = ctypes.POINTER(ctypes.c_char*len(value))
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
-            for i,c in enumerate(str(value)):
+            for i,c in enumerate(value):
                 p.contents[i] = c
             return i+1
 
@@ -551,7 +554,7 @@ try:
             Buffer = res()
             Buffer.value = value
 
-            res = k32.WriteProcessMemory(self.handle, self.address, Buffer, len(value), ctypes.byref(NumberOfBytesWritten)) 
+            res = k32.WriteProcessMemory(self.handle, self.address, Buffer, len(value), ctypes.byref(NumberOfBytesWritten))
             if (res == 0) or (NumberOfBytesWritten.value != len(value)):
                 e = OSError('Unable to write to pid(%x)[%08x:%08x].'% (self.id, self.address, self.address+len(value)))
                 raise error.StoreError(self, self.address,len(value), written=NumberOfBytesWritten.value, exception=e)
@@ -671,7 +674,7 @@ try:
 
             half = size // 2
             if half > 0:
-                return ''.join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
+                return str().join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
             if _idaapi.isEnabled(offset):
                 return '' if size == 0 else (padding*size) if (_idaapi.getFlags(offset) & _idaapi.FF_IVL) == 0 else _idaapi.get_many_bytes(offset, size)
             raise Exception, offset
@@ -680,7 +683,7 @@ try:
         def within_segment(cls, offset):
             s = _idaapi.getseg(offset)
             return s is not None and s.startEA <= offset < s.endEA
-            
+
         @classmethod
         def seek(cls, offset):
             res,cls.offset = cls.offset,offset
@@ -744,15 +747,15 @@ try:
         def consume(self, amount):
             '''Read some number of bytes'''
             try:
-                result = str( self.client.DataSpaces.Virtual.Read(self.offset, amount) )
+                result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
             except RuntimeError, e:
                 raise StopIteration('Unable to read 0x%x bytes from address %x'% (amount, self.offset))
-            return result
-            
+            return str(result)
+
         def store(self, data):
             '''Write some number of bytes'''
             return self.client.DataSpaces.Virtual.Write(self.offset, data)
-    
+
     Config.log.warning("__module__ : Successfully loaded `PyDbgEng` provider.")
 except ImportError:
     Config.log.info("__module__ : Unable to import '_PyDbgEng' module. Failed to load `PyDbgEng` provider.")
@@ -769,7 +772,13 @@ try:
             return res
 
         def consume(self, amount):
-            return ''.join(map(chr,_pykd.loadBytes(self.addr, amount)))
+            if amount == 0:
+                return ''
+            try:
+                res = map(chr,_pykd.loadBytes(self.addr, amount))
+            except:
+                raise error.ConsumeError(self,self.addr,amount,0)
+            return str().join(res)
 
         def store(self, data):
             raise error.StoreError(self, self.addr, len(data), message="Pykd doesn't allow you to write to memory.")
@@ -788,7 +797,7 @@ class base64(string):
         if end and end in base64string:
             res = [i for i,_ in enumerate(result) if _.startswith(end)][0]
             result[:] = result[:res]
-        result = ''.join(result).translate(None, ' \t\n\r\v')
+        result = str().join(result).translate(None, ' \t\n\r\v')
         super(base64,self).__init__(result.decode('base64'))
 
     @property
@@ -812,13 +821,13 @@ if __name__ == '__main__' and 0:
             r = self.d[self.o:self.o+amount].tostring()
             self.o += amount
             return r
-    
+
     import ptypes
     from ptypes import *
     strm = provider.stream(fakefile())
 #    print repr(strm.fileobj.d)
 #    print strm.buffer_data
-    
+
 #    print repr(fakefile().d[0:0x30].tostring())
     x = dynamic.array(pint.uint32_t, 3)(source=strm)
     x = x.l
@@ -978,7 +987,7 @@ if __name__ == '__main__':
             if a.count('B') == len(data):
                 raise Success
         return
-            
+
     @TestCase
     def test_filecopy_readwrite():
         data = 'A'*512
@@ -1010,7 +1019,7 @@ if __name__ == '__main__':
             if z.consume(len(data)) == data:
                 raise Success
             raise Failure
-            
+
         @TestCase
         def test_memory_write():
             data = 'A'*0x40
@@ -1054,18 +1063,17 @@ if __name__ == '__main__':
 
     @TestCase
     def test_random_readwrite():
-        pass
+        raise NotImplementedError
 
     @TestCase
     def test_proxy_read():
-        pass
+        raise NotImplementedError
     @TestCase
     def test_proxy_write():
-        pass
+        raise NotImplementedError
     @TestCase
     def test_proxy_readwrite():
-        pass
-
+        raise NotImplementedError
 
     try:
         import nt
@@ -1098,7 +1106,7 @@ if __name__ == '__main__':
             p.terminate()
             if data == string:
                 raise Success
-        
+
         @TestCase
         def test_windows_remote_store():
             pass
@@ -1171,7 +1179,7 @@ if __name__ == '__main__' and 0:
     def test_hole():
         if a._find(5) == -1:
             raise Success
-    
+
     @TestCase
     def test_second():
         if a.available[a._find(6)] == 6:
@@ -1190,7 +1198,7 @@ if __name__ == '__main__' and 0:
     def test_less():
         if a.find(-1) == -1:
             raise Success
-    
+
     @TestCase
     def test_tail():
         if a.find(11) == -1:

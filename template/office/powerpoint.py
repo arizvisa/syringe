@@ -317,7 +317,7 @@ class PlaceholderAtom(pstruct.type):
             ('Subtitle', 16), ('VerticalTextTitle', 17), ('VerticalTextBody', 18), ('NotesSlideImage', 19), ('Object', 20),
             ('Graph', 21), ('Table', 22), ('ClipArt', 23), ('OrganizationChart', 24), ('MediaClip', 25),
         ]
-        
+
     _fields_ = [
         (uint4, 'placementId'),
         (__placeholderid, 'placeholderId'),

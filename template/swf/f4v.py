@@ -24,7 +24,7 @@ class SAMPLEFLAGS(pbinary.struct):
 class BOXHEADER(pstruct.type):
     def __ExtendedSize(self):
         return UI64 if s['TotalSize'].li.num() == 1 else pint.uint_t
-            
+
     _fields_ = [
         (UI32, 'TotalSize'),
         (UI32, 'BoxType'),

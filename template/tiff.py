@@ -106,4 +106,4 @@ if __name__ == '__main__':
 
     a = tiff.File()
     a = a.l
-    
+

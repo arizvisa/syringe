@@ -26,7 +26,7 @@
                     substring($string, 1, string-length($string)-1)
                 ) * 16
             else
-               $value 
+               $value
         " />
     </xsl:function>
 
@@ -218,14 +218,14 @@
     </xsl:template>
 
     <xsl:template match="//one-byte/pri_opcd">
-        <xsl:call-template name="primary_opcode">        
+        <xsl:call-template name="primary_opcode">
             <xsl:with-param name="opc_value" select="utils:fromHex(@value)" />
         </xsl:call-template>
     </xsl:template>
 
     <!-- FIXME: these need to be checked/verified -->
     <xsl:template match="//two-byte/pri_opcd">
-        <xsl:call-template name="primary_opcode">        
+        <xsl:call-template name="primary_opcode">
             <xsl:with-param name="opc_value" select="utils:fromHex(@value) + 256" />
         </xsl:call-template>
     </xsl:template>

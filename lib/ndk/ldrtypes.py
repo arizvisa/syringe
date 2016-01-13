@@ -69,7 +69,7 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         right = left + self['SizeOfImage'].long()
         return (address >= left) and (address < right)
 
-## declarations, heh. 
+## declarations, heh.
 class _LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
     _object_ = dyn.pointer(LDR_DATA_TABLE_ENTRY)
 

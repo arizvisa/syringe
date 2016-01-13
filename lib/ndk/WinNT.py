@@ -2,6 +2,19 @@ from ptypes import *
 
 short = pint.int16_t
 
+class fpointer_t(ptype.opointer_t):
+    """This is typically used for LIST_ENTRY"""
+    _path_ = ()
+    def _calculate_(self, offset):
+        res = self.new(self._object_).a
+        for p in self._path_: res = res[p]
+        return offset - res.getoffset()
+    def classname(self):
+        return self.typename() + '(' + self._object_.typename() + (', _path_=%r)'%(self._path_,) if self._path_ else ')')
+
+def fpointer(type, fieldname):
+    return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname,'__iter__') else (fieldname,))
+
 class PVOID(dyn.pointer(ptype.undefined, type=pint.uint32_t)): pass
 class PVOID64(dyn.pointer(ptype.undefined, type=pint.uint64_t)): pass
 class ULONG_PTR(ptype.pointer_t): pass
@@ -65,28 +78,83 @@ class PLUID(dyn.pointer(LUID)): pass
 class BOOLEAN(pint.int32_t): pass
 class PBOOLEAN(dyn.pointer(BOOLEAN)): pass
 
-class _LIST_ENTRY(pstruct.type):
+### Singly-linked list
+class _SLIST_ENTRY(fpointer_t):
     _object_ = None
-    _path_ = ()
+    _sentinel_ = 0
 
+    def __init__(self, **attrs):
+        super(_SLIST_ENTRY,self).__init__(**attrs)
+        assert issubclass(self._object_, ptype.pointer_t), '%s.%s._object_ is not a valid pointer'%(self.__module__,self.__class__.__name__)
+
+    def walk_nextentry(self,state,path):
+        try:
+            # python doesn't tail-recurse anyways...
+            next = path.next()
+            state = self.walk_nextentry(state[next], path)
+        except StopIteration:
+            pass
+        return state
+
+    def walk(self):
+        '''Walks through a linked list'''
+        sentinel = 0 if self._sentinel_ is None else self._sentinel_
+        n = self
+        while n.num() != sentinel:
+            result = n.d
+            yield result.l
+            n = self.walk_nextentry(result, iter(self._path_))
+            if n.int() == 0: break
+        return
+
+_SLIST_ENTRY._object_ = _SLIST_ENTRY
+_SLIST_ENTRY._path_ = ()
+SLIST_ENTRY = _SLIST_ENTRY
+
+class SLIST_HEADER(pstruct.type):
+    def __Next(self):
+        p = getattr(self, '_path_', _SLIST_ENTRY._path_)
+        o = getattr(self, '_object_', _SLIST_ENTRY._object_)
+        return dyn.clone(_SLIST_ENTRY, _path_=p, _object_=o)
+
+    _fields_ = [
+        (__Next, 'Next'),
+        (pint.uint16_t, 'Depth'),
+        (pint.uint16_t, 'Sequence'),
+    ]
+
+    def summary(self):
+        return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].num(),self['Sequence'].num())
+
+### Doubly-linked list
+class _LIST_ENTRY(pstruct.type):
     _fields_ = [
         (lambda s: s._object_, 'Flink'),
         (lambda s: s._object_, 'Blink'),
     ]
     flink,blink = 'Flink','Blink'
+    _object_ = None
+    _path_ = ()
+    _sentinel_ = None
 
     def __init__(self, **attrs):
         super(_LIST_ENTRY,self).__init__(**attrs)
         assert issubclass(self._object_, ptype.pointer_t), '%s.%s._object_ is not a valid pointer'%(self.__module__,self.__class__.__name__)
 
+    def summary(self):
+        return '<->'.join(('f:'+hex(self['Flink'].num()), 'b:'+hex(self['Blink'].num())))
+
     def forward(self):
+        if self[self.flink].num() == self._sentinel_:
+            raise StopIteration, self
         return self[self.flink].d
+
     def backward(self):
         return self[self.blink].d
 
     def walk_nextentry(self,state,path):
         try:
-            # python doesn't tail-recursion anyways...
+            # python doesn't tail-recurse anyways...
             next = path.next()
             state = self.walk_nextentry(state[next], path)
         except StopIteration:
@@ -96,19 +164,12 @@ class _LIST_ENTRY(pstruct.type):
     def walk(self, direction=flink):
         '''Walks through a circular linked list'''
         n = self[direction]
-        start = self.getoffset()
-        while n.num() != 0:
+        sentinel = self.getoffset() if self._sentinel_ is None else self._sentinel_
+        while n.num() != 0 and n.int() != sentinel:
             result = n.d
             yield result.l
-
             n = self.walk_nextentry(result, iter(self._path_))
-            if n.__class__ != self.__class__:
-                raise ValueError("%s.%s - resolving of %s didn't result in the correct type"%(self.__module__, self.__class__.__name__, self._path_))
             n = n[direction]
-
-            if n.int() == start:
-                break
-            continue
         return
 
     def moonwalk(self):

@@ -41,7 +41,7 @@ class field:
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):
             if not isinstance(value, bool):
-                logging.warn('rvalue \'%s\' is not of type bool. forcing to one. : (%s != %s)'%(repr(value), type(value).__name__, bool.__name__))
+                logging.warn("rvalue %r is not of boolean type. Coercing it into one : (%s != %s)"% (value, type(value).__name__, bool.__name__))
             return field.descriptor.__set__(self, instance, bool(value))
 
     @classmethod
@@ -199,7 +199,7 @@ class defaults:
     class ptype:
         clone_name = field.type('clone_name', str, 'This will only affect newly cloned types')
         noncontiguous = field.bool('noncontiguous', 'Disable optimization for loading ptype.container elements contiguously. Enabling this allows there to be \'holes\' within a list of elements in a container and disables an important optimization.')
-        
+
     class pint:
         bigendian_name = field.type('bigendian_name', str, 'Modifies the name of any integers that are big-endian')
         littleendian_name = field.type('littleendian_name', str, 'Modifies the name of any integers that are little-endian')
@@ -273,7 +273,7 @@ defaults.display.partial.littleendian_name = 'pble({})'
 defaults.display.mangle_with_attributes = False
 defaults.parray.break_on_zero_sized_element = True
 defaults.parray.break_on_max_count = False
-defaults.parray.max_count = 0
+defaults.parray.max_count = sys.maxint
 defaults.pstruct.use_offset_on_duplicate = True
 defaults.ptype.noncontiguous = False
 #defaults.ptype.clone_name = 'clone({})'

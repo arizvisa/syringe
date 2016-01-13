@@ -18,7 +18,7 @@ def setbyteorder(endianness):
 
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
-    if type(ptype) is not type:
+    if not isinstance(ptype, type):
         raise error.TypeError(ptype, 'bigendian')
     import __builtin__
     d = dict(ptype.__dict__)
@@ -27,7 +27,7 @@ def bigendian(ptype):
 
 def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
-    if type(ptype) is not type:
+    if not isinstance(ptype, type):
         raise error.TypeError(ptype, 'littleendian')
     import __builtin__
     d = dict(ptype.__dict__)
@@ -63,7 +63,7 @@ class integer_t(ptype.type):
             transform = lambda x: x
         else:
             raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness %s'% repr(self.byteorder))
-    
+
         mask = (1<<self.blocksize()*8) - 1
         integer &= mask
         bc = bitmap.new(integer, self.blocksize() * 8)
@@ -72,7 +72,7 @@ class integer_t(ptype.type):
             bc,x = bitmap.consume(bc,8)
             res.append(x)
         res = res + [0]*(self.blocksize() - len(res))   # FIXME: use padding
-        self.value = ''.join(transform([chr(x) for x in res]))
+        self.value = str().join(transform(map(chr,res)))
         return self
 
     def get(self):
@@ -159,13 +159,23 @@ class enum(integer_t):
     '''
     _values_ = list( tuple(('name', 'constant')) )
 
+    def __init__(self, *args, **kwds):
+        super(enum, self).__init__(*args, **kwds)
+
+        # check types of ._values_
+        if any(not isinstance(k, basestring) or not isinstance(v, (int,long)) for k,v in self._values_):
+            raise TypeError, (self, 'enum.__init__', "%s._values_ is of an incorrect format. Should be [(string,integral)]"%(self.classname()))
+
+        # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
+        return
+
     @classmethod
     def byValue(cls, value):
         '''Lookup the string in an enumeration by it's first-defined value'''
         for k,v in cls._values_:
             if v == value:
                 return k
-        raise KeyError(value)
+        raise KeyError, (cls, 'enum.byValue', value)
 
     @classmethod
     def byName(cls, name):
@@ -173,18 +183,7 @@ class enum(integer_t):
         for k,v in cls._values_:
             if k == name:
                 return v
-        raise KeyError(name)
-
-    def __cmp__(self, value):
-        '''Can compare an enumeration as it's string or integral representation'''
-        try:
-            if type(value) == str:
-                return cmp(self.byValue(self.num()), value)
-
-        except KeyError:
-            pass
-
-        return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'integer_t'][0], self).__cmp__(value)
+        raise KeyError, (cls, 'enum.byName', name)
 
     def __getattr__(self, name):
         try:
@@ -209,8 +208,15 @@ class enum(integer_t):
     def summary(self, **options):
         return self.str()
 
+    def set(self, value):
+        if isinstance(value, basestring):
+            value = self.byName(value)
+        return super(enum,self).set(value)
+
     def __getitem__(self, name):
-        return self.byName(name)
+        '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
+        res = self.byName(name)
+        return res == self.num()
 
     ## XXX: not sure what to name these 2 methods, but i've needed them on numerous occasions
     ##      for readability purposes
@@ -346,6 +352,78 @@ if __name__ == '__main__':
         if a.int() == b and a.serialize() == s:
             raise Success
         print b,a, repr(a.serialize())
+
+    @TestCase
+    def test_enum_set_integer():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+
+        a = e().set(0xaaaaaaaa)
+        if a['aa']: raise Success
+
+    @TestCase
+    def test_enum_set_name():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+
+        a = e().set('aa')
+        if a['aa']: raise Success
+
+    @TestCase
+    def test_enum_unknown_name():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+        a = e().a
+        if not a['aa'] and not a['bb'] and not a['cc']:
+            raise Success
+
+    @TestCase
+    def test_enum_check_attributes():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+        a = e()
+        if a.aa == 0xaaaaaaaa and a.bb == 0xbbbbbbbb and a.cc == 0xcccccccc:
+            raise Success
+
+    @TestCase
+    def test_enum_check_output_name():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+        a = e().set('cc')
+        if a.str().startswith('cc') and a.str().endswith('(0x%08x)'%a.num()):
+            raise Success
+
+    @TestCase
+    def test_enum_check_output_number():
+        class e(pint.enum, pint.uint32_t):
+            _values_ = [
+                ('aa', 0xaaaaaaaa),
+                ('bb', 0xbbbbbbbb),
+                ('cc', 0xcccccccc),
+            ]
+        a = e().set(0xdddddddd)
+        if a.str() == '0x%08x'%a.num():
+            raise Success
 
 #    @TestCase
 #    def Test11():

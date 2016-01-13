@@ -32,7 +32,7 @@ def blockarray(type, size, **kwds):
         t = parray.block(_object_=type)
         Config.log.error('blockarray : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(),size))
         size = 0
- 
+
     class blockarray(parray.block):
         _object_ = type
         def blocksize(self):
@@ -55,11 +55,11 @@ def align(size, **kwds):
     # methods to get assigned
     def repr(self, **options): return self.summary(**options)
     def blocksize(self):
-        p = self.parent
-        if p is None:
+        parent = self.parent
+        if parent is None or self not in parent.value:
             return 0
-        i = p.value.index(self) # XXX: why does this call __repr__?
-        offset = p.getoffset()+sum(n.blocksize() for n in p.value[:i])
+        idx = parent.value.index(self)
+        offset = parent.getoffset()+sum(n.blocksize() for n in parent.value[:idx])
         return (-offset) & (size-1)
     getinitargs = lambda s: (type,kwds)
 
@@ -131,7 +131,7 @@ class _union_generic(ptype.container):
 
         current = len(self.object)
         self.object.append(object)
-        
+
         self.__fastindex[name.lower()] = current
         return current
 
@@ -206,6 +206,8 @@ class union(_union_generic):
     def __alloc_objects(self, value):
         source = provider.proxy(value)      # each element will write into the offset occupied by value
         self.object = []
+
+        # append elements to .object via _union_generic.append
         for t,n in self._fields_:
             self.append(self.new(t, __name__=n, offset=0, source=source))
         return self
@@ -315,8 +317,8 @@ if __name__ == '__main__':
                 return True
             except Failure,e:
                 print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+#            except Exception,e:
+#                print '%s: %r : %r'% (name,Failure(), e)
             return False
         TestCaseList.append(harness)
         return fn
@@ -337,12 +339,12 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_union_rootstatic():
         import dynamic,pint,parray
-        class test(dynamic.union): 
+        class test(dynamic.union):
             root = dynamic.array(pint.uint8_t,4)
             _fields_ = [
                 (dynamic.block(4), 'block'),
                 (pint.uint32_t, 'int'),
-            ] 
+            ]
 
         a = test(source=ptypes.provider.string('A'*4))
         a=a.l
@@ -393,7 +395,7 @@ if __name__ == '__main__':
         ptype.setbyteorder(config.byteorder.littleendian)
         string = '\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
-        
+
         t = dynamic.pointer(dynamic.block(0))
         x = t(source=s).l
         if x.d.getoffset() == 0x771af826 and x.serialize() ==  string:
@@ -455,7 +457,7 @@ if __name__ == '__main__':
         a=a.a
         if a['a'].blocksize() == 4 and a['b'].size() == 2 and a['c'].size() == 1 and a.blocksize() == 4:
             raise Success
-        
+
 if __name__ == '__main__':
     results = []
     for t in TestCaseList:

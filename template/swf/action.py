@@ -133,7 +133,7 @@ class ActionDefineFunction2(pstruct.type):
         (UI16, 'codeSize'),
 #        (lambda s: dyn.block(s['codeSize'].li.int()), 'code'),   # FIXME
     ]
-    
+
 ###
 class Array(parray.terminated):
     _object_ = ACTIONRECORD

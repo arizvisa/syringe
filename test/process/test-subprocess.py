@@ -44,7 +44,7 @@ class spawn(object):
             si.wShowWindow = subprocess.SW_HIDE
             return subprocess.Popen(program, universal_newlines=newlines, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, close_fds=False, startupinfo=si, cwd=cwd, env=environment)
         return subprocess.Popen(program, universal_newlines=newlines, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=stderr, close_fds=True, cwd=cwd, env=environment)
-    
+
     @staticmethod
     def monitorPipe(id, pipe, blocksize=1):
         """Create a monitoring thread that stuffs data from a pipe into a queue.

@@ -62,7 +62,7 @@ def pretty_dis(obj, address=0):
         res.append('    %s %s    %s'% (mnem.ljust(16), str(arg).ljust(32), comment))
 
         if ofs not in labels.keys():
-            if opnum in opcode.hasjrel or mnem.startswith('store') or mnem.startswith('call'): 
+            if opnum in opcode.hasjrel or mnem.startswith('store') or mnem.startswith('call'):
                 res.append('')
 
     return '\n'.join(res)

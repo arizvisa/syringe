@@ -119,7 +119,6 @@ class system_header(pbinary.struct):
         assert bits > s
         max = bits-s
         return dyn.clone(self.streamarray, blockbits=lambda s:max)
-        
 
     _fields_ = [
         (16, 'header_length'),

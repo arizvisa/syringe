@@ -444,7 +444,7 @@ class DefineSprite(pstruct.type):
 
     class __ControlTags(TagList):
         allowed = (ShowFrame,
-            PlaceObject, PlaceObject2, RemoveObject, RemoveObject2, 
+            PlaceObject, PlaceObject2, RemoveObject, RemoveObject2,
             StartSound, FrameLabel,
 #            SoundStreamHead, SoundStreamHead2, SoundStreamBlock,   # FIXME
             End)
@@ -508,7 +508,7 @@ class DefineFontInfo(pstruct.type):
         if self['FontFlags'].li['WideCodes']:
             return dyn.array( UI16, nGlyphs )
         return dyn.array( UI8, nGlyphs )
-    
+
     _fields_ = [
         (UI16, 'FontID'),
         (UI8, 'FontNameLen'),
@@ -685,7 +685,7 @@ if __name__ == '__main__':
         a = tags.Tag()
         a = a.l
         b = a['data']
-        print b 
+        print b
         print b['shapeid']
         print b['shapebounds']
         print b['shapes']
@@ -729,7 +729,6 @@ if __name__ == '__main__':
         a = a.l
         print a['data']['ABCData']
 
-        
 if __name__ == '__main__':
     results = []
     for t in TestCaseList:

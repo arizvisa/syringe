@@ -72,7 +72,7 @@ class gdt(pbinary.array):
 class ldt(pbinary.array):
     #length = 8192
     _object_ = descriptor
-    
+
 #a=gdt.entry()
 #print a
 

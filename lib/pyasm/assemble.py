@@ -19,7 +19,7 @@ def evaluate(value):
 
 #def evaluate(expression):
 #    '''automagically identify what type of int someone has fed us'''
-#    #XXX: let's lean on python's expression evaluator. ;) 
+#    #XXX: let's lean on python's expression evaluator. ;)
 #    return eval(expression)
 
 def oplength(opnum):

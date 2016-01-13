@@ -69,7 +69,7 @@ class this_ptr_offsets(pstruct.type):
         (pint.int32_t, 'vbase_descr'),
         (pint.int32_t, 'vbase_offset'),
     ]
-    
+
 class cxx_type_info(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'flags'),

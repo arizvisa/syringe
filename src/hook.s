@@ -12,7 +12,7 @@ PythonHook:
     pusha
     movl %esp, %ebp
     subl $8, %esp
-    
+
 # XXX: we can use a new stack if we want for some reason
 
 ## store processor state into a dictionary
@@ -26,7 +26,7 @@ PythonHook:
     movl (%esp), %ecx
     pushl (%ebp, %ecx, 4)
     call *(PyInt_FromLong)
-    
+
     movl 4(%esp), %ecx
     pushl %eax
     leal (%esi, %ecx, 4), %eax

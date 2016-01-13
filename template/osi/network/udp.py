@@ -11,8 +11,8 @@ class u_long(pint.uint32_t): pass
 class header(pstruct.type, stackable):
     type = 0x11
     _fields_ = [
-        (u_short, 'source port'),       
-        (u_short, 'dest port'),       
+        (u_short, 'source port'),
+        (u_short, 'dest port'),
         (u_short, 'length'),
         (u_short, 'checksum'),
     ]

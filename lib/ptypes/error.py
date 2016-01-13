@@ -72,7 +72,7 @@ class CommitError(SerializationError, exc.EnvironmentError):
     def __init__(self, object, written=0, exception=Exception):
         super(CommitError,self).__init__(object, exception)
         self.args = written,
-    
+
     def __str__(self):
         written, = self.args
         if written > 0:

@@ -9,7 +9,7 @@ class u_long(pint.uint32_t): pass
 class tcp_seq(pint.uint32_t): pass
 
 class flags(pbinary.flags):
-    _fields_ = [(1,f) for f in ('URG','ACK','PSH','RST','SYN','FIN')] 
+    _fields_ = [(1,f) for f in ('URG','ACK','PSH','RST','SYN','FIN')]
 
 @layer.define
 class header(pstruct.type, stackable):
@@ -51,5 +51,5 @@ class header(pstruct.type, stackable):
         return self['th_off/th_flags']['th_flags']
 
     def nextlayer_size(self):
-        raise NotImplementedError 
+        raise NotImplementedError
 

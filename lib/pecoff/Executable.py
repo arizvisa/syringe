@@ -141,13 +141,13 @@ class Portable(pstruct.type, Header):
         else:
             if not isinstance(self.source, ptypes.provider.filebase):
                 logging.warn("Unknown ptype source.. treating as a fileobj : {!r}".format(self.source))
-                
+
             class sectionentry(pstruct.type):
                 _fields_ = [
                     (dyn.align(optionalheader['FileAlignment'].num()), 'Padding'),
                     (lambda s: dyn.block(s.Section.getreadsize()), 'Data'),
                 ]
-        
+
         sectionentry.properties = lambda s: dict(itertools.chain(super(pstruct.type,s).properties().iteritems(),{'SectionName':s.SectionName}.iteritems()))
         class result(parray.type):
             length = len(sections)

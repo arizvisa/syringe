@@ -56,7 +56,7 @@ class ImageDescriptor(pstruct.type):
 
 class Trailer(pint.uint8_t): pass
     # value == 0x3b
-    
+
 class ImageTableData_Chunk(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'CodeSize'),

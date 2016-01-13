@@ -43,7 +43,7 @@ class File(pstruct.type, ptype.boundary):
         def decode(self, **attrs):
             attrs['source'] = ptypes.prov.string(block)
             return super(File.data,self).decode(**attrs)
-            
+
     def __data(self):
         # if it's compressed then use the 'cdata' structure
         header = self['Header'].li
@@ -51,7 +51,7 @@ class File(pstruct.type, ptype.boundary):
             length = min(header['FileLength'].num(),self.source.size()) - header.size()
             return dyn.clone(self.cdata, _value_=dyn.block(length))
         return Data
-    
+
     _fields_ = [
         (Header, 'header'),
         (__data, 'data')

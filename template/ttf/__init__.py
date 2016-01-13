@@ -201,8 +201,8 @@ class glyf(parray.block):
                     (1, 'RESERVED'),
                     (1, 'WE_HAVE_A_SCALE'),
                     (1, 'ROUND_XY_TO_GRID'),
-                    (1, 'ARGS_ARE_XY_VALUES'), 
-                    (1, 'ARG_1_AND_2_ARE_WORDS'), 
+                    (1, 'ARGS_ARE_XY_VALUES'),
+                    (1, 'ARG_1_AND_2_ARE_WORDS'),
                 ]
             class arg1and2_short(pstruct.type):
                 _fields_ = [(uint16,'argument1'),(uint16,'argument2')]
@@ -266,7 +266,7 @@ class glyf(parray.block):
             (FWord, 'yMax'),
             (__data, 'header'),
             (dyn.align(2), 'alignment'),    # XXX: ?? is this right
-        ] 
+        ]
     _object_ = glyph
 
 ### main file format
@@ -311,7 +311,7 @@ if __name__ == '__main__':
     b = ttf.File()
     b = b.l
     print '\n'.join(map(repr,((i,x['tag'].summary()) for i,x in enumerate(b['tables']))))
-    
+
     if 'tables' and False:
         print b['tables'][0]['offset'].d.l.hexdump()
         print b['tables'][1]['offset'].d.l.hexdump()

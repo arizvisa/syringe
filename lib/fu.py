@@ -1879,7 +1879,7 @@ if __name__ == 'bootstrap':
     stashed_up,stashed_fe = (getattr(st,attr).im_func.func_code for attr in ('unpack_references','fetch'))
     res = stashed_up,stashed_fe,st.packed()
     #marshal.dumps(res)
-    
+
     class mystash:
         cons_data = {}
         inst_data = {}

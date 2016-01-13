@@ -54,7 +54,7 @@ class ip_timestamp(pstruct.type):
         raise NotImplementedError
         n = l - 4
         return dyn.array(pint.uint32_t, n)
-        
+
     _fields_ = [
         (u_char, 'ipt_code'),
         (u_char, 'ipt_len'),

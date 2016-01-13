@@ -50,7 +50,7 @@ class Relocation(pstruct.type):
         if symbolsectionnumber is not None:
             targetsection = currentsection.parent[symbolsectionnumber]
             targetsectionname = targetsection['Name'].str()
-        
+
         data = array.array('c',data)
         return self.__relocate(data, symbol, sectionarray, currentsectionname, targetsectionname, namespace).tostring()
 

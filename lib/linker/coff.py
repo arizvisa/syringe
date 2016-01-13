@@ -180,7 +180,7 @@ class executable(coff):
         return super(executable, self).__init__()
 
     @classmethod
-    def open(cls, path):    
+    def open(cls, path):
         p = pecoff.Executable.open(path, mode='r')
 
         result = cls()
@@ -221,7 +221,7 @@ class executable(coff):
             section = self.value['Sections'].getsectionbyname(n)
             self[n] = section['PointerToRawData'].int()
         return
-            
+
     def do_iat(self):
         '''preload the iat symbols from the binary'''
         importDirectory = self.value['DataDirectory'][1]
@@ -356,7 +356,7 @@ class executable(coff):
             if symbolnames is None or ((None,ordinalstring) in symbolnames) or ((None,name) in symbolnames):    #
                 self[None,ordinalstring] = value
                 symbols.extend([(None,name),(None,ordinalstring)])
-        return symbols                
+        return symbols
 ###
     def do_relocations(self):
         relo = self.value['DataDirectory'][5]
@@ -426,7 +426,7 @@ class object(coff):
         return super(object, self).__init__()
 
     @classmethod
-    def open(cls, path):    
+    def open(cls, path):
         p = pecoff.Object.open(path, mode='r')
 
         result = cls()
@@ -439,7 +439,7 @@ class object(coff):
         result = []
         for section in self.value['Sections']:
             n = int(section['Characteristics'])
-            if n&0x800 or n&0x2000000 or n&0x200 or n&0x80:    #LNK_REMOVE or MEM_DISCARDABLE or LNK_INFO 
+            if n&0x800 or n&0x2000000 or n&0x200 or n&0x80:    #LNK_REMOVE or MEM_DISCARDABLE or LNK_INFO
                 continue
             result.append( section['Name'].str() )
         return result
@@ -598,7 +598,7 @@ class library(store.container, coff):
         return super(library, self).__init__()
 
     @classmethod
-    def open(cls, path):    
+    def open(cls, path):
         p = pecoff.Archive.open(path, mode='r')
 
         result = cls()
@@ -661,7 +661,7 @@ if __name__ == '__main__':
 
     X   updating the iat in the segment, or creating a segment specifically for it
     X   the hook on each segment name relocates all the segment's symbols correctly
-    X   segments are 
+    X   segments are
 
     X   pecoff's relocation code getting the correct symbols out of the symboltable
             i think this is like mostly segment names.
@@ -740,12 +740,12 @@ if __name__ == '__main__':
 #        print z
 #        z.add_export( (None,'somesymbol1') )
 #        z.add_forward( ('kernel32.dll', 'Whee'), [(None,'remote1')] )
-#        a=(None,'remote1') 
-#        b=('kernel32.dll','Whee') 
-                
-#        a=(None,'somesymbol1') 
-#        b=(None,'remote1') 
-#        c=('kernel32.dll','whee') 
+#        a=(None,'remote1')
+#        b=('kernel32.dll','Whee')
+
+#        a=(None,'somesymbol1')
+#        b=(None,'remote1')
+#        c=('kernel32.dll','whee')
 
         a = ('ntdll.dll','RtlAllocateHeap')
         b = ('kernel32.dll', 'forwarded')
@@ -768,5 +768,3 @@ if __name__ == '__main__':
         a = coff.object.open('../../obj/python-test.obj')
         print a.do()
         print a
-
-        

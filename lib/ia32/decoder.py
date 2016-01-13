@@ -73,7 +73,7 @@ def consume(iterable):
             continue
         instruction = x
         break
-        
+
     ## instruction
     if not instruction:
         instruction = iterable.next()
@@ -217,7 +217,7 @@ if __name__ == '__main__':
 
         source = iter(code + 'a'*80)
         insn = decoder.consume(source)
-        checkinsn() 
+        checkinsn()
 
     if True:
         code = '\x8b\x74\x24\x08'
@@ -252,7 +252,7 @@ if __name__ == '__main__':
 
         modrm = '\xc0'
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
-#        print mod,reg,rm    
+#        print mod,reg,rm
 
     if True:
         list = ['f7 d8', '1a c0', '68 80 00 00 00']
@@ -298,14 +298,14 @@ if __name__ == '__main__':
             if res is True:
                 continue
             print n, 1
-            
+
         print '2 byte'
         for n in xrange(-0x8000, 0x7fff):
             res = test(n, 2)
             if res is True:
                 continue
             print n, 1
-        
+
     if False:
         print '4 byte'
         for n in xrange(-0x80000000, 0x7fffffff):

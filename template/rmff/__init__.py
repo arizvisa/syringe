@@ -113,7 +113,7 @@ class Type_Specific_RealVideo(pstruct.type):
         (dyn.block(4), 'unknown_block'),
         (UINT16, 'frame_rate'),
         (UINT16, 'unknown_u16'),
-        
+
 #        (dyn.block(8), 'unknown_block'),
         (__object, 'object'),
         (__unknown, 'unknown'),
@@ -121,7 +121,7 @@ class Type_Specific_RealVideo(pstruct.type):
 
     class Video_Codec(ptype.definition):
         cache = {}
-    
+
 ### type specific codec data
 @Type_Specific_RealAudio.Audio_Codec.define
 class Codec_Data_cook_v4(pstruct.type):
@@ -293,7 +293,7 @@ class RealMedia_File_Header_v0(pstruct.type):
         (UINT32, 'file_version'),
         (UINT32, 'num_headers'),
     ]
-    
+
 @RealMedia_Header.Media_Type.define
 class RealMedia_File_Header_v1(RealMedia_File_Header_v0):
     type = (1, '.RMF')
@@ -444,7 +444,7 @@ class NameValueProperty_v0(pstruct.type):
 class Media_Packet_Record(RealMedia_Record):
     class Media_Type(ptype.definition):
         cache = {}
-    
+
 @Media_Packet_Record.Media_Type.define
 class Media_Packet_Header_v0(pstruct.type):
     type = 0
@@ -502,7 +502,7 @@ if __name__ == '__main__':
     import ptypes,rmff
     ptypes.setsource( ptypes.file(sys.argv[1], mode='rb') )
 
-    self = rmff.File()   
+    self = rmff.File()
     z = self.l
     print len(self.value)
 

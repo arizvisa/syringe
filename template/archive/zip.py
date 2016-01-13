@@ -39,7 +39,7 @@ class Central_directory_File_header(pstruct.type):
     type = 0x02014b50
     _fields_ = [
         (pint.uint32_t, 'central file header signature'),  #(0x02014b50)
-        (pint.uint16_t, 'version made by'),                
+        (pint.uint16_t, 'version made by'),
         (pint.uint16_t, 'version needed to extract'),
         (pint.uint16_t, 'general purpose bit flag'),
         (pint.uint16_t, 'compression method'),

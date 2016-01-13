@@ -46,7 +46,7 @@ class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
         (virtualaddress(lambda s: dyn.block(s.parent['Size'].li.num()), type=dword), 'Data'),
         (dword, 'Size'),
         (dword, 'Codepage'),
-        (dword, 'Reserved'),       
+        (dword, 'Reserved'),
     ]
 
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.pointer_t):
@@ -132,7 +132,7 @@ if True:
             # wValueLength = number of 16-bit words of wValue
             l = self['wValueLength'].li.num()
             return dyn.clone(pstr.wstring, length=l)
-    
+
     @VersionEntry.define
     class Var(Entry):
         type = "VarFileInfo"

@@ -1,5 +1,5 @@
 import math
-from . import ptype,pint,bitmap,config
+from . import ptype,pint,bitmap,config,error
 
 def setbyteorder(endianness):
     import __builtin__
@@ -112,54 +112,53 @@ class float_t(type):
         config.defaults.log.warn('float_t.getf : %s : Invalid exponent value : %d'% (self.instance(), exponent))
         return 0.0
 
-class fixed_t(type):
+class sfixed_t(type):
+    """Represents a signed fixed-point number.
+
+    sign = number of bits containing sign flag
+    fractional = number of bits for fractional component
+    length = size in bytes of type
+    """
+    length = 0
+    sign = fractional = 0
+
+    def getf(self):
+        mask = 2**(8*self.length) - 1
+        intm = 2**(8*self.length - self.sign) - 1
+        shift = 2**self.fractional
+        n = self.num()
+        #return float(n & intm) / shift * (-1 if n & (mask ^ intm) else +1)
+        if n & (mask ^ intm):
+            return float((n & intm) - (mask&intm+1)) / shift
+        return float(n & intm) / shift
+
+    def setf(self, value):
+        integral,fraction = math.trunc(value),value-math.trunc(value)
+        magnitude = 2**(8*self.length - self.fractional)
+        shift = 2**self.fractional
+
+        mask = 2 ** (8*self.length) - 1
+        intm = 2 ** (8*self.length - self.sign) - 1
+
+        integral &= (magnitude-1) # clamp
+        integral *= magnitude
+        #integral |= (mask ^ intm)
+
+        n = integral + math.trunc(fraction*shift)
+        return super(type, self).set(n)
+
+class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.
 
     fractional = number of bits for fractional component
     length = size in bytes of type
     """
-    fractional = 0      # number of bits to represent fractional part
     length = 0          # size in bytes of integer
+    fractional = 0      # number of bits to represent fractional part
 
-    def getf(self):
-        n = self.num()
-        shift = 2**self.fractional
-        return float(n) / shift
-
-    def setf(self, value):
-        integral,fraction = math.trunc(value),value-math.trunc(value)
-        shift = 2**self.fractional
-        magnitude = (self.length*8)-self.fractional
-
-        integral &= int(2**magnitude-1)  # clamp
-        integral *= 2**magnitude
-
-        n = integral + math.trunc(fraction*shift)
-        return super(type, self).set(n)
-
-class sfixed_t(type):
-    """Represents a signed fixed-point number.
-
-    fractional = number of bits for fractional component
-    length = size in bytes of type
-    """
-    def getf(self):
-        raise error.ImplementationError(self, 'sfixed_t.getf')
-        n = self.num()
-        shift = 2**self.fractional
-        return float(n) / shift
-
-    def setf(self, value):
-        raise error.ImplementationError(self, 'sfixed_t.setf')
-        integral,fraction = math.trunc(value),value-math.trunc(value)
-        shift = 2**self.fractional
-        magnitude = (self.length*8)-self.fractional
-
-        integral &= int(2**magnitude-1)  # clamp
-        integral *= 2**magnitude
-
-        n = integral + math.trunc(fraction*shift)
-        return super(type, self).set(n)
+    @property
+    def sign(self):
+        return 0
 
 ###
 class ieee(ptype.definition): attribute,cache = 'length',{}
@@ -273,7 +272,7 @@ if __name__ == '__main__':
         testcase = lambda cls=single,integer=f,value=n:test_assignment(cls,integer,value)
         testcase.__name__ = 'single_precision_assignment_%d'% i
         TestCase(testcase)
-            
+
     for i,(n,f) in enumerate(double_precision):
         testcase = lambda cls=double,integer=f,value=n:test_load(cls,value,integer)
         testcase.__name__ = 'double_precision_load_%d'% i
@@ -290,26 +289,82 @@ if __name__ == '__main__':
         length,fractional = 4,16
 
     @TestCase
-    def fixed_point_word_integral():
+    def ufixed_point_word_get():
+        x = word(byteorder=config.byteorder.bigendian)
+        x.source = ptypes.prov.string('\x80\x80')
+        if x.l.getf() == 128.5: raise Success
+    @TestCase
+    def ufixed_point_dword_get():
+        x = dword(byteorder=config.byteorder.bigendian)
+        x.source = ptypes.prov.string('\x00\x64\x40\x00')
+        if x.l.getf() == 100.25: raise Success
+
+    @TestCase
+    def ufixed_point_word_integral_set():
         x = word(byteorder=config.byteorder.bigendian)
         x.set(30.5)
         if x.serialize()[0] == '\x1e': raise Success
     @TestCase
-    def fixed_point_word_fractional():
+    def ufixed_point_word_fractional_set():
         x = word(byteorder=config.byteorder.bigendian)
         x.set(30.5)
         if x.serialize()[1] == '\x80': raise Success
 
     @TestCase
-    def fixed_point_dword_integral():
+    def ufixed_point_dword_integral_set():
         x = dword(byteorder=config.byteorder.bigendian)
         x.set(1.25)
         if x.serialize()[:2] == '\x00\x01': raise Success
     @TestCase
-    def fixed_point_dword_fractional():
+    def ufixed_point_dword_fractional_set():
         x = dword(byteorder=config.byteorder.bigendian)
         x.set(1.25)
         if x.serialize()[2:] == '\x40\x00': raise Success
+
+    import ptypes
+    reload(ptypes.pfloat)
+    from ptypes.pfloat import sfixed_t
+    ## sfixed_t
+    class sword(sfixed_t):
+        length,fractional,sign = 2,8,1
+    class sdword(sfixed_t):
+        length,fractional,sign = 4,16,1
+
+    @TestCase
+    def sfixed_point_word_get():
+        x = sword(byteorder=config.byteorder.bigendian)
+        x.source = ptypes.prov.string('\xff\x40')
+        if x.l.getf() == -0.75: raise Success
+        print x.getf()
+    @TestCase
+    def sfixed_point_dword_get():
+        x = sdword(byteorder=config.byteorder.bigendian)
+        x.source = ptypes.prov.string('\xff\xff\xc0\x00')
+        if x.l.getf() == -0.25: raise Success
+        print x.getf()
+
+    @TestCase
+    def sfixed_point_word_integral_set():
+        x = sword(byteorder=config.byteorder.bigendian)
+        x.set(-0.5)
+        if x.serialize()[0] == '\xff': raise Success
+    @TestCase
+    def sfixed_point_word_fractional_set():
+        x = sword(byteorder=config.byteorder.bigendian)
+        x.set(-0.75)
+        if x.serialize()[1] == '\x40': raise Success
+
+    @TestCase
+    def sfixed_point_dword_integral_set():
+        x = sdword(byteorder=config.byteorder.bigendian)
+        x.source = ptypes.prov.string('\xff\xfe\x40\x00')
+        x.set(-1.75)
+        if x.serialize()[:2] == '\xff\xfe': raise Success
+    @TestCase
+    def sfixed_point_dword_fractional_set():
+        x = sdword(byteorder=config.byteorder.bigendian)
+        x.set(-1.25)
+        if x.serialize()[2:] == '\xc0\x00': raise Success
 
 if __name__ == '__main__':
     results = []

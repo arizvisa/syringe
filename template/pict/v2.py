@@ -77,7 +77,7 @@ class directBitsRect(pstruct.type):
     class Pack3(pstruct.type):
         def __lineCount(self):
             return [uint8, Integer][self.parent.rowbytes > 250]
-            
+
         _fields_ = [
             (__lineCount, 'stride'),
             (lambda s: dyn.block(int(s['stride'].li)), 'data')
@@ -289,7 +289,7 @@ class File(pstruct.type):
         _object_ = OpRecord
         def isTerminator(self, value):
             return int(value['code']) == 0x00ff
-        
+
     _fields_ = [
         (Integer, 'version'),
         (__opcodes, 'opcodes'),
@@ -297,7 +297,7 @@ class File(pstruct.type):
 
 if __name__ == '__main__':
     input = ptypes.provider.file('y:/cases/pucik0044/pict_pixdata_heap/poc.pict')
-    
+
     if False:
         import sys
         sys.path.append('~/work/syringe.git/lib')

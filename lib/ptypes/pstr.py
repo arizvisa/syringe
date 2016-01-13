@@ -131,9 +131,8 @@ class string(ptype.type):
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             sz = self._object_.length
-            source = self.source or self.parent is not None and self.parent.source
-            source.seek(self.getoffset())
-            block = source.consume( self.blocksize() )
+            self.source.seek(self.getoffset())
+            block = self.source.consume( self.blocksize() )
             result = self.deserialize_block(block)
         return result
 
@@ -156,12 +155,15 @@ class string(ptype.type):
             return super(string,self).summary(**options)
         return result
 
+    def repr(self, **options):
+        return self.details(**options)
+
 class szstring(string):
     '''Standard null-terminated string'''
     _object_ = char_t
-    length=None
-    def isTerminator(self, v):
-        return v.num() == 0
+    length = None
+    def isTerminator(self, value):
+        return value.num() == 0
 
     def set(self, value):
         if not value.endswith('\x00'):
@@ -178,40 +180,38 @@ class szstring(string):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            source = self.source or self.parent is not None and self.parent.source
-            source.seek(self.getoffset())
-            producer = (source.consume(1) for x in itertools.count())
+            self.source.seek(self.getoffset())
+            producer = (self.source.consume(1) for _ in itertools.count())
             result = self.deserialize_stream(producer)
         return result
 
     def deserialize_stream(self, stream):
-        o = self.getoffset()
-        obj = self.new(self._object_, offset=o)
-        sz = obj.blocksize()
+        ofs = self.getoffset()
+        obj = self.new(self._object_, offset=ofs)
+        size = obj.blocksize()
 
-        getchar = lambda: ''.join([stream.next() for x in range(sz)])
+        getchar = lambda: ''.join([stream.next() for _ in range(size)])
 
         self.value = ''
         while True:
             char = getchar()
-
-            obj.setoffset(o)
+            obj.setoffset(ofs)
             obj.deserialize_block(char)
             self.value += obj.serialize()
             if self.isTerminator(obj):
                 break
-            o += sz
+            ofs += size
         return self
 
     def blocksize(self):
-        return self.size() if self.initializedQ() else self.load().size() # XXX: heh
+        return self.load().size()
 
 class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
     def str(self):
-        s = __builtin__.unicode(self.value, 'utf-16').encode('utf-8')
-        return utils.strdup(s)[:len(self)]
+        data = __builtin__.unicode(self.value, 'utf-16').encode('utf-8')
+        return utils.strdup(data)
 
 class szwstring(szstring, wstring):
     '''Standard null-terminated string of wide-characters'''
@@ -325,10 +325,8 @@ if __name__ == '__main__':
             ]
 
         x = IMAGE_IMPORT_HINT(source=provider.string('AAHello world this is a zero0-terminated string\x00this didnt work')).l
-
         if x['String'].str() == 'Hello world this is a zero0-terminated string':
             raise Success
-
 
     @TestCase
     def test_str_szwstring():
@@ -380,6 +378,23 @@ if __name__ == '__main__':
         a = fuq(source=s)
         a = a.l
         if a.size() == 12:
+            raise Success
+
+    @TestCase
+    def test_wstr_struct():
+        import ptypes
+        from ptypes import pint,dyn,pstr
+        class record0085(pstruct.type):
+            _fields_ = [
+                (pint.uint16_t, 'unknown'),
+                (pint.uint32_t, 'skipped'),
+                (pint.uint16_t, 'sheetname_length'),
+                (lambda s: dyn.clone(pstr.wstring, length=s['sheetname_length'].li.num()), 'sheetname'),
+            ]
+        s = ptypes.prov.string('85001400e511000000000600530068006500650074003100'.decode('hex')[4:])
+        a = record0085(source=s)
+        a=a.l
+        if a['sheetname'].str() == 'Sheet1':
             raise Success
 
 if __name__ == '__main__':

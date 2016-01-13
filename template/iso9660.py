@@ -51,7 +51,7 @@ class __mixin(object):
         if l == r:
             fmt = '0x%%0%dx (%%d)'% s
             return fmt % (l,l)
-            
+
         fmt = '0x%%0%dx <error-diff:0x%%0%dx>'% (s,s)
         return fmt % (l,r)
 
@@ -396,7 +396,7 @@ class section_entry(pstruct.type):
 class section_entry_extension(pstruct.type):
     class __field(pbinary.struct):
         _fields_ = [(4,'unused'),(1,'record_follows'),(2,'unused2'),(1,'wtf')]
-    
+
     _fields_ = [
         (uchar, 'indicator'),
         (uchar, 'field'),

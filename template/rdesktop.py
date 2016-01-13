@@ -27,7 +27,7 @@ class dictionary(object):   # ptype.dictionary?
         except KeyError:
             result = cls.Unknown
         return result
-        
+
     @classmethod
     def Get(cls, id, size):
         return dyn.clone(cls.Lookup(id), blocksize=lambda s:size)

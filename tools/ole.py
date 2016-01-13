@@ -22,7 +22,7 @@ def liststreams(paths):
             log('%s : not an ole file : %s',filename,msg)
             continue
         streams = ['/'.join(x) for x in ole.listdir()]
-        
+
         for x in streams:
             if x not in result:
                 result[x] = 0
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     m.add_argument('-list', action='store_true', default=None, help='list all streams in files')
     m.add_argument('-extract', metavar='PATH', action='store', nargs=1, default=None, help='extract the STREAMNAME from files to PATH')
     _ =argh.parse_args()
-    
+
     result = []
     for x in map(glob.iglob, _.file):
         result.extend(x)

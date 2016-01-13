@@ -118,7 +118,7 @@ class ProfileHeader(pstruct.type):
         (__profile_class, 'Profile/Device Class'),
         (__colorspace, 'Colour space of data'),
         (__colorspace, 'Profile Connection Space'),
-        (dateTimeNumber, 'Date and time this profile was first created'),       
+        (dateTimeNumber, 'Date and time this profile was first created'),
         (dyn.block(4), 'Profile file signature'),
         (__platform, 'Primary Platform signature'),
         (__profile_flags, 'Profile flags'),
@@ -185,7 +185,6 @@ class PlatStruct(pstruct.type):
         (verify_bitsize(uInt32Number, 8), 'CombCount'),
         (uInt32Number, 'PlatformSize'),
         (lambda s: dyn.array(CombStruct, int(s['CombCount'].li)), 'CombArray')
-        
     ]
 
 class CombStruct(pstruct.type):

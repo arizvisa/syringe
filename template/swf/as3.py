@@ -233,7 +233,7 @@ class param_info(pstruct.type):
     _fields_ = [
         (lambda s: dyn.array(u30, s.parent['param_count'].num()), 'param_name')
     ]
-    
+
     def summary(self):
         cpool = self.getparent(abcFile)['constant_pool']
         return ', '.join( cpool['string'][x.num()].str() for x in self['param_name'] )
@@ -280,7 +280,7 @@ class method_info(pstruct.type):
         returntype = '*'
         if idx > 0:
             returntype = cpool['multiname'][idx].str()
-        
+
         idx = self['name'].num()
         name = '*'
         if idx > 0:

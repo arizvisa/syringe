@@ -13,7 +13,7 @@ class inode(pbinary.struct):
         (6, 'namelen'),
         (26, 'offset'),
     ]
-    
+
 class info(pstruct.type):
     _fields_ = [
         (u32, 'crc'),
@@ -24,7 +24,7 @@ class info(pstruct.type):
 
 class super(pstruct.type):
     _fields_ = [
-        (u32, 'magic'),     # defaults to 0x28cd3d45      
+        (u32, 'magic'),     # defaults to 0x28cd3d45
         (u32, 'size'),
         (u32, 'flags'),
         (u32, 'future'),

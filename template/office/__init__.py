@@ -14,7 +14,15 @@ class RecordUnknown(ptype.block):
     def classname(self):
         s = self.shortname()
         names = s.split('.')
-        names[-1] = '%s<%s>[size:0x%x]'%(names[-1], '?' if self.type is None else hex(self.type), self.blocksize())
+        if self.type is None:
+            tstr = '?'
+        elif isinstance(self.type, (int,long)):
+            tstr = hex(self.type)
+        elif hasattr(self.type, '__iter__'):
+            tstr = '({:s})'.format(','.join(hex(x) if isinstance(x, (int,long)) else repr(x) for x in self.type))
+        else:
+            tstr = repr(self.type)
+        names[-1] = '%s<%s>[size:0x%x]'%(names[-1], tstr, self.blocksize())
         return '.'.join(names)
 
 # record type lookup
@@ -41,6 +49,8 @@ class RecordGeneral(pstruct.type):
         RecordType = RecordType
         class VersionInstance(pbinary.struct):
             _fields_=[(12,'instance'),(4,'version')]
+            def summary(self):
+                return '{:d} / 0x{:03x}'.format(self['version'], self['instance'])
         _fields_ = [
             (pbinary.littleendian(VersionInstance), 'Version/Instance'),
             (lambda s: s.RecordType, 'Type'),
@@ -58,7 +68,7 @@ class RecordGeneral(pstruct.type):
         def summary(self):
             v = self['Version/Instance'].num()
             t,l = self['Type'].num(),self['Length'].num()
-            return 'ver/inst=%04x type=0x%04x length=0x%08x'% (v, t, l)
+            return 'version=%d instance=0x%03x type=0x%04x length=0x%08x'% (v & 0xf, (v&0xfff0) / 0x10, t, l)
 
     def __data(self):
         res = self['header'].li
@@ -84,7 +94,7 @@ class RecordGeneral(pstruct.type):
         if bs > s:
             return dyn.block(bs - s)
         return ptype.undefined
-        
+
     _fields_ = [
         (lambda s: s.Header, 'header'),
         (__data, 'data'),

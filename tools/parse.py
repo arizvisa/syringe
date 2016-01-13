@@ -29,7 +29,7 @@ def iterfiles(parser, paths):
             log(': %d : %s : %s : failure while parsing : %f : %s',i+1,parser_name,filename,t2-t1,exception)
             yield filename,p
             continue
-        
+
         t2 = time.time()
         if p.initialized:
             log(': %d : %s : %s : completed : %f',i+1,parser_name,filename,t2-t1)
@@ -98,7 +98,7 @@ if __name__ == '__main__':
     m.add_argument('-repr', action='store_true', default=None, help='print a repr of all files')
     m.add_argument('-hist', action='store_true', default=None, help='print a histogram of all typed records in files')
     _ =argh.parse_args()
-    
+
     result = []
     for x in map(glob.iglob, _.file):
         result.extend(x)

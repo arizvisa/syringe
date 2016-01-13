@@ -5,7 +5,7 @@ __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type
 
 def setbyteorder(endianness):
     '''Sets the _global_ byte order for any pbinary.type.
-    
+
     ``endianness`` can be either pbinary.bigendian or pbinary.littleendian
     '''
     global partial
@@ -185,7 +185,7 @@ class container(type):
         if recurse and self.value is not None:
             for n in self.value:
                 n.setposition((ofs,bofs), recurse=recurse)
-                bofs += n.blockbits()
+                bofs += n.bits() if n.initializedQ() else n.blockbits()
             pass
         return result
 
@@ -673,7 +673,7 @@ class terminatedarray(_array_generic):
     def alloc(self, *fields, **attrs):
         if 'length' in attrs:
             return super(terminatedarray, self).alloc(*fields, **attrs)
-    
+
         # a terminatedarray will always have at least 1 element if it's
         #   initialized
         attrs.setdefault('length',1)
@@ -788,7 +788,7 @@ class partial(ptype.container):
             return bitmap.data(bmp)
         if self.byteorder is not config.byteorder.littleendian:
             raise error.AssertionError(self, 'partial.serialize', message='byteorder %s is invalid'% self.byteorder)
-        return ''.join(reversed(bitmap.data(bmp)))
+        return str().join(reversed(bitmap.data(bmp)))
 
     def deserialize_block(self, block):
         self.value = res = [self.binaryobject()]
@@ -825,7 +825,7 @@ class partial(ptype.container):
         with utils.assign(self, **attrs):
             o,s = self.getoffset(),self.blocksize()
             self.source.seek(o)
-            block = ''.join(reversed(self.source.consume(s)))
+            block = str().join(reversed(self.source.consume(s)))
 
             self.value = res = [self.binaryobject()]
             bc = bitmap.consumer(x for x in block)
@@ -835,9 +835,8 @@ class partial(ptype.container):
     def commit(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                bs = self.blocksize()
                 self.source.seek( self.getoffset() )
-                data = self.serialize()[:bs]
+                data = self.serialize()
                 self.source.store(data)
             return self
 
@@ -931,8 +930,11 @@ class partial(ptype.container):
             config.byteorder.littleendian : Config.display.partial.littleendian_name,
             config.byteorder.bigendian : Config.display.partial.bigendian_name,
         }
-        res, = self.value
-        cn = res.classname() if self.initializedQ() else self._object_.typename()
+        if self.initializedQ():
+            res, = self.value
+            cn = res.classname()
+        else:
+            cn = self._object_.typename()
         return fmt[self.byteorder].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     def contains(self, offset):

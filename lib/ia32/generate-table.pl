@@ -28,7 +28,7 @@ foreach my $rec (@{$ref}) {
 ## convert operand-size to a single byte representation
 sub makeSize {
     my ($value) = @_;
-    
+
     my %lookup = (
         ops_2opword => 0x40-1,
         ops_opbyte => 0x40-2,
@@ -113,7 +113,7 @@ sub hdump {
             push(@array, '  ') while $len++ < 16;
             $format="0x%08x (%05d)" .
                "   %s%s%s%s %s%s%s%s %s%s%s%s %s%s%s%s   %s\n";
-        } 
+        }
         $data =~ tr/\0-\37\177-\377/./;
         printf $format,$offset,$offset,@array,$data;
         $offset += 16;
@@ -227,7 +227,7 @@ if (1) {
         }
         print "\"\n";
     }
-    
+
     print "])\n";
 }
 

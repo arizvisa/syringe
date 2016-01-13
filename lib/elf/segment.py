@@ -103,7 +103,7 @@ class PT_NOTE(parray.block):
             (lambda s: dyn.array(Elf32_Word, s['descsz'].li.num()/4), 'desc'),
             (dyn.align(4), 'desc_pad'),
         ]
-    
+
 @Type.define
 class PT_SHLIB(ptype.block):
     type = 5

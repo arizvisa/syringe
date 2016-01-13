@@ -205,7 +205,7 @@ class HuffmanTable(pstruct.type):
         counts = res
         res = [consume(symbols, x) for x in res]
         codes = res
-            
+
         res = [ indent+'codes of length[%d] bits (%d total): %s'% (index, len(code), utils.hexdump(''.join(code))) for ((index, code), count) in zip(enumerate(codes), counts)]
         return '\n'.join(res)
 
@@ -368,7 +368,7 @@ if __name__ == '__main__' and False:
     ## process dht table
     self = lookup['DHT']['table'][3]
     print repr(self)
-    
+
     ### process scan data
     self = lookup['SOS']
     print repr(self)

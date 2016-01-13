@@ -83,7 +83,7 @@ class PEB(pstruct.type, versioned):
             f.append( (self.BitField, 'BitField') )
         else:
             f.append( (BOOLEAN, 'SpareBool') )
-            
+
         f.extend([
             (HANDLE, 'Mutant'),
             (PVOID, 'ImageBaseAddress'),
@@ -91,7 +91,7 @@ class PEB(pstruct.type, versioned):
             ##
             (PVOID, 'ProcessParameters'),
             (pint.uint32_t, 'SubSystemData'),
-            (dyn.pointer(heaptypes.HEAP), 'ProcessHeap'),
+            (dyn.pointer(heaptypes._HEAP), 'ProcessHeap'),
         ])
 
         if self.NTDDI_VERSION >= sdkddkver.NTDDI_WIN7:
@@ -128,7 +128,7 @@ class PEB(pstruct.type, versioned):
                 (PVOID, 'EventLog'),
                 (PPEB_FREE_BLOCK, 'FreeList'),
             ])
-        
+
         f.extend([
             (ULONG, 'TlxExpansionCounter'),
             (PVOID, 'TlsBitmap'),
@@ -167,7 +167,7 @@ class PEB(pstruct.type, versioned):
             f.append( (PVOID, 'LoaderLock') )
         else:
             f.append( (PVOID, 'LoaderLock') )
-        
+
         f.extend([
             (ULONG, 'OSMajorVersion'),
             (ULONG, 'OSMinorVersion'),
@@ -386,7 +386,7 @@ class TEB(pstruct.type, versioned):
             f.append((PVOID, 'SavedPriorityState'))
         else:
             f.append((ULONG, 'SparePointer1'))
-        
+
         f.extend([
             (ULONG, 'SoftPatchPtr1'),
             (PVOID, 'ThreadPoolData'),

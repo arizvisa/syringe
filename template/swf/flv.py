@@ -38,7 +38,7 @@ class TagBody(ptype.definition): cache = {}
 ### AUDIODATA
 @TagHeader.define
 class AudioTagHeader(pbinary.struct):
-    type = 8    
+    type = 8
     _fields_ = [
         (4,'SoundFormat'),
         (2,'SoundRate'),
@@ -107,7 +107,7 @@ class VideoPacketHeader(ptype.definition):
 class AVCVIDEOPACKETHEADER(pstruct.type):
     type = 7
     class AVCPacketType(pint.enum, UI8):
-        _values_ = [ 
+        _values_ = [
             (0, 'AVC sequence header'),
             (1, 'AVC NALU'),
             (2, 'AVC end-of-sequence header'),
@@ -162,8 +162,8 @@ class H263VIDEOPACKET(pbinary.struct):
         (5, 'Version'),
         (8, 'TemporalReference'),
         (3, 'PictureSize'),
-        (__Custom, 'CustomWidth'), 
-        (__Custom, 'CustomHeight'), 
+        (__Custom, 'CustomWidth'),
+        (__Custom, 'CustomHeight'),
         (2, 'PictureType'),
         (1, 'DeblockingFlag'),
         (5, 'Quantizer'),
@@ -220,7 +220,7 @@ class VP6FLVALPHAVIDEOPACKET(pstruct.type):
         streamtag = self.getparent(StreamTag)
         sz = streamtag.DataSize()
         ofs = self['OffsetToAlpha'].li.num()
-        
+
         if ofs + self['Adjustment'].li.size() >= sz:
             logging.warn('OffsetToAlpha incorrect : %x', self.getoffset())
             return dyn.block(sz - self['Adjustment'].size() - self['OffsetToAlpha'].size())
@@ -306,12 +306,12 @@ class AVCVIDEOPACKET(pstruct.type):
         t = h['AVCPacketType'].num()
         if t == 0:
             # FIXME: ISO 14496-15, 5.2.4.1
-            return AVCDecoderConfigurationRecord 
+            return AVCDecoderConfigurationRecord
         elif t == 1:
             # FIXME: avcC
             return NALU
         return ptype.block
-        
+
     _fields_ = [
         (__Data, 'Data')
     ]
@@ -400,7 +400,7 @@ class SCRIPTDATADATE(pstruct.type):
     def summary(self):
         return 'DataTime:{:s} LocalDateTimeOffset:{:d}'.format(self['DateTime'].summary(), self['LocalDateTimeOffset'].num)
     repr = summary
-        
+
 @SCRIPTDATATYPE.define
 class SCRIPTDATALONGSTRING(pstruct.type):
     type = 12
@@ -461,7 +461,7 @@ class FilterParams(pstruct.type):
         if filtername == 'SE':
             return SelectiveEncryptionFilterParams
         return ptype.undefined
-        
+
     _fields_ = [
         (__FilterParams, 'FilterParams'),
     ]

@@ -73,7 +73,7 @@ class OSExecPageAllocator(object):
         return self.read(self.__offset, amount)
     def write(self, data):
         return self.write(self.__offset, data)
-    
+
 class Local(OSExecPageAllocator):
     def read(self, address, length):
         blockpointer = ctypes.POINTER(ctypes.c_char*length)
@@ -139,7 +139,7 @@ if sys.platform == 'linux2':
             if res == 0xffffffff:
                 raise OSError('Unable to mprotect page')
             return sourceAddress
-            
+
         def freeExecutable(self, address, count, **attrs):
             return self.freeWriteable(address, count)
 
@@ -226,7 +226,7 @@ if sys.platform == 'win32':
 
         def getExecutable(self, address, count, **attrs):
             oldProtections = DWORD()
-            
+
             res = k32.VirtualProtectEx(
                 self.handle,
                 address,
@@ -289,7 +289,7 @@ if sys.platform == 'win32':
             Buffer = res()
             Buffer.value = value
 
-            res = k32.WriteProcessMemory(self.handle, address, Buffer, len(value), byref(NumberOfBytesWritten)) 
+            res = k32.WriteProcessMemory(self.handle, address, Buffer, len(value), byref(NumberOfBytesWritten))
             if res == 0:
                 message = 'Unable to write to handle(%x)[%08x:%08x].'% (self.handle, address, address+len(value))
                 raise OSError(message, "GetLastError() -> %s"% (repr(getLastErrorTuple())))
