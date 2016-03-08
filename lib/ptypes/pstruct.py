@@ -1,4 +1,53 @@
-'''base structure element'''
+"""Structure container types.
+
+A pstruct.type is used to create a data structure that is keyed by field names.
+There are a few basic methods that are provided for a user to derive information
+from an instantiated type. A pstruct.type's interface inherits from
+ptype.container and will always have a .value that's a list. In most cases, a
+pstruct.type can be treated as a python dict.
+
+The pstruct interface provides the following methods on top of the methods
+required to provide a mapping-type interface.
+
+    class interface(pstruct.type):
+        # the fields describing the format of the structure
+        _fields_ = [
+            (sub-type, 'name'),
+            ...
+        ]
+
+        def alias(self, name, target)
+            '''Alias the key ``name`` to ``target``.'''
+        def unalias(self, name):
+            '''Remove the alias ``name``.'''
+        def append(self, object):
+            '''Append ``object`` to structure keyed by /object.shortname()/'''
+        def getindex(self, name):
+            '''Return the index into /self.value/ identified by the key ``name``'''
+
+Example usage:
+    # define a type
+    from ptypes import pstruct
+    class type(pstruct.type):
+        _fields_ = [(subtype1, 'name1'),(subtype2, 'name2']
+
+    # instantiate and load a type
+    instance = type()
+    instance.load()
+
+    # fetch a particular sub-element
+    print instance['name1']
+
+    # assign a sub-element
+    instance['name2'] = new-instance
+
+    # create an alias
+    instance.alias('alternative-name', 'name1')
+
+    # remove an alias
+    instance.unalias('alternative-name')
+"""
+
 from . import ptype,utils,config,pbinary,error
 Config = config.defaults
 __all__ = 'type,make'.split(',')
@@ -6,7 +55,7 @@ __all__ = 'type,make'.split(',')
 class _pstruct_generic(ptype.container):
     def __init__(self, *args, **kwds):
         super(_pstruct_generic,self).__init__(*args, **kwds)
-        self.clear()
+        self.__fastindex = {}
 
     def alias(self, alias, target):
         """Add an alias from /alias/ to the field /target/"""
@@ -37,9 +86,6 @@ class _pstruct_generic(ptype.container):
                     return i
                 continue
         raise KeyError, name
-
-    def clear(self):
-        self.__fastindex = {}
 
     def __contains__(self, name):
         if name.__class__ is not str:
@@ -124,13 +170,13 @@ class type(_pstruct_generic):
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             self.value,path = [],' -> '.join(self.backtrace())
-            self.clear()
+            self.__fastindex = {}
 
             try:
                 ofs = self.getoffset()
                 current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
                 for i,(t,name) in enumerate(self._fields_):
-                    if name in self:
+                    if name in self.__fastindex:
                         _,name = name,'%s_%x'%(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
                         Config.log.warn("type.load : %s : Duplicate element name %r. Using generated name %r : %s", self.instance(), _, name, path)
 

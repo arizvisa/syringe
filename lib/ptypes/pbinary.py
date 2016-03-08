@@ -1,3 +1,119 @@
+"""Binary-type primitives and containers.
+
+Some parts of a complex data structure are described at a granularity that is
+smaller than the atomic "byte" provided by an architecture. This module provides
+binary primitives to assist with those types of definitions. Within this module
+are 3 basic types. The atomic type that specifies an atomic range of bits. The
+array type, which allows one to describe a contiguous list of binary types. And
+a structure type, which allows one to describe a container of bits keyed by an
+identifier. Each binary type is internally stored as a bitmap. A bitmap is simply
+a tuple of (integer-value,number-of-bits). This tuple is abstracted away from the
+user, but in some case may be useful to know about.
+
+Each binary type has the same methods as defined by the core ptype module. However,
+due to binary types being of different size primitive than the byte type..some of
+the methods contain variations that are used to describe the dimensions of a type
+by the number of bits. The basic interface for these is:
+
+    class interface(pbinary.type):
+        def bitmap(self):
+            '''Return ``self`` as a bitmap type'''
+        def bits(self):
+            '''Return the number of bits. Parallel to .size()'''
+        def blockbits(self):
+            '''Return the expected number of bits. Parallel to .blocksize()'''
+        def setposition(self, position):
+            '''Move the binary type to the specified (offset, bit-offset)'''
+        def getposition(self):
+            '''Return the position of ``self`` as (offset, bit-offset)'''
+
+        .boffset -- bit offset of ptype
+
+Due to the dimensions of data-structures being along a byte-granularity instead
+of a bit-granularity, this module provides an intermediary type that is responsible
+for containing any kind of pbinary type. This type is abstracted away from the
+user and is created internally when inserting a pbinary type into a regular
+byte-granularity ptype. The type is named pbinary.partial, and exposes the
+following interface:
+
+    class interface(pbinary.partial):
+        byteorder = byte-order-of-type
+        _object_ = pbinary-type-that-is-contained
+
+        .object = Returns the pbinary-type that pbinary.partial wraps
+
+Within this module, are two internal types similar to the two types defined within
+ptype. These are the .type and .container types. pbinary.type is used to describe
+a contiguous range of bits, and pbinary.container is used to describe a container
+of pbinary types. When defining a pbinary structure, one can specify either
+another pbinary.container or an integer. If an integer is specified, this will
+describe the number of bits that the type will represent. These types can be used
+in the following two interfaces.
+
+    class interface(pbinary.array):
+        _object_ = type
+        length = number-of-elements
+
+    class interface(pbinary.struct):
+        _fields_ = [
+            (type1, 'name1'),
+            (integer1, 'name2'),
+        ]
+
+Similar to parray, there are types that provided support for sentinel-terminated
+and block-sized arrays. These are listed as:
+
+    pbinary.terminatedarray -- .isTerminator(self, value) specifies the sentinel value.
+    pbinary.blockarray -- .blockbits(self) returns the number of bits to terminate at.
+
+Another type included by this module is named pbinary.flags. This type is defined
+like a pbinary.struct definition, only when it's display..any of it's single bit
+fields are displayed when they're True.
+
+Example usage:
+# set the byteorder to bigendian
+    from ptypes import pbinary,config
+    pbinary.setbyteorder(pbinary.config.byteorder.bigendian)
+
+# define an 32-element array of 4-bit sized elements
+    class type(pbinary.array):
+        _object_ = 4
+        length = 32
+
+# define a 2-byte structure
+    class type(pbinary.struct):
+        _fields_ = [
+            (4, 'field1'),
+            (2, 'field2'),
+            (6, 'field3'),
+            (4, 'field4'),
+        ]
+
+# define a 16-bit blockarray
+    class type(pbinary.blockarray):
+        _object_ = 2
+        def blockbits(self):
+            return 16
+
+# define an array that's terminated when 3 bits are set to 1.
+    class type(pbinary.terminatedarray):
+        _object_ = 3
+        def isTerminator(self, value):
+            return value == 7
+
+# define a pbinary flag type
+    class type(pbinary.flags):
+        _fields_ = [
+            (1, 'flag1'),
+            (1, 'flag2'),
+            (6, 'padding'),
+        ]
+
+# instantiate and load a type
+    instance = pbinary.new(type)
+    instance.load()
+"""
+
 import types,inspect,itertools,operator
 import ptype,utils,bitmap,config,error
 Config = config.defaults
@@ -68,6 +184,11 @@ class type(ptype.generic):
     def getoffset(self):
         offset,_ = self.getposition()
         return offset
+    def setposition(self, (offset,suboffset), recurse=False):
+        result = self.getposition()
+        ofs,bofs = (offset + (suboffset // 8), suboffset % 8)
+        super(type,self).setposition((ofs,bofs), recurse=recurse)
+        return result
 
     @property
     def boffset(self):

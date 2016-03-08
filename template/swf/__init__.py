@@ -23,34 +23,62 @@ class Data(pstruct.type):
         (TagList, 'tags')
     ]
 
+## Encoded data types
+class EncodedDataType(ptype.definition):
+    cache = {}
+
+@EncodedDataType.define
+class UncompressedData(ptype.encoded_t):
+    type = 'FWS'
+    _value_ = ptype.block
+    _object_ = Data
+
+EncodedDataType.unknown = UncompressedData
+
+class CompressedData(ptype.encoded_t):
+    _value_ = ptype.block
+    _object_ = Data
+
+    _compress = lambda s: s
+    _decompress = lambda s: s
+    def encode(self, object, **attrs):
+        block = object.serialize()
+        compressed_block = self._compress(block)
+        print '%s: compressed %x to %x bytes'%(self.__class__.__name__,len(block),len(compressed_block))
+        return super(CompressedData,self).encode(ptype.block().set(compressed_block))
+    def decode(self, object, **attrs):
+        block = object.serialize()
+        decompressed_block = self._decompress(block)
+        print '%s: decompressed %x to %x bytes'%(self.__class__.__name__,len(block),len(decompressed_block))
+        return super(CompressedData,self).decode(ptype.block().set(decompressed_block))
+
+@EncodedDataType.define
+class ZlibData(CompressedData):
+    type = 'CWS'
+    _compress = zlib.compress
+    _decompress = zlib.decompress
+
+try:
+    import pylzma
+    @EncodedDataType.define
+    class LzmaData(CompressedData):
+        type = 'ZWS'
+        _compress = pylzma.compress
+        _decompress = pylzma.decompress
+
+except ImportError:
+    # logging.warn("swf.%s : Unable to import pylzma. lzma support not available."% __name__)
+    pass
+
 class File(pstruct.type, ptype.boundary):
-    class cdata(ptype.encoded_t):
-        _object_ = Data
-        def encode(self, object, **attrs):
-            block = object.serialize()
-            compressed_block = zlib.compress(block)
-            print 'zlib: compressed %x to %x bytes'%(len(block),len(compressed_block))
-            return compressed_block
-        def decode(self, **attrs):
-            block = self.serialize()
-            decompressed_block = zlib.decompress(block)
-            print 'zlib: decompressed %x to %x bytes'%(len(block),len(decompressed_block))
-            attrs['source'] = ptypes.prov.string(decompressed_block)
-            return super(File.cdata,self).decode(**attrs)
-
-    class data(ptype.encoded_t):
-        _object_ = Data
-        def decode(self, **attrs):
-            attrs['source'] = ptypes.prov.string(block)
-            return super(File.data,self).decode(**attrs)
-
     def __data(self):
-        # if it's compressed then use the 'cdata' structure
         header = self['Header'].li
-        if header['Signature'][0].num() == ord('C'):
-            length = min(header['FileLength'].num(),self.source.size()) - header.size()
-            return dyn.clone(self.cdata, _value_=dyn.block(length))
-        return Data
+        sig = header['Signature'].str()
+
+        # if it's compressed then use the 'zlib' structure
+        t = EncodedDataType.get(sig)
+        length = min(header['FileLength'].num(),self.source.size()) - header.size()
+        return dyn.clone(t, _value_=dyn.clone(t._value_, length=length))
 
     _fields_ = [
         (Header, 'header'),

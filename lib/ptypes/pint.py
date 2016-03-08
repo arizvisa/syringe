@@ -1,3 +1,146 @@
+"""Primitive integral types.
+
+A pint.integer_t is an atomic type that is used to describe integer types within
+a complex data structure. They contain only one attribute which is the length.
+The methods they expose are related to setting or getting the integer value.
+This module includes functions for transforming the integer type to an
+endian-ness that is different than the platform that the python interpreter is
+built for.
+
+At the time of importing this module, the default byteorder is that of the one
+specifed by the python interpreter. Within this module, there are 3 methods that
+are responsible for adjusting the endianness. They are as follows:
+
+    setbyteorder(order) -- Set the byte-order for all the types in this module
+                           globally. This function will modify the byteorder of
+                           any type at the time a subtype is made to inherit
+                           from it.
+
+    bigendian(type) -- Return the provided pint.integer_t with the byteorder set
+                       to bigendian.
+
+    littleendian(type) -- Return the provided pint.integer_t with the byteorder
+                          set to littleendian.
+
+The base type within this module that all integral types are based on is labelled
+integer_t. This base type includes methods for performing a few operations upon
+the integer_t. The interface is as follows:
+
+    class interface(pint.integer_t):
+        length = number-of-bytes
+        def int(self):
+            '''Return integral as a python 'int' type'''
+        def long(self):
+            '''Return integral as a python 'long' type'''
+        def set(self, integer):
+            '''Set the integer_t to the value ``integer``'''
+        def num(self):
+            '''Return the integer_t as an integer'''
+        def flip(self):
+            '''Return the integer_t with the alternate byteorder'''
+
+There are two basic integer_t's that each type in this module is based on. They
+are the pint.uint_t, and pint.sint_t types. pint.sint_t is a signed integer with
+the high-bit representing signedness and pint.uint_t is an unsigned integer. Each
+subtype defined in this module is based on one of these two types.
+
+The default types that are provided by this module are as follows:
+
+    pint.uint8_t,pint.uint16_t,pint.uint32_t,pint.uint64_t -- Unsigned integers
+    pint.sint8_t,pint.sint16_t,pint.sint32_t,pint.sint64_t -- Signed integers
+
+Each default type is also defined within a ptype.definition that can be used to
+locate a type given a particular size. The two definitions are pint.uinteger,
+and pint.sinteger. These types are also aliased to pint.uint and pint.sint.
+
+    # find a pint.uint_t that is 2 bytes in length
+    type = pint.uinteger.get(2)
+
+    # find a pint.sint_t that is 1 byte in length
+    type = pint.sinteger.get(1)
+
+Also included in this module is an enumeration type called `pint.enum`. In some
+cases a developer might describe a complex data structure as having an integer
+with a named identifier. The `pint.enum` type can be used to represent these
+types of definitions. This enumeration type has the following interface:
+
+    class type(pint.enum, integral-subtype):
+        _values_ = [
+            ('name1', 0xvalue1),
+            ('name2', 0xvalue2),
+        ]
+
+        @classmethod
+        def names(cls):
+            '''Return the names of each enumeration.'''
+        @classmethod
+        def enumerations(cls):
+            '''Return the values of each enumeration.'''
+        @classmethod
+        def byValue(cls, value):
+            '''Return the enumeration name based on the ``value``.'''
+        @classmethod
+        def byName(cls, name):
+            '''Return the enumeration value based on the ``name``.'''
+
+Example usage:
+    # change the endianness to little-endian globally
+    from ptypes import pint
+    pint.setbyteorder(pint.littleendian)
+
+    # define an integral type of 3 bytes in length
+    class type(pint.uint_t):
+        length = 3
+
+    # define a signed integral type of 8 bytes in length
+    class type(pint.sint_t):
+        length = 8
+
+    # define a little-endian dword type using the decorative form
+    @pint.bigendian
+    class type(pint.uint32_t):
+        pass
+
+    # transform a type to bigendian form after defining
+    type = pint.bigendian(type)
+
+    # instantiate and load a 16-bit signed word in little-endian
+    type = pint.littleendian(pint.uint16_t)
+    instance = type()
+    instance.load()
+
+    # change the value of instance
+    instance.set(57005)
+
+    # output the value of instance as a numerical value
+    print instance.num()
+    print int(instance)
+
+    # return instance in it's alternative byteorder
+    flipped = instance.flip()
+
+Example usage of pint.enum:
+    # define an enumeration for a uint32_t
+    from ptypes import pint
+    class enumeration(pint.enum, pint.uint32_t):
+        _values_ = [
+            ('name1', 0x00000000),
+            ('name2', 0x00000001),
+            ('name3', 0x00000002),
+            ...
+        ]
+
+    # instantiate and load an enumeration
+    instance = enumeration()
+    instance.load()
+
+    # assign the instance by an enumeration name
+    instance.set('name1') 
+
+    # return the instance as a name or an integer in string form
+    print instance.str()
+"""
+
 from . import ptype,bitmap,config,error,utils
 
 def setbyteorder(endianness):

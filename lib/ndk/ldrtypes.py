@@ -1,9 +1,8 @@
 from WinNT import *
-from umtypes import *
+import umtypes,pecoff
 
 ## XXX: It would be worth it to do the Loader Data Table Entry Flags
 
-import pecoff
 class LDR_DATA_TABLE_ENTRY(pstruct.type):
     class SectionPointerUnion(dyn.union):
         _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
@@ -51,8 +50,8 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
         (dyn.pointer(pecoff.Executable.File), 'DllBase'),   # !!!
         (PVOID, 'EntryPoint'),
         (ULONG, 'SizeOfImage'),
-        (UNICODE_STRING, 'FullDllName'),
-        (UNICODE_STRING, 'BaseDllName'),
+        (umtypes.UNICODE_STRING, 'FullDllName'),
+        (umtypes.UNICODE_STRING, 'BaseDllName'),
 #        (ULONG, 'Flags'),   # !!!
         (__Flags, 'Flags'),   # !!!
         (USHORT, 'LoadCount'),
@@ -80,7 +79,7 @@ class _LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(_LDR_DATA_TABLE_ENTRY_LIS
 class PEB_LDR_DATA(pstruct.type):
     _fields_ = [
         (ULONG, 'Length'),
-        (BOOLEAN, 'Initialized'),
+        (ULONG, 'Initialized'),
         (PVOID, 'SsHandle'),
         (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
         (_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),

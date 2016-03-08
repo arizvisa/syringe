@@ -18,6 +18,7 @@ class HeapException(ptypes.error.RequestError):
         self.message = '({:s})'.format(', '.join(itertools.chain(iterdata, mapdata)) if self.__iterdata__ or self.__mapdata__ else '')
         return super(HeapException, self).__str__()
 
+class NotFoundException(HeapException): pass
 class ListHintException(HeapException): pass
 class InvalidPlatformException(HeapException): pass
 class IncorrectHeapType(HeapException): pass
@@ -220,8 +221,8 @@ if 'HeapEntry':
                         (pint.uint8_t, 'SmallTagIndex'),
                         (_HEAP_ENTRY._Flags, 'Flags'),
                         (pint.uint8_t, 'UnusedBytes'),
-                        #(pint.uint8_t, 'SegmentIndex'),
-                        (pint.uint8_t, 'SegmentOffset'),
+                        (pint.uint8_t, 'SegmentIndex'),
+                        #(pint.uint8_t, 'SegmentOffset'),
                     ])
                 elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
                     f.extend([
@@ -248,7 +249,7 @@ if 'HeapEntry':
                     n1,n2 = object[0].num(),object[1].num()
                     d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
                     d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                    return ptypes.bitmap.data(d1+d2)
+                    return super(_HEAP_ENTRY,self).encode(ptype.block().set(ptypes.bitmap.data(d1+d2)))
 
                 elif frontend == 2:
                     # LFH Frontend
@@ -260,33 +261,40 @@ if 'HeapEntry':
                     data[1] = (n & 0x0000ff00) >> 8
                     data[2] = (n & 0x00ff0000) >> 16
                     data[3] = (n & 0xff000000) >> 24
-                    return ''.join(map(chr,data))
+                    return super(_HEAP_ENTRY,self).encode(ptype.block().set(''.join(map(chr,data))))
+
+                elif frontend == 0:
+                    # Back-to-Front(242)
+                    pass
 
                 else:
                     raise NotImplementedError, frontend
-            return object.serialize()
+            return super(_HEAP_ENTRY,self).encode(object)
 
-        def decode(self, **attrs):
+        def decode(self, object, **attrs):
             frontend = getattr(self, '_FrontEndHeapType', 0)
             if hasattr(self, '_HEAP_ENTRY_Encoding'):
                 if self.__EncodedQ() and frontend == 0:
-                    n1,n2 = self.object[0].num(),self.object[1].num()
+                    n1,n2 = object[0].num(),object[1].num()
                     o1,o2 = self._HEAP_ENTRY_Encoding
                     d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
                     d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                    attrs['source'] = ptypes.prov.string(d1+d2)
-                    return super(_HEAP_ENTRY, self).decode(**attrs)
+                    return super(_HEAP_ENTRY, self).decode( ptype.block().set(d1+d2) )
 
                 elif frontend == 2:
                     # LFH Frontend
-                    n = self.object[0].num()
+                    n = object[0].num()
                     o,_ = self._HEAP_ENTRY_Encoding
                     d = ptypes.bitmap.data((n^o,32), reversed=True)
-                    attrs['source'] = ptypes.prov.string(d + self.object[1].serialize())
+                    return super(_HEAP_ENTRY, self).decode( ptype.block().set(d + object[1].serialize()) )
+
+                elif frontend == 0:
+                    # Back-to-Front(242)
+                    pass
 
                 else:
                     raise NotImplementedError, frontend
-            return super(_HEAP_ENTRY, self).decode(**attrs)
+            return super(_HEAP_ENTRY, self).decode(object, **attrs)
 
         def Size(self):
             '''Return the decoded Size field'''
@@ -323,14 +331,15 @@ if 'HeapEntry':
     class FreeListBucket(LIST_ENTRY):
         class _HeapBucketLink(ptype.pointer_t):
             _object_ = _HEAP_BUCKET_COUNTERS
-            def decode(self, **attrs):
-                ofs = self.decode_offset()
+            def decode(self, object, **attrs):
+                ofs = object.get()
                 if ofs & 1:
-                    attrs.setdefault('source', self.source)
-                    attrs.setdefault('offset', self.decode_offset()-1)
-                    return self.new(_HEAP_BUCKET, **attrs)
-                    #return dyn.clone(_HEAP_BUCKET,_fields_=[(dyn.block(1),'Padding')]+_HEAP_BUCKET._fields_[:])
-                return super(FreeListBucket._HeapBucketLink,self).decode(**attrs)
+                    self._object_ = _HEAP_BUCKET
+                    object.set(ofs & ~1)
+                else:
+                    self._object_ = _HEAP_BUCKET_COUNTERS
+                    object.set(ofs & ~0)
+                return super(FreeListBucket._HeapBucketLink,self).decode(object, **attrs)
         _fields_ = LIST_ENTRY._fields_[:]
         _fields_[1] = (_HeapBucketLink, 'Blink')
 
@@ -688,7 +697,7 @@ if 'Heap':
         def __init__(self, **attrs):
             super(_HEAP_SEGMENT, self).__init__(**attrs)
             f = []
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_VISTA:
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
                 raise NotImplementedError
                 f.extend([
                     (LIST_ENTRY, 'ListEntry'),
@@ -736,7 +745,7 @@ if 'Heap':
                     (_HEAP_ENTRY, 'Entry'),
                     (pint.uint32_t, 'SegmentSignature'),
                     (pint.uint32_t, 'SegmentFlags'),
-                    (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_SEGMENT,('SegmentListEntry',)),_path_=('SegmentListEntry',)), 'SegmentListEntry'),   # XXX: entry comes from _HEAP
+                    (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_SEGMENT,'SegmentListEntry'),_path_=('SegmentListEntry',)), 'SegmentListEntry'),   # XXX: entry comes from _HEAP
                     (dyn.pointer(_HEAP), 'Heap'),
                     (pint.uint32_t, 'BaseAddress'),
                     (pint.uint32_t, 'NumberOfPages'),
@@ -781,13 +790,15 @@ if 'Heap':
             p = self['LargeBlocksIndex'].d.l
             while blockindex >= p['ArraySize'].num():
                 if p['ExtendedLookup'].num() == 0:
-                    raise ListHintException(self, '_HEAP.FindHeapListLookup', 'Unable to locate ListHint for blocksize', blocksize=blocksize, index=p['ArraySize'].num()-1, lookup=p)
+                    raise ListHintException(self, '_HEAP.FindHeapListLookup', 'Unable to locate ListHint for blockindex', blockindex=blockindex, index=p['ArraySize'].num()-1, lookup=p)
                 p = p['ExtendedLookup'].d.l
             return p
 
         def FindHeapBucket(self, size):
             '''Find the correct Heap Bucket from the FreeListEntry for the given ``size``'''
             entry = self.FindFreeListEntry(size)
+            if entry['Blink'].num() == 0:
+                raise NotFoundException(self, '_HEAP.FindHeapBucket', 'Unable to find a Heap Bucket for the requested size : 0x%x'% size, entry=entry, size=size)
             return entry['Blink'].d.l
 
         def FindFreeListEntry(self, size):
@@ -881,7 +892,7 @@ if 'Heap':
                     (pint.uint32_t, 'AlignMask'),
 
                     (LIST_ENTRY, 'VirtualAllocedBlocks'),   # XXX: unknown type
-                    (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_SEGMENT,('SegmentListEntry',)),_path_=('SegmentListEntry',)), 'SegmentList'),
+                    (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_SEGMENT,'SegmentListEntry'),_path_=('SegmentListEntry',)), 'SegmentList'),
                     (pint.uint16_t, 'FreeListInUseTerminate'),
                     (pint.uint16_t, 'AllocatorBackTraceIndex'),
                     (pint.uint32_t, 'NonDedicatedListLength'),

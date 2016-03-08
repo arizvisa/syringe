@@ -1,38 +1,133 @@
-import __builtin__,itertools
+"""Primitive string types.
+
+A pstr.type is an atomic type that is used to describe string types within a
+data structure. They are treated internally as atomic types, but expose an
+interface that allows one to modify each of it's particular characters.
+
+The base type is named pstr.string and is sized according to the `.length`
+property. An implied char_t type is assigned to the `._object_` property and is
+used to determine what the size of each glyph in the string is. The dynamically
+sized string types have no length due to them being terminated according to a
+specific character terminator. Generally, string types have the following
+interface:
+
+    class interface(pstr.string):
+        length = length-of-string
+        def set(self, string):
+            '''Set the string to the value of ``string``.'''
+        def get(self):
+            '''Return the value of ``self``'''
+        def str(self):
+            '''Return the string as a python str type.'''
+        def insert(self, index, character):
+            '''Insert the specified ``character`` at ``index`` of the pstr.string.'''
+        def append(self, character):
+            '''Append the ``character`` to the pstr.string'''
+        def extend(self, iterable):
+            '''Append each character in ``iterable`` to the pstr.string'''
+        def __getitem__(self, index):
+            '''Return the glyph at the specified ``index``'''
+        def __getslice__(self, slice):
+            '''Return the glyphs at the specified ``slice``'''
+        def __len__(self):
+            '''Return the number of characters within the string.'''
+
+There are a few types that this module provides:
+
+char_t -- a single character
+wchar_t -- a single wide-character
+string -- an ascii string of /self.length/ characters in length
+wstring -- a wide-character string of /self.length/ characters in length
+szstring -- a zero-terminated ascii string
+szwstring -- a zero-terminated wide-character string
+unicode -- an alias to wstring
+szunicode -- an alias to szwstring
+
+Example usage:
+    # define a type
+    from ptypes import pstr
+    class type(pstr.string):
+        length = 0x20
+
+    # instantiate and load a type
+    instance = type()
+    instance.load()
+
+    # fetch a specific character
+    print instance[1]
+
+    # re-assign a new string
+    instance.set("new string contents")
+
+    # return the length of the type
+    print len(instance)
+
+    # return the type in ascii
+    value = instance.str()
+"""
+
+import __builtin__,sys,itertools,codecs
 from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider,config
 Config = config.defaults
 
 class _char_t(pint.integer_t):
-    length = 1
+    encoding = codecs.lookup('ascii')
+
+    def __init__(self, **attrs):
+        super(_char_t,self).__init__(**attrs)
+
+        # calculate the size of .length based on .encoding
+        res = __builtin__.unicode('\x00', 'ascii').encode(self.encoding.name)
+        self.length = len(res)
+
+    def set(self, value):
+        '''Set the _char_t to the str ``value``.'''
+        if isinstance(value, __builtin__.str):
+            try: value = __builtin__.unicode(value, 'ascii')
+            except UnicodeDecodeError: return super(pint.integer_t,self).set(str(value))
+        elif isinstance(value, __builtin__.unicode):
+            value = value
+        else:
+            raise ValueError, (self, '_char_t.set', 'User tried to set a value of an incorrect type : %s', value.__class__)
+        res = value.encode(self.encoding.name)
+        return super(pint.integer_t,self).set(res)
+
+    def get(self):
+        return self.serialize().decode(self.encoding.name)
+
     def str(self):
-        return self.v
+        return self.get()
 
     def summary(self, **options):
-        return repr(self.str())
+        return repr(self.serialize())
+
+    @classmethod
+    def typename(cls):
+        return '{:s}<{:s}>'.format(cls.__name__, cls.encoding.name)
+
+class char_t(_char_t):
+    '''Single character type'''
+
+    def str(self):
+        '''Return the character instance as a str type.'''
+        return str(super(char_t, self).str())
 
     @classmethod
     def typename(cls):
         return cls.__name__
 
-class char_t(_char_t):
-    def set(self, value):
-        self.value = value
-        return self
-
-    def get(self):
-        return str(self.value)
-
 uchar_t = char_t    # yeah, secretly there's no difference..
 
 class wchar_t(_char_t):
-    length = 2
+    '''Single wide-character type'''
 
-    def set(self, value):
-        self.value = value + '\x00'
-        return self
-
-    def get(self):
-        return __builtin__.unicode(self.value, 'utf-16').encode('utf-8')
+    # try and figure out what type
+    if Config.integer.order == config.byteorder.littleendian:
+        encoding = codecs.lookup('utf-16-le')
+    elif Config.integer.order == config.byteorder.bigendian:
+        encoding = codecs.lookup('utf-16-be')
+    else:
+        raise SystemError, ('wchar_t', 'Unable to determine default encoding type based on platform byteorder : %r'% Config.integer.order)
 
 class string(ptype.type):
     '''String of characters'''
@@ -40,97 +135,133 @@ class string(ptype.type):
     _object_ = char_t
     initializedQ = lambda self: self.value is not None    # bool
 
+    def __init__(self, **attrs):
+        res = super(string,self).__init__(**attrs)
+
+        # ensure that self._object_ is using a fixed-width encoding
+        _object_ = self._object_
+
+        # encode 3 types of strings and ensure that their lengths scale up with their string sizes
+        res,single,double = ( __builtin__.unicode(n, 'ascii').encode(_object_.encoding.name) for n in ('\x00', 'A', 'AA') )
+        if len(res) * 2 == len(single) * 2 == len(double):
+            return
+        raise ValueError, (self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : %s', _object_.encoding.name)
+
     def at(self, offset, **kwds):
         ofs = offset - self.getoffset()
-        return self[ ofs / self._object_.length ]
+        return self[ ofs / self._object_().blocksize() ]
 
     def blocksize(self):
-        return self._object_.length * self.length
+        return self._object_().blocksize() * self.length
 
     def __insert(self, index, string):
-        l = self._object_.length
+        l = self._object_().blocksize()
         offset = index * l
         self.value = self.value[:offset] + string[:l] + self.value[offset:]
+
     def __delete(self, index):
-        l = self._object_.length
+        l = self._object_().blocksize()
         offset = index * l
         self.value = self.value[:offset] + self.value[offset+l:]
 
     def __replace(self, index, string):
-        l = self._object_.length
+        l = self._object_().blocksize()
         offset = index * l
         self.value = self.value[:offset] + string[:l] + self.value[offset+l:]
+
     def __fetch(self, index):
-        l = self._object_.length
+        l = self._object_().blocksize()
         offset = index * l
         return self.value[offset:offset+l]
+
     def __len__(self):
-        if not self.initialized:
-            return int(self.length)
-        return len(self.value) / self._object_.length
+        if not self.initializedQ():
+            raise error.InitializationError(self, 'string.__len__')
+        return len(self.value) / self._object_().blocksize()
 
     def __delitem__(self, index):
+        '''Remove the character at the specified ``index``.'''
         if index.__class__ is slice:
             raise error.ImplementationError(self, 'string.__delitem__', message='slice support not implemented')
         self.__delete(index)
-    def __getitem__(self, index):
-        if index.__class__ is slice:
-            result = [self[_] for _ in xrange(*index.indices(len(self)))]
 
-            # ..and now it's an array
-            type = ptype.clone(parray.type, typename=lambda s:self.typename(), length=len(result), _object_=self._object_)
+    def __getitem__(self, index):
+        '''Return the character at the specified ``index``.'''
+        res = self.cast(dynamic.array(self._object_, len(self)))
+
+        # handle a slice of glyphs
+        if index.__class__ is slice:
+            result = [res.value[_] for _ in xrange(*index.indices(len(res)))]
+
+            # ..and now turn the slice into an array
+            type = ptype.clone(parray.type,length=len(result), _object_=self._object_)
             return self.new(type, offset=result[0].getoffset(), value=result)
 
         if index < -len(self) or index >= len(self):
             raise error.UserError(self, 'string.__getitem__', message='list index %d out of range'% index)
 
+        # otherwise, returning a single element from the array should be good
         index %= len(self)
-        res = self.new(self._object_, __name__=str(index))
-        ofs = index*res.blocksize()
-        res.setoffset(self.getoffset()+ofs)
-        return res.load(offset=ofs,source=provider.string(self.serialize()))
+        return res[index]
 
     def __setitem__(self, index, value):
+        '''Replace the character at ``index`` with the character ``value``'''
+
+        # convert self into an array we can modify
+        res = self.cast(dynamic.array(self._object_, len(self)))
+
+        # handle a slice of glyphs
         if index.__class__ is slice:
-            raise error.ImplementationError(self, 'string.__setitem__', message='slice support not implemented')
-        if value.__class__ is not self._object_:
-            raise error.TypeError(self, 'string.__setitem__', message='expected value of type %s. received %s'% (repr(self._object_),repr(value.__class__)))
-        self.__replace(index, value.serialize())
+            indices = xrange(*index.indices(len(res)))
+            [ res[index].set(glyph) for glyph,index in map(None,value,indices) ]
+
+        # handle a single glyph
+        else:
+            res[index].set(value)
+
+        # now we can re-load ourselves from it
+        return self.load(offset=0, source=provider.proxy(res))
+
     def insert(self, index, object):
+        '''Insert the character ``object`` into the string at index ``index`` of the string.'''
         if object.__class__ is not self._object_:
             raise error.TypeError(self, 'string.insert', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
         self.__insert(index, value.serialize())
+
     def append(self, object):
+        '''Append the character ``object`` to the string.'''
         if object.__class__ is not self._object_:
             raise error.TypeError(self, 'string.append', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
         self.value += object.serialize()
+
     def extend(self, iterable):
+        '''Extend the string ``self`` with the characters provided by ``iterable``.'''
         for x in iterable:
             self.append(x)
         return
 
     def set(self, value):
-        chararray = [x for x in value]
-        _ = dynamic.array(self._object_, len(chararray))
-        result = _()
-
-        for character,element in zip(value,result.alloc()):
-            element.set(character)
-        self.length = len(result)
-        self.value = result.serialize()
-        return self
+        '''Replaces the contents of ``self`` with the string ``value``.'''
+        size,glyphs = self.blocksize(),[x for x in value]
+        t = dynamic.array(self._object_, len(glyphs))
+        result = t(blocksize=lambda:size)
+        for element,glyph in zip(result.alloc(), value):
+            element.set(glyph)
+        if len(value) > self.blocksize() / self._object_().a.size():
+            Config.log.warn('%s.set : %s : User attempted to set a value larger than the specified type. String was truncated to %d characters. : %d > %d'% (self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
+        return self.load(offset=0, source=provider.proxy(result))
 
     def get(self):
-        return self.serialize()
+        t = dynamic.array(self._object_, len(self))
+        return ''.join(g.str() for g in self.cast(t))
 
     def str(self):
-        '''return type as a str'''
-        s = self.value
-        return utils.strdup(s)[:len(self)]
+        '''Return the string as a python str.'''
+        return utils.strdup(self.get())
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            sz = self._object_.length
+            sz = self._object_().blocksize()
             self.source.seek(self.getoffset())
             block = self.source.consume( self.blocksize() )
             result = self.deserialize_block(block)
@@ -158,6 +289,9 @@ class string(ptype.type):
     def repr(self, **options):
         return self.details(**options)
 
+    def classname(self):
+        return '{:s}<{:s}>'.format(super(string,self).classname(), self._object_.typename())
+
 class szstring(string):
     '''Standard null-terminated string'''
     _object_ = char_t
@@ -166,14 +300,20 @@ class szstring(string):
         return value.num() == 0
 
     def set(self, value):
-        if not value.endswith('\x00'):
-            value += '\x00'
+        """Set the null-terminated string to ``value``.
 
-        result = dynamic.array(self._object_, len(value))().alloc()
-        for element,character in zip(result, value):
-            element.set(character)
-        self.value = result.serialize()
-        return self
+        Resizes the string according to the length of ``value``.
+        """
+
+        # FIXME: If .isTerminator() is altered for any reason, this won't work.
+        if not value.endswith('\x00'.encode(self._object_.encoding.name)):
+            value += '\x00'.encode(self._object_.encoding.name)
+
+        t = dynamic.array(self._object_, len(value))
+        result = t()
+        for glyph,element in zip(value, result.alloc()):
+            element.set(glyph)
+        return self.load(offset=0, source=provider.proxy(result))
 
     def deserialize_block(self, block):
         return self.deserialize_stream(iter(block))
@@ -190,13 +330,12 @@ class szstring(string):
         obj = self.new(self._object_, offset=ofs)
         size = obj.blocksize()
 
-        getchar = lambda: ''.join([stream.next() for _ in range(size)])
+        getchar = lambda: ''.join(itertools.islice(stream,size))
 
         self.value = ''
         while True:
-            char = getchar()
             obj.setoffset(ofs)
-            obj.deserialize_block(char)
+            obj.deserialize_block(getchar())
             self.value += obj.serialize()
             if self.isTerminator(obj):
                 break
@@ -204,28 +343,15 @@ class szstring(string):
         return self
 
     def blocksize(self):
-        return self.load().size()
+        return self.size() if self.initializedQ() else self.load().size()
 
 class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
-    def str(self):
-        data = __builtin__.unicode(self.value, 'utf-16').encode('utf-8')
-        return utils.strdup(data)
 
-class szwstring(szstring, wstring):
+class szwstring(szstring):
     '''Standard null-terminated string of wide-characters'''
     _object_ = wchar_t
-
-    def set(self, value):
-        if not value.endswith('\x00'):
-            value += '\x00'
-
-        result = dynamic.array(self._object_, len(value))().alloc()
-        for characeter,element in zip(value, result):
-            element.set(character)
-        self.value = result.serialize()
-        return self
 
 ## aliases that should probably be improved
 unicode=wstring
@@ -395,6 +521,17 @@ if __name__ == '__main__':
         a = record0085(source=s)
         a=a.l
         if a['sheetname'].str() == 'Sheet1':
+            raise Success
+
+    @TestCase
+    def test_str_szwstring_blockarray():
+        import ptypes
+        from ptypes import pstr,dyn
+        data = '3d 00 3a 00 3a 00 3d 00 3a 00 3a 00 5c 00 00 00 65 00 2e 00 6c 00 6f 00 67 00 00 00 00 00 ab ab ab ab ab ab ab ab'.replace(' ','').decode('hex')
+        source = ptypes.prov.string(data)
+        t = dyn.blockarray(pstr.szwstring, 30)
+        a = t(source=source).l
+        if (a[0].str(),a[1].str(),a[2].str()) == ('=::=::\\','e.log','') and a[2].blocksize() == 2 and len(a) == 3:
             raise Success
 
 if __name__ == '__main__':

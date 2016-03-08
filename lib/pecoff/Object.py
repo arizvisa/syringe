@@ -11,7 +11,7 @@ def open(filename, **kwds):
 class File(ptypes.pstruct.type, ptypes.ptype.boundary):
     """Coff Object File"""
     def __Data(self):
-        sections = self['Sections'].li
+        sections = filter(lambda n: not n['Characteristics']['CNT_UNINITIALIZED_DATA'], self['Sections'].li)
         class result(ptypes.parray.type):
             length = len(sections)
             def _object_(self):

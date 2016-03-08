@@ -75,7 +75,7 @@ class LUID(pstruct.type):
 class PLUID(dyn.pointer(LUID)): pass
 
 ###
-class BOOLEAN(pint.int32_t): pass
+class BOOLEAN(BYTE): pass
 class PBOOLEAN(dyn.pointer(BOOLEAN)): pass
 
 ### Singly-linked list

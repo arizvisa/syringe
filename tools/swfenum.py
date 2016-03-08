@@ -42,8 +42,9 @@ if __name__ == '__main__':
     clock.stop()
 
     header = myfile['header']
-    frameinfo = myfile['data']['frameinfo']
-    tags = myfile['data']['tags']
+    data = myfile['data'].d.l
+    frameinfo = data['frameinfo']
+    tags = data['tags']
 
     z = myfile
 

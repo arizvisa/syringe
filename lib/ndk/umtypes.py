@@ -26,11 +26,10 @@ class CLONG(ULONG): pass
 class CSHORT(short): pass
 class PCSHORT(dyn.pointer(CSHORT)): pass
 class PHYSICAL_ADDRESS(LARGE_INTEGER): pass
-#class PPHYSICAL_ADDRESS(dyn.pointer(LARGE_INTEGER)): pass
 class PPHYSICAL_ADDRESS(dyn.pointer(PHYSICAL_ADDRESS)): pass
 class KPRIORITY(LONG): pass
+class KAFFINITY(LONG): pass
 class NTSTATUS(LONG): pass
-#class PNTSTATUS(dyn.pointer(LONG)): pass
 class PNTSTATUS(dyn.pointer(NTSTATUS)): pass
 
 class PSTR(pstr.string): pass
@@ -56,7 +55,10 @@ class UNICODE_STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return self['Buffer'].d.li.str()[:int(self['Length'])]
+        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:int(self['Length'])]
+
+    def summary(self):
+        return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].num(), self['MaximumLength'].num(), self.str())
 
 class PUNICODE_STRING(dyn.pointer(UNICODE_STRING)): pass
 
@@ -66,12 +68,16 @@ class STRING(pstruct.type):
         (USHORT, 'MaximumLength'),
         (lambda s: dyn.pointer(dyn.clone(PSTR, length=int(s['Length'].load()))), 'Buffer')
     ]
+
     def get(self):
         logging.warn('STRING.get() has been deprecated in favor of .str()')
         return self.str()
 
     def str(self):
-        return self['Buffer'].d.li.str()[:int(self['Length'])]
+        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:int(self['Length'])]
+
+    def summary(self):
+        return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].num(), self['MaximumLength'].num(), self.str())
 
 class PSTRING(dyn.pointer(STRING)): pass
 

@@ -1,4 +1,86 @@
-'''Provides a dynamic kind of feel'''
+"""Utilities for creating or modifying types dynamically.
+
+When defining the various complex-data structures that can exist within an
+application, a lot of types are dynamically generated. Dynamically generated can
+mean either having a variable size, a type that's based on an enumeration, an
+encoding based on the value of a particular field, etc. This module contains a
+few utilities that can be used for defining or transforming types as the data
+structure is decoded or loaded.
+
+Within this module are the following functions:
+
+    block -- Define a block of a specific size
+    blockarray -- Define an array of elements up to a particular size.
+    align -- A type that will align a structure to a specified alignment.
+    array -- Define an array with it's subtype and size.
+    clone -- Clone a type into a new type with the specified attributes and values.
+    pointer -- Return a pointer type that points to another type.
+    rpointer -- Return a pointer type that's relative to another object.
+    opointer -- Return a pointer type that's offset is transformed.
+
+Also within this module is a type that's used to define a union. A union is a
+root type that can be transformed into a number of various types. The union
+interface is used similarly to a pstruct.type. When using a dynamic.union type,
+the root type can be defined as a property named `.root`. If this property is
+not defined, the type will be inferred from the largest field that is defined.
+Once a union is instantiated, the different subtypes can be accessed as if they
+are field names of a pstruct.type.
+
+An example of this definition:
+
+    class union(dynamic.union):
+        _fields_ = [
+            (subtype1, 'a'),
+            (subtype2, 'b'),
+            (subtype3, 'c'),
+        ]
+
+Example usage:
+# create a block type that's 0x100 bytes in size
+    from ptypes import dynamic
+    type = dynamic.block(0x100)
+
+# create an array type for a block that's 0x40 bytes
+    from ptypes import pint,dyn
+    type = dyn.blockarray(pint.uint32_t, 0x40)
+
+# create a structure with field1 aligned to offset 4
+    from ptypes import pstruct,pint,dyn
+    class type(pstruct.type):
+        _fields_ = [
+            (pint.uint8_t, 'field1'),
+            (dyn.align(4), 'align1'),
+            (pint.uint32_t, 'field2'),
+        ]
+
+# create an array type of 12 uint32_t's
+    type = dyn.array(pint.uint32_t, 12)
+
+# clone a pstr.string type, modifying the length field to 8 characters.
+    from ptypes import pstr,dyn
+    type = dyn.clone(pstr.string, length=8)
+
+# create a pointer to a uint32
+    from ptypes import pint,pstr,dyn
+    type = dyn.pointer(pint.uint32_t)
+
+# create a pointer to a szstring relative to a parent element that's an array
+    type = dyn.rpointer(pstr.szstring, object=lambda s: s.getparent(parray.type))
+
+# create a pointer to a uint32 relative to the current pointer's value + 0x100
+    type = dyn.opointer(pint.uint32_t, calculate=lambda s: s.num() + 0x100)
+
+# create a union type backed by an array of 4 uint32 types
+    from ptypes import dynamic,pint,pstr
+    class type(dynamic.union):
+        root = dynamic.array(pint.uint32_t, 4)
+        _fields_ = [
+            (dyn.block(16), 'block'),
+            (dyn.array(pint.uint16_t, 8), 'ushort'),
+            (dyn.clone(pstr.wstring, length=8), 'widestring'),
+        ]
+"""
+
 from . import ptype,parray,pstruct,config,error,utils,provider
 Config = config.defaults
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')

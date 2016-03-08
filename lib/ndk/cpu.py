@@ -182,3 +182,24 @@ class tss64(pstruct.type):
         (pint.uint16_t, 'Reserved'),
         (pint.uint16_t, 'I/O Map Base Address'),
     ]
+
+class _HARDWARE_PTE(pbinary.flags):
+    _fields_ = [
+        ('Valid', 1),
+        ('Write', 1),
+        ('Owner', 1),
+        ('WriteThrough', 1),
+        ('CacheDisable', 1),
+        ('Accessed', 1),
+        ('Dirty', 1),
+        ('LargePage', 1),
+        ('Global', 1),
+        ('CopyOnWrite', 1),
+        ('Prototype', 1),
+        ('reserved0', 1),
+        ('PageFrameNumber', 36),
+        ('reserved1', 4),
+        ('SoftwareWsIndex', 11),
+        ('NoExecute', 1),
+    ]
+

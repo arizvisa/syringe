@@ -1,4 +1,91 @@
-'''base array element'''
+"""Array container types.
+
+A parray.type is used to create a data structure that describes an list of a
+particular subtype. The methods provided to a user expose a list-like interface
+to the user. A parray.type's interface inherits from ptype.container and will
+always have a .value that's a list. In most cases, a parray.type can be treated
+as a python list.
+
+The basic parray interface provides the following methods on top of the methods
+required to provide an array-type interface.
+
+    class interface(parray.type):
+        # the sub-element that the array is composed of.
+        _object_ = sub-type
+
+        # the length of the array
+        length = count
+
+        def insert(self, index, object):
+            '''Insert ``object`` into the array at the specified ``index``.'''
+
+        def append(self, object):
+            '''Appends the specified ``object`` to the end of the array type.'''
+
+        def extend(self, iterable):
+            '''Appends all the objects provided in ``iterable`` to the end of the array type.'''
+
+        def pop(self, index):
+            '''Removes and returns the instance at the specified index of the array.'''
+
+        def getindex(self, index):
+            '''Return the index into /self.value/ identified by ``index``.'''
+
+There are a couple of array types that can be used to describe the different data structures
+one may encounter. They are as following:
+
+    parray.type -- The basic array type. /self.length// specifies it's length,
+                   and /self._object_/ specifies it's subtype.
+
+    parray.terminated -- An array type that is terminated by a specific element
+                         type. In this array type, /self.length/ is initially
+                         set to None due to the termination of this array being
+                         defined by the result of a user-supplied
+                         .isTerminator(sub-instance) method.
+
+    parray.uninitialized -- An array type that will read until an error or other
+                            kind of interrupt happens. The size of this type is
+                            determined dynamically.
+
+    parray.infinite -- An array type that will read indefinitely until it
+                       consumes the blocksize of it's parent element or the
+                       entirety of it's data source.
+
+    parray.block -- An array type that will read elements until it reaches the
+                    length of it's .blocksize() method. If a sub-element causes
+                    the array to read past it's .blocksize(), the sub-element
+                    will remain partially uninitialized.
+
+Example usage:
+    # define a basic type
+    from ptypes import parray
+    class type(parray.type):
+        _object_ = subtype
+        length = 4
+
+    # define a terminated array
+    class terminated(parray.terminated):
+        _object_ = subtype
+        def isTerminator(self, value):
+            return value is sentineltype or value == sentinelvalue
+
+    # define a block array
+    class block(parray.block):
+        _object_ = subtype
+        def blocksize(self):
+            return size-of-array
+
+    # instantiate and load a type
+    instance = type()
+    instance.load()
+
+    # fetch an element from the array
+    print instance[index]
+
+    # print the length of the array
+    print len(instance)
+"""
+
 import itertools
 from . import ptype,utils,error,config
 Config = config.defaults

@@ -1,3 +1,101 @@
+"""Primitive floating and fixed-point types.
+
+A pfloat.float_t is an atomic type that is used to describe real numbers within a
+complex data structure. This is used to describe the different components
+of a floating-point number that are encoded according to the ieee-754 standard.
+A float_t includes space for defining the signflag, mantissa, and the exponent
+of a floating-point number. This type has the following interface:
+
+    class interface(pfloat.float_t):
+        components = (sign-bits, exponent-bits, fractional-bits)
+        length = number-of-bytes
+
+        def set(self, number):
+            '''Assign the decimal ``number`` to the value of ``self``.'''
+        def float(self):
+            '''Return ``self`` as a 'float' type in python.'''
+        def __float__(self):
+            '''Method overload for the 'float' keyword.'''
+
+Another type, pfloat.fixed_t, is also included that can be used to describe real
+numbers encoded using fixed-point arithmetic. This type allows a user to specify
+the number of bits that represent the fractional part of a fixed-point number. A
+similar type, pfloat.sfixed_t, lets one specify whether the fixed-point number
+has a bit dedicated to it's signedness. Both the fixed_t and sfixed_t have the
+following interfaces:
+
+    class interface(pfloat.fixed_t):
+        fraction = number-of-bits-for-decimal
+        length = size-in-bytes
+
+    class interface(pfloat.sfixed_t):
+        fraction = number-of-bits-for-decimal
+        sign = number-of-bits-for-signflag
+        length = size-in-bytes
+
+A floating-point type within a data-structure can also be of varying byteorders.
+Provided within this module are functions that can be used to transform the
+byteorder of the types defined within or declared elsewhere. These functions are:
+
+    setbyteorder(order) -- Set the byte-order for all the types in this module
+                           globally. This function will modify the byteorder of
+                           any type at the time a subtype is made to inherit
+                           from it.
+
+    bigendian(type) -- Return the provided pfloat.type with the byteorder set
+                       to bigendian.
+
+    littleendian(type) -- Return the provided pfloat.type with the byteorder
+                          set to littleendian.
+
+Within this module, the following ieee-754 types are defined:
+
+    half -- 16-bit real number. 5-bits for the exponent, 10 for the fraction.
+    single -- 32-bit real number. 8-bits for the exponent, 23 for the fraction.
+    double -- 64-bit real number. 11-bits for the exponent, 52 for the fraction.
+
+Also defined within this module is a ptype.definition that can be used to locate
+a specific float_t that matches a particular size. It can be used as such:
+
+    # find a pfloat.float_t that is 4 bytes in length
+    type = pfloat.ieee.get(4)
+
+Example usage:
+    # change the endianness to big-endian globally
+    from ptypes import pfloat
+    pfloat.setbyteorder(pfloat.bigendian)
+
+    # define an ieee-754 single type
+    class type(pfloat.float_t):
+        length = 4
+        components = (1, 8, 23)
+
+    # define a fixed-point 16.16 type
+    class type(pfloat.fixed_t):
+        length = 4
+        fraction = 16
+
+    # transform a type's byteorder to bigendian using decorator
+    @pfloat.bigendian
+    class type(pfloat.float_t):
+        length = 8
+        components = (1, 11, 52)
+
+    # transform the byteorder of a type to littleendian after definition
+    type = pfloat.littleendian(type)
+
+    # instantiate and load a type
+    instance = type()
+    instance.load()
+
+    # assign a floating-point number to a instance
+    instance.set(22 / 7.0)
+
+    # return the floating-point number of an instance
+    print instance.float()
+    print float(instance)
+"""
+
 import math
 from . import ptype,pint,bitmap,config,error
 

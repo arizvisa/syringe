@@ -1,4 +1,4 @@
-import sys,itertools,_random,math,_weakref
+import sys,itertools,_random,math,_weakref,array
 import functools,random
 
 ## string formatting
@@ -161,26 +161,15 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
     """
 
     rows = kwds.pop('rows', kwds.pop('lines', None))
-
-    # TODO: should prolly make this an iterator properly
     value = iter(value)
-    def tryRead(iterable, length):
-        res = ''
-        try:
-            for x in itertools.islice(iterable, length):
-                res += x
-
-        except StopIteration:
-            pass
-        return res
 
     getRow = lambda o: hexrow(data, offset=o, **kwds)
 
     res = []
-    (ofs, data) = offset, tryRead(value, width)
+    (ofs, data) = offset, str().join(itertools.islice(value, width))
     for i in (itertools.count(1) if rows is None else xrange(1, rows)):
         res.append( getRow(ofs) )
-        ofs, data = (ofs + width, tryRead(value, width))
+        ofs, data = (ofs + width, str().join(itertools.islice(value, width)))
         if len(data) < width:
             break
         continue
