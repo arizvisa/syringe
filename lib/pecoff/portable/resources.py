@@ -52,13 +52,14 @@ class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.pointer_t):
     class rva(pbinary.struct):
         _fields_ = [(1,'type'),(31,'offset')]
+        def get(self):
+            return self['offset']
     _value_ = dyn.clone(pbinary.partial, _object_=rva, byteorder=config.byteorder.littleendian)
     def decode(self, object, **attrs):
         base = self.getparent(headers.DataDirectoryEntry)['Address']
-        rva = base.num() + self.object['offset']
-        res = headers.calculateRelativeAddress(base, rva)
-        object.set(res)
-        return super(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA,self).decode(object, **attrs)
+        va = headers.calculateRelativeAddress(self, base.get()+self.object['offset'])
+        res = self.new(ptype.pointer_t._value_).set(va)
+        return super(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA,self).decode(res, **attrs)
     def summary(self, **attrs):
         return self.object.summary(**attrs)
 
@@ -102,7 +103,7 @@ if True:
             #return VersionEntry.get(szkey, length=bs)
 
         def __Children(self):
-            bs = self['wLength'].li.num() - self.blocksize()
+            bs = self['wLength'].li.num() - sum(self[n].blocksize() for _,n in self._fields_[:-1])
             assert bs >= 0,bs
             class Member(pstruct.type):
                 _fields_ = [

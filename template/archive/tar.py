@@ -1,15 +1,27 @@
 # http://www.freebsd.org/cgi/man.cgi?query=tar&sektion=5&manpath=FreeBSD+8-current
+import ptypes
 from ptypes import *
+import operator
 
 class stringinteger(pstr.string):
     def int(self):
-        return int(self.str())
+        try: res = self.str()
+        except UnicodeDecodeError: res = self.get()
+        try: res = int(res)
+        except ValueError: res = 0
+        return res
     def long(self):
-        return long(self.str())
+        try: res = self.str()
+        except UnicodeDecodeError: res = self.get()
+        try: res = long(res)
+        except ValueError: res = 0
+        return res
     def __int__(self):
         return self.int()
     def __long__(self):
         return self.long()
+    def num(self):
+        return self.int()
     def set(self, integer):
         n = str(integer)
         prefix = '0'*(self.length-1 - len(n))
@@ -17,15 +29,17 @@ class stringinteger(pstr.string):
 
 class stringoctal(stringinteger):
     def int(self):
-        try:
-            return int(self.str(),8)
-        except ValueError:
-            return 0
+        try: res = self.str()
+        except UnicodeDecodeError: res = self.get()
+        try: res = int(res,8)
+        except ValueError: res = 0
+        return res
     def long(self):
-        try:
-            return long(self.str(),8)
-        except ValueError:
-            return 0
+        try: res = self.str()
+        except UnicodeDecodeError: res = self.get()
+        try: res = long(res,8)
+        except ValueError: res = 0
+        return res
 
     def set(self, integer):
         n = oct(integer)[1:]
@@ -34,31 +48,47 @@ class stringoctal(stringinteger):
 
 class stream_t(parray.infinite):
     def summary(self):
-        return '%s size: %x, %d files.'% (repr(self._object_), self.size(), len(self))
+        return '%s size: %x, %d files.'% (self._object_.typename(), self.size(), len(self))
 
-    terminated = 0
     def isTerminator(self, value):
-        if value.iseof():
-            self.terminated += 1
-        else:
-            self.terminated = 0
-        return self.terminated == 2
+        return value.iseof()
+
+class linkflag(pint.enum, pstr.char_t):
+    _values_ = [(_, ord(n)) for _,n in [
+        ('REGTYPE',  '0'),  # regular file
+        ('AREGTYPE', '\0'), # regular file
+        ('LNKTYPE',  '1'),  # link
+        ('SYMTYPE',  '2'),  # reserved
+        ('CHRTYPE',  '3'),  # character special
+        ('BLKTYPE',  '4'),  # block special
+        ('DIRTYPE',  '5'),  # directory (in this case, the size field has no meaning)
+        ('FIFOTYPE', '6'),  # FIFO special (archiving a FIFO file archives its existence, not contents)
+        ('CONTTYPE', '7'),  # reserve
+    ]]
 
 class header_t(pstruct.type):
     _fields_ = [
-        (dyn.clone(pstr.string,length=100), 'name'),
+        (dyn.clone(pstr.string,length=100), 'filename'),
         (dyn.clone(stringoctal,length=8), 'mode'),
         (dyn.clone(stringoctal,length=8), 'uid'),
         (dyn.clone(stringoctal,length=8), 'gid'),
         (dyn.clone(stringoctal,length=12), 'size'),
         (dyn.clone(stringoctal,length=12), 'mtime'),
         (dyn.clone(stringoctal,length=8), 'checksum'),
-        (pstr.char_t, 'linkflag'),
+        (linkflag, 'linkflag'),
         (dyn.clone(pstr.string,length=100), 'linkname'),
     ]
 
+    def listing(self):
+        name = self['filename'].str()
+        mode = self['mode'].num()
+        uid,gid = self['uid'].num(),self['gid'].num()
+        size = self['size'].num()
+        mtime,checksum = self['mtime'].num(),self['checksum'].num()
+        return '{!r} mode={:04o} uid={:d} gid={:d} size=0x{:x} mtime={:x} checksum={:x}'.format(name, mode, uid, gid, size, mtime, checksum) + (' -> {!r}'.format(self['linkname'].get()) if self['linkflag'].num() else '')
+
     def isempty(self):
-        return self['name'].str() == ''
+        return self['filename'].str() == ''
 
 # FIXME: we can auto-detect which header we are by checking 'magic'
 class header_extended_t(pstruct.type):
@@ -71,14 +101,25 @@ class header_extended_t(pstruct.type):
         (dyn.clone(stringinteger,length=8), 'devminor'),
     ]
 
+    def listing(self):
+        major,minor = self['devmajor'],self['devminor']
+        uname = 'uname={:s}'.format(self['uname'].str()) if len(self['uname'].str()) > 0 else ''
+        gname = 'gname={:s}'.format(self['gname'].str()) if len(self['uname'].str()) > 0 else ''
+        device = ('dev={:s}'.format('.'.join(map(str,(major.num(),minor.num()))))) if len(major.get() + minor.get()) > 0 else ''
+        res = (' ' + ' '.join(filter(None,(uname, gname, device)))) if any((uname, gname, device)) else ''
+        return 'ext v{:d}'.format(self['version'].num()) + res
+
 class member_t(pstruct.type):
     def iseof(self):
-        n = reduce(lambda x,y:x+y, (ord(x) for x in self.serialize()), 0)
-        return n == 0
+        return all(n == '\x00' for n in self.serialize())
+
+    def listing(self):
+        index = int(self.name())
+        return '{:d}) {:s}'.format(index, self['header'].listing())
 
     def summary(self):
         common = self['header']['common']
-        filename = common['name']
+        filename = common['filename']
         mode = common['mode']
         uid,gid = common['uid'],common['gid']
         sz,rsz = common['size'],self['data'].size()
@@ -91,8 +132,14 @@ class header_old(pstruct.type):
         (dyn.clone(pstr.string,length=255), 'pad'),
     ]
 
+    def dump(self):
+        return '\n'.join(map(repr,(self['common'],)))
+
+    def listing(self):
+        return self['common'].listing()
+
     def getsize(self):
-        return self['common']['size'].int()
+        return self['common'].li['size'].int()
 
 class old(stream_t):
     class member(member_t):
@@ -109,8 +156,15 @@ class header_ustar(header_old):
         (dyn.block(12), 'padding'),
     ]
 
+    def dump(self):
+        prefixofs = self.getoffset('prefix')
+        return '\n'.join(map(repr, (self['common'], self['extended'])) + filter(lambda n:n.startswith('[%x] '%prefixofs), self.details().split('\n')))
+
+    def listing(self):
+        return ' | '.join((self['common'].listing(), self['extended'].listing()))
+
     def getsize(self):
-        sz = self['common']['size'].int()
+        sz = self['common'].li['size'].int()
         return (sz+511)/512*512
 
 class ustar(stream_t):
@@ -135,13 +189,11 @@ class gnu_sparse_header(pstruct.type):
 class gnu_sparse_array(parray.terminated):
     _object_ = gnu_sparse_header
     def isTerminator(self, value):
-        v = value['isextended'].str()
-        return v == '\x00'
+        return value['isextended'].str() == '\x00'
 
 class header_gnu(header_old):
     def __extended_data(self):
-        v = self['isextended'].li.str()
-        if v == '\x00':
+        if self['isextended'].li.str() == '\x00':
             return dyn.clone(parray.type,_object_=gnu_sparse_header)
         return gnu_sparse_array
 
@@ -161,39 +213,154 @@ class header_gnu(header_old):
         (__extended_data, 'extended_data'),
     ]
 
+    def dump(self):
+        return '\n'.join(map(repr, (self, self['common'], self['extended'])))
+
+    def listing(self):
+        res = 'atime=0x{:x} ctime=0x{:x}'.format(self['atime'].num(), self['ctime'].num())
+        return ' | '.join((self['common'].listing(), self['extended'].listing(), res))
+
 class gnu(stream_t):
     class member(member_t):
         _fields_=[(header_gnu,'header'),(lambda s: dyn.block(s['header'].getsize()),'data')]
     _object_ = member
 
 if __name__ == '__main__':
-    import ptypes,tar
-    class streamfile(object):
-        def __init__(self, file):
-            self.file = file
-            self.offset = 0
-        def read(self, amount):
-            self.file.seek(self.offset)
-            self.offset += amount
-            return self.file.read(amount)
-        def write(self, data):
-            self.file.seek(self.offset)
-            offset+=len(data)
-            return self.file.write(data)
-        def tell(self):
-            return self.file.tell()
+    import sys,os,os.path,logging,argparse
+    import ptypes,archive.tar
+    if sys.platform == 'win32': import msvcrt
 
-#    ptypes.setsource(ptypes.provider.stream(streamfile(file('./test.tar', 'rb+'))))
-#    ptypes.setsource(ptypes.provider.stream(file('./test.tar', 'rb+')))
-    ptypes.setsource(ptypes.provider.file('./test.tar'))
-    reload(tar)
+    arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'tar.py', description="List or extract information out of a .tar file", add_help=False)
+    arg_p.add_argument('FILE', nargs='*', action='append', type=str, help='list of filenames to extract')
+    arg_commands_gr = arg_p.add_argument_group("Main operation mode")
+    arg_commands_gr.add_argument('-h', '--help', action='store_const', help="show this help message and exit", dest='mode', const='help')
+    arg_commands_gr.add_argument('-l', '--list', action='store_const', help="list the contents of an archive", dest='mode', const='list')
+    arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help="extract files from an archive", dest='mode', const='extract')
+    arg_commands_gr.add_argument('-d', '--dump', action='store_const', help="dump the specified file records", dest='mode', const='dump')
+    arg_device_gr = arg_p.add_argument_group("Device selection and switching")
+    arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar="ARCHIVE", help="use archive file or device ARCHIVE", dest='source')
+    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar="DEVICE", help="extract files to specified DEVICE or FORMAT", dest='target', default=None)
+    arg_device_gr.add_argument('-t', '--type', nargs=1, action='store', type=str.lower, metavar="TYPE", help="specify tar type (old, ustar, gnu)", dest='type', choices=('old','ustar','gnu'), default=('ustar',))
 
-    a = tar.ustar(offset=0)
-    a=a.l
-    print a
+    if len(sys.argv) <= 1:
+        print >>sys.stdout, arg_p.format_usage()
+        sys.exit(0)
 
-#    print a[0]
-#    print a[1]
-#    b = tar.old(offset=0)
-#
-#    c = tar.gnu(offset=0)
+    args = arg_p.parse_args(sys.argv[1:])
+    if args.mode == 'help':
+        print >>sys.stdout, arg_p.format_help()
+        sys.exit(0)
+
+    # fix up arguments
+    source_a,target_a = args.source[0],None if args.target is None else args.target[0]
+    if source_a == '-':
+        if sys.platform == 'win32': msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        source = ptypes.prov.stream(sys.stdin)
+    else:
+        source = ptypes.prov.file(source_a, mode='rb')
+
+    if target_a == '-':
+        if sys.platform == 'win32': msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+        target = sys.stdout
+    else:
+        target = target_a
+
+    filelist, = args.FILE
+    filetype, = args.type
+    filelookup = set(filelist)
+    indexlookup = set((int(n) for n in filelist if n.isdigit()))
+
+    isMatchedName = lambda r: (not filelookup) or (r['header']['common']['filename'].str() in filelookup)
+    isMatchedIndex = lambda r: int(r.name()) in indexlookup
+
+    # some useful functions
+    def iterate(root):
+        for rec in root:
+            if isMatchedIndex(rec) or isMatchedName(rec):
+                yield rec
+            continue
+        return
+
+    def dictionary(root):
+        res = {}
+        for k in root.keys():
+            v = root[k]
+            if isinstance(v, pint.type):
+                res[k] = v.num()
+            elif isinstance(v, pstr.type):
+                try:
+                    res[k] = v.str()
+                except UnicodeDecodeError:
+                    res[k] = v.serialize()
+            else:
+                res[k] = v.summary()
+            continue
+        return res
+
+    # create the file type
+    lookup = {'old': archive.tar.old, 'ustar': archive.tar.ustar, 'gnu': archive.tar.gnu}
+    cls = lookup[filetype]
+    z = cls(source=source)
+
+    # implement each mode
+    if args.mode == 'list':
+        for rec in iterate(z.l[:-1]):
+            print rec.listing()
+        sys.exit(0)
+
+    elif args.mode == 'extract':
+        target = target or os.path.join('.','{path:s}','{name:s}')
+
+    elif args.mode == 'dump':
+        target = target or sys.stdout
+    
+    # help
+    else:
+        print >>sys.stdout, arg_p.format_help()
+        sys.exit(1)
+
+    # for each member...
+    for rec in iterate(z.l[:-1]):
+
+        # assign what data we're writing
+        if args.mode == 'extract':
+            sz = rec['header'].getsize()
+            data = rec['data'].serialize()[:sz]
+        elif args.mode == 'dump':
+            data = '\n'.join((' '.join((ptypes.utils.repr_class(rec.classname()),rec.name())), ptypes.utils.indent(rec['header'].dump())))
+
+        # set some reasonable defaults
+        res = dictionary(rec['header']['common'])
+        res['index'] = int(rec.name())
+        res['path'],res['name'] = os.path.split(res['filename'].replace('/', os.sep))
+
+        # write to a generated filename
+        if isinstance(target, basestring):
+            outname = target.format(**res)
+
+            dirpath,name = os.path.split(outname)
+            dirpath and not os.path.isdir(dirpath) and os.makedirs(dirpath)
+
+            res = os.path.join(dirpath, name)
+            if res.endswith(os.path.sep):
+                if os.path.isdir(res):
+                    logging.warn("Unable to create already existing subdirectory for record : {:d} : {:s}".format(int(rec.name()), res))
+                else:
+                    logging.info("Creating subdirectory due to member : {:d} : {:s}".format(int(rec.name()), res))
+                    os.makedirs(res)
+                continue
+
+            if os.path.exists(res):
+                logging.warn("Overwriting already existing file due to member : {:d} : {:s}".format(int(rec.name()), res))
+            else:
+                logging.info("Creating file for member : {:d} : {:s}".format(int(rec.name()), res))
+
+            with file(res, 'wb') as out: print >>out, data
+
+        # fall-back to writing to already open target
+        else:
+            print >>target, data
+        continue
+
+    sys.exit(0)
+

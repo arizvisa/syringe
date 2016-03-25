@@ -89,6 +89,7 @@ Example usage:
 import itertools
 from . import ptype,utils,error,config
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,terminated,infinite,block'.split(',')
 
 class _parray_generic(ptype.container):
@@ -178,7 +179,9 @@ class _parray_generic(ptype.container):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            return [ self.value[ self.getindex(idx) ] for idx in xrange(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)) ]
+            result = [ self.value[ self.getindex(idx) ] for idx in xrange(*index.indices(len(self))) ]
+            t = ptype.clone(type, length=len(result), _object_=self._object_)
+            return self.new(t, offset=result[0].getoffset(), value=result)
 
         range(len(self))[index]     # make python raise the correct exception if so..
         return super(_parray_generic, self).__getitem__(index)
@@ -343,7 +346,7 @@ class terminated(type):
 
                     size = n.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Config.log.warn("terminated.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                        Log.warn("terminated.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
                         break
                     if size < 0:
                         raise error.AssertionError(self, 'terminated.load', message="Element size for %s is < 0"% n.classname())
@@ -352,7 +355,7 @@ class terminated(type):
         except KeyboardInterrupt:
             # XXX: some of these variables might not be defined due to my usage of KeyboardInterrupt being racy. who cares...
             path = ' -> '.join(self.backtrace())
-            Config.log.warn("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
+            Log.fatal("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
             return self
 
         except (Exception,error.LoadError), e:
@@ -402,7 +405,7 @@ class infinite(uninitialized):
             n.load(**attrs)
         except (error.LoadError,error.InitializationError),e:
             path = ' -> '.join(self.backtrace())
-            Config.log.warn("infinite.__next_element : %s : Unable to read element %s : %s"% (self.instance(), n.instance(), path))
+            Log.warn("infinite.__next_element : %s : Unable to read element %s : %s"% (self.instance(), n.instance(), path))
         return n
 
     def isTerminator(self, value):
@@ -424,7 +427,7 @@ class infinite(uninitialized):
                     # read next element at the current offset
                     n = self.__next_element(offset)
                     if not n.initializedQ():
-                        Config.log.warn("infinite.load : %s : Element %d left partially initialized : %s"%(self.instance(), len(self.value), n.instance()))
+                        Log.info("infinite.load : %s : Element %d left partially initialized : %s"%(self.instance(), len(self.value), n.instance()))
                     self.value.append(n)
 
                     if not n.initializedQ():
@@ -436,7 +439,7 @@ class infinite(uninitialized):
                     # check sanity of element size
                     size = n.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Config.log.warn("infinite.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                        Log.warn("infinite.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
                         break
                     if size < 0:
                         raise error.AssertionError(self, 'infinite.load', message="Element size for %s is < 0"% n.classname())
@@ -448,13 +451,13 @@ class infinite(uninitialized):
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
-                Config.log.warn("infinite.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
+                Log.fatal("infinite.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
                 return self
 
             except (Exception,error.LoadError),e:
                 if self.parent is not None:
                     path = ' -> '.join(self.backtrace())
-                    Config.log.warn("infinite.load : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
+                    Log.warn("infinite.load : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=e)
         return self
 
@@ -482,7 +485,7 @@ class infinite(uninitialized):
                     # check sanity of element size
                     size = n.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Config.log.warn("infinite.loadstream : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                        Log.warn("infinite.loadstream : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
                         break
                     if size < 0:
                         raise error.AssertionError(self, 'infinite.loadstream', message="Element size for %s is < 0"% n.classname())
@@ -494,7 +497,7 @@ class infinite(uninitialized):
             except error.LoadError, e:
                 if self.parent is not None:
                     path = ' -> '.join(self.backtrace())
-                    Config.log.warn("infinite.loadstream : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
+                    Log.warn("infinite.loadstream : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=e)
             pass
         super(type, self).load()
@@ -531,19 +534,19 @@ class block(uninitialized):
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
                         path = ' -> '.join(n.backtrace())
-                        Config.log.warn("block.load : %s : Reached end of blockarray at %s : %s"%(self.instance(), n.instance(), path))
+                        Log.warn("block.load : %s : Reached end of blockarray at %s : %s"%(self.instance(), n.instance(), path))
                         self.value.append(n)
 
                     # otherwise add the incomplete element to the array
                     elif o < self.blocksize():
-                        Config.log.warn("block.load : %s : LoadError raised at %s : %s"%(self.instance(), n.instance(), repr(e)))
+                        Log.warn("block.load : %s : LoadError raised at %s : %s"%(self.instance(), n.instance(), repr(e)))
                         self.value.append(n)
 
                     break
 
                 size = n.blocksize()
                 if size <= 0 and Config.parray.break_on_zero_sized_element:
-                    Config.log.warn("block.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                    Log.warn("block.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
                     break
                 if size < 0:
                     raise error.AssertionError(self, 'block.load', message="Element size for %s is < 0"% n.classname())
@@ -551,7 +554,7 @@ class block(uninitialized):
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
                     path = ' -> '.join(n.backtrace())
-                    Config.log.info("block.load : %s : Terminated at %s : %s"%(self.instance(), n.instance(), path))
+                    Log.info("block.load : %s : Terminated at %s : %s"%(self.instance(), n.instance(), path))
                     self.value.append(n)
                     break
 

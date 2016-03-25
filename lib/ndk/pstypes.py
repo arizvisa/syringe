@@ -154,8 +154,8 @@ class PEB(pstruct.type, versioned):
             (ULONG, 'HeapDeCommitFreeBlockThreshold'),
             (ULONG, 'NumberOfHeaps'),
             (ULONG, 'MaximumNumberOfHeaps'),
-#            (PVOID, 'ProcessHeaps'),
-            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=int(s['NumberOfHeaps'].li)), PVOID), 'ProcessHeaps'),
+            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=s['NumberOfHeaps'].li.num()), PVOID), 'ProcessHeaps'),
+#            (dyn.pointer(win32k.GDI_HANDLE_TABLE), 'GdiSharedHandleTable'),
             (PVOID, 'GdiSharedHandleTable'),
             (PVOID, 'ProcessStarterHelper'),
             (ULONG, 'GdiDCAttributeList'),
@@ -229,7 +229,7 @@ class PEB(pstruct.type, versioned):
     def getmodulebyaddress(self, address):
         ldr = self['Ldr'].d.l
         for m in ldr.walk():
-            start,size = int(m['DllBase']),int(m['SizeOfImage'])
+            start,size = m['DllBase'].num(),m['SizeOfImage'].num()
             left,right = start, start+size
             if address >= left and address <= right:
                 return m
@@ -700,4 +700,4 @@ if __name__ == '__main__':
     Ldr = Peb['Ldr'].d.l
     for x in Ldr['InLoadOrderModuleList'].walk():
         print x['BaseDllName'].str(),x['FullDllName'].str()
-        print hex(int(x['DllBase'])), hex(int(x['SizeOfImage']))
+        print hex(x['DllBase'].num()), hex(x['SizeOfImage'].num())

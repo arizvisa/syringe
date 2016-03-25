@@ -69,6 +69,7 @@ Example usage:
 import __builtin__,sys,itertools,codecs
 from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider,config
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 class _char_t(pint.integer_t):
     encoding = codecs.lookup('ascii')
@@ -92,11 +93,24 @@ class _char_t(pint.integer_t):
         res = value.encode(self.encoding.name)
         return super(pint.integer_t,self).set(res)
 
-    def get(self):
-        return self.serialize().decode(self.encoding.name)
-
     def str(self):
-        return self.get()
+        '''Try to decode the _char_t to a character.'''
+        data = self.serialize()
+        try:
+            res = data.decode(self.encoding.name)
+        except UnicodeDecodeError, e:
+            raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
+        return res
+
+    def get(self):
+        '''Decode the _char_t to a character replacing any invalid characters if they don't decode.'''
+        data = self.serialize()
+        try:
+            res = data.decode(self.encoding.name)
+        except UnicodeDecodeError:
+            Log.warn('%s.get : %s : Unable to decode to %s. Replacing invalid characters. : %r'% (self.classname(), self.instance(), self.encoding.name, data))
+            res = data.decode(self.encoding.name, 'replace')
+        return res
 
     def summary(self, **options):
         return repr(self.serialize())
@@ -248,16 +262,29 @@ class string(ptype.type):
         for element,glyph in zip(result.alloc(), value):
             element.set(glyph)
         if len(value) > self.blocksize() / self._object_().a.size():
-            Config.log.warn('%s.set : %s : User attempted to set a value larger than the specified type. String was truncated to %d characters. : %d > %d'% (self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
+            Log.warn('%s.set : %s : User attempted to set a value larger than the specified type. String was truncated to %d characters. : %d > %d'% (self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
         return self.load(offset=0, source=provider.proxy(result))
 
-    def get(self):
-        t = dynamic.array(self._object_, len(self))
-        return ''.join(g.str() for g in self.cast(t))
-
     def str(self):
-        '''Return the string as a python str.'''
-        return utils.strdup(self.get())
+        '''Decode the string into the specified encoding type.'''
+        t = dynamic.array(self._object_, len(self))
+        data = self.cast(t).serialize()
+        try:
+            res = data.decode(t._object_.encoding.name)
+        except UnicodeDecodeError, e:
+            raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, t._object_.encoding.name))
+        return utils.strdup(res)
+
+    def get(self):
+        '''Try and decode the string into the specified encoding type.'''
+        t = dynamic.array(self._object_, len(self))
+        data = self.cast(t).serialize()
+        try:
+            res = data.decode(t._object_.encoding.name)
+        except UnicodeDecodeError:
+            Log.warn('%s.str : %s : Unable to decode to %s. Defaulting to unencoded string.'% (self.classname(), self.instance(), self._object_.typename()))
+            res = data.decode(t._object_.encoding.name, 'ignore')
+        return utils.strdup(res)
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
@@ -282,7 +309,7 @@ class string(ptype.type):
         try:
             result = repr(self.str())
         except UnicodeDecodeError:
-            Config.log.debug('%s.summary : %s : Unable to decode unicode string. Rendering as hexdump instead.'% (self.classname(),self.instance()))
+            Log.debug('%s.summary : %s : Unable to decode unicode string. Rendering as hexdump instead.'% (self.classname(),self.instance()))
             return super(string,self).summary(**options)
         return result
 
@@ -291,6 +318,7 @@ class string(ptype.type):
 
     def classname(self):
         return '{:s}<{:s}>'.format(super(string,self).classname(), self._object_.typename())
+type = string
 
 class szstring(string):
     '''Standard null-terminated string'''

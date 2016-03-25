@@ -150,7 +150,7 @@ def setbyteorder(endianness):
             if v is not integer_t and isinstance(v,__builtin__.type) and issubclass(v,integer_t) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
                 d = dict(v.__dict__)
                 d['byteorder'] = endianness
-                globals()[k] = type(v.__name__, v.__bases__, d)     # re-instantiate types
+                globals()[k] = __builtin__.type(v.__name__, v.__bases__, d)     # re-instantiate types
             continue
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
@@ -161,7 +161,7 @@ def setbyteorder(endianness):
 
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
-    if not isinstance(ptype, type):
+    if not issubclass(ptype, type):
         raise error.TypeError(ptype, 'bigendian')
     import __builtin__
     d = dict(ptype.__dict__)
@@ -170,7 +170,7 @@ def bigendian(ptype):
 
 def littleendian(ptype):
     '''Will convert an integer_t to littleendian form'''
-    if not isinstance(ptype, type):
+    if not issubclass(ptype, type):
         raise error.TypeError(ptype, 'littleendian')
     import __builtin__
     d = dict(ptype.__dict__)
@@ -243,6 +243,7 @@ class integer_t(ptype.type):
         elif self.byteorder is config.byteorder.littleendian:
             return self.cast(bigendian(self.__class__))
         raise error.UserError(self, 'integer_t.flip', message='Unexpected byte order %s'% repr(self.byteorder))
+type = integer_t
 
 class sint_t(integer_t):
     '''Provides signed integer support'''
@@ -300,7 +301,7 @@ class enum(integer_t):
         _values_:array( tuple( name, value ), ... )<w>
             This contains which enumerations are defined.
     '''
-    _values_ = list( tuple(('name', 'constant')) )
+    _values_ = []
 
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)

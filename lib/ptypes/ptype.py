@@ -234,6 +234,7 @@ Example pointer_t usage:
 import sys,types,inspect,functools,itertools,operator,__builtin__
 from . import bitmap,provider,utils,config,error
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
 
@@ -354,7 +355,7 @@ def debug(ptype, **attributes):
             result = super(decorated, self).serialize()
             size = len(result)
             _ = logentry('serialize() -> __len__ -> 0x{:x}', self.instance(), len(size))
-            Config.log.debug(' : '.join(self.instance(),_[-1]))
+            Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('serialize',[]).append(_)
             return result
 
@@ -365,7 +366,7 @@ def debug(ptype, **attributes):
 
             offset, size, source = self.getoffset(), self.blocksize(), self.source
             _ = logentry('load({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'%(k,v) for k,v in attrs.items()), end-start, offset, size, source)
-            Config.log.debug(' : '.join(self.instance(),_[-1]))
+            Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('load',[]).append(_)
             return result
 
@@ -375,7 +376,7 @@ def debug(ptype, **attributes):
             end = time.time()
 
             _ = logentry('commit({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'%(k,v) for k,v in attrs.items()), end-start, offset, size, source)
-            Config.log.debug(' : '.join(self.instance(),_[-1]))
+            Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('commit',[]).append(_)
             return result
 
@@ -390,7 +391,7 @@ def debugrecurse(ptype):
         __doc__ = ptype.__doc__
         def new(self, t, **attrs):
             res = force(t, self)
-            Config.log.debug(' '.join(('constructed :',repr(t),'->',self.classname(),self.name())))
+            Log.debug(' '.join(('constructed :',repr(t),'->',self.classname(),self.name())))
             debugres = debug(res, constructed=(time.time(),t))
             return super(decorated,self).new(debugres, **attrs)
     decorated.__name__ = 'debug(%s,recurse=True)'% ptype.__name__
@@ -782,7 +783,7 @@ class base(generic):
         Each value in the iterable is composed of (index,(self.serialize(),other.serialize()))
         """
         if False in (self.initializedQ(),other.initializedQ()):
-            Config.log.fatal('base.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
+            Log.fatal('base.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 
         s,o = self.serialize(),other.serialize()
@@ -820,7 +821,7 @@ class base(generic):
             result.setoffset(result.getoffset(), recurse=True)
 
         except Exception,e:
-            Config.log.warning("base.cast : %s : %s : Error during cast resulted in a partially initialized instance : %s"%(self.classname(), t.typename(), repr(e)))
+            Log.warning("base.cast : %s : %s : Error during cast resulted in a partially initialized instance : %s"%(self.classname(), t.typename(), repr(e)))
 
         # force partial or overcommited initializations
         try: result = result.deserialize_block(data)
@@ -829,9 +830,9 @@ class base(generic):
         # log whether our size has changed somehow
         a,b = self.size(),result.size()
         if a > b:
-            Config.log.info("base.cast : %s : Result %s size is smaller than source : %x < %x", self.classname(), result.classname(), result.size(), self.size())
+            Log.info("base.cast : %s : Result %s size is smaller than source : %x < %x", self.classname(), result.classname(), result.size(), self.size())
         elif a < b:
-            Config.log.warning("base.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
+            Log.warning("base.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
         return result
 
     def traverse(self, edges=lambda node:tuple(node.value) if isinstance(node, container) else (), filter=lambda node:True, **kwds):
@@ -963,15 +964,15 @@ class type(base):
                 childOffset = self.getoffset() - self.parent.getoffset()
                 maxElementSize = parentSize - childOffset
                 if res > maxElementSize:
-                    Config.log.warn("type.serialize : %s : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : %x > %x : %x", self.instance(), res, maxElementSize, parentSize)
+                    Log.warn("type.serialize : %s : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : %x > %x : %x", self.instance(), res, maxElementSize, parentSize)
                     res = maxElementSize
 
             if res > sys.maxint:
-                Config.log.fatal('type.serialize : %s : blocksize is larger than sys.maxint. Refusing to add padding : %x > %x', self.instance(), res, sys.maxint)
+                Log.fatal('type.serialize : %s : blocksize is larger than sys.maxint. Refusing to add padding : %x > %x', self.instance(), res, sys.maxint)
                 return ''
 
             # generate padding up to the blocksize
-            Config.log.info('type.serialize : %s : Padding result due to element being partially uninitialized during serialization : %x', self.instance(), res)
+            Log.info('type.serialize : %s : Padding result due to element being partially uninitialized during serialization : %x', self.instance(), res)
             padding = utils.padding.fill(res if res > 0 else 0, self.padding)
 
             # prefix beginning of padding with any data that element contains
@@ -983,7 +984,7 @@ class type(base):
         # pad up to the .blocksize() if our length doesn't meet the minimum
         res = self.blocksize()
         if len(result) < res:
-            Config.log.info('type.serialize : %s : Padding result due to element being partially initialized during serialization : %x', self.instance(), res)
+            Log.info('type.serialize : %s : Padding result due to element being partially initialized during serialization : %x', self.instance(), res)
             padding = utils.padding.fill(res-len(result), self.padding)
             result += padding
         return result
@@ -1008,7 +1009,7 @@ class type(base):
         """
         if self.initializedQ() or self.value:
             return len(self.value)
-        Config.log.info("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
+        Log.info("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
         return 0
 
     def blocksize(self):
@@ -1123,7 +1124,7 @@ class container(base):
             res = self.at(offset, recurse=False, **kwds)
 
         except ValueError, msg:
-            Config.log.info('container.at : %s : Non-fatal exception raised : %r'% (self.instance(), ValueError(msg)))
+            Log.info('container.at : %s : Non-fatal exception raised : %r'% (self.instance(), ValueError(msg)))
             return self
 
         # if we're already at a leaf of the trie, then no need to descend
@@ -1177,7 +1178,7 @@ class container(base):
         if self.value is None:
             raise error.SyntaxError(self, 'container.deserialize_block', message='caller is responsible for allocation of elements in self.value')
 
-        value,expected = list(self.value),self.blocksize()
+        value,expected = self.value[:],self.blocksize()
 
         # read everything up to the blocksize
         bs,total = 0,0
@@ -1198,11 +1199,11 @@ class container(base):
         # log any information about deserialization errors
         if total < expected:
             path = ' -> '.join(self.backtrace())
-            Config.log.warn('container.deserialize_block : %s : Container less than expected blocksize : %x < %x : {%s}'%(self.instance(), total, expected, path))
+            Log.warn('container.deserialize_block : %s : Container less than expected blocksize : %x < %x : {%s}'%(self.instance(), total, expected, path))
             raise StopIteration(self, total) # XXX
         elif total > expected:
             path = ' -> '.join(self.backtrace())
-            Config.log.debug('container.deserialize_block : %s : Container larger than expected blocksize : %x > %x : {%s}'%(self.instance(), total, expected, path))
+            Log.debug('container.deserialize_block : %s : Container larger than expected blocksize : %x > %x : {%s}'%(self.instance(), total, expected, path))
             raise error.LoadError(self, consumed=total) # XXX
         return self
 
@@ -1222,22 +1223,22 @@ class container(base):
             childOffset = self.getoffset() - self.parent.getoffset()
             maxElementSize = parentSize - childOffset
             if bs > maxElementSize:
-                Config.log.warn("container.serialize : %s : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : %x > %x : %x", self.instance(), bs, maxElementSize, parentSize)
+                Log.warn("container.serialize : %s : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : %x > %x : %x", self.instance(), bs, maxElementSize, parentSize)
                 bs = maxElementSize
 
         # if the blocksize is larger than maxint, then ignore the padding
         if bs > sys.maxint:
-            Config.log.warn('container.serialize : %s : blocksize is larger than sys.maxint. Refusing to add padding : %x > %x', self.instance(), bs, sys.maxint)
+            Log.warn('container.serialize : %s : blocksize is larger than sys.maxint. Refusing to add padding : %x > %x', self.instance(), bs, sys.maxint)
             return result
 
         # if the result is smaller then the blocksize, then pad the rest in
         if len(result) < bs:
-            Config.log.info('container.serialize : %s : Padding result due to element being partially uninitialized during serialization : %x', self.instance(), bs)
+            Log.info('container.serialize : %s : Padding result due to element being partially uninitialized during serialization : %x', self.instance(), bs)
             result += utils.padding.fill(bs - len(result), self.padding)
 
         # if it's larger then the blocksize, then warn the user about it
         if len(result) > bs:
-            Config.log.debug('container.serialize : %s : Container larger than expected blocksize : %x > %x'%(self.instance(), len(result), bs))
+            Log.debug('container.serialize : %s : Container larger than expected blocksize : %x > %x'%(self.instance(), len(result), bs))
 
         # otherwise, our result should appear correct
         return result
@@ -1270,7 +1271,7 @@ class container(base):
                     any(isinstance(n,container) or isinstance(n,undefined) for n in self.value):
 
                 # load each element individually up to the blocksize
-                bs,value = 0,list(self.value)
+                bs,value = 0,self.value[:]
                 left,right = self.getoffset(),self.getoffset()+self.blocksize()
                 while value and left < right:
                     res = value.pop(0)
@@ -1293,9 +1294,9 @@ class container(base):
             ofs,s,bs = self.getoffset(),self.size(),self.blocksize()
             self.source.seek(ofs+bs)
             if s < bs:
-                Config.log.warning('container.load : %s : Unable to complete read : at {%x:+%x} : %s', self.instance(), ofs, s, repr(e))
+                Log.warning('container.load : %s : Unable to complete read : at {%x:+%x} : %s', self.instance(), ofs, s, repr(e))
             else:
-                Config.log.debug('container.load : %s : Cropped to {%x:+%x} : %s', self.instance(), ofs, s, repr(e))
+                Log.debug('container.load : %s : Cropped to {%x:+%x} : %s', self.instance(), ofs, s, repr(e))
         return self
 
     def commit(self, **attrs):
@@ -1306,7 +1307,7 @@ class container(base):
             try:
                 return super(container,self).commit(**attrs)
             except error.CommitError, e:
-                Config.log.warning('container.commit : %s : Unable to complete contiguous store : write at {%x:+%x} : %s', self.instance(), self.getoffset(), self.size(), repr(e))
+                Log.warning('container.commit : %s : Unable to complete contiguous store : write at {%x:+%x} : %s', self.instance(), self.getoffset(), self.size(), repr(e))
 
         # commit all elements of container individually
         with utils.assign(self, **attrs):
@@ -1318,7 +1319,7 @@ class container(base):
                     if current > sz: break
                 pass
             except error.CommitError, e:
-                Config.log.fatal('container.commit : %s : Unable to complete non-contiguous store : write stopped at {%x:+%x} : %s', self.instance(), ofs+current, self.blocksize()-current, repr(e))
+                Log.fatal('container.commit : %s : Unable to complete non-contiguous store : write stopped at {%x:+%x} : %s', self.instance(), ofs+current, self.blocksize()-current, repr(e))
         return self
 
     def copy(self, **attrs):
@@ -1336,7 +1337,7 @@ class container(base):
         differences in elements that are of a particular type.
         """
         if False in (self.initializedQ(),other.initializedQ()):
-            Config.log.fatal('container.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
+            Log.fatal('container.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 
         if self.value == other.value:
@@ -1629,8 +1630,8 @@ class definition(object):
         a = set(cls.cache.keys())
         b = set(otherdefinition.cache.keys())
         if a.intersection(b):
-            Config.log.warn('definition.update : %s : Unable to import module %r due to multiple definitions of the same record',cls.__module__, otherdefinition)
-            Config.log.warn('definition.update : %s : Duplicate records : %r', cls.__module__, a.intersection(b))
+            Log.warn('definition.update : %s : Unable to import module %r due to multiple definitions of the same record',cls.__module__, otherdefinition)
+            Log.warn('definition.update : %s : Duplicate records : %r', cls.__module__, a.intersection(b))
             return False
 
         # merge record caches into a single one
@@ -1665,7 +1666,8 @@ class definition(object):
         def clone(definition):
             res = dict(definition.__dict__)
             res.update(attributes)
-            res = __builtin__.type(res.pop('__name__',definition.__name__), definition.__bases__, res)
+            #res = __builtin__.type(res.pop('__name__',definition.__name__), definition.__bases__, res)
+            res = __builtin__.type(res.pop('__name__',definition.__name__), (definition,), res)
             cls.add(getattr(res,cls.attribute),res)
             return definition
 
@@ -1771,7 +1773,7 @@ class wrapper_t(type):
     def size(self):
         if self.initializedQ():
             return self.object.size()
-        Config.log.info("wrapper_t.size : %s : Unable to get size of ptype.wrapper_t, as object is still uninitialized."% self.instance())
+        Log.info("wrapper_t.size : %s : Unable to get size of ptype.wrapper_t, as object is still uninitialized."% self.instance())
         return 0
 
     def classname(self):
@@ -2038,7 +2040,7 @@ class rpointer_t(pointer_t):
 
     def decode(self, object, **attrs):
         res = super(rpointer_t,self).decode(object, **attrs)
-        root = self._baseobject_
+        root = force(self._baseobject_, self)
         base = root.getoffset() if isinstance(root,generic) else root().getoffset()
         res.set(base + object.get())
         return res
@@ -2077,7 +2079,7 @@ class constant(type):
 
     def __init__(self, **attrs):
         if self.__doc__ is None:
-            Config.log.warn('constant.__init__ : %s : Constant was not initialized', self.classname())
+            Log.warn('constant.__init__ : %s : Constant was not initialized', self.classname())
             self.__doc__ = ''
         return super(constant,self).__init__(**attrs)
 
@@ -2085,7 +2087,7 @@ class constant(type):
         bs,data = self.blocksize(),self.__doc__
 
         if (data != string) or (bs != len(string)):
-            Config.log.warn('constant.set : %s : Data did not match expected value : %r != %r', self.classname(), string, data)
+            Log.warn('constant.set : %s : Data did not match expected value : %r != %r', self.classname(), string, data)
 
         if len(string) < bs:
             self.value = string + utils.padding.fill(bs-len(string), self.padding)
@@ -2097,7 +2099,7 @@ class constant(type):
     def deserialize_block(self, block):
         data = self.__doc__
         if data != block:
-            Config.log.warn('constant.deserialize_block : %s : Data loaded from source did not match expected constant value : %r != %r', self.instance(), block, data)
+            Log.warn('constant.deserialize_block : %s : Data loaded from source did not match expected constant value : %r != %r', self.instance(), block, data)
         return super(constant,self).deserialize_block(data)
 
     def alloc(self, **attrs):

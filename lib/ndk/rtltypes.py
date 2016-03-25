@@ -1,5 +1,5 @@
+import umtypes
 from WinNT import *
-from umtypes import *
 
 class _RTL_CRITICAL_SECTION(pstruct.type):
     _fields_ = [
@@ -22,12 +22,12 @@ class _RTL_DRIVE_LETTER_CURDIR(pstruct.type):
         (WORD, 'Flags'),
         (WORD, 'Length'),
         (ULONG, 'TimeStamp'),
-        (STRING, 'DosPath'),
+        (umtypes.STRING, 'DosPath'),
     ]
 
 class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
     class CURDIR(pstruct.type):
-        _fields_ = [(UNICODE_STRING,'DosPath'), (HANDLE,'Handle')]
+        _fields_ = [(umtypes.UNICODE_STRING,'DosPath'), (HANDLE,'Handle')]
         def summary(self):
             return 'Handle={:x} DosPath={!r}'.format(self['Handle'].num(), self['DosPath'].str())
 
@@ -42,9 +42,9 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (PVOID, 'StandardOutput'),
         (PVOID, 'StandardError'),
         (CURDIR, 'CurrentDirectory'),
-        (UNICODE_STRING, 'DllPath'),
-        (UNICODE_STRING, 'ImagePathName'),
-        (UNICODE_STRING, 'CommandLine'),
+        (umtypes.UNICODE_STRING, 'DllPath'),
+        (umtypes.UNICODE_STRING, 'ImagePathName'),
+        (umtypes.UNICODE_STRING, 'CommandLine'),
 #        (dyn.pointer(lambda s: dyn.block(s.getparent(_RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].num())), 'Environment'),
 #        (dyn.pointer(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.num())), 'Environment'),
         (dyn.pointer(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.num())), 'Environment'),
@@ -57,11 +57,31 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (ULONG, 'FillAttribute'),
         (ULONG, 'WindowFlags'),
         (ULONG, 'ShowWindowFlags'),
-        (UNICODE_STRING, 'WindowTitle'),
-        (UNICODE_STRING, 'DesktopInfo'),
-        (UNICODE_STRING, 'ShellInfo'),
-        (UNICODE_STRING, 'RuntimeData'),
+        (umtypes.UNICODE_STRING, 'WindowTitle'),
+        (umtypes.UNICODE_STRING, 'DesktopInfo'),
+        (umtypes.UNICODE_STRING, 'ShellInfo'),
+        (umtypes.UNICODE_STRING, 'RuntimeData'),
 
         (dyn.array(_RTL_DRIVE_LETTER_CURDIR,32), 'CurrentDirectories'),
         (ULONG, 'EnvironmentSize'),
     ]
+
+class _RLT_PATH_TYPE(pint.enum):
+    _values_ = [
+        ('RtlPathTypeUnknown', 0),
+        ('RtlPathTypeUncAbsolute', 1),
+        ('RtlPathTypeDriveAbsolute', 2),
+        ('RtlPathTypeDriveRelative', 3),
+        ('RtlPathTypeRooted', 4),
+        ('RtlPathTypeRelative', 5),
+        ('RtlPathTypeLocalDevice', 6),
+        ('RtlPathTypeRootLocalDevice', 7),
+    ]
+
+class _RTL_RELATIVE_NAME(pstruct.type):
+    _fields_ = [
+        (umtypes.UNICODE_STRING, 'RelativeName'),
+        (HANDLE, 'ContainingDirectory'),
+        (PVOID, 'CurDirRef'),
+    ]
+

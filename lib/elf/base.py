@@ -12,8 +12,16 @@ class ElfXX_Off(ptype.rpointer_t):
     def typename(cls):
         return cls.__name__
     def classname(self):
-        type = self._object_() if hasattr(self._object_, '__call__') else ptype.undefined
-        return '%s<%s>'%(self.typename(), type.typename())
+        try: type = self.d.classname() if self.initializedQ() else self._object_().classname()
+        except: pass
+        else: return '%s<%s>'%(self.typename(), type)
+
+        try: type = self._object_.typename() if ptype.istype(self._object_) else self._object_().classname()
+        except: pass
+        else: return '%s<%s>'%(self.typename(), type)
+
+        type = self._object_.__name__
+        return '%s<%s>'%(self.typename(), type)
 
 class ElfXX_Header(ptype.boundary): pass
 class ElfXX_File(ptype.boundary): pass

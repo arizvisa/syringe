@@ -117,6 +117,7 @@ Example usage:
 import types,inspect,itertools,operator
 import ptype,utils,bitmap,config,error
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
 
 def setbyteorder(endianness):
@@ -291,7 +292,6 @@ class type(ptype.generic):
 
 class container(type):
     '''contains a list of variable-bit integers'''
-
     # positioning
     def getposition(self, index=None):
         if index is None:
@@ -372,7 +372,7 @@ class container(type):
         return self
 
     def serialize(self):
-        Config.log.warn('container.serialize : %s : Returning a potentially unaligned binary structure as a string', self.classname())
+        Log.warn('container.serialize : %s : Returning a potentially unaligned binary structure as a string', self.classname())
         return bitmap.data(self.bitmap())
 
     def load(self, **attrs):
@@ -416,8 +416,17 @@ class container(type):
         try:
             target.deserialize_consumer(source)
         except StopIteration:
-            Config.log.warn('container.cast : %s : Incomplete cast to %s. Target has been left partially initialized.', self.classname(), target.typename())
+            Log.warn('container.cast : %s : Incomplete cast to %s. Target has been left partially initialized.', self.classname(), target.typename())
         return target
+
+    # method overloads
+    def __iter__(self):
+        if self.value is None:
+            raise error.InitializationError(self, 'container.__iter__')
+
+        for res in self.value:
+            yield res
+        return
 
     def __getitem__(self, index):
         res = self.value[index]
@@ -459,6 +468,11 @@ class _array_generic(container):
         if not self.initialized:
             return self.length
         return len(self.value)
+
+    def __iter__(self):
+        for res in super(_array_generic,self).__iter__():
+            yield res if isinstance(res,container) else res.num()
+        return
 
     def __getitem__(self, index):
         return super(_array_generic, self).__getitem__(index)
@@ -537,28 +551,6 @@ class _struct_generic(container):
         assert isinstance(name,basestring)
         return self.__fastindex[name.lower()]
 
-    def keys(self):
-        '''return the name of each field'''
-        return [name for type,name in self._fields_]
-
-    def values(self):
-        '''return all the integer values of each field'''
-        return [ n if isinstance(n,container) else n.num() for n in self.value ]
-
-    def items(self):
-        return [(k,v) for (_,k),v in zip(self._fields_, self.values())]
-
-    def __getitem__(self, name):
-        index = self.getindex(name)
-        return super(_struct_generic, self).__getitem__(index)
-
-    def __setitem__(self, name, value):
-        index = self.getindex(name)
-        value = super(_struct_generic, self).__setitem__(index, value)
-        if isinstance(value, type):
-            value.__name__ = name
-        return value
-
     def details(self, **options):
         return self.__details_initialized(**options) if self.initializedQ() else self.__details_uninitialized(**options)
 
@@ -603,6 +595,57 @@ class _struct_generic(container):
             i = utils.repr_class(typename)
             result.append('[%s] %s %s{%d} ???'%(utils.repr_position(self.getposition(), hex=Config.display.partial.hex, precision=3 if Config.display.partial.fractional else 0),i,name,s))
         return '\n'.join(result)
+
+    # iterator methods
+    def iterkeys(self):
+        for _,name in self._fields_: yield name
+
+    def itervalues(self):
+        for res in self.value:
+            yield res if isinstance(res,container) else res.num()
+        return
+
+    def iteritems(self):
+        for k,v in itertools.izip(self.iterkeys(), self.itervalues()):
+            yield k,v
+        return
+
+    # list methods
+    def keys(self):
+        '''return the name of each field'''
+        return [ name for _,name in self._fields_ ]
+
+    def values(self):
+        '''return all the integer values of each field'''
+        return [ res if isinstance(res,container) else res.num() for res in self.value ]
+
+    def items(self):
+        return [(k,v) for (_,k),v in zip(self._fields_, self.values())]
+
+    # method overloads
+    def __contains__(self, name):
+        if not isinstance(name, basestring):
+            raise error.UserError(self, '_struct_generic.__contains__', message='Element names must be of a str type.')
+        return name in self.__fastindex
+
+    def __iter__(self):
+        if self.value is None:
+            raise error.InitializationError(self, '_struct_generic.__iter__')
+
+        for k in self.iterkeys():
+            yield k
+        return
+
+    def __getitem__(self, name):
+        index = self.getindex(name)
+        return super(_struct_generic, self).__getitem__(index)
+
+    def __setitem__(self, name, value):
+        index = self.getindex(name)
+        value = super(_struct_generic, self).__setitem__(index, value)
+        if isinstance(value, type):
+            value.__name__ = name
+        return value
 
     #def __getstate__(self):
     #    return super(_struct_generic,self).__getstate__(),self.__fastindex
@@ -717,7 +760,7 @@ class struct(_struct_generic):
 
     def copy(self, **attrs):
         result = super(struct,self).copy(**attrs)
-        result._fields_ = list(self._fields_)
+        result._fields_ = self._fields_[:]
         return result
 
     def alloc(self, __attrs__={}, **fields):
@@ -823,7 +866,7 @@ class terminatedarray(_array_generic):
         except StopIteration,e:
             n = self.value[-1]
             path = ' ->\n\t'.join(self.backtrace())
-            Config.log.info("terminatedarray : %s : Terminated at %s<%x:+??>\n\t%s"%(self.instance(), n.typename(), n.getoffset(), path))
+            Log.info("terminatedarray : %s : Terminated at %s<%x:+??>\n\t%s"%(self.instance(), n.typename(), n.getoffset(), path))
 
         return self
 
@@ -872,11 +915,11 @@ class blockarray(terminatedarray):
                 position = (offset,suboffset)
 
             if total < 0:
-                Config.log.info('blockarray.deserialize_consumer : %s : Read %d extra bits', self.instance(), -total)
+                Log.info('blockarray.deserialize_consumer : %s : Read %d extra bits', self.instance(), -total)
 
         except StopIteration,e:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
-            Config.log.warn('blockarray.deserialize_consumer : %s : Incomplete read at %s while consuming %d bits', self.instance(), repr(position), n.blockbits())
+            Log.warn('blockarray.deserialize_consumer : %s : Incomplete read at %s while consuming %d bits', self.instance(), repr(position), n.blockbits())
         return self
 
 class partial(ptype.container):
@@ -1028,12 +1071,9 @@ class partial(ptype.container):
     def __setitem__(self, name, value):
         res, = self.value
         res[name] = value
-    def values(self):
-        res, = self.value
-        return res.values()
-    def num(self):
-        res, = self.value
-        return res.num()
+    def __iter__(self):
+        for res in self.value[0]: yield res
+
     def __getattr__(self, name):
         if name in ('__module__','__name__'):
             raise AttributeError(name)
@@ -1041,10 +1081,6 @@ class partial(ptype.container):
             raise error.InitializationError(self, 'partial.__getattr__')
         res, = self.value
         return getattr(res, name)
-
-    def bitmap(self):
-        res, = self.value
-        return res.bitmap()
 
     def classname(self):
         fmt = {
@@ -1055,7 +1091,7 @@ class partial(ptype.container):
             res, = self.value
             cn = res.classname()
         else:
-            cn = self._object_.typename()
+            cn = self._object_.typename() if istype(self._object_) else self._object_.__name__
         return fmt[self.byteorder].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     def contains(self, offset):
@@ -1075,12 +1111,11 @@ class partial(ptype.container):
 
     def get(self):
         res, = self.value
-        return res.num()
+        return res.get()
 
-    def set(self, value, **attrs):
+    def set(self, *args, **kwds):
         res, = self.value
-        res.set(value)
-        return self
+        return res.set(*args, **kwds)
 
     #def __getstate__(self):
     #    return super(partial,self).__getstate__(),self._object_,self.position,self.byteorder,
@@ -1126,7 +1161,7 @@ def new(pb, **attrs):
     '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
     # create a partial type
     if istype(pb):
-        Config.log.debug("new : %s : Instantiating type as partial"% pb.typename())
+        Log.debug("new : %s : Instantiating type as partial"% pb.typename())
         t = ptype.clone(partial, _object_=pb)
         return t(**attrs)
 
@@ -1145,7 +1180,7 @@ def bigendian(p, **attrs):
     attrs.setdefault('__name__', p._object_.__name__ if issubclass(p,partial) else p.__name__)
 
     if not issubclass(p, partial):
-        Config.log.debug("bigendian : %s : Promoting type to partial"% p.typename())
+        Log.debug("bigendian : %s : Promoting type to partial"% p.typename())
         p = ptype.clone(partial, _object_=p, **attrs)
     else:
         p.update_attributes(attrs)
@@ -1157,7 +1192,7 @@ def littleendian(p, **attrs):
     attrs.setdefault('__name__', p._object_.__name__ if issubclass(p,partial) else p.__name__)
 
     if not issubclass(p, partial):
-        Config.log.debug("littleendian : %s : Promoting type to partial"% p.typename())
+        Log.debug("littleendian : %s : Promoting type to partial"% p.typename())
         p = ptype.clone(partial, _object_=p, **attrs)
     else:
         p.update_attributes(attrs)

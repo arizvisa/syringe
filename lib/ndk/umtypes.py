@@ -46,8 +46,8 @@ class UNICODE_STRING(pstruct.type):
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
 #        (PWSTR, 'Buffer'),
-#        (lambda s: dyn.pointer(dyn.clone(WSTR, length=int(s['MaximumLength'].load()))), 'Buffer')
-        (lambda s: dyn.pointer(dyn.clone(WSTR, length=int(s['Length'].load())/2)), 'Buffer')
+#        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['MaximumLength'].li.num())), 'Buffer')
+        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['Length'].li.num()/2)), 'Buffer')
     ]
 
     def get(self):
@@ -55,7 +55,7 @@ class UNICODE_STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:int(self['Length'])]
+        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:self['Length'].num()]
 
     def summary(self):
         return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].num(), self['MaximumLength'].num(), self.str())
@@ -66,7 +66,7 @@ class STRING(pstruct.type):
     _fields_ = [
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
-        (lambda s: dyn.pointer(dyn.clone(PSTR, length=int(s['Length'].load()))), 'Buffer')
+        (lambda s: dyn.pointer(dyn.clone(PSTR, length=s['Length'].li.num())), 'Buffer')
     ]
 
     def get(self):
@@ -74,7 +74,7 @@ class STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:int(self['Length'])]
+        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:self['Length'].num()]
 
     def summary(self):
         return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].num(), self['MaximumLength'].num(), self.str())
@@ -85,3 +85,12 @@ class ANSI_STRING(STRING): pass
 class PANSI_STRING(PSTRING): pass
 class OEM_STRING(STRING): pass
 class POEM_STRING(PSTRING): pass
+
+class EX_PUSH_LOCK(pbinary.struct):
+    _fields_ = [
+        (1, 'Locked'),
+        (1, 'Waiting'),
+        (1, 'Waking'),
+        (1, 'MultipleShared'),
+        (28, 'Shared'),
+    ]

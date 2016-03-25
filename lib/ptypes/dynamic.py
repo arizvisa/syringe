@@ -83,6 +83,7 @@ Example usage:
 
 from . import ptype,parray,pstruct,config,error,utils,provider
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
 
 ## FIXME: might want to raise an exception or warning if we have too large of a block
@@ -94,7 +95,7 @@ def block(size, **kwds):
 
     if size < 0:
         t = ptype.block(length=size)
-        Config.log.error('block : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(), size))
+        Log.error('block : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(), size))
         size = 0
 
     def classname(self):
@@ -112,7 +113,7 @@ def blockarray(type, size, **kwds):
 
     if size < 0:
         t = parray.block(_object_=type)
-        Config.log.error('blockarray : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(),size))
+        Log.error('blockarray : %s : Invalid argument size=%d cannot be < 0. Defaulting to 0'% (t.typename(),size))
         size = 0
 
     class blockarray(parray.block):
@@ -173,15 +174,15 @@ def array(type, count, **kwds):
 
     if count < 0:
         t = parray.type(_object_=type,length=count)
-        Config.log.error('dynamic.array : %s : Invalid argument count=%d cannot be < 0. Defaulting to 0.'%( t.typename(), count))
+        Log.error('dynamic.array : %s : Invalid argument count=%d cannot be < 0. Defaulting to 0.'%( t.typename(), count))
         count = 0
 
     if Config.parray.max_count > 0 and count > Config.parray.max_count:
         t = parray.type(_object_=type,length=count)
         if Config.parray.break_on_max_count:
-            Config.log.fatal('dynamic.array : %s : Requested argument count=%d is larger than configuration max_count=%d.'%( t.typename(), count, Config.parray.max_count))
+            Log.fatal('dynamic.array : %s : Requested argument count=%d is larger than configuration max_count=%d.'%( t.typename(), count, Config.parray.max_count))
             raise error.UserError(t, 'array', message='Requested array count=%d is larger than configuration max_count=%d'%(count, Config.parray.max_count))
-        Config.log.warn('dynamic.array : %s : Requested argument count=%d is larger than configuration max_count=%d.'%( t.typename(), count, Config.parray.max_count))
+        Log.warn('dynamic.array : %s : Requested argument count=%d is larger than configuration max_count=%d.'%( t.typename(), count, Config.parray.max_count))
 
     def classname(self):
         obj = type
@@ -326,7 +327,7 @@ class union(_union_generic):
             if not result.initializedQ():
                 result.l
         except error.UserError, e:
-            Config.log.warning("union.__getitem__ : %s : Ignoring exception %s"% (self.instance(), e))
+            Log.warning("union.__getitem__ : %s : Ignoring exception %s"% (self.instance(), e))
         return result
 
     def details(self):
@@ -399,8 +400,8 @@ if __name__ == '__main__':
                 return True
             except Failure,e:
                 print '%s: %r'% (name,e)
-#            except Exception,e:
-#                print '%s: %r : %r'% (name,Failure(), e)
+            except Exception,e:
+                print '%s: %r : %r'% (name,Failure(), e)
             return False
         TestCaseList.append(harness)
         return fn

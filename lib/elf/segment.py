@@ -32,7 +32,7 @@ def _p_offset(size):
         type = Type.get(self['p_type'].li.num())
         #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(ElfXX_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
 
-        base = s.getparent(ElfXX_File),
+        base = self.getparent(ElfXX_File)
         result = dyn.clone(type, blocksize=lambda _:self.getparent(ElfXX_Phdr)['p_filesz'].li.num())
         return dyn.rpointer(result, base, type=size)
     return p_offset
@@ -59,12 +59,12 @@ class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
     class p_flags(_p_flags): pass   # XXX
     _fields_ = [
         (p_type, 'p_type'),
+        (p_flags, 'p_flags'),
         (_p_offset(Elf64_Off), 'p_offset'),
         (Elf64_Addr, 'p_vaddr'),
         (Elf64_Addr, 'p_paddr'),
         (Elf64_Xword, 'p_filesz'),
         (Elf64_Xword, 'p_memsz'),
-        (p_flags, 'p_flags'),
         (Elf64_Xword, 'p_align'),
     ]
 

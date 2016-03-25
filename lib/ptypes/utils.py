@@ -3,14 +3,9 @@ import functools,random
 
 ## string formatting
 def strdup(string, terminator='\x00'):
-    """Will return a copy of ``string`` up to the provided ``terminated``"""
-    string = iter(string)
-    res = ''
-    for x in string:
-        if x == terminator:
-            break
-        res += x
-    return res
+    """Will return a copy of ``string`` with the provided ``terminated`` characters trimmed"""
+    count = len(list(itertools.takewhile(lambda n: n not in terminator, string)))
+    return string[:count]
 
 def indent(string, tabsize=4, char=' ', newline='\n'):
     """Indent each line of ``string`` with the specified tabsize"""

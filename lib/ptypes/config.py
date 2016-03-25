@@ -251,13 +251,20 @@ class defaults:
 import ptype # recursive
 
 ### defaults
-root = logging.getLogger()
-if len(root.handlers) == 0:
-    logging.basicConfig(format='[%(created).3f] <%(process)x.%(thread)x> [%(levelname)s:%(name)s.%(module)s] %(message)s', level=logging.WARNING)
-defaults.log = root.getChild('ptypes')
+# logging
+defaults.log = log = logging.getLogger('ptypes')
+log.setLevel(logging.root.level)
+log.propagate = 1
+res = logging.StreamHandler(None)
+res.setFormatter(logging.Formatter("[%(created).3f] <%(process)x.%(thread)x> [%(levelname)s:%(name)s] %(message)s", None))
+log.addHandler(res)
+del(res,log)
 
+# general integers
 defaults.integer.size = long(math.log((sys.maxsize+1)*2,2)/8)
 defaults.integer.order = byteorder.littleendian if sys.byteorder == 'little' else byteorder.bigendian if sys.byteorder == 'big' else None
+
+# display
 defaults.display.show_module_name = False
 defaults.display.show_parent_name = False
 defaults.display.hexdump.width = 16
@@ -271,15 +278,23 @@ defaults.display.partial.fractional = False
 defaults.display.partial.bigendian_name = 'pb({})'
 defaults.display.partial.littleendian_name = 'pble({})'
 defaults.display.mangle_with_attributes = False
+
+# array types
 defaults.parray.break_on_zero_sized_element = True
 defaults.parray.break_on_max_count = False
 defaults.parray.max_count = sys.maxint
+
+# structures
 defaults.pstruct.use_offset_on_duplicate = True
+
+# root types
 defaults.ptype.noncontiguous = False
 #defaults.ptype.clone_name = 'clone({})'
 #defaults.pint.bigendian_name = 'bigendian({})'
 #defaults.pint.littleendian_name = 'littleendian({})'
 defaults.ptype.clone_name = 'c({})'
+
+# integer types
 defaults.pint.bigendian_name = 'be({})' if sys.byteorder.startswith('little') else '{}'
 defaults.pint.littleendian_name = 'le({})' if sys.byteorder.startswith('big') else '{}'
 

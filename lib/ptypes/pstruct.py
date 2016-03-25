@@ -48,8 +48,10 @@ Example usage:
     instance.unalias('alternative-name')
 """
 
+import itertools
 from . import ptype,utils,config,pbinary,error
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,make'.split(',')
 
 class _pstruct_generic(ptype.container):
@@ -87,19 +89,41 @@ class _pstruct_generic(ptype.container):
                 continue
         raise KeyError, name
 
-    def __contains__(self, name):
-        if name.__class__ is not str:
-            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
-        return name in self.__fastindex
+    # iterator methods
+    def iterkeys(self):
+        for _,name in self._fields_: yield name
 
+    def itervalues(self):
+        for res in self.value: yield res
+
+    def iteritems(self):
+        for k,v in itertools.izip(self.iterkeys(), self.itervalues()):
+            yield k,v
+        return
+
+    # list methods
     def keys(self):
-        return [name for type,name in self._fields_]
+        return [ name for _,name in self._fields_ ]
 
     def values(self):
-        return list(self.value)
+        return self.value[:]
 
     def items(self):
         return [(k,v) for (_,k),v in zip(self._fields_,self.value)]
+
+    # method overloads
+    def __contains__(self, name):
+        if not isinstance(name, basestring):
+            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
+        return name in self.__fastindex
+
+    def __iter__(self):
+        if self.value is None:
+            raise error.InitializationError(self, '_pstruct_generic.__iter__')
+
+        for k in self.iterkeys():
+            yield k
+        return
 
     def __getitem__(self, name):
         if name.__class__ is not str:
@@ -138,13 +162,13 @@ class type(_pstruct_generic):
         try:
             res = self.size() >= self.blocksize()
         except Exception,e:
-            Config.log.warn("type.initializedQ : %s : .blocksize() raised an exception when attempting to determine the initialization state of the instance : %s : %s", self.instance(), e, ' -> '.join(self.backtrace()), exc_info=True)
+            Log.warn("type.initializedQ : %s : .blocksize() raised an exception when attempting to determine the initialization state of the instance : %s : %s", self.instance(), e, ' -> '.join(self.backtrace()), exc_info=True)
         finally:
             return res
 
     def copy(self, **attrs):
         result = super(type,self).copy(**attrs)
-        result._fields_ = list(self._fields_)
+        result._fields_ = self._fields_[:]
         return result
 
     def alloc(self, __attrs__={}, **fields):
@@ -178,7 +202,7 @@ class type(_pstruct_generic):
                 for i,(t,name) in enumerate(self._fields_):
                     if name in self.__fastindex:
                         _,name = name,'%s_%x'%(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
-                        Config.log.warn("type.load : %s : Duplicate element name %r. Using generated name %r : %s", self.instance(), _, name, path)
+                        Log.warn("type.load : %s : Duplicate element name %r. Using generated name %r : %s", self.instance(), _, name, path)
 
                     # create each element
                     n = self.new(t, __name__=name, offset=ofs)
@@ -190,11 +214,11 @@ class type(_pstruct_generic):
                         try:
                             _ = self.blocksize()
                         except Exception, e:
-                            Config.log.debug("type.load : %s : Custom blocksize raised an exception at offset %x, field %r : %s", self.instance(), current, n.instance(), path, exc_info=True)
+                            Log.debug("type.load : %s : Custom blocksize raised an exception at offset %x, field %r : %s", self.instance(), current, n.instance(), path, exc_info=True)
                         else:
                             if current+bs > _:
                                 path = ' -> '.join(self.backtrace())
-                                Config.log.info("type.load : %s : Custom blocksize caused structure to terminate at offset %x, field %r : %s", self.instance(), current, n.instance(), path)
+                                Log.info("type.load : %s : Custom blocksize caused structure to terminate at offset %x, field %r : %s", self.instance(), current, n.instance(), path)
                                 break
                         current += bs
                     ofs += bs
@@ -202,7 +226,7 @@ class type(_pstruct_generic):
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
-                Config.log.warn("type.load : %s : User interrupt at element %s : %s", self.instance(), n.instance(), path)
+                Log.warn("type.load : %s : User interrupt at element %s : %s", self.instance(), n.instance(), path)
                 return self
 
             except error.LoadError, e:
@@ -274,8 +298,7 @@ def make(fields, **attrs):
     if len(set([x.getoffset() for x in fields])) != len(fields):
         raise ValueError('more than one field is occupying the same location')
 
-    types = list(fields)
-    types.sort(cmp=lambda a,b: cmp(a.getoffset(),b.getoffset()))
+    types = sorted(fields, cmp=lambda a,b: cmp(a.getoffset(),b.getoffset()))
 
     ofs,result = 0,[]
     for object in types:

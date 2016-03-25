@@ -54,6 +54,7 @@ Example usage:
 import __builtin__,array,exceptions,sys,itertools,operator
 from . import config,utils,error
 Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 class base(object):
     '''Base provider class. Intended to be used as a template for a provider implementation.'''
@@ -79,7 +80,7 @@ class empty(base):
         return '\x00'*amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Config.log.info('%s.store : Tried to write %x bytes to a read-only medium.'%(type(self).__name__, len(data)))
+        Log.info('%s.store : Tried to write %x bytes to a read-only medium.'%(type(self).__name__, len(data)))
         return len(data)
 
 ## core providers
@@ -168,7 +169,7 @@ class proxy(base):
 
         buf = self.type.serialize() if self.autoload is None else self.type.load(**self.autoload).serialize()
 #        if self.autoload is not None:
-#            Config.log.debug('%s.consume : Autoloading : %s : %r'%(type(self).__name__, self.type.instance(), self.type.source))
+#            Log.debug('%s.consume : Autoloading : %s : %r'%(type(self).__name__, self.type.instance(), self.type.source))
 
         if amount >= 0 and left >= 0 and right <= len(buf):
             result = buf[left:right]
@@ -200,7 +201,7 @@ class proxy(base):
             self.offset += len(data)
             self.type if self.autocommit is None else self.type.commit(**self.autocommit)
 #            if self.autocommit is not None:
-#                Config.log.debug('%s.store : Autocommitting : %s : %r'%(type(self).__name__, self.type.instance(), self.type.source))
+#                Log.debug('%s.store : Autocommitting : %s : %r'%(type(self).__name__, self.type.instance(), self.type.source))
             return len(data)
 
         # otherwise, check if nothing is being written
@@ -260,7 +261,7 @@ class proxy(base):
 
         # check to see if there's any data left
         if len(data) > 0:
-            Config.log.warn("%s : __write_range : %d bytes left-over from trying to write to %d bytes.", cls.__name__, len(data), result)
+            Log.warn("%s : __write_range : %d bytes left-over from trying to write to %d bytes.", cls.__name__, len(data), result)
 
         # return the aggregated total
         return result
@@ -308,7 +309,7 @@ class random(base):
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Config.log.info('%s.store : Tried to write %x bytes to a read-only medium.'%(type(self).__name__, len(data)))
+        Log.info('%s.store : Tried to write %x bytes to a read-only medium.'%(type(self).__name__, len(data)))
         return len(data)
 
 ## useful providers
@@ -377,9 +378,14 @@ class stream(base):
             return result
 
         # preread enough bytes so that stuff works
-        elif (len(self.data) == 0) or (o <= len(self.data)):
+        elif len(self.data) == 0 or o <= len(self.data):
             n = amount - (len(self.data) - o)
             self.preread(n)
+            return self.consume(amount)
+
+        # preread up to the offset
+        if o + amount > len(self.data):
+            self.preread(o - len(self.data))
             return self.consume(amount)
 
         raise error.ConsumeError(self, self.offset,amount)
@@ -420,7 +426,7 @@ class iterable(stream):
         return str().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
-        Config.log.info('iter._write : Tried to write %x bytes to an iterator'%(len(data)))
+        Log.info('iter._write : Tried to write %x bytes to an iterator'%(len(data)))
         return len(data)
 
 class filebase(base):
@@ -442,7 +448,7 @@ class filebase(base):
         offset = self.file.tell()
         if amount < 0:
             raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. %d:+%s from %s'%(offset,amount,self))
-        Config.log.debug('%s.consume : Attempting to consume %x:+%x'%(type(self).__name__, offset, amount))
+        Log.debug('%s.consume : Attempting to consume %x:+%x'%(type(self).__name__, offset, amount))
 
         result = ''
         try:
@@ -519,10 +525,10 @@ class posixfile(filebase):
         access = 'read/write' if (flags&os.O_RDWR) else 'write' if (flags&os.O_WRONLY) else 'read-only' if flags & os.O_RDONLY else 'unknown'
 
         if os.access(filename,6):
-            Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(mode), access)
+            Log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(mode), access)
         else:
             flags |= os.O_CREAT|os.O_TRUNC
-            Config.log.info("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(mode), access)
+            Log.info("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(mode), access)
 
         # mode defaults to rw-rw-r--
         self.fd = os.open(filename, flags, perms)
@@ -560,14 +566,14 @@ class file(filebase):
 
         if os.access(filename,0):
             if 'wb' in access:
-                Config.log.warn("%s(%s, %s) : Truncating file by user-request.", type(self).__name__, repr(filename), repr(access))
-            Config.log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(access), straccess)
+                Log.warn("%s(%s, %s) : Truncating file by user-request.", type(self).__name__, repr(filename), repr(access))
+            Log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(access), straccess)
 
         else:  # file not found
             if 'r+' in access:
-                Config.log.warn("%s(%s, %s) : File not found. Modifying access to write-only.", type(self).__name__, repr(filename), repr(access))
+                Log.warn("%s(%s, %s) : File not found. Modifying access to write-only.", type(self).__name__, repr(filename), repr(access))
                 access = 'wb'
-            Config.log.warn("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
+            Log.warn("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
 
         return __builtin__.open(filename, access, 0)
 
@@ -603,7 +609,7 @@ try:
             self.file.seek(ofs)
 
 except ImportError:
-    Config.log.warning("__module__ : Unable to import 'tempfile' module. Failed to load `filecopy` provider.")
+    Log.warning("__module__ : Unable to import 'tempfile' module. Failed to load `filecopy` provider.")
 
 class memorybase(base):
     '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
@@ -660,7 +666,7 @@ try:
             return i+1
 
 except ImportError:
-    Config.log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `memory` provider.")
+    Log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `memory` provider.")
 
 try:
     import ctypes
@@ -835,12 +841,12 @@ try:
             self.handle = None
             return result
 
-    Config.log.info("__module__ : Successfully loaded `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
+    Log.info("__module__ : Successfully loaded `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
 except ImportError:
-    Config.log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
+    Log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
 
 except OSError, m:
-    Config.log.warning("__module__ : Unable to load 'kernel32.dll' (%s). Failed to load `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers."% m)
+    Log.warning("__module__ : Unable to load 'kernel32.dll' (%s). Failed to load `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers."% m)
 
 try:
     import _idaapi
@@ -893,9 +899,9 @@ try:
             cls.offset += len(data)
             return len(data)
 
-    Config.log.warning("__module__ : Successfully loaded `Ida` provider.")
+    Log.warning("__module__ : Successfully loaded `Ida` provider.")
 except ImportError:
-    Config.log.info("__module__ : Unable to import '_idaapi' module (not running IDA?). Failed to load `Ida` provider.")
+    Log.info("__module__ : Unable to import '_idaapi' module (not running IDA?). Failed to load `Ida` provider.")
 
 try:
     import _PyDbgEng
@@ -914,7 +920,7 @@ try:
                 result = _PyDbgEng.Connect('tcp:port={},server={}'.format(port,host))
             elif type(remote) is dict:
                 result = _PyDbgEng.Connect('tcp:port={port},server={host}'.format(**client))
-            elif type(remote) is str:
+            elif isinstance(type(remote), basestring):
                 result = _PyDbgEng.Connect(client)
             return cls(result)
         @classmethod
@@ -945,9 +951,9 @@ try:
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
             return self.client.DataSpaces.Virtual.Write(self.offset, data)
 
-    Config.log.warning("__module__ : Successfully loaded `PyDbgEng` provider.")
+    Log.warning("__module__ : Successfully loaded `PyDbgEng` provider.")
 except ImportError:
-    Config.log.info("__module__ : Unable to import '_PyDbgEng' module. Failed to load `PyDbgEng` provider.")
+    Log.info("__module__ : Unable to import '_PyDbgEng' module. Failed to load `PyDbgEng` provider.")
 
 try:
     import pykd as _pykd
@@ -980,9 +986,9 @@ try:
             self.addr += res
             return res
 
-    Config.log.warning("__module__ : Successfully loaded `Pykd` provider.")
+    Log.warning("__module__ : Successfully loaded `Pykd` provider.")
 except ImportError:
-    Config.log.info("__module__ : Unable to import 'pykd' module. Failed to load `Pykd` provider.")
+    Log.info("__module__ : Unable to import 'pykd' module. Failed to load `Pykd` provider.")
 
 class base64(string):
     '''A provider that accesses data in a Base64 encoded string.'''
@@ -1242,7 +1248,7 @@ if __name__ == '__main__':
                 raise Success
 
     except ImportError:
-        Config.log.warning("__module__ : Skipping `memory` provider tests.")
+        Log.warning("__module__ : Skipping `memory` provider tests.")
         pass
 
     @TestCase
@@ -1360,7 +1366,7 @@ if __name__ == '__main__':
             pass
 
     except ImportError:
-        Config.log.warning("__module__ : Skipping `WindowsProcessId` provider tests.")
+        Log.warning("__module__ : Skipping `WindowsProcessId` provider tests.")
 
     testcert="""
     -----BEGIN CERTIFICATE-----
