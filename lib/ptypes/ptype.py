@@ -474,11 +474,18 @@ class _base_generic(object):
     def properties(self):
         """Return a tuple of properties/characteristics describing the current state of the object to the user"""
         result = {}
-        if self.initializedQ():
+
+        try:
             if self.blocksize() < self.size():
                 result['overcommit'] = True
-        else:
+
+        except error.InitializationError:
             result['uninitialized'] = True
+
+        else:
+            if self.blocksize() > self.size():
+                result['underload'] = True
+
         if not hasattr(self, '__name__') or not self.__name__:
             result['unnamed'] = True
         return result
@@ -823,6 +830,9 @@ class base(generic):
         except Exception,e:
             Log.warning("base.cast : %s : %s : Error during cast resulted in a partially initialized instance : %s"%(self.classname(), t.typename(), repr(e)))
 
+        # update with any attributes that need to be propagated
+        result.update_attributes(recurse=self.attributes)
+
         # force partial or overcommited initializations
         try: result = result.deserialize_block(data)
         except (error.LoadError, StopIteration): pass
@@ -857,7 +867,7 @@ class base(generic):
                 block = self.source.consume(bs)
                 self = self.deserialize_block(block)
             except (StopIteration,error.ProviderError), e:
-                self.source.seek(ofs + bs)
+                #self.source.seek(ofs + bs)
                 raise error.LoadError(self, consumed=bs, exception=e)
         return self
 
@@ -945,7 +955,7 @@ class type(base):
         bs = self.blocksize()
         if len(block) < bs:
             self.value = block[:bs]
-            raise StopIteration(self, len(block))
+            raise StopIteration(self.name(), len(block))
 
         # all is good.
         self.value = block[:bs]
@@ -1200,7 +1210,7 @@ class container(base):
         if total < expected:
             path = ' -> '.join(self.backtrace())
             Log.warn('container.deserialize_block : %s : Container less than expected blocksize : %x < %x : {%s}'%(self.instance(), total, expected, path))
-            raise StopIteration(self, total) # XXX
+            raise StopIteration(self.name(), total) # XXX
         elif total > expected:
             path = ' -> '.join(self.backtrace())
             Log.debug('container.deserialize_block : %s : Container larger than expected blocksize : %x > %x : {%s}'%(self.instance(), total, expected, path))

@@ -609,7 +609,7 @@ try:
             self.file.seek(ofs)
 
 except ImportError:
-    Log.warning("__module__ : Unable to import 'tempfile' module. Failed to load `filecopy` provider.")
+    Log.warning("__module__ : Unable to import the 'tempfile' module. Failed to load the `filecopy` provider.")
 
 class memorybase(base):
     '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
@@ -666,7 +666,7 @@ try:
             return i+1
 
 except ImportError:
-    Log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `memory` provider.")
+    Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `memory` provider.")
 
 try:
     import ctypes
@@ -841,12 +841,12 @@ try:
             self.handle = None
             return result
 
-    Log.info("__module__ : Successfully loaded `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
+    Log.info("__module__ : Successfully loaded the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
 except ImportError:
-    Log.warning("__module__ : Unable to import 'ctypes' module. Failed to load `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
+    Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
 
 except OSError, m:
-    Log.warning("__module__ : Unable to load 'kernel32.dll' (%s). Failed to load `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers."% m)
+    Log.warning("__module__ : Unable to load 'kernel32.dll' (%s). Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers."% m)
 
 try:
     import _idaapi
@@ -899,9 +899,10 @@ try:
             cls.offset += len(data)
             return len(data)
 
-    Log.warning("__module__ : Successfully loaded `Ida` provider.")
+    Log.warning("__module__ : Successfully loaded the `Ida` provider.")
+
 except ImportError:
-    Log.info("__module__ : Unable to import '_idaapi' module (not running IDA?). Failed to load `Ida` provider.")
+    Log.info("__module__ : Unable to import the '_idaapi' module (not running IDA?). Failed to load the `Ida` provider.")
 
 try:
     import _PyDbgEng
@@ -951,9 +952,9 @@ try:
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
             return self.client.DataSpaces.Virtual.Write(self.offset, data)
 
-    Log.warning("__module__ : Successfully loaded `PyDbgEng` provider.")
+    Log.warning("__module__ : Successfully loaded the `PyDbgEng` provider.")
 except ImportError:
-    Log.info("__module__ : Unable to import '_PyDbgEng' module. Failed to load `PyDbgEng` provider.")
+    Log.info("__module__ : Unable to import the '_PyDbgEng' module. Failed to load the `PyDbgEng` provider.")
 
 try:
     import pykd as _pykd
@@ -986,9 +987,70 @@ try:
             self.addr += res
             return res
 
-    Log.warning("__module__ : Successfully loaded `Pykd` provider.")
+    Log.warning("__module__ : Successfully loaded the `Pykd` provider.")
+
 except ImportError:
-    Log.info("__module__ : Unable to import 'pykd' module. Failed to load `Pykd` provider.")
+    Log.info("__module__ : Unable to import the 'pykd' module. Failed to load the `Pykd` provider.")
+
+try:
+    class lldb(base):
+        module = __import__('lldb')
+        def __init__(self, sbprocess=None):
+            self.__process = sbprocess or self.module.process
+            self.address = 0
+        def seek(self, offset):
+            res,self.address = self.address, offset
+            return res
+        def consume(self, amount):
+            process,err = self.__process, self.module.SBError()
+            data = process.ReadMemory(self.address, amount, err)
+            if err.Fail() or len(data) != amount:
+                raise error.ConsumeError(self, self.address, amount)
+            self.address += len(data)
+            return bytes(data)
+        def store(self, data):
+            process,err = self.__process, self.module.SBError()
+            amount = process.WriteMemory(self.address, bytes(data), err)
+            if err.Fail() or len(data) != amount:
+                raise error.StoreError(self, self.address, len(data))
+            self.address += amount
+            return amount
+
+    Log.warning("__module__ : Successfully loaded the `lldb` provider.")
+except ImportError:
+    Log.info("__module__ : Unable to import the 'lldb' module. Failed to load the `lldb` provider.")
+
+try:
+    class gdb(base):
+        module = __import__('gdb')
+        def __init__(self, inferior=None):
+            self.__process = inferior or self.module.selected_inferior()
+            self.address = 0
+        def seek(self, offset):
+            res,self.address = self.address, offset
+            return res
+        def consume(self, amount):
+            process = self.__process
+            try:
+                data = process.read_memory(self.address, amount)
+            except gdb.MemoryError:
+                data = None
+            if data is None or len(data) != amount:
+                raise error.ConsumeError(self, self.address, amount)
+            self.address += len(data)
+            return bytes(data)
+        def store(self, data):
+            process = self.__process
+            try:
+                process.write_memory(self.address, bytes(data))
+            except gdb.MemoryError:
+                raise error.StoreError(self, self.address, len(data))
+            self.address += len(data)
+            return len(data)
+
+    Log.warning("__module__ : Successfully loaded the `gdb` provider.")
+except ImportError:
+    Log.info("__module__ : Unable to import the 'gdb' module. Failed to load the `gdb` provider.")
 
 class base64(string):
     '''A provider that accesses data in a Base64 encoded string.'''
@@ -1248,7 +1310,7 @@ if __name__ == '__main__':
                 raise Success
 
     except ImportError:
-        Log.warning("__module__ : Skipping `memory` provider tests.")
+        Log.warning("__module__ : Skipping the `memory` provider tests.")
         pass
 
     @TestCase
@@ -1366,7 +1428,7 @@ if __name__ == '__main__':
             pass
 
     except ImportError:
-        Log.warning("__module__ : Skipping `WindowsProcessId` provider tests.")
+        Log.warning("__module__ : Skipping the `WindowsProcessId` provider tests.")
 
     testcert="""
     -----BEGIN CERTIFICATE-----

@@ -77,15 +77,14 @@ class _pstruct_generic(ptype.container):
         return current
 
     def getindex(self, name):
-        if name.__class__ is not str:
-            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
+        if not isinstance(name, basestring):
+            raise error.UserError(self, '_pstruct_generic.getindex', message='Element names must be of a str type.')
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
             for i,(_,n) in enumerate(self._fields_):
                 if n.lower() == name.lower():
-                    self.__fastindex[name.lower()] = i
-                    return i
+                    return self.__fastindex.setdefault(name.lower(), i)
                 continue
         raise KeyError, name
 

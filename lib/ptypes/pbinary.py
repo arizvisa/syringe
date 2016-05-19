@@ -329,7 +329,7 @@ class container(type):
             raise error.InitializationError(self, 'container.bitmap')
         return reduce(bitmap.push, map(operator.methodcaller('bitmap'),self.value), bitmap.new(0,0))
     def bits(self):
-        return sum(n.bits() for n in self.value)
+        return sum(n.bits() for n in self.value or [])
     def blockbits(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.blockbits')
@@ -548,8 +548,16 @@ class _struct_generic(container):
         del self.__fastindex[alias.lower()]
 
     def getindex(self, name):
-        assert isinstance(name,basestring)
-        return self.__fastindex[name.lower()]
+        if not isinstance(name, basestring):
+            raise error.UserError(self, '_struct_generic.getindex', message='Element names must be of a str type.')
+        try:
+            return self.__fastindex[name.lower()]
+        except KeyError:
+            for i,(_,n) in enumerate(self._fields_):
+                if n.lower() == name.lower():
+                    return self.__fastindex.setdefault(name.lower(), i)
+                continue
+        raise KeyError, name
 
     def details(self, **options):
         return self.__details_initialized(**options) if self.initializedQ() else self.__details_uninitialized(**options)

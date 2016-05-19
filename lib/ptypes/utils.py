@@ -1,4 +1,4 @@
-import sys,itertools,_random,math,_weakref,array
+import sys,itertools,_random,math,_weakref,array,logging
 import functools,random
 
 ## string formatting
@@ -85,15 +85,13 @@ def mapexception(map={}, any=None, ignored=()):
             try:
                 return fn(*args, **kwds)
             except:
-                t,v,tb = sys.exc_info()
+                t,v,_ = sys.exc_info()
 
             for src,dst in map.iteritems():
                 if t is src or (hasattr(src,'__contains__') and t in src):
-                    raise dst(*v)
+                    raise dst(t, *v)
                 continue
-            if t in ignored or any is None:
-                raise t(*v)
-            raise any(*v)
+            raise v if t in ignored or any is None else any(t, *v)
 
         functools.update_wrapper(decorated, fn)
         return decorated
