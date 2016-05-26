@@ -22,9 +22,9 @@ class ID(pint.uint32_t):
         return self.str()
 
 class HEX(pstr.string):
-    def num(self):
+    def int(self):
         return int(self.str(),16)
-    __int__,__long__ = num,num
+    __int__ = num = number = int
 
 ### yay
 class Chunk_Type(object): pass

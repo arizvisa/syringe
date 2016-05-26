@@ -65,14 +65,8 @@ class stringinteger(pstr.string):
         if len(self.str()) > 0:
             return int(self.str())
         return 0
-    def long(self):
-        if len(self.str()) > 0:
-            return long(self.str())
-        return 0
     def __int__(self):
         return self.int()
-    def __long__(self):
-        return self.long()
     def summary(self):
         return str(self.int())
 

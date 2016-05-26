@@ -29,13 +29,9 @@ the integer_t. The interface is as follows:
     class interface(pint.integer_t):
         length = number-of-bytes
         def int(self):
-            '''Return integral as a python 'int' type'''
-        def long(self):
-            '''Return integral as a python 'long' type'''
+            '''Return the integer_t as an integer'''
         def set(self, integer):
             '''Set the integer_t to the value ``integer``'''
-        def num(self):
-            '''Return the integer_t as an integer'''
         def flip(self):
             '''Return the integer_t with the alternate byteorder'''
 
@@ -113,8 +109,7 @@ Example usage:
     instance.set(57005)
 
     # output the value of instance as a numerical value
-    print instance.num()
-    print int(instance)
+    print instance.int()
 
     # return instance in it's alternative byteorder
     flipped = instance.flip()
@@ -140,7 +135,7 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print instance.str()
 """
-
+import six
 from . import ptype,bitmap,config,error,utils
 
 def setbyteorder(endianness):
@@ -181,14 +176,6 @@ class integer_t(ptype.type):
     '''Provides basic integer-like support'''
     byteorder = config.defaults.integer.order
 
-    def int(self): return int(self.num())
-    def long(self): return long(self.num())
-    def __int__(self): return self.int()
-    def __long__(self): return self.long()
-
-    def number(self):
-        return self.num()
-
     def classname(self):
         typename = self.typename()
         if self.byteorder is config.byteorder.bigendian:
@@ -199,7 +186,7 @@ class integer_t(ptype.type):
             raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness %s'% repr(self.byteorder))
         return typename
 
-    def set(self, integer):
+    def __set__(self, integer):
         if self.byteorder is config.byteorder.bigendian:
             transform = lambda x: reversed(x)
         elif self.byteorder is config.byteorder.littleendian:
@@ -218,10 +205,10 @@ class integer_t(ptype.type):
         self.value = str().join(transform(map(chr,res)))
         return self
 
-    def get(self):
-        return self.num()
+    def __get__(self):
+        return self.int()
 
-    def num(self):
+    def int(self):
         '''Convert integer type into a number'''
         if not self.initializedQ():
             raise error.InitializationError(self, 'num')
@@ -230,10 +217,11 @@ class integer_t(ptype.type):
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
         elif self.byteorder is config.byteorder.littleendian:
             return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
-        raise error.SyntaxError(self, 'integer_t.num', message='Unknown integer endianness %s'% repr(self.byteorder))
+        raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness %s'% repr(self.byteorder))
+    __int__ = num = number = int
 
     def summary(self, **options):
-        res = self.num()
+        res = self.int()
         return '{s}0x{n:0{l:d}x} ({s}{n:d})'.format(s='-' if res < 0 else '',n=abs(res),l=self.length*2)
 
     def flip(self):
@@ -247,22 +235,22 @@ type = integer_t
 
 class sint_t(integer_t):
     '''Provides signed integer support'''
-    def num(self):
+    def int(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'num')
         signmask = int(2**(8*self.blocksize()-1))
-        num = super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0],self).num()
+        num = super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0],self).int()
         res = num&(signmask-1)
         if num&signmask:
             return (signmask-res)*-1
         return res & (signmask-1)
 
-    def set(self, integer):
+    def __set__(self, integer):
         signmask = int(2**(8*self.blocksize()))
         res = integer & (signmask-1)
         if integer < 0:
             res |= signmask
-        return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0], self).set(res)
+        return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0], self).__set__(res)
 
 class uinteger(ptype.definition): attribute,cache = 'length',{}
 class sinteger(ptype.definition): attribute,cache = 'length',{}
@@ -307,7 +295,7 @@ class enum(integer_t):
         super(enum, self).__init__(*args, **kwds)
 
         # check types of ._values_
-        if any(not isinstance(k, basestring) or not isinstance(v, (int,long)) for k,v in self._values_):
+        if any(not isinstance(k, basestring) or not isinstance(v, six.integer_types) for k,v in self._values_):
             raise TypeError, (self, 'enum.__init__', "%s._values_ is of an incorrect format. Should be [(string,integral)]"%(self.classname()))
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
@@ -341,7 +329,7 @@ class enum(integer_t):
 
     def str(self):
         '''Return value as a string'''
-        res = self.num()
+        res = self.int()
         number = ('0x{:x}'.format(abs(res)) if res >= 0 else '-0x{:x}'.format(abs(res)))
         try:
             value = self.byValue(res) + '(%s)'% number
@@ -352,15 +340,15 @@ class enum(integer_t):
     def summary(self, **options):
         return self.str()
 
-    def set(self, value):
+    def __set__(self, value):
         if isinstance(value, basestring):
             value = self.byName(value)
-        return super(enum,self).set(value)
+        return super(enum,self).__set__(value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
         res = self.byName(name)
-        return res == self.num()
+        return res == self.int()
 
     ## XXX: not sure what to name these 2 methods, but i've needed them on numerous occasions
     ##      for readability purposes
@@ -554,7 +542,7 @@ if __name__ == '__main__':
                 ('cc', 0xcccccccc),
             ]
         a = e().set('cc')
-        if a.str().startswith('cc') and a.str().endswith('(0x%08x)'%a.num()):
+        if a.str().startswith('cc') and a.str().endswith('(0x%08x)'%a.int()):
             raise Success
 
     @TestCase
@@ -566,7 +554,7 @@ if __name__ == '__main__':
                 ('cc', 0xcccccccc),
             ]
         a = e().set(0xdddddddd)
-        if a.str() == '0x%08x'%a.num():
+        if a.str() == '0x%08x'%a.int():
             raise Success
 
 #    @TestCase

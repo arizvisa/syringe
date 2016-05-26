@@ -1,5 +1,5 @@
 #bitmap = (integer, bits)
-import sys
+import __builtin__,sys,six
 
 ## start somewhere
 def new(value, size):
@@ -15,32 +15,21 @@ zero = new(0,0)
 
 def isinteger(v):
     '''Returns true if provided variable is of type int or long'''
-    return isinstance(v, (int, long))
+    return isinstance(v, six.integer_types)
 
 def isbitmap(v):
     '''Returns true if provided variable is a valid bitmap type (i really shouldn't be keeping track of these)'''
-    return v.__class__ is tuple and len(v) == 2  # and isinteger(v[0]) and isinteger(v[1])
+    return isinstance(v, tuple) and len(v) == 2  # and isinteger(v[0]) and isinteger(v[1])
 
 def empty(bitmap):
     '''Returns true if specified bitmap has none of its bits set'''
     integer,size = bitmap
     return not(integer > 0)
 
-## for treating a bitmap as an array of bits
-def count(bitmap, value=False):
-    '''Returns the number of bits that are set to value and returns the count'''
-    integer,size = bitmap
-    count,size = 0,abs(size)
-    while size > 0:
-        if bool(integer & 1) == value:
-            count += 1
-        continue
-    return count
-
 import math # glad this is a builtin
 def fit(integer):
-    '''Returns the number of bits necessary to contain integer. or log(2)'''
-    return int(math.log(integer,2))+1
+    '''Returns the number of bits necessary to contain integer'''
+    return __builtin__.int(math.log(integer,2))+1
 
     count = 0
     while integer >= 2:
@@ -48,21 +37,21 @@ def fit(integer):
         integer >>= 1
     return count + 1
 
-def string(bitmap):
-    '''Returns bitmap as a formatted binary string'''
+def string(bitmap, reversed=True):
+    '''Returns bitmap as a formatted binary string starting with the least-significant-bits first'''
     integer,size = bitmap
     size = abs(size)
     res = []
     for position in range(size):
         res.append(['0', '1'][integer & 1 != 0])
         integer >>= 1
-    return str().join(reversed(res))
+    return str().join(res if reversed else reversed(res))
 
 def hex(bitmap):
     '''Return bitmap as a hex string'''
     n,s = bitmap
     size = abs(s)
-    length = int(math.ceil(size/4.0))
+    length = __builtin__.int(math.ceil(size/4.0))
     if s < 0:
         max,sf = 2**size,2**(size-1)
         n = (n-max) if n&sf else n&(sf-1)
@@ -71,12 +60,12 @@ def hex(bitmap):
 
 def scan(bitmap, value=True, position=0):
     '''Searches through bitmap for specified /value/ and returns it's position'''
-    assert position >= 0, 'invalid search position < 0 : %d'% position
-
     integer,size = bitmap
-    size = abs(size)
 
-    bitmask = 1 << position
+    if position < 0 or position > abs(size):
+        raise AssertionError("Invalid position : {:d}".format(position))
+
+    size,bitmask = abs(size), 1 << position
     for i in range(size):
         if bool(integer & bitmask) == value:
             return position
@@ -93,18 +82,21 @@ def runscan(bitmap, value, length, position=0):
             if bool(run_integer&1) == value and length <= run_length:
                 return position
             position += run_length
-    raise ValueError('Unable to find a %d bit run of %d in bitmap'% (length, value))
+    raise ValueError('Unable to find a {:s} bit run of {:d} in bitmap'.format(length, value))
 
 def runlength(bitmap, value, position=0):
     '''Returns the count of bits, starting at /position/'''
-    assert position >= 0, 'invalid search position < 0 : %d'% position
+    integer,size = bitmap
+    if position < 0 or position > abs(size):
+        raise AssertionError("Invalid position : {:d}".format(position))
     return scan(bitmap, not value, position) - position
 
 def run(bitmap, position=0):
     '''Iterates through all the runs in a given bitmap'''
-    assert position >= 0, 'invalid search position < 0 : %d'% position
-
     integer,size = bitmap
+    if position < 0 or position > abs(size):
+        raise AssertionError("Invalid position : {:d}".format(position))
+
     value,size = integer & 1, abs(size)
     while size > 0:
         length = runlength( (integer,size), value, position)
@@ -112,12 +104,17 @@ def run(bitmap, position=0):
         size -= length
         position += length
         value = not value
+    return
 
 def set(bitmap, position, value=True, count=1):
     '''Store /value/ into /bitmap/ starting at /position/'''
-    assert count >= 0 and position >= 0, 'invalid count or position < 0 : %x : %x'%(count, position)
-
     integer,size = bitmap
+
+    if count < 0 or position < 0:
+        raise AssertionError("Invalid count or position : {:d} : {:d}".format(count, position))
+    if position + count > abs(size):
+        raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
+
     mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
     if value:
         return (integer | mask, size)
@@ -126,6 +123,12 @@ def set(bitmap, position, value=True, count=1):
 def get(bitmap, position, count):
     '''Fetch /count/ number of bits from /bitmap/ starting at /position/'''
     integer,size = bitmap
+
+    if count < 0 or position < 0:
+        raise AssertionError("Invalid count or position : {:d} : {:d}".format(count, position))
+    if position + count > abs(size):
+        raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
+
     mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
     return ((integer & mask) >> position, count)
 
@@ -157,7 +160,7 @@ def div(bitmap, integer):
     if size < 0:
         sf = 2**(abs(size)-1)
         n = (n-max) if n&sf else n&(sf-1)
-    return long(float(n)/integer)&(max-1),size
+    return __builtin__.int(float(n)/integer)&(max-1),size
 def mod(bitmap, integer):
     n,size = bitmap
     max = 2**abs(size)
@@ -223,7 +226,9 @@ def consume(bitmap, bits):
 
     If bitmap is signed, then return a signed integer.
     '''
-    assert bits >= 0, 'invalid bit count < 0 : %d'% bits
+    if bits < 0:
+        raise AssertionError('Invalid bit count < 0 : {:d}'.format(bits))
+
     integersize,integermask = bits,2**bits
     bitmapinteger,bitmapsize = bitmap
 
@@ -247,7 +252,8 @@ def shift(bitmap, bits):
 
     If bitmap is signed, then return a signed integer.
     '''
-    assert bits >= 0, 'invalid bit count < 0 : %d'% bits
+    if bits < 0:
+        raise AssertionError('Invalid bit count < 0 : {:d}'.format(bits))
     integersize,integermask = bits,2**bits
 
     bitmapinteger,bitmapsize = bitmap
@@ -285,12 +291,13 @@ class consumer(object):
         return self
 
     def read(self, bytes):
-        '''read specified number of bytes from iterable'''
-        assert bytes > 0, 'invalid byte count < 0 : %d'% bytes
+        '''Reads the specified number of bytes from iterable'''
+        if bytes < 0:
+            raise AssertionError('Invalid byte count < 0 : {:d}'.format(bytes))
         result,count = 0,0
         while bytes > 0:
             result *= 256
-            result += ord(self.source.next())
+            result += ord(next(self.source))
             bytes,count = bytes-1,count+1
         self.cache = push(self.cache, new(result, count*8))
         return count
@@ -310,10 +317,10 @@ class consumer(object):
 
 def repr(object):
     integer,size = object
-    return "<type 'bitmap'> (%s, %d)"% (hex(object),size)
+    return "<type 'bitmap'> (0x{:x}, {:d})".format(hex(object),size)
 
 def data(bitmap, reversed=False):
-    '''Convert a bitmap to a string left-aligned to 8-bits'''
+    '''Convert a bitmap to a string left-aligned to 8-bits. Defaults to big-endian.'''
     fn = consume if reversed else shift
     integer,size = bitmap
 
@@ -345,7 +352,7 @@ def cast_unsigned(bitmap):
     '''Casts a bitmap to a unsigned integer'''
     integer,size = bitmap
     return (integer,abs(size))
-def number(bitmap):
+def value(bitmap):
     '''Return the integral part of a bitmap, handling signedness if necessary'''
     v,s = bitmap
     if s < 0:
@@ -355,16 +362,30 @@ def number(bitmap):
             return (signmask-res)*-1
         return res & (signmask-1)
     return v
+int = num = number = value
+
+def weight(bitmap):
+    v,s = bitmap
+    res,mask = 0, 2**s - 1
+    while v > 0:
+        res,v = res+1, v & (v - 1)
+    return res
+
+def count(bitmap, value=False):
+    '''Returns the number of bits that are set to value and returns the count'''
+    _,s = bitmap
+    res = weight(bitmap)
+    return res if value else (s-res)
 
 def splitter(bitmap, maxsize):
-    '''Split bitmap into multiple of maxsize bits'''
+    '''Split bitmap into multiple of maxsize bits starting from the low bit.'''
 
     sf,maxsize = -1 if maxsize < 0 else +1, abs(maxsize)
     while True:
         v,s = bitmap
         if s < maxsize:
             break
-        bitmap,v = shift(bitmap,maxsize)
+        bitmap,v = consume(bitmap,maxsize)
         yield (v,maxsize*sf)
 
     if s > 0:
@@ -372,8 +393,8 @@ def splitter(bitmap, maxsize):
     return
 
 def split(bitmap, maxsize):
-    '''Return bitmap divided into a list of maxsize bits'''
-    return [x for x in splitter(bitmap,maxsize)]
+    '''Returns a list of bitmaps resulting from the bitmap divided by maxsize bits.'''
+    return [x for x in splitter(bitmap,maxsize)][::-1]
 
 def join(iterable):
     '''Join a list of bitmaps into a single one'''
@@ -389,8 +410,8 @@ def groupby(sequence, count):
     return
 
 # jspelman. he's everywhere.
-ror = lambda (value, bits), shift=1,: (((value & (2**shift-1)) << bits-shift) | (value >> shift), bits)
-rol = lambda (value, bits), shift=1,: ( (value << shift) | ((value & ((2**bits-1) ^ (2**(bits-shift)-1))) >> (bits-shift)), bits)
+ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
+rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
 
 def reverse(bitmap):
     '''Flip the bit order of the bitmap'''
@@ -466,7 +487,7 @@ if __name__ == '__main__':
         freeslot = 0
         count = 3
         result = bitmap.set(result, freeslot, 1, count)
-        if bitmap.number(result) == 7:
+        if bitmap.value(result) == 7:
             raise Success
 
 #    @TestCase
@@ -515,25 +536,25 @@ if __name__ == '__main__':
     def signed_add_positive_wrap():
         x = (255, -8)
         res = bitmap.add(x, 1)
-        if res == (0, -8) and bitmap.number(res) == 0:
+        if res == (0, -8) and bitmap.value(res) == 0:
             raise Success
     @TestCase
     def signed_add_positive_nowrap():
         x = (254, -8)
         res = bitmap.add(x, 1)
-        if res == (255, -8) and bitmap.number(res) == -1:
+        if res == (255, -8) and bitmap.value(res) == -1:
             raise Success
     @TestCase
     def signed_add_negative_wrap():
         x = (254,-8)
         res = bitmap.add(x, 2)
-        if res == (0,-8) and bitmap.number(res) == 0:
+        if res == (0,-8) and bitmap.value(res) == 0:
             raise Success
     @TestCase
     def signed_add_negative_nowrap():
         x = (250,-8)
         res = bitmap.add(x, 5)
-        if res == (255,-8) and bitmap.number(res) == -1:
+        if res == (255,-8) and bitmap.value(res) == -1:
             raise Success
 
     ### sub
@@ -541,25 +562,25 @@ if __name__ == '__main__':
     def signed_sub_positive_wrap():
         x = (5, -8)
         res = bitmap.sub(x, 10)
-        if res == (251, -8) and bitmap.number(res) == -5:
+        if res == (251, -8) and bitmap.value(res) == -5:
             raise Success
     @TestCase
     def signed_sub_positive_nowrap():
         x = (10, -8)
         res = bitmap.sub(x, 5)
-        if res == (5, -8) and bitmap.number(res) == 5:
+        if res == (5, -8) and bitmap.value(res) == 5:
             raise Success
     @TestCase
     def signed_sub_negative_nowrap():
         x = (156,-8)
         res = bitmap.sub(x, 10)
-        if res == (146,-8) and bitmap.number(res) == -110:
+        if res == (146,-8) and bitmap.value(res) == -110:
             raise Success
     @TestCase
     def signed_sub_negative_wrap():
         x = (133,-8)
         res = bitmap.sub(x, 10)
-        if res == (123,-8) and bitmap.number(res) == 123:
+        if res == (123,-8) and bitmap.value(res) == 123:
             raise Success
 
     ### grow
@@ -567,13 +588,13 @@ if __name__ == '__main__':
     def grow_unsigned():
         x = (5, 4)
         res = bitmap.grow(x, 4)
-        if res == (5*2**4,8) and bitmap.number(res) == 5*2**4:
+        if res == (5*2**4,8) and bitmap.value(res) == 5*2**4:
             raise Success
     @TestCase
     def grow_signed():
         x = (15, -4)
         res = bitmap.grow(x, 4)
-        if res == (15*2**4,-8) and bitmap.number(res) == -16:
+        if res == (15*2**4,-8) and bitmap.value(res) == -16:
             raise Success
 
     ### shrink
@@ -581,13 +602,13 @@ if __name__ == '__main__':
     def shrink_unsigned():
         x = (0x50, 8)
         res = bitmap.shrink(x, 4)
-        if res == (5,4) and bitmap.number(res) == 5:
+        if res == (5,4) and bitmap.value(res) == 5:
             raise Success
     @TestCase
     def shrink_signed():
         x = (0xff, -8)
         res = bitmap.shrink(x, 4)
-        if res == (15,-4) and bitmap.number(res) == -1:
+        if res == (15,-4) and bitmap.value(res) == -1:
             raise Success
 
     ### push
@@ -595,13 +616,13 @@ if __name__ == '__main__':
     def push_bitmap_unsigned():
         x = (15,4)
         res = bitmap.push(x, (15,4))
-        if res == (0xff,8) and bitmap.number(res) == 255:
+        if res == (0xff,8) and bitmap.value(res) == 255:
             raise Success
     @TestCase
     def push_bitmap_signed():
         x = (15,-4)
         res = bitmap.push(x, (15,4))
-        if res == (0xff,-8) and bitmap.number(res) == -1:
+        if res == (0xff,-8) and bitmap.value(res) == -1:
             raise Success
 
     ### consume
@@ -697,13 +718,13 @@ if __name__ == '__main__':
     def mul_unsigned_bitmap_unsigned():
         x = (0x40000000,32)
         res = bitmap.mul(x, 4)
-        if res == (0,32) and bitmap.number(res) == 0:
+        if res == (0,32) and bitmap.value(res) == 0:
             raise Success
     @TestCase
     def mul_unsigned_bitmap_signed():
         x = (0x40000000,32)
         res = bitmap.mul(x, -4)
-        if res == (0,32) and bitmap.number(res) == 0:
+        if res == (0,32) and bitmap.value(res) == 0:
             raise Success
 
     #signed_divide(4,4) == 0xc000000000000002L and signed_divide(4,-4) !=
@@ -723,26 +744,26 @@ if __name__ == '__main__':
 
         x = (0x10000000,32)
         res = bitmap.div(x,0x10)
-        if bitmap.number(res) == 0x1000000:
+        if bitmap.value(res) == 0x1000000:
             raise Success
     @TestCase
     def div_unsigned_bitmap_signed():
         '''0x10 / -0x10 = -1'''
         x = (0x10,-32)
         res = bitmap.div(x,-0x10)
-        if bitmap.number(res) == -1:
+        if bitmap.value(res) == -1:
             raise Success
     @TestCase
     def div_signed_bitmap_signed_1():
         x = (0xffffffffffffa251,-64)
         res = bitmap.div(x, 0xc1)
-        if bitmap.number(res) == -124:
+        if bitmap.value(res) == -124:
             raise Success
     @TestCase
     def div_signed_bitmap_signed_2():
         x = (0xffffffffffff1634,-64)
         res = bitmap.div(x, 0xad)
-        if bitmap.number(res) == -345:
+        if bitmap.value(res) == -345:
             raise Success
 
     @TestCase
@@ -750,7 +771,7 @@ if __name__ == '__main__':
         '''-0x10/-0x10 = 1'''
         x = (0xfffffffffffffff0,-64)
         res = bitmap.div(x, -0x10)
-        if bitmap.number(res) == 1:
+        if bitmap.value(res) == 1:
             raise Success
 
     ### mod
@@ -760,7 +781,7 @@ if __name__ == '__main__':
         mask=2**64-1
         x = (23983&mask,64)
         res = bitmap.mod(x, 5)
-        if bitmap.number(res) == 3:
+        if bitmap.value(res) == 3:
             raise Success
     @TestCase
     def mod_unsigned_bitmap_signed():
@@ -768,7 +789,7 @@ if __name__ == '__main__':
         mask=2**64-1
         x = (23983&mask,-64)
         res = bitmap.mod(x, -5)
-        if bitmap.signed(res) and bitmap.number(res) == -2:
+        if bitmap.signed(res) and bitmap.value(res) == -2:
             raise Success
     @TestCase
     def mod_signed_bitmap_unsigned():
@@ -776,7 +797,7 @@ if __name__ == '__main__':
         mask=2**64-1
         x = (-23983&mask,64)
         res = bitmap.mod(x, -5)
-        if bitmap.number(res) == 0xfffffffffffffffe:
+        if bitmap.value(res) == 0xfffffffffffffffe:
             raise Success
 
     @TestCase
@@ -785,7 +806,7 @@ if __name__ == '__main__':
         mask=2**64-1
         x = (-23983&mask,-64)
         res = bitmap.mod(x, -5)
-        if bitmap.signed(res) and bitmap.number(res) == -3:
+        if bitmap.signed(res) and bitmap.value(res) == -3:
             raise Success
 
 if __name__ == '__main__':

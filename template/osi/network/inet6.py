@@ -11,7 +11,7 @@ pint.setbyteorder(pint.bigendian)
 class in_addr(dyn.array(pint.uint32_t, 4)):
     def summary(self):
         num = bitmap.new(super(in_addr,self).num(), 128)
-        components = bitmap.split(num, 16)
+        components = bitmap.split(num, 16)[::-1]
 
         # FIXME: there's got to be a more elegant way than a hacky state machine
         result,counter = [],0

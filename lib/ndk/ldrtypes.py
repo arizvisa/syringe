@@ -64,8 +64,8 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
     ]
 
     def contains(self, address):
-        left = self['DllBase'].long()
-        right = left + self['SizeOfImage'].long()
+        left = self['DllBase'].int()
+        right = left + self['SizeOfImage'].int()
         return (address >= left) and (address < right)
 
 ## declarations, heh.

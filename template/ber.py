@@ -23,10 +23,10 @@ class Length(pbinary.struct):
         (7, 'count'),
         (__value, 'value'),
     ]
-    def number(self):
+    def int(self):
         #assert not self.isIndefinite()
         return self['value'] if self['form'] else self['count']
-    __int__ = __long__ = number
+    __int__ = num = number = int
 
     def isIndefinite(self):
         assert self.initialized
@@ -45,11 +45,11 @@ class Tag(pbinary.struct):
         (__TagLong, 'TagLong'),
     ]
 
-    def number(self):
+    def int(self):
         res = self['Tag']
         res += sum(x['integer'] for x in self['TagLong'])
         return res
-    __int__ = __long__ = number
+    __int__ = num = number = int
 
     def summary(self):
         res = self.number()

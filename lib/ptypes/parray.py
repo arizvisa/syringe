@@ -28,9 +28,6 @@ required to provide an array-type interface.
         def pop(self, index):
             '''Removes and returns the instance at the specified index of the array.'''
 
-        def getindex(self, index):
-            '''Return the index into /self.value/ identified by ``index``.'''
-
 There are a couple of array types that can be used to describe the different data structures
 one may encounter. They are as following:
 
@@ -151,14 +148,14 @@ class _parray_generic(ptype.container):
             ofs += n.blocksize()
         return res
 
-    def getindex(self, index):
+    def __getindex__(self, index):
         return index
 
     def __delitem__(self, index):
         if isinstance(index, slice):
             origvalue = self.value[:]
             for idx in xrange(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                realidx = self.getindex(idx)
+                realidx = self.__getindex__(idx)
                 self.value.pop( self.value.index(origvalue[realidx]) )
             return origvalue.__getitem__(index)
         return self.pop(index)
@@ -168,18 +165,18 @@ class _parray_generic(ptype.container):
             val = itertools.repeat(value) if isinstance(value,ptype.generic) else iter(value)
             origvalue = self.value[:]
             for idx in xrange(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                realidx = self.getindex(idx)
-                self.value[realidx] = val.next()
+                realidx = self.__getindex__(idx)
+                self.value[realidx] = next(val)
             return origvalue.__getitem__(index)
 
-        idx = self.getindex(index)
+        idx = self.__getindex__(index)
         result = super(_parray_generic, self).__setitem__(idx, value)
         result.__name__ = str(index)
         return result
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            result = [ self.value[ self.getindex(idx) ] for idx in xrange(*index.indices(len(self))) ]
+            result = [ self.value[ self.__getindex__(idx) ] for idx in xrange(*index.indices(len(self))) ]
             t = ptype.clone(type, length=len(result), _object_=self._object_)
             return self.new(t, offset=result[0].getoffset(), value=result)
 
@@ -226,15 +223,15 @@ class type(_parray_generic):
 
     def alloc(self, fields=(), **attrs):
         result = super(type,self).alloc(**attrs)
-        if len(fields) > 0 and fields[0].__class__ is tuple:
+        if len(fields) > 0 and isinstance(fields[0], tuple):
             for k,v in fields:
-                idx = result.getindex(k)
+                idx = result.__getindex__(k)
                 if ptype.istype(v) or ptype.isresolveable(v):
                     result.value[idx] = result.new(v).alloc(**attrs)
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = result.new(v)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].__set__(v)
                 continue
         else:
             for idx,v in enumerate(fields):
@@ -244,7 +241,7 @@ class type(_parray_generic):
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = result.new(v,__name__=name)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].__set__(v)
                 continue
 
             # re-alloc elements that exist in the rest of the array
@@ -284,10 +281,10 @@ class type(_parray_generic):
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
         return '%s[%d] %s'% (obj, length, res)
 
-    def set(self, value):
+    def __set__(self, value):
         """Update self with the contents of the list ``value``"""
         if self.initializedQ() and len(self) == len(value):
-            return super(type,self).set(*value)
+            return super(type,self).__set__(*value)
 
         self.value = []
         for idx,val in enumerate(value):
@@ -299,7 +296,7 @@ class type(_parray_generic):
                 res = self.new(self._object_,__name__=str(idx)).a
             self.value.append(res)
 
-        result = super(type,self).set(*value)
+        result = super(type,self).__set__(*value)
         result.length = len(self)
         return self
 
@@ -918,7 +915,7 @@ if __name__ == '__main__':
 
         a = argh(source=provider.empty())
         a.set([x for x in range(69)])
-        if len(a) == 69 and sum(x.num() for x in a) == 2346:
+        if len(a) == 69 and sum(x.int() for x in a) == 2346:
             raise Success
 
     @TestCase
@@ -929,7 +926,7 @@ if __name__ == '__main__':
 
         a = argh(source=provider.empty(), length=69)
         a.a.set([42 for _ in range(69)])
-        if sum(x.num() for x in a) == 2898:
+        if sum(x.int() for x in a) == 2898:
             raise Success
 
     @TestCase
@@ -938,7 +935,7 @@ if __name__ == '__main__':
         class argh(parray.type):
             _object_ = pint.int32_t
         a = argh(length=4).alloc(((0,0x77777777),(3,-1)))
-        if a[0].num() == 0x77777777 and a[-1].num() == -1:
+        if a[0].int() == 0x77777777 and a[-1].int() == -1:
             raise Success
 
     @TestCase
@@ -947,7 +944,7 @@ if __name__ == '__main__':
         class argh(parray.type):
             _object_ = pint.int32_t
         a = argh(length=4).alloc((0,2,4))
-        if tuple(s.num() for s in a) == (0,2,4,0):
+        if tuple(s.int() for s in a) == (0,2,4,0):
             raise Success
 
     @TestCase
@@ -969,7 +966,7 @@ if __name__ == '__main__':
         import pint
         a = parray.type(_object_=pint.uint32_t,length=4).a
         a.set((10,10,10,10))
-        if sum(x.num() for x in a) == 40:
+        if sum(x.int() for x in a) == 40:
             raise Success
 
     @TestCase
@@ -995,7 +992,7 @@ if __name__ == '__main__':
         b = ptype.clone(parray.type,_object_=pint.uint8_t,length=4)
         a = parray.type(_object_=pint.uint8_t,length=4).a
         a.set(tuple(pint.uint32_t().set(0x40) for x in range(4)))
-        if sum(x.num() for x in a) == 256:
+        if sum(x.int() for x in a) == 256:
             raise Success
 
     @TestCase
@@ -1033,7 +1030,7 @@ if __name__ == '__main__':
             length = 4
         a = blah()
         a.set((pint.uint8_t().set(2),pint.uint8_t().set(2),pint.uint8_t().set(2),pint.uint8_t().set(2)))
-        if sum(x.num() for x in a) == 8:
+        if sum(x.int() for x in a) == 8:
             raise Success
 
     @TestCase
@@ -1043,7 +1040,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
             length = 4
         a = blah().alloc((4,8,0xc,0x10))
-        if all(x.size() == 4 for x in a) and tuple(x.num() for x in a) == (4,8,12,16):
+        if all(x.size() == 4 for x in a) and tuple(x.int() for x in a) == (4,8,12,16):
             raise Success
 
     @TestCase
@@ -1063,7 +1060,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
             length = 4
         a = blah().alloc([pint.uint8_t().set(i) for i in range(4)])
-        if all(x.size() == 1 for x in a) and sum(x.num() for x in a) == 6:
+        if all(x.size() == 1 for x in a) and sum(x.int() for x in a) == 6:
             raise Success
 
     @TestCase
@@ -1092,7 +1089,7 @@ if __name__ == '__main__':
         class blah(parray.terminated):
             _object_ = pint.uint32_t
             def isTerminator(self, value):
-                return value.num() == 1
+                return value.int() == 1
         a = blah().a
         a.value.extend(map(a.new, (pint.uint32_t,)*2))
         a.a
@@ -1106,7 +1103,7 @@ if __name__ == '__main__':
             class _object_(parray.terminated):
                 _object_ = pint.uint32_t
                 def isTerminator(self, value):
-                    return value.num() == 1
+                    return value.int() == 1
         a = blah().a
         if a.initializedQ() and a.serialize() == '':
             raise Success

@@ -13,7 +13,7 @@ class u_long(pint.uint32_t): pass
 class in_addr(u_long):
     def summary(self):
         num = bitmap.new(super(in_addr,self).num(), 32)
-        octets = bitmap.split(num, 8)
+        octets = bitmap.split(num, 8)[::-1]
         return '0x{:x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.number,[num]+octets))
 
 @layer.define

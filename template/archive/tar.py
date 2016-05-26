@@ -16,12 +16,7 @@ class stringinteger(pstr.string):
         try: res = long(res)
         except ValueError: res = 0
         return res
-    def __int__(self):
-        return self.int()
-    def __long__(self):
-        return self.long()
-    def num(self):
-        return self.int()
+    __int__ = num = number = int
     def set(self, integer):
         n = str(integer)
         prefix = '0'*(self.length-1 - len(n))

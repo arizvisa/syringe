@@ -81,17 +81,17 @@ class _char_t(pint.integer_t):
         res = __builtin__.unicode('\x00', 'ascii').encode(self.encoding.name)
         self.length = len(res)
 
-    def set(self, value):
+    def __set__(self, value):
         '''Set the _char_t to the str ``value``.'''
         if isinstance(value, __builtin__.str):
             try: value = __builtin__.unicode(value, 'ascii')
-            except UnicodeDecodeError: return super(pint.integer_t,self).set(str(value))
+            except UnicodeDecodeError: return super(pint.integer_t,self).__set__(str(value))
         elif isinstance(value, __builtin__.unicode):
             value = value
         else:
             raise ValueError, (self, '_char_t.set', 'User tried to set a value of an incorrect type : %s', value.__class__)
         res = value.encode(self.encoding.name)
-        return super(pint.integer_t,self).set(res)
+        return super(pint.integer_t,self).__set__(res)
 
     def str(self):
         '''Try to decode the _char_t to a character.'''
@@ -102,7 +102,7 @@ class _char_t(pint.integer_t):
             raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
         return res
 
-    def get(self):
+    def __get__(self):
         '''Decode the _char_t to a character replacing any invalid characters if they don't decode.'''
         data = self.serialize()
         try:
@@ -195,7 +195,7 @@ class string(ptype.type):
 
     def __delitem__(self, index):
         '''Remove the character at the specified ``index``.'''
-        if index.__class__ is slice:
+        if isinstance(index, slice):
             raise error.ImplementationError(self, 'string.__delitem__', message='slice support not implemented')
         self.__delete(index)
 
@@ -204,7 +204,7 @@ class string(ptype.type):
         res = self.cast(dynamic.array(self._object_, len(self)))
 
         # handle a slice of glyphs
-        if index.__class__ is slice:
+        if isinstance(index, slice):
             result = [res.value[_] for _ in xrange(*index.indices(len(res)))]
 
             # ..and now turn the slice into an array
@@ -225,26 +225,26 @@ class string(ptype.type):
         res = self.cast(dynamic.array(self._object_, len(self)))
 
         # handle a slice of glyphs
-        if index.__class__ is slice:
+        if isinstance(index, slice):
             indices = xrange(*index.indices(len(res)))
-            [ res[index].set(glyph) for glyph,index in map(None,value,indices) ]
+            [ res[index].__set__(glyph) for glyph,index in map(None,value,indices) ]
 
         # handle a single glyph
         else:
-            res[index].set(value)
+            res[index].__set__(value)
 
         # now we can re-load ourselves from it
         return self.load(offset=0, source=provider.proxy(res))
 
     def insert(self, index, object):
         '''Insert the character ``object`` into the string at index ``index`` of the string.'''
-        if object.__class__ is not self._object_:
+        if not isinstance(object, self._object_):
             raise error.TypeError(self, 'string.insert', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
         self.__insert(index, value.serialize())
 
     def append(self, object):
         '''Append the character ``object`` to the string.'''
-        if object.__class__ is not self._object_:
+        if not isinstance(object, self._object_):
             raise error.TypeError(self, 'string.append', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
         self.value += object.serialize()
 
@@ -254,13 +254,13 @@ class string(ptype.type):
             self.append(x)
         return
 
-    def set(self, value):
+    def __set__(self, value):
         '''Replaces the contents of ``self`` with the string ``value``.'''
         size,glyphs = self.blocksize(),[x for x in value]
         t = dynamic.array(self._object_, len(glyphs))
         result = t(blocksize=lambda:size)
         for element,glyph in zip(result.alloc(), value):
-            element.set(glyph)
+            element.__set__(glyph)
         if len(value) > self.blocksize() / self._object_().a.size():
             Log.warn('%s.set : %s : User attempted to set a value larger than the specified type. String was truncated to %d characters. : %d > %d'% (self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
         return self.load(offset=0, source=provider.proxy(result))
@@ -275,7 +275,7 @@ class string(ptype.type):
             raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, t._object_.encoding.name))
         return utils.strdup(res)
 
-    def get(self):
+    def __get__(self):
         '''Try and decode the string into the specified encoding type.'''
         t = dynamic.array(self._object_, len(self))
         data = self.cast(t).serialize()
@@ -291,10 +291,10 @@ class string(ptype.type):
             sz = self._object_().blocksize()
             self.source.seek(self.getoffset())
             block = self.source.consume( self.blocksize() )
-            result = self.deserialize_block(block)
+            result = self.__deserialize_block__(block)
         return result
 
-    def deserialize_block(self, block):
+    def __deserialize_block__(self, block):
         if len(block) != self.blocksize():
             raise error.LoadError(self, len(block))
         self.value = block
@@ -325,9 +325,9 @@ class szstring(string):
     _object_ = char_t
     length = None
     def isTerminator(self, value):
-        return value.num() == 0
+        return value.int() == 0
 
-    def set(self, value):
+    def __set__(self, value):
         """Set the null-terminated string to ``value``.
 
         Resizes the string according to the length of ``value``.
@@ -340,20 +340,20 @@ class szstring(string):
         t = dynamic.array(self._object_, len(value))
         result = t()
         for glyph,element in zip(value, result.alloc()):
-            element.set(glyph)
+            element.__set__(glyph)
         return self.load(offset=0, source=provider.proxy(result))
 
-    def deserialize_block(self, block):
-        return self.deserialize_stream(iter(block))
+    def __deserialize_block__(self, block):
+        return self.__deserialize_stream__(iter(block))
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             self.source.seek(self.getoffset())
             producer = (self.source.consume(1) for _ in itertools.count())
-            result = self.deserialize_stream(producer)
+            result = self.__deserialize_stream__(producer)
         return result
 
-    def deserialize_stream(self, stream):
+    def __deserialize_stream__(self, stream):
         ofs = self.getoffset()
         obj = self.new(self._object_, offset=ofs)
         size = obj.blocksize()
@@ -363,7 +363,7 @@ class szstring(string):
         self.value = ''
         while True:
             obj.setoffset(ofs)
-            obj.deserialize_block(getchar())
+            obj.__deserialize_block__(getchar())
             self.value += obj.serialize()
             if self.isTerminator(obj):
                 break
@@ -526,7 +526,7 @@ if __name__ == '__main__':
     def test_str_szstring_customterm():
         class fuq(pstr.szstring):
             def isTerminator(self, value):
-                return value.num() == 0x3f
+                return value.int() == 0x3f
 
         s = provider.string('hello world\x3f..................')
         a = fuq(source=s)
@@ -543,7 +543,7 @@ if __name__ == '__main__':
                 (pint.uint16_t, 'unknown'),
                 (pint.uint32_t, 'skipped'),
                 (pint.uint16_t, 'sheetname_length'),
-                (lambda s: dyn.clone(pstr.wstring, length=s['sheetname_length'].li.num()), 'sheetname'),
+                (lambda s: dyn.clone(pstr.wstring, length=s['sheetname_length'].li.int()), 'sheetname'),
             ]
         s = ptypes.prov.string('85001400e511000000000600530068006500650074003100'.decode('hex')[4:])
         a = record0085(source=s)

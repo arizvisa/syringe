@@ -1,4 +1,4 @@
-import os,sys,math
+import os,sys,math,six
 __all__ = 'defaults,byteorder'.split(',')
 class field:
     class descriptor(object):
@@ -183,8 +183,14 @@ def configuration(cls):
 @namespace
 class byteorder:
     '''Byte order constants'''
-    bigendian = field.option('bigendian', 'Big-endian')
-    littleendian = field.option('littleendian', 'Little-endian')
+    bigendian = field.option('bigendian', 'Specify big-endian ordering')
+    littleendian = field.option('littleendian', 'Specify little-endian ordering')
+
+@namespace
+class partial:
+    fractional = field.option('fractional', 'Display the offset as a fraction of the full bit (0.0, 0.125, 0.25, ..., 0.875)')
+    hex = field.option('hexadecimal', 'Display the partial-offset in hexadecimal (0.0, 0.2, 0.4, ..., 0.c, 0.e)')
+    bit = field.option('bit', 'Display just the bit number (0.0, 0.1, 0.2, ..., 0.7)')
 
 ### new-config
 import logging
@@ -193,21 +199,21 @@ class defaults:
     log = field.type('default-logger', logging.Filterer, 'Default place to log progress')
 
     class integer:
-        size = field.type('integersize', (int,long), 'The word-size of the architecture')
+        size = field.type('integersize', six.integer_types, 'The word-size of the architecture')
         order = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
 
     class ptype:
-        clone_name = field.type('clone_name', str, 'This will only affect newly cloned types')
+        clone_name = field.type('clone_name', basestring, 'This will only affect newly cloned types')
         noncontiguous = field.bool('noncontiguous', 'Disable optimization for loading ptype.container elements contiguously. Enabling this allows there to be \'holes\' within a list of elements in a container and disables an important optimization.')
 
     class pint:
-        bigendian_name = field.type('bigendian_name', str, 'Modifies the name of any integers that are big-endian')
-        littleendian_name = field.type('littleendian_name', str, 'Modifies the name of any integers that are little-endian')
+        bigendian_name = field.type('bigendian_name', basestring, 'Modifies the name of any integers that are big-endian')
+        littleendian_name = field.type('littleendian_name', basestring, 'Modifies the name of any integers that are little-endian')
 
     class parray:
         break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')
         break_on_max_count = field.bool('break_on_max_count', 'If a dynamically created array is larger than max_count, then fail it\'s creation. If not, then issue a warning.')
-        max_count = field.type('max_count', int, 'If max_count is larger than 0, then notify via a warning or an exception based on the value of \'break_on_max_count\'')
+        max_count = field.type('max_count', six.integer_types, 'If max_count is larger than 0, then notify via a warning or an exception based on the value of \'break_on_max_count\'')
 
     class pstruct:
         use_offset_on_duplicate = field.bool('use_offset_on_duplicate', 'If more than one field has the same name, then suffix the field by it\'s offset. Otherwise use the field\'s index.')
@@ -219,23 +225,22 @@ class defaults:
 
         class hexdump:
             '''Formatting for a hexdump'''
-            width = field.type('width', int)
-            threshold = field.type('threshold', int)
+            width = field.type('width', six.integer_types)
+            threshold = field.type('threshold', six.integer_types)
 
         class threshold:
             '''Width and Row thresholds for displaying summaries'''
-            summary = field.type('summary_threshold', int)
-            summary_message = field.type('summary_threshold_message', str)
-            details = field.type('details_threshold', int)
-            details_message = field.type('details_threshold_message', str)
+            summary = field.type('summary_threshold', six.integer_types)
+            summary_message = field.type('summary_threshold_message', basestring)
+            details = field.type('details_threshold', six.integer_types)
+            details_message = field.type('details_threshold_message', basestring)
 
-        class partial:
-            '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
-            hex = field.bool('hex_offset', 'display the partial-offset in hexadecimal (0.0-0.9,0.a-0.f)')
-            fractional = field.bool('fractional_offset', 'display the offset as a fraction of a full bit, otherwise display just the bit number (0.0-0.7)')
+    class pbinary:
+        '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
+        offset = field.enum('offset', (partial.bit,partial.fractional,partial.hex), 'which format to display the sub-offset for binary types')
 
-            bigendian_name = field.type('bigendian_name', str, 'format specifier defining an element that is read most-significant to least-significant')
-            littleendian_name = field.type('littleendian_name', str, 'format specifier defining an element that is read least-significant to most-significant')
+        bigendian_name = field.type('bigendian_name', basestring, 'format specifier defining an element that is read most-significant to least-significant')
+        littleendian_name = field.type('littleendian_name', basestring, 'format specifier defining an element that is read least-significant to most-significant')
 
     def __getsource():
         global ptype
@@ -273,10 +278,6 @@ defaults.display.threshold.summary = 80
 defaults.display.threshold.details = 8
 defaults.display.threshold.summary_message = ' ..skipped ~{leftover} bytes.. '
 defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipped} bytes.. '
-defaults.display.partial.hex = True
-defaults.display.partial.fractional = False
-defaults.display.partial.bigendian_name = 'pb({})'
-defaults.display.partial.littleendian_name = 'pble({})'
 defaults.display.mangle_with_attributes = False
 
 # array types
@@ -297,6 +298,11 @@ defaults.ptype.clone_name = 'c({})'
 # integer types
 defaults.pint.bigendian_name = 'be({})' if sys.byteorder.startswith('little') else '{}'
 defaults.pint.littleendian_name = 'le({})' if sys.byteorder.startswith('big') else '{}'
+
+# pbinary types
+defaults.pbinary.offset = partial.hex
+defaults.pbinary.bigendian_name = 'pb({})'
+defaults.pbinary.littleendian_name = 'pble({})'
 
 if __name__ == '__main__':
     @namespace
@@ -319,11 +325,11 @@ if __name__ == '__main__':
     @configuration
     class config(object):
         byteorder = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
-        integersize = field.type('integersize', (int,long), 'The word-size of the architecture')
+        integersize = field.type('integersize', six.integer_types, 'The word-size of the architecture')
 
         class display:
-            summary = field.type('single-line', int)
-            details = field.type('multi-line', int)
+            summary = field.type('single-line', six.integer_types)
+            details = field.type('multi-line', six.integer_types)
             show_module = field.bool('show-module-name')
 
         def __getlogger():

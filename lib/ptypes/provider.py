@@ -1002,12 +1002,16 @@ try:
             res,self.address = self.address, offset
             return res
         def consume(self, amount):
-            process,err = self.__process, self.module.SBError()
-            data = process.ReadMemory(self.address, amount, err)
-            if err.Fail() or len(data) != amount:
+            if amount < 0:
                 raise error.ConsumeError(self, self.address, amount)
-            self.address += len(data)
-            return bytes(data)
+            process,err = self.__process, self.module.SBError()
+            if amount > 0:
+                data = process.ReadMemory(self.address, amount, err)
+                if err.Fail() or len(data) != amount:
+                    raise error.ConsumeError(self, self.address, amount)
+                self.address += len(data)
+                return bytes(data)
+            return ''
         def store(self, data):
             process,err = self.__process, self.module.SBError()
             amount = process.WriteMemory(self.address, bytes(data), err)
@@ -1344,7 +1348,7 @@ if __name__ == '__main__':
 
         source = t1().set((0x41,)*4 + (0x42,)*4 + (0x43,)*(4*0xe))
         res = t2(source=provider.proxy(source)).l
-        if res[0].num() == 0x41414141 and res[1].num() == 0x42424242 and res[2].num() == 0x43434343:
+        if res[0].int() == 0x41414141 and res[1].int() == 0x42424242 and res[2].int() == 0x43434343:
             raise Success
         raise Failure
 

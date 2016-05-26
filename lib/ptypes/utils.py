@@ -23,11 +23,11 @@ class assign(object):
     def __enter__(self):
         objects,attrs = self.objects,self.attributes
         self.states = tuple( dict((k,getattr(o,k)) for k in attrs.keys()) for o in objects)
-        [o.update_attributes(attrs) for o in objects]
+        [o.__update__(attrs) for o in objects]
         return objects
 
     def __exit__(self, exc_type, exc_value, traceback):
-        [o.update_attributes(a) for o,a in zip(self.objects,self.states)]
+        [o.__update__(a) for o,a in zip(self.objects,self.states)]
         return
 
 ## ptype padding types
@@ -108,7 +108,7 @@ def repr_position(pos, hex=True, precision=0):
         ofs, = pos
         return '{:x}'.format(ofs)
     ofs,bofs = pos
-    if precision > 0:
+    if precision > 0 or hex:
         partial = bofs / 8.0
         if hex:
             return '{:x}.{:x}'.format(ofs,math.trunc(partial*0x10))
@@ -282,7 +282,7 @@ def memoize(*kargs,**kattrs):
         argnames = itertools.islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs
-        c_var = (varnames.next() if flags & F_VARARG else None, varnames.next() if flags & F_VARKWD else None)
+        c_var = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
         if not kargs and not kattrs:
             kargs[:] = itertools.chain(c_positional,filter(None,c_var))
         def key(*args, **kwds):

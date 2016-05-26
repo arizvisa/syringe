@@ -22,8 +22,6 @@ required to provide a mapping-type interface.
             '''Remove the alias ``name``.'''
         def append(self, object):
             '''Append ``object`` to structure keyed by /object.shortname()/'''
-        def getindex(self, name):
-            '''Return the index into /self.value/ identified by the key ``name``'''
 
 Example usage:
     # define a type
@@ -61,7 +59,7 @@ class _pstruct_generic(ptype.container):
 
     def alias(self, alias, target):
         """Add an alias from /alias/ to the field /target/"""
-        res = self.getindex(target)
+        res = self.__getindex__(target)
         self.__fastindex[alias.lower()] = res
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
@@ -76,9 +74,9 @@ class _pstruct_generic(ptype.container):
         self.__fastindex[name.lower()] = current
         return current
 
-    def getindex(self, name):
+    def __getindex__(self, name):
         if not isinstance(name, basestring):
-            raise error.UserError(self, '_pstruct_generic.getindex', message='Element names must be of a str type.')
+            raise error.UserError(self, '_pstruct_generic.__getindex__', message='Element names must be of a str type.')
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
@@ -125,12 +123,12 @@ class _pstruct_generic(ptype.container):
         return
 
     def __getitem__(self, name):
-        if name.__class__ is not str:
+        if not isinstance(name, basestring):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
         return super(_pstruct_generic, self).__getitem__(name)
 
     def __setitem__(self, name, value):
-        index = self.getindex(name)
+        index = self.__getindex__(name)
         result = super(_pstruct_generic, self).__setitem__(index, value)
         result.__name__ = name
         return result
@@ -185,7 +183,7 @@ class type(_pstruct_generic):
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=n)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].__set__(v)
                 continue
             self.setoffset(self.getoffset(), recurse=True)
         return result
@@ -258,25 +256,25 @@ class type(_pstruct_generic):
             return '\n'.join(result)
         return '[%x] Empty []'%self.getoffset()
 
-    def set(self, value=(), **individual):
+    def __set__(self, value=(), **individual):
         result = self
         if result.initializedQ():
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'type.set', message='iterable value to assign with is not of the same length as struct')
-                result = super(type,result).set(*value)
+                result = super(type,result).__set__(*value)
             for k,v in individual.iteritems():
-                idx = self.getindex(k)
+                idx = self.__getindex__(k)
                 if ptype.isresolveable(v) or ptype.istype(v):
                     result.value[idx] = self.new(v, __name__=k).a
                 elif isinstance(v,ptype.generic):
                     result.value[idx] = self.new(v, __name__=k)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].__set__(v)
                 continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
-        return result.a.set(value, **individual)
+        return result.a.__set__(value, **individual)
 
     def __getstate__(self):
         return super(type,self).__getstate__(),self._fields_,
@@ -453,7 +451,7 @@ if __name__ == '__main__':
 
         a = st(source=provider.empty())
         a.set((5, (10,)))
-        if a['b']['b'].num() == 10:
+        if a['b']['b'].int() == 10:
             raise Success
 
     @TestCase
@@ -462,7 +460,7 @@ if __name__ == '__main__':
         class st(pstruct.type):
             _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
         a = st().alloc(a=0xdead,b=0x0d0e0a0d)
-        if a['a'].num() == 0xdead and a['b'].num() == 0x0d0e0a0d:
+        if a['a'].int() == 0xdead and a['b'].int() == 0x0d0e0a0d:
             raise Success
 
     @TestCase
@@ -471,7 +469,7 @@ if __name__ == '__main__':
         class st(pstruct.type):
             _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
         a = st().alloc(a=pint.uint32_t().set(0x0d0e0a0d),b=0x0d0e0a0d)
-        if a['a'].num() == 0x0d0e0a0d and a['b'].num() == 0x0d0e0a0d:
+        if a['a'].int() == 0x0d0e0a0d and a['b'].int() == 0x0d0e0a0d:
             raise Success
 
     @TestCase
@@ -479,13 +477,13 @@ if __name__ == '__main__':
         import pint
         class st(pstruct.type):
             def __b(self):
-                return ptype.clone(pint.int_t, length=self['a'].li.num())
+                return ptype.clone(pint.int_t, length=self['a'].li.int())
             _fields_ = [
                 (pint.int8_t, 'a'),
                 (__b, 'b'),
             ]
         a = st().alloc(a=3)
-        if a['b'].size() == a['a'].num():
+        if a['b'].size() == a['a'].int():
             raise Success
 
     @TestCase
@@ -493,22 +491,22 @@ if __name__ == '__main__':
         import pint
         class st(pstruct.type):
             def __b(self):
-                return ptype.clone(pint.int_t, length=self['a'].li.num())
+                return ptype.clone(pint.int_t, length=self['a'].li.int())
             _fields_ = [
                 (pint.int_t, 'a'),
                 (__b, 'b'),
             ]
         a = st().alloc(a=pint.int32_t().set(4))
-        if a['b'].size() == a['a'].num():
+        if a['b'].size() == a['a'].int():
             raise Success
 
     @TestCase
     def test_structure_alloc_container_dynamic_instance():
         import pint
-        class st1(pstruct.type): _fields_=[(pint.int8_t,'a'),(lambda s: ptype.clone(pint.int_t,length=s['a'].li.num()), 'b')]
+        class st1(pstruct.type): _fields_=[(pint.int8_t,'a'),(lambda s: ptype.clone(pint.int_t,length=s['a'].li.int()), 'b')]
         class st2(pstruct.type):
             def __b(self):
-                if self['a'].li.num() == 2:
+                if self['a'].li.int() == 2:
                     return st1
                 return ptype.undefined
             _fields_ = [
@@ -517,7 +515,7 @@ if __name__ == '__main__':
             ]
 
         a = st2().alloc(b=st1().alloc(a=2))
-        if a['b']['a'].num() == a['b']['b'].size():
+        if a['b']['a'].int() == a['b']['b'].size():
             raise Success
 
     @TestCase
@@ -528,7 +526,7 @@ if __name__ == '__main__':
                 (pint.int32_t, 'a'),
             ]
         a = st().a.set(a=20)
-        if a['a'].num() == 20:
+        if a['a'].int() == 20:
             raise Success
 
     @TestCase
@@ -550,7 +548,7 @@ if __name__ == '__main__':
                 (pint.int_t, 'a'),
             ]
         a = st().a.set(a=pint.uint32_t().set(20))
-        if a['a'].size() == 4 and a['a'].num() == 20:
+        if a['a'].size() == 4 and a['a'].int() == 20:
             raise Success
 
     @TestCase
@@ -575,7 +573,7 @@ if __name__ == '__main__':
                 (ptype.undefined, 'b'),
             ]
         a = st2().set(a=5)
-        if a['a'].num() == 5:
+        if a['a'].int() == 5:
             raise Success
 
 if __name__ == '__main__':

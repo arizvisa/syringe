@@ -177,7 +177,7 @@ class float_t(type):
         sf = 1 if s < 0 else 0
         exponent = e + exponentbias - 1
         m = m*2.0 - 1.0     # remove the implicit bit
-        mantissa = long(m * (2**self.components[2]))
+        mantissa = int(m * (2**self.components[2]))
 
         # store components
         result = bitmap.zero
@@ -185,12 +185,12 @@ class float_t(type):
         result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
         result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
 
-        return super(type, self).set( result[0] )
+        return self.__set__( result[0] )
 
     def getf(self):
         """convert the stored floating-point number into a python native float"""
         exponentbias = (2**self.components[1])/2 - 1
-        res = bitmap.new( self.num(), sum(self.components) )
+        res = bitmap.new( self.__get__(), sum(self.components) )
 
         # extract components
         res,sign = bitmap.shift(res, self.components[0])
@@ -224,7 +224,7 @@ class sfixed_t(type):
         mask = 2**(8*self.length) - 1
         intm = 2**(8*self.length - self.sign) - 1
         shift = 2**self.fractional
-        n = self.num()
+        n = self.__get__()
         #return float(n & intm) / shift * (-1 if n & (mask ^ intm) else +1)
         if n & (mask ^ intm):
             return float((n & intm) - (mask&intm+1)) / shift
@@ -243,7 +243,7 @@ class sfixed_t(type):
         #integral |= (mask ^ intm)
 
         n = integral + math.trunc(fraction*shift)
-        return super(type, self).set(n)
+        return self.__set__(n)
 
 class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.
@@ -337,11 +337,11 @@ if __name__ == '__main__':
 
         a = cls()
         a.setf(float)
-        n = a.long()
+        n = a.int()
 
         if n == expected:
             raise Success
-        raise Failure, 'setf: %s == 0x%x? %s (0x%x) %s'%(float, expected, result, n, f)
+        raise Failure, 'setf: %s == 0x%x? %s (0x%x) %s'%(float, expected, a.num(), n, f)
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -354,12 +354,12 @@ if __name__ == '__main__':
             i = 0
 
         a = cls()
-        super(type, a).set(integer)
+        super(type,a).set(integer)
         n = a.getf()
 
         if n == expected:
             raise Success
-        raise Failure, 'getf: 0x%x == %s? %s (%s) %x'%( integer, expected, result, n, i)
+        raise Failure, 'getf: 0x%x == %s? %s (%s) %x'%( integer, expected, a.num(), n, i)
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):

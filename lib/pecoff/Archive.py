@@ -10,14 +10,9 @@ class ulong(bigendian(uint32_t)): pass
 class stringinteger(pstr.string):
     def int(self):
         return int(self.str())
-    def long(self):
-        return long(self.str())
+    num = number = int
     def __int__(self):
         return self.int()
-    def __long__(self):
-        return self.long()
-    def num(self):
-        return int(self.str())
 
 class Index(uint16_t):
     def getIndex(self):

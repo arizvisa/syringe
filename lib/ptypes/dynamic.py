@@ -68,7 +68,7 @@ Example usage:
     type = dyn.rpointer(pstr.szstring, object=lambda s: s.getparent(parray.type))
 
 # create a pointer to a uint32 relative to the current pointer's value + 0x100
-    type = dyn.opointer(pint.uint32_t, calculate=lambda s: s.num() + 0x100)
+    type = dyn.opointer(pint.uint32_t, calculate=lambda s: s.int() + 0x100)
 
 # create a union type backed by an array of 4 uint32 types
     from ptypes import dynamic,pint,pstr
@@ -80,7 +80,7 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-
+import six
 from . import ptype,parray,pstruct,config,error,utils,provider
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -89,7 +89,7 @@ __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.s
 ## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
     """Returns a ptype.block type with the specified ``size``"""
-    if size.__class__ not in (int,long):
+    if not isinstance(size, six.integer_types):
         t = ptype.block(length=size)
         raise error.UserError(t, 'block', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
 
@@ -107,7 +107,7 @@ def block(size, **kwds):
 
 def blockarray(type, size, **kwds):
     """Returns a parray.block with the specified ``size`` and ``type``"""
-    if size.__class__ not in (int,long):
+    if not isinstance(size, six.integer_types):
         t = parray.block(_object_=type)
         raise error.UserError(t, 'blockarray', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
 
@@ -131,7 +131,7 @@ def blockarray(type, size, **kwds):
 
 def align(size, **kwds):
     '''return a block that will align a structure to a multiple of the specified number of bytes'''
-    if size.__class__ not in (int,long):
+    if not isinstance(size, six.integer_types):
         t = ptype.type(length=0)
         raise error.UserError(t, 'align', message='Argument size must be integral : %s -> %s'% (size.__class__, repr(size)))
 
@@ -168,7 +168,7 @@ def array(type, count, **kwds):
     returns an array of the specified length containing elements of the specified type
     '''
     count = int(count)
-    if count.__class__ not in (int,long):
+    if not isinstance(count, six.integer_types):
         t = parray.type(_object_=type,length=count)
         raise error.UserError(t, 'array', message='Argument count must be integral : %s -> %s'% (count.__class__, repr(count)))
 
@@ -227,11 +227,11 @@ class _union_generic(ptype.container):
     def items(self):
         return [(k,v) for (_,k),v in zip(self._fields_,self.object)]
 
-    def getindex(self, name):
+    def __getindex__(self, name):
         return self.__fastindex[name.lower()]
 
     def __getitem__(self, name):
-        index = self.getindex(name)
+        index = self.__getindex__(name)
         return self.object[index]
 
 class union(_union_generic):
@@ -309,8 +309,8 @@ class union(_union_generic):
         _ = self.value.load()
         return self
 
-    def deserialize_block(self, block):
-        _ = self.value.deserialize_block(block)
+    def __deserialize_block__(self, block):
+        _ = self.value.__deserialize_block__(block)
         return self
 
     def properties(self):
@@ -524,7 +524,7 @@ if __name__ == '__main__':
         i = range(0x40,0x40+v.length)
         x = ptype.provider.string(''.join(chr(x)+'\x00\x00\x00' for x in i))
         z = v(source=x).l
-        if z[4].num() == 0x44:
+        if z[4].int() == 0x44:
             raise Success
 
     @TestCase
