@@ -210,14 +210,14 @@ class type(ptype.generic):
         return bitmap.size(self.value)
     def blockbits(self):
         return self.bits()
-    def __get__(self):
+    def __getvalue__(self):
         return self.value
-    def __set__(self, value):
+    def __setvalue__(self, value):
         if bitmap.isbitmap(value):
             self.value = value
             return self
         if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'type.__set__', message='tried to call .__set__ with an unknown type %s'%value.__class__)
+            raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type %s'%value.__class__)
         _,size = self.value or (0,0)
         self.value = value,size
         return self
@@ -242,7 +242,7 @@ class type(ptype.generic):
 
     def __deserialize_consumer__(self, consumer):
         try:
-            self.__set__(consumer.consume(self.blockbits()))
+            self.__setvalue__(consumer.consume(self.blockbits()))
         except StopIteration, error:
             raise error
         return self
@@ -342,20 +342,22 @@ class container(type):
     def blocksize(self):
         return (self.blockbits()+7) // 8
 
-    def __set__(self, value):
+    def __getvalue__(self):
+        return tuple(self.value)
+    def __setvalue__(self, value):
         if not isinstance(value, six.integer_types):
             raise error.UserError(self, 'container.set', message='tried to call .set with an unknown type %s'%value.__class__)
         _,size = self.bitmap()
         result = value,size
         for element in self.value:
             result,number = bitmap.shift(result, element.bits())
-            element.__set__(number)
+            element.__setvalue__(number)
         return self
 
     def update(self, value):
         if bitmap.size(value) != self.blockbits():
             raise error.UserError(self, 'container.update', message='not allowed to change size of container')
-        return self.__set__(bitmap.value(value))
+        return self.__setvalue__(bitmap.value(value))
 
     # loading
     def __deserialize_consumer__(self, consumer, generator):
@@ -464,7 +466,7 @@ class container(type):
             raise error.UserError(self, 'container.__setitem__', message='tried to assign to index %d with an unknown type %s'%(index,value.__class__))
 
         # update a pbinary.type with the provided value clamped
-        return res.__set__(value & ((2**res.bits())-1))
+        return res.__setvalue__(value & ((2**res.bits())-1))
 
 ### generics
 class _array_generic(container):
@@ -699,9 +701,9 @@ class array(_array_generic):
                 elif isinstance(v,type):
                     result.value[idx] = result.new(v, __name__=k)
                 elif isbitmap(v):
-                    result.value[idx] = result.new(type, __name__=k).__set__(v)
+                    result.value[idx] = result.new(type, __name__=k).__setvalue__(v)
                 else:
-                    result.value[idx].__set__(v)
+                    result.value[idx].__setvalue__(v)
                 continue
             return result
         for idx,v in enumerate(fields):
@@ -709,13 +711,13 @@ class array(_array_generic):
             if istype(v) or ptype.isresolveable(v) or isinstance(v,type):
                 result.value[idx] = result.new(v, __name__=str(idx))
             elif bitmap.isbitmap(v):
-                result.value[idx] = result.new(type, __name__=str(idx)).__set__(v)
+                result.value[idx] = result.new(type, __name__=str(idx)).__setvalue__(v)
             else:
-                result.value[idx].__set__(v)
+                result.value[idx].__setvalue__(v)
             continue
         return result
 
-    def __set__(self, value):
+    def __setvalue__(self, value):
         if self.initializedQ():
             iterable = iter(value) if isinstance(value,(tuple,list)) and len(value) > 0 and isinstance(value[0], tuple) else iter(enumerate(value))
             for idx,val in enumerate(value):
@@ -734,7 +736,7 @@ class array(_array_generic):
             elif isinstance(val,type):
                 res = self.new(val, __name__=str(idx))
             else:
-                res = self.new(self._object_,__name__=str(idx)).a.__set__(val)
+                res = self.new(self._object_,__name__=str(idx)).a.__setvalue__(val)
             self.value.append(res)
         self.length = len(self.value)
         return self
@@ -791,9 +793,9 @@ class struct(_struct_generic):
                 elif isinstance(v,type):
                     result.value[idx] = result.new(v, __name__=n)
                 elif bitmap.isbitmap(v):
-                    result.value[idx] = result.new(type, __name__=n).__set__(v)
+                    result.value[idx] = result.new(type, __name__=n).__setvalue__(v)
                 else:
-                    result.value[idx].__set__(v)
+                    result.value[idx].__setvalue__(v)
                 continue
             self.setposition(self.getposition(), recurse=True)
         return result
@@ -813,7 +815,7 @@ class struct(_struct_generic):
         '''Returns the specified /field/'''
         return self[field]
 
-    def __set__(self, value=(), **individual):
+    def __setvalue__(self, value=(), **individual):
         result = self
 
         def assign((index, value)):
@@ -824,7 +826,7 @@ class struct(_struct_generic):
                 k = result.value[index].__name__
                 result.value[index] = result.new(value, __name__=k)
             else:
-                result.value[index].__set__(value)
+                result.value[index].__setvalue__(value)
             return
 
         if result.initializedQ():
@@ -835,7 +837,7 @@ class struct(_struct_generic):
             map(assign, ((self.__getindex__(k),v) for k,v in individual.iteritems()) )
             result.setposition(result.getposition(), recurse=True)
             return result
-        return result.a.__set__(value, **individual)
+        return result.a.__setvalue__(value, **individual)
 
     #def __getstate__(self):
     #    return super(struct,self).__getstate__(),self._fields_,
@@ -1140,13 +1142,13 @@ class partial(ptype.container):
     def repr(self, **options):
         return '???' if not self.initializedQ() else self.value[0].repr(**options)
 
-    def __get__(self):
+    def __getvalue__(self):
         res, = self.value
-        return res.__get__()
+        return res.get()
 
-    def __set__(self, *args, **kwds):
+    def __setvalue__(self, *args, **kwds):
         res, = self.value
-        return res.__set__(*args, **kwds)
+        return res.set(*args, **kwds)
 
     #def __getstate__(self):
     #    return super(partial,self).__getstate__(),self._object_,self.position,self.byteorder,

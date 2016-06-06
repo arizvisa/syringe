@@ -731,14 +731,14 @@ class generic(_base_generic):
 
         This value should be able to be passed to .set
         """
-        return self.__get__()
+        return self.__getvalue__()
 
     def set(self, *args, **kwds):
         """Set value of type to ``value``.
 
         Should be the same value as returned by .get
         """
-        return self.__set__(*args, **kwds)
+        return self.__setvalue__(*args, **kwds)
 
     def copy(self):
         """Return a new instance of self"""
@@ -1001,7 +1001,7 @@ class type(base):
         return result
 
     ## set/get
-    def __set__(self, value, **attrs):
+    def __setvalue__(self, value, **attrs):
         """Set entire type equal to ``value``"""
         if not isinstance(value, basestring):
             raise error.TypeError(self, 'type.set', message='type %r is not serialized data'% value.__class__)
@@ -1009,7 +1009,7 @@ class type(base):
         self.length = len(self.value)
         return self
 
-    def __get__(self):
+    def __getvalue__(self):
         return self.serialize()
 
     ## size boundaries
@@ -1418,7 +1418,7 @@ class container(base):
             yield res
         return
 
-    def __set__(self, *elements):
+    def __setvalue__(self, *elements):
         """Set ``self`` with instances or copies of the types provided in the iterable ``elements``.
 
         If uninitialized, this will make a copy of all the instances in ``elements`` and update the
@@ -1437,7 +1437,7 @@ class container(base):
                 elif isinstance(ele,generic):
                     self.value[idx] = self.new(ele, __name__=name)
                 else:
-                    val.__set__(ele)
+                    val.__setvalue__(ele)
                 continue
         elif all(isresolveable(x) or istype(x) or isinstance(x,generic) for x in elements):
             self.value = [ self.new(x) if isinstance(x,generic) else self.new(x).a for x in elements ]
@@ -1446,8 +1446,8 @@ class container(base):
         self.setoffset(self.getoffset(), recurse=True)
         return self
 
-    def __get__(self):
-        return tuple((v.__get__() for v in self.value))
+    def __getvalue__(self):
+        return tuple((v.__getvalue__() for v in self.value))
 
     def __getstate__(self):
         return (super(container,self).__getstate__(),self.source, self.attributes, self.ignored, self.parent, self.position)
@@ -1756,11 +1756,11 @@ class wrapper_t(type):
         return self
 
     # forwarded methods
-    def __get__(self):
-        return self.object.__get__()
+    def __getvalue__(self):
+        return self.object.__getvalue__()
 
-    def __set__(self, value):
-        res = self.object.__set__(value)
+    def __setvalue__(self, value):
+        res = self.object.__setvalue__(value)
         return self
 
     def commit(self, **attrs):
@@ -1959,13 +1959,13 @@ class pointer_t(encoded_t):
         '''Default pointer value that can return an integer in any byteorder'''
         length,byteorder = Config.integer.size, Config.integer.order
 
-        def __set__(self, offset):
+        def __setvalue__(self, offset):
             bs = self.blocksize()
             res = bitmap.new(offset, bs*8)
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
-            return super(pointer_t._value_,self).__set__(res)
+            return super(pointer_t._value_,self).__setvalue__(res)
 
-        def __get__(self):
+        def __getvalue__(self):
             if self.value is None:
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
@@ -1979,7 +1979,7 @@ class pointer_t(encoded_t):
     def encode(self, object, **attrs):
         return object.cast(self._value_, **attrs)
 
-    @utils.memoize('self', self=lambda n:(n.source, n._object_, n.object.__get__()), attrs=lambda n:tuple(sorted(n.items())))
+    @utils.memoize('self', self=lambda n:(n.source, n._object_, n.object.__getvalue__()), attrs=lambda n:tuple(sorted(n.items())))
     def dereference(self, **attrs):
         res = self.decode(self.object)
         attrs.setdefault('__name__', '*'+self.name())
@@ -2077,7 +2077,7 @@ class constant(type):
             self.__doc__ = ''
         return super(constant,self).__init__(**attrs)
 
-    def __set__(self, string):
+    def __setvalue__(self, string):
         bs,data = self.blocksize(),self.__doc__
 
         if (data != string) or (bs != len(string)):

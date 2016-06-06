@@ -81,17 +81,17 @@ class _char_t(pint.integer_t):
         res = __builtin__.unicode('\x00', 'ascii').encode(self.encoding.name)
         self.length = len(res)
 
-    def __set__(self, value):
+    def __setvalue__(self, value):
         '''Set the _char_t to the str ``value``.'''
         if isinstance(value, __builtin__.str):
             try: value = __builtin__.unicode(value, 'ascii')
-            except UnicodeDecodeError: return super(pint.integer_t,self).__set__(str(value))
+            except UnicodeDecodeError: return super(pint.integer_t,self).__setvalue__(str(value))
         elif isinstance(value, __builtin__.unicode):
             value = value
         else:
             raise ValueError, (self, '_char_t.set', 'User tried to set a value of an incorrect type : %s', value.__class__)
         res = value.encode(self.encoding.name)
-        return super(pint.integer_t,self).__set__(res)
+        return super(pint.integer_t,self).__setvalue__(res)
 
     def str(self):
         '''Try to decode the _char_t to a character.'''
@@ -102,7 +102,7 @@ class _char_t(pint.integer_t):
             raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
         return res
 
-    def __get__(self):
+    def __getvalue__(self):
         '''Decode the _char_t to a character replacing any invalid characters if they don't decode.'''
         data = self.serialize()
         try:
@@ -227,11 +227,11 @@ class string(ptype.type):
         # handle a slice of glyphs
         if isinstance(index, slice):
             indices = xrange(*index.indices(len(res)))
-            [ res[index].__set__(glyph) for glyph,index in map(None,value,indices) ]
+            [ res[index].__setvalue__(glyph) for glyph,index in map(None,value,indices) ]
 
         # handle a single glyph
         else:
-            res[index].__set__(value)
+            res[index].__setvalue__(value)
 
         # now we can re-load ourselves from it
         return self.load(offset=0, source=provider.proxy(res))
@@ -254,13 +254,13 @@ class string(ptype.type):
             self.append(x)
         return
 
-    def __set__(self, value):
+    def __setvalue__(self, value):
         '''Replaces the contents of ``self`` with the string ``value``.'''
         size,glyphs = self.blocksize(),[x for x in value]
         t = dynamic.array(self._object_, len(glyphs))
         result = t(blocksize=lambda:size)
         for element,glyph in zip(result.alloc(), value):
-            element.__set__(glyph)
+            element.__setvalue__(glyph)
         if len(value) > self.blocksize() / self._object_().a.size():
             Log.warn('%s.set : %s : User attempted to set a value larger than the specified type. String was truncated to %d characters. : %d > %d'% (self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
         return self.load(offset=0, source=provider.proxy(result))
@@ -275,7 +275,7 @@ class string(ptype.type):
             raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, t._object_.encoding.name))
         return utils.strdup(res)
 
-    def __get__(self):
+    def __getvalue__(self):
         '''Try and decode the string into the specified encoding type.'''
         t = dynamic.array(self._object_, len(self))
         data = self.cast(t).serialize()
@@ -327,7 +327,7 @@ class szstring(string):
     def isTerminator(self, value):
         return value.int() == 0
 
-    def __set__(self, value):
+    def __setvalue__(self, value):
         """Set the null-terminated string to ``value``.
 
         Resizes the string according to the length of ``value``.
@@ -340,7 +340,7 @@ class szstring(string):
         t = dynamic.array(self._object_, len(value))
         result = t()
         for glyph,element in zip(value, result.alloc()):
-            element.__set__(glyph)
+            element.__setvalue__(glyph)
         return self.load(offset=0, source=provider.proxy(result))
 
     def __deserialize_block__(self, block):

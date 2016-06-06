@@ -184,7 +184,7 @@ class DataDirectory(parray.type):
 
     def details(self, **options):
         if self.initializedQ():
-            width = max(len(n.classname()) for n in self.value)
+            width = max(len(n.classname()) for n in self.value) if self.value else 0
             return '\n'.join('[{:x}] {:>{}}{:4s} {:s}:+{:#x}'.format(n.getoffset(),n.classname(),width,'{%d}'%i, n['Address'].summary(), n['Size'].num()) for i,n in enumerate(self.value))
         return super(DataDirectory,self).details(**options)
 

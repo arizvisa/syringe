@@ -231,7 +231,7 @@ class type(_parray_generic):
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = result.new(v)
                 else:
-                    result.value[idx].__set__(v)
+                    result.value[idx].__setvalue__(v)
                 continue
         else:
             for idx,v in enumerate(fields):
@@ -241,7 +241,7 @@ class type(_parray_generic):
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = result.new(v,__name__=name)
                 else:
-                    result.value[idx].__set__(v)
+                    result.value[idx].__setvalue__(v)
                 continue
 
             # re-alloc elements that exist in the rest of the array
@@ -281,10 +281,10 @@ class type(_parray_generic):
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
         return '%s[%d] %s'% (obj, length, res)
 
-    def __set__(self, value):
+    def __setvalue__(self, value):
         """Update self with the contents of the list ``value``"""
         if self.initializedQ() and len(self) == len(value):
-            return super(type,self).__set__(*value)
+            return super(type,self).__setvalue__(*value)
 
         self.value = []
         for idx,val in enumerate(value):
@@ -296,7 +296,7 @@ class type(_parray_generic):
                 res = self.new(self._object_,__name__=str(idx)).a
             self.value.append(res)
 
-        result = super(type,self).__set__(*value)
+        result = super(type,self).__setvalue__(*value)
         result.length = len(self)
         return self
 

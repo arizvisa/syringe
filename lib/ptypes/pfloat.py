@@ -185,12 +185,12 @@ class float_t(type):
         result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
         result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
 
-        return self.__set__( result[0] )
+        return self.__setvalue__( result[0] )
 
     def getf(self):
         """convert the stored floating-point number into a python native float"""
         exponentbias = (2**self.components[1])/2 - 1
-        res = bitmap.new( self.__get__(), sum(self.components) )
+        res = bitmap.new( self.__getvalue__(), sum(self.components) )
 
         # extract components
         res,sign = bitmap.shift(res, self.components[0])
@@ -224,7 +224,7 @@ class sfixed_t(type):
         mask = 2**(8*self.length) - 1
         intm = 2**(8*self.length - self.sign) - 1
         shift = 2**self.fractional
-        n = self.__get__()
+        n = self.__getvalue__()
         #return float(n & intm) / shift * (-1 if n & (mask ^ intm) else +1)
         if n & (mask ^ intm):
             return float((n & intm) - (mask&intm+1)) / shift
@@ -243,7 +243,7 @@ class sfixed_t(type):
         #integral |= (mask ^ intm)
 
         n = integral + math.trunc(fraction*shift)
-        return self.__set__(n)
+        return self.__setvalue__(n)
 
 class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.

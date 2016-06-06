@@ -297,9 +297,7 @@ def memoize(*kargs,**kattrs):
             return tuple(itertools.chain(k1, (None,), k2))
         def callee(*args, **kwds):
             res = key(*args, **kwds)
-            if res in cache:
-                return cache[res]
-            return cache.setdefault(res, fn(*args,**kwds))
+            return cache[res] if res in cache else cache.setdefault(res, fn(*args,**kwds))
 
         # set some utilies on the memoized function
         callee.memoize_key = lambda: key

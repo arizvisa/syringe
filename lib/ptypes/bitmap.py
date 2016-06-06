@@ -37,15 +37,16 @@ def fit(integer):
         integer >>= 1
     return count + 1
 
-def string(bitmap, reversed=True):
+def string(bitmap, **kwds):
     '''Returns bitmap as a formatted binary string starting with the least-significant-bits first'''
+    reverse = kwds['reversed'] if 'reversed' in kwds else kwds.get('reverse', False)
     integer,size = bitmap
     size = abs(size)
     res = []
     for position in range(size):
-        res.append(['0', '1'][integer & 1 != 0])
+        res = res + ['1' if integer&1 else '0']
         integer >>= 1
-    return str().join(res if reversed else reversed(res))
+    return str().join(reversed(res) if reverse else res)
 
 def hex(bitmap):
     '''Return bitmap as a hex string'''
@@ -67,7 +68,7 @@ def scan(bitmap, value=True, position=0):
 
     size,bitmask = abs(size), 1 << position
     for i in range(size):
-        if bool(integer & bitmask) == value:
+        if bool(integer & bitmask) == value or position >= size:
             return position
         bitmask <<= 1
         position += 1

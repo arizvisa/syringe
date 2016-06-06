@@ -183,7 +183,7 @@ class type(_pstruct_generic):
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=n)
                 else:
-                    result.value[idx].__set__(v)
+                    result.value[idx].__setvalue__(v)
                 continue
             self.setoffset(self.getoffset(), recurse=True)
         return result
@@ -256,13 +256,13 @@ class type(_pstruct_generic):
             return '\n'.join(result)
         return '[%x] Empty []'%self.getoffset()
 
-    def __set__(self, value=(), **individual):
+    def __setvalue__(self, value=(), **individual):
         result = self
         if result.initializedQ():
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'type.set', message='iterable value to assign with is not of the same length as struct')
-                result = super(type,result).__set__(*value)
+                result = super(type,result).__setvalue__(*value)
             for k,v in individual.iteritems():
                 idx = self.__getindex__(k)
                 if ptype.isresolveable(v) or ptype.istype(v):
@@ -270,11 +270,11 @@ class type(_pstruct_generic):
                 elif isinstance(v,ptype.generic):
                     result.value[idx] = self.new(v, __name__=k)
                 else:
-                    result.value[idx].__set__(v)
+                    result.value[idx].__setvalue__(v)
                 continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
-        return result.a.__set__(value, **individual)
+        return result.a.__setvalue__(value, **individual)
 
     def __getstate__(self):
         return super(type,self).__getstate__(),self._fields_,

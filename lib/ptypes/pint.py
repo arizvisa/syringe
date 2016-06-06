@@ -186,7 +186,7 @@ class integer_t(ptype.type):
             raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness %s'% repr(self.byteorder))
         return typename
 
-    def __set__(self, integer):
+    def __setvalue__(self, integer):
         if self.byteorder is config.byteorder.bigendian:
             transform = lambda x: reversed(x)
         elif self.byteorder is config.byteorder.littleendian:
@@ -205,7 +205,7 @@ class integer_t(ptype.type):
         self.value = str().join(transform(map(chr,res)))
         return self
 
-    def __get__(self):
+    def __getvalue__(self):
         return self.int()
 
     def int(self):
@@ -245,12 +245,12 @@ class sint_t(integer_t):
             return (signmask-res)*-1
         return res & (signmask-1)
 
-    def __set__(self, integer):
+    def __setvalue__(self, integer):
         signmask = int(2**(8*self.blocksize()))
         res = integer & (signmask-1)
         if integer < 0:
             res |= signmask
-        return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0], self).__set__(res)
+        return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0], self).__setvalue__(res)
 
 class uinteger(ptype.definition): attribute,cache = 'length',{}
 class sinteger(ptype.definition): attribute,cache = 'length',{}
@@ -340,10 +340,10 @@ class enum(integer_t):
     def summary(self, **options):
         return self.str()
 
-    def __set__(self, value):
+    def __setvalue__(self, value):
         if isinstance(value, basestring):
             value = self.byName(value)
-        return super(enum,self).__set__(value)
+        return super(enum,self).__setvalue__(value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
