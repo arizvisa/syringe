@@ -30,11 +30,11 @@ class _p_flags(pbinary.flags):
 def _p_offset(size):
     def p_offset(self):
         type = Type.get(self['p_type'].li.num())
-        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(ElfXX_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
+        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(ElfXX_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)
         result = dyn.clone(type, blocksize=lambda _:self.getparent(ElfXX_Phdr)['p_filesz'].li.num())
-        return dyn.rpointer(result, base, type=size)
+        return dyn.rpointer(result, base, size)
     return p_offset
 
 class ElfXX_Phdr(ElfXX_Header): pass

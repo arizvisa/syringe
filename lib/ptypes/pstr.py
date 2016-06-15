@@ -89,7 +89,7 @@ class _char_t(pint.integer_t):
         elif isinstance(value, __builtin__.unicode):
             value = value
         else:
-            raise ValueError, (self, '_char_t.set', 'User tried to set a value of an incorrect type : %s', value.__class__)
+            raise ValueError(self, '_char_t.set', 'User tried to set a value of an incorrect type : {:s}'.format(value.__class__))
         res = value.encode(self.encoding.name)
         return super(pint.integer_t,self).__setvalue__(res)
 
@@ -99,7 +99,7 @@ class _char_t(pint.integer_t):
         try:
             res = data.decode(self.encoding.name)
         except UnicodeDecodeError, e:
-            raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
+            raise UnicodeDecodeError(e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
         return res
 
     def __getvalue__(self):
@@ -108,7 +108,7 @@ class _char_t(pint.integer_t):
         try:
             res = data.decode(self.encoding.name)
         except UnicodeDecodeError:
-            Log.warn('%s.get : %s : Unable to decode to %s. Replacing invalid characters. : %r'% (self.classname(), self.instance(), self.encoding.name, data))
+            Log.warn('{:s}.get : {:s} : Unable to decode to {:s}. Replacing invalid characters. : {!r}'.format(self.classname(), self.instance(), self.encoding.name, data))
             res = data.decode(self.encoding.name, 'replace')
         return res
 
@@ -141,7 +141,7 @@ class wchar_t(_char_t):
     elif Config.integer.order == config.byteorder.bigendian:
         encoding = codecs.lookup('utf-16-be')
     else:
-        raise SystemError, ('wchar_t', 'Unable to determine default encoding type based on platform byteorder : %r'% Config.integer.order)
+        raise SystemError('wchar_t', 'Unable to determine default encoding type based on platform byteorder : {!r}'.format(Config.integer.order))
 
 class string(ptype.type):
     '''String of characters'''
@@ -159,7 +159,7 @@ class string(ptype.type):
         res,single,double = ( __builtin__.unicode(n, 'ascii').encode(_object_.encoding.name) for n in ('\x00', 'A', 'AA') )
         if len(res) * 2 == len(single) * 2 == len(double):
             return
-        raise ValueError, (self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : %s', _object_.encoding.name)
+        raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(_object_.encoding.name))
 
     def at(self, offset, **kwds):
         ofs = offset - self.getoffset()
@@ -212,7 +212,7 @@ class string(ptype.type):
             return self.new(type, offset=result[0].getoffset(), value=result)
 
         if index < -len(self) or index >= len(self):
-            raise error.UserError(self, 'string.__getitem__', message='list index %d out of range'% index)
+            raise error.UserError(self, 'string.__getitem__', message='list index {:d} out of range'.format(index))
 
         # otherwise, returning a single element from the array should be good
         index %= len(self)
@@ -239,13 +239,13 @@ class string(ptype.type):
     def insert(self, index, object):
         '''Insert the character ``object`` into the string at index ``index`` of the string.'''
         if not isinstance(object, self._object_):
-            raise error.TypeError(self, 'string.insert', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
+            raise error.TypeError(self, 'string.insert', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
         self.__insert(index, value.serialize())
 
     def append(self, object):
         '''Append the character ``object`` to the string.'''
         if not isinstance(object, self._object_):
-            raise error.TypeError(self, 'string.append', message='expected value of type %s. received %s'% (repr(self._object_),repr(object.__class__)))
+            raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
         self.value += object.serialize()
 
     def extend(self, iterable):
@@ -262,7 +262,7 @@ class string(ptype.type):
         for element,glyph in zip(result.alloc(), value):
             element.__setvalue__(glyph)
         if len(value) > self.blocksize() / self._object_().a.size():
-            Log.warn('%s.set : %s : User attempted to set a value larger than the specified type. String was truncated to %d characters. : %d > %d'% (self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
+            Log.warn('{:s}.set : {:s} : User attempted to set a value larger than the specified type. String was truncated to {:d} characters. : {:d} > {:d}'.format(self.classname(), self.instance(), size / result._object_().a.size(), len(value), self.blocksize() / self._object_().a.size()))
         return self.load(offset=0, source=provider.proxy(result))
 
     def str(self):
@@ -272,7 +272,7 @@ class string(ptype.type):
         try:
             res = data.decode(t._object_.encoding.name)
         except UnicodeDecodeError, e:
-            raise UnicodeDecodeError, (e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, t._object_.encoding.name))
+            raise UnicodeDecodeError(e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, t._object_.encoding.name))
         return utils.strdup(res)
 
     def __getvalue__(self):
@@ -282,7 +282,7 @@ class string(ptype.type):
         try:
             res = data.decode(t._object_.encoding.name)
         except UnicodeDecodeError:
-            Log.warn('%s.str : %s : Unable to decode to %s. Defaulting to unencoded string.'% (self.classname(), self.instance(), self._object_.typename()))
+            Log.warn('{:s}.str : {:s} : Unable to decode to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename()))
             res = data.decode(t._object_.encoding.name, 'ignore')
         return utils.strdup(res)
 
@@ -309,7 +309,7 @@ class string(ptype.type):
         try:
             result = repr(self.str())
         except UnicodeDecodeError:
-            Log.debug('%s.summary : %s : Unable to decode unicode string. Rendering as hexdump instead.'% (self.classname(),self.instance()))
+            Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(),self.instance()))
             return super(string,self).summary(**options)
         return result
 

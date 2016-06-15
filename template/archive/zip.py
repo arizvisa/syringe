@@ -146,7 +146,7 @@ class CentralDirectory(pstruct.type):
         (pint.uint16_t, 'disk number start'),
         (pint.uint16_t, 'internal file attributes'),
         (pint.uint32_t, 'external file attributes'),
-        (dyn.rpointer(ptype.undefined, type=pint.uint32_t), 'relative offset of local header'),
+        (dyn.rpointer(ptype.undefined, pint.uint32_t), 'relative offset of local header'),
         (lambda s: dyn.clone(pstr.string, length=s['file name length'].li.num()), 'file name'),
         (lambda s: dyn.block(s['extra field length'].li.num()), 'extra field'),
         (lambda s: dyn.clone(pstr.string, length=s['file comment length'].li.num()), 'file comment'),

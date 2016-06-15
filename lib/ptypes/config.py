@@ -21,14 +21,14 @@ class field:
         def __set__(self, instance, value):
             if value in self.__option__:
                 return field.descriptor.__set__(self, instance, value)
-            raise ValueError, '{!r} is not a member of {!r}'.format(value, self.__option__)
+            raise ValueError('{!r} is not a member of {!r}'.format(value, self.__option__))
 
     class __type_descriptor(descriptor):
         __type__ = type
         def __set__(self, instance, value):
             if (hasattr(self.__type__, '__iter__') and type(value) in self.__type__) or isinstance(value, self.__type__):
                 return field.descriptor.__set__(self, instance, value)
-            raise ValueError, '{!r} is not an instance of {!r}'.format(value, self.__type__)
+            raise ValueError('{!r} is not an instance of {!r}'.format(value, self.__type__))
 
     class __set_descriptor(descriptor):
         set,get = None,None
@@ -41,7 +41,7 @@ class field:
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):
             if not isinstance(value, bool):
-                logging.warn("rvalue %r is not of boolean type. Coercing it into one : (%s != %s)"% (value, type(value).__name__, bool.__name__))
+                logging.warn("rvalue {!r} is not of boolean type. Coercing it into one : ({:s} != {:s})".format(value, type(value).__name__, bool.__name__))
             return field.descriptor.__set__(self, instance, bool(value))
 
     @classmethod
@@ -111,7 +111,7 @@ def namespace(cls):
             elif hasattr(v, '__class__'):
                 val = repr(v)
             else:
-                raise ValueError,k
+                raise ValueError(k)
             doc = v.__doc__.split('\n')[0] if v.__doc__ else None
             col2 = max((col2,len(val)))
             result.append((k, val, doc))
@@ -130,7 +130,7 @@ def namespace(cls):
         if name in attrs.viewkeys():
             object.__setattr__(self, name, value)
             return
-        raise AttributeError('Configuration \'%s\' does not have field named \'%s\''%(cls.__name__,name))
+        raise AttributeError('Configuration \'{:s}\' does not have field named \'{:s}\''.format(cls.__name__,name))
 
     attrs['__repr__'] = __repr__
     attrs['__setattr__'] = __setattr__
@@ -171,7 +171,7 @@ def configuration(cls):
         if name in attrs.viewkeys():
             object.__setattr__(self, name, value)
             return
-        raise AttributeError('Namespace \'%s\' does not have a field named \'%s\''%(cls.__name__,name))
+        raise AttributeError('Namespace \'{:s}\' does not have a field named \'{:s}\''.format(cls.__name__,name))
 
     attrs['__repr__'] = __repr__
     attrs['__setattr__'] = __setattr__
@@ -250,7 +250,7 @@ class defaults:
         if all(hasattr(value, method) for method in ('seek','store','consume')) or isinstance(value, provider.base):
             ptype.source = value
             return
-        raise ValueError, "Invalid source object"
+        raise ValueError("Invalid source object")
     source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
 import ptype # recursive
@@ -343,7 +343,7 @@ if __name__ == '__main__':
             return ptype.source
         def __setsource(value):
             if not isinstance(value, provider.base):
-                raise ValueError, "Invalid source object"
+                raise ValueError("Invalid source object")
             ptype.source = value
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 

@@ -102,7 +102,8 @@ class RecordGeneral(pstruct.type):
     ]
 
     def blocksize(self):
-        return self['header'].li.size() + self['header'].Length()
+        res = self['header'].li
+        return res.size() + res.Length()
 
 class RecordContainer(parray.block):
     _object_ = RecordGeneral

@@ -99,10 +99,10 @@ def mapexception(map={}, any=None, ignored=()):
 
 ## naming representations of a type or instance
 def repr_class(name):
-    #return "<class '%s'>"% name
-    return "<class %s>"% name
+    #return "<class '{:s}'>".format(name)
+    return "<class {:s}>".format(name)
 def repr_instance(classname, name):
-    return "<instance %s '%s'>"% (classname, name)
+    return "<instance {:s} '{:s}'>".format(classname, name)
 def repr_position(pos, hex=True, precision=0):
     if len(pos) == 1:
         ofs, = pos
@@ -128,22 +128,22 @@ def hexrow(value, offset=0, width=16, breaks=[8]):
     extra = width - len(value)
 
     ## left
-    left = '%04x'% offset
+    left = '{:04x}'.format(offset)
 
     ## middle
-    res = [ '%02x'%ord(x) for x in value ]
+    res = [ '{:02x}'.format(ord(x)) for x in value ]
     if len(value) < width:
         res += ['  ' for x in range(extra)]
 
     for x in breaks:
         if x < len(res):
-            res[x] = ' %s'% res[x]
+            res[x] = ' '+res[x]
     middle = ' '.join(res)
 
     ## right
     right = printable(value) + ' '*extra
 
-    return '%s  %s  %s'% (left, middle, right)
+    return '  '.join((left, middle, right))
 
 def hexdump(value, offset=0, width=16, rows=None, **kwds):
     """Returns ``value`` as a formatted hexdump
@@ -187,7 +187,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     bytewidth = width / charwidth
     leftover = size - bytewidth
 
-    hexify = lambda s: ''.join('\\x%02x'%ord(x) for x in iter(s))
+    hexify = lambda s: ''.join('\\x{:02x}'.format(ord(x)) for x in iter(s))
 
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)
@@ -278,7 +278,7 @@ def memoize(*kargs,**kattrs):
         cache = {}
         co = fn.func_code
         flags,varnames = co.co_flags,iter(co.co_varnames)
-        assert (flags & F_VARGEN) == 0, 'Not able to memoize %r generator function'% fn
+        assert (flags & F_VARGEN) == 0, 'Not able to memoize {!r} generator function'.format(fn)
         argnames = itertools.islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs

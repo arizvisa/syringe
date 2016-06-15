@@ -27,6 +27,13 @@ class descriptor(pbinary.struct):
 class descriptor64(descriptor):
     _fields_ = [(32,'Reserved'),(32,'Base[High]')] + descriptor._fields_
 
+class general(pbinary.struct):
+    _fields_ = [(32,name) for name in ('eax','ecx','edx','ebx','esp','ebp','esi','edi')]
+class rex(pbinary.struct):
+    _fields_ = list(itertools.chain(((64,name) for name in ('rax','rbx','rcx','rdx','rsi','rdi','rbp','rsp',)), ((64,'r%d'%num) for num in range(8,16))))
+class segment(pbinary.struct):
+    _fields_ = [(32,name) for name in ('cs','ds','ss','es','fs','gs')]
+
 class flags(pbinary.flags):
     _fields_ = [
         (1,'0'),
@@ -60,11 +67,62 @@ class eflags(pbinary.flags):
 class rflags(pbinary.flags):
     _fields_ = [(10+32,'reserved')]+eflags._fields_[1:]
 
-a = pbinary.new(eflags,source=ptypes.prov.string('\xaa\xaa\xaa\xaa'))
-a = pbinary.new(eflags,source=ptypes.prov.string('\x7f\x00\x00\x80'))
-print a
-print a.l.summary()
-print a.l
+class fpstate(pbinary.struct):
+    """
+    Intel FPU register-space/region
+    https://software.intel.com/en-us/articles/x87-and-sse-floating-point-assists-in-ia-32-flush-to-zero-ftz-and-denormals-are-zero-daz
+    """
+    default = 0x37f
+    _fields_ = [
+        (1, 'B'),   # FPU Busy
+        (1, 'C3'),  # condition-code (cc)
+        (3, 'TOP'), # Top of Stack Pointer (ST*)
+        (1, 'C2'),  # cc
+        (1, 'C1'),  # cc
+        (1, 'C0'),  # cc
+        (1, 'ES'),  # Error Summary
+        (1, 'SF'),  # Fault from Stack
+        (1, 'PM'),  # Precision
+        (1, 'UM'),  # Underflow
+        (1, 'OM'),  # Overflow
+        (1, 'ZM'),  # Divided by Zero
+        (1, 'DM'),  # Denormal(?) Operand
+        (1, 'IM'),  # Invalid Operand
+    ]
+
+class sse(pbinary.array):
+    _object_,length = 32*8,8
+class mmx(pbinary.array):
+    _object_,length = 16*8,8
+class fpu(pbinary.array):
+    _object_,length = 10*8,8
+
+class fpctrl(pbinary.struct):
+    _fields_ = [
+        (3, 'reserved0'),
+        (1, 'X'),   # Infinity control (0=Projective,1=Affine)
+        (2, 'RC'),  # Rounding control (00=Round to nearest even,01=Round down towards infinity,10=Round up towards infinity,11=Round towards zero)
+        (2, 'PC'),  # Precision control (00=Single(24),01=Reserved,10=Double(53),11=Extended(64))
+        (2, 'reserved1'),
+        (1, 'PM'),  # Precision mask
+        (1, 'UM'),  # Underflow mask
+        (1, 'OM'),  # Overflow mask
+        (1, 'ZM'),  # Zero Dvide mask
+        (1, 'DM'),  # Denormalized Operand mask
+        (1, 'IM'),  # Invalid Operation mask
+    ]
+
+class frstor(pbinary.struct):
+    # FIXME: this size should be 108 bytes, not 100
+    _fields_ = [
+        (fpctrl, 'ControlWord'),
+        (fpstate, 'StatusWord'),
+        (16, 'TagWord'),
+        (48, 'DataPointer'),
+        (48, 'InstructionPointer'),
+        (16, 'LastInstructionOpcode'),
+        (fpu, 'ST'),
+    ]
 
 class gdt(pbinary.array):
     #length = 8192

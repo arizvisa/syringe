@@ -15,7 +15,7 @@ class RecordGeneral(RecordGeneral):
         def Type(self):
             return RT_Excel.type
         def Instance(self):
-            return self['type'].num()
+            return self['type'].num(), None
         def Length(self):
             return self['length'].num()
 
@@ -102,9 +102,8 @@ class BiffSubStream(parray.terminated):
     _object_ = RecordGeneral
     def isTerminator(self, value):
 #        print hex(value.getoffset()),value['data'].name(), value.blocksize()
-        if value['header'].Instance() == EOF.type:
-            return True
-        return False
+        rec,_ = value['header'].Instance()
+        return True if rec == EOF.type else False
 
     def search(self, type):
         type = int(type)
@@ -168,7 +167,7 @@ class RRTabId(parray.block):
     type = 0x13d
     type = 317
     def blocksize(self):
-        return int(self.parent['length'])
+        return self.parent['length'].int()
 
 ###
 class FrtFlags(pbinary.struct):
@@ -544,12 +543,12 @@ class RefreshAll(pint.enum, pint.uint16_t):
     type = 0x1b7
     type = 439
     _values_ = [
-        (0, 'noforce'),(1, 'force'),
+        ('noforce', 0),('force', 1),
     ]
 
 class Boolean(pint.enum):
     _values_ = [
-        (0, 'False'),(1, 'True'),
+        ('False', 0),('True', 1),
     ]
 
 @RT_Excel.define
@@ -563,15 +562,15 @@ class Date1904(pint.enum,pint.uint16_t):
     type = 34
 
     _values_ = [
-        (0, '1900 date system'),
-        (1, '1904 date system'),
+        ('1900 date system', 0),
+        ('1904 date system', 1),
     ]
 
 class HideObjEnum(pint.enum):
     _values_ = [
-        (0, 'SHOWALL'),
-        (1, 'SHOWPLACEHOLDER'),
-        (2, 'HIDEALL'),
+        ('SHOWALL',         0),
+        ('SHOWPLACEHOLDER', 1),
+        ('HIDEALL',         2),
     ]
 
 @RT_Excel.define
@@ -659,8 +658,8 @@ class Window1(pstruct.type):
 class CalcMode(pint.enum, pint.uint16_t):
     type = 0xd
     type = 13
-    _fields_ = [
-        (0,'Manual'),(1,'Automatic'),(2,'No Tables'),
+    _values_ = [
+        ('Manual', 0),('Automatic', 1),('No Tables', 2),
     ]
 
 @RT_Excel.define
@@ -1074,10 +1073,10 @@ if True:
     class RevItab(pstruct.type):
         class type(pint.enum, pint.uint8_t):
             _values_ = [
-                (0x00, 'same-workbook'),
-                (0x01, 'diff-workbook'),
-                (0x02, 'prev-revitab'),
-                (0x03, 'missing-sheet'),
+                ('same-workbook', 0x00),
+                ('diff-workbook', 0x01),
+                ('prev-revitab',  0x02),
+                ('missing-sheet', 0x03),
             ]
         _fields_ = [
             (type, 'type'),
@@ -1327,7 +1326,7 @@ class ColorTheme(pint.enum, pint.uint32_t):
 
 class XFPropGradient(pstruct.type):
     class type(pint.enum, pint.uint32_t):
-        _values_ = [ (0, 'linear'), (1,'rectangular') ]
+        _values_ = [ ('linear', 0), ('rectangular', 1) ]
     _fields_ = [
         (type, 'type'),
         (Xnum, 'numDegree'),
@@ -1393,7 +1392,7 @@ class ExtType_TextColor(FullColorExt):
 @ExtPropType.define
 class ExtType_FontScheme(pint.enum, pint.uint16_t):
     type = 14
-    _values_ = [(0,'default'), (1,'default,bold'), (2,'default,italic'), (3,'default,bold,italic')]
+    _values_ = [('default', 0), ('default,bold', 1), ('default,italic', 2), ('default,bold,italic', 3)]
 @ExtPropType.define
 class ExtType_TextIndentation(pint.uint16_t):
     type = 15
@@ -1843,7 +1842,7 @@ class CachedDiskHeader(pstruct.type):
 ####
 class Feat11FieldDataItem(pstruct.type):
     class lfdt(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('Text', 0x00000001),
             ('Number', 0x00000002),
             ('Boolean', 0x00000003),
@@ -1857,7 +1856,7 @@ class Feat11FieldDataItem(pstruct.type):
             ('Multiple Choices', 0x0000000B),
         ]
     class lfxidt(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('SOMITEM_SCHEMA', 0x00001000),
             ('SOMITEM_ATTRIBUTE', 0x00001001),
             ('SOMITEM_ATTRIBUTEGROUP', 0x00001002),
@@ -1933,7 +1932,7 @@ class Feat11FieldDataItem(pstruct.type):
         ]
 
     class ilta(pint.enum, pint.uint32_t):
-        _fields_ = [
+        _values_ = [
             ('No formula (section 2.2.2)', 0x00000000),
             ('Average', 0x00000001),
             ('Count', 0x00000002),
@@ -2245,10 +2244,10 @@ class SST(pstruct.type):
 
 class FontIndex(pint.enum, pint.uint16_t):
     _values_ = [
-        (0, 'Default'),
-        (1, 'Default,Bold'),
-        (2, 'Default,Italic'),
-        (3, 'Default,Bold,Italic'),
+        ('Default',             0),
+        ('Default,Bold',        1),
+        ('Default,Italic',      2),
+        ('Default,Bold,Italic', 3),
     ]
 
 class FormatRun(pstruct.type):

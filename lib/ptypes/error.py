@@ -7,7 +7,7 @@ class Base(exc.StandardError):
     def name(self):
         module = self.__module__
         name = type(self).__name__
-        return '%s.%s'%(module,name)
+        return '.'.join((module,name))
 
     def __repr__(self):
         return self.__str__()
@@ -23,8 +23,8 @@ class StoreError(ProviderError):
     def __str__(self):
         identity,offset,amount,written = self.stored
         if written > 0:
-            return 'StoreError(%s) : Unable to store object to 0x%x:+%x : Wrote 0x%x'%( type(identity), offset, amount, written)
-        return 'StoreError(%s) : Unable to write object to 0x%x:+%x'%( type(identity), offset, amount)
+            return 'StoreError({:s}) : Unable to store object to 0x{:x}:+{:x} : Wrote 0x{:x}'.format(type(identity), offset, amount, written)
+        return 'StoreError({:s}) : Unable to write object to 0x{:x}:+{:x}'.format(type(identity), offset, amount)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
     def __init__(self, identity, offset, desired, amount=0, **kwds):
@@ -33,8 +33,8 @@ class ConsumeError(ProviderError):
     def __str__(self):
         identity,offset,desired,amount = self.consumed
         if amount > 0:
-            return 'ConsumeError(%s) : Unable to read from 0x%x:+%x : Read 0x%x'% (type(identity), offset, desired, amount)
-        return 'ConsumeError(%s) : Unable to read from 0x%x:+%x'% (type(identity), offset, desired)
+            return 'ConsumeError({:s}) : Unable to read from 0x{:x}:+{:x} : Read 0x{:x}'.format(type(identity), offset, desired, amount)
+        return 'ConsumeError({:s}) : Unable to read from 0x{:x}:+{:x}'.format(type(identity), offset, desired)
 
 ### errors that can happen during deserialization or serialization
 class SerializationError(Base):
@@ -46,11 +46,11 @@ class SerializationError(Base):
     def objectname(self):
         return self.object.__name__ if type(self.object) is type else self.object.shortname()
     def path(self):
-        return '{%s}'% ' -> '.join(self.object.backtrace() or [])
+        return '{{{:s}}}'.format(' -> '.join(self.object.backtrace() or []))
     def position(self):
-        try: bs = '%x'% self.object.blocksize()
+        try: bs = '{:x}'.format(self.object.blocksize())
         except: bs = '?'
-        return '%x:+%s'%( self.object.getoffset(), bs )
+        return '{:x}:+{:s}'.format(self.object.getoffset(), bs)
     def __str__(self):
         return ' : '.join((self.objectname(), self.typename(), self.path(), super(SerializationError,self).__str__()))
 
@@ -63,7 +63,7 @@ class LoadError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         consumed, = self.loaded
         if consumed > 0:
-            return '%s : %s : Unable to consume %x from source (%s)'%(self.typename(), self.path(), consumed, super(LoadError,self).__str__())
+            return '{:s} : {:s} : Unable to consume 0x{:x} from source ({:s})'.format(self.typename(), self.path(), consumed, super(LoadError,self).__str__())
         return super(LoadError,self).__str__()
 
 class CommitError(SerializationError, exc.EnvironmentError):
@@ -75,7 +75,7 @@ class CommitError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         written, = self.committed
         if written > 0:
-            return '%s : wrote %x : %s'%(self.typename(), written, self.path())
+            return '{:s} : wrote 0x{:x} : {:s}'.format(self.typename(), written, self.path())
         return super(CommitError,self).__str__()
 
 class MemoryError(SerializationError, exc.MemoryError):
@@ -92,7 +92,7 @@ class RequestError(Base):
     def objectname(self):
         return self.object.__name__ if type(self.object) is type else self.object.shortname()
     def methodname(self):
-        return '%s'% self.method
+        return str(self.method)
     def __str__(self):
         if self.message:
             return ' : '.join((self.methodname(), self.objectname(), self.typename(), self.message))
@@ -120,7 +120,7 @@ class AssertionError(Base, exc.AssertionError):
         return self.object.__name__ if type(self.object) is type else self.object.shortname()
 
     def methodname(self):
-        return '%s'% self.method
+        return str(self.method)
 
     def __str__(self):
         if self.message:

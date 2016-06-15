@@ -205,7 +205,7 @@ class Header(pstruct.type):
 class File(pstruct.type):
     _fields_ = [
         (Header, 'header'),
-        (lambda s: dyn.pointer(Directory,type=dyn.clone(pint.uint32_t,byteorder=s['header'].li.byteorder()), recurse={'byteorder':s['header'].li.byteorder()}), 'pointer'),
+        (lambda s: dyn.pointer(Directory,dyn.clone(pint.uint32_t,byteorder=s['header'].li.byteorder()), recurse={'byteorder':s['header'].li.byteorder()}), 'pointer'),
     ]
 
 if __name__ == '__main__':

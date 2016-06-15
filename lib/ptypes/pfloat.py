@@ -98,6 +98,8 @@ Example usage:
 
 import math
 from . import ptype,pint,bitmap,config,error
+Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 def setbyteorder(endianness):
     import __builtin__
@@ -113,7 +115,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.bigendian)
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness %s"% repr(endianness))
+    raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
 def bigendian(ptype):
     '''Will convert an pfloat_t to bigendian form'''
@@ -135,7 +137,7 @@ def littleendian(ptype):
 
 class type(pint.integer_t):
     def summary(self, **options):
-        return '%s (%x)'% (self.getf(), self.num())
+        return '{:s} ({:x})'.format(self.getf(), self.num())
 
     def setf(self, value):
         raise error.ImplementationError(self, 'type.setf')
@@ -207,7 +209,7 @@ class float_t(type):
             return math.ldexp( math.copysign(m,s), e)
 
         # FIXME: this should return NaN or something
-        config.defaults.log.warn('float_t.getf : %s : Invalid exponent value : %d'% (self.instance(), exponent))
+        Log.warn('float_t.getf : {:s} : Invalid exponent value : {:d}'.format(self.instance(), exponent))
         return 0.0
 
 class sfixed_t(type):
@@ -341,7 +343,7 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        raise Failure, 'setf: %s == 0x%x? %s (0x%x) %s'%(float, expected, a.num(), n, f)
+        raise Failure('setf: %s == 0x%x? %s (0x%x) %s'%(float, expected, a.num(), n, f))
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -359,7 +361,7 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        raise Failure, 'getf: 0x%x == %s? %s (%s) %x'%( integer, expected, a.num(), n, i)
+        raise Failure('getf: 0x%x == %s? %s (%s) %x'%( integer, expected, a.num(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):

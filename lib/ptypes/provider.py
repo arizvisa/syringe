@@ -80,7 +80,7 @@ class empty(base):
         return '\x00'*amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('%s.store : Tried to write %x bytes to a read-only medium.'%(type(self).__name__, len(data)))
+        Log.info('{:s}.store : Tried to write 0x{:x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
 ## core providers
@@ -105,7 +105,7 @@ class string(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         if amount < 0:
-            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. %d:+%s from %s'%(self.offset,amount,self))
+            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.offset,amount,self))
         if amount == 0: return ''
         if self.offset >= len(self.data):
             raise error.ConsumeError(self,self.offset,amount)
@@ -152,7 +152,7 @@ class proxy(base):
         valid = ('autocommit', 'autoload')
         res = set(kwds.iterkeys()).difference(valid)
         if res.difference(valid):
-            raise error.UserError(self, '__init__', message='Invalid keyword(s) specified. Expected (%r) : %r'%(valid, tuple(res)))
+            raise error.UserError(self, '__init__', message='Invalid keyword(s) specified. Expected ({!r}) : {!r}'.format(valid, tuple(res)))
 
         self.autoload = kwds.get('autoload', None)
         self.autocommit = kwds.get('autocommit', None)
@@ -169,7 +169,7 @@ class proxy(base):
 
         buf = self.type.serialize() if self.autoload is None else self.type.load(**self.autoload).serialize()
 #        if self.autoload is not None:
-#            Log.debug('%s.consume : Autoloading : %s : %r'%(type(self).__name__, self.type.instance(), self.type.source))
+#            Log.debug('{:s}.consume : Autoloading : {:s} : {!r}'.format(type(self).__name__, self.type.instance(), self.type.source))
 
         if amount >= 0 and left >= 0 and right <= len(buf):
             result = buf[left:right]
@@ -196,12 +196,12 @@ class proxy(base):
                 self.__write_range(self.type, self.offset, data)
 
             else:
-                raise NotImplementedError, self.type.__class__
+                raise NotImplementedError(self.type.__class__)
 
             self.offset += len(data)
             self.type if self.autocommit is None else self.type.commit(**self.autocommit)
 #            if self.autocommit is not None:
-#                Log.debug('%s.store : Autocommitting : %s : %r'%(type(self).__name__, self.type.instance(), self.type.source))
+#                Log.debug('{:s}.store : Autocommitting : {:s} : {!r}'.format(type(self).__name__, self.type.instance(), self.type.source))
             return len(data)
 
         # otherwise, check if nothing is being written
@@ -261,7 +261,7 @@ class proxy(base):
 
         # check to see if there's any data left
         if len(data) > 0:
-            Log.warn("%s : __write_range : %d bytes left-over from trying to write to %d bytes.", cls.__name__, len(data), result)
+            Log.warn("{:s} : __write_range : {:d} bytes left-over from trying to write to {:d} bytes.".format(cls.__name__, len(data), result))
 
         # return the aggregated total
         return result
@@ -287,7 +287,7 @@ class proxy(base):
         if robj is not None: yield robj
 
     def __repr__(self):
-        return '%s -> %s'% (super(proxy, self).__repr__(), self.type.instance())
+        return '{:s} -> {:s}'.format(super(proxy, self).__repr__(), self.type.instance())
 
 import random as _random
 class random(base):
@@ -309,7 +309,7 @@ class random(base):
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('%s.store : Tried to write %x bytes to a read-only medium.'%(type(self).__name__, len(data)))
+        Log.info('{:s}.store : Tried to write 0x{:x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
 ## useful providers
@@ -369,7 +369,7 @@ class stream(base):
         '''Consume ``amount`` bytes from the given provider.'''
         o = self.offset - self.data_ofs
         if o < 0:
-            raise ValueError('%s.consume : Unable to seek to offset %x (%x,+%x)'% (type(self).__name__, self.offset, self.data_ofs, len(self.data)))
+            raise ValueError('{:s}.consume : Unable to seek to offset {:x} ({:x},+{:x})'.format(type(self).__name__, self.offset, self.data_ofs, len(self.data)))
 
         # select the requested data
         if (self.eof) or (o + amount <= len(self.data)):
@@ -401,7 +401,7 @@ class stream(base):
                     self.eof = False
                 self._write(data)
                 return len(data)
-            raise ValueError("%s.store : Unable to store %x bytes outside of provider's cache size (%x,+%x)"%(type(self), len(data), self.data_ofs, len(self.data)))
+            raise ValueError("{:s}.store : Unable to store {:x} bytes outside of provider's cache size ({:x},+{:x})".format(type(self), len(data), self.data_ofs, len(self.data)))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -409,7 +409,7 @@ class stream(base):
         return self._write(data)
 
     def __repr__(self):
-        return '%s[eof=%s base=%x length=+%x] ofs=%x'%( type(self), repr(self.eof), self.data_ofs, len(self.data), self.offset)
+        return '{:s}[eof={!r} base=0x{:x} length=+{:x}] ofs=0x{:x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
 
     def __getitem__(self, i):
         return self.data[i-self.data_ofs]
@@ -426,7 +426,7 @@ class iterable(stream):
         return str().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
-        Log.info('iter._write : Tried to write %x bytes to an iterator'%(len(data)))
+        Log.info('iter._write : Tried to write 0x{:x} bytes to an iterator'.format(len(data)))
         return len(data)
 
 class filebase(base):
@@ -447,8 +447,8 @@ class filebase(base):
         '''Consume ``amount`` bytes from the given provider.'''
         offset = self.file.tell()
         if amount < 0:
-            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. %d:+%s from %s'%(offset,amount,self))
-        Log.debug('%s.consume : Attempting to consume %x:+%x'%(type(self).__name__, offset, amount))
+            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(offset,amount,self))
+        Log.debug('{:s}.consume : Attempting to consume {:x}:+{:x}'.format(type(self).__name__, offset, amount))
 
         result = ''
         try:
@@ -487,7 +487,7 @@ class filebase(base):
         return result
 
     def __repr__(self):
-        return '%s -> %s'% (super(filebase, self).__repr__(), repr(self.file))
+        return '{:s} -> {!r}'.format(super(filebase, self).__repr__(), self.file)
 
     def __del__(self):
         try: self.close()
@@ -525,10 +525,10 @@ class posixfile(filebase):
         access = 'read/write' if (flags&os.O_RDWR) else 'write' if (flags&os.O_WRONLY) else 'read-only' if flags & os.O_RDONLY else 'unknown'
 
         if os.access(filename,6):
-            Log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(mode), access)
+            Log.info("{:s}({!r}, {!r}) : Opening file for {:s}".format(type(self).__name__, filename, mode, access))
         else:
             flags |= os.O_CREAT|os.O_TRUNC
-            Log.info("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(mode), access)
+            Log.info("{:s}({!r}, {!r}) : Creating new file for {:s}".format(type(self).__name__, filename, mode, access))
 
         # mode defaults to rw-rw-r--
         self.fd = os.open(filename, flags, perms)
@@ -566,14 +566,14 @@ class file(filebase):
 
         if os.access(filename,0):
             if 'wb' in access:
-                Log.warn("%s(%s, %s) : Truncating file by user-request.", type(self).__name__, repr(filename), repr(access))
-            Log.info("%s(%s, %s) : Opening file for %s", type(self).__name__, repr(filename), repr(access), straccess)
+                Log.warn("{:s}({!r}, {!r}) : Truncating file by user-request.".format(type(self).__name__, filename, access))
+            Log.info("{:s}({!r}, {!r}) : Opening file for {:s}".format(type(self).__name__, filename, access, straccess))
 
         else:  # file not found
             if 'r+' in access:
-                Log.warn("%s(%s, %s) : File not found. Modifying access to write-only.", type(self).__name__, repr(filename), repr(access))
+                Log.warn("{:s}({!r}, {!r}) : File not found. Modifying access to write-only.".format(type(self).__name__, filename, access))
                 access = 'wb'
-            Log.warn("%s(%s, %s) : Creating new file for %s", type(self).__name__, repr(filename), repr(access), straccess)
+            Log.warn("{:s}({!r}, {!r}) : Creating new file for {:s}".format(type(self).__name__, filename, access, straccess))
 
         return __builtin__.open(filename, access, 0)
 
@@ -632,7 +632,7 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. %d:+%s from %s'%(self.address,amount,self))
+                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.address,amount,self))
             res = memory._read(self.address, amount)
             if len(res) == 0 and amount > 0:
                 raise error.ConsumeError(self,offset,amount,len(res))
@@ -673,7 +673,7 @@ try:
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
     except Exception,m:
-        raise OSError,m
+        raise OSError(m)
 
     class win32error:
         @staticmethod
@@ -691,7 +691,7 @@ try:
             res = ctypes.cast(p_string, ctypes.c_char_p)
             errorString = str(res.value)
             res = k32.LocalFree(res)
-            assert res == 0, "kernel32!LocalFree failed. Error 0x%08x."% k32.GetLastError()
+            assert res == 0, "kernel32!LocalFree failed. Error 0x{:08x}.".format(k32.GetLastError())
 
             return (errorCode, errorString)
 
@@ -716,7 +716,7 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. %d:+%s from %s'%(self.address,amount,self))
+                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.address,amount,self))
 
             NumberOfBytesRead = ctypes.c_int()
             res = ctypes.c_char*amount
@@ -725,7 +725,7 @@ try:
             # FIXME: instead of failing on an incomplete read, perform a partial read
             res = k32.ReadProcessMemory(self.handle, self.address, Buffer, amount, ctypes.byref(NumberOfBytesRead))
             if (res == 0) or (NumberOfBytesRead.value != amount):
-                e = ValueError('Unable to read pid(%x)[%08x:%08x].'% (self.handle, self.address, self.address+amount))
+                e = ValueError('Unable to read pid({:x})[{:08x}:{:08x}].'.format(self.handle, self.address, self.address+amount))
                 raise error.ConsumeError(self, self.address,amount, NumberOfBytesRead.value)
 
             self.address += amount
@@ -743,7 +743,7 @@ try:
 
             res = k32.WriteProcessMemory(self.handle, self.address, Buffer, len(value), ctypes.byref(NumberOfBytesWritten))
             if (res == 0) or (NumberOfBytesWritten.value != len(value)):
-                e = OSError('Unable to write to pid(%x)[%08x:%08x].'% (self.id, self.address, self.address+len(value)))
+                e = OSError('Unable to write to pid({:x})[{:08x}:{:08x}].'.format(self.id, self.address, self.address+len(value)))
                 raise error.StoreError(self, self.address,len(value), written=NumberOfBytesWritten.value, exception=e)
 
             self.address += len(value)
@@ -846,7 +846,7 @@ except ImportError:
     Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
 
 except OSError, m:
-    Log.warning("__module__ : Unable to load 'kernel32.dll' (%s). Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers."% m)
+    Log.warning("__module__ : Unable to load 'kernel32.dll' ({:s}). Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(m))
 
 try:
     import _idaapi
@@ -855,7 +855,7 @@ try:
         offset = 0xffffffff
 
         def __init__(self):
-            raise UserWarning("%s.%s is a static object and contains only staticmethods."%(self.__module__,self.__class__.__name__))
+            raise UserWarning("{:s}.{:s} is a static object and contains only staticmethods.".format(self.__module__,self.__class__.__name__))
 
         @classmethod
         def read(cls, offset, size, padding='\x00'):
@@ -868,7 +868,7 @@ try:
                 return str().join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
             if _idaapi.isEnabled(offset):
                 return '' if size == 0 else (padding*size) if (_idaapi.getFlags(offset) & _idaapi.FF_IVL) == 0 else _idaapi.get_many_bytes(offset, size)
-            raise Exception, offset
+            raise Exception(offset)
 
         @classmethod
         def within_segment(cls, offset):
@@ -945,7 +945,7 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
             except RuntimeError, e:
-                raise StopIteration('Unable to read 0x%x bytes from address %x'% (amount, self.offset))
+                raise StopIteration('Unable to read 0x{:x} bytes from address 0x{:x}'.format(amount, self.offset))
             return str(result)
 
         def store(self, data):
@@ -1328,11 +1328,11 @@ if __name__ == '__main__':
 
     @TestCase
     def test_random_write():
-        raise Failure, 'Unable to write to provider.random()'
+        raise Failure('Unable to write to provider.random()')
 
     @TestCase
     def test_random_readwrite():
-        raise Failure, 'Unable to write to provider.random()'
+        raise Failure('Unable to write to provider.random()')
 
     @TestCase
     def test_proxy_read_container():

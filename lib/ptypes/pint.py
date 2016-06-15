@@ -137,6 +137,8 @@ Example usage of pint.enum:
 """
 import six
 from . import ptype,bitmap,config,error,utils
+Config = config.defaults
+Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 def setbyteorder(endianness):
     import __builtin__
@@ -152,7 +154,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.bigendian)
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness %s"% repr(endianness))
+    raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
 def bigendian(ptype):
     '''Will convert an integer_t to bigendian form'''
@@ -183,7 +185,7 @@ class integer_t(ptype.type):
         elif self.byteorder is config.byteorder.littleendian:
             return config.defaults.pint.littleendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
         else:
-            raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness %s'% repr(self.byteorder))
+            raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness {!r}'.format(self.byteorder))
         return typename
 
     def __setvalue__(self, integer):
@@ -192,7 +194,7 @@ class integer_t(ptype.type):
         elif self.byteorder is config.byteorder.littleendian:
             transform = lambda x: x
         else:
-            raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness %s'% repr(self.byteorder))
+            raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
         mask = (1<<self.blocksize()*8) - 1
         integer &= mask
@@ -217,7 +219,7 @@ class integer_t(ptype.type):
             return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
         elif self.byteorder is config.byteorder.littleendian:
             return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
-        raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness %s'% repr(self.byteorder))
+        raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
     __int__ = num = number = int
 
     def summary(self, **options):
@@ -230,7 +232,7 @@ class integer_t(ptype.type):
             return self.cast(littleendian(self.__class__))
         elif self.byteorder is config.byteorder.littleendian:
             return self.cast(bigendian(self.__class__))
-        raise error.UserError(self, 'integer_t.flip', message='Unexpected byte order %s'% repr(self.byteorder))
+        raise error.UserError(self, 'integer_t.flip', message='Unexpected byte order {!r}'.format(self.byteorder))
 type = integer_t
 
 class sint_t(integer_t):
@@ -294,9 +296,16 @@ class enum(integer_t):
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)
 
-        # check types of ._values_
+        # invert ._values_ if they're defined backwards
+        if len(self._values_):
+            name, value = self._values_[0]
+            if isinstance(value, basestring):
+                Log.warning("pint.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(self.classname(), self.typename()))
+                self._values_ = [(k,v) for v,k in self._values_]
+
+        # verify the types are correct for ._values_
         if any(not isinstance(k, basestring) or not isinstance(v, six.integer_types) for k,v in self._values_):
-            raise TypeError, (self, 'enum.__init__', "%s._values_ is of an incorrect format. Should be [(string,integral)]"%(self.classname()))
+            raise TypeError(self, 'enum.__init__', "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.classname(), basestring, int))
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
         return
@@ -307,7 +316,7 @@ class enum(integer_t):
         for k,v in cls._values_:
             if v == value:
                 return k
-        raise KeyError, (cls, 'enum.byValue', value)
+        raise KeyError(cls, 'enum.byValue', value)
 
     @classmethod
     def byName(cls, name):
@@ -315,7 +324,7 @@ class enum(integer_t):
         for k,v in cls._values_:
             if k == name:
                 return v
-        raise KeyError, (cls, 'enum.byName', name)
+        raise KeyError(cls, 'enum.byName', name)
 
     def __getattr__(self, name):
         try:
@@ -325,14 +334,14 @@ class enum(integer_t):
 
         except KeyError:
             pass
-        raise AttributeError, (enum, self, name)
+        raise AttributeError(enum, self, name)
 
     def str(self):
         '''Return value as a string'''
         res = self.int()
         number = ('0x{:x}'.format(abs(res)) if res >= 0 else '-0x{:x}'.format(abs(res)))
         try:
-            value = self.byValue(res) + '(%s)'% number
+            value = self.byValue(res) + '({:s})'.format(number)
         except KeyError:
             value = number
         return value

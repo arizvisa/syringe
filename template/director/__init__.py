@@ -136,7 +136,7 @@ class IndexNode(pstruct.type):
     _fields_ = [
         (ID, 'ckID'),
         (lambda s: s.endian(ULONG), 'ckSize'),
-        (lambda s: s.endian(dyn.pointer(Chunk, type=LONG)), 'ckOffset'),
+        (lambda s: s.endian(dyn.pointer(Chunk, LONG)), 'ckOffset'),
         (ULONG, 'reservedValue1'),
         (ULONG, 'reservedValue2'),
     ]

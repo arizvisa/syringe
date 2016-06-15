@@ -57,7 +57,7 @@ class Dos(pstruct.type):
         #   include our pointer to it
         #if dos['e_ss'].num() == 0:      # my tests...
         if self['e_lfarlc'].li.num() >= 0x40:
-            return dyn.rpointer(Next, self, type=pint.uint32_t)
+            return dyn.rpointer(Next, self, pint.uint32_t)
         return pint.uint_t
 
     def filesize(self):
@@ -86,7 +86,7 @@ class Dos(pstruct.type):
         ( uint16, 'e_csum' ),        # checksum / checksum (ignored) / Checksum
         ( uint16, 'e_ip' ),          # ip / ip of entry / InitialIP
         ( uint16, 'e_cs' ),          # cs / cs of entry / InitialrmwwelativeIp
-        ( lambda self: dyn.rpointer(dyn.array(Dos.Relocation,self['e_crlc'].li.num()), self, type=uint16), 'e_lfarlc' ), # relocation table
+        ( lambda self: dyn.rpointer(dyn.array(Dos.Relocation,self['e_crlc'].li.num()), self, uint16), 'e_lfarlc' ), # relocation table
         ( uint16, 'e_ovno'),         # overlay number
         #( uint32, 'EXE_SYM_TAB'),   # from inc/exe.inc
 
@@ -302,7 +302,7 @@ class PharLap3(PharLap, Header):
     class OffsetSize(pstruct.type):
         def __Offset(self):
             t = getattr(self, '_object_', ptype.block)
-            return dyn.rpointer(lambda _: dyn.clone(t, blocksize=lambda _:self['Size'].li.num()), self.getparent(PharLap3), type=dword)
+            return dyn.rpointer(lambda _: dyn.clone(t, blocksize=lambda _:self['Size'].li.num()), self.getparent(PharLap3), dword)
 
         _fields_ = [
             (__Offset, 'Offset'),

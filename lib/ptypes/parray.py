@@ -178,10 +178,36 @@ class _parray_generic(ptype.container):
         if isinstance(index, slice):
             result = [ self.value[ self.__getindex__(idx) ] for idx in xrange(*index.indices(len(self))) ]
             t = ptype.clone(type, length=len(result), _object_=self._object_)
-            return self.new(t, offset=result[0].getoffset(), value=result)
+            return self.new(t, offset=result[0].getoffset() if len(result) else self.getoffset(), value=result)
 
         range(len(self))[index]     # make python raise the correct exception if so..
         return super(_parray_generic, self).__getitem__(index)
+
+    def __repr__(self):
+        """Calls .repr() to display the details of a specific object"""
+        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
+        result = self.repr()
+
+        # generate the element description
+        length = len(self) if self.initializedQ() else (self.length or 0)
+        if self._object_ is None:
+            obj = '(untyped)'
+        else:
+            obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
+        element_descr = '{:s}[{:d}]'.format(obj, length)
+
+        # multiline
+        if result.count('\n') > 0:
+            if prop:
+                return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element_descr,result)
+            return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element_descr,result)
+
+        _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
+        # single-line
+        descr = "{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        if prop:
+            return "[{:s}] {:s} {{{:s}}} {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, element_descr, result)
+        return "[{:s}] {:s} {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, element_descr, result)
 
 class type(_parray_generic):
     '''
@@ -266,7 +292,7 @@ class type(_parray_generic):
 
                 else:
                     # XXX: should never be encountered
-                    raise error.ImplementationError(self, 'type.load', 'Unknown load type -> %s'% (repr(obj)))
+                    raise error.ImplementationError(self, 'type.load', 'Unknown load type -> {!r}'.format(obj))
             return super(type, self).load(**attrs)
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
@@ -279,7 +305,7 @@ class type(_parray_generic):
             obj = '(untyped)'
         else:
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
-        return '%s[%d] %s'% (obj, length, res)
+        return '{:s}[{:d}] {:s}'.format(obj, length, res)
 
     def __setvalue__(self, value):
         """Update self with the contents of the list ``value``"""
@@ -343,16 +369,16 @@ class terminated(type):
 
                     size = n.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("terminated.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                        Log.warn("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
                         break
                     if size < 0:
-                        raise error.AssertionError(self, 'terminated.load', message="Element size for %s is < 0"% n.classname())
+                        raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(n.classname()))
                     ofs += size
 
         except KeyboardInterrupt:
             # XXX: some of these variables might not be defined due to my usage of KeyboardInterrupt being racy. who cares...
             path = ' -> '.join(self.backtrace())
-            Log.fatal("terminated.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
+            Log.fatal("terminated.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path), exc_info=True)
             return self
 
         except (Exception,error.LoadError), e:
@@ -402,7 +428,7 @@ class infinite(uninitialized):
             n.load(**attrs)
         except (error.LoadError,error.InitializationError),e:
             path = ' -> '.join(self.backtrace())
-            Log.warn("infinite.__next_element : %s : Unable to read element %s : %s"% (self.instance(), n.instance(), path))
+            Log.warn("infinite.__next_element : {:s} : Unable to read element {:s} : {:s}".format(self.instance(), n.instance(), path))
         return n
 
     def isTerminator(self, value):
@@ -424,7 +450,7 @@ class infinite(uninitialized):
                     # read next element at the current offset
                     n = self.__next_element(offset)
                     if not n.initializedQ():
-                        Log.info("infinite.load : %s : Element %d left partially initialized : %s"%(self.instance(), len(self.value), n.instance()))
+                        Log.info("infinite.load : {:s} : Element {:d} left partially initialized : {:s}".format(self.instance(), len(self.value), n.instance()))
                     self.value.append(n)
 
                     if not n.initializedQ():
@@ -436,10 +462,10 @@ class infinite(uninitialized):
                     # check sanity of element size
                     size = n.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("infinite.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                        Log.warn("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
                         break
                     if size < 0:
-                        raise error.AssertionError(self, 'infinite.load', message="Element size for %s is < 0"% n.classname())
+                        raise error.AssertionError(self, 'infinite.load', message="Element size for {:s} is < 0".format(n.classname()))
 
                     # next iteration
                     offset += size
@@ -448,13 +474,13 @@ class infinite(uninitialized):
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
-                Log.fatal("infinite.load : %s : User interrupt at element %s : %s"% (self.instance(), n.instance(), path), exc_info=True)
+                Log.fatal("infinite.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path), exc_info=True)
                 return self
 
             except (Exception,error.LoadError),e:
                 if self.parent is not None:
                     path = ' -> '.join(self.backtrace())
-                    Log.warn("infinite.load : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
+                    Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=e)
         return self
 
@@ -482,10 +508,10 @@ class infinite(uninitialized):
                     # check sanity of element size
                     size = n.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("infinite.loadstream : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                        Log.warn("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
                         break
                     if size < 0:
-                        raise error.AssertionError(self, 'infinite.loadstream', message="Element size for %s is < 0"% n.classname())
+                        raise error.AssertionError(self, 'infinite.loadstream', message="Element size for {:s} is < 0".format(n.classname()))
 
                     # next iteration
                     offset += size
@@ -494,7 +520,7 @@ class infinite(uninitialized):
             except error.LoadError, e:
                 if self.parent is not None:
                     path = ' -> '.join(self.backtrace())
-                    Log.warn("infinite.loadstream : %s : Stopped reading at element %s : %s"% (self.instance(), n.instance(), path))
+                    Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=e)
             pass
         super(type, self).load()
@@ -531,27 +557,27 @@ class block(uninitialized):
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
                         path = ' -> '.join(n.backtrace())
-                        Log.warn("block.load : %s : Reached end of blockarray at %s : %s"%(self.instance(), n.instance(), path))
+                        Log.warn("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), n.instance(), path))
                         self.value.append(n)
 
                     # otherwise add the incomplete element to the array
                     elif o < self.blocksize():
-                        Log.warn("block.load : %s : LoadError raised at %s : %s"%(self.instance(), n.instance(), repr(e)))
+                        Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), n.instance(), e))
                         self.value.append(n)
 
                     break
 
                 size = n.blocksize()
                 if size <= 0 and Config.parray.break_on_zero_sized_element:
-                    Log.warn("block.load : %s : Terminated early due to zero-length element : %s"%(self.instance(), n.instance()))
+                    Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
                     break
                 if size < 0:
-                    raise error.AssertionError(self, 'block.load', message="Element size for %s is < 0"% n.classname())
+                    raise error.AssertionError(self, 'block.load', message="Element size for {:s} is < 0".format(n.classname()))
 
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
                     path = ' -> '.join(n.backtrace())
-                    Log.info("block.load : %s : Terminated at %s : %s"%(self.instance(), n.instance(), path))
+                    Log.info("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), n.instance(), path))
                     self.value.append(n)
                     break
 

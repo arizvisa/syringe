@@ -134,7 +134,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.bigendian)
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness %s"% repr(endianness))
+    raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
 # instance tests
 @utils.memoize('t')
@@ -171,7 +171,7 @@ def force(t, self, chain=None):
         return force(next(t), self, chain)
 
     path = ','.join(self.backtrace())
-    raise error.TypeError(self, 'force<pbinary>', message='chain=%r : refusing request to resolve %r to a type that does not inherit from pbinary.type : %s'% (chain, t, path))
+    raise error.TypeError(self, 'force<pbinary>', message='chain={!r} : refusing request to resolve {!r} to a type that does not inherit from pbinary.type : {:s}'.format(chain, t, path))
 
 class type(ptype.generic):
     """An atomic component of any binary array or structure.
@@ -217,7 +217,7 @@ class type(ptype.generic):
             self.value = value
             return self
         if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type %s'%value.__class__)
+            raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type {:s}'.format(value.__class__))
         _,size = self.value or (0,0)
         self.value = value,size
         return self
@@ -225,7 +225,7 @@ class type(ptype.generic):
         return tuple(self.value)
     def update(self, value):
         if not bitmap.isbitmap(value):
-            raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type %s'%value.__class__)
+            raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
         self.value = value
         return self
 
@@ -253,7 +253,7 @@ class type(ptype.generic):
 
     def summary(self, **options):
         res = _,size = self.bitmap()
-        return '(%s, %d)'% (bitmap.hex(res), size)
+        return '({:s}, {:d})'.format(bitmap.hex(res), size)
 
     def details(self, **options):
         return bitmap.string(self.bitmap())
@@ -346,7 +346,7 @@ class container(type):
         return tuple(self.value)
     def __setvalue__(self, value):
         if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'container.set', message='tried to call .set with an unknown type %s'%value.__class__)
+            raise error.UserError(self, 'container.set', message='tried to call .set with an unknown type {:s}'.format(value.__class__))
         _,size = self.bitmap()
         result = value,size
         for element in self.value:
@@ -379,7 +379,7 @@ class container(type):
         return self
 
     def serialize(self):
-        Log.warn('container.serialize : %s : Returning a potentially unaligned binary structure as a string', self.classname())
+        Log.warn('container.serialize : {:s} : Returning a potentially unaligned binary structure as a string'.format(self.classname()))
         return bitmap.data(self.bitmap())
 
     def load(self, **attrs):
@@ -413,7 +413,7 @@ class container(type):
 
     def cast(self, container, **attrs):
         if not iscontainer(container):
-            raise error.UserError(self, 'container.cast', message='unable to cast to type not of a pbinary.container (%s)'% container.typename())
+            raise error.UserError(self, 'container.cast', message='unable to cast to type not of a pbinary.container ({:s})'.format(container.typename()))
 
         source = bitmap.consumer()
         source.push( self.bitmap() )
@@ -423,7 +423,7 @@ class container(type):
         try:
             target.__deserialize_consumer__(source)
         except StopIteration:
-            Log.warn('container.cast : %s : Incomplete cast to %s. Target has been left partially initialized.', self.classname(), target.typename())
+            Log.warn('container.cast : {:s} : Incomplete cast to {:s}. Target has been left partially initialized.'.format(self.classname(), target.typename()))
         return target
 
     # method overloads
@@ -452,7 +452,7 @@ class container(type):
         # if element it's being assigned to is a container
         res = self.value[index]
         if not isinstance(res, type):
-            raise error.AssertionError(self, 'container.__setitem__', message='Unknown %s at index %d while trying to assign to it'% (res.__class__, index))
+            raise error.AssertionError(self, 'container.__setitem__', message='Unknown {:s} at index {:d} while trying to assign to it'.format(res.__class__, index))
 
         # if value is a bitmap
         if bitmap.isbitmap(value):
@@ -463,7 +463,7 @@ class container(type):
             return value
 
         if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'container.__setitem__', message='tried to assign to index %d with an unknown type %s'%(index,value.__class__))
+            raise error.UserError(self, 'container.__setitem__', message='tried to assign to index {:d} with an unknown type {:s}'.format(index,value.__class__))
 
         # update a pbinary.type with the provided value clamped
         return res.__setvalue__(value & ((2**res.bits())-1))
@@ -513,24 +513,24 @@ class _array_generic(container):
     def __getobject_name(self):
         if bitmap.isbitmap(self._object_):
             res = self._object_
-            return ('signed<%d>' if bitmap.signed(res) else 'unsigned<%d>')% bitmap.size(res)
+            return ('signed<{:d}>' if bitmap.signed(res) else 'unsigned<{:d}>').format(bitmap.size(res))
         elif istype(self._object_):
             return self._object_.typename()
         elif isinstance(self._object_, six.integer_types):
-            return ('signed<%d>' if self._object_ < 0 else 'unsigned<%d>')% abs(self._object_)
+            return ('signed<{:d}>' if self._object_ < 0 else 'unsigned<{:d}>').format(abs(self._object_))
         return self._object_.__name__
 
     def __summary_uninitialized(self):
         name = self.__getobject_name()
         try:count = len(self)
         except (TypeError): count = None
-        return '%s[%s] ???'%(name, repr(count) if count is None else str(count))
+        return '{:s}[{:s}] ???'.format(name, repr(count) if count is None else str(count))
 
     def __summary_initialized(self):
         name,value = self.__getobject_name(),self.bitmap()
         try:count = len(self)
         except (TypeError): count = None
-        return '%s[%s] %s'% (name, repr(count) if count is None else str(count), bitmap.hex(value) if bitmap.size(value) > 0 else '...')
+        return '{:s}[{:s}] {:s}'.format(name, repr(count) if count is None else str(count), bitmap.hex(value) if bitmap.size(value) > 0 else '...')
 
     def __getindex__(self, index):
         return self.__getindex__(int(index)) if isinstance(index, basestring) else index
@@ -559,7 +559,7 @@ class _struct_generic(container):
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
         if any(alias.lower() == name.lower() for _,name in self._fields_):
-            raise error.UserError(self, '_struct_generic.__contains__', message='Not allowed to remove %s from aliases'% alias.lower())
+            raise error.UserError(self, '_struct_generic.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
     def __getindex__(self, name):
@@ -572,7 +572,7 @@ class _struct_generic(container):
                 if n.lower() == name.lower():
                     return self.__fastindex.setdefault(name.lower(), i)
                 continue
-        raise KeyError, name
+        raise KeyError(name)
 
     def details(self, **options):
         return self.__details_initialized(**options) if self.initializedQ() else self.__details_uninitialized(**options)
@@ -587,22 +587,22 @@ class _struct_generic(container):
                 if istype(t):
                     typename = t.typename()
                 elif bitmap.isbitmap(t):
-                    typename = 'signed<%s>'%bitmap.size(t) if bitmap.signed(t) else 'unsigned<%s>'%bitmap.size(t)
+                    typename = 'signed<{:s}>'.format(bitmap.size(t)) if bitmap.signed(t) else 'unsigned<{:s}>'.format(bitmap.size(t))
                 elif isinstance(t, six.integer_types):
-                    typename = 'signed<%d>'%t if t<0 else 'unsigned<%d>'%t
+                    typename = 'signed<{:d}>'.format(t) if t<0 else 'unsigned<{:d}>'.format(t)
                 else:
-                    typename = 'unknown<%s>'%repr(t)
+                    typename = 'unknown<{!r}>'.format(t)
 
                 i = utils.repr_class(typename)
                 _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-                result.append('[%s] %s %s ???'%(utils.repr_position(self.getposition(name), hex=_hex, precision=_precision),i,name,v))
+                result.append('[{:s}] {:s} {:s} ???'.format(utils.repr_position(self.getposition(name), hex=_hex, precision=_precision),i,name,v))
                 continue
 
             _,s = b = value.bitmap()
             i = utils.repr_instance(value.classname(),value.name())
-            v = '(%s,%d)'%(bitmap.hex(b), s)
+            v = '({:s},{:d})'.format(bitmap.hex(b), s)
             _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-            result.append('[%s] %s %s'%(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision),i,value.summary()))
+            result.append('[{:s}] {:s} {:s}'.format(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision),i,value.summary()))
         return '\n'.join(result)
 
     def __details_uninitialized(self):
@@ -619,7 +619,7 @@ class _struct_generic(container):
 
             i = utils.repr_class(typename)
             _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-            result.append('[%s] %s %s{%d} ???'%(utils.repr_position(self.getposition(), hex=_hex, precision=_precision),i,name,s))
+            result.append('[{:s}] {:s} {:s}{{{:d}}} ???'.format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision),i,name,s))
         return '\n'.join(result)
 
     # iterator methods
@@ -881,7 +881,7 @@ class terminatedarray(_array_generic):
         except StopIteration,e:
             n = self.value[-1]
             path = ' ->\n\t'.join(self.backtrace())
-            Log.info("terminatedarray : %s : Terminated at %s<%x:+??>\n\t%s"%(self.instance(), n.typename(), n.getoffset(), path))
+            Log.info("terminatedarray : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), n.typename(), n.getoffset(), path))
 
         return self
 
@@ -930,11 +930,11 @@ class blockarray(terminatedarray):
                 position = (offset,suboffset)
 
             if total < 0:
-                Log.info('blockarray.__deserialize_consumer__ : %s : Read %d extra bits', self.instance(), -total)
+                Log.info('blockarray.__deserialize_consumer__ : {:s} : Read {:d} extra bits'.format(self.instance(), -total))
 
         except StopIteration,e:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
-            Log.warn('blockarray.__deserialize_consumer__ : %s : Incomplete read at %s while consuming %d bits', self.instance(), repr(position), n.blockbits())
+            Log.warn('blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!r} while consuming {:d} bits'.format(self.instance(), position, n.blockbits()))
         return self
 
 class partial(ptype.container):
@@ -996,7 +996,7 @@ class partial(ptype.container):
         if self.byteorder is config.byteorder.bigendian:
             return bitmap.data(bmp)
         if self.byteorder is not config.byteorder.littleendian:
-            raise error.AssertionError(self, 'partial.serialize', message='byteorder %s is invalid'% self.byteorder)
+            raise error.AssertionError(self, 'partial.serialize', message='byteorder {:s} is invalid'.format(self.byteorder))
         return str().join(reversed(bitmap.data(bmp)))
 
     def __deserialize_block__(self, block):
@@ -1018,7 +1018,7 @@ class partial(ptype.container):
     def __load_bigendian(self, **attrs):
         # big-endian. stream-based
         if self.byteorder is not config.byteorder.bigendian:
-            raise error.AssertionError(self, 'partial.load', message='byteorder %s is invalid'% self.byteorder)
+            raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
 
         with utils.assign(self, **attrs):
             o = self.getoffset()
@@ -1030,7 +1030,7 @@ class partial(ptype.container):
     def __load_littleendian(self, **attrs):
         # little-endian. block-based
         if self.byteorder is not config.byteorder.littleendian:
-            raise error.AssertionError(self, 'partial.load', message='byteorder %s is invalid'% self.byteorder)
+            raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
 
         with utils.assign(self, **attrs):
             o,s = self.getoffset(),self.blocksize()
@@ -1090,7 +1090,7 @@ class partial(ptype.container):
             result['byteorder'] = 'bigendian'
         else:
             if self.byteorder is not config.byteorder.littleendian:
-                raise error.AssertionError(self, 'partial.properties', message='byteorder %s is invalid'% self.byteorder)
+                raise error.AssertionError(self, 'partial.properties', message='byteorder {:s} is invalid'.format(self.byteorder))
             result['byteorder'] = 'littleendian'
         return result
 
@@ -1180,10 +1180,10 @@ class flags(struct):
             flags.append( (name,value.int()) )
 
         x = _,s = self.bitmap()
-        return '(%s, %d) %s'% (bitmap.hex(x), s, ','.join("%s%s"%(n, '?' if v is None else '=%d'%v if v > 1 else '') for n,v in flags if v is None or v > 0))
+        return '({:s}, {:d}) {:s}'.format(bitmap.hex(x), s, ','.join(''.join((n, '?' if v is None else '={:d}'.format(v) if v > 1 else '')) for n,v in flags if v is None or v > 0))
 
     def __summary_uninitialized(self):
-        return '(flags) %s'% ','.join("%s?"%name for t,name in self._fields_)
+        return '(flags) {:s}'.format(','.join("{:s}?".format(name) for t,name in self._fields_))
 
     def __and__(self, field):
         '''Returns if the specified /field/ is set'''
@@ -1194,7 +1194,7 @@ def new(pb, **attrs):
     '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
     # create a partial type
     if istype(pb):
-        Log.debug("new : %s : Instantiating type as partial"% pb.typename())
+        Log.debug("new : {:s} : Instantiating type as partial".format(pb.typename()))
         t = ptype.clone(partial, _object_=pb)
         return t(**attrs)
 
@@ -1213,7 +1213,7 @@ def bigendian(p, **attrs):
     attrs.setdefault('__name__', p._object_.__name__ if issubclass(p,partial) else p.__name__)
 
     if not issubclass(p, partial):
-        Log.debug("bigendian : %s : Promoting type to partial"% p.typename())
+        Log.debug("bigendian : {:s} : Promoting type to partial".format(p.typename()))
         p = ptype.clone(partial, _object_=p, **attrs)
     else:
         p.__update__(attrs)
@@ -1225,7 +1225,7 @@ def littleendian(p, **attrs):
     attrs.setdefault('__name__', p._object_.__name__ if issubclass(p,partial) else p.__name__)
 
     if not issubclass(p, partial):
-        Log.debug("littleendian : %s : Promoting type to partial"% p.typename())
+        Log.debug("littleendian : {:s} : Promoting type to partial".format(p.typename()))
         p = ptype.clone(partial, _object_=p, **attrs)
     else:
         p.__update__(attrs)

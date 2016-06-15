@@ -100,7 +100,7 @@ class PEB(pstruct.type, versioned):
                 (PVOID, 'UserSharedInfoPtr'),
                 (ULONG, 'SystemReserved'),
                 (ULONG, 'SpareUlong'),
-                (dyn.pointer(API_SET_MAP, type=ULONG), 'ApiSetMap'),
+                (dyn.pointer(API_SET_MAP, ULONG), 'ApiSetMap'),
             ])
 
         elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
@@ -464,7 +464,7 @@ class _API_SET_HEADER(pstruct.type):
 
 class _API_SET_VALUE_ENTRY(pstruct.type):
     _fields_ = [
-        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['Size'].li.num())), object=s._baseobject_, type=ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'Value'),
+        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['Size'].li.num())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'Value'),
         (ULONG, 'Size'),
     ]
 
@@ -480,9 +480,9 @@ class _API_SET_VALUE(pstruct.type):
 class _API_SET_ENTRY(pstruct.type):
     _baseobject_ = None
     _fields_ = [
-        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['NameLength'].li.num())), object=s._baseobject_, type=ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'NameOffset'),
+        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['NameLength'].li.num())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'NameOffset'),
         (ULONG, 'NameLength'),
-        (lambda s: dyn.rpointer(_API_SET_VALUE, object=s._baseobject_, type=ULONG), 'ValueOffset'),
+        (lambda s: dyn.rpointer(_API_SET_VALUE, s._baseobject_, ULONG), 'ValueOffset'),
     ]
 
 class API_SET_MAP(pstruct.type, versioned):

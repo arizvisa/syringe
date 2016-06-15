@@ -15,8 +15,8 @@ class fpointer_t(ptype.opointer_t):
 def fpointer(type, fieldname):
     return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname,'__iter__') else (fieldname,))
 
-class PVOID(dyn.pointer(ptype.undefined, type=pint.uint32_t)): pass
-class PVOID64(dyn.pointer(ptype.undefined, type=pint.uint64_t)): pass
+class PVOID(dyn.pointer(ptype.undefined, pint.uint32_t)): pass
+class PVOID64(dyn.pointer(ptype.undefined, pint.uint64_t)): pass
 class ULONG_PTR(ptype.pointer_t): pass
 
 class BYTE(pint.uint8_t): pass

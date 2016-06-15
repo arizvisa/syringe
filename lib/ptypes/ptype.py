@@ -307,19 +307,19 @@ def force(t, self, chain=None):
             return force(next(t), self, chain)
 
     path = ','.join(self.backtrace())
-    raise error.TypeError(self, 'force<ptype>', message='chain=%r : Refusing request to resolve %r to a type that does not inherit from ptype.type : {%s}'% (chain, t, path))
+    raise error.TypeError(self, 'force<ptype>', message='chain={!r} : Refusing request to resolve {!r} to a type that does not inherit from ptype.type : {{{:s}}}'.format(chain, t, path))
 
 def debug(ptype, **attributes):
     """``rethrow`` all exceptions that occur during initialization of ``ptype``"""
     if not istype(ptype):
-        raise error.UserError(ptype, 'debug', message='%r is not a ptype'% ptype)
+        raise error.UserError(ptype, 'debug', message='{!r} is not a ptype'.format(ptype))
 
     import time,traceback
     def logentry(string, *args):
         return (time.time(),traceback.extract_stack(), string.format(*args))
 
     if any((hasattr(n) for n in ('_debug_','_dump_'))):
-        raise error.UserError(ptype, 'debug', message='%r has a private method name that clashes')
+        raise error.UserError(ptype, 'debug', message='{!r} has a private method name that clashes'.format(ptype))
 
     class decorated_ptype(ptype):
         __doc__ = ptype.__doc__
@@ -365,7 +365,7 @@ def debug(ptype, **attributes):
             end = time.time()
 
             offset, size, source = self.getoffset(), self.blocksize(), self.source
-            _ = logentry('load({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'%(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            _ = logentry('load({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
             Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('load',[]).append(_)
             return result
@@ -375,12 +375,12 @@ def debug(ptype, **attributes):
             result = super(decorated, self).commit(**kwds)
             end = time.time()
 
-            _ = logentry('commit({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'%(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            _ = logentry('commit({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
             Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('commit',[]).append(_)
             return result
 
-    decorated.__name__ = 'debug(%s)'% ptype.__name__
+    decorated.__name__ = 'debug({:s})'.format(ptype.__name__)
     decorated._debug_.update(attributes)
     return decorated
 
@@ -394,7 +394,7 @@ def debugrecurse(ptype):
             Log.debug(' '.join(('constructed :',repr(t),'->',self.classname(),self.name())))
             debugres = debug(res, constructed=(time.time(),t))
             return super(decorated,self).new(debugres, **attrs)
-    decorated.__name__ = 'debug(%s,recurse=True)'% ptype.__name__
+    decorated.__name__ = 'debug({:s},recurse=True)'.format(ptype.__name__)
     return decorated
 
 source = provider.memory()
@@ -509,21 +509,21 @@ class _base_generic(object):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = '%s'% ','.join('%s=%s'%(k,repr(v)) for k,v in self.properties().iteritems())
+        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
         result = self.repr()
 
         # multiline
         if result.count('\n') > 0:
             if prop:
-                return "%s '%s' {%s}\n%s"%(utils.repr_class(self.classname()),self.name(),prop,result)
-            return "%s '%s'\n%s"%(utils.repr_class(self.classname()),self.name(),result)
+                return "{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
+            return "{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
-        descr = "%s '%s'"%(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        descr = "{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
         if prop:
-            return "[%s] %s {%s} %s"%(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
-        return "[%s] %s %s"%(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
+            return "[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
+        return "[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
     # naming
     @classmethod
@@ -531,29 +531,29 @@ class _base_generic(object):
         """Return the name of the ptype"""
         if hasattr(cls, '__module__') and cls.__module__ is not None:
             if Config.display.show_module_name:
-                return '%s.%s'%( cls.__module__, cls.__name__ )
-            return '%s.%s'%( cls.__module__.rsplit('.',1)[-1], cls.__name__ )
+                return '.'.join((cls.__module__, cls.__name__))
+            return '.'.join((cls.__module__.rsplit('.',1)[-1], cls.__name__))
         return cls.__name__
     def classname(self):
         """Return the dynamic classname. Can be overwritten."""
         return self.typename()
     def shortname(self):
-        return getattr(self, '__name__', 'unnamed_x%x'%id(self))
+        return getattr(self, '__name__', 'unnamed_{:x}'.format(id(self)))
     def name(self):
         """Return the loaded name of the instance"""
         name = self.shortname()
         if Config.display.show_parent_name and self.parent is not None:
-            return '%s.%s'%( self.parent.name(), name )
+            return '.'.join((self.parent.name(), name))
         return name
     def instance(self):
         """Returns a minimal string describing the type and it's location"""
         name,ofs = self.classname(),self.getoffset()
         try:
             bs = self.blocksize()
-            return '%s[%x:+%x]'% (name, ofs, bs)
+            return '{:s}[{:x}:+{:x}]'.format(name, ofs, bs)
         except:
             pass
-        return '%s[%x:+?]'% (name, ofs)
+        return '{:s}[{:x}:+???]'.format(name, ofs)
 
     def hexdump(self, **options):
         """Return a hexdump of the type using utils.hexdump(**options)
@@ -639,9 +639,9 @@ class _base_generic(object):
         chain = ';'.join(utils.repr_instance(x.classname(),x.name()) for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))
         try: bs = hex(self.blocksize())
         except: bs = '???'
-        raise error.NotFoundError(self, 'base.getparent', message="match %s not found in chain : %s[%x:+%s] : %s"%(type.typename(), self.classname(), self.getoffset(), bs, chain))
+        raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s}[{:x}:+{:s}] : {:s}".format(type.typename(), self.classname(), self.getoffset(), bs, chain))
 
-    def backtrace(self, fn=lambda x:'<type:%s name:%s offset:%x>'%(x.classname(), x.name(), x.getoffset())):
+    def backtrace(self, fn=lambda x:'<type:{:s} name:{:s} offset:{:x}>'.format(x.classname(), x.name(), x.getoffset())):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
 
@@ -669,7 +669,7 @@ class _base_generic(object):
 
         # instantiate an instance if we're given a type
         if not(istype(t) or isinstance(t,generic)):
-            raise error.TypeError(self, 'base.new', message='%r is not a ptype class'% t.__class__)
+            raise error.TypeError(self, 'base.new', message='{!r} is not a ptype class'.format(t.__class__))
 
         # if it's a type, then instantiate it
         if istype(t):
@@ -704,7 +704,7 @@ class generic(_base_generic):
         raise error.ImplementationError(self, 'base.repr')
 
     def __deserialize_block__(self, block):
-        raise error.ImplementationError(self, 'base.__deserialize_block__', message='Subclass %s must implement deserialize_block'% self.classname())
+        raise error.ImplementationError(self, 'base.__deserialize_block__', message='Subclass {:s} must implement deserialize_block'.format(self.classname()))
     def serialize(self):
         raise error.ImplementationError(self, 'base.serialize')
 
@@ -791,7 +791,7 @@ class base(generic):
         Each value in the iterable is composed of (index,(self.serialize(),other.serialize()))
         """
         if False in (self.initializedQ(),other.initializedQ()):
-            Log.fatal('base.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
+            Log.fatal('base.compare : {:s} : Instance not initialized ({:s})'.format(self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 
         s,o = self.serialize(),other.serialize()
@@ -829,7 +829,7 @@ class base(generic):
             result.setoffset(result.getoffset(), recurse=True)
 
         except Exception,e:
-            Log.warning("base.cast : %s : %s : Error during cast resulted in a partially initialized instance : %s"%(self.classname(), t.typename(), repr(e)))
+            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e))
 
         # update with any attributes that need to be propagated
         result.__update__(recurse=self.attributes)
@@ -841,9 +841,9 @@ class base(generic):
         # log whether our size has changed somehow
         a,b = self.size(),result.size()
         if a > b:
-            Log.info("base.cast : %s : Result %s size is smaller than source : %x < %x", self.classname(), result.classname(), result.size(), self.size())
+            Log.info("base.cast : {:s} : Result {:s} size is smaller than source : 0x{:x} < 0x{:x}".format(self.classname(), result.classname(), result.size(), self.size()))
         elif a < b:
-            Log.warning("base.cast : %s : Result %s is partially initialized : %x > %x", self.classname(), result.classname(), result.size(), self.size())
+            Log.warning("base.cast : {:s} : Result {:s} is partially initialized : 0x{:x} > 0x{:x}".format(self.classname(), result.classname(), result.size(), self.size()))
         return result
 
     def traverse(self, edges=lambda node:tuple(node.value) if isinstance(node, container) else (), filter=lambda node:True, **kwds):
@@ -975,15 +975,15 @@ class type(base):
                 childOffset = self.getoffset() - self.parent.getoffset()
                 maxElementSize = parentSize - childOffset
                 if res > maxElementSize:
-                    Log.warn("type.serialize : %s : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : %x > %x : %x", self.instance(), res, maxElementSize, parentSize)
+                    Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : 0x{:x} > 0x{:x} : 0x{:x}".format(self.instance(), res, maxElementSize, parentSize))
                     res = maxElementSize
 
             if res > sys.maxint:
-                Log.fatal('type.serialize : %s : blocksize is larger than sys.maxint. Refusing to add padding : %x > %x', self.instance(), res, sys.maxint)
+                Log.fatal('type.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : 0x{:x} > 0x{:x}'.format(self.instance(), res, sys.maxint))
                 return ''
 
             # generate padding up to the blocksize
-            Log.info('type.serialize : %s : Padding result due to element being partially uninitialized during serialization : %x', self.instance(), res)
+            Log.info('type.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : 0x{:x}'.format(self.instance(), res))
             padding = utils.padding.fill(res if res > 0 else 0, self.padding)
 
             # prefix beginning of padding with any data that element contains
@@ -995,7 +995,7 @@ class type(base):
         # pad up to the .blocksize() if our length doesn't meet the minimum
         res = self.blocksize()
         if len(result) < res:
-            Log.info('type.serialize : %s : Padding result due to element being partially initialized during serialization : %x', self.instance(), res)
+            Log.info('type.serialize : {:s} : Padding result due to element being partially initialized during serialization : 0x{:x}'.format(self.instance(), res))
             padding = utils.padding.fill(res-len(result), self.padding)
             result += padding
         return result
@@ -1004,7 +1004,7 @@ class type(base):
     def __setvalue__(self, value, **attrs):
         """Set entire type equal to ``value``"""
         if not isinstance(value, basestring):
-            raise error.TypeError(self, 'type.set', message='type %r is not serialized data'% value.__class__)
+            raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
         res,self.value = self.value,value
         self.length = len(self.value)
         return self
@@ -1020,7 +1020,7 @@ class type(base):
         """
         if self.initializedQ() or self.value:
             return len(self.value)
-        Log.info("type.size : %s : Unable to get size of ptype.type, as object is still uninitialized."% self.instance())
+        Log.info("type.size : {:s} : Unable to get size of ptype.type, as object is still uninitialized.".format(self.instance()))
         return 0
 
     def blocksize(self):
@@ -1120,7 +1120,7 @@ class container(base):
         until an atomic type (such as ptype.type, or pbinary.partial) is encountered.
         """
         if not self.contains(offset):
-            raise error.NotFoundError(self, 'container.at', 'offset 0x%x can not be located within container.'% offset)
+            raise error.NotFoundError(self, 'container.at', 'offset 0x{:x} can not be located within container.'.format(offset))
 
         # if we weren't asked to recurse, then figure out which sub-element contains the offset
         if not recurse:
@@ -1128,14 +1128,14 @@ class container(base):
                 if n.contains(offset):
                     return n
                 continue
-            raise error.NotFoundError(self, 'container.at', 'offset 0x%x not found in a child element. returning encompassing parent.'%offset)
+            raise error.NotFoundError(self, 'container.at', 'offset 0x{:x} not found in a child element. returning encompassing parent.'.format(offset))
 
         # descend into the trie a single level
         try:
             res = self.at(offset, recurse=False, **kwds)
 
         except ValueError, msg:
-            Log.info('container.at : %s : Non-fatal exception raised : %r'% (self.instance(), ValueError(msg)))
+            Log.info('container.at : {:s} : Non-fatal exception raised : {!r}'.format(self.instance(), ValueError(msg)))
             return self
 
         # if we're already at a leaf of the trie, then no need to descend
@@ -1196,11 +1196,11 @@ class container(base):
         # log any information about deserialization errors
         if total < expected:
             path = ' -> '.join(self.backtrace())
-            Log.warn('container.__deserialize_block__ : %s : Container less than expected blocksize : %x < %x : {%s}'%(self.instance(), total, expected, path))
+            Log.warn('container.__deserialize_block__ : {:s} : Container less than expected blocksize : 0x{:x} < 0x{:x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise StopIteration(self.name(), total) # XXX
         elif total > expected:
             path = ' -> '.join(self.backtrace())
-            Log.debug('container.__deserialize_block__ : %s : Container larger than expected blocksize : %x > %x : {%s}'%(self.instance(), total, expected, path))
+            Log.debug('container.__deserialize_block__ : {:s} : Container larger than expected blocksize : 0x{:x} > 0x{:x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise error.LoadError(self, consumed=total) # XXX
         return self
 
@@ -1220,22 +1220,22 @@ class container(base):
             childOffset = self.getoffset() - self.parent.getoffset()
             maxElementSize = parentSize - childOffset
             if bs > maxElementSize:
-                Log.warn("container.serialize : %s : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : %x > %x : %x", self.instance(), bs, maxElementSize, parentSize)
+                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : 0x{:x} > 0x{:x} : 0x{:x}".format(self.instance(), bs, maxElementSize, parentSize))
                 bs = maxElementSize
 
         # if the blocksize is larger than maxint, then ignore the padding
         if bs > sys.maxint:
-            Log.warn('container.serialize : %s : blocksize is larger than sys.maxint. Refusing to add padding : %x > %x', self.instance(), bs, sys.maxint)
+            Log.warn('container.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : 0x{:x} > 0x{:x}'.format(self.instance(), bs, sys.maxint))
             return result
 
         # if the result is smaller then the blocksize, then pad the rest in
         if len(result) < bs:
-            Log.info('container.serialize : %s : Padding result due to element being partially uninitialized during serialization : %x', self.instance(), bs)
+            Log.info('container.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : 0x{:x}'.format(self.instance(), bs))
             result += utils.padding.fill(bs - len(result), self.padding)
 
         # if it's larger then the blocksize, then warn the user about it
         if len(result) > bs:
-            Log.debug('container.serialize : %s : Container larger than expected blocksize : %x > %x'%(self.instance(), len(result), bs))
+            Log.debug('container.serialize : {:s} : Container larger than expected blocksize : 0x{:x} > 0x{:x}'.format(self.instance(), len(result), bs))
 
         # otherwise, our result should appear correct
         return result
@@ -1291,9 +1291,9 @@ class container(base):
             ofs,s,bs = self.getoffset(),self.size(),self.blocksize()
             self.source.seek(ofs+bs)
             if s < bs:
-                Log.warning('container.load : %s : Unable to complete read : at {%x:+%x} : %s', self.instance(), ofs, s, repr(e))
+                Log.warning('container.load : {:s} : Unable to complete read : at {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs, s, e))
             else:
-                Log.debug('container.load : %s : Cropped to {%x:+%x} : %s', self.instance(), ofs, s, repr(e))
+                Log.debug('container.load : {:s} : Cropped to {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs, s, e))
         return self
 
     def commit(self, **attrs):
@@ -1304,7 +1304,7 @@ class container(base):
             try:
                 return super(container,self).commit(**attrs)
             except error.CommitError, e:
-                Log.warning('container.commit : %s : Unable to complete contiguous store : write at {%x:+%x} : %s', self.instance(), self.getoffset(), self.size(), repr(e))
+                Log.warning('container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:+{:x}}} : {:s}'.format(self.instance(), self.getoffset(), self.size(), e))
 
         # commit all elements of container individually
         with utils.assign(self, **attrs):
@@ -1316,7 +1316,7 @@ class container(base):
                     if current > sz: break
                 pass
             except error.CommitError, e:
-                Log.fatal('container.commit : %s : Unable to complete non-contiguous store : write stopped at {%x:+%x} : %s', self.instance(), ofs+current, self.blocksize()-current, repr(e))
+                Log.fatal('container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs+current, self.blocksize()-current, e))
         return self
 
     def copy(self, **attrs):
@@ -1334,7 +1334,7 @@ class container(base):
         differences in elements that are of a particular type.
         """
         if False in (self.initializedQ(),other.initializedQ()):
-            Log.fatal('container.compare : %s : Instance not initialized (%s)'% (self.instance(), self.instance() if not self.initializedQ() else other.instance()))
+            Log.fatal('container.compare : {:s} : Instance not initialized ({:s})'.format(self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 
         if self.value == other.value:
@@ -1358,7 +1358,7 @@ class container(base):
                 yield ofs, (tuple(between(self,(ofs,self.blocksize()))),None)
             else:
                 if len(s) != len(o):
-                    raise error.AssertionError(self, 'container.compare', message='Invalid length between both objects : %x != %x'%(len(s), len(o)))
+                    raise error.AssertionError(self, 'container.compare', message='Invalid length between both objects : {:x} != {:x}'.format(len(s), len(o)))
                 length = len(s)
                 s,o = (between(o, (ofs,ofs+length)) for o in (self,other))
                 yield ofs, (tuple(s), tuple(o))
@@ -1400,7 +1400,7 @@ class container(base):
             return self.append(res)
 
         # assume that object is now a ptype instance
-        assert isinstance(object, generic), "container.append : %s : Tried to append unknown type to container : %s"% (self.instance(), object.__class__)
+        assert isinstance(object, generic), "container.append : {:s} : Tried to append unknown type to container : {:s}".format(self.instance(), object.__class__)
         object.parent,object.source = self,None
 
         current = len(self.value)
@@ -1494,7 +1494,7 @@ class block(type):
     def __setslice__(self, i, j, value):
         v = self.value
         if len(value) != j-i:
-            raise ValueError, 'block.__setslice__ : %s : Unable to reassign slice outside of bounds of object : (%d,%d) : %d'% (self.instance(), i, j, len(value))
+            raise ValueError('block.__setslice__ : {:s} : Unable to reassign slice outside of bounds of object : ({:d}, {:d}) : {:d}'.format(self.instance(), i, j, len(value)))
         self.value = v[:i] + value + v[j:]
 
 #@utils.memoize('cls', newattrs=lambda n:tuple(sorted(n.iteritems())))
@@ -1627,8 +1627,8 @@ class definition(object):
         a = set(cls.cache.keys())
         b = set(otherdefinition.cache.keys())
         if a.intersection(b):
-            Log.warn('definition.update : %s : Unable to import module %r due to multiple definitions of the same record',cls.__module__, otherdefinition)
-            Log.warn('definition.update : %s : Duplicate records : %r', cls.__module__, a.intersection(b))
+            Log.warn('definition.update : {:s} : Unable to import module {!r} due to multiple definitions of the same record'.format(cls.__module__, otherdefinition))
+            Log.warn('definition.update : {:s} : Duplicate records : {!r}'.format(cls.__module__, a.intersection(b)))
             return False
 
         # merge record caches into a single one
@@ -1637,9 +1637,9 @@ class definition(object):
 
     @classmethod
     def copy(cls, otherdefinition):
-        #assert issubclass(otherdefinition, cls), 'ptype.definition :%s is not inheriting from %s
+        #assert issubclass(otherdefinition, cls), 'ptype.definition :{:s} is not inheriting from{:s} 
         if not issubclass(otherdefinition, cls):
-            raise error.AssertionError(cls, 'definition.copy', message='%s is not inheriting from %s'%(otherdefinition.__name__, cls.__name__))
+            raise error.AssertionError(cls, 'definition.copy', message='{:s} is not inheriting from {:s}'.format(otherdefinition.__name__, cls.__name__))
 
         otherdefinition.cache = dict(cls.cache)
         otherdefinition.attribute = cls.attribute
@@ -1710,14 +1710,14 @@ class wrapper_t(type):
 
         # if .__object__ is undefined or of a different type than self._value_
         if (self.__object__ is None) or (self.__object__.__class__ != self._value_):
-            name = 'wrapped_object<%s>'% (self._value_.typename() if istype(self._value_) else self._value_.__name__)
+            name = 'wrapped_object<{:s}>'.format(self._value_.typename() if istype(self._value_) else self._value_.__name__)
             self.__object__ = self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
 
         return self.__object__
 
     @object.setter
     def object(self, instance):
-        name = 'wrapped_object<%s>'% instance.name()
+        name = 'wrapped_object<{:s}>'.format(instance.name())
 
         # steal the type from the one the user specified
         self._value_ = instance.__class__
@@ -1770,15 +1770,15 @@ class wrapper_t(type):
     def size(self):
         if self.initializedQ():
             return self.object.size()
-        Log.info("wrapper_t.size : %s : Unable to get size of ptype.wrapper_t, as object is still uninitialized."% self.instance())
+        Log.info("wrapper_t.size : {:s} : Unable to get size of ptype.wrapper_t, as object is still uninitialized.".format(self.instance()))
         return 0
 
     def classname(self):
         if self.initializedQ():
-            return '%s<%s>'% (self.typename(),self.object.classname())
+            return '{:s}<{:s}>'.format(self.typename(),self.object.classname())
         if self._value_ is None:
-            return '%s<?>'% self.typename()
-        return '%s<%s>'% (self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
+            return '{:s}<?>'.format(self.typename())
+        return '{:s}<{:s}>'.format(self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
 
     def contains(self, offset):
         left = self.getoffset()
@@ -1946,7 +1946,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.bigendian)
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness %r"% endianness)
+    raise ValueError("Unknown integer endianness {!r}".fromat(endianness))
 
 class pointer_t(encoded_t):
     _object_ = None
@@ -2004,10 +2004,10 @@ class pointer_t(encoded_t):
 
     def classname(self):
         targetname = force(self._object_, self).typename() if istype(self._object_) else getattr(self._object_, '__name__', 'None')
-        return '%s<%s>'% (self.typename(),targetname)
+        return '{:s}<{:s}>'.format(self.typename(),targetname)
 
     def summary(self, **options):
-        return '*0x%x'% self.int()
+        return '*0x{:x}'.format(self.int())
 
     def repr(self, **options):
         """Display all pointer_t instances as an integer"""
@@ -2027,10 +2027,10 @@ class rpointer_t(pointer_t):
         if self.initializedQ():
             baseobject = self._baseobject_
             basename = baseobject.classname() if isinstance(self._baseobject_, base) else baseobject.__name__
-            return '%s(%s, %s)'%(self.typename(), self.object.classname(), basename)
+            return '{:s}({:s}, {:s})'.format(self.typename(), self.object.classname(), basename)
 
         objectname = force(self._object_,self).typename() if istype(self._object_) else self._object_.__name__
-        return '%s(%s, ...)'%(self.typename(), objectname)
+        return '{:s}({:s}, ...)'.format(self.typename(), objectname)
 
     def decode(self, object, **attrs):
         res = super(rpointer_t,self).decode(object, **attrs)
@@ -2052,9 +2052,9 @@ class opointer_t(pointer_t):
     def classname(self):
         calcname = self._calculate_.__name__
         if self.initializedQ():
-            return '%s(%s, %s)'%(self.typename(), self.object.classname(), calcname)
+            return '{:s}({:s}, {:s})'.format(self.typename(), self.object.classname(), calcname)
         objectname = force(self._object_,self).typename() if istype(self._object_) else self._object_.__name__
-        return '%s(%s, %s)'%(self.typename(), objectname, calcname)
+        return '{:s}({:s}, {:s})'.format(self.typename(), objectname, calcname)
 
     def decode(self, object, **attrs):
         res = super(opointer_t,self).decode(object, **attrs)
@@ -2073,7 +2073,7 @@ class constant(type):
 
     def __init__(self, **attrs):
         if self.__doc__ is None:
-            Log.warn('constant.__init__ : %s : Constant was not initialized', self.classname())
+            Log.warn('constant.__init__ : {:s} : Constant was not initialized'.format(self.classname()))
             self.__doc__ = ''
         return super(constant,self).__init__(**attrs)
 
@@ -2081,7 +2081,7 @@ class constant(type):
         bs,data = self.blocksize(),self.__doc__
 
         if (data != string) or (bs != len(string)):
-            Log.warn('constant.set : %s : Data did not match expected value : %r != %r', self.classname(), string, data)
+            Log.warn('constant.set : {:s} : Data did not match expected value : {!r} != {!r}'.format(self.classname(), string, data))
 
         if len(string) < bs:
             self.value = string + utils.padding.fill(bs-len(string), self.padding)
@@ -2093,7 +2093,7 @@ class constant(type):
     def __deserialize_block__(self, block):
         data = self.__doc__
         if data != block:
-            Log.warn('constant.__deserialize_block__ : %s : Data loaded from source did not match expected constant value : %r != %r', self.instance(), block, data)
+            Log.warn('constant.__deserialize_block__ : {:s} : Data loaded from source did not match expected constant value : {!r} != {!r}'.format(self.instance(), block, data))
         return super(constant,self).__deserialize_block__(data)
 
     def alloc(self, **attrs):

@@ -66,11 +66,11 @@ class _sh_flags(pbinary.flags):
 def _sh_offset(size):
     def sh_offset(self):
         type = Type.get(self['sh_type'].li.num())   # XXX: not 64-bit
-        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), type=Elf32_Off)
+        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)
         result = dyn.clone(type, blocksize=lambda _:self.getparent(ElfXX_Shdr)['sh_size'].li.num())
-        return dyn.rpointer(result, base, type=size)
+        return dyn.rpointer(result, base, size)
     return sh_offset
 
 class ElfXX_Shdr(ElfXX_Header): pass
@@ -86,8 +86,8 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
         (Elf32_Addr, 'sh_addr'),
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), type=Elf32_Off), 'sh_offset'),
+#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), Elf32_Off), 'sh_offset'),
+#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), Elf32_Off), 'sh_offset'),
         (_sh_offset(Elf32_Off), 'sh_offset'),
         (Elf32_Word, 'sh_size'),
         (Elf32_Word, 'sh_link'),

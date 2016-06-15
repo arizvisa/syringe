@@ -20,8 +20,8 @@ class Empty(ptype.undefined): pass
 A = dyn.array
 P = dyn.pointer
 C = dyn.clone
-OD = lambda t: dyn.rpointer(t, object=lambda s: s.p, type=Dword)
-OW = lambda t: dyn.rpointer(t, object=lambda s: s.p, type=Word)
+OD = lambda t: dyn.rpointer(t, lambda s: s.p, Dword)
+OW = lambda t: dyn.rpointer(t, lambda s: s.p, Word)
 
 ###
 class DesignerInfo(pstruct.type):
