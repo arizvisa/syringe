@@ -218,7 +218,7 @@ class File(pstruct.type):
         (__Data, 'Data'),
     ]
 
-    @ptypes.utils.memoize(self=lambda s: s.source)
+    @ptypes.utils.memoize(self=lambda s: s)
     def getDifat(self):
         '''Return an array containing the Difat'''
         count = self['Difat']['csectDifat'].num()
@@ -238,7 +238,7 @@ class File(pstruct.type):
             map(res.append, (p for p in table))
         return res
 
-    @ptypes.utils.memoize(self=lambda s: s.source)
+    @ptypes.utils.memoize(self=lambda s: s)
     def getMiniFat(self):
         '''Return an array containing the MiniFAT'''
         mf = self['MiniFat']
@@ -248,13 +248,13 @@ class File(pstruct.type):
             map(res.append, (p for p in table))
         return res
 
-    @ptypes.utils.memoize(self=lambda s: s.source)
+    @ptypes.utils.memoize(self=lambda s: s)
     def getFat(self):
         '''Return an array containing the FAT'''
         count,difat = self['Fat']['csectFat'].num(),self.getDifat()
         res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount)
         for _,v in zip(xrange(count), difat):
-            map(res.append, (p for p in v.l.d.l))
+            map(res.append, (p for p in v.d.l))
         return res
 
     def getDirectory(self):

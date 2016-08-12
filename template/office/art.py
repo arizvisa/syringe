@@ -1352,6 +1352,16 @@ class MSOPATHESCAPE(pint.enum, uint4):
 ## record types from [MS-OART]
 @FT_OfficeArtSp.define
 class OfficeArtSpContainer(RecordContainer):
+    # PST_ShapeContainer
+    type = 15,0x000
+
+@FT_msofbtChildAnchor
+class OfficeArtClientAnchor(RecordContainer):
+    type = 0,0x000
+
+@FT_msofbtClientData.define
+class OfficeArtClientData(RecordContainer):
+    # PST_ShapeClientContainer
     type = 15,0x000
 
 @FT_OfficeArtSolver.define
@@ -1376,10 +1386,12 @@ class OfficeArtFSP(pstruct.type):
 
 @FT_OfficeArtDg.define
 class OfficeArtDgContainer(RecordContainer):
+    # PST_DrawingContainer
     type = 15,0x000
 
 @FT_OfficeArtSpgr.define
 class OfficeArtSpgrContainer(RecordContainer):
+    # PST_GroupShapeContainer
     type = 15,0x000
 
 @FT_OfficeArtBlipDIB.define
@@ -3402,7 +3414,7 @@ if __name__ == '__main__':
         import ptypes
         ptypes.setsource( ptypes.provider.file('poc.xls') )
 
-        x = SpContainer()
+        x = OfficeArtSpContainer()
     #    x.setoffset(66100)
         x.setoffset(66360)
         print x.l

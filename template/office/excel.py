@@ -5,6 +5,12 @@ from . import *
 @Record.define
 class RT_Excel(ptype.definition):
     type,cache = __name__,{}
+    @classmethod
+    def lookup(cls, type):
+        type,none = type
+        if none is not None:
+            raise KeyError
+        return super(RT_Excel, cls).lookup(type)
 
 class RecordGeneral(RecordGeneral):
     class Header(pstruct.type):
@@ -682,10 +688,10 @@ class DSF(pint.uint16_t):
     type = 353
     type = 0x161
 
-#@RT_Excel.define
-#class MSODRAWING(art.SpContainer):
-#    type = 0x00ec
-#    type = 236
+@RT_Excel.define
+class MSODRAWING(art.OfficeArtSpContainer):
+    type = 0x00ec
+    type = 236
 
 @RT_Excel.define
 class EOF(pstruct.type):

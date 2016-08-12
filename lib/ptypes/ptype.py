@@ -1468,7 +1468,7 @@ class undefined(type):
         return False if self.value is None else True
     def serialize(self):
 #        return utils.padding.fill(self.blocksize(), self.padding)
-        return self.value
+        return self.value or ''
     def summary(self, **options):
         return '...'
     def details(self, **options):
@@ -1513,7 +1513,7 @@ def clone(cls, **newattrs):
     if hasattr(cls, '__module__'):
         newattrs.setdefault('__module__', cls.__module__)
 
-    ignored = cls.ignored
+    ignored = cls.ignored if hasattr(cls, 'ignored') else set()
     recurse = dict(newattrs.pop('recurse', {}))
 
     # update class with all attributes
@@ -1526,8 +1526,9 @@ def clone(cls, **newattrs):
     # filter out ignored attributes from recurse dictionary
     recurse = dict((k,v) for k,v in recurse.iteritems() if k not in ignored)
 
-    if _clone.attributes is None: _clone.attributes = {}
-    _clone.attributes.update(recurse)
+    if hasattr(_clone, 'attributes'):
+        _clone.attributes = getattr(_clone, 'attributes', None) or {}
+        _clone.attributes.update(recurse)
     return _clone
 
 class definition(object):
@@ -1614,10 +1615,9 @@ class definition(object):
         Returns cls.unknown with the provided ``unknownattrs`` if ``type`` is
         not found.
         """
-        try:
-            return cls.cache[type]
-        except KeyError:
-            pass
+        try: return cls.lookup(type)
+        except KeyError: pass
+
         unknownattrs.setdefault(cls.attribute,type)
         return clone(cls.unknown, **unknownattrs)
 

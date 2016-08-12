@@ -379,22 +379,6 @@ class NotesContainer(RecordContainer):
 class DrawingContainer(RecordContainer):
     type = 15,0x000
 
-#@Record.define
-#class PST_DrawingContainer(RecordContainer):
-#    type = 61442
-
-#@Record.define
-#class PST_GroupShapeContainer(RecordContainer):
-#    type = 61443
-
-#@Record.define
-#class PST_ShapeContainer(RecordContainer):
-#    type = 61444
-
-#@Record.define
-#class PST_ShapeClientContainer(RecordContainer):
-#    type = 61457
-
 @RT_Handout.define
 class HandoutContainer(RecordContainer):
     type = 15,0x000

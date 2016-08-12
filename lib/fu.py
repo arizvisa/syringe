@@ -1093,7 +1093,7 @@ if 'special':
 
             # XXX: assign the globals from hints if requested
             globs = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
-            result = cls.new_cellvars(*closure)
+            result = cls.cell(*closure)
             return function.new(code, globs, closure=result)
 
         @classmethod
@@ -1106,59 +1106,9 @@ if 'special':
             return instance
 
         @classmethod
-        def new_cellvars(cls, *args):
+        def cell(cls, *args):
             '''Convert args into a cell tuple'''
-            # create a closure that we can rip its cell list from
-            newinstruction = lambda op,i: op + chr(i&0x00ff) + chr((i&0xff00)/0x100)
-
-            LOAD_CONST = '\x64'     # LOAD_CONST /co_consts/
-            LOAD_DEREF = '\x88'     # LOAD_DEREF /co_freevars/
-            STORE_DEREF = '\x89'    # STORE_DEREF  /co_cellvars/
-            LOAD_CLOSURE = '\x87'   # LOAD_CLOSURE /co_cellvars/
-            MAKE_CLOSURE = '\x86'   # MAKE_CLOSURE /number/ ???
-            STORE_FAST = '\x7d'     # STORE_FAST /co_varnames/
-            LOAD_FAST = '\x7c'      # LOAD_FAST /co_varnames/
-            BUILD_TUPLE = '\x66'    # BUILD_TUPLE /length/
-            POP_TOP = '\x01'
-            RETURN_VALUE = '\x53'
-
-            # generate inner code object
-            result = []
-            for i in range(len(args)):
-                result.append(newinstruction(LOAD_DEREF, i))
-                result.append(POP_TOP)
-            result.append(newinstruction(LOAD_CONST, 0))
-            result.append(RETURN_VALUE)
-
-            freevars = __builtin__.tuple( chr(x+65) for x in range(len(args)) )
-            innercodeobj = code.new(0, 0, 0, 0, ''.join(result), (None,), (), (), '', '<closure>', 0, '', freevars, ())
-
-            # generate outer code object for >= 2.5
-            result = []
-            for i in range(len(args)):
-                result.append( newinstruction(LOAD_CONST, i+1) )
-                result.append( newinstruction(STORE_DEREF, i) )
-                result.append( newinstruction(LOAD_CLOSURE, i) )
-
-            result.append( newinstruction(BUILD_TUPLE, len(args)) )
-            result.append( newinstruction(LOAD_CONST, 0) )
-            result.append( newinstruction(MAKE_CLOSURE, 0) )    # XXX: these opcodes are different for <= 2.4
-            result.append( RETURN_VALUE )
-
-            outercodestring = ''.join(result)
-
-            # build constants list
-            result = list_.new(args)
-            result.insert(0, innercodeobj)
-            constants = __builtin__.tuple(result)
-
-            # names within outer code object
-            cellvars = __builtin__.tuple( chr(x+65) for x in range(len(args)) )
-            outercodeobj = code.new(0, 0, 0, 0, outercodestring, constants, (), (), '', '<function>', 0, '', (), cellvars)
-
-            # finally fucking got it
-            fn = function.new(outercodeobj, {})
-            return fn().func_closure
+            return __builtin__.tuple(((lambda n: lambda : n)(n).func_closure[0]) for n in args)
 
     @package.cache.register
     class builtin_(__constant):

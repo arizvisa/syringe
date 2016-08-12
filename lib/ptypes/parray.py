@@ -189,7 +189,9 @@ class _parray_generic(ptype.container):
         result = self.repr()
 
         # generate the element description
-        length = len(self) if self.initializedQ() else (self.length or 0)
+        try: length = len(self)
+        except: length = self.length or 0
+
         if self._object_ is None:
             obj = '(untyped)'
         else:
@@ -300,7 +302,9 @@ class type(_parray_generic):
 
     def summary(self, **options):
         res = super(type,self).summary(**options)
-        length = len(self) if self.initializedQ() else (self.length or 0)
+        try: length = len(self)
+        except: length = self.length or 0
+
         if self._object_ is None:
             obj = '(untyped)'
         else:
