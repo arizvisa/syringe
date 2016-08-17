@@ -7,8 +7,9 @@ class _sh_name(pint.uint_t):
 
     def str(self):
         ofs = self.num()
-        stringtable = self.getparent(ElfXX_Header).stringtable()
-        return stringtable.extract(ofs).str()
+        stringtable = self.getparent(ElfXX_Ehdr).stringtable()
+        res = stringtable.extract(ofs)
+        return res.str()
 
 class _sh_type(pint.enum):
     _values_ = [
@@ -69,11 +70,9 @@ def _sh_offset(size):
         #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)
-        result = dyn.clone(type, blocksize=lambda _:self.getparent(ElfXX_Shdr)['sh_size'].li.num())
+        result = dyn.clone(type, blocksize=lambda _: self['sh_size'].li.num())
         return dyn.rpointer(result, base, size)
     return sh_offset
-
-class ElfXX_Shdr(ElfXX_Header): pass
 
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
@@ -191,7 +190,7 @@ class SHT_STRTAB(parray.block):
     _object_ = pstr.szstring
 
     def extract(self, offset):
-        return self.at(offset + self.getoffset(), recurse=False).str()
+        return self.at(offset + self.getoffset(), recurse=False)
 
 @Type.define
 class SHT_RELA(parray.block):

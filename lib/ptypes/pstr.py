@@ -314,7 +314,7 @@ class string(ptype.type):
         return result
 
     def repr(self, **options):
-        return self.details(**options)
+        return self.summary(**options)
 
     def classname(self):
         return '{:s}<{:s}>'.format(super(string,self).classname(), self._object_.typename())

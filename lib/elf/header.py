@@ -2,7 +2,7 @@ from . import section,segment
 from .base import *
 
 ### 32-bit
-class Elf32_Ehdr(pstruct.type, ElfXX_Header):
+class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
     def _ent_array(self, type, size, length):
         t = dyn.clone(type, blocksize=lambda s:self[size].li.num())
         return dyn.array(t, self[length].li.num())
@@ -31,7 +31,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Header):
         return self['e_shoff'].d.li[index]['sh_offset'].d.l
 
 ### 64-bit
-class Elf64_Ehdr(pstruct.type, ElfXX_Header):
+class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
     def _ent_array(self, type, size, length):
         t = dyn.clone(type, blocksize=lambda s:self[size].li.num())
         return dyn.array(t, self[length].li.num())

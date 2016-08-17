@@ -1355,7 +1355,7 @@ class OfficeArtSpContainer(RecordContainer):
     # PST_ShapeContainer
     type = 15,0x000
 
-@FT_msofbtChildAnchor
+@FT_msofbtChildAnchor.define
 class OfficeArtClientAnchor(RecordContainer):
     type = 0,0x000
 
