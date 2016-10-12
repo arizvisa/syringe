@@ -274,10 +274,15 @@ class PersistDirectoryEntry(pstruct.type):
         (lambda s: dyn.array( dyn.pointer(RecordGeneral), s['info'].li['cPersist'] ), 'offsets')
     ]
 
-    def details(self):
-        id = 'info.persistId:%x'% self['info']['persistId']
-        addresses = [hex(o.num()) for o in self['offsets']]
-        return ' '.join((id, 'offsets:{', ','.join(addresses), '}'))
+    def summary(self):
+        info = self['info']
+        info_s = 'info.persistId:0x%x info.cPersist:0x%x'% (info['persistId'], info['cPersist'])
+        offset = [o.num() for o in self['offsets']]
+        offset_s = 'offsets:{%s}'% (','.join(map(hex, offset)))
+        return ' '.join((info_s, offset_s))
+
+    def repr(self):
+        return self.summary()
 
     def walk(self):
         # heh

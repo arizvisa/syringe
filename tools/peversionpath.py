@@ -50,7 +50,7 @@ class help(optparse.OptionParser):
 
         # fields
         self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
-        self.add_option('-f', '--format', default='{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {ProductVersion}/{OriginalFilename})')
+        self.add_option('-f', '--format', default='{OriginalFilename}/{ProductVersion}/{__name__}', type='str', help='output the specified format (defaults to {OriginalFilename}/{ProductVersion}/{__name__})')
         self.description = 'If path-format is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table'
 
 help = help()
