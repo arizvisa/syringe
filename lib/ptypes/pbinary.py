@@ -809,6 +809,8 @@ class struct(_struct_generic):
     def blockbits(self):
         if self.initializedQ():
             return super(struct,self).blockbits()
+        # FIXME: self.new(t) can potentially executes a function that it shouldn't
+        #        as .blockbits() is called by .__load_littleendian
         return sum((t if isinstance(t,six.integer_types) else bitmap.size(t) if bitmap.isbitmap(t) else self.new(t).blockbits()) for t,_ in self._fields_)
 
     def __and__(self, field):
@@ -1032,6 +1034,8 @@ class partial(ptype.container):
         if self.byteorder is not config.byteorder.littleendian:
             raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
 
+        # FIXME: self.new(t) can potentially get called due to this call to self.blocksize().
+        #        This can cause a field's closure to get called when the type is uninitialized.
         with utils.assign(self, **attrs):
             o,s = self.getoffset(),self.blocksize()
             self.source.seek(o)

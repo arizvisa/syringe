@@ -849,7 +849,7 @@ except OSError, m:
     Log.warning("__module__ : Unable to load 'kernel32.dll' ({:s}). Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(m))
 
 try:
-    import _idaapi
+    import idaapi as _idaapi
     class Ida(memorybase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
         offset = 0xffffffff
