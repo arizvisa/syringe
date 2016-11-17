@@ -156,7 +156,7 @@ def configuration(cls):
             doc = v.__doc__.split('\n')[0] if v.__doc__ else None
             col2 = max((col2,len(repr(val[k]))))
             result.append((k, val[k], doc))
-        return [(('{name:%d} = {val:<%d} # {doc}' if d else '{name:%d} = {val:<%d}')%(col1,col2)).format(name=k,val=v,doc=d) for k,v,d in result]
+        return [(('{{name:{:d}}} = {{val:<{:d}}} # {{doc}}' if d else '{{name:{:d}}} = {{val:<{:d}}}').format(col1,col2)).format(name=k,val=v,doc=d) for k,v,d in result]
 
     def __repr__(self):
         descr = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n')

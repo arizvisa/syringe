@@ -354,7 +354,7 @@ def debug(ptype, **attributes):
         def serialize(self):
             result = super(decorated, self).serialize()
             size = len(result)
-            _ = logentry('serialize() -> __len__ -> 0x{:x}', self.instance(), len(size))
+            _ = logentry('serialize() -> __len__() -> {:#x}', self.instance(), len(size))
             Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('serialize',[]).append(_)
             return result
@@ -365,7 +365,7 @@ def debug(ptype, **attributes):
             end = time.time()
 
             offset, size, source = self.getoffset(), self.blocksize(), self.source
-            _ = logentry('load({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            _ = logentry('load({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
             Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('load',[]).append(_)
             return result
@@ -375,7 +375,7 @@ def debug(ptype, **attributes):
             result = super(decorated, self).commit(**kwds)
             end = time.time()
 
-            _ = logentry('commit({:s}) {:f} seconds -> (offset=0x{:x},size=0x{:x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            _ = logentry('commit({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
             Log.debug(' : '.join(self.instance(),_[-1]))
             self._debug_.setdefault('commit',[]).append(_)
             return result
@@ -637,7 +637,7 @@ class _base_generic(object):
 
         # XXX
         chain = ';'.join(utils.repr_instance(x.classname(),x.name()) for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))
-        try: bs = hex(self.blocksize())
+        try: bs = '{:#x}'.format(self.blocksize())
         except: bs = '???'
         raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s}[{:x}:+{:s}] : {:s}".format(type.typename(), self.classname(), self.getoffset(), bs, chain))
 
@@ -841,9 +841,9 @@ class base(generic):
         # log whether our size has changed somehow
         a,b = self.size(),result.size()
         if a > b:
-            Log.info("base.cast : {:s} : Result {:s} size is smaller than source : 0x{:x} < 0x{:x}".format(self.classname(), result.classname(), result.size(), self.size()))
+            Log.info("base.cast : {:s} : Result {:s} size is smaller than source : {:#x} < {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         elif a < b:
-            Log.warning("base.cast : {:s} : Result {:s} is partially initialized : 0x{:x} > 0x{:x}".format(self.classname(), result.classname(), result.size(), self.size()))
+            Log.warning("base.cast : {:s} : Result {:s} is partially initialized : {:#x} > {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         return result
 
     def traverse(self, edges=lambda node:tuple(node.value) if isinstance(node, container) else (), filter=lambda node:True, **kwds):
@@ -975,15 +975,15 @@ class type(base):
                 childOffset = self.getoffset() - self.parent.getoffset()
                 maxElementSize = parentSize - childOffset
                 if res > maxElementSize:
-                    Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : 0x{:x} > 0x{:x} : 0x{:x}".format(self.instance(), res, maxElementSize, parentSize))
+                    Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
                     res = maxElementSize
 
             if res > sys.maxint:
-                Log.fatal('type.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : 0x{:x} > 0x{:x}'.format(self.instance(), res, sys.maxint))
+                Log.fatal('type.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), res, sys.maxint))
                 return ''
 
             # generate padding up to the blocksize
-            Log.info('type.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : 0x{:x}'.format(self.instance(), res))
+            Log.info('type.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), res))
             padding = utils.padding.fill(res if res > 0 else 0, self.padding)
 
             # prefix beginning of padding with any data that element contains
@@ -995,7 +995,7 @@ class type(base):
         # pad up to the .blocksize() if our length doesn't meet the minimum
         res = self.blocksize()
         if len(result) < res:
-            Log.info('type.serialize : {:s} : Padding result due to element being partially initialized during serialization : 0x{:x}'.format(self.instance(), res))
+            Log.info('type.serialize : {:s} : Padding result due to element being partially initialized during serialization : {:#x}'.format(self.instance(), res))
             padding = utils.padding.fill(res-len(result), self.padding)
             result += padding
         return result
@@ -1120,7 +1120,7 @@ class container(base):
         until an atomic type (such as ptype.type, or pbinary.partial) is encountered.
         """
         if not self.contains(offset):
-            raise error.NotFoundError(self, 'container.at', 'offset 0x{:x} can not be located within container.'.format(offset))
+            raise error.NotFoundError(self, 'container.at', 'offset {:#x} can not be located within container.'.format(offset))
 
         # if we weren't asked to recurse, then figure out which sub-element contains the offset
         if not recurse:
@@ -1128,7 +1128,7 @@ class container(base):
                 if n.contains(offset):
                     return n
                 continue
-            raise error.NotFoundError(self, 'container.at', 'offset 0x{:x} not found in a child element. returning encompassing parent.'.format(offset))
+            raise error.NotFoundError(self, 'container.at', 'offset {:#x} not found in a child element. returning encompassing parent.'.format(offset))
 
         # descend into the trie a single level
         try:
@@ -1196,11 +1196,11 @@ class container(base):
         # log any information about deserialization errors
         if total < expected:
             path = ' -> '.join(self.backtrace())
-            Log.warn('container.__deserialize_block__ : {:s} : Container less than expected blocksize : 0x{:x} < 0x{:x} : {{{:s}}}'.format(self.instance(), total, expected, path))
+            Log.warn('container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise StopIteration(self.name(), total) # XXX
         elif total > expected:
             path = ' -> '.join(self.backtrace())
-            Log.debug('container.__deserialize_block__ : {:s} : Container larger than expected blocksize : 0x{:x} > 0x{:x} : {{{:s}}}'.format(self.instance(), total, expected, path))
+            Log.debug('container.__deserialize_block__ : {:s} : Container larger than expected blocksize : {:#x} > {:#x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise error.LoadError(self, consumed=total) # XXX
         return self
 
@@ -1220,22 +1220,22 @@ class container(base):
             childOffset = self.getoffset() - self.parent.getoffset()
             maxElementSize = parentSize - childOffset
             if bs > maxElementSize:
-                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : 0x{:x} > 0x{:x} : 0x{:x}".format(self.instance(), bs, maxElementSize, parentSize))
+                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), bs, maxElementSize, parentSize))
                 bs = maxElementSize
 
         # if the blocksize is larger than maxint, then ignore the padding
         if bs > sys.maxint:
-            Log.warn('container.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : 0x{:x} > 0x{:x}'.format(self.instance(), bs, sys.maxint))
+            Log.warn('container.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), bs, sys.maxint))
             return result
 
         # if the result is smaller then the blocksize, then pad the rest in
         if len(result) < bs:
-            Log.info('container.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : 0x{:x}'.format(self.instance(), bs))
+            Log.info('container.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), bs))
             result += utils.padding.fill(bs - len(result), self.padding)
 
         # if it's larger then the blocksize, then warn the user about it
         if len(result) > bs:
-            Log.debug('container.serialize : {:s} : Container larger than expected blocksize : 0x{:x} > 0x{:x}'.format(self.instance(), len(result), bs))
+            Log.debug('container.serialize : {:s} : Container larger than expected blocksize : {:#x} > {:#x}'.format(self.instance(), len(result), bs))
 
         # otherwise, our result should appear correct
         return result
@@ -2007,7 +2007,7 @@ class pointer_t(encoded_t):
         return '{:s}<{:s}>'.format(self.typename(),targetname)
 
     def summary(self, **options):
-        return '*0x{:x}'.format(self.int())
+        return '*{:#x}'.format(self.int())
 
     def repr(self, **options):
         """Display all pointer_t instances as an integer"""

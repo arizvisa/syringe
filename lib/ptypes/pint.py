@@ -224,7 +224,7 @@ class integer_t(ptype.type):
 
     def summary(self, **options):
         res = self.int()
-        return '{s}0x{n:0{l:d}x} ({s}{n:d})'.format(s='-' if res < 0 else '',n=abs(res),l=self.length*2)
+        return '{:+#0{:d}x} ({:d})'.format(res, 3+self.length*2, res)
 
     def flip(self):
         '''Returns an integer with the endianness flipped'''
@@ -337,17 +337,19 @@ class enum(integer_t):
         raise AttributeError(enum, self, name)
 
     def str(self):
-        '''Return value as a string'''
+        '''Return enumeration as a string or jsut the integer if unknown.'''
         res = self.int()
-        number = ('0x{:x}'.format(abs(res)) if res >= 0 else '-0x{:x}'.format(abs(res)))
         try:
-            value = self.byValue(res) + '({:s})'.format(number)
-        except KeyError:
-            value = number
-        return value
+            return self.byValue(res)
+        except KeyError: pass
+        return '{:#x}'.format(res)
 
     def summary(self, **options):
-        return self.str()
+        res = self.int()
+        try:
+            return self.byValue(res) + '({:#x})'.format(res)
+        except KeyError: pass
+        return super(enum, self).summary()
 
     def __setvalue__(self, value):
         if isinstance(value, basestring):
@@ -551,7 +553,7 @@ if __name__ == '__main__':
                 ('cc', 0xcccccccc),
             ]
         a = e().set('cc')
-        if a.str().startswith('cc') and a.str().endswith('(0x%08x)'%a.int()):
+        if a.str() == 'cc':
             raise Success
 
     @TestCase
@@ -563,28 +565,8 @@ if __name__ == '__main__':
                 ('cc', 0xcccccccc),
             ]
         a = e().set(0xdddddddd)
-        if a.str() == '0x%08x'%a.int():
+        if a.str() == '{:#x}'.format(a.int()):
             raise Success
-
-#    @TestCase
-#    def Test11():
-#        raise NotImplementedError
-
-#       >>> y[3][2]['data']
-#       Traceback (most recent call last):
-#         File "<stdin>", line 1, in <module>
-#         File "c:\Users\user\work\syringe\lib\ptypes\ptype.py", line 247, in __repr__
-#           return self.repr()
-#         File "c:\Users\user\work\syringe\lib\ptypes\ptype.py", line 498, in repr
-#           return '[%x] %s %s %s'%( self.getoffset(), self.classname(), prop, self.details())
-#         File "c:\Users\user\work\syringe\lib\ptypes\pint.py", line 205, in details
-#           value = self.lookupByValue(res)
-#         File "c:\Users\user\work\syringe\lib\ptypes\pint.py", line 158, in lookupByValue
-#           for k,v in cls._values_:
-#       ValueError: too many values to unpack
-#       >>> y[3][2]['data']._values_
-#       ['name', 'constant']
-
 
 if __name__ == '__main__':
     results = []

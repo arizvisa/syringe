@@ -211,11 +211,11 @@ class type(_pstruct_generic):
                         try:
                             _ = self.blocksize()
                         except Exception, e:
-                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset 0x{:x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
+                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
                             if current+bs > _:
                                 path = ' -> '.join(self.backtrace())
-                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset 0x{:x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
+                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
                         current += bs
                     ofs += bs

@@ -1,5 +1,6 @@
 #bitmap = (integer, bits)
 import __builtin__,sys,six
+import utils
 
 ## start somewhere
 def new(value, size):
@@ -55,8 +56,8 @@ def hex(bitmap):
     length = __builtin__.int(math.ceil(size/4.0))
     if s < 0:
         max,sf = 2**size,2**(size-1)
-        n = (n-max) if n&sf else n&(sf-1)
-        return '{:s}{:#0{:d}x}'.format('-' if n < 0 else '+', abs(n)&(max-1), length+2)
+        res = n & (max-1)
+        return '{:+#0{:d}x}'.format((res-max) if res&sf else res&(sf-1), length+3)
     return '{:#0{:d}x}'.format(n&(2**size)-1, length+2)
 
 def scan(bitmap, value=True, position=0):
@@ -318,7 +319,7 @@ class consumer(object):
 
 def repr(object):
     integer,size = object
-    return "<type 'bitmap'> (0x{:x}, {:d})".format(hex(object),size)
+    return "<type 'bitmap'> ({:#x}, {:d})".format(object, size)
 
 def data(bitmap, reversed=False):
     '''Convert a bitmap to a string left-aligned to 8-bits. Defaults to big-endian.'''

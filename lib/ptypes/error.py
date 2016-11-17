@@ -23,8 +23,8 @@ class StoreError(ProviderError):
     def __str__(self):
         identity,offset,amount,written = self.stored
         if written > 0:
-            return 'StoreError({:s}) : Unable to store object to 0x{:x}:+{:x} : Wrote 0x{:x}'.format(type(identity), offset, amount, written)
-        return 'StoreError({:s}) : Unable to write object to 0x{:x}:+{:x}'.format(type(identity), offset, amount)
+            return 'StoreError({:s}) : Unable to store object to {:#x}:{:+#x} : Wrote {:#x}'.format(type(identity), offset, amount, written)
+        return 'StoreError({:s}) : Unable to write object to {:#x}:{:+#x}'.format(type(identity), offset, amount)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
     def __init__(self, identity, offset, desired, amount=0, **kwds):
@@ -33,8 +33,8 @@ class ConsumeError(ProviderError):
     def __str__(self):
         identity,offset,desired,amount = self.consumed
         if amount > 0:
-            return 'ConsumeError({:s}) : Unable to read from 0x{:x}:+{:x} : Read 0x{:x}'.format(type(identity), offset, desired, amount)
-        return 'ConsumeError({:s}) : Unable to read from 0x{:x}:+{:x}'.format(type(identity), offset, desired)
+            return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x} : Read {:#x}'.format(type(identity), offset, desired, amount)
+        return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x}'.format(type(identity), offset, desired)
 
 ### errors that can happen during deserialization or serialization
 class SerializationError(Base):
@@ -63,7 +63,7 @@ class LoadError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         consumed, = self.loaded
         if consumed > 0:
-            return '{:s} : {:s} : Unable to consume 0x{:x} from source ({:s})'.format(self.typename(), self.path(), consumed, super(LoadError,self).__str__())
+            return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.typename(), self.path(), consumed, super(LoadError,self).__str__())
         return super(LoadError,self).__str__()
 
 class CommitError(SerializationError, exc.EnvironmentError):
@@ -75,7 +75,7 @@ class CommitError(SerializationError, exc.EnvironmentError):
     def __str__(self):
         written, = self.committed
         if written > 0:
-            return '{:s} : wrote 0x{:x} : {:s}'.format(self.typename(), written, self.path())
+            return '{:s} : wrote {:+#x} : {:s}'.format(self.typename(), written, self.path())
         return super(CommitError,self).__str__()
 
 class MemoryError(SerializationError, exc.MemoryError):

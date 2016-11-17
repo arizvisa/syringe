@@ -2028,7 +2028,7 @@ if __name__ == '__main__':
         data = '\xa8'
         a = pbinary.new(pbinary.bigendian(p, source=prov.string(data)))
         a = a.l
-        if 'notset' not in a.summary() and all(('set%d'%x) in a.summary() for x in range(3)):
+        if 'notset' not in a.summary() and all(('set{:d}'.format(x)) in a.summary() for x in range(3)):
             raise Success
 
     @TestCase

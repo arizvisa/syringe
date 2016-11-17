@@ -343,7 +343,7 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        raise Failure('setf: %s == 0x%x? %s (0x%x) %s'%(float, expected, a.num(), n, f))
+        raise Failure('setf: {:s} == {:#x}? {:s} ({:#x}) {:s}'.format(float, expected, a.num(), n, f))
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -361,25 +361,25 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        raise Failure('getf: 0x%x == %s? %s (%s) %x'%( integer, expected, a.num(), n, i))
+        raise Failure('getf: {:#x} == {:s}? {:s} ({:s}) {:#x}'.format(integer, expected, a.num(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):
         testcase = lambda cls=single,integer=f,value=n:test_load(cls,value,integer)
-        testcase.__name__ = 'single_precision_load_%d'% i
+        testcase.__name__ = 'single_precision_load_{:d}'.format(i)
         TestCase(testcase)
     for i,(n,f) in enumerate(single_precision):
         testcase = lambda cls=single,integer=f,value=n:test_assignment(cls,integer,value)
-        testcase.__name__ = 'single_precision_assignment_%d'% i
+        testcase.__name__ = 'single_precision_assignment_{:d}'.format(i)
         TestCase(testcase)
 
     for i,(n,f) in enumerate(double_precision):
         testcase = lambda cls=double,integer=f,value=n:test_load(cls,value,integer)
-        testcase.__name__ = 'double_precision_load_%d'% i
+        testcase.__name__ = 'double_precision_load_{:d}'.format(i)
         TestCase(testcase)
     for i,(n,f) in enumerate(double_precision):
         testcase = lambda cls=double,integer=f,value=n:test_assignment(cls,integer,value)
-        testcase.__name__ = 'double_precision_assignment_%d'% i
+        testcase.__name__ = 'double_precision_assignment_{:d}'.format(i)
         TestCase(testcase)
 
     ## fixed

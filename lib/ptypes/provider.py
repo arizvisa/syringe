@@ -80,7 +80,7 @@ class empty(base):
         return '\x00'*amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('{:s}.store : Tried to write 0x{:x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
+        Log.info('{:s}.store : Tried to write {:#x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
 ## core providers
@@ -309,7 +309,7 @@ class random(base):
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('{:s}.store : Tried to write 0x{:x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
+        Log.info('{:s}.store : Tried to write {:#x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
 ## useful providers
@@ -409,7 +409,7 @@ class stream(base):
         return self._write(data)
 
     def __repr__(self):
-        return '{:s}[eof={!r} base=0x{:x} length=+{:x}] ofs=0x{:x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
+        return '{:s}[eof={!r} base={:#x} length={:+#x}] ofs={:#x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
 
     def __getitem__(self, i):
         return self.data[i-self.data_ofs]
@@ -426,7 +426,7 @@ class iterable(stream):
         return str().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
-        Log.info('iter._write : Tried to write 0x{:x} bytes to an iterator'.format(len(data)))
+        Log.info('iter._write : Tried to write {:#x} bytes to an iterator'.format(len(data)))
         return len(data)
 
 class filebase(base):
@@ -691,7 +691,8 @@ try:
             res = ctypes.cast(p_string, ctypes.c_char_p)
             errorString = str(res.value)
             res = k32.LocalFree(res)
-            assert res == 0, "kernel32!LocalFree failed. Error 0x{:08x}.".format(k32.GetLastError())
+            if res == 0:
+                raise AssertionError("KERNEL32.dll!LocalFree failed. Error {:#0{:d}x}.".format(k32.GetLastError(), 2+8))
 
             return (errorCode, errorString)
 
@@ -945,7 +946,7 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
             except RuntimeError, e:
-                raise StopIteration('Unable to read 0x{:x} bytes from address 0x{:x}'.format(amount, self.offset))
+                raise StopIteration('Unable to read {:#x} bytes from address {:#x}'.format(amount, self.offset))
             return str(result)
 
         def store(self, data):
@@ -1418,7 +1419,7 @@ if __name__ == '__main__':
             p = multiprocessing.Process(target=stringspin, args=(q,string,))
             p.start()
             address = q.get()
-            print hex(address)
+            print '{:#x}'.format(address)
 
             src = provider.WindowsProcessId(p.pid)
             src.seek(address)

@@ -780,7 +780,7 @@ if __name__ == '__main__':
 
             def repr(self, **options):
                 if self.initialized:
-                    return self.classname() + ' %x'% self.int()
+                    return self.classname() + ' {:x}'.format(self.int())
                 return self.classname() + ' ???'
 
         class extreme(parray.infinite):
