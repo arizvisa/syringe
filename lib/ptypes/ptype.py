@@ -423,7 +423,7 @@ class _base_generic(object):
         self.__source = value
 
     attributes = None        # {...}
-    ignored = set(('source','parent','attributes','value','__name__','position'))
+    ignored = set(('source','parent','attributes','value','__name__','position','offset'))
 
     parent = None       # ptype.base
     p = property(fget=lambda s: s.parent)   # abbr to get to .parent
@@ -436,11 +436,19 @@ class _base_generic(object):
         self.attributes = {} if self.attributes is None else dict(self.attributes)
         self.__update__(attrs)
 
-    def setposition(self, position, **kwds):
-        self.position,res = position,self.position
-        return res
+    ## offset
+    def setoffset(self, offset, **_):
+        raise error.ImplementationError(self, 'generic.setoffset')
+    def getoffset(self, **_):
+        raise error.ImplementationError(self, 'generic.setoffset')
+    offset = property(fget=lambda s: s.getoffset(), fset=lambda s,v: s.setoffset(v))
+
+    ## position
+    def setposition(self, position, **_):
+        raise error.ImplementationError(self, 'generic.setposition')
     def getposition(self):
-        return self.position
+        raise error.ImplementationError(self, 'generic.getposition')
+    position = property(fget=lambda s: s.getposition(), fset=lambda s,v: s.setposition(v))
 
     def __update__(self, attrs={}, **moreattrs):
         """Update the attributes that will be assigned to object.
@@ -756,19 +764,21 @@ class generic(_base_generic):
         return 0 if (self.getposition(),self.blocksize()) == (other.getposition(),other.blocksize()) else +1
 
 class base(generic):
-    ignored = generic.ignored.union(('offset',))
     padding = utils.padding.source.zero()
 
-    ## offset
-    position = 0,
-    offset = property(fget=lambda s: s.getoffset(), fset=lambda s,v: s.setoffset(v))
-    def setoffset(self, offset, **_):
+    def setoffset(self, offset, **options):
         """Changes the current offset to ``offset``"""
-        return self.setposition((offset,), **_)
-    def getoffset(self, **_):
+        return self.setposition((offset,), **options)[0]
+    def getoffset(self, **options):
         """Returns the current offset"""
-        offset, = self.getposition(**_)
-        return offset
+        return self.getposition(**options)[0]
+
+    __position__ = 0,
+    def setposition(self, position, **kwds):
+        (self.__position__, res) = position, (self.__position__) or (0,)
+        return res[:]
+    def getposition(self):
+        return self.__position__[:]
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
@@ -1030,7 +1040,7 @@ class type(base):
         size of the type. This *must* return an integral type.
         """
 
-        # XXX: overloading will always provide a side effect o)f modifying the .source's offset
+        # XXX: overloading will always provide a side effect of modifying the .source's offset
         #        make sure to fetch the blocksize first before you .getoffset() on something.
         return self.length
 
@@ -1070,23 +1080,24 @@ class container(base):
             raise error.InitializationError(self, 'container.blocksize')
         return sum(n.blocksize() for n in self.value)
 
-    def getoffset(self, field=None):
+    def getoffset(self, *field, **options):
         """Returns the current offset.
 
         If ``field`` is specified as a ``str``, return the offset of the
         sub-element with the provided name. If specified as a ``list`` or
         ``tuple``, descend into sub-elements using ``field`` as the path.
         """
-        if field is None:
+        if not len(field):
             return super(container,self).getoffset()
+        (field,) = field
 
+        # if a path is specified, then recursively get the offset
         if isinstance(field, (tuple,list)):
-            #name,res = (field[0], field[1:])
-            name,res = (lambda hd,*tl:(hd,tl))(*field)
+            (name, res) = (lambda hd,*tl:(hd,tl))(*field)
             return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
         index = self.__getindex__(field)
-        return self.getoffset() + sum(x.size() for x in self.value[:index])
+        return self.getoffset() + sum(map(operator.methodcaller('size'), self.value[:index]))
 
     def __getindex__(self, name):
         """Searches the .value attribute for an element with the provided ``name``
@@ -1095,7 +1106,6 @@ class container(base):
         ptype.container.
         """
         raise error.ImplementationError(self, 'container.__getindex__', 'Developer forgot to overload this method')
-
     def __getitem__(self, key):
         index = self.__getindex__(key)
         if self.value is None:
@@ -1158,15 +1168,15 @@ class container(base):
 
         If ``recurse`` is True, the update all offsets in sub-elements.
         """
-        return self.setposition((offset,), recurse=recurse)
+        return self.setposition((offset,), recurse=recurse)[0]
 
     def setposition(self, offset, recurse=False):
-        offset, = offset
-        res = super(container, self).setposition((offset,), recurse=recurse)
+        res = super(container, self).setposition(offset, recurse=recurse)
         if recurse and self.value is not None:
+            o = offset[0]
             for n in self.value:
-                n.setposition((offset,), recurse=recurse)
-                offset += n.size() if n.initializedQ() else n.blocksize()
+                n.setposition((o,), recurse=recurse)
+                o += n.size() if n.initializedQ() else n.blocksize()
             return res
         return res
 

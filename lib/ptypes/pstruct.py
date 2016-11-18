@@ -133,6 +133,16 @@ class _pstruct_generic(ptype.container):
         result.__name__ = name
         return result
 
+    def __repr__(self):
+        """Calls .repr() to display the details of a specific object"""
+        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
+        result = self.repr()
+
+        # multiline
+        if prop:
+            return "{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
+        return "{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)
+
     def __getstate__(self):
         return super(_pstruct_generic,self).__getstate__(),self.__fastindex,
 
@@ -247,17 +257,20 @@ class type(_pstruct_generic):
                 result.append('[{:x}] {:s} {:s} {:s}'.format(o, i, name, v))
                 continue
             o = self.getoffset(value.__name__ or name)
-            i = utils.repr_instance(value.classname(), value.name())
+            i = utils.repr_instance(value.classname(), value.name() or name)
             v = value.summary(**options) if value.initializedQ() else '???'
-            result.append('[{:x}] {:s} {:s}'.format(o, i, v))
+            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
+            result.append('[{:x}] {:s}{:s} {:s}'.format(o, i, ' {{{:s}}}'.format(prop) if prop else '', v))
             o += value.size()
 
         if len(result) > 0:
             return '\n'.join(result)
         return '[{:x}] Empty []'.format(self.getoffset())
 
-    def __setvalue__(self, value=(), **individual):
+    def __setvalue__(self, *_, **individual):
         result = self
+        value = _ and tuple(_[0]) or ()
+
         if result.initializedQ():
             if value:
                 if len(result._fields_) != len(value):

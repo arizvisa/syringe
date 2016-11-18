@@ -183,12 +183,7 @@ class _parray_generic(ptype.container):
         range(len(self))[index]     # make python raise the correct exception if so..
         return super(_parray_generic, self).__getitem__(index)
 
-    def __repr__(self):
-        """Calls .repr() to display the details of a specific object"""
-        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
-        result = self.repr()
-
-        # generate the element description
+    def __element_description(self):
         try: length = len(self)
         except: length = self.length or 0
 
@@ -196,20 +191,34 @@ class _parray_generic(ptype.container):
             obj = '(untyped)'
         else:
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
-        element_descr = '{:s}[{:d}]'.format(obj, length)
 
-        # multiline
-        if result.count('\n') > 0:
+        return '{:s}[{:d}]'.format(obj, length)
+
+    def summary(self, **options):
+        res = super(_parray_generic,self).summary(**options)
+        return ' '.join((self.__element_description(), res))
+
+    def __repr__(self):
+        """Calls .repr() to display the details of a specific object"""
+        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
+        result, element_descr = self.repr(), self.__element_description()
+
+        # multiline (includes element description)
+        if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _parray_generic.details.im_func:
             if prop:
                 return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element_descr,result)
             return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element_descr,result)
+
+        # if the user chose to not use the default summary, then prefix the element description.
+        if getattr(self.repr, 'im_func', None) not in (_parray_generic.repr.im_func,_parray_generic.summary.im_func):
+            result = ' '.join((element_descr,result))
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
         descr = "{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
         if prop:
-            return "[{:s}] {:s} {{{:s}}} {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, element_descr, result)
-        return "[{:s}] {:s} {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, element_descr, result)
+            return "[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
+        return "[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
 class type(_parray_generic):
     '''
@@ -299,17 +308,6 @@ class type(_parray_generic):
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
         raise error.AssertionError(self, 'type.load')
-
-    def summary(self, **options):
-        res = super(type,self).summary(**options)
-        try: length = len(self)
-        except: length = self.length or 0
-
-        if self._object_ is None:
-            obj = '(untyped)'
-        else:
-            obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
-        return '{:s}[{:d}] {:s}'.format(obj, length, res)
 
     def __setvalue__(self, value):
         """Update self with the contents of the list ``value``"""

@@ -73,10 +73,10 @@ types of definitions. This enumeration type has the following interface:
         def enumerations(cls):
             '''Return the values of each enumeration.'''
         @classmethod
-        def byValue(cls, value):
+        def byvalue(cls, value):
             '''Return the enumeration name based on the ``value``.'''
         @classmethod
-        def byName(cls, name):
+        def byname(cls, name):
             '''Return the enumeration value based on the ``name``.'''
 
 Example usage:
@@ -300,65 +300,60 @@ class enum(integer_t):
         if len(self._values_):
             name, value = self._values_[0]
             if isinstance(value, basestring):
-                Log.warning("pint.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(self.classname(), self.typename()))
+                Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
                 self._values_ = [(k,v) for v,k in self._values_]
 
         # verify the types are correct for ._values_
         if any(not isinstance(k, basestring) or not isinstance(v, six.integer_types) for k,v in self._values_):
-            raise TypeError(self, 'enum.__init__', "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.classname(), basestring, int))
+            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.typename(), basestring, int))
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
         return
 
     @classmethod
-    def byValue(cls, value):
+    def byvalue(cls, value):
         '''Lookup the string in an enumeration by it's first-defined value'''
-        for k,v in cls._values_:
-            if v == value:
-                return k
-        raise KeyError(cls, 'enum.byValue', value)
+        try: return next(k for k, v in cls._values_ if v == value)
+        except StopIteration: pass
+        raise KeyError(cls, 'enum.byvalue', value)
+    byValue = byvalue
 
     @classmethod
-    def byName(cls, name):
+    def byname(cls, name):
         '''Lookup the value in an enumeration by it's first-defined name'''
-        for k,v in cls._values_:
-            if k == name:
-                return v
-        raise KeyError(cls, 'enum.byName', name)
+        try: return next(v for k,v in cls._values_ if k == name)
+        except StopIteration: pass
+        raise KeyError(cls, 'enum.byname', name)
+    byName = byname
 
     def __getattr__(self, name):
-        try:
-            # if getattr fails, then assume the user wants the value of
-            #     a particular enum value
-            return self.byName(name)
-
-        except KeyError:
-            pass
+        # if getattr fails, then assume the user wants the value of
+        #     a particular enum value
+        try: return self.byname(name)
+        except KeyError: pass
         raise AttributeError(enum, self, name)
 
     def str(self):
-        '''Return enumeration as a string or jsut the integer if unknown.'''
+        '''Return enumeration as a string or just the integer if unknown.'''
         res = self.int()
-        try:
-            return self.byValue(res)
+        try: return self.byvalue(res)
         except KeyError: pass
         return '{:#x}'.format(res)
 
     def summary(self, **options):
         res = self.int()
-        try:
-            return self.byValue(res) + '({:#x})'.format(res)
+        try: return self.byvalue(res) + '({:#x})'.format(res)
         except KeyError: pass
         return super(enum, self).summary()
 
     def __setvalue__(self, value):
         if isinstance(value, basestring):
-            value = self.byName(value)
+            value = self.byname(value)
         return super(enum,self).__setvalue__(value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
-        res = self.byName(name)
+        res = self.byname(name)
         return res == self.int()
 
     ## XXX: not sure what to name these 2 methods, but i've needed them on numerous occasions
@@ -564,8 +559,9 @@ if __name__ == '__main__':
                 ('bb', 0xbbbbbbbb),
                 ('cc', 0xcccccccc),
             ]
-        a = e().set(0xdddddddd)
-        if a.str() == '{:#x}'.format(a.int()):
+        res = 0xdddddddd
+        a = e().set(res)
+        if a.str() == '{:#x}'.format(res):
             raise Success
 
 if __name__ == '__main__':

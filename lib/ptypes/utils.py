@@ -112,7 +112,7 @@ def repr_position(pos, hex=True, precision=0):
         partial = bofs / 8.0
         if hex:
             return '{:x}.{:x}'.format(ofs,math.trunc(partial*0x10))
-        fraction = ':0{:d}d'.format(precision)
+        fraction = ':0{:d}x'.format(precision)
         res = '{:x}.{'+fraction+'}'
         return res.format(ofs,math.trunc(partial * 10**precision))
     return '{:x}.{:x}'.format(ofs,bofs)

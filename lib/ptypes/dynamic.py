@@ -277,13 +277,13 @@ class union(_union_generic):
         """Return a ptype.block of a size that contain /objects/"""
         res = self.root
         if res is None:
-            size = max(t().a.blocksize() for t in objects)
+            size = max((t() if ptype.istype(t) else self.new(t)).a.blocksize() for t in objects)
             self.root = res = clone(ptype.block, length=size)
         return res
 
     def __alloc_root(self, **attrs):
         t = self.__choose_root(t for t,n in self._fields_)
-        self.value = self.new(t,offset=self.getoffset())
+        self.value = self.new(t, offset=self.getoffset())
         return self.value.alloc(**attrs)
 
     def __alloc_objects(self, value):
@@ -346,12 +346,12 @@ class union(_union_generic):
     def contains(self, offset):
         return super(ptype.container,self).contains(offset)
 
-    def setoffset(self, ofs, recurse=False):
+    def setposition(self, offset, recurse=False):
         if self.value is not None:
-            self.value.setoffset(ofs, recurse=recurse)
-        return super(ptype.container,self).setoffset(ofs, recurse=recurse)
-    def getoffset(self, **_):
-        return super(ptype.container,self).getoffset(**_)
+            self.value.setposition(offset, recurse=recurse)
+        return super(ptype.container, self).setposition(offset, recurse=recurse)
+    def getposition(self):
+        return super(ptype.container, self).getposition()
 
 union_t = union # alias
 
