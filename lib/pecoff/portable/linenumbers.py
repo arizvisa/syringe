@@ -4,9 +4,8 @@ from ..__base__ import *
 
 class LineNumber(pstruct.type):
     _fields_ = [
-        (dword, 'Type'),
+        (dword, 'Type'),    # FIXME: SymbolTableIndex or VirtualAddress based on Linenumber
         (uint16, 'Linenumber'),
-        (addr_t, 'Address')
     ]
 
 # heh..

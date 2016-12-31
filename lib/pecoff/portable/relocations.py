@@ -24,7 +24,7 @@ class IMAGE_REL_I386(ptypes.pint.enum, uint16):
 
 class Relocation(pstruct.type):
     _fields_ = [
-        (addr_t, 'VirtualAddress'),
+        (uint32, 'VirtualAddress'), # FIXME: this can be a virtualaddress(...) to the actual relocation
         (uint32, 'SymbolTableIndex'),
         (IMAGE_REL_I386, 'Type')
     ]
@@ -120,7 +120,7 @@ class BaseRelocationBlock(ptype.block):
 
 class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
-        (addr_t, 'Page RVA'),
+        (uint32, 'Page RVA'),   # FIXME: this can be a virtualaddress(...) to the page
         (uint32, 'Size'),
         (lambda s: dyn.clone(BaseRelocationBlock, length=s['Size'].li.num()-8), 'Relocations'),
 #        (lambda s: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _:(s['Size'].li.num()-8)*8), 'Relocations')

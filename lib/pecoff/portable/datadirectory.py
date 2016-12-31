@@ -156,6 +156,13 @@ class LoadConfig(AddressEntry):
             (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.num()), type=uint64), 'GuardCFFunctionTable'),
             (uint32, 'GuardCFFunctionCount'),
             (uint32, 'GuardFlags'),     # CF_INSTRUMENTED=0x100,CFW_INSTRUMENTED=0x200,CF_FUNCTION_TABLE_PRESENT=0x400
+
+            (dyn.array(uint32,11), 'padding'),
+            (uint64, 'RelocationDelta'),
+            (uint64, 'Unknown[0]'),
+            (realaddress(uint32, type=uint64), 'RtlFailFast'),
+            (realaddress(uint32, type=uint64), 'RtlFailFastOffset'),
+            (dyn.array(uint32,3), 'Unknown[1]'),
         ]
 
     def _object_(self):

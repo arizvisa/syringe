@@ -204,6 +204,9 @@ def clone(cls, **newattrs):
     return ptype.clone(cls, **newattrs)
 
 class _union_generic(ptype.container):
+    __object__ = None
+    object = property(fget=lambda s: s.value)
+
     def __init__(self, *args, **kwds):
         super(_union_generic,self).__init__(*args, **kwds)
         self.__fastindex = {}
@@ -212,8 +215,8 @@ class _union_generic(ptype.container):
         """Add an element as part of a union. Return it's index."""
         name = object.name()
 
-        current = len(self.object)
-        self.object.append(object)
+        current = len(self.__object__)
+        self.__object__.append(object)
 
         self.__fastindex[name.lower()] = current
         return current
@@ -222,26 +225,26 @@ class _union_generic(ptype.container):
         return [name for type,name in self._fields_]
 
     def values(self):
-        return list(self.object)
+        return list(self.__object__)
 
     def items(self):
-        return [(k,v) for (_,k),v in zip(self._fields_,self.object)]
+        return [(k,v) for (_,k),v in zip(self._fields_,self.__object__)]
 
     def __getindex__(self, name):
         return self.__fastindex[name.lower()]
 
     def __getitem__(self, name):
         index = self.__getindex__(name)
-        return self.object[index]
+        return self.__object__[index]
 
 class union(_union_generic):
     """
     Provides a data structure with Union-like characteristics. If the root type
     isn't defined, it is assumed the first type in the union will be the root.
 
-    The `.object` property contains a list of the instantiated types for each
-    defined field. The `.value` property points to an instance of the `.root`
-    property.
+    The hidden `.__object__` property contains a list of the instantiated types
+    for each defined field. The `.object` property points to an instance of the
+    `.root` property.
 
     i.e.
     class myunion(dynamic.union):
@@ -269,7 +272,7 @@ class union(_union_generic):
     """
     root = None         # root type. determines block size.
     _fields_ = []       # aliases of root type that will act on the same data
-    object = None       # objects associated with each alias
+    __objects__ = None       # objects associated with each alias
     value = None
 
     initializedQ = lambda self: self.value is not None and self.value.initialized
@@ -288,9 +291,9 @@ class union(_union_generic):
 
     def __alloc_objects(self, value):
         source = provider.proxy(value)      # each element will write into the offset occupied by value
-        self.object = []
+        self.__object__ = []
 
-        # append elements to .object via _union_generic.append
+        # append elements to .__object__ via _union_generic.append
         for t,n in self._fields_:
             self.append(self.new(t, __name__=n, offset=0, source=source))
         return self
@@ -316,7 +319,7 @@ class union(_union_generic):
     def properties(self):
         result = super(union,self).properties()
         if self.initializedQ():
-            result['object'] = ['{:s}<{:s}>'.format(v.name(),v.classname()) for v in self.object]
+            result['object'] = ['{:s}<{:s}>'.format(v.name(),v.classname()) for v in self.__object__]
         else:
             result['object'] = ['{:s}<{:s}>'.format(n,t.typename()) for t,n in self._fields_]
         return result
