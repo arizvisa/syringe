@@ -50,7 +50,7 @@ class help(optparse.OptionParser):
 
         # fields
         self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
-        self.add_option('-f', '--format', default='{OriginalFilename}/{ProductVersion}/{__name__}', type='str', help='output the specified format (defaults to {OriginalFilename}/{ProductVersion}/{__name__})')
+        self.add_option('-f', '--format', default='{__name__}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__}/{ProductVersion}/{OriginalFilename})')
         self.description = 'If path-format is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table'
 
 help = help()
@@ -145,10 +145,13 @@ if __name__ == '__main__':
 
     # build the path
     if opts.dump:
-        print >>sys.stdout, '\n'.join(repr(x) for x in strings.items())
+        print >>sys.stdout, '\n'.join(map(repr, strings.items()))
         sys.exit(0)
 
-    path = opts.format.format(**strings)
+    res = sys.getfilesystemencoding()
+    encoded = { k.encode(res, 'replace') : v.encode(res, 'replace') for k, v in strings.iteritems() }
+
+    path = opts.format.format(**encoded)
     print >>sys.stdout, path
     sys.exit(0)
 
