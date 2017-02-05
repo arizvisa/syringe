@@ -2,6 +2,8 @@ from ptypes import *
 import art,graph
 from . import *
 
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
 @Record.define
 class RT_Excel(ptype.definition):
     type,cache = __name__,{}
@@ -15,8 +17,8 @@ class RT_Excel(ptype.definition):
 class RecordGeneral(RecordGeneral):
     class Header(pstruct.type):
         _fields_ = [
-            (pint.littleendian(pint.uint16_t), 'type'),
-            (pint.littleendian(pint.uint16_t), 'length'),
+            (pint.uint16_t, 'type'),
+            (pint.uint16_t, 'length'),
         ]
         def Type(self):
             return RT_Excel.type
@@ -46,25 +48,25 @@ class DRw_ByteU(pint.uint8_t): pass
 class XFIndex(pint.uint16_t): pass
 
 class ColRelU(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (14, 'col'),
         (1, 'colRelative'),
         (1, 'rowRelative'),
-    ]
+    ])
 
 class ColRelNegU(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (14, 'col'),
         (1, 'colRelative'),
         (1, 'rowRelative'),
-    ]
+    ])
 
 class RkNumber(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (1, 'fX100'),
         (1, 'fInt'),
         (30, 'num'),
-    ]
+    ])
 
 class RkRec(pstruct.type):
     _fields_ = [
@@ -114,9 +116,10 @@ class BiffSubStream(parray.terminated):
     def search(self, type):
         type = int(type)
         result = []
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
         for i,n in enumerate(self):
             try:
-                if n['data'].type == type:
+                if flazy(n).type == type:
                     result.append(i)
             except AttributeError:
                 pass
@@ -125,14 +128,16 @@ class BiffSubStream(parray.terminated):
 
     def searcht(self, biff):
         result = []
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
         for i,n in enumerate(self):
-            if type(n['data']) is biff:
+            if type(flazy(n)) is biff:
                 result.append(i)
             continue
         return result
 
     def details(self):
-        bof = self[0]['data']
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
+        bof = flazy(self[0])
         try:
             return '%s -> %d records -> document type %r'% (self.name(), len(self), bof['dt'])
         except (TypeError,KeyError):
@@ -152,12 +157,12 @@ class CatSerRange(pstruct.type):
     type = 4128
 
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fBetween'),
             (1, 'fMaxCross'),
             (1, 'fReverse'),
             (13, 'reserved')
-        ]
+        ])
 
     _fields_ = [
         (pint.int16_t, 'catCross'),
@@ -177,11 +182,11 @@ class RRTabId(parray.block):
 
 ###
 class FrtFlags(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (1, 'fFrtRef'),
         (1, 'fFrtAlert'),
         (14, 'reserved')
-    ]
+    ])
 
 class FrtHeader(pstruct.type):
     _fields_ = [
@@ -238,7 +243,8 @@ class RK(pstruct.type):
         (RkRec, 'rkrec')
     ]
 
-#@RT_Excel.define
+#FIXME
+@RT_Excel.define
 class MulBlank(pstruct.type):
     type = 190
     type = 0xbe
@@ -284,11 +290,11 @@ class MergeCells(pstruct.type):
 @RT_Excel.define
 class CrtLayout12(pstruct.type):
     class CrtLayout12Auto(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'unused'),
             (4, 'autolayouttype'),
             (11, 'reserved')
-        ]
+        ])
 
     type = 2205
     _fields_ = [
@@ -310,11 +316,11 @@ class CrtLayout12(pstruct.type):
 @RT_Excel.define
 class Frame(pstruct.type):
     class FrameAuto(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fAutoSize'),
             (1, 'fAutoPosition'),
             (14, 'reserved')
-        ]
+        ])
 
     type = 4146
     _fields_ = [
@@ -389,15 +395,15 @@ class DVAL(pstruct.type):
     type = 0x1b2
 
     class wDviFlags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fWnClosed'),
             (1, 'fWnPinned'),
             (1, 'fCached'),
             (13, 'Reserved')
-        ]
+        ])
 
     _fields_ = [
-        (pbinary.littleendian(wDviFlags), 'wDviFlags'),
+        (wDviFlags, 'wDviFlags'),
         (pint.uint32_t, 'xLeft'),
         (pint.uint32_t, 'yTop'),
         (pint.uint32_t, 'idObj'),
@@ -423,7 +429,7 @@ class DV(pstruct.type):
     type = 446
 
     class dwDvFlags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (4, 'ValType'),
             (3, 'ErrStyle'),
             (1, 'fStrLookup'),
@@ -434,7 +440,7 @@ class DV(pstruct.type):
             (1, 'fShowErrorMsg'),
             (4, 'typOperator'),
             (8, 'Reserved'),
-        ]
+        ])
 
     class string(pstruct.type):
         def __unicode(self):
@@ -472,7 +478,7 @@ class DV(pstruct.type):
 @RT_Excel.define
 class BOF(pstruct.type):
     class Flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fWin'),
             (1, 'fRisc'),
             (1, 'fBeta'),
@@ -491,7 +497,7 @@ class BOF(pstruct.type):
             (8, 'verLowestBiff'),
             (4, 'verLastXLSaved'),
             (20, 'reserved2')
-        ]
+        ])
 
     class DocType(pint.enum, pint.uint16_t):
         _values_ = [
@@ -532,7 +538,7 @@ class Font(pstruct.type):
 class BookBool(pbinary.struct):
     type = 0xda
     type = 218
-    _fields_ = [
+    _fields_ = R([
         (1, 'fNoSaveSup'),
         (1, 'reserved1'),
         (1, 'fHasEnvelope'),
@@ -542,7 +548,7 @@ class BookBool(pbinary.struct):
         (1, 'unused'),
         (1, 'fHideBorderUnselLists'),
         (7, 'reserved2'),
-    ]
+    ])
 
 @RT_Excel.define
 class RefreshAll(pint.enum, pint.uint16_t):
@@ -709,7 +715,7 @@ class Row(pstruct.type):
     type = 0x208
 
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (3, 'iOutLevel'),
             (1, 'reserved2'),
             (1, 'fCollapsed'),
@@ -722,7 +728,7 @@ class Row(pstruct.type):
             (1, 'fExDes'),
             (1, 'fPhonetic'),
             (1, 'unused2'),
-        ]
+        ])
 
     _fields_ = [
         (Rw, 'rw'),
@@ -816,7 +822,7 @@ class CRN(pstruct.type):
     ]
 
 class CellXF(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (3, 'alc'),
         (1, 'fWrap'),
         (3, 'alcV'),
@@ -856,10 +862,10 @@ class CellXF(pbinary.struct):
         (7, 'icvBack'),
         (1, 'fsxButton'),
         (1, 'reserved3'),
-    ]
+    ])
 
 class StyleXF(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (3, 'alc'),
         (1, 'fWrap'),
         (3, 'alcV'),
@@ -892,20 +898,20 @@ class StyleXF(pbinary.struct):
         (7, 'icvFore'),
         (7, 'icvBack'),
         (2, 'reserved3'),
-    ]
+    ])
 
 @RT_Excel.define
 class XF(pstruct.type):
     type = 0xe0
     type = 224
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fLocked'),
             (1, 'fHidden'),
             (1, 'fStyle'),
             (1, 'f123Prefix'),
             (12, 'ixfParent'),
-        ]
+        ])
     _fields_ = [
         (FontIndex, 'ifnt'),
         (IFmt, 'ifmt'),
@@ -913,7 +919,8 @@ class XF(pstruct.type):
         (lambda s: CellXF if s['flags'].li['fStyle'] == 0 else StyleXF, 'data'),
     ]
 
-#@RT_Excel.define # FIXME
+# FIXME
+@RT_Excel.define
 class MulRk(pstruct.type):
     type = 0xbd
     type = 189
@@ -950,7 +957,7 @@ if True:
 
     class Ptg(pstruct.type):
         class type(pbinary.struct):
-            _fields_=[(7,'ptg'),(1,'reserved0')]
+            _fields_ = R([(7,'ptg'),(1,'reserved0')])
 
         def __value(self):
             t = self['type'].li['ptg']
@@ -1235,7 +1242,7 @@ if False:
         type = 6
 
         class flags(pbinary.struct):
-            _fields_ = [
+            _fields_ = R([
                 (1,'fAlwaysCalc'),
                 (1, 'reserved1'),
                 (1, 'fFill'),
@@ -1243,7 +1250,7 @@ if False:
                 (1, 'reserved2'),
                 (1, 'fClearErrors'),
                 (10, 'reserved3'),
-            ]
+            ])
 
         _fields_ = [
             (Cell, 'cell'),
@@ -1253,7 +1260,7 @@ if False:
             (CellParsedFormula, 'formula'),
         ]
 
-#@RT_Excel.define
+@RT_Excel.define
 class XCT(pstruct.type):
     type = 89
     type = 0x59
@@ -1268,18 +1275,18 @@ class BuiltInStyle(pstruct.type):
         (pint.uint8_t, 'iLevel'),
     ]
 
-#@RT_Excel.define # FIXME
+#FIXME
+@RT_Excel.define
 class Style(pstruct.type):
     type = 659
     type = 0x293
 
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fBuiltIn'),
             (3, 'unused'),
             (12,'ixfe'),
-        ]
-    flags = pbinary.littleendian(flags)
+        ])
 
     _fields_ = [
         (flags, 'flags'),
@@ -1305,7 +1312,7 @@ class FullColorExt(pstruct.type):
             return LongRGBA
         if t == 3:
             return ColorTheme
-        raise NotImplementedError(t)
+        return ptype.undefined
 
     _fields_ = [
         (XColorType, 'xclrType'),
@@ -1421,9 +1428,9 @@ class ExtProp(pstruct.type):
 
     def __extPropData(self):
         t = self['extType'].li.int()
-        # FIXME: http://msdn.microsoft.com/en-us/library/dd906769(v=office.12).aspx
-        sz = self['cb'].li.int()
-        return ExtPropType.get(self['extType'].li.int(), blocksize=lambda s:sz)
+        sz = self['cb'].li.int() - (2 + 2)
+        res = ExtPropType.lookup(self['extType'].li.int())
+        return dyn.clone(res, blocksize=lambda s:sz)
 
     _fields_ = [
         (extType, 'extType'),
@@ -1431,7 +1438,7 @@ class ExtProp(pstruct.type):
         (__extPropData, 'extPropData'),
     ]
 
-#@RT_Excel.define # FIXME
+@RT_Excel.define # FIXME
 class XFExt(pstruct.type):
     type = 0x87d
     type = 2173
@@ -1444,13 +1451,18 @@ class XFExt(pstruct.type):
         (lambda s: dyn.array(ExtProp, s['cexts'].li.int()), 'rgExt'),
     ]
 
-#@RT_Excel.define # FIXME
+@RT_Excel.define
 class Format(pstruct.type):
     type = 0x41e
     type = 1054
+    def __stFormat(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['length'].int() - 2
+        return dyn.block(length)
     _fields_ = [
         (pint.uint16_t, 'ifmt'),
-        (XLUnicodeString, 'stFormat'),
+        #(XLUnicodeString, 'stFormat'), # FIXME: is the specification wrong here?
+        (__stFormat, 'stFormat'),
     ]
 
 @RT_Excel.define
@@ -1517,7 +1529,7 @@ class FeatProtection(pstruct.type):
     ]
 
 class FFErrorCheck(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (1, 'ffecCalcError'),
         (1, 'ffecEmptyCellRef'),
         (1, 'ffecNumStoredAsText'),
@@ -1527,7 +1539,7 @@ class FFErrorCheck(pbinary.struct):
         (1, 'ffecUnprotFmla'),
         (1, 'ffecDateValidation'),
         (24, 'reserved'),
-    ]
+    ])
 
 class FeatFormulaErr2(FFErrorCheck): pass
 
@@ -1544,7 +1556,7 @@ class PropertyBag(pstruct.type):
 
 class FactoidData(pstruct.type):
     class flags(pbinary.struct):
-        _fields_ = [(1,'fDelete'),(1,'fXMLBased'),(6,'reserved')]
+        _fields_ = R([(1,'fDelete'),(1,'fXMLBased'),(6,'reserved')])
 
     _fields_ = [
         (flags, 'flags'),
@@ -1558,7 +1570,7 @@ class FeatSmartTag(pstruct.type):
         (lambda s: dyn.array(FactoidData,s['cSmartTags'].li.int()), 'rgFactoid'),
     ]
 
-#@RT_Excel.define
+@RT_Excel.define
 class Feat(pstruct.type):
     type = 0x868
     type = 2152
@@ -1570,7 +1582,7 @@ class Feat(pstruct.type):
             return FeatFormulaErr2
         elif isf['ISFFACTOID']:
             return FeatSmartTag
-        raise NotImplementedError(isf)
+        return ptype.undefined
 
     _fields_ =[
         (FrtHeader, 'frtHeader'),
@@ -1585,7 +1597,7 @@ class Feat(pstruct.type):
     ]
 
 class EnhancedProtection(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (1, 'iprotObjects'),
         (1, 'iprotScenarios'),
         (1, 'iprotFormatCells'),
@@ -1602,7 +1614,7 @@ class EnhancedProtection(pbinary.struct):
         (1, 'iprotPivotTables'),
         (1, 'iprotSelUnlockedCells'),
         (17, 'reserved'),
-    ]
+    ])
 
 @RT_Excel.define
 class FeatHdr(pstruct.type):
@@ -1760,7 +1772,7 @@ class AFDOper(pstruct.type):
 
 class AutoFilter(pstruct.type):
     class flag(pbinary.struct):
-        _fields_ = [(2,'wJoin'),(1,'fSimple1'),(1,'fSimple2'),(1,'fTopN'),(1,'fTop'),(1,'fPercent'),(9,'wTopN')]
+        _fields_ = R([(2,'wJoin'),(1,'fSimple1'),(1,'fSimple2'),(1,'fTopN'),(1,'fTop'),(1,'fPercent'),(9,'wTopN')])
 
     def __str1(self):
         return XLUnicodeStringNoCch if self['doper1'].li['vt'].int() == 6 else ptype.type
@@ -1791,7 +1803,7 @@ class Feat11XMapEntry2(pstruct.type):
 
 class Feat11XMapEntry(pstruct.type):
     class flags(pbinary.struct):
-        _fields_ = [(1,'reserved1'),(1,'fLoadXMap'),(1,'fCanBeSingle'),(1,'reserved2'),(28,'reserved3')]
+        _fields_ = R([(1,'reserved1'),(1,'fLoadXMap'),(1,'fCanBeSingle'),(1,'reserved2'),(28,'reserved3')])
     _fields_ = [
         (flags, 'flags'),
         (Feat11XMapEntry2, 'details'),
@@ -1952,7 +1964,7 @@ class Feat11FieldDataItem(pstruct.type):
         ]
 
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1,'fAutoFilter'),
             (1,'fAutoFilterHidden'),
             (1,'fLoadXmapi'),
@@ -1965,7 +1977,7 @@ class Feat11FieldDataItem(pstruct.type):
             (1,'fLoadTotalStr'),
             (1,'fAutoCreateCalcCol'),
             (20, 'unused2'),
-        ]
+        ])
 
     def __dxfFmtAgg(self):
         sz = self['cbFmtAgg'].li.int()
@@ -2052,7 +2064,7 @@ class TableFeatureType(pstruct.type):
     class crwTotals(Boolean, pint.uint32_t): pass
 
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'unused2'), (1, 'fAutoFilter'), (1, 'fPersistAutoFilter'),
             (1, 'fShowInsertRow'), (1, 'fInsertRowInsCells'), (1, 'fLoadPldwIdDeleted'),
             (1, 'fShownTotalRow'), (1, 'reserved1'), (1, 'fNeedsCommit'),
@@ -2061,7 +2073,7 @@ class TableFeatureType(pstruct.type):
             (1, 'fLoadPldwIdChanged'), (4, 'verXL'), (1, 'fLoadEntryId'),
             (1, 'fLoadPllstclInvalid'), (1, 'fGoodRupBld'), (1, 'unused3'),
             (1, 'fPublished'), (7, 'reserved3'),
-        ]
+        ])
 
     def __cSPName(self):
         return XLUnicodeString if self['flags'].li['fLoadCSPName'] else ptype.type
@@ -2154,7 +2166,7 @@ class List12BlockLevel(pstruct.type):
 
 class List12TableStyleClientInfo(pstruct.type):
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1,'fFirstColumn'),
             (1,'fLastColumn'),
             (1,'fRowStripes'),
@@ -2162,7 +2174,7 @@ class List12TableStyleClientInfo(pstruct.type):
             (2,'unused1'),
             (1,'fDefaultStyle'),
             (9,'unused2'),
-        ]
+        ])
 
     _fields_ = [
         (flags, 'flags'),
@@ -2175,7 +2187,7 @@ class List12DisplayName(pstruct.type):
         (XLUnicodeString, 'stListComment'),
     ]
 
-#@RT_Excel.define
+@RT_Excel.define
 class List12(pstruct.type):
     type = 2167
     type = 0x877
@@ -2188,7 +2200,7 @@ class List12(pstruct.type):
             return List12TableStyleClientInfo
         elif v == 2:
             return List12DisplayName
-        raise NotImplementedError(v)
+        return ptype.undefined
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -2238,14 +2250,14 @@ class PublisherRecord(pstruct.type):
         (SectionRecord, 'sec'),
     ]
 
-#@RT_Excel.define # FIXME
+@RT_Excel.define
 class SST(pstruct.type):
     type = 252
     type = 0xfc
     _fields_ = [
         (pint.int32_t, 'cstTotal'),     # GUARD: >=0
         (pint.int32_t, 'cstUnique'),    # GUARD: >=0
-        (lambda s: dyn.array(XLUnicodeRichExtendedString, s['cstUnique'].li.int()), 'rgb'),
+        (lambda s: dyn.array(XLUnicodeRichExtendedString, abs(s['cstUnique'].li.int())), 'rgb'),
     ]
 
 class FontIndex(pint.enum, pint.uint16_t):
@@ -2264,7 +2276,7 @@ class FormatRun(pstruct.type):
 
 class Phs(pstruct.type):
     class formatinfo(pbinary.struct):
-        _fields_ = [(2,'phType'),(2,'alcH'),(12,'unused')]
+        _fields_ = R([(2,'phType'),(2,'alcH'),(12,'unused')])
 
     _fields_ = [
         (FontIndex, 'ifnt'),
@@ -2305,13 +2317,13 @@ class ExtRst(pstruct.type):
 
 class XLUnicodeRichExtendedString(pstruct.type):
     class flags(pbinary.struct):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fHighByte'),
             (1, 'reserved1'),
             (1, 'fExtSt'),
             (1, 'fRichSt'),
             (4, 'reserved2'),
-        ]
+        ])
 
     def __cRun(self):
         f = self['flags'].l
@@ -2346,7 +2358,8 @@ class ISSTInf(pstruct.type):
         (pint.uint16_t, 'reserved'),
     ]
 
-#@RT_Excel.define
+# FIXME
+@RT_Excel.define
 class ExtSST(pstruct.type):
     type = 255
     type = 0xff

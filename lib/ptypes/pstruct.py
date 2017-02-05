@@ -269,13 +269,17 @@ class type(_pstruct_generic):
 
     def __setvalue__(self, *_, **individual):
         result = self
-        value = _ and tuple(_[0]) or ()
+        value, = _ if _ else ((),)
 
         if result.initializedQ():
+            if isinstance(value, dict):
+                value = individual.update(value)
+
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'type.set', message='iterable value to assign with is not of the same length as struct')
                 result = super(type,result).__setvalue__(*value)
+
             for k,v in individual.iteritems():
                 idx = self.__getindex__(k)
                 if ptype.isresolveable(v) or ptype.istype(v):

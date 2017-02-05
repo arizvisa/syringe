@@ -1,4 +1,10 @@
+import ptypes
 from ptypes import *
+
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
+### utility functions
+R = lambda f: list(reversed(f))     # reverse a ._fields_ declaration because Micro$oft's documentation lists structures with bit 0 as the high bit
 
 ### atomic types
 class bool1(pint.uint8_t): pass
@@ -7,6 +13,9 @@ class uint2(pint.uint16_t): pass
 class uint4(pint.uint32_t): pass
 class sint2(pint.int16_t): pass
 class sint4(pint.int32_t): pass
+
+### general types
+class MD4(dyn.block(16)): pass
 
 ### record generalities
 class RecordUnknown(ptype.block):
@@ -48,13 +57,19 @@ class RecordGeneral(pstruct.type):
     class Header(pstruct.type):
         RecordType = RecordType
         class VersionInstance(pbinary.struct):
-            _fields_=[(12,'instance'),(4,'version')]
+            _fields_ = R([(4,'version'), (12,'instance')])
             def summary(self):
                 return '{:d} / 0x{:03x}'.format(self['version'], self['instance'])
+            def set(self, *_, **fields):
+                iterable, = _ if _ else ((),)
+                if not isinstance(iterable, dict):
+                    version, instance = iterable
+                    return self.set((instance, version))
+                return super(RecordGeneral.Header.VersionInstance, self).set(iterable, **fields)
         _fields_ = [
-            (pbinary.littleendian(VersionInstance), 'Version/Instance'),
+            (VersionInstance, 'Version/Instance'),
             (lambda s: s.RecordType, 'Type'),
-            (pint.littleendian(pint.uint32_t), 'Length')
+            (pint.uint32_t, 'Length')
         ]
 
         def Type(self):
@@ -86,6 +101,14 @@ class RecordGeneral(pstruct.type):
             res = Type.get(i, length=l)
 
         # something good had to come out of that
+        if getattr(self, 'lazy', False):
+            class RecordData(ptype.encoded_t):
+                @classmethod
+                def typename(cls):
+                    return cls._object_.typename()
+            RecordData._value_ = dyn.block(l)
+            RecordData._object_ = res
+            return RecordData
         return dyn.clone(res, blocksize=lambda s: l)
 
     def __extra(self):
@@ -100,6 +123,8 @@ class RecordGeneral(pstruct.type):
         (__data, 'data'),
         (__extra, 'extra'),
     ]
+
+    d = property(fget=lambda s: s['data'].d if getattr(s, 'lazy', False) else s['data'])
 
     def blocksize(self):
         res = self['header'].li
@@ -118,24 +143,21 @@ class RecordContainer(parray.block):
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
         if not recurse:
-            for x in self:
-                if int(x['header']['recType']) == type:
-                    yield x
-                continue
+            for n in self.filter(type):
+                yield n
             return
 
         # ourselves first
         for d in self.search(type, False):
             yield d
 
-        # now our chidren
-        for x in self:
-            try:
-                x['data'].search
-            except AttributeError:
-                continue
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
 
-            for d in x['data'].search(type, True):
+        # now our chidren
+        for n in self:
+            if not hasattr(flazy(n), 'search'):
+                continue
+            for d in flazy(n).search(type, True):
                 yield d
             continue
         return
@@ -149,15 +171,16 @@ class RecordContainer(parray.block):
         return res[0]
 
     def walk(self):
-        for x in self:
-            yield x['data']
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
+        for n in self:
+            yield flazy(n)
         return
 
     def errors(self):
-        for x in self:
-            if x.initialized and x.size() == x.blocksize():
+        for n in self:
+            if n.initialized and n.size() == n.blocksize():
                 continue
-            yield x
+            yield n
         return
 
     def dumperrors(self):
@@ -165,6 +188,29 @@ class RecordContainer(parray.block):
         for i,x in enumerate(self.errors()):
             result.append('%d\t%s\t%d\t%d'%(i,x.classname(),x.size(),x.blocksize()))
         return '\n'.join(result)
+
+    def filter(self, type):
+        if isinstance(type, (int,long)):
+            for n in self:
+                if n['header']['recType'].int() == type:
+                    yield n
+                continue
+            return
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
+        for n in self:
+            if isinstance(flazy(n), type):
+                yield n
+            continue
+        return
+
+    def __getitem__(self, index):
+        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
+        if hasattr(self, '_values_') and isinstance(index, basestring):
+            lookup = dict(self._values_)
+            t = lookup[index]
+            res = (i for i,n in enumerate(self) if isinstance(flazy(n), t))
+            index = next(res)
+        return super(RecordContainer, self).__getitem__(index)
 
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
@@ -176,7 +222,7 @@ class File(RecordContainer):
         return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
 
     def blocksize(self):
-        return self.source.size()
+        return self.source.size() if hasattr(self, 'source') else super(File, self).blocksize()
 
 if __name__ == '__main__':
     from ptypes import *

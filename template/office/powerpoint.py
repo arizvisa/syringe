@@ -1,9 +1,65 @@
+import ptypes
 from ptypes import *
 from . import *
 import art,graph
+from array import array
+
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
+## Ripped from PowerPoint97-2007BinaryFileFormat(ppt)Specification.pdf
+recordType = [
+    ('RT_Unknown', 0x0000),
+    ('RT_SubContainerCompleted', 0x0001),
+    ('RT_IRRAtom', 0x0002),                 # indexed record reference
+    ('RT_PSS', 0x0003),                     # start of stream
+    ('RT_SubContainerException', 0x0004),
+    ('RT_ClientSignal1', 0x0006),
+    ('RT_ClientSignal2', 0x0007),
+    ('RT_PowerPointStateInfoAtom', 0x000a),
+    ('RT_Scheme', 0x03f4),
+    ('RT_SchemeAtom', 0x03f5),
+    ('RT_DocViewInfo', 0x03f6),
+    ('RT_SslideLayoutAtom', 0x03f7),
+    ('RT_ViewInfo', 0x03fc),
+    ('RT_Texture', 0x0403),
+    ('RT_VBASlideInfo', 0x0404),
+    ('RT_VBASlideInfoAtom', 0x0405),
+    ('RT_OEShape', 0x0bc0),
+    ('RT_GrColor', 0x0bcc),
+    ('RT_GrectAtom', 0x0bd1),
+    ('RT_GratioAtom', 0x0bd7),
+    ('RT_Gscaling', 0x0bd8),
+    ('RT_GpointAtom', 0x0bda),
+    ('RT_TypeFAce', 0x0fb9),
+    ('RT_ExternalObject', 0x0fbb),
+    ('RT_ExOleObject', 0x0fc2),
+    ('RT_ExPlainLinkAtom', 0x0fc4),
+    ('RT_CorePict', 0x0fc5),
+    ('RT_CorePictAtom', 0x0fc6),
+    ('RT_ExPlainAtom', 0x0fc7),
+    ('RT_ExLinkAtom_old', 0x0fcf),
+    ('RT_ExPlain', 0x0fd5),
+    ('RT_ExPlainLink', 0x0fd6),
+    ('RT_ReColorEntryAtom', 0x0fde),
+    ('RT_EmFormatAtom', 0x0fe1),
+    ('RT_CharFormatAtom', 0x0fe2),
+    ('RT_ParaFormatAtom', 0x0fe3),
+    ('RT_ExQuickTime', 0x0fe9),
+    ('RT_ExQuickTimeMovie', 0x0fea),
+    ('RT_ExQuickTimeMovieData', 0x0feb),
+    ('RT_ExSubscription', 0x0fec),
+    ('RT_ExSubscriptionSection', 0x0fed),
+    ('RT_SlideList', 0x0ff4),
+    ('RT_PersistPtrFullBlock', 0x1771),
+    ('RT_RulerIndentAtom', 0x2710),
+    ('RT_GscalingAtom', 0x2711),
+    ('RT_GrColorAtom', 0x2712),
+    ('RT_GLPointAtom', 0x2713),
+    ('RT_GlineAtom', 0x2714),
+]
 
 ## ripped from [MS-PPT]
-recordType = [
+recordType += [
     ('RT_Document', 0x03e8),
     ('RT_DocumentAtom', 0x03e9),
     ('RT_EndDocumentAtom', 0x03ea),
@@ -265,20 +321,20 @@ class CurrentUserAtom(pstruct.type):
 
 # PowerPoint Document stream
 class PersistDirectoryEntry(pstruct.type):
-    class __info(pbinary.struct):
-        _fields_ = [(12, 'cPersist'), (20,'persistId')]
-    __info = pbinary.littleendian(__info)
+    class _info(pbinary.struct):
+        _fields_ = R([(20,'persistId'), (12, 'cPersist')])
 
     _fields_ = [
-        (__info, 'info'),
+        (_info, 'info'),
         (lambda s: dyn.array( dyn.pointer(RecordGeneral), s['info'].li['cPersist'] ), 'offsets')
     ]
 
     def summary(self):
         info = self['info']
-        info_s = 'info.persistId:0x%x info.cPersist:0x%x'% (info['persistId'], info['cPersist'])
-        offset = [o.num() for o in self['offsets']]
-        offset_s = 'offsets:{%s}'% (','.join(map(hex, offset)))
+        info_s = 'info.persistId:{:#x} info.cPersist:{:#x}'.format(info['persistId'], info['cPersist'])
+        offset = array('L', self['offsets'].serialize())
+        res = map('{:#x}'.format, offset)
+        offset_s = 'offsets:({:s})'.format(','.join(res))
         return ' '.join((info_s, offset_s))
 
     def repr(self):
@@ -287,7 +343,8 @@ class PersistDirectoryEntry(pstruct.type):
     def walk(self):
         # heh
         for n in self['offsets']:
-            yield n.d.li['data']
+            res = n.d.li
+            yield res['data'] if getattr(res, 'lazy', false) else res['data'].d.l
         return
 
 @RT_PersistDirectoryAtom.define
@@ -342,7 +399,7 @@ class PlaceHolderEnum(pint.enum, ubyte1): _values_ = []
 class MasterIdRef(uint4): pass
 class NotesIdRef(uint4): pass
 class SlideFlags(pbinary.struct):
-    _fields_ = [(1,'fMasterObjects'),(1,'fMasterScheme'),(1,'fMasterBackground'),(13,'reserved')]
+    _fields_ = R([(1,'fMasterObjects'),(1,'fMasterScheme'),(1,'fMasterBackground'),(13,'reserved')])
 
 @RT_SlideAtom.define
 class SlideAtom(pstruct.type):
@@ -389,7 +446,12 @@ class HandoutContainer(RecordContainer):
     type = 15,0x000
 
 class ColorStruct(pstruct.type):
-    _fields_= [(ubyte1,name) for name in ('red','green','blue','unused')]
+    _fields_= [
+        (ubyte1,'red'),
+        (ubyte1,'green'),
+        (ubyte1,'blue'),
+        (ubyte1,'unused'),
+    ]
 
 @RT_ColorSchemeAtom.define
 class SlideSchemeColorSchemeAtom(parray.type):
@@ -490,40 +552,277 @@ class DocumentAtom(pstruct.type):
         (bool1, 'fShowComments'),
     ]
 
-#@RT_Environment.define
-class DocumentTextInfoContainer(pstruct.type):
-    type = 15,0x000
-    _fields_ = [
-    # FIXME
-        #(KinsokuContainer, 'kinsoku'),
-        #(FontCollectionContainer, 'fontCollection'),
-        #(TextCFExceptionAtom, 'textCFDefaultsAtom'),
-        #(TextPFExceptionAtom, 'textPFDefaultsAtom'),
-        #(DefaultRulerAtom, 'defaultRulerAtom'),
-        #(TextSIExceptionAtom, 'textSIDefaultsAtom'),
-        #(TextMasterStyleAtom, 'textMasterStyleAtom'),
+class TextTypeEnum(pint.enum):
+    _values_ = [
+        ( 'Tx_TYPE_TITLE', 0x00000000 ),        # Title placeholder shape text.
+        ( 'Tx_TYPE_BODY', 0x00000001 ),         # Body placeholder shape text.
+        ( 'Tx_TYPE_NOTES', 0x00000002 ),        # Notes placeholder shape text.
+        ( 'Tx_TYPE_OTHER', 0x00000004 ),        # Any other text.
+        ( 'Tx_TYPE_CENTERBODY', 0x00000005 ),   # Center body placeholder shape text.
+        ( 'Tx_TYPE_CENTERTITLE', 0x00000006 ),  # Center title placeholder shape text.
+        ( 'Tx_TYPE_HALFBODY', 0x00000007 ),     # Half-sized body placeholder shape text.
+        ( 'Tx_TYPE_QUARTERBODY', 0x00000008 ),  # Quarter-sized body placeholder shape text.
     ]
 
-#@RT_DrawingGroup.define
-class DrawingGroupContainer(pstruct.type):
-    type = 15,0x000
-    _fields_ = [
-    # FIXME
-        #(OfficeArtDggContainer, 'OfficeArtDgg'),
+class PFMasks(pbinary.flags):
+    _fields_ = R([
+        (1, 'hasBullet'),
+        (1, 'bulletHasFont'),
+        (1, 'bulletHasColor'),
+        (1, 'bulletHasSize'),
+        (1, 'bulletFont'),
+        (1, 'bulletColor'),
+        (1, 'bulletSize'),
+        (1, 'bulletChar'),
+        (1, 'leftMargin'),
+        (1, 'unused'),
+        (1, 'indent'),
+        (1, 'align'),
+        (1, 'lineSpacing'),
+        (1, 'spaceBefore'),
+        (1, 'spaceAfter'),
+        (1, 'defaultTabSize'),
+        (1, 'fontAlign'),
+        (1, 'charWrap'),
+        (1, 'wordWrap'),
+        (1, 'overflow'),
+        (1, 'tabStops'),
+        (1, 'textDirection'),
+        (1, 'reserved1'),
+        (1, 'bulletBlip'),
+        (1, 'bulletScheme'),
+        (1, 'bulletHasScheme'),
+        (6, 'reserved2'),
+    ])
+
+class BulletFlags(pbinary.flags):
+    _fields_ = R([
+        (1, 'fHasBullet'),
+        (1, 'fBulletHasFont'),
+        (1, 'fBulletHasColor'),
+        (1, 'fBulletHasSize'),
+        (12, 'reserved'),
+    ])
+
+class BulletSize(sint2): pass
+
+class TextAlignmentEnum(pint.enum, uint2):
+    _values_ = [
+        ('Tx_ALIGNLeft', 0x0000), # For horizontal text, left aligned.  For vertical text, top aligned.
+        ('Tx_ALIGNCenter', 0x0001), # For horizontal text, centered.  For vertical text, middle aligned.
+        ('Tx_ALIGNRight', 0x0002), # For horizontal text, right aligned.  For vertical text, bottom aligned.
+        ('Tx_ALIGNJustify', 0x0003), # For horizontal text, flush left and right.  For vertical text, flush top and bottom.
+        ('Tx_ALIGNDistributed', 0x0004), # Distribute space between characters.
+        ('Tx_ALIGNThaiDistributed', 0x0005), # Thai distribution justification.
+        ('Tx_ALIGNJustifyLow', 0x0006), # Kashida justify low.
     ]
 
-#@RT_SlideListWithText.define
-class MasterListWithTextContainer(pstruct.type):
+class ParaSpacing(sint2): pass
+class MarginOrIndent(sint2): pass
+class TabSize(sint2): pass
+
+class TabStops(pstruct.type):
+    _fields_ = [
+        (uint2, 'count'),
+        (lambda s: dyn.array(TabStop, s['count'].li.int()), 'rgTabStop'),
+    ]
+
+class TextTabTypeEnum(pint.enum, uint2):
+    _values_ = [
+        ('Tx_TABLeft', 0x0000), # Left-aligned tab stop.
+        ('Tx_TABCenter', 0x0001), # Center-aligned tab stop.
+        ('Tx_TABRight', 0x0002), # Right-aligned tab stop.
+        ('Tx_TABDecimal', 0x0003), # Decimal point-aligned tab stop.
+    ]
+
+class TabStop(pstruct.type):
+    _fields_ = [
+        (sint2, 'position'),
+        (TextTabTypeEnum, 'type'),
+    ]
+
+class TextFontAlignmentEnum(pint.enum, uint2):
+    _values_ = [
+        ('Tx_ALIGNFONTRoman', 0x0000), # Place characters on font baseline.
+        ('Tx_ALIGNFONTHanging', 0x0001), # Characters hang from top of line height
+        ('Tx_ALIGNFONTCenter', 0x0002), # Characters centered within line height.
+        ('Tx_ALIGNFONTUpholdFixed', 0x0003), # Characters are anchored to the very bottom of a single line. This is different than Tx_ALIGNFONTRoman because of letters such as "g", "q", and "y".
+    ]
+
+class PFWrapFlags(pbinary.flags):
+    _fields_ = R([
+        (1, 'charWrap'),
+        (1, 'wordWrap'),
+        (1, 'overflow'),
+        (13, 'reserved'),
+    ])
+
+class TextDirectionEnum(pint.enum, uint2):
+    _values_ = [
+        ('LeftToRight', 0x0000),
+        ('RightToLeft', 0x0001),
+    ]
+
+class FontIndexRef(uint2): pass
+
+class ColorIndexStruct(pstruct.type):
+    class _index(pint.enum, ubyte1):
+        _values_ = [
+            ('Background', 0x00),
+            ('Text', 0x01),
+            ('Shadow', 0x02),
+            ('Title', 0x03),
+            ('Fill', 0x04),
+            ('Accent1', 0x05),
+            ('Accent2', 0x06),
+            ('Accent3', 0x07),
+            ('sRGB', 0xFE),
+            ('undefined', 0xFF),
+        ]
+    _fields_ = [
+        (ubyte1, 'red'),
+        (ubyte1, 'green'),
+        (ubyte1, 'blue'),
+        (_index, 'index'),
+    ]
+
+class TextPFException(pstruct.type):
+    fmask = lambda T,F: lambda *flds: lambda s: T if any(s['masks'].li[f] for f in flds) else F
+    _fields_ = [
+        (PFMasks, 'masks'),
+        (fmask(BulletFlags,ptype.undefined)('hasBullet', 'bulletHasFont', 'bulletHasColor', 'bulletHasSize'), 'bulletFlags'),
+        (fmask(sint2,pint.sint_t)('bulletChar'), 'bulletChar'),
+        (fmask(FontIndexRef,pint.uint_t)('bulletFont'), 'bulletFontRef'),
+        (fmask(BulletSize,pint.sint_t)('bulletSize'), 'bulletSize'),
+        (fmask(ColorIndexStruct,ptype.undefined)('bulletColor'), 'bulletColor'),
+        (fmask(TextAlignmentEnum,pint.uint_t)('align'), 'textAlignment'),
+        (fmask(ParaSpacing,pint.sint_t)('lineSpacing'), 'lineSpacing'),
+        (fmask(ParaSpacing,pint.sint_t)('spaceBefore'), 'spaceBefore'),
+        (fmask(ParaSpacing,pint.sint_t)('spaceAfter'), 'spaceAfter'),
+        (fmask(MarginOrIndent,pint.sint_t)('leftMargin'), 'leftMargin'),
+        (fmask(MarginOrIndent,pint.sint_t)('indent'), 'indent'),
+        (fmask(TabSize,pint.sint_t)('defaultTabSize'), 'defaultTabSize'),
+        (fmask(TabStops,ptype.undefined)('tabStops'), 'tabStops'),
+        (fmask(TextFontAlignmentEnum,pint.uint_t)('fontAlign'), 'fontAlign'),
+        (fmask(PFWrapFlags,ptype.undefined)('charWrap','wordWrap','overflow'), 'wrapFlags'),
+        (fmask(TextDirectionEnum,pint.uint_t)('textDirection'), 'textDirection'),
+    ]
+
+class CFMasks(pbinary.flags):
+    _fields_ = R([
+        (1, 'bold'),
+        (1, 'italic'),
+        (1, 'underline'),
+        (1, 'unused1'),
+        (1, 'shadow'),
+        (1, 'fehint'),
+        (1, 'unused2'),
+        (1, 'kumi'),
+        (1, 'unused3'),
+        (1, 'emboss'),
+        (4, 'fHasStyle'),
+        (2, 'unused4'),
+        (1, 'typeface'),
+        (1, 'size'),
+        (1, 'color'),
+        (1, 'position'),
+        (1, 'pp10ext'),
+        (1, 'oldEATypeface'),
+        (1, 'ansiTypeface'),
+        (1, 'symbolTypeface'),
+        (1, 'newEATypeface'),
+        (1, 'csTypeface'),
+        (1, 'pp11ext'),
+        (5, 'reserved'),
+    ])
+
+class CFStyle(pbinary.flags):
+    _fields_ = R([
+        (1, 'bold'),
+        (1, 'italic'),
+        (1, 'underline'),
+        (1, 'unused1'),
+        (1, 'shadow'),
+        (1, 'fehint'),
+        (1, 'unused2'),
+        (1, 'kumi'),
+        (1, 'unused3'),
+        (1, 'emboss'),
+        (4, 'pp9rt'),
+        (2, 'unused4'),
+    ])
+
+class TextCFException(pstruct.type):
+    fmask = lambda T,F: lambda *flds: lambda s: T if any(s['masks'].li[f] for f in flds) else F
+    _fields_ = [
+        (CFMasks, 'masks'),
+        (fmask(CFStyle,ptype.undefined)('bold','italic','underline','shadow','fehint','kumi','emboss','fHasStyle'), 'fontStyle'),
+        (fmask(FontIndexRef,pint.uint_t)('typeface'), 'fontRef'),
+        (fmask(FontIndexRef,pint.uint_t)('oldEATypeface'), 'oldEAFontRef'),
+        (fmask(FontIndexRef,pint.uint_t)('ansiTypeface'), 'ansiFontRef'),
+        (fmask(FontIndexRef,pint.uint_t)('symbolTypeface'), 'symbolFontRef'),
+        (fmask(sint2,pint.sint_t)('size'), 'fontSize'),
+        (fmask(ColorIndexStruct,ptype.undefined)('color'), 'color'),
+        (fmask(sint2,pint.sint_t)('position'), 'position'),
+    ]
+
+class TextMasterStyleLevel(pstruct.type):
+    def __level(self):
+        try:
+            p = self.getparent(type=RecordGeneral)
+            _,instance = p['header'].Instance()
+            res = uint2 if instance >= 5 else pint.uint_t
+        except ptypes.error.NotFoundError:
+            res = pint.uint_t
+        return res
+
+    _fields_ = [
+        (__level, 'level'),
+        (TextPFException, 'pf'),
+        (TextCFException, 'cf'),
+    ]
+
+@RT_TextMasterStyleAtom.define
+class TextMasterStyleAtom(pstruct.type):
+    type = 0, None
+    _fields_ = [
+        (uint2, 'cLevels'),
+        (lambda s: dyn.array(TextMasterStyleLevel, min((5,s['cLevels'].li.int()))), 'lstLvl'),
+    ]
+
+@RT_Environment.define
+class DocumentTextInfoContainer(RecordContainer):
+    type = 15,0x000
+    _values_ = [
+        #('kinsoku', KinsokuContainer),
+        #('fontCollection', FontCollectionContainer),
+        #('textCFDefaultsAtom', TextCFExceptionAtom),
+        #('textPFDefaultsAtom', TextPFExceptionAtom),
+        #('defaultRulerAtom', DefaultRulerAtom),
+        #('textSIDefaultsAtom', TextSIExceptionAtom),
+        ('textMasterStyleAtom', TextMasterStyleAtom),
+    ]
+
+@RT_DrawingGroup.define
+class DrawingGroupContainer(RecordContainer):
+    type = 15,0x000
+    _values_ = [
+    # FIXME
+        #('OfficeArtDgg', OfficeArtDggContainer),
+    ]
+
+@RT_SlideListWithText.define
+class MasterListWithTextContainer(RecordContainer):
     type = 15,0x001
-    _fields_ = [
+    _values_ = [
     # FIXME
-    #    (lambda s: parray.block(MasterPersistAtom, s.parent['rh']['recLen']), 'rgMasterPersistAtom'),
+    #    ('rgMasterPersistAtom', MasterPersistAtom),
     ]
 
-#@RT_List.define
-class DocInfoListContainer(pstruct.type):
+@RT_List.define
+class DocInfoListContainer(RecordContainer):
     type = 15,0x000
-    _fields_ = [
+    _values = [
     # FIXME
     ]
 

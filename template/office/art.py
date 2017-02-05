@@ -2,6 +2,8 @@ import ptypes
 from ptypes import *
 from . import *
 
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
 ## ripped from [MS-OART]
 recordType = [
     ('FT_OfficeArgDgg', 0xf000),
@@ -139,17 +141,17 @@ class POINT(pstruct.type):
     ]
 
 class MSOPATHINFO(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (3, 'type'), # MSOPATHTYPE
         (13, 'segments'),
-    ]
+    ])
 
 class MSOPATHESCAPEINFO(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (3, 'type'),    # MSOPATHTYPE
         (5, 'escape'),  # MSOPATHESCAPE
         (8, 'segments'),
-    ]
+    ])
 
 class RECT(pstruct.type):
     _fields_ = [
@@ -161,7 +163,7 @@ class RECT(pstruct.type):
 
 class ADJH(pstruct.type):
     class flags(pbinary.flags):
-        _fields_ = [
+        _fields_ = R([
             (1, 'fahInverseX'),
             (1, 'fahInverseY'),
             (1, 'fahSwitchPosition'),
@@ -177,7 +179,7 @@ class ADJH(pstruct.type):
             (1, 'fahyRange'),
             (1, 'fahPolarPin'),
             (18, 'unused1'),
-        ]
+        ])
     _fields_ = [
         (flags, 'flags'),
         (uint4, 'apX'),
@@ -191,7 +193,7 @@ class ADJH(pstruct.type):
     ]
 
 class SG(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (13, 'sgf'),
         (1, 'fCalculatedParam1'),
         (1, 'fCalculatedParam2'),
@@ -199,7 +201,7 @@ class SG(pbinary.struct):
         (16, 'param1'),
         (16, 'param2'),
         (16, 'param3'),
-    ]
+    ])
 
 class IHlink(pstruct.type):
     _fields_ = [
@@ -208,11 +210,11 @@ class IHlink(pstruct.type):
     ]
 
 class OfficeArtFOPTEOPID(pbinary.struct):
-    _fields_ = [
-        (1,'fComplex'),
-        (1,'fBid'),
+    _fields_ = R([
         (14,'id'),
-    ]
+        (1,'fBid'),
+        (1,'fComplex'),
+    ])
 
 class OfficeArtFOPTEOP(ptype.definition):
     cache = {}
@@ -225,7 +227,7 @@ class OfficeArtFOPTE(pstruct.type):
         return OfficeArtFOPTEOP.get(opid)
 
     _fields_ = [
-        (pbinary.littleendian(OfficeArtFOPTEOPID), 'opid'),
+        (OfficeArtFOPTEOPID, 'opid'),
         (__op, 'op'),
     ]
 
@@ -233,15 +235,15 @@ class OfficeArtFOPTE(pstruct.type):
         return self['op'].complex()
 
 class TABLEFLAGS(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (1, 'fIsTable'),
         (1, 'fIsTablePlaceholder'),
         (1, 'fIsTableRTL'),
         (29, 'unused1'),
-    ]
+    ])
 
 class COLORREF(pbinary.struct):
-    _fields_ = [
+    _fields_ = R([
         (8, 'red'),
         (8, 'green'),
         (8, 'blue'),
@@ -253,7 +255,7 @@ class COLORREF(pbinary.struct):
         (1, 'unused1'),
         (1, 'unused2'),
         (1, 'unused3'),
-    ]
+    ])
 
 class MSOSHADECOLOR(pstruct.type):
     _fields_ = [
@@ -1371,17 +1373,17 @@ class OfficeArtSolverContainer(RecordContainer):
 @FT_OfficeArtFSP.define
 class OfficeArtFSP(pstruct.type):
     type = 2,None       # MSOPT enumeration value
-    class __flags(pbinary.flags):
-        _fields_ = [
+    class _flags(pbinary.flags):
+        _fields_ = R([
             (20,'unused1'),
             (1,'fHaveSpt'),(1,'fBackground'),(1,'fHaveAnchor'),(1,'fConnector'),
             (1,'fFlipV'),(1,'fFlipH'),(1,'fHaveMaster'),(1,'fOleShape'),
             (1,'fDeleted'),(1,'fPatriarch'),(1,'fChild'),(1,'fGroup'),
-        ]
+        ])
 
     _fields_ = [
         (MSOSPID, 'spid'),
-        (pbinary.littleendian(__flags), 'f')
+        (_flags, 'f')
     ]
 
 @FT_OfficeArtDg.define
@@ -1633,6 +1635,125 @@ class OfficeArtSecondaryFOPT(OfficeArtRGFOPTE):
 class OfficeArtTertiaryFOPT(OfficeArtRGFOPTE):
     type = 3,None           # Number of properties in the table
 
+@FT_OfficeArtBlipEMF.define
+class OfficeArtBlipEMF(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x3d4:50, 0x3d5:66}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
+@FT_OfficeArtBlipWMF.define
+class OfficeArtBlipWMF(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x216:50, 0x217:66}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
+@FT_OfficeArtBlipPICT.define
+class OfficeArtBlipPICT(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x542:50, 0x543:66}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
+@FT_OfficeArtBlipJPEG.define
+class OfficeArtBlipJPEG(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x46a:17, 0x46b:33, 0x6e2:17, 0x6e3:33}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
+@FT_OfficeArtBlipPNG.define
+class OfficeArtBlipPNG(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x6e0:17, 0x6e1:33}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
+@FT_OfficeArtBlipDIB.define
+class OfficeArtBlipDIB(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x7a8:17, 0x7a9:33}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
+@FT_OfficeArtBlipTIFF.define
+class OfficeArtBlipTIFF(pstruct.type):
+    type = 0,None
+    def __BLIPFileData(self):
+        p = self.getparent(type=RecordGeneral)
+        length = p['header']['Length'].int()
+        _,instance = p['header'].Instance()
+        uid = {0x6e4:17, 0x6e5:33}
+        return dyn.block(length - uid[instance])
+
+    _fields_ = [
+        (MD4, 'rgbUid1'),
+        (MD4, 'rgbUid2'),
+        (ubyte1, 'tag'),
+        (__BLIPFileData, 'BLIPFileData'),
+    ]
+
 ## OfficeArt Properties
 # Shape
 @OfficeArtFOPTEOP.define
@@ -1683,12 +1804,12 @@ class dgmLayoutMRU(MSODGMLO):
 @OfficeArtFOPTEOP.define
 class equationXML(uint4):
     type = 0x030c
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class shapeBooleanProperties(pbinary.flags):
-    type = 0x33f
-    _fields_ = list(reversed([
+    type = 0x033f
+    _fields_ = R([
         (1, 'fBackground'),
         (1, 'reserved1'),
         (1, 'fInitiator'),
@@ -1715,20 +1836,20 @@ class shapeBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (4, 'unused7'),
-    ]))
+    ])
 
 # Callout
 @OfficeArtFOPTEOP.define
 class unused832(sint4):
-    type = 0x340
+    type = 0x0340
 
 @OfficeArtFOPTEOP.define
 class dxyCalloutGap(sint4):
-    type = 0x341
+    type = 0x0341
 
 @OfficeArtFOPTEOP.define
 class spcoa(pint.enum, sint4):
-    type = 0x342
+    type = 0x0342
     _values_ = [
         ('msospcoaAny', 0x00000000), # The callout is drawn according to its list of vertices.
         ('msospcoa30', 0x00000001), # The callout is drawn at a 30-degree angle.
@@ -1740,7 +1861,7 @@ class spcoa(pint.enum, sint4):
 
 @OfficeArtFOPTEOP.define
 class spcod(pint.enum, sint4):
-    type = 0x343
+    type = 0x0343
     _values_ = [
         ('msospcodTop', 0x00000000), # This callout connects to the top of the callout box.
         ('msospcodCenter', 0x00000001), # This callout connects to the callout box at the midpoint of its top and bottom coordinates.
@@ -1750,16 +1871,16 @@ class spcod(pint.enum, sint4):
 
 @OfficeArtFOPTEOP.define
 class dxyCalloutDropSpecified(pint.enum, sint4):
-    type = 0x344
+    type = 0x0344
 
 @OfficeArtFOPTEOP.define
 class dxyCalloutLengthSpecified(pint.enum, sint4):
-    type = 0x345
+    type = 0x0345
 
 @OfficeArtFOPTEOP.define
 class calloutShapeBoolean(pbinary.flags):
-    type = 0x37f
-    _fields_ = list(reversed([
+    type = 0x037f
+    _fields_ = R([
         (1, 'fCalloutLengthSpecified'),
         (1, 'fCalloutDropAuto'),
         (1, 'fCalloutMinusY'),
@@ -1776,66 +1897,66 @@ class calloutShapeBoolean(pbinary.flags):
         (1, 'fUsefCalloutAccentBar'),
         (1, 'fUsefCallout'),
         (9, 'unused2'),
-    ]))
+    ])
 
 # Group Shape
 @OfficeArtFOPTEOP.define
 class wzName(uint4):
-    type = 0x380
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x0380
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class wzDescription(uint4):
-    type = 0x381
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x0381
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class pihlShape(uint4):
-    type = 0x382
+    type = 0x0382
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class pWrapPolygonVertices(uint4):
-    type = 0x383
+    type = 0x0383
     complex = lambda s: dyn.clone(IMsoArray, _object_=POINT, blocksize=lambda _: s.num())
 
 @OfficeArtFOPTEOP.define
 class dxWrapDistLeft(uint4):
-    type = 0x384
+    type = 0x0384
 
 @OfficeArtFOPTEOP.define
 class dxWrapDistTop(uint4):
-    type = 0x385
+    type = 0x0385
 
 @OfficeArtFOPTEOP.define
 class dxWrapDistRight(uint4):
-    type = 0x386
+    type = 0x0386
 
 @OfficeArtFOPTEOP.define
 class dxWrapDistBottom(uint4):
-    type = 0x387
+    type = 0x0387
 
 @OfficeArtFOPTEOP.define
 class lidRegroup(uint4):
-    type = 0x388
+    type = 0x0388
 
 @OfficeArtFOPTEOP.define
 class unused906(sint4):
-    type = 0x38a
+    type = 0x038a
 
 @OfficeArtFOPTEOP.define
 class wzTooltip(uint4):
-    type = 0x38d
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x038d
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class wzScript(uint4):
-    type = 0x38e
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x038e
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class posh(uint4):
-    type = 0x38f
+    type = 0x038f
     _values_ = [
         ('msophAbs', 0x00000000), # The shape is horizontally offset by an absolute distance from the page element.
         ('msophLeft', 0x00000001), # The shape is horizontally positioned at the left side of the page element.
@@ -1847,7 +1968,7 @@ class posh(uint4):
 
 @OfficeArtFOPTEOP.define
 class posrelh(uint4):
-    type = 0x390
+    type = 0x0390
     _values_ = [
         ('msoprhMargin', 0x00000001), # The shape is horizontally positioned relative to the margins of the page:
         ('msoprhPage', 0x00000002), # The shape is horizontally positioned relative to the edges of the page:
@@ -1857,7 +1978,7 @@ class posrelh(uint4):
 
 @OfficeArtFOPTEOP.define
 class posv(uint4):
-    type = 0x391
+    type = 0x0391
     _values_ = [
         ('msophAbs', 0x00000000), # The shape is horizontally offset by an absolute distance from the page element.
         ('msophLeft', 0x00000001), # The shape is horizontally positioned at the left side of the page element.
@@ -1869,7 +1990,7 @@ class posv(uint4):
 
 @OfficeArtFOPTEOP.define
 class posrelv(uint4):
-    type = 0x392
+    type = 0x0392
     _values_ = [
         ('msoprvMargin', 0x00000001), # The shape is horizontally positioned relative to the margins of the page:
         ('msoprvPage', 0x00000002), # The shape is horizontally positioned relative to the edges of the page:
@@ -1879,11 +2000,11 @@ class posrelv(uint4):
 
 @OfficeArtFOPTEOP.define
 class pctHR(uint4):
-    type = 0x393
+    type = 0x0393
 
 @OfficeArtFOPTEOP.define
 class alignHR(pint.enum, uint4):
-    type = 0x394
+    type = 0x0394
     _values_ = [
         ('left-aligned', 0x00000000),
         ('center', 0x00000001),
@@ -1892,20 +2013,20 @@ class alignHR(pint.enum, uint4):
 
 @OfficeArtFOPTEOP.define
 class dxHeightHR(uint4):
-    type = 0x395
+    type = 0x0395
 
 @OfficeArtFOPTEOP.define
 class dxWidthHR(uint4):
-    type = 0x396
+    type = 0x0396
 
 @OfficeArtFOPTEOP.define
 class wzScriptExtAttr(uint4):
-    type = 0x397
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x0397
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class alignHR(pint.enum, uint4):
-    type = 0x398
+    type = 0x0398
     _values_ = [
         ('JavaScript', 0x00000001),
         ('VBScript', 0x00000002),
@@ -1915,47 +2036,47 @@ class alignHR(pint.enum, uint4):
 
 @OfficeArtFOPTEOP.define
 class borderTopColor(COLORREF):
-    type = 0x39b
+    type = 0x039b
 
 @OfficeArtFOPTEOP.define
 class borderLeftColor(COLORREF):
-    type = 0x39c
+    type = 0x039c
 
 @OfficeArtFOPTEOP.define
 class borderBottomColor(COLORREF):
-    type = 0x39d
+    type = 0x039d
 
 @OfficeArtFOPTEOP.define
 class borderRightColor(COLORREF):
-    type = 0x39e
+    type = 0x039e
 
 @OfficeArtFOPTEOP.define
 class tableProperties(uint4):
-    type = 0x39f
+    type = 0x039f
 
 @OfficeArtFOPTEOP.define
 class tableRowProperties(uint4):
-    type = 0x3a0
+    type = 0x03a0
     complex = lambda s: dyn.clone(IMsoArray, _object_=sint4, blocksize=lambda _: s.num())
 
 @OfficeArtFOPTEOP.define
 class wzWebBot(uint4):
-    type = 0x3a5
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x03a5
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class metroBlob(uint4):
-    type = 0x3a9
+    type = 0x03a9
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class dhgt(uint4):
-    type = 0x3aa
+    type = 0x03aa
 
 @OfficeArtFOPTEOP.define
 class groupShapeBoolean(pbinary.flags):
-    type = 0x3bf
-    _fields_ = list(reversed([
+    type = 0x03bf
+    _fields_ = R([
         (1, 'fPrint'),
         (1, 'fHidden'),
         (1, 'fOneD'),
@@ -1988,28 +2109,28 @@ class groupShapeBoolean(pbinary.flags):
         (1, 'fUsefStandardHR'),
         (1, 'fUsefIsBullet'),
         (1, 'fUsefLayoutInCell'),
-    ]))
+    ])
 
 # Group Shape 2
 @OfficeArtFOPTEOP.define
 class pctHoriz(uint4):
-    type = 0x7c0
+    type = 0x07c0
 
 @OfficeArtFOPTEOP.define
 class pctVert(uint4):
-    type = 0x7c1
+    type = 0x07c1
 
 @OfficeArtFOPTEOP.define
 class pctHorizPos(uint4):
-    type = 0x7c2
+    type = 0x07c2
 
 @OfficeArtFOPTEOP.define
 class pctVertPos(uint4):
-    type = 0x7c3
+    type = 0x07c3
 
 @OfficeArtFOPTEOP.define
 class sizerelh(pint.enum, uint4):
-    type = 0x7c4
+    type = 0x07c4
     _values_ = [
         ('msosrhMargin', 0x00000000), # The page, excluding the margins.
         ('msosrhPage', 0x00000001), # The page.
@@ -2021,7 +2142,7 @@ class sizerelh(pint.enum, uint4):
 
 @OfficeArtFOPTEOP.define
 class sizerelv(pint.enum, uint4):
-    type = 0x7c5
+    type = 0x07c5
     _values_ = [
         ('msosrvMargin', 0x00000000), # The page, excluding the margins.
         ('msosrvPage', 0x00000001), # The page.
@@ -2034,107 +2155,107 @@ class sizerelv(pint.enum, uint4):
 # Geometry
 @OfficeArtFOPTEOP.define
 class geoLeft(uint4):
-    type = 0x140
+    type = 0x0140
 
 @OfficeArtFOPTEOP.define
 class geoTop(uint4):
-    type = 0x141
+    type = 0x0141
 
 @OfficeArtFOPTEOP.define
 class geoRight(uint4):
-    type = 0x142
+    type = 0x0142
 
 @OfficeArtFOPTEOP.define
 class geoBottom(uint4):
-    type = 0x143
+    type = 0x0143
 
 @OfficeArtFOPTEOP.define
 class shapePath(MSOSHAPEPATH):
-    type = 0x144
+    type = 0x0144
 
 @OfficeArtFOPTEOP.define
 class pVertices(uint4):
-    type = 0x145
+    type = 0x0145
     complex = lambda s: dyn.clone(IMsoArray, _object_=POINT, blocksize=lambda _: s.num())
 
 @OfficeArtFOPTEOP.define
 class pSegmentInfo(uint4):
-    type = 0x146
+    type = 0x0146
     complex = lambda s: dyn.clone(IMsoArray, _object_=MSOPATHINFO, blocksize=lambda _: s.num())
 
 @OfficeArtFOPTEOP.define
 class adjustValue(uint4):
-    type = 0x147
+    type = 0x0147
 
 @OfficeArtFOPTEOP.define
 class adjust2Value(uint4):
-    type = 0x148
+    type = 0x0148
 
 @OfficeArtFOPTEOP.define
 class adjust3Value(uint4):
-    type = 0x149
+    type = 0x0149
 
 @OfficeArtFOPTEOP.define
 class adjust4Value(uint4):
-    type = 0x14a
+    type = 0x014a
 
 @OfficeArtFOPTEOP.define
 class adjust5Value(uint4):
-    type = 0x14b
+    type = 0x014b
 
 @OfficeArtFOPTEOP.define
 class adjust6Value(uint4):
-    type = 0x14c
+    type = 0x014c
 
 @OfficeArtFOPTEOP.define
 class adjust7Value(uint4):
-    type = 0x14d
+    type = 0x014d
 
 @OfficeArtFOPTEOP.define
 class adjust8Value(uint4):
-    type = 0x14e
+    type = 0x014e
 
 @OfficeArtFOPTEOP.define
 class pConnectionSites(uint4):
-    type = 0x151
+    type = 0x0151
     complex = lambda s: dyn.clone(IMsoArray, _object_=MSOPATHINFO, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class pConnectionSitesDir(uint4):
-    type = 0x152
+    type = 0x0152
     complex = lambda s: dyn.clone(IMsoArray, _object_=FixedPoint, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class xLimo(uint4):
-    type = 0x153
+    type = 0x0153
 
 @OfficeArtFOPTEOP.define
 class yLimo(uint4):
-    type = 0x154
+    type = 0x0154
 
 @OfficeArtFOPTEOP.define
 class pAdjustHandles(uint4):
-    type = 0x155
+    type = 0x0155
     complex = lambda s: dyn.clone(IMsoArray, _object_=ADJH, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class pGuides(uint4):
-    type = 0x156
+    type = 0x0156
     complex = lambda s: dyn.clone(IMsoArray, _object_=SG, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class pInscribe(uint4):
-    type = 0x157
+    type = 0x0157
     complex = lambda s: dyn.clone(IMsoArray, _object_=RECT, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class cxk(MSOCXK):
-    type = 0x158
+    type = 0x0158
 
 @OfficeArtFOPTEOP.define
 class GeometryBoolean(pbinary.struct):
-    type = 0x17f
-    _fields_ = [
+    type = 0x017f
+    _fields_ = R([
         (1, 'fFillOK'),
         (1, 'fFillShadeShapeOK'),
         (1, 'fGtextOK'),
@@ -2151,172 +2272,172 @@ class GeometryBoolean(pbinary.struct):
         (1, 'fUsefShadowOK'),
         (1, 'unused3'),
         (9, 'unused4'),
-    ]
+    ])
 
 # Fill Style
 @OfficeArtFOPTEOP.define
 class fillType(MSOFILLTYPE):
-    type = 0x180
+    type = 0x0180
 
 @OfficeArtFOPTEOP.define
 class fillColor(COLORREF):
-    type = 0x181
+    type = 0x0181
 
 @OfficeArtFOPTEOP.define
 class fillOpacity(FixedPoint):
-    type = 0x182
+    type = 0x0182
 
 @OfficeArtFOPTEOP.define
 class fillBackColor(COLORREF):
-    type = 0x183
+    type = 0x0183
 
 @OfficeArtFOPTEOP.define
 class fillBackOpacity(FixedPoint):
-    type = 0x184
+    type = 0x0184
 
 @OfficeArtFOPTEOP.define
 class fillCrMod(COLORREF):
-    type = 0x185
+    type = 0x0185
 
 @OfficeArtFOPTEOP.define
 class fillBlip(uint4):
-    type = 0x186
+    type = 0x0186
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class fillBlipName(uint4):
-    type = 0x187
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x0187
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class fillBlipFlags(MSOBLIPFLAGS):
-    type = 0x188
+    type = 0x0188
 
 @OfficeArtFOPTEOP.define
 class fillWidth(uint4):
-    type = 0x189
+    type = 0x0189
 
 @OfficeArtFOPTEOP.define
 class fillHeight(uint4):
-    type = 0x18a
+    type = 0x018a
 
 @OfficeArtFOPTEOP.define
 class fillAngle(FixedPoint):
-    type = 0x18b
+    type = 0x018b
 
 @OfficeArtFOPTEOP.define
 class fillFocus(uint4):
-    type = 0x18c
+    type = 0x018c
 
 @OfficeArtFOPTEOP.define
 class fillToLeft(uint4):
-    type = 0x18d
+    type = 0x018d
 
 @OfficeArtFOPTEOP.define
 class fillToTop(uint4):
-    type = 0x18e
+    type = 0x018e
 
 @OfficeArtFOPTEOP.define
 class fillToRight(uint4):
-    type = 0x18f
+    type = 0x018f
 
 @OfficeArtFOPTEOP.define
 class fillToBottom(uint4):
-    type = 0x190
+    type = 0x0190
 
 @OfficeArtFOPTEOP.define
 class fillRectLeft(uint4):
-    type = 0x191
+    type = 0x0191
 
 @OfficeArtFOPTEOP.define
 class fillRectTop(uint4):
-    type = 0x192
+    type = 0x0192
 
 @OfficeArtFOPTEOP.define
 class fillRectRight(uint4):
-    type = 0x193
+    type = 0x0193
 
 @OfficeArtFOPTEOP.define
 class fillRectBottom(uint4):
-    type = 0x194
+    type = 0x0194
 
 @OfficeArtFOPTEOP.define
 class fillDztype(MSODZTYPE):
-    type = 0x195
+    type = 0x0195
 
 @OfficeArtFOPTEOP.define
 class fillShadePreset(uint4):
-    type = 0x196
+    type = 0x0196
 
 @OfficeArtFOPTEOP.define
 class fillShadeColors(uint4):
-    type = 0x197
+    type = 0x0197
     complex = lambda s: dyn.clone(IMsoArray, _object_=MSOSHADECOLOR, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class fillOriginX(FixedPoint):
-    type = 0x198
+    type = 0x0198
 
 @OfficeArtFOPTEOP.define
 class fillOriginY(FixedPoint):
-    type = 0x199
+    type = 0x0199
 
 @OfficeArtFOPTEOP.define
 class fillShapeOriginX(FixedPoint):
-    type = 0x19a
+    type = 0x019a
 
 @OfficeArtFOPTEOP.define
 class fillShapeOriginY(FixedPoint):
-    type = 0x19b
+    type = 0x019b
 
 @OfficeArtFOPTEOP.define
 class fillShadeType(MSOSHADETYPE):
-    type = 0x19c
+    type = 0x019c
 
 @OfficeArtFOPTEOP.define
 class fillColorExt(COLORREF):
-    type = 0x19e
+    type = 0x019e
 
 @OfficeArtFOPTEOP.define
 class reserved415(uint4):
-    type = 0x19f
+    type = 0x019f
 
 @OfficeArtFOPTEOP.define
 class fillColorExtMod(MSOTINTSHADE):
-    type = 0x1a0
+    type = 0x01a0
 
 @OfficeArtFOPTEOP.define
 class reserved417(uint4):
-    type = 0x1a1
+    type = 0x01a1
 
 @OfficeArtFOPTEOP.define
 class fillBackColorExt(COLORREF):
-    type = 0x1a2
+    type = 0x01a2
 
 @OfficeArtFOPTEOP.define
 class reserved419(uint4):
-    type = 0x1a3
+    type = 0x01a3
 
 @OfficeArtFOPTEOP.define
 class fillBackColorExtMod(uint4):
-    type = 0x1a4
+    type = 0x01a4
 
 @OfficeArtFOPTEOP.define
 class reserved421(uint4):
-    type = 0x1a5
+    type = 0x01a5
 
 @OfficeArtFOPTEOP.define
 class reserved422(uint4):
-    type = 0x1a6
+    type = 0x01a6
 
 @OfficeArtFOPTEOP.define
 class reserved423(uint4):
-    type = 0x1a7
+    type = 0x01a7
 
 @OfficeArtFOPTEOP.define
 class FillStyleBooleanProperties(pbinary.flags):
-    type = 0x1bf
-    _fields_ = list(reversed([
+    type = 0x01bf
+    _fields_ = R([
         (1, 'fNoFillHitTest'),
         (1, 'fillUseRect'),
         (1, 'fillShape'),
@@ -2333,152 +2454,152 @@ class FillStyleBooleanProperties(pbinary.flags):
         (1, 'fUsefUseShapeAnchor'),
         (1, 'fUsefRecolorFillAsPicture'),
         (9, 'unused2'),
-    ]))
+    ])
 
 # Line Style
 @OfficeArtFOPTEOP.define
 class lineColor(COLORREF):
-    type = 0x1c0
+    type = 0x01c0
 
 @OfficeArtFOPTEOP.define
 class lineOpacity(COLORREF):
-    type = 0x1c1
+    type = 0x01c1
 
 @OfficeArtFOPTEOP.define
 class lineBackColor(COLORREF):
-    type = 0x1c2
+    type = 0x01c2
 
 @OfficeArtFOPTEOP.define
 class lineCrMod(COLORREF):
-    type = 0x1c3
+    type = 0x01c3
 
 @OfficeArtFOPTEOP.define
 class lineType(MSOLINETYPE):
-    type = 0x1c4
+    type = 0x01c4
 
 @OfficeArtFOPTEOP.define
 class lineFillBlip(uint4):
-    type = 0x1c5
+    type = 0x01c5
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class lineFillBlipName(uint4):
-    type = 0x1c6
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x01c6
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class lineFillBlipFlags(MSOBLIPFLAGS):
-    type = 0x1c7
+    type = 0x01c7
 
 @OfficeArtFOPTEOP.define
 class lineFillWidth(MSOBLIPFLAGS):
-    type = 0x1c8
+    type = 0x01c8
 
 @OfficeArtFOPTEOP.define
 class lineFillHeight(MSOBLIPFLAGS):
-    type = 0x1c9
+    type = 0x01c9
 
 @OfficeArtFOPTEOP.define
 class lineFillDztype(MSODZTYPE):
-    type = 0x1ca
+    type = 0x01ca
 
 @OfficeArtFOPTEOP.define
 class lineWidth(uint4):
-    type = 0x1cb
+    type = 0x01cb
 
 @OfficeArtFOPTEOP.define
 class lineMiterLimit(FixedPoint):
-    type = 0x1cc
+    type = 0x01cc
 
 @OfficeArtFOPTEOP.define
 class lineStyle(MSOLINESTYLE):
-    type = 0x1cd
+    type = 0x01cd
 
 @OfficeArtFOPTEOP.define
 class lineDashing(MSOLINEDASHING):
-    type = 0x1ce
+    type = 0x01ce
 
 @OfficeArtFOPTEOP.define
 class lineDashStyle(uint4):
-    type = 0x1cf
+    type = 0x01cf
     complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class lineStartArrowhead(MSOLINEEND):
-    type = 0x1d0
+    type = 0x01d0
 
 @OfficeArtFOPTEOP.define
 class lineEndArrowhead(MSOLINEEND):
-    type = 0x1d1
+    type = 0x01d1
 
 @OfficeArtFOPTEOP.define
 class lineStartArrowWidth(MSOLINEENDWIDTH):
-    type = 0x1d2
+    type = 0x01d2
 
 @OfficeArtFOPTEOP.define
 class lineStartArrowLength(MSOLINEENDLENGTH):
-    type = 0x1d3
+    type = 0x01d3
 
 @OfficeArtFOPTEOP.define
 class lineEndArrowWidth(MSOLINEENDWIDTH):
-    type = 0x1d4
+    type = 0x01d4
 
 @OfficeArtFOPTEOP.define
 class lineEndArrowLength(MSOLINEENDLENGTH):
-    type = 0x1d5
+    type = 0x01d5
 
 @OfficeArtFOPTEOP.define
 class lineJoinStyle(MSOLINEJOIN):
-    type = 0x1d6
+    type = 0x01d6
 
 @OfficeArtFOPTEOP.define
 class lineEndCapStyle(MSOLINECAP):
-    type = 0x1d7
+    type = 0x01d7
 
 @OfficeArtFOPTEOP.define
 class lineColorExt(COLORREF):
-    type = 0x1d9
+    type = 0x01d9
 
 @OfficeArtFOPTEOP.define
 class reserved474(uint4):
-    type = 0x1da
+    type = 0x01da
 
 @OfficeArtFOPTEOP.define
 class lineColorExtMod(COLORREF):
-    type = 0x1db
+    type = 0x01db
 
 @OfficeArtFOPTEOP.define
 class reserved476(uint4):
-    type = 0x1dc
+    type = 0x01dc
 
 @OfficeArtFOPTEOP.define
 class lineBackColorExt(COLORREF):
-    type = 0x1dd
+    type = 0x01dd
 
 @OfficeArtFOPTEOP.define
 class reserved478(uint4):
-    type = 0x1de
+    type = 0x01de
 
 @OfficeArtFOPTEOP.define
 class lineBackColorExtMod(MSOTINTSHADE):
-    type = 0x1df
+    type = 0x01df
 
 @OfficeArtFOPTEOP.define
 class reserved480(uint4):
-    type = 0x1e0
+    type = 0x01e0
 
 @OfficeArtFOPTEOP.define
 class reserved481(uint4):
-    type = 0x1e1
+    type = 0x01e1
 
 @OfficeArtFOPTEOP.define
 class reserved482(uint4):
-    type = 0x1e2
+    type = 0x01e2
 
 @OfficeArtFOPTEOP.define
 class LineStyleBooleanProperties(pbinary.flags):
-    type = 0x1ff
-    _fields_ = list(reversed([
+    type = 0x01ff
+    _fields_ = R([
         (1, 'fNoLineDrawDash'),
         (1, 'fLineFillShape'),
         (1, 'fHitTestLine'),
@@ -2501,151 +2622,151 @@ class LineStyleBooleanProperties(pbinary.flags):
         (1, 'unused3'),
         (1, 'fUsefLineOpaqueBackColor'),
         (6, 'unused4'),
-    ]))
+    ])
 
 # Left Line Style
 @OfficeArtFOPTEOP.define
 class lineLeftColor(COLORREF):
-    type = 0x540
+    type = 0x0540
 
 @OfficeArtFOPTEOP.define
 class lineLeftOpacity(FixedPoint):
-    type = 0x541
+    type = 0x0541
 
 @OfficeArtFOPTEOP.define
 class lineLeftBackColor(COLORREF):
-    type = 0x542
+    type = 0x0542
 
 @OfficeArtFOPTEOP.define
 class lineLeftCrMod(COLORREF):
-    type = 0x543
+    type = 0x0543
 
 @OfficeArtFOPTEOP.define
 class lineLeftType(MSOLINETYPE):
-    type = 0x544
+    type = 0x0544
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillBlip(uint4):
-    type = 0x545
+    type = 0x0545
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillBlipName(uint4):
-    type = 0x546
+    type = 0x0546
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillBlipFlags(MSOBLIPFLAGS):
-    type = 0x547
+    type = 0x0547
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillWidth(sint4):
-    type = 0x548
+    type = 0x0548
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillHeight(sint4):
-    type = 0x549
+    type = 0x0549
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillDztype(MSODZTYPE):
-    type = 0x54a
+    type = 0x054a
 
 @OfficeArtFOPTEOP.define
 class lineLeftWidth(sint4):
-    type = 0x54b
+    type = 0x054b
 
 @OfficeArtFOPTEOP.define
 class lineLeftMiterLimit(FixedPoint):
-    type = 0x54c
+    type = 0x054c
 
 @OfficeArtFOPTEOP.define
 class lineLeftStyle(MSOLINESTYLE):
-    type = 0x54d
+    type = 0x054d
 
 @OfficeArtFOPTEOP.define
 class lineLeftDashing(MSOLINEDASHING):
-    type = 0x54e
+    type = 0x054e
 
 @OfficeArtFOPTEOP.define
 class lineLeftDashStyle(uint4):
-    type = 0x54f
+    type = 0x054f
     complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class lineLeftStartArrowhead(MSOLINEEND):
-    type = 0x550
+    type = 0x0550
 
 @OfficeArtFOPTEOP.define
 class lineLeftEndArrowhead(MSOLINEEND):
-    type = 0x551
+    type = 0x0551
 
 @OfficeArtFOPTEOP.define
 class lineLeftStartArrowWidth(MSOLINEENDWIDTH):
-    type = 0x552
+    type = 0x0552
 
 @OfficeArtFOPTEOP.define
 class lineLeftStartArrowLength(MSOLINEENDLENGTH):
-    type = 0x553
+    type = 0x0553
 
 @OfficeArtFOPTEOP.define
 class lineLeftEndArrowWidth(MSOLINEENDWIDTH):
-    type = 0x554
+    type = 0x0554
 
 @OfficeArtFOPTEOP.define
 class lineLeftEndArrowLength(MSOLINEENDLENGTH):
-    type = 0x555
+    type = 0x0555
 
 @OfficeArtFOPTEOP.define
 class lineLeftJoinStyle(MSOLINEJOIN):
-    type = 0x556
+    type = 0x0556
 
 @OfficeArtFOPTEOP.define
 class lineLeftEndCapStyle(MSOLINECAP):
-    type = 0x557
+    type = 0x0557
 
 @OfficeArtFOPTEOP.define
 class lineLeftColorExt(COLORREF):
-    type = 0x559
+    type = 0x0559
 
 @OfficeArtFOPTEOP.define
 class reserved1370(uint4):
-    type = 0x55a
+    type = 0x055a
 
 @OfficeArtFOPTEOP.define
 class lineLeftColorExtMod(MSOTINTSHADE):
-    type = 0x55b
+    type = 0x055b
 
 @OfficeArtFOPTEOP.define
 class reserved1372(uint4):
-    type = 0x55c
+    type = 0x055c
 
 @OfficeArtFOPTEOP.define
 class lineLeftBackColorExt(COLORREF):
-    type = 0x55d
+    type = 0x055d
 
 @OfficeArtFOPTEOP.define
 class reserved1374(uint4):
-    type = 0x55e
+    type = 0x055e
 
 @OfficeArtFOPTEOP.define
 class lineLeftBackColorExtMod(MSOTINTSHADE):
-    type = 0x55f
+    type = 0x055f
 
 @OfficeArtFOPTEOP.define
 class reserved1376(uint4):
-    type = 0x560
+    type = 0x0560
 
 @OfficeArtFOPTEOP.define
 class reserved1377(uint4):
-    type = 0x561
+    type = 0x0561
 
 @OfficeArtFOPTEOP.define
 class reserved1378(uint4):
-    type = 0x562
+    type = 0x0562
 
 @OfficeArtFOPTEOP.define
 class LeftLineStyleBooleanProperties(pbinary.flags):
-    type = 0x57f
-    _fields_ = list(reversed([
+    type = 0x057f
+    _fields_ = R([
         (1, 'fLeftNoLineDrawDash'),
         (1, 'fLineLeftFillShape'),
         (1, 'fLeftHitTestLine'),
@@ -2668,152 +2789,152 @@ class LeftLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]))
+    ])
 
 # Top Line Style
 @OfficeArtFOPTEOP.define
 class lineTopColor(COLORREF):
-    type = 0x580
+    type = 0x0580
 
 @OfficeArtFOPTEOP.define
 class lineTopOpacity(FixedPoint):
-    type = 0x581
+    type = 0x0581
 
 @OfficeArtFOPTEOP.define
 class lineTopBackColor(COLORREF):
-    type = 0x582
+    type = 0x0582
 
 @OfficeArtFOPTEOP.define
 class lineTopCrMod(COLORREF):
-    type = 0x583
+    type = 0x0583
 
 @OfficeArtFOPTEOP.define
 class lineTopType(MSOLINETYPE):
-    type = 0x584
+    type = 0x0584
 
 @OfficeArtFOPTEOP.define
 class lineTopFillBlip(uint4):
-    type = 0x585
+    type = 0x0585
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class lineTopFillBlipName(uint4):
-    type = 0x586
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x0586
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class lineTopFillBlipFlags(MSOBLIPFLAGS):
-    type = 0x587
+    type = 0x0587
 
 @OfficeArtFOPTEOP.define
 class lineTopFillWidth(sint4):
-    type = 0x588
+    type = 0x0588
 
 @OfficeArtFOPTEOP.define
 class lineTopFillHeight(sint4):
-    type = 0x589
+    type = 0x0589
 
 @OfficeArtFOPTEOP.define
 class lineTopFillDztype(MSODZTYPE):
-    type = 0x58a
+    type = 0x058a
 
 @OfficeArtFOPTEOP.define
 class lineTopWidth(sint4):
-    type = 0x58b
+    type = 0x058b
 
 @OfficeArtFOPTEOP.define
 class lineTopMiterLimit(FixedPoint):
-    type = 0x58c
+    type = 0x058c
 
 @OfficeArtFOPTEOP.define
 class lineTopStyle(MSOLINESTYLE):
-    type = 0x58d
+    type = 0x058d
 
 @OfficeArtFOPTEOP.define
 class lineTopDashing(MSOLINEDASHING):
-    type = 0x58e
+    type = 0x058e
 
 @OfficeArtFOPTEOP.define
 class lineTopDashStyle(uint4):
-    type = 0x58f
+    type = 0x058f
     complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class lineTopStartArrowhead(MSOLINEEND):
-    type = 0x590
+    type = 0x0590
 
 @OfficeArtFOPTEOP.define
 class lineTopEndArrowhead(MSOLINEEND):
-    type = 0x591
+    type = 0x0591
 
 @OfficeArtFOPTEOP.define
 class lineTopStartArrowWidth(MSOLINEENDWIDTH):
-    type = 0x592
+    type = 0x0592
 
 @OfficeArtFOPTEOP.define
 class lineTopStartArrowLength(MSOLINEENDLENGTH):
-    type = 0x593
+    type = 0x0593
 
 @OfficeArtFOPTEOP.define
 class lineTopEndArrowWidth(MSOLINEENDWIDTH):
-    type = 0x594
+    type = 0x0594
 
 @OfficeArtFOPTEOP.define
 class lineTopEndArrowLength(MSOLINEENDLENGTH):
-    type = 0x595
+    type = 0x0595
 
 @OfficeArtFOPTEOP.define
 class lineTopJoinStyle(MSOLINEJOIN):
-    type = 0x596
+    type = 0x0596
 
 @OfficeArtFOPTEOP.define
 class lineTopEndCapStyle(MSOLINECAP):
-    type = 0x597
+    type = 0x0597
 
 @OfficeArtFOPTEOP.define
 class lineTopColorExt(COLORREF):
-    type = 0x599
+    type = 0x0599
 
 @OfficeArtFOPTEOP.define
 class reserved1434(uint4):
-    type = 0x59a
+    type = 0x059a
 
 @OfficeArtFOPTEOP.define
 class lineTopColorExtMod(MSOTINTSHADE):
-    type = 0x59b
+    type = 0x059b
 
 @OfficeArtFOPTEOP.define
 class reserved1436(uint4):
-    type = 0x59c
+    type = 0x059c
 
 @OfficeArtFOPTEOP.define
 class lineTopBackColorExt(COLORREF):
-    type = 0x59d
+    type = 0x059d
 
 @OfficeArtFOPTEOP.define
 class reserved1438(uint4):
-    type = 0x59e
+    type = 0x059e
 
 @OfficeArtFOPTEOP.define
 class lineTopBackColorExtMod(MSOTINTSHADE):
-    type = 0x59f
+    type = 0x059f
 
 @OfficeArtFOPTEOP.define
 class reserved1440(uint4):
-    type = 0x5a0
+    type = 0x05a0
 
 @OfficeArtFOPTEOP.define
 class reserved1441(uint4):
-    type = 0x5a1
+    type = 0x05a1
 
 @OfficeArtFOPTEOP.define
 class reserved1442(uint4):
-    type = 0x5a2
+    type = 0x05a2
 
 @OfficeArtFOPTEOP.define
 class TopLineStyleBooleanProperties(pbinary.flags):
-    type = 0x5bf
-    _fields_ = list(reversed([
+    type = 0x05bf
+    _fields_ = R([
         (1, 'fTopNoLineDrawDash'),
         (1, 'fLineTopFillShape'),
         (1, 'fTopHitTestLine'),
@@ -2836,152 +2957,152 @@ class TopLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]))
+    ])
 
 # Right Line Style
 @OfficeArtFOPTEOP.define
 class lineRightColor(COLORREF):
-    type = 0x5c0
+    type = 0x05c0
 
 @OfficeArtFOPTEOP.define
 class lineRightOpacity(FixedPoint):
-    type = 0x5c1
+    type = 0x05c1
 
 @OfficeArtFOPTEOP.define
 class lineRightBackColor(COLORREF):
-    type = 0x5c2
+    type = 0x05c2
 
 @OfficeArtFOPTEOP.define
 class lineRightCrMod(COLORREF):
-    type = 0x5c3
+    type = 0x05c3
 
 @OfficeArtFOPTEOP.define
 class lineRightType(MSOLINETYPE):
-    type = 0x5c4
+    type = 0x05c4
 
 @OfficeArtFOPTEOP.define
 class lineRightFillBlip(uint4):
-    type = 0x5c5
+    type = 0x05c5
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class lineRightFillBlipName(uint4):
-    type = 0x5c6
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x05c6
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class lineRightFillBlipFlags(MSOBLIPFLAGS):
-    type = 0x5c7
+    type = 0x05c7
 
 @OfficeArtFOPTEOP.define
 class lineRightFillWidth(sint4):
-    type = 0x5c8
+    type = 0x05c8
 
 @OfficeArtFOPTEOP.define
 class lineRightFillHeight(sint4):
-    type = 0x5c9
+    type = 0x05c9
 
 @OfficeArtFOPTEOP.define
 class lineRightFillDztype(MSODZTYPE):
-    type = 0x5ca
+    type = 0x05ca
 
 @OfficeArtFOPTEOP.define
 class lineRightWidth(sint4):
-    type = 0x5cb
+    type = 0x05cb
 
 @OfficeArtFOPTEOP.define
 class lineRightMiterLimit(FixedPoint):
-    type = 0x5cc
+    type = 0x05cc
 
 @OfficeArtFOPTEOP.define
 class lineRightStyle(MSOLINESTYLE):
-    type = 0x5cd
+    type = 0x05cd
 
 @OfficeArtFOPTEOP.define
 class lineRightDashing(MSOLINEDASHING):
-    type = 0x5ce
+    type = 0x05ce
 
 @OfficeArtFOPTEOP.define
 class lineRightDashStyle(uint4):
-    type = 0x5cf
+    type = 0x05cf
     complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class lineRightStartArrowhead(MSOLINEEND):
-    type = 0x5d0
+    type = 0x05d0
 
 @OfficeArtFOPTEOP.define
 class lineRightEndArrowhead(MSOLINEEND):
-    type = 0x5d1
+    type = 0x05d1
 
 @OfficeArtFOPTEOP.define
 class lineRightStartArrowWidth(MSOLINEENDWIDTH):
-    type = 0x5d2
+    type = 0x05d2
 
 @OfficeArtFOPTEOP.define
 class lineRightStartArrowLength(MSOLINEENDLENGTH):
-    type = 0x5d3
+    type = 0x05d3
 
 @OfficeArtFOPTEOP.define
 class lineRightEndArrowWidth(MSOLINEENDWIDTH):
-    type = 0x5d4
+    type = 0x05d4
 
 @OfficeArtFOPTEOP.define
 class lineRightEndArrowLength(MSOLINEENDLENGTH):
-    type = 0x5d5
+    type = 0x05d5
 
 @OfficeArtFOPTEOP.define
 class lineRightJoinStyle(MSOLINEJOIN):
-    type = 0x5d6
+    type = 0x05d6
 
 @OfficeArtFOPTEOP.define
 class lineRightEndCapStyle(MSOLINECAP):
-    type = 0x5d7
+    type = 0x05d7
 
 @OfficeArtFOPTEOP.define
 class lineRightColorExt(COLORREF):
-    type = 0x5d9
+    type = 0x05d9
 
 @OfficeArtFOPTEOP.define
 class reserved1498(uint4):
-    type = 0x5da
+    type = 0x05da
 
 @OfficeArtFOPTEOP.define
 class lineRightColorExtMod(MSOTINTSHADE):
-    type = 0x5db
+    type = 0x05db
 
 @OfficeArtFOPTEOP.define
 class reserved1500(uint4):
-    type = 0x5dc
+    type = 0x05dc
 
 @OfficeArtFOPTEOP.define
 class lineRightBackColorExt(COLORREF):
-    type = 0x5dd
+    type = 0x05dd
 
 @OfficeArtFOPTEOP.define
 class reserved1502(uint4):
-    type = 0x5de
+    type = 0x05de
 
 @OfficeArtFOPTEOP.define
 class lineRightBackColorExtMod(MSOTINTSHADE):
-    type = 0x5df
+    type = 0x05df
 
 @OfficeArtFOPTEOP.define
 class reserved1504(uint4):
-    type = 0x5e0
+    type = 0x05e0
 
 @OfficeArtFOPTEOP.define
 class reserved1505(uint4):
-    type = 0x5e1
+    type = 0x05e1
 
 @OfficeArtFOPTEOP.define
 class reserved1506(uint4):
-    type = 0x5e2
+    type = 0x05e2
 
 @OfficeArtFOPTEOP.define
 class RightLineStyleBooleanProperties(pbinary.flags):
-    type = 0x5ff
-    _fields_ = list(reversed([
+    type = 0x05ff
+    _fields_ = R([
         (1, 'fRightNoLineDrawDash'),
         (1, 'fLineRightFillShape'),
         (1, 'fRightHitTestLine'),
@@ -3004,152 +3125,152 @@ class RightLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]))
+    ])
 
 # Bottom Line Style
 @OfficeArtFOPTEOP.define
 class lineBottomColor(COLORREF):
-    type = 0x600
+    type = 0x0600
 
 @OfficeArtFOPTEOP.define
 class lineBottomOpacity(FixedPoint):
-    type = 0x601
+    type = 0x0601
 
 @OfficeArtFOPTEOP.define
 class lineBottomBackColor(COLORREF):
-    type = 0x602
+    type = 0x0602
 
 @OfficeArtFOPTEOP.define
 class lineBottomCrMod(COLORREF):
-    type = 0x603
+    type = 0x0603
 
 @OfficeArtFOPTEOP.define
 class lineBottomType(MSOLINETYPE):
-    type = 0x604
+    type = 0x0604
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillBlip(uint4):
-    type = 0x605
+    type = 0x0605
     complex = lambda s: dyn.block(s.num())
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillBlipName(uint4):
-    type = 0x606
-    complex = lambda s: dyn.clone(pstr.string, s.num())
+    type = 0x0606
+    complex = lambda s: dyn.clone(pstr.string, length=s.num())
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillBlipFlags(MSOBLIPFLAGS):
-    type = 0x607
+    type = 0x0607
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillWidth(sint4):
-    type = 0x608
+    type = 0x0608
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillHeight(sint4):
-    type = 0x608
+    type = 0x0608
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillDztype(MSODZTYPE):
-    type = 0x60a
+    type = 0x060a
 
 @OfficeArtFOPTEOP.define
 class lineBottomWidth(sint4):
-    type = 0x60b
+    type = 0x060b
 
 @OfficeArtFOPTEOP.define
 class lineBottomMiterLimit(FixedPoint):
-    type = 0x60c
+    type = 0x060c
 
 @OfficeArtFOPTEOP.define
 class lineBottomStyle(MSOLINESTYLE):
-    type = 0x60d
+    type = 0x060d
 
 @OfficeArtFOPTEOP.define
 class lineBottomDashing(MSOLINEDASHING):
-    type = 0x60e
+    type = 0x060e
 
 @OfficeArtFOPTEOP.define
 class lineBottomDashStyle(uint4):
-    type = 0x60f
+    type = 0x060f
     complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.num())
 
 @OfficeArtFOPTEOP.define
 class lineBottomStartArrowhead(MSOLINEEND):
-    type = 0x610
+    type = 0x0610
 
 @OfficeArtFOPTEOP.define
 class lineBottomEndArrowhead(MSOLINEEND):
-    type = 0x611
+    type = 0x0611
 
 @OfficeArtFOPTEOP.define
 class lineBottomStartArrowWidth(MSOLINEENDWIDTH):
-    type = 0x612
+    type = 0x0612
 
 @OfficeArtFOPTEOP.define
 class lineBottomStartArrowLength(MSOLINEENDLENGTH):
-    type = 0x613
+    type = 0x0613
 
 @OfficeArtFOPTEOP.define
 class lineBottomEndArrowWidth(MSOLINEENDWIDTH):
-    type = 0x614
+    type = 0x0614
 
 @OfficeArtFOPTEOP.define
 class lineBottomEndArrowLength(MSOLINEENDLENGTH):
-    type = 0x615
+    type = 0x0615
 
 @OfficeArtFOPTEOP.define
 class lineBottomJoinStyle(MSOLINEJOIN):
-    type = 0x616
+    type = 0x0616
 
 @OfficeArtFOPTEOP.define
 class lineBottomEndCapStyle(MSOLINECAP):
-    type = 0x617
+    type = 0x0617
 
 @OfficeArtFOPTEOP.define
 class lineBottomColorExt(COLORREF):
-    type = 0x619
+    type = 0x0619
 
 @OfficeArtFOPTEOP.define
 class reserved1562(uint4):
-    type = 0x61a
+    type = 0x061a
 
 @OfficeArtFOPTEOP.define
 class lineBottomColorExtMod(MSOTINTSHADE):
-    type = 0x61b
+    type = 0x061b
 
 @OfficeArtFOPTEOP.define
 class reserved1500(uint4):
-    type = 0x61c
+    type = 0x061c
 
 @OfficeArtFOPTEOP.define
 class lineBottomBackColorExt(COLORREF):
-    type = 0x61d
+    type = 0x061d
 
 @OfficeArtFOPTEOP.define
 class reserved1566(uint4):
-    type = 0x61e
+    type = 0x061e
 
 @OfficeArtFOPTEOP.define
 class lineBottomBackColorExtMod(MSOTINTSHADE):
-    type = 0x61f
+    type = 0x061f
 
 @OfficeArtFOPTEOP.define
 class reserved1568(uint4):
-    type = 0x620
+    type = 0x0620
 
 @OfficeArtFOPTEOP.define
 class reserved1569(uint4):
-    type = 0x621
+    type = 0x0621
 
 @OfficeArtFOPTEOP.define
 class reserved1570(uint4):
-    type = 0x622
+    type = 0x0622
 
 @OfficeArtFOPTEOP.define
 class BottomLineStyleBooleanProperties(pbinary.flags):
-    type = 0x63f
-    _fields_ = list(reversed([
+    type = 0x063f
+    _fields_ = R([
         (1, 'fBottomNoLineDrawDash'),
         (1, 'fLineBottomFillShape'),
         (1, 'fBottomHitTestLine'),
@@ -3172,179 +3293,257 @@ class BottomLineStyleBooleanProperties(pbinary.flags):
         (1, 'unused5'),
         (1, 'unused6'),
         (6, 'unused7'),
-    ]))
+    ])
 
 # Shadow Style
 @OfficeArtFOPTEOP.define
 class shadowType(MSOSHADOWTYPE):
-    type = 0x200
+    type = 0x0200
 
 @OfficeArtFOPTEOP.define
 class shadowColor(COLORREF):
-    type = 0x201
+    type = 0x0201
 
 @OfficeArtFOPTEOP.define
 class shadowHilight(COLORREF):
-    type = 0x202
+    type = 0x0202
 
 @OfficeArtFOPTEOP.define
 class shadowCrMod(COLORREF):
-    type = 0x203
+    type = 0x0203
 
 @OfficeArtFOPTEOP.define
 class shadowOpacity(FixedPoint):
-    type = 0x204
+    type = 0x0204
 
 @OfficeArtFOPTEOP.define
 class shadowOffsetX(sint4):
-    type = 0x205
+    type = 0x0205
 
 @OfficeArtFOPTEOP.define
 class shadowOffsetX(sint4):
-    type = 0x206
+    type = 0x0206
 
 @OfficeArtFOPTEOP.define
 class shadowSecondOffsetX(sint4):
-    type = 0x207
+    type = 0x0207
 
 @OfficeArtFOPTEOP.define
 class shadowSecondOffsetY(sint4):
-    type = 0x208
+    type = 0x0208
 
 @OfficeArtFOPTEOP.define
 class shadowOriginX(FixedPoint):
-    type = 0x210
+    type = 0x0210
 
 @OfficeArtFOPTEOP.define
 class shadowOriginY(FixedPoint):
-    type = 0x211
+    type = 0x0211
 
 @OfficeArtFOPTEOP.define
 class shadowColorExt(COLORREF):
-    type = 0x212
+    type = 0x0212
 
 @OfficeArtFOPTEOP.define
 class reserved531(uint4):
-    type = 0x213
+    type = 0x0213
 
 @OfficeArtFOPTEOP.define
 class shadowColorExtMod(MSOTINTSHADE):
-    type = 0x214
+    type = 0x0214
 
 @OfficeArtFOPTEOP.define
 class reserved533(uint4):
-    type = 0x215
+    type = 0x0215
 
 @OfficeArtFOPTEOP.define
 class shadowHighlightExt(COLORREF):
-    type = 0x216
+    type = 0x0216
 
 @OfficeArtFOPTEOP.define
 class reserved535(uint4):
-    type = 0x217
+    type = 0x0217
 
 @OfficeArtFOPTEOP.define
 class shadowHighlightExtMod(MSOTINTSHADE):
-    type = 0x218
+    type = 0x0218
 
 @OfficeArtFOPTEOP.define
 class reserved537(uint4):
-    type = 0x219
+    type = 0x0219
 
 @OfficeArtFOPTEOP.define
 class reserved538(uint4):
-    type = 0x21a
+    type = 0x021a
 
 @OfficeArtFOPTEOP.define
 class reserved539(uint4):
-    type = 0x21b
+    type = 0x021b
 
 @OfficeArtFOPTEOP.define
 class shadowSoftness(sint4):
-    type = 0x21c
+    type = 0x021c
 
 @OfficeArtFOPTEOP.define
 class ShadowStyleBooleanProperties(pbinary.flags):
-    type = 0x23f
-    _fields_ = list(reversed([
+    type = 0x023f
+    _fields_ = R([
         (1, 'fshadowObscured'),
         (1, 'fShadow'),
         (14, 'unused1'),
         (1, 'fUsefshadowObscured'),
         (1, 'fUsefShadow'),
         (14, 'unused2'),
-    ]))
+    ])
 
 # Perspective Style
 @OfficeArtFOPTEOP.define
 class perspectiveType(MSOXFORMTYPE):
-    type = 0x240
+    type = 0x0240
 
 @OfficeArtFOPTEOP.define
 class perspectiveOffsetX(uint4):
-    type = 0x241
+    type = 0x0241
 
 @OfficeArtFOPTEOP.define
 class perspectiveOffsetY(uint4):
-    type = 0x242
+    type = 0x0242
 
 @OfficeArtFOPTEOP.define
 class perspectiveScaleXToX(FixedPoint):
-    type = 0x243
+    type = 0x0243
 
 @OfficeArtFOPTEOP.define
 class perspectiveScaleYToX(FixedPoint):
-    type = 0x244
+    type = 0x0244
 
 @OfficeArtFOPTEOP.define
 class perspectiveScaleXToY(FixedPoint):
-    type = 0x245
+    type = 0x0245
 
 @OfficeArtFOPTEOP.define
 class perspectiveScaleYToY(FixedPoint):
-    type = 0x246
+    type = 0x0246
 
 @OfficeArtFOPTEOP.define
 class perspectivePerspectiveX(FixedPoint):
-    type = 0x247
+    type = 0x0247
 
 @OfficeArtFOPTEOP.define
 class perspectivePerspectiveY(FixedPoint):
-    type = 0x247
+    type = 0x0247
 
 @OfficeArtFOPTEOP.define
 class perspectiveWeight(uint4):
-    type = 0x249
+    type = 0x0249
 
 @OfficeArtFOPTEOP.define
 class perspectiveOriginX(FixedPoint):
-    type = 0x24a
+    type = 0x024a
 
 @OfficeArtFOPTEOP.define
 class perspectiveOriginY(FixedPoint):
-    type = 0x24b
+    type = 0x024b
 
 @OfficeArtFOPTEOP.define
 class PerspectiveStyleBooleanProperties(pbinary.flags):
-    type = 0x27f
-    _fields_ = list(reversed([
+    type = 0x027f
+    _fields_ = R([
         (1, 'fPerspective'),
         (15, 'unused1'),
         (1, 'fUsefPerspective'),
         (15, 'unused2'),
-    ]))
+    ])
 
-# 3D Object
-# 3D Style
-# Diagram
+# FIXME: 3D Object
+
+# FIXME: 3D Style
+
+# FIXME: Diagram
+
 # Transform
+@OfficeArtFOPTEOP.define
+class left(sint4):
+    type = 0x0000
+
+@OfficeArtFOPTEOP.define
+class top(sint4):
+    type = 0x0001
+
+@OfficeArtFOPTEOP.define
+class right(sint4):
+    type = 0x0002
+
+@OfficeArtFOPTEOP.define
+class bottom(sint4):
+    type = 0x0003
+
+@OfficeArtFOPTEOP.define
+class rotation(FixedPoint):
+    type = 0x0004
+
+@OfficeArtFOPTEOP.define
+class gvPage(uint4):
+    type = 0x0005
+
+@OfficeArtFOPTEOP.define
+class TransformBooleanProperties(pbinary.flags):
+    type = 0x003f
+    _fields_ = R([
+        (1, 'fFlipH'),
+        (1, 'fFlipV'),
+        (1, 'unused1'),
+        (13, 'unused2'),
+        (1, 'fUsefFlipH'),
+        (1, 'fUsefFlipV'),
+        (1, 'unused3'),
+        (13, 'unused4'),
+    ])
+
 # Relative Transform
+@OfficeArtFOPTEOP.define
+class relLeft(sint4):
+    type = 0x03c0
+
+@OfficeArtFOPTEOP.define
+class relTop(sint4):
+    type = 0x03c1
+
+@OfficeArtFOPTEOP.define
+class relRight(sint4):
+    type = 0x03c2
+
+@OfficeArtFOPTEOP.define
+class relBottom(sint4):
+    type = 0x03c3
+
+@OfficeArtFOPTEOP.define
+class relRotation(FixedPoint):
+    type = 0x03c4
+
+@OfficeArtFOPTEOP.define
+class gvRelPage(uint4):
+    type = 0x03c5
+
+@OfficeArtFOPTEOP.define
+class RelativeTransformBooleanProperties(pbinary.flags):
+    type = 0x03ff
+    _fields_ = R([
+        (1, 'fRelFlipH'),
+        (1, 'fRelFlipV'),
+        (1, 'unused1'),
+        (13, 'unused2'),
+        (1, 'fUsefRelFlipH'),
+        (1, 'fUsefRelFlipV'),
+        (1, 'unused3'),
+        (13, 'unused4'),
+    ])
 
 # Protection
 @OfficeArtFOPTEOP.define
 class ProtectionBooleanProperties(pbinary.flags):
-    type = 0x07f
-    _fields_ = list(reversed([
+    type = 0x007f
+    _fields_ = R([
         (1, 'fLockAgainstGrouping'),
         (1, 'fLockAdjustHandles'),
         (1, 'fLockText'),
@@ -3367,15 +3566,485 @@ class ProtectionBooleanProperties(pbinary.flags):
         (1, 'fUsefLockRotation'),
         (1, 'fUsefLockAgainstUngrouping'),
         (6, 'unused2'),
-    ]))
+    ])
 
 # Text
+@OfficeArtFOPTEOP.define
+class ITxId(sint4):
+    type = 0x0080
+
+@OfficeArtFOPTEOP.define
+class dxTextLeft(sint4):
+    type = 0x0081
+
+@OfficeArtFOPTEOP.define
+class dyTextTop(sint4):
+    type = 0x0082
+
+@OfficeArtFOPTEOP.define
+class dxTextRight(sint4):
+    type = 0x0083
+
+@OfficeArtFOPTEOP.define
+class dyTextBottom(sint4):
+    type = 0x0084
+
+@OfficeArtFOPTEOP.define
+class WrapText(MSOWRAPMODE):
+    type = 0x0085
+
+@OfficeArtFOPTEOP.define
+class unused134(uint4):
+    type = 0x0086
+
+@OfficeArtFOPTEOP.define
+class anchorText(MSOANCHOR):
+    type = 0x0087
+
+@OfficeArtFOPTEOP.define
+class txflTextFlow(MSOTXFL):
+    type = 0x0088
+
+@OfficeArtFOPTEOP.define
+class cdirFont(MSOCDIR):
+    type = 0x0089
+
+@OfficeArtFOPTEOP.define
+class hspNext(MSOSPID):
+    type = 0x008a
+
+@OfficeArtFOPTEOP.define
+class txdir(MSOTXDIR):
+    type = 0x008b
+
+@OfficeArtFOPTEOP.define
+class unused140(uint4):
+    type = 0x008c
+
+@OfficeArtFOPTEOP.define
+class unused141(uint4):
+    type = 0x008d
+
+@OfficeArtFOPTEOP.define
+class TextBooleanProperties(pbinary.flags):
+    type = 0x00bf
+    _fields_ = R([
+        (1, 'unused1'),
+        (1, 'fFitShapeToText'),
+        (1, 'unused2'),
+        (1, 'fAutoTextMargin'),
+        (1, 'fSelectText'),
+        (11, 'unused3'),
+        (1, 'unused4'),
+        (1, 'fUsefFitShapeToText'),
+        (1, 'unused5'),
+        (1, 'fUsefAutoTextMargin'),
+        (1, 'fUsefSelectText'),
+        (11, 'unused6'),
+    ])
+
 # Geometry Text
+@OfficeArtFOPTEOP.define
+class gtextUNICODE(uint4):
+    type = 0x00c0
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class gtextAlign(pint.enum, uint4):
+    type = 0x00c1
+    _values_ = [
+        ('msoalignTextStretch', 0x00000000), # Text SHOULD<59> be stretched to fill the entire length of the path:
+        ('msoalignTextCenter', 0x00000001), # Text is centered along the length of the path:
+        ('msoalignTextLeft', 0x00000002), # Text is placed at the beginning of the path:
+        ('msoalignTextRight', 0x00000003), # Text is placed at the end of the path:
+        ('msoalignTextLetterJust', 0x00000004), # Spacing between individual letters SHOULD<60> be added so that the letters fill the entire path:
+        ('msoalignTextWordJust', 0x00000005), # Spacing between individual words SHOULD<61> be added so that the words fill the entire path:
+    ]
+
+@OfficeArtFOPTEOP.define
+class gtextSize(FixedPoint):
+    type = 0x00c3
+
+@OfficeArtFOPTEOP.define
+class gtextSpacing(FixedPoint):
+    type = 0x00c4
+
+@OfficeArtFOPTEOP.define
+class gtextFont(uint4):
+    type = 0x00c5
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class gtextCSSFont(uint4):
+    type = 0x00c6
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class GeometryTextBooleanProperties(pbinary.flags):
+    type = 0x00ff
+    _fields_ = R([
+        (1, 'gtextFStrikeThrough'),
+        (1, 'gtextFSmallcaps'),
+        (1, 'gtextFShadow'),
+        (1, 'gtextFUnderline'),
+        (1, 'gtextFItalic'),
+        (1, 'gtextFBold'),
+        (1, 'gtextFDxMeasure'),
+        (1, 'gtextFNormalize'),
+        (1, 'gtextFBestFit'),
+        (1, 'gtextFShrinkFit'),
+        (1, 'gtextFStretch'),
+        (1, 'gtextFTight'),
+        (1, 'gtextFKern'),
+        (1, 'gtextFVertical'),
+        (1, 'fGtext'),
+        (1, 'gtextFReverseRows'),
+        (1, 'fUsegtextFStrikethrough'),
+        (1, 'fUsegtextFSmallcaps'),
+        (1, 'fUsegtextFShadow'),
+        (1, 'fUsegtextFUnderline'),
+        (1, 'fUsegtextFItalic'),
+        (1, 'fUsegtextFBold'),
+        (1, 'fUsegtextFDxMeasure'),
+        (1, 'fUsegtextFNormalize'),
+        (1, 'fUsegtextFBestFit'),
+        (1, 'fUsegtextFShrinkFit '),
+        (1, 'fUsegtextFStretch '),
+        (1, 'fUsegtextFTight '),
+        (1, 'fUsegtextFKern '),
+        (1, 'fUsegtextFVertical '),
+        (1, 'fUsefGtext '),
+        (1, 'fUsegtextFReverseRows '),
+    ])
+
 # Blip
+@OfficeArtFOPTEOP.define
+class cropFromTop(FixedPoint):
+    type = 0x0100
+
+@OfficeArtFOPTEOP.define
+class cropFromBottom(FixedPoint):
+    type = 0x0101
+
+@OfficeArtFOPTEOP.define
+class cropFromLeft(FixedPoint):
+    type = 0x0102
+
+@OfficeArtFOPTEOP.define
+class cropFromRight(FixedPoint):
+    type = 0x0103
+
+@OfficeArtFOPTEOP.define
+class pib(FixedPoint):
+    type = 0x0104
+    complex = lambda s: RecordGeneral
+
+@OfficeArtFOPTEOP.define
+class pibName(uint4):
+    type = 0x0105
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class pibFlags(MSOBLIPFLAGS):
+    type = 0x0106
+
+@OfficeArtFOPTEOP.define
+class pictureTransparent(COLORREF):
+    type = 0x0107
+
+@OfficeArtFOPTEOP.define
+class pictureContrast(sint4):
+    type = 0x0108
+
+@OfficeArtFOPTEOP.define
+class pictureBrightness(sint4):
+    type = 0x0109
+
+@OfficeArtFOPTEOP.define
+class pictureId(sint4):
+    type = 0x010b
+
+@OfficeArtFOPTEOP.define
+class pictureDblCrMod(COLORREF):
+    type = 0x010c
+
+@OfficeArtFOPTEOP.define
+class pictureFillCrMod(COLORREF):
+    type = 0x010d
+
+@OfficeArtFOPTEOP.define
+class pictureLineCrMod(COLORREF):
+    type = 0x010e
+
+@OfficeArtFOPTEOP.define
+class pibPrint(uint4):
+    type = 0x010f
+    complex = lambda s: RecordGeneral
+
+@OfficeArtFOPTEOP.define
+class pibPrintName(COLORREF):
+    type = 0x0110
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class pibPrintFlags(MSOBLIPFLAGS):
+    type = 0x0111
+
+@OfficeArtFOPTEOP.define
+class movie(uint4):
+    type = 0x0112
+    complex = lambda s: ptype.undefined
+
+@OfficeArtFOPTEOP.define
+class pictureTransparentEx(COLORREF):
+    type = 0x0115
+
+@OfficeArtFOPTEOP.define
+class reserved278(uint4):
+    type = 0x0116
+
+@OfficeArtFOPTEOP.define
+class pictureTransparentExMod(MSOTINTSHADE):
+    type = 0x0117
+
+@OfficeArtFOPTEOP.define
+class reserved280(uint4):
+    type = 0x0118
+
+@OfficeArtFOPTEOP.define
+class reserved281(uint4):
+    type = 0x0119
+
+@OfficeArtFOPTEOP.define
+class pictureRecolor(COLORREF):
+    type = 0x011a
+
+@OfficeArtFOPTEOP.define
+class pictureRecolorExt(COLORREF):
+    type = 0x011b
+
+@OfficeArtFOPTEOP.define
+class reserved284(uint4):
+    type = 0x011c
+
+@OfficeArtFOPTEOP.define
+class pictureRecolorExtModl(MSOTINTSHADE):
+    type = 0x011b
+
+@OfficeArtFOPTEOP.define
+class reserved286(uint4):
+    type = 0x011e
+
+@OfficeArtFOPTEOP.define
+class reserved287(uint4):
+    type = 0x011f
+
+@OfficeArtFOPTEOP.define
+class BlipBooleanProperties(pbinary.flags):
+    type = 0x013f
+    _fields_ = R([
+        (1, 'fPictureActive'),
+        (1, 'fPictureBiLevel'),
+        (1, 'fpictureGray'),
+        (1, 'fNoHitTestPicture'),
+        (1, 'fLooping'),
+        (1, 'fRewind'),
+        (1, 'fPicturePreserveGrays'),
+        (9, 'unused1'),
+        (1, 'fUsefPictureActive'),
+        (1, 'fUsefPictureBiLevel'),
+        (1, 'fUsefPictureGray'),
+        (1, 'fUsefNoHitTestPicture'),
+        (1, 'fUsefLooping'),
+        (1, 'FusefRewind'),
+        (1, 'FusefPicturePreserveGrays'),
+        (9, 'unused2'),
+    ])
+
 # Unknown HTML
+@OfficeArtFOPTEOP.define
+class wzLineId(uint4):
+    type = 0x0402
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzFillId(uint4):
+    type = 0x0403
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzPictureId(uint4):
+    type = 0x0404
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzPathId(uint4):
+    type = 0x0405
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzShadowId(uint4):
+    type = 0x0406
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzPerspectiveId(uint4):
+    type = 0x0407
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzGtextId(uint4):
+    type = 0x0408
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzFormulaeId(uint4):
+    type = 0x0409
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzHandlesId(uint4):
+    type = 0x040a
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzCalloutId(uint4):
+    type = 0x040b
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzLockId(uint4):
+    type = 0x040c
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzTextId(uint4):
+    type = 0x040d
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzThreeDId(uint4):
+    type = 0x040e
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class UnknownHTMLBooleanProperties(pbinary.flags):
+    type = 0x043f
+    _fields_ = [
+        (1, 'unused1'),
+        (1, 'fFakeMaster'),
+        (1, 'fOleFromHtml'),
+        (13, 'unused2'),
+        (1, 'unused3'),
+        (1, 'fUsefFakeMaster'),
+        (1, 'FusefOleFromHtml'),
+        (13, 'unused4'),
+    ]
+
 # Web Component
+@OfficeArtFOPTEOP.define
+class webComponentWzHtml(uint4):
+    type = 0x0680
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class webComponentWzName(uint4):
+    type = 0x0681
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class webComponentWzUrl(uint4):
+    type = 0x0682
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class WebComponentBooleanProperties(pbinary.flags):
+    type = 0x06bf
+    _fields_ = [
+        (1, 'fIsWebComponent'),
+        (15, 'unused1'),
+        (1, 'fUsefIsWebComponent'),
+        (15, 'unused2'),
+    ]
+
 # Ink
+@OfficeArtFOPTEOP.define
+class pInkData(uint4):
+    type = 0x0700
+    #complex = lambda s: dyn.clone(pstr.wstring, length=s.num()) #FIXME
+
+@OfficeArtFOPTEOP.define
+class InkBooleanProperties(pbinary.flags):
+    type = 0x073f
+    _fields_ = R([
+        (1, 'fRenderInk'),
+        (1, 'fRenderShape'),
+        (1, 'fHitTestInk'),
+        (1, 'fInkAnnotation'),
+        (12, 'unused1'),
+        (1, 'fUsefRenderInk'),
+        (1, 'fUsefRenderShape'),
+        (1, 'fUsefHItTestInk'),
+        (1, 'fUsefInkAnnotation'),
+        (12, 'unused2'),
+    ])
+
 # Signature Line
+@OfficeArtFOPTEOP.define
+class wzSigSetupId(uint4):
+    type = 0x0781
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupProvId(uint4):
+    type = 0x0782
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupSuggSigner(uint4):
+    type = 0x0783
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupSuggSigner2(uint4):
+    type = 0x0784
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupSuggSignerEmail(uint4):
+    type = 0x0785
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupSignInst(uint4):
+    type = 0x0786
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupAddlXml(uint4):
+    type = 0x0787
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class wzSigSetupProvUrl(uint4):
+    type = 0x0788
+    complex = lambda s: dyn.clone(pstr.wstring, length=s.num())
+
+@OfficeArtFOPTEOP.define
+class SignatureLineBooleanProperties(pbinary.flags):
+    type = 0x07bf
+    _fields_ = R([
+        (1, 'fIsSignatureLine'),
+        (1, 'fSigSetupSignInstSet'),
+        (1, 'fSigSetupAllowComments'),
+        (1, 'fSigSetupShowSignDate'),
+        (12, 'unused1'),
+        (1, 'fUsefIsSignatureLine'),
+        (1, 'fUsefSigSetupSignInsetSet'),
+        (1, 'fUsefSigSetupAllowComments'),
+        (1, 'fUsefSigSetupShowSignDate'),
+        (12, 'unused2'),
+    ])
 
 if __name__ == '__main__':
     from ptypes import *
@@ -3425,12 +4094,11 @@ if __name__ == '__main__':
                 (12, 'instance'),
                 (4, 'version'),
             ]
-        header = pbinary.littleendian(header)
 
         class wtf(pstruct.type):
             _fields_ = [
                 (header, 'h'),
-                (pint.littleendian(pint.uint16_t), 't'),
+                (pint.uint16_t, 't'),
             ]
 
         z = RecordGeneral()

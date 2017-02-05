@@ -374,9 +374,7 @@ class enum(type):
         return super(enum, self).details()
 
     def __setvalue__(self, value):
-        if isinstance(value, basestring):
-            value = self.byname(value)
-        return super(enum, self).__setvalue__(value)
+        return super(enum, self).__setvalue__(self.byname(value) if isinstance(value, basestring) else value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
@@ -847,6 +845,7 @@ class array(_array_generic):
                 else:
                     result.value[idx].__setvalue__(v)
                 continue
+            result.setposition(result.getposition(), recurse=True)
             return result
         for idx, v in enumerate(fields):
             #if any((istype(v), isinstance(v, type), ptype.isresolveable(v))):
@@ -857,6 +856,7 @@ class array(_array_generic):
             else:
                 result.value[idx].__setvalue__(v)
             continue
+        result.setposition(result.getposition(), recurse=True)
         return result
 
     def __setvalue__(self, value):
@@ -961,7 +961,7 @@ class struct(_struct_generic):
 
     def __setvalue__(self, *_, **individual):
         result = self
-        value = _ and tuple(_[0]) or ()
+        value, = _ if _ else ((),)
 
         def assign((index, value)):
             if istype(value) or ptype.isresolveable(value):
@@ -975,10 +975,14 @@ class struct(_struct_generic):
             return
 
         if result.initializedQ():
+            if isinstance(value, dict):
+                value = individual.update(value)
+
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'struct.set', message='iterable value to assign with is not of the same length as struct')
                 map(assign, enumerate(value))
+
             map(assign, ((self.__getindex__(k), v) for k, v in individual.iteritems()) )
             result.setposition(result.getposition(), recurse=True)
             return result
@@ -1196,6 +1200,7 @@ class partial(ptype.container):
             raise error.CommitError(self, exception=e)
 
     def alloc(self, **attrs):
+        # FIXME: use new alloc instead of **attrs
         try:
             self.value = [self.__pb_object()]
             with utils.assign(self, **attrs):
@@ -1247,18 +1252,32 @@ class partial(ptype.container):
     def repr(self, **options):
         return '???' if not self.initializedQ() else self.object.repr(**options)
     def __len__(self):
+        if not self.initializedQ():
+            raise error.InitialiationError(self, 'partial.__len__')
         return len(self.object)
     def __getitem__(self, name):
+        if not self.initializedQ():
+            raise error.InitialiationError(self, 'partial.__getitem__')
         return self.object[name]
     def __setitem__(self, name, value):
+        if not self.initializedQ():
+            raise error.InitialiationError(self, 'partial.__setitem__')
         self.object[name] = value
     def __iter__(self):
+        if not self.initializedQ():
+            raise error.InitialiationError(self, 'partial.__iter__')
         for res in self.object: yield res
     def __repr__(self):
+        if not self.initializedQ():
+            return super(partial, self).__repr__()
         return self.object.__repr__()
     def __getvalue__(self):
+        if not self.initializedQ():
+            raise error.InitialiationError(self, 'partial.__getvalue__')
         return self.object.get()
     def __setvalue__(self, *args, **kwds):
+        if not self.initializedQ():
+            raise error.InitialiationError(self, 'partial.__setvalue__')
         return self.object.set(*args, **kwds)
     def __getattr__(self, name):
         if name in ('__module__', '__name__'):

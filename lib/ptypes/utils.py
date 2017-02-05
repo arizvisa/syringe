@@ -16,9 +16,16 @@ def indent(string, tabsize=4, char=' ', newline='\n'):
 ## temporary attribute assignments for a context
 class assign(object):
     """Will temporarily assign the provided attributes to the specified to all code within it's scope"""
+
+    # the following is a table of forwarded attributes to ensure that the
+    # proper attribute is fetched so it'll get restored properly
+    magical = {
+        'source' : '__source__',
+    }
+
     def __init__(self, *objects, **attrs):
         self.objects = objects
-        self.attributes = attrs
+        self.attributes = { self.magical.get(k, k) : v for k, v in attrs.iteritems() }
 
     def __enter__(self):
         objects,attrs = self.objects,self.attributes
@@ -297,7 +304,8 @@ def memoize(*kargs,**kattrs):
             return tuple(itertools.chain(k1, (None,), k2))
         def callee(*args, **kwds):
             res = key(*args, **kwds)
-            return cache[res] if res in cache else cache.setdefault(res, fn(*args,**kwds))
+            try: return cache[res] if res in cache else cache.setdefault(res, fn(*args,**kwds))
+            except TypeError: return fn(*args, **kwds)
 
         # set some utilies on the memoized function
         callee.memoize_key = lambda: key

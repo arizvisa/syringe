@@ -1,5 +1,8 @@
+import ptypes
 from ptypes import *
 from . import *
+
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 recordType = [
     ('FT_OfficeArtClientAnchorChart', 0xf010),
@@ -20,7 +23,7 @@ class OfficeArtClientTextBox(ptype.type):
     type = 0,0x000
 
 @FT_OfficeArtClientAnchorChart.define
-class OfficeArtclientAnchorChart(pstruct.type):
+class OfficeArtClientAnchorChart(pstruct.type):
     type = 0,0x000
 
     #copied from http://svn.apache.org/viewvc/poi/trunk/src/java/org/apache/poi/ddf/EscherClientAnchorRecord.java?view=annotate

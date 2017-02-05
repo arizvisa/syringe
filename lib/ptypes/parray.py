@@ -311,11 +311,15 @@ class type(_parray_generic):
 
     def __setvalue__(self, value):
         """Update self with the contents of the list ``value``"""
-        if self.initializedQ() and len(self) == len(value):
+        if isinstance(value, dict):
+            items = value.items()
+        elif self.initializedQ() and len(self) == len(value):
             return super(type,self).__setvalue__(*value)
+        else:
+            items = enumerate(value)
 
         self.value = []
-        for idx,val in enumerate(value):
+        for idx,val in items:
             if ptype.isresolveable(val) or ptype.istype(val):
                 res = self.new(val, __name__=str(idx)).a
             elif isinstance(val,ptype.generic):

@@ -407,20 +407,20 @@ class _base_generic(object):
     #           XXX meta-related information
     #           instance tree navigation
 
-    __slots__ = ('__source','attributes','ignored','parent','value','position')
+    __slots__ = ('__source__','attributes','ignored','parent','value','position')
 
     # FIXME: it'd probably be a good idea to have this not depend on globals.source,
     #        and instead have globals.source depend on this.
-    __source = None      # ptype.prov
+    __source__ = None      # ptype.prov
     @property
     def source(self):
         if self.parent is None:
             global source
-            return source if self.__source is None else self.__source
-        return self.parent.source if self.__source is None else self.__source
+            return source if self.__source__ is None else self.__source__
+        return self.parent.source if self.__source__ is None else self.__source__
     @source.setter
     def source(self, value):
-        self.__source = value
+        self.__source__ = value
 
     attributes = None        # {...}
     ignored = set(('source','parent','attributes','value','__name__','position','offset'))
@@ -1471,6 +1471,7 @@ class undefined(type):
         return self.blocksize()
     def load(self, **attrs):
 #        self.value = utils.padding.fill(self.blocksize(), self.padding)
+        self.value = ''
         return self
     def commit(self, **attrs):
         return self
@@ -1771,6 +1772,7 @@ class wrapper_t(type):
 
     def __setvalue__(self, value):
         res = self.object.__setvalue__(value)
+        self.object.commit(offset=0, source=provider.proxy(self))
         return self
 
     def commit(self, **attrs):
