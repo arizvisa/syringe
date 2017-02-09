@@ -314,9 +314,9 @@ class CurrentUserAtom(pstruct.type):
         (ubyte1, 'majorVersion'),
         (ubyte1, 'minorVersion'),
         (dyn.block(2), 'unused'),
-        (lambda s: dyn.clone(pstr.string,length=int(s['lenUserName'].li)), 'ansiUserName'),
+        (lambda s: dyn.clone(pstr.string,length=s['lenUserName'].li.int()), 'ansiUserName'),
         (uint4, 'relVersion'),
-#        (lambda s: dyn.clone(pstr.wstring,length=int(s['lenUserName'].li)*2), 'unicodeUserName'),
+#        (lambda s: dyn.clone(pstr.wstring,length=s['lenUserName'].li.int()*2), 'unicodeUserName'),
     ]
 
 # PowerPoint Document stream

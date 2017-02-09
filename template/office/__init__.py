@@ -2,6 +2,9 @@ import ptypes
 from ptypes import *
 import itertools,functools,operator
 
+ptypes.Config.ptype.clone_name = '{}'
+ptypes.Config.pbinary.littleendian_name = '{}'
+ptypes.Config.pbinary.bigendian_name = 'be({})'
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### utility functions
@@ -40,15 +43,22 @@ class Record(ptype.definition):
     class RT_Unknown(ptype.definition): cache,unknown = {},RecordUnknown
     unknown = RT_Unknown
 
+class Instance(ptype.definition):
+    @classmethod
+    def define(cls, *definition, **attributes):
+        res = super(Instance, cls).define(*definition, **attributes)
+        res.__instance__ = cls.type
+        return res
+
 ### Record type
 class RecordType(pint.enum, pint.littleendian(pint.uint16_t)):
     _values_ = []
 
     @classmethod
     def define(cls,(name,value)):
-        res = type(name, (ptype.definition,), {'type':value, 'cache':{}})
+        res = type(name, (Instance,), {'type':value, 'cache':{}})
         cls._values_.append((res.__name__,res.type))
-        return (name,Record.define(res))
+        return (name, Record.define(res))
 
 ### Record header
 class RecordGeneral(pstruct.type):
@@ -83,7 +93,7 @@ class RecordGeneral(pstruct.type):
         def summary(self):
             v = self['Version/Instance'].int()
             t,l = self['Type'].int(),self['Length'].int()
-            return 'version={:d} instance={:#03x} type={:#04x} length={:#08x}'.format(v & 0xf, (v&0xfff0) / 0x10, t, l)
+            return 'version={:d} instance={:#05x} type={:#06x} length={length:#x}({length:x})'.format(v & 0xf, (v&0xfff0) / 0x10, t, length=l)
 
     def __data(self):
         res = self['header'].li
@@ -158,11 +168,12 @@ class RecordGeneral(pstruct.type):
 class RecordContainer(parray.block):
     _object_ = RecordGeneral
 
-    def repr(self): return self.details()
+    def repr(self): return self.details() + '\n'
     def details(self):
-        f = lambda item: '{:s}[{:x}]'.format(item.classname(), item.getparent(RecordGeneral)['header'].Type())
-        res = ((lambda records:'{:s} * {:d}'.format(ty, len(records)) if len(records) > 1 else ty)(list(records)) for ty, records in itertools.groupby(self.walk(), f))
-        return '-> ' + ' | '.join(res)
+        emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
+        f = lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
+        return '\n'.join(res)
 
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
@@ -232,13 +243,21 @@ class RecordContainer(parray.block):
 
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
+    def repr(self): return self.details() + '\n'
     def details(self):
-        f = lambda item: '{:s}[{:x}]'.format(item.classname(), item.getparent(RecordGeneral)['header'].Type())
-        res = ((lambda records:'{:s} * {:d}'.format(ty, len(records)) if len(records) > 1 else ty)(list(records)) for ty, records in itertools.groupby(self.walk(), f))
-        return '-> ' + ' | '.join(res)
+        emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
+        f = lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
+        return '\n'.join(res)
 
     def blocksize(self):
-        return self.source.size() if hasattr(self, 'source') else super(File, self).blocksize()
+        return self.source.size() if hasattr(self.source, 'size') else super(File, self).blocksize()
+
+    def properties(self):
+        res = super(File, self).properties()
+        res['size'] = self.size()
+        res['blocksize'] = self.blocksize()
+        return res
 
 if __name__ == '__main__':
     from ptypes import *

@@ -242,7 +242,7 @@ class type(_pstruct_generic):
         return result
 
     def repr(self, **options):
-        return self.details(**options)
+        return self.details(**options) + '\n'
 
     def details(self, **options):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__

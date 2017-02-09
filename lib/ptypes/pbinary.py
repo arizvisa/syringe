@@ -617,8 +617,9 @@ class _array_generic(container):
         prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
         result, element_descr = self.repr(), self.__element_description()
 
-        # multiline (includes element description
+        # multiline (includes element description)
         if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _array_generic.details.im_func:
+            result = result.rstrip('\n') # remove trailing newlines
             if prop:
                 return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element_descr,result)
             return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element_descr,result)
@@ -807,7 +808,7 @@ class _struct_generic(container):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
-        result = self.repr()
+        result = self.repr().rstrip('\n') # remove trailing newlines
 
         if prop:
             return "{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)

@@ -522,6 +522,7 @@ class _base_generic(object):
 
         # multiline
         if result.count('\n') > 0:
+            result = result.rstrip('\n') # remove trailing newlines
             if prop:
                 return "{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
             return "{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)

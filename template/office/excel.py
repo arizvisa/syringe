@@ -24,14 +24,14 @@ class RecordGeneral(RecordGeneral):
         def summary(self):
             if self.initializedQ():
                 type, length = map(self.__getitem__, ('type','length'))
-                return 'type={type:#04x} length={length:#04x}({length:d})'.format(type=type.int(), length=length.int())
+                return 'type={type:#06x} length={length:#x}({length:d})'.format(type=type.int(), length=length.int())
             return super(RecordGeneral.Header, self).summary()
         def Type(self):
             return RT_Excel.type
         def Instance(self):
             return self['type'].int(), None
         def Length(self):
-            return self['length'].int()
+            return self['length'].int() if len(self.value) == 2 and self['length'].initializedQ() else 0
 
 class RecordContainer(RecordContainer): _object_ = RecordGeneral
 
@@ -158,31 +158,33 @@ class BiffSubStream(RecordContainer):
 
     def isTerminator(self, value):
         rec,_ = value['header'].Instance()
-        return True if rec == EOF.type else False
+        return True if rec == EOF.type or value.getoffset()+value.size() >= self.parent.getoffset()+self.parent.blocksize() else False
 
-    def details(self):
-        if not self.initializedQ():
-            return '???'
-
+    def properties(self):
         flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
-        res = flazy(self[0])
-        try:
-            dt, vers, year, build = map(res.__getitem__, ('dt','vers','rupYear','rupBuild'))
-            f = ((k, res['f'].__field__(k)) for k in res['f'])
-            f = ((k, v) for k,v in f if v.int())
-            flags = ('{:s}={:d}'.format(k, v.int()) if v.bits() > 1 else k for k,v in f)
-            return '{:s} -> version({:d}.{:d}) : year({:d}) build({:d}) : {:s}'.format(dt.summary(), vers.int() // 0x100, vers.int() & 0xff, year.int(), build.int(), ' '.join(flags))
-        except (TypeError,KeyError):
-            pass
-        return '{:s} -> {:s}'.format(res['dt'].summary(), super(BiffSubStream, self).summary())
+        rec = flazy(self[0])
+
+        dt, vers, year, build = map(rec.__getitem__, ('dt','vers','rupYear','rupBuild'))
+
+        res = super(BiffSubStream, self).properties()
+        res['document-type'] = dt.summary()
+        res['document-version'] = '{:d}.{:d}'.format(vers.int() // 0x100, vers.int() & 0xff)
+        res['document-year'] = year.int()
+        res['document-build'] = build.int()
+        return res
 
 class File(File):
     _object_ = BiffSubStream
 
     def details(self):
-        if self.initializedQ():
-            return 'size={length:#x} ({length:d}) blocksize={cb:#x} ({cb:d})'.format(length=self.size(), cb=self.blocksize())
-        return '???'
+        res = list(self)
+        master = res.pop(0)
+        worksheets = res[:]
+
+        res = []
+        res.append('[{:x}] master : 0 : {:s}'.format(master.getoffset(), master.summary()))
+        res.extend('[{:x}] worksheet : {:d} : {:s}'.format(ws.getoffset(), idx+1, ws.summary()) for idx,ws in enumerate(worksheets))
+        return '\n'.join(res) + '\n'
 
 ###
 @RT_Excel.define
@@ -497,8 +499,8 @@ class DV(pstruct.type):
     class string(pstruct.type):
         def __unicode(self):
             if int(self['unicode_flag'].li):
-                return dyn.clone(pstr.wstring, length=int(self['length'].li))
-            return dyn.clone(pstr.string, length=int(self['length'].li))
+                return dyn.clone(pstr.wstring, length=self['length'].li.int())
+            return dyn.clone(pstr.string, length=self['length'].li.int())
 
         _fields_ = [
             (uint2, 'length'),
@@ -2462,8 +2464,8 @@ class XLUnicodeRichExtendedString(pstruct.type):
     def __rgb(self):
         f = self['flags'].l
         if f['fHighByte']:
-            return dyn.clone(pstr.wstring, length=int(self['cch'].li))
-        return dyn.clone(pstr.string, length=int(self['cch'].li))
+            return dyn.clone(pstr.wstring, length=self['cch'].li.int())
+        return dyn.clone(pstr.string, length=self['cch'].li.int())
     def __ExtRst(self):
         f = self['flags'].l
         return ExtRst if f['fExtSt'] else ptype.undefined
@@ -2961,18 +2963,43 @@ class TxO(pstruct.type):
         return rg.previousRecord(Obj, **count)
 
     def __fmla(self):
-        rg = self.getparent(RecordGeneral)
+        try:
+            rg = self.getparent(RecordGeneral)
+        except ptypes.error.NotFoundError:
+            return dyn.block(0)
         cb = rg['header'].li.Length()
         flds = map(operator.itemgetter(1), self._fields_)[:-1]
         res = sum(n.li.size() for n in map(self.__getitem__, flds))
         return dyn.block(cb - res)
 
+    def __reserved(type):
+        def reserved(self, type=type):
+            try:
+                res = self.__previousObjRecord()
+            except:
+                return ptype.undefined
+            if res.d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14):
+                return type
+            return pint.uint_t
+        return reserved
+
+    def __controlInfo(self):
+        try:
+            res = self.__previousObjRecord()
+            if res.d['cmo'].li['data']['ot'].int() in (0,5,7,11,12,14):
+                return ControlInfo
+        except: pass
+        return ControlInfo
+
     _fields_ = [
         (_flags, 'flags'),
         (_rot, 'rot'),
-        (lambda s: uint2 if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14) else pint.uint_t, 'reserved4'),
-        (lambda s: uint4 if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14) else pint.uint_t, 'reserved5'),
-        (lambda s: ControlInfo if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() in (0,5,7,11,12,14) else ptype.undefined, 'controlInfo'),
+        #(lambda s: uint2 if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14) else pint.uint_t, 'reserved4'),
+        #(lambda s: uint4 if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14) else pint.uint_t, 'reserved5'),
+        (__reserved(uint2), 'reserved4'),
+        (__reserved(uint4), 'reserved5'),
+        #(lambda s: ControlInfo if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() in (0,5,7,11,12,14) else ptype.undefined, 'controlInfo'),
+        (__controlInfo, 'controlInfo'),
         (uint2, 'cchText'),
         (uint2, 'cbRuns'),
         (FontIndex, 'ifntEmpty'),
@@ -2983,9 +3010,6 @@ class TxO(pstruct.type):
 @RT_Excel.define
 class Continue(ptype.block):
     type = 0x3c
-    def blocksize(self):
-        rg = self.getparent(RecordGeneral)
-        return rg['header'].Length()
 
 if __name__ == '__main__':
     import sys
