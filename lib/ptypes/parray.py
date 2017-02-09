@@ -480,13 +480,19 @@ class infinite(uninitialized):
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
-                Log.fatal("infinite.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path), exc_info=True)
+                if len(self.value):
+                    Log.fatal("infinite.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
+                else:
+                    Log.fatal("infinite.load : {:s} : User interrupt before load : {:s}".format(self.instance(), path), exc_info=True)
                 return self
 
             except (Exception,error.LoadError),e:
                 if self.parent is not None:
                     path = ' -> '.join(self.backtrace())
-                    Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
+                    if len(self.value):
+                        Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
+                    else:
+                        Log.warn("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
                 raise error.LoadError(self, exception=e)
         return self
 

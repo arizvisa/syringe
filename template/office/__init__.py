@@ -1,5 +1,6 @@
 import ptypes
 from ptypes import *
+import itertools,functools,operator
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
@@ -21,17 +22,16 @@ class MD4(dyn.block(16)): pass
 class RecordUnknown(ptype.block):
     length = 0
     def classname(self):
-        s = self.shortname()
-        names = s.split('.')
+        names = self.shortname().split('.')
         if self.type is None:
-            tstr = '?'
+            res = '?'
         elif isinstance(self.type, (int,long)):
-            tstr = hex(self.type)
+            res = hex(self.type)
         elif hasattr(self.type, '__iter__'):
-            tstr = '({:s})'.format(','.join(hex(x) if isinstance(x, (int,long)) else repr(x) for x in self.type))
+            res = '({:s})'.format(','.join('{:#x}'.format(x) if isinstance(x, (int,long)) else '{!r}'.format(x) for x in self.type))
         else:
-            tstr = repr(self.type)
-        names[-1] = '%s<%s>[size:0x%x]'%(names[-1], tstr, self.blocksize())
+            res = repr(self.type)
+        names[-1] = '{:s}<{:s}>[size:{:#x}]'.format(names[-1], res, self.blocksize())
         return '.'.join(names)
 
 # record type lookup
@@ -64,7 +64,7 @@ class RecordGeneral(pstruct.type):
                 iterable, = _ if _ else ((),)
                 if not isinstance(iterable, dict):
                     version, instance = iterable
-                    return self.set((instance, version))
+                    return self.set(dict(instance=instance, version=version))
                 return super(RecordGeneral.Header.VersionInstance, self).set(iterable, **fields)
         _fields_ = [
             (VersionInstance, 'Version/Instance'),
@@ -73,17 +73,17 @@ class RecordGeneral(pstruct.type):
         ]
 
         def Type(self):
-            return self['Type'].num()
+            return self['Type'].int()
         def Instance(self):
             res = self['Version/Instance']
             return res['version'],res['instance']
         def Length(self):
-            return self['Length'].num()
+            return self['Length'].int()
 
         def summary(self):
-            v = self['Version/Instance'].num()
-            t,l = self['Type'].num(),self['Length'].num()
-            return 'version=%d instance=0x%03x type=0x%04x length=0x%08x'% (v & 0xf, (v&0xfff0) / 0x10, t, l)
+            v = self['Version/Instance'].int()
+            t,l = self['Type'].int(),self['Length'].int()
+            return 'version={:d} instance={:#03x} type={:#04x} length={:#08x}'.format(v & 0xf, (v&0xfff0) / 0x10, t, l)
 
     def __data(self):
         res = self['header'].li
@@ -124,21 +124,45 @@ class RecordGeneral(pstruct.type):
         (__extra, 'extra'),
     ]
 
-    d = property(fget=lambda s: s['data'].d if getattr(s, 'lazy', False) else s['data'])
+    h = property(fget=lambda s: s['header'])
+
+    def Data(self):
+        return self['data'].d if getattr(self, 'lazy', False) else self['data']
+    d = property(fget=Data)
 
     def blocksize(self):
         res = self['header'].li
         return res.size() + res.Length()
 
+    def previousRecord(self, type, **count):
+        container = self.p
+        idx = container.value.index(self)
+
+        # Seek backwards from index to find record
+        count = count.get('count', -1)
+        if count > 0:
+            for i in range(count):
+                if isinstance(container[idx - i].d, type):
+                    break
+                continue
+        else:
+            i = 0
+            while idx >= i and not isinstance(container[idx - i].d, type):
+                i += 1
+
+        if not isinstance(container[idx - i].d, type):
+            raise ptypes.error.NotFoundError(self, 'previousRecord', message='Unable to locate previous record : {!r}'.format(type))
+        return container[idx - i]
+
+
 class RecordContainer(parray.block):
     _object_ = RecordGeneral
 
+    def repr(self): return self.details()
     def details(self):
-        records = []
-        for v in self.walk():
-            n = '%s[%x]'%(v.__class__.__name__,v.type)
-            records.append(n)
-        return 'records=%d [%s]'%(len(self), ','.join(records))
+        f = lambda item: '{:s}[{:x}]'.format(item.classname(), item.getparent(RecordGeneral)['header'].Type())
+        res = ((lambda records:'{:s} * {:d}'.format(ty, len(records)) if len(records) > 1 else ty)(list(records)) for ty, records in itertools.groupby(self.walk(), f))
+        return '-> ' + ' | '.join(res)
 
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
@@ -164,7 +188,7 @@ class RecordContainer(parray.block):
 
     def lookup(self, type):
         '''Return the first instance of specified record type'''
-        res = [x for x in self if int(x['header']['recType']) == type]
+        res = [x for x in self if x['header']['recType'].int() == type]
         if not res:
             raise KeyError(type)
         assert len(res) == 1, repr(res)
@@ -178,16 +202,10 @@ class RecordContainer(parray.block):
 
     def errors(self):
         for n in self:
-            if n.initialized and n.size() == n.blocksize():
+            if n.initializedQ() and n.size() == n.blocksize():
                 continue
             yield n
         return
-
-    def dumperrors(self):
-        result = []
-        for i,x in enumerate(self.errors()):
-            result.append('%d\t%s\t%d\t%d'%(i,x.classname(),x.size(),x.blocksize()))
-        return '\n'.join(result)
 
     def filter(self, type):
         if isinstance(type, (int,long)):
@@ -215,11 +233,9 @@ class RecordContainer(parray.block):
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
     def details(self):
-        records = []
-        for v in self.walk():
-            n = '%s[%x]'%(v.__class__.__name__,v.type)
-            records.append(n)
-        return '%s records=%d [%s]'%(self.name(), len(self), ','.join(records))
+        f = lambda item: '{:s}[{:x}]'.format(item.classname(), item.getparent(RecordGeneral)['header'].Type())
+        res = ((lambda records:'{:s} * {:d}'.format(ty, len(records)) if len(records) > 1 else ty)(list(records)) for ty, records in itertools.groupby(self.walk(), f))
+        return '-> ' + ' | '.join(res)
 
     def blocksize(self):
         return self.source.size() if hasattr(self, 'source') else super(File, self).blocksize()

@@ -890,7 +890,7 @@ if __name__ == '__main__':
 
         # go through persist directory
         for i,entry in enumerate(persistdirectory.li['data']):
-            print '%s %x'%('-'*70, i)
+            print '{:s} {:x}'.format('-'*70, i)
             for obj in entry.walk():
                 print obj
             continue

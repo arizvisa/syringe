@@ -133,11 +133,11 @@ class Directory(parray.block):
 
     def details(self):
         res = []
-        maxoffsetlength = max(len('[%x]'%x.getoffset()) for x in self)
-        maxnamelength = max(len(repr(x['Name'].str())) for x in self)
-        for i,x in enumerate(self):
-            offset = '[%x]'% x.getoffset()
-            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, x.classname(), i, x['Name'].str(), x['Type'].summary(), x['sectLocation'].num(), x['qwSize'].num(), x['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
+        maxoffsetlength = max(len('[{:x}]'.format(n.getoffset())) for n in self)
+        maxnamelength = max(len('{!r}'.format(n['Name'].str())) for n in self)
+        for i,n in enumerate(self):
+            offset = '[{:x}]'.format(n.getoffset())
+            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, n.classname(), i, n['Name'].str(), n['Type'].summary(), n['sectLocation'].num(), n['qwSize'].num(), n['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
         return '\n'.join(res)
     def repr(self):
         return self.details()

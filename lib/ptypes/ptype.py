@@ -1904,7 +1904,7 @@ class encoded_t(wrapper_t):
         # ..and we're done
         return object
 
-#    @utils.memoize('self', self=lambda n:(n.object, n.source, n._object_), attrs=lambda n:tuple(sorted(n.items())))
+    #@utils.memoize('self', self=lambda n:(n.object, n.source, n._object_), attrs=lambda n:tuple(sorted(n.items())))
     def dereference(self, **attrs):
         """Dereference object into the target type specified by self._object_"""
         attrs.setdefault('__name__', '*'+self.name())
