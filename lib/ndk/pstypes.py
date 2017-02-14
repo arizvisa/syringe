@@ -392,7 +392,14 @@ class TEB(pstruct.type, versioned):
             (ULONG, 'IsImpersonating'),
             (PVOID, 'NlsCache'),
             (PVOID, 'pShimData'),
-            (ULONG, 'HeapVirualAffinity'),
+        ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+            f.append((ULONG, 'LowFragHeapDataSlot'))
+        else:
+            f.append((ULONG, 'HeapVirtualAffinity'))
+
+        f.extend([
             (PVOID, 'CurrentTransactionHandle'),
             (PTEB_ACTIVE_FRAME, 'ActiveFrame'),
         ])

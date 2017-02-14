@@ -145,10 +145,9 @@ def istype(t):
 def iscontainer(t):
     return istype(t) and issubclass(t, container)
 
-def force(t, self, chain=None):
+def force(t, self, chain=[]):
     """Resolve type ``t`` into a pbinary.type for the provided object ``self``"""
-    if chain is None:
-        chain = []
+    chain = chain[:]
     chain.append(t)
 
     # conversions
@@ -243,6 +242,7 @@ class type(ptype.generic):
 
     def copy(self, **attrs):
         result = self.new(self.__class__, position=self.getposition())
+        attrs.setdefault('value', self.value[:])
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         result.__update__(attrs)
         return result
@@ -1122,7 +1122,7 @@ class partial(ptype.container):
         return self
 
     def copy(self, **attrs):
-        result = super(ptype.container, self).copy(**attrs)
+        result = super(partial, self).copy(**attrs)
         result._object_ = self._object_
         result.byteorder = self.byteorder
         return result

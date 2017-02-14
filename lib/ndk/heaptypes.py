@@ -183,9 +183,7 @@ if 'HeapEntry':
             (PVOID, 'Settable'),
         ]
 
-    class _HEAP_ENTRY(ptype.encoded_t):
-        _value_ = dyn.array(pint.uint32_t, 2)
-
+    class _HEAP_ENTRY(pstruct.type, versioned):
         class _Flags(pbinary.flags):
             _fields_ = [
                 (1, 'SETTABLE_FLAG3'),   # No Coalesce
@@ -198,7 +196,7 @@ if 'HeapEntry':
                 (1, 'BUSY'),
             ]
 
-        class _UnusedBytes(pbinary.struct):
+        class _UnusedBytes(pbinary.flags):
             _fields_ = [
                 (1, 'AllocatedByFrontend'),
                 (3, 'Unknown'),
@@ -210,37 +208,50 @@ if 'HeapEntry':
                 busy = 'BUSY' if self['Busy'] else 'FREE'
                 return '{:s} {:s} Unused:{:d}'.format(frontend, busy, self['Unused'])
 
-        class _object_(pstruct.type, versioned):
-            def __init__(self, **attrs):
-                super(_HEAP_ENTRY._object_, self).__init__(**attrs)
-                f = []
-                if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
-                    f.extend([
-                        (pint.uint16_t, 'Size'),
-                        (pint.uint16_t, 'PreviousSize'),
-                        (pint.uint8_t, 'SmallTagIndex'),
-                        (_HEAP_ENTRY._Flags, 'Flags'),
-                        (pint.uint8_t, 'UnusedBytes'),
-                        (pint.uint8_t, 'SegmentIndex'),
-                        #(pint.uint8_t, 'SegmentOffset'),
-                    ])
-                elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
-                    f.extend([
-                        (pint.uint16_t, 'Size'),
-                        (_HEAP_ENTRY._Flags, 'Flags'),
-                        (pint.uint8_t, 'SmallTagIndex'),    # Checksum
-                        (pint.uint16_t, 'PreviousSize'),
-                        (pint.uint8_t, 'SegmentOffset'),
-                        (_HEAP_ENTRY._UnusedBytes, 'UnusedBytes'),
-                    ])
-                else:
-                    raise NotImplementedError
-                self._fields_ = f
+        def __init__(self, **attrs):
+            super(_HEAP_ENTRY, self).__init__(**attrs)
+            f = []
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
+                #f.extend([
+                #   (pint.uint16_t, 'Size'),
+                #   (pint.uint16_t, 'PreviousSize'),
+                #   (pint.uint8_t, 'SmallTagIndex'),
+                #   (_HEAP_ENTRY._Flags, 'Flags'),
+                #   (pint.uint8_t, 'UnusedBytes'),
+                #   (pint.uint8_t, 'SegmentIndex'),
+                #   (pint.uint8_t, 'SegmentOffset'),
+                #])
+                f.extend([
+                    (pint.uint16_t, 'Size'),
+                    (pint.uint16_t, 'PreviousSize'),
+                    (pint.uint8_t, 'SegmentIndex'),
+                    (_HEAP_ENTRY._Flags, 'Flags'),
+                    (pint.uint8_t, 'Index'),
+                    (pint.uint8_t, 'Mask'),
+                    #(dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_ENTRY._object_,'FreeList'),_path_=('FreeList',)), 'FreeList'),
+                ])
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
+                f.extend([
+                    (pint.uint16_t, 'Size'),
+                    (_HEAP_ENTRY._Flags, 'Flags'),
+                    (pint.uint8_t, 'SmallTagIndex'),    # Checksum
+                    (pint.uint16_t, 'PreviousSize'),
+                    (pint.uint8_t, 'SegmentOffset'),    # Size // 8
+                    (_HEAP_ENTRY._UnusedBytes, 'UnusedBytes'),  # XXX: for some reason this is checked against 0x055
+                ])
+            else:
+                raise NotImplementedError((sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION)))
+            self._fields_ = f
+
+    class _ENCODED_HEAP_ENTRY(ptype.encoded_t):
+        _value_ = dyn.array(pint.uint32_t, 2)
+        _object_ = _HEAP_ENTRY
 
         def __EncodedQ(self):
             return hasattr(self, '_HEAP_ENTRY_EncodeFlagMask') and (self.object[0].num() & self._HEAP_ENTRY_EncodeFlagMask)
 
         def encode(self, object, **attrs):
+            heap = self.getparent(type=_HEAP)
             frontend = getattr(self, '_FrontEndHeapType', 0)
             if hasattr(self, '_HEAP_ENTRY_Encoding'):
                 if self.__EncodedQ() and frontend == 0:
@@ -249,7 +260,7 @@ if 'HeapEntry':
                     n1,n2 = object[0].num(),object[1].num()
                     d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
                     d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                    return super(_HEAP_ENTRY,self).encode(ptype.block().set(ptypes.bitmap.data(d1+d2)))
+                    return super(_ENCODED_HEAP_ENTRY,self).encode(ptype.block().set(ptypes.bitmap.data(d1+d2)))
 
                 elif frontend == 2:
                     # LFH Frontend
@@ -261,7 +272,7 @@ if 'HeapEntry':
                     data[1] = (n & 0x0000ff00) >> 8
                     data[2] = (n & 0x00ff0000) >> 16
                     data[3] = (n & 0xff000000) >> 24
-                    return super(_HEAP_ENTRY,self).encode(ptype.block().set(''.join(map(chr,data))))
+                    return super(_ENCODED_HEAP_ENTRY,self).encode(ptype.block().set(''.join(map(chr,data))))
 
                 elif frontend == 0:
                     # Back-to-Front(242)
@@ -269,9 +280,10 @@ if 'HeapEntry':
 
                 else:
                     raise NotImplementedError, frontend
-            return super(_HEAP_ENTRY,self).encode(object)
+            return super(_ENCODED_HEAP_ENTRY,self).encode(object)
 
         def decode(self, object, **attrs):
+            heap = self.getparent(type=_HEAP)
             frontend = getattr(self, '_FrontEndHeapType', 0)
             if hasattr(self, '_HEAP_ENTRY_Encoding'):
                 if self.__EncodedQ() and frontend == 0:
@@ -279,14 +291,14 @@ if 'HeapEntry':
                     o1,o2 = self._HEAP_ENTRY_Encoding
                     d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
                     d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                    return super(_HEAP_ENTRY, self).decode( ptype.block().set(d1+d2) )
+                    return super(_ENCODED_HEAP_ENTRY, self).decode( ptype.block().set(d1+d2) )
 
                 elif frontend == 2:
                     # LFH Frontend
                     n = object[0].num()
                     o,_ = self._HEAP_ENTRY_Encoding
                     d = ptypes.bitmap.data((n^o,32), reversed=True)
-                    return super(_HEAP_ENTRY, self).decode( ptype.block().set(d + object[1].serialize()) )
+                    return super(_ENCODED_HEAP_ENTRY, self).decode( ptype.block().set(d + object[1].serialize()) )
 
                 elif frontend == 0:
                     # Back-to-Front(242)
@@ -294,7 +306,7 @@ if 'HeapEntry':
 
                 else:
                     raise NotImplementedError, frontend
-            return super(_HEAP_ENTRY, self).decode(object, **attrs)
+            return super(_ENCODED_HEAP_ENTRY, self).decode(object, **attrs)
 
         def Size(self):
             '''Return the decoded Size field'''
@@ -327,6 +339,59 @@ if 'HeapEntry':
                 sz = 0
                 return 'LFH: Size:0x{:x} Summary:{:s} ({:08x}{:08x})'.format(sz, res['UnusedBytes'].summary(), self.object[0].num(), self.object[1].num())
             return 'Backend: Flags:{:s} Size:0x{:x} PreviousSize:0x{:x} SmallTagIndex:0x{:x} SegmentIndex:0x{:x}'.format(res['Flags'].summary(),res['Size'].num()*8,res['PreviousSize'].num()*8,res['SmallTagIndex'].num(),res['SegmentOffset'].num())
+
+    class _HEAP_FREE_ENTRY(pstruct.type):
+        class _EncodedHeapEntry(ptype.encoded_t):
+            _value_ = dyn.array(pint.uint32_t, 2)
+            _object_ = _HEAP_ENTRY
+
+            def encode(self, object, **attrs):
+                heap = self.getparent(type=_HEAP)
+                n1, n2 = object[0].int(), object[1].int()
+                o1, o2 = heap['Encoding']['Flink'].int(), heap['Encoding']['Blink'].int()
+                d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
+                d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
+                return super(_HEAP_FREE_ENTRY._EncodedHeapEntry, self).encode(ptype.block().set(ptypes.bitmap.data(d1+d2)))
+
+            def decode(self, object, **attrs):
+                heap = self.getparent(type=_HEAP)
+                n1, n2 = object[0].int(), object[1].int()
+                o1, o2 = heap['Encoding']['Flink'].int(), heap['Encoding']['Blink'].int()
+                d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
+                d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
+                return super(_HEAP_FREE_ENTRY._EncodedHeapEntry, self).decode(ptype.block().set(d1+d2))
+
+        def __init__(self, **attrs):
+            super(_HEAP_FREE_ENTRY, self).__init__(**attrs)
+            f = []
+            f.extend([
+                (self._EncodedHeapEntry, 'Entry'),
+                (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_FREE_ENTRY,'ListEntry')), 'ListEntry'),
+            ])
+            self._fields_ = f
+
+        def Size(self):
+            '''Return the decoded Size field'''
+            self = self['Entry'].d.l
+            return self['Size'].num()*8
+
+        def PreviousSize(self):
+            '''Return the decoded PreviousSize field'''
+            self = self['Entry'].d.l
+            return self['PreviousSize'].num()*8
+
+        def SegmentIndex(self):
+            '''Return the decoded SegmentIndex field'''
+            self = self['Entry'].d.l
+            return self['SegmentOffset'].num()
+
+        def Busy(self):
+            '''Returns whether the chunk is in use or not'''
+            frontend = getattr(self, '_FrontEndHeapType', 0)
+            if frontend == 2:
+                res = self['Entry'].d.l
+                return bool(res['UnusedBytes']['Busy'])
+            raise NotImplementedError, frontend
 
     class FreeListBucket(LIST_ENTRY):
         class _HeapBucketLink(ptype.pointer_t):
@@ -362,7 +427,7 @@ if 'HeapChunk':
             return pint.uint_t
 
         _fields_ = [
-            (_HEAP_ENTRY, 'Header'),
+            (_ENCODED_HEAP_ENTRY, 'Header'),
             (__ChunkFreeEntryOffset, 'ChunkFreeEntryOffset'),
             (lambda s: dyn.block(s.blocksize() - s['Header'].li.size() - s['ChunkFreeEntryOffset'].li.size()), 'Data'),
         ]
@@ -378,7 +443,7 @@ if 'HeapChunk':
             return link['Blink'].d.l
 
     ChunkFreeList._fields_ = [
-        (_HEAP_ENTRY, 'Header'),
+        (_ENCODED_HEAP_ENTRY, 'Header'),
         (dyn.clone(LIST_ENTRY,_object_=fpointer(ChunkFreeList,'ListEntry'),_path_=('ListEntry',)), 'ListEntry'),
         (lambda s: dyn.block(s['Header'].li.Size()), 'Data')
     ]
@@ -406,15 +471,16 @@ if 'LookasideList':
             _fields_ = [
                 (dyn.clone(SLIST_ENTRY,_object_=fpointer(ChunkLookaside,'ListHead'),_path_=('ListHead',)), 'ListHead'),
                 (pint.uint16_t, 'Depth'),
-                (pint.uint16_t, 'MaxDepth'),
-                (pint.uint32_t, 'none'),
+                (pint.uint16_t, 'MaximumDepth'),
+                #(pint.uint32_t, 'none'),
                 (pint.uint32_t, 'TotalAlloc'),
-                (pint.uint32_t, 'AllocMiss'),
+                (pint.uint32_t, 'AllocateMisses'),
                 (pint.uint32_t, 'TotalFrees'),
-                (pint.uint32_t, 'FreeMiss'),
-                (pint.uint32_t, 'AllocLastTotal'),
-                (pint.uint32_t, 'LastAllocateMiss'),
-                (dyn.block(12), 'Unknown'),
+                (pint.uint32_t, 'FreeMisses'),
+                (pint.uint32_t, 'LastTotalAllocates'),
+                (pint.uint32_t, 'LastAllocateMisses'),
+                (dyn.array(pint.uint32_t, 2), 'Counters'),
+                (dyn.block(4), 'Unknown'),
             ]
 
         HEAP_MAX_FREELIST = 0x80
@@ -568,6 +634,7 @@ if 'LFH':
                 res['BusyBlocks'] = self.UsedBlockCount()
             return res
 
+    # FIXME: NTDDI_WIN8 changes this structure entirely
     _HEAP_USERDATA_HEADER._fields_ = [
         (dyn.pointer(_HEAP_SUBSEGMENT), 'SubSegment'),
         (PVOID, 'Reserved'),    # FIXME: figure out what this actually points to
@@ -640,6 +707,9 @@ if 'LFH':
                     (dyn.array(_HEAP_BUCKET,128), 'Buckets'),
                     (_HEAP_LOCAL_DATA, 'LocalData'),
                 ])
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN8:
+                # http://illmatics.com/Windows%208%20Heap%20Internals.pdf
+                raise NotImplementedError
             else:
                 raise NotImplementedError
             self._fields_ = f
@@ -653,6 +723,7 @@ if 'LFH':
         (dyn.array(_HEAP_LOCAL_SEGMENT_INFO,128), 'SegmentInfo'),
     ]
 
+    # FIXME: NTDDI_WIN8 moves the DelayFreeList
     _HEAP_SUBSEGMENT._fields_ = [
         (dyn.pointer(_HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
         (dyn.pointer(_HEAP_USERDATA_HEADER), 'UserBlocks'),
@@ -666,6 +737,7 @@ if 'LFH':
         (ULONG, 'Lock'),
     ]
 
+    # FIXME NTDDI_WIN8 changes the order of these
     _HEAP_LOCAL_SEGMENT_INFO._fields_ = [
         (dyn.pointer(_HEAP_SUBSEGMENT), 'Hint'),
         (dyn.pointer(_HEAP_SUBSEGMENT), 'ActiveSubSegment'),
@@ -714,7 +786,7 @@ if 'Heap':
                     (dyn.pointer(_HEAP_UNCOMMMTTED_RANGE), 'UnCommittedRanges'),
                     (pint.uint16_t, 'AllocatorBackTraceIndex'),
                     (pint.uint16_t, 'Reserved'),
-                    (dyn.pointer(_HEAP_ENTRY), 'LastEntryInSegment'),
+                    (dyn.pointer(_ENCODED_HEAP_ENTRY), 'LastEntryInSegment'),
                 ])
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7+1:
                 raise NotImplementedError
@@ -740,12 +812,12 @@ if 'Heap':
                     (dyn.pointer(_HEAP_TAG_ENTRY), 'TagEntries'),
                     (LIST_ENTRY, 'UCRSegments'),
                 ])
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
                 f.extend([
-                    (_HEAP_ENTRY, 'Entry'),
+                    (_ENCODED_HEAP_ENTRY, 'Entry'),
                     (pint.uint32_t, 'SegmentSignature'),
                     (pint.uint32_t, 'SegmentFlags'),
-                    (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_SEGMENT,'SegmentListEntry'),_path_=('SegmentListEntry',)), 'SegmentListEntry'),   # XXX: entry comes from _HEAP
+                    (dyn.clone(LIST_ENTRY,_object_=fpointer(_HEAP_SEGMENT,'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from _HEAP
                     (dyn.pointer(_HEAP), 'Heap'),
                     (pint.uint32_t, 'BaseAddress'),
                     (pint.uint32_t, 'NumberOfPages'),
@@ -767,7 +839,7 @@ if 'Heap':
             (_HEAP_ENTRY_EXTRA, 'ExtraStuff'),
             (pint.uint64_t, 'CommitSize'),
             (pint.uint64_t, 'ReserveSize'),
-            (_HEAP_ENTRY, 'BusyBlock'),
+            (_ENCODED_HEAP_ENTRY, 'BusyBlock'),
         ]
 
     class _HEAP(pstruct.type, versioned):
@@ -820,8 +892,7 @@ if 'Heap':
         def __init__(self, **attrs):
             super(_HEAP, self).__init__(**attrs)
             f = [(_HEAP_SEGMENT, 'Segment')]
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_VISTA:
-                raise NotImplementedError
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
                 f.extend([
                     (pint.uint32_t, 'Flags'),
                     (pint.uint32_t, 'ForceFlags'),
@@ -855,7 +926,7 @@ if 'Heap':
                     (dyn.pointer(_HEAP_LIST_LOOKUP), 'LargeBlocksIndex'),
                     (dyn.pointer(ptype.type), 'UCRIndex'),
                     (dyn.pointer(_HEAP_PSEUDO_TAG_ENTRY), 'PseudoTagEntries'),
-                    (dyn.clone(LIST_ENTRY, _object_=dyn.pointer(_HEAP_FREE_ENTRY)), 'FreeLists'),      # XXX:
+                    (dyn.clone(LIST_ENTRY, _object_=fpointer(_HEAP_FREE_ENTRY,'ListEntry'), _path_=('ListEntry',)), 'FreeLists'),      # XXX:
                     (dyn.pointer(_HEAP_LOCK), 'LockVariable'),
                     (dyn.pointer(pint.uint32_t), 'CommitRoutine'),
                     (dyn.pointer(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.num())), 'FrontEndHeap'),
@@ -909,6 +980,9 @@ if 'Heap':
                     (_HEAP_COUNTERS, 'Counters'),
                     (_HEAP_TUNING_PARAMETERS, 'TuningParameters'),
                 ])
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN8:
+                # http://illmatics.com/Windows%208%20Heap%20Internals.pdf
+                raise NotImplementedError
             else:
                 raise NotImplementedError
             self._fields_ = f
@@ -931,7 +1005,7 @@ if 'Heap':
         class _ListsInUseUlong(pbinary.array):
             _object_ = 1
             def run(self):
-                return ptypes.bitmap.reverse(self.bitmap())
+                return self.bitmap()
             def summary(self):
                 objectname,_ = super(_HEAP_LIST_LOOKUP._ListsInUseUlong,self).summary().split(' ', 2)
                 return ' '.join((objectname, ptypes.bitmap.hex((self.run()))))

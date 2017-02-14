@@ -257,6 +257,9 @@ class versioned(ptype.type):
     NTDDI_VERSION = sdkddkver.NTDDI_VERSION
     WIN64 = sdkddkver.WIN64
     attributes = { 'NTDDI_VERSION':NTDDI_VERSION, 'WIN64':WIN64 }
+    def __init__(self, **attrs):
+        super(versioned, self).__init__(**attrs)
+        self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
 
 class SIZE_T(ULONG): pass
 

@@ -52,6 +52,10 @@ NTDDI_WIN7SP2 = NTDDI_WIN7 | SP2
 NTDDI_WIN7SP3 = NTDDI_WIN7 | SP3
 NTDDI_WIN7SP4 = NTDDI_WIN7 | SP4
 
+NTDDI_WIN8 = 0x06020000
+
+NTDDI_WINBLUE = 0x06020000
+
 # try to automatically identify which NTDDI_VERSION to use by default
 if not hasattr(sys,'getwindowsversion'):
     NTDDI_VERSION = 0x06010100

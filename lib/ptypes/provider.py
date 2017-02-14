@@ -68,6 +68,7 @@ class base(object):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
         raise error.ImplementationError(self, 'seek', message='Developer forgot to overload this method')
 
+## core providers
 class empty(base):
     '''Empty provider. Returns only zeroes.'''
     offset = 0
@@ -82,57 +83,6 @@ class empty(base):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         Log.info('{:s}.store : Tried to write {:#x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
-
-## core providers
-class string(base):
-    '''Basic writeable string provider.'''
-    offset = int
-    data = str     # this is backed by an array.array type
-
-    @property
-    def value(self): return self.data.tostring()
-    @value.setter
-    def value(self, value): self.data = value
-
-    def __init__(self, string=''):
-        self.data = array.array('c', string)
-    def seek(self, offset):
-        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res,self.offset = self.offset,offset
-        return res
-
-    @utils.mapexception(any=error.ProviderError,ignored=(error.ConsumeError,error.UserError))
-    def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
-        if amount < 0:
-            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.offset,amount,self))
-        if amount == 0: return ''
-        if self.offset >= len(self.data):
-            raise error.ConsumeError(self,self.offset,amount)
-
-        minimum = min((self.offset+amount, len(self.data)))
-        res = self.data[self.offset : minimum].tostring()
-        if res == '' and amount > 0:
-            raise error.ConsumeError(self,self.offset,amount,len(res))
-        if len(res) == amount:
-            self.offset += amount
-        return str(res)
-
-    @utils.mapexception(any=error.ProviderError,ignored=(error.StoreError,))
-    def store(self, data):
-        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        try:
-            left, right = self.offset, self.offset + len(data)
-            self.data[left:right] = array.array('c',data)
-            self.offset = right
-            return len(data)
-        except Exception,e:
-            raise error.StoreError(self,self.offset,len(data),exception=e)
-        raise error.ProviderError
-
-    @utils.mapexception(any=error.ProviderError)
-    def size(self):
-        return len(self.data)
 
 class proxy(base):
     """Provider that will read or write it's data to/from the specified ptype.
@@ -289,6 +239,142 @@ class proxy(base):
     def __repr__(self):
         return '{:s} -> {:s}'.format(super(proxy, self).__repr__(), self.type.instance())
 
+class string(base):
+    '''Basic writeable string provider.'''
+    offset = int
+    data = str     # this is backed by an array.array type
+
+    @property
+    def value(self): return self.data.tostring()
+    @value.setter
+    def value(self, value): self.data = value
+
+    def __init__(self, string=''):
+        self.data = array.array('c', string)
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res,self.offset = self.offset,offset
+        return res
+
+    @utils.mapexception(any=error.ProviderError,ignored=(error.ConsumeError,error.UserError))
+    def consume(self, amount):
+        '''Consume ``amount`` bytes from the given provider.'''
+        if amount < 0:
+            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.offset,amount,self))
+        if amount == 0: return ''
+        if self.offset >= len(self.data):
+            raise error.ConsumeError(self,self.offset,amount)
+
+        minimum = min((self.offset+amount, len(self.data)))
+        res = self.data[self.offset : minimum].tostring()
+        if res == '' and amount > 0:
+            raise error.ConsumeError(self,self.offset,amount,len(res))
+        if len(res) == amount:
+            self.offset += amount
+        return str(res)
+
+    @utils.mapexception(any=error.ProviderError,ignored=(error.StoreError,))
+    def store(self, data):
+        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+        try:
+            left, right = self.offset, self.offset + len(data)
+            self.data[left:right] = array.array('c',data)
+            self.offset = right
+            return len(data)
+        except Exception,e:
+            raise error.StoreError(self,self.offset,len(data),exception=e)
+        raise error.ProviderError
+
+    @utils.mapexception(any=error.ProviderError)
+    def size(self):
+        return len(self.data)
+
+class memorybase(base):
+    '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
+
+class filebase(base):
+    '''Basic fileobj provider. Intended to be inherited from.'''
+    file = None
+    def __init__(self, fileobj):
+        self.file = fileobj
+
+    @utils.mapexception(any=error.ProviderError)
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res = self.file.tell()
+        self.file.seek(offset)
+        return res
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
+    def consume(self, amount):
+        '''Consume ``amount`` bytes from the given provider.'''
+        offset = self.file.tell()
+        if amount < 0:
+            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(offset,amount,self))
+        Log.debug('{:s}.consume : Attempting to consume {:x}:+{:x}'.format(type(self).__name__, offset, amount))
+
+        result = ''
+        try:
+            result = self.file.read(amount)
+        except OverflowError, e:
+            self.file.seek(offset)
+            raise error.ConsumeError(self,offset,amount, len(result), exception=e)
+
+        if result == '' and amount > 0:
+            raise error.ConsumeError(self,offset,amount, len(result))
+
+        if len(result) != amount:
+            self.file.seek(offset)
+        return result
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
+    def store(self, data):
+        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+        offset = self.file.tell()
+        try:
+            return self.file.write(data)
+        except Exception, e:
+            self.file.seek(offset)
+        raise error.StoreError(self, offset, len(data), exception=e)
+
+    @utils.mapexception(any=error.ProviderError)
+    def close(self):
+        return self.file.close()
+
+    @utils.mapexception(any=error.ProviderError)
+    def size(self):
+        old = self.file.tell()
+        self.file.seek(0, 2)
+        result = self.file.tell()
+        self.file.seek(old, 0)
+        return result
+
+    def __repr__(self):
+        return '{:s} -> {!r}'.format(super(filebase, self).__repr__(), self.file)
+
+    def __del__(self):
+        try: self.close()
+        except: pass
+        return
+
+## other providers
+class base64(string):
+    '''A provider that accesses data in a Base64 encoded string.'''
+    def __init__(self, base64string, begin='', end=''):
+        result = map(operator.methodcaller('strip'),base64string.split('\n'))
+        if begin and begin in base64string:
+            res = [i for i,_ in enumerate(result) if _.startswith(begin)][0]
+            result[:] = result[res+1:]
+        if end and end in base64string:
+            res = [i for i,_ in enumerate(result) if _.startswith(end)][0]
+            result[:] = result[:res]
+        result = str().join(result).translate(None, ' \t\n\r\v')
+        super(base64,self).__init__(result.decode('base64'))
+
+    @property
+    def value(self):
+        return self.data.tostring().encode('base64')
+
 import random as _random
 class random(base):
     """Provider that returns random data when read from."""
@@ -312,7 +398,7 @@ class random(base):
         Log.info('{:s}.store : Tried to write {:#x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
-## useful providers
+## special providers
 class stream(base):
     """Provider that caches data read from a file stream in order to provide random-access reading.
 
@@ -429,72 +515,6 @@ class iterable(stream):
         Log.info('iter._write : Tried to write {:#x} bytes to an iterator'.format(len(data)))
         return len(data)
 
-class filebase(base):
-    '''Basic fileobj provider. Intended to be inherited from.'''
-    file = None
-    def __init__(self, fileobj):
-        self.file = fileobj
-
-    @utils.mapexception(any=error.ProviderError)
-    def seek(self, offset):
-        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res = self.file.tell()
-        self.file.seek(offset)
-        return res
-
-    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
-    def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
-        offset = self.file.tell()
-        if amount < 0:
-            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(offset,amount,self))
-        Log.debug('{:s}.consume : Attempting to consume {:x}:+{:x}'.format(type(self).__name__, offset, amount))
-
-        result = ''
-        try:
-            result = self.file.read(amount)
-        except OverflowError, e:
-            self.file.seek(offset)
-            raise error.ConsumeError(self,offset,amount, len(result), exception=e)
-
-        if result == '' and amount > 0:
-            raise error.ConsumeError(self,offset,amount, len(result))
-
-        if len(result) != amount:
-            self.file.seek(offset)
-        return result
-
-    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
-    def store(self, data):
-        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        offset = self.file.tell()
-        try:
-            return self.file.write(data)
-        except Exception, e:
-            self.file.seek(offset)
-        raise error.StoreError(self, offset, len(data), exception=e)
-
-    @utils.mapexception(any=error.ProviderError)
-    def close(self):
-        return self.file.close()
-
-    @utils.mapexception(any=error.ProviderError)
-    def size(self):
-        old = self.file.tell()
-        self.file.seek(0, 2)
-        result = self.file.tell()
-        self.file.seek(old, 0)
-        return result
-
-    def __repr__(self):
-        return '{:s} -> {!r}'.format(super(filebase, self).__repr__(), self.file)
-
-    def __del__(self):
-        try: self.close()
-        except: pass
-        return
-
-## optional providers
 import os
 class posixfile(filebase):
     '''Basic posix file provider.'''
@@ -611,63 +631,8 @@ try:
 except ImportError:
     Log.warning("__module__ : Unable to import the 'tempfile' module. Failed to load the `filecopy` provider.")
 
-class memorybase(base):
-    '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
-
-try:
-    import ctypes
-
-    ## TODO: figure out an elegant way to catch exceptions we might cause
-    ##       by dereferencing any of these pointers on both windows (veh) and posix (signals)
-
-    class memory(memorybase):
-        '''Basic in-process memory provider based on ctypes.'''
-        address = 0
-        def seek(self, offset):
-            '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            res,self.address = self.address,offset
-            return res
-
-        @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
-        def consume(self, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
-            if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.address,amount,self))
-            res = memory._read(self.address, amount)
-            if len(res) == 0 and amount > 0:
-                raise error.ConsumeError(self,offset,amount,len(res))
-            if len(res) == amount:
-                self.address += amount
-            return res
-
-        @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
-        def store(self, data):
-            '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            res = memory._write(self.address, data)
-            if res != len(data):
-                raise error.StoreError(self,self.address,len(data),written=res)
-            self.address += len(data)
-            return res
-
-        @staticmethod
-        def _read(address, length):
-            blockpointer = ctypes.POINTER(ctypes.c_char*length)
-            v = ctypes.c_void_p(address)
-            p = ctypes.cast(v, blockpointer)
-            return str().join(p.contents)
-
-        @staticmethod
-        def _write(address, value):
-            blockpointer = ctypes.POINTER(ctypes.c_char*len(value))
-            v = ctypes.c_void_p(address)
-            p = ctypes.cast(v, blockpointer)
-            for i,c in enumerate(value):
-                p.contents[i] = c
-            return i+1
-
-except ImportError:
-    Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `memory` provider.")
-
+## platform-specific providers
+DEFAULT = []
 try:
     import ctypes
     try:
@@ -850,13 +815,14 @@ except OSError, m:
     Log.warning("__module__ : Unable to load 'kernel32.dll' ({:s}). Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(m))
 
 try:
+    _ = 'idaapi' in sys.modules
     import idaapi as _idaapi
     class Ida(memorybase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
         offset = 0xffffffff
 
         def __init__(self):
-            raise UserWarning("{:s}.{:s} is a static object and contains only staticmethods.".format(self.__module__,self.__class__.__name__))
+            pass
 
         @classmethod
         def read(cls, offset, size, padding='\x00'):
@@ -901,11 +867,12 @@ try:
             return len(data)
 
     Log.warning("__module__ : Successfully loaded the `Ida` provider.")
-
+    if _: DEFAULT.append(Ida)
 except ImportError:
     Log.info("__module__ : Unable to import the '_idaapi' module (not running IDA?). Failed to load the `Ida` provider.")
 
 try:
+    _ = '_PyDbgEng' in sys.modules
     import _PyDbgEng
     class PyDbgEng(memorybase):
         '''A provider that uses the PyDbgEng.pyd module to interact with the memory of the current debugged process.'''
@@ -954,10 +921,12 @@ try:
             return self.client.DataSpaces.Virtual.Write(self.offset, data)
 
     Log.warning("__module__ : Successfully loaded the `PyDbgEng` provider.")
+    if _: DEFAULT.append(PyDbgEng)
 except ImportError:
     Log.info("__module__ : Unable to import the '_PyDbgEng' module. Failed to load the `PyDbgEng` provider.")
 
 try:
+    _ = 'pykd' in sys.modules
     import pykd as _pykd
     class Pykd(memorybase):
         '''A provider that uses the Pykd library to interact with the memory of a debugged process.'''
@@ -989,11 +958,12 @@ try:
             return res
 
     Log.warning("__module__ : Successfully loaded the `Pykd` provider.")
-
+    if _: DEFAULT.append(Pykd)
 except ImportError:
     Log.info("__module__ : Unable to import the 'pykd' module. Failed to load the `Pykd` provider.")
 
 try:
+    _ = 'lldb' in sys.modules
     class lldb(base):
         module = __import__('lldb')
         def __init__(self, sbprocess=None):
@@ -1022,10 +992,12 @@ try:
             return amount
 
     Log.warning("__module__ : Successfully loaded the `lldb` provider.")
+    if _: DEFAULT.append(lldb)
 except ImportError:
     Log.info("__module__ : Unable to import the 'lldb' module. Failed to load the `lldb` provider.")
 
 try:
+    _ = 'gdb' in sys.modules
     class gdb(base):
         module = __import__('gdb')
         def __init__(self, inferior=None):
@@ -1054,25 +1026,66 @@ try:
             return len(data)
 
     Log.warning("__module__ : Successfully loaded the `gdb` provider.")
+    if _: DEFAULT.append(lldb)
 except ImportError:
     Log.info("__module__ : Unable to import the 'gdb' module. Failed to load the `gdb` provider.")
 
-class base64(string):
-    '''A provider that accesses data in a Base64 encoded string.'''
-    def __init__(self, base64string, begin='', end=''):
-        result = map(operator.methodcaller('strip'),base64string.split('\n'))
-        if begin and begin in base64string:
-            res = [i for i,_ in enumerate(result) if _.startswith(begin)][0]
-            result[:] = result[res+1:]
-        if end and end in base64string:
-            res = [i for i,_ in enumerate(result) if _.startswith(end)][0]
-            result[:] = result[:res]
-        result = str().join(result).translate(None, ' \t\n\r\v')
-        super(base64,self).__init__(result.decode('base64'))
+try:
+    import ctypes
 
-    @property
-    def value(self):
-        return self.data.tostring().encode('base64')
+    ## TODO: figure out an elegant way to catch exceptions we might cause
+    ##       by dereferencing any of these pointers on both windows (veh) and posix (signals)
+
+    class memory(memorybase):
+        '''Basic in-process memory provider based on ctypes.'''
+        address = 0
+        def seek(self, offset):
+            '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+            res,self.address = self.address,offset
+            return res
+
+        @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
+        def consume(self, amount):
+            '''Consume ``amount`` bytes from the given provider.'''
+            if amount < 0:
+                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.address,amount,self))
+            res = memory._read(self.address, amount)
+            if len(res) == 0 and amount > 0:
+                raise error.ConsumeError(self,offset,amount,len(res))
+            if len(res) == amount:
+                self.address += amount
+            return res
+
+        @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
+        def store(self, data):
+            '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+            res = memory._write(self.address, data)
+            if res != len(data):
+                raise error.StoreError(self,self.address,len(data),written=res)
+            self.address += len(data)
+            return res
+
+        @staticmethod
+        def _read(address, length):
+            blockpointer = ctypes.POINTER(ctypes.c_char*length)
+            v = ctypes.c_void_p(address)
+            p = ctypes.cast(v, blockpointer)
+            return str().join(p.contents)
+
+        @staticmethod
+        def _write(address, value):
+            blockpointer = ctypes.POINTER(ctypes.c_char*len(value))
+            v = ctypes.c_void_p(address)
+            p = ctypes.cast(v, blockpointer)
+            for i,c in enumerate(value):
+                p.contents[i] = c
+            return i+1
+
+    DEFAULT.append(memory)
+except ImportError:
+    Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `memory` provider.")
+
+default = DEFAULT[0]
 
 if __name__ == '__main__' and 0:
     import array

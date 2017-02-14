@@ -6,7 +6,7 @@ ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ## ripped from [MS-OART]
 recordType = [
-    ('FT_OfficeArgDgg', 0xf000),
+    ('FT_OfficeArtDgg', 0xf000),
     ('FT_OfficeArtBStore', 0xf001),
     ('FT_OfficeArtDg', 0xf002),
     ('FT_OfficeArtSpgr', 0xf003),
@@ -1394,6 +1394,10 @@ class OfficeArtFSP(pstruct.type):
         (MSOSPID, 'spid'),
         (_flags, 'f')
     ]
+
+@FT_OfficeArtDgg.define
+class OfficeArtDggContainer(RecordContainer):
+    type = 15, 0x000
 
 @FT_OfficeArtDg.define
 class OfficeArtDgContainer(RecordContainer):

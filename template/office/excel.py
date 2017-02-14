@@ -1,13 +1,15 @@
-import operator,functools,itertools
 from ptypes import *
 import art,graph
 from . import *
+
+import operator,functools,itertools
+import logging
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 @Record.define
 class RT_Excel(ptype.definition):
-    type,cache = __name__,{}
+    type, cache = __name__, {}
     @classmethod
     def lookup(cls, type):
         type,none = type
@@ -53,6 +55,8 @@ class DRw_ByteU(ubyte1): pass
 class XFIndex(uint2): pass
 class ObjId(uint2): pass
 class Ilel(uint2): pass
+class ColorICV(uint4): pass
+class TabId(uint2): pass
 
 class ColRelU(pbinary.struct):
     _fields_ = R([
@@ -122,8 +126,85 @@ class RgceAreaRel(pstruct.type):
         (ColRelNegU, 'columnLast'),
     ]
 
+class Ts(pbinary.flags):
+    _fields_ = R([
+        (1, 'unused1'),
+        (1, 'ftsItalic'),
+        (5, 'unused2'),
+        (1, 'ftsStrikeout'),
+        (24, 'unused3'),
+    ])
+
+class Stxp(pstruct.type):
+    _fields_ = [
+        (sint4, 'twpHeight'),
+        (Ts, 'ts'),
+        (sint2, 'bls'),
+        (sint2, 'sss'),
+        (ubyte1, 'uls'),
+        (ubyte1, 'bFamily'),
+        (ubyte1, 'bCharSet'),
+        (ubyte1, 'unused'),
+    ]
+
+class LongRGB(pstruct.type):
+    _fields_ = [ (ubyte1,'red'),(ubyte1,'green'),(ubyte1,'blue'),(ubyte1,'reserved') ]
+
 class LongRGBA(pstruct.type):
     _fields_ = [ (ubyte1,'red'),(ubyte1,'green'),(ubyte1,'blue'),(ubyte1,'alpha') ]
+
+class XColorType(pint.enum, uint2):
+    _values_ = [
+        ('XCLRAUTO', 0x00000000),
+        ('XCLRINDEXED', 0x00000001),
+        ('XCLRRGB', 0x00000002),
+        ('XCLRTHEMED', 0x00000003),
+        ('XCLRNINCHED', 0x00000004),
+    ]
+
+class CFColor(pstruct.type):
+    def __xclrValue(self):
+        res = self['xclrType'].li
+        if res == 'XCLRAUTO':
+            return ptype.undefined
+        elif res == 'XCLRINDEXED':
+            return ColorICV
+        elif res == 'XCLRRGB':
+            return LongRGBA
+        elif res == 'XCLRTHEMED':
+            return ColorTheme
+        logging.warn('{:s}.__xclrValue : Unknown xclrType value. : {:04x}'.format(self.instance(), res.int()))
+        return ptype.undefined
+
+    _fields_ = [
+        (XColorType, 'xclrType'),
+        (__xclrValue, 'xclrValue'),
+        (Xnum, 'numTint'),
+    ]
+
+class CFVOParsedFormula(pstruct.type):
+    def __rgce(self):
+        cce = self['cce'].li.int()
+        return dyn.clone(Rgce, blocksize=lambda s,cce=cce:cce)
+
+    _fields_ = [
+        (uint2, 'cce'),
+        (__rgce, 'rgce'),
+    ]
+
+class CFVO(pstruct.type):
+    _fields_ = [
+        (ubyte1, 'cfvoType'),
+        (CFVOParsedFormula, 'fmla'),
+        (Xnum, 'numValue'),
+    ]
+
+class CFMStateItem(pstruct.type):
+    _fields_ = [
+        (CFVO, 'cfvo'),
+        (ubyte1, 'fEqual'),
+        (uint4, 'unused'),
+    ]
 
 class Cetab(pbinary.enum):
     width = 15
@@ -143,6 +224,103 @@ class FontScheme(pint.enum, uint2):
         ('default,bold', 1),
         ('default,italic', 2),
         ('default,bold,italic', 3)
+    ]
+
+class HorizAlign(pbinary.enum):
+    width = 3
+    _values_ = [
+        ('ALCNIL', 0xFF), # Alignment not specified
+        ('ALCGEN', 0x00), # General alignment
+        ('ALCLEFT', 0x01), # Left alignment
+        ('ALCCTR', 0x02), # Centered alignment
+        ('ALCRIGHT', 0x03), # Right alignment
+        ('ALCFILL', 0x04), # Fill alignment
+        ('ALCJUST', 0x05), # Justify alignment
+        ('ALCCONTCTR', 0x06), # Center-across-selection alignment
+        ('ALCDIST', 0x07), # Distributed alignment
+    ]
+
+class VertAlign(pbinary.enum):
+    width = 3
+    _values_ = [
+        ('ALCVTOP', 0x00), # Top alignment
+        ('ALCVCTR', 0x01), # Center alignment
+        ('ALCVBOT', 0x02), # Bottom alignment
+        ('ALCVJUST', 0x03), # Justify alignment
+        ('ALCVDIST', 0x04), # Distributed alignment
+    ]
+
+class ReadingOrder(pbinary.enum):
+    width = 2
+    _values_ = [
+        ('READING_ORDER_CONTEXT', 0x00), # Context reading order
+        ('READING_ORDER_LTR', 0x01), # Left-to-right reading order
+        ('READING_ORDER_RTL', 0x02), # Right-to-left reading order
+    ]
+
+class BorderStyle(pbinary.enum):
+    width = 4
+    _values_ = [
+        ('NONE', 0x0000), # No border
+        ('THIN', 0x0001), # Thin line
+        ('MEDIUM', 0x0002), # Medium line
+        ('DASHED', 0x0003), # Dashed line
+        ('DOTTED', 0x0004), # Dotted line
+        ('THICK', 0x0005), # Thick line
+        ('DOUBLE', 0x0006), # Double line
+        ('HAIR', 0x0007), # Hairline
+        ('MEDIUMDASHED', 0x0008), # Medium dashed line
+        ('DASHDOT', 0x0009), # Dash-dot line
+        ('MEDIUMDASHDOT', 0x000A), # Medium dash-dot line
+        ('DASHDOTDOT', 0x000B), # Dash-dot-dot line
+        ('MEDIUMDASHDOTDOT', 0x000C), # Medium dash-dot-dot line
+        ('SLANTDASHDOT', 0x000D), # Slanted dash-dot-dot line
+    ]
+
+class FillPattern(pbinary.enum):
+    width = 6
+    _values_ = [
+        ('FLSNULL', 0x00), # No fill pattern
+        ('FLSSOLID', 0x01), # Solid
+        ('FLSMEDGRAY', 0x02), # 50% gray
+        ('FLSDKGRAY', 0x03), # 75% gray
+        ('FLSLTGRAY', 0x04), # 25% gray
+        ('FLSDKHOR', 0x05), # Horizontal stripe
+        ('FLSDKVER', 0x06), # Vertical stripe
+        ('FLSDKDOWN', 0x07), # Reverse diagonal stripe
+        ('FLSDKUP', 0x08), # Diagonal stripe
+        ('FLSDKGRID', 0x09), # Diagonal crosshatch
+        ('FLSDKTRELLIS', 0x0A), # Thick Diagonal crosshatch
+        ('FLSLTHOR', 0x0B), # Thin horizontal stripe
+        ('FLSLTVER', 0x0C), # Thin vertical stripe
+        ('FLSLTDOWN', 0x0D), # Thin reverse diagonal stripe
+        ('FLSLTUP', 0x0E), # Thin diagonal stripe
+        ('FLSLTGRID', 0x0F), # Thin horizontal crosshatch
+        ('FLSLTTRELLIS', 0x10), # Thin diagonal crosshatch
+        ('FLSGRAY125', 0x11), # 12.5% gray
+        ('FLSGRAY0625', 0x12), # 6.25% gray
+    ]
+
+class RevisionType(pint.enum, uint2):
+    _values_ = [
+        ('REVTINSRW', 0x0000), # Insert Row.
+        ('REVTINSCOL', 0x0001), # Insert Column.
+        ('REVTDELRW', 0x0002), # Delete Row.
+        ('REVTDELCOL', 0x0003), # Delete Column.
+        ('REVTMOVE', 0x0004), # Cell Move.
+        ('REVTINSERTSH', 0x0005), # Insert Sheet.
+        ('REVTSORT', 0x0007), # Sort.
+        ('REVTCHANGECELL', 0x0008), # Cell Change.
+        ('REVTRENSHEET', 0x0009), # Rename Sheet.
+        ('REVTDEFNAME', 0x000A), # Defined name Change.
+        ('REVTFORMAT', 0x000B), # Format Revision.
+        ('REVTAUTOFMT', 0x000C), # AutoFormat Revision.
+        ('REVTNOTE', 0x000D), # Comment Revision.
+        ('REVTHEADER', 0x0020), # Header (meta-data) Revision.
+        ('REVTCONFLICT', 0x0025), # Conflict.
+        ('REVTADDVIEW', 0x002B), # Custom view Add.
+        ('REVTDELVIEW', 0x002C), # Custom view Delete.
+        ('REVTTRASHQTFIELD', 0x002E), # Query table field Removal.
     ]
 
 ### File types
@@ -351,7 +529,7 @@ class CrtLayout12(pstruct.type):
 ###
 @RT_Excel.define
 class Frame(pstruct.type):
-    class FrameAuto(pbinary.flags):
+    class _flags(pbinary.flags):
         _fields_ = R([
             (1, 'fAutoSize'),
             (1, 'fAutoPosition'),
@@ -361,7 +539,7 @@ class Frame(pstruct.type):
     type = 4146
     _fields_ = [
         (uint2, 'frt'),
-        (FrameAuto, 'f')
+        (_flags, 'flags')
     ]
 
 ###
@@ -411,6 +589,14 @@ class XLUnicodeString(pstruct.type):
         (__rgb, 'rgb'),
     ]
 
+# FIXME: http://msdn.microsoft.com/en-us/library/dd924700(v=office.12).aspx
+# this type doesn't align with this structure definition
+class LPWideString(pstruct.type):
+    _fields_ = [
+        (uint2, 'cchCharacters'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].li.int()), 'rgchData'),
+    ]
+
 class VirtualPath(XLUnicodeString): pass
 class XLNameUnicodeString(XLUnicodeString): pass
 
@@ -437,6 +623,7 @@ class ShortXLUnicodeString(pstruct.type):
 @RT_Excel.define
 class SupBook(pstruct.type):
     type = 430
+    type = 0x1ae
     _fields_ = [
         (uint2, 'ctab'),
         (uint2, 'cch'),
@@ -531,7 +718,7 @@ class DV(pstruct.type):
 ###
 @RT_Excel.define
 class BOF(pstruct.type):
-    class Flags(pbinary.flags):
+    class _flags(pbinary.flags):
         _fields_ = R([
             (1, 'fWin'),
             (1, 'fRisc'),
@@ -567,7 +754,33 @@ class BOF(pstruct.type):
         (DocType, 'dt'),
         (uint2, 'rupBuild'),
         (uint2, 'rupYear'),
-        (Flags, 'f')
+        (_flags, 'flags')
+    ]
+
+@RT_Excel.define
+class BoundSheet8(pstruct.type):
+    type = 0x85
+    type = 133
+
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (2, 'hsState'),
+            (6, 'unused'),
+        ])
+
+    class _docType(pint.enum, ubyte1):
+        _values_ = [
+            ('worksheet', 0x00),
+            ('macro', 0x01),
+            ('chart', 0x02),
+            ('vba-module', 0x06),
+        ]
+
+    _fields_ = [
+        (uint4, 'lbPlyPos'),
+        (_docType, 'dt'),
+        (_flags, 'flags'),
+        (ShortXLUnicodeString, 'stName'),
     ]
 
 ###
@@ -603,6 +816,53 @@ class BookBool(pbinary.flags):
         (1, 'fHideBorderUnselLists'),
         (7, 'reserved2'),
     ])
+
+class BookExt_Conditional11(pbinary.flags):
+    _fields_ = R([
+        (1, 'fBuggedUserAboutSolution'),
+        (1, 'fShowInkAnnotation'),
+        (6, 'unused'),
+    ])
+
+class BookExt_Conditional12(pbinary.flags):
+    _fields_ = R([
+        (1, 'reserved'),
+        (1, 'fPublishedBookItems'),
+        (1, 'fShowPivotChartFilter'),
+        (5, 'reserved2'),
+    ])
+
+@RT_Excel.define
+class BookExt(pstruct.type):
+    type = 2147
+    type = 0x863
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fDontAutoRecover'),
+            (1, 'fHidePivotList'),
+            (1, 'fFilterPrivacy'),
+            (1, 'fEmbedFactoids'),
+            (2, 'mdFactoidDisplay'),
+            (1, 'fSavedDuringRecovery'),
+            (1, 'fCreatedViaMinimalSave'),
+            (1, 'fOpenedViaDataRecovery'),
+            (1, 'fOpenedViaSafeLoad'),
+            (22, 'reserved'),
+        ])
+
+    def __unknown(self):
+        cb = self['cb'].li.int()
+        total = 12 + 4 + 4 + 1 + 1
+        return dyn.block(cb - total)
+
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (uint4, 'cb'),
+        (_flags, 'flags'),
+        (BookExt_Conditional11, 'grbit1'),
+        (BookExt_Conditional12, 'grbit2'),
+        (__unknown, 'unknown'),
+    ]
 
 @RT_Excel.define
 class RefreshAll(pint.enum, uint2):
@@ -649,6 +909,17 @@ class Backup(Boolean, uint2):
     type = 0x40
     type = 64
 
+@RT_Excel.define
+class CompressPictures(pstruct.type):
+    type = 0x89b
+    type = 2203
+    class _fAutoCompressPicture(Boolean, uint4): pass
+
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (_fAutoCompressPicture, 'fAutoCompressPicture'),
+    ]
+
 class TabIndex(uint2): pass
 
 @RT_Excel.define
@@ -665,6 +936,11 @@ class Protect(Boolean, uint2):
 class WinProtect(Boolean, uint2):
     type = 0x19
     type = 25
+
+@RT_Excel.define
+class UsesELFs(Boolean, uint2):
+    type = 0x1ae
+    type = 352
 
 @RT_Excel.define
 class WriteAccess(pstruct.type):
@@ -721,6 +997,77 @@ class Window1(pstruct.type):
     ]
 
 @RT_Excel.define
+class Country(pstruct.type):
+    type = 0x8c
+    type = 140
+    class _iCountryWinIni(pint.enum, uint2):
+        _values_ = [
+            ('United States', 1),
+            ('Canada', 2),
+            ('Latin America', 3),
+            ('Russia', 7),
+            ('Egypt', 20),
+            ('Greece', 30),
+            ('Netherlands', 31),
+            ('Belgium', 32),
+            ('France', 33),
+            ('Spain', 34),
+            ('Hungary', 36),
+            ('Italy', 39),
+            ('Switzerland', 41),
+            ('Austria', 43),
+            ('United Kingdom', 44),
+            ('Denmark', 45),
+            ('Sweden', 46),
+            ('Norway', 47),
+            ('Poland', 48),
+            ('Germany', 49),
+            ('Mexico', 52),
+            ('Brazil', 55),
+            ('Australia', 61),
+            ('New Zealand', 64),
+            ('Thailand', 66),
+            ('Japan', 81),
+            ('Korea', 82),
+            ('Viet Nam', 84),
+            ('People\'s Republic of China', 86),
+            ('Turkey', 90),
+            ('Algeria', 213),
+            ('Morocco', 216),
+            ('Libya', 218),
+            ('Portugal', 351),
+            ('Iceland', 354),
+            ('Finland', 358),
+            ('Czech Republic', 420),
+            ('Taiwan', 886),
+            ('Lebanon', 961),
+            ('Jordan', 962),
+            ('Syria', 963),
+            ('Iraq', 964),
+            ('Kuwait', 965),
+            ('Saudi Arabia', 966),
+            ('United Arab Emirates', 971),
+            ('Israel', 972),
+            ('Qatar', 974),
+            ('Iran', 981),
+        ]
+
+    _fields_ = [
+        (uint2, 'iCountryDef'),
+        (_iCountryWinIni, 'iCountryWinIni'),
+    ]
+
+@RT_Excel.define
+class RecalcId(pstruct.type):
+    type = 449
+    type = 0x1c1
+    _fields_ = [
+        (uint2, 'rt'),
+        (uint2, 'reserved'),
+        (uint4, 'dwBuild'),
+    ]
+
+@RT_Excel.define
 class CalcMode(pint.enum, uint2):
     type = 0xd
     type = 13
@@ -749,9 +1096,50 @@ class DSF(uint2):
     type = 0x161
 
 @RT_Excel.define
-class MSODRAWING(art.OfficeArtSpContainer):
-    type = 0x00ec
+class MsoDrawingGroup(art.OfficeArtDggContainer):
+    type = 0xeb
+    type = 235
+    def blocksize(self):
+        return self.getparent(RecordGeneral)['header'].Length()
+
+@RT_Excel.define
+class HFPicture(pstruct.type):
+    type = 2150
+    type = 0x866
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fIsDrawing'),
+            (1, 'fIsDrawingGroup'),
+            (1, 'fContinue'),
+            (5, 'unused'),
+        ])
+    def __rgDrawing(self):
+        res = self['flags'].li
+        fd, fg = res['fIsDrawing'], res['fIsDrawingGroup']
+        cb = self.getparent(RecordGeneral)['header'].Length()
+        if fd and not fg:
+            return dyn.clone(art.OfficeArtDgContainer, blocksize=lambda s,cb=cb: cb-(12+1+1))
+        elif not fd and fg:
+            return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda s,cb=cb: cb-(12+1+1))
+        elif not fd and not fg:
+            return ptype.undefined
+        logging.warn('{:s}.__rgDrawing : Mutually exclusive fIsDrawing and fIsDrawing is set. Using a generic RecordContainer.'.format(self.classname()))
+        return dyn.clone(art.RecordContainer, blocksize=lambda s,cb=cb: cb - (12+1+1))
+
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (_flags, 'flags'),
+        (ubyte1, 'reserved'),
+        (__rgDrawing, 'rgDrawing'),
+    ]
+
+@RT_Excel.define
+class MsoDrawing(art.OfficeArtDgContainer):
+    type = 0xec
     type = 236
+
+    def blocksize(self):
+        return self.getparent(RecordGeneral)['header'].Length()
 
 @RT_Excel.define
 class EOF(pstruct.type):
@@ -759,9 +1147,82 @@ class EOF(pstruct.type):
     _fields_ = []
 
 @RT_Excel.define
+class Theme(pstruct.type):
+    type = 2198
+    type = 0x896
+    def __rgb(self):
+        res = self.getparent(RecordGeneral)
+        cb = res['header'].Length()
+        return dyn.block(cb - (12+4))
+
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (uint4, 'dwThemeVersion'),
+        (__rgb, 'rgb'),
+    ]
+
+@RT_Excel.define
 class Blank(Cell):
     type = 513
     type = 0x201
+
+@RT_Excel.define
+class ForceFullCalculation(pstruct.type):
+    type = 0x8a3
+    type = 2211
+    class _fNoDeps(Boolean, uint4): pass
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (_fNoDeps, 'fNoDeps'),
+    ]
+
+class XTI(pstruct.type):
+    _fields_ = [
+        (uint2, 'iSupBook'),
+        (sint2, 'iTabFirst'),
+        (sint2, 'iTabLast'),
+    ]
+
+@RT_Excel.define
+class ExternSheet(pstruct.type):
+    type = 0x17
+    type = 23
+    _fields_ = [
+        (uint2, 'cXTI'),
+        (lambda s: dyn.array(XTI, s['cXTI'].li.int()), 'rgXTI'),
+    ]
+
+@RT_Excel.define
+class ExternName(pstruct.type):
+    type = 0x23
+    type = 35
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fBuiltIn'),
+            (1, 'fWantAdvise'),
+            (1, 'fWantPict'),
+            (1, 'fOle'),
+            (1, 'fOleLink'),
+            (10, 'cf'),
+            (1, 'fIcon'),
+        ])
+    def __body(self):
+        res = self['flags'].li
+        f1, f2 = res['fOle'], res['fOleLink']
+        #lookup = {
+        #    #(0, 0) : ExternOleDdeLink,
+        #    (0, 0) : ExternDocName,
+        #    (0, 1) : ptype.undefined,   # ???
+        #    (1, 0) : ExternDdeLinkNoOper,
+        #}
+        # FIXME: this is pretty poorly documented
+        cb = self.getparent(RecordGeneral)['header'].li.Length()
+        return dyn.block(cb - 2)
+
+    _fields_ = [
+        (_flags, 'flags'),
+        (__body, 'body'),
+    ]
 
 @RT_Excel.define
 class Row(pstruct.type):
@@ -795,20 +1256,45 @@ class Row(pstruct.type):
     ]
 
 ###
+class XFProperty(ptype.definition):
+    attribute, cache = 'propertyType', {}
+
+# FIXME: implement some XFProperty types
+
+class XFProp(pstruct.type):
+    def __xfPropDataBlob(self):
+        t, cb = self['xfPropType'].li.int(), self['cb'].li.int()
+        res = XFProperty.get(t, length=cb - (2+2), propertyType=t)
+        return dyn.clone(res, blocksize=lambda s,cb=cb: cb - (2+2))
+
+    _fields_ = [
+        (uint2, 'xfPropType'),      # XXX: make this a pint.enum
+        (uint2, 'cb'),
+        (__xfPropDataBlob, 'xfPropDataBlob'),
+    ]
+
+class XFProps(pstruct.type):
+    _fields_ = [
+        (uint2, 'reserved'),
+        (uint2, 'cprops'),
+        (lambda s: dyn.array(XFProp, s['cprops'].li.int()), 'xfPropArray'),
+    ]
+
+###
 if True:
+    class SerArType(ptype.definition):
+        attribute, cache = 'serType', {}
+
     class SerAr(pstruct.type):
         _fields_ = [
-            (uint4,'reserved'),
+            (uint4,'reserved1'),        # XXX: make this a pint.enum
             (lambda s: SerArType.get(s['reserved1'].li.int()), 'Ser'),
         ]
 
-    class SerArType(ptype.definition):
-        cache = {}
-
     @SerArType.define
     class SerBool(pstruct.type):
-        type = 0x04
-        type = 4
+        serType = 0x04
+        serType = 4
         _fields_ = [
             (ubyte1,'f'),
             (ubyte1,'reserved2'),
@@ -829,8 +1315,8 @@ if True:
 
     @SerArType.define
     class SerErr(pstruct.type):
-        type = 0x10
-        type = 16
+        serType = 0x10
+        serType = 16
         _fields_ = [
             (BErr, 'err'),
             (ubyte1,'reserved2'),
@@ -840,8 +1326,8 @@ if True:
 
     @SerArType.define
     class SerNil(pstruct.type):
-        type = 0x0
-        type = 0
+        serType = 0x0
+        serType = 0
         _fields_ = [
             (uint4,'unused1'),
             (uint4,'unused2'),
@@ -849,16 +1335,16 @@ if True:
 
     @SerArType.define
     class SerNum(pstruct.type):
-        type = 0x1
-        type = 1
+        serType = 0x1
+        serType = 1
         _fields_ = [
             (Xnum,'xnum'),
         ]
 
     @SerArType.define
     class SerStr(pstruct.type):
-        type = 0x2
-        type = 2
+        serType = 0x2
+        serType = 2
         _fields_ = [
             (XLUnicodeString,'string'),
         ]
@@ -1016,7 +1502,7 @@ class CellParsedFormula(pstruct.type):
     ]
 
 class Ptg(ptype.definition):
-    cache = {}
+    attribute, cache = 'parseType', {}
 
 class PtgDataType(pbinary.enum):
     width = 2
@@ -1061,7 +1547,7 @@ class PtgGeneral(pstruct.type):
 
 @Ptg.define
 class PtgExp(pstruct.type):
-    type = 0x01, None
+    parseType = 0x01, None
     _fields_ = [
         (Rw, 'row'),
         (Col, 'col'),
@@ -1069,96 +1555,96 @@ class PtgExp(pstruct.type):
 
 @Ptg.define
 class PtgTbl(pstruct.type):
-    type = 0x02, None
+    parseType = 0x02, None
     _fields_ = [
         (Rw, 'row'),
         (Col, 'col'),
     ]
 
 @Ptg.define
-class PtgAdd(ptype.undefined): type = 0x03, None
+class PtgAdd(ptype.undefined): parseType = 0x03, None
 @Ptg.define
-class PtgSub(ptype.undefined): type = 0x04, None
+class PtgSub(ptype.undefined): parseType = 0x04, None
 @Ptg.define
-class PtgMul(ptype.undefined): type = 0x05, None
+class PtgMul(ptype.undefined): parseType = 0x05, None
 @Ptg.define
-class PtgDiv(ptype.undefined): type = 0x06, None
+class PtgDiv(ptype.undefined): parseType = 0x06, None
 @Ptg.define
-class PtgPower(ptype.undefined): type = 0x07, None
+class PtgPower(ptype.undefined): parseType = 0x07, None
 @Ptg.define
-class PtgPower(ptype.undefined): type = 0x07, None
+class PtgPower(ptype.undefined): parseType = 0x07, None
 @Ptg.define
-class PtgConcat(ptype.undefined): type = 0x08, None
+class PtgConcat(ptype.undefined): parseType = 0x08, None
 @Ptg.define
-class PtgLt(ptype.undefined): type = 0x09, None
+class PtgLt(ptype.undefined): parseType = 0x09, None
 @Ptg.define
-class PtgLe(ptype.undefined): type = 0x0a, None
+class PtgLe(ptype.undefined): parseType = 0x0a, None
 @Ptg.define
-class PtgEq(ptype.undefined): type = 0x0b, None
+class PtgEq(ptype.undefined): parseType = 0x0b, None
 @Ptg.define
-class PtgGe(ptype.undefined): type = 0x0c, None
+class PtgGe(ptype.undefined): parseType = 0x0c, None
 @Ptg.define
-class PtgGt(ptype.undefined): type = 0x0d, None
+class PtgGt(ptype.undefined): parseType = 0x0d, None
 @Ptg.define
-class PtgNe(ptype.undefined): type = 0x0e, None
+class PtgNe(ptype.undefined): parseType = 0x0e, None
 @Ptg.define
-class PtgIsect(ptype.undefined): type = 0x0f, None
+class PtgIsect(ptype.undefined): parseType = 0x0f, None
 @Ptg.define
-class PtgUnion(ptype.undefined): type = 0x10, None
+class PtgUnion(ptype.undefined): parseType = 0x10, None
 @Ptg.define
-class PtgRange(ptype.undefined): type = 0x11, None
+class PtgRange(ptype.undefined): parseType = 0x11, None
 @Ptg.define
-class PtgUplus(ptype.undefined): type = 0x12, None
+class PtgUplus(ptype.undefined): parseType = 0x12, None
 @Ptg.define
-class PtgUminus(ptype.undefined): type = 0x13, None
+class PtgUminus(ptype.undefined): parseType = 0x13, None
 @Ptg.define
-class PtgPercent(ptype.undefined): type = 0x14, None
+class PtgPercent(ptype.undefined): parseType = 0x14, None
 @Ptg.define
-class PtgParen(ptype.undefined): type = 0x15, None
+class PtgParen(ptype.undefined): parseType = 0x15, None
 @Ptg.define
-class PtgMissArg(ptype.undefined): type = 0x16, None
+class PtgMissArg(ptype.undefined): parseType = 0x16, None
 @Ptg.define
-class PtgStr(ShortXLUnicodeString): type = 0x17, None
+class PtgStr(ShortXLUnicodeString): parseType = 0x17, None
 @Ptg.define
-class PtgElfLel(Ilel): type = 0x18, 0x01
+class PtgElfLel(Ilel): parseType = 0x18, 0x01
 @Ptg.define
-class PtgElfRw(RgceElfLoc): type = 0x18, 0x02
+class PtgElfRw(RgceElfLoc): parseType = 0x18, 0x02
 @Ptg.define
-class PtgElfCol(RgceElfLoc): type = 0x18, 0x03
+class PtgElfCol(RgceElfLoc): parseType = 0x18, 0x03
 @Ptg.define
-class PtgElfRwV(RgceElfLoc): type = 0x18, 0x06
+class PtgElfRwV(RgceElfLoc): parseType = 0x18, 0x06
 @Ptg.define
-class PtgElfColV(RgceElfLoc): type = 0x18, 0x07
+class PtgElfColV(RgceElfLoc): parseType = 0x18, 0x07
 @Ptg.define
-class PtgElfRadical(RgceElfLoc): type = 0x18, 0x0a
+class PtgElfRadical(RgceElfLoc): parseType = 0x18, 0x0a
 @Ptg.define
-class PtgElfRadicalS(uint4): type = 0x18, 0x0b
+class PtgElfRadicalS(uint4): parseType = 0x18, 0x0b
 @Ptg.define
-class PtgElfColS(uint4): type = 0x18, 0x0d
+class PtgElfColS(uint4): parseType = 0x18, 0x0d
 @Ptg.define
-class PtgElfColSV(uint4): type = 0x18, 0x0f
+class PtgElfColSV(uint4): parseType = 0x18, 0x0f
 @Ptg.define
-class PtgElfRadicalLel(Ilel): type = 0x18, 0x10
+class PtgElfRadicalLel(Ilel): parseType = 0x18, 0x10
 @Ptg.define
-class PtgSxName(uint4): type = 0x18, 0x1d
+class PtgSxName(uint4): parseType = 0x18, 0x1d
 @Ptg.define
-class PtgAttrSemi(uint2): type = 0x19, 0x01
+class PtgAttrSemi(uint2): parseType = 0x19, 0x01
 
 @Ptg.define
-class PtgAttrIf(uint2): type = 0x19, 0x02
+class PtgAttrIf(uint2): parseType = 0x19, 0x02
 @Ptg.define
 class PtgAttrChoose(pstruct.type):
-    type = 0x19, 0x04
+    parseType = 0x19, 0x04
     _fields_ = [
         (uint2, 'cOffset'),
         (lambda s: dyn.array(uint2, s['cOffset'].int()+1), 'rgOffset'),
     ]
 @Ptg.define
-class PtgAttrGoto(uint2): type = 0x19, 0x08
+class PtgAttrGoto(uint2): parseType = 0x19, 0x08
 @Ptg.define
-class PtgAttrSum(uint2): type = 0x19, 0x10
+class PtgAttrSum(uint2): parseType = 0x19, 0x10
 @Ptg.define
-class PtgAttrBaxcel(uint2): type = 0x19, 0x20
+class PtgAttrBaxcel(uint2): parseType = 0x19, 0x20
 
 class PtgAttrSpaceType(pstruct.type):
     class _type(pint.enum, ubyte1):
@@ -1177,21 +1663,21 @@ class PtgAttrSpaceType(pstruct.type):
     ]
 
 @Ptg.define
-class PtgAttrSpace(PtgAttrSpaceType): type = 0x19, 0x40
+class PtgAttrSpace(PtgAttrSpaceType): parseType = 0x19, 0x40
 @Ptg.define
-class PtgAttrSpaceSemi(PtgAttrSpaceType): type = 0x19, 0x41
+class PtgAttrSpaceSemi(PtgAttrSpaceType): parseType = 0x19, 0x41
 @Ptg.define
-class PtgErr(BErr): type = 0x1c, None
+class PtgErr(BErr): parseType = 0x1c, None
 @Ptg.define
-class PtgBool(Boolean, ubyte1): type = 0x1d, None
+class PtgBool(Boolean, ubyte1): parseType = 0x1d, None
 @Ptg.define
-class PtgInt(uint2): type = 0x1e, None
+class PtgInt(uint2): parseType = 0x1e, None
 @Ptg.define
-class PtgNum(Xnum): type = 0x1f, None
+class PtgNum(Xnum): parseType = 0x1f, None
 
 @Ptg.define
 class PtgArray(pstruct.type):
-    type = 0x20, None
+    parseType = 0x20, None
     _fields_ = [
         (ubyte1, 'unused1'),
         (uint2, 'unused2'),
@@ -1200,11 +1686,11 @@ class PtgArray(pstruct.type):
 
 @Ptg.define
 class PtgFunc(Ftab):
-    type = 0x21, None
+    parseType = 0x21, None
 
 @Ptg.define
 class PtgFuncVar(pstruct.type):
-    type = 0x22, None
+    parseType = 0x22, None
     class _tab(pbinary.struct):
         def __value(self):
             return Cetab if self['fCeFunc'] else Ftab
@@ -1219,15 +1705,15 @@ class PtgFuncVar(pstruct.type):
     ]
 
 @Ptg.define
-class PtgName(uint4): type = 0x23, None
+class PtgName(uint4): parseType = 0x23, None
 @Ptg.define
-class PtgRef(RgceLocRel): type = 0x24, None
+class PtgRef(RgceLocRel): parseType = 0x24, None
 @Ptg.define
-class PtgArea(RgceArea): type = 0x25, None
+class PtgArea(RgceArea): parseType = 0x25, None
 
 @Ptg.define
 class PtgMemArea(pstruct.type):
-    type = 0x26, None
+    parseType = 0x26, None
     _fields_ = [
         (uint4, 'unused'),
         (uint2, 'cce'),
@@ -1235,7 +1721,7 @@ class PtgMemArea(pstruct.type):
 
 @Ptg.define
 class PtgMemErr(pstruct.type):
-    type = 0x27, None
+    parseType = 0x27, None
     _fieldS_ = [
         (BErr, 'err'),
         (ubyte1, 'unused1'),
@@ -1245,18 +1731,18 @@ class PtgMemErr(pstruct.type):
 
 @Ptg.define
 class PtgMemNoMem(pstruct.type):
-    type = 0x28, None
+    parseType = 0x28, None
     _fields_ = [
         (uint4, 'unused'),
         (uint2, 'cce'),
     ]
 
 @Ptg.define
-class PtgMemFunc(uint2): type = 0x29, None
+class PtgMemFunc(uint2): parseType = 0x29, None
 
 @Ptg.define
 class PtgRefErr(pstruct.type):
-    type = 0x2a, None
+    parseType = 0x2a, None
     _fields_ = [
         (uint2, 'unused1'),
         (uint2, 'unused2'),
@@ -1264,7 +1750,7 @@ class PtgRefErr(pstruct.type):
 
 @Ptg.define
 class PtgAreaErr(pstruct.type):
-    type = 0x2b, None
+    parseType = 0x2b, None
     _fields_ = [
         (uint2, 'unused1'),
         (uint2, 'unused2'),
@@ -1273,13 +1759,13 @@ class PtgAreaErr(pstruct.type):
     ]
 
 @Ptg.define
-class PtgRefN(RgceLocRel): type = 0x2c, None
+class PtgRefN(RgceLocRel): parseType = 0x2c, None
 @Ptg.define
-class PtgAreaN(RgceAreaRel): type = 0x2d, None
+class PtgAreaN(RgceAreaRel): parseType = 0x2d, None
 
 @Ptg.define
 class PtgNameX(pstruct.type):
-    type = 0x39, None
+    parseType = 0x39, None
     _fields_ = [
         (XtiIndex, 'ixti'),
         (uint4, 'nameindex'),
@@ -1287,7 +1773,7 @@ class PtgNameX(pstruct.type):
 
 @Ptg.define
 class PtgRef3d(pstruct.type):
-    type = 0x3a, None
+    parseType = 0x3a, None
     _fields_ = [
         (XtiIndex, 'ixti'),
         (RgceLoc, 'nameindex'),
@@ -1295,7 +1781,7 @@ class PtgRef3d(pstruct.type):
 
 @Ptg.define
 class PtgArea3d(pstruct.type):
-    type = 0x3b, None
+    parseType = 0x3b, None
     _fields_ = [
         (XtiIndex, 'ixti'),
         (RgceArea, 'area'), # FIXME: or RgceAreaRel
@@ -1303,7 +1789,7 @@ class PtgArea3d(pstruct.type):
 
 @Ptg.define
 class PtgRefErr3d(pstruct.type):
-    type = 0x3c, None
+    parseType = 0x3c, None
     _fields_ = [
         (XtiIndex, 'ixti'),
         (uint4, 'unused1'),
@@ -1312,7 +1798,7 @@ class PtgRefErr3d(pstruct.type):
 
 @Ptg.define
 class PtgAreaErr3d(pstruct.type):
-    type = 0x3d, None
+    parseType = 0x3d, None
     _fields_ = [
         (XtiIndex, 'ixti'),
         (uint4, 'unused1'),
@@ -1323,6 +1809,95 @@ class PtgAreaErr3d(pstruct.type):
 
 class Rgce(parray.block):
     _object_ = PtgGeneral
+
+class CFGradientInterpItem(pstruct.type):
+    _fields_ = [
+        (CFVO, 'cfvoInterp'),
+        (Xnum, 'numDomain'),
+    ]
+
+class CFGradientItem(pstruct.type):
+    _fields_ = [
+        (Xnum, 'numGrange'),
+        (CFColor, 'color'),
+    ]
+
+class CFGradient(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = [
+            (1, 'fClamp'),
+            (1, 'fBackground'),
+            (6, 'reserved2'),
+        ]
+    _fields_ = [
+        (uint2, 'unused'),
+        (ubyte1, 'reserved1'),
+        (ubyte1, 'cInterpCurve'),
+        (ubyte1, 'cGradientCurve'),
+        (_flags, 'flags'),
+        (lambda s: dyn.array(CFGradientInterpItem, s['cInterpCurve'].li.int()), 'rgInterp'),
+        (lambda s: dyn.array(CFGradientItem, s['cGradientCurve'].li.int()), 'rgCurve'),
+    ]
+
+class CFDatabar(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fRightToLeft'),
+            (1, 'fShowValue'),
+            (6, 'reserved2'),
+        ])
+    _fields_ = [
+        (uint2, 'unused'),
+        (ubyte1, 'reserved1'),
+        (_flags, 'flags'),
+        (ubyte1, 'iPercentMin'),
+        (ubyte1, 'iPercentMax'),
+        (CFColor, 'color'),
+        (CFVO, 'cfvoDB1'),
+        (CFVO, 'cfvoDB2'),
+    ]
+
+class CFFilter(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = [
+            (1, 'fTop'),
+            (1, 'fPercent'),
+            (6, 'reserved2'),
+        ]
+    _fields_ = [
+        (uint2, 'cbFilter'),
+        (ubyte1, 'reserved1'),
+        (_flags, 'flags'),
+        (uint2, 'iParam'),
+    ]
+
+class CFMultistate(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = [
+            (1, 'fIconOnly'),
+            (1, 'reserved2'),
+            (1, 'fReverse'),
+            (5, 'reserved3'),
+        ]
+    _fields_ = [
+        (uint2, 'unused'),
+        (ubyte1, 'reserved1'),
+        (ubyte1, 'cStates'),
+        (ubyte1, 'iIconSet'),
+        (_flags, 'flags'),
+        (lambda s: dyn.array(CFMStateItem, s['cStates'].li.int()), 'rgStates'),
+    ]
+
+class CFParsedFormula(pstruct.type):
+    def __rgce(self):
+        cce = self['cce'].li.int()
+        return dyn.clone(Rgce, blocksize=lambda s,cce=cce: cce)
+    _fields_ = [
+        (uint2, 'cce'),
+        (__rgce, 'rgce'),
+    ]
+
+class CFParsedFormulaNoCCE(Rgce): pass
 
 if False:
     class RgbExtra(parray.infinite):
@@ -1392,11 +1967,24 @@ class XCT(pstruct.type):
 
 class BuiltInStyle(pstruct.type):
     _fields_ = [
-        (ubyte1, 'istyBuiltIn'),
+        (ubyte1, 'istyBuiltIn'),    # FIXME: this can be a pint.enum
         (ubyte1, 'iLevel'),
     ]
 
-#FIXME
+@RT_Excel.define
+class TableStyles(pstruct.type):
+    type = 2190
+    type = 0x88e
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (uint4, 'cts'),
+        (uint2, 'cchDefTableStyle'),
+        (uint2, 'cchDefPivotStyle'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['cchDefTableStyle'].li.int()), 'rgchDefTableStyle'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['cchDefPivotStyle'].li.int()), 'rgchDefPivotStyle'),
+    ]
+
+# FIXME
 #@RT_Excel.define
 class Style(pstruct.type):
     type = 659
@@ -1415,13 +2003,33 @@ class Style(pstruct.type):
         (lambda s: XLUnicodeString if not s['flags'].li['fBuiltIn'] else ptype.undefined, 'user')
     ]
 
-class XColorType(pint.enum, uint2):
-    _values_ = [
-        ('XCLRAUTO', 0x00000000),
-        ('XCLRINDEXED', 0x00000001),
-        ('XCLRRGB', 0x00000002),
-        ('XCLRTHEMED', 0x00000003),
-        ('XCLRNINCHED', 0x00000004),
+@RT_Excel.define
+class StyleExt(pstruct.type):
+    type = 2194
+    type = 0x892
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fBuiltIn'),
+            (1, 'fHidden'),
+            (1, 'fCustom'),
+            (5, 'reserved'),
+        ])
+    class _iCategory(pint.enum, ubyte1):
+        _values_ = [
+            ('custom', 0x00),
+            ('good-bad-neutral', 0x00),
+            ('data-model', 0x00),
+            ('title-heading', 0x00),
+            ('themed', 0x00),
+            ('number-format', 0x00),
+        ]
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (_flags, 'flags'),
+        (_iCategory, 'iCategory'),
+        (BuiltInStyle,'builtInData'),
+        (LPWideString, 'stName'),
+        (XFProps, 'xfProps'),
     ]
 
 class FullColorExt(pstruct.type):
@@ -1501,40 +2109,40 @@ class XFExtGradient(pstruct.type):
     ]
 
 class ExtPropType(ptype.definition):
-    cache = {}
+    attribute, cache = 'extType', {}
 @ExtPropType.define
 class ET_Foreground_Color(FullColorExt):
-    type = 0x0004
+    extType = 0x0004
 @ExtPropType.define
 class ET_Background_Color(FullColorExt):
-    type = 0x0005
+    extType = 0x0005
 @ExtPropType.define
 class ET_GradientFill(XFExtGradient):
-    type = 0x0006
+    extType = 0x0006
 @ExtPropType.define
 class ET_TopBorderColor(FullColorExt):
-    type = 0x0007
+    extType = 0x0007
 @ExtPropType.define
 class ET_BottomBorderColor(FullColorExt):
-    type = 0x0008
+    extType = 0x0008
 @ExtPropType.define
 class ET_LeftBorderColor(FullColorExt):
-    type = 0x0009
+    extType = 0x0009
 @ExtPropType.define
 class ET_RightBorderColor(FullColorExt):
-    type = 0x000a
+    extType = 0x000a
 @ExtPropType.define
 class ET_DiagonalBorderColor(FullColorExt):
-    type = 0x000b
+    extType = 0x000b
 @ExtPropType.define
 class ET_TextColor(FullColorExt):
-    type = 0x000d
+    extType = 0x000d
 @ExtPropType.define
 class ET_FontScheme(FontScheme):
-    type = 0x000e
+    extType = 0x000e
 @ExtPropType.define
 class ET_TextIndentation(uint2):
-    type = 0x000f
+    extType = 0x000f
 
 class ExtProp(pstruct.type):
     class _extType(pint.enum, uint2):
@@ -1562,6 +2170,17 @@ class ExtProp(pstruct.type):
         (_extType, 'extType'),
         (uint2, 'cb'),
         (__extPropData, 'extPropData'),
+    ]
+
+@RT_Excel.define
+class XFCFC(pstruct.type):
+    type = 0x87c
+    type = 2172
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (uint2, 'reserved'),
+        (uint2, 'cxfs'),
+        (uint4, 'crc'),
     ]
 
 @RT_Excel.define
@@ -1638,6 +2257,12 @@ class Ref8U(pstruct.type):
         (RwU, 'rwLast'),
         (ColU, 'colFirst'),
         (ColU, 'colLast'),
+    ]
+
+class SqRefU(pstruct.type):
+    _fields_ = [
+        (uint2, 'cref'),
+        (lambda s: dyn.array(Ref8U, s['cref'].li.int()), 'rgrefs'),
     ]
 
 class SDContainer(pstruct.type):
@@ -1831,13 +2456,139 @@ class XFExtNoFRT(pstruct.type):
         (lambda s: dyn.array(ExtProp,s['cexts'].li.int()), 'rgExt'),
     ]
 
-# DXFN
-#http://msdn.microsoft.com/en-us/library/dd926759(v=office.12).aspx
+@RT_Excel.define
+class DXF(pstruct.type):
+    type = 2189
+    type = 0x88d
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'unused'),
+            (1, 'fNewBorder'),
+            (1, 'unused2'),
+            (13, 'reserved'),
+        ])
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (_flags, 'flags'),
+        (XFProps, 'xfprops'),
+    ]
 
-class DXFN12List(pstruct.type):
-    def DXFN(self):
+# DXFN
+class DXFNumIfmt(IFmt): pass
+
+class DXFNumUsr(pstruct.type):
+    _fields_ = [
+        (ubyte1, 'cb'),
+        (XLUnicodeString, 'fmt'),   # FIXME: should this be bound by cb?
+    ]
+
+class DXFFntD(pstruct.type):
+    def __stFontName(self):
+        cch = self['cchFont'].li.int()
+        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda s,cch=cch: cch)
+    _fields_ = [
+        (ubyte1, 'cchFont'),
+        (__stFontName, 'stFontName'),
+        (lambda s: dyn.block(max((0, 63-s['cchFont'].li.int()))), 'unused1'),
+        (Stxp, 'stxp'),
+        (uint4, 'icvFore'),
+        (uint4, 'reserved'),
+        (Ts, 'tsNinch'),
+        (uint4, 'fSssNinch'),
+        (uint4, 'fUlsNinch'),
+        (uint4, 'fBlsNinch'),
+        (uint4, 'unused2'),
+        (sint4, 'ich'),
+        (uint4, 'cch'),
+        (uint2, 'iFnt'),
+    ]
+
+class DXFALC(pstruct.type):
+    class _flags(pbinary.struct):
+        _fields_ = R([
+            (HorizAlign, 'alc'),
+            (1, 'fWrap'),
+            (VertAlign, 'alcv'),
+            (1, 'fJustLast'),
+            (8, 'trot'),
+            (4, 'cIndent'),
+            (1, 'fShrinkToFit'),
+            (1, 'fMergeCell'),
+            (ReadingOrder, 'iReadingOrder'),
+            (8, 'unused'),
+        ])
+    _fields_ = [
+        (_flags, 'flags'),
+        (sint2, 'iIndent'),
+    ]
+
+class DXFBdr(pbinary.struct):
+    _fields_ = R([
+        (BorderStyle, 'dgLeft'),
+        (BorderStyle, 'dgRight'),
+        (BorderStyle, 'dgTop'),
+        (BorderStyle, 'dgBottom'),
+        (7, 'icvLeft'),
+        (7, 'icvRight'),
+        (1, 'bitDiagDown'),
+        (1, 'bitDiagUp'),
+        (7, 'icvTop'),
+        (7, 'icvBottom'),
+        (7, 'icvDiag'),
+        (4, 'dgDiag'),
+        (7, 'unused'),
+    ])
+
+class DXFPat(pbinary.struct):
+    _fields_ = R([
+        (10, 'unused1'),
+        (FillPattern, 'fls'),
+        (7, 'icvForeground'),
+        (7, 'icvBackground'),
+        (2, 'unused2'),
+    ])
+
+class DXFProt(pbinary.struct):
+    _fields_ = R([
+        (1, 'fLocked'),
+        (1, 'fHidden'),
+        (14, 'reserved'),
+    ])
+
+class DXFN(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'alchNinch'),       (1, 'alcvNinch'),       (1, 'wrapNinch'),
+            (1, 'trotNinch'),       (1, 'kintoNinch'),      (1, 'cIndentNinch'),
+            (1, 'fShrinkNinch'),    (1, 'fMergeCellNinch'), (1, 'lockedNinch'),
+            (1, 'hiddenNinch'),     (1, 'glLeftNinch'),     (1, 'glRightNinch'),
+            (1, 'glTopNinch'),      (1, 'glBottomNinch'),   (1, 'glDiagDownNinch'),
+            (1, 'glDiagUpNinch'),   (1, 'flsNinch'),        (1, 'icvFNinch'),
+            (1, 'icvBNinch'),       (1, 'ifmtNinch'),       (1, 'fIfntNinch'),
+            (1, 'unused1'),         (1, 'reserved1'),       (1, 'ibitAtrNum'),
+            (1, 'ibitAtrFnt'),      (1, 'ibitAtrAlc'),      (1, 'ibitAtrBdr'),
+            (1, 'ibitAtrPat'),      (1, 'ibitAtrProt'),     (1, 'iReadingOrderNinch'),
+            (1, 'fIfmtUser'),       (1, 'unused2'),         (1, 'fNewBorder'),
+            (1, 'fZeroInited'),
+        ])
+    def __dxfnum(self):
+        f = self['flags'].li
+        if f['ibitAtrNum']:
+            return DXFNumUsr if f['fIfmtUser'] else DXFNumIfmt
         return ptype.undefined
 
+    hasFlag = lambda t, fld: lambda s: fld if s['flags'].li[fld] else ptype.undefined
+    _fields_ = [
+        (_flags, 'flags'),
+        (__dxfnum,  'dxfnum'),
+        (hasFlag(DXFFntD,'ibitAtrFnt'), 'dxffntd'),
+        (hasFlag(DXFALC,'ibitAtrAlc'),  'dxfalc'),
+        (hasFlag(DXFBdr,'ibitAtrBdr'),  'dxfbdr'),
+        (hasFlag(DXFPat,'ibitAtrPat'),  'dxfpat'),
+        (hasFlag(DXFProt,'ibitAtrProt'),'dxfprot'),
+    ]
+
+class DXFN12List(pstruct.type):
     _fields_ = [
         (DXFN, 'dxfn'),
         (XFExtNoFRT, 'xfext'),
@@ -2413,14 +3164,6 @@ class Phs(pstruct.type):
         (formatinfo, 'ph'),
     ]
 
-if False:
-    # FIXME: http://msdn.microsoft.com/en-us/library/dd924700(v=office.12).aspx
-    # this type doesn't align with this structure definition
-    class LPWideString(pstruct.type):
-        _fields_ = [
-            (uint2, 'cchCharacters'),
-            (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].li.int()), 'rgchData'),
-        ]
 
 class RPHSSub(pstruct.type):
     _fields_ = [
@@ -2578,7 +3321,7 @@ class ObjFmlaNoSize(ObjectParsedFormula):
     pass
 
 class Ft(ptype.definition):
-    cache = {}
+    attribute, cache = 'featureType', {}
 
 class FtGeneral(pstruct.type):
     def __data(self):
@@ -2586,18 +3329,18 @@ class FtGeneral(pstruct.type):
         return Ft.get(res, blocksize=lambda s,cb=cb:cb)
 
     _fields_ = [
-        (uint2, 'ft'),
+        (uint2, 'ft'),          # XXX: Make this a pint.enum
         (uint2, 'cb'),
         (__data, 'data'),
     ]
 
 @Ft.define
 class FtReserved(ptype.undefined):
-    type = 0x0000
+    featureType = 0x0000
 
 @Ft.define
 class FtCmo(pstruct.type):
-    type = 0x0015
+    featureType = 0x0015
     class _ot(pint.enum, uint2):
         _values_ = [
             ('Group', 0x0000),
@@ -2654,14 +3397,14 @@ class FtCmo(pstruct.type):
 
 @Ft.define
 class FtGmo(pstruct.type):
-    type = 0x0006
+    featureType = 0x0006
     _fields_ = [
         (uint2, 'unused'),
     ]
 
 @Ft.define
 class FtCf(pint.enum, uint2):
-    type = 0x0007
+    featureType = 0x0007
     _values_ = [
         ('emf', 0x0002),
         ('bmp', 0x0009),
@@ -2670,7 +3413,7 @@ class FtCf(pint.enum, uint2):
 
 @Ft.define
 class FtPioGrbit(pbinary.flags):
-    type = 0x0008
+    featureType = 0x0008
     _fields_ = R([
         (1, 'fAutoPict'),
         (1, 'fDde'),
@@ -2687,7 +3430,7 @@ class FtPioGrbit(pbinary.flags):
 
 @Ft.define
 class FtCbls(pstruct.type):
-    type = 0x000a
+    featureType = 0x000a
     _fields_ = [
         (uint4, 'unused1'),
         (uint4, 'unused2'),
@@ -2696,7 +3439,7 @@ class FtCbls(pstruct.type):
 
 @Ft.define
 class FtRbo(pstruct.type):
-    type = 0x000b
+    featureType = 0x000b
     _fields_ = [
         (uint4, 'unused1'),
         (uint2, 'unused2'),
@@ -2704,7 +3447,7 @@ class FtRbo(pstruct.type):
 
 @Ft.define
 class FtSbs(pstruct.type):
-    type = 0x000c
+    featureType = 0x000c
     class _fHoriz(pint.enum, uint2):
         _values_ = [('vertical',0),('horizontal',1)]
     class _flags(pbinary.flags):
@@ -2729,7 +3472,7 @@ class FtSbs(pstruct.type):
 
 @Ft.define
 class FtNts(pstruct.type):
-    type = 0x000d
+    featureType = 0x000d
     class _fSharedNote(pint.enum, uint2):
         _values_ = [('unshared',0),('shared',1)]
     _fields_ = [
@@ -2740,7 +3483,7 @@ class FtNts(pstruct.type):
 
 @Ft.define
 class FtMacro(ObjFmlaNoSize):
-    type = 0x0004
+    featureType = 0x0004
 
 class PictFmlaKey(pstruct.type):
     _fields_ = [
@@ -2752,21 +3495,21 @@ class PictFmlaKey(pstruct.type):
 
 @Ft.define
 class FtPictFmla(pstruct.type):
-    type = 0x0009
+    featureType = 0x0009
     _fields_ = [
         (ObjFmlaNoSize, 'fmla'),
         (uint4, 'IPosInCtlStm'),
         (PictFmlaKey, 'key'),
     ]
 
-@Ft.define(type=0x0014)
-@Ft.define(type=0x000e)
+@Ft.define(featureType=0x0014)
+@Ft.define(featureType=0x000e)
 class ObjLinkFmla(ObjFmlaNoSize):
-    type = 0x0014
+    featureType = 0x0014
 
 @Ft.define
 class FtCblsData(pstruct.type):
-    type = 0x0012
+    featureType = 0x0012
     class _fChecked(pint.enum, uint2):
         _values_ = [
             ('unchecked', 0),
@@ -2787,7 +3530,7 @@ class FtCblsData(pstruct.type):
 
 @Ft.define
 class FtRboData(pstruct.type):
-    type = 0x000b
+    featureType = 0x000b
     class _fFirstBtn(pint.enum, uint2):
         _values_ = [('first', 1),('other',0)]
     _fields_ = [
@@ -2797,7 +3540,7 @@ class FtRboData(pstruct.type):
 
 @Ft.define
 class FtEdoData(pstruct.type):
-    type = 0x0010
+    featureType = 0x0010
     class _ivtEdit(pint.enum, uint2):
         _values_ = [
             ('string', 0x0000),
@@ -2849,7 +3592,7 @@ class LbsDropData(pstruct.type):
 
 @Ft.define
 class FtLbsData(pstruct.type):
-    type = 0x0013
+    featureType = 0x0013
     class _flags(pbinary.flags):
         class _lct(pbinary.enum):
             width = 8
@@ -2888,7 +3631,7 @@ class FtLbsData(pstruct.type):
 
 @Ft.define
 class FtGboData(pstruct.type):
-    type = 0x000f
+    featureType = 0x000f
     class _flags(pbinary.flags):
         _fields_ = R([
             (1, 'fNo3d'),
@@ -3010,6 +3753,205 @@ class TxO(pstruct.type):
 @RT_Excel.define
 class Continue(ptype.block):
     type = 0x3c
+    type = 60
+
+@RT_Excel.define
+class CondFmt(pstruct.type):
+    type = 0x1b0
+    type = 432
+    class _id(pbinary.struct):
+        _fields_ = R([
+            (1, 'fToughRecalc'),
+            (15, 'nID'),
+        ])
+    _fields_ = [
+        (uint2, 'ccf'),
+        (_id, 'id'),
+        (Ref8U, 'refBound'),
+        (SqRefU, 'sqref'),
+    ]
+
+@RT_Excel.define
+class Palette(pstruct.type):
+    type = 0x92
+    type = 146
+    _fields_ = [
+        (sint2, 'ccv'),
+        (lambda s: dyn.array(LongRGB, s['ccv'].li.int()), 'rgColor'),
+    ]
+
+@RT_Excel.define
+class Header(XLUnicodeString):
+    type = 0x14
+    type = 20
+
+@RT_Excel.define
+class CF(pstruct.type):
+    type = 0x1b1
+    type = 433
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'unused1'),
+            (1, 'fStopIfTrue'),
+            (2, 'reserved1'),
+            (1, 'unused2'),
+            (3, 'reserved2'),
+        ])
+    class _icfTemplate(pint.enum, uint2):
+        _values_ = [
+            ('Cell value', 0x0000),
+            ('Formula', 0x0001),
+            ('Color scale formatting', 0x0002),
+            ('Data bar formatting', 0x0003),
+            ('Icon set formatting', 0x0004),
+            ('Filter', 0x0005),
+            ('Unique values', 0x0007),
+            ('Contains text', 0x0008),
+            ('Contains blanks', 0x0009),
+            ('Contains no blanks', 0x000A),
+            ('Contains errors', 0x000B),
+            ('Contains no errors', 0x000C),
+            ('Today', 0x000F),
+            ('Tomorrow', 0x0010),
+            ('Yesterday', 0x0011),
+            ('Last 7 days', 0x0012),
+            ('Last month', 0x0013),
+            ('Next month', 0x0014),
+            ('This week', 0x0015),
+            ('Next week', 0x0016),
+            ('Last week', 0x0017),
+            ('This month', 0x0018),
+            ('Above average', 0x0019),
+            ('Below Average', 0x001A),
+            ('Duplicate values', 0x001B),
+            ('Above or equal to average', 0x001D),
+            ('Below or equal to average', 0x001E),
+        ]
+
+    def __rgce(field):
+        def rgce(self, field=field):
+            cce = self[field].li.int()
+            return dyn.clone(CFParsedFormulaNoCCE, blocksize=lambda s,cce=cce: cce)
+        return rgce
+
+    def __rgbCT(self):
+        ct = self['ct'].li.int()
+        if ct in (0x01, 0x02):
+            return ptype.undefined
+        elif ct in (0x03,):
+            return CFGradient
+        elif ct in (0x04,):
+            return CFDatabar
+        elif ct in (0x05,):
+            return CFFilter
+        elif ct in (0x06,):
+            return CFMultistate
+        logging.warn('{:s}.__rgbCT : Unknown ct value. : {:02x}'.format(self.instance(), ct))
+        return ptype.undefined
+
+    _fields_ = [
+        (ubyte1, 'ct'),
+        (ubyte1, 'cp'),
+        (uint2, 'cce1'),
+        (uint2, 'cce2'),
+        (DXFN, 'rgbdxf'),
+        (__rgce('cce1'), 'rgce1'),
+        (__rgce('cce2'), 'rgce2'),
+        (CFParsedFormula, 'fmlaActive'),
+        (uint2, 'ipriority'),
+        (_icfTemplate, 'icfTemplate'),
+        (ubyte1, 'cbTemplateParm'),
+        #(CFExTemplateParams, 'rgbTemplateParms'),  # FIXME
+        (lambda s: dyn.block(s['cbTemplateParm'].li.int()), 'rgbTemplateParms'),
+        (__rgbCT, 'rgbCT'),
+    ]
+
+class RRD(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fAccepted'),
+            (1, 'fUndoAction'),
+            (1, 'unused'),
+            (1, 'fDelAtEdgeOfSort'),
+            (12, 'reserved'),
+        ])
+    _fields_ = [
+        (uint4, 'cbMemory'),
+        (sint4, 'revid'),
+        (RevisionType, 'revt'),
+        (_flags, 'flags'),
+        (TabId, 'tabid'),
+    ]
+
+class NoteRR(pstruct.type):
+    class _revisionFlags(pbinary.flags):
+        _fields_ = R([
+            (1, 'bitfDelNote'),
+            (1, 'bitfAddNote'),
+            (14, 'reserved1'),
+        ])
+    class _hideFlags(pbinary.flags):
+        _fields_ = R([
+            (1, 'reserved2'),
+            (1, 'fShow'),
+            (5, 'reserved3'),
+            (1, 'fRwHidden'),
+            (1, 'fColHidden'),
+            (2, 'reserved4'),
+            (1, 'unused1'),
+            (4, 'reserved5'),
+        ])
+    _fields_ = [
+        (RRD, 'rrd'),
+        (_revisionFlags, 'revFlags'),
+        (RwU, 'row'),
+        (ColU, 'col'),
+        (_hideFlags, 'hideFlags'),
+        (dyn.block(16), 'guid'),    # FIXME
+        (uint4, 'ichEnd'),
+        (uint4, 'cchNote'),
+        (XLUnicodeString, 'stAuthor'),
+        (uint2, 'unused2'),
+    ]
+
+class NoteSh(pstruct.type):
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'reserved1'),
+            (1, 'fShow'),
+            (1, 'reserved2'),
+            (1, 'unused1'),
+            (3, 'reserved3'),
+            (1, 'fRwHidden'),
+            (1, 'fColHidden'),
+            (7, 'reserved4'),
+        ])
+
+    _fields_ = [
+        (Rw, 'row'),
+        (Col, 'col'),
+        (_flags, 'flags'),
+        (ObjId, 'idObj'),
+        (XLUnicodeString, 'stAuthor'),
+        (ubyte1, 'unused2'),
+    ]
+
+@RT_Excel.define
+class Note(pstruct.type):
+    type = 0x1c
+    type = 28
+
+    def __body(self):
+        container = self.getparent(type=RecordContainer)
+        record = container[0].d
+
+        # FIXME: is this the right way to determine which stream we're in?
+        dt = record['dt']
+        return NoteSh if dt in ('workbook', 'worksheet', 'macrosheet') else NoteRR
+
+    _fields_ = [
+        (__body, 'body'),
+    ]
 
 if __name__ == '__main__':
     import sys

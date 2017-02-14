@@ -274,10 +274,9 @@ def isrelated(t, t2):
         return result
     return getbases(set(), t.__bases__).intersection( getbases(set(), t.__bases__) )
 
-def force(t, self, chain=None):
+def force(t, self, chain=[]):
     """Resolve type ``t`` into a ptype.type for the provided object ``self``"""
-    if chain is None:
-        chain = []
+    chain = chain[:]
     chain.append(t)
 
     # of type pbinary.type. we insert a partial node into the tree
@@ -397,7 +396,7 @@ def debugrecurse(ptype):
     decorated.__name__ = 'debug({:s},recurse=True)'.format(ptype.__name__)
     return decorated
 
-source = provider.memory()
+source = provider.default()
 class _base_generic(object):
     # XXX: this class should implement
     #           attribute inheritance
@@ -791,7 +790,11 @@ class base(generic):
         """Return a duplicate instance of the current one."""
         result = self.new(self.__class__, position=self.getposition())
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
-        attrs.setdefault('value', self.value)
+        attrs.setdefault('parent', self.parent)
+        if 'value' not in attrs:
+            if not isinstance(self.value, (str, types.NoneType)):
+                raise error.AssertionError(self, 'base.copy', message='Invalid type of .value while trying to duplicate object : {!r}'.format(self.value.__class__))
+            attrs['value'] = None if self.value is None else self.value[:]
         result.__update__(attrs)
         return result
         #return result.load(offset=0,source=provider.string(self.serialize()),blocksize=lambda sz=self.blocksize():sz) if self.initializedQ() else result
@@ -980,8 +983,12 @@ class type(base):
         if not self.initializedQ():
             res = self.blocksize()
 
+            # check that child element is actually within bounds of parent
+            if self.parent is not None and self.parent.getoffset() > self.getoffset():
+                Log.info("type.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), self.parent.getoffset(), self.getoffset()))
+
             # clamp the blocksize if it pushes the child element outside the bounds of the parent
-            if isinstance(self.parent,container):
+            elif isinstance(self.parent,container):
                 parentSize = self.parent.blocksize()
                 childOffset = self.getoffset() - self.parent.getoffset()
                 maxElementSize = parentSize - childOffset
@@ -994,22 +1001,22 @@ class type(base):
                 return ''
 
             # generate padding up to the blocksize
-            Log.info('type.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), res))
+            Log.info('type.serialize : {:s} : Padding data due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), res))
             padding = utils.padding.fill(res if res > 0 else 0, self.padding)
 
             # prefix beginning of padding with any data that element contains
             return padding if self.value is None else self.value + padding[len(self.value):]
 
         # take the current value as a string, which should match up to .size()
-        result = self.value
+        data = self.value
 
         # pad up to the .blocksize() if our length doesn't meet the minimum
         res = self.blocksize()
-        if len(result) < res:
-            Log.info('type.serialize : {:s} : Padding result due to element being partially initialized during serialization : {:#x}'.format(self.instance(), res))
-            padding = utils.padding.fill(res-len(result), self.padding)
-            result += padding
-        return result
+        if len(data) < res:
+            Log.info('type.serialize : {:s} : Padding data due to element being partially initialized during serialization : {:#x}'.format(self.instance(), res))
+            padding = utils.padding.fill(res-len(data), self.padding)
+            data += padding
+        return data
 
     ## set/get
     def __setvalue__(self, value, **attrs):
@@ -1220,36 +1227,40 @@ class container(base):
 
         # check the blocksize(), if it's invalid then return what we have since we can't figure out the padding anyways
         try:
-            bs = self.blocksize()
+            res = self.blocksize()
         except:
             return str().join(n.serialize() for n in self.value)
-        result = str().join(n.serialize() for n in self.value)
+        data = str().join(n.serialize() for n in self.value)
+
+        # check that child element is actually within bounds of parent
+        if self.parent is not None and self.parent.getoffset() > self.getoffset():
+            Log.info("container.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), self.parent.getoffset(), self.getoffset()))
 
         # clamp the blocksize if we're outside the bounds of the parent
-        if isinstance(self.parent,container):
+        elif isinstance(self.parent,container):
             parentSize = self.parent.blocksize()
             childOffset = self.getoffset() - self.parent.getoffset()
             maxElementSize = parentSize - childOffset
-            if bs > maxElementSize:
-                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), bs, maxElementSize, parentSize))
-                bs = maxElementSize
+            if res > maxElementSize:
+                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
+                res = maxElementSize
 
         # if the blocksize is larger than maxint, then ignore the padding
-        if bs > sys.maxint:
-            Log.warn('container.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), bs, sys.maxint))
-            return result
+        if res > sys.maxint:
+            Log.warn('container.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), res, sys.maxint))
+            return data
 
-        # if the result is smaller then the blocksize, then pad the rest in
-        if len(result) < bs:
-            Log.info('container.serialize : {:s} : Padding result due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), bs))
-            result += utils.padding.fill(bs - len(result), self.padding)
+        # if the data is smaller then the blocksize, then pad the rest in
+        if len(data) < res:
+            Log.info('container.serialize : {:s} : Padding data due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), res))
+            data += utils.padding.fill(res - len(data), self.padding)
 
         # if it's larger then the blocksize, then warn the user about it
-        if len(result) > bs:
-            Log.debug('container.serialize : {:s} : Container larger than expected blocksize : {:#x} > {:#x}'.format(self.instance(), len(result), bs))
+        if len(data) > res:
+            Log.debug('container.serialize : {:s} : Container larger than expected blocksize : {:#x} > {:#x}'.format(self.instance(), len(data), res))
 
-        # otherwise, our result should appear correct
-        return result
+        # otherwise, our data should appear correct
+        return data
 
     def alloc(self, **attrs):
         """Will zero the ptype.container instance with the provided ``attrs``.
@@ -1332,10 +1343,14 @@ class container(base):
 
     def copy(self, **attrs):
         """Performs a deep-copy of self repopulating the new instance if self is initialized"""
-        # create an instance of self and update with requested attributes
-        result = super(container,self).copy(**attrs)
-        result.value = map(operator.methodcaller('copy', **attrs),self.value)
-        return result
+        attrs.setdefault('value', [])
+        attrs.setdefault('parent', self.parent)
+        # create an empty instance of self and update with requested attributes
+        res = super(container,self).copy(**attrs)
+
+        # now copy the children, with the same parent
+        res.value = map(operator.methodcaller('copy', parent=res),self.value)
+        return res
 
     def compare(self, other, *args, **kwds):
         """Returns an iterable containing the difference between ``self`` and ``other``

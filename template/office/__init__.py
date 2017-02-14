@@ -172,7 +172,7 @@ class RecordContainer(parray.block):
     def details(self):
         emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
         f = lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
         return '\n'.join(res)
 
     def search(self, type, recurse=False):
@@ -247,7 +247,7 @@ class File(RecordContainer):
     def details(self):
         emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
         f = lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
         return '\n'.join(res)
 
     def blocksize(self):
@@ -255,8 +255,10 @@ class File(RecordContainer):
 
     def properties(self):
         res = super(File, self).properties()
-        res['size'] = self.size()
-        res['blocksize'] = self.blocksize()
+        try: res['size'] = self.size()
+        except ptypes.error.InitializationError: pass
+        try: res['blocksize'] = self.blocksize()
+        except ptypes.error.InitializationError: pass
         return res
 
 if __name__ == '__main__':
