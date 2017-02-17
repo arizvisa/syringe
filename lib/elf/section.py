@@ -6,7 +6,7 @@ class _sh_name(pint.uint_t):
         return self.str()
 
     def str(self):
-        ofs = self.num()
+        ofs = self.int()
         stringtable = self.getparent(ElfXX_Ehdr).stringtable()
         res = stringtable.extract(ofs)
         return res.str()
@@ -66,11 +66,11 @@ class _sh_flags(pbinary.flags):
 
 def _sh_offset(size):
     def sh_offset(self):
-        type = Type.get(self['sh_type'].li.num())   # XXX: not 64-bit
+        type = Type.get(self['sh_type'].li.int())   # XXX: not 64-bit
         #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)
-        result = dyn.clone(type, blocksize=lambda _: self['sh_size'].li.num())
+        result = dyn.clone(type, blocksize=lambda _: self['sh_size'].li.int())
         return dyn.rpointer(result, base, size)
     return sh_offset
 
@@ -203,8 +203,8 @@ class SHT_HASH(pstruct.type):
     _fields_ = [
         (Elf32_Word, 'nbucket'),
         (Elf32_Word, 'nchain'),
-        (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.num()), 'bucket'),
-        (lambda s: dyn.array(Elf32_Word, s['nchain'].li.num()), 'chain'),
+        (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.int()), 'bucket'),
+        (lambda s: dyn.array(Elf32_Word, s['nchain'].li.int()), 'chain'),
     ]
 
 from . import segment

@@ -18,7 +18,7 @@ class Dos(pstruct.type):
         ]
 
         def linear(self):
-            return self['segment'].num()*0x10 + self['offset'].num()
+            return self['segment'].int()*0x10 + self['offset'].int()
 
         def decode(self, **attrs):
             p = self.getparent(ptype.boundary)
@@ -27,7 +27,7 @@ class Dos(pstruct.type):
 
         def summary(self):
             s,o = self['segment'],self['offset']
-            return '(segment:offset) %04x:%04x (linear) %05x'% (s.num(),o.num(),(s.num()*0x10+o.num())&0xfffff)
+            return '(segment:offset) %04x:%04x (linear) %05x'% (s.int(),o.int(),(s.int()*0x10+o.int())&0xfffff)
 
         def repr(self):
             return self.summary()
@@ -45,7 +45,7 @@ class Dos(pstruct.type):
     def __e_padding(self):
         sz = self.blocksize()
         # add Oem structure if within the relocation size (if defined), or
-        ofs = self['e_lfarlc'].li.num()
+        ofs = self['e_lfarlc'].li.int()
         if ofs > 0:
             leftover = ofs-sz
             return self.Oem if sz+self.Oem().a.blocksize() <= ofs else dyn.clone(self.Oem,blocksize=lambda s:leftover)
@@ -55,17 +55,17 @@ class Dos(pstruct.type):
     def __e_lfanew(self):
         # if we're satisfying the specification's req for an extra header, then
         #   include our pointer to it
-        #if dos['e_ss'].num() == 0:      # my tests...
-        if self['e_lfarlc'].li.num() >= 0x40:
+        #if dos['e_ss'].int() == 0:      # my tests...
+        if self['e_lfarlc'].li.int() >= 0x40:
             return dyn.rpointer(Next, self, pint.uint32_t)
         return pint.uint_t
 
     def filesize(self):
-        cp = self['e_cp'].li.num()-1
-        return cp*0x200 + self['e_cblp'].li.num()
+        cp = self['e_cp'].li.int()-1
+        return cp*0x200 + self['e_cblp'].li.int()
 
     def headersize(self):
-        hdr = self['e_cparhdr'].li.num()
+        hdr = self['e_cparhdr'].li.int()
         return hdr * 0x10
 
     def datasize(self):
@@ -86,7 +86,7 @@ class Dos(pstruct.type):
         ( uint16, 'e_csum' ),        # checksum / checksum (ignored) / Checksum
         ( uint16, 'e_ip' ),          # ip / ip of entry / InitialIP
         ( uint16, 'e_cs' ),          # cs / cs of entry / InitialrmwwelativeIp
-        ( lambda self: dyn.rpointer(dyn.array(Dos.Relocation,self['e_crlc'].li.num()), self, uint16), 'e_lfarlc' ), # relocation table
+        ( lambda self: dyn.rpointer(dyn.array(Dos.Relocation,self['e_crlc'].li.int()), self, uint16), 'e_lfarlc' ), # relocation table
         ( uint16, 'e_ovno'),         # overlay number
         #( uint32, 'EXE_SYM_TAB'),   # from inc/exe.inc
 
@@ -117,12 +117,12 @@ class Portable(pstruct.type, Header):
 
     def __Padding(self):
         '''Figure out the PE header size and pad according to SizeOfHeaders'''
-        sz = self.getparent(File)['Dos']['e_lfanew'].li.num()
+        sz = self.getparent(File)['Dos']['e_lfanew'].li.int()
         opt = self['OptionalHeader'].li
         res = map(self.__getitem__,('SignaturePadding','FileHeader','OptionalHeader','DataDirectory','Sections'))
         res = sum(map(operator.methodcaller('blocksize'),res))
         res += 2
-        return dyn.block(opt['SizeOfHeaders'].num() - res - sz)
+        return dyn.block(opt['SizeOfHeaders'].int() - res - sz)
 
     def __Data(self):
         sections = self['Sections'].li
@@ -133,7 +133,7 @@ class Portable(pstruct.type, Header):
             class sectionentry(pstruct.type):
                 noncontiguous = True
                 _fields_ = [
-                    (dyn.align(optionalheader['SectionAlignment'].num(), undefined=True), 'Padding'),
+                    (dyn.align(optionalheader['SectionAlignment'].int(), undefined=True), 'Padding'),
                     (lambda s: dyn.block(s.Section.getloadedsize()), 'Data'),
                 ]
 
@@ -144,7 +144,7 @@ class Portable(pstruct.type, Header):
 
             class sectionentry(pstruct.type):
                 _fields_ = [
-                    (dyn.align(optionalheader['FileAlignment'].num()), 'Padding'),
+                    (dyn.align(optionalheader['FileAlignment'].int()), 'Padding'),
                     (lambda s: dyn.block(s.Section.getreadsize()), 'Data'),
                 ]
 
@@ -160,22 +160,22 @@ class Portable(pstruct.type, Header):
         if len(self['DataDirectory']) < 4:
             return ptype.undefined
         res = self['DataDirectory'][4]
-        if res['Address'].num() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
+        if res['Address'].int() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
             return ptype.undefined
         lastoffset = self['Data'].li.getoffset() + self['Data'].blocksize()
-        return dyn.block(res['Address'].num() - lastoffset)
+        return dyn.block(res['Address'].int() - lastoffset)
 
     def __Certificate(self):
         if len(self['DataDirectory']) < 4:
             return ptype.undefined
         res = self['DataDirectory'][4]
-        if res['Address'].num() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
+        if res['Address'].int() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
             return ptype.undefined
-        sz = res['Size'].li.num()
+        sz = res['Size'].li.int()
         return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda s:sz)
 
     def __DataDirectory(self):
-        length = self['OptionalHeader'].li['NumberOfRvaAndSizes'].num()
+        length = self['OptionalHeader'].li['NumberOfRvaAndSizes'].int()
         if length > 0x10:   # XXX
             logging.warn('OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries (0x%x) for the DataDirectory. Assuming the maximum of 0x10'% length)
             length = 0x10
@@ -183,7 +183,7 @@ class Portable(pstruct.type, Header):
 
     def __Sections(self):
         header = self['FileHeader'].li
-        length = header['NumberOfSections'].num()
+        length = header['NumberOfSections'].int()
         return dyn.clone(portable.SectionTableArray, length=length)
 
     _fields_ = [
@@ -292,7 +292,7 @@ class PharLap(pstruct.type, Header):
     class RepeatBlock(pstruct.type):
         _fields_ = [
             (word, 'Count'),
-            (lambda s: dyn.block(s['Count'].li.num()), 'String'),
+            (lambda s: dyn.block(s['Count'].li.int()), 'String'),
         ]
 
 @NextHeader.define
@@ -302,7 +302,7 @@ class PharLap3(PharLap, Header):
     class OffsetSize(pstruct.type):
         def __Offset(self):
             t = getattr(self, '_object_', ptype.block)
-            return dyn.rpointer(lambda _: dyn.clone(t, blocksize=lambda _:self['Size'].li.num()), self.getparent(PharLap3), dword)
+            return dyn.rpointer(lambda _: dyn.clone(t, blocksize=lambda _:self['Size'].li.int()), self.getparent(PharLap3), dword)
 
         _fields_ = [
             (__Offset, 'Offset'),
@@ -310,7 +310,7 @@ class PharLap3(PharLap, Header):
         ]
 
         def summary(self):
-            return '0x{:x}:+0x{:x}'.format(self['Offset'].num(),self['Size'].num())
+            return '{:#x}:{:+#x}'.format(self['Offset'].int(),self['Size'].int())
 
     _fields_ = [
         (word, 'Level'),
@@ -399,25 +399,25 @@ class NeHeader(pstruct.type):
 class File(pstruct.type, ptype.boundary):
     def __Padding(self):
         dos = self['Dos'].li
-        ofs = dos['e_lfarlc'].num()
+        ofs = dos['e_lfarlc'].int()
         return dyn.block(ofs - self.blocksize()) if ofs > 0 else dyn.block(0)
 
     def __Relocations(self):
         dos = self['Dos'].li
-        ofs = dos['e_lfarlc'].num()
-        return dyn.array(Dos.Relocation, dos['e_crlc'].li.num() if ofs == self.blocksize() else 0)
+        ofs = dos['e_lfarlc'].int()
+        return dyn.array(Dos.Relocation, dos['e_crlc'].li.int() if ofs == self.blocksize() else 0)
 
     def __Stub(self):
         # everything up to e_lfanew
         dos = self['Dos'].li
-        lfanew = dos['e_lfanew'].num()
+        lfanew = dos['e_lfanew'].int()
         if lfanew > 0:
             return dyn.block(lfanew - self.blocksize())
         return ptype.undefined
 
     def __Next(self):
         dos = self['Dos'].li
-        if dos['e_lfanew'].num() == self.blocksize():
+        if dos['e_lfanew'].int() == self.blocksize():
             return Next
         return dyn.block(dos.filesize() - self.blocksize())
 

@@ -10,7 +10,7 @@ class fpointer_t(ptype.opointer_t):
         for p in self._path_: res = res[p]
         return offset - res.getoffset()
     def classname(self):
-        return self.typename() + '(' + self._object_.typename() + (', _path_=%r)'%(self._path_,) if self._path_ else ')')
+        return self.typename() + '(' + self._object_.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
 
 def fpointer(type, fieldname):
     return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname,'__iter__') else (fieldname,))
@@ -44,7 +44,7 @@ class LPWSTR(dyn.pointer(pstr.wstring)): pass
 class LONGLONG(pint.int64_t): pass
 class ULONGLONG(pint.uint64_t): pass
 
-class LARGE_INTEGER(dyn.union):
+class LARGE_INTEGER(dynamic.union):
     class u(pstruct.type):
         _fields_ = [
             (DWORD, 'LowPart'),
@@ -55,7 +55,7 @@ class LARGE_INTEGER(dyn.union):
         (LONGLONG, 'QuadPart')
     ]
 
-class ULARGE_INTEGER(dyn.union):
+class ULARGE_INTEGER(dynamic.union):
     class u(pstruct.type):
         _fields_ = [
             (DWORD, 'LowPart'),
@@ -85,25 +85,32 @@ class _SLIST_ENTRY(fpointer_t):
 
     def __init__(self, **attrs):
         super(_SLIST_ENTRY,self).__init__(**attrs)
-        assert issubclass(self._object_, ptype.pointer_t), '%s.%s._object_ is not a valid pointer'%(self.__module__,self.__class__.__name__)
+        if not issubclass(self._object_, ptype.pointer_t):
+            raise AssertionError('{:s}._object_ is not a valid pointer.'.format( '.'.join((self.__module__,self.__class__.__name__)) ))
 
-    def walk_nextentry(self,state,path):
+    def __walk_nextentry(self,state,path):
         try:
             # python doesn't tail-recurse anyways...
             next = path.next()
-            state = self.walk_nextentry(state[next], path)
+            state = self.__walk_nextentry(state[next], path)
         except StopIteration:
             pass
         return state
 
     def walk(self):
         '''Walks through a linked list'''
-        sentinel = 0 if self._sentinel_ is None else self._sentinel_
+        if self._sentinel_ is None:
+            sentinel = {0}
+        elif hasattr(self._sentinel_,'__iter__'):
+            sentinel = set(self._sentinel_)
+        else:
+            sentinel = {self._sentinel_}
+
         n = self
-        while n.num() != sentinel:
+        while n.int() not in sentinel:
             result = n.d
             yield result.l
-            n = self.walk_nextentry(result, iter(self._path_))
+            n = self.__walk_nextentry(result, iter(self._path_))
             if n.int() == 0: break
         return
 
@@ -124,7 +131,7 @@ class SLIST_HEADER(pstruct.type):
     ]
 
     def summary(self):
-        return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].num(),self['Sequence'].num())
+        return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].int(),self['Sequence'].int())
 
 ### Doubly-linked list
 class _LIST_ENTRY(pstruct.type):
@@ -139,24 +146,25 @@ class _LIST_ENTRY(pstruct.type):
 
     def __init__(self, **attrs):
         super(_LIST_ENTRY,self).__init__(**attrs)
-        assert issubclass(self._object_, ptype.pointer_t), '%s.%s._object_ is not a valid pointer'%(self.__module__,self.__class__.__name__)
+        if not issubclass(self._object_, ptype.pointer_t):
+            raise AssertionError('{:s}._object_ is not a valid pointer'.format( '.'.join((self.__module__,self.__class__.__name__)) ))
 
     def summary(self):
-        return '<->'.join(('f:'+hex(self['Flink'].num()), 'b:'+hex(self['Blink'].num())))
+        return '<->'.join(('f:'+hex(self['Flink'].int()), 'b:'+hex(self['Blink'].int())))
 
     def forward(self):
-        if self[self.flink].num() == self._sentinel_:
+        if self[self.flink].int() == self._sentinel_:
             raise StopIteration, self
         return self[self.flink].d
 
     def backward(self):
         return self[self.blink].d
 
-    def walk_nextentry(self,state,path):
+    def __walk_nextentry(self,state,path):
         try:
             # python doesn't tail-recurse anyways...
-            next = path.next()
-            state = self.walk_nextentry(state[next], path)
+            key = next(path)
+            state = self.__walk_nextentry(state[key], path)
         except StopIteration:
             pass
         return state
@@ -164,11 +172,20 @@ class _LIST_ENTRY(pstruct.type):
     def walk(self, direction=flink):
         '''Walks through a circular linked list'''
         n = self[direction]
-        sentinel = self.getoffset() if self._sentinel_ is None else self._sentinel_
-        while n.num() != 0 and n.int() != sentinel:
+
+        if self._sentinel_ is None:
+            sentinel = {self.getoffset()}
+        elif isinstance(self._sentinel_, basestring):
+            sentinel = {self[self._sentinel_].int()}
+        elif hasattr(self._sentinel_,'__iter__'):
+            sentinel = set(self._sentinel_)
+        else:
+            sentinel = {self._sentinel_}
+
+        while n.int() != 0 and n.int() not in sentinel:
             result = n.d
             yield result.l
-            n = self.walk_nextentry(result, iter(self._path_))
+            n = self.__walk_nextentry(result, iter(self._path_))
             n = n[direction]
         return
 
@@ -260,6 +277,7 @@ class versioned(ptype.type):
     def __init__(self, **attrs):
         super(versioned, self).__init__(**attrs)
         self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
+        self.attributes['WIN64'] = self.WIN64
 
 class SIZE_T(ULONG): pass
 
@@ -274,14 +292,14 @@ class rfc4122(pstruct.type):
         return self.summary(**options)
     def summary(self, **options):
         if self.initialized:
-            d1 = '%08x'% self['Data1'].num()
-            d2 = '%04x'% self['Data2'].num()
-            d3 = '%04x'% self['Data3'].num()
+            d1 = '{:08x}'.format(self['Data1'].int())
+            d2 = '{:04x}'.format(self['Data2'].int())
+            d3 = '{:04x}'.format(self['Data3'].int())
             _ = list(self['Data4'].serialize())
-            d4 = ''.join('%02x'%ord(ch) for ch in _[:2])
-            d5 = ''.join('%02x'%ord(ch) for ch in _[2:])
-            return '{' + '-'.join((d1,d2,d3,d4,d5)) + '}'
-        return '{????????-????-????-????-????????????}'
+            d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
+            d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
+            return '[{:x}] {{Data1-Data2-Data3-Data4}} {{{:s}}}'.format(self.getoffset(), '-'.join((d1,d2,d3,d4,d5)))
+        return '[{:x}] {{Data1-Data2-Data3-Data4}} {{????????-????-????-????-????????????}}'.format(self.getoffset())
 
 class GUID(rfc4122):
     _fields_ = [

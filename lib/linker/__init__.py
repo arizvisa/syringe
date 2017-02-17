@@ -3,7 +3,7 @@ from store import BaseAddress
 
 class linker(store.container):
     def __repr__(self):
-        return '%s modules %s'% ( super(linker,self).__repr__(), repr([st.modulename for st in self.stores]) )
+        return '{:s} modules {!r}'.format(super(linker,self).__repr__(), [st.modulename for st in self.stores])
 
     def getlocals(self):
         return []

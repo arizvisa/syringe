@@ -71,7 +71,7 @@ from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider,config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
-class _char_t(pint.integer_t):
+class _char_t(pint.type):
     encoding = codecs.lookup('ascii')
 
     def __init__(self, **attrs):
@@ -91,7 +91,7 @@ class _char_t(pint.integer_t):
         else:
             raise ValueError(self, '_char_t.set', 'User tried to set a value of an incorrect type : {:s}'.format(value.__class__))
         res = value.encode(self.encoding.name)
-        return super(pint.integer_t,self).__setvalue__(res)
+        return super(pint.type,self).__setvalue__(res)
 
     def str(self):
         '''Try to decode the _char_t to a character.'''
@@ -111,6 +111,9 @@ class _char_t(pint.integer_t):
             Log.warn('{:s}.get : {:s} : Unable to decode to {:s}. Replacing invalid characters. : {!r}'.format(self.classname(), self.instance(), self.encoding.name, data))
             res = data.decode(self.encoding.name, 'replace')
         return res
+
+    def int(self):
+        return super(_char_t, self).__getvalue__()
 
     def summary(self, **options):
         return repr(self.serialize())

@@ -98,7 +98,7 @@ class symboltable(dict):
 
     def name(self):
         '''quick short name to describe to a human what's in this obj'''
-        return '%s{%s}'%( repr(type(self)), self.modulename )
+        return '{!r}{{{:s}}}'.format(type(self), self.modulename)
 
     ### iterables
     def iterkeys(self):
@@ -279,7 +279,7 @@ class symboltable(dict):
 #            if check is not None:
 #                logging.debug('%s : merge : Destination symbol %s has already been initialized with %s'% (self.name(), ln, repr(check)))
             if value is None:
-                logging.debug('%s : merge : Source symbol %s is uninitialized'%(self.name(), repr(sn)))
+                logging.debug('{:s} : merge : Source symbol {!r} is uninitialized'.format(self.name(), sn))
 
             # copy value, and call it's hook
             super(symboltable, self).__setitem__(id, value)
@@ -297,7 +297,7 @@ class symboltable(dict):
         return result
 
     def __repr__(self):
-       return ' '.join((self.name(), repr(dict((([([k,(self.modulename,k[1])][k[0] is None],v) for k,v in self.iteritems()]))))))
+       return ' '.join((self.name(), '{!r}'.format(dict((([([k,(self.modulename,k[1])][k[0] is None],v) for k,v in self.iteritems()]))))))
 
 #####################
 class base(symboltable):
@@ -398,14 +398,14 @@ class base(symboltable):
         try:
             super(base,self).__getitem__(name)
         except KeyError:
-            raise KeyError('Symbol %s is unknown in %s'% (repr(name), self.modulename))
+            raise KeyError('Symbol {!r} is unknown in {:s}'.format(name, self.modulename))
 
         super(base,self).__setitem__(name, value)
 
     def add(self, (module,symbolname), value, scope=GlobalScope, segment=None):
         '''Store the specified symbol in the symbol store'''
         if (module,symbolname) in self.keys():
-            raise KeyError('Symbol %s is already defined as %s in %s'% (repr(symbolname), repr(self[module,symbolname]), self.modulename))
+            raise KeyError('Symbol {!r} is already defined as {!r} in {:s}'.format(symbolname, self[module,symbolname], self.modulename))
 
         # store our symbol and its value
         super(base, self).__setitem__((module,symbolname), value)
@@ -428,7 +428,7 @@ class base(symboltable):
         try:
             values = self.values()
             count = [0 for x in values if x is not None]
-            return '%s -> [%d symbols, %d defined]'% (self.name(), len(values), len(count))
+            return '{:s} -> [{:d} symbols, {:d} defined]'.format(self.name(), len(values), len(count))
         except AttributeError:
             pass
         return super(object, self).__repr__()
@@ -444,10 +444,10 @@ class base(symboltable):
         return list(result.intersection(self.scope[ExternalScope]))
 
     def dump(self):
-        g = [(k, (lambda:repr(self[k]),lambda:hex(self[k]))[type(self[k]) in (int,long)]()) for k in self.getglobals()]
-        l = [(k, (lambda:repr(self[k]),lambda:hex(self[k]))[type(self[k]) in (int,long)]()) for k in self.getlocals()]
-        gs = "globals:%s"% repr(g)
-        ls = "locals:%d"% len(l)
+        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in (int,long)]()) for k in self.getglobals()]
+        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in (int,long)]()) for k in self.getlocals()]
+        gs = "globals:{!r}".format(g)
+        ls = "locals:{:d}".format(len(l))
         return '\n'.join((gs,ls))
 
     def getundefined(self):
@@ -627,7 +627,7 @@ class container(base):
         protections.discard(0)
 
         if len(protections) > 1:
-            logging.error('%s : segment %s protection %s is inconsistent. defaulting to rw-. %s'%(self.name(),name,repr(protections)))
+            logging.error('{:s} : segment {:s} protection {:s} is inconsistent. defaulting to rw-. {!r}'.format(self.name(),name,protections))
             return 6
         return protections[0]
 

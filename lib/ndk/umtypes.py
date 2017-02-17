@@ -46,8 +46,8 @@ class UNICODE_STRING(pstruct.type):
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
 #        (PWSTR, 'Buffer'),
-#        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['MaximumLength'].li.num())), 'Buffer')
-        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['Length'].li.num()/2)), 'Buffer')
+#        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['MaximumLength'].li.int())), 'Buffer')
+        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['Length'].li.int()/2)), 'Buffer')
     ]
 
     def get(self):
@@ -55,10 +55,10 @@ class UNICODE_STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:self['Length'].num()]
+        return None if self['Buffer'].int() == 0 else self['Buffer'].d.li.str()[:self['Length'].int()]
 
     def summary(self):
-        return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].num(), self['MaximumLength'].num(), self.str())
+        return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].int(), self['MaximumLength'].int(), self.str())
 
 class PUNICODE_STRING(dyn.pointer(UNICODE_STRING)): pass
 
@@ -66,7 +66,7 @@ class STRING(pstruct.type):
     _fields_ = [
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
-        (lambda s: dyn.pointer(dyn.clone(PSTR, length=s['Length'].li.num())), 'Buffer')
+        (lambda s: dyn.pointer(dyn.clone(PSTR, length=s['Length'].li.int())), 'Buffer')
     ]
 
     def get(self):
@@ -74,10 +74,10 @@ class STRING(pstruct.type):
         return self.str()
 
     def str(self):
-        return None if self['Buffer'].num() == 0 else self['Buffer'].d.li.str()[:self['Length'].num()]
+        return None if self['Buffer'].int() == 0 else self['Buffer'].d.li.str()[:self['Length'].int()]
 
     def summary(self):
-        return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].num(), self['MaximumLength'].num(), self.str())
+        return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].int(), self['MaximumLength'].int(), self.str())
 
 class PSTRING(dyn.pointer(STRING)): pass
 

@@ -200,7 +200,7 @@ class Managed(MemoryManager):
             bucket[i] = (pointer, (chunksize, layout))
             return pointer + freeslot*chunksize, bucket[i]
 
-        raise ValueError('Unable to allocate %d bytes out of bucket %s'% (size, repr(bucket)))
+        raise ValueError('Unable to allocate {:d} bytes out of bucket {!r}'.format(size, bucket))
 
     def free(self, pointer):
         pagemask = self.allocator.getPageSize()-1

@@ -4,8 +4,8 @@ from .base import *
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
     def _ent_array(self, type, size, length):
-        t = dyn.clone(type, blocksize=lambda s:self[size].li.num())
-        return dyn.array(t, self[length].li.num())
+        t = dyn.clone(type, blocksize=lambda s:self[size].li.int())
+        return dyn.array(t, self[length].li.int())
 
     _fields_ = [
         (e_type, 'e_type'),
@@ -24,17 +24,17 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
     ]
 
     def blocksize(self):
-        return self['e_ehsize'].li.num()-e_ident().a.blocksize()
+        return self['e_ehsize'].li.int()-e_ident().a.blocksize()
 
     def stringtable(self):
-        index = self['e_shstrndx'].num()
+        index = self['e_shstrndx'].int()
         return self['e_shoff'].d.li[index]['sh_offset'].d.l
 
 ### 64-bit
 class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
     def _ent_array(self, type, size, length):
-        t = dyn.clone(type, blocksize=lambda s:self[size].li.num())
-        return dyn.array(t, self[length].li.num())
+        t = dyn.clone(type, blocksize=lambda s:self[size].li.int())
+        return dyn.array(t, self[length].li.int())
 
     _fields_ = [
         (e_type, 'e_type'),
@@ -52,7 +52,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         (Elf64_Half, 'e_shstrndx'),
     ]
     def blocksize(self):
-        return self['e_ehsize'].li.num() - e_ident().a.blocksize()
+        return self['e_ehsize'].li.int() - e_ident().a.blocksize()
     def stringtable(self):
-        index = self['e_shstrndx'].num()
+        index = self['e_shstrndx'].int()
         return self['e_shoff'].d.li[index]['sh_offset'].d.l

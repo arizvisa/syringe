@@ -63,9 +63,9 @@ class PEB(pstruct.type, versioned):
             self._fields_ = list(reversed(f))
 
         def __repr__(self):
-            ofs = '[%x]'% self.getoffset()
+            ofs = '[{:x}]'.format(self.getoffset())
             names = '|'.join((k for k,v in self.items() if v))
-            return ' '.join([ofs, self.name(), names, repr(self.serialize())])
+            return ' '.join([ofs, self.name(), names, '{!r}'.format(self.serialize())])
 
     def __init__(self, **attrs):
         super(PEB, self).__init__(**attrs)
@@ -154,7 +154,7 @@ class PEB(pstruct.type, versioned):
             (ULONG, 'HeapDeCommitFreeBlockThreshold'),
             (ULONG, 'NumberOfHeaps'),
             (ULONG, 'MaximumNumberOfHeaps'),
-            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=s['NumberOfHeaps'].li.num()), PVOID), 'ProcessHeaps'),
+            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=s['NumberOfHeaps'].li.int()), PVOID), 'ProcessHeaps'),
 #            (dyn.pointer(win32k.GDI_HANDLE_TABLE), 'GdiSharedHandleTable'),
             (PVOID, 'GdiSharedHandleTable'),
             (PVOID, 'ProcessStarterHelper'),
@@ -229,7 +229,7 @@ class PEB(pstruct.type, versioned):
     def getmodulebyaddress(self, address):
         ldr = self['Ldr'].d.l
         for m in ldr.walk():
-            start,size = m['DllBase'].num(),m['SizeOfImage'].num()
+            start,size = m['DllBase'].int(),m['SizeOfImage'].int()
             left,right = start, start+size
             if address >= left and address <= right:
                 return m
@@ -471,7 +471,7 @@ class _API_SET_HEADER(pstruct.type):
 
 class _API_SET_VALUE_ENTRY(pstruct.type):
     _fields_ = [
-        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['Size'].li.num())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'Value'),
+        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['Size'].li.int())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'Value'),
         (ULONG, 'Size'),
     ]
 
@@ -480,14 +480,14 @@ class _API_SET_VALUE(pstruct.type):
         (ULONG, 'Count'),
         (ULONG, 'EndOfEntriesOffset'),
         (ULONG, 'Hash'),
-        (lambda s: _API_SET_VALUE_ENTRY if s['Count'].li.num() > 1 else ptype.undefined, 'OriginalRedirect'),
-        (lambda s: dyn.array(_API_SET_VALUE_ENTRY, s['Count'].li.num()), 'Entry'),
+        (lambda s: _API_SET_VALUE_ENTRY if s['Count'].li.int() > 1 else ptype.undefined, 'OriginalRedirect'),
+        (lambda s: dyn.array(_API_SET_VALUE_ENTRY, s['Count'].li.int()), 'Entry'),
     ]
 
 class _API_SET_ENTRY(pstruct.type):
     _baseobject_ = None
     _fields_ = [
-        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['NameLength'].li.num())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'NameOffset'),
+        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['NameLength'].li.int())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'NameOffset'),
         (ULONG, 'NameLength'),
         (lambda s: dyn.rpointer(_API_SET_VALUE, s._baseobject_, ULONG), 'ValueOffset'),
     ]
@@ -495,7 +495,7 @@ class _API_SET_ENTRY(pstruct.type):
 class API_SET_MAP(pstruct.type, versioned):
     def __Entry(self):
         res = self['Header'].li
-        return dyn.array(_API_SET_ENTRY, res['Count'].num(), recurse={'_baseobject_':self})
+        return dyn.array(_API_SET_ENTRY, res['Count'].int(), recurse={'_baseobject_':self})
 
     _fields_ = [
         (_API_SET_HEADER, 'Header'),
@@ -707,4 +707,4 @@ if __name__ == '__main__':
     Ldr = Peb['Ldr'].d.l
     for x in Ldr['InLoadOrderModuleList'].walk():
         print x['BaseDllName'].str(),x['FullDllName'].str()
-        print hex(x['DllBase'].num()), hex(x['SizeOfImage'].num())
+        print hex(x['DllBase'].int()), hex(x['SizeOfImage'].int())

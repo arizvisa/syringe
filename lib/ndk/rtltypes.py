@@ -29,7 +29,7 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
     class CURDIR(pstruct.type):
         _fields_ = [(umtypes.UNICODE_STRING,'DosPath'), (HANDLE,'Handle')]
         def summary(self):
-            return 'Handle={:x} DosPath={!r}'.format(self['Handle'].num(), self['DosPath'].str())
+            return 'Handle={:x} DosPath={!r}'.format(self['Handle'].int(), self['DosPath'].str())
 
     _fields_ = [
         (ULONG, 'MaximumLength'),
@@ -45,9 +45,9 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (umtypes.UNICODE_STRING, 'DllPath'),
         (umtypes.UNICODE_STRING, 'ImagePathName'),
         (umtypes.UNICODE_STRING, 'CommandLine'),
-#        (dyn.pointer(lambda s: dyn.block(s.getparent(_RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].num())), 'Environment'),
-#        (dyn.pointer(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.num())), 'Environment'),
-        (dyn.pointer(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.num())), 'Environment'),
+#        (dyn.pointer(lambda s: dyn.block(s.getparent(_RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
+#        (dyn.pointer(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
+        (dyn.pointer(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
         (ULONG, 'StartingX'),
         (ULONG, 'StartingY'),
         (ULONG, 'CountX'),

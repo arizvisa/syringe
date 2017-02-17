@@ -562,10 +562,11 @@ class Pos(pstruct.type):
 ###
 class XLUnicodeStringNoCch(pstruct.type):
     def __rgb(self):
-        res, cb = self['fHighByte'].li.int(), self.blocksize()
+        res = self['fHighByte'].li.int()
         hb = (res >> 7) & 1
-        sz = (self.length * 2) if hb else (self.length)
-        return dyn.clone(pstr.wstring, blocksize=lambda s,cb=cb: cb - 1)
+        t = pstr.wstring if hb else pstr.string
+        cb = self.blocksize()
+        return dyn.clone(t, blocksize=lambda s,cb=cb: cb-1)
 
     _fields_ = [
         (ubyte1, 'fHighByte'),
@@ -3655,6 +3656,40 @@ class Obj(pstruct.type):
     _fields_ = [
         (FtGeneral, 'cmo'),
         (__properties, 'props'),
+    ]
+
+class FormatRun(pstruct.type):
+    _fields_ = [
+        (uint2, 'ich'),
+        (FontIndex, 'ifnt'),
+    ]
+
+class Run(pstruct.type):
+    _fields_ = [
+        (FormatRun, 'formatRun'),
+        (uint2, 'unused1'),
+        (uint2, 'unused2'),
+    ]
+
+class TxOLastRun(pstruct.type):
+    _fields_ = [
+        (uint2, 'cchText'),
+        (uint2, 'unused1'),
+        (uint4, 'unused2'),
+    ]
+
+class TxORuns(pstruct.type):
+    def __rgTxoRuns(self):
+        try:
+            rg = self.getparent(RecordGeneral)
+            res = rg.previousRecord(TxO, **count)
+        except ptypes.error.NotFoundError:
+            return dyn.array(Run, 0)
+        cbRuns = res.d['cbRuns']
+        return dyn.array(Run, cbRuns.int() / 8 - 1)
+    _fields_ = [
+        (__rgTxoRuns, 'rgTxoRuns'),
+        (TxOLastRun, 'lastRun'),
     ]
 
 @RT_Excel.define

@@ -16,12 +16,12 @@ class File(ptypes.pstruct.type, ptypes.ptype.boundary):
             length = len(sections)
             def _object_(self):
                 sect = sections[len(self.value)]
-                return ptypes.dynamic.clone(ptypes.dynamic.block(sect['SizeOfRawData'].li.num()), Section=sect, SectionName=sect['Name'].str())
+                return ptypes.dynamic.clone(ptypes.dynamic.block(sect['SizeOfRawData'].li.int()), Section=sect, SectionName=sect['Name'].str())
         return result
 
     _fields_ = [
         (portable.FileHeader, 'Header'),
-        (lambda s: ptypes.dynamic.clone(portable.SectionTableArray, length=s['Header'].li['NumberOfSections'].num()), 'Sections'),
+        (lambda s: ptypes.dynamic.clone(portable.SectionTableArray, length=s['Header'].li['NumberOfSections'].int()), 'Sections'),
         (__Data, 'Data'),
     ]
 
@@ -60,7 +60,7 @@ if __name__ == '__main__':
     for name in sst.names():
         v = sst.getSymbol(name)
         if int(v['StorageClass']) == 3 and int(v['Value']) == 0:
-            num = v['SectionNumber'].num()
+            num = v['SectionNumber'].int()
             sym_static[num] = (v, sst.getaux(name))
         continue
 
@@ -128,7 +128,7 @@ if __name__ == '__main__':
             print name,
             if index in sym_static.keys():
                 sym,aux = sym_static[index]
-                print sym['Name'].str(), sym['SectionNumber'].num(), int(sym['Value'])
+                print sym['Name'].str(), sym['SectionNumber'].int(), int(sym['Value'])
                 data = section.getrelocateddata(symboltable)
             else:
                 data = section.data().serialize()

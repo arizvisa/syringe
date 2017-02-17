@@ -22,9 +22,9 @@ class Ordinal(word):
         return self.int() - self.parent.parent.parent['Base'].int()
 
 class IMAGE_EXPORT_DIRECTORY(pstruct.type):
-    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, self['NumberOfFunctions'].li.num()))
-    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, self['NumberOfNames'].li.num()))
-    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     self['NumberOfNames'].li.num()))
+    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, self['NumberOfFunctions'].li.int()))
+    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, self['NumberOfNames'].li.int()))
+    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     self['NumberOfNames'].li.int()))
 
     _fields_ = [
         ( dword, 'Flags' ),
@@ -91,8 +91,8 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     def iterate(self):
         """For each export, yields (offset of export, ordinal, name, ordinalString, virtualaddress)"""
-        if 0 in (self['AddressOfNames'].num(),self['AddressOfNameOrdinals'].num()):
-            base = self['Base'].num()
+        if 0 in (self['AddressOfNames'].int(),self['AddressOfNameOrdinals'].int()):
+            base = self['Base'].int()
             ofs,eat = self.getExportAddressTable()
             for i,e in enumerate(eat):
                 yield ofs,i+base,'','',e

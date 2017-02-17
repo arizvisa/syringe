@@ -73,14 +73,14 @@ Example usage:
 # create a union type backed by an array of 4 uint32 types
     from ptypes import dynamic,pint,pstr
     class type(dynamic.union):
-        root = dynamic.array(pint.uint32_t, 4)
+        _value_ = dynamic.array(pint.uint32_t, 4)
         _fields_ = [
             (dyn.block(16), 'block'),
             (dyn.array(pint.uint16_t, 8), 'ushort'),
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import six
+import six,operator
 from . import ptype,parray,pstruct,config,error,utils,provider
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -204,9 +204,6 @@ def clone(cls, **newattrs):
     return ptype.clone(cls, **newattrs)
 
 class _union_generic(ptype.container):
-    __object__ = None
-    object = property(fget=lambda s: s.value)
-
     def __init__(self, *args, **kwds):
         super(_union_generic,self).__init__(*args, **kwds)
         self.__fastindex = {}
@@ -261,7 +258,7 @@ class union(_union_generic):
 
     i.e.
     class myunion(dynamic.union)::
-        root = block(256)
+        _value_ = block(256)
         _fields_ = [
             (dyn.array(uint16_t,64), 'a'),
             (dyn.array(uint8_t,64), 'b'),
@@ -270,50 +267,58 @@ class union(_union_generic):
     In this example, the union is backed by a `block(256)` object. This object
     will be used to decode the structures used by field 'a' and field 'b'.
     """
-    root = None         # root type. determines block size.
+    _value_ = None      # root type. determines block size.
     _fields_ = []       # aliases of root type that will act on the same data
-    __objects__ = None       # objects associated with each alias
+    __object__ = None   # objects associated with each alias
     value = None
 
-    initializedQ = lambda self: self.value is not None and self.value.initialized
-    def __choose_root(self, objects):
+    @property
+    def object(self):
+        if self.value is None:
+            return self.__create__()
+        return self.value[0]
+    o = object
+
+    initializedQ = lambda self: isinstance(self.value, list) and self.value[0].initializedQ() and self.__object__ is not None and len(self.__object__) == len(self._fields_ or [])
+    def __choose__(self, objects):
         """Return a ptype.block of a size that contain /objects/"""
-        res = self.root
+        res = self._value_
         if res is None:
-            size = max((t() if ptype.istype(t) else self.new(t)).a.blocksize() for t in objects)
-            self.root = res = clone(ptype.block, length=size)
+            size = max(self.new(t).a.blocksize() for t in objects)
+            return clone(ptype.block, length=size)
         return res
 
-    def __alloc_root(self, **attrs):
-        t = self.__choose_root(t for t,n in self._fields_)
-        self.value = self.new(t, offset=self.getoffset())
-        return self.value.alloc(**attrs)
+    def __create__(self):
+        t = self.__choose__(t for t,n in self._fields_)
+        res = self.new(t, offset=self.getoffset())
+        self.value = [res]
 
-    def __alloc_objects(self, value):
-        source = provider.proxy(value)      # each element will write into the offset occupied by value
+        source = provider.proxy(res)      # each element will write into the offset occupied by value
         self.__object__ = []
-
-        # append elements to .__object__ via _union_generic.append
         for t,n in self._fields_:
-            self.append(self.new(t, __name__=n, offset=0, source=source))
-        return self
+            self.append( self.new(t, __name__=n, offset=0, source=source) )
+        return self.value[0]
 
     def alloc(self, **attrs):
-        value = self.__alloc_root(**attrs) if self.value is None else self.value
-        self.__alloc_objects(value)
+        res = self.__create__() if self.value is None else self.value[0]
+        res.alloc(**attrs)
+        map(operator.methodcaller('load', offset=0), self.__object__)
         return self
 
     def serialize(self):
-        return self.value.serialize()
+        return self.value[0].serialize()
 
     def load(self, **attrs):
-        value = self.__alloc_root(**attrs) if self.value is None else self.value
-        self.__alloc_objects(value)
-        _ = self.value.load()
+        res = self.__create__() if self.value is None else self.value[0]
+        res.load(**attrs)
+        map(operator.methodcaller('load', offset=0), self.__object__)
         return self
 
+    def commit(self, **attrs):
+        return self.object.commit(**attrs)
+
     def __deserialize_block__(self, block):
-        _ = self.value.__deserialize_block__(block)
+        self.value[0].__deserialize_block__(block)
         return self
 
     def properties(self):
@@ -327,31 +332,69 @@ class union(_union_generic):
     def __getitem__(self, key):
         result = super(union,self).__getitem__(key)
         try:
-            if not result.initializedQ():
-                result.l
+            result.li
         except error.UserError, e:
             Log.warning("union.__getitem__ : {:s} : Ignoring exception {:s}".format(self.instance(), e))
         return result
 
     def details(self):
-        if self.initializedQ():
-            res = repr(self.serialize())
-            root = self.value.classname()
+        if not self.initializedQ():
+            return self.__details_uninitialized()
+        return self.__details_initialized()
+    repr = details
+
+    def __details_initialized(self):
+        gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
+        result = []
+
+        # do the root object first
+        inst = utils.repr_instance(self.object.classname(), '<object>')
+        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.object.properties().iteritems())
+        result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
+
+        # now try to do the rest of the fields
+        for (t,name),value in map(None, self._fields_, self.__object__ or []):
+            inst = utils.repr_instance(value.classname(), value.name() or name)
+            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
+            result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', value.summary()))
+
+        if len(result) > 0:
+            return '\n'.join(result)
+        return '[{:x}] Empty []'.format(self.getoffset())
+
+    def __details_uninitialized(self):
+        gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
+        result = []
+
+        # first the object if it's been allocated
+        if self.object is not None:
+            inst = utils.repr_instance(self.object.classname(), '<object>')
+            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.object.properties().iteritems())
+            result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
         else:
-            res = '???'
-            root = self.__choose_root(t for t,n in self._fields_).typename()
-        return ' '.join((root, res))
+            result.append('[{:x}] {:s} ???'.format(self.getoffset(), gettypename(self._value_)))
+
+        # now the rest of the fields
+        for (t,name),value in map(None, self._fields_, self.__object__ or []):
+            if value is None:
+                result.append('[{:x}] {:s} {:s} ???'.format(self.getoffset(), utils.repr_class(gettypename(t)), name))
+                continue
+            inst = utils.repr_instance(value.classname(), value.name() or name)
+            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
+            result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
+
+        if len(result) > 0:
+            return '\n'.join(result)
+        return '[{:x}] Empty []'.format(self.getoffset())
 
     def blocksize(self):
-        return self.value.blocksize()
+        return self.object.blocksize()
     def size(self):
-        return self.value.size()
-    def contains(self, offset):
-        return super(ptype.container,self).contains(offset)
+        return self.object.size()
 
     def setposition(self, offset, recurse=False):
         if self.value is not None:
-            self.value.setposition(offset, recurse=recurse)
+            self.value[0].setposition(offset, recurse=recurse)
         return super(ptype.container, self).setposition(offset, recurse=recurse)
     def getposition(self):
         return super(ptype.container, self).getposition()
@@ -368,11 +411,12 @@ def pointer(target, *optional_type, **attrs):
     if len(optional_type) > 1:
         raise TypeError('{:s}.pointer takes exactly 1 or 2 arguments ({:d} given)'.format(__name__, 1 + len(optional_type)))
     type = ptype.pointer_t._value_ if len(optional_type) == 0 or optional_type[0] is None else optional_type[0]
-    t = ptype.pointer_t._value_ if type is None else type
     def classname(self):
         return 'dynamic.pointer({:s})'.format(target.typename() if ptype.istype(target) else target.__name__)
 #    attrs.setdefault('classname', classname)
-    return ptype.clone(ptype.pointer_t, _object_=target, _value_=t, **attrs)
+    t = ptype.pointer_t._value_ if type is None else type
+    res = ptype.clone(t, **attrs)
+    return ptype.clone(ptype.pointer_t, _object_=target, _value_=res)
 
 def rpointer(target, *optional, **attrs):
     """rpointer(target, object?, type?, **attributes):
@@ -384,11 +428,12 @@ def rpointer(target, *optional, **attrs):
     if len(optional) > 2:
         raise TypeError('{:s}.rpointer takes exactly 1 - 3 arguments ({:d} given)'.format(__name__, 1 + len(optional)))
     object = (lambda s: list(s.walk())[-1]) if len(optional) == 0 or optional[0] is None else optional[0]
-    t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
     def classname(self):
         return 'dynamic.rpointer({:s}, ...)'.format(target.typename() if ptype.istype(target) else target.__name__)
 #    attrs.setdefault('classname', classname)
-    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _value_=t, **attrs)
+    t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
+    res = ptype.clone(t, **attrs)
+    return ptype.clone(ptype.rpointer_t, _object_=target, _baseobject_=object, _value_=res)
 
 def opointer(target, *optional, **attrs):
     """rpointer(target, calculate?, type?, **attributes):
@@ -400,11 +445,12 @@ def opointer(target, *optional, **attrs):
     if len(optional) > 2:
         raise TypeError('{:s}.opointer takes exactly 1 - 3 arguments ({:d} given)'.format(__name__, 1 + len(optional)))
     calculate = (lambda s,o: o) if len(optional) == 0 or optional[0] is None else optional[0]
-    t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
     def classname(self):
         return 'dynamic.opointer({:s}, ...)'.format(target.typename() if ptype.istype(target) else target.__name__)
 #    attrs.setdefault('classname', classname)
-    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=t, **attrs)
+    t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
+    res = ptype.clone(t, **attrs)
+    return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=res)
 
 if __name__ == '__main__':
     import ptype,parray,pstruct,parray,pint,provider
@@ -450,7 +496,7 @@ if __name__ == '__main__':
     def test_dynamic_union_rootstatic():
         import dynamic,pint,parray
         class test(dynamic.union):
-            root = dynamic.array(pint.uint8_t,4)
+            _value_ = dynamic.array(pint.uint8_t,4)
             _fields_ = [
                 (dynamic.block(4), 'block'),
                 (pint.uint32_t, 'int'),
@@ -458,7 +504,7 @@ if __name__ == '__main__':
 
         a = test(source=ptypes.provider.string('A'*4))
         a=a.l
-        if a.value[0].int() != 0x41:
+        if a.object[0].int() != 0x41:
             raise Failure
 
         if a['block'].size() == 4 and a['int'].int() == 0x41414141:

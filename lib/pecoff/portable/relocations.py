@@ -46,7 +46,7 @@ class Relocation(pstruct.type):
         symbol = symboltable[self['SymbolTableIndex'].int()]
 
         # figure out the section name our address points into
-        symbolsectionnumber,targetsectionname = symbol['SectionNumber'].num(),None
+        symbolsectionnumber,targetsectionname = symbol['SectionNumber'].int(),None
         if symbolsectionnumber is not None:
             targetsection = currentsection.parent[symbolsectionnumber]
             targetsectionname = targetsection['Name'].str()
@@ -55,9 +55,9 @@ class Relocation(pstruct.type):
         return self.__relocate(data, symbol, sectionarray, currentsectionname, targetsectionname, namespace).tostring()
 
     def __relocate(self, data, symbol, sectionarray, currentsectionname, targetsectionname, namespace):
-        relocationva,relocationtype = self['VirtualAddress'].int(),self['Type'].num()
+        relocationva,relocationtype = self['VirtualAddress'].int(),self['Type'].int()
         name = symbol['Name'].str()
-        storageclass,value = symbol['StorageClass'].num(), namespace[name]
+        storageclass,value = symbol['StorageClass'].int(), namespace[name]
 
         if value is None:
             raise ValueError('Attempted relocation for an undefined symbol `%s\'.'% name)
@@ -122,9 +122,9 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
         (uint32, 'Page RVA'),   # FIXME: this can be a virtualaddress(...) to the page
         (uint32, 'Size'),
-        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Size'].li.num()-8), 'Relocations'),
-#        (lambda s: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _:(s['Size'].li.num()-8)*8), 'Relocations')
-#        (lambda s: dyn.clone(BaseRelocationArray, blocksize=lambda _:s['Size'].li.num()-8), 'Relocations')
+        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Size'].li.int()-8), 'Relocations'),
+#        (lambda s: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _:(s['Size'].li.int()-8)*8), 'Relocations')
+#        (lambda s: dyn.clone(BaseRelocationArray, blocksize=lambda _:s['Size'].li.int()-8), 'Relocations')
     ]
 
     def fetchrelocations(self):
@@ -133,7 +133,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
         return [((v&0xf000)/0x1000, v&0x0fff) for v in relocations]
 
     def getrelocations(self, section):
-        pageoffset = self['Page RVA'].num() - section['VirtualAddress'].num()
+        pageoffset = self['Page RVA'].int() - section['VirtualAddress'].int()
         assert pageoffset >= 0 and pageoffset < section.getloadedsize()
 
         for type,offset in self.fetchrelocations():
@@ -189,16 +189,16 @@ if False:       # deprecated because we would like to be able to separate segmen
 class IMAGE_BASERELOC_DIRECTORY(parray.block):
     _object_ = IMAGE_BASERELOC_DIRECTORY_ENTRY
     def getbysection(self, section):
-        return ( entry for entry in self if section.containsaddress(entry['Page RVA'].num()) )
+        return ( entry for entry in self if section.containsaddress(entry['Page RVA'].int()) )
 
     def relocate(self, data, section, namespace):
         assert data.__class__ is array.array, 'data argument must be formed as an array'
 
         sectionname = section['Name'].str()
-        imagebase = self.getparent(Header)['OptionalHeader']['ImageBase'].num()
+        imagebase = self.getparent(Header)['OptionalHeader']['ImageBase'].int()
 
         sectionarray = section.parent
-        sectionvaLookup = dict( ((s['Name'].str(),s['VirtualAddress'].num()) for s in sectionarray) )
+        sectionvaLookup = dict( ((s['Name'].str(),s['VirtualAddress'].int()) for s in sectionarray) )
 
         # relocation type 3
         t = relocationtype()

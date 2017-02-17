@@ -8,24 +8,24 @@ from .headers import virtualaddress,realaddress,fileoffset
 class Entry(headers.DataDirectoryEntry):
     def _object_(self):
         # called by 'Address'
-        sz = self['Size'].num()
+        sz = self['Size'].int()
         return dyn.block(sz)
 
     def containsaddress(self, addr):
         '''if an address is within our boundaries'''
-        start = self['Address'].num()
-        end = start + self['Size'].num()
+        start = self['Address'].int()
+        end = start + self['Size'].int()
         if (addr >= start) and (addr < end):
             return True
         return False
 
     def valid(self):
-        return self['Size'].num() != 0
+        return self['Size'].int() != 0
 
     def __Address(self):
         t = self._object_
         if ptypes.iscontainer(t):
-            return self.addressing(dyn.clone(t, blocksize=lambda s: s.getparent(Entry)['Size'].li.num()), type=uint32)
+            return self.addressing(dyn.clone(t, blocksize=lambda s: s.getparent(Entry)['Size'].li.int()), type=uint32)
         return self.addressing(t, type=uint32)
 
     _fields_ = [
@@ -120,7 +120,7 @@ class LoadConfig(AddressEntry):
 
             (uint32, 'GuardCFCheckFunctionPointer'),
             (uint32, 'Reserved2'),
-            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.num()), type=uint32), 'GuardCFFunctionTable'),
+            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.int()), type=uint32), 'GuardCFFunctionTable'),
             (uint32, 'GuardCFFunctionCount'),
             (uint32, 'GuardFlags'),     # CF_INSTRUMENTED=0x100,CFW_INSTRUMENTED=0x200,CF_FUNCTION_TABLE_PRESENT=0x400
         ]
@@ -153,7 +153,7 @@ class LoadConfig(AddressEntry):
 
             (uint32, 'GuardCFCheckFunctionPointer'),
             (uint32, 'Reserved2'),
-            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.num()), type=uint64), 'GuardCFFunctionTable'),
+            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.int()), type=uint64), 'GuardCFFunctionTable'),
             (uint32, 'GuardCFFunctionCount'),
             (uint32, 'GuardFlags'),     # CF_INSTRUMENTED=0x100,CFW_INSTRUMENTED=0x200,CF_FUNCTION_TABLE_PRESENT=0x400
 
@@ -192,7 +192,7 @@ class DataDirectory(parray.type):
     def details(self, **options):
         if self.initializedQ():
             width = max(len(n.classname()) for n in self.value) if self.value else 0
-            return '\n'.join('[{:x}] {:>{}}{:4s} {:s}:+{:#x}'.format(n.getoffset(),n.classname(),width,'{%d}'%i, n['Address'].summary(), n['Size'].num()) for i,n in enumerate(self.value))
+            return '\n'.join('[{:x}] {:>{}}{:4s} {:s}:+{:#x}'.format(n.getoffset(),n.classname(),width,'{%d}'%i, n['Address'].summary(), n['Size'].int()) for i,n in enumerate(self.value))
         return super(DataDirectory,self).details(**options)
 
     def repr(self, **options):

@@ -4,14 +4,14 @@ import umtypes,pecoff
 ## XXX: It would be worth it to do the Loader Data Table Entry Flags
 
 class LDR_DATA_TABLE_ENTRY(pstruct.type):
-    class SectionPointerUnion(dyn.union):
+    class SectionPointerUnion(dynamic.union):
         _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
-    class TimeDateStampUnion(dyn.union):
+    class TimeDateStampUnion(dynamic.union):
         _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
 
-    #class __SectionPointerUnion(dyn.union):
+    #class __SectionPointerUnion(dynamic.union):
     #    _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
-    #class __TimeDateStampUnion(dyn.union):
+    #class __TimeDateStampUnion(dynamic.union):
     #    _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
 
     class __Flags(pbinary.flags):

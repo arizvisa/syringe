@@ -135,19 +135,21 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print instance.str()
 """
-import six
+import six,__builtin__
 from . import ptype,bitmap,config,error,utils
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
+__state__ = {}
 def setbyteorder(endianness):
     import __builtin__
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        for k,v in globals().iteritems():
-            if v is not integer_t and isinstance(v,__builtin__.type) and issubclass(v,integer_t) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
-                d = dict(v.__dict__)
-                d['byteorder'] = endianness
-                globals()[k] = __builtin__.type(v.__name__, v.__bases__, d)     # re-instantiate types
+        transform = {config.byteorder.bigendian:bigendian, config.byteorder.littleendian:littleendian}[endianness]
+        for k,v in globals().items():
+            if v not in (type,uinteger_t,sinteger_t) and isinstance(v,__builtin__.type) and issubclass(v,type):
+                if getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
+                    globals()[k] = transform(v)
+                pass
             continue
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
@@ -156,26 +158,49 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.littleendian)
     raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
-def bigendian(ptype):
+def bigendian(integral):
     '''Will convert an integer_t to bigendian form'''
-    if not issubclass(ptype, type):
-        raise error.TypeError(ptype, 'bigendian')
-    import __builtin__
-    d = dict(ptype.__dict__)
-    d['byteorder'] = config.byteorder.bigendian
-    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
+    if not issubclass(integral, type):
+        raise error.TypeError(integral, 'bigendian')
+    if getattr(integral, 'byteorder', None) == config.byteorder.bigendian:
+        return integral
 
-def littleendian(ptype):
+    le, be = __state__.setdefault(config.byteorder.littleendian, {}), __state__.setdefault(config.byteorder.bigendian, {})
+    if any(integral in n for n in (be,le)):
+        integral = be.get(integral, le.get(integral, type))
+        class newintegral(integral):
+            __doc__ = integral.__doc__
+            byteorder = config.byteorder.bigendian
+        if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
+        newintegral.__name__ = integral.__name__
+        be.setdefault(newintegral, integral)
+        return newintegral
+    return ptype.clone(integral, byteorder=config.byteorder.bigendian)
+
+def littleendian(integral):
     '''Will convert an integer_t to littleendian form'''
-    if not issubclass(ptype, type):
-        raise error.TypeError(ptype, 'littleendian')
-    import __builtin__
-    d = dict(ptype.__dict__)
-    d['byteorder'] = config.byteorder.littleendian
-    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
+    if not issubclass(integral, type):
+        raise error.TypeError(integral, 'littleendian')
+    if getattr(integral, 'byteorder', None) == config.byteorder.littleendian:
+        return integral
 
-class integer_t(ptype.type):
-    '''Provides basic integer-like support'''
+    le, be = __state__.setdefault(config.byteorder.littleendian, {}), __state__.setdefault(config.byteorder.bigendian, {})
+    if any(integral in n for n in (be,le)):
+        integral = le.get(integral, be.get(integral, type))
+        class newintegral(integral):
+            __doc__ = integral.__doc__
+            byteorder = config.byteorder.littleendian
+        if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
+        newintegral.__name__ = integral.__name__
+        be.setdefault(newintegral, integral)
+        return newintegral
+    return ptype.clone(integral, byteorder=config.byteorder.littleendian)
+
+class type(ptype.type):
+    """Provides basic integer-like support
+
+    Not intended to really be inherited from as it doesn't implement .summary
+    """
     byteorder = config.defaults.integer.order
 
     def classname(self):
@@ -185,8 +210,25 @@ class integer_t(ptype.type):
         elif self.byteorder is config.byteorder.littleendian:
             return config.defaults.pint.littleendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
         else:
-            raise error.SyntaxError(self, 'integer_t.classname', message='Unknown integer endianness {!r}'.format(self.byteorder))
+            raise error.SyntaxError(self, 'type.classname', message='Unknown integer endianness {!r}'.format(self.byteorder))
         return typename
+
+    def flip(self):
+        '''Returns an integer with the endianness flipped'''
+        if self.byteorder is config.byteorder.bigendian:
+            return self.cast(littleendian(self.__class__))
+        elif self.byteorder is config.byteorder.littleendian:
+            return self.cast(bigendian(self.__class__))
+        raise error.UserError(self, 'type.flip', message='Unexpected byte order {!r}'.format(self.byteorder))
+
+    def __getvalue__(self):
+        if not self.initializedQ():
+            raise error.InitializationError(self, 'int')
+        if self.byteorder is config.byteorder.bigendian:
+            return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
+        elif self.byteorder is config.byteorder.littleendian:
+            return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
+        raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
     def __setvalue__(self, integer):
         if self.byteorder is config.byteorder.bigendian:
@@ -195,7 +237,6 @@ class integer_t(ptype.type):
             transform = lambda x: x
         else:
             raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness {!r}'.format(self.byteorder))
-
         mask = (1<<self.blocksize()*8) - 1
         integer &= mask
         bc = bitmap.new(integer, self.blocksize() * 8)
@@ -204,44 +245,36 @@ class integer_t(ptype.type):
             bc,x = bitmap.consume(bc,8)
             res.append(x)
         res = res + [0]*(self.blocksize() - len(res))   # FIXME: use padding
-        self.value = str().join(transform(map(chr,res)))
-        return self
+        return super(type, self).__setvalue__(str().join(transform(map(chr,res))))
+
+    def get(self):
+        return self.__getvalue__()
+    num = number = __int__ = int = get
+
+class uinteger_t(type):
+    '''Provides unsigned integer support'''
+    def summary(self, **options):
+        res = self.int()
+        return '{:-#0{:d}x} ({:d})'.format(res, 2+self.length*2, res)
 
     def __getvalue__(self):
-        return self.int()
-
-    def int(self):
         '''Convert integer type into a number'''
-        if not self.initializedQ():
-            raise error.InitializationError(self, 'num')
+        return super(uinteger_t, self).__getvalue__()
 
-        if self.byteorder is config.byteorder.bigendian:
-            return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
-        elif self.byteorder is config.byteorder.littleendian:
-            return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
-        raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
-    __int__ = num = number = int
+    def __setvalue__(self, integer):
+        return super(uinteger_t, self).__setvalue__(integer)
 
+class sinteger_t(type):
+    '''Provides signed integer support'''
     def summary(self, **options):
         res = self.int()
         return '{:+#0{:d}x} ({:d})'.format(res, 3+self.length*2, res)
 
-    def flip(self):
-        '''Returns an integer with the endianness flipped'''
-        if self.byteorder is config.byteorder.bigendian:
-            return self.cast(littleendian(self.__class__))
-        elif self.byteorder is config.byteorder.littleendian:
-            return self.cast(bigendian(self.__class__))
-        raise error.UserError(self, 'integer_t.flip', message='Unexpected byte order {!r}'.format(self.byteorder))
-type = integer_t
-
-class sint_t(integer_t):
-    '''Provides signed integer support'''
-    def int(self):
+    def __getvalue__(self):
         if not self.initializedQ():
-            raise error.InitializationError(self, 'num')
+            raise error.InitializationError(self, 'int')
         signmask = int(2**(8*self.blocksize()-1))
-        num = super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0],self).int()
+        num = super(sinteger_t, self).__getvalue__()
         res = num&(signmask-1)
         if num&signmask:
             return (signmask-res)*-1
@@ -252,37 +285,42 @@ class sint_t(integer_t):
         res = integer & (signmask-1)
         if integer < 0:
             res |= signmask
-        return super([_ for _ in self.__class__.__mro__ if _.__name__ == 'sint_t'][0], self).__setvalue__(res)
+        return super(sinteger_t, self).__setvalue__(res)
 
 class uinteger(ptype.definition): attribute,cache = 'length',{}
 class sinteger(ptype.definition): attribute,cache = 'length',{}
-uint,sint,integer = uinteger,sinteger,sinteger
+uint,sint = uinteger,sinteger
+integer_t,integer = sinteger_t, sinteger
 
 @uint.define
-class uint_t(integer_t): length = 0
+class uint_t(uinteger_t): length = 0
 @uint.define
-class uint8_t(uint_t): length = 1
+class uint8_t(uinteger_t): length = 1
 @uint.define
-class uint16_t(uint_t): length = 2
+class uint16_t(uinteger_t): length = 2
 @uint.define
-class uint32_t(uint_t): length = 4
+class uint32_t(uinteger_t): length = 4
 @uint.define
-class uint64_t(uint_t): length = 8
+class uint64_t(uinteger_t): length = 8
+@uint.define
+class uint128_t(uinteger_t): length = 16
 
 @sint.define
-class int_t(sint_t): length = 0
+class sint_t(sinteger_t): length = 0
 @sint.define
-class sint8_t(int_t): length = 1
+class sint8_t(sinteger_t): length = 1
 @sint.define
-class sint16_t(int_t): length = 2
+class sint16_t(sinteger_t): length = 2
 @sint.define
-class sint32_t(int_t): length = 4
+class sint32_t(sinteger_t): length = 4
 @sint.define
-class sint64_t(int_t): length = 8
+class sint64_t(sinteger_t): length = 8
+@sint.define
+class sint128_t(sinteger_t): length = 16
 
-int8_t,int16_t,int32_t,int64_t = sint8_t,sint16_t,sint32_t,sint64_t
+int_t,int8_t,int16_t,int32_t,int64_t,int128_t = sint_t,sint8_t,sint16_t,sint32_t,sint64_t,sint128_t
 
-class enum(integer_t):
+class enum(uinteger_t):
     '''
     An integer_t for managing constants used when you define your integer.
     i.e. class myinteger(pint.enum, pint.uint32_t): pass
@@ -294,7 +332,7 @@ class enum(integer_t):
     _values_ = []
 
     def __init__(self, *args, **kwds):
-        super(enum, self).__init__(*args, **kwds)
+        super(type, self).__init__(*args, **kwds)
 
         # invert ._values_ if they're defined backwards
         if len(self._values_):
@@ -349,7 +387,7 @@ class enum(integer_t):
     def __setvalue__(self, value):
         if isinstance(value, basestring):
             value = self.byname(value)
-        return super(enum,self).__setvalue__(value)
+        return super(uinteger_t,self).__setvalue__(value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
@@ -367,6 +405,12 @@ class enum(integer_t):
     def enumerations(cls):
         '''Return all values that have been defined in this'''
         return [v for k,v in cls._values_]
+
+# update our current state
+for k, v in globals().items():
+    if v is not type and isinstance(v, __builtin__.type) and issubclass(v, type):
+        __state__.setdefault(Config.integer.order, {})[v] = v
+    continue
 
 if __name__ == '__main__':
     import ptype,parray
@@ -410,7 +454,7 @@ if __name__ == '__main__':
         a = a.l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print b, repr(b.serialize())
+        print a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_bigendian_uint32_set():
@@ -418,14 +462,14 @@ if __name__ == '__main__':
         a.set(0x0abcdef0)
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print b, repr(b.serialize())
+        print a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_littleendian_load():
         b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print b, repr(b.serialize())
+        print b, b.serialize().encode('hex')
 
     @TestCase
     def test_int_littleendian_set():
@@ -433,7 +477,7 @@ if __name__ == '__main__':
         b.set(0x0abcdef0)
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print b, repr(b.serialize())
+        print b, b.serialize().encode('hex')
 
     @TestCase
     def test_int_revert_bigendian_uint32_load():
@@ -441,7 +485,7 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string1)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, repr(a.serialize())
+        print a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_revert_littleendian_uint32_load():
@@ -449,7 +493,7 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string2)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
-        print a, repr(a.serialize())
+        print a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_littleendian_int32_signed_load():
@@ -459,7 +503,7 @@ if __name__ == '__main__':
         b, = struct.unpack('l',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b,a, repr(a.serialize())
+        print b, a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_littleendian_int32_unsigned_load():
@@ -469,7 +513,7 @@ if __name__ == '__main__':
         b, = struct.unpack('l',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b,a, repr(a.serialize())
+        print b, a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_littleendian_int32_unsigned_highedge_load():
@@ -479,7 +523,7 @@ if __name__ == '__main__':
         b, = struct.unpack('l',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b,a, repr(a.serialize())
+        print b, a, a.serialize().encode('hex')
 
     @TestCase
     def test_int_littleendian_int32_unsigned_lowedge_load():
@@ -489,7 +533,7 @@ if __name__ == '__main__':
         b, = struct.unpack('l',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b,a, repr(a.serialize())
+        print b, a, a.serialize().encode('hex')
 
     @TestCase
     def test_enum_set_integer():

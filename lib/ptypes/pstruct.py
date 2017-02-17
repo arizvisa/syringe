@@ -256,11 +256,11 @@ class type(_pstruct_generic):
                 v = self.new(ptype.type).a.summary(**options)
                 result.append('[{:x}] {:s} {:s} {:s}'.format(o, i, name, v))
                 continue
-            o = self.getoffset(value.__name__ or name)
-            i = utils.repr_instance(value.classname(), value.name() or name)
-            v = value.summary(**options) if value.initializedQ() else '???'
+            ofs = self.getoffset(value.__name__ or name)
+            inst = utils.repr_instance(value.classname(), value.name() or name)
+            val = value.summary(**options) if value.initializedQ() else '???'
             prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
-            result.append('[{:x}] {:s}{:s} {:s}'.format(o, i, ' {{{:s}}}'.format(prop) if prop else '', v))
+            result.append('[{:x}] {:s}{:s} {:s}'.format(ofs, inst, ' {{{:s}}}'.format(prop) if prop else '', val))
             o += value.size()
 
         if len(result) > 0:

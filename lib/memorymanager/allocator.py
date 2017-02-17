@@ -201,7 +201,7 @@ if sys.platform == 'win32':
                 ctypes.byref(oldProtections)
             )
             if not res:
-                raise OSError("GetLastError() -> %s"% (repr(getLastErrorTuple())))
+                raise OSError("GetLastError() -> {!r}".format(getLastErrorTuple()))
 
             # and...back
             kernelToAllocator = { PAGE_NOACCESS : 0, PAGE_EXECUTE : 1, PAGE_WRITECOPY : 2, PAGE_EXECUTE_WRITECOPY : 3, PAGE_READONLY : 4, PAGE_EXECUTE_READ : 5, PAGE_READWRITE : 6, PAGE_EXECUTE_READWRITE : 7 }
@@ -221,7 +221,7 @@ if sys.platform == 'win32':
                 PAGE_READWRITE
             )
             if not res:
-                raise OSError("GetLastError() -> %s"% (repr(getLastErrorTuple())))
+                raise OSError("GetLastError() -> {!r}".format(getLastErrorTuple()))
             return res
 
         def getExecutable(self, address, count, **attrs):
@@ -235,7 +235,7 @@ if sys.platform == 'win32':
                 byref(oldProtections)
             )
             if not res:
-                raise OSError("GetLastError() -> %s"% (repr(getLastErrorTuple())))
+                raise OSError("GetLastError() -> {!r}".format(getLastErrorTuple()))
             return address
 
         def freeExecutable(self, address, count, **attrs):
@@ -249,7 +249,7 @@ if sys.platform == 'win32':
                 byref(oldProtections)
             )
             if not res:
-                raise OSError("GetLastError() -> %s"% (repr(getLastErrorTuple())))
+                raise OSError("GetLastError() -> {!r}".format(getLastErrorTuple()))
             return res != 0
 
         def freeWriteable(self, address, count, **attrs):
@@ -262,11 +262,11 @@ if sys.platform == 'win32':
                 MEM_DECOMMIT
             )
             if not res:
-                raise OSError("GetLastError() -> %s"% (repr(getLastErrorTuple())))
+                raise OSError("GetLastError() -> {!r}".format(getLastErrorTuple()))
             return res != 0
 
         def read(self, address, length):
-            assert type(address) in (int,long), "Invalid address type %s"% repr(address)
+            assert type(address) in (int,long), "Invalid address type {!r}".format(address)
             assert type(length) in (int,long)
             NumberOfBytesRead = ctypes.c_int()
             res = ctypes.c_char*length
@@ -274,14 +274,14 @@ if sys.platform == 'win32':
 
             res = k32.ReadProcessMemory(self.handle, address, Buffer, length, byref(NumberOfBytesRead))
             if res == 0:
-                message = 'Unable to read from handle(%x)[%08x:%08x].'% (self.handle, address, address+length)
-                raise OSError(message, "GetLastError() -> %s"% (repr(getLastErrorTuple())))
-
+                message = 'Unable to read from handle({:x})[{:08x}:{:08x}].'.format(self.handle, address, address+length)
+                raise OSError(message, "GetLastError() -> {!r}".format(getLastErrorTuple()))
+.format
             assert NumberOfBytesRead.value == length, 'Expected %d bytes, received %d bytes.'% (length, NumberOfBytesRead.value)
             return str(Buffer.raw)
 
         def write(self, address, value):
-            assert type(address) in (int,long), "Invalid address type %s"% repr(address)
+            assert type(address) in (int,long), "Invalid address type {!r}".format(address)
             assert type(value) is str
             NumberOfBytesWritten = ctypes.c_int()
 
@@ -292,7 +292,7 @@ if sys.platform == 'win32':
             res = k32.WriteProcessMemory(self.handle, address, Buffer, len(value), byref(NumberOfBytesWritten))
             if res == 0:
                 message = 'Unable to write to handle(%x)[%08x:%08x].'% (self.handle, address, address+len(value))
-                raise OSError(message, "GetLastError() -> %s"% (repr(getLastErrorTuple())))
+                raise OSError(message, "GetLastError() -> {!r}".format(getLastErrorTuple()))
 
             #assert NumberOfBytesWritten.value == len(value), 'Expected %d bytes, received %d bytes.'% (len(value), NumberOfBytesWritten.value)
             return NumberOfBytesWritten.value

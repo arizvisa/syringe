@@ -15,7 +15,7 @@ class IMAGE_IMPORT_HINT(pstruct.type):
     ]
 
     def hint(self):
-        return self['Hint'].li.num()
+        return self['Hint'].li.int()
 
     def str(self):
         return self['String'].li.str()
@@ -99,13 +99,13 @@ class _IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
         return self['Name'].getName()
 
 class IMAGE_IMPORT_NAME_TABLE_ENTRY32(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
-    root = uint32
+    _value_ = uint32
     _fields_ = [
         (IMAGE_IMPORT_NAME_TABLE_NAME32, 'Name'),
         (IMAGE_IMPORT_NAME_TABLE_ORDINAL32, 'Ordinal'),
     ]
 class IMAGE_IMPORT_NAME_TABLE_ENTRY64(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
-    root = uint64
+    _value_ = uint64
     _fields_ = [
         (IMAGE_IMPORT_NAME_TABLE_NAME64, 'Name'),
         (IMAGE_IMPORT_NAME_TABLE_ORDINAL64, 'Ordinal'),
@@ -114,7 +114,7 @@ IMAGE_IMPORT_NAME_TABLE_ENTRY = IMAGE_IMPORT_NAME_TABLE_ENTRY32 if ptypes.Config
 
 class _IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
     def isTerminator(self, value):
-        return value.num() == 0 if self.length is None else self.length < len(self.value)
+        return value.int() == 0 if self.length is None else self.length < len(self.value)
 
 class IMAGE_IMPORT_ADDRESS_TABLE32(_IMAGE_IMPORT_ADDRESS_TABLE):
     _object_ = uint32

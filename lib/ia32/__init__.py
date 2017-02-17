@@ -101,7 +101,7 @@ def promoteBranch_8(instruction):
         column = ord(getOpcode(instruction)[1]) & 0xf
         result = setOpcode(instruction, chr(column | 0x70))
     else:
-        raise NotImplementedError('Unable to promote a non-branch instruction to 8-bits: %s'%(repr(n)))
+        raise NotImplementedError('Unable to promote a non-branch instruction to 8-bits: {!r}'.format(n))
 
     result = setPrefix(setImmediate(result, '\x00'), prefix)
     return setImmediate(result, encodeInteger(offset-length(result), 1))
@@ -121,7 +121,7 @@ def promoteBranch_32(instruction):
     elif isRelativeCall(instruction) or isUnconditionalBranch(instruction) or isConditionalBranch(instruction):
         result = instruction
     else:
-        raise NotImplementedError('Unable to promote a non-branch instruction to 32-bits: %s'%(repr(n)))
+        raise NotImplementedError('Unable to promote a non-branch instruction to 32-bits: {!r}'.format(n))
 
     result = setPrefix(setImmediate(result, '\x00\x00\x00\x00'), prefix)
     return setImmediate(result, encodeInteger(offset-length(result), 4))

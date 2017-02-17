@@ -172,8 +172,7 @@ class proxy(base):
     def __write_object(cls, object, offset, data):
         left,right = offset, offset+len(data)
         res = object.blocksize()
-        padding = utils.padding.fill(res - min(res,len(data)), object.padding)
-        object.value = object.value[:left] + data + padding + object.value[right:]
+        object.value = object.value[:left] + data + object.value[right:]
         return res
 
     @classmethod
@@ -292,8 +291,11 @@ class string(base):
 class memorybase(base):
     '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
 
+class debuggerbase(memorybase):
+    '''Base provider class for reading/writing with a debugger-type backing. Intended to be inherited from.'''
+
 class filebase(base):
-    '''Basic fileobj provider. Intended to be inherited from.'''
+    '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
     file = None
     def __init__(self, fileobj):
         self.file = fileobj
@@ -817,7 +819,7 @@ except OSError, m:
 try:
     _ = 'idaapi' in sys.modules
     import idaapi as _idaapi
-    class Ida(memorybase):
+    class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
         offset = 0xffffffff
 
@@ -835,7 +837,16 @@ try:
                 return str().join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
             if _idaapi.isEnabled(offset):
                 return '' if size == 0 else (padding*size) if (_idaapi.getFlags(offset) & _idaapi.FF_IVL) == 0 else _idaapi.get_many_bytes(offset, size)
-            raise Exception(offset)
+            raise Exception((offset, size))
+
+        @classmethod
+        def expr(cls, string):
+            index = (i for i in range(_idaapi.get_nlist_size()) if string == _idaapi.get_nlist_name(i))
+            try:
+                res = _idaapi.get_nlist_ea(next(index))
+            except StopIteration:
+                raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
+            return res
 
         @classmethod
         def within_segment(cls, offset):
@@ -853,7 +864,7 @@ try:
             '''Consume ``amount`` bytes from the given provider.'''
             try:
                 result = cls.read(cls.offset, amount)
-            except Exception, (ofs,):
+            except Exception, (ofs,amount):
                 raise error.ConsumeError(cls, ofs, amount, ofs-cls.offset)
             cls.offset += len(result)
             return result
@@ -874,7 +885,7 @@ except ImportError:
 try:
     _ = '_PyDbgEng' in sys.modules
     import _PyDbgEng
-    class PyDbgEng(memorybase):
+    class PyDbgEng(debuggerbase):
         '''A provider that uses the PyDbgEng.pyd module to interact with the memory of the current debugged process.'''
         offset = 0
         def __init__(self, client=None):
@@ -903,6 +914,13 @@ try:
                 result = _PyDbgEng.AttachKernel(flags=0, connectOptions=remote)
             return cls(result)
 
+        @classmethod
+        def expr(cls, string):
+            control = _PyDbgEng.IDebugControl
+            dtype = DEBUG_VALUE_INT32
+            return control.Evaluate(string, dtype)
+            raise NotImplementedError   # XXX
+
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
             res,self.offset = self.offset,offset
@@ -928,10 +946,14 @@ except ImportError:
 try:
     _ = 'pykd' in sys.modules
     import pykd as _pykd
-    class Pykd(memorybase):
+    class Pykd(debuggerbase):
         '''A provider that uses the Pykd library to interact with the memory of a debugged process.'''
         def __init__(self):
             self.addr = 0
+
+        @classmethod
+        def expr(cls, string):
+            return _pykd.expr(string)
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -964,11 +986,14 @@ except ImportError:
 
 try:
     _ = 'lldb' in sys.modules
-    class lldb(base):
+    class lldb(debuggerbase):
         module = __import__('lldb')
         def __init__(self, sbprocess=None):
             self.__process = sbprocess or self.module.process
             self.address = 0
+        @classmethod
+        def expr(cls, string):
+            raise NotImplementedError   # XXX
         def seek(self, offset):
             res,self.address = self.address, offset
             return res
@@ -998,11 +1023,15 @@ except ImportError:
 
 try:
     _ = 'gdb' in sys.modules
-    class gdb(base):
+    class gdb(debuggerbase):
         module = __import__('gdb')
         def __init__(self, inferior=None):
             self.__process = inferior or self.module.selected_inferior()
             self.address = 0
+        @classmethod
+        def expr(cls, string):
+            res = gdb.parse_and_eval(string)
+            return res.cast( gdb.lookup_type("long") )
         def seek(self, offset):
             res,self.address = self.address, offset
             return res

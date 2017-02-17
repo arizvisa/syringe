@@ -47,7 +47,7 @@ def calculateRelativeOffset(self, offset):
     pe = locateHeader(self)
     section = pe['Sections'].getsectionbyoffset(offset)
     o = offset - section['PointerToRawData'].int()
-    return base + section['VirtualAddress'].num() + o
+    return base + section['VirtualAddress'].int() + o
 
 def calculateRealAddress(self, address):
     """given an rva, return offset relative to the baseaddress"""
@@ -67,14 +67,21 @@ def calculateRealAddress(self, address):
 def realaddress(target, **kwds):
     """Returns a pointer to /target/ where value is an rva"""
     kwds.setdefault('__name__', 'realaddress')
+    if 'type' in kwds:
+        return dyn.opointer(target, calculateRealAddress, kwds.pop('type'), **kwds)
     return dyn.opointer(target, calculateRealAddress, **kwds)
+
 def fileoffset(target, **kwds):
     """Returns a pointer to /target/ where value is a fileoffset"""
     kwds.setdefault('__name__', 'fileoffset')
+    if 'type' in kwds:
+        return dyn.opointer(target, calculateRelativeOffset, kwds.pop('type'), **kwds)
     return dyn.opointer(target, calculateRelativeOffset, **kwds)
 def virtualaddress(target, **kwds):
     """Returns a pointer to /target/ where value is a va"""
     kwds.setdefault('__name__', 'virtualaddress')
+    if 'type' in kwds:
+        return dyn.opointer(target, calculateRelativeAddress, kwds.pop('type'), **kwds)
     return dyn.opointer(target, calculateRelativeAddress, **kwds)
 
 class DataDirectoryEntry(pstruct.type):
@@ -139,8 +146,8 @@ class SectionTable(pstruct.type):
         (virtualaddress(lambda s:dyn.block(s.parent.getloadedsize()), type=uint32), 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
         (fileoffset(lambda s:dyn.block(s.parent.getreadsize()), type=uint32), 'PointerToRawData'),
-        (fileoffset(lambda s:dyn.array(relocations.Relocation, s.parent['NumberOfRelocations'].li.num()), type=uint32), 'PointerToRelocations'),
-        (fileoffset(lambda s:dyn.array(linenumbers.LineNumber, s.parent['NumberOfLinenumbers'].li.num()), type=uint32), 'PointerToLinenumbers'),
+        (fileoffset(lambda s:dyn.array(relocations.Relocation, s.parent['NumberOfRelocations'].li.int()), type=uint32), 'PointerToRelocations'),
+        (fileoffset(lambda s:dyn.array(linenumbers.LineNumber, s.parent['NumberOfLinenumbers'].li.int()), type=uint32), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
         (uint16, 'NumberOfLinenumbers'),
         (pbinary.littleendian(IMAGE_SCN), 'Characteristics'),
@@ -148,9 +155,9 @@ class SectionTable(pstruct.type):
 
     def getreadsize(self):
         nt = self.getparent(SectionTableArray).p
-        alignment = nt['OptionalHeader']['FileAlignment'].num()
+        alignment = nt['OptionalHeader']['FileAlignment'].int()
         mask = alignment - 1
-        return (self['SizeOfRawData'].num() + mask) & ~mask
+        return (self['SizeOfRawData'].int() + mask) & ~mask
 
     def getloadedsize(self):
         # XXX: even though the loadedsize is aligned to SectionAlignment,
@@ -158,17 +165,17 @@ class SectionTable(pstruct.type):
         #      actual mapped size is rounded to pagesize
 
         # nt = self.getparent(Header)
-        # alignment = nt['OptionalHeader']['SectionAlignment'].num()
+        # alignment = nt['OptionalHeader']['SectionAlignment'].int()
         alignment = 0x1000  # pagesize
         mask = alignment - 1
-        return (self['VirtualSize'].num() + mask) & ~mask
+        return (self['VirtualSize'].int() + mask) & ~mask
 
     def containsaddress(self, address):
-        start = self['VirtualAddress'].num()
+        start = self['VirtualAddress'].int()
         return True if (address >= start) and (address < start + self.getloadedsize()) else False
 
     def containsoffset(self, offset):
-        start = self['PointerToRawData'].num()
+        start = self['PointerToRawData'].int()
         return True if (offset >= start) and (offset < start + self.getreadsize()) else False
 
     def data(self):
@@ -179,10 +186,10 @@ class SectionTable(pstruct.type):
 
     ## offset means section offset
     def getoffsetbyaddress(self, address):
-        return address - self['VirtualAddress'].num() + self['PointerToRawData'].num()
+        return address - self['VirtualAddress'].int() + self['PointerToRawData'].int()
 
     def getaddressbyoffset(self, offset):
-        return offset - self['PointerToRawData'].num() + self['VirtualAddress'].num()
+        return offset - self['PointerToRawData'].int() + self['VirtualAddress'].int()
 
 class SectionTableArray(parray.type):
     _object_ = SectionTable
@@ -230,7 +237,7 @@ class SectionTableArray(parray.type):
         vswidth = max(n['VirtualSize'].size()*2 for n in self.value)+2
         fwidth = max(n['PointerToRawData'].size()*2 for n in self.value)+2
         fswidth = max(n['SizeOfRawData'].size()*2 for n in self.value)+2
-        return '\n'.join('[{:x}] {:>{}}{:4s} Name:{:<{}} Raw[{:=#0{}x}:+{:=#0{}x}] Virtual[{:=#0{}x}:+{:=#0{}x}] Characteristics:{:s}'.format(n.getoffset(), n.classname(),cnwidth,'{%d}'%i, n['Name'].str(),namewidth, n['PointerToRawData'].num(),fwidth, n['SizeOfRawData'].num(),fswidth, n['VirtualAddress'].num(),vwidth, n['VirtualSize'].num(),vswidth, n['Characteristics'].summary()) for i,n in enumerate(self.value))
+        return '\n'.join('[{:x}] {:>{}}{:4s} Name:{:<{}} Raw[{:=#0{}x}:+{:=#0{}x}] Virtual[{:=#0{}x}:+{:=#0{}x}] Characteristics:{:s}'.format(n.getoffset(), n.classname(),cnwidth,'{%d}'%i, n['Name'].str(),namewidth, n['PointerToRawData'].int(),fwidth, n['SizeOfRawData'].int(),fswidth, n['VirtualAddress'].int(),vwidth, n['VirtualSize'].int(),vswidth, n['Characteristics'].summary()) for i,n in enumerate(self.value))
 
     def repr(self, **options):
         return self.details(**options)
@@ -257,7 +264,7 @@ class OptionalHeader(pstruct.type):
         '''Returns True if a 64-bit executable'''
         if len(self.v) > 0:
             magic = self['Magic']
-            return magic.li.num() == 0x20b
+            return magic.li.int() == 0x20b
         return False
 
     _fields_ = [
@@ -342,7 +349,7 @@ class Certificate(pstruct.type):
         (uint32, 'dwLength'),
         (wRevision, 'wRevision'),
         (wCertificateType, 'wCertificateType'),
-        (lambda s: dyn.block(s['dwLength'].li.num() - 8), 'bCertificate'),
+        (lambda s: dyn.block(s['dwLength'].li.int() - 8), 'bCertificate'),
     ]
 
 if __name__ == '__main__':

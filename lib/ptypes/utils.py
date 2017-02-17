@@ -1,5 +1,6 @@
 import sys,itertools,_random,math,_weakref,array,logging
 import functools,random
+import types
 
 ## string formatting
 def strdup(string, terminator='\x00'):
@@ -306,14 +307,20 @@ def memoize(*kargs,**kattrs):
             res = key(*args, **kwds)
             try: return cache[res] if res in cache else cache.setdefault(res, fn(*args,**kwds))
             except TypeError: return fn(*args, **kwds)
+        def force(*args, **kwds):
+            res = key(*args, **kwds)
+            cache[res] = fn(*args, **kwds)
+            return cache[res]
 
         # set some utilies on the memoized function
-        callee.memoize_key = lambda: key
-        callee.memoize_key.__doc__ = """Generate a unique key based on the provided arguments"""
+        callee.memoize_key = lambda *args,**kwargs: key(*args, **kwargs)
+        callee.memoize_key.__doc__ = """Generate a unique key based on the provided arguments."""
         callee.memoize_cache = lambda: cache
-        callee.memoize_cache.__doc__ = """Return the current memoize cache"""
+        callee.memoize_cache.__doc__ = """Return the current memoize cache."""
         callee.memoize_clear = lambda: cache.clear()
-        callee.memoize_clear.__doc__ = """Empty the current memoize cache"""
+        callee.memoize_clear.__doc__ = """Empty the current memoize cache."""
+        callee.force = lambda *args,**kwargs: force(*args, **kwargs)
+        callee.force.__doc__ = """Force calling the function whilst updating the memoize cache."""
 
         callee.func_name = fn.func_name
         callee.func_doc = fn.func_doc

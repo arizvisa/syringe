@@ -263,7 +263,7 @@ class type(ptype.generic):
 
     def summary(self, **options):
         res = self.bitmap()
-        return '({:s}, {:d})'.format(bitmap.hex(res), self.bits())
+        return '({:s},{:d})'.format(bitmap.hex(res), self.bits())
 
     def details(self, **options):
         return bitmap.string(self.bitmap(), reversed=True)
@@ -735,7 +735,7 @@ class _struct_generic(container):
 
             _, s = b = value.bitmap()
             i = utils.repr_instance(value.classname(), value.name() or name)
-            v = '({:s}, {:d})'.format(bitmap.hex(b), s)
+            v = '({:s},{:d})'.format(bitmap.hex(b), s)
             prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
             _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
             result.append('[{:s}] {:s}{:s} {:s}'.format(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision), i, ' {{{:s}}}'.format(prop) if prop else '', value.summary()))
@@ -1101,6 +1101,7 @@ class partial(ptype.container):
         list(itertools.starmap(res.__setitem__, (('position', (offset, 0)), ('parent', self))))
         if hasattr(self.blocksize, 'im_func') and self.blocksize.im_func is not partial.blocksize.im_func:
             res.setdefault('blockbits', self.blockbits)
+        if hasattr(self, '__name__'): res.setdefault('__name__', self.__name__)
         return obj(**res)
 
     def __update__(self, attrs={}, **moreattrs):
@@ -1281,8 +1282,6 @@ class partial(ptype.container):
             raise error.InitialiationError(self, 'partial.__setvalue__')
         return self.object.set(*args, **kwds)
     def __getattr__(self, name):
-        if name in ('__module__', '__name__'):
-            raise AttributeError(name)
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__getattr__')
         return getattr(self.object, name)
@@ -1324,17 +1323,19 @@ class flags(struct):
 
     def __summary_initialized(self):
         flags = []
-        for (t, name), value in map(None, self._fields_, self.value):
+        for (t, name), value in zip(self._fields_, self.value):
             if value is None:
                 flags.append((name, value))
                 continue
             flags.append((name, value.int()))
-
-        x = _, s = self.bitmap()
-        return '({:s}, {:d}) {:s}'.format(bitmap.hex(x), s, ','.join(''.join((n, '?' if v is None else '={:d}'.format(v) if v > 1 else '')) for n, v in flags if v is None or v > 0))
+        res, fval = self.bitmap(), lambda v: '?' if v is None else '={:d}'.format(v) if v > 1 else ''
+        items = [(n,v) for n,v in flags if v is None or v > 0]
+        if items:
+            return '({:s},{:d}) {:s}'.format(bitmap.hex(res), bitmap.size(res), ','.join(map(str().join,((n,fval(v)) for n,v in items))))
+        return '({:s},{:d})'.format(bitmap.hex(res), bitmap.size(res))
 
     def __summary_uninitialized(self):
-        return '(flags) {:s}'.format(','.join("{:s}?".format(name) for t, name in self._fields_))
+        return '(?,{:d}) {:s}'.format(self.blockbits(), ','.join("?{:s}".format(name) for t, name in self._fields_))
 
     def __and__(self, field):
         '''Returns if the specified /field/ is set'''
@@ -2469,7 +2470,7 @@ if __name__ == '__main__':
                 ('b', -5),
                 ('c', -4),
                 ('d', -3),
-                
+
             ]
         class s(pbinary.struct):
             _fields_ = [
@@ -2492,11 +2493,10 @@ if __name__ == '__main__':
                 ('d', -3),
                 ('e', -2),
                 ('f', -1),
-                
             ]
         class s(pbinary.array):
             length, _object_ = 4, e
-            
+
         x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
         if ''.join(map(operator.methodcaller('str'), x.get())) == 'dead':
             raise Success

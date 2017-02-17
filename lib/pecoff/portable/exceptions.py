@@ -50,7 +50,7 @@ class UNWIND_INFO(pstruct.type):
         (byte, 'SizeOfProlog'),
         (byte, 'CountOfCodes'),
         (Frame, 'Frame'),
-        (lambda s: dyn.array(UNWIND_CODE, s['CountOfCodes'].li.num()), 'UnwindCode'),
+        (lambda s: dyn.array(UNWIND_CODE, s['CountOfCodes'].li.int()), 'UnwindCode'),
         (__ExceptionHandler, 'ExceptionHandler'),
         (__ChainedUnwindInfo, 'ChainedUnwindInfo'),
     ]
@@ -66,7 +66,7 @@ class IMAGE_EXCEPTION_DIRECTORY(parray.block):
     _object_ = RUNTIME_FUNCTION
 
     def blocksize(self):
-        return self.p.p['Size'].num()
+        return self.p.p['Size'].int()
 
 if __name__ == '__main__':
     import pecoff,ptypes

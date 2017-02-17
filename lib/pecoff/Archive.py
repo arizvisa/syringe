@@ -8,15 +8,15 @@ import logging,itertools
 class ulong(bigendian(uint32_t)): pass
 
 class stringinteger(pstr.string):
-    def int(self):
+    def __getvalue__(self):
         return int(self.str())
-    num = number = int
-    def __int__(self):
-        return self.int()
+    def __setvalue__(self, integer):
+        res, bs = str(integer), self.blocksize()
+        return super(stringinteger, self).__setvalue__(res + ' '*(bs-len(res)))
 
 class Index(uint16_t):
     def getIndex(self):
-        return self.num()-1      # 1 off
+        return self.int()-1      # 1 off
 
 class Import(pstruct.type):
     class Header(pstruct.type):
@@ -44,7 +44,7 @@ class Import(pstruct.type):
         ]
 
         def valid(self):
-            sig1,sig2 = self['Sig1'].num(), self['Sig2'].num()
+            sig1,sig2 = self['Sig1'].int(), self['Sig2'].int()
             return sig1 == 0 and sig2 == 0xffff
 
         def repr(self):
@@ -58,13 +58,13 @@ class Import(pstruct.type):
     ]
 
     def getImport(self):
-        return self['Member']['Module'].str(), self['Member']['Name'].str(), self['Header']['Ordinal/Hint'].num(), self['Header']['Type']
+        return self['Member']['Module'].str(), self['Member']['Name'].str(), self['Header']['Ordinal/Hint'].int(), self['Header']['Type']
 
 #######
 class MemberType(ptype.definition):
     attribute,cache = 'internalname',{}
 
-    class Data(dyn.union):
+    class Data(dynamic.union):
         _fields_ = [
             (Import, 'Import'),
             (Object.File, 'Object'),
@@ -82,26 +82,26 @@ class Linker1(pstruct.type):
     internalname = 0
     _fields_ = [
         (ulong, 'Number of Symbols'),
-        (lambda self: dyn.array(ulong, self['Number of Symbols'].li.num()), 'Offsets'),
-        (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].li.num()), 'Strings')
+        (lambda self: dyn.array(ulong, self['Number of Symbols'].li.int()), 'Offsets'),
+        (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].li.int()), 'Strings')
     ]
 
     def getTable(self):
-        return [(str(k), v.num()) for k,v in zip(self['Strings'], self['Offsets'])]
+        return [(str(k), v.int()) for k,v in zip(self['Strings'], self['Offsets'])]
 
 @MemberType.define
 class Linker2(pstruct.type):
     internalname = 1
     _fields_ = [
         (uint32_t, 'Number of Members'),
-        (lambda self: dyn.array(uint32_t, self['Number of Members'].li.num()), 'Offsets'),
+        (lambda self: dyn.array(uint32_t, self['Number of Members'].li.int()), 'Offsets'),
         (uint32_t, 'Number of Symbols'),
-        (lambda self: dyn.array(Index, self['Number of Symbols'].li.num()), 'Indices'),
-        (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].num()), 'Strings')
+        (lambda self: dyn.array(Index, self['Number of Symbols'].li.int()), 'Indices'),
+        (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].int()), 'Strings')
     ]
 
     def getTable(self):
-        return [(k.str(), self['Offsets'][i.getIndex()].num()) for k,i in zip(self['Strings'], self['Indices'])]
+        return [(k.str(), self['Offsets'][i.getIndex()].int()) for k,i in zip(self['Strings'], self['Indices'])]
 
 #@MemberType.define
 class LinkerMember1(Linker1):
@@ -118,7 +118,7 @@ class Longnames(ptype.block):
         return utils.strdup(self.serialize()[index:])
 
     def blocksize(self):
-        return self.p['Header'].li['Size'].num()
+        return self.p['Header'].li['Size'].int()
 
 #######
 class Member(pstruct.type):
@@ -147,17 +147,17 @@ class Member(pstruct.type):
         ]
 
         def data(self):
-            size = self['Size'].num()
-            return self.new(dyn.block(self['Size'].num()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
+            size = self['Size'].int()
+            return self.new(dyn.block(self['Size'].int()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
 
     def __Data(self):
         header = self['Header'].li
-        filename,size = header['Name'].str(),header['Size'].num()
+        filename,size = header['Name'].str(),header['Size'].int()
         res = MemberType.get(filename, root=dyn.block(size))
         return dyn.clone(res, length=size) if ptype.isrelated(res, ptype.block) else res
 
     def __newline(self):
-        ofs = self.getoffset('Member') + self['Header'].li['Size'].num()
+        ofs = self.getoffset('Member') + self['Header'].li['Size'].int()
         res = self.new(pstr.char_t, __name__='newline', offset=ofs)
         if res.l.serialize() == '\n':
             return pstr.char_t
@@ -188,7 +188,7 @@ class Members(parray.terminated):
         if name == '//':
             self.Names = value
 
-        res = self.Linker['Number of Members'].num()
+        res = self.Linker['Number of Members'].int()
         return False if len(self.value) < res else True
 
     def walk(self):
@@ -231,7 +231,7 @@ class File(pstruct.type):
         return self.getmember(index).li.data().l.serialize()
 
     def getmembercount(self):
-        return self['members'].Linker['Number of Members'].num()
+        return self['members'].Linker['Number of Members'].int()
 
     ## faster interface using ptypes to slide view
     def fetchimports(self):
@@ -252,7 +252,7 @@ class File(pstruct.type):
                 importheader.setoffset(o)
                 imp.setoffset(o+impblocksize)
                 imp.load()
-                yield (imp['Module'].str(), imp['Name'].str(), importheader['Ordinal/Hint'].num(), tuple(importheader['Type'].values()[:2]))
+                yield (imp['Module'].str(), imp['Name'].str(), importheader['Ordinal/Hint'].int(), tuple(importheader['Type'].values()[:2]))
             continue
         return
 

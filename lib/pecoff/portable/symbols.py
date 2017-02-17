@@ -13,7 +13,7 @@ class IMAGE_SYM(ptypes.pint.enum, uint16):
 
     def getSection(self):
         '''Returns the physical section number index if defined, otherwise None'''
-        n = self.num()
+        n = self.int()
         if n in (0, 0xffff, 0xfffe, -1, -2):
             return None
         return n - 1
@@ -86,10 +86,10 @@ class ShortName(pstruct.type):
 
     def str(self):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
-        if self['IsShort'].num() != 0x00000000:
+        if self['IsShort'].int() != 0x00000000:
             return ptypes.utils.strdup( self.serialize(), terminator='\x00')
         stringtable = self.getparent(SymbolTableAndStringTable)['Strings']
-        return stringtable.extract( self['Offset'].num() )
+        return stringtable.extract( self['Offset'].int() )
 
     def set(self, string):
         if len(string) <= 8:
@@ -114,13 +114,13 @@ class Symbol(pstruct.type):
     def summary(self, **options):
         if self.initializedQ():
             name = self['Name'].str()
-            value = self['Value'].num()
+            value = self['Value'].int()
             sym_section = self['SectionNumber']
             sym_type = self['Type']
             sym_class = self['StorageClass']
 
-            aux = AuxiliaryRecord.lookup(sym_class.num())
-            return '{!r}:0x{:x} Section:{:s} (Type:{:s}, Class:{:s}) Aux:{:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].num())
+            aux = AuxiliaryRecord.lookup(sym_class.int())
+            return '{!r}:{:#x} Section:{:s} (Type:{:s}, Class:{:s}) Aux:{:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
         return super(Symbol, self).summary()
 
     def repr(self):
@@ -128,9 +128,9 @@ class Symbol(pstruct.type):
 
     @property
     def auxiliary(self):
-        argh = self.parent.value
-        index = argh.index(self)+1
-        return tuple(argh[index:index+self['NumberOfAuxSymbols'].num()])
+        res = self.parent.value
+        index = res.index(self)+1
+        return tuple(res[index:index+self['NumberOfAuxSymbols'].int()])
     aux = auxiliary
 
 class SymbolTable(parray.terminated):
@@ -143,8 +143,8 @@ class SymbolTable(parray.terminated):
 
     def isTerminator(self, value):
         if isinstance(value, Symbol):
-            auxCount = value['NumberOfAuxSymbols'].num()
-            auxSymbol = AuxiliaryRecord.lookup( value['StorageClass'].num() )
+            auxCount = value['NumberOfAuxSymbols'].int()
+            auxSymbol = AuxiliaryRecord.lookup( value['StorageClass'].int() )
             self.__auxiliary.extend((auxSymbol for _ in range(auxCount)))
         return False
 
@@ -153,20 +153,20 @@ class SymbolTable(parray.terminated):
         while len(result) > 0:
             sym = result.pop(0)
             assert isinstance(sym, Symbol)
-            aux = [ result.pop(0) for t in range(sym['NumberOfAuxSymbols'].num()) ]
+            aux = [ result.pop(0) for t in range(sym['NumberOfAuxSymbols'].int()) ]
             yield sym,aux
         return
 
     def getSymbolAndAuxiliary(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
-        return self.value[index : index+1 + symbol['NumberOfAuxSymbols'].num()]
+        return self.value[index : index+1 + symbol['NumberOfAuxSymbols'].int()]
 
     def details(self, **options):
         result = []
         for s,a in self.iterate():
             result.append(repr(s))
-            if s['NumberOfAuxSymbols'].num() > 0:
+            if s['NumberOfAuxSymbols'].int() > 0:
                 result.extend(ptypes.utils.indent('\n'.join(map(repr,a))).split('\n'))
             continue
         return '\n'.join(result)
@@ -262,7 +262,7 @@ class StringTable(pstruct.type):
 
     _fields_ = [
         (__default_value(uint32, 4), 'Size'),
-        (lambda s: dyn.block(s['Size'].li.num() - 4), 'Data')
+        (lambda s: dyn.block(s['Size'].li.int() - 4), 'Data')
     ]
 
     def extract(self, offset):
@@ -280,7 +280,7 @@ class StringTable(pstruct.type):
 
 class SymbolTableAndStringTable(pstruct.type):
     _fields_ = [
-        (lambda s: dyn.clone(SymbolTable, length=s.p.p['NumberOfSymbols'].li.num()), 'Symbols'),
+        (lambda s: dyn.clone(SymbolTable, length=s.p.p['NumberOfSymbols'].li.int()), 'Symbols'),
         (StringTable, 'Strings'),
     ]
 

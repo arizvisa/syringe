@@ -16,8 +16,8 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
         (word, 'MinorVersion'),
         (word, 'NumberOfNames'),
         (word, 'NumberOfIds'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=s['NumberOfNames'].li.num()), 'Names'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].li.num()), 'Ids'),
+        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=s['NumberOfNames'].li.int()), 'Names'),
+        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].li.int()), 'Ids'),
     ]
 
     def iterate(self):
@@ -36,14 +36,14 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
 class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
     _fields_ = [
         (word, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.num()), 'String')
+        (lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.int()), 'String')
     ]
     def str(self):
         return self['String'].str()
 
 class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda s: dyn.block(s.parent['Size'].li.num()), type=dword), 'Data'),
+        (virtualaddress(lambda s: dyn.block(s.parent['Size'].li.int()), type=dword), 'Data'),
         (dword, 'Size'),
         (dword, 'Codepage'),
         (dword, 'Reserved'),
@@ -93,17 +93,17 @@ if True:
     class Entry(pstruct.type):
         def Value(self):
             szkey = self['szKey'].li.str()
-            sz = self['wValueLength'].li.num()
+            sz = self['wValueLength'].li.int()
             return VersionValue.get(szkey, length=sz)
 
         def Child(self):
             szkey = self['szKey'].li.str()
             return VersionEntry.lookup(szkey)
-            #bs = self['wLength'].li.num() - self.blocksize()
+            #bs = self['wLength'].li.int() - self.blocksize()
             #return VersionEntry.get(szkey, length=bs)
 
         def __Children(self):
-            bs = self['wLength'].li.num() - sum(self[n].blocksize() for _,n in self._fields_[:-1])
+            bs = self['wLength'].li.int() - sum(self[n].blocksize() for _,n in self._fields_[:-1])
             assert bs >= 0,bs
             class Member(pstruct.type):
                 _fields_ = [
@@ -133,14 +133,14 @@ if True:
             return Empty
         def Value(self):
             # wValueLength = number of 16-bit words of wValue
-            l = self['wValueLength'].li.num()
+            l = self['wValueLength'].li.int()
             return dyn.clone(pstr.wstring, length=l)
 
     @VersionEntry.define
     class Var(Entry):
         type = "VarFileInfo"
         def Value(self):
-            l = self['wValueLength'].li.num()
+            l = self['wValueLength'].li.int()
             return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
     @VersionEntry.define
     class Empty(ptype.undefined):

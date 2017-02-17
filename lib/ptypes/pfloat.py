@@ -135,9 +135,9 @@ def littleendian(ptype):
     d['byteorder'] = config.byteorder.littleendian
     return __builtin__.type(ptype.__name__, ptype.__bases__, d)
 
-class type(pint.integer_t):
+class type(pint.type):
     def summary(self, **options):
-        return '{:s} ({:x})'.format(self.getf(), self.num())
+        return '{:f} ({:#x})'.format(self.getf(), self.__getvalue__())
 
     def setf(self, value):
         raise error.ImplementationError(self, 'type.setf')
@@ -169,17 +169,27 @@ class float_t(type):
     def setf(self, value):
         """store /value/ into a binary format"""
         exponentbias = (2**self.components[1])/2 - 1
-        m,e = math.frexp(value)
-
-        # extract components from value
-        s = math.copysign(1.0, m)
-        m = abs(m)
 
         # convert to integrals
-        sf = 1 if s < 0 else 0
-        exponent = e + exponentbias - 1
-        m = m*2.0 - 1.0     # remove the implicit bit
-        mantissa = int(m * (2**self.components[2]))
+        if math.isnan(value):
+            sf, exponent, mantissa = 0, 2**self.components[1] - 1, ~0
+        elif math.isinf(value):
+            sf, exponent, mantissa = 1 if value < 0 else 0, 2**self.components[1] - 1, 0
+        elif value == 0.0 and math.atan2(value, value) < 0.0:
+            sf, exponent, mantissa = 1, 0, 0
+        elif value == 0.0 and math.atan2(value, value) == 0.0:
+            sf, exponent, mantissa = 0, 0, 0
+        else:
+            m,e = math.frexp(value)
+
+            # extract components from value
+            s = math.copysign(1.0, m)
+            sf = 1 if s < 0 else 0
+
+            exponent = e + exponentbias - 1
+            if exponent != 0:
+                m = m*2.0 - 1.0     # remove the implicit bit
+            mantissa = int(m * (2**self.components[2]))
 
         # store components
         result = bitmap.zero
@@ -199,7 +209,8 @@ class float_t(type):
         res,exponent = bitmap.shift(res, self.components[1])
         res,mantissa = bitmap.shift(res, self.components[2])
 
-        if exponent > 0 and exponent < (2**self.components[2]-1):
+        if exponent > 0 and exponent < (2**self.components[1]-1):
+            print 'conv'
             # convert to float
             s = -1 if sign else +1
             e = exponent - exponentbias
@@ -208,9 +219,16 @@ class float_t(type):
             # done
             return math.ldexp( math.copysign(m,s), e)
 
+        if exponent == 2**self.components[1]-1 and mantissa == 0:
+            return float('-inf') if sign else float('+inf')
+        elif exponent in (0,2**self.components[1]-1) and mantissa != 0:
+            return float('-nan') if sign else float('+nan')
+        elif exponent == 0 and mantissa == 0:
+            return float('-0') if sign else float('+0')
+
         # FIXME: this should return NaN or something
-        Log.warn('float_t.getf : {:s} : Invalid exponent value : {:d}'.format(self.instance(), exponent))
-        return 0.0
+        Log.warn('float_t.getf : {:s} : invalid components value : {:d} : {:d} : {:d}'.format(self.instance(), sign, exponent, mantissa))
+        raise NotImplementedError
 
 class sfixed_t(type):
     """Represents a signed fixed-point number.
@@ -310,21 +328,32 @@ if __name__ == '__main__':
         (0x3f800000, 1.0),
         (0xc0000000, -2.0),
         (0x7f7fffff, 3.4028234663852886e+38),
-        #        (0x00000000, 0.0),
-        #        (0x80000000, -0.0),
-        #        (0x7f800000, 0),
-        #        (0xff800000, -0),
         (0x3eaaaaab, 1.0/3),
         (0x41c80000, 25.0),
+
+        (0xffc00000, +float('NaN')),
+        (0x7fc00000, -float('NaN')),
+        (0x7f800000, +float('inf')),
+        (0xff800000, -float('inf')),
+        (0x00000000, float('+0')),
+        (0x80000000, float('-0')),
     ]
 
     double_precision = [
+        (0x0000000000000000, 0.0),
         (0x3ff0000000000000, 1.0),
         (0x3ff0000000000001, 1.0000000000000002),
         (0x3ff0000000000002, 1.0000000000000004),
         (0x4000000000000000, 2.0),
         (0xc000000000000000, -2.0),
         (0x3fd5555555555555, 0.3333333333333333),
+
+        (0xfff8000000000000, +float('NaN')),
+        (0x7ff8000000000000, -float('NaN')),
+        (0x7ff0000000000000, +float('inf')),
+        (0xfff0000000000000, -float('inf')),
+        (0x0000000000000000, float('+0')),
+        (0x8000000000000000, float('-0')),
     ]
 
     def test_assignment(cls, float, expected):
@@ -343,7 +372,13 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        raise Failure('setf: {:s} == {:#x}? {:s} ({:#x}) {:s}'.format(float, expected, a.num(), n, f))
+        elif math.isnan(float) and math.isnan(a.getf()):
+            raise Success
+        elif math.isinf(float) and math.isinf(a.getf()) and float < 0 and a.getf() < 0:
+            raise Success
+        elif math.isinf(float) and math.isinf(a.getf()) and float >= 0 and a.getf() >= 0:
+            raise Success
+        raise Failure('setf: {:f} == {:#x}? {:d} ({:#x}) {:f}'.format(float, expected, a.int(), n, f))
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -361,24 +396,30 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        raise Failure('getf: {:#x} == {:s}? {:s} ({:s}) {:#x}'.format(integer, expected, a.num(), n, i))
+        elif math.isnan(n) and math.isnan(expected):
+            raise Success
+        elif math.isinf(n) and math.isinf(expected) and n < 0 and expected < 0:
+            raise Success
+        elif math.isinf(n) and math.isinf(expected) and n >= 0 and expected >= 0:
+            raise Success
+        raise Failure('getf: {:#x} == {:f}? result:{:#x} ({:f}) python:{:#x}'.format(integer, expected, a.int(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):
-        testcase = lambda cls=single,integer=f,value=n:test_load(cls,value,integer)
+        testcase = lambda cls=single,integer=n,value=f:test_load(cls,integer,value)
         testcase.__name__ = 'single_precision_load_{:d}'.format(i)
         TestCase(testcase)
     for i,(n,f) in enumerate(single_precision):
-        testcase = lambda cls=single,integer=f,value=n:test_assignment(cls,integer,value)
+        testcase = lambda cls=single,integer=n,value=f:test_assignment(cls,value,integer)
         testcase.__name__ = 'single_precision_assignment_{:d}'.format(i)
         TestCase(testcase)
 
     for i,(n,f) in enumerate(double_precision):
-        testcase = lambda cls=double,integer=f,value=n:test_load(cls,value,integer)
+        testcase = lambda cls=double,integer=n,value=f:test_load(cls,integer,value)
         testcase.__name__ = 'double_precision_load_{:d}'.format(i)
         TestCase(testcase)
     for i,(n,f) in enumerate(double_precision):
-        testcase = lambda cls=double,integer=f,value=n:test_assignment(cls,integer,value)
+        testcase = lambda cls=double,integer=n,value=f:test_assignment(cls,value,integer)
         testcase.__name__ = 'double_precision_assignment_{:d}'.format(i)
         TestCase(testcase)
 

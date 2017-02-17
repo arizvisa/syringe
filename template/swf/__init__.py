@@ -45,12 +45,12 @@ class CompressedData(ptype.encoded_t):
         block = object.serialize()
         compressed_block = self._compress(block)
         print '%s: compressed %x to %x bytes'%(self.__class__.__name__,len(block),len(compressed_block))
-        return super(CompressedData,self).encode(ptype.block().set(compressed_block))
+        return super(CompressedData,self).encode(ptype.block(length=len(compressed_block)).set(compressed_block))
     def decode(self, object, **attrs):
         block = object.serialize()
         decompressed_block = self._decompress(block)
         print '%s: decompressed %x to %x bytes'%(self.__class__.__name__,len(block),len(decompressed_block))
-        return super(CompressedData,self).decode(ptype.block().set(decompressed_block))
+        return super(CompressedData,self).decode(ptype.block(length=len(decompressed_block)).set(decompressed_block))
 
 @EncodedDataType.define
 class ZlibData(CompressedData):

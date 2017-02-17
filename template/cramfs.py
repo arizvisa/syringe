@@ -39,5 +39,5 @@ if __name__ == '__main__':
     ptypes.setsource('re1000.fw')
 
     a = cramfs.super()
-    a.setoffset(0):
+    a.setoffset(0)
     a=a.l
