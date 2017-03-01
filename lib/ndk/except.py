@@ -49,7 +49,7 @@ class _EH4_SCOPETABLE(pstruct.type):
 
 class _EH3_EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
-        (lambda s: dyn.pointer(_EH3_EXCEPTION_REGISTRATION), 'Next'),
+        (lambda s: pointer(_EH3_EXCEPTION_REGISTRATION), 'Next'),
         (PVOID, 'ExceptionHandler'),
         (PSCOPETABLE_ENTRY, 'ScopeTable'),
         (DWORD, 'TryLevel'),
@@ -57,7 +57,7 @@ class _EH3_EXCEPTION_REGISTRATION(pstruct.type):
 
 class EHRegistrationNode(pstruct.type):
     _fields_ = [
-        (lambda s: dyn.pointer(EHRegistrationNode), 'pNext'),
+        (lambda s: pointer(EHRegistrationNode), 'pNext'),
         (PVOID, 'frameHandler'),
         (pint.int32_t, 'state'),
     ]
@@ -78,7 +78,7 @@ class TypeDescriptor(pstruct.type):
 class HandlerType(pstruct.type):
     _fields_ = [
         (DWORD, 'adjectives'),
-        (dyn.pointer(TypeDescriptor), 'pType'),
+        (pointer(TypeDescriptor), 'pType'),
         (pint.int32_t, 'dispCatchObj'),
         (PVOID, 'addressOfHandler'),
     ]
@@ -89,13 +89,13 @@ class TryBlockMapEntry(pstruct.type):
         (pint.int32_t, 'tryHigh'),
         (pint.int32_t, 'catchHigh'),
         (pint.int32_t, 'nCatches'),
-        (lambda s: dyn.pointer(dyn.array(HandlerType, s['nCatches'].li.int())), 'pHandlerArray'),
+        (lambda s: pointer(dyn.array(HandlerType, s['nCatches'].li.int())), 'pHandlerArray'),
     ]
 
 class ESTypeList(pstruct.type):
     _fields_ = [
         (pint.int32_t, 'nCount'),
-        (lambda s: dyn.pointer(dyn.array(HandlerType, s['nCount'].li.int())), 'pHandlerArray'),
+        (lambda s: pointer(dyn.array(HandlerType, s['nCount'].li.int())), 'pHandlerArray'),
     ]
 
 class TypeDescriptor(pstruct.type):
@@ -108,7 +108,7 @@ class TypeDescriptor(pstruct.type):
 class CatchableTypeArray(pstruct.type):
     _fields_ = [
         (pint.int32_t, 'nCatchableTypes'),
-        (lambda s: dyn.pointer(dyn.array(CatchableType, s['nCatchableTypes'].li.int())), 'arrayOfCatchableTypes'),
+        (lambda s: pointer(dyn.array(CatchableType, s['nCatchableTypes'].li.int())), 'arrayOfCatchableTypes'),
     ]
 
 class PMD(pstruct.type):
@@ -121,7 +121,7 @@ class PMD(pstruct.type):
 class CatchableType(pstruct.type):
     _fields_ = [
         (DWORD, 'properties'),
-        (dyn.pointer(TypeDescriptor), 'pType'),
+        (pointer(TypeDescriptor), 'pType'),
         (PMD, 'thisDisplacement'),
         (pint.int32_t, 'sizeOrOffset'),
         (PVOID, 'copyFunction'),
@@ -132,7 +132,7 @@ class ThrowInfo(pstruct.type):
         (DWORD, 'attributes'),
         (PVOID, 'pmfnUnwind'),
         (PVOID, 'pForwardCompat'),
-        (dyn.pointer(CatchableTypeArray), 'pCatchableTypeArray'),
+        (pointer(CatchableTypeArray), 'pCatchableTypeArray'),
     ]
 
 class FuncInfo(pstruct.type):
@@ -144,15 +144,15 @@ class FuncInfo(pstruct.type):
         # 0x19930522    - EHFlags is valid
 
         (pint.int32_t, 'maxState'),
-        (dyn.pointer(UnwindMapEntry), 'pUnwindMap'),
+        (pointer(UnwindMapEntry), 'pUnwindMap'),
 
         (pint.uint32_t, 'nTryBlocks'),
-        (dyn.pointer(TryBlockMapEntry), 'pTryBlockMap'),
+        (pointer(TryBlockMapEntry), 'pTryBlockMap'),
 
         (pint.uint32_t, 'nIPMapEntries'),
         (PVOID, 'pIPtoStateMap'),
 
-        (dyn.pointer(ESTypeList), 'pESTypeList'),
+        (pointer(ESTypeList), 'pESTypeList'),
         (pint.int32_t, 'EHFlags'),
     ]
 
@@ -177,8 +177,8 @@ class RTTICompleteObjectLocator(pstruct.type):
         (DWORD, 'signature'),
         (DWORD, 'offset'),
         (DWORD, 'cdOffset'),
-        (dyn.pointer(TypeDescriptor), 'pTypeDescriptor'),
-        (dyn.pointer(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
+        (pointer(TypeDescriptor), 'pTypeDescriptor'),
+        (pointer(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
     ]
 
 class RTTIClassHierarchyDescriptor(pstruct.type):
@@ -186,7 +186,7 @@ class RTTIClassHierarchyDescriptor(pstruct.type):
         (DWORD, 'signature'),
         (DWORD, 'attributes'),
         (DWORD, 'numBaseClasses'),
-        (lambda s: dyn.pointer(dyn.clone(RTTIBaseClassArray, length=s['numBaseClasses'].li.int())), 'pBaseClassArray'),
+        (lambda s: pointer(dyn.clone(RTTIBaseClassArray, length=s['numBaseClasses'].li.int())), 'pBaseClassArray'),
     ]
 
 class RTTIBaseClassArray(parray.type):
@@ -194,7 +194,7 @@ class RTTIBaseClassArray(parray.type):
 
 class RTTIBaseClassDescriptor(pstruct.type):
     _fields_= [
-        (dyn.pointer(TypeDescriptor), 'pTypeDescriptor'),
+        (pointer(TypeDescriptor), 'pTypeDescriptor'),
         (DWORD, 'numContainedBases'),
         (PMD, 'where'),
         (DWORD, 'attributes'),

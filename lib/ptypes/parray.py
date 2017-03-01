@@ -183,7 +183,7 @@ class _parray_generic(ptype.container):
         range(len(self))[index]     # make python raise the correct exception if so..
         return super(_parray_generic, self).__getitem__(index)
 
-    def __element_description(self):
+    def __element__(self):
         try: length = len(self)
         except: length = self.length or 0
 
@@ -196,23 +196,23 @@ class _parray_generic(ptype.container):
 
     def summary(self, **options):
         res = super(_parray_generic,self).summary(**options)
-        return ' '.join((self.__element_description(), res))
+        return ' '.join((self.__element__(), res))
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
-        result, element_descr = self.repr(), self.__element_description()
+        result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
         if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _parray_generic.details.im_func:
             result = result.rstrip('\n')
             if prop:
-                return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element_descr,result)
-            return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element_descr,result)
+                return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
+            return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
 
         # if the user chose to not use the default summary, then prefix the element description.
         if getattr(self.repr, 'im_func', None) not in (_parray_generic.repr.im_func,_parray_generic.summary.im_func):
-            result = ' '.join((element_descr,result))
+            result = ' '.join((element,result))
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line

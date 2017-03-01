@@ -1,17 +1,27 @@
+import ptypes
 from .base import *
 
 ### generic
-class _sh_name(pint.uint_t):
+class _sh_name(pint.type):
     def summary(self):
-        return self.str()
+        try:
+            res = self.str()
+        except (ptypes.error.TypeError, ptypes.error.NotFoundError):
+            res = super(_sh_name, self).summary()
+        return res
 
     def str(self):
-        ofs = self.int()
-        stringtable = self.getparent(ElfXX_Ehdr).stringtable()
-        res = stringtable.extract(ofs)
-        return res.str()
+        table = self.getparent(ElfXX_Ehdr).stringtable()
+        if isinstance(table, SHT_STRTAB):
+            return table.read(self.int()).str()
+        raise ptypes.error.TypeError(self, 'str')
 
 class _sh_type(pint.enum):
+    SHT_LOSUNW, SHT_HISUNW = 0x6ffffffa, 0x6fffffff
+    SHT_LOOS, SHT_HIOS = 0x60000000, 0x6fffffff
+    SHT_LOPROC, SHT_HIPROC = 0x70000000, 0x7fffffff
+    SHT_LOUSER, SHT_HIUSER = 0x80000000, 0xffffffff
+
     _values_ = [
         ('SHT_NULL', 0),
         ('SHT_PROGBITS', 1),
@@ -34,31 +44,38 @@ class _sh_type(pint.enum):
         ('SHT_SYMTAB_SHNDX', 18),
         ('SHT_NUM', 19),
 
-        ('SHT_LOOS', 0x60000000),
-        ('SHT_GNU_HASH', 0x6ffffff6),
-        ('SHT_GNU_LIBLIST', 0x6ffffff7),
         ('SHT_CHECKSUM', 0x6ffffff8),
-        ('SHT_LOSUNW', 0x6ffffffa),
+
         ('SHT_SUNW_move', 0x6ffffffa),
         ('SHT_SUNW_COMDAT', 0x6ffffffb),
         ('SHT_SUNW_syminfo', 0x6ffffffc),
+
+        ('SHT_GNU_HASH', 0x6ffffff6),
+        ('SHT_GNU_LIBLIST', 0x6ffffff7),
         ('SHT_GNU_verdef', 0x6ffffffd),
         ('SHT_GNU_verneed', 0x6ffffffe),
         ('SHT_GNU_versym', 0x6fffffff),
-        ('SHT_HISUNW', 0x6fffffff),
-        ('SHT_HIOS', 0x6fffffff),
 
-        ('SHT_LOPROC', 0x70000000),
-        ('SHT_HIPROC', 0x7fffffff),
-        ('SHT_LOUSER', 0x80000000),
-        ('SHT_HIUSER', 0xffffffff),
+        ('SHT_ARM_EXIDX', 0x70000001),
+        ('SHT_ARM_PREEMPTMAP', 0x70000002),
+        ('SHT_ARM_ATTRIBUTES', 0x70000003),
+        ('SHT_ARM_DEBUGOVERLAY', 0x70000004),
+        ('SHT_ARM_OVERLAYSECTION', 0x70000005),
     ]
 
 class _sh_flags(pbinary.flags):
     # Elf32_Word
     _fields_ = [
-        (4, 'SHF_MASKPROC'),
-        (1+8+16, 'SHF_RESERVED'),
+        (4, 'SHF_MASKPROC'),        # FIXME: lookup based on processor
+        (8, 'SHF_MASKOS'),          # FIXME: lookup based on platform
+        (10, 'SHF_UNKNOWN'),
+        (1, 'SHF_GROUP'),
+        (1, 'SHF_OS_NONCONFORMING'),
+        (1, 'SHF_LINK_ORDER'),
+        (1, 'SHF_INFO_LINK'),
+        (1, 'SHF_STRINGS'),
+        (1, 'SHF_MERGE'),
+        (1, 'SHF_UNUSED'),
         (1, 'SHF_EXECINSTR'),
         (1, 'SHF_ALLOC'),
         (1, 'SHF_WRITE'),
@@ -70,16 +87,31 @@ def _sh_offset(size):
         #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)
-        result = dyn.clone(type, blocksize=lambda _: self['sh_size'].li.int())
+        result = dyn.clone(type, blocksize=lambda s: self['sh_size'].li.int())
         return dyn.rpointer(result, base, size)
     return sh_offset
+
+class _sh_index(pint.enum):
+    SHN_LOPROC, SHN_HIPROC = 0xff00, 0xff1f
+    SHN_LOOS, SHN_HIOS = 0xff20, 0xff3f
+    SHN_LORESERVE, SHN_HIRESERVE = 0xff00, 0xffff
+    _values_ = [
+        ('SHN_UNDEF', 0),
+        ('SHN_BEFORE', 0xff00),
+        ('SHN_AFTER', 0xff01),
+        ('SHN_ABS', 0xfff1),
+        ('SHN_COMMON', 0xfff2),
+        ('SHN_XINDEX', 0xffff),
+    ]
 
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf32_Word): pass
     class sh_type(_sh_type, Elf32_Word): pass
-    class sh_flags(_sh_flags):
-        _fields_ = _sh_flags._fields_
+    class sh_flags(_sh_flags): pass
+    def __sh_unknown(self):
+        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
+        return dyn.block(max((0,self.blocksize()-res)))
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
@@ -93,6 +125,7 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
         (Elf32_Word, 'sh_info'),
         (Elf32_Word, 'sh_addralign'),
         (Elf32_Word, 'sh_entsize'),
+        (__sh_unknown, 'sh_unknown'),
     ]
 
 class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
@@ -100,6 +133,9 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_type(_sh_type, Elf64_Word): pass
     class sh_flags(_sh_flags):
         _fields_ = [(32,'SHF_RESERVED2')] + _sh_flags._fields_
+    def __sh_unknown(self):
+        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
+        return dyn.block(max((0,self.blocksize()-res)))
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
@@ -111,6 +147,7 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
         (Elf64_Word, 'sh_info'),
         (Elf64_Xword, 'sh_addralign'),
         (Elf64_Xword, 'sh_entsize'),
+        (__sh_unknown, 'sh_unknown'),
     ]
 
 ## some types
@@ -189,8 +226,8 @@ class SHT_STRTAB(parray.block):
     type = 3
     _object_ = pstr.szstring
 
-    def extract(self, offset):
-        return self.at(offset + self.getoffset(), recurse=False)
+    def read(self, offset):
+        return self.field(offset)
 
 @Type.define
 class SHT_RELA(parray.block):
@@ -233,3 +270,13 @@ class SHT_SHLIB(segment.PT_SHLIB):
 class SHT_DYNSYM(parray.block):
     type = 11
     _object_ = Elf32_Sym
+
+# FIXME
+@Type.define
+class SHT_GROUP(parray.block):
+    type = 17
+    class GRP_COMDAT(Elf32_Word): pass
+    def _object_(self):
+        return Elf32_Word if self.value is None or len(self.value) > 0 else Elf32_Word
+
+    _object_ = Elf32_Word

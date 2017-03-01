@@ -52,12 +52,14 @@ class e_ident(pstruct.type):
     EI_NIDENT=16
     class EI_CLASS(pint.enum, uchar):
         _values_ = [
+            ('ELFCLASSNONE', 0),
             ('ELFCLASS32', 1),
             ('ELFCLASS64', 2),
         ]
     class EI_DATA(pint.enum, uchar):
         # FIXME: switch the byteorder of everything based on this value
         _values_ = [
+            ('ELFDATANONE', 0),
             ('ELFDATA2LSB', 1),
             ('ELFDATA2MSB', 2),
         ]
@@ -65,6 +67,7 @@ class e_ident(pstruct.type):
         _values_ = [
             ('ELFOSABI_SYSV', 0),
             ('ELFOSABI_HPUX', 1),
+            ('ELFOSABI_ARM_EABI', 64),
             ('ELFOSABI_STANDALONE', 255),
         ]
     _fields_ = [
@@ -80,16 +83,14 @@ class e_ident(pstruct.type):
         return self.initialized and self['EI_MAG'].serialize() == '\x7fELF'
 
 class e_type(pint.enum, Elf32_Half):
+    ET_LOOS, ET_HIOS = 0xfe00, 0xfeff
+    ET_LOPROC, ET_HIPROC = 0xff00, 0xffff
     _values_ = [
         ('ET_NONE', 0),
         ('ET_REL', 1),
         ('ET_EXEC', 2),
         ('ET_DYN', 3),
         ('ET_CORE', 4),
-        ('ET_LOOS', 0xfe00),
-        ('ET_HIOS', 0xfeff),
-        ('ET_LOPROC', 0xff00),
-        ('ET_HIPROC', 0xffff),
     ]
 
 class e_machine(pint.enum, Elf32_Half):
@@ -103,6 +104,9 @@ class e_machine(pint.enum, Elf32_Half):
         ('EM_860', 7),
         ('EM_MIPS', 8),
         ('EM_MIPS_RS4_BE', 10),
+        ('EM_SPARC32PLUS', 18),
+        ('EM_ARM', 40),
+        ('EM_SPARCV9', 43),
 #       ('RESERVED', 11-16),
     ]
 

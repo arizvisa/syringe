@@ -85,7 +85,7 @@ class _char_t(pint.type):
         '''Set the _char_t to the str ``value``.'''
         if isinstance(value, __builtin__.str):
             try: value = __builtin__.unicode(value, 'ascii')
-            except UnicodeDecodeError: return super(pint.integer_t,self).__setvalue__(str(value))
+            except UnicodeDecodeError: return super(pint.type,self).__setvalue__(str(value))
         elif isinstance(value, __builtin__.unicode):
             value = value
         else:
@@ -212,13 +212,14 @@ class string(ptype.type):
 
             # ..and now turn the slice into an array
             type = ptype.clone(parray.type,length=len(result), _object_=self._object_)
-            return self.new(type, offset=result[0].getoffset(), value=result)
+            return self.new(type, offset=result[0].getoffset(), value=result, parent=self)
 
         if index < -len(self) or index >= len(self):
             raise error.UserError(self, 'string.__getitem__', message='list index {:d} out of range'.format(index))
 
         # otherwise, returning a single element from the array should be good
         index %= len(self)
+        res[index].parent = self
         return res[index]
 
     def __setitem__(self, index, value):

@@ -2,9 +2,10 @@ from ptypes import *
 from WinNT import *
 import ldrtypes,rtltypes,umtypes,Ntddk
 import heaptypes,sdkddkver
+import pecoff
 
 class PEB_FREE_BLOCK(pstruct.type): pass
-class PPEB_FREE_BLOCK(dyn.pointer(PEB_FREE_BLOCK)): pass
+class PPEB_FREE_BLOCK(P(PEB_FREE_BLOCK)): pass
 PEB_FREE_BLOCK._fields_ = [(PPEB_FREE_BLOCK,'Next'),(ULONG,'Size')]
 
 class PEB(pstruct.type, versioned):
@@ -16,6 +17,16 @@ class PEB(pstruct.type, versioned):
             (1, 'IsImageDynamicallyRelocated'),
             (1, 'SkipPatchingUser32Forwarders'),
             (1, 'SpareBits'),
+        ]
+
+    class CrossProcessFlags(pbinary.flags):
+        _fields_ = [
+            (1, 'ProcessInJob'),
+            (1, 'ProcessInitializing'),
+            (1, 'ProcessUsingVEH'),
+            (1, 'ProcessUsingVCH'),
+            (1, 'ProcessUsingFTH'),
+            (27, 'ReservedBits0'),
         ]
 
     class NtGlobalFlag(pbinary.flags):
@@ -67,103 +78,117 @@ class PEB(pstruct.type, versioned):
             names = '|'.join((k for k,v in self.items() if v))
             return ' '.join([ofs, self.name(), names, '{!r}'.format(self.serialize())])
 
+    class TracingFlags(pbinary.flags):
+        _fields_ = [
+            (1, 'HeapTracingEnabled'),
+            (1, 'CritSecTracingEnabled'),
+            (30, 'SpareTracingBits'),
+        ]
+
     def __init__(self, **attrs):
         super(PEB, self).__init__(**attrs)
-
         self._fields_ = f = []
+        aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
+
         f.extend([
             (UCHAR, 'InheritedAddressSpace'),
             (UCHAR, 'ReadImageFileExecOptions'),
             (UCHAR, 'BeingDebugged'),
         ])
+
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
-            f.append( (self.BitField, 'BitField') )
+            f.append( (pbinary.littleendian(PEB.BitField), 'BitField') )
         else:
+            raise NotImplementedError
             f.append( (BOOLEAN, 'SpareBool') )
 
         f.extend([
+            (aligned, 'align(Mutant)'),
             (HANDLE, 'Mutant'),
-            (PVOID, 'ImageBaseAddress'),
+            (P(pecoff.Executable.File), 'ImageBaseAddress'),
             (ldrtypes.PPEB_LDR_DATA, 'Ldr'),
-            ##
-            (dyn.pointer(rtltypes._RTL_USER_PROCESS_PARAMETERS), 'ProcessParameters'),
-            (pint.uint32_t, 'SubSystemData'),
-            (dyn.pointer(heaptypes._HEAP), 'ProcessHeap'),
+            (P(rtltypes._RTL_USER_PROCESS_PARAMETERS), 'ProcessParameters'),
+            (PVOID, 'SubSystemData'),
+            (P(heaptypes._HEAP), 'ProcessHeap'),
         ])
 
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
             f.extend([
-                (pint.uint32_t, 'FastPebLock'),
+                (P(rtltypes._RTL_CRITICAL_SECTION), 'FastPebLock'),
                 (PVOID, 'AltThunkSListPtr'),
                 (PVOID, 'IFEOKey'),
-                (ULONG, 'CrossProcessFlags'),
+                (pbinary.littleendian(PEB.CrossProcessFlags), 'CrossProcessFlags'),
+                (aligned, 'align(UserSharedInfoPtr)'),
                 (PVOID, 'UserSharedInfoPtr'),
                 (ULONG, 'SystemReserved'),
-                (ULONG, 'SpareUlong'),
-                (dyn.pointer(API_SET_MAP, ULONG), 'ApiSetMap'),
+                (ULONG, 'AtlThunkSListPtr32') if getattr(self,'WIN64',False) else (ULONG,'SpareUlong'),
+                (P(API_SET_MAP), 'ApiSetMap'),
             ])
 
         elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+            raise NotImplementedError
             f.extend([
-                (pint.uint32_t, 'FastPebLock'),
+                (P(rtltypes._RTL_CRITICAL_SECTION), 'FastPebLock'),
                 (PVOID, 'AltThunkSListPtr'),
                 (PVOID, 'IFEOKey'),
                 (ULONG, 'CrossProcessFlags'),
                 (PVOID, 'UserSharedInfoPtr'),
                 (ULONG, 'SystemReserved'),
                 (ULONG, 'SpareUlong'),
-                (ULONG, 'SparePebPtr0'),
+                (PVOID, 'SparePebPtr0'),
             ])
         else:
+            raise NotImplementedError
             f.extend([
-                (PVOID, 'FastPebLock'),
-                (pint.uint32_t, 'FastPebLockRoutine'),
-                (pint.uint32_t, 'FastPebUnlockRoutine'),
+                (P(rtltypes._RTL_CRITICAL_SECTION), 'FastPebLock'),
+                (PVOID, 'FastPebLockRoutine'),
+                (PVOID, 'FastPebUnlockRoutine'),
                 (ULONG, 'EnvironmentUpdateCount'),
-                (pint.uint32_t, 'KernelCallbackTable'),
+                (PVOID, 'KernelCallbackTable'),
                 (PVOID, 'EventLogSection'),
                 (PVOID, 'EventLog'),
                 (PPEB_FREE_BLOCK, 'FreeList'),
             ])
 
         f.extend([
-            (ULONG, 'TlxExpansionCounter'),
-            (PVOID, 'TlsBitmap'),
-            (dyn.array(ULONG,2), 'TlsBitmapBits'),
+            (ULONG, 'TlsExpansionCounter'),
+            (aligned, 'align(TlsBitmap)'),
+            (PVOID, 'TlsBitmap'),           # FIXME: Does TlsBitmapBits represent the number of bytes that are in use?
+            (pbinary.littleendian(dyn.clone(pbinary.array, _object_=1, length=32*2)), 'TlsBitmapBits'),
             (PVOID, 'ReadOnlySharedMemoryBase'),
         ])
 
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
-            f.append( (PVOID, 'HotpatchInformation') )
+            f.append((PVOID, 'HotpatchInformation'))
         else:
-            f.append( (PVOID, 'ReadOnlySharedMemoryHeap') )
+            f.append((PVOID, 'ReadOnlySharedMemoryHeap'))
 
         f.extend([
-            (PVOID, 'ReadOnlyStaticServerData'),
+            (P(PVOID), 'ReadOnlyStaticServerData'),
             (PVOID, 'AnsiCodePageData'),
             (PVOID, 'OemCodePageData'),
             (PVOID, 'UnicodeCaseTableData'),
             (ULONG, 'NumberOfProcessors'),
-#            (ULONG, 'NtGlobalFlag'),
-            (PEB.NtGlobalFlag, 'NtGlobalFlag'),
-            (ULONG, 'Reserved'),
+            (pbinary.littleendian(PEB.NtGlobalFlag), 'NtGlobalFlag'),
+            (dyn.align(8), 'Reserved'),
             (LARGE_INTEGER, 'CriticalSectionTimeout'),
-            (ULONG, 'HeapSegmentReserve'),
-            (ULONG, 'HeapSegmentCommit'),
-            (ULONG, 'HeapDeCommitTotalFreeThreshold'),
-            (ULONG, 'HeapDeCommitFreeBlockThreshold'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'HeapSegmentReserve'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'HeapSegmentCommit'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'HeapDeCommitTotalFreeThreshold'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'HeapDeCommitFreeBlockThreshold'),
             (ULONG, 'NumberOfHeaps'),
             (ULONG, 'MaximumNumberOfHeaps'),
-            (lambda s: dyn.pointer( dyn.clone(heaptypes.ProcessHeapEntries, length=s['NumberOfHeaps'].li.int()), PVOID), 'ProcessHeaps'),
-#            (dyn.pointer(win32k.GDI_HANDLE_TABLE), 'GdiSharedHandleTable'),
+            (lambda s: P(dyn.clone(heaptypes.ProcessHeapEntries, length=s['NumberOfHeaps'].li.int())), 'ProcessHeaps'),
+#            (P(win32k.GDI_HANDLE_TABLE), 'GdiSharedHandleTable'),
             (PVOID, 'GdiSharedHandleTable'),
             (PVOID, 'ProcessStarterHelper'),
             (ULONG, 'GdiDCAttributeList'),
         ])
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
-            f.append( (PVOID, 'LoaderLock') )
-        else:
-            f.append( (PVOID, 'LoaderLock') )
+
+        f.extend([
+            (aligned, 'align(LoaderLock)'),
+            (P(rtltypes._RTL_CRITICAL_SECTION), 'LoaderLock')
+        ])
 
         f.extend([
             (ULONG, 'OSMajorVersion'),
@@ -174,47 +199,46 @@ class PEB(pstruct.type, versioned):
             (ULONG, 'ImageSubSystem'),
             (ULONG, 'ImageSubSystemMajorVersion'),
             (ULONG, 'ImageSubSystemMinorVersion'),
-            (ULONG, 'ImageProcessAffinityMask'),
-            (dyn.array(ULONG,0x22), 'GdiHandleBuffer'),
-            (pint.uint32_t, 'PostProcessInitRoutine'),
-            (pint.uint32_t, 'TlsExpansionBitmap'),
+            (aligned, 'align(ActiveProcessAffinityMask)'),
+            (ULONG, 'ActiveProcessAffinityMask'),
+            (aligned, 'align(GdiHandleBuffer)'),
+            (dyn.array(ULONG,0x3c if getattr(self,'WIN64',False) else 0x22), 'GdiHandleBuffer'),
+            (PVOID, 'PostProcessInitRoutine'),
+            (PVOID, 'TlsExpansionBitmap'),
             (dyn.array(ULONG,0x20), 'TlsExpansionBitmapBits'),
             (ULONG, 'SessionId'),
         ])
+
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WINXP:
             f.extend([
+                (aligned, 'align(AppCompatFlags)'),
                 (ULARGE_INTEGER, 'AppCompatFlags'),
                 (ULARGE_INTEGER, 'AppCompatFlagsUser'),
                 (PVOID, 'pShimData'),
                 (PVOID, 'AppCompatInfo'),
                 (umtypes.UNICODE_STRING, 'CSDVersion'),
-                (pint.uint32_t, 'ActivationContextData'),
-                (pint.uint32_t, 'ProcessAssemblyStorageMap'),
-                (pint.uint32_t, 'SystemDefaultActivationContextData'),
-                (pint.uint32_t, 'SystemAssemblyStorageMap'),
-                (ULONG, 'MinimumStackCommit'),
+                (PVOID, 'ActivationContextData'),  # FIXME: P(_ACTIVATION_CONTEXT_DATA)
+                (PVOID, 'ProcessAssemblyStorageMap'), # FIXME: P(_ASSEMBLY_STORAGE_MAP)
+                (PVOID, 'SystemDefaultActivationContextData'), # FIXME: P(_ACTIVATION_CONTEXT_DATA)
+                (PVOID, 'SystemAssemblyStorageMap'),  # FIXME: P(_ASSEMBLY_STORAGE_MAP)
+                (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'MinimumStackCommit'),
             ])
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WS03:
             f.extend([
-                (PVOID, 'FlsCallback'),
+                (PVOID, 'FlsCallback'),  # FIXME: P(_FLS_CALLBACK_INFO)
                 (LIST_ENTRY, 'FlsListHead'),
-                (pint.uint32_t, 'FlsBitmap'),
+                (PVOID, 'FlsBitmap'),
                 (dyn.array(ULONG,4), 'FlsBitmapBits'),
                 (ULONG, 'FlsHighIndex'),
             ])
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
             f.extend([
+                (aligned, 'align(WerRegistrationData)'),
                 (PVOID, 'WerRegistrationData'),
                 (PVOID, 'WerShipAssertPtr'),
-
                 (PVOID, 'pContextData'),
                 (PVOID, 'pImageHeaderHash'),
-
-## FIXME: not sure what this means in the pdb structure...
-#   +0x240 TracingFlags     : 0
-#   +0x240 HeapTracingEnabled : 0y0
-#   +0x240 CritSecTracingEnabled : 0y0
-#   +0x240 SpareTracingBits : 0y000000000000000000000000000000 (0)
+                (pbinary.littleendian(PEB.TracingFlags), 'TracingFlags')
             ])
         return
 
@@ -248,16 +272,16 @@ class PEB(pstruct.type, versioned):
 class TEB_ACTIVE_FRAME_CONTEXT(pstruct.type):
     _fields_ = [
         (ULONG, 'Flags'),
-        (dyn.pointer(umtypes.PSTR), 'FrameName'),
+        (P(umtypes.PSTR), 'FrameName'),
     ]
 
 class TEB_ACTIVE_FRAME(pstruct.type):
     _fields_ = [
         (ULONG, 'Flags'),
-        (lambda s: dyn.pointer(TEB_ACTIVE_FRAME), 'Previous'),
-        (dyn.pointer(TEB_ACTIVE_FRAME_CONTEXT), 'Context'),
+        (lambda s: P(TEB_ACTIVE_FRAME), 'Previous'),
+        (P(TEB_ACTIVE_FRAME_CONTEXT), 'Context'),
     ]
-class PTEB_ACTIVE_FRAME(dyn.pointer(TEB_ACTIVE_FRAME)): pass
+class PTEB_ACTIVE_FRAME(P(TEB_ACTIVE_FRAME)): pass
 
 class GDI_TEB_BATCH(pstruct.type):
     _fields_ = [
@@ -274,14 +298,19 @@ class TEB(pstruct.type, versioned):
             (1, 'DbgHasFiberData'),
             (1, 'DbgSkipThreadAttach'),
             (1, 'DbgWerInShipAssertCode'),
-            (1, 'DbgIssuedInitialBp'),
+            (1, 'DbgRanProcessInit'),
             (1, 'DbgClonedThread'),
-            (9, 'SpareSameTebBits'),
+            (1, 'DbgSupressDebugMsg'),
+            (1, 'DbgDisableUserStackWalk'),
+            (1, 'DbgRtlExceptionAttached'),
+            (1, 'DbgInitialThread'),
+            (5, 'SpareSameTebBits'),
         ]
 
     def __init__(self, **attrs):
         super(TEB, self).__init__(**attrs)
         self._fields_ = f = []
+        aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
 
         f.extend([
             (NT_TIB, 'Tib'),
@@ -289,60 +318,64 @@ class TEB(pstruct.type, versioned):
             (umtypes.CLIENT_ID, 'Cid'),
             (PVOID, 'ActiveRpcHandle'),
             (PVOID, 'ThreadLocalStoragePointer'),
-            (dyn.pointer(PEB), 'ProcessEnvironmentBlock'),
+            (P(PEB), 'ProcessEnvironmentBlock'),
             (ULONG, 'LastErrorValue'),
             (ULONG, 'CountOfOwnedCriticalSections'),
             (PVOID, 'CsrClientThread'),
-            (dyn.pointer(Ntddk.W32THREAD), 'Win32ThreadInfo'),
+            (P(Ntddk.W32THREAD), 'Win32ThreadInfo'),
             (dyn.array(ULONG,0x1a), 'User32Reserved'),
             (dyn.array(ULONG,5), 'UserReserved'),
+            (aligned, 'align(WOW32Reserved)'),
             (PVOID, 'WOW32Reserved'),
             (LCID, 'CurrentLocale'),
             (ULONG, 'FpSoftwareStatusRegister'),
             (dyn.array(PVOID,0x36), 'SystemReserved1'),
             (LONG, 'ExceptionCode'),
-            (dyn.pointer(Ntddk.ACTIVATION_CONTEXT_STACK), 'ActivationContextStackPointer'),
+            (aligned, 'align(ActivationContextStackPointer)'),
+            (P(Ntddk.ACTIVATION_CONTEXT_STACK), 'ActivationContextStackPointer'),
         ])
 
-        if self.WIN64:
-            f.append((dyn.block(24), 'SpareBytes1'))
-        else:
-            f.append((dyn.block(0x24), 'SpareBytes1'))
+        f.append((dyn.block(24 if getattr(self,'WIN64',False) else 0x24), 'SpareBytes1'))
 
         f.extend([
             (ULONG, 'TxFsContext'),
+            (aligned, 'align(GdiTebBatch)'),
             (GDI_TEB_BATCH, 'GdiTebBatch'),
+            (aligned, 'align(RealClientId)'),
             (umtypes.CLIENT_ID, 'RealClientId'),
             (PVOID, 'GdiCachedProcessHandle'),
             (ULONG, 'GdiClientPID'),
             (ULONG, 'GdiClientTID'),
             (PVOID, 'GdiThreadLocalInfo'),
-            (dyn.array(SIZE_T,62), 'Win32ClientInfo'),
+            (dyn.array(PVOID,62), 'Win32ClientInfo'),
             (dyn.array(PVOID,0xe9), 'glDispatchTable'),
-            (dyn.array(SIZE_T,0x1d), 'glReserved1'),
+            (dyn.array(PVOID,0x1d), 'glReserved1'),
             (PVOID, 'glReserved2'),
             (PVOID, 'glSectionInfo'),
             (PVOID, 'glSection'),
             (PVOID, 'glTable'),
             (PVOID, 'glCurrentRC'),
             (PVOID, 'glContext'),
+            (aligned, 'align(LastStatusValue)'),
             (umtypes.NTSTATUS, 'LastStatusValue'),
+            (aligned, 'align(StaticUnicodeString)'),
             (umtypes.UNICODE_STRING, 'StaticUnicodeString'),
 #            (WCHAR, 'StaticUnicodeBuffer[0x105]'),
             (dyn.clone(pstr.wstring, length=0x106), 'StaticUnicodeBuffer'),
+            (aligned, 'align(DeallocationStack)'),
             (PVOID, 'DeallocationStack'),
             (dyn.array(PVOID,0x40), 'TlsSlots'),
             (LIST_ENTRY, 'TlsLinks'),
             (PVOID, 'Vdm'),
             (PVOID, 'ReservedForNtRpc'),
             (dyn.array(PVOID,0x2), 'DbgSsReserved'),
-            (ULONG, 'HardErrorDisabled'),
+            (ULONG, 'HardErrorMode'),
         ])
 
-        if self.WIN64:
-            f.append((dyn.array(PVOID,11), 'Instrumentation'))
-        else:
-            f.append((dyn.array(PVOID,9), 'Instrumentation'))
+        f.extend([
+            (aligned, 'align(Instrumentation)'),
+            (dyn.array(PVOID,11 if getattr(self,'WIN64',False) else 9), 'Instrumentation')
+        ])
 
         f.extend([
             (GUID, 'ActivityId'),
@@ -374,21 +407,32 @@ class TEB(pstruct.type, versioned):
         f.extend([
             (UCHAR, 'IdealProcessor'),
             (ULONG, 'GuaranteedStackBytes'),
+            (aligned, 'align(ReservedForPerf)'),
             (PVOID, 'ReservedForPerf'),
             (PVOID, 'ReservedForOle'),
             (ULONG, 'WaitingOnLoaderLock'),
         ])
 
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+            f.append((aligned, 'align(SavedPriorityState)'))
             f.append((PVOID, 'SavedPriorityState'))
         else:
             f.append((ULONG, 'SparePointer1'))
 
         f.extend([
-            (ULONG, 'SoftPatchPtr1'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'SoftPatchPtr1'),
             (PVOID, 'ThreadPoolData'),
             (PVOID, 'TlsExpansionSlots'),
-            (ULONG, 'ImpersonationLocale'),
+        ])
+
+        if getattr(self, 'WIN64', False):
+            f.extend([
+                (PVOID, 'DeallocationBStore'),
+                (PVOID, 'BStoreLimit'),
+            ])
+
+        f.extend([
+            (ULONG, 'MuiGeneration'),
             (ULONG, 'IsImpersonating'),
             (PVOID, 'NlsCache'),
             (PVOID, 'pShimData'),
@@ -400,46 +444,42 @@ class TEB(pstruct.type, versioned):
             f.append((ULONG, 'HeapVirtualAffinity'))
 
         f.extend([
+            (aligned, 'align(CurrentTransactionHandle)'),
             (PVOID, 'CurrentTransactionHandle'),
             (PTEB_ACTIVE_FRAME, 'ActiveFrame'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WS03:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
             f.append((PVOID, 'FlsData'))
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
             f.extend([
                 (PVOID, 'PreferredLangauges'),
                 (PVOID, 'UserPrefLanguages'),
                 (PVOID, 'MergedPrefLanguages'),
                 (ULONG, 'MuiImpersonation'),
                 (USHORT, 'CrossTebFlags'),
-                (self.SameTebFlags, 'SameTebFlags'),   # XXX
+                (TEB.SameTebFlags, 'SameTebFlags'),   # XXX
                 (PVOID, 'TxnScopeEntercallback'),
                 (PVOID, 'TxnScopeExitCAllback'),
                 (PVOID, 'TxnScopeContext'),
                 (ULONG, 'LockCount'),
-                (ULONG, 'ProcessRundown'),
-                (ULONGLONG, 'LastSwitchTime'),
-                (ULONGLONG, 'TotalSwitchOutTime'),
-                (LARGE_INTEGER, 'WaitReasonBitMap'),
-            ])
-        else:
-            f.extend([
-                (UCHAR, 'SafeThunkCall'),
-                (dyn.block(UCHAR,3), 'BooleanSpare'),
+                (ULONG, 'SpareUlong0'),
+                (PVOID, 'ResourceRetValue'),
             ])
         return
 
-class THREAD_BASIC_INFORMATION(pstruct.type):
-    _fields_ = [
-        (umtypes.NTSTATUS, 'ExitStatus'),
-        (PVOID, 'TebBaseAddress'),
-        (umtypes.CLIENT_ID, 'ClientId'),
-        (umtypes.KAFFINITY, 'AffinityMask'),
-        (umtypes.KPRIORITY, 'Priority'),
-        (umtypes.KPRIORITY, 'BasePriority'),
-    ]
+class THREAD_BASIC_INFORMATION(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(THREAD_BASIC_INFORMATION, self).__init__(**attrs)
+        self._fields_ = [
+            (umtypes.NTSTATUS, 'ExitStatus'),
+            (PVOID, 'TebBaseAddress'),
+            (umtypes.CLIENT_ID, 'ClientId'),
+            (umtypes.KAFFINITY, 'AffinityMask'),
+            (umtypes.KPRIORITY, 'Priority'),
+            (umtypes.KPRIORITY, 'BasePriority'),
+        ]
 
 class THREAD_INFORMATION_CLASS(pint.enum):
     _values_ = [(n,v) for v,n in (
@@ -470,8 +510,31 @@ class _API_SET_HEADER(pstruct.type):
     ]
 
 class _API_SET_VALUE_ENTRY(pstruct.type):
+    class _Value(rpointer_t):
+        _value_ = ULONG
+        def summary(self):
+            res = super(_API_SET_VALUE_ENTRY._Value, self).summary()
+            return '{:s} -> {!r}'.format(res, self.d.l.str())
+
+        class _object_(pstr.wstring):
+            def blocksize(self):
+                try:
+                    parent = self.getparent(_API_SET_VALUE_ENTRY)
+                    result = parent['Size'].li.int()
+                except (error.NotFoundError, error.InitializationError):
+                    result = 0
+                return result
+
+    def __Value(self):
+        def _object_(self, parent=self):
+            parent = self.getparent(_API_SET_VALUE_ENTRY)
+            res = parent['Size'].li.int()
+            return dyn.clone(pstr.wstring, blocksize=lambda s,sz=res: sz)
+
+        return dyn.clone(_API_SET_VALUE_ENTRY._Value, _baseobject_=self._baseobject_, _object_=_object_)
+
     _fields_ = [
-        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['Size'].li.int())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'Value'),
+        (lambda s: dyn.clone(s._Value, _baseobject_=s._baseobject_), 'Value'),
         (ULONG, 'Size'),
     ]
 
@@ -486,10 +549,29 @@ class _API_SET_VALUE(pstruct.type):
 
 class _API_SET_ENTRY(pstruct.type):
     _baseobject_ = None
+    class _NameOffset(rpointer_t):
+        _value_ = ULONG
+        def summary(self):
+            res = super(_API_SET_ENTRY._NameOffset, self).summary()
+            return '{:s} -> {!r}'.format(res, self.d.li.str())
+
+        class _object_(pstr.wstring):
+            def blocksize(self):
+                try:
+                    parent = self.getparent(_API_SET_ENTRY)
+                    result = parent['NameLength'].li.int()
+                except (error.NotFoundError, error.InitializationError):
+                    result = 0
+                return result
+
+    class _ValueOffset(rpointer_t):
+        _value_ = ULONG
+        _object_ = _API_SET_VALUE
+
     _fields_ = [
-        (lambda s: dyn.rpointer((lambda _:dyn.clone(pstr.wstring,blocksize=lambda _:s['NameLength'].li.int())), s._baseobject_, ULONG, summary=lambda _:'{:s} -> {!r}'.format(super(ptype.rpointer_t,_).summary(),_.d.l.str())), 'NameOffset'),
+        (lambda s: dyn.clone(s._NameOffset, _baseobject_=s._baseobject_), 'NameOffset'),
         (ULONG, 'NameLength'),
-        (lambda s: dyn.rpointer(_API_SET_VALUE, s._baseobject_, ULONG), 'ValueOffset'),
+        (lambda s: dyn.clone(s._ValueOffset, _baseobject_=s._baseobject_), 'ValueOffset'),
     ]
 
 class API_SET_MAP(pstruct.type, versioned):

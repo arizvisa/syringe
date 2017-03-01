@@ -10,11 +10,11 @@ class KSEMAPHORE(pstruct.type):
 
 class _TL(pstruct.type):
     _fields_ = [
-        (dyn.pointer(lambda s:_TL), 'next'),
+        (P(lambda s:_TL), 'next'),
         (PVOID,'pobj'),
         (PVOID,'pfnFree'),
     ]
-class PTL(dyn.pointer(_TL)): pass
+class PTL(P(_TL)): pass
 
 class W32THREAD(pstruct.type, versioned):
     def __init__(self, **attrs):
@@ -55,7 +55,7 @@ class ETHREAD(pstruct.type, versioned):
         (LIST_ENTRY, 'IrpList'),
         (ULONG, 'TopLevelIrp'),
 #        (PDEVICE_OBJECT, 'DeviceToVerify'),
-        (dyn.pointer(dyn.block(0xb8)), 'DeviceToVerify'),
+        (P(dyn.block(0xb8)), 'DeviceToVerify'),
 #        (_PSP_RATE_APC *, 'RateControlApc'),
         (dyn.block(4), 'RateControlApc'),
         (PVOID, 'Win32StartAddress'),

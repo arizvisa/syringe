@@ -619,33 +619,37 @@ class _base_generic(object):
 
         If nothing is specified, return the parent element.
 
-        If an argument is provided, return the element whose parent is the one
-        specified.
-
         If the ``type`` argument is specified, recursively descend into .parent
-        elements until encountering an instance that inherits from the one
-        provided.
+        elements until encountering an instance that inherits from the one specified.
+
+        If any arguments are provided, return the element whom either inherits
+        from a type provided, or whose .parent matches the requested instance.
         """
-        if len(args) == 0 and 'type' not in kwds:
+        if not len(args) and 'type' not in kwds:
             return self.parent
 
-        t = args[0] if len(args) > 0 else kwds['type']
+        query = args if len(args) else (kwds['type'],)
+        match = lambda self: lambda query: any(((isinstance(q,__builtin__.type) and isinstance(self,q)) or self.parent is q) for q in query)
 
-        if self.__class__ is t:
+        # check to see if user actually queried for self
+        if match(self)(query):
             return self
 
-        #if self.__class__ == t or self is t or (isinstance(t,__builtin__.type) and (isinstance(self,t) or issubclass(self.__class__,t))):
-        #    return self
+        # now walk upwards till we find what the user is looking for
+        def parents(node):
+            return () if node.parent is None else (node.parent,)
 
-        for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)):
-            if x.parent is t or (isinstance(t,__builtin__.type) and (isinstance(x,t) or issubclass(x.__class__,t))):
-                return x
+        for node in self.traverse(edges=parents):
+            if match(node)(query):
+                return node
             continue
 
-        chain = ';'.join(utils.repr_instance(x.classname(),x.name()) for x in self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None)))
-        try: bs = '{:#x}'.format(self.blocksize())
+        # otherwise, we can bail since it wasn't found.
+        chain = ';'.join(utils.repr_instance(node.classname(),node.name()) for node in self.traverse(edges=parents))
+        try: bs = '{:+#x}'.format(self.blocksize())
         except: bs = '???'
-        raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s}[{:x}:+{:s}] : {:s}".format(t.typename(), self.classname(), self.getoffset(), bs, chain))
+        res = (q.typename() if istype(q) else str(q) for q in query)
+        raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s}[{:s}] : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), bs, chain))
 
     def backtrace(self, fn=lambda x:'<type:{:s} name:{:s} offset:{:x}>'.format(x.classname(), x.name(), x.getoffset())):
         """
@@ -982,14 +986,19 @@ class type(base):
         if not self.initializedQ():
             res = self.blocksize()
 
+            try:
+                parent = self.getparent(encoded_t)
+            except error.NotFoundError:
+                parent = self.getparent(None)
+
             # check that child element is actually within bounds of parent
-            if self.parent is not None and self.parent.getoffset() > self.getoffset():
-                Log.info("type.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), self.parent.getoffset(), self.getoffset()))
+            if parent is not None and parent.getoffset() > self.getoffset():
+                Log.info("type.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), parent.getoffset(), self.getoffset()))
 
             # clamp the blocksize if it pushes the child element outside the bounds of the parent
-            elif isinstance(self.parent,container):
-                parentSize = self.parent.blocksize()
-                childOffset = self.getoffset() - self.parent.getoffset()
+            elif isinstance(parent,container):
+                parentSize = parent.blocksize()
+                childOffset = self.getoffset() - parent.getoffset()
                 maxElementSize = parentSize - childOffset
                 if res > maxElementSize:
                     Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
@@ -1224,7 +1233,6 @@ class container(base):
 
     def serialize(self):
         """Return contents of all sub-elements concatenated as a string"""
-
         # check the blocksize(), if it's invalid then return what we have since we can't figure out the padding anyways
         try:
             res = self.blocksize()
@@ -1232,14 +1240,19 @@ class container(base):
             return str().join(n.serialize() for n in self.value)
         data = str().join(n.serialize() for n in self.value)
 
+        try:
+            parent = self.getparent(encoded_t)
+        except error.NotFoundError:
+            parent = self.getparent(None)
+
         # check that child element is actually within bounds of parent
-        if self.parent is not None and self.parent.getoffset() > self.getoffset():
-            Log.info("container.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), self.parent.getoffset(), self.getoffset()))
+        if parent is not None and parent.getoffset() > self.getoffset():
+            Log.info("container.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), parent.getoffset(), self.getoffset()))
 
         # clamp the blocksize if we're outside the bounds of the parent
-        elif isinstance(self.parent,container):
-            parentSize = self.parent.blocksize()
-            childOffset = self.getoffset() - self.parent.getoffset()
+        elif isinstance(parent,container):
+            parentSize = parent.blocksize()
+            childOffset = self.getoffset() - parent.getoffset()
             maxElementSize = parentSize - childOffset
             if res > maxElementSize:
                 Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
@@ -1658,7 +1671,7 @@ class definition(object):
 
     @classmethod
     def copy(cls, otherdefinition):
-        #assert issubclass(otherdefinition, cls), 'ptype.definition :{:s} is not inheriting from{:s} 
+        #assert issubclass(otherdefinition, cls), 'ptype.definition :{:s} is not inheriting from{:s}
         if not issubclass(otherdefinition, cls):
             raise error.AssertionError(cls, 'definition.copy', message='{:s} is not inheriting from {:s}'.format(otherdefinition.__name__, cls.__name__))
 

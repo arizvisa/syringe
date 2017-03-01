@@ -583,19 +583,12 @@ class _array_generic(container):
     length = 0
 
     def summary(self, **options):
-        return self.__summary_initialized() if self.initializedQ() else self.__summary_uninitialized()
+        element, value = self.__element__(), self.bitmap()
+        result = bitmap.hex(value) if bitmap.size(value) else '...'
+        return ' '.join((element,result))
 
-    def __summary_uninitialized(self):
-        result = self.__element_description()
-        try: count = len(self)
-        except (TypeError): count = None
-        return '{:s}[{:s}] ???'.format(result, str(count))
-
-    def __summary_initialized(self):
-        result, value = self.__element_description(), self.bitmap()
-        try: count = len(self)
-        except (TypeError): count = None
-        return '{:s}[{:s}] {:s}'.format(result, str(count), bitmap.hex(value) if bitmap.size(value) > 0 else '...')
+    def repr(self, **options):
+        return self.summary(**options) if self.initializedQ() else ' '.join((self.__element__(),'???'))
 
     def details(self, **options):
         return self.__details_initialized() if self.initializedQ() else self.__details_uninitialized()
@@ -603,30 +596,27 @@ class _array_generic(container):
     def __details_initialized(self):
         _hex, _precision, value = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0, self.bitmap()
         result = bitmap.string(value)
-        return '[{:s}] ({:s}, {:d})'.format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), ('0b'+result) if len(result) else '0b0', value[1])
+        return '[{:s}] {:s} ({:s}, {:d})'.format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), ('0b'+result) if len(result) else '0b0', value[1])
 
     def __details_uninitialized(self):
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-        return '[{:s}] (???, {:d})'.format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.blockbits())
-
-    def repr(self, **options):
-        return self.__summary_initialized() if self.initializedQ() else self.__summary_uninitialized()
+        return '[{:s}] {:s} (???, {:d})'.format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), self.blockbits())
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
-        result, element_descr = self.repr(), self.__element_description()
+        result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
         if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _array_generic.details.im_func:
             result = result.rstrip('\n') # remove trailing newlines
             if prop:
-                return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element_descr,result)
-            return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element_descr,result)
+                return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
+            return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
 
         # if the user chose to not use the default summary, then prefix the element description.
         if getattr(self.repr, 'im_func', None) not in (_array_generic.repr.im_func,_array_generic.summary.im_func,_array_generic.details.im_func):
-            result = ' '.join((element_descr,result))
+            result = ' '.join((element,result))
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
@@ -635,15 +625,18 @@ class _array_generic(container):
             return "[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return "[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
-    def __element_description(self):
+    def __element__(self):
+        try: count = len(self)
+        except TypeError: count = None
         if bitmap.isbitmap(self._object_):
-            res = self._object_
-            return ('signed<{:d}>' if bitmap.signed(res) else 'unsigned<{:d}>').format(bitmap.size(res))
+            result = ('signed<{:d}>' if bitmap.signed(self._object_) else 'unsigned<{:d}>').format(bitmap.size(self._object_))
         elif istype(self._object_):
-            return self._object_.typename()
+            result = self._object_.typename()
         elif isinstance(self._object_, six.integer_types):
-            return ('signed<{:d}>' if self._object_ < 0 else 'unsigned<{:d}>').format(abs(self._object_))
-        return self._object_.__name__
+            result = ('signed<{:d}>' if self._object_ < 0 else 'unsigned<{:d}>').format(abs(self._object_))
+        else:
+            result = self._object_.__name__
+        return '{:s}[{:s}]'.format(result, str(count))
 
     def __getindex__(self, index):
         return self.__getindex__(int(index)) if isinstance(index, basestring) else index
@@ -1255,19 +1248,19 @@ class partial(ptype.container):
         return '???' if not self.initializedQ() else self.object.repr(**options)
     def __len__(self):
         if not self.initializedQ():
-            raise error.InitialiationError(self, 'partial.__len__')
+            raise error.InitializationError(self, 'partial.__len__')
         return len(self.object)
     def __getitem__(self, name):
         if not self.initializedQ():
-            raise error.InitialiationError(self, 'partial.__getitem__')
+            raise error.InitializationError(self, 'partial.__getitem__')
         return self.object[name]
     def __setitem__(self, name, value):
         if not self.initializedQ():
-            raise error.InitialiationError(self, 'partial.__setitem__')
+            raise error.InitializationError(self, 'partial.__setitem__')
         self.object[name] = value
     def __iter__(self):
         if not self.initializedQ():
-            raise error.InitialiationError(self, 'partial.__iter__')
+            raise error.InitializationError(self, 'partial.__iter__')
         for res in self.object: yield res
     def __repr__(self):
         if not self.initializedQ():
@@ -1275,11 +1268,11 @@ class partial(ptype.container):
         return self.object.__repr__()
     def __getvalue__(self):
         if not self.initializedQ():
-            raise error.InitialiationError(self, 'partial.__getvalue__')
+            raise error.InitializationError(self, 'partial.__getvalue__')
         return self.object.get()
     def __setvalue__(self, *args, **kwds):
         if not self.initializedQ():
-            raise error.InitialiationError(self, 'partial.__setvalue__')
+            raise error.InitializationError(self, 'partial.__setvalue__')
         return self.object.set(*args, **kwds)
     def __getattr__(self, name):
         if not self.initializedQ():

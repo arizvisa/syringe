@@ -21,33 +21,34 @@ CSR_API_ID_FROM_OPCODE = lambda n: (int(int(n)))
 CSR_SERVER_ID_FROM_OPCODE = lambda n: int((n) >> 16)
 
 class CINT(pint.uint32_t): pass
-class PCSZ(dyn.pointer(pstr.char_t)): pass
+class PCSZ(P(pstr.char_t)): pass
 class CLONG(ULONG): pass
 class CSHORT(short): pass
-class PCSHORT(dyn.pointer(CSHORT)): pass
+class PCSHORT(P(CSHORT)): pass
 class PHYSICAL_ADDRESS(LARGE_INTEGER): pass
-class PPHYSICAL_ADDRESS(dyn.pointer(PHYSICAL_ADDRESS)): pass
+class PPHYSICAL_ADDRESS(P(PHYSICAL_ADDRESS)): pass
 class KPRIORITY(LONG): pass
 class KAFFINITY(LONG): pass
 class NTSTATUS(LONG): pass
-class PNTSTATUS(dyn.pointer(NTSTATUS)): pass
+class PNTSTATUS(P(NTSTATUS)): pass
 
 class PSTR(pstr.string): pass
 class WSTR(pstr.wstring): pass
 
-class CLIENT_ID(pstruct.type):
+class CLIENT_ID(pstruct.type, versioned):
     _fields_ = [
         (HANDLE, 'UniqueProcess'),
         (HANDLE, 'UniqueThread'),
     ]
 
-class UNICODE_STRING(pstruct.type):
+class UNICODE_STRING(pstruct.type, versioned):
     _fields_ = [
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
 #        (PWSTR, 'Buffer'),
-#        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['MaximumLength'].li.int())), 'Buffer')
-        (lambda s: dyn.pointer(dyn.clone(WSTR, length=s['Length'].li.int()/2)), 'Buffer')
+#        (lambda s: P(dyn.clone(WSTR, length=s['MaximumLength'].li.int())), 'Buffer')
+        (lambda s: ULONG if getattr(s,'WIN64',False) else pint.uint_t, 'Unknown'),
+        (lambda s: P(dyn.clone(WSTR, length=s['Length'].li.int()/2)), 'Buffer')
     ]
 
     def get(self):
@@ -60,13 +61,13 @@ class UNICODE_STRING(pstruct.type):
     def summary(self):
         return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].int(), self['MaximumLength'].int(), self.str())
 
-class PUNICODE_STRING(dyn.pointer(UNICODE_STRING)): pass
+class PUNICODE_STRING(P(UNICODE_STRING)): pass
 
 class STRING(pstruct.type):
     _fields_ = [
         (USHORT, 'Length'),
         (USHORT, 'MaximumLength'),
-        (lambda s: dyn.pointer(dyn.clone(PSTR, length=s['Length'].li.int())), 'Buffer')
+        (lambda s: P(dyn.clone(PSTR, length=s['Length'].li.int())), 'Buffer')
     ]
 
     def get(self):
@@ -79,7 +80,7 @@ class STRING(pstruct.type):
     def summary(self):
         return 'Length={:x} MaximumLength={:x} Buffer={!r}'.format(self['Length'].int(), self['MaximumLength'].int(), self.str())
 
-class PSTRING(dyn.pointer(STRING)): pass
+class PSTRING(P(STRING)): pass
 
 class ANSI_STRING(STRING): pass
 class PANSI_STRING(PSTRING): pass

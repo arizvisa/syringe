@@ -1,20 +1,18 @@
 from WinNT import *
 import umtypes,pecoff
 
-## XXX: It would be worth it to do the Loader Data Table Entry Flags
-
-class LDR_DATA_TABLE_ENTRY(pstruct.type):
+class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
     class SectionPointerUnion(dynamic.union):
-        _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
+        class SectionPointer(pstruct.type):
+            _fields_ = [(PVOID, 'SectionPointer'),(ULONG,'CheckSum')]
+        _fields_ = [
+            (LIST_ENTRY, 'HashLinks'),
+            (SectionPointer, 'SectionPointer')
+        ]
     class TimeDateStampUnion(dynamic.union):
         _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
 
-    #class __SectionPointerUnion(dynamic.union):
-    #    _fields_ = [(LIST_ENTRY, 'HashLinks'), (PVOID, 'SectionPointer')]
-    #class __TimeDateStampUnion(dynamic.union):
-    #    _fields_ = [(ULONG, 'TimeDateStamp'), (PVOID, 'LoadedImports')]
-
-    class __Flags(pbinary.flags):
+    class Flags(pbinary.flags):
         _fields_ = [
             (1, 'LDRP_COMPAT_DATABASE_PROCESSED'),  # 0x80000000
             (1, 'LDRP_MM_LOADED'),                  # 0x40000000
@@ -36,32 +34,47 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
             (1, 'LDRP_ENTRY_PROCESSED'),            # 0x00004000
             (1, 'LDRP_UNLOAD_IN_PROGRESS'),         # 0x00002000
             (1, 'LDRP_LOAD_IN_PROGRESS'),           # 0x00001000
-            (9, '?'),                               # 0x00000??8
+            (9, 'LDRP_RESERVED'),                   # 0x00000??8
             (1, 'LDRP_IMAGE_DLL'),                  # 0x00000004
             (1, 'LDRP_STATIC_LINK'),                # 0x00000002
             (1, 'LDRP_RESERVED'),                   # 0x00000001
         ]
 
-    _fields_ = [
-        (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
-        (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
-        (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
-        #(PVOID, 'DllBase'),
-        (dyn.pointer(pecoff.Executable.File), 'DllBase'),   # !!!
-        (PVOID, 'EntryPoint'),
-        (ULONG, 'SizeOfImage'),
-        (umtypes.UNICODE_STRING, 'FullDllName'),
-        (umtypes.UNICODE_STRING, 'BaseDllName'),
-#        (ULONG, 'Flags'),   # !!!
-        (__Flags, 'Flags'),   # !!!
-        (USHORT, 'LoadCount'),
-        (USHORT, 'TlsIndex'),
-        (SectionPointerUnion, 'SectionPointerUnion'),
-        (ULONG, 'CheckSum'),
-        (TimeDateStampUnion, 'TimeDateStampUnion'),
-        (PVOID, 'EntryPointActivationContext'),
-        (PVOID, 'PatchInformation'),
-    ]
+    def __init__(self, **attrs):
+        super(LDR_DATA_TABLE_ENTRY, self).__init__(**attrs)
+        self._fields_ = f = []
+        aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
+
+        f.extend([
+            (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
+            (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
+            (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
+            (P(pecoff.Executable.File), 'DllBase'),
+            (PVOID, 'EntryPoint'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'SizeOfImage'),
+            (aligned, 'align(FullDllName)'),
+            (umtypes.UNICODE_STRING, 'FullDllName'),
+            (umtypes.UNICODE_STRING, 'BaseDllName'),
+            (pbinary.littleendian(LDR_DATA_TABLE_ENTRY.Flags), 'Flags'),   # !!!
+            (USHORT, 'LoadCount'),
+            (USHORT, 'TlsIndex'),
+
+            (LIST_ENTRY, 'HashLinks'),
+            #(LDR_DATA_TABLE_ENTRY.SectionPointerUnion, 'SectionPointer/HashLinks'),
+
+            (ULONG, 'TimeDateStamp'),
+            (aligned, 'align(EntryPointActivationContext)'),
+            #(LDR_DATA_TABLE_ENTRY.TimeDateStampUnion, 'TimeDateStampUnion/LoadedImports'),
+
+            (PVOID, 'EntryPointActivationContext'), # FIXME: P(_ACTIVATION_CONTEXT)
+            (PVOID, 'PatchInformation'),
+            (LIST_ENTRY, 'ForwarderLinks'),
+            (LIST_ENTRY, 'ServiceTagLinks'),
+            (LIST_ENTRY, 'StaticLinks'),        # FIXME: points to 0x18/0x30 byte entries in the heap?
+            (PVOID, 'ContextInformation'),
+            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'OriginalBase'),
+            (LARGE_INTEGER, 'LoadTime'),
+        ])
 
     def contains(self, address):
         left = self['DllBase'].int()
@@ -70,25 +83,30 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type):
 
 ## declarations, heh.
 class _LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
-    _object_ = dyn.pointer(LDR_DATA_TABLE_ENTRY)
+    _object_ = P(LDR_DATA_TABLE_ENTRY)
 
 class _LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InLoadOrderLinks',)
 class _LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InMemoryOrderModuleList',)
 class _LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InInitializationOrderModuleList',)
 
-class PEB_LDR_DATA(pstruct.type):
-    _fields_ = [
-        (ULONG, 'Length'),
-        (ULONG, 'Initialized'),
-        (PVOID, 'SsHandle'),
-        (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
-        (_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
-        (_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
+class PEB_LDR_DATA(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(PEB_LDR_DATA, self).__init__(**attrs)
+        self._fields_ = f = []
+        f.extend([
+            (ULONG, 'Length'),
+            (ULONG, 'Initialized'),
+            (PVOID, 'SsHandle'),
 
-        (PVOID, 'EntryInProgress'),
-        (PVOID, 'ShutdownInProgress'),
-        (ULONG, 'ShutdownThreadId'),
-    ]
+            (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
+            (_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
+            (_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
+
+            (PVOID, 'EntryInProgress'),
+            (PVOID, 'ShutdownInProgress'),
+            (ULONG, 'ShutdownThreadId'),
+        ])
+
     def walk(self):
         for x in self['InLoadOrderModuleList'].walk():
             yield x
@@ -101,5 +119,5 @@ class PEB_LDR_DATA(pstruct.type):
             continue
         raise KeyError
 
-class PPEB_LDR_DATA(dyn.pointer(PEB_LDR_DATA)): pass
+class PPEB_LDR_DATA(P(PEB_LDR_DATA)): pass
 

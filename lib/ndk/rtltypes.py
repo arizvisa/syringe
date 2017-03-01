@@ -14,7 +14,7 @@ class _RTL_CRITICAL_SECTION(pstruct.type):
 class _RTL_BITMAP(pstruct.type):
     _fields_ = [
         (ULONG, 'SizeOfBitMap'),
-        (dyn.pointer(ULONG), 'Buffer'),
+        (P(ULONG), 'Buffer'),
     ]
 
 class _RTL_DRIVE_LETTER_CURDIR(pstruct.type):
@@ -45,9 +45,9 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (umtypes.UNICODE_STRING, 'DllPath'),
         (umtypes.UNICODE_STRING, 'ImagePathName'),
         (umtypes.UNICODE_STRING, 'CommandLine'),
-#        (dyn.pointer(lambda s: dyn.block(s.getparent(_RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
-#        (dyn.pointer(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
-        (dyn.pointer(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
+#        (P(lambda s: dyn.block(s.getparent(_RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
+#        (P(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
+        (P(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
         (ULONG, 'StartingX'),
         (ULONG, 'StartingY'),
         (ULONG, 'CountX'),

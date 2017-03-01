@@ -2,6 +2,7 @@ from .base import *
 from . import dynamic
 
 class _p_type(pint.enum):
+    PT_LOPROC, PT_HIPROC = 0x70000000, 0x7fffffff
     _values_ = [
         ('PT_NULL', 0),
         ('PT_LOAD', 1),
@@ -10,11 +11,13 @@ class _p_type(pint.enum):
         ('PT_NOTE', 4),
         ('PT_SHLIB', 5),
         ('PT_PHDR', 6),
+
         ('PT_GNU_EH_FRAME', 0x6474e550),
         ('PT_GNU_STACK', 0x6474e551),
         ('PT_GNU_RELRO', 0x6474e552),
-        ('PT_LOPROC', 0x70000000),
-        ('PT_HIPROC', 0x7fffffff),
+
+        ('PT_ARM_ARCHEXT', 0x70000000),  # Platform architecture compatibility information
+        ('PT_ARM_UNWIND', 0x70000001),  # Exception unwind tables
     ]
 
 class _p_flags(pbinary.flags):
@@ -41,6 +44,9 @@ def _p_offset(size):
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf32_Word): pass
     class p_flags(_p_flags): pass   # XXX
+    def __p_unknown(self):
+        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
+        return dyn.block(max((0,self.blocksize()-res)))
     _fields_ = [
         (p_type, 'p_type'),
         (_p_offset(Elf32_Off), 'p_offset'),
@@ -50,11 +56,15 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
         (Elf32_Word, 'p_memsz'),
         (p_flags, 'p_flags'),
         (Elf32_Word, 'p_align'),
+        (__p_unknown, 'p_unknown'),
     ]
 
 class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf64_Word): pass
     class p_flags(_p_flags): pass   # XXX
+    def __p_unknown(self):
+        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
+        return dyn.block(max((0,self.blocksize()-res)))
     _fields_ = [
         (p_type, 'p_type'),
         (p_flags, 'p_flags'),
@@ -64,6 +74,7 @@ class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
         (Elf64_Xword, 'p_filesz'),
         (Elf64_Xword, 'p_memsz'),
         (Elf64_Xword, 'p_align'),
+        (__p_unknown, 'p_unknown'),
     ]
 
 ### segment type definitions

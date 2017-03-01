@@ -1,23 +1,80 @@
 from ptypes import *
 
-short = pint.int16_t
+###
+import sdkddkver
+class versioned(ptype.type):
+    '''will update the attrs with the operating systems NTDDI_VERSION'''
+    NTDDI_VERSION = sdkddkver.NTDDI_VERSION
+    WIN64 = sdkddkver.WIN64
+    attributes = { 'NTDDI_VERSION':NTDDI_VERSION, 'WIN64':WIN64 }
+    def __init__(self, **attrs):
+        super(versioned, self).__init__(**attrs)
+        self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
+        self.attributes['WIN64'] = self.WIN64
 
-class fpointer_t(ptype.opointer_t):
+###
+PVALUE32 = dyn.clone(ptype.pointer_t._value_, length=4)
+PVALUE64 = dyn.clone(ptype.pointer_t._value_, length=8)
+
+class fpointer_t(ptype.opointer_t, versioned):
     """This is typically used for LIST_ENTRY"""
+    @property
+    def _value_(self):
+        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
+
     _path_ = ()
     def _calculate_(self, offset):
         res = self.new(self._object_).a
         for p in self._path_: res = res[p]
         return offset - res.getoffset()
     def classname(self):
-        return self.typename() + '(' + self._object_.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
+        res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
+        return self.typename() + '(' + res.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
 
 def fpointer(type, fieldname):
     return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname,'__iter__') else (fieldname,))
+fptr = fpointer
 
-class PVOID(dyn.pointer(ptype.undefined, pint.uint32_t)): pass
-class PVOID64(dyn.pointer(ptype.undefined, pint.uint64_t)): pass
-class ULONG_PTR(ptype.pointer_t): pass
+###
+class PVOID(ptype.pointer_t, versioned):
+    @property
+    def _value_(self):
+        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
+    _object_ = ptype.undefined
+
+class pointer_t(ptype.pointer_t, versioned):
+    @property
+    def _value_(self):
+        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
+    _object_ = ptype.undefined
+
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
+def pointer(target, **attrs):
+    return dyn.clone(pointer_t, _object_=target)
+P = pointer
+
+###
+class rpointer_t(ptype.rpointer_t, versioned):
+    @property
+    def _value_(self):
+        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
+
+    def decode(self, object, **attrs):
+        root = ptype.force(self._baseobject_, self)
+        base = root.getoffset() if isinstance(root,ptype.generic) else root().getoffset()
+        t = pint.uint64_t if getattr(self,'WIN64',False) else pint.uint32_t
+        return t().set(base + object.get())
+
+def rpointer(target, base, **attrs):
+    return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
+rptr = rpointer
+
+###
+class short(pint.int16_t): pass
+class ULONG_PTR(PVOID): pass
 
 class BYTE(pint.uint8_t): pass
 class WORD(pint.uint16_t): pass
@@ -29,17 +86,17 @@ class USHORT(pint.uint16_t): pass
 class ULONG(pint.uint32_t): pass
 
 class HANDLE(PVOID): pass
-class PHANDLE(dyn.pointer(HANDLE)): pass
+class PHANDLE(pointer(HANDLE)): pass
 
 class CHAR(pint.uint8_t): pass
-class PCHAR(dyn.pointer(CHAR)): pass
+class PCHAR(pointer(CHAR)): pass
 class WCHAR(pint.uint16_t): pass
-class PWCHAR(dyn.pointer(WCHAR)): pass
+class PWCHAR(pointer(WCHAR)): pass
 
 class LCID(DWORD): pass
 
-class PWSTR(dyn.pointer(pstr.wstring)): pass
-class LPWSTR(dyn.pointer(pstr.wstring)): pass
+class PWSTR(pointer(pstr.wstring)): pass
+class LPWSTR(pointer(pstr.wstring)): pass
 
 class LONGLONG(pint.int64_t): pass
 class ULONGLONG(pint.uint64_t): pass
@@ -72,11 +129,11 @@ class LUID(pstruct.type):
         (DWORD, 'HighPart'),
     ]
 
-class PLUID(dyn.pointer(LUID)): pass
+class PLUID(pointer(LUID)): pass
 
 ###
 class BOOLEAN(BYTE): pass
-class PBOOLEAN(dyn.pointer(BOOLEAN)): pass
+class PBOOLEAN(pointer(BOOLEAN)): pass
 
 ### Singly-linked list
 class _SLIST_ENTRY(fpointer_t):
@@ -118,20 +175,26 @@ _SLIST_ENTRY._object_ = _SLIST_ENTRY
 _SLIST_ENTRY._path_ = ()
 SLIST_ENTRY = _SLIST_ENTRY
 
-class SLIST_HEADER(pstruct.type):
+class SLIST_HEADER(pstruct.type, versioned):
     def __Next(self):
         p = getattr(self, '_path_', _SLIST_ENTRY._path_)
         o = getattr(self, '_object_', _SLIST_ENTRY._object_)
         return dyn.clone(_SLIST_ENTRY, _path_=p, _object_=o)
 
-    _fields_ = [
-        (__Next, 'Next'),
-        (pint.uint16_t, 'Depth'),
-        (pint.uint16_t, 'Sequence'),
-    ]
+    def __init__(self, **attrs):
+        super(SLIST_HEADER, self).__init__(**attrs)
+        f = self._fields_ = []
+        aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
+
+        f.extend([
+            (pint.uint32_t if getattr(self,'WIN64',False) else pint.uint_t, 'Alignment'),
+            (self.__Next, 'Next'),
+            (pint.uint16_t, 'Depth'),
+            (pint.uint16_t, 'Sequence'),
+        ])
 
     def summary(self):
-        return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].int(),self['Sequence'].int())
+        return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].int(), self['Sequence'].int())
 
 ### Doubly-linked list
 class _LIST_ENTRY(pstruct.type):
@@ -192,7 +255,7 @@ class _LIST_ENTRY(pstruct.type):
     def moonwalk(self):
         return self.walk(direction=self.blink)
 
-_LIST_ENTRY._object_ = dyn.pointer(_LIST_ENTRY)
+_LIST_ENTRY._object_ = pointer(_LIST_ENTRY)
 _LIST_ENTRY._path_ = ()
 LIST_ENTRY = _LIST_ENTRY
 
@@ -216,7 +279,7 @@ class EXCEPTION_RECORD32(pstruct.type):
     _fields_ = [
         (DWORD, 'ExceptionCode'),
         (EXCEPTION_FLAGS, 'ExceptionFlags'),
-        (lambda s: dyn.pointer(EXCEPTION_RECORD32), 'ExceptionRecord'),
+        (lambda s: pointer(EXCEPTION_RECORD32), 'ExceptionRecord'),
         (PVOID, 'ExceptionAddress'),
         (DWORD, 'NumberParameters'),
         (lambda s: dyn.array(DWORD, s['NumberParameters'].li.int()), 'ExceptionInformation'),
@@ -230,7 +293,7 @@ if False:
         _fields_ = [
             (DWORD, 'ExceptionCode'),
             (EXCEPTION_FLAGS, 'ExceptionFlags'),
-            (lambda s: dyn.pointer(EXCEPTION_RECORD64), 'ExceptionRecord'), # FIXME: 64
+            (lambda s: pointer(EXCEPTION_RECORD64), 'ExceptionRecord'), # FIXME: 64
             (PVOID, 'ExceptionAddress'),    # FIXME: 64
             (DWORD, 'NumberParameters'),
             (DWORD, '__unusedAlignment'),
@@ -239,7 +302,7 @@ if False:
 
 class EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
-        (lambda s:dyn.pointer(EXCEPTION_REGISTRATION), 'Next'),
+        (lambda s:pointer(EXCEPTION_REGISTRATION), 'Next'),
         (PVOID, 'Handler'),
     ]
 
@@ -258,28 +321,17 @@ class EXCEPTION_REGISTRATION(pstruct.type):
 class NT_TIB(pstruct.type):
     _fields_ = [
 #        (dyn.block(4), 'ExceptionList'),
-        (dyn.pointer(EXCEPTION_REGISTRATION), 'ExceptionList'),
+        (pointer(EXCEPTION_REGISTRATION), 'ExceptionList'),
         (PVOID, 'StackBase'),
         (PVOID, 'StackLimit'),
         (PVOID, 'SubSystemTib'),
         (PVOID, 'FiberData'),
         (PVOID, 'ArbitraryUserPointer'),
-        (lambda s: dyn.pointer(NT_TIB), 'Self'),
+        (lambda s: pointer(NT_TIB), 'Self'),
     ]
 
-###
-import sdkddkver
-class versioned(ptype.type):
-    '''will update the attrs with the operating systems NTDDI_VERSION'''
-    NTDDI_VERSION = sdkddkver.NTDDI_VERSION
-    WIN64 = sdkddkver.WIN64
-    attributes = { 'NTDDI_VERSION':NTDDI_VERSION, 'WIN64':WIN64 }
-    def __init__(self, **attrs):
-        super(versioned, self).__init__(**attrs)
-        self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
-        self.attributes['WIN64'] = self.WIN64
-
 class SIZE_T(ULONG): pass
+class SIZE_T64(ULONGLONG): pass
 
 class rfc4122(pstruct.type):
     _fields_ = [

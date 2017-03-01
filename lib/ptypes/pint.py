@@ -130,7 +130,7 @@ Example usage of pint.enum:
     instance.load()
 
     # assign the instance by an enumeration name
-    instance.set('name1') 
+    instance.set('name1')
 
     # return the instance as a name or an integer in string form
     print instance.str()
