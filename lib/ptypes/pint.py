@@ -135,18 +135,21 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print instance.str()
 """
-import six,__builtin__
+import six
+from six.moves import builtins
+
 from . import ptype,bitmap,config,error,utils
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 __state__ = {}
 def setbyteorder(endianness):
-    import __builtin__
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
         transform = {config.byteorder.bigendian:bigendian, config.byteorder.littleendian:littleendian}[endianness]
         for k,v in globals().items():
-            if v not in (type,uinteger_t,sinteger_t) and isinstance(v,__builtin__.type) and issubclass(v,type):
+            if v in (type,) or getattr(v,'__base__',type) is type:
+                continue
+            if isinstance(v, builtins.type) and issubclass(v, type):
                 if getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
                     globals()[k] = transform(v)
                 pass
@@ -225,9 +228,9 @@ class type(ptype.type):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
         if self.byteorder is config.byteorder.bigendian:
-            return reduce(lambda x,y: x << 8 | ord(y), self.serialize(), 0)
+            return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), self.serialize(), 0)
         elif self.byteorder is config.byteorder.littleendian:
-            return reduce(lambda x,y: x << 8 | ord(y), reversed(self.serialize()), 0)
+            return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), reversed(self.serialize()), 0)
         raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
     def __setvalue__(self, integer):
@@ -245,7 +248,7 @@ class type(ptype.type):
             bc,x = bitmap.consume(bc,8)
             res.append(x)
         res = res + [0]*(self.blocksize() - len(res))   # FIXME: use padding
-        return super(type, self).__setvalue__(str().join(transform(map(chr,res))))
+        return super(type, self).__setvalue__(str().join(transform(map(six.int2byte,res))))
 
     def get(self):
         return self.__getvalue__()
@@ -320,7 +323,7 @@ class sint128_t(sinteger_t): length = 16
 
 int_t,int8_t,int16_t,int32_t,int64_t,int128_t = sint_t,sint8_t,sint16_t,sint32_t,sint64_t,sint128_t
 
-class enum(uinteger_t):
+class enum(type):
     '''
     An integer_t for managing constants used when you define your integer.
     i.e. class myinteger(pint.enum, pint.uint32_t): pass
@@ -332,18 +335,18 @@ class enum(uinteger_t):
     _values_ = []
 
     def __init__(self, *args, **kwds):
-        super(type, self).__init__(*args, **kwds)
+        super(enum, self).__init__(*args, **kwds)
 
         # invert ._values_ if they're defined backwards
         if len(self._values_):
             name, value = self._values_[0]
-            if isinstance(value, basestring):
+            if isinstance(value, six.string_types):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
                 self._values_ = [(k,v) for v,k in self._values_]
 
         # verify the types are correct for ._values_
-        if any(not isinstance(k, basestring) or not isinstance(v, six.integer_types) for k,v in self._values_):
-            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.typename(), basestring, int))
+        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k,v in self._values_):
+            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.typename(), six.string_types, int))
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
         return
@@ -351,7 +354,7 @@ class enum(uinteger_t):
     @classmethod
     def byvalue(cls, value):
         '''Lookup the string in an enumeration by it's first-defined value'''
-        try: return next(k for k, v in cls._values_ if v == value)
+        try: return six.next(k for k, v in cls._values_ if v == value)
         except StopIteration: pass
         raise KeyError(cls, 'enum.byvalue', value)
     byValue = byvalue
@@ -359,7 +362,7 @@ class enum(uinteger_t):
     @classmethod
     def byname(cls, name):
         '''Lookup the value in an enumeration by it's first-defined name'''
-        try: return next(v for k,v in cls._values_ if k == name)
+        try: return six.next(v for k,v in cls._values_ if k == name)
         except StopIteration: pass
         raise KeyError(cls, 'enum.byname', name)
     byName = byname
@@ -385,9 +388,9 @@ class enum(uinteger_t):
         return super(enum, self).summary()
 
     def __setvalue__(self, value):
-        if isinstance(value, basestring):
+        if isinstance(value, six.string_types):
             value = self.byname(value)
-        return super(uinteger_t,self).__setvalue__(value)
+        return super(enum,self).__setvalue__(value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
@@ -408,17 +411,13 @@ class enum(uinteger_t):
 
 # update our current state
 for k, v in globals().items():
-    if v is not type and isinstance(v, __builtin__.type) and issubclass(v, type):
+    if v in (type,) or getattr(v,'__base__',type) is type:
+        continue
+    if isinstance(v, builtins.type) and issubclass(v, type):
         __state__.setdefault(Config.integer.order, {})[v] = v
     continue
 
 if __name__ == '__main__':
-    import ptype,parray
-    import pstruct,parray,pint,provider
-
-    import config,logging
-    config.defaults.log.setLevel(logging.DEBUG)
-
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -442,9 +441,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes
-    from ptypes import *
-    import provider,utils,struct
+    import ptypes,struct
+    from ptypes import provider,utils,pint
     string1 = '\x0a\xbc\xde\xf0'
     string2 = '\xf0\xde\xbc\x0a'
 
@@ -609,6 +607,9 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )

@@ -117,6 +117,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
     ]
     def blocksize(self):
         return self['e_ehsize'].li.int() - e_ident().a.blocksize()
+
     def stringtable(self):
         res, index = self['e_shoff'].d.li, self['e_shstrndx'].int()
         if index < len(res):

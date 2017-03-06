@@ -23,6 +23,35 @@ class ElfXX_Off(ptype.rpointer_t):
         type = self._object_.__name__
         return '%s<%s>'%(self.typename(), type)
 
+class ULEB128(pbinary.terminatedarray):
+    class septet(pbinary.struct):
+        _fields_ = [
+            (1, 'more'),
+            (7, 'value'),
+        ]
+    _object_ = septet
+    def isTerminator(self, value):
+        return not bool(value['more'])
+
+    def int(self): return self.get()
+    def get(self):
+        res = 0
+        for n in reversed(self):
+            res = (res << 7) | n['value']
+        return res
+    def set(self, value):
+        result = []
+        while value > 0:
+            result.append( self.new(self.septet).set((1, value & (2**7-1))) )
+            value /= 2**7
+        result[-1].set(more=0)
+        self.value[:] = result[:]
+        return self
+
+    def summary(self):
+        res = self.int()
+        return '{:s} : {:d} : ({:#x}, {:d})'.format(self.__element__(), res, res, 7*len(self))
+
 class ElfXX_File(ptype.boundary): pass
 class ElfXX_Header(ptype.boundary): pass
 class ElfXX_Ehdr(ElfXX_Header): pass

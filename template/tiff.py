@@ -61,95 +61,95 @@ class DirectoryType(pint.enum, pint.uint16_t):
 class Tags(ptype.definition):
     attribute,cache = 'tag',{}
 
-class DirectoryTag(pint.uint16_t, pint.enum): pass
-DirectoryTag._values_ = [
-    ('PhotometricInterpretation', 262),
-    ('NewSubfileType', 254),
-    ('SubfileType', 255),
-    ('ImageWidth', 256),
-    ('ImageLength', 257),
-    ('BitsPerSample', 258),
-    ('Compression', 259),
-    ('Threshholding', 263),
-    ('CellWidth', 264),
-    ('CellLength', 265),
-    ('FillOrder', 266),
-    ('DocumentName', 269),
-    ('ImageDescription', 270),
-    ('Make', 271),
-    ('Model', 272),
-    ('StripOffsets', 273),
-    ('Orientation', 274),
-    ('SamplesPerPixel', 277),
-    ('RowsPerStrip', 278),
-    ('StripByteCounts', 279),
-    ('MinSampleValue', 280),
-    ('MaxSampleValue', 281),
-    ('XResolution', 282),
-    ('YResolution', 283),
-    ('PlanarConfiguration', 284),
-    ('PageName', 285),
-    ('XPosition', 286),
-    ('YPosition', 287),
-    ('FreeOffsets', 288),
-    ('FreeByteCounts', 289),
-    ('GrayResponseUnit', 290),
-    ('GrayResponseCurve', 291),
-    ('T4Options', 292),
-    ('T6Options', 293),
-    ('ResolutionUnit', 296),
-    ('PageNumber', 297),
-    ('TransferFunction', 301),
-    ('Software', 305),
-    ('DateTime', 306),
-    ('Artist', 315),
-    ('HostComputer', 316),
-    ('Predictor', 317),
-    ('WhitePoint', 318),
-    ('PrimaryChromaticities', 319),
-    ('ColorMap', 320),
-    ('HalftoneHints', 321),
-    ('TileWidth', 322),
-    ('TileLength', 323),
-    ('TileOffsets', 324),
-    ('TileByteCounts', 325),
-    ('InkSet', 332),
-    ('InkNames', 333),
-    ('NumberOfInks', 334),
-    ('DotRange', 336),
-    ('TargetPrinter', 337),
-    ('ExtraSamples', 338),
-    ('SampleFormat', 339),
-    ('SMinSampleValue', 340),
-    ('SMaxSampleValue', 341),
-    ('TransferRange', 342),
-    ('JPEGProc', 512),
-    ('JPEGInterchangeFormat', 513),
-    ('JPEGInterchangeFormatLngth', 514),
-    ('JPEGRestartInterval', 515),
-    ('JPEGLosslessPredictors', 517),
-    ('JPEGPointTransforms', 518),
-    ('JPEGQTables', 519),
-    ('JPEGDCTables', 520),
-    ('JPEGACTables', 521),
-    ('YCbCrCoefficients', 529),
-    ('YCbCrSubSampling', 530),
-    ('YCbCrPositioning', 531),
-    ('ReferenceBlackWhite', 532),
-    ('Copyright', 33432),
-]
+class DirectoryTag(pint.enum, pint.uint16_t):
+    _values_ = [
+        ('PhotometricInterpretation', 262),
+        ('NewSubfileType', 254),
+        ('SubfileType', 255),
+        ('ImageWidth', 256),
+        ('ImageLength', 257),
+        ('BitsPerSample', 258),
+        ('Compression', 259),
+        ('Threshholding', 263),
+        ('CellWidth', 264),
+        ('CellLength', 265),
+        ('FillOrder', 266),
+        ('DocumentName', 269),
+        ('ImageDescription', 270),
+        ('Make', 271),
+        ('Model', 272),
+        ('StripOffsets', 273),
+        ('Orientation', 274),
+        ('SamplesPerPixel', 277),
+        ('RowsPerStrip', 278),
+        ('StripByteCounts', 279),
+        ('MinSampleValue', 280),
+        ('MaxSampleValue', 281),
+        ('XResolution', 282),
+        ('YResolution', 283),
+        ('PlanarConfiguration', 284),
+        ('PageName', 285),
+        ('XPosition', 286),
+        ('YPosition', 287),
+        ('FreeOffsets', 288),
+        ('FreeByteCounts', 289),
+        ('GrayResponseUnit', 290),
+        ('GrayResponseCurve', 291),
+        ('T4Options', 292),
+        ('T6Options', 293),
+        ('ResolutionUnit', 296),
+        ('PageNumber', 297),
+        ('TransferFunction', 301),
+        ('Software', 305),
+        ('DateTime', 306),
+        ('Artist', 315),
+        ('HostComputer', 316),
+        ('Predictor', 317),
+        ('WhitePoint', 318),
+        ('PrimaryChromaticities', 319),
+        ('ColorMap', 320),
+        ('HalftoneHints', 321),
+        ('TileWidth', 322),
+        ('TileLength', 323),
+        ('TileOffsets', 324),
+        ('TileByteCounts', 325),
+        ('InkSet', 332),
+        ('InkNames', 333),
+        ('NumberOfInks', 334),
+        ('DotRange', 336),
+        ('TargetPrinter', 337),
+        ('ExtraSamples', 338),
+        ('SampleFormat', 339),
+        ('SMinSampleValue', 340),
+        ('SMaxSampleValue', 341),
+        ('TransferRange', 342),
+        ('JPEGProc', 512),
+        ('JPEGInterchangeFormat', 513),
+        ('JPEGInterchangeFormatLngth', 514),
+        ('JPEGRestartInterval', 515),
+        ('JPEGLosslessPredictors', 517),
+        ('JPEGPointTransforms', 518),
+        ('JPEGQTables', 519),
+        ('JPEGDCTables', 520),
+        ('JPEGACTables', 521),
+        ('YCbCrCoefficients', 529),
+        ('YCbCrSubSampling', 530),
+        ('YCbCrPositioning', 531),
+        ('ReferenceBlackWhite', 532),
+        ('Copyright', 33432),
+    ]
 
 ### file
 class Entry(pstruct.type):
     def __value(self):
         count = self['count'].li.num()
         try:
-            object = Type.lookup(self['type'].li.num())
+            res = Type.lookup(self['type'].li.num())
         except KeyError:
             return pint.uint32_t
         else:
-            t = dyn.array(object, count)
-            if count == 1 and t().a.size() <= 4: return object
+            t = dyn.array(res, count)
+            if count == 1 and t().a.size() <= 4: return res
             if t().a.size() <= 4: return t
         return ptype.undefined
 
@@ -157,11 +157,12 @@ class Entry(pstruct.type):
         count = self['count'].li.num()
         try:
             object = Type.lookup(self['type'].li.num())
-            t = dyn.array(object, count)
+            res = dyn.array(object, count)
         except KeyError:
             pass
         else:
-            if isinstance(self['value'], ptype.undefined): return dyn.pointer(t)
+            if isinstance(self['value'], ptype.undefined):
+                return dyn.pointer(res, pint.uint32_t)
         return ptype.undefined
 
     _fields_ = [
@@ -174,11 +175,14 @@ class Entry(pstruct.type):
     ]
 
 class Directory(pstruct.type):
-    _fields_ = [
-        (pint.uint16_t, 'count'),
-        (lambda s: dyn.array(Entry, s['count'].li.num()), 'entry'),
-        (dyn.pointer(lambda _: Directory), 'next')
-    ]
+    def __init__(self, **attrs):
+        super(Directory, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (pint.uint16_t, 'count'),
+            (lambda s: dyn.array(Entry, s['count'].li.num()), 'entry'),
+            (dyn.pointer(Directory, pint.uint32_t), 'next')
+        ])
 
     def iterate(self):
         for n in self['entry']:
@@ -189,6 +193,12 @@ class Directory(pstruct.type):
         raise NotImplementedError
 
 class Header(pstruct.type):
+    class _byteorder(pint.enum, pint.uint16_t):
+        _values_ = [
+            ('littleendian', 0x4949),
+            ('bigendian', 0x4d4d),
+        ]
+
     def byteorder(self):
         bo = self['byteorder'].serialize()
         if bo == 'II':
@@ -198,14 +208,26 @@ class Header(pstruct.type):
         raise NotImplementedError("Unknown byteorder : {!r}".format(bo))
 
     _fields_ = [
-        (dyn.block(2), 'byteorder'),
+        (_byteorder, 'byteorder'),
         (dyn.block(2), 'signature'),
     ]
 
 class File(pstruct.type):
+    def __pointer(self):
+        bo = self['header'].li.byteorder()
+        pointer = dyn.pointer(Directory, pint.uint32_t, byteorder=bo)
+        return dyn.clone(pointer, recurse=dict(byteorder=bo))
+
+    def __data(self):
+        res = self['header'].li.size() + self['pointer'].li.size()
+        if isinstance(self.source, ptypes.prov.filebase):
+            return dyn.block(self.source.size() - res)
+        return ptype.undefined
+
     _fields_ = [
         (Header, 'header'),
-        (lambda s: dyn.pointer(Directory,dyn.clone(pint.uint32_t,byteorder=s['header'].li.byteorder()), recurse={'byteorder':s['header'].li.byteorder()}), 'pointer'),
+        (__pointer, 'pointer'),
+        (__data, 'data'),
     ]
 
 if __name__ == '__main__':

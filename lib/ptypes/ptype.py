@@ -230,8 +230,11 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
+import sys,six,types
+import itertools,operator,functools
+import inspect,time,traceback
+from six.moves import builtins
 
-import sys,types,inspect,functools,itertools,operator,__builtin__
 from . import bitmap,provider,utils,config,error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -246,7 +249,7 @@ def isiterator(t):
 
 def iscallable(t):
     """True if type ``t`` is a code object that can be called"""
-    return callable(t) and hasattr(t, '__call__')
+    return six.callable(t) and hasattr(t, '__call__')
 
 @utils.memoize('t')
 def istype(t):
@@ -298,12 +301,12 @@ def force(t, self, chain=[]):
         return force(t(), self, chain)
 
     if inspect.isgenerator(t):
-        return force(next(t), self, chain)
+        return force(six.next(t), self, chain)
 
     if False:
         # and lastly iterators
         if isiterator(t):
-            return force(next(t), self, chain)
+            return force(six.next(t), self, chain)
 
     path = ','.join(self.backtrace())
     raise error.TypeError(self, 'force<ptype>', message='chain={!r} : Refusing request to resolve {!r} to a type that does not inherit from ptype.type : {{{:s}}}'.format(chain, t, path))
@@ -313,7 +316,6 @@ def debug(ptype, **attributes):
     if not istype(ptype):
         raise error.UserError(ptype, 'debug', message='{!r} is not a ptype'.format(ptype))
 
-    import time,traceback
     def logentry(string, *args):
         return (time.time(),traceback.extract_stack(), string.format(*args))
 
@@ -385,12 +387,11 @@ def debug(ptype, **attributes):
 
 def debugrecurse(ptype):
     """``rethrow`` all exceptions that occur during initialization of ``ptype`` and any sub-elements"""
-    import time,traceback
     class decorated(debug(ptype)):
         __doc__ = ptype.__doc__
         def new(self, t, **attrs):
             res = force(t, self)
-            Log.debug(' '.join(('constructed :',repr(t),'->',self.classname(),self.name())))
+            Log.debug('constructed : {!r} -> {:s} {:s}'.format(t, self.classname(), self.name()))
             debugres = debug(res, constructed=(time.time(),t))
             return super(decorated,self).new(debugres, **attrs)
     decorated.__name__ = 'debug({:s},recurse=True)'.format(ptype.__name__)
@@ -629,7 +630,7 @@ class _base_generic(object):
             return self.parent
 
         query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((isinstance(q,__builtin__.type) and isinstance(self,q)) or self.parent is q) for q in query)
+        match = lambda self: lambda query: any(((isinstance(q,builtins.type) and isinstance(self,q)) or self.parent is q) for q in query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -658,7 +659,7 @@ class _base_generic(object):
         By default this returns a string describing the type and location of
         each structure.
         """
-        path = self.traverse(edges=lambda node:(node.parent for x in range(1) if node.parent is not None))
+        path = self.traverse(edges=lambda node:(node.parent for _ in (None,) if node.parent is not None))
         path = [ fn(x) for x in path ]
         return list(reversed(path))
 
@@ -815,7 +816,7 @@ class base(generic):
         if s == o:
             return
 
-        comparison = (bool(ord(x)^ord(y)) for x,y in zip(s,o))
+        comparison = (bool(six.byte2int(x)^six.byte2int(y)) for x,y in zip(s,o))
         result = [(different,len(list(times))) for different,times in itertools.groupby(comparison)]
         index = 0
         for diff,length in result:
@@ -1004,8 +1005,8 @@ class type(base):
                     Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
                     res = maxElementSize
 
-            if res > sys.maxint:
-                Log.fatal('type.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), res, sys.maxint))
+            if res > six.MAXSIZE:
+                Log.fatal('type.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), res, six.MAXSIZE))
                 return ''
 
             # generate padding up to the blocksize
@@ -1029,7 +1030,7 @@ class type(base):
     ## set/get
     def __setvalue__(self, value, **attrs):
         """Set entire type equal to ``value``"""
-        if not isinstance(value, basestring):
+        if not isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
         res,self.value = self.value,value
         if hasattr(self, 'length'):
@@ -1258,9 +1259,9 @@ class container(base):
                 Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
                 res = maxElementSize
 
-        # if the blocksize is larger than maxint, then ignore the padding
-        if res > sys.maxint:
-            Log.warn('container.serialize : {:s} : blocksize is larger than sys.maxint. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), res, sys.maxint))
+        # if the blocksize is larger than maxsize, then ignore the padding
+        if res > six.MAXSIZE:
+            Log.warn('container.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}'.format(self.instance(), res, six.MAXSIZE))
             return data
 
         # if the data is smaller then the blocksize, then pad the rest in
@@ -1371,7 +1372,7 @@ class container(base):
 
         def between(object, (left,right)):
             objects = provider.proxy.collect(object, left, right)
-            mapped = itertools.imap(lambda n: n.getparent(*args, **kwds) if kwds else n, objects)
+            mapped = six.moves.map(lambda n: n.getparent(*args, **kwds) if kwds else n, objects)
             for n,_ in itertools.groupby(mapped):
                 if left+n.size() <= right:
                     yield n
@@ -1517,7 +1518,7 @@ class block(type):
         if not self.initializedQ():
             return '???'
         if self.blocksize() > 0:
-            return self.details(**options)
+            return self.details(**options) + '\n'
         return self.summary(**options)
     def __setvalue__(self, value, **attrs):
         """Set entire type equal to ``value``"""
@@ -1697,8 +1698,8 @@ class definition(object):
         def clone(definition):
             res = dict(definition.__dict__)
             res.update(attributes)
-            #res = __builtin__.type(res.pop('__name__',definition.__name__), definition.__bases__, res)
-            res = __builtin__.type(res.pop('__name__',definition.__name__), (definition,), res)
+            #res = builtins.type(res.pop('__name__',definition.__name__), definition.__bases__, res)
+            res = builtins.type(res.pop('__name__',definition.__name__), (definition,), res)
             cls.add(getattr(res,cls.attribute),res)
             return definition
 
@@ -1766,8 +1767,7 @@ class wrapper_t(type):
     o = object
 
     def initializedQ(self):
-        return self.__value__ is not None and self.__object__ is not None
-        #return self._value_ is not None and self.__object__ is not None and self.__object__.initializedQ()
+        return self._value_ is not None and self.__object__ is not None and self.__object__.initializedQ()
 
     def blocksize(self):
         if self.object.initializedQ():
@@ -2014,7 +2014,7 @@ class pointer_t(encoded_t):
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            res = reduce(bitmap.push, map(None, map(ord,value), (8,)*len(self.value)), bitmap.zero)
+            res = six.moves.reduce(bitmap.push, map(None, map(ord,value), (8,)*len(self.value)), bitmap.zero)
             return bitmap.value(res)
 
     def decode(self, object, **attrs):
@@ -2179,7 +2179,8 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     import ptypes
-    from ptypes import *
+    from ptypes import dynamic,pint,pstr,parray,pstruct,ptype,provider,error
+    prov = provider
 
     @TestCase
     def test_wrapper_read():
@@ -2209,16 +2210,16 @@ if __name__ == '__main__':
     @TestCase
     def test_encoded_xorenc():
         k = 0x80
-        s = ''.join(chr(ord(x)^k) for x in 'hello world')
+        s = ''.join(six.int2byte(six.byte2int(x)^k) for x in 'hello world')
         class xor(ptype.encoded_t):
             _value_ = dynamic.block(len(s))
             _object_ = dynamic.block(len(s))
             key = k
             def encode(self, object, **attrs):
-                data = ''.join(chr(ord(x)^k) for x in object.serialize())
+                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
                 return super(xor,self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
-                data = ''.join(chr(ord(x)^k) for x in object.serialize())
+                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
                 return super(xor,self).decode(ptype.block(length=len(data)).set(data))
 
         x = xor(source=ptypes.prov.string(s))
@@ -2228,11 +2229,9 @@ if __name__ == '__main__':
 
     @TestCase
     def test_decoded_xorenc():
-        from ptypes import pstr
-
         k = 0x80
         data = 'hello world'
-        match = ''.join(chr(ord(x)^k) for x in data)
+        match = ''.join(six.int2byte(six.byte2int(x)^k) for x in data)
 
         class xor(ptype.encoded_t):
             _value_ = dynamic.block(len(data))
@@ -2241,10 +2240,10 @@ if __name__ == '__main__':
             key = k
 
             def encode(self, object, **attrs):
-                data = ''.join(chr(ord(x)^k) for x in object.serialize())
+                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
                 return super(xor,self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
-                data = ''.join(chr(ord(x)^k) for x in object.serialize())
+                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
                 return super(xor,self).decode(ptype.block(length=len(data)).set(data))
 
         instance = pstr.string(length=len(match)).set(match)
@@ -2300,26 +2299,18 @@ if __name__ == '__main__':
 
     @TestCase
     def test_attributes_static_1():
-        from ptypes import pint
-        argh = pint.uint32_t
-
-        x = argh(a1=5).a
+        x = pint.uint32_t(a1=5).a
         if 'a1' not in x.attributes and x.a1 == 5:
             raise Success
 
     @TestCase
     def test_attributes_recurse_1():
-        from ptypes import pint
-
-        argh = pint.uint32_t
-
-        x = argh(recurse={'a1':5}).a
+        x = pint.uint32_t(recurse={'a1':5}).a
         if 'a1' in x.attributes and x.a1 == 5:
             raise Success
 
     @TestCase
     def test_attributes_static_2():
-        from ptypes import pint,parray
         class argh(parray.type):
             length = 5
             _object_ = pint.uint32_t
@@ -2330,7 +2321,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_attributes_recurse_2():
-        from ptypes import pint,parray
         class argh(parray.type):
             length = 5
             _object_ = pint.uint32_t
@@ -2341,28 +2331,21 @@ if __name__ == '__main__':
 
     @TestCase
     def test_attributes_static_3():
-        from ptypes import pint
-        argh = pint.uint32_t
-
-        x = argh().a
+        x = pint.uint32_t().a
         x.__update__({'a2':5})
         if 'a2' not in x.attributes and x.a2 == 5:
             raise Success
 
     @TestCase
     def test_attributes_recurse_3():
-        from ptypes import pint
-
         argh = pint.uint32_t
-
-        x = argh().a
+        x = pint.uint32_t().a
         x.__update__(recurse={'a2':5})
         if 'a2' in x.attributes and x.a2 == 5:
             raise Success
 
     @TestCase
     def test_attributes_static_4():
-        from ptypes import pint,parray
         class argh(parray.type):
             length = 5
             _object_ = pint.uint32_t
@@ -2374,7 +2357,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_attributes_recurse_4():
-        from ptypes import pint,parray
         class argh(parray.type):
             length = 5
             _object_ = pint.uint32_t
@@ -2386,22 +2368,15 @@ if __name__ == '__main__':
 
     @TestCase
     def test_attributes_static_5():
-        from ptypes import pint
-        argh = pint.uint32_t
-
-        a = argh(a1=5).a
-        x = a.new(argh)
+        a = pint.uint32_t(a1=5).a
+        x = a.new(pint.uint32_t)
         if 'a1' not in a.attributes and 'a1' not in x.attributes and 'a1' not in dir(x):
             raise Success
 
     @TestCase
     def test_attributes_recurse_5():
-        from ptypes import pint
-
-        argh = pint.uint32_t
-
-        a = argh(recurse={'a1':5}).a
-        x = a.new(argh)
+        a = pint.uint32_t(recurse={'a1':5}).a
+        x = a.new(pint.uint32_t)
         if 'a1' in a.attributes and 'a1' in x.attributes and x.a1 == 5:
             raise Success
 
@@ -2465,7 +2440,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_deref():
-        from ptypes import pint
         data = '\x04\x00\x00\x00AAAA'
 
         a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t)
@@ -2476,7 +2450,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref():
-        from ptypes import pint,dyn
         src = prov.string('\x04\x00\x00\x00AAAAAAAA')
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4)).l
         b = a.d.l
@@ -2489,7 +2462,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_type_cast_same():
-        from ptypes import pint,dyn
         t1 = dynamic.clone(ptype.type, length=4)
         t2 = pint.uint32_t
 
@@ -2501,7 +2473,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_cast_same():
-        from ptypes import pint,dyn
         t1 = dynamic.clone(ptype.type, length=4)
         t2 = dynamic.array(pint.uint8_t, 4)
 
@@ -2513,7 +2484,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_type_cast_diff_large_to_small():
-        from ptypes import ptype
         t1 = ptype.clone(ptype.type, length=4)
         t2 = ptype.clone(ptype.type, length=2)
         data = prov.string('ABCD')
@@ -2524,7 +2494,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_type_cast_diff_small_to_large():
-        from ptypes import ptype
         t1 = ptype.clone(ptype.type, length=2)
         t2 = ptype.clone(ptype.type, length=4)
         data = prov.string('ABCD')
@@ -2535,7 +2504,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_cast_large_to_small():
-        from ptypes import pint,dyn
         t1 = dynamic.array(pint.uint8_t, 8)
         t2 = dynamic.array(pint.uint8_t, 4)
         data = prov.string('ABCDEFGH')
@@ -2547,7 +2515,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_cast_small_to_large():
-        from ptypes import pint,dyn
         t1 = dynamic.array(pint.uint8_t, 4)
         t2 = dynamic.array(pint.uint8_t, 8)
         data = prov.string('ABCDEFGH')
@@ -2558,7 +2525,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_type_copy():
-        from ptypes import pint
         data = prov.string("WIQIWIQIWIQIWIQI")
         a = pint.uint32_t(source=data).a
         b = a.copy()
@@ -2586,7 +2552,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_getoffset():
         class bah(ptype.type): length=2
-        data = prov.string(map(chr,xrange(ord('a'),ord('z'))))
+        data = prov.string(map(six.int2byte,six.moves.range(six.byte2int('a'),six.byte2int('z'))))
         a = bah(offset=0,source=data)
         if a.getoffset() == 0 and a.l.serialize()=='ab':
             raise Success
@@ -2594,7 +2560,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_setoffset():
         class bah(ptype.type): length=2
-        data = prov.string(map(chr,xrange(ord('a'),ord('z'))))
+        data = prov.string(map(six.int2byte,six.moves.range(six.byte2int('a'),six.byte2int('z'))))
         a = bah(offset=0,source=data)
         a.setoffset(20)
         if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == 'uv':
@@ -2617,7 +2583,7 @@ if __name__ == '__main__':
 
         a = cont()
         a.set(bah().a, bah().a, bah().a)
-        if tuple(a.getoffset(i) for i in range(len(a.v))) == (0,2,4):
+        if tuple(a.getoffset(i) for i in six.moves.range(len(a.v))) == (0,2,4):
             raise Success
 
     @TestCase
@@ -2635,7 +2601,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_decompression_block():
-        from ptypes import dynamic,pint,pstruct,ptype
         class cblock(pstruct.type):
             class _zlibblock(ptype.encoded_t):
                 _object_ = ptype.block
@@ -2662,7 +2627,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compression_block():
-        from ptypes import dynamic,pint,pstruct,ptype
         class zlibblock(ptype.encoded_t):
             _object_ = ptype.block
             def encode(self, object, **attrs):
@@ -2685,7 +2649,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_equality_type_same():
-        from ptypes import ptype,provider as prov
         class type1(ptype.type): length=4
         class type2(ptype.type): length=4
         data = 'ABCDEFGHIJKLMNOP'
@@ -2696,7 +2659,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_equality_type_different():
-        from ptypes import ptype,provider as prov
         class type1(ptype.type): length=4
         data = 'ABCDEFGHIJKLMNOP'
         a = type1(source=prov.string(data))
@@ -2708,7 +2670,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compare_type():
-        from ptypes import pstr,provider as prov
         a = pstr.szstring().set('this sentence is over the top!')
         b = pstr.szstring().set('this sentence is unpunctuaTed')
         getstr = lambda s,(i,(x,_)): s[i:i+len(x)].serialize()
@@ -2719,7 +2680,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compare_container_types():
-        from ptypes import ptype,provider as prov,pint
         a = pint.uint8_t().set(20)
         b = pint.uint8_t().set(40)
         c = pint.uint8_t().set(60)
@@ -2743,7 +2703,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compare_container_sizes():
-        from ptypes import ptype,provider as prov,pint
         a = pint.uint8_t().set(20)
         b = pint.uint8_t().set(40)
         c = pint.uint8_t().set(60)
@@ -2763,13 +2722,12 @@ if __name__ == '__main__':
 
         result = dict(y.compare(z))
         if result.keys() == [1]:
-            s,o = tuple(reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),'') for X in result[1])
-            if s == g.serialize() and o == ''.join(map(chr,(40,60,80,100))):
+            s,o = tuple(six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),'') for X in result[1])
+            if s == g.serialize() and o == ''.join(map(six.int2byte,(40,60,80,100))):
                 raise Success
 
     @TestCase
     def test_compare_container_tail():
-        from ptypes import ptype,provider as prov,pint
         a = pint.uint8_t().set(20)
         b = pint.uint8_t().set(40)
         c = pint.uint8_t().set(60)
@@ -2790,11 +2748,10 @@ if __name__ == '__main__':
         result = dict(y.compare(z))
         if result.keys() == [3]:
             s,o = result[3]
-            if s is None and reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),'') == g.serialize()+'\x40':
+            if s is None and six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),'') == g.serialize()+'\x40':
                 raise Success
     @TestCase
     def test_container_set_uninitialized_type():
-        from ptypes import ptype,pint,provider
         class container(ptype.container): pass
         a = container().set(pint.uint32_t,pint.uint32_t)
         if a.size() == 8:
@@ -2802,15 +2759,13 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_set_uninitialized_instance():
-        from ptypes import ptype,pint,provider
         class container(ptype.container): pass
-        a = container().set(*(pint.uint8_t().set(1) for _ in range(10)))
+        a = container().set(*(pint.uint8_t().set(1) for _ in six.moves.range(10)))
         if sum(x.int() for x in a) == 10:
             raise Success
 
     @TestCase
     def test_container_set_initialized_value():
-        from ptypes import ptype,pint,provider
         class container(ptype.container): pass
         a = container().set(*((pint.uint8_t,)*4))
         a.set(4,4,4,4)
@@ -2819,7 +2774,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_set_initialized_type():
-        from ptypes import ptype,pint,provider
         class container(ptype.container): pass
         a = container().set(*((pint.uint8_t,)*4))
         a.set(pint.uint32_t,pint.uint32_t,pint.uint32_t,pint.uint32_t)
@@ -2828,7 +2782,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_set_initialized_instance():
-        from ptypes import ptype,pint,provider
         class container(ptype.container): pass
         a = container().set(pint.uint8_t,pint.uint32_t)
         a.set(pint.uint32_t().set(0xfeeddead), pint.uint8_t().set(0x42))
@@ -2837,7 +2790,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_set_invalid():
-        from ptypes import ptype,pint,provider,error
         class container(ptype.container): pass
         a = container().set(ptype.type,ptype.type)
         try: a.set(5,10,20)
@@ -2847,7 +2799,6 @@ if __name__ == '__main__':
 
     #@TestCase
     def test_collect_pointers():
-        from ptypes import ptype,pint,provider
         ptype.source = provider.string(provider.random().consume(0x1000))
         a = pint.uint32_t
         b = ptype.clone(ptype.pointer_t, _object_=a)
@@ -2877,7 +2828,6 @@ if __name__ == '__main__':
     #@TestCase
     def test_collect_pointers2():
         import pecoff
-        from ptypes import pint,ptype
         #a = pint.uint32_t()
         #b = a.new(ptype.pointer_t)
         class parentTester(object):
@@ -2944,7 +2894,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_container_append_type():
-        import pint
         class C(ptype.container): pass
         x = C()
         x.append(pint.uint32_t)
@@ -2953,7 +2902,9 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )
-

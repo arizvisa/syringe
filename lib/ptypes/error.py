@@ -1,5 +1,5 @@
-import exceptions as exc
-class Base(exc.StandardError):
+import exceptions
+class Base(exceptions.StandardError):
     """Root exception type in ptypes"""
     def __init__(self, *args):
         return super(Base,self).__init__(args)
@@ -54,7 +54,7 @@ class SerializationError(Base):
     def __str__(self):
         return ' : '.join((self.objectname(), self.typename(), self.path(), super(SerializationError,self).__str__()))
 
-class LoadError(SerializationError, exc.EnvironmentError):
+class LoadError(SerializationError, exceptions.EnvironmentError):
     """Error while initializing object from source"""
     def __init__(self, object, consumed=0, **kwds):
         super(LoadError,self).__init__(object, **kwds)
@@ -66,7 +66,7 @@ class LoadError(SerializationError, exc.EnvironmentError):
             return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.typename(), self.path(), consumed, super(LoadError,self).__str__())
         return super(LoadError,self).__str__()
 
-class CommitError(SerializationError, exc.EnvironmentError):
+class CommitError(SerializationError, exceptions.EnvironmentError):
     """Error while committing object to source"""
     def __init__(self, object, written=0, **kwds):
         super(CommitError,self).__init__(object, **kwds)
@@ -78,7 +78,7 @@ class CommitError(SerializationError, exc.EnvironmentError):
             return '{:s} : wrote {:+#x} : {:s}'.format(self.typename(), written, self.path())
         return super(CommitError,self).__str__()
 
-class MemoryError(SerializationError, exc.MemoryError):
+class MemoryError(SerializationError, exceptions.MemoryError):
     """Out of memory or unable to load type due to not enough memory"""
 
 ### errors that happen due to different requests on a ptypes trie
@@ -98,17 +98,17 @@ class RequestError(Base):
             return ' : '.join((self.methodname(), self.objectname(), self.typename(), self.message))
         return ' : '.join((self.methodname(), self.objectname(), self.typename()))
 
-class TypeError(RequestError, exc.TypeError):
+class TypeError(RequestError, exceptions.TypeError):
     """Error while generating type or casting to type"""
-class InputError(RequestError, exc.ValueError):
+class InputError(RequestError, exceptions.ValueError):
     """Source has reported termination of input"""
-class NotFoundError(RequestError, exc.ValueError):
+class NotFoundError(RequestError, exceptions.ValueError):
     """Traversal or search was unable to locate requested type or value"""
-class InitializationError(RequestError, exc.ValueError):
+class InitializationError(RequestError, exceptions.ValueError):
     """Object is uninitialized"""
 
 ### assertion errors. doing things invalid
-class AssertionError(Base, exc.AssertionError):
+class AssertionError(Base, exceptions.AssertionError):
     def __init__(self, object, method, message='', **kwds):
         super(AssertionError,self).__init__(kwds)
         self.object,self.message = object,message
@@ -131,7 +131,7 @@ class UserError(AssertionError):
     """User tried to do something invalid (assertion)"""
 class DeprecationError(AssertionError):
     """Functionality has been deprecated"""
-class ImplementationError(AssertionError, exc.NotImplementedError):
+class ImplementationError(AssertionError, exceptions.NotImplementedError):
     """Functionality is currently unimplemented"""
-class SyntaxError(AssertionError, exc.SyntaxError):
+class SyntaxError(AssertionError, exceptions.SyntaxError):
     """Syntax of a definition is incorrect"""

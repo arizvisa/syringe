@@ -50,8 +50,12 @@ Example usage:
     instance.commit(source=ptypes.provider.name(...))
     print( repr(instance) )
 """
+import six
+import sys,os
+import itertools,operator,functools
+import array,exceptions,random as _random
+from six.moves import builtins
 
-import __builtin__,array,exceptions,sys,itertools,operator
 from . import config,utils,error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -100,7 +104,7 @@ class proxy(base):
         self.offset = 0
 
         valid = ('autocommit', 'autoload')
-        res = set(kwds.iterkeys()).difference(valid)
+        res = set(six.iterkeys(kwds)).difference(valid)
         if res.difference(valid):
             raise error.UserError(self, '__init__', message='Invalid keyword(s) specified. Expected ({!r}) : {!r}'.format(valid, tuple(res)))
 
@@ -377,7 +381,6 @@ class base64(string):
     def value(self):
         return self.data.tostring().encode('base64')
 
-import random as _random
 class random(base):
     """Provider that returns random data when read from."""
 
@@ -392,7 +395,8 @@ class random(base):
     @utils.mapexception(any=error.ProviderError)
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
-        return str().join(chr(_random.randint(0,255)) for x in xrange(amount))
+        res = map(_random.randint, (0,)*amount, (255,)*amount)
+        return str().join(map(six.int2byte, res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -517,7 +521,6 @@ class iterable(stream):
         Log.info('iter._write : Tried to write {:#x} bytes to an iterator'.format(len(data)))
         return len(data)
 
-import os
 class posixfile(filebase):
     '''Basic posix file provider.'''
     def __init__(self, *args, **kwds):
@@ -597,7 +600,7 @@ class file(filebase):
                 access = 'wb'
             Log.warn("{:s}({!r}, {!r}) : Creating new file for {:s}".format(type(self).__name__, filename, access, straccess))
 
-        return __builtin__.open(filename, access, 0)
+        return builtins.open(filename, access, 0)
 
 try:
     import tempfile
@@ -624,7 +627,7 @@ try:
         def save(self, filename):
             '''Copy the current temporary file to the specified ``filename``.'''
             ofs = self.file.tell()
-            with __builtin__.file(filename, 'wb') as output:
+            with builtins.file(filename, 'wb') as output:
                 self.file.seek(0)
                 for data in self.file:
                     output.write(data)
@@ -841,9 +844,9 @@ try:
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in range(_idaapi.get_nlist_size()) if string == _idaapi.get_nlist_name(i))
+            index = (i for i in six.moves.range(_idaapi.get_nlist_size()) if string == _idaapi.get_nlist_name(i))
             try:
-                res = _idaapi.get_nlist_ea(next(index))
+                res = _idaapi.get_nlist_ea(six.next(index))
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
             return res
@@ -900,7 +903,7 @@ try:
                 result = _PyDbgEng.Connect('tcp:port={},server={}'.format(port,host))
             elif type(remote) is dict:
                 result = _PyDbgEng.Connect('tcp:port={port},server={host}'.format(**client))
-            elif isinstance(type(remote), basestring):
+            elif isinstance(type(remote), six.string_types):
                 result = _PyDbgEng.Connect(client)
             return cls(result)
         @classmethod
@@ -966,7 +969,7 @@ try:
             if amount == 0:
                 return ''
             try:
-                res = map(chr,_pykd.loadBytes(self.addr, amount))
+                res = map(six.int2byte,_pykd.loadBytes(self.addr, amount))
             except:
                 raise error.ConsumeError(self,self.addr,amount,0)
             self.addr += amount
@@ -1006,11 +1009,11 @@ try:
                 if err.Fail() or len(data) != amount:
                     raise error.ConsumeError(self, self.address, amount)
                 self.address += len(data)
-                return bytes(data)
+                return six.binary_type(data)
             return ''
         def store(self, data):
             process,err = self.__process, self.module.SBError()
-            amount = process.WriteMemory(self.address, bytes(data), err)
+            amount = process.WriteMemory(self.address, six.binary_type(data), err)
             if err.Fail() or len(data) != amount:
                 raise error.StoreError(self, self.address, len(data))
             self.address += amount
@@ -1044,11 +1047,11 @@ try:
             if data is None or len(data) != amount:
                 raise error.ConsumeError(self, self.address, amount)
             self.address += len(data)
-            return bytes(data)
+            return six.binary_type(data)
         def store(self, data):
             process = self.__process
             try:
-                process.write_memory(self.address, bytes(data))
+                process.write_memory(self.address, six.binary_type(data))
             except gdb.MemoryError:
                 raise error.StoreError(self, self.address, len(data))
             self.address += len(data)
@@ -1116,48 +1119,7 @@ except ImportError:
 
 default = DEFAULT[0]
 
-if __name__ == '__main__' and 0:
-    import array
-    import ptypes,ptypes.provider as provider
-#    x = provider.WindowsFile('~/a.out')
-#    raise NotImplementedError("Stop being lazy and finish WindowsFile")
-
-    import array
-    class fakefile(object):
-        d = array.array('L', ((0xdead*x)&0xffffffff for x in range(0x1000)))
-        d = array.array('c', d.tostring())
-        o = 0
-        def seek(self, ofs):
-            self.o = ofs
-        def read(self, amount):
-            r = self.d[self.o:self.o+amount].tostring()
-            self.o += amount
-            return r
-
-    import ptypes
-    from ptypes import *
-    strm = provider.stream(fakefile())
-#    print repr(strm.fileobj.d)
-#    print strm.buffer_data
-
-#    print repr(fakefile().d[0:0x30].tostring())
-    x = dynamic.array(pint.uint32_t, 3)(source=strm)
-    x = x.l
-#    print repr(x.l.serialize())
-
-    print repr(pint.uint32_t(offset=0,source=strm).l.serialize() + \
-     pint.uint32_t(offset=4,source=strm).l.serialize() + \
-     pint.uint32_t(offset=8,source=strm).l.serialize() + \
-     pint.uint32_t(offset=0xc,source=strm).l.serialize() + \
-     pint.uint32_t(offset=0x10,source=strm).l.serialize() + \
-     pint.uint32_t(offset=0x14,source=strm).l.serialize() + \
-     pint.uint32_t(offset=0x18,source=strm).l.serialize() )
-
 if __name__ == '__main__':
-    # test cases are found at next instance of '__main__'
-    import config,logging
-    config.defaults.log.setLevel(logging.DEBUG)
-
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -1181,10 +1143,12 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import os,random
-    from __builtin__ import *
-    import provider
-    import tempfile
+    import ptypes
+    from ptypes import parray,pint,pbinary,provider
+
+    import six
+    import os,random,tempfile,time
+    from six.moves.builtins import *
 
     class temporaryname(object):
         def __enter__(self, *args):
@@ -1206,7 +1170,6 @@ if __name__ == '__main__':
             del(self.file)
             os.unlink(filename)
 
-    import time
     @TestCase
     def test_file_readonly():
         data = 'A'*512
@@ -1379,8 +1342,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_proxy_read_container():
-        import ptypes
-        from ptypes import parray,pint
         class t1(parray.type):
             _object_ = pint.uint8_t
             length = 0x10*4
@@ -1397,8 +1358,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_proxy_write_container():
-        import ptypes
-        from ptypes import parray,pint
         class t1(parray.type):
             _object_ = pint.uint8_t
             length = 0x10*4
@@ -1416,9 +1375,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_proxy_readwrite_container():
-        import ptypes
-        from ptypes import pint,parray,pbinary
-
         class t1(parray.type):
             length = 8
             class _object_(pbinary.struct):
@@ -1435,11 +1391,11 @@ if __name__ == '__main__':
         source.commit()
         res[1].set(0x42424242)
         res[1].commit()
-        if source[0].serialize() == 'AAA' and source[1].serialize() == 'ABB' and source[2]['a'] == ord('B') and source[2]['b'] == ord('B'):
+        if source[0].serialize() == 'AAA' and source[1].serialize() == 'ABB' and source[2]['a'] == six.byte2int('B') and source[2]['b'] == six.byte2int('B'):
             raise Success
 
     try:
-        import nt
+        import nt,multiprocessing,os,ctypes
         raise ImportError
         def stringalloc(string):
             v = ctypes.c_char*len(string)
@@ -1454,7 +1410,6 @@ if __name__ == '__main__':
 
         @TestCase
         def test_windows_remote_consume():
-            import multiprocessing,os,ctypes
             q = multiprocessing.Queue()
             string = "hola mundo"
 
@@ -1514,8 +1469,8 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__' and 0:
-    import ptype,parray
-    import pstruct,parray,pint,provider
+    from ptypes import ptype,parray,pstruct,pint,provider
+    from array import array
 
     a = provider.virtual()
     a.available = [0,6]
@@ -1569,7 +1524,6 @@ if __name__ == '__main__' and 0:
 
     @TestCase
     def test_flatten():
-        from array import array
         s = lambda x:array('c',x)
         a = provider.virtual()
         a.available = [0,5]
@@ -1591,7 +1545,9 @@ if __name__ == '__main__' and 0:
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )
-

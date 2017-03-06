@@ -143,11 +143,11 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         return res
 
     _fields_ = [
-        ( virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE32), 'INT'),  # FIXME
+        ( virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE32, type=dword), 'INT'),  # FIXME
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
-        ( virtualaddress(pstr.szstring), 'Name'),
-        ( virtualaddress(__IAT), 'IAT')
+        ( virtualaddress(pstr.szstring, type=dword), 'Name'),
+        ( virtualaddress(__IAT, type=dword), 'IAT')
     ]
 
     def iterate(self):

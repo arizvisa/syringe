@@ -45,8 +45,9 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
+import itertools,operator,functools
+import six
 
-import itertools
 from . import ptype,utils,config,pbinary,error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -75,7 +76,7 @@ class _pstruct_generic(ptype.container):
         return current
 
     def __getindex__(self, name):
-        if not isinstance(name, basestring):
+        if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__getindex__', message='Element names must be of a str type.')
         try:
             return self.__fastindex[name.lower()]
@@ -94,8 +95,8 @@ class _pstruct_generic(ptype.container):
         for res in self.value: yield res
 
     def iteritems(self):
-        for k,v in itertools.izip(self.iterkeys(), self.itervalues()):
-            yield k,v
+        for (_, name), value in itertools.izip(self._fields_, self.value):
+            yield name, value
         return
 
     # list methods
@@ -110,7 +111,7 @@ class _pstruct_generic(ptype.container):
 
     # method overloads
     def __contains__(self, name):
-        if not isinstance(name, basestring):
+        if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
         return name in self.__fastindex
 
@@ -118,12 +119,12 @@ class _pstruct_generic(ptype.container):
         if self.value is None:
             raise error.InitializationError(self, '_pstruct_generic.__iter__')
 
-        for k in self.iterkeys():
+        for k in six.iterkeys(self):
             yield k
         return
 
     def __getitem__(self, name):
-        if not isinstance(name, basestring):
+        if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
         return super(_pstruct_generic, self).__getitem__(name)
 
@@ -265,7 +266,7 @@ class type(_pstruct_generic):
 
         if len(result) > 0:
             return '\n'.join(result)
-        return '[{:x}] Empty []'.format(self.getoffset())
+        return '[{:x}] Empty[]'.format(self.getoffset())
 
     def __setvalue__(self, *_, **individual):
         result = self
@@ -353,7 +354,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptype,pstruct,provider
+    import ptypes
+    from ptypes import ptype,pstruct,provider,pint
 
     class uint8(ptype.type):
         length = 1
@@ -444,7 +446,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_uninitialized_flat():
-        import pint
         class st(pstruct.type):
             _fields_ = [
                 (pint.uint32_t, 'a'),
@@ -459,7 +460,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_uninitialized_complex():
-        import pint
         class sa(pstruct.type):
             _fields_ = [(pint.uint16_t,'b')]
 
@@ -473,7 +473,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_alloc_value():
-        import pint
         class st(pstruct.type):
             _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
         a = st().alloc(a=0xdead,b=0x0d0e0a0d)
@@ -482,7 +481,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_alloc_instance():
-        import pint
         class st(pstruct.type):
             _fields_ = [(pint.uint16_t,'a'),(pint.uint32_t,'b')]
         a = st().alloc(a=pint.uint32_t().set(0x0d0e0a0d),b=0x0d0e0a0d)
@@ -491,7 +489,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_alloc_dynamic_value():
-        import pint
         class st(pstruct.type):
             def __b(self):
                 return ptype.clone(pint.int_t, length=self['a'].li.int())
@@ -505,7 +502,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_alloc_dynamic_instance():
-        import pint
         class st(pstruct.type):
             def __b(self):
                 return ptype.clone(pint.int_t, length=self['a'].li.int())
@@ -519,7 +515,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_alloc_container_dynamic_instance():
-        import pint
         class st1(pstruct.type): _fields_=[(pint.int8_t,'a'),(lambda s: ptype.clone(pint.int_t,length=s['a'].li.int()), 'b')]
         class st2(pstruct.type):
             def __b(self):
@@ -537,7 +532,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_initialized_value():
-        import pint
         class st(pstruct.type):
             _fields_ = [
                 (pint.int32_t, 'a'),
@@ -548,7 +542,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_initialized_type():
-        import pint
         class st(pstruct.type):
             _fields_ = [
                 (pint.int_t, 'a'),
@@ -559,7 +552,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_initialized_instance():
-        import pint
         class st(pstruct.type):
             _fields_ = [
                 (pint.int_t, 'a'),
@@ -570,7 +562,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_initialized_container():
-        import pint
         class st1(pstruct.type): _fields_=[(pint.int8_t,'a'),(pint.uint32_t,'b')]
         class st2(pstruct.type):
             _fields_ = [
@@ -583,7 +574,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_structure_set_uninitialized_value():
-        import pint
         class st2(pstruct.type):
             _fields_ = [
                 (pint.int32_t, 'a'),
@@ -594,8 +584,8 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
-    import logging,config
-    config.defaults.log.setLevel(logging.DEBUG)
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
 
     results = []
     for t in TestCaseList:

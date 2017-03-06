@@ -1,6 +1,6 @@
-import sys,itertools,_random,math,_weakref,array,logging
-import functools,random
-import types
+import sys,math,random
+import itertools,functools
+import six
 
 ## string formatting
 def strdup(string, terminator='\x00'):
@@ -52,14 +52,14 @@ class padding:
 
         @classmethod
         def file(cls,file):
-            return itertools.imap(file.read, itertools.repeat(1))
+            return six.moves.map(file.read, itertools.repeat(1))
             #return (file.read(1) for x in itertools.count())
 
         @classmethod
         def prng(cls,seed=None):
             random.seed(seed)
-            return itertools.imap(chr, itertools.starmap(random.randint, itertools.repeat((0,0xff))))
-            #return (chr(random.randint(0,0xff)) for x in itertools.count())
+            return six.moves.map(six.int2byte, itertools.starmap(random.randint, itertools.repeat((0,0xff))))
+            #return (six.int2byte(random.randint(0,0xff)) for x in itertools.count())
 
         @classmethod
         def zero(cls):
@@ -128,7 +128,7 @@ def repr_position(pos, hex=True, precision=0):
 ## hexdumping capability
 def printable(s):
     """Return a string of only printable characters"""
-    return reduce(lambda t,c: t + (c if ord(c) >= 0x20 and ord(c) < 0x7f else '.'), iter(s), '')
+    return six.moves.reduce(lambda t,c: t + (c if six.byte2int(c) >= 0x20 and six.byte2int(c) < 0x7f else '.'), iter(s), '')
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
@@ -139,9 +139,9 @@ def hexrow(value, offset=0, width=16, breaks=[8]):
     left = '{:04x}'.format(offset)
 
     ## middle
-    res = [ '{:02x}'.format(ord(x)) for x in value ]
+    res = [ '{:02x}'.format(six.byte2int(x)) for x in value ]
     if len(value) < width:
-        res += ['  ' for x in range(extra)]
+        res += ['  '] * extra
 
     for x in breaks:
         if x < len(res):
@@ -168,7 +168,7 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
 
     res = []
     (ofs, data) = offset, str().join(itertools.islice(value, width))
-    for i in (itertools.count(1) if rows is None else xrange(1, rows)):
+    for i in (itertools.count(1) if rows is None else six.moves.range(1, rows)):
         res.append( getRow(ofs) )
         ofs, data = (ofs + width, str().join(itertools.islice(value, width)))
         if len(data) < width:
@@ -195,7 +195,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     bytewidth = width / charwidth
     leftover = size - bytewidth
 
-    hexify = lambda s: ''.join('\\x{:02x}'.format(ord(x)) for x in iter(s))
+    hexify = lambda s: str().join(map(r'\x{:02x}'.format, six.iterbytes(s)))
 
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)
@@ -229,18 +229,18 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
 
     # display everything
     if height <= 0 or leftover <= 0:
-        for o in xrange(0, size, width):
+        for o in six.moves.range(0, size, width):
             # offset, width, attrs
             yield hexrow(data[o:o+width], offset+o, width, **attrs)
         return
 
     # display rows
     o1 = offset
-    for o in xrange(0, half*width, width):
+    for o in six.moves.range(0, half*width, width):
         yield hexrow(data[o:o+width], o+o1, **attrs)
     yield message.format(leftover=leftover, height=height, count=count, skipped=skipped, size=size)
     o2 = width*(count-half)
-    for o in xrange(0, half*width, width):
+    for o in six.moves.range(0, half*width, width):
         yield hexrow(data[o+o2:o+o2+width], o+o1+o2, **attrs)
     return
 
@@ -290,7 +290,7 @@ def memoize(*kargs,**kattrs):
         argnames = itertools.islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs
-        c_var = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
+        c_var = (six.next(varnames) if flags & F_VARARG else None, six.next(varnames) if flags & F_VARKWD else None)
         if not kargs and not kattrs:
             kargs[:] = itertools.chain(c_positional,filter(None,c_var))
         def key(*args, **kwds):
@@ -329,10 +329,6 @@ def memoize(*kargs,**kattrs):
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
 
 if __name__ == '__main__':
-    # test cases are found at next instance of '__main__'
-    import config,logging
-    config.defaults.log = logging.RootLogger(logging.DEBUG)
-
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -356,7 +352,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import utils
+    import ptypes
+    from ptypes import utils
 
     @mapexception({Failure:Success})
     def blah_failure_to_success():
@@ -513,6 +510,9 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )

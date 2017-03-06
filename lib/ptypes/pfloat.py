@@ -95,20 +95,20 @@ Example usage:
     print instance.float()
     print float(instance)
 """
+import six,math
+from six.moves import builtins
 
-import math
 from . import ptype,pint,bitmap,config,error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 def setbyteorder(endianness):
-    import __builtin__
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
         for k,v in globals().iteritems():
-            if v is not type and isinstance(v,__builtin__.type) and issubclass(v,type) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
+            if v is not type and isinstance(v,builtins.type) and issubclass(v,type) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
                 d = dict(v.__dict__)
                 d['byteorder'] = endianness
-                globals()[k] = __builtin__.type(v.__name__, v.__bases__, d)     # re-instantiate types
+                globals()[k] = builtins.type(v.__name__, v.__bases__, d)     # re-instantiate types
             continue
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
@@ -119,21 +119,19 @@ def setbyteorder(endianness):
 
 def bigendian(ptype):
     '''Will convert an pfloat_t to bigendian form'''
-    import __builtin__
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'bigendian')
     d = dict(ptype.__dict__)
     d['byteorder'] = config.byteorder.bigendian
-    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
+    return builtins.type(ptype.__name__, ptype.__bases__, d)
 
 def littleendian(ptype):
     '''Will convert an pfloat_t to littleendian form'''
-    import __builtin__
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'littleendian')
     d = dict(ptype.__dict__)
     d['byteorder'] = config.byteorder.littleendian
-    return __builtin__.type(ptype.__name__, ptype.__bases__, d)
+    return builtins.type(ptype.__name__, ptype.__bases__, d)
 
 class type(pint.type):
     def summary(self, **options):
@@ -210,7 +208,6 @@ class float_t(type):
         res,mantissa = bitmap.shift(res, self.components[2])
 
         if exponent > 0 and exponent < (2**self.components[1]-1):
-            print 'conv'
             # convert to float
             s = -1 if sign else +1
             e = exponent - exponentbias
@@ -320,7 +317,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import struct,pint,config
+    import ptypes, struct
+    from ptypes import pint,config,pfloat
     pint.setbyteorder(config.byteorder.bigendian)
 
     ## data
@@ -383,10 +381,10 @@ if __name__ == '__main__':
     def test_load(cls, integer, expected):
         if cls.length == 4:
             expected, = struct.unpack('f', struct.pack('f', expected))
-            i,_ = bitmap.join(bitmap.new(ord(x),8) for x in reversed(struct.pack('f',expected)))
+            i,_ = bitmap.join(bitmap.new(six.byte2int(x),8) for x in reversed(struct.pack('f',expected)))
         elif cls.length == 8:
             expected, = struct.unpack('d', struct.pack('d', expected))
-            i,_ = bitmap.join(bitmap.new(ord(x),8) for x in reversed(struct.pack('d',expected)))
+            i,_ = bitmap.join(bitmap.new(six.byte2int(x),8) for x in reversed(struct.pack('d',expected)))
         else:
             i = 0
 
@@ -462,13 +460,10 @@ if __name__ == '__main__':
         x.set(1.25)
         if x.serialize()[2:] == '\x40\x00': raise Success
 
-    import ptypes
-    reload(ptypes.pfloat)
-    from ptypes.pfloat import sfixed_t
     ## sfixed_t
-    class sword(sfixed_t):
+    class sword(pfloat.sfixed_t):
         length,fractional,sign = 2,8,1
-    class sdword(sfixed_t):
+    class sdword(pfloat.sfixed_t):
         length,fractional,sign = 4,16,1
 
     @TestCase
@@ -508,6 +503,9 @@ if __name__ == '__main__':
         if x.serialize()[2:] == '\xc0\x00': raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )

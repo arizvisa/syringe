@@ -65,8 +65,11 @@ Example usage:
     # return the type in ascii
     value = instance.str()
 """
+import sys,six
+import itertools,operator,functools
+import codecs
+from six.moves import builtins
 
-import __builtin__,sys,itertools,codecs
 from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider,config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -78,15 +81,15 @@ class _char_t(pint.type):
         super(_char_t,self).__init__(**attrs)
 
         # calculate the size of .length based on .encoding
-        res = __builtin__.unicode('\x00', 'ascii').encode(self.encoding.name)
+        res = builtins.unicode('\x00', 'ascii').encode(self.encoding.name)
         self.length = len(res)
 
     def __setvalue__(self, value):
         '''Set the _char_t to the str ``value``.'''
-        if isinstance(value, __builtin__.str):
-            try: value = __builtin__.unicode(value, 'ascii')
+        if isinstance(value, builtins.str):
+            try: value = builtins.unicode(value, 'ascii')
             except UnicodeDecodeError: return super(pint.type,self).__setvalue__(str(value))
-        elif isinstance(value, __builtin__.unicode):
+        elif isinstance(value, builtins.unicode):
             value = value
         else:
             raise ValueError(self, '_char_t.set', 'User tried to set a value of an incorrect type : {:s}'.format(value.__class__))
@@ -116,7 +119,7 @@ class _char_t(pint.type):
         return super(_char_t, self).__getvalue__()
 
     def summary(self, **options):
-        return repr(self.serialize())
+        return '{!r}'.format(self.serialize())
 
     @classmethod
     def typename(cls):
@@ -159,7 +162,7 @@ class string(ptype.type):
         _object_ = self._object_
 
         # encode 3 types of strings and ensure that their lengths scale up with their string sizes
-        res,single,double = ( __builtin__.unicode(n, 'ascii').encode(_object_.encoding.name) for n in ('\x00', 'A', 'AA') )
+        res,single,double = ( builtins.unicode(n, 'ascii').encode(_object_.encoding.name) for n in ('\x00', 'A', 'AA') )
         if len(res) * 2 == len(single) * 2 == len(double):
             return
         raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(_object_.encoding.name))
@@ -208,7 +211,7 @@ class string(ptype.type):
 
         # handle a slice of glyphs
         if isinstance(index, slice):
-            result = [res.value[_] for _ in xrange(*index.indices(len(res)))]
+            result = [res.value[_] for _ in six.moves.range(*index.indices(len(res)))]
 
             # ..and now turn the slice into an array
             type = ptype.clone(parray.type,length=len(result), _object_=self._object_)
@@ -230,7 +233,7 @@ class string(ptype.type):
 
         # handle a slice of glyphs
         if isinstance(index, slice):
-            indices = xrange(*index.indices(len(res)))
+            indices = six.moves.range(*index.indices(len(res)))
             [ res[index].__setvalue__(glyph) for glyph,index in map(None,value,indices) ]
 
         # handle a single glyph
@@ -311,7 +314,7 @@ class string(ptype.type):
 
     def summary(self, **options):
         try:
-            result = repr(self.str())
+            result = '{!r}'.format(self.str())
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(),self.instance()))
             return super(string,self).summary(**options)
@@ -390,9 +393,6 @@ unicode=wstring
 szunicode=szwstring
 
 if __name__ == '__main__':
-    import provider
-    import pstr
-
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -414,6 +414,10 @@ if __name__ == '__main__':
             return False
         TestCaseList.append(harness)
         return fn
+
+if __name__ == '__main__':
+    import ptypes
+    from ptypes import pint,pstr,parray,pstruct,dyn,provider,utils
 
     @TestCase
     def test_str_char():
@@ -458,7 +462,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_array_szstring():
-        import parray
         data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
 
         class stringarray(parray.terminated):
@@ -475,7 +478,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_struct_szstring():
-        import pstruct,pint,pstr
         class IMAGE_IMPORT_HINT(pstruct.type):
             _fields_ = [
                 ( pint.uint16_t, 'Hint' ),
@@ -498,10 +500,9 @@ if __name__ == '__main__':
         data = ' '.join(map(lambda x:x.strip(),'''
             00 57 00 65 00 6c 00 63 00 6f 00 6d 00 65 00 00
         '''.split('\n'))).strip()
-        data = map(lambda x: chr(int(x,16)), data.split(' '))
+        data = map(lambda x: six.int2byte(int(x,16)), data.split(' '))
         data = ''.join(data)
 
-        import pstruct,pstr,provider,utils
         class wbechar_t(pstr.wchar_t):
             def set(self, value):
                 self.value = '\x00' + value
@@ -513,7 +514,7 @@ if __name__ == '__main__':
         class unicodestring(pstr.szwstring):
             _object_ = wbechar_t
             def str(self):
-                s = __builtin__.unicode(self.value, 'utf-16-be').encode('utf-8')
+                s = builtins.unicode(self.value, 'utf-16-be').encode('utf-8')
                 return utils.strdup(s)[:len(self)]
 
         class unicodespeech_packet(pstruct.type):
@@ -540,8 +541,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_wstr_struct():
-        import ptypes
-        from ptypes import pint,dyn,pstr
         class record0085(pstruct.type):
             _fields_ = [
                 (pint.uint16_t, 'unknown'),
@@ -557,8 +556,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_szwstring_blockarray():
-        import ptypes
-        from ptypes import pstr,dyn
         data = '3d 00 3a 00 3a 00 3d 00 3a 00 3a 00 5c 00 00 00 65 00 2e 00 6c 00 6f 00 67 00 00 00 00 00 ab ab ab ab ab ab ab ab'.replace(' ','').decode('hex')
         source = ptypes.prov.string(data)
         t = dyn.blockarray(pstr.szwstring, 30)
@@ -567,6 +564,9 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )

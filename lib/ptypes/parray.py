@@ -82,8 +82,9 @@ Example usage:
     # print the length of the array
     print len(instance)
 """
+import six
+import itertools,operator,functools
 
-import itertools
 from . import ptype,utils,error,config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -110,7 +111,7 @@ class _parray_generic(ptype.container):
         object.parent,object.source = self,None
         self.value.insert(index, object)
 
-        for i in xrange(index, len(self.value)):
+        for i in six.moves.range(index, len(self.value)):
             v = self.value[i]
             v.setoffset(offset, recurse=True)
             offset += v.blocksize()
@@ -154,7 +155,7 @@ class _parray_generic(ptype.container):
     def __delitem__(self, index):
         if isinstance(index, slice):
             origvalue = self.value[:]
-            for idx in xrange(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
+            for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 realidx = self.__getindex__(idx)
                 self.value.pop( self.value.index(origvalue[realidx]) )
             return origvalue.__getitem__(index)
@@ -164,9 +165,9 @@ class _parray_generic(ptype.container):
         if isinstance(index, slice):
             val = itertools.repeat(value) if isinstance(value,ptype.generic) else iter(value)
             origvalue = self.value[:]
-            for idx in xrange(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
+            for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 realidx = self.__getindex__(idx)
-                self.value[realidx] = next(val)
+                self.value[realidx] = six.next(val)
             return origvalue.__getitem__(index)
 
         idx = self.__getindex__(index)
@@ -176,11 +177,11 @@ class _parray_generic(ptype.container):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            result = [ self.value[ self.__getindex__(idx) ] for idx in xrange(*index.indices(len(self))) ]
+            result = [ self.value[ self.__getindex__(idx) ] for idx in six.moves.range(*index.indices(len(self))) ]
             t = ptype.clone(type, length=len(result), _object_=self._object_)
             return self.new(t, offset=result[0].getoffset() if len(result) else self.getoffset(), value=result)
 
-        range(len(self))[index]     # make python raise the correct exception if so..
+        ([None]*len(self))[index]     # make python raise the correct exception if so..
         return super(_parray_generic, self).__getitem__(index)
 
     def __element__(self):
@@ -237,7 +238,7 @@ class type(_parray_generic):
     # load ourselves lazily
     def __load_block(self, **attrs):
         ofs = self.getoffset()
-        for index in xrange(self.length):
+        for index in six.moves.range(self.length):
             n = self.new(self._object_, __name__=str(index), offset=ofs, **attrs)
             self.value.append(n)
             ofs += n.blocksize()
@@ -246,7 +247,7 @@ class type(_parray_generic):
     # load ourselves incrementally
     def __load_container(self, **attrs):
         ofs = self.getoffset()
-        for index in xrange(self.length):
+        for index in six.moves.range(self.length):
             n = self.new(self._object_, __name__=str(index), offset=ofs, **attrs)
             self.value.append(n)
             n.load()
@@ -283,7 +284,7 @@ class type(_parray_generic):
                 continue
 
             # re-alloc elements that exist in the rest of the array
-            for idx in xrange(len(fields), len(result)):
+            for idx in six.moves.range(len(fields), len(result)):
                 result.value[idx].alloc(**attrs)
 
         result.setoffset(self.getoffset(), recurse=True)
@@ -364,7 +365,7 @@ class terminated(type):
     def load(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                forever = itertools.count() if self.length is None else xrange(len(self))
+                forever = itertools.count() if self.length is None else six.moves.range(len(self))
 
                 self.value = []
                 ofs = self.getoffset()
@@ -549,7 +550,7 @@ class block(uninitialized):
             return super(block,self).load(**attrs)
 
         with utils.assign(self, **attrs):
-            forever = itertools.count() if self.length is None else xrange(len(self))
+            forever = itertools.count() if self.length is None else six.moves.range(len(self))
             self.value = []
 
             if self.blocksize() == 0:   # if array is empty...
@@ -607,14 +608,6 @@ class block(uninitialized):
         return super(block,self).initializedQ() and (self.size() >= self.blocksize() if self.length is None else len(self.value) == self.length)
 
 if __name__ == '__main__':
-    import ptype,parray
-    import pstruct,parray,pint,provider
-
-    import config,logging
-    #config.defaults.log.setLevel(logging.DEBUG)
-    #config.defaults.log.setLevel(logging.WARN)
-    config.defaults.log.setLevel(logging.FATAL)
-
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -637,19 +630,22 @@ if __name__ == '__main__':
         TestCaseList.append(harness)
         return fn
 
+if __name__ == '__main__':
+    import ptypes,array,random
+    from ptypes import pstruct,parray,pint,provider,utils,dynamic,ptype
+    import string
+
     class RecordGeneral(pstruct.type):
         _fields_ = [
             (pint.uint8_t, 'start'),
             (pint.uint8_t, 'end'),
         ]
 
-    string = 'A'*100
     class qword(ptype.type): length = 8
     class dword(ptype.type): length = 4
     class word(ptype.type): length = 2
     class byte(ptype.type): length = 1
 
-    import random
     random.seed()
     def function(self):
 #        if len(self.value) > 0:
@@ -672,7 +668,7 @@ if __name__ == '__main__':
         x.source = provider.string('AAAA'*15)
         x.l
 #        print x.length,len(x), x.value
-#        print repr(x)
+#        print '{!r}'.format(x)
         if len(x) == 5 and x[4].serialize() == 'AAAA':
             raise Success
 
@@ -682,20 +678,17 @@ if __name__ == '__main__':
             length = 16
             _object_ = function
 
-        import provider
         x = myarray()
         x.source = provider.memory()
         x.setoffset(id(x))
         x.load()
 #        print x
 
-        import utils
         if len(x) == 16:
             raise Success
 
     @TestCase
     def test_array_terminated_uint8():
-        import pint
         class myarray(parray.terminated):
             _object_ = pint.uint8_t
             def isTerminator(self, v):
@@ -735,12 +728,11 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_block_uint8():
-        import pint
         class container(parray.block):
             _object_ = pint.uint8_t
             blocksize = lambda s:4
 
-        block = ''.join(map(chr,range(0x10)))
+        block = ''.join(map(six.int2byte,six.moves.range(0x10)))
 
         a = container(source=provider.string(block)).l
         if len(a) == 4:
@@ -748,7 +740,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_infinite_type_partial():
-        b = ''.join(map(chr,range(ord('a'), ord('z')) + range(ord('A'), ord('Z')) + range(ord('0'), ord('9'))))
+        b = string.ascii_letters+string.digits
 
         count = 0x10
 
@@ -785,7 +777,7 @@ if __name__ == '__main__':
             length = 4
             _object_ = pint.uint8_t
             def int(self):
-                return reduce(lambda x,y:x*256+int(y), self.v, 0)
+                return six.moves.reduce(lambda x,y:x*256+int(y), self.v, 0)
 
             def repr(self, **options):
                 if self.initialized:
@@ -804,9 +796,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_infinite_nested_block():
-        import random
-        from ptypes import parray,dynamic,ptype,pint,provider
-
         random.seed(0)
 
         class leaf(pint.uint32_t): pass
@@ -831,17 +820,16 @@ if __name__ == '__main__':
 
             _object_ = randomcontainer
 
-        string = ''.join([ chr(random.randint(ord('A'),ord('Z'))) for x in range(0x100) ])
+        string = ''.join([ six.int2byte(random.randint(six.byte2int('A'),six.byte2int('Z'))) for x in six.moves.range(0x100) ])
         a = arr(source=provider.string(string))
         a=a.l
         if a.blocksize() == 0x108:
             raise Success
 
-    import array
     @TestCase
     def test_array_infinite_nested_partial():
         class fakefile(object):
-            d = array.array('L', ((0xdead*x)&0xffffffff for x in range(0x100)))
+            d = array.array('L', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
             d = array.array('c', d.tostring() + '\xde\xad\xde\xad')
             o = 0
             def seek(self, ofs):
@@ -948,29 +936,26 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_set_uninitialized():
-        import pint
         class argh(parray.type):
             _object_ = pint.int32_t
 
         a = argh(source=provider.empty())
-        a.set([x for x in range(69)])
+        a.set([x for x in six.moves.range(69)])
         if len(a) == 69 and sum(x.int() for x in a) == 2346:
             raise Success
 
     @TestCase
     def test_array_set_initialized():
-        import pint
         class argh(parray.type):
             _object_ = pint.int32_t
 
         a = argh(source=provider.empty(), length=69)
-        a.a.set([42 for _ in range(69)])
+        a.a.set([42 for _ in six.moves.range(69)])
         if sum(x.int() for x in a) == 2898:
             raise Success
 
     @TestCase
     def test_array_alloc_keyvalue_set():
-        import pint
         class argh(parray.type):
             _object_ = pint.int32_t
         a = argh(length=4).alloc(((0,0x77777777),(3,-1)))
@@ -979,7 +964,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_set_iterable():
-        import pint
         class argh(parray.type):
             _object_ = pint.int32_t
         a = argh(length=4).alloc((0,2,4))
@@ -988,7 +972,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_keyvalue_instance():
-        import pint
         class aigh(parray.type):
             _object_ = pint.uint8_t
             length = 4
@@ -1002,7 +985,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_set_initialized_value():
-        import pint
         a = parray.type(_object_=pint.uint32_t,length=4).a
         a.set((10,10,10,10))
         if sum(x.int() for x in a) == 40:
@@ -1010,7 +992,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_set_initialized_type():
-        import pint
         a = parray.type(_object_=pint.uint8_t,length=4).a
         a.set((pint.uint32_t,)*4)
         if sum(x.size() for x in a) == 16:
@@ -1018,7 +999,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_set_initialized_container():
-        import pint,ptype
         b = ptype.clone(parray.type,_object_=pint.uint8_t,length=4)
         a = parray.type(_object_=pint.uint8_t,length=4).a
         a.set((b,)*4)
@@ -1027,16 +1007,14 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_set_initialized_instance():
-        import pint,ptype
         b = ptype.clone(parray.type,_object_=pint.uint8_t,length=4)
         a = parray.type(_object_=pint.uint8_t,length=4).a
-        a.set(tuple(pint.uint32_t().set(0x40) for x in range(4)))
+        a.set(tuple(pint.uint32_t().set(0x40) for x in six.moves.range(4)))
         if sum(x.int() for x in a) == 256:
             raise Success
 
     @TestCase
     def test_array_set_uninitialized_dynamic_value():
-        import pint,ptype
         class blah(parray.type):
             def _object_(self):
                 length = 0 if len(self.value) == 0 else (self.value[-1].length+1)%4
@@ -1049,7 +1027,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_set_uninitialized_dynamic_type():
-        import pint,ptype
         class blah(parray.type):
             def _object_(self):
                 length = 0 if len(self.value) == 0 else (self.value[-1].length+1)%4
@@ -1061,7 +1038,6 @@ if __name__ == '__main__':
             raise Success
     @TestCase
     def test_array_set_uninitialized_dynamic_instance():
-        import pint,ptype
         class blah(parray.type):
             def _object_(self):
                 length = 0 if len(self.value) == 0 else (self.value[-1].length+1)%4
@@ -1074,7 +1050,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_value():
-        import pint,ptype
         class blah(parray.type):
             _object_ = pint.uint32_t
             length = 4
@@ -1084,7 +1059,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_type():
-        import pint,ptype
         class blah(parray.type):
             _object_ = pint.uint32_t
             length = 4
@@ -1094,27 +1068,24 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_instance():
-        import pint,ptype
         class blah(parray.type):
             _object_ = pint.uint32_t
             length = 4
-        a = blah().alloc([pint.uint8_t().set(i) for i in range(4)])
+        a = blah().alloc([pint.uint8_t().set(i) for i in six.moves.range(4)])
         if all(x.size() == 1 for x in a) and sum(x.int() for x in a) == 6:
             raise Success
 
     @TestCase
     def test_array_alloc_partial():
-        import pint,ptype
         class blah(parray.type):
             _object_ = pint.uint32_t
             length = 4
         a = blah().alloc([pint.uint8_t])
-        if a[0].size() == 1 and all(a[x].size() == 4 for x in range(1,4)):
+        if a[0].size() == 1 and all(a[x].size() == 4 for x in six.moves.range(1,4)):
             raise Success
 
     @TestCase
     def test_array_alloc_infinite_empty():
-        import pint,ptype
         class blah(parray.infinite):
             _object_ = pint.uint32_t
 
@@ -1124,7 +1095,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_terminated_partial():
-        import pint,ptype
         class blah(parray.terminated):
             _object_ = pint.uint32_t
             def isTerminator(self, value):
@@ -1137,7 +1107,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_alloc_infinite_sublement_infinite():
-        import pint
         class blah(parray.infinite):
             class _object_(parray.terminated):
                 _object_ = pint.uint32_t
@@ -1149,6 +1118,9 @@ if __name__ == '__main__':
 
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )

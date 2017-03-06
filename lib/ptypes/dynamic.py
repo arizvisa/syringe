@@ -81,7 +81,8 @@ Example usage:
         ]
 """
 import six,operator
-from . import ptype,parray,pstruct,config,error,utils,provider
+
+from . import ptype,parray,pstruct,config,error,utils,provider,pint
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
@@ -401,7 +402,6 @@ class union(_union_generic):
 
 union_t = union # alias
 
-import pint
 def pointer(target, *optional_type, **attrs):
     """pointer(object, type?, **attributes):
     Returns a pointer to the type ``target``.
@@ -453,10 +453,6 @@ def opointer(target, *optional, **attrs):
     return ptype.clone(ptype.opointer_t, _object_=target, _calculate_=calculate, _value_=res)
 
 if __name__ == '__main__':
-    import ptype,parray,pstruct,parray,pint,provider
-    import logging,config
-    config.defaults.log.setLevel(logging.DEBUG)
-
     class Result(Exception): pass
     class Success(Result): pass
     class Failure(Result): pass
@@ -481,8 +477,7 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     import ptypes,zlib
-    from ptypes import *
-    from ptypes import config
+    from ptypes import dynamic,pint,parray,pstruct,config
 
     ptypes.setsource(ptypes.provider.string('A'*50000))
 
@@ -494,7 +489,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_dynamic_union_rootstatic():
-        import dynamic,pint,parray
         class test(dynamic.union):
             _value_ = dynamic.array(pint.uint8_t,4)
             _fields_ = [
@@ -512,7 +506,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_dynamic_alignment():
-        import dynamic,pint,pstruct
         class test(pstruct.type):
             _fields_ = [
                 (pint.uint32_t, 'u32'),
@@ -594,8 +587,8 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_array_2():
         v = dynamic.array(pint.int32_t, 8)
-        i = range(0x40,0x40+v.length)
-        x = ptype.provider.string(''.join(chr(x)+'\x00\x00\x00' for x in i))
+        i = six.moves.range(0x40,0x40+v.length)
+        x = ptype.provider.string(''.join(six.int2byte(x)+'\x00\x00\x00' for x in i))
         z = v(source=x).l
         if z[4].int() == 0x44:
             raise Success
@@ -615,7 +608,9 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )
-

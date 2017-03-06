@@ -9,7 +9,7 @@ class BYTE(pint.uint8_t): pass
 class CHAR(pint.int8_t): pass
 class USHORT(bigendian(pint.uint16_t)): pass
 class SHORT(bigendian(pint.int16_t)): pass
-class UINT24(bigendian(pint.integer_t)): length = 3
+class UINT24(bigendian(pint.uint_t)): length = 3
 class ULONG(bigendian(pint.uint32_t)): pass
 class LONG(bigendian(pint.int32_t)): pass
 class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda x: int(x) / 65536.0)

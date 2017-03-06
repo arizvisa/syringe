@@ -7,8 +7,8 @@ class _sh_name(pint.type):
         try:
             res = self.str()
         except (ptypes.error.TypeError, ptypes.error.NotFoundError):
-            res = super(_sh_name, self).summary()
-        return res
+            return super(_sh_name, self).summary()
+        return '{:s} : {!r}'.format(super(_sh_name, self).summary(), res)
 
     def str(self):
         table = self.getparent(ElfXX_Ehdr).stringtable()
@@ -104,6 +104,66 @@ class _sh_index(pint.enum):
         ('SHN_XINDEX', 0xffff),
     ]
 
+class _st_name(pint.type):
+    def summary(self):
+        try:
+            res = self.str()
+        except (ptypes.error.TypeError, ptypes.error.NotFoundError):
+            return super(_st_name, self).summary()
+        return '{:s} : {!r}'.format(super(_st_name, self).summary(), res)
+
+    def str(self):
+        index = self.getparent(ElfXX_Shdr)['sh_link'].int()
+        res = self.getparent(ElfXX_Ehdr)['e_shoff'].d.li
+        if index >= len(res):
+            raise ptypes.error.NotFoundError(self, 'str')
+        table = res[index]['sh_offset'].d.li
+        if isinstance(table, SHT_STRTAB):
+            return table.read(self.int()).str()
+        raise ptypes.error.TypeError(self, 'str')
+
+class st_info(pbinary.struct):
+    class st_bind(pbinary.enum):
+        width = 4
+        STB_LOPROC, STB_HIPROC = 13, 15
+        _values_ = [
+            ('STB_LOCAL', 0),
+            ('STB_GLOBAL', 1),
+            ('STB_WEAK', 2),
+        ]
+    class st_type(pbinary.enum):
+        width = 4
+        STT_LOPROC, STT_HIPROC = 13, 15
+        _values_ = [
+            ('STT_NOTYPE', 0),
+            ('STT_OBJECT', 1),
+            ('STT_FUNC', 2),
+            ('STT_SECTION', 3),
+            ('STT_FILE', 4),
+        ]
+    _fields_ = [
+        (st_bind, 'ST_BIND'),
+        (st_type, 'ST_TYPE'),
+    ]
+
+    def summary(self, **options):
+        if self.value is None:
+            return '???'
+        res = self.bitmap()
+        items = ['{:s}={:s}'.format(name + ('' if value is None else '[{:d}]'.format(value.bits())), '???' if value is None else value.summary()) for (_, name), value in map(None, self._fields_, self.value)]
+        if items:
+            return '({:s},{:d}) : {:s}'.format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res), ' '.join(items))
+        return '({:s},{:d})'.format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))
+
+class ElfXX_Section(pint.enum):
+    SHN_LOPROC, SHN_HIPROC = 0xff00, 0xff1f
+    SHN_LORESERVE, SHN_HIRESERVE = 0xff00, 0xffff
+    _values_ = [
+        ('SHN_UNDEF', 0),
+        ('SHN_ABS', 0xfff1),
+        ('SHN_COMMON', 0xfff2),
+    ]
+
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf32_Word): pass
@@ -151,23 +211,25 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     ]
 
 ## some types
-class Elf32_Section(pint.uint16_t): pass
-class Elf64_Section(pint.uint16_t): pass
+class Elf32_Section(ElfXX_Section, pint.uint16_t): pass
+class Elf64_Section(ElfXX_Section, pint.uint16_t): pass
 class Elf32_Sym(pstruct.type):
+    class st_name(_st_name, Elf32_Word): pass
     _fields_ = [
-        (Elf32_Word, 'st_name'),
+        (st_name, 'st_name'),
         (Elf32_Addr, 'st_value'),
         (Elf32_Word, 'st_size'),
-        (pint.uint8_t, 'st_info'),
+        (st_info, 'st_info'),
         (pint.uint8_t, 'st_other'),
         (Elf32_Section, 'st_shndx')
     ]
 class Elf64_Sym(pstruct.type):
+    class st_name(_st_name, Elf64_Word): pass
     _fields_ = [
-        (Elf64_Word, 'st_name'),
+        (st_name, 'st_name'),
         (Elf64_Addr, 'st_value'),
         (Elf64_Xword, 'st_size'),
-        (pint.uint8_t, 'st_info'),
+        (st_info, 'st_info'),
         (pint.uint8_t, 'st_other'),
         (Elf64_Section, 'st_shndx')
     ]
@@ -228,6 +290,13 @@ class SHT_STRTAB(parray.block):
 
     def read(self, offset):
         return self.field(offset)
+    def summary(self):
+        res = (res.str() for res in self)
+        res = map('{!r}'.format, res)
+        return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res))
+    def details(self):
+        return '\n'.join(repr(s) for s in self)
+    repr = details
 
 @Type.define
 class SHT_RELA(parray.block):
@@ -280,3 +349,160 @@ class SHT_GROUP(parray.block):
         return Elf32_Word if self.value is None or len(self.value) > 0 else Elf32_Word
 
     _object_ = Elf32_Word
+
+@Type.define
+class SHT_ARM_ATTRIBUTES(pstruct.type):
+    type = 0x70000003
+
+    class vendortag(ptype.definition):
+        cache, unknown = {}, ULEB128
+    @vendortag.define
+    class Tag_CPU_raw_name(pstr.szstring): type = 4
+    @vendortag.define
+    class Tag_CPU_name(pstr.szstring): type = 5
+    @vendortag.define
+    class Tag_CPU_arch(ULEB128): type = 6
+    @vendortag.define
+    class Tag_CPU_arch_profile(ULEB128): type = 7
+    @vendortag.define
+    class Tag_ARM_ISA_use(ULEB128): type = 8
+    @vendortag.define
+    class Tag_THUMB_ISA_use(ULEB128): type = 9
+    @vendortag.define
+    class Tag_FP_arch(ULEB128): type = 10
+    @vendortag.define
+    class Tag_WMMX_arch(ULEB128): type = 11
+    @vendortag.define
+    class Tag_Advanced_SIMD_arch(ULEB128): type = 12
+    @vendortag.define
+    class Tag_PCS_config(ULEB128): type = 13
+    @vendortag.define
+    class Tag_ABI_PCS_R9_use(ULEB128): type = 14
+    @vendortag.define
+    class Tag_ABI_PCS_RW_data(ULEB128): type = 15
+    @vendortag.define
+    class Tag_ABI_PCS_RO_data(ULEB128): type = 16
+    @vendortag.define
+    class Tag_ABI_PCS_GOT_use(ULEB128): type = 17
+    @vendortag.define
+    class Tag_ABI_PCS_wchar_t(ULEB128): type = 18
+    @vendortag.define
+    class Tag_ABI_FP_rounding(ULEB128): type = 19
+    @vendortag.define
+    class Tag_ABI_FP_denormal(ULEB128): type = 20
+    @vendortag.define
+    class Tag_ABI_FP_exceptions(ULEB128): type = 21
+    @vendortag.define
+    class Tag_ABI_FP_user_exceptions(ULEB128): type = 22
+    @vendortag.define
+    class Tag_ABI_FP_number_model(ULEB128): type = 23
+    @vendortag.define
+    class Tag_ABI_align_needed(ULEB128): type = 24
+    @vendortag.define
+    class Tag_ABI_align_preserved(ULEB128): type = 25
+    @vendortag.define
+    class Tag_ABI_enum_size(ULEB128): type = 26
+    @vendortag.define
+    class Tag_ABI_HardFP_use(ULEB128): type = 27
+    @vendortag.define
+    class Tag_ABI_VFP_args(ULEB128): type = 28
+    @vendortag.define
+    class Tag_ABI_WMMX_args(ULEB128): type = 29
+    @vendortag.define
+    class Tag_ABI_optimization_goals(ULEB128): type = 30
+    @vendortag.define
+    class Tag_ABI_FP_optimization_goals(ULEB128): type = 31
+    @vendortag.define
+    class Tag_compatibility(ULEB128): type = 32
+    @vendortag.define
+    class Tag_CPU_unaligned_access(ULEB128): type = 34
+    @vendortag.define
+    class Tag_FP_HP_extension(ULEB128): type = 36
+    @vendortag.define
+    class Tag_ABI_FP_16bit_format(ULEB128): type = 38
+    @vendortag.define
+    class Tag_MPextension_use(ULEB128): type = 42
+    @vendortag.define
+    class Tag_DIV_use(ULEB128): type = 44
+    @vendortag.define
+    class Tag_DSP_extension(ULEB128): type = 46
+    @vendortag.define
+    class Tag_also_compatible_with(ULEB128): type = 65
+    @vendortag.define
+    class Tag_conformance(ULEB128): type = 67
+    @vendortag.define
+    class Tag_Virtualization_use(ULEB128): type = 68
+
+    class Tag(pint.enum, uchar): pass
+
+    class Section(pstruct.type):
+        def __value(self):
+            tag = self['tag'].li.int()
+            length = self['length'].li.int() - (self['tag'].li.size() + self['length'].li.size())
+            return dyn.clone(SHT_ARM_ATTRIBUTES.Attributes, blocksize=lambda s,length=length:length)
+        _fields_ = [
+            (lambda s: SHT_ARM_ATTRIBUTES.Tag, 'tag'),
+            (Elf32_Word, 'length'),
+            (__value, 'attribute'),
+        ]
+        def summary(self):
+            return 'tag={:s} length={:d} attribute={:s}'.format(self['tag'].summary(), self['length'].int(), self['attribute'].__element__())
+    class Sections(parray.block):
+        def summary(self):
+            return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res.summary() for res in self))
+    Sections._object_ = Section
+    class Attribute(pstruct.type):
+        def __value(self):
+            tag = self['tag'].li.int()
+            return SHT_ARM_ATTRIBUTES.vendortag.get(tag)
+        _fields_ = [
+            (lambda s: SHT_ARM_ATTRIBUTES.Tag, 'tag'),
+            (__value, 'value'),
+        ]
+        def summary(self):
+            return '{:s}={:s}'.format(self['tag'].summary(), str(self['value'].get()))
+    class Attributes(parray.block):
+        def details(self):
+            res = []
+            for i, n in enumerate(self):
+                res.append('[{:x}] {:d} : {:s} = {:s}'.format(n.getoffset(), i, n['tag'].summary(), str(n['value'].get())))
+            return '\n'.join(res)
+        def summary(self):
+            return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res['tag'].summary() for res in self))
+        repr = details
+    Attributes._object_ = Attribute
+
+    @vendortag.define
+    class Tag_File(Section): type = 1
+    @vendortag.define
+    class Tag_Section(Section): type = 2
+    @vendortag.define
+    class Tag_Symbol(Section): type = 3
+
+    Tag._values_ = [(t.__name__, t.type) for t in vendortag.cache.values()]
+
+    class Vendor(pstruct.type):
+        def __section(self):
+            bs = self['length'].li.int() - (self['length'].size() + self['name'].li.size())
+            return dyn.clone(SHT_ARM_ATTRIBUTES.Sections, blocksize=lambda s,bs=bs: bs)
+
+        _fields_ = [
+            (Elf32_Word, 'length'),
+            (pstr.szstring, 'name'),
+            (__section, 'section'),
+        ]
+        def summary(self):
+            return 'length={:d} name={!r} section={:s}'.format(self['length'].int(), self['name'].str(), self['section'].__element__())
+    class Vendors(parray.block):
+        def summary(self):
+            return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res.summary() for res in self))
+    Vendors._object_ = Vendor
+
+    def __vendor(self):
+        bs = self.blocksize() - self['version'].li.size()
+        return dyn.clone(SHT_ARM_ATTRIBUTES.Vendors, blocksize=lambda s,bs=bs: bs)
+
+    _fields_ = [
+        (pint.uint8_t, 'version'),
+        (__vendor, 'vendor'),
+    ]

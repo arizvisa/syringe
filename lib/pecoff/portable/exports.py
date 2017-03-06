@@ -8,37 +8,41 @@ from .headers import virtualaddress
 import struct,logging
 
 # FuncPointer can also point to some code too
-class FuncPointer(virtualaddress(pstr.szstring)):
+class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
     def getModuleName(self):
         module,name = self.d.li.str().split('.', 1)
         if name.startswith('#'):
             name = 'Ordinal%d'% int(name[1:])
         return module.lower() + '.dll',name
 
-class NamePointer(virtualaddress(pstr.szstring)): pass
+class NamePointer(virtualaddress(pstr.szstring, type=dword)): pass
 class Ordinal(word):
     def getExportIndex(self):
         '''Returns the Ordinal's index for things'''
         return self.int() - self.parent.parent.parent['Base'].int()
 
 class IMAGE_EXPORT_DIRECTORY(pstruct.type):
-    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, self['NumberOfFunctions'].li.int()))
-    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, self['NumberOfNames'].li.int()))
-    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     self['NumberOfNames'].li.int()))
+    _p_AddressOfFunctions =    lambda self: virtualaddress(dyn.array(FuncPointer, self['NumberOfFunctions'].li.int()), type=dword)
+    _p_AddressOfNames =        lambda self: virtualaddress(dyn.array(NamePointer, self['NumberOfNames'].li.int()), type=dword)
+    _p_AddressOfNameOrdinals = lambda self: virtualaddress(dyn.array(Ordinal,     self['NumberOfNames'].li.int()), type=dword)
+
+    def __ExportData(self):
+        res = sum(self[n].li.size() for _,n in self._fields_[:-1])
+        return dyn.block(self.blocksize() - res)
 
     _fields_ = [
         ( dword, 'Flags' ),
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( word, 'MajorVersion' ),
         ( word, 'MinorVersion' ),
-        ( virtualaddress(pstr.szstring), 'Name' ),
+        ( virtualaddress(pstr.szstring, type=dword), 'Name' ),
         ( dword, 'Base' ),
         ( dword, 'NumberOfFunctions' ),
         ( dword, 'NumberOfNames' ),
         ( _p_AddressOfFunctions, 'AddressOfFunctions' ),
         ( _p_AddressOfNames, 'AddressOfNames' ),
         ( _p_AddressOfNameOrdinals, 'AddressOfNameOrdinals' ),
-#        ( lambda s: dyn.block( s.blocksize() - s.size() ), 'ExportData'),
+        ( __ExportData, 'ExportData'),
     ]
 
     def getNames(self):

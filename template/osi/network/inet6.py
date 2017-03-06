@@ -66,7 +66,7 @@ class layer_ip6(ip6_hdr):
 class ip6_opt(pstruct.type):
     def __ip6_len(self):
         type = self['ip6o_type'].li.num()
-        return (u_int8_t,pint.integer_t)[type == 0]   # for Pad0
+        return (u_int8_t,pint.int_t)[type == 0]   # for Pad0
 
     def __ip6o_payload(self):
         t,size = self['ip6o_type'].li.num(),self['ip6o_len'].li.num()

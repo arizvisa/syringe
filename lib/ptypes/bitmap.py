@@ -1,6 +1,7 @@
 #bitmap = (integer, bits)
-import __builtin__,sys,six
-import utils
+import sys,six
+import math,itertools
+from six.moves import builtins
 
 ## start somewhere
 def new(value, size):
@@ -27,10 +28,9 @@ def empty(bitmap):
     integer,size = bitmap
     return not(integer > 0)
 
-import math # glad this is a builtin
 def fit(integer):
     '''Returns the number of bits necessary to contain integer'''
-    return __builtin__.int(math.log(integer,2))+1
+    return builtins.int(math.log(integer,2))+1
 
     count = 0
     while integer >= 2:
@@ -44,7 +44,7 @@ def string(bitmap, **kwds):
     integer,size = bitmap
     size = abs(size)
     res = []
-    for position in range(size):
+    for position in six.moves.range(size):
         res = res + ['1' if integer&1 else '0']
         integer >>= 1
     return str().join(reversed(res) if reverse else res)
@@ -53,7 +53,7 @@ def hex(bitmap):
     '''Return bitmap as a hex string'''
     n,s = bitmap
     size = abs(s)
-    length = __builtin__.int(math.ceil(size/4.0))
+    length = builtins.int(math.ceil(size/4.0))
     if s < 0:
         max,sf = 2**size,2**(size-1)
         res = n & (max-1)
@@ -68,7 +68,7 @@ def scan(bitmap, value=True, position=0):
         raise AssertionError("Invalid position : {:d}".format(position))
 
     size,bitmask = abs(size), 1 << position
-    for i in range(size):
+    for i in six.moves.range(size):
         if bool(integer & bitmask) == value or position >= size:
             return position
         bitmask <<= 1
@@ -117,7 +117,7 @@ def set(bitmap, position, value=True, count=1):
     if position + count > abs(size):
         raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
+    mask,size = six.moves.reduce(lambda r,v: 1<<v | r, six.moves.range(position, position+count), 0), abs(size)
     if value:
         return (integer | mask, size)
     return (integer & ~mask, size)
@@ -131,7 +131,7 @@ def get(bitmap, position, count):
     if position + count > abs(size):
         raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask,size = reduce(lambda r,v: 1<<v | r, range(position, position+count), 0), abs(size)
+    mask,size = six.moves.reduce(lambda r,v: 1<<v | r, six.moves.range(position, position+count), 0), abs(size)
     return ((integer & mask) >> position, count)
 
 def add(bitmap, integer):
@@ -162,7 +162,7 @@ def div(bitmap, integer):
     if size < 0:
         sf = 2**(abs(size)-1)
         n = (n-max) if n&sf else n&(sf-1)
-    return __builtin__.int(float(n)/integer)&(max-1),size
+    return builtins.int(float(n)/integer)&(max-1),size
 def mod(bitmap, integer):
     n,size = bitmap
     max = 2**abs(size)
@@ -299,7 +299,7 @@ class consumer(object):
         result,count = 0,0
         while bytes > 0:
             result *= 256
-            result += ord(next(self.source))
+            result += six.byte2int(six.next(self.source))
             bytes,count = bytes-1,count+1
         self.cache = push(self.cache, new(result, count*8))
         return count
@@ -336,7 +336,7 @@ def data(bitmap, reversed=False):
     while bitmap[1] != 0:
         bitmap,b = fn(bitmap, 8)
         res.append(b)
-    return str().join(map(chr,res))
+    return str().join(map(six.int2byte,res))
 
 def size(bitmap):
     '''Return the size of the bitmap, ignoring signedness'''
@@ -400,9 +400,8 @@ def split(bitmap, maxsize):
 
 def join(iterable):
     '''Join a list of bitmaps into a single one'''
-    return reduce(push, iterable, (0,0))
+    return six.moves.reduce(push, iterable, (0,0))
 
-import itertools
 def groupby(sequence, count):
     '''Group sequence by number of elements'''
     data = enumerate(sequence)
@@ -480,7 +479,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import bitmap
+    import ptypes
+    from ptypes import bitmap
 
     ### set
     @TestCase
@@ -522,11 +522,11 @@ if __name__ == '__main__':
         print x.consume(4)
 
         x = bitmap.new(0, 4)
-        for i in range(6):
+        for i in six.moves.range(6):
             print x
             x = bitmap.add(x, 3)
 
-        for i in range(6):
+        for i in six.moves.range(6):
             print x
             x = bitmap.sub(x, 6)
 
@@ -812,7 +812,9 @@ if __name__ == '__main__':
             raise Success
 
 if __name__ == '__main__':
+    import logging
+    ptypes.config.defaults.log.setLevel(logging.DEBUG)
+
     results = []
     for t in TestCaseList:
         results.append( t() )
-

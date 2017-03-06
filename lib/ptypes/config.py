@@ -1,5 +1,8 @@
-import os,sys,math,six
+import sys,os,math
+import six,logging
+
 __all__ = 'defaults,byteorder'.split(',')
+
 class field:
     class descriptor(object):
         def __init__(self):
@@ -93,7 +96,7 @@ def namespace(cls):
             v.__name__ = '{}.{}'.format(cls.__name__,k)
         if k.startswith('_') or type(v) is property:
             attrs[k] = v
-        elif not callable(v) or isinstance(v,type):
+        elif not six.callable(v) or isinstance(v,type):
             properties[k] = v
         elif not hasattr(v, '__class__'):
             subclass[k] = namespace(v)
@@ -109,7 +112,7 @@ def namespace(cls):
             if isinstance(v, type):
                 val = '<>'
             elif hasattr(v, '__class__'):
-                val = repr(v)
+                val = '{!r}'.format(v)
             else:
                 raise ValueError(k)
             doc = v.__doc__.split('\n')[0] if v.__doc__ else None
@@ -127,15 +130,15 @@ def namespace(cls):
         return res + '\n'
 
     def __setattr__(self, name, value):
-        if name in attrs.viewkeys():
+        if name in six.viewkeys(attrs):
             object.__setattr__(self, name, value)
             return
         raise AttributeError('Configuration \'{:s}\' does not have field named \'{:s}\''.format(cls.__name__,name))
 
     attrs['__repr__'] = __repr__
     attrs['__setattr__'] = __setattr__
-    attrs.update((k,property(fget=lambda s,k=k:properties[k])) for k in properties.viewkeys())
-    attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in subclass.viewkeys())
+    attrs.update((k,property(fget=lambda s,k=k:properties[k])) for k in six.viewkeys(properties))
+    attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in six.viewkeys(subclass))
     result = type(cls.__name__, cls.__bases__, attrs)
     return result()
 
@@ -154,13 +157,13 @@ def configuration(cls):
         for k,v in obj.items():
             col1 = max((col1,len(k)))
             doc = v.__doc__.split('\n')[0] if v.__doc__ else None
-            col2 = max((col2,len(repr(val[k]))))
+            col2 = max((col2,len('{!r}'.format(val[k]))))
             result.append((k, val[k], doc))
         return [(('{{name:{:d}}} = {{val:<{:d}}} # {{doc}}' if d else '{{name:{:d}}} = {{val:<{:d}}}').format(col1,col2)).format(name=k,val=v,doc=d) for k,v,d in result]
 
     def __repr__(self):
         descr = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n')
-        values = dict((k,getattr(self,k,None)) for k in properties.viewkeys())
+        values = dict((k,getattr(self,k,None)) for k in six.viewkeys(properties))
         res = descr.format(cls.__name__,cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(getprops(properties,values))
         subs = ['[{}.{}]\n...'.format(cls.__name__,k) for k in subclass.keys()]
         if subs:
@@ -168,14 +171,14 @@ def configuration(cls):
         return res + '\n'
 
     def __setattr__(self, name, value):
-        if name in attrs.viewkeys():
+        if name in six.viewkeys(attrs):
             object.__setattr__(self, name, value)
             return
         raise AttributeError('Namespace \'{:s}\' does not have a field named \'{:s}\''.format(cls.__name__,name))
 
     attrs['__repr__'] = __repr__
     attrs['__setattr__'] = __setattr__
-    attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in subclass.viewkeys())
+    attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in six.viewkeys(subclass))
     result = type(cls.__name__, cls.__bases__, attrs)
     return result()
 
@@ -193,7 +196,6 @@ class partial:
     bit = field.option('bit', 'Display just the bit number (0.0, 0.1, 0.2, ..., 0.7)')
 
 ### new-config
-import logging
 @configuration
 class defaults:
     log = field.type('default-logger', logging.Filterer, 'Default place to log progress')
@@ -203,12 +205,12 @@ class defaults:
         order = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
 
     class ptype:
-        clone_name = field.type('clone_name', basestring, 'This will only affect newly cloned types')
+        clone_name = field.type('clone_name', six.string_types, 'This will only affect newly cloned types')
         noncontiguous = field.bool('noncontiguous', 'Disable optimization for loading ptype.container elements contiguously. Enabling this allows there to be \'holes\' within a list of elements in a container and disables an important optimization.')
 
     class pint:
-        bigendian_name = field.type('bigendian_name', basestring, 'Modifies the name of any integers that are big-endian')
-        littleendian_name = field.type('littleendian_name', basestring, 'Modifies the name of any integers that are little-endian')
+        bigendian_name = field.type('bigendian_name', six.string_types, 'Modifies the name of any integers that are big-endian')
+        littleendian_name = field.type('littleendian_name', six.string_types, 'Modifies the name of any integers that are little-endian')
 
     class parray:
         break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')
@@ -231,16 +233,16 @@ class defaults:
         class threshold:
             '''Width and Row thresholds for displaying summaries'''
             summary = field.type('summary_threshold', six.integer_types)
-            summary_message = field.type('summary_threshold_message', basestring)
+            summary_message = field.type('summary_threshold_message', six.string_types)
             details = field.type('details_threshold', six.integer_types)
-            details_message = field.type('details_threshold_message', basestring)
+            details_message = field.type('details_threshold_message', six.string_types)
 
     class pbinary:
         '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
         offset = field.enum('offset', (partial.bit,partial.fractional,partial.hex), 'which format to display the sub-offset for binary types')
 
-        bigendian_name = field.type('bigendian_name', basestring, 'format specifier defining an element that is read most-significant to least-significant')
-        littleendian_name = field.type('littleendian_name', basestring, 'format specifier defining an element that is read least-significant to most-significant')
+        bigendian_name = field.type('bigendian_name', six.string_types, 'format specifier defining an element that is read most-significant to least-significant')
+        littleendian_name = field.type('littleendian_name', six.string_types, 'format specifier defining an element that is read least-significant to most-significant')
 
     def __getsource():
         global ptype
@@ -283,7 +285,7 @@ defaults.display.mangle_with_attributes = False
 # array types
 defaults.parray.break_on_zero_sized_element = True
 defaults.parray.break_on_max_count = False
-defaults.parray.max_count = sys.maxint
+defaults.parray.max_count = six.MAXSIZE
 
 # structures
 defaults.pstruct.use_offset_on_duplicate = True
@@ -348,5 +350,5 @@ if __name__ == '__main__':
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
     #ptypes.config.logger = logging.root
-    print repr(consts)
-    print repr(config)
+    print '{!r}'.format(consts)
+    print '{!r}'.format(config)
