@@ -236,7 +236,7 @@ class Managed(MemoryManager):
         self.allocations[page] = (basepointer,(chunksize,layout))
 
         # if all the bits are clear, we can remove this page
-        if bitmap.empty(layout):
+        if bitmap.isempty(layout):
             self.allocator.freeWriteable(page, 1)
             del(self.allocations[page])
             return

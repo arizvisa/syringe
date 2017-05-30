@@ -95,6 +95,8 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     def iterate(self):
         """For each export, yields (offset of export, ordinal, name, ordinalString, virtualaddress)"""
+        cls = self.__class__
+
         if 0 in (self['AddressOfNames'].int(),self['AddressOfNameOrdinals'].int()):
             base = self['Base'].int()
             ofs,eat = self.getExportAddressTable()
@@ -108,7 +110,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             if 0 <= ordinal <= len(eat):
                 value = eat[ordinal]
             else:
-                logging.warning("Error resolving exports for %s : %d", name, ordinal)
+                logging.warning("{:s} : Error resolving exports for {:s} : {:d}".format('.'.join((cls.__module__, cls.__name__)), name, ordinal))
                 value = 0
             ordinalstring = 'Ordinal%d'% (ordinal + self['Base'].int())
             yield (ofs, ordinal, name, ordinalstring, value)

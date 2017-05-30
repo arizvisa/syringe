@@ -1,13 +1,61 @@
-import ptypes
-from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap
-from ..__base__ import *
+import sys,ptypes
+from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
 
-from . import headers
+from ..__base__ import *
 
 import array
 
-## per symbol relocations
-class IMAGE_REL_I386(ptypes.pint.enum, uint16):
+class MachineRelocation(ptype.definition):
+    cache = {}
+
+## Base Relocation class (Sub-class for each machine type)
+class Relocation(pstruct.type):
+    _fields_ = [
+        (uint32, 'VirtualAddress'), # FIXME: this can be a virtualaddress(...) to the actual relocation
+        (uint32, 'SymbolTableIndex'),
+        #(uint16, 'Type')
+    ]
+
+    def summary(self):
+        fields = [('VirtualAddress', lambda v: '%x'% v), ('SymbolTableIndex', int), ('Type', str)]
+        res = ', '.join(['%s=%s'% (k,t(self[k])) for k,t in fields])
+        return '{' + res + '}'
+
+    def __relocate__(self, data, symbol, section, namespace):
+        raise NotImplementedError
+
+    def relocate(self, data, symboltable, namespace=None):
+        '''
+        data = a string
+        symboltable = an array of symbols
+        namespace = a dict for looking up symbol and segment values by name
+        '''
+        # FIXME: stupid fucking python and it's issues recursive module importing
+        headers = sys.modules.get('pecoff.portable.headers', __import__('pecoff.portable.headers'))
+
+        # find the symbol used by the relocation
+        symbol = symboltable[self['SymbolTableIndex'].int()]
+
+        # figure out the section our symbol and our relocation points into
+        currentsection = self.getparent(headers.SectionTable)
+        sectionarray = currentsection.getparent(headers.SectionTableArray)
+
+        # if the symbol is undefined or absolute, then assume the current section
+        symbolsectionnumber = symbol.getSectionIndex()
+        if symbolsectionnumber is None:
+            section = currentsection
+        # otherwise use the symbol's section index
+        else:
+            section = sectionarray[symbolsectionnumber]
+
+        # convert the data into an array that can be processed
+        data = array.array('B', data)
+        return self.__relocate__(data, symbol, section, namespace).tostring()
+
+### Each relocation entry
+
+## I386
+class IMAGE_REL_I386(pint.enum, uint16):
     _values_ = [
         ('ABSOLUTE', 0x0000),
         ('DIR16', 0x0001),
@@ -22,68 +70,52 @@ class IMAGE_REL_I386(ptypes.pint.enum, uint16):
         ('REL32', 0x0014)
     ]
 
-class Relocation(pstruct.type):
-    _fields_ = [
-        (uint32, 'VirtualAddress'), # FIXME: this can be a virtualaddress(...) to the actual relocation
-        (uint32, 'SymbolTableIndex'),
-        (IMAGE_REL_I386, 'Type')
-    ]
+@MachineRelocation.define
+class Relocation_I386(Relocation):
+    type = Machine.byname('I386')
 
-    def summary(self):
-        fields = [('VirtualAddress', lambda v: '%x'% v), ('SymbolTableIndex', int), ('Type', str)]
-        res = ', '.join(['%s=%s'% (k,t(self[k])) for k,t in fields])
-        return '{%s}'% res
+    _fields_ = Relocation._fields_[:] + [(IMAGE_REL_I386, 'Type')]
 
-    def relocate(self, data, symboltable, namespace):
-        '''
-        data = a string
-        symboltable = an array of symbols
-        namespace = a dict for looking up symbol and segment values by name
-        '''
-        currentsection = self.getparent(headers.SectionTable)
-        sectionarray = currentsection.parent
-        currentsectionname = currentsection['Name'].str()
-        symbol = symboltable[self['SymbolTableIndex'].int()]
+    def __relocate__(self, data, symbol, section, namespace=None):
+        '''Apply relocations for the specified ``symbol`` to the ``data``.'''
+        namespace = namespace or {}
 
-        # figure out the section name our address points into
-        symbolsectionnumber,targetsectionname = symbol['SectionNumber'].int(),None
-        if symbolsectionnumber is not None:
-            targetsection = currentsection.parent[symbolsectionnumber]
-            targetsectionname = targetsection['Name'].str()
+        # figure out the relocation information
+        relocationva, relocationtype = self['VirtualAddress'].int(), self['Type'].int()
 
-        data = array.array('c',data)
-        return self.__relocate(data, symbol, sectionarray, currentsectionname, targetsectionname, namespace).tostring()
+        # figure out the symbol type
+        storageclass = symbol['StorageClass'].int()
 
-    def __relocate(self, data, symbol, sectionarray, currentsectionname, targetsectionname, namespace):
-        relocationva,relocationtype = self['VirtualAddress'].int(),self['Type'].int()
+        # get the symbol name so that it can be looked up against the namespace
         name = symbol['Name'].str()
-        storageclass,value = symbol['StorageClass'].int(), namespace[name]
 
-        if value is None:
-            raise ValueError('Attempted relocation for an undefined symbol `%s\'.'% name)
+        # lookup the symbol's value in the namespace first...otherwise, use what was actually assigned in the symbol table
+        value = namespace.get(name, symbol['Value'].int())
 
-        result = bitmap.new(0,0)
-        generator = ( bitmap.new(ord(x),8) for x in data[relocationva:relocationva+4] )
+        # extract the value that's already encoded within the section's data
+        result = ptypes.bitmap.zero
+        generator = ( bitmap.new(ch, 8) for ch in data[relocationva : relocationva + 4] )
         for x in generator:
             result = bitmap.insert(result, x)
-        result = result[0]
+        result = bitmap.int(result)
 
         currentva = relocationva + 4
 
-        if targetsectionname is None:       # externally defined
-            result = value
+        # FIXME: figure out the machine type in order to determine the relocation types and how to apply them
 
+        # XXX: this is only for x86
+        # figure out where to get the relocation's value from based on the relocation type
+        if section is None:       # externally defined
+            result = value
         elif relocationtype == 0:
             pass
-
         # XXX: will these relocations work?
         elif relocationtype == 6:                                           # 32-bit VA
             result = (value+result)
-#            print '>',name,hex(result),targetsectionname,hex(namespace[targetsectionname])
-
+        #    print '>',name,hex(result),targetsectionname,hex(namespace[targetsectionname])
         elif relocationtype == 0x14:                                        # 32-bit relative displacement
             result = (value+result+4) - (currentva)
-            raise NotImplementedError(relocationtype)
+            #raise NotImplementedError(relocationtype)
         elif relocationtype == 7:                                           # use real virtual address (???)
             result = value
         elif relocationtype in [0xA, 0xB]:                                  # [section index, offset from section]
@@ -91,13 +123,51 @@ class Relocation(pstruct.type):
         else:
             raise NotImplementedError(relocationtype)
 
-        result,serialized = bitmap.new(result, 32),array.array('c','')
+        # calculate relocation and assign it into an array
+        result, serialized = bitmap.new(result, 32), array.array('B','')
         while result[1] > 0:
-            result,value = bitmap.consume(result, 8)
-            serialized.append(chr(value))
-        assert len(serialized) == 4
+            result, value = bitmap.consume(result, 8)
+            serialized.append(value)
 
-        data[relocationva:relocationva+len(serialized)] = serialized
+        # update segment data with new serialized relocation
+        if len(serialized) != 4:
+            raise AssertionError("Expected size of relocation was expected to be {:d} bytes : {:d} != {:d}".format(4, len(serialized), 4))
+        data[relocationva : relocationva + len(serialized)] = serialized
+
+        # we're done. so return it back to the user
+        return data
+
+## AMD64
+class IMAGE_REL_AMD64(pint.enum, uint16):
+    _values_ = [
+        ('ABSOLUTE', 0x0000),
+        ('ADDR64', 0x0001),
+        ('ADDR32', 0x0002),
+        ('ADDR32NB', 0x0003),
+        ('REL32', 0x0004),
+        ('REL32_1', 0x0005),
+        ('REL32_2', 0x0006),
+        ('REL32_3', 0x0007),
+        ('REL32_4', 0x0008),
+        ('REL32_5', 0x0009),
+        ('SECTION', 0x000a),
+        ('SECREL', 0x000b),
+        ('SECREL7', 0x000c),
+        ('TOKEN', 0x000d),
+        ('SREL32', 0x000e),
+        ('PAIR', 0x000f),
+        ('SSPAN32', 0x0010),
+    ]
+
+@MachineRelocation.define
+class Relocation_AMD64(Relocation):
+    type = Machine.byname('AMD64')
+
+    _fields_ = Relocation._fields_[:] + [(IMAGE_REL_AMD64, 'Type')]
+
+    def __relocate__(self, data, symbol, section, namespace=None):
+        '''Apply relocations for the specified ``symbol`` to the ``data``.'''
+        # FIXME: Implement this
         return data
 
 ## per data directory relocations
@@ -134,7 +204,8 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
 
     def getrelocations(self, section):
         pageoffset = self['Page RVA'].int() - section['VirtualAddress'].int()
-        assert pageoffset >= 0 and pageoffset < section.getloadedsize()
+        if not (pageoffset >= 0 and pageoffset < section.getloadedsize()):
+            raise AssertionError("Page Offset in RVA outside bounds of section : not(0 <= {:#x} < {:#x}) : Page RVA {:#x}, VA = {:#x}, Section = {:s}".format(pageoffset, section.getloadedsize(), self['Page RVA'].int(), section['VirtualAddress'].int(), section['Name'].str()))
 
         for type,offset in self.fetchrelocations():
             if type == 0:
@@ -192,7 +263,8 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
         return ( entry for entry in self if section.containsaddress(entry['Page RVA'].int()) )
 
     def relocate(self, data, section, namespace):
-        assert data.__class__ is array.array, 'data argument must be formed as an array'
+        if not isinstance(data, array.array):
+            raise AssertionError("Type of argument `data` must of an instance of {!r} : not isinstance({!r}, array.array)".format(array.array, data.__class__))
 
         sectionname = section['Name'].str()
         imagebase = self.getparent(Header)['OptionalHeader']['ImageBase'].int()
@@ -219,7 +291,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
 
                 except KeyError:
                     currentrva = imagebase+currentva
-                    print "Relocation target at %x to %x lands outside section space"% (currentrva, targetrva)
+                    print "Relocation target at {:#x} to {:#x} lands outside section space".format(currentrva, targetrva)
 
                     # XXX: is it possible to hack support for relocations to the
                     #      'mz' header into this? that only fixes that case...but why else would you legitimately need something outside a section?
@@ -230,7 +302,8 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
 
 #                relo = t.write(targetva, imagebase)
                 relo = t.write(targetoffset, namespace[targetsectionname])
-                data[offset:offset+len(relo)] = array.array('c',relo)
+                data[offset : offset + len(relo)] = array.array('c',relo)
             continue
 
         return data
+

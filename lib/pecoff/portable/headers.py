@@ -2,7 +2,7 @@ import ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pbinary
 from ..__base__ import *
 
-from . import symbols
+from . import symbols,relocations,linenumbers
 
 ### locating particular parts of the executable
 def locateBase(self):
@@ -84,8 +84,7 @@ def virtualaddress(target, **kwds):
         return dyn.opointer(target, calculateRelativeAddress, kwds.pop('type'), **kwds)
     return dyn.opointer(target, calculateRelativeAddress, **kwds)
 
-class DataDirectoryEntry(pstruct.type):
-    pass
+class DataDirectoryEntry(pstruct.type): pass
 
 class SectionTable(pstruct.type):
     """PE Executable Section Table Entry"""
@@ -146,7 +145,7 @@ class SectionTable(pstruct.type):
         (virtualaddress(lambda s:dyn.block(s.parent.getloadedsize()), type=uint32), 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
         (fileoffset(lambda s:dyn.block(s.parent.getreadsize()), type=uint32), 'PointerToRawData'),
-        (fileoffset(lambda s:dyn.array(relocations.Relocation, s.parent['NumberOfRelocations'].li.int()), type=uint32), 'PointerToRelocations'),
+        (fileoffset(lambda s:dyn.array(relocations.MachineRelocation.lookup(s.getparent(Header).Machine().int()), s.parent['NumberOfRelocations'].li.int()), type=uint32), 'PointerToRelocations'),
         (fileoffset(lambda s:dyn.array(linenumbers.LineNumber, s.parent['NumberOfLinenumbers'].li.int()), type=uint32), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
         (uint16, 'NumberOfLinenumbers'),
@@ -154,9 +153,18 @@ class SectionTable(pstruct.type):
     ]
 
     def getreadsize(self):
-        nt = self.getparent(SectionTableArray).p
-        alignment = nt['OptionalHeader']['FileAlignment'].int()
-        mask = alignment - 1
+        portable = self.getparent(SectionTableArray)
+
+        # if it's a portable executable, then apply the alignment
+        try:
+            nt = portable.p
+            alignment = nt['OptionalHeader']['FileAlignment'].int()
+            mask = alignment - 1
+
+        # otherwise, there's no alignment necessary
+        except KeyError:
+            mask = 0
+
         return (self['SizeOfRawData'].int() + mask) & ~mask
 
     def getloadedsize(self):
@@ -198,7 +206,8 @@ class SectionTableArray(parray.type):
         """Identify the `SectionTable` by the va specified in /address/"""
         sections = [n for n in self if n.containsaddress(address)]
         if len(sections) > 1:
-            logging.warn('More than one section was returned for address %x'% address)
+            cls = self.__class__
+            logging.warn("{:s} : More than one section was returned for address {:x}".format('.'.join((cls.__module__, cls.__name__)), address))
         if len(sections):
             return sections[0]
         raise KeyError('Address %x not in a known section'% (address))
@@ -207,7 +216,7 @@ class SectionTableArray(parray.type):
         """Identify the `SectionTable` by the file-offset specified in /offset/"""
         sections = [n for n in self if n.containsoffset(offset)]
         if len(sections) > 1:
-            logging.warn('More than one section was returned for offset %x'% address)
+            logging.warn("{:s} : More than one section was returned for offset {:x}".format('.'.join((cls.__module__, cls.__name__)), address))
         if len(sections):
             return sections[0]
         raise KeyError('Offset %x not in a known section'% (offset))
@@ -225,7 +234,7 @@ class SectionTableArray(parray.type):
         """Return the `SectionTable` specified by /name/"""
         sections = [n for n in self if n['Name'].str() == name]
         if len(sections) > 1:
-            logging.warn('More than one section was returned for name %s'% name)
+            logging.warn("{:s} : More than one section was returned for name {!r}".format('.'.join((cls.__module__, cls.__name__)), name))
         if len(sections):
             return sections[0]
         raise KeyError('section name %s not known'% (name))
@@ -252,7 +261,7 @@ class OptionalHeader(pstruct.type):
             (1, 'NX_COMPAT'), (1, 'FORCE_INTEGRITY'), (1, 'DYNAMIC_BASE'), (6, 'reserved_10'),
         ]
 
-    class Subsystem(uint16, pint.enum):
+    class Subsystem(pint.enum, uint16):
         _values_ = [
             ('UNKNOWN', 0), ('NATIVE', 1), ('WINDOWS_GUI', 2), ('WINDOWS_CUI', 3),
             ('OS2_CUI', 5), ('POSIX_CUI', 7), ('NATIVE_WINDOWS', 8), ('WINDOWS_CE_GUI', 9),
@@ -312,15 +321,6 @@ class FileHeader(pstruct.type):
             (1, 'LINE_NUMS_STRIPPED'), (1, 'EXECUTABLE_IMAGE'), (1, 'RELOCS_STRIPPED'),
         ]
 
-    class Machine(word, pint.enum):
-        _values_ = [
-            ('UNKNOWN', 0x0000), ('AM33', 0x01d3), ('AMD64', 0x8664), ('ARM', 0x01c0),
-            ('EBC', 0x0ebc), ('I386', 0x014c), ('IA64', 0x0200), ('M32R', 0x9041),
-            ('MIPS16', 0x0266), ('MIPSFPU', 0x0366), ('MIPSFPU16', 0x0466), ('POWERPC', 0x01f0),
-            ('POWERPCFP', 0x01f1), ('R4000', 0x0166), ('SH3', 0x01a2), ('SH3DSP', 0x01a3),
-            ('SH4', 0x01a6), ('SH5', 0x01a8), ('THUMB', 0x01c2), ('WCEMIPSV2', 0x0169),
-        ]
-
     _fields_ = [
         (Machine, 'Machine'),
         (uint16, 'NumberOfSections'),
@@ -332,12 +332,12 @@ class FileHeader(pstruct.type):
     ]
 
 class Certificate(pstruct.type):
-    class wRevision(uint16, pint.enum):
+    class wRevision(pint.enum, uint16):
         _values_ = [
             ('WIN_CERT_REVISION_1_0', 0x0100),
             ('WIN_CERT_REVISION_2_0', 0x0200),
         ]
-    class wCertificateType(uint16, pint.enum):
+    class wCertificateType(pint.enum, uint16):
         _values_ = [
             ('WIN_CERT_TYPE_X509', 0x0001),
             ('WIN_CERT_TYPE_PKCS7_SIGNED_DATA', 0x0002),

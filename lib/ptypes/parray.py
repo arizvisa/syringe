@@ -193,7 +193,7 @@ class _parray_generic(ptype.container):
         else:
             obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
 
-        return '{:s}[{:d}]'.format(obj, length)
+        return u"{:s}[{:d}]".format(obj, length)
 
     def summary(self, **options):
         res = super(_parray_generic,self).summary(**options)
@@ -201,15 +201,15 @@ class _parray_generic(ptype.container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
         if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _parray_generic.details.im_func:
             result = result.rstrip('\n')
             if prop:
-                return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
-            return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
+                return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
+            return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
 
         # if the user chose to not use the default summary, then prefix the element description.
         if getattr(self.repr, 'im_func', None) not in (_parray_generic.repr.im_func,_parray_generic.summary.im_func):
@@ -217,10 +217,10 @@ class _parray_generic(ptype.container):
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
-        descr = "{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
         if prop:
-            return "[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
-        return "[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
+            return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
+        return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
 class type(_parray_generic):
     '''
@@ -732,7 +732,7 @@ if __name__ == '__main__':
             _object_ = pint.uint8_t
             blocksize = lambda s:4
 
-        block = ''.join(map(six.int2byte,six.moves.range(0x10)))
+        block = str().join(map(six.int2byte,six.moves.range(0x10)))
 
         a = container(source=provider.string(block)).l
         if len(a) == 4:
@@ -820,7 +820,7 @@ if __name__ == '__main__':
 
             _object_ = randomcontainer
 
-        string = ''.join([ six.int2byte(random.randint(six.byte2int('A'),six.byte2int('Z'))) for x in six.moves.range(0x100) ])
+        string = str().join([ six.int2byte(random.randint(six.byte2int('A'),six.byte2int('Z'))) for x in six.moves.range(0x100) ])
         a = arr(source=provider.string(string))
         a=a.l
         if a.blocksize() == 0x108:

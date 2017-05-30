@@ -271,7 +271,7 @@ class sinteger_t(type):
     '''Provides signed integer support'''
     def summary(self, **options):
         res = self.int()
-        return '{:+#0{:d}x} ({:d})'.format(res, 3+self.length*2, res)
+        return u"{:+#0{:d}x} ({:d})".format(res, 3+self.length*2, res)
 
     def __getvalue__(self):
         if not self.initializedQ():
@@ -379,11 +379,11 @@ class enum(type):
         res = self.int()
         try: return self.byvalue(res)
         except KeyError: pass
-        return '{:#x}'.format(res)
+        return u"{:#x}".format(res)
 
     def summary(self, **options):
         res = self.int()
-        try: return self.byvalue(res) + '({:#x})'.format(res)
+        try: return self.byvalue(res) + u"({:#x})".format(res)
         except KeyError: pass
         return super(enum, self).summary()
 

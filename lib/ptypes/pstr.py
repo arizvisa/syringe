@@ -119,7 +119,7 @@ class _char_t(pint.type):
         return super(_char_t, self).__getvalue__()
 
     def summary(self, **options):
-        return '{!r}'.format(self.serialize())
+        return u'{!r}'.format(self.serialize())
 
     @classmethod
     def typename(cls):
@@ -314,7 +314,7 @@ class string(ptype.type):
 
     def summary(self, **options):
         try:
-            result = '{!r}'.format(self.str())
+            result = u'{!r}'.format(self.str())
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(),self.instance()))
             return super(string,self).summary(**options)

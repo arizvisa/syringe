@@ -18,15 +18,18 @@ zero = new(0,0)
 def isinteger(v):
     '''Returns true if provided variable is of type int or long'''
     return isinstance(v, six.integer_types)
+integerQ = isinteger
 
 def isbitmap(v):
     '''Returns true if provided variable is a valid bitmap type (i really shouldn't be keeping track of these)'''
     return isinstance(v, tuple) and len(v) == 2  # and isinteger(v[0]) and isinteger(v[1])
+bitmapQ = isbitmap
 
-def empty(bitmap):
+def isempty(bitmap):
     '''Returns true if specified bitmap has none of its bits set'''
     integer,size = bitmap
     return not(integer > 0)
+emptyQ = isempty
 
 def fit(integer):
     '''Returns the number of bits necessary to contain integer'''
@@ -319,7 +322,7 @@ class consumer(object):
 
 def repr(object):
     integer,size = object
-    return "<type 'bitmap'> ({:#x}, {:d})".format(object, size)
+    return "<type 'bitmap'> ({:#x}, {:d})".format(integer, size)
 
 def data(bitmap, reversed=False):
     '''Convert a bitmap to a string left-aligned to 8-bits. Defaults to big-endian.'''

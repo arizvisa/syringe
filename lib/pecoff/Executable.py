@@ -125,6 +125,7 @@ class Portable(pstruct.type, Header):
         return dyn.block(opt['SizeOfHeaders'].int() - res - sz)
 
     def __Data(self):
+        cls = self.__class__
         sections = self['Sections'].li
         optionalheader = self['OptionalHeader'].li
 
@@ -140,7 +141,7 @@ class Portable(pstruct.type, Header):
         # file (default)
         else:
             if not isinstance(self.source, ptypes.provider.filebase):
-                logging.warn("Unknown ptype source.. treating as a fileobj : {!r}".format(self.source))
+                logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
 
             class sectionentry(pstruct.type):
                 _fields_ = [
@@ -175,9 +176,10 @@ class Portable(pstruct.type, Header):
         return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda s:sz)
 
     def __DataDirectory(self):
+        cls = self.__class__
         length = self['OptionalHeader'].li['NumberOfRvaAndSizes'].int()
         if length > 0x10:   # XXX
-            logging.warn('OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries (0x%x) for the DataDirectory. Assuming the maximum of 0x10'% length)
+            logging.warn("{:s} : OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries ({:#x}) for the DataDirectory. Assuming the maximum of 0x10.".format('.'.join((cls.__module__, cls.__name__)), length))
             length = 0x10
         return dyn.clone(portable.DataDirectory, length=length)
 
@@ -243,6 +245,9 @@ class Portable(pstruct.type, Header):
         checksum = (res&0xffff) + (res>>16)
         checksum += (checksum>>16)
         return (checksum&0xffff) + len(data)
+
+    def Machine(self):
+        return self['FileHeader']['Machine']
 
 @NextHeader.define
 class DosExtender(pstruct.type, Header):

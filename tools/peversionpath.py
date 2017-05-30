@@ -3,6 +3,8 @@ import itertools,logging,optparse,os.path
 import ptypes,pecoff
 from ptypes import *
 
+import six
+
 #Type = 16       # Version Info
 #Name = 1        # Name
 #Language = 1033 # English
@@ -19,7 +21,7 @@ def extractLgCpIds(versionInfo):
     _,vfi = versionInfo['Children']
     vfi = vfi['Child']
     res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in vfi['Children']) ))
-    return tuple((cp.num(),lg.num()) for cp,lg in res)
+    return tuple((cp.int(), lg.int()) for cp, lg in res)
 
 def getStringTable(versionInfo, (Lgid, Cp)):
     sfi,_ = versionInfo['Children']
@@ -30,18 +32,17 @@ def getStringTable(versionInfo, (Lgid, Cp)):
         if st['szKey'].str().upper() == LgidCp:
             return [s['Child'] for s in st['Children']]
         continue
-    raise KeyError, (Lgid,Cp)
+    raise KeyError, (Lgid, Cp)
 
 class help(optparse.OptionParser):
     def __init__(self):
         optparse.OptionParser.__init__(self)
         self.usage = '%prog executable'
 
-        # resources
         self.add_option('', '--dump-names', default=False, action='store_true', help='dump the VERSION_INFO name resources available')
-        self.add_option('', '--name', default=1, type='int', help='use the specified resource name')
+        self.add_option('', '--name', default=None, type='int', help='use the specified resource name')
         self.add_option('', '--dump-languages', default=False, action='store_true', help='dump the VERSION_INFO language resources available')
-        self.add_option('', '--language', default=1033, type='int', help='use the specified resource language')
+        self.add_option('', '--language', default=None, type='int', help='use the specified resource language')
 
         # VS_VERSIONINFO
         self.add_option('', '--list', default=False, action='store_true', help='dump the language-id+codepages available')
@@ -51,7 +52,7 @@ class help(optparse.OptionParser):
         # fields
         self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
         self.add_option('-f', '--format', default='{__name__}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__}/{ProductVersion}/{OriginalFilename})')
-        self.description = 'If path-format is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table'
+        self.description = 'If ``path-format`` is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table.'
 
 help = help()
 
@@ -70,43 +71,62 @@ if __name__ == '__main__':
     try:
         resource = parseResourceDirectory(filename)
     except ptypes.error.LoadError, e:
-        print >>sys.stderr, 'File %s does not appear to be an executable'% filename
+        six.print_('File %s does not appear to be an executable'% filename, file=sys.stderr)
         sys.exit(1)
     if resource.getoffset() == 0:
-        print >>sys.stderr, 'File %s does not contain a resource datadirectory entry'% filename
+        six.print_('File %s does not contain a resource datadirectory entry'% filename, file=sys.stderr)
         sys.exit(1)
     resource = resource.l
 
     # parse the resource names
     VERSION_INFO = 16
-    if VERSION_INFO not in resource.list():
-        print >>sys.stderr, 'File %s does not appear to contain a VERSION_INFO entry within it\'s resources directory.'% filename
+    if VERSION_INFO not in resource.List():
+        six.print_('File %s does not appear to contain a VERSION_INFO entry within it\'s resources directory.'% filename, file=sys.stderr)
         sys.exit(1)
 
     try:
-        resource_Names = resource.entry(VERSION_INFO).l
+        resource_Names = resource.Entry(VERSION_INFO).l
     except AttributeError:
-        print >>sys.stderr, 'No resource entry in %s that matches VERSION_INFO : %r'%(filename, VERSION_INFO)
+        six.print_('No resource entry in %s that matches VERSION_INFO : %r'%(filename, VERSION_INFO), file=sys.stderr)
         sys.exit(1)
     if opts.dump_names:
-        print >>sys.stdout, '\n'.join(map(repr,resource_Names.iterate()))
+        six.print_('\n'.join(map(repr,resource_Names.Iterate())), file=sys.stdout)
         sys.exit(0)
 
     # parse the resource languages
     try:
-        resource_Languages = resource_Names.getEntry(opts.name).l
+        if opts.name is not None:
+            resource_Languages = resource_Names.Entry(opts.name).l
+        else:
+            if resource_Names['NumberOfIds'].int() != 1:
+                raise IndexError
+            resource_Languages = resource_Names['Ids'][0]['Entry'].d.l
+            six.print_('Defaulting to the only language entry: %d'%(resource_Names['Ids'][0]['Name'].int()), file=sys.stderr)
+    except IndexError:
+        six.print_('More than one name found in %s : %r'%(filename, tuple(n['Name'].int() for n in resource_Names['Ids'])), file=sys.stderr)
+        sys.exit(1)
     except AttributeError:
-        print >>sys.stderr, 'No resource found in %s with the requested name : %r'%(filename, opts.name)
+        six.print_('No resource found in %s with the requested name : %r'%(filename, opts.name), file=sys.stderr)
         sys.exit(1)
     if opts.dump_languages:
-        print >>sys.stdout, '\n'.join(map(repr,resource_Languages.iterate()))
+        six.print_('\n'.join(map(repr,resource_Languages.Iterate())), file=sys.stdout)
         sys.exit(0)
 
     # grab the version record
     try:
-        resource_Version = resource_Languages.getEntry(opts.language).l
+        if opts.language is not None:
+            resource_Version = resource_Languages.Entry(opts.language).l
+        else:
+            if resource_Languages['NumberOfIds'].int() != 1:
+                raise IndexError
+            resource_Version = resource_Languages['Ids'][0]['Entry'].d.l
+            six.print_('Defaulting to the only version entry: %d'%(resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
+
+    except IndexError:
+        six.print_('More than one language found in %s : %r'%(filename, tuple(n['Name'].int() for n in resource_Languages['Ids'])), file=sys.stderr)
+        sys.exit(1)
     except AttributeError:
-        print >>sys.stderr, 'No version record found in %s for the specified language : %r'%(filename, opts.language)
+        six.print_('No version record found in %s for the specified language : %r'%(filename, opts.language), file=sys.stderr)
         sys.exit(1)
     else:
         versionInfo = resource_Version['Data'].d
@@ -115,7 +135,7 @@ if __name__ == '__main__':
     vi = versionInfo.l.cast(pecoff.portable.resources.VS_VERSIONINFO)
     lgcpids = extractLgCpIds(vi)
     if opts.list:
-        print >>sys.stdout, '\n'.join(map(repr,lgcpids))
+        six.print_('\n'.join(map(repr,lgcpids)), file=sys.stdout)
         sys.exit(0)
 
     # if we have to choose, figure out which language,codepage to find
@@ -124,10 +144,10 @@ if __name__ == '__main__':
         try:
             codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
         except ValueError, e:
-            print >>sys.stderr, 'More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename
+            six.print_('More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename, file=sys.stderr)
             sys.exit(1)
         if (language,codepage) not in lgcpids:
-            print >>sys.stderr, 'Invalid (language,codepage) in %s : %r not in %s'%(filename, (language,codepage), lgcpids)
+            six.print_('Invalid (language,codepage) in %s : %r not in %s'%(filename, (language,codepage), lgcpids), file=sys.stderr)
             sys.exit(1)
     else:
         (language,codepage), = lgcpids
@@ -136,7 +156,7 @@ if __name__ == '__main__':
     try:
         st = getStringTable(vi, (language,codepage))
     except KeyError:
-        print >>sys.stderr, '(language,codepage) in %s has no properties : %r'%(filename, (language,codepage))
+        six.print_('(language,codepage) in %s has no properties : %r'%(filename, (language,codepage)), file=sys.stderr)
         sys.exit(1)
     else:
         strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
@@ -145,13 +165,13 @@ if __name__ == '__main__':
 
     # build the path
     if opts.dump:
-        print >>sys.stdout, '\n'.join(map(repr, strings.items()))
+        six.print_('\n'.join(map(repr, strings.items())), file=sys.stdout)
         sys.exit(0)
 
     res = sys.getfilesystemencoding()
-    encoded = { k.encode(res, 'replace') : v.encode(res, 'replace') for k, v in strings.iteritems() }
+    encoded = { k.encode(res, 'replace') : v.encode(res, 'replace') for k, v in six.iteritems(strings) }
 
     path = opts.format.format(**encoded)
-    print >>sys.stdout, path
+    six.print_(path, file=sys.stdout)
     sys.exit(0)
 

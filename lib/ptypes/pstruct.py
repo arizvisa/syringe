@@ -134,16 +134,6 @@ class _pstruct_generic(ptype.container):
         result.__name__ = name
         return result
 
-    def __repr__(self):
-        """Calls .repr() to display the details of a specific object"""
-        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
-        result = self.repr()
-
-        # multiline
-        if prop:
-            return "{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
-        return "{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)
-
     def __getstate__(self):
         return super(_pstruct_generic,self).__getstate__(),self.__fastindex,
 
@@ -170,7 +160,7 @@ class type(_pstruct_generic):
         try:
             res = self.size() >= self.blocksize()
         except Exception,e:
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, ' -> '.join(self.backtrace())), exc_info=True)
+            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, " -> ".join(self.backtrace())), exc_info=True)
         finally:
             return res
 
@@ -201,7 +191,7 @@ class type(_pstruct_generic):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.value,path = [],' -> '.join(self.backtrace())
+            self.value,path = []," -> ".join(self.backtrace())
             self.__fastindex = {}
 
             try:
@@ -209,7 +199,7 @@ class type(_pstruct_generic):
                 current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
                 for i,(t,name) in enumerate(self._fields_):
                     if name in self.__fastindex:
-                        _,name = name,'{:s}_{:x}'.format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+                        _,name = name,u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
                         Log.warn("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
 
                     # create each element
@@ -225,7 +215,7 @@ class type(_pstruct_generic):
                             Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
                             if current+bs > _:
-                                path = ' -> '.join(self.backtrace())
+                                path = " -> ".join(self.backtrace())
                                 Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
                         current += bs
@@ -233,7 +223,7 @@ class type(_pstruct_generic):
 
             except KeyboardInterrupt:
                 # XXX: some of these variables might not be defined due to a race. who cares...
-                path = ' -> '.join(self.backtrace())
+                path = " -> ".join(self.backtrace())
                 Log.warn("type.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path))
                 return self
 
@@ -248,25 +238,28 @@ class type(_pstruct_generic):
     def details(self, **options):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
-            return '\n'.join('[{:x}] {:s} {:s} ???'.format(self.getoffset(), utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
+            f = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
+            res = (f(utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
+            return '\n'.join(res)
 
         result,o = [],self.getoffset()
+        fn = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
         for (t,name),value in map(None,self._fields_,self.value):
             if value is None:
                 i = utils.repr_class(gettypename(t))
                 v = self.new(ptype.type).a.summary(**options)
-                result.append('[{:x}] {:s} {:s} {:s}'.format(o, i, name, v))
+                result.append(fn(i, name, v))
                 continue
             ofs = self.getoffset(value.__name__ or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            val = value.summary(**options) if value.initializedQ() else '???'
-            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
-            result.append('[{:x}] {:s}{:s} {:s}'.format(ofs, inst, ' {{{:s}}}'.format(prop) if prop else '', val))
+            val = value.summary(**options) if value.initializedQ() else u'???'
+            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in value.properties().iteritems())
+            result.append(u"[{:x}] {:s}{:s} {:s}".format(ofs, inst, u" {{{:s}}}".format(prop) if prop else u"", val))
             o += value.size()
 
         if len(result) > 0:
             return '\n'.join(result)
-        return '[{:x}] Empty[]'.format(self.getoffset())
+        return u"[{:x}] Empty[]".format(self.getoffset())
 
     def __setvalue__(self, *_, **individual):
         result = self
@@ -321,7 +314,7 @@ def make(fields, **attrs):
 
         delta = o-ofs
         if delta > 0:
-            result.append((ptype.clone(ptype.block,length=delta), '__padding_{:x}'.format(ofs)))
+            result.append((ptype.clone(ptype.block,length=delta), u'__padding_{:x}'.format(ofs)))
             ofs += delta
 
         if s > 0:

@@ -335,28 +335,28 @@ def debug(ptype, **attributes):
             if 'constructed' in dbg:
                 t,c = dbg['constructed']
                 _,st,bt = dbg['creation']
-                print >>file, "[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), self.__name__ if hasattr(self, '__name__') else '')
+                print >>file, u"[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), getattr(self, '__name__', u""))
             else:
                 t,st,bt = dbg['creation']
-                print >>file, "[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), self.__name__ if hasattr(self, '__name__') else '')
+                print >>file, u"[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), getattr(self, '__name__', u""))
 
-            print >>file, 'Created by:'
+            print >>file, u"Created by:"
             print >>file, format_stack(st)
-            print >>file, 'Located at:'
-            print >>file, '\n'.join('{:s} : {:s}'.format(x.instance(),x.name()) for x in bt)
-            print >>file, 'Loads from store'
-            print >>file, '\n'.join('[:d] [{:f}] {:s}'.format(i, t, string) for i,(t,_,string) in enumerate(dbg['load']))
-            print >>file, 'Writes to store'
-            print >>file, '\n'.join('[:d] [{:f}] {:s}'.format(i, t, string) for i,(t,_,string) in enumerate(dbg['commit']))
-            print >>file, 'Serialized to a string:'
-            print >>file, '\n'.join('[:d] [{:f}] {:s}'.format(i, t, string) for i,(t,_,string) in enumerate(dbg['serialize']))
+            print >>file, u"Located at:"
+            print >>file, '\n'.join(u"{:s} : {:s}".format(x.instance(),x.name()) for x in bt)
+            print >>file, u"Loads from store"
+            print >>file, '\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i,(t,_,string) in enumerate(dbg['load']))
+            print >>file, u"Writes to store"
+            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i,(t,_,string) in enumerate(dbg['commit']))
+            print >>file, u"Serialized to a string:"
+            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i,(t,_,string) in enumerate(dbg['serialize']))
             return
 
         def serialize(self):
             result = super(decorated, self).serialize()
             size = len(result)
-            _ = logentry('serialize() -> __len__() -> {:#x}', self.instance(), len(size))
-            Log.debug(' : '.join(self.instance(),_[-1]))
+            _ = logentry(u"serialize() -> __len__() -> {:#x}", self.instance(), len(size))
+            Log.debug(" : ".join(self.instance(),_[-1]))
             self._debug_.setdefault('serialize',[]).append(_)
             return result
 
@@ -366,8 +366,8 @@ def debug(ptype, **attributes):
             end = time.time()
 
             offset, size, source = self.getoffset(), self.blocksize(), self.source
-            _ = logentry('load({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
-            Log.debug(' : '.join(self.instance(),_[-1]))
+            _ = logentry(u"load({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            Log.debug(" : ".join(self.instance(),_[-1]))
             self._debug_.setdefault('load',[]).append(_)
             return result
 
@@ -376,12 +376,12 @@ def debug(ptype, **attributes):
             result = super(decorated, self).commit(**kwds)
             end = time.time()
 
-            _ = logentry('commit({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}', ','.join('{:s}={!r}'.format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
-            Log.debug(' : '.join(self.instance(),_[-1]))
+            _ = logentry(u"commit({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
+            Log.debug(" : ".join(self.instance(),_[-1]))
             self._debug_.setdefault('commit',[]).append(_)
             return result
 
-    decorated.__name__ = 'debug({:s})'.format(ptype.__name__)
+    decorated.__name__ = "debug({:s})".format(ptype.__name__)
     decorated._debug_.update(attributes)
     return decorated
 
@@ -394,7 +394,7 @@ def debugrecurse(ptype):
             Log.debug('constructed : {!r} -> {:s} {:s}'.format(t, self.classname(), self.name()))
             debugres = debug(res, constructed=(time.time(),t))
             return super(decorated,self).new(debugres, **attrs)
-    decorated.__name__ = 'debug({:s},recurse=True)'.format(ptype.__name__)
+    decorated.__name__ = "debug({:s},recurse=True)".format(ptype.__name__)
     return decorated
 
 source = provider.default()
@@ -483,19 +483,19 @@ class _base_generic(object):
         """Return a tuple of properties/characteristics describing the current state of the object to the user"""
         result = {}
 
-        try:
-            if self.blocksize() < self.size():
-                result['overcommit'] = True
-
-        except error.InitializationError:
-            result['uninitialized'] = True
-
-        else:
-            if self.blocksize() > self.size():
-                result['underload'] = True
-
         if not hasattr(self, '__name__') or not self.__name__:
             result['unnamed'] = True
+
+        if self.initializedQ():
+            try:
+                size = self.size()
+            except InitializationError:
+                pass
+            else:
+                key = 'overcommit'  if self.blocksize() < size else 'underload' if self.blocksize() > size else None
+                if key: result[key] = True
+        else:
+            result['uninitialized'] = True
         return result
 
     def traverse(self, edges, filter=lambda node:True, **kwds):
@@ -517,22 +517,22 @@ class _base_generic(object):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
         result = self.repr()
 
         # multiline
         if result.count('\n') > 0:
             result = result.rstrip('\n') # remove trailing newlines
             if prop:
-                return "{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
-            return "{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)
+                return u"{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
+            return u"{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
-        descr = "{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
         if prop:
-            return "[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
-        return "[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
+            return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
+        return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
     # naming
     @classmethod
@@ -559,10 +559,10 @@ class _base_generic(object):
         name,ofs = self.classname(),self.getoffset()
         try:
             bs = self.blocksize()
-            return '{:s}[{:x}:+{:x}]'.format(name, ofs, bs)
+            return "{:s}[{:x}:+{:x}]".format(name, ofs, bs)
         except:
             pass
-        return '{:s}[{:x}:+???]'.format(name, ofs)
+        return "{:s}[{:x}:+???]".format(name, ofs)
 
     def hexdump(self, **options):
         """Return a hexdump of the type using utils.hexdump(**options)
@@ -578,7 +578,7 @@ class _base_generic(object):
     def details(self, **options):
         """Return details of the object. This can be displayed in multiple-lines."""
         if not self.initializedQ():
-            return '???'
+            return u"???"
 
         buf = self.serialize()
         try: sz = self.size()
@@ -598,7 +598,7 @@ class _base_generic(object):
     def summary(self, **options):
         """Return a summary of the object. This can be displayed on a single-line."""
         if not self.initializedQ():
-            return '???'
+            return u"???"
 
         buf = self.serialize()
         try: sz = self.size()
@@ -611,8 +611,8 @@ class _base_generic(object):
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
         if threshold > 0 and sz > threshold:
             threshold = options.pop('width', threshold) # 'threshold' maps to 'width' for emit_repr
-            return '"{}"'.format(utils.emit_repr(buf, threshold, message, **options))
-        return '"{}"'.format(utils.emit_repr(buf, **options))
+            return u'"' + utils.emit_repr(buf, threshold, message, **options) + u'"'
+        return u'"' + utils.emit_repr(buf, **options) + u'"'
 
     @utils.memoize('self', self='parent', args=lambda n:(n[0],) if len(n) > 0 else (), kwds=lambda n:n.get('type',()))
     def getparent(self, *args, **kwds):
@@ -647,12 +647,12 @@ class _base_generic(object):
 
         # otherwise, we can bail since it wasn't found.
         chain = ';'.join(utils.repr_instance(node.classname(),node.name()) for node in self.traverse(edges=parents))
-        try: bs = '{:+#x}'.format(self.blocksize())
-        except: bs = '???'
+        try: bs = u"{:+#x}".format(self.blocksize())
+        except: bs = u"???"
         res = (q.typename() if istype(q) else str(q) for q in query)
         raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s}[{:s}] : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), bs, chain))
 
-    def backtrace(self, fn=lambda x:'<type:{:s} name:{:s} offset:{:x}>'.format(x.classname(), x.name(), x.getoffset())):
+    def backtrace(self, fn=lambda s:u"<type:{:s} name:{:s} offset:{:x}>".format(s.classname(), s.name(), s.getoffset())):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
 
@@ -1409,8 +1409,8 @@ class container(base):
 
             #data = ''.join((x.serialize() if x.initializedQ() else '?'*blocksizeorelse(x)) for x in self.value)
             data = str().join(n.serialize() if n.initializedQ() else '' for n in self.value)
-            return '"{:s}"'.format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else '???'
-        return '???'
+            return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
+        return u"???"
 
     def append(self, object):
         """Add ``object`` to the ptype.container ``self``. Return the element's index.
@@ -1516,7 +1516,7 @@ class block(type):
     def repr(self, **options):
         """Display all ptype.block instances as a hexdump"""
         if not self.initializedQ():
-            return '???'
+            return u"???"
         if self.blocksize() > 0:
             return self.details(**options) + '\n'
         return self.summary(**options)
@@ -1815,10 +1815,10 @@ class wrapper_t(type):
 
     def classname(self):
         if self.initializedQ():
-            return '{:s}<{:s}>'.format(self.typename(),self.object.classname())
+            return "{:s}<{:s}>".format(self.typename(),self.object.classname())
         if self._value_ is None:
-            return '{:s}<?>'.format(self.typename())
-        return '{:s}<{:s}>'.format(self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
+            return "{:s}<?>".format(self.typename())
+        return "{:s}<{:s}>".format(self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
 
     def contains(self, offset):
         left = self.getoffset()
@@ -1990,7 +1990,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.bigendian)
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness {!r}".fromat(endianness))
+    raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
 class pointer_t(encoded_t):
     _object_ = None
@@ -2027,13 +2027,13 @@ class pointer_t(encoded_t):
     def dereference(self, **attrs):
         res = self.decode(self.object)
         attrs.setdefault('__name__', '*'+self.name())
-        attrs.setdefault('source', self.source)
+        attrs.setdefault('source', self.__source__)
         attrs.setdefault('offset', res.get())
         return self.new(self._object_, **attrs)
 
     def reference(self, object, **attrs):
         attrs.setdefault('__name__', '*'+self.name())
-        attrs.setdefault('source', self.source)
+        attrs.setdefault('source', self.__source__)
         res = self.object.copy().set(object.getoffset())
         enc = self.encode(res)
         enc.commit(offset=0, source=provider.proxy(self.object))
@@ -2051,11 +2051,11 @@ class pointer_t(encoded_t):
         return '{:s}<{:s}>'.format(self.typename(),targetname)
 
     def summary(self, **options):
-        return '*{:#x}'.format(self.int())
+        return u'*{:#x}'.format(self.int())
 
     def repr(self, **options):
         """Display all pointer_t instances as an integer"""
-        return self.summary(**options) if self.initializedQ() else '*???'
+        return self.summary(**options) if self.initializedQ() else u"*???"
 
     def __getstate__(self):
         return super(pointer_t,self).__getstate__(),self._object_

@@ -334,14 +334,25 @@ class SIZE_T(ULONG): pass
 class SIZE_T64(ULONGLONG): pass
 
 class rfc4122(pstruct.type):
+    class _Data1(pint.bigendian(pint.uint32_t)):
+        def summary(self):
+            return '{:08x}'.format(self.int())
+    class _Data2and3(pint.bigendian(pint.uint16_t)):
+        def summary(self):
+            return '{:04x}'.format(self.int())
+    class _Data4(pint.bigendian(pint.uint64_t)):
+        def summary(self):
+            res = list(self.serialize())
+            d1 = ''.join(map('{:02x}'.format,map(ord,res[:2])) )
+            d2 = ''.join(map('{:02x}'.format,map(ord,res[2:])) )
+            return '-'.join((d1,d2))
     _fields_ = [
-        (pint.bigendian(pint.uint32_t), 'Data1'),
-        (pint.bigendian(pint.uint16_t), 'Data2'),
-        (pint.bigendian(pint.uint16_t), 'Data3'),
-        (pint.bigendian(pint.uint64_t), 'Data4'),
+        (_Data1, 'Data1'),
+        (_Data2and3, 'Data2'),
+        (_Data2and3, 'Data3'),
+        (_Data4, 'Data4'),
     ]
-    def repr(self, **options):
-        return self.summary(**options)
+
     def summary(self, **options):
         if self.initialized:
             d1 = '{:08x}'.format(self['Data1'].int())
@@ -350,8 +361,8 @@ class rfc4122(pstruct.type):
             _ = list(self['Data4'].serialize())
             d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
             d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
-            return '[{:x}] {{Data1-Data2-Data3-Data4}} {{{:s}}}'.format(self.getoffset(), '-'.join((d1,d2,d3,d4,d5)))
-        return '[{:x}] {{Data1-Data2-Data3-Data4}} {{????????-????-????-????-????????????}}'.format(self.getoffset())
+            return '{{Data1-Data2-Data3-Data4}} {{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
+        return '{{Data1-Data2-Data3-Data4}} {{????????-????-????-????-????????????}}'
 
 class GUID(rfc4122):
     _fields_ = [
