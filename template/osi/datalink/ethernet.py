@@ -1,7 +1,7 @@
-import __base__
+import ptypes, __base__
 from ptypes import *
 
-pint.setbyteorder(pint.bigendian)
+pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass

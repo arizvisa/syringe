@@ -63,7 +63,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
 
     def __e_flags(self):
         res = self['e_machine'].li.int()
-        return e_flags.get(res)
+        return e_flags.get(res, type=res)
 
     _fields_ = [
         (e_type, 'e_type'),
@@ -98,7 +98,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
 
     def __e_flags(self):
         res = self['e_machine'].li.int()
-        return e_flags.get(res)
+        return e_flags.get(res, type=res)
 
     _fields_ = [
         (e_type, 'e_type'),

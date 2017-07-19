@@ -75,7 +75,7 @@ class VideoTagHeader(pstruct.type):
 
     def __Header(self):
         t = self['Type'].li
-        return VideoPacketHeader.get(t['CodecID'])
+        return VideoPacketHeader.get(t['CodecID'], type=t['CodecID'])
 
     _fields_ = [
         (Type, 'Type'),
@@ -320,7 +320,7 @@ class AVCVIDEOPACKET(pstruct.type):
 class SCRIPTDATAVALUE(pstruct.type):
     def __ScriptDataValue(self):
         t = self['Type'].li.num()
-        return SCRIPTDATATYPE.get(t)
+        return SCRIPTDATATYPE.get(t, type=t)
     _fields_ = [
         (UI8,'Type'),
         (__ScriptDataValue, 'Value'),
@@ -418,7 +418,7 @@ class StreamTag(pstruct.type):
     def __Header(self):
         base = self.getparent(FLVTAG)
         t = base['Type'].li['TagType']
-        return TagHeader.get(t)
+        return TagHeader.get(t, type=t)
 
     def __FilterParams(self):
         base = self.getparent(FLVTAG)
@@ -427,7 +427,7 @@ class StreamTag(pstruct.type):
     def __Body(self):
         base = self.getparent(FLVTAG)
         t = base['Type'].li['TagType']
-        return TagBody.get(t, length=self.DataSize())
+        return TagBody.get(t, type=t, length=self.DataSize())
 
     def DataSize(self):
         base = self.getparent(FLVTAG)

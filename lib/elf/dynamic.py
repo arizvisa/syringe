@@ -108,9 +108,13 @@ class Elf32_Dyn(pstruct.type):
             ('DT_SYMINFO', 0x6ffffeff),
         ]
 
+    def __d_val(self):
+        res = self['d_tag'].li.int()
+        return Type.get(res, type=res)
+
     _fields_ = [
         (d_tag, 'd_tag'),
-        (lambda s: Type.get(s['d_tag'].li.int()), 'd_val'),
+        (__d_val, 'd_val'),
     ]
 
 ####

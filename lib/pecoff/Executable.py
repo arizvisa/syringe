@@ -103,7 +103,7 @@ class NextHeader(ptype.definition):
 class Next(pstruct.type):
     def __Header(self):
         t = self['Signature'].li.serialize()
-        return NextHeader.get(t)
+        return NextHeader.get(t, type=t)
 
     _fields_ = [
         (uint16, 'Signature'),

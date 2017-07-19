@@ -1644,16 +1644,20 @@ class definition(object):
         return type in cls.cache
 
     @classmethod
-    def get(cls, type, **unknownattrs):
+    def get(cls, *type, **unknownattrs):
         """Lookup a ptype by a particular value.
 
         Returns cls.unknown with the provided ``unknownattrs`` if ``type`` is
         not found.
         """
+        if len(type) != 1:
+            raise TypeError("get() takes exactly {:d} argument ({:d} given)".format(1, len(type)))
+        type, = type
+
         try: return cls.lookup(type)
         except KeyError: pass
 
-        unknownattrs.setdefault(cls.attribute,type)
+        #unknownattrs.setdefault(cls.attribute,type)
         return clone(cls.unknown, **unknownattrs)
 
     @classmethod

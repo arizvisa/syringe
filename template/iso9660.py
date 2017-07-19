@@ -164,11 +164,15 @@ class iso_directory_record(pstruct.type):
 #define ISO_DIRECTORY_RECORD_SIZE       33
 
 class iso_volume_descriptor(pstruct.type):
+    def __data(self):
+        res = self['type'].li.int()
+        return volume_descriptor.get(res, type=res)
+
     _fields_ = [
         (uchar, 'type'),
         (dyn.clone(string,length=5), 'id'),
         (uchar, 'version'),
-        (lambda s: volume_descriptor.get(s['type'].li.int()), 'data'),
+        (__data, 'data'),
     ]
 
 class volume_descriptor(ptype.definition):

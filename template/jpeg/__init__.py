@@ -79,9 +79,8 @@ class header(pstruct.type):
 
 class headerlength(pstruct.type):
     def __data(self):
-        bs = self['length'].li.int() - 2
-        t = self.type
-        return dyn.clone(coded, _object_=markerlength.get(t, length=bs), blocksize=lambda s:bs)
+        t, bs = self.type, self['length'].li.int() - 2
+        return dyn.clone(coded, _object_=markerlength.get(t, type=t, length=bs), blocksize=lambda s:bs)
 
     _fields_ = [
         (pint.uint16_t, 'length'),
@@ -210,12 +209,12 @@ class HuffmanTable(pstruct.type):
         return '\n'.join(res)
 
     def __repr__(self):
-        res = ['[%08x] %s %s'% (self.getOffset(k), k, v) for k,v in self.items()]
+        res = ['[%08x] %s %s'% (self.getoffset(k), k, v) for k,v in self.items()]
         res = []
-        res.append('[%08x<0..3>] [table][class]: %d'% (self.getOffset('table'), self['table']['class']))
-        res.append('[%08x<4..7>] [table][destination]: %d'% (self.getOffset('table'), self['table']['destination']))
-        res.append('[%08x] [count]: %s'% (self.getOffset('count'), repr(self['count'])))
-        res.append('[%08x] [symbols]: %s'% (self.getOffset('symbols'), repr(self['symbols'])))
+        res.append('[%08x<0..3>] [table][class]: %d'% (self.getoffset('table'), self['table']['class']))
+        res.append('[%08x<4..7>] [table][destination]: %d'% (self.getoffset('table'), self['table']['destination']))
+        res.append('[%08x] [count]: %s'% (self.getoffset('count'), repr(self['count'])))
+        res.append('[%08x] [symbols]: %s'% (self.getoffset('symbols'), repr(self['symbols'])))
         res.append('value ->\n%s'% (self.dumpValue('    ')))
         return '%s\n%s\n'% (repr(type(self)), '\n'.join(res))
 

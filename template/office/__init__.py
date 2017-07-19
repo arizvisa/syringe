@@ -98,7 +98,7 @@ class RecordGeneral(pstruct.type):
     def __data(self):
         res = self['header'].li
         t,i,l = res.Type(), res.Instance(), res.Length()
-        Type = self.Record.get(t)
+        Type = self.Record.get(t, type=t)
 
         # look for an explicit instance
         try:
@@ -108,7 +108,7 @@ class RecordGeneral(pstruct.type):
         except KeyError:
             ver,instance = i
             i = ver,None
-            res = Type.get(i, length=l)
+            res = Type.get(i, type=i, length=l)
 
         # something good had to come out of that
         if getattr(self, 'lazy', False):

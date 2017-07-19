@@ -1,4 +1,4 @@
-import logging
+import ptypes, logging
 
 from __base__ import layer
 from ptypes import parray,dyn

@@ -83,7 +83,8 @@ class _sh_flags(pbinary.flags):
 
 def _sh_offset(size):
     def sh_offset(self):
-        type = Type.get(self['sh_type'].li.int())   # XXX: not 64-bit
+        res = self['sh_type'].li.int()
+        type = Type.get(res, type=res)   # XXX: not 64-bit
         #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)
@@ -454,7 +455,7 @@ class SHT_ARM_ATTRIBUTES(pstruct.type):
     class Attribute(pstruct.type):
         def __value(self):
             tag = self['tag'].li.int()
-            return SHT_ARM_ATTRIBUTES.vendortag.get(tag)
+            return SHT_ARM_ATTRIBUTES.vendortag.get(tag, type=tag)
         _fields_ = [
             (lambda s: SHT_ARM_ATTRIBUTES.Tag, 'tag'),
             (__value, 'value'),

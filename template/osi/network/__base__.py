@@ -1,4 +1,4 @@
-import osi.__base__
+import ptypes, osi.__base__
 from osi import datalink
 from ptypes import ptype,pstruct
 
@@ -14,8 +14,8 @@ class stackable(osi.__base__.stackable):
         raise NotImplementedError
 
     def nextlayer(self):
-        sz = self.nextlayer_size()
-        t = layer.get( self.nextlayer_id(), length=sz )
+        id, sz = self.nextlayer_id(), self.nextlayer_size()
+        t = layer.get( id, type=id, length=sz )
         return t,sz
 
     def nextlayer_size(self):

@@ -31,7 +31,7 @@ class ACTIONRECORD(pstruct.type):
         hdr = self['header'].l
         code = hdr['ActionCode'].int()
         sz = hdr['Length'].int()
-        return action.get(code, length=sz)
+        return action.get(code, type=code, length=sz)
 
     _fields_ = [
         (ACTIONRECORDHEADER, 'header'),

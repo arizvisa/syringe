@@ -18,7 +18,7 @@ class object_id(UINT32):
 class Str8(pstruct.type):
     _fields_ = [
         (UINT8, 'len'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['len'].li)), 's')
+        (lambda s: dyn.clone(pstr.string, length=s['len'].li.int()), 's')
     ]
     def __str__(self):
         return str(self['s'])
@@ -26,11 +26,11 @@ class Str8(pstruct.type):
 ### General Types with record lookups
 class RealMedia_Header(pstruct.type):
     def __object(self):
-        id,ver = self['object_id'].li.serialize(),int(self['object_version'].li)
-        return self.Media_Type.get((ver,id), length=int(self['size'].li) - 10)
+        id,ver = self['object_id'].li.serialize(),self['object_version'].li.int()
+        return self.Media_Type.get((ver,id), type=(ver,id), length=self['size'].li.int() - 10)
 
     def blocksize(self):
-        return int(self['size'].li)
+        return self['size'].li.int()
 
     _fields_ = [
         (object_id, 'object_id'),
@@ -47,7 +47,7 @@ class RealMedia_Structure(pstruct.type):
     _fields_ = [
         (ULONG32, 'size'),
         (UINT16, 'object_version'),
-        (lambda s: s.Media_Type.get(s['object_version'].li.num()), 'object'),
+        (lambda s: s.Media_Type.get(s['object_version'].li.num(), type=s['object_version'].int()), 'object'),
     ]
     class Media_Type(ptype.definition):
         pass
@@ -55,7 +55,7 @@ class RealMedia_Structure(pstruct.type):
 class RealMedia_Record(pstruct.type):
     _fields_ = [
         (UINT16, 'object_version'),
-        (lambda s: s.Media_Type.get(s['object_version'].li.num()), 'object')
+        (lambda s: s.Media_Type.get(s['object_version'].li.num(), type=s['object_version'].int()), 'object')
     ]
     class Media_Type(ptype.definition):
         pass
@@ -63,15 +63,15 @@ class RealMedia_Record(pstruct.type):
 # http://git.ffmpeg.org/?p=ffmpeg;a=blob;f=libavformat/rmdec.c;h=436a7e08f2a593735d50e15ba38ed34c5f8eede1;hb=HEAD
 class Type_Specific_RealAudio(pstruct.type):
     def __object(self):
-        ver = int(self['object_version'].li)
-        return self.Media_Type.get(ver)
+        ver = self['object_version'].li.int()
+        return self.Media_Type.get(ver, type=ver)
 
     def __codec(self):
         fourcc = self['object'].li.codec()
-        version = int(self['object_version'].li)
+        version = self['object_version'].li.int()
 
-        type = self.Audio_Codec.get((version,fourcc), length=int(self['i_codec'].li))
-        return dyn.clone(type, blocksize=lambda s: int(self['i_codec'].li))
+        type = self.Audio_Codec.get((version,fourcc), type=(version,fourcc), length=self['i_codec'].li.int())
+        return dyn.clone(type, blocksize=lambda s: self['i_codec'].li.int())
 
     _fields_ = [
         (object_id, 'object_id'),
@@ -95,7 +95,7 @@ class Type_Specific_RealVideo(pstruct.type):
             raise NotImplementedError('Unknown Video Type Version at %x: %x'% (self.getoffset(), v))
 
         id = self['id'].li.serialize()
-        return self.Video_Codec.get(id)
+        return self.Video_Codec.get(id, type=id)
 
     def __unknown(self):
         fields = (n for _,n in self._fields_[:-1])
@@ -130,7 +130,7 @@ class Codec_Data_cook_v4(pstruct.type):
         (UINT16, 'unknown_0'),
         (UINT8, 'unknown_2'),
         (ULONG32, 'length'),
-        (lambda s: dyn.block(int(s['length'].li)), 'data')
+        (lambda s: dyn.block(s['length'].li.int()), 'data')
     ]
 
 @Type_Specific_RealAudio.Audio_Codec.define
@@ -342,11 +342,11 @@ class RealMedia_MediaProperties_Header_v0(pstruct.type):
         (UINT32, 'preroll'),
         (UINT32, 'duration'),
         (UINT8, 'stream_name_size'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['stream_name_size'].li)), 'stream_name'),
+        (lambda s: dyn.clone(pstr.string, length=s['stream_name_size'].li.int()), 'stream_name'),
         (UINT8, 'mime_type_size'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['mime_type_size'].li)), 'mime_type'),
+        (lambda s: dyn.clone(pstr.string, length=s['mime_type_size'].li.int()), 'mime_type'),
         (UINT32, 'type_specific_len'),
-#        (lambda s: dyn.block(int(s['type_specific_len'].li)), 'type_specific_data'),
+#        (lambda s: dyn.block(s['type_specific_len'].li.int()), 'type_specific_data'),
         (__type_specific_data, 'type_specific_data')
     ]
 
@@ -356,13 +356,13 @@ class RealMedia_Content_Description_Header(pstruct.type):
 
     _fields_ = [
         (UINT16, 'title_len'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['title_len'].li)), 'title'),
+        (lambda s: dyn.clone(pstr.string, length=s['title_len'].li.int()), 'title'),
         (UINT16, 'author_len'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['author_len'].li)), 'author'),
+        (lambda s: dyn.clone(pstr.string, length=s['author_len'].li.int()), 'author'),
         (UINT16, 'copyright_len'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['copyright_len'].li)), 'copyright'),
+        (lambda s: dyn.clone(pstr.string, length=s['copyright_len'].li.int()), 'copyright'),
         (UINT16, 'comment_len'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['comment_len'].li)), 'comment'),
+        (lambda s: dyn.clone(pstr.string, length=s['comment_len'].li.int()), 'comment'),
     ]
 
 @RealMedia_Header.Media_Type.define
@@ -371,7 +371,7 @@ class RealMedia_Data_Chunk_Header(pstruct.type):
     _fields_ = [
         (UINT32, 'num_packets'),
         (UINT32, 'next_data_header'),
-        (lambda s: dyn.array( MediaMedia_Packet_Header_v0, int(s['num_packets'].li) ), 'packets')
+        (lambda s: dyn.array( MediaMedia_Packet_Header_v0, s['num_packets'].li.int() ), 'packets')
     ]
 
 @RealMedia_Header.Media_Type.define
@@ -381,7 +381,7 @@ class RealMedia_Index_Chunk_Header(pstruct.type):
         (UINT32, 'num_indices'),
         (UINT16, 'stream_number'),
         (UINT32, 'next_index_header'),
-        (lambda s: dyn.array( Index_Packet_Record, int(s['num_indices'].li) ), 'packets')
+        (lambda s: dyn.array( Index_Packet_Record, s['num_indices'].li.int() ), 'packets')
     ]
 
 @RealMedia_Header.Media_Type.define
@@ -403,12 +403,12 @@ class LogicalStream_v0(pstruct.type):
     object_version = 0
     _fields_ = [
         (UINT16, 'num_physical_streams'),
-        (lambda s: dyn.array(UINT16, int(s['num_physical_streams'].li)), 'physical_stream_numbers'),
-        (lambda s: dyn.array(ULONG32, int(s['num_physical_streams'].li)), 'data_offsets'),
+        (lambda s: dyn.array(UINT16, s['num_physical_streams'].li.int()), 'physical_stream_numbers'),
+        (lambda s: dyn.array(ULONG32, s['num_physical_streams'].li.int()), 'data_offsets'),
         (UINT16, 'num_rules'),
-        (lambda s: dyn.array(UINT16, int(s['num_rules'].li)), 'rule_to_physical_stream_number_map'),
+        (lambda s: dyn.array(UINT16, s['num_rules'].li.int()), 'rule_to_physical_stream_number_map'),
         (UINT16, 'num_properties'),
-        (lambda s: dyn.array(NameValueProperty, int(s['num_properties'].li)), 'properties'),
+        (lambda s: dyn.array(NameValueProperty, s['num_properties'].li.int()), 'properties'),
     ]
 
 ### name value property structures
@@ -434,7 +434,7 @@ class NameValueProperty_v0(pstruct.type):
 
     _fields_ = [
         (UINT8, 'name_length'),
-        (lambda s: dyn.clone(pstr.string, length=int(s['name_length'].li)), 'name'),
+        (lambda s: dyn.clone(pstr.string, length=s['name_length'].li.int()), 'name'),
         (INT32, 'type'),
         (UINT16, 'value_length'),
         (__value_data, 'value_data')
@@ -457,7 +457,7 @@ class Media_Packet_Header_v0(pstruct.type):
         (UINT32, 'timestamp'),
         (UINT8, 'packet_group'),
         (UINT8, 'flags'),
-        (lambda s: dyn.block(int(s['length'].li)-12), 'data'),
+        (lambda s: dyn.block(s['length'].li.int()-12), 'data'),
     ]
 
 @Media_Packet_Record.Media_Type.define
@@ -470,7 +470,7 @@ class Media_Packet_Header_v1(pstruct.type):
         (UINT32, 'timestamp'),
         (UINT16, 'asm_rule'),
         (UINT8, 'asm_flags'),
-        (lambda s: dyn.block(int(s['length'].li)-13), 'data'),
+        (lambda s: dyn.block(s['length'].li.int()-13), 'data'),
     ]
 
 ### index packet records
@@ -494,7 +494,7 @@ class File(parray.terminated):
     def isTerminator(self, value):
         l = len(self.value)
         if l > 0:
-            return l > int(self.value[0]['object']['num_headers']) + 1
+            return l > self.value[0]['object']['num_headers'].int() + 1
         return False
 
 if __name__ == '__main__':

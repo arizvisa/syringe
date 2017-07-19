@@ -41,8 +41,8 @@ class Chunk(pstruct.type):
         return size
 
     def ckData(self):
-        size = self['ckSize'].li.num()
-        return Record.get(self['ckID'].li.str(), blocksize=lambda s:size)
+        res, size = self['ckID'].li.str(), self['ckSize'].li.num()
+        return Record.get(res, type=res, blocksize=lambda s:size)
 
     def ckSize(self):
         return self.endian(LONG)
@@ -51,7 +51,7 @@ class Chunk(pstruct.type):
         (ID, 'ckID'),
         (ckSize, 'ckSize'),
 #        (ckData, 'ckData'),
-        (lambda self: Record.get(self['ckID'].li.str(), blocksize=lambda s:self['ckSize'].li.num()), 'ckData'),
+        (lambda self: Record.get(self['ckID'].li.str(), type=self['ckID'].str(), blocksize=lambda s:self['ckSize'].li.num()), 'ckData'),
         (ckExtra, 'ckExtra'),
     ]
 
@@ -82,12 +82,12 @@ class File(pstruct.type):
     def __Data(self):
         type = self['Type'].li.serialize()
         size = self['Size'].li.num()
-        return Record.get(type, blocksize=lambda s:size)
+        return Record.get(type, type=type, blocksize=lambda s:size)
 
     _fields_ = [
         (dyn.block(4), 'Type'),
         (__Size, 'Size'),
-        (lambda self: Record.get(self['Type'].li.serialize(), blocksize=lambda s:self['Size'].li.num()), 'Data'),
+        (lambda self: Record.get(self['Type'].li.serialize(), type=self['Type'].serialize(), blocksize=lambda s:self['Size'].li.num()), 'Data'),
 #        (__Data, 'Data'),
     ]
 

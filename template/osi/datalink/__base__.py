@@ -1,4 +1,4 @@
-import osi.__base__
+import ptypes, osi.__base__
 from ptypes import ptype
 class layer(ptype.definition):
     cache = {}
@@ -9,4 +9,4 @@ class stackable(osi.__base__.stackable):
 
     def nextlayer(self):
         id = self.nextlayer_id()
-        return (layer.get(id),None)
+        return (layer.get(id, type=id), None)

@@ -15,9 +15,9 @@ class pcap_hdr_t(pstruct.type):
     def __version(self):
         magic_number = self['magic_number'].li.serialize()
         if magic_number == '\xa1\xb2\xc3\xd4':
-            self.attributes['byteorder'] = ptypes.config.byteorder.bigendian
+            self.attributes['pcap_byteorder'] = ptypes.config.byteorder.bigendian
         elif magic_number == '\xd4\xc3\xb2\xa1':
-            self.attributes['byteorder'] = ptypes.config.byteorder.littleendian
+            self.attributes['pcap_byteorder'] = ptypes.config.byteorder.littleendian
         else:
             logging.warn("Unable to determine byteorder : {!r}".format(magic_number))
         return self.version
@@ -51,8 +51,12 @@ class pcaprec_hdr_s(pstruct.type):
     ]
 
 class Packet(pstruct.type):
+    def __header(self):
+        res = pcaprec_hdr_s
+        return dyn.clone(res, recurse=dict(byteorder=self.pcap_byteorder))
+
     _fields_ = [
-        (pcaprec_hdr_s, 'header'),
+        (__header, 'header'),
         (lambda s: dyn.block(s['header']['incl_len'].li.num()), 'data'),
     ]
 
@@ -77,6 +81,12 @@ class File(pstruct.type):
     def __packets(self):
         self.attributes.update(self['header'].attributes)
         return List
+
+    def blocksize(self):
+        if isinstance(self.source, ptypes.provider.filebase):
+            return self.source.size()
+        return sys.maxint
+
     _fields_ = [
         (pcap_hdr_t, 'header'),
         (__packets, 'packets'),

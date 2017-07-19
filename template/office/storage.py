@@ -65,7 +65,7 @@ class SECT(Sector.Pointer): pass
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
     def summary(self, **options):
-        return ''.join(Sector.get(n.num()).symbol for n in self)
+        return ''.join(Sector.get(n.int(), type=n.int()).symbol for n in self)
     def _object_(self):
         return dyn.clone(Sector.Pointer,_object_=self.Pointer)
     def chain(self, index):

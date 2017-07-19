@@ -103,13 +103,13 @@ if True:
         def Value(self):
             szkey = self['szKey'].li.str()
             sz = self['wValueLength'].li.int()
-            return VersionValue.get(szkey, length=sz)
+            return VersionValue.get(szkey, type=szkey, length=sz)
 
         def Child(self):
             szkey = self['szKey'].li.str()
             return VersionEntry.lookup(szkey)
             #bs = self['wLength'].li.int() - self.blocksize()
-            #return VersionEntry.get(szkey, length=bs)
+            #return VersionEntry.get(szkey, type=szkey, length=bs)
 
         def __Children(self):
             bs = self['wLength'].li.int() - sum(self[n].li.size() for _, n in self._fields_[:-1])

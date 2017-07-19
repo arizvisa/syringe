@@ -1,7 +1,7 @@
-import __base__
+import ptypes, __base__
 from __base__ import layer,datalink,stackable
 
-import ptypes,ptypes.bitmap as bitmap
+import ptypes.bitmap as bitmap
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)

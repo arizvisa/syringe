@@ -34,10 +34,15 @@ class Tag(pstruct.type):
     def __HeaderLongLength(self):
         return UI32 if self['Header'].li['Length'] == 0x3f else pint.uint_t
 
+    def __data(self):
+        res = self['Header'].li['Type']
+        cb = self['Header'].size() + self['HeaderLongLength'].size()
+        return TagDef.get(res, type=res, length=self.blocksize() - cb)
+
     _fields_ = [
         (RECORDHEADER, 'Header'),
         (__HeaderLongLength, 'HeaderLongLength'),
-        (lambda s: TagDef.get(s['Header'].li['Type'], length=s.blocksize()-(s['Header'].size()+s['HeaderLongLength'].size())), 'data'),
+        (__data, 'data'),
         (__unknown, 'unknown')
     ]
 

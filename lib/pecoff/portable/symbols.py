@@ -124,7 +124,8 @@ class Symbol(pstruct.type):
         if self.initializedQ():
             name, value = self['Name'].str(), self['Value'].int()
             sym_section, sym_type, sym_class = map(self.__getitem__, ('SectionNumber', 'Type', 'StorageClass'))
-            aux = AuxiliaryRecord.get(sym_class.int())
+            res = sym_class.int()
+            aux = AuxiliaryRecord.get(res, type=res)
             return '{:s} = {:#x} : Section={:s} : (Type={:s}, Class={:s}) : Aux={:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
         return super(Symbol, self).summary()
 
@@ -148,7 +149,8 @@ class SymbolTable(parray.terminated):
     def isTerminator(self, value):
         if isinstance(value, Symbol):
             auxCount = value['NumberOfAuxSymbols'].int()
-            auxSymbol = AuxiliaryRecord.get(value['StorageClass'].int())
+            res = value['StorageClass'].int()
+            auxSymbol = AuxiliaryRecord.get(value, type=value)
             self.__auxiliary__.extend((auxSymbol,) * auxCount)
         return False
 

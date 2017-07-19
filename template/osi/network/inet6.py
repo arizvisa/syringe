@@ -3,10 +3,11 @@
 
 # http://www.ietf.org/rfc/rfc2460.txt
 
-import __base__
+import ptypes, __base__
 from __base__ import layer,datalink,stackable
 from ptypes import *
-pint.setbyteorder(pint.bigendian)
+
+pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class in_addr(dyn.array(pint.uint32_t, 4)):
     def summary(self):
@@ -56,7 +57,7 @@ class ip6_hdr(pstruct.type, stackable):
         if protocol == 0:
             result = ip6_exthdr_hop
         else:
-            result = layer.get(protocol)
+            result = layer.get(protocol, type=protocol)
         return result,sz
 
 @layer.define

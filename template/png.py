@@ -68,7 +68,7 @@ class chunk(pstruct.type):
     def __data(self):
         id = self['type'].li.serialize()
         length = self['length'].li.int()
-        result = Chunk.get(id, length=length)
+        result = Chunk.get(id, type=id, length=length)
         return dyn.clone(result, blocksize=lambda s:length)
 
     _fields_ = [
