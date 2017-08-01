@@ -211,6 +211,8 @@ class _union_generic(ptype.container):
 
     def append(self, object):
         """Add an element as part of a union. Return it's index."""
+        return self.__append__(object)
+    def __append__(self, object):
         name = object.name()
 
         current = len(self.__object__)
@@ -219,18 +221,34 @@ class _union_generic(ptype.container):
         self.__fastindex[name.lower()] = current
         return current
 
+    # list methods
     def keys(self):
-        return [name for type,name in self._fields_]
-
+        return [name for name in self.__keys__()]
     def values(self):
-        return list(self.__object__)
-
+        return list(self.__values__())
     def items(self):
-        return [(k,v) for (_,k),v in zip(self._fields_,self.__object__)]
+        return [(k, v) for k, v in self.__items__()]
+
+    # iterator methods
+    def iterkeys(self):
+        for name in self.__keys__(): yield name
+    def itervalues(self):
+        for res in self.__values__(): yield res
+    def iteritems(self):
+        for k, v in self.__items__(): yield k, v
+
+    # internal dict methods
+    def __keys__(self):
+        for type, name in self._fields_: yield name
+    def __values__(self):
+        for res in self.__object__: yield res
+    def __items__(self):
+        for (_, k), v in zip(self._fields_, self.__object__):
+            yield k, v
+        return
 
     def __getindex__(self, name):
         return self.__fastindex[name.lower()]
-
     def __getitem__(self, name):
         index = self.__getindex__(name)
         return self.__object__[index]
@@ -297,7 +315,8 @@ class union(_union_generic):
         source = provider.proxy(res)      # each element will write into the offset occupied by value
         self.__object__ = []
         for t,n in self._fields_:
-            self.append( self.new(t, __name__=n, offset=0, source=source) )
+            res = self.new(t, __name__=n, offset=0, source=source)
+            self.__append__(res)
         return self.value[0]
 
     def alloc(self, **attrs):
@@ -354,7 +373,8 @@ class union(_union_generic):
         result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
-        for (t,name),value in map(None, self._fields_, self.__object__ or []):
+        for fld, value in map(None, self._fields_, self.__object__ or []):
+            t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
             prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
             result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', value.summary()))
@@ -376,7 +396,8 @@ class union(_union_generic):
             result.append('[{:x}] {:s} ???'.format(self.getoffset(), gettypename(self._value_)))
 
         # now the rest of the fields
-        for (t,name),value in map(None, self._fields_, self.__object__ or []):
+        for fld, value in map(None, self._fields_, self.__object__ or []):
+            t, name = fld or (value.__class__, value.name())
             if value is None:
                 result.append('[{:x}] {:s} {:s} ???'.format(self.getoffset(), utils.repr_class(gettypename(t)), name))
                 continue

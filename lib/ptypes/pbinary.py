@@ -487,7 +487,7 @@ class container(type):
 
         position = self.getposition()
         for n in generator:
-            self.append(n)
+            self.__append__(n)
             n.setposition(position)
             n.__deserialize_consumer__(consumer)
 
@@ -518,6 +518,9 @@ class container(type):
 
     def append(self, object):
         '''Add an element to a pbinary.container. Return it's index.'''
+        return self.__append__(object)
+
+    def __append__(self, object):
         current, size = len(self.value), 0 if self.value is None else self.bits()
 
         offset, suboffset = self.getposition()
@@ -681,7 +684,10 @@ class _struct_generic(container):
 
     def append(self, object):
         """Add an element to a pbinary.struct. Return it's index."""
-        current = super(_struct_generic, self).append(object)
+        return self.__append__(object)
+
+    def __append__(self, object):
+        current = super(_struct_generic, self).__append__(object)
         self.__fastindex[object.name().lower()] = current
         return current
 
@@ -717,14 +723,15 @@ class _struct_generic(container):
         if self.value is None:
             return u"???"
         res = self.bitmap()
-        items = [u"{:s}={:s}".format(name, u"???" if value is None else value.summary()) for (_, name), value in map(None, self._fields_, self.value)]
+        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in map(None, self._fields_, self.value)]
         if items:
             return u"({:s},{:d}) : {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(items))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __details_initialized(self):
         result = []
-        for (t, name), value in map(None, self._fields_, self.value):
+        for fld, value in map(None, self._fields_, self.value):
+            t, name = fld or (value.__class__, value.name())
             if value is None:
                 if istype(t):
                     typename = t.typename()
@@ -769,31 +776,36 @@ class _struct_generic(container):
             return '\n'.join(result)
         return u"[{:x}] Empty{{}} ???".format(self.getoffset())
 
+    # list methods
+    def keys(self):
+        '''Return the name of each field.'''
+        return [name for name in self.__keys__()]
+    def values(self):
+        '''Return all the integer values of each field.'''
+        return [res for res in self.__values__()]
+    def items(self):
+        return [(k, v) for k, v in self.__items__()]
+
     # iterator methods
     def iterkeys(self):
-        for _, name in self._fields_: yield name
-
+        for name in self.__keys__(): yield name
     def itervalues(self):
+        for res in self.__values__(): yield res
+    def iteritems(self):
+        for name, value in self.__items__(): yield name, value
+
+    # internal dict methods
+    def __keys__(self):
+        for _, name in self._fields_: yield name
+    def __values__(self):
         for res in self.value:
             yield res if isinstance(res, container) else res.int()
         return
-
-    def iteritems(self):
-        for (_, name), value in itertools.izip(self._fields_, self.value):
-            yield name, value
+    def __items__(self):
+        #for (_, k), v in itertools.izip(self._fields_, self.__values__()):
+        for (_, k), v in itertools.izip(self._fields_, self.value):
+            yield k, v
         return
-
-    # list methods
-    def keys(self):
-        '''return the name of each field'''
-        return [ name for _, name in self._fields_ ]
-
-    def values(self):
-        '''return all the integer values of each field'''
-        return [ res if isinstance(res, container) else res.int() for res in self.value ]
-
-    def items(self):
-        return [(k, v) for (_, k), v in zip(self._fields_, self.values())]
 
     # method overloads
     def __contains__(self, name):

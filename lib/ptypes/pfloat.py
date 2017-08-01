@@ -135,17 +135,22 @@ def littleendian(ptype):
 
 class type(pint.type):
     def summary(self, **options):
-        return '{:f} ({:#x})'.format(self.getf(), self.__getvalue__())
+        res = super(type, self).__getvalue__()
+        return '{:f} ({:#x})'.format(self.float(), res)
 
-    def setf(self, value):
-        raise error.ImplementationError(self, 'type.setf')
+    def __setvalue__(self, value):
+        raise error.ImplementationError(self, 'type.__setvalue__')
 
-    def getf(self):
-        raise error.ImplementationError(self, 'type.getf')
+    def __getvalue__(self):
+        raise error.ImplementationError(self, 'type.__getvalue__')
 
-    float = __float__ = lambda s: s.getf()
-    set = lambda s,v,**a: s.setf(v)
-    get = lambda s: s.getf()
+    float = __float__ = lambda self: self.get()
+    int = __int__ = lambda self: super(type, self).__getvalue__()
+
+    # wrappers for backwards compatibility
+    setf = lambda self, value: self.__setvalue__(value)
+    getf = lambda self: self.__getvalue__()
+    
 
 class float_t(type):
     """Represents a packed floating-point number.
@@ -164,7 +169,7 @@ class float_t(type):
         """round the floating-point number to the specified number of bits"""
         raise error.ImplementationError(self, 'float_t.round')
 
-    def setf(self, value):
+    def __setvalue__(self, value):
         """store /value/ into a binary format"""
         exponentbias = (2**self.components[1])/2 - 1
 
@@ -195,12 +200,13 @@ class float_t(type):
         result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
         result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
 
-        return self.__setvalue__( result[0] )
+        return super(type, self).__setvalue__(result[0])
 
-    def getf(self):
+    def __getvalue__(self):
         """convert the stored floating-point number into a python native float"""
         exponentbias = (2**self.components[1])/2 - 1
-        res = bitmap.new( self.__getvalue__(), sum(self.components) )
+        value = super(type, self).__getvalue__()
+        res = bitmap.new(value, sum(self.components))
 
         # extract components
         res,sign = bitmap.shift(res, self.components[0])
@@ -224,7 +230,7 @@ class float_t(type):
             return float('-0') if sign else float('+0')
 
         # FIXME: this should return NaN or something
-        Log.warn('float_t.getf : {:s} : invalid components value : {:d} : {:d} : {:d}'.format(self.instance(), sign, exponent, mantissa))
+        Log.warn('float_t.__getvalue__ : {:s} : invalid components value : {:d} : {:d} : {:d}'.format(self.instance(), sign, exponent, mantissa))
         raise NotImplementedError
 
 class sfixed_t(type):
@@ -237,17 +243,17 @@ class sfixed_t(type):
     length = 0
     sign = fractional = 0
 
-    def getf(self):
+    def __getvalue__(self):
         mask = 2**(8*self.length) - 1
         intm = 2**(8*self.length - self.sign) - 1
         shift = 2**self.fractional
-        n = self.__getvalue__()
-        #return float(n & intm) / shift * (-1 if n & (mask ^ intm) else +1)
-        if n & (mask ^ intm):
-            return float((n & intm) - (mask&intm+1)) / shift
-        return float(n & intm) / shift
+        value = super(type, self).__getvalue__()
+        #return float(value & intm) / shift * (-1 if value & (mask ^ intm) else +1)
+        if value & (mask ^ intm):
+            return float((value & intm) - (mask&intm+1)) / shift
+        return float(value & intm) / shift
 
-    def setf(self, value):
+    def __setvalue__(self, value):
         integral,fraction = math.trunc(value),value-math.trunc(value)
         magnitude = 2**(8*self.length - self.fractional)
         shift = 2**self.fractional
@@ -260,7 +266,7 @@ class sfixed_t(type):
         #integral |= (mask ^ intm)
 
         n = integral + math.trunc(fraction*shift)
-        return self.__setvalue__(n)
+        return super(type, self).__setvalue__(n)
 
 class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.
@@ -364,19 +370,19 @@ if __name__ == '__main__':
         else:
             f = float('NaN')
 
-        a = cls()
-        a.setf(float)
-        n = a.int()
+        res = cls()
+        res.set(float)
+        n = res.int()
 
         if n == expected:
             raise Success
-        elif math.isnan(float) and math.isnan(a.getf()):
+        elif math.isnan(float) and math.isnan(res.getf()):
             raise Success
-        elif math.isinf(float) and math.isinf(a.getf()) and float < 0 and a.getf() < 0:
+        elif math.isinf(float) and math.isinf(res.getf()) and float < 0 and res.getf() < 0:
             raise Success
-        elif math.isinf(float) and math.isinf(a.getf()) and float >= 0 and a.getf() >= 0:
+        elif math.isinf(float) and math.isinf(res.getf()) and float >= 0 and res.getf() >= 0:
             raise Success
-        raise Failure('setf: {:f} == {:#x}? {:d} ({:#x}) {:f}'.format(float, expected, a.int(), n, f))
+        raise Failure('setf: {:f} == {:#x}? {:d} ({:#x}) {:f}'.format(float, expected, res.int(), n, f))
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -388,9 +394,9 @@ if __name__ == '__main__':
         else:
             i = 0
 
-        a = cls()
-        super(type,a).set(integer)
-        n = a.getf()
+        res = cls()
+        super(type, res).__setvalue__(integer)
+        n = res.get()
 
         if n == expected:
             raise Success
@@ -400,7 +406,7 @@ if __name__ == '__main__':
             raise Success
         elif math.isinf(n) and math.isinf(expected) and n >= 0 and expected >= 0:
             raise Success
-        raise Failure('getf: {:#x} == {:f}? result:{:#x} ({:f}) python:{:#x}'.format(integer, expected, a.int(), n, i))
+        raise Failure('getf: {:#x} == {:f}? result:{:#x} ({:f}) python:{:#x}'.format(integer, expected, res.int(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):

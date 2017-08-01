@@ -230,6 +230,7 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
+import __builtin__
 import sys,six,types
 import itertools,operator,functools
 import inspect,time,traceback
@@ -252,9 +253,13 @@ def iscallable(t):
     return six.callable(t) and hasattr(t, '__call__')
 
 @utils.memoize('t')
+def isinstance(t):
+    return __builtin__.isinstance(t, generic)
+
+@utils.memoize('t')
 def istype(t):
     """True if type ``t`` inherits from ptype.type"""
-    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
+    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (__builtin__.isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
 
 @utils.memoize('t')
 def iscontainer(t):
@@ -264,7 +269,7 @@ def iscontainer(t):
 @utils.memoize('t')
 def isresolveable(t):
     """True if type ``t`` can be descended into"""
-    return isinstance(t, (types.FunctionType, types.MethodType))    # or isiterator(t)
+    return __builtin__.isinstance(t, (types.FunctionType, types.MethodType))    # or isiterator(t)
 
 def isrelated(t, t2):
     """True if type ``t`` is related to ``t2``"""
@@ -288,16 +293,16 @@ def force(t, self, chain=[]):
         return t
 
     # of type ptype
-    if istype(t) or isinstance(t, base):
+    if istype(t) or __builtin__.isinstance(t, base):
         return t
 
     # functions
-    if isinstance(t, types.FunctionType):
+    if __builtin__.isinstance(t, types.FunctionType):
         res = t(self)
         return force(res, self, chain)
 
     # bound methods
-    if isinstance(t, types.MethodType):
+    if __builtin__.isinstance(t, types.MethodType):
         return force(t(), self, chain)
 
     if inspect.isgenerator(t):
@@ -328,7 +333,7 @@ def debug(ptype, **attributes):
 
         def __init__(self, *args, **kwds):
             self._debug_['creation'] = time.time(),traceback.extract_stack(),self.backtrace(lambda s:s)
-            return super(decorated_ptype,self).__init__(*args,**kwds)
+            return super(decorated_ptype, self).__init__(*args,**kwds)
 
         def _dump_(self, file):
             dbg = self._debug_
@@ -393,7 +398,7 @@ def debugrecurse(ptype):
             res = force(t, self)
             Log.debug('constructed : {!r} -> {:s} {:s}'.format(t, self.classname(), self.name()))
             debugres = debug(res, constructed=(time.time(),t))
-            return super(decorated,self).new(debugres, **attrs)
+            return super(decorated, self).new(debugres, **attrs)
     decorated.__name__ = "debug({:s},recurse=True)".format(ptype.__name__)
     return decorated
 
@@ -504,7 +509,7 @@ class _base_generic(object):
         This will iterate in a top-down approach.
         """
         for self in edges(self, **kwds):
-            if not isinstance(self, generic):
+            if not isinstance(self):
                 continue
 
             if filter(self):
@@ -630,7 +635,7 @@ class _base_generic(object):
             return self.parent
 
         query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((isinstance(q,builtins.type) and isinstance(self,q)) or self.parent is q) for q in query)
+        match = lambda self: lambda query: any(((__builtin__.isinstance(q,builtins.type) and __builtin__.isinstance(self,q)) or self.parent is q) for q in query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -647,10 +652,8 @@ class _base_generic(object):
 
         # otherwise, we can bail since it wasn't found.
         chain = ';'.join(utils.repr_instance(node.classname(),node.name()) for node in self.traverse(edges=parents))
-        try: bs = u"{:+#x}".format(self.blocksize())
-        except: bs = u"???"
         res = (q.typename() if istype(q) else str(q) for q in query)
-        raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s}[{:s}] : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), bs, chain))
+        raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s} : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), chain))
 
     def backtrace(self, fn=lambda s:u"<type:{:s} name:{:s} offset:{:x}>".format(s.classname(), s.name(), s.getoffset())):
         """
@@ -679,7 +682,7 @@ class _base_generic(object):
         attrs.setdefault('parent', self)
 
         # instantiate an instance if we're given a type
-        if not(istype(t) or isinstance(t,generic)):
+        if not(istype(t) or isinstance(t)):
             raise error.TypeError(self, 'base.new', message='{!r} is not a ptype class'.format(t.__class__))
 
         # if it's a type, then instantiate it
@@ -687,7 +690,7 @@ class _base_generic(object):
             t = t(**attrs)
 
         # if already instantiated, then update it's attributes
-        elif isinstance(t,generic):
+        elif isinstance(t):
             t.__update__(**attrs)
 
         # give the instance a default name
@@ -795,7 +798,7 @@ class base(generic):
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         attrs.setdefault('parent', self.parent)
         if 'value' not in attrs:
-            if not isinstance(self.value, (str, types.NoneType)):
+            if not __builtin__.isinstance(self.value, (str, types.NoneType)):
                 raise error.AssertionError(self, 'base.copy', message='Invalid type of .value while trying to duplicate object : {!r}'.format(self.value.__class__))
             attrs['value'] = None if self.value is None else self.value[:]
         result.__update__(attrs)
@@ -816,22 +819,22 @@ class base(generic):
         if s == o:
             return
 
-        comparison = (bool(six.byte2int(x)^six.byte2int(y)) for x,y in zip(s,o))
-        result = [(different,len(list(times))) for different,times in itertools.groupby(comparison)]
+        comparison = (bool(six.byte2int(x)^six.byte2int(y)) for x, y in zip(s, o))
+        result = [(different, len(list(times))) for different, times in itertools.groupby(comparison)]
         index = 0
         for diff,length in result:
             #if diff: yield index,length
-            if diff: yield index,(s[index:index+length],o[index:index+length])
+            if diff: yield index, (s[index:index+length], o[index:index+length])
             index += length
 
         if len(s) != len(o):
             #yield index,max(len(s),len(o))-index
-            yield index,(s[index:],'') if len(s) > len(o) else ('',o[index:])
+            yield index, (s[index:], '') if len(s) > len(o) else ('', o[index:])
         return
 
     def cast(self, t, **kwds):
         """Cast the contents of the current instance into a differing ptype"""
-        data,bs = self.serialize(),self.blocksize()
+        data, bs = self.serialize(), self.blocksize()
 
         # copy attributes that make the new instantiation similar
         kwds.setdefault('offset', self.getoffset())
@@ -841,6 +844,9 @@ class base(generic):
         with utils.assign(self, attributes={}):
             result = self.new(t, **kwds)
 
+        # update with any attributes that need to be propagated
+        result.__update__(recurse=self.attributes)
+
         # try and load the contents using the correct blocksize
         try:
             result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda:bs)
@@ -848,9 +854,6 @@ class base(generic):
 
         except Exception,e:
             Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e))
-
-        # update with any attributes that need to be propagated
-        result.__update__(recurse=self.attributes)
 
         # force partial or overcommited initializations
         try: result = result.__deserialize_block__(data)
@@ -864,17 +867,17 @@ class base(generic):
             Log.warning("base.cast : {:s} : Result {:s} is partially initialized : {:#x} > {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         return result
 
-    def traverse(self, edges=lambda node:tuple(node.value) if isinstance(node, container) else (), filter=lambda node:True, **kwds):
+    def traverse(self, edges=lambda node:tuple(node.value) if __builtin__.isinstance(node, container) else (), filter=lambda node:True, **kwds):
         """
         This will traverse a tree in a top-down approach.
 
         By default this will traverse every sub-element from a given object.
         """
-        return super(base,self).traverse(edges, filter, **kwds)
+        return super(base, self).traverse(edges, filter, **kwds)
 
     def new(self, ptype, **attrs):
         res = force(ptype, self)
-        return super(base,self).new(res, **attrs)
+        return super(base, self).new(res, **attrs)
 
     def load(self, **attrs):
         """Synchronize the current instance with data from the .source attributes"""
@@ -906,11 +909,11 @@ class base(generic):
         global encoded_t
         class parentTester(object):
             def __eq__(self, other):
-                return other.parent is None or isinstance(other, encoded_t)
+                return other.parent is None or __builtin__.isinstance(other, encoded_t)
         parentTester = parentTester()
 
         #edges = lambda node:tuple(node.value) if iscontainer(node.__class__) else ()
-        #encoded = lambda node: (node.d,) if isinstance(node, encoded_t) else ()
+        #encoded = lambda node: (node.d,) if __builtin__.isinstance(node, encoded_t) else ()
         #itertools.chain(self.traverse(edges, filter=filter, *args, **kwds), self.traverse(encoded, filter=filter, *args, **kwds)):
         duplicates = set()
         if parentTester == self:
@@ -960,7 +963,7 @@ class type(base):
     ignored = generic.ignored.union(('length',))
 
     def copy(self, **attrs):
-        result = super(type,self).copy(**attrs)
+        result = super(type, self).copy(**attrs)
         if hasattr(self, 'length'):
             result.length = self.length
         return result
@@ -997,7 +1000,7 @@ class type(base):
                 Log.info("type.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), parent.getoffset(), self.getoffset()))
 
             # clamp the blocksize if it pushes the child element outside the bounds of the parent
-            elif isinstance(parent,container):
+            elif __builtin__.isinstance(parent,container):
                 parentSize = parent.blocksize()
                 childOffset = self.getoffset() - parent.getoffset()
                 maxElementSize = parentSize - childOffset
@@ -1030,7 +1033,7 @@ class type(base):
     ## set/get
     def __setvalue__(self, value, **attrs):
         """Set entire type equal to ``value``"""
-        if not isinstance(value, six.string_types):
+        if not __builtin__.isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
         res,self.value = self.value,value
         if hasattr(self, 'length'):
@@ -1068,10 +1071,10 @@ class type(base):
         return self.summary(**options) if self.initializedQ() else '???'
 
     def __getstate__(self):
-        return (super(type,self).__getstate__(),self.blocksize(),self.value,)
+        return (super(type, self).__getstate__(),self.blocksize(),self.value,)
     def __setstate__(self, state):
         state,self.length,self.value = state
-        super(type,self).__setstate__(state)
+        super(type, self).__setstate__(state)
 
 class container(base):
     '''
@@ -1106,11 +1109,11 @@ class container(base):
         ``tuple``, descend into sub-elements using ``field`` as the path.
         """
         if not len(field):
-            return super(container,self).getoffset()
+            return super(container, self).getoffset()
         (field,) = field
 
         # if a path is specified, then recursively get the offset
-        if isinstance(field, (tuple,list)):
+        if __builtin__.isinstance(field, (tuple, list)):
             (name, res) = (lambda hd,*tl:(hd,tl))(*field)
             return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
@@ -1131,7 +1134,7 @@ class container(base):
         return self.value[index]
 
     def __setitem__(self, index, value):
-        if not isinstance(value, base):
+        if not __builtin__.isinstance(value, base):
             raise error.TypeError(self, 'container.__setitem__',message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
         if self.value is None:
             raise error.InitializationError(self, 'container.__setitem__')
@@ -1167,7 +1170,7 @@ class container(base):
             return self
 
         # if we're already at a leaf of the trie, then no need to descend
-        if isinstance(res, (type, pbinary.partial)):
+        if __builtin__.isinstance(res, (type, pbinary.partial)):
             return res
 
         # drill into the trie's elements for more detail
@@ -1246,12 +1249,16 @@ class container(base):
         except error.NotFoundError:
             parent = self.getparent(None)
 
+            # check to see if we should validate ourselves according to parent's boundaries
+            if parent is None or not __builtin__.isinstance(parent.value, list) or self not in parent.value:
+                return data
+
         # check that child element is actually within bounds of parent
         if parent is not None and parent.getoffset() > self.getoffset():
             Log.info("container.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), parent.getoffset(), self.getoffset()))
 
         # clamp the blocksize if we're outside the bounds of the parent
-        elif isinstance(parent,container):
+        elif __builtin__.isinstance(parent, container):
             parentSize = parent.blocksize()
             childOffset = self.getoffset() - parent.getoffset()
             maxElementSize = parentSize - childOffset
@@ -1291,7 +1298,7 @@ class container(base):
         try:
             # if any of the sub-elements are undefined, load each element separately
             if Config.ptype.noncontiguous and \
-                    any(isinstance(n,container) or isinstance(n,undefined) for n in self.value):
+                    any(__builtin__.isinstance(n,container) or __builtin__.isinstance(n,undefined) for n in self.value):
 
                 # load each element individually up to the blocksize
                 bs,value = 0,self.value[:]
@@ -1310,7 +1317,7 @@ class container(base):
                 return self
 
             # otherwise the contents are contiguous, load them as so
-            return super(container,self).load(**attrs)
+            return super(container, self).load(**attrs)
 
         # we failed out, log what happened according to the variable state
         except error.LoadError, e:
@@ -1325,10 +1332,10 @@ class container(base):
     def commit(self, **attrs):
         """Commit the current state of all children back to the .source attribute"""
         if not Config.ptype.noncontiguous and \
-                all(not (isinstance(n,container) or isinstance(n,undefined)) for n in self.value):
+                all(not (__builtin__.isinstance(n,container) or __builtin__.isinstance(n,undefined)) for n in self.value):
 
             try:
-                return super(container,self).commit(**attrs)
+                return super(container, self).commit(**attrs)
             except error.CommitError, e:
                 Log.warning('container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:+{:x}}} : {:s}'.format(self.instance(), self.getoffset(), self.size(), e))
 
@@ -1350,10 +1357,10 @@ class container(base):
         attrs.setdefault('value', [])
         attrs.setdefault('parent', self.parent)
         # create an empty instance of self and update with requested attributes
-        res = super(container,self).copy(**attrs)
+        res = super(container, self).copy(**attrs)
 
         # now copy the children, with the same parent
-        res.value = map(operator.methodcaller('copy', parent=res),self.value)
+        res.value = map(operator.methodcaller('copy', parent=res), self.value or [])
         return res
 
     def compare(self, other, *args, **kwds):
@@ -1379,7 +1386,7 @@ class container(base):
                 left += n.size()
             return
 
-        for ofs,(s,o) in super(container,self).compare(other):
+        for ofs,(s,o) in super(container, self).compare(other):
             if len(s) == 0:
                 i = other.value.index(other.field(ofs, recurse=False))
                 yield ofs, (None, tuple(between(other,(ofs,other.blocksize()))))
@@ -1412,25 +1419,27 @@ class container(base):
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
-    def append(self, object):
+    def append(self, value):
         """Add ``object`` to the ptype.container ``self``. Return the element's index.
 
         When adding ``object`` to ``self``, none of the offsets are updated and
         thus will need to be manually updated before committing to a provider.
         """
+        return self.__append__(value)
+
+    def __append__(self, object):
 
         # if we're uninitialized, then create an empty value and try again
         if self.value is None:
             self.value = []
-            return self.append(object)
+            return self.__append__(object)
 
         # if object is not an instance, then try to resolve it to one and try again
-        if not isinstance(object, generic):
+        if not isinstance(object):
             res = self.new(object)
-            return self.append(res)
+            return self.__append__(res)
 
         # assume that object is now a ptype instance
-        assert isinstance(object, generic), "container.append : {:s} : Tried to append unknown type to container : {:s}".format(self.instance(), object.__class__)
         object.parent,object.source = self,None
 
         current = len(self.value)
@@ -1464,13 +1473,13 @@ class container(base):
                 name = getattr(val,'__name__',None)
                 if isresolveable(ele) or istype(ele):
                     self.value[idx] = self.new(ele, __name__=name).a
-                elif isinstance(ele,generic):
+                elif isinstance(ele):
                     self.value[idx] = self.new(ele, __name__=name)
                 else:
                     val.__setvalue__(ele)
                 continue
-        elif all(isresolveable(x) or istype(x) or isinstance(x,generic) for x in elements):
-            self.value = [ self.new(x) if isinstance(x,generic) else self.new(x).a for x in elements ]
+        elif all(isresolveable(x) or istype(x) or isinstance(x) for x in elements):
+            self.value = [ self.new(x) if isinstance(x) else self.new(x).a for x in elements ]
         else:
             raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(elements))
         self.setoffset(self.getoffset(), recurse=True)
@@ -1480,10 +1489,10 @@ class container(base):
         return tuple((v.__getvalue__() for v in self.value))
 
     def __getstate__(self):
-        return (super(container,self).__getstate__(),self.source, self.attributes, self.ignored, self.parent, self.position)
+        return (super(container, self).__getstate__(),self.source, self.attributes, self.ignored, self.parent, self.position)
     def __setstate__(self, state):
         state,self.source,self.attributes,self.ignored,self.parent,self.position = state
-        super(container,self).__setstate__(state)
+        super(container, self).__setstate__(state)
 
 class undefined(type):
     """An empty ptype that is eternally undefined"""
@@ -1541,7 +1550,7 @@ def clone(cls, **newattrs):
     class _clone(cls):
         __doc__ = cls.__doc__
         def classname(self):
-            cn = super(_clone,self).classname()
+            cn = super(_clone, self).classname()
             return Config.ptype.clone_name.format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     newattrs.setdefault('__name__', cls.__name__)
@@ -1628,7 +1637,7 @@ class definition(object):
     @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
-        assert isinstance(cls.cache, dict), 'ptype.definition {!r} has an invalid .cache attribute : {!r}'.format(cls, cls.cache.__class__)
+        assert __builtin__.isinstance(cls.cache, dict), 'ptype.definition {!r} has an invalid .cache attribute : {!r}'.format(cls, cls.cache.__class__)
         cls.cache[type] = object
 
     @classmethod
@@ -1807,7 +1816,7 @@ class wrapper_t(type):
 
     def commit(self, **attrs):
         self.object.commit(offset=0, source=provider.proxy(self))
-        return super(wrapper_t,self).commit(**attrs)
+        return super(wrapper_t, self).commit(**attrs)
 
     def size(self):
         if self.object.initializedQ():
@@ -1830,19 +1839,19 @@ class wrapper_t(type):
         return left <= offset < right
 
     def __getstate__(self):
-        return super(wrapper_t,self).__getstate__(),self._value_,self.__object__
+        return super(wrapper_t, self).__getstate__(),self._value_,self.__object__
 
     def __setstate__(self, state):
         state,self._value_,self.__object__ = state
-        super(wrapper_t,self).__setstate__(state)
+        super(wrapper_t, self).__setstate__(state)
 
     def summary(self, **options):
         options.setdefault('offset',self.getoffset())
-        return super(wrapper_t,self).summary(**options)
+        return super(wrapper_t, self).summary(**options)
 
     def details(self, **options):
         options.setdefault('offset', self.getoffset())
-        return super(wrapper_t,self).details(**options)
+        return super(wrapper_t, self).details(**options)
 
 class encoded_t(wrapper_t):
     """This type represents an element that can be decoded/encoded to/from another element.
@@ -2011,7 +2020,7 @@ class pointer_t(encoded_t):
             bs = self.blocksize()
             res = bitmap.new(offset, bs*8)
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
-            return super(pointer_t._value_,self).__setvalue__(res)
+            return super(pointer_t._value_, self).__setvalue__(res)
 
         def __getvalue__(self):
             if self.value is None:
@@ -2062,10 +2071,10 @@ class pointer_t(encoded_t):
         return self.summary(**options) if self.initializedQ() else u"*???"
 
     def __getstate__(self):
-        return super(pointer_t,self).__getstate__(),self._object_
+        return super(pointer_t, self).__getstate__(),self._object_
     def __setstate__(self, state):
         state,self._object_ = state
-        super(wrapper_t,self).__setstate__(state)
+        super(wrapper_t, self).__setstate__(state)
 
 class rpointer_t(pointer_t):
     """a pointer_t that's at an offset relative to a specific object"""
@@ -2074,24 +2083,24 @@ class rpointer_t(pointer_t):
     def classname(self):
         if self.initializedQ():
             baseobject = self._baseobject_
-            basename = baseobject.classname() if isinstance(self._baseobject_, base) else baseobject.__name__
+            basename = baseobject.classname() if __builtin__.isinstance(self._baseobject_, base) else baseobject.__name__
             return '{:s}({:s}, {:s})'.format(self.typename(), self.object.classname(), basename)
         res = getattr(self, '_object_', undefined) or undefined
         objectname = force(res, self).typename() if istype(res) else res.__name__
         return '{:s}({:s}, ...)'.format(self.typename(), objectname)
 
     def decode(self, object, **attrs):
-        res = super(rpointer_t,self).decode(object, **attrs)
+        res = super(rpointer_t, self).decode(object, **attrs)
         root = force(self._baseobject_, self)
-        base = root.getoffset() if isinstance(root,generic) else root().getoffset()
+        base = root.getoffset() if isinstance(root) else root().getoffset()
         res.set(base + object.get())
         return res
 
     def __getstate__(self):
-        return super(rpointer_t,self).__getstate__(),self._baseobject_
+        return super(rpointer_t, self).__getstate__(),self._baseobject_
     def __setstate__(self, state):
         state,self._baseobject_, = state
-        super(rpointer_t,self).__setstate__(state)
+        super(rpointer_t, self).__setstate__(state)
 
 class opointer_t(pointer_t):
     """a pointer_t that's calculated via a user-provided function that takes an integer value as an argument"""
@@ -2106,7 +2115,7 @@ class opointer_t(pointer_t):
         return '{:s}({:s}, {:s})'.format(self.typename(), objectname, calcname)
 
     def decode(self, object, **attrs):
-        res = super(opointer_t,self).decode(object, **attrs)
+        res = super(opointer_t, self).decode(object, **attrs)
         res.set(self._calculate_(object.get()))
         return res
 
@@ -2124,7 +2133,7 @@ class constant(type):
         if self.__doc__ is None:
             Log.warn('constant.__init__ : {:s} : Constant was not initialized'.format(self.classname()))
             self.__doc__ = ''
-        return super(constant,self).__init__(**attrs)
+        return super(constant, self).__init__(**attrs)
 
     def __setvalue__(self, string):
         bs,data = self.blocksize(),self.__doc__
@@ -2143,7 +2152,7 @@ class constant(type):
         data = self.__doc__
         if data != block:
             Log.warn('constant.__deserialize_block__ : {:s} : Data loaded from source did not match expected constant value : {!r} != {!r}'.format(self.instance(), block, data))
-        return super(constant,self).__deserialize_block__(data)
+        return super(constant, self).__deserialize_block__(data)
 
     def alloc(self, **attrs):
         """Allocate the ptype instance with requested string"""
@@ -2151,10 +2160,10 @@ class constant(type):
         return self.load(**attrs)
 
     def __getstate__(self):
-        return super(constant,self).__getstate__(),self.__doc__
+        return super(constant, self).__getstate__(),self.__doc__
     def __setstate__(self, state):
         state,self.__doc__ = state
-        super(constant,self).__setstate__(state)
+        super(constant, self).__setstate__(state)
 
 from . import pbinary  # XXX: recursive. yay.
 
@@ -2221,10 +2230,10 @@ if __name__ == '__main__':
             key = k
             def encode(self, object, **attrs):
                 data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                return super(xor,self).encode(ptype.block(length=len(data)).set(data))
+                return super(xor, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
                 data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                return super(xor,self).decode(ptype.block(length=len(data)).set(data))
+                return super(xor, self).decode(ptype.block(length=len(data)).set(data))
 
         x = xor(source=ptypes.prov.string(s))
         x = x.l
@@ -2245,10 +2254,10 @@ if __name__ == '__main__':
 
             def encode(self, object, **attrs):
                 data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                return super(xor,self).encode(ptype.block(length=len(data)).set(data))
+                return super(xor, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
                 data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                return super(xor,self).decode(ptype.block(length=len(data)).set(data))
+                return super(xor, self).decode(ptype.block(length=len(data)).set(data))
 
         instance = pstr.string(length=len(match)).set(match)
 
@@ -2266,11 +2275,11 @@ if __name__ == '__main__':
 
             def encode(self, object, **attrs):
                 data = object.serialize().encode('base64')
-                return super(b64,self).encode(ptype.block(length=len(data)).set(data))
+                return super(b64, self).encode(ptype.block(length=len(data)).set(data))
 
             def decode(self, object, **attrs):
                 data = object.serialize().decode('base64')
-                return super(b64,self).decode(ptype.block(length=len(data)).set(data))
+                return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
         x = b64(source=ptypes.prov.string(s)).l
         y = x.d.l
@@ -2288,11 +2297,11 @@ if __name__ == '__main__':
 
             def encode(self, object, **attrs):
                 data = object.serialize().encode('base64')
-                return super(b64,self).encode(ptype.block(length=len(data)).set(data))
+                return super(b64, self).encode(ptype.block(length=len(data)).set(data))
 
             def decode(self, object, **attrs):
                 data = object.serialize().decode('base64')
-                return super(b64,self).decode(ptype.block(length=len(data)).set(data))
+                return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
         instance = pstr.szstring().set(input)
 
@@ -2610,10 +2619,10 @@ if __name__ == '__main__':
                 _object_ = ptype.block
                 def encode(self, object, **attrs):
                     data = object.serialize().encode('zlib')
-                    return super(cblock._zlibblock,self).encode(ptype.block().set(data), length=len(data))
+                    return super(cblock._zlibblock, self).encode(ptype.block().set(data), length=len(data))
                 def decode(self, object, **attrs):
                     data = object.serialize().decode('zlib')
-                    return super(cblock._zlibblock,self).decode(ptype.block().set(data), length=len(data))
+                    return super(cblock._zlibblock, self).decode(ptype.block().set(data), length=len(data))
 
             def __zlibblock(self):
                 return ptype.clone(self._zlibblock, _value_=dynamic.block(self['size'].l.int()))
@@ -2635,10 +2644,10 @@ if __name__ == '__main__':
             _object_ = ptype.block
             def encode(self, object, **attrs):
                 data = object.serialize().encode('zlib')
-                return super(zlibblock,self).encode(ptype.block(length=len(data)).set(data))
+                return super(zlibblock, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
                 data = object.serialize().decode('zlib')
-                return super(zlibblock,self).decode(ptype.block(length=len(data)).set(data))
+                return super(zlibblock, self).decode(ptype.block(length=len(data)).set(data))
 
         class mymessage(ptype.block): pass
         message = 'hi there.'
@@ -2836,10 +2845,10 @@ if __name__ == '__main__':
         #b = a.new(ptype.pointer_t)
         class parentTester(object):
             def __eq__(self, other):
-                return other.parent is None or isinstance(other, ptype.encoded_t) or issubclass(other.__class__, ptype.encoded_t)
+                return other.parent is None or __builtin__.isinstance(other, ptype.encoded_t) or issubclass(other.__class__, ptype.encoded_t)
         parentTester = parentTester()
         #c = b.getparent(parentTester())
-        #print isinstance(b, ptype.encoded_t)
+        #print __builtin__.isinstance(b, ptype.encoded_t)
         a = pecoff.Executable.open('~/mshtml.dll')
 
         global result
@@ -2847,7 +2856,7 @@ if __name__ == '__main__':
         for n in result:
             print n
         #for n in a.traverse(filter=lambda n: parentTester == n):
-        #    if isinstance(n, ptype.encoded_t):
+        #    if __builtin__.isinstance(n, ptype.encoded_t):
         #        b = n.d.getparent(parentTester)
         #        print b.l
         #        continue

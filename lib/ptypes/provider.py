@@ -375,7 +375,7 @@ class base64(string):
             res = [i for i,_ in enumerate(result) if _.startswith(end)][0]
             result[:] = result[:res]
         result = str().join(result).translate(None, ' \t\n\r\v')
-        super(base64,self).__init__(result.decode('base64'))
+        super(base64, self).__init__(result.decode('base64'))
 
     @property
     def value(self):
@@ -525,7 +525,7 @@ class posixfile(filebase):
     '''Basic posix file provider.'''
     def __init__(self, *args, **kwds):
         res = self.open(*args, **kwds)
-        super(posixfile,self).__init__(res)
+        super(posixfile, self).__init__(res)
 
     @utils.mapexception(any=error.ProviderError)
     def open(self, filename, mode='rw', perms=0644):
@@ -562,13 +562,13 @@ class posixfile(filebase):
     @utils.mapexception(any=error.ProviderError)
     def close(self):
         os.close(self.fd)
-        return super(posixfile,self).close()
+        return super(posixfile, self).close()
 
 class file(filebase):
     '''Basic file provider.'''
     def __init__(self, *args, **kwds):
         res = self.open(*args, **kwds)
-        return super(file,self).__init__(res)
+        return super(file, self).__init__(res)
 
     @utils.mapexception(any=error.ProviderError)
     def open(self, filename, mode='rw'):
@@ -611,7 +611,7 @@ try:
         """
         def __init__(self, *args, **kwds):
             res = self.open(*args, **kwds)
-            return super(filecopy,self).__init__(res)
+            return super(filecopy, self).__init__(res)
 
         @utils.mapexception(any=error.ProviderError)
         def open(self, filename):

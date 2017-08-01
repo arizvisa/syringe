@@ -1,4 +1,7 @@
+import ptypes
 from ptypes import *
+
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 class BYTE(pint.uint8_t): pass
 class DWORD(pint.uint32_t): pass
@@ -14,24 +17,24 @@ class BITMAPFILEHEADER(pstruct.type):
         ( DWORD, 'bfOffBits' )
     ]
 
-class BITMAPINFOHEADER(pstruct.type):
-    class __biCompression(DWORD, pint.enum):
-        _values_ = [
-            ('BI_RGB', 0),
-            ('BI_RLE8', 1),
-            ('BI_RLE4', 2),
-            ('BI_BITFIELDS', 3),
-            ('BI_JPEG', 4),
-            ('BI_PNG', 5),
-        ]
+class biCompression(pint.enum, DWORD):
+    _values_ = [
+        ('BI_RGB', 0),
+        ('BI_RLE8', 1),
+        ('BI_RLE4', 2),
+        ('BI_BITFIELDS', 3),
+        ('BI_JPEG', 4),
+        ('BI_PNG', 5),
+    ]
 
+class BITMAPINFOHEADER(pstruct.type):
     _fields_ = [
         (DWORD, 'biSize'),
         (LONG, 'biWidth'),
         (LONG, 'biHeight'),
         (WORD, 'biPlanes'),
         (WORD, 'biBitCount'),
-        (__biCompression, 'biCompression'),
+        (biCompression, 'biCompression'),
         (DWORD, 'biSizeImage'),
         (LONG, 'biXPelsPerMeter'),
         (LONG, 'biYPelsPerMeter'),
@@ -49,21 +52,24 @@ class RGBQUAD(pstruct.type):
 
 class BITMAPINFO(pstruct.type):
     def __bmiColors(self):
-        header = self['bmiHeader'].l
-        clrsused = int(header['biClrUsed'])
-        bitcount = int(header['biBitCount'])
+        header = self['bmiHeader'].li
+        clrsused = header['biClrUsed'].int()
+        bitcount = header['biBitCount'].int()
 
         # XXX: this is incorrect, but i'm lazy right now.
 #        if clrsused == 0:
 #            return dyn.array(RGBQUAD, 1<<bitcount)
         return dyn.array(RGBQUAD, clrsused)
 
-    def blocksize(self):
-        return int(self['bmiHeader']['biSize'])
+    def __bmiExtra(self):
+        hdr = self['bmiHeader'].li
+        cb = hdr.size() + self['bmiColors'].li.size()
+        return dyn.block(max((hdr['biSize'].int() - cb, 0)))
 
     _fields_ = [
         (BITMAPINFOHEADER, 'bmiHeader'),
         (__bmiColors, 'bmiColors'),
+        (__bmiExtra, 'bmiExtra'),
     ]
 
 class BITMAPCOREHEADER(pstruct.type):
@@ -80,7 +86,7 @@ class File(pstruct.type):
         ( BITMAPFILEHEADER, 'header'),
         ( BITMAPINFO, 'info'),
         # XXX: this size is only valid for jpeg and png. but i'm trusting it for rle8 too
-        ( lambda s: dyn.block(int(s['info'].li['bmiHeader']['biSizeImage'])), 'data')
+        ( lambda s: dyn.block(s['info'].li['bmiHeader']['biSizeImage'].int()), 'data')
     ]
 
 if __name__ == '__main__':

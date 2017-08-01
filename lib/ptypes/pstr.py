@@ -78,7 +78,7 @@ class _char_t(pint.type):
     encoding = codecs.lookup('ascii')
 
     def __init__(self, **attrs):
-        super(_char_t,self).__init__(**attrs)
+        super(_char_t, self).__init__(**attrs)
 
         # calculate the size of .length based on .encoding
         res = builtins.unicode('\x00', 'ascii').encode(self.encoding.name)
@@ -88,13 +88,13 @@ class _char_t(pint.type):
         '''Set the _char_t to the str ``value``.'''
         if isinstance(value, builtins.str):
             try: value = builtins.unicode(value, 'ascii')
-            except UnicodeDecodeError: return super(pint.type,self).__setvalue__(str(value))
+            except UnicodeDecodeError: return super(pint.type, self).__setvalue__(str(value))
         elif isinstance(value, builtins.unicode):
             value = value
         else:
             raise ValueError(self, '_char_t.set', 'User tried to set a value of an incorrect type : {:s}'.format(value.__class__))
         res = value.encode(self.encoding.name)
-        return super(pint.type,self).__setvalue__(res)
+        return super(pint.type, self).__setvalue__(res)
 
     def str(self):
         '''Try to decode the _char_t to a character.'''
@@ -156,7 +156,7 @@ class string(ptype.type):
     initializedQ = lambda self: self.value is not None    # bool
 
     def __init__(self, **attrs):
-        res = super(string,self).__init__(**attrs)
+        res = super(string, self).__init__(**attrs)
 
         # ensure that self._object_ is using a fixed-width encoding
         _object_ = self._object_
@@ -251,6 +251,9 @@ class string(ptype.type):
 
     def append(self, object):
         '''Append the character ``object`` to the string.'''
+        return self.__append__(object)
+
+    def __append__(self, object):
         if not isinstance(object, self._object_):
             raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
         self.value += object.serialize()
@@ -263,8 +266,9 @@ class string(ptype.type):
 
     def __setvalue__(self, value):
         '''Replaces the contents of ``self`` with the string ``value``.'''
-        size,glyphs = self.blocksize(),[x for x in value]
-        t = dynamic.array(self._object_, len(glyphs))
+        size, esize = self.blocksize(), self.new(self._object_).a.size()
+        glyphs = [res for res in value]
+        t = dynamic.array(self._object_, size / esize)
         result = t(blocksize=lambda:size)
         for element,glyph in zip(result.alloc(), value):
             element.__setvalue__(glyph)
@@ -317,14 +321,14 @@ class string(ptype.type):
             result = u'{!r}'.format(self.str())
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(),self.instance()))
-            return super(string,self).summary(**options)
+            return super(string, self).summary(**options)
         return result
 
     def repr(self, **options):
         return self.summary(**options) if self.initializedQ() else '???'
 
     def classname(self):
-        return '{:s}<{:s}>'.format(super(string,self).classname(), self._object_.typename())
+        return '{:s}<{:s}>'.format(super(string, self).classname(), self._object_.typename())
 type = string
 
 class szstring(string):

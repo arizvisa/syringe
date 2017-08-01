@@ -379,7 +379,7 @@ class enum(type):
         res = self.int()
         try: return self.byvalue(res)
         except KeyError: pass
-        return u"{:#x}".format(res)
+        return u"{:x}".format(res)
 
     def summary(self, **options):
         res = self.int()
@@ -390,7 +390,7 @@ class enum(type):
     def __setvalue__(self, value):
         if isinstance(value, six.string_types):
             value = self.byname(value)
-        return super(enum,self).__setvalue__(value)
+        return super(enum, self).__setvalue__(value)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
@@ -603,7 +603,7 @@ if __name__ == '__main__':
             ]
         res = 0xdddddddd
         a = e().set(res)
-        if a.str() == '{:#x}'.format(res):
+        if a.str() == '{:x}'.format(res):
             raise Success
 
 if __name__ == '__main__':

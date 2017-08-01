@@ -117,16 +117,19 @@ class _parray_generic(ptype.container):
             offset += v.blocksize()
         return
 
+    def __append__(self, object):
+        idx = super(_parray_generic, self).__append__(object)
+        offset = (self.value[idx-1].getoffset() + self.value[idx-1].size()) if idx > 0 else self.getoffset()
+        self.value[idx].setoffset(offset)
+        return idx
+
     def append(self, object):
         """Append ``object`` to a ``self``. Return the index it was inserted at.
 
         This will update the offset of ``object`` so that it will appear at the
         end of the array.
         """
-        idx = super(_parray_generic,self).append(object)
-        offset = (self.value[idx-1].getoffset() + self.value[idx-1].size()) if idx > 0 else self.getoffset()
-        self.value[idx].setoffset(offset)
-        return idx
+        return self.__append__(object)
 
     def extend(self, iterable):
         map(self.append, iterable)
@@ -196,7 +199,7 @@ class _parray_generic(ptype.container):
         return u"{:s}[{:d}]".format(obj, length)
 
     def summary(self, **options):
-        res = super(_parray_generic,self).summary(**options)
+        res = super(_parray_generic, self).summary(**options)
         return ' '.join((self.__element__(), res))
 
     def __repr__(self):
@@ -255,13 +258,13 @@ class type(_parray_generic):
         return self
 
     def copy(self, **attrs):
-        result = super(type,self).copy(**attrs)
+        result = super(type, self).copy(**attrs)
         result._object_ = self._object_
         result.length = self.length
         return result
 
     def alloc(self, fields=(), **attrs):
-        result = super(type,self).alloc(**attrs)
+        result = super(type, self).alloc(**attrs)
         if len(fields) > 0 and isinstance(fields[0], tuple):
             for k,v in fields:
                 idx = result.__getindex__(k)
@@ -305,7 +308,7 @@ class type(_parray_generic):
 
                 else:
                     # XXX: should never be encountered
-                    raise error.ImplementationError(self, 'type.load', 'Unknown load type -> {!r}'.format(obj))
+                    raise error.ImplementationError(self, 'type.load', "Unknown load type -> {!r}".format(obj))
             return super(type, self).load(**attrs)
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
@@ -316,7 +319,7 @@ class type(_parray_generic):
         if isinstance(value, dict):
             items = value.items()
         elif self.initializedQ() and len(self) == len(value):
-            return super(type,self).__setvalue__(*value)
+            return super(type, self).__setvalue__(*value)
         else:
             items = enumerate(value)
 
@@ -330,16 +333,16 @@ class type(_parray_generic):
                 res = self.new(self._object_,__name__=str(idx)).a
             self.value.append(res)
 
-        result = super(type,self).__setvalue__(*value)
+        result = super(type, self).__setvalue__(*value)
         result.length = len(self)
         return self
 
     def __getstate__(self):
-        return super(type,self).__getstate__(),self._object_,self.length
+        return super(type, self).__getstate__(),self._object_,self.length
 
     def __setstate__(self, state):
         state,self._object_,self.length = state
-        super(type,self).__setstate__(state)
+        super(type, self).__setstate__(state)
 
 class terminated(type):
     '''
@@ -356,7 +359,7 @@ class terminated(type):
             if self.value is None:
                 raise error.InitializationError(self, 'terminated.__len__')
             return len(self.value)
-        return super(terminated,self).__len__()
+        return super(terminated, self).__len__()
 
     def alloc(self, **attrs):
         attrs.setdefault('length', 0 if self.value is None else len(self.value))
@@ -410,7 +413,7 @@ class uninitialized(terminated):
     """An array that can contain uninitialized or partially initialized elements.
 
     This array determines it's size dynamically ignoring partially or
-    uninitialized elements.
+    uninitialized elements found near the end.
     """
     def size(self):
         if self.value is not None:
@@ -424,21 +427,24 @@ class uninitialized(terminated):
         if self.value is None:
             return False
 
-        # Check if all defined elements are initialized or partially initialized
-        return all(n.initializedQ() for n in self.value if n.value is not None)
+        # Grab all initialized elements near the beginning
+        res = list(itertools.takewhile(operator.methodcaller('initializedQ'), self.value))
+
+        # Verify that the rest are uninitialized
+        return all(not n.initializedQ() for n in self.value[len(res):])
 
 class infinite(uninitialized):
     '''An array that reads elements until an exception or interrupt happens'''
 
     def __next_element(self, offset, **attrs):
-        '''method that returns a new element at a specified offset and loads it. intended to be overloaded.'''
+        '''Utility method that returns a new element at a specified offset and loads it. intended to be overloaded.'''
         index = len(self.value)
         n = self.new(self._object_, __name__=str(index), offset=offset)
         try:
             n.load(**attrs)
         except (error.LoadError,error.InitializationError),e:
             path = ' -> '.join(self.backtrace())
-            Log.warn("infinite.__next_element : {:s} : Unable to read element {:s} : {:s}".format(self.instance(), n.instance(), path))
+            Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), n.instance(), path))
         return n
 
     def isTerminator(self, value):
@@ -447,7 +453,7 @@ class infinite(uninitialized):
     def load(self, **attrs):
         # fallback to regular loading if user has hardcoded the length
         if attrs.get('length', self.length) is not None:
-            return super(infinite,self).load(**attrs)
+            return super(infinite, self).load(**attrs)
 
         with utils.assign(self, **attrs):
             offset, self.value = self.getoffset(), []
@@ -551,7 +557,7 @@ class block(uninitialized):
     def load(self, **attrs):
         # fallback to regular loading if user has hardcoded the length
         if attrs.get('length', self.length) is not None:
-            return super(block,self).load(**attrs)
+            return super(block, self).load(**attrs)
 
         with utils.assign(self, **attrs):
             forever = itertools.count() if self.length is None else six.moves.range(len(self))
@@ -608,7 +614,7 @@ class block(uninitialized):
         return self
 
     def initializedQ(self):
-        return super(block,self).initializedQ() and (self.size() >= self.blocksize() if self.length is None else len(self.value) == self.length)
+        return super(block, self).initializedQ() and (self.size() >= self.blocksize() if self.length is None else len(self.value) == self.length)
 
 if __name__ == '__main__':
     class Result(Exception): pass
@@ -671,7 +677,7 @@ if __name__ == '__main__':
         x.source = provider.string('AAAA'*15)
         x.l
 #        print x.length,len(x), x.value
-#        print '{!r}'.format(x)
+#        print "{!r}".format(x)
         if len(x) == 5 and x[4].serialize() == 'AAAA':
             raise Success
 
@@ -784,7 +790,7 @@ if __name__ == '__main__':
 
             def repr(self, **options):
                 if self.initialized:
-                    return self.classname() + ' {:x}'.format(self.int())
+                    return self.classname() + " {:x}".format(self.int())
                 return self.classname() + ' ???'
 
         class extreme(parray.infinite):

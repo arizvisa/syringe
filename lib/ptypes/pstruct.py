@@ -55,7 +55,7 @@ __all__ = 'type,make'.split(',')
 
 class _pstruct_generic(ptype.container):
     def __init__(self, *args, **kwds):
-        super(_pstruct_generic,self).__init__(*args, **kwds)
+        super(_pstruct_generic, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
     def alias(self, alias, target):
@@ -70,8 +70,10 @@ class _pstruct_generic(ptype.container):
 
     def append(self, object):
         """Add an element to a pstruct.type. Return it's index."""
+        return self.__append__(object)
+    def __append__(self, object):
         name = object.shortname()
-        current = super(_pstruct_generic,self).append(object)
+        current = super(_pstruct_generic, self).__append__(object)
         self.__fastindex[name.lower()] = current
         return current
 
@@ -87,27 +89,31 @@ class _pstruct_generic(ptype.container):
                 continue
         raise KeyError(name)
 
-    # iterator methods
-    def iterkeys(self):
-        for _,name in self._fields_: yield name
-
-    def itervalues(self):
-        for res in self.value: yield res
-
-    def iteritems(self):
-        for (_, name), value in itertools.izip(self._fields_, self.value):
-            yield name, value
-        return
-
     # list methods
     def keys(self):
-        return [ name for _,name in self._fields_ ]
-
+        return [ name for name in self.__keys__() ]
     def values(self):
-        return self.value[:]
-
+        return [res for res in self.__values__()]
     def items(self):
-        return [(k,v) for (_,k),v in zip(self._fields_,self.value)]
+        return [(k, v) for k, v in self.__items__()]
+
+    # iterator methods
+    def iterkeys(self):
+        for name in self.__keys__(): yield name
+    def itervalues(self):
+        for res in self.__values__(): yield res
+    def iteritems(self):
+        for name, value in self.__items__(): yield name, value
+
+    # internal dict methods
+    def __keys__(self):
+        for _, name in self._fields_: yield name
+    def __values__(self):
+        for res in self.value: yield res
+    def __items__(self):
+        for (_, k), v in itertools.izip(self._fields_, self.value):
+            yield k, v
+        return
 
     # method overloads
     def __contains__(self, name):
@@ -135,11 +141,11 @@ class _pstruct_generic(ptype.container):
         return result
 
     def __getstate__(self):
-        return super(_pstruct_generic,self).__getstate__(),self.__fastindex,
+        return super(_pstruct_generic, self).__getstate__(),self.__fastindex,
 
     def __setstate__(self, state):
         state,self.__fastindex, = state
-        super(_pstruct_generic,self).__setstate__(state)
+        super(_pstruct_generic, self).__setstate__(state)
 
 class type(_pstruct_generic):
     '''
@@ -154,7 +160,7 @@ class type(_pstruct_generic):
 
     def initializedQ(self):
         if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
-            return super(type,self).initializedQ()
+            return super(type, self).initializedQ()
 
         res = False
         try:
@@ -165,7 +171,7 @@ class type(_pstruct_generic):
             return res
 
     def copy(self, **attrs):
-        result = super(type,self).copy(**attrs)
+        result = super(type, self).copy(**attrs)
         result._fields_ = self._fields_[:]
         return result
 
@@ -244,7 +250,8 @@ class type(_pstruct_generic):
 
         result,o = [],self.getoffset()
         fn = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
-        for (t,name),value in map(None,self._fields_,self.value):
+        for fld, value in map(None, self._fields_, self.value):
+            t, name = fld or (value.__class__, value.name())
             if value is None:
                 i = utils.repr_class(gettypename(t))
                 v = self.new(ptype.type).a.summary(**options)
@@ -272,7 +279,7 @@ class type(_pstruct_generic):
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'type.set', message='iterable value to assign with is not of the same length as struct')
-                result = super(type,result).__setvalue__(*value)
+                result = super(type, result).__setvalue__(*value)
 
             for k,v in individual.iteritems():
                 idx = self.__getindex__(k)
@@ -288,11 +295,11 @@ class type(_pstruct_generic):
         return result.a.__setvalue__(value, **individual)
 
     def __getstate__(self):
-        return super(type,self).__getstate__(),self._fields_,
+        return super(type, self).__getstate__(),self._fields_,
 
     def __setstate__(self, state):
         state,self._fields_, = state
-        super(type,self).__setstate__(state)
+        super(type, self).__setstate__(state)
 
 def make(fields, **attrs):
     """Given a set of initialized ptype objects, return a pstruct object describing it.
