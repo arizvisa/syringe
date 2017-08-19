@@ -1035,7 +1035,7 @@ class type(base):
         """Set entire type equal to ``value``"""
         if not __builtin__.isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
-        res,self.value = self.value,value
+        res, self.value = self.value, value
         if hasattr(self, 'length'):
             self.length = len(self.value)
         return self
@@ -1457,10 +1457,10 @@ class container(base):
             yield res
         return
 
-    def __setvalue__(self, *elements):
-        """Set ``self`` with instances or copies of the types provided in the iterable ``elements``.
+    def __setvalue__(self, *value):
+        """Set ``self`` with instances or copies of the types provided in the iterable ``value``.
 
-        If uninitialized, this will make a copy of all the instances in ``elements`` and update the
+        If uninitialized, this will make a copy of all the instances in ``value`` and update the
         'parent' and 'source' attributes to match. All the offsets will be
         recursively updated.
 
@@ -1468,25 +1468,25 @@ class container(base):
 
         This is an internal function and is not intended to be used outside of ptypes.
         """
-        if self.initializedQ() and len(self.value) == len(elements):
-            for idx,(val,ele) in enumerate(zip(self.value,elements)):
-                name = getattr(val,'__name__',None)
-                if isresolveable(ele) or istype(ele):
-                    self.value[idx] = self.new(ele, __name__=name).a
-                elif isinstance(ele):
-                    self.value[idx] = self.new(ele, __name__=name)
+        if self.initializedQ() and len(self.value) == len(value):
+            for idx, (value, e) in enumerate(zip(self.value, value)):
+                name = getattr(value, '__name__',None)
+                if isresolveable(e) or istype(e):
+                    self.value[idx] = self.new(e, __name__=name).a
+                elif isinstance(e):
+                    self.value[idx] = self.new(e, __name__=name)
                 else:
-                    val.__setvalue__(ele)
+                    value.set(e)
                 continue
-        elif all(isresolveable(x) or istype(x) or isinstance(x) for x in elements):
-            self.value = [ self.new(x) if isinstance(x) else self.new(x).a for x in elements ]
+        elif all(isresolveable(e) or istype(e) or isinstance(e) for e in value):
+            self.value = [ self.new(e) if isinstance(e) else self.new(e).a for e in value ]
         else:
-            raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(elements))
+            raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(value))
         self.setoffset(self.getoffset(), recurse=True)
         return self
 
     def __getvalue__(self):
-        return tuple((v.__getvalue__() for v in self.value))
+        return tuple((res.get() for res in self.value))
 
     def __getstate__(self):
         return (super(container, self).__getstate__(),self.source, self.attributes, self.ignored, self.parent, self.position)
@@ -1807,10 +1807,10 @@ class wrapper_t(type):
 
     # forwarded methods
     def __getvalue__(self):
-        return self.object.__getvalue__()
+        return self.object.get()
 
     def __setvalue__(self, value):
-        res = self.object.__setvalue__(value)
+        res = self.object.set(value)
         self.object.commit(offset=0, source=provider.proxy(self))
         return self
 
@@ -2027,7 +2027,7 @@ class pointer_t(encoded_t):
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            res = six.moves.reduce(bitmap.push, map(None, map(ord,value), (8,)*len(self.value)), bitmap.zero)
+            res = six.moves.reduce(bitmap.push, map(None, map(ord, value), (8,) * len(self.value)), bitmap.zero)
             return bitmap.value(res)
 
     def decode(self, object, **attrs):
@@ -2136,13 +2136,13 @@ class constant(type):
         return super(constant, self).__init__(**attrs)
 
     def __setvalue__(self, string):
-        bs,data = self.blocksize(),self.__doc__
+        bs, data = self.blocksize(), self.__doc__
 
         if (data != string) or (bs != len(string)):
             Log.warn('constant.set : {:s} : Data did not match expected value : {!r} != {!r}'.format(self.classname(), string, data))
 
         if len(string) < bs:
-            self.value = string + utils.padding.fill(bs-len(string), self.padding)
+            self.value = string + utils.padding.fill(bs - len(string), self.padding)
             return self
 
         self.value = string

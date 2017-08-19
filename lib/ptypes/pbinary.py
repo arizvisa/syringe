@@ -219,26 +219,36 @@ class type(ptype.generic):
     def __getvalue__(self):
         return self.value[:]
     def __setvalue__(self, value):
-        # FIXME: clamp bitmap according to .bits()
+        # FIXME: clamp bitmaps and integers according to .blockbits()
+
         if bitmap.isbitmap(value):
             size = bitmap.size(value)
             if size != self.blockbits():
                 Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
-            value, _ = value
-            self.value = bitmap.new(value, size * (1,-1)[getattr(self, 'signed', False)])
+
+            # check signedness for backwards compatibility
+            smult = (1,-1)[getattr(self, 'signed', False)]
+
+            self.value = bitmap.new(bitmap.value(value), size * smult)
             return self
-        if isinstance(value, six.integer_types):
-            try: _, size = self.value or (0, self.blockbits() * (1,-1)[getattr(self, 'signed', False)])
+
+        elif isinstance(value, six.integer_types):
+            # backwards compatibility
+            smult = (1,-1)[getattr(self, 'signed', False)]
+
+            try: _, size = self.value or (0, self.blockbits() * smult)
             except: size = 0
+
             self.value = bitmap.new(value, size)
             return self
+
         raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
+
     def bitmap(self):
         return None if self.value is None else tuple(self.value)
     def update(self, value):
-        # FIXME: clamp to .blockbits
         if bitmap.isbitmap(value):
-            self.value = value
+            self.value = bitmap.new(*value)
             return self
         raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
 
@@ -461,23 +471,38 @@ class container(type):
     def __getitem__(self, key):
         res = self.__field__(key)
         return res if isinstance(res, container) else res.int()
+    def item(self, key):
+        return self.__field__(key)
 
     def __getvalue__(self):
-        return tuple(self.value)
-    def __setvalue__(self, value):
+        return tuple(n.int() if isinstance(n, type) else n.get() for n in self.value)
+    def __setvalue__(self, *value):
+        value, = value
         if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'container.set', message='tried to call .set with an unknown type {:s}'.format(value.__class__))
-        _, size = self.bitmap()
-        result = value, size
-        for element in self.value:
-            result, number = bitmap.shift(result, element.bits())
-            element.__setvalue__(number)
+            raise error.UserError(self, 'container.set', message='Unable to .set() with an unknown type. : {:s}'.format(value.__class__))
+
+        result = bitmap.new(value, self.blockbits())
+        for e in self.value:
+            result, number = bitmap.shift(result, e.bits())
+            e.set(number)
+
+        if bitmap.size(result) > 0:
+            raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
         return self
 
     def update(self, value):
-        if bitmap.size(value) != self.blockbits():
-            raise error.UserError(self, 'container.update', message='not allowed to change size of container')
-        return self.__setvalue__(bitmap.value(value))
+        result = value if bitmap.isbitmap(value) else (value, self.blockbits())
+        if bitmap.size(result) != self.blockbits():
+            raise error.UserError(self, 'container.update', message="Unable to change size of bitmap container. : {:d} != {:d}".format(bitmap.size(result), self.blockbits()))
+
+        value = self.value if self.initializedQ() else self.a.value
+        for e in value:
+            result, number = bitmap.shift(result, e.bits())
+            e.set(number)
+
+        if bitmap.size(result) > 0:
+            raise error.AssertionError(self, 'container.update', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
+        return self
 
     # loading
     def __deserialize_consumer__(self, consumer, generator):
@@ -556,6 +581,10 @@ class container(type):
         for res in self.value: yield res
 
     def __setitem__(self, index, value):
+        ## validate the index
+        #if not (0 <= index < len(self.value)):
+        #    raise IndexError(self, 'container.__setitem__', index)
+
         # if it's a pbinary element
         if isinstance(value, type):
             res = self.value[index].getposition()
@@ -581,8 +610,8 @@ class container(type):
         if not isinstance(value, six.integer_types):
             raise error.UserError(self, 'container.__setitem__', message='tried to assign to index {:d} with an unknown type {:s}'.format(index, value.__class__))
 
-        # update a pbinary.type with the provided value clamped
-        return res.__setvalue__(value & (2**res.bits()-1))
+        # update a pbinary.type with the provided value
+        return res.set(value)
 
 ### generics
 class _array_generic(container):
@@ -645,7 +674,15 @@ class _array_generic(container):
         return u"{:s}[{:s}]".format(result, str(count))
 
     def __getindex__(self, index):
-        return self.__getindex__(int(index)) if isinstance(index, six.string_types) else index
+        # check to see if the user gave us a bad type
+        if not isinstance(index, six.integer_types):
+            raise TypeError(self, '_array_generic.__getindex__', "Invalid type {:s} specified for index of {:s}.".format(index.__class__, self.typename()))
+
+        ## validate the index
+        #if not(0 <= index < len(self.value)):
+        #    raise IndexError(self, '_array_generic.__getindex__', index)
+
+        return index
 
     # method overloads
     def __len__(self):
@@ -698,12 +735,12 @@ class _struct_generic(container):
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
         if any(alias.lower() == name.lower() for _, name in self._fields_):
-            raise error.UserError(self, '_struct_generic.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
+            raise error.UserError(self, '_struct_generic.__contains__', message='Not allowed to remove {:s} from list of aliases.'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
     def __getindex__(self, name):
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_struct_generic.__getindex__', message='Element names must be of a str type.')
+            raise error.UserError(self, '_struct_generic.__getindex__', message='Element names must inherit from the `basestring` type. : {!r}'.format(name.__class__))
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
@@ -883,27 +920,29 @@ class array(_array_generic):
         result.setposition(result.getposition(), recurse=True)
         return result
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, *value):
+        value, = value
         if self.initializedQ():
             iterable = iter(value) if isinstance(value, (tuple, list)) and len(value) > 0 and isinstance(value[0], tuple) else iter(enumerate(value))
-            for idx, val in enumerate(value):
-                if istype(val) or ptype.isresolveable(val) or isinstance(val, type):
-                    self.value[idx] = result.new(val, __name__=str(idx))
+            for idx, value in iterable:
+                if istype(value) or ptype.isresolveable(value) or isinstance(value, type):
+                    self.value[idx] = self.new(value, __name__=str(idx))
                 else:
-                    self[idx] = val
+                    self[idx] = value
                 continue
             self.setposition(self.getposition(), recurse=True)
             return self
 
         self.value = result = []
-        for idx, val in enumerate(value):
-            if istype(val) or ptype.isresolveable(val):
-                res = self.new(val, __name__=str(idx)).a
-            elif isinstance(val, type):
-                res = self.new(val, __name__=str(idx))
+        for idx, value in enumerate(value):
+            if istype(value) or ptype.isresolveable(value):
+                res = self.new(value, __name__=str(idx)).a
+            elif isinstance(value, type):
+                res = self.new(value, __name__=str(idx))
             else:
-                res = self.new(self._object_, __name__=str(idx)).a.__setvalue__(val)
+                res = self.new(self._object_, __name__=str(idx)).a.set(value)
             self.value.append(res)
+
         self.length = len(self.value)
         return self
 
@@ -985,7 +1024,7 @@ class struct(_struct_generic):
 
     def __setvalue__(self, *_, **individual):
         result = self
-        value, = _ if _ else ((),)
+        value, = _ or ((),)
 
         def assign((index, value)):
             if istype(value) or ptype.isresolveable(value):
@@ -995,7 +1034,7 @@ class struct(_struct_generic):
                 k = result.value[index].__name__
                 result.value[index] = result.new(value, __name__=k)
             else:
-                result.value[index].__setvalue__(value)
+                result.value[index].set(value)
             return
 
         if result.initializedQ():
@@ -1389,7 +1428,7 @@ def new(pb, **attrs):
     '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
     # create a partial type
     if istype(pb):
-        Log.debug("new : {:s} : Instantiating type as partial".format(pb.typename()))
+        #Log.debug("new : {:s} : Instantiating type as partial".format(pb.typename()))
         t = ptype.clone(partial, _object_=pb)
         return t(**attrs)
 
@@ -1453,8 +1492,8 @@ if __name__ == '__main__':
                 return True
             except Failure,e:
                 print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            #except Exception,e:
+            #    print '%s: %r : %r'% (name,Failure(), e)
             return False
         TestCaseList.append(harness)
         return fn
@@ -2507,7 +2546,7 @@ if __name__ == '__main__':
                 (e, 'third'),
             ]
         x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
-        if x.get()[2].str() == 'd':
+        if x.item('third').str() == 'd':
             raise Success
 
     @TestCase
@@ -2526,7 +2565,7 @@ if __name__ == '__main__':
             length, _object_ = 4, e
 
         x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
-        if ''.join(map(operator.methodcaller('str'), x.get())) == 'dead':
+        if ''.join(map(operator.methodcaller('str'), map(x.item, range(len(x))))) == 'dead':
             raise Success
 
 if __name__ == '__main__':

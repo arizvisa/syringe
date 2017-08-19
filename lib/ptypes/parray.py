@@ -166,12 +166,12 @@ class _parray_generic(ptype.container):
 
     def __setitem__(self, index, value):
         if isinstance(index, slice):
-            val = itertools.repeat(value) if isinstance(value,ptype.generic) else iter(value)
-            origvalue = self.value[:]
+            ivalue = itertools.repeat(value) if isinstance(value,ptype.generic) else iter(value)
+            res = self.value[:]
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                realidx = self.__getindex__(idx)
-                self.value[realidx] = six.next(val)
-            return origvalue.__getitem__(index)
+                idx = self.__getindex__(idx)
+                self.value[idx] = six.next(ivalue)
+            return res.__getitem__(index)
 
         idx = self.__getindex__(index)
         result = super(_parray_generic, self).__setitem__(idx, value)
@@ -314,23 +314,24 @@ class type(_parray_generic):
             raise error.LoadError(self, exception=e)
         raise error.AssertionError(self, 'type.load')
 
-    def __setvalue__(self, value):
-        """Update self with the contents of the list ``value``"""
+    def __setvalue__(self, *value):
+        """Update self with the contents of the first argument in ``value``"""
+        value, = value
         if isinstance(value, dict):
-            items = value.items()
+            iterable = value.items()
         elif self.initializedQ() and len(self) == len(value):
             return super(type, self).__setvalue__(*value)
         else:
-            items = enumerate(value)
+            iterable = enumerate(value)
 
         self.value = []
-        for idx,val in items:
-            if ptype.isresolveable(val) or ptype.istype(val):
-                res = self.new(val, __name__=str(idx)).a
-            elif isinstance(val,ptype.generic):
-                res = val
+        for idx, ivalue in iterable:
+            if ptype.isresolveable(ivalue) or ptype.istype(ivalue):
+                res = self.new(ivalue, __name__=str(idx)).a
+            elif isinstance(ivalue, ptype.generic):
+                res = ivalue
             else:
-                res = self.new(self._object_,__name__=str(idx)).a
+                res = self.new(self._object_, __name__=str(idx)).a
             self.value.append(res)
 
         result = super(type, self).__setvalue__(*value)
@@ -338,10 +339,10 @@ class type(_parray_generic):
         return self
 
     def __getstate__(self):
-        return super(type, self).__getstate__(),self._object_,self.length
+        return super(type, self).__getstate__(), self._object_, self.length
 
     def __setstate__(self, state):
-        state,self._object_,self.length = state
+        state, self._object_, self.length = state
         super(type, self).__setstate__(state)
 
 class terminated(type):

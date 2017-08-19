@@ -270,7 +270,7 @@ class type(_pstruct_generic):
 
     def __setvalue__(self, *_, **individual):
         result = self
-        value, = _ if _ else ((),)
+        value, = _ or ((),)
 
         if result.initializedQ():
             if isinstance(value, dict):
@@ -288,7 +288,7 @@ class type(_pstruct_generic):
                 elif isinstance(v,ptype.generic):
                     result.value[idx] = self.new(v, __name__=k)
                 else:
-                    result.value[idx].__setvalue__(v)
+                    result.value[idx].set(v)
                 continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
@@ -461,10 +461,10 @@ if __name__ == '__main__':
     @TestCase
     def test_structure_set_uninitialized_complex():
         class sa(pstruct.type):
-            _fields_ = [(pint.uint16_t,'b')]
+            _fields_ = [(pint.uint16_t, 'b')]
 
         class st(pstruct.type):
-            _fields_ = [(pint.uint32_t, 'a'),(sa,'b')]
+            _fields_ = [(pint.uint32_t, 'a'), (sa, 'b')]
 
         a = st(source=provider.empty())
         a.set((5, (10,)))
