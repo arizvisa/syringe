@@ -31,7 +31,7 @@ class _IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
     def summary(self):
         return repr(self.getOrdinal())
 
-class IMAGE_IMPORT_NAME_TABLE_ORDINAL32(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
+class IMAGE_IMPORT_NAME_TABLE_ORDINAL(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
     _fields_ = [
         (1, 'OrdinalFlag'),   # True if an ordinal
         (15, 'Zero'),
@@ -43,7 +43,6 @@ class IMAGE_IMPORT_NAME_TABLE_ORDINAL64(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
         (47, 'Zero'),
         (16, 'Ordinal Number'),
     ]
-IMAGE_IMPORT_NAME_TABLE_ORDINAL = IMAGE_IMPORT_NAME_TABLE_ORDINAL32 if ptypes.Config.integer.size == 4 else IMAGE_IMPORT_NAME_TABLE_ORDINAL64
 
 class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
     byteorder = ptypes.config.byteorder.bigendian
@@ -69,7 +68,7 @@ class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
         hint,string = self.getName()
         return '({:d}, {:s})'.format(hint, repr(string) if string is None else '"%s"'%string)
 
-class IMAGE_IMPORT_NAME_TABLE_NAME32(_IMAGE_IMPORT_NAME_TABLE_NAME):
+class IMAGE_IMPORT_NAME_TABLE_NAME(_IMAGE_IMPORT_NAME_TABLE_NAME):
     _fields_ = [
         (1, 'OrdinalFlag'),
         (31, 'Name'),
@@ -80,7 +79,6 @@ class IMAGE_IMPORT_NAME_TABLE_NAME64(_IMAGE_IMPORT_NAME_TABLE_NAME):
         (32, 'Zero'),
         (31, 'Name'),
     ]
-IMAGE_IMPORT_NAME_TABLE_NAME = IMAGE_IMPORT_NAME_TABLE_NAME32 if ptypes.Config.integer.size == 4 else IMAGE_IMPORT_NAME_TABLE_NAME64
 
 class _IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
     def ordinalQ(self):
@@ -98,11 +96,11 @@ class _IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
             return self['Ordinal'].getOrdinal()
         return self['Name'].getName()
 
-class IMAGE_IMPORT_NAME_TABLE_ENTRY32(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
+class IMAGE_IMPORT_NAME_TABLE_ENTRY(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
     _value_ = uint32
     _fields_ = [
-        (IMAGE_IMPORT_NAME_TABLE_NAME32, 'Name'),
-        (IMAGE_IMPORT_NAME_TABLE_ORDINAL32, 'Ordinal'),
+        (IMAGE_IMPORT_NAME_TABLE_NAME, 'Name'),
+        (IMAGE_IMPORT_NAME_TABLE_ORDINAL, 'Ordinal'),
     ]
 class IMAGE_IMPORT_NAME_TABLE_ENTRY64(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
     _value_ = uint64
@@ -110,40 +108,37 @@ class IMAGE_IMPORT_NAME_TABLE_ENTRY64(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
         (IMAGE_IMPORT_NAME_TABLE_NAME64, 'Name'),
         (IMAGE_IMPORT_NAME_TABLE_ORDINAL64, 'Ordinal'),
     ]
-IMAGE_IMPORT_NAME_TABLE_ENTRY = IMAGE_IMPORT_NAME_TABLE_ENTRY32 if ptypes.Config.integer.size == 4 else IMAGE_IMPORT_NAME_TABLE_ENTRY64
 
 class _IMAGE_IMPORT_ADDRESS_TABLE(parray.terminated):
     def isTerminator(self, value):
         return value.int() == 0 if self.length is None else self.length < len(self.value)
 
-class IMAGE_IMPORT_ADDRESS_TABLE32(_IMAGE_IMPORT_ADDRESS_TABLE):
+class IMAGE_IMPORT_ADDRESS_TABLE(_IMAGE_IMPORT_ADDRESS_TABLE):
     _object_ = uint32
 class IMAGE_IMPORT_ADDRESS_TABLE64(_IMAGE_IMPORT_ADDRESS_TABLE):
     _object_ = uint64
-IMAGE_IMPORT_ADDRESS_TABLE = IMAGE_IMPORT_ADDRESS_TABLE32 if ptypes.Config.integer.size == 4 else IMAGE_IMPORT_ADDRESS_TABLE64
 
 class _IMAGE_IMPORT_NAME_TABLE(parray.terminated):
     _object_ = uint32
     def isTerminator(self, value):
         return True if int(value['Name']['Name']) == 0 else False
 
-class IMAGE_IMPORT_NAME_TABLE32(_IMAGE_IMPORT_NAME_TABLE):
-    _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY32
+class IMAGE_IMPORT_NAME_TABLE(_IMAGE_IMPORT_NAME_TABLE):
+    _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
 class IMAGE_IMPORT_NAME_TABLE64(_IMAGE_IMPORT_NAME_TABLE):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY64
-IMAGE_IMPORT_NAME_TABLE = IMAGE_IMPORT_NAME_TABLE32 if ptypes.Config.integer.size == 4 else IMAGE_IMPORT_NAME_TABLE64
 
 class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     def __IAT(self):
-        res = IMAGE_IMPORT_ADDRESS_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_ADDRESS_TABLE32
-        if self.source in [getattr(ptypes.provider,'Ida',None)]:
+        res = IMAGE_IMPORT_ADDRESS_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_ADDRESS_TABLE
+        if hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida:
             entry = self.getparent(IMAGE_IMPORT_DIRECTORY_ENTRY)
-            int = entry['INT'].li.d.l
-            return dyn.clone(res, length=len(int))
+            count = entry['INT'].li.d.l
+            return dyn.clone(res, length=len(count))
         return res
 
     _fields_ = [
-        ( virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE32, type=dword), 'INT'),  # FIXME
+        ( virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE, type=dword), 'INT'),  # FIXME
         ( TimeDateStamp, 'TimeDateStamp' ),
         ( dword, 'ForwarderChain' ),
         ( virtualaddress(pstr.szstring, type=dword), 'Name'),
@@ -192,17 +187,18 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
 
 class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
     def __IAT(self):
-        if self.source in [getattr(ptypes.provider,'Ida',None)]:
+        res = IMAGE_IMPORT_ADDRESS_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_ADDRESS_TABLE
+        if hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida:
             entry = self.getparent(IMAGE_DELAYLOAD_DIRECTORY_ENTRY)
-            int = entry['DINT'].li.d.l
-            return dyn.clone(IMAGE_IMPORT_ADDRESS_TABLE, length=len(int))
-        return IMAGE_IMPORT_ADDRESS_TABLE
+            count = entry['DINT'].li.d.l
+            return dyn.clone(res, length=len(count))
+        return res
     _fields_ = [
         ( dword, 'Attributes'),
         ( virtualaddress(pstr.szstring), 'Name'),
         ( virtualaddress(dword), 'ModuleHandle'),
         ( virtualaddress(__IAT), 'DIAT'),
-        ( virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
+        ( lambda s: virtualaddress(IMAGE_IMPORT_NAME_TABLE64) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
         ( virtualaddress(__IAT), 'BDIAT' ),
         ( virtualaddress(__IAT), 'UDAT'),
         ( TimeDateStamp, 'TimeStamp'),

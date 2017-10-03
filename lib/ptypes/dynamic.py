@@ -168,7 +168,6 @@ def array(type, count, **kwds):
     '''
     returns an array of the specified length containing elements of the specified type
     '''
-    count = int(count)
     if not isinstance(count, six.integer_types):
         t = parray.type(_object_=type,length=count)
         raise error.UserError(t, 'array', message='Argument count must be integral : {:s} -> {!r}'.format(count.__class__, count))

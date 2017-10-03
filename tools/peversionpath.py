@@ -15,17 +15,20 @@ def parseResourceDirectory(filename):
     sections = pe['Sections']
     datadirectory = pe['DataDirectory']
     resourceDirectory = datadirectory[2]
-    return resourceDirectory['Address'].d
+    if resourceDirectory['Address'].int():
+        return resourceDirectory['Address'].d
+    raise ptypes.error.LoadError(resourceDirectory)
+
+def getChildByKey(versionInfo, szKey):
+    return next(ch['Child'] for ch in versionInfo['Children'] if ch['Child']['szKey'].str() == szKey)
 
 def extractLgCpIds(versionInfo):
-    _,vfi = versionInfo['Children']
-    vfi = vfi['Child']
+    vfi = getChildByKey(versionInfo, u'VarFileInfo')
     res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in vfi['Children']) ))
     return tuple((cp.int(), lg.int()) for cp, lg in res)
 
 def getStringTable(versionInfo, (Lgid, Cp)):
-    sfi,_ = versionInfo['Children']
-    sfi = sfi['Child']
+    sfi = getChildByKey(versionInfo, u'StringFileInfo')
     LgidCp = '{:04X}{:04X}'.format(Lgid,Cp)
     for st in sfi['Children']:
         st = st['Child']

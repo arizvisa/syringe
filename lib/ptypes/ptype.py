@@ -289,6 +289,7 @@ def force(t, self, chain=[]):
 
     # of type pbinary.type. we insert a partial node into the tree
     if pbinary.istype(t):
+        Log.debug("{:s}.force : {:s} : Implicitly promoting binary type `{:s}` to partial for storing in non-binary container.".format(__name__, self.instance(), t.typename()))
         t = clone(pbinary.partial, _object_=t)
         return t
 
@@ -494,7 +495,7 @@ class _base_generic(object):
         if self.initializedQ():
             try:
                 size = self.size()
-            except InitializationError:
+            except error.InitializationError:
                 pass
             else:
                 key = 'overcommit'  if self.blocksize() < size else 'underload' if self.blocksize() > size else None
@@ -763,7 +764,7 @@ class generic(_base_generic):
 
         To compare the actual contents, see .compare(other)
         """
-        if self.initializedQ() != other.initializedQ():
+        if not isinstance(other) or self.initializedQ() != other.initializedQ():
             return -1
         if self.initializedQ():
             return 0 if (self.getposition(),self.serialize()) == (other.getposition(),other.serialize()) else -1
@@ -995,17 +996,21 @@ class type(base):
             except error.NotFoundError:
                 parent = self.getparent(None)
 
+            # check if child element is child of encoded_t which doesn't get checked since encoded types can have their sizes changed.
+            if __builtin__.isinstance(parent, encoded_t):
+                pass
+
             # check that child element is actually within bounds of parent
-            if parent is not None and parent.getoffset() > self.getoffset():
-                Log.info("type.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), parent.getoffset(), self.getoffset()))
+            elif parent is not None and parent.getoffset() > self.getoffset():
+                Log.info("type.serialize : {:s} : child element is outside the bounds of parent element {:s}. : {:#x} > {:#x}".format(self.instance(), parent.instance(), parent.getoffset(), self.getoffset()))
 
             # clamp the blocksize if it pushes the child element outside the bounds of the parent
-            elif __builtin__.isinstance(parent,container):
+            elif __builtin__.isinstance(parent, container):
                 parentSize = parent.blocksize()
                 childOffset = self.getoffset() - parent.getoffset()
                 maxElementSize = parentSize - childOffset
                 if res > maxElementSize:
-                    Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
+                    Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
                     res = maxElementSize
 
             if res > six.MAXSIZE:
@@ -1013,7 +1018,7 @@ class type(base):
                 return ''
 
             # generate padding up to the blocksize
-            Log.info('type.serialize : {:s} : Padding data due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), res))
+            Log.debug('type.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially uninitialized during serialization.'.format(self.instance(), res))
             padding = utils.padding.fill(res if res > 0 else 0, self.padding)
 
             # prefix beginning of padding with any data that element contains
@@ -1025,7 +1030,7 @@ class type(base):
         # pad up to the .blocksize() if our length doesn't meet the minimum
         res = self.blocksize()
         if len(data) < res:
-            Log.info('type.serialize : {:s} : Padding data due to element being partially initialized during serialization : {:#x}'.format(self.instance(), res))
+            Log.debug('type.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially initialized during serialization.'.format(self.instance(), res))
             padding = utils.padding.fill(res-len(data), self.padding)
             data += padding
         return data
@@ -1051,7 +1056,7 @@ class type(base):
         """
         if self.initializedQ() or self.value:
             return len(self.value)
-        Log.info("type.size : {:s} : Unable to get size of ptype.type, as object is still uninitialized.".format(self.instance()))
+        Log.info("type.size : {:s} : Unable to determine size of ptype.type, as object is still uninitialized.".format(self.instance()))
         return 0
 
     def blocksize(self):
@@ -1253,9 +1258,13 @@ class container(base):
             if parent is None or not __builtin__.isinstance(parent.value, list) or self not in parent.value:
                 return data
 
+        # check if child element is child of encoded_t which doesn't get checked since encoded types can have their sizes changed.
+        if __builtin__.isinstance(parent, encoded_t):
+            pass
+
         # check that child element is actually within bounds of parent
-        if parent is not None and parent.getoffset() > self.getoffset():
-            Log.info("container.serialize : {:s} : child element is outside the bounds of parent element. : {:#x} > {:#x}".format(self.instance(), parent.getoffset(), self.getoffset()))
+        elif parent is not None and parent.getoffset() > self.getoffset():
+            Log.info("container.serialize : {:s} : child element is outside the bounds of parent element {:s}. : {:#x} > {:#x}".format(self.instance(), parent.instance(), parent.getoffset(), self.getoffset()))
 
         # clamp the blocksize if we're outside the bounds of the parent
         elif __builtin__.isinstance(parent, container):
@@ -1263,7 +1272,7 @@ class container(base):
             childOffset = self.getoffset() - parent.getoffset()
             maxElementSize = parentSize - childOffset
             if res > maxElementSize:
-                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), res, maxElementSize, parentSize))
+                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
                 res = maxElementSize
 
         # if the blocksize is larger than maxsize, then ignore the padding
@@ -1273,7 +1282,7 @@ class container(base):
 
         # if the data is smaller then the blocksize, then pad the rest in
         if len(data) < res:
-            Log.info('container.serialize : {:s} : Padding data due to element being partially uninitialized during serialization : {:#x}'.format(self.instance(), res))
+            Log.debug('container.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially uninitialized during serialization.'.format(self.instance(), res))
             data += utils.padding.fill(res - len(data), self.padding)
 
         # if it's larger then the blocksize, then warn the user about it
@@ -1649,8 +1658,9 @@ class definition(object):
         return cls.cache[type]
 
     @classmethod
-    def contains(cls, type):
+    def has(cls, type):
         return type in cls.cache
+    contains = has
 
     @classmethod
     def get(cls, *type, **unknownattrs):
@@ -1823,7 +1833,7 @@ class wrapper_t(type):
             return self.object.size()
         elif self.__value__ is not None:
             return len(self.__value__)
-        Log.info("wrapper_t.size : {:s} : Unable to get size of ptype.wrapper_t, as object is still uninitialized.".format(self.instance()))
+        Log.info("wrapper_t.size : {:s} : Unable to determine size of ptype.wrapper_t, as object is still uninitialized.".format(self.instance()))
         return 0
 
     def classname(self):

@@ -14,10 +14,10 @@ def setsource(prov):
 ## globally changing the byte order
 def setbyteorder(endianness):
     '''
-    _Globally_ sets the integer byte order to the endianness specified.
-    Can be either config.byteorder.bigendian or config.byteorder.littleendian
+    Sets the integer byte order to the endianness specified for all non-binary types.
+    Can be either config.byteorder.bigendian or config.byteorder.littleendian.
     '''
-    [ module.setbyteorder(endianness) for module in (ptype,pint,pfloat,pbinary) ]
+    [ module.setbyteorder(endianness) for module in (ptype,pint,pfloat) ]
 
 ## some things people people might find useful
 #from ptype import debug,debugrecurse

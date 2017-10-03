@@ -67,8 +67,8 @@ types of definitions. This enumeration type has the following interface:
         ]
 
         @classmethod
-        def names(cls):
-            '''Return the names of each enumeration.'''
+        def mapping(cls):
+            '''Return the enumeration values as a dictionary.'''
         @classmethod
         def enumerations(cls):
             '''Return the values of each enumeration.'''
@@ -136,6 +136,7 @@ Example usage of pint.enum:
     print instance.str()
 """
 import six
+import functools, operator, itertools
 from six.moves import builtins
 
 from . import ptype,bitmap,config,error,utils
@@ -258,7 +259,7 @@ class uinteger_t(type):
     '''Provides unsigned integer support'''
     def summary(self, **options):
         res = self.int()
-        return '{:-#0{:d}x} ({:d})'.format(res, 2+self.length*2, res)
+        return '{:-#0{:d}x} ({:d})'.format(res, 2+self.blocksize()*2, res)
 
     def __getvalue__(self):
         '''Convert integer type into a number'''
@@ -271,7 +272,7 @@ class sinteger_t(type):
     '''Provides signed integer support'''
     def summary(self, **options):
         res = self.int()
-        return u"{:+#0{:d}x} ({:d})".format(res, 3+self.length*2, res)
+        return u"{:+#0{:d}x} ({:d})".format(res, 3+self.blocksize()*2, res)
 
     def __getvalue__(self):
         if not self.initializedQ():
@@ -329,61 +330,100 @@ class enum(type):
     i.e. class myinteger(pint.enum, pint.uint32_t): pass
 
     Settable properties:
-        _values_:array( tuple( name, value ), ... )<w>
+        _values_:array( tuple( name, value ), ... )
             This contains which enumerations are defined.
     '''
-    _values_ = []
 
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)
 
+        if getattr(self.__class__, '__pint_enum_validated__', False):
+            return
+        cls = self.__class__
+
+        # ensure that the enumeration has ._values_ defined
+        if not hasattr(cls, '_values_'):
+            Log.warning("{:s}.enum : {:s} : {:s}._values_ has no enumerations defined. Assigning a default empty list to class.".format(__name__, self.classname(), self.typename()))
+            self._values_ = cls._values_ = []
+
         # invert ._values_ if they're defined backwards
-        if len(self._values_):
-            name, value = self._values_[0]
+        if len(cls._values_):
+            name, value = cls._values_[0]
             if isinstance(value, six.string_types):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
-                self._values_ = [(k,v) for v,k in self._values_]
+                self._values_ = cls._values_ = [(k, v) for v, k in cls._values_[:]]
+            pass
 
-        # verify the types are correct for ._values_
-        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k,v in self._values_):
-            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.typename(), six.string_types, int))
+        # check that enumeration's ._values_ are defined correctly
+        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k, v in cls._values_):
+            res = map(operator.attrgetter('__name__'), six.string_types)
+            stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+
+            res = map(operator.attrgetter('__name__'), six.integer_types)
+            inttypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+
+            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
+
+        # collect duplicate values and give a warning if there are any found for a name
+        res = {}
+        for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
+            res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
+        for val, items in res.viewitems():
+            if len(items) > 1:
+                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
+            continue
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
+
+        # cache the validation for the class so we don't need to check anything again
+        if cls is not enum:
+            cls.__pint_enum_validated__ = True
         return
 
     @classmethod
-    def byvalue(cls, value):
+    def byvalue(cls, value, *default):
         '''Lookup the string in an enumeration by it's first-defined value'''
-        try: return six.next(k for k, v in cls._values_ if v == value)
-        except StopIteration: pass
+        if len(default) > 1:
+            raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
+
+        try:
+            return six.next(k for k, v in cls._values_ if v == value)
+        except StopIteration:
+            if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byvalue', value)
     byValue = byvalue
 
     @classmethod
-    def byname(cls, name):
+    def byname(cls, name, *default):
         '''Lookup the value in an enumeration by it's first-defined name'''
-        try: return six.next(v for k,v in cls._values_ if k == name)
-        except StopIteration: pass
+        if len(default) > 1:
+            raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
+
+        try:
+            return six.next(v for k, v in cls._values_ if k == name)
+        except StopIteration:
+            if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byname', name)
     byName = byname
 
     def __getattr__(self, name):
         # if getattr fails, then assume the user wants the value of
         #     a particular enum value
-        try: return self.byname(name)
+        try:
+            res = self.byname(name)
+            Log.warning("{:s}.enum : {:s} : Using {:s}.attribute for fetching the value for `{:s}` is deprecated.".format(__name__, self.classname(), self.typename(), name))
+            return res
         except KeyError: pass
         raise AttributeError(enum, self, name)
 
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
         res = self.int()
-        try: return self.byvalue(res)
-        except KeyError: pass
-        return u"{:x}".format(res)
+        return self.byvalue(res, u"{:x}".format(res))
 
     def summary(self, **options):
         res = self.int()
-        try: return self.byvalue(res) + u"({:#x})".format(res)
+        try: return u"{:s}({:#x})".format(self.byvalue(res), res)
         except KeyError: pass
         return super(enum, self).summary()
 
@@ -397,17 +437,15 @@ class enum(type):
         res = self.byname(name)
         return res == self.int()
 
-    ## XXX: not sure what to name these 2 methods, but i've needed them on numerous occasions
-    ##      for readability purposes
-    @classmethod
-    def names(cls):
-        '''Return all the names that have been defined'''
-        return [k for k,v in cls._values_]
-
     @classmethod
     def enumerations(cls):
-        '''Return all values that have been defined in this'''
-        return [v for k,v in cls._values_]
+        '''Return all values in enumeration as a set.'''
+        return {v : k for k, v in cls._values_}
+
+    @classmethod
+    def mapping(cls):
+        '''Return potential enumeration values as a dictionary.'''
+        return {k : v for k, v in cls._values_}
 
 # update our current state
 for k, v in globals().items():

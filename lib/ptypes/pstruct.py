@@ -197,7 +197,7 @@ class type(_pstruct_generic):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.value,path = []," -> ".join(self.backtrace())
+            self.value, path, n = [], " -> ".join(self.backtrace()), None
             self.__fastindex = {}
 
             try:
@@ -228,8 +228,10 @@ class type(_pstruct_generic):
                     ofs += bs
 
             except KeyboardInterrupt:
-                # XXX: some of these variables might not be defined due to a race. who cares...
                 path = " -> ".join(self.backtrace())
+                if n is None:
+                    Log.warn("type.load : {:s} : User interrupt while attempting to load first element. : {:s}".format(self.instance(), path))
+                    return self
                 Log.warn("type.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path))
                 return self
 

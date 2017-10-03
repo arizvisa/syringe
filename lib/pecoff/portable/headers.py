@@ -84,9 +84,36 @@ def virtualaddress(target, **kwds):
         return dyn.opointer(target, calculateRelativeAddress, kwds.pop('type'), **kwds)
     return dyn.opointer(target, calculateRelativeAddress, **kwds)
 
-class DataDirectoryEntry(pstruct.type): pass
+class IMAGE_DATA_DIRECTORY(pstruct.type):
+    def _object_(self):
+        # called by 'Address'
+        res = self['Size'].int()
+        return dyn.block(res)
 
-class SectionTable(pstruct.type):
+    def containsaddress(self, addr):
+        '''if an address is within our boundaries'''
+        start = self['Address'].int()
+        end = start + self['Size'].int()
+        return start <= addr < end
+
+    def valid(self):
+        return self['Size'].int() != 0
+
+    def __Address(self):
+        t = self._object_
+        if ptypes.iscontainer(t):
+            return self.addressing(dyn.clone(t, blocksize=lambda s: s.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int()), type=uint32)
+        return self.addressing(t, type=uint32)
+
+    _fields_ = [
+        (__Address, 'Address'),
+        (uint32, 'Size')
+    ]
+
+    def summary(self):
+        return 'Address={:#x} Size={:#x}'.format(self['Address'].int(), self['Size'].int())
+
+class IMAGE_SECTION_HEADER(pstruct.type):
     """PE Executable Section Table Entry"""
     class IMAGE_SCN(pbinary.flags):
         _fields_ = [
@@ -198,12 +225,13 @@ class SectionTable(pstruct.type):
 
     def getaddressbyoffset(self, offset):
         return offset - self['PointerToRawData'].int() + self['VirtualAddress'].int()
+SectionTable = IMAGE_SECTION_HEADER
 
 class SectionTableArray(parray.type):
-    _object_ = SectionTable
+    _object_ = IMAGE_SECTION_HEADER
 
     def getsectionbyaddress(self, address):
-        """Identify the `SectionTable` by the va specified in /address/"""
+        """Identify the `IMAGE_SECTION_HEADER` by the va specified in /address/"""
         sections = [n for n in self if n.containsaddress(address)]
         if len(sections) > 1:
             cls = self.__class__
@@ -213,7 +241,7 @@ class SectionTableArray(parray.type):
         raise KeyError('Address %x not in a known section'% (address))
 
     def getsectionbyoffset(self, offset):
-        """Identify the `SectionTable` by the file-offset specified in /offset/"""
+        """Identify the `IMAGE_SECTION_HEADER` by the file-offset specified in /offset/"""
         sections = [n for n in self if n.containsoffset(offset)]
         if len(sections) > 1:
             logging.warn("{:s} : More than one section was returned for offset {:x}".format('.'.join((cls.__module__, cls.__name__)), address))
@@ -231,7 +259,7 @@ class SectionTableArray(parray.type):
         return self.getstringbyoffset( section.getoffsetbyaddress(address) )
 
     def getsectionbyname(self, name):
-        """Return the `SectionTable` specified by /name/"""
+        """Return the `IMAGE_SECTION_HEADER` specified by /name/"""
         sections = [n for n in self if n['Name'].str() == name]
         if len(sections) > 1:
             logging.warn("{:s} : More than one section was returned for name {!r}".format('.'.join((cls.__module__, cls.__name__)), name))
@@ -251,14 +279,23 @@ class SectionTableArray(parray.type):
     def repr(self, **options):
         return self.details(**options)
 
-class OptionalHeader(pstruct.type):
+class IMAGE_OPTIONAL_HEADER(pstruct.type):
     """PE Executable Optional Header"""
     class DllCharacteristics(pbinary.flags):
         # TODO: GUARD_CF
         _fields_ = [
-            (1, 'TERMINAL_SERVER_AWARE'), (1, 'reserved_1'), (1, 'WDM_DRIVER'),
-            (1, 'reserved_3'), (1, 'NO_BIND'), (1, 'NO_SEH'), (1, 'NO_ISOLATION'),
-            (1, 'NX_COMPAT'), (1, 'FORCE_INTEGRITY'), (1, 'DYNAMIC_BASE'), (6, 'reserved_10'),
+            (1, 'TERMINAL_SERVER_AWARE'),
+            (1, 'GUARD_CF'),
+            (1, 'WDM_DRIVER'),
+            (1, 'APPCONTAINER'),
+            (1, 'NO_BIND'),
+            (1, 'NO_SEH'),
+            (1, 'NO_ISOLATION'),
+            (1, 'NX_COMPAT'),
+            (1, 'FORCE_INTEGRITY'),
+            (1, 'DYNAMIC_BASE'),
+            (1, 'HIGH_ENTROPY_VA'),
+            (5, 'reserved_11'),
         ]
 
     class Subsystem(pint.enum, uint16):
@@ -309,8 +346,9 @@ class OptionalHeader(pstruct.type):
         ( uint32, 'LoaderFlags' ),
         ( uint32, 'NumberOfRvaAndSizes' ),
     ]
+OptionalHeader = IMAGE_OPTIONAL_HEADER64 = IMAGE_OPTIONAL_HEADER
 
-class FileHeader(pstruct.type):
+class IMAGE_FILE_HEADER(pstruct.type):
     """PE Executable File Header"""
     class Characteristics(pbinary.flags):
         _fields_ = [
@@ -330,6 +368,7 @@ class FileHeader(pstruct.type):
         (word, 'SizeOfOptionalHeader'),
         (pbinary.littleendian(Characteristics), 'Characteristics')
     ]
+FileHeader = IMAGE_FILE_HEADER
 
 class Certificate(pstruct.type):
     class wRevision(pint.enum, uint16):

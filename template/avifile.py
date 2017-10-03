@@ -118,7 +118,7 @@ class avih(pstruct.type):
         (pint.uint32_t, 'dwMicroSecPerFrame'),
         (pint.uint32_t, 'dwMaxBytesPerSec'),
         (pint.uint32_t, 'dwPaddingGranularity'),
-        (pbinary.new(AVIF, byteorder=ptypes.config.byteorder.littleendian), 'dwFlags'),
+        (pbinary.littleendian(AVIF), 'dwFlags'),
         (pint.uint32_t, 'dwTotalFrames'),
         (pint.uint32_t, 'dwInitialFrames'),
         (pint.uint32_t, 'dwStreams'),
@@ -199,7 +199,7 @@ class AviIndexEntry(pstruct.type):
         ]
     _fields_ = [
         (pint.sint32_t, 'ChunkId'),
-        (pbinary.new(AVIIF, byteorder=ptypes.config.byteorder.littleendian), 'Flags'),
+        (pbinary.littleendian(AVIIF), 'Flags'),
         (pint.sint32_t, 'Offset'),
         (pint.sint32_t, 'Size'),
     ]
@@ -219,7 +219,7 @@ class AVIOLDINDEX(pstruct.type):
         return cls().set(dwChunkID='{:02d}wb'.format(number), **fields)
     _fields_ = [
         (ID, 'dwChunkID'),
-        (pbinary.new(AviIndexEntry.AVIIF, byteorder=ptypes.config.byteorder.littleendian), 'dwFlags'),
+        (pbinary.littleendian(AviIndexEntry.AVIIF), 'dwFlags'),
         (pint.uint32_t, 'dwOffset'),
         (pint.uint32_t, 'dwSize'),
     ]

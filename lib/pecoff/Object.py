@@ -4,24 +4,24 @@ from ptypes import *
 from . import portable
 from .__base__ import *
 
-def open(filename, **kwds):
-    res = File()
-    res.source = ptypes.provider.file(filename, **kwds)
-    res.load()
-    res.filename = filename     # ;)
-    return res
+import logging
 
-class Signature(portable.FileHeader):
+def open(filename, **kwds):
+    logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))
+    res = File(filename=filename, source=ptypes.provider.file(filename, **kwds))
+    return res.load()
+
+class Signature(portable.IMAGE_FILE_HEADER):
     _fields_ = [
         (Machine, 'Machine'),
         (uint16, 'NumberOfSections'),
     ]
 
     def isImportSignature(self):
-        return all((self['Machine'].int() == self['Machine'].byname('UNKNOWN'), self['NumberOfSections'].int() == 0xffff))
+        return all((self['Machine'].li.int() == self['Machine'].byname('UNKNOWN'), self['NumberOfSections'].li.int() == 0xffff))
 
-class ObjectHeader(portable.FileHeader):
-    _fields_ = portable.FileHeader._fields_[2:]
+class ObjectHeader(portable.IMAGE_FILE_HEADER):
+    _fields_ = portable.IMAGE_FILE_HEADER._fields_[2:]
 
 class ImportHeader(pstruct.type):
     _fields_ = [

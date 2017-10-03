@@ -37,7 +37,7 @@ class Relocation(pstruct.type):
         symbol = symboltable[self['SymbolTableIndex'].int()]
 
         # figure out the section our symbol and our relocation points into
-        currentsection = self.getparent(headers.SectionTable)
+        currentsection = self.getparent(headers.IMAGE_SECTION_HEADER)
         sectionarray = currentsection.getparent(headers.SectionTableArray)
 
         # if the symbol is undefined or absolute, then assume the current section

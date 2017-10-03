@@ -5,7 +5,7 @@ from ..__base__ import *
 from . import headers
 from .headers import virtualaddress
 
-import struct,logging
+import array,logging
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
@@ -71,7 +71,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         data = section.data().load().serialize()
 
         block = data[offset: offset + 2*self['NumberOfNames'].int()]
-        return [ struct.unpack_from('H', block, offset)[0] for offset in xrange(0, len(block), 2) ]
+        return [ordinal for ordinal in array.array('H', block)]
 
     def getExportAddressTable(self):
         """Returns (export address table offset,[virtualaddress of each export]) from the export address table"""
@@ -86,18 +86,15 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         data = section.data().load().serialize()
 
         block = data[offset: offset + 4*self['NumberOfFunctions'].int()]
-        addresses = ( struct.unpack_from('L', block, offset)[0] for offset in xrange(0, len(block), 4) )
+        result = [ utils.strdup(data[va-sectionva:]) if exportdirectory.contains(va) else va for i, va in enumerate(array.array('L', block))]
 
-        result = []
-        for i,va in enumerate(addresses):
-            result.append( utils.strdup(data[va-sectionva:]) if exportdirectory.contains(va) else va )
         return address,result
 
     def iterate(self):
         """For each export, yields (offset of export, ordinal, name, ordinalString, virtualaddress)"""
         cls = self.__class__
 
-        if 0 in (self['AddressOfNames'].int(),self['AddressOfNameOrdinals'].int()):
+        if 0 in {self['AddressOfNames'].int(),self['AddressOfNameOrdinals'].int()}:
             base = self['Base'].int()
             ofs,eat = self.getExportAddressTable()
             for i,e in enumerate(eat):

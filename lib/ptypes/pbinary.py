@@ -260,9 +260,7 @@ class type(ptype.generic):
         return result
 
     def __eq__(self, other):
-        if isinstance(other, type):
-            return (self.initializedQ(), self.bitmap()) == (other.initializedQ(), other.bitmap())
-        return False
+        return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.bitmap() == other.bitmap()
 
     def __deserialize_consumer__(self, consumer):
         try: self.__setvalue__(consumer.consume(self.blockbits()))
@@ -325,53 +323,106 @@ class type(ptype.generic):
 
 # FIXME: mostly copied from pint.enum
 class enum(type):
-    width, _values_ = 0, []
+    '''
+    A pbinary.type for managing constants used when you define a binary type.
+    i.e. class myinteger(pbinary.enum): width = N
+
+    Settable properties:
+        width:int
+            This defines the width of the enumeration.
+        _values_:array( tuple( name, value ), ... )
+            This contains which enumerations are defined.
+    '''
 
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)
 
+        if getattr(self.__class__, '__pbinary_enum_validated__', False):
+            return
+        cls = self.__class__
+
+        # ensure that the enumeration has ._values_ defined
+        if not hasattr(cls, '_values_'):
+            Log.warning("{:s}.enum : {:s} : {:s}._values_ has no enumerations defined. Assigning a default empty list to class.".format(__name__, self.classname(), self.typename()))
+            self._values_ = cls._values_ = []
+
         # invert ._values_ if they're backwards
-        if len(self._values_):
-            name, value = self._values_[0]
+        if len(cls._values_):
+            name, value = cls._values_[0]
             if isinstance(value, six.string_types):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
-                self._values_ = [(k, v) for v, k in self._values_]
+                self._values_ = cls_values_ = [(k, v) for v, k in self._values_]
+            pass
 
-        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k, v in self._values_):
-            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be [({:s}, {:s}), ...]".format(self.typename(), str, int))
+        # check that enumeration's ._values_ are defined correctly
+        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k, v in cls._values_):
+            res = map(operator.attrgetter('__name__'), six.string_types)
+            stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+
+            res = map(operator.attrgetter('__name__'), six.integer_types)
+            inttypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+
+            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
+
+        # collect duplicate values and give a warning if there are any found for a name
+        res = {}
+        for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
+            res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
+        for val, items in res.viewitems():
+            if len(items) > 1:
+                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
+            continue
+
+        # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
+
+        # cache the validation for the class so we don't need to check anything again
+        if cls is not enum:
+            cls.__pbinary_enum_validated__ = True
+        return
 
     def blockbits(self):
-        return getattr(self, 'width', self.value[1] if self.value is not None else 0)
+        return getattr(self, 'width', bitmap.size(self.value) if bitmap.isbitmap(self.value) else 0)
 
     @classmethod
-    def byvalue(cls, value):
+    def byvalue(cls, value, *default):
         '''Lookup the string in an enumeration by it's first-defined value'''
-        try: return six.next(k for k, v in cls._values_ if v == value)
-        except StopIteration: pass
+        if len(default) > 1:
+            raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
+
+        try:
+            return six.next(k for k, v in cls._values_ if v == value)
+        except StopIteration:
+            if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byvalue', value)
     byValue = byvalue
 
     @classmethod
-    def byname(cls, name):
+    def byname(cls, name, *default):
         '''Lookup the value in an enumeration by it's first-defined name'''
-        try: return six.next(v for k,v in cls._values_ if k == name)
-        except StopIteration: pass
+        if len(default) > 1:
+            raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
+
+        try:
+            return six.next(v for k,v in cls._values_ if k == name)
+        except StopIteration:
+            if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byname', name)
     byName = byname
 
     def __getattr__(self, name):
         # if getattr fails, then assume the user wants the value of
         #     a particular enum value
-        try: return self.byname(name)
+        try:
+            res = self.byname(name)
+            Log.warning("{:s}.enum : {:s} : Using {:s}.attribute for fetching the value for `{:s}` is deprecated.".format(__name__, self.classname(), self.typename(), name))
+            return res
         except KeyError: pass
         raise AttributeError(enum, self, name)
 
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
         res = self.int()
-        try: return self.byvalue(res)
-        except KeyError: pass
-        return u"{:#x}".format(res)
+        return self.byvalue(res, u"{:x}".format(res))
 
     def summary(self, **options):
         res, (value, size) = self.int(), self.bitmap()
@@ -392,16 +443,15 @@ class enum(type):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
         return self.byname(name) == self.int()
 
-    ## XXX: not sure what to name these 2 methods, but i've needed them on numerous occasions
-    ##      for readability purposes
-    @classmethod
-    def names(cls):
-        '''Return all the names that have been defined'''
-        return [k for k, v in cls._values_]
     @classmethod
     def enumerations(cls):
-        '''Return all values that have been defined in this'''
-        return [v for k, v in cls._values_]
+        '''Return all values in enumeration as a set.'''
+        return {v for k, v in cls._values_}
+
+    @classmethod
+    def mapping(cls):
+        '''Return potential enumeration values as a dictionary.'''
+        return {k : v for k, v in cls._values_}
 
 class container(type):
     '''contains a list of variable-bit integers'''
@@ -528,10 +578,10 @@ class container(type):
         return bitmap.data(self.bitmap())
 
     def load(self, **attrs):
-        raise error.UserError(self, 'container.load', "Not allowed to load from a binary-type. traverse to a partial, and then call .load")
+        raise error.UserError(self, 'container.load', "Unable to load from a binary-type when reading from a byte-stream. Promote to a partial type and then .load().")
 
     def commit(self, **attrs):
-        raise error.UserError(self, 'container.commit', "Not allowed to commit from a binary-type")
+        raise error.UserError(self, 'container.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
 
     def alloc(self, **attrs):
         try:
@@ -561,7 +611,7 @@ class container(type):
 
     def cast(self, container, **attrs):
         if not iscontainer(container):
-            raise error.UserError(self, 'container.cast', message='unable to cast to type not of a pbinary.container ({:s})'.format(container.typename()))
+            raise error.UserError(self, 'container.cast', message='Unable to cast binary-type to a none-container. : {:s}'.format(container.typename()))
 
         source = bitmap.consumer()
         source.push(self.bitmap())
@@ -631,7 +681,7 @@ class _array_generic(container):
     def __details_initialized(self):
         _hex, _precision, value = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0, self.bitmap()
         result = bitmap.string(value)
-        return u"[{:s}] {:s} ({:s},{:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), ('0b'+result) if len(result) else '0b0', value[1])
+        return u"[{:s}] {:s} ({:s},{:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), ('0b'+result) if len(result) else '0b0', bitmap.size(value))
 
     def __details_uninitialized(self):
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
@@ -1153,7 +1203,7 @@ class partial(ptype.container):
     value = None
     _object_ = None
     byteorder = config.byteorder.bigendian
-    initializedQ = lambda s: isinstance(s.value, list) and len(s.value) > 0
+    initializedQ = lambda s: isinstance(s.value, list) and len(s.value) > 0 and s.value[0].initializedQ()
     __pb_attribute = None
 
     def __pb_object(self, **attrs):
@@ -1192,10 +1242,10 @@ class partial(ptype.container):
 
     @property
     def object(self):
-        if not self.initializedQ():
-            return None
-        res, = self.value
-        return res
+        if isinstance(self.value, list) and len(self.value):
+            res, = self.value
+            return res
+        return None
     o = object
 
     def serialize(self):
@@ -1213,7 +1263,9 @@ class partial(ptype.container):
         self.value = res = [self.__pb_object()]
         data = iter(block) if self.byteorder is config.byteorder.bigendian else reversed(block)
         res = res[0].__deserialize_consumer__(bitmap.consumer(data))
-        return self
+        if res.parent is not self:
+            raise error.AssertionError(self, 'partial.__deserialize_block__', message="parent for binary type {:s} is not {:s}".format(res[0].instance(), self.instance()))
+        return res.parent
 
     def load(self, **attrs):
         try:
@@ -1242,8 +1294,11 @@ class partial(ptype.container):
         if self.byteorder is not config.byteorder.littleendian:
             raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
 
-        # FIXME: self.new(t) can potentially get called due to this call to self.blocksize().
-        #        This can cause a field's closure to get called when the type is uninitialized.
+        # XXX: self.new(t) can potentially get called due to this call to self.blocksize().
+        #      This can cause a field's closure to get called and raise an InitializationError().
+        # FIXME: check to see if there's a dynamic type that needs to be resolved
+        #        and if so, throw up an error that explains why you can't use dynamic
+        #        types with a non-constant in a little-endian binary type.
         with utils.assign(self, **attrs):
             offset, size = self.getoffset(), self.blocksize()
             self.source.seek(offset)
@@ -1406,14 +1461,11 @@ class flags(struct):
     def __summary_initialized(self):
         flags = []
         for (t, name), value in zip(self._fields_, self.value):
-            if value is None:
-                flags.append((name, value))
-                continue
-            flags.append((name, value.int()))
-        res, fval = self.bitmap(), lambda v: '?' if v is None else '={:d}'.format(v) if v > 1 else ''
-        items = [(n,v) for n,v in flags if v is None or v > 0]
+            flags.append((name, value))
+        res, fval = self.bitmap(), lambda v: '?' if v is None else '={:s}'.format(v.str()) if isinstance(v, enum) else '={:d}'.format(v.int()) if v.int() > 1 else ''
+        items = [(n, v) for n, v in flags if v is None or isinstance(v, enum) or v.int() > 0]
         if items:
-            return u"({:s},{:d}) : {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(map(str().join,((n,fval(v)) for n,v in items))))
+            return u"({:s},{:d}) : {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(map(str().join, ((n, fval(v)) for n, v in items))))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __summary_uninitialized(self):
@@ -1428,12 +1480,13 @@ def new(pb, **attrs):
     '''Create a new instance of /pb/ applying the attributes specified by /attrs/'''
     # create a partial type
     if istype(pb):
-        #Log.debug("new : {:s} : Instantiating type as partial".format(pb.typename()))
+        Log.debug("{:s}.new : Explicitly instantiating partial container for binary type `{:s}`.".format(__name__, pb.typename()))
         t = ptype.clone(partial, _object_=pb)
         return t(**attrs)
 
-    # create a partial type with the specified instance
+    # create a partial type for the specified pbinary instance
     if isinstance(pb, type):
+        Log.debug("{:s}.new : Promoting binary type for `{:s}` to a partial type.".format(__name__, pb.typename()))
         attrs.setdefault('value', pb)
         attrs.setdefault('offset', pb.getposition()[0])
         t = ptype.clone(partial, _object_=pb.__class__)
@@ -1447,7 +1500,7 @@ def bigendian(p, **attrs):
     attrs.setdefault('__name__', p._object_.__name__ if issubclass(p, partial) else p.__name__)
 
     if not issubclass(p, partial):
-        Log.debug("bigendian : {:s} : Promoting type to partial".format(p.typename()))
+        Log.debug("{:s}.bigendian : Explicitly promoting binary type for `{:s}` to a partial type.".format(__name__, p.typename()))
         p = ptype.clone(partial, _object_=p, **attrs)
     else:
         p.__update__(attrs)
@@ -1459,7 +1512,7 @@ def littleendian(p, **attrs):
     attrs.setdefault('__name__', p._object_.__name__ if issubclass(p, partial) else p.__name__)
 
     if not issubclass(p, partial):
-        Log.debug("littleendian : {:s} : Promoting type to partial".format(p.typename()))
+        Log.debug("{:s}.littleendian : Explicitly promoting binary type for `{:s}` to a partial type.".format(__name__, p.typename()))
         p = ptype.clone(partial, _object_=p, **attrs)
     else:
         p.__update__(attrs)

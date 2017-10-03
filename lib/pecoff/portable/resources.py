@@ -56,9 +56,9 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.rpointer_t):
             self['type'] = 0
             self['offset'] = value
             return self
-    _value_ = dyn.clone(RVAType, byteorder=ptypes.config.byteorder.littleendian)
+    _value_ = pbinary.littleendian(RVAType)
     def _baseobject_(self):
-        base = self.getparent(headers.DataDirectoryEntry)['Address']
+        base = self.getparent(headers.IMAGE_DATA_DIRECTORY)['Address']
         if base.int() == 0:
             raise ValueError("No Resource Data Directory Entry")
         return base.d

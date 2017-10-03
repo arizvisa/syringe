@@ -1,12 +1,13 @@
-import logging,operator,itertools,array,ptypes
+import ptypes
 from ptypes import *
-from .__base__ import *
 
+from .__base__ import *
 from . import portable
 
-ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+import logging,operator,itertools,array
 
 def open(filename, **kwds):
+    logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))
     res = File(filename=filename, source=ptypes.provider.file(filename, **kwds))
     return res.load()
 
@@ -112,7 +113,7 @@ class Next(pstruct.type):
 
 ## Portable Executable (PE)
 @NextHeader.define
-class Portable(pstruct.type, Header):
+class IMAGE_NT_HEADERS(pstruct.type, Header):
     type = 'PE'
 
     def __Padding(self):
@@ -130,7 +131,7 @@ class Portable(pstruct.type, Header):
         optionalheader = self['OptionalHeader'].li
 
         # memory
-        if isinstance(self.source, ptypes.provider.memorybase) or self.source in [getattr(ptypes.provider,'Ida',None)]:
+        if isinstance(self.source, ptypes.provider.memorybase) or (hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida):
             class sectionentry(pstruct.type):
                 noncontiguous = True
                 _fields_ = [
@@ -161,19 +162,24 @@ class Portable(pstruct.type, Header):
         if len(self['DataDirectory']) < 4:
             return ptype.undefined
         res = self['DataDirectory'][4]
-        if res['Address'].int() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
+        offset, size = res['Address'].int(), res['Size'].int()
+        if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
             return ptype.undefined
         lastoffset = self['Data'].li.getoffset() + self['Data'].blocksize()
-        return dyn.block(res['Address'].int() - lastoffset)
+        if hasattr(self.source, 'size') and offset < self.source.size():
+            return dyn.block(offset - lastoffset)
+        return ptype.undefined
 
     def __Certificate(self):
         if len(self['DataDirectory']) < 4:
             return ptype.undefined
         res = self['DataDirectory'][4]
-        if res['Address'].int() == 0 or issubclass(self.source.__class__,ptypes.provider.memorybase):
+        offset, size = res['Address'].int(), res['Size'].int()
+        if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
             return ptype.undefined
-        sz = res['Size'].li.int()
-        return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda s:sz)
+        if hasattr(self.source, 'size') and offset < self.source.size():
+            return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda s, size=size:size)
+        return ptype.undefined
 
     def __DataDirectory(self):
         cls = self.__class__
@@ -190,8 +196,8 @@ class Portable(pstruct.type, Header):
 
     _fields_ = [
         (uint16, 'SignaturePadding'),
-        (portable.FileHeader, 'FileHeader'),
-        (portable.OptionalHeader, 'OptionalHeader'),
+        (portable.IMAGE_FILE_HEADER, 'FileHeader'),
+        (portable.IMAGE_OPTIONAL_HEADER, 'OptionalHeader'),
         (__DataDirectory, 'DataDirectory'),
         (__Sections, 'Sections'),
         (__Padding, 'Padding'),
@@ -248,6 +254,7 @@ class Portable(pstruct.type, Header):
 
     def Machine(self):
         return self['FileHeader']['Machine']
+Portable = IMAGE_NT_HEADERS64 = IMAGE_NT_HEADERS
 
 @NextHeader.define
 class DosExtender(pstruct.type, Header):
@@ -431,7 +438,7 @@ class File(pstruct.type, ptype.boundary):
         sz+= self['Extra'].blocksize()
         sz+= self['Stub'].blocksize()
         sz+= self['Next'].blocksize()
-        if issubclass(self.source.__class__, ptypes.provider.filebase):
+        if isinstance(self.source, ptypes.provider.filebase):
             return dyn.block( self.source.size() - sz)
         return ptype.undefined
 

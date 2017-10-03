@@ -1,42 +1,15 @@
 import ptypes
-from ptypes import pstruct,parray,provider,dyn
+from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
 from ..__base__ import *
 
-from . import exports,relocations,imports,resources,exceptions,headers
+from . import exports,relocations,imports,resources,exceptions,clr,loader,headers
 from .headers import virtualaddress,realaddress,fileoffset
+from .headers import IMAGE_DATA_DIRECTORY
 
-class Entry(headers.DataDirectoryEntry):
-    def _object_(self):
-        # called by 'Address'
-        sz = self['Size'].int()
-        return dyn.block(sz)
-
-    def containsaddress(self, addr):
-        '''if an address is within our boundaries'''
-        start = self['Address'].int()
-        end = start + self['Size'].int()
-        if (addr >= start) and (addr < end):
-            return True
-        return False
-
-    def valid(self):
-        return self['Size'].int() != 0
-
-    def __Address(self):
-        t = self._object_
-        if ptypes.iscontainer(t):
-            return self.addressing(dyn.clone(t, blocksize=lambda s: s.getparent(Entry)['Size'].li.int()), type=uint32)
-        return self.addressing(t, type=uint32)
-
-    _fields_ = [
-        (__Address, 'Address'),
-        (uint32, 'Size')
-    ]
-
-class AddressEntry(Entry):
+class AddressEntry(IMAGE_DATA_DIRECTORY):
     addressing = staticmethod(virtualaddress)
 
-class OffsetEntry(Entry):
+class OffsetEntry(IMAGE_DATA_DIRECTORY):
     addressing = staticmethod(fileoffset)
 
 class Export(AddressEntry):
@@ -53,6 +26,7 @@ class Resource(AddressEntry):
 
 class Exception(AddressEntry):
     _object_ = exceptions.IMAGE_EXCEPTION_DIRECTORY
+
 class Security(OffsetEntry):
     class _object_(parray.block):
         _object_ = headers.Certificate
@@ -63,136 +37,116 @@ class BaseReloc(AddressEntry):
 class Debug(AddressEntry): pass
 class Architecture(AddressEntry): pass
 class GlobalPtr(AddressEntry): pass
-class Tls(AddressEntry):
-    class IMAGE_TLS_DIRECTORY(pstruct.type):
-        _fields_ = [
-            (uint32, 'StartAddressOfRawData'),
-            (uint32, 'EndAddressOfRawData'),
-            (uint32, 'AddressOfIndex'),
-            (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32), type=uint32), 'AddressOfCallbacks'),
-            (uint32, 'SizeOfZeroFill'),
-            (uint32, 'Characteristics'),
-        ]
 
-    class IMAGE_TLS_DIRECTORY64(pstruct.type):
-        _fields_ = [
-            (uint64, 'StartAddressOfRawData'),
-            (uint64, 'EndAddressOfRawData'),
-            (uint64, 'AddressOfIndex'),
-            (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32), type=uint64), 'AddressOfCallbacks'),
-            (uint32, 'SizeOfZeroFill'),
-            (uint32, 'Characteristics'),
-        ]
+class IMAGE_TLS_DIRECTORY(pstruct.type):
+    _fields_ = [
+        (uint32, 'StartAddressOfRawData'),
+        (uint32, 'EndAddressOfRawData'),
+        (uint32, 'AddressOfIndex'),
+        (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32), type=uint32), 'AddressOfCallbacks'),
+        (uint32, 'SizeOfZeroFill'),
+        (uint32, 'Characteristics'),
+    ]
+
+class IMAGE_TLS_DIRECTORY64(pstruct.type):
+    _fields_ = [
+        (uint64, 'StartAddressOfRawData'),
+        (uint64, 'EndAddressOfRawData'),
+        (uint64, 'AddressOfIndex'),
+        (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32), type=uint64), 'AddressOfCallbacks'),
+        (uint32, 'SizeOfZeroFill'),
+        (uint32, 'Characteristics'),
+    ]
+
+class Tls(AddressEntry):
     def _object_(self):
-        opt = self.getparent(Header)['OptionalHeader'].li
-        return sself.IMAGE_TLS_DIRECTORY64 if opt.is64() else self.IMAGE_TLS_DIRECTORY
+        res = self.getparent(Header)['OptionalHeader'].li
+        return IMAGE_TLS_DIRECTORY64 if res.is64() else IMAGE_TLS_DIRECTORY
 
 class LoadConfig(AddressEntry):
-    # FIXME: The size field in the DataDirectory is used to determine which
-    #        IMAGE_LOADCONFIG_DIRECTORY to use.
-    #        Determine the different structures that are available, and modify
-    #        _object_ to choose the correct one.
-    class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
-        _fields_ = [
-            (uint32, 'Size'),
-            (TimeDateStamp, 'TimeDateStamp'),
-            (uint16, 'MajorVersion'),
-            (uint16, 'MinorVersion'),
-            (uint32, 'GlobalFlagsClear'),
-            (uint32, 'GlobalFlagsSet'),
-            (uint32, 'CriticalSectionDefaultTimeout'),
-
-            (uint32, 'DeCommitFreeBlockThreshold'),
-            (uint32, 'DeCommitTotalFreeThreshold'),
-            (realaddress(uint32, type=uint32), 'LockPrefixTable'),
-            (uint32, 'MaximumAllocationSize'),
-            (uint32, 'VirtualMemoryThreshold'),
-            (uint32, 'ProcessAffinityMask'),
-
-            (uint32, 'ProcessHeapFlags'),
-            (uint16, 'CSDVersion'),
-            (uint16, 'Reserved'),
-
-            (realaddress(uint32, type=uint32), 'EditList'),
-            (realaddress(uint32, type=uint32), 'SecurityCookie'),
-            (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].li.int()), type=uint32), 'SEHandlerTable'),
-            (uint32, 'SEHandlerCount'),
-
-            (uint32, 'GuardCFCheckFunctionPointer'),
-            (uint32, 'Reserved2'),
-            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.int()), type=uint32), 'GuardCFFunctionTable'),
-            (uint32, 'GuardCFFunctionCount'),
-            (uint32, 'GuardFlags'),     # CF_INSTRUMENTED=0x100,CFW_INSTRUMENTED=0x200,CF_FUNCTION_TABLE_PRESENT=0x400
-        ]
-
-    class IMAGE_LOADCONFIG_DIRECTORY64(pstruct.type):
-        _fields_ = [
-            (uint32, 'Size'),
-            (TimeDateStamp, 'TimeDateStamp'),
-            (uint16, 'MajorVersion'),
-            (uint16, 'MinorVersion'),
-            (uint32, 'GlobalFlagsClear'),
-            (uint32, 'GlobalFlagsSet'),
-            (uint32, 'CriticalSectionDefaultTimeout'),
-
-            (uint64, 'DeCommitFreeBlockThreshold'),
-            (uint64, 'DeCommitTotalFreeThreshold'),
-            (realaddress(uint32, type=uint64), 'LockPrefixTable'),
-            (uint64, 'MaximumAllocationSize'),
-            (uint64, 'VirtualMemoryThreshold'),
-            (uint64, 'ProcessAffinityMask'),
-
-            (uint32, 'ProcessHeapFlags'),
-            (uint16, 'CSDVersion'),
-            (uint16, 'Reserved'),
-
-            (realaddress(uint32, type=uint64), 'EditList'),
-            (realaddress(uint32, type=uint64), 'SecurityCookie'),
-            (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].li.int()), type=uint64), 'SEHandlerTable'),
-            (uint64, 'SEHandlerCount'),
-
-            (uint32, 'GuardCFCheckFunctionPointer'),
-            (uint32, 'Reserved2'),
-            (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.int()), type=uint64), 'GuardCFFunctionTable'),
-            (uint32, 'GuardCFFunctionCount'),
-            (uint32, 'GuardFlags'),     # CF_INSTRUMENTED=0x100,CFW_INSTRUMENTED=0x200,CF_FUNCTION_TABLE_PRESENT=0x400
-
-            (dyn.array(uint32,11), 'padding'),
-            (uint64, 'RelocationDelta'),
-            (uint64, 'Unknown[0]'),
-            (realaddress(uint32, type=uint64), 'RtlFailFast'),
-            (realaddress(uint32, type=uint64), 'RtlFailFastOffset'),
-            (dyn.array(uint32,3), 'Unknown[1]'),
-        ]
-
     def _object_(self):
-        opt = self.getparent(Header)['OptionalHeader'].li
-        return LoadConfig.IMAGE_LOADCONFIG_DIRECTORY64 if opt.is64() else LoadConfig.IMAGE_LOADCONFIG_DIRECTORY
+        res = self.getparent(Header)['OptionalHeader'].li
+        res = loader.IMAGE_LOADCONFIG_DIRECTORY64 if res.is64() else loader.IMAGE_LOADCONFIG_DIRECTORY
+        return dyn.clone(res, blocksize=lambda s, cb=self['Size'].li.int(): cb)
 
 class BoundImport(AddressEntry): pass
 class IAT(AddressEntry):
-    _object_ = imports.IMAGE_IMPORT_ADDRESS_TABLE
+    _object_ = lambda s: IMAGE_IMPORT_ADDRESS_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_ADDRESS_TABLE
 class DelayLoad(AddressEntry):
     _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY
-class ComHeader(AddressEntry): pass
+class ClrHeader(AddressEntry):
+    _object_ = clr.IMAGE_COR20_HEADER
 class Reserved(AddressEntry): pass
+
+class DataDirectoryEntry(pint.enum):
+    _values_ = [
+        ('Export', 0),
+        ('Import', 1),
+        ('Resource', 2),
+        ('Exception', 3),
+        ('Security', 4),
+        ('BaseReloc', 5),
+        ('Debug', 6),
+        ('Architecture', 7),
+        ('GlobalPtr', 8),
+        ('Tls', 9),
+        ('LoadConfig', 10),
+        ('BoundImport', 11),
+        ('IAT', 12),
+        ('DelayLoad', 13),
+        ('ClrHeader', 14),
+        ('Reserved', 15),
+
+        # aliases
+        ('Exports', 0),
+        ('Imports', 1),
+        ('Resources', 2),
+        ('Exceptions', 3),
+        ('Certificate', 4),
+        ('Reloc', 5),
+        ('Relocations', 5),
+        ('Relocation', 5),
+        ('BaseRelocation', 5),
+        ('BaseRelocations', 5),
+        ('Global', 8),
+        ('Thread', 9),
+        ('ThreadLocalStorage', 9),
+        ('LoaderConfig', 10),
+        ('Loader', 10),
+        ('Bound', 11),
+        ('BoundImports', 11),
+        ('ImportAddress', 12),
+        ('DelayImportDescriptor', 13),
+        ('DelayImport', 13),
+        ('Clr', 14),
+        ('COM', 14),
+        ('COR20', 14),
+    ]
 
 class DataDirectory(parray.type):
     length = 16
+
+    def __getindex__(self, key):
+        if isinstance(key, basestring):
+            # try and be smart in case user tries to be dumb
+            key, res = key.lower(), { k.lower() : v for k, v in DataDirectoryEntry.mapping().iteritems() }
+            key = key[:-key.find('table')] if key.endswith('table') else key
+            return res[key]
+        return key
 
     def _object_(self):
         entries = (
             Export, Import, Resource, Exception, Security,
             BaseReloc, Debug, Architecture, GlobalPtr,
             Tls, LoadConfig, BoundImport, IAT,
-            DelayLoad, ComHeader, Reserved
+            DelayLoad, ClrHeader, Reserved
         )
         return entries[len(self.value)]
 
     def details(self, **options):
         if self.initializedQ():
             width = max(len(n.classname()) for n in self.value) if self.value else 0
-            return '\n'.join('[{:x}] {:>{}}{:4s} {:s}:+{:#x}'.format(n.getoffset(),n.classname(),width,'{%d}'%i, n['Address'].summary(), n['Size'].int()) for i,n in enumerate(self.value))
+            return '\n'.join('[{:x}] {:>{}}{:4s} {:s}:+{:#x}'.format(n.getoffset(), n.classname(), width, '{%d}'%i, n['Address'].summary(), n['Size'].int()) for i, n in enumerate(self.value))
         return super(DataDirectory,self).details(**options)
 
     def repr(self, **options):

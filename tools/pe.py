@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import itertools,logging,argparse
+import itertools,operator,logging,argparse
 import pecoff,ptypes
 import six
 ptypes.config.defaults.ptype.clone_name = '{}'
@@ -23,22 +23,25 @@ def resolve(result, path):
     for p in path:
         if p == '':
             break
-        if p == '.':
-            continue
-        if p == '..':
+        elif p == '.':
+            pass
+        elif p == '..':
             result = result.p
-            continue
-        if hasattr(result, 'keys'):
-            result = result.__getitem__(p)
-            continue
-        result = result.__getitem__(int(p))
+        elif p == '!' and hasattr(result, 'd'):
+            result = result.d.li
+        elif hasattr(result, 'keys'):
+            result = result.__field__(p) if isinstance(result, (ptypes.pbinary.type,ptypes.pbinary.partial)) else operator.getitem(result, p)
+        else:
+            result = result.__field__(int(p)) if isinstance(result, (ptypes.pbinary.type,ptypes.pbinary.partial)) else operator.getitem(result, int(p))
+        continue
+
     if not p:
         return result.details()
-    if hasattr(result, 'num'):
-        return result.int()
-    if hasattr(result, 'str'):
-        return result.str()
-    return result.details()
+    if not isinstance(result, (ptypes.ptype.pointer_t,ptypes.pbinary.partial)):
+        if hasattr(result, 'num'): return result.num()
+        if hasattr(result, 'int'): return result.int()
+        if hasattr(result, 'str'): return result.str()
+    return result.repr()
 
 ## commands
 def dump_exe(t, output):
@@ -47,8 +50,10 @@ def dump_exe(t, output):
         six.print_(t['Dos'].repr(), file=sys.stdout)
         six.print_(t['Stub'].hexdump(), file=sys.stdout)
         return
-    _ = ptypes.dyn.block(t['Dos'].size()+t['Stub'].size())
-    return extract(_(offset=0).li, output)
+    if isinstance(output, basestring):
+        _ = ptypes.dyn.block(t['Dos'].size()+t['Stub'].size())
+        return extract(_(offset=0).li, output)
+    return extract(t, output)
 
 def dump_header(t, output):
     t = t['Next']['Header']
@@ -77,7 +82,7 @@ def extract_section(t, index, output):
     global result; result = t
     #if 'load' in kwds:
     #    return extract(t['VirtualAddress'].d.li, output or 'raw')
-    return extract(t['PointerToRawData'].d.li, output or 'raw')
+    return extract(t['PointerToRawData'].d.li, output or 'hex')
 
 def list_entries(t, output):
     t = t['Next']['Header']
@@ -95,8 +100,8 @@ def extract_entry(t, index, output):
     t = t[index]
     global result; result = t['Address'].d.li
     t,s = t['Address'],t['Size']
-    if output == 'print':
-        return extract(t.d.li, 'print')
+    if output == 'print' or not isinstance(output, basestring):
+        return extract(t.d.li, output)
     res = ptypes.dyn.block(s.int())(offset=t.d.getoffset())
     return extract(res.li, output or 'raw')
 

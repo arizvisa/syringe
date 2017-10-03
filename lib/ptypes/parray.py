@@ -97,7 +97,7 @@ class _parray_generic(ptype.container):
 
     def __len__(self):
         if not self.initializedQ():
-            return int(self.length)
+            return self.length
         return len(self.value)
 
     def insert(self, index, object):
@@ -184,8 +184,9 @@ class _parray_generic(ptype.container):
             t = ptype.clone(type, length=len(result), _object_=self._object_)
             return self.new(t, offset=result[0].getoffset() if len(result) else self.getoffset(), value=result)
 
-        ([None]*len(self))[index]     # make python raise the correct exception if so..
-        return super(_parray_generic, self).__getitem__(index)
+        idx = self.__getindex__(index)
+        ([None]*len(self))[idx]     # make python raise the correct exception if so..
+        return super(_parray_generic, self).__getitem__(idx)
 
     def __element__(self):
         try: length = len(self)
@@ -324,7 +325,7 @@ class type(_parray_generic):
         else:
             iterable = enumerate(value)
 
-        self.value = []
+        length, self.value = len(self), []
         for idx, ivalue in iterable:
             if ptype.isresolveable(ivalue) or ptype.istype(ivalue):
                 res = self.new(ivalue, __name__=str(idx)).a
@@ -333,6 +334,10 @@ class type(_parray_generic):
             else:
                 res = self.new(self._object_, __name__=str(idx)).a
             self.value.append(res)
+
+        # output a warning if the length is already set to something and the user explicitly changed it to something different.
+        if length and length != len(self):
+            Log.warn("parray.__setvalue__ : {:s} : Length of array was explicitly changed. : {:d} != {:d}".format(self.instance(), length, len(self)))
 
         result = super(type, self).__setvalue__(*value)
         result.length = len(self)
@@ -370,7 +375,7 @@ class terminated(type):
         try:
             with utils.assign(self, **attrs):
                 forever = itertools.count() if self.length is None else six.moves.range(len(self))
-                offset, self.value = self.getoffset(), []
+                offset, self.value, n = self.getoffset(), [], None
 
                 if isinstance(self.source, ptype.provider.empty):
                     return self
@@ -390,8 +395,10 @@ class terminated(type):
                     offset += size
 
         except KeyboardInterrupt:
-            # XXX: some of these variables might not be defined due to my usage of KeyboardInterrupt being racy. who cares...
             path = ' -> '.join(self.backtrace())
+            if n is None:
+                Log.fatal("terminated.load : {:s} : User interrupt while attempting to load first element. : {:s}".format(self.instance(), path), exc_info=True)
+                return self
             Log.fatal("terminated.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path), exc_info=True)
             return self
 
@@ -469,7 +476,7 @@ class infinite(uninitialized):
                     # read next element at the current offset
                     n = self.__next_element(offset)
                     if not n.initializedQ():
-                        Log.info("infinite.load : {:s} : Element {:d} left partially initialized : {:s}".format(self.instance(), len(self.value), n.instance()))
+                        Log.debug("infinite.load : {:s} : Element {:d} left partially initialized : {:s}".format(self.instance(), len(self.value), n.instance()))
                     self.value.append(n)
 
                     if not n.initializedQ():
@@ -491,7 +498,6 @@ class infinite(uninitialized):
                     current += size
 
             except KeyboardInterrupt:
-                # XXX: some of these variables might not be defined due to a race. who cares...
                 path = ' -> '.join(self.backtrace())
                 if len(self.value):
                     Log.fatal("infinite.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
@@ -601,7 +607,7 @@ class block(uninitialized):
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
                     path = ' -> '.join(n.backtrace())
-                    Log.info("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), n.instance(), path))
+                    Log.debug("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), n.instance(), path))
                     self.value.append(n)
                     break
 

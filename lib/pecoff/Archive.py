@@ -1,11 +1,16 @@
 import ptypes
 from ptypes import *
-from ptypes.pint import *
+
 import Object
 
 import logging,itertools
 
-class ulong(bigendian(uint32_t)): pass
+def open(filename, **kwds):
+    logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))
+    res = File(filename=filename, source=ptypes.provider.file(filename, **kwds))
+    return res.load()
+
+class ulong(pint.bigendian(pint.uint32_t)): pass
 
 class stringinteger(pstr.string):
     def __getvalue__(self):
@@ -14,7 +19,7 @@ class stringinteger(pstr.string):
         res, bs = str(integer), self.blocksize()
         return super(stringinteger, self).__setvalue__(res + ' '*(bs-len(res)))
 
-class Index(uint16_t):
+class Index(pint.uint16_t):
     def getIndex(self):
         return self.int()-1      # 1 off
 
@@ -27,13 +32,13 @@ class Import(pstruct.type):
                 (11, 'Reserved')
             ]
         _fields_ = [
-            (uint16_t, 'Sig1'),
-            (uint16_t, 'Sig2'),
-            (uint16_t, 'Version'),
-            (uint16_t, 'Machine'),
-            (uint32_t, 'Time-Date Stamp'),
-            (uint32_t, 'Size Of Data'),
-            (uint16_t, 'Ordinal/Hint'),
+            (pint.uint16_t, 'Sig1'),
+            (pint.uint16_t, 'Sig2'),
+            (pint.uint16_t, 'Version'),
+            (pint.uint16_t, 'Machine'),
+            (pint.uint32_t, 'Time-Date Stamp'),
+            (pint.uint32_t, 'Size Of Data'),
+            (pint.uint16_t, 'Ordinal/Hint'),
             (Type, 'Type')
         ]
 
@@ -93,9 +98,9 @@ class Linker1(pstruct.type):
 class Linker2(pstruct.type):
     internalname = 1
     _fields_ = [
-        (uint32_t, 'Number of Members'),
-        (lambda self: dyn.array(uint32_t, self['Number of Members'].li.int()), 'Offsets'),
-        (uint32_t, 'Number of Symbols'),
+        (pint.uint32_t, 'Number of Members'),
+        (lambda self: dyn.array(pint.uint32_t, self['Number of Members'].li.int()), 'Offsets'),
+        (pint.uint32_t, 'Number of Symbols'),
         (lambda self: dyn.array(Index, self['Number of Symbols'].li.int()), 'Indices'),
         (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].int()), 'Strings')
     ]
@@ -272,13 +277,6 @@ class File(pstruct.type):
 #            yield self.new(Object.File, __name__='Member[%d]'% index, offset=o)
             yield self.new(Object.File, offset=o)
         return
-
-def open(filename, **kwds):
-    res = File()
-    res.source = ptypes.provider.file(filename, **kwds)
-    res.load()
-    res.filename = filename
-    return res
 
 if __name__ == '__main__':
     import Archive

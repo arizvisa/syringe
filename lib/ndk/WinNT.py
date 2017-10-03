@@ -354,15 +354,18 @@ class rfc4122(pstruct.type):
     ]
 
     def summary(self, **options):
-        if self.initialized:
-            d1 = '{:08x}'.format(self['Data1'].int())
-            d2 = '{:04x}'.format(self['Data2'].int())
-            d3 = '{:04x}'.format(self['Data3'].int())
-            _ = list(self['Data4'].serialize())
-            d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
-            d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
-            return '{{Data1-Data2-Data3-Data4}} {{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
+        if self.initializedQ():
+            return '{{Data1-Data2-Data3-Data4}} {:s}'.format(self.str())
         return '{{Data1-Data2-Data3-Data4}} {{????????-????-????-????-????????????}}'
+
+    def str(self):
+        d1 = '{:08x}'.format(self['Data1'].int())
+        d2 = '{:04x}'.format(self['Data2'].int())
+        d3 = '{:04x}'.format(self['Data3'].int())
+        _ = list(self['Data4'].serialize())
+        d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
+        d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
+        return '{{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
 
 class GUID(rfc4122):
     _fields_ = [

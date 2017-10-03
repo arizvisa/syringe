@@ -317,7 +317,6 @@ class filebase(base):
         offset = self.file.tell()
         if amount < 0:
             raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(offset,amount,self))
-        Log.debug('{:s}.consume : Attempting to consume {:x}:+{:x}'.format(type(self).__name__, offset, amount))
 
         result = ''
         try:
@@ -824,10 +823,11 @@ try:
     import idaapi as _idaapi
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
-        offset = 0xffffffff
+        offset = _idaapi.BADADDR
 
-        def __init__(self):
-            pass
+        def __new__(cls):
+            Log.warn("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
+            return cls
 
         @classmethod
         def read(cls, offset, size, padding='\x00'):
@@ -865,10 +865,15 @@ try:
         @classmethod
         def consume(cls, amount):
             '''Consume ``amount`` bytes from the given provider.'''
+            startofs = cls.offset
             try:
                 result = cls.read(cls.offset, amount)
-            except Exception, (ofs,amount):
-                raise error.ConsumeError(cls, ofs, amount, ofs-cls.offset)
+            except Exception, err:
+                if isinstance(err, tuple) and len(err) == 2:
+                    ofs, amount = err
+                    raise error.ConsumeError(cls, ofs, amount, ofs-startofs)
+                Log.fatal("{:s} : Unable to read {:+d} bytes from {:#x} due to unexpected exception. : {:#x}:{:+#x}".format('.'.join((__name__,cls.__name__)), amount, startofs, cls.offset, amount), exc_info=True)
+                raise error.ConsumeError(cls, startofs, amount, cls.offset-startofs)
             cls.offset += len(result)
             return result
 
@@ -880,7 +885,7 @@ try:
             cls.offset += len(data)
             return len(data)
 
-    Log.warning("__module__ : Successfully loaded the `Ida` provider.")
+    Log.info("__module__ : Successfully loaded the `Ida` provider.")
     if _: DEFAULT.append(Ida)
 except ImportError:
     Log.info("__module__ : Unable to import the '_idaapi' module (not running IDA?). Failed to load the `Ida` provider.")
@@ -941,7 +946,7 @@ try:
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
             return self.client.DataSpaces.Virtual.Write(self.offset, data)
 
-    Log.warning("__module__ : Successfully loaded the `PyDbgEng` provider.")
+    Log.info("__module__ : Successfully loaded the `PyDbgEng` provider.")
     if _: DEFAULT.append(PyDbgEng)
 except ImportError:
     Log.info("__module__ : Unable to import the '_PyDbgEng' module. Failed to load the `PyDbgEng` provider.")
@@ -982,7 +987,7 @@ try:
             self.addr += res
             return res
 
-    Log.warning("__module__ : Successfully loaded the `Pykd` provider.")
+    Log.info("__module__ : Successfully loaded the `Pykd` provider.")
     if _: DEFAULT.append(Pykd)
 except ImportError:
     Log.info("__module__ : Unable to import the 'pykd' module. Failed to load the `Pykd` provider.")
@@ -1019,7 +1024,7 @@ try:
             self.address += amount
             return amount
 
-    Log.warning("__module__ : Successfully loaded the `lldb` provider.")
+    Log.info("__module__ : Successfully loaded the `lldb` provider.")
     if _: DEFAULT.append(lldb)
 except ImportError:
     Log.info("__module__ : Unable to import the 'lldb' module. Failed to load the `lldb` provider.")
@@ -1057,7 +1062,7 @@ try:
             self.address += len(data)
             return len(data)
 
-    Log.warning("__module__ : Successfully loaded the `gdb` provider.")
+    Log.info("__module__ : Successfully loaded the `gdb` provider.")
     if _: DEFAULT.append(lldb)
 except ImportError:
     Log.info("__module__ : Unable to import the 'gdb' module. Failed to load the `gdb` provider.")
