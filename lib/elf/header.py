@@ -55,6 +55,56 @@ class e_flags_arm(pbinary.flags):
         (EF_ARM_GCC_MASK, 'EF_ARM_GCC_MASK'),
     ]
 
+@e_flags.define
+class e_flags_mips(pbinary.flags):
+    type = e_machine.byname('EM_MIPS')
+    class EF_MIPS_ARCH_(pbinary.enum):
+        width = 4
+        _values_ = [
+            ('EF_MIPS_ARCH_1', 0),
+            ('EF_MIPS_ARCH_2', 1),
+            ('EF_MIPS_ARCH_3', 2),
+            ('EF_MIPS_ARCH_4', 3),
+            ('EF_MIPS_ARCH_5', 4),
+            ('EF_MIPS_ARCH_32', 5),
+            ('EF_MIPS_ARCH_64', 6),
+            ('EF_MIPS_ARCH_32R2', 7),
+            ('EF_MIPS_ARCH_64R2', 8),
+        ]
+    class EF_MIPS_ARCH_ASE_(pbinary.enum):
+        width = 4
+        _values_ = [
+            ('EF_MIPS_ARCH_ASE_MDMX', 8),
+            ('EF_MIPS_ARCH_ASE_M16', 4),
+            ('EF_MIPS_ARCH_ASE_MICROMIPS', 2),
+        ]
+    class E_MIPS_ABI_(pbinary.enum):
+        width = 4
+        _values_ = [
+            ('E_MIPS_ABI_O32', 1),
+            ('E_MIPS_ABI_O64', 2),
+            ('E_MIPS_ABI_EABI32', 3),
+            ('E_MIPS_ABI_EABI64', 4),
+        ]
+    _fields_ = [
+        (EF_MIPS_ARCH_, 'ARCH'),
+        (EF_MIPS_ARCH_ASE_, 'ASE'),
+        (8, 'EF_MIPS_ARCH_UNUSED'),
+        (E_MIPS_ABI_, 'ABI'),
+        (1, 'EF_MIPS_ARCH_RESERVED'),
+        (1, 'E_MIPS_NAN2008'),
+        (1, 'E_MIPS_FP64'),
+        (1, 'EF_MIPS_32BITMODE'),
+        (1, 'EF_MIPS_OPTIONS_FIRST'),
+        (1, 'EF_MIPS_ABI_ON32'),
+        (1, 'EF_MIPS_ABI2'),
+        (1, 'EF_MIPS_64BIT_WHIRL'),
+        (1, 'EF_MIPS_XGOT'),
+        (1, 'EF_MIPS_CPIC'),
+        (1, 'EF_MIPS_PIC'),
+        (1, 'EF_MIPS_NOREORDER'),
+    ]
+
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
     def _ent_array(self, type, size, length):

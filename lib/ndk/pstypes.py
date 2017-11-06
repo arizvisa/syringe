@@ -240,6 +240,9 @@ class PEB(pstruct.type, versioned):
                 (PVOID, 'pImageHeaderHash'),
                 (pbinary.littleendian(PEB.TracingFlags), 'TracingFlags')
             ])
+
+        # FIXME: Some fields added for windows 8
+        # See https://www.geoffchappell.com/studies/windows/win32/ntdll/structs/peb/index.htm
         return
 
     def getmodulebyname(self, name):

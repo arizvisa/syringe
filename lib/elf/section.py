@@ -50,6 +50,7 @@ class _sh_type(pint.enum):
         ('SHT_SUNW_COMDAT', 0x6ffffffb),
         ('SHT_SUNW_syminfo', 0x6ffffffc),
 
+        ('SHT_GNU_ATTRIBUTES', 0x6ffffff5),
         ('SHT_GNU_HASH', 0x6ffffff6),
         ('SHT_GNU_LIBLIST', 0x6ffffff7),
         ('SHT_GNU_verdef', 0x6ffffffd),

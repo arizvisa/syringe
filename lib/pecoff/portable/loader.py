@@ -79,31 +79,36 @@ class IMAGE_GUARD_(pbinary.flags):
 
 class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
     # FIXME: The size field in the DataDirectory is used to determine which
-    #        IMAGE_LOADCONFIG_DIRECTORY to use.
-    #        Determine the different structures that are available, and modify
-    #        _object_ to choose the correct one.
+    #        IMAGE_LOADCONFIG_DIRECTORY to use. Instead we're cheating and
+    #        using the size specified in the data-directory entry and a
+    #        feature of pstruct.type when defining a custom .blocksize(). A
+    #        proper implementation should check the 'Size' field and then
+    #        use this to determine which IMAGE_LOADCONFIG_DIRECTORY
+    #        should be used. Once that's done, then we can define a
+    #        sub-object that chooses the correct IMAGE_LOADCONFIG_DIRECTORY
+    #        to use.
 
     _fields_ = [
         (uint32, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
         (uint16, 'MajorVersion'),
         (uint16, 'MinorVersion'),
-        (uint32, 'GlobalFlagsClear'),
-        (uint32, 'GlobalFlagsSet'),
+        (uint32, 'GlobalFlagsClear'),   # FIXME
+        (uint32, 'GlobalFlagsSet'), # FIXME
         (uint32, 'CriticalSectionDefaultTimeout'),
 
         (uint32, 'DeCommitFreeBlockThreshold'),
         (uint32, 'DeCommitTotalFreeThreshold'),
-        (realaddress(ptype.undefined, type=uint32), 'LockPrefixTable'),
+        (realaddress(ptype.undefined, type=uint32), 'LockPrefixTable'),     # XXX: NULL-terminated list of VAs
         (uint32, 'MaximumAllocationSize'),
         (uint32, 'VirtualMemoryThreshold'),
         (uint32, 'ProcessAffinityMask'),
 
-        (uint32, 'ProcessHeapFlags'),
+        (uint32, 'ProcessHeapFlags'),   # FIXME: where are these flags at?
         (uint16, 'CSDVersion'),
         (uint16, 'Reserved'),
 
-        (realaddress(ptype.undefined, type=uint32), 'EditList'),
+        (realaddress(ptype.undefined, type=uint32), 'EditList'),    # XXX: also probably a NULL-terminated list of VAs
         (realaddress(uint32, type=uint32), 'SecurityCookie'),
         (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].li.int()), type=uint32), 'SEHandlerTable'),
         (uint32, 'SEHandlerCount'),
@@ -120,11 +125,11 @@ class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
         (realaddress(lambda s: dyn.array(uint32, s.parent['GuardLongJumpTargetCount'].li.int()), type=uint32), 'GuardLongJumpTargetTable'),
         (uint32, 'GuardLongJumpTargetCount'),
 
-        (realaddress(ptype.undefined, type=uint32), 'DynamicValueRelocTable'),
-        (realaddress(ptype.undefined, type=uint32), 'CHPEMetadataPointer'),
+        (realaddress(ptype.undefined, type=uint32), 'DynamicValueRelocTable'),  # XXX: Probably another NULL-terminated list of VAs
+        (realaddress(ptype.undefined, type=uint32), 'CHPEMetadataPointer'),     # FIXME
         (realaddress(uint32, type=uint32), 'GuardRFFailureRoutine'),
         (realaddress(uint32, type=uint32), 'GuardRFFailureRoutineFunctionPointer'),
-        (uint32, 'DynamicValueRelocTableOffset'),
+        (uint32, 'DynamicValueRelocTableOffset'),   # XXX: depends on DynamicValueRelocTableSection
         (uint16, 'DynamicValueRelocTableSection'),
         (uint16, 'Reserved2'),
 

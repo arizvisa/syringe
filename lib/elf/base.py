@@ -92,6 +92,13 @@ class e_ident(pstruct.type):
             ('ELFDATA2LSB', 1),
             ('ELFDATA2MSB', 2),
         ]
+        def order(self):
+            res = self.int()
+            if res == 1:
+                return ptypes.config.byteorder.littleendian
+            elif res == 2:
+                return ptypes.config.byteorder.bigendian
+            return ptypes.config.defaults.integer.order
     class EI_OSABI(pint.enum, uchar):
         _values_ = [
             ('ELFOSABI_SYSV', 0),
