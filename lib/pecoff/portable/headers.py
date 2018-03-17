@@ -192,7 +192,8 @@ class IMAGE_SECTION_HEADER(pstruct.type):
         except KeyError:
             mask = 0
 
-        return (self['SizeOfRawData'].int() + mask) & ~mask
+        res = (self['SizeOfRawData'].int() + mask) & ~mask
+        return min((self.source.size() - self['PointerToRawData'].int(), res)) if hasattr(self.source, 'size') else res
 
     def getloadedsize(self):
         # XXX: even though the loadedsize is aligned to SectionAlignment,

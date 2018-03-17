@@ -11,7 +11,7 @@ class IMAGE_SYM(pint.enum, uint16):
         ('DEBUG', 0xfffe)       #-2)
     ]
 
-    def getSectionIndex(self):
+    def GetSectionIndex(self):
         '''Returns the physical section number index if defined, otherwise None'''
         res = self.int()
         if res in (0, 0xffff, 0xfffe, -1, -2):
@@ -19,7 +19,7 @@ class IMAGE_SYM(pint.enum, uint16):
         return res - 1
 
     def summary(self):
-        res = self.getSectionIndex()
+        res = self.GetSectionIndex()
         return super(IMAGE_SYM, self).summary() if res is None else 'SectionIndex({:d})'.format(res)
 
 class IMAGE_SYM_TYPE(pint.enum, uint16):
@@ -101,7 +101,7 @@ class ShortName(pstruct.type):
             return self
 
         table = self.getparent(SymbolTableAndStringTable)
-        res = table.addString(string)
+        res = table.AddString(string)
 
         self['IsShort'].set(0)
         self['Offset'].set(res)
@@ -117,8 +117,8 @@ class Symbol(pstruct.type):
         (uint8, 'NumberOfAuxSymbols')
     ]
 
-    def getSectionIndex(self):
-        return self['SectionNumber'].getSectionIndex()
+    def GetSectionIndex(self):
+        return self['SectionNumber'].GetSectionIndex()
 
     def summary(self, **options):
         if self.initializedQ():
@@ -165,7 +165,7 @@ class SymbolTable(parray.terminated):
             yield sym, aux
         return
 
-    def getSymbolAndAuxiliary(self, symbol):
+    def GetSymbolAndAuxiliary(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
         return self.value[index : index+1 + symbol['NumberOfAuxSymbols'].int()]
@@ -304,22 +304,22 @@ class SymbolTableAndStringTable(pstruct.type):
     def names(self):
         return [sym['Name'].str() for sym, _ in self['Symbols'].iterate()]
 
-    def walk(self):
+    def iterate(self):
         for sym, _ in self['Symbols'].iterate():
             yield sym
         return
 
-    def getSymbol(self, name=None):
+    def GetSymbol(self, name=None):
         if name:
             return self.li.fetch(name)[0]
         self.li
         return [sym for sym, aux in self['Symbols'].iterate()]
 
-    def getAuxiliary(self, name):
+    def GetAuxiliary(self, name):
         res = self.fetch(name)
         return tuple(res[1:]) if len(res) > 1 else ()
 
-    def addSymbol(self):
+    def AddSymbol(self):
         '''Add a new unnamed symbol to the 'Symbols' table. Return the Symbol instance.'''
         cls, index, symbols = self.__class__, len(self['Symbols']), self['Symbols']
         logging.info('{:s} : adding a new symbol at index {:d}'.format('.'.join((cls.__module__, cls.__name__)), index))
@@ -329,7 +329,7 @@ class SymbolTableAndStringTable(pstruct.type):
         symbols.append(res)
         return res
 
-    def addString(self, string):
+    def AddString(self, string):
         '''Add the specified `string` to the 'Strings' table and return the offset into the table'''
         cls, table = self.__class__, self['Strings']
         res = table.add(string)
@@ -351,7 +351,7 @@ class SymbolTableAndStringTable(pstruct.type):
             res = self.fetch(name)
             sym = next(iter(res))
         except KeyError:
-            sym = self.addSymbol()
+            sym = self.AddSymbol()
             sym['Name'].set(name)
         sym['Value'].set(value)
         sym['SectionNumber'].set('ABSOLUTE')    # absolute address

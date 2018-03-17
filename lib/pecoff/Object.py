@@ -129,7 +129,7 @@ if __name__ == 'CoffObject':
     ## build list of external symbols
     sym_external = {}
     for name in sst.names():
-        v = sst.getSymbol(name)
+        v = sst.GetSymbol(name)
         if v['StorageClass'].int() == v['StorageClass'].byname('EXTERNAL'):
             sym_external[name] = v
         continue
@@ -140,10 +140,10 @@ if __name__ == 'CoffObject':
     ## build list of static symbols
     sym_static = {}
     for name in sst.names():
-        sym = sst.getSymbol(name)
+        sym = sst.GetSymbol(name)
         if sym['StorageClass'].int() == sym['StorageClass'].byname('STATIC') and sym['Value'].int() == 0:
-            idx = sym.getSectionIndex()
-            sym_static[idx] = (sym, sst.getAuxiliary(name))
+            idx = sym.GetSectionIndex()
+            sym_static[idx] = (sym, sst.GetAuxiliary(name))
         continue
 
     for x in sym_static.keys():

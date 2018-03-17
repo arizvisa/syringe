@@ -1338,7 +1338,7 @@ if __name__ == '__main__':
         k32 = ctypes.WinDLL('kernel32.dll')
         return k32.GetCurrentProcess()
 
-    def getPBIObj (handle):
+    def GetProcessBasicInformation (handle):
         nt = ctypes.WinDLL('ntdll.dll')
         class ProcessBasicInformation(ctypes.Structure):
             _fields_ = [('Reserved1', ctypes.c_uint32),
@@ -1363,7 +1363,7 @@ if __name__ == '__main__':
 
     # grab peb
     import ndk
-    pebaddress = getPBIObj(handle).PebBaseAddress
+    pebaddress = GetProcessBasicInformation(handle).PebBaseAddress
     z = ndk.PEB(offset=pebaddress).l
 
     # grab heap

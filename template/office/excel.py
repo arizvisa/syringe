@@ -1265,7 +1265,7 @@ class XFProperty(ptype.definition):
 class XFProp(pstruct.type):
     def __xfPropDataBlob(self):
         t, cb = self['xfPropType'].li.int(), self['cb'].li.int()
-        res = XFProperty.get(t, propertyType=t length=cb - (2+2))
+        res = XFProperty.get(t, propertyType=t, length=cb - (2+2))
         return dyn.clone(res, blocksize=lambda s,cb=cb: cb - (2+2))
 
     _fields_ = [
@@ -1913,8 +1913,8 @@ if False:
                 continue
             return
 
-class Icv(uint2): pass
-class IcvXF(uint2): pass
+class Icv(uint2): '''A color in the color table.'''
+class IcvXF(uint2): '''A color in the color table for cell and style formatting properties.'''
 
 if False:
     class NameParsedFormula(pstruct.type):
@@ -3989,6 +3989,110 @@ class Note(pstruct.type):
 
     _fields_ = [
         (__body, 'body'),
+    ]
+
+class ObjectLink(pstruct.type):
+    class _WLinkObj(pint.enum, uint2):
+        _values_ = [
+            ('Entire chart', 0x0001),
+            ('Value axis, or vertical value axis on bubble and scatter chart groups', 0x0002),
+            ('Category axis, or horizontal value axis on bubble and scatter chart groups.', 0x0003),
+            ('Series or data points.', 0x0004),
+            ('Series axis.', 0x0007),
+            ('Display units labels of an axis.', 0x000c),
+        ]
+
+    _fields_ = [
+        (_WLinkObj, 'wLinkObj'),
+        (uint2, 'wLinkVar1'),   # index into Series
+        (uint2, 'wLinkVar2'),   # index into Category
+    ]
+
+class Text(pstruct.type):
+    class _at(pint.enum, ubyte1):
+        _values_ = [
+            ('left', 1),
+            ('center', 2),
+            ('right', 3),
+            ('justify', 4),
+            ('distributed', 7),
+        ]
+
+    class _vat(pint.enum, ubyte1):
+        _values_ = [
+            ('top', 1),
+            ('middle', 2),
+            ('bottom', 3),
+            ('justify', 4),
+            ('distributed', 7),
+        ]
+
+    class _wBkgMode(pint.enum, uint2):
+        _values_ = [
+            ('transparent', 0x0001),
+            ('opaque', 0x0002),
+        ]
+
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fAutoColor'),
+            (1, 'fShowKey'),
+            (1, 'fShowValue'),
+            (1, 'unused1'),
+            (1, 'fAutoText'),
+            (1, 'fGenerated'),
+            (1, 'fDeleted'),
+            (1, 'fAutoMode'),
+            (3, 'unused2'),
+            (1, 'fShowLabelAndPerc'),
+            (1, 'fShowPercent'),
+            (1, 'fShowBubbleSizes'),
+            (1, 'fShowLabel'),
+            (1, 'reserved'),
+        ])
+
+    class _dlp(pbinary.struct):
+        class _position(pbinary.enum):
+            width = 4
+            _values_ = [
+                ('default', 0x0),
+                ('outside-end', 0x1),
+                ('inside-end', 0x2),
+                ('center', 0x3),
+                ('inside-base', 0x4),
+                ('above', 0x5),
+                ('below', 0x6),
+                ('left', 0x7),
+                ('right', 0x8),
+                ('auto', 0x9),
+                ('user', 0xa),
+            ]
+        class _iReadingOrder(pbinary.enum):
+            width = 2
+            _values_ = [
+                ('default', 0),
+                ('left-to-right', 1),
+                ('right-to-left', 2),
+            ]
+        _fields_ = R([
+            (_position, 'position'),
+            (10, 'unused3'),
+            (_iReadingOrder, 'iReadingOrder'),
+        ])
+
+    _fields_ = [
+        (_at, 'at'),
+        (_vat, 'vat'),
+        (_wBkgMode, 'wBkgMode'),
+        (LongRGB, 'rgbText'),
+        (sint4, 'x'),
+        (sint4, 'y'),
+        (sint4, 'dx'),
+        (sint4, 'dy'),
+        (_flags, 'flags'),
+        (Icv, 'icvText'),
+        (_dlp, 'dlp'),
+        (uint2, 'trot'),
     ]
 
 if __name__ == '__main__':

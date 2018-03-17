@@ -18,7 +18,7 @@ def modulename(filename):
     return filename.rsplit('.',1)[0].upper()
 
 def iterate_imports(filename):
-    z = pecoff.Executable.open(filename, mode='r')
+    z = pecoff.Executable.File(source=ptypes.prov.file(filename, mode='r')).l
     importsDirectory = z['Next']['Header']['DataDirectory'][1]
     if importsDirectory['Address'].num() == 0:
         raise ValueError, "No imports found in {}".format(filename)
@@ -62,7 +62,7 @@ def walk_executable(filename):
             print 'Unable to load %s'% f
             continue
         try:
-            executable = pecoff.Executable.open(p, mode='r')
+            executable = pecoff.Executable.File(source=ptypes.prov.file(p, mode='r')).l
         except ptypes.error.Base, e:
             print 'Unable to load %s'% p
             continue

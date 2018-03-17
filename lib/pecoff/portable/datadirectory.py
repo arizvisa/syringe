@@ -130,7 +130,7 @@ class DataDirectory(parray.type):
         if isinstance(key, basestring):
             # try and be smart in case user tries to be dumb
             key, res = key.lower(), { k.lower() : v for k, v in DataDirectoryEntry.mapping().iteritems() }
-            key = key[:-key.find('table')] if key.endswith('table') else key
+            key = key[:key.rfind('table')] if key.endswith('table') else key[:]
             return res[key]
         return key
 

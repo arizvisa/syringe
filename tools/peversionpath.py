@@ -84,7 +84,7 @@ if __name__ == '__main__':
     # parse the resource names
     VERSION_INFO = 16
     if VERSION_INFO not in resource.List():
-        six.print_('File %s does not appear to contain a VERSION_INFO entry within it\'s resources directory.'% filename, file=sys.stderr)
+        six.print_('File %s does not appear to contain a VERSION_INFO entry within its resources directory.'% filename, file=sys.stderr)
         sys.exit(1)
 
     try:

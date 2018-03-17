@@ -20,7 +20,7 @@ class stringinteger(pstr.string):
         return super(stringinteger, self).__setvalue__(res + ' '*(bs-len(res)))
 
 class Index(pint.uint16_t):
-    def getIndex(self):
+    def GetIndex(self):
         return self.int()-1      # 1 off
 
 class Import(pstruct.type):
@@ -62,7 +62,7 @@ class Import(pstruct.type):
         (Member, 'Member')
     ]
 
-    def getImport(self):
+    def GetImport(self):
         return self['Member']['Module'].str(), self['Member']['Name'].str(), self['Header']['Ordinal/Hint'].int(), self['Header']['Type']
 
 #######
@@ -91,7 +91,7 @@ class Linker1(pstruct.type):
         (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].li.int()), 'Strings')
     ]
 
-    def getTable(self):
+    def GetTable(self):
         return [(str(k), v.int()) for k,v in zip(self['Strings'], self['Offsets'])]
 
 @MemberType.define
@@ -105,8 +105,8 @@ class Linker2(pstruct.type):
         (lambda self: dyn.array(pstr.szstring, self['Number of Symbols'].int()), 'Strings')
     ]
 
-    def getTable(self):
-        return [(k.str(), self['Offsets'][i.getIndex()].int()) for k,i in zip(self['Strings'], self['Indices'])]
+    def GetTable(self):
+        return [(k.str(), self['Offsets'][i.GetIndex()].int()) for k,i in zip(self['Strings'], self['Indices'])]
 
 #@MemberType.define
 class LinkerMember1(Linker1):
@@ -196,14 +196,14 @@ class Members(parray.terminated):
         res = self.Linker['Number of Members'].int()
         return False if len(self.value) < res else True
 
-    def walk(self):
+    def iterate(self):
         for m in (x['Member'] for x in self if type(x) is ArchiveMember):
             if m.isImport():
                 continue
             yield m['Object']
         return
 
-    def walkimports(self):
+    def iterate_imports(self):
         for m in (x['Member'] for x in self if type(x) is ArchiveMember):
             if m.isImport():
                 yield m['Import']

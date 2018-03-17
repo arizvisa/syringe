@@ -367,7 +367,7 @@ class union(_union_generic):
         result = []
 
         # do the root object first
-        inst = utils.repr_instance(self.object.classname(), '<object>')
+        inst = utils.repr_instance(self.object.classname(), '{object}')
         prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.object.properties().iteritems())
         result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
 
@@ -388,7 +388,7 @@ class union(_union_generic):
 
         # first the object if it's been allocated
         if self.object is not None:
-            inst = utils.repr_instance(self.object.classname(), '<object>')
+            inst = utils.repr_instance(self.object.classname(), '{object}')
             prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.object.properties().iteritems())
             result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
         else:

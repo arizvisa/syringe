@@ -298,7 +298,7 @@ class memorybase(base):
 class debuggerbase(memorybase):
     '''Base provider class for reading/writing with a debugger-type backing. Intended to be inherited from.'''
 
-class filebase(base):
+class fileobj(base):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
     file = None
     def __init__(self, fileobj):
@@ -361,6 +361,7 @@ class filebase(base):
         try: self.close()
         except: pass
         return
+filebase = fileobj
 
 ## other providers
 class base64(string):
@@ -520,7 +521,7 @@ class iterable(stream):
         Log.info('iter._write : Tried to write {:#x} bytes to an iterator'.format(len(data)))
         return len(data)
 
-class posixfile(filebase):
+class posixfile(fileobj):
     '''Basic posix file provider.'''
     def __init__(self, *args, **kwds):
         res = self.open(*args, **kwds)
@@ -563,7 +564,7 @@ class posixfile(filebase):
         os.close(self.fd)
         return super(posixfile, self).close()
 
-class file(filebase):
+class file(fileobj):
     '''Basic file provider.'''
     def __init__(self, *args, **kwds):
         res = self.open(*args, **kwds)
@@ -603,7 +604,7 @@ class file(filebase):
 
 try:
     import tempfile
-    class filecopy(filebase):
+    class filecopy(fileobj):
         """A provider that reads/writes from a temporary copy of the specified file.
 
         If the user wishes to save the file to another location, a .save method is provided.

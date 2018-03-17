@@ -13,23 +13,22 @@ class IMAGE_IMPORT_HINT(pstruct.type):
         ( pstr.szstring, 'String' ),
         ( dyn.align(2), 'Padding' )
     ]
-
-    def hint(self):
+    def str(self): return self.String()
+    def Hint(self):
         return self['Hint'].li.int()
-
-    def str(self):
+    def String(self):
         return self['String'].li.str()
 
 class _IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
     byteorder = ptypes.config.byteorder.bigendian
 
-    def getOrdinal(self):
+    def GetOrdinal(self):
         """Returns (Ordinal Hint, Ordinal String)"""
         hint = self['Ordinal Number']
         return (hint, 'Ordinal%d'% hint)      # microsoft-convention
 
     def summary(self):
-        return repr(self.getOrdinal())
+        return repr(self.GetOrdinal())
 
 class IMAGE_IMPORT_NAME_TABLE_ORDINAL(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
     _fields_ = [
@@ -57,15 +56,15 @@ class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
     d = property(fget=lambda s,**a: s.dereference(**a))
     deref = lambda s,**a: s.dereference(**a)
 
-    def getName(self):
+    def GetName(self):
         """Returns (Import Hint, Import String)"""
         if self['Name'] != 0:
             res = self.deref().li
-            return (res.hint(), res.str())
+            return (res.Hint(), res.String())
         return (0, None)
 
     def summary(self):
-        hint,string = self.getName()
+        hint,string = self.GetName()
         return '({:d}, {:s})'.format(hint, repr(string) if string is None else '"%s"'%string)
 
 class IMAGE_IMPORT_NAME_TABLE_NAME(_IMAGE_IMPORT_NAME_TABLE_NAME):
@@ -81,20 +80,22 @@ class IMAGE_IMPORT_NAME_TABLE_NAME64(_IMAGE_IMPORT_NAME_TABLE_NAME):
     ]
 
 class _IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
-    def ordinalQ(self):
-        res = self.object.int() & 1<<(8*self.object.size()-1)
-        return bool(res)
-
+    def OrdinalQ(self):
+        bc = 8 * self.object.size()
+        mask = 2 ** (bc-1)
+        return bool(self.object.int() & mask)
+    def NameQ(self):
+        return not self.OrdinalQ()
     def summary(self):
-        if self.ordinalQ():
+        if self.OrdinalQ():
             return 'Ordinal -> '+ self['Ordinal'].summary()
         return 'Name -> '+ self['Name'].summary()
 
-    def getImport(self):
+    def GetImport(self):
         '''Will return a tuple of (iat index, name)'''
-        if self.ordinalQ() == 1:
-            return self['Ordinal'].getOrdinal()
-        return self['Name'].getName()
+        if self.OrdinalQ() == 1:
+            return self['Ordinal'].GetOrdinal()
+        return self['Name'].GetName()
 
 class IMAGE_IMPORT_NAME_TABLE_ENTRY(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
     _value_ = uint32
@@ -102,6 +103,7 @@ class IMAGE_IMPORT_NAME_TABLE_ENTRY(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
         (IMAGE_IMPORT_NAME_TABLE_NAME, 'Name'),
         (IMAGE_IMPORT_NAME_TABLE_ORDINAL, 'Ordinal'),
     ]
+
 class IMAGE_IMPORT_NAME_TABLE_ENTRY64(_IMAGE_IMPORT_NAME_TABLE_ENTRY):
     _value_ = uint64
     _fields_ = [
@@ -146,7 +148,7 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     ]
 
     def iterate(self):
-        '''[(hint,importname,importtableaddress),...]'''
+        '''[(hint, importentry_name, importentry_offset, importentry_value),...]'''
         header = self.getparent(Header)
         nametable, addresstable = self['INT'], self['IAT']
 
@@ -154,13 +156,13 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         sectionva, data = section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())
 
         for name, address in zip(nametable.d.l[:-1], addresstable.d.l[:-1]):
-            if name.ordinalQ():
+            if name.OrdinalQ():
                 hint = name.object.int() & 0xffff
-                yield hint, 'Ordinal{:d}'.format(hint), address.getoffset()
+                yield hint, 'Ordinal{:d}'.format(hint), address.getoffset(), address.int()
                 continue
             p = name['name']['name'] - sectionva
             hint =  data[p] | data[p+1]*0x100
-            yield hint, utils.strdup(data[p+2:].tostring()), address.getoffset()
+            yield hint, utils.strdup(data[p+2:].tostring()), address.getoffset(), address.int()
         return
 
 class IMAGE_IMPORT_DIRECTORY(parray.terminated):

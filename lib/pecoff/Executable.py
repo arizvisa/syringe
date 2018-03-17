@@ -101,15 +101,30 @@ class Dos(pstruct.type):
 class NextHeader(ptype.definition):
     cache = {}
 
+### What file format the data is
+class NextData(ptype.definition):
+    cache = {}
+
 class Next(pstruct.type):
     def __Header(self):
         t = self['Signature'].li.serialize()
         return NextHeader.get(t, type=t)
 
+    def __Data(self):
+        t = self['Signature'].li.serialize()
+        return NextData.get(t, type=t)
+
     _fields_ = [
         (uint16, 'Signature'),
         (__Header, 'Header'),
+        (__Data, 'Data'),
     ]
+
+    def Header(self):
+        return self['Header']
+
+    def Data(self):
+        return self['Data']
 
 ## Portable Executable (PE)
 @NextHeader.define
@@ -124,62 +139,6 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         res = sum(map(operator.methodcaller('blocksize'),res))
         res += 2
         return dyn.block(opt['SizeOfHeaders'].int() - res - sz)
-
-    def __Data(self):
-        cls = self.__class__
-        sections = self['Sections'].li
-        optionalheader = self['OptionalHeader'].li
-
-        # memory
-        if isinstance(self.source, ptypes.provider.memorybase) or (hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida):
-            class sectionentry(pstruct.type):
-                noncontiguous = True
-                _fields_ = [
-                    (dyn.align(optionalheader['SectionAlignment'].int(), undefined=True), 'Padding'),
-                    (lambda s: dyn.block(s.Section.getloadedsize()), 'Data'),
-                ]
-
-        # file (default)
-        else:
-            if not isinstance(self.source, ptypes.provider.filebase):
-                logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
-
-            class sectionentry(pstruct.type):
-                _fields_ = [
-                    (dyn.align(optionalheader['FileAlignment'].int()), 'Padding'),
-                    (lambda s: dyn.block(s.Section.getreadsize()), 'Data'),
-                ]
-
-        sectionentry.properties = lambda s: dict(itertools.chain(super(pstruct.type,s).properties().iteritems(),{'SectionName':s.SectionName}.iteritems()))
-        class result(parray.type):
-            length = len(sections)
-            def _object_(self):
-                sect = sections[len(self.value)]
-                return dyn.clone(sectionentry, Section=sect, SectionName=sect['Name'].str())
-        return result
-
-    def __CertificatePadding(self):
-        if len(self['DataDirectory']) < 4:
-            return ptype.undefined
-        res = self['DataDirectory'][4]
-        offset, size = res['Address'].int(), res['Size'].int()
-        if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
-            return ptype.undefined
-        lastoffset = self['Data'].li.getoffset() + self['Data'].blocksize()
-        if hasattr(self.source, 'size') and offset < self.source.size():
-            return dyn.block(offset - lastoffset)
-        return ptype.undefined
-
-    def __Certificate(self):
-        if len(self['DataDirectory']) < 4:
-            return ptype.undefined
-        res = self['DataDirectory'][4]
-        offset, size = res['Address'].int(), res['Size'].int()
-        if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
-            return ptype.undefined
-        if hasattr(self.source, 'size') and offset < self.source.size():
-            return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda s, size=size:size)
-        return ptype.undefined
 
     def __DataDirectory(self):
         cls = self.__class__
@@ -201,9 +160,6 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         (__DataDirectory, 'DataDirectory'),
         (__Sections, 'Sections'),
         (__Padding, 'Padding'),
-        (__Data, 'Data'),
-        (__CertificatePadding, 'CertificatePadding'),
-        (__Certificate, 'Certificate'),
     ]
 
     def getaddressbyoffset(self, offset):
@@ -255,6 +211,81 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
     def Machine(self):
         return self['FileHeader']['Machine']
 Portable = IMAGE_NT_HEADERS64 = IMAGE_NT_HEADERS
+
+@NextData.define
+class IMAGE_NT_HEADERS_data(pstruct.type, Header):
+    type = 'PE'
+
+    def __Sections(self):
+        cls = self.__class__
+        header = self.p.Header()
+        sections = header['Sections'].li
+        optionalheader = header['OptionalHeader'].li
+
+        # memory
+        if isinstance(self.source, ptypes.provider.memorybase) or (hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida):
+            class sectionentry(pstruct.type):
+                noncontiguous = True
+                _fields_ = [
+                    (dyn.align(optionalheader['SectionAlignment'].int(), undefined=True), 'Padding'),
+                    (lambda s: dyn.block(s.Section.getloadedsize()), 'Data'),
+                ]
+
+        # file (default)
+        else:
+            if not isinstance(self.source, ptypes.provider.filebase):
+                logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
+
+            class sectionentry(pstruct.type):
+                _fields_ = [
+                    (dyn.align(optionalheader['FileAlignment'].int()), 'Padding'),
+                    (lambda s: dyn.block(s.Section.getreadsize()), 'Data'),
+                ]
+
+        sectionentry.properties = lambda self: dict(itertools.chain(super(pstruct.type, self).properties().iteritems(), {'SectionName':self.SectionName}.iteritems()))
+        class result(parray.type):
+            length = len(sections)
+            def _object_(self):
+                sect = sections[len(self.value)]
+                return dyn.clone(sectionentry, Section=sect, SectionName=sect['Name'].str())
+        return result
+
+    def __CertificatePadding(self):
+        header = self.p.Header()
+        if len(header['DataDirectory']) < 4:
+            return ptype.undefined
+
+        res = header['DataDirectory'][4]
+        offset, size = res['Address'].int(), res['Size'].int()
+        if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
+            return ptype.undefined
+
+        lastoffset = self['Sections'].li.getoffset() + self['Sections'].blocksize()
+        if hasattr(self.source, 'size') and offset < self.source.size():
+            return dyn.block(offset - lastoffset)
+
+        return ptype.undefined
+
+    def __Certificate(self):
+        header = self.p.Header()
+        if len(header['DataDirectory']) < 4:
+            return ptype.undefined
+
+        res = header['DataDirectory'][4]
+        offset, size = res['Address'].int(), res['Size'].int()
+        if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
+            return ptype.undefined
+
+        if hasattr(self.source, 'size') and offset < self.source.size():
+            return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda self,size=size: size)
+
+        return ptype.undefined
+
+    _fields_ = [
+        (__Sections, 'Sections'),
+        (__CertificatePadding, 'CertificatePadding'),
+        (__Certificate, 'Certificate'),
+    ]
 
 @NextHeader.define
 class DosExtender(pstruct.type, Header):

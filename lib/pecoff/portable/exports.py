@@ -9,7 +9,7 @@ import array,logging
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
-    def getModuleName(self):
+    def GetModuleName(self):
         module,name = self.d.li.str().split('.', 1)
         if name.startswith('#'):
             name = 'Ordinal%d'% int(name[1:])
@@ -17,7 +17,7 @@ class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
 
 class NamePointer(virtualaddress(pstr.szstring, type=dword)): pass
 class Ordinal(word):
-    def getExportIndex(self):
+    def GetExportIndex(self):
         '''Returns the Ordinal's index for things'''
         return self.int() - self.parent.parent.parent['Base'].int()
 
@@ -45,7 +45,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         ( __ExportData, 'ExportData'),
     ]
 
-    def getNames(self):
+    def GetNames(self):
         """Returns a list of all the export names"""
         Header = headers.locateHeader(self)
         section = Header['Sections'].getsectionbyaddress(self['AddressOfNames'].int())
@@ -59,7 +59,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             names.append(utils.strdup(data[x:]))
         return names
 
-    def getNameOrdinals(self):
+    def GetNameOrdinals(self):
         """Returns a list of all the Ordinals for each export"""
         Header = headers.locateHeader(self)
         address = self['AddressOfNameOrdinals'].int()
@@ -73,7 +73,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         block = data[offset: offset + 2*self['NumberOfNames'].int()]
         return [ordinal for ordinal in array.array('H', block)]
 
-    def getExportAddressTable(self):
+    def GetExportAddressTable(self):
         """Returns (export address table offset,[virtualaddress of each export]) from the export address table"""
         Header = headers.locateHeader(self)
         exportdirectory = self.parent.parent
@@ -91,19 +91,19 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         return address,result
 
     def iterate(self):
-        """For each export, yields (offset of export, ordinal, name, ordinalString, virtualaddress)"""
+        """For each export, yields (entry_offset, entry_ordinal, entry_name, entry_ordinalname, export_address)"""
         cls = self.__class__
 
         if 0 in {self['AddressOfNames'].int(),self['AddressOfNameOrdinals'].int()}:
             base = self['Base'].int()
-            ofs,eat = self.getExportAddressTable()
+            ofs,eat = self.GetExportAddressTable()
             for i,e in enumerate(eat):
                 yield ofs,i+base,'','',e
                 ofs += 4
             return
 
-        ofs,eat = self.getExportAddressTable()
-        for name,ordinal in zip(self.getNames(), self.getNameOrdinals()):
+        ofs,eat = self.GetExportAddressTable()
+        for name,ordinal in zip(self.GetNames(), self.GetNameOrdinals()):
             if 0 <= ordinal <= len(eat):
                 value = eat[ordinal]
             else:

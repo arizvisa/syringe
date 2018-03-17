@@ -6,7 +6,10 @@ from . import headers
 from .headers import virtualaddress
 
 class UNWIND_CODE(dyn.union):
-    #http://msdn.microsoft.com/en-us/library/ck9asaa9.aspx
+    # http://msdn.microsoft.com/en-us/library/ck9asaa9.aspx
+
+    # FIXME: this is a pretty minimal grammar...
+    #            fix this implementation and treat like one.
 
     @pbinary.bigendian
     class _CodeOffset(pbinary.struct):
@@ -22,26 +25,42 @@ class UNWIND_CODE(dyn.union):
 
 class UNWIND_INFO(pstruct.type):
     class Header(pbinary.struct):
-        EHANDLER = 0x1
-        UHANDLER = 0x2
-        CHAININFO = 0x4
-        _fields_=[(3,'Version'),(5,'Flags')]
-    class Frame(pbinary.struct): _fields_=[(4,'Register'),(4,'Offset')]
+        class UNW_FLAG_(pbinary.enum):
+            width = 5
+            _values_ = [
+                ('NHANDLER', 0),
+                ('EHANDLER', 1),
+                ('UHANDLER', 2),
+                ('FHANDLER', 3),
+                ('CHAININFO', 4),
+            ]
+        _fields_=[
+            (UNW_FLAG_, 'Flags'),
+            (3, 'Version'),
+        ]
+
+    class Frame(pbinary.struct):
+        _fields_ = [
+            (4, 'Register'),
+            (4, 'Offset'),
+        ]
     class ExceptionHandler(pstruct.type):
         _fields_ = [
-            (virtualaddress(ptype.undefined), 'Address'),
+            (virtualaddress(ptype.undefined, type=dword), 'Address'),
             (ptype.undefined, 'Data')
         ]
+
     def __ExceptionHandler(self):
         h = self['Header'].l
-        n = h['Flags']
-        if (n&(h.EHANDLER|h.UHANDLER)>0) and (n&h.CHAININFO == 0):
+        n = h.__field__('Flags')
+        if (n.int() & (n.byname('EHANDLER') | n.byname('UHANDLER')) > 0) and (n.int() & n.byname('CHAININFO') == 0):
             return self.ExceptionHandler
         return ptype.undefined
+
     def __ChainedUnwindInfo(self):
         h = self['Header'].l
-        n = h['Flags']
-        if n&h.CHAININFO > 0:
+        n = h.__field__('Flags')
+        if n.int() == n.byname('CHAININFO') > 0:
             return RUNTIME_FUNCTION
         return ptype.undefined
 
@@ -51,6 +70,7 @@ class UNWIND_INFO(pstruct.type):
         (byte, 'CountOfCodes'),
         (Frame, 'Frame'),
         (lambda s: dyn.array(UNWIND_CODE, s['CountOfCodes'].li.int()), 'UnwindCode'),
+        (dyn.align(4), 'align(ExceptionHandler)'),  # FIXME: this was copied from IDA
         (__ExceptionHandler, 'ExceptionHandler'),
         (__ChainedUnwindInfo, 'ChainedUnwindInfo'),
     ]
@@ -59,7 +79,7 @@ class RUNTIME_FUNCTION(pstruct.type):
     _fields_ = [
         (dword, 'BeginAddress'),
         (dword, 'EndAddress'),
-        (virtualaddress(UNWIND_INFO), 'UnwindData'),
+        (virtualaddress(UNWIND_INFO, type=dword), 'UnwindData'),
     ]
 
 class IMAGE_EXCEPTION_DIRECTORY(parray.block):
@@ -70,11 +90,11 @@ class IMAGE_EXCEPTION_DIRECTORY(parray.block):
 
 if __name__ == '__main__':
     import pecoff,ptypes
-    a = pecoff.Executable.open('c:/windows/sysnative/wow64win.dll')
-    print a['padding'].hexdump()
-    print a['Data']['Sections'][0]
+    a = pecoff.Executable.open('c:/windows/system32/wow64win.dll', mode='rb')
+    print a['Next']['Header']['padding'].hexdump()
+    print a['Next']['Data']['Sections'][0]
     #b = a.new(dyn.block(0x5b74), offset=0x50e00)
-    b = a['Data']['DataDirectory'][3]['virtualaddress'].d
+    b = a['Next']['Header']['DataDirectory'][3]['Address'].d
     b=b.l
     #c = RUNTIME_FUNCTION(source=ptypes.prov.proxy(b))
     c = b[2]['UnwindData'].d.l
