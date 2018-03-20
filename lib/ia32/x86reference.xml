@@ -10663,12 +10663,10 @@ Should I add this comment?
 	  <src><a>W</a><t>ps</t></src>   
 	</syntax>
         <instr_ext>sse1</instr_ext>
-	,v<grp1>simdfp</grp1>, int(self['vindex'])
+	<grp1>simdfp</grp1>
 	<grp2>logical</grp2>
 	<note><brief>Bitwise Logical AND NOT of Packed Single-FP Values</brief></note>
-        if v > 0:
-          </entry>[v-1]
-        return None
+      </entry>
 
       <entry r="yes"> 
         <pref>66</pref>   

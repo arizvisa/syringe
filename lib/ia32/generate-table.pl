@@ -1,18 +1,72 @@
 #!/usr/bin/perl
 use XML::Simple;
 use Data::Dumper;
+use Getopt::ArgParse;
 
 use strict; use warnings;
 
+local $/=undef;
+
+## parse out command line arguments using damian conway's genius..
+my $ap = Getopt::ArgParse->new_parser(
+    description => "Generate an opcode table for determining instruction lengths.",
+    print_usage_if_help => 1,
+);
+$ap->add_arg("--input", "-f",
+    dest=>'infile',
+    metavar=>'INFILE',
+    default=>'-',
+    help=>"the file containing the operand table .xml file.",
+);
+$ap->add_arg("--output", "-o",
+    dest=>'outfile',
+    metavar=>'OUTFILE',
+    default=>'-',
+    help=>"the file to write the generated contents.",
+);
+$ap->add_arg("--format",
+    dest=>'format',
+    choices_i=>['perl', 'python', 'javascript', 'c', 'shell'],
+    default=>'python',
+    required=>1,
+    help=>"the format to output the table in.",
+);
+$ap->add_arg("--name", "-n",
+    dest=>'name',
+    metavar=>'NAME',
+    help=>"the name of the table to output if the requsted format needs it.",
+);
+
+die $ap->print_usage() if !@ARGV;
+my $args = $ap->parse_args(@ARGV);
+
+## Figure out which file to read from
+my $infile;
+if ($args->infile eq "-") {
+    print STDERR "Reading from standard input...\n";
+    $infile = *STDIN;
+} else {
+    open($infile, '<', $args->infile) ||
+        die sprintf("Unable to open file %s for reading: %s", $args->infile, $!);
+    print STDERR sprintf("Reading from %s...\n", $args->infile);
+}
+
+## Figure out which file to write to
+my $outfile;
+if ($args->outfile eq "-") {
+    $outfile = *STDOUT;
+} else {
+    open($outfile, '>', $args->outfile) ||
+        die sprintf("Unable to open file %s for writing: %s", $args->outfile, $!);
+    print STDERR sprintf("Writing to %s...\n", $args->outfile);
+}
+
 ## parse xml file
 my $prefixes = "\x26\x2e\x36\x3e\x64\x65\x66\x67\xf0\xf2\xf3";
-local $/=undef;
-my $xml = <STDIN>;
-my $ref = XMLin($xml, ForceArray => ['operand'])->{instruction};
+my $ref = XMLin(<$infile>, ForceArray => ['operand'])->{instruction};
 
 ## create opcode list
-my @opcodes;
-@opcodes = map {undef} 0..0x1ff;
+my @opcodes = map {undef} 0..0x1ff;
 
 ## assign to opcode list
 foreach my $rec (@{$ref}) {
@@ -49,7 +103,7 @@ sub makeSize {
 #            die "$_ != $match";
 #        }
 #    }
-    return $lookup{$match} || int($match);
+    return $lookup{$value} || int($value);
 }
 
 ## convert operand-type to a single byte
@@ -165,7 +219,7 @@ sub mergeOperand {
 for (my $index=0; $index < @opcodes; $index++) {
     my $value = $opcodes[$index]->{value};
     if ( index($prefixes, chr($index)) == -1 and !defined $value) {
-        print STDERR sprintf("[%x] is undefined\n", $index);
+        #print STDERR sprintf("[%x] is undefined\n", $index);
     }
 }
 
@@ -188,46 +242,80 @@ for (my $op=0; $op < @opcodes; $op++) {
 $opcodes[0x10f] = "\xc1";       # 3dNow! -> \x0f\x0f modrm imm1
 
 ############################
-my $group=0x10;
-if (0) {
-    @_ = map { sprintf("0x%02x", $_) } @result;
-    @_ = chunkArray($group, @_);
-    my $row=0;
-    @_ = map { sprintf("/*%02X*/ %s", ($row++)*$group, join(",", @{$_})); } @_;
-    my $array = join(",\n", @_);
-
-    print <<EOF
-#include "types.h"
-
-byte OperandLookupTable[] = {
-$array
-};
-EOF
-}
-
-############################
 if (0) {
     my $string = join("", map{chr}@result);
     print "$string";
 }
 
 ############################
-if (1) {
+my $name = $args->name || "OperandLookupTable";
+if (lc $args->format eq "python") {
     my $string = join("", map{chr}@result);
-    print "OperandLookupTable = ''.join([\n";
+    print $outfile "$name = ''.join([\n";
 
     for (my $i=0; $i<length($string); $i+=0x10) {
         my $s = substr($string, $i, 0x10);
 
-        print "    \"";
+        print $outfile "    \"";
         for (my $n = 0; $n < length($s); $n++) {
             my $c = substr($s, $n, 1);
-#            print "\n>".length($c) . "\n";
-            printf("\\x%02x",ord($c) & 0xff);
+            printf $outfile ("\\x%02x",ord($c) & 0xff);
         }
-        print "\"\n";
+        print $outfile "\"\n";
     }
+    print $outfile "])\n";
 
-    print "])\n";
+} elsif (lc $args->format eq "c") {
+    my $group=0x10;
+    @_ = map { sprintf("0x%02x", $_) } @result;
+    @_ = chunkArray($group, @_);
+    my $row=0;
+    @_ = map { sprintf("/*%02X*/ %s", ($row++)*$group, join(",", @{$_})); } @_;
+    my $array = join(",\n", @_);
+
+    print $outfile "#include <stdint.h>\n\n";
+    print $outfile "const uint8_t $name\[] = {\n";
+    print $outfile "$array\n";
+    print $outfile "};";
+} elsif (lc $args->format eq "perl") {
+    my $string = join("", map{chr}@result);
+    print $outfile "package $name;\n";
+    print $outfile "use strict; use warnings;\n";
+    print $outfile "\n";
+    print $outfile 'use vars qw(@EXPORT_OK @Table);'."\n";
+    print $outfile "\n";
+    print $outfile 'our @EXPORT_OK = (@Table);'."\n";
+    
+
+    print $outfile 'my @Table = ('."\n";
+    for (my $i=0; $i<length($string); $i+=0x10) {
+        my $s = substr($string, $i, 0x10);
+
+        print $outfile "    ";
+        for (my $n = 0; $n < length($s); $n++) {
+            my $c = substr($s, $n, 1);
+            printf $outfile ("0x%02x, ",ord($c) & 0xff);
+        }
+        print $outfile "\n";
+    }
+    print $outfile ");\n";
+} elsif (lc $args->format eq "shell") {
+    for (my $i=0; $i<@result; $i++) {
+        print $outfile "$result[$i]\n";
+    }
+} elsif (lc $args->format eq "javascript" || lc $args eq "js") {
+    print $outfile "module.exports['$name'] = [\n";
+    for (my $i=0; $i<@result; $i+=0x10) {
+        my @slice = @result[$i..$i+0x10];
+        print $outfile "    ";
+        for (my $j=0; $j<scalar(@slice)-1; $j++) {
+            printf $outfile ("0x%02x, ", $slice[$j] & 0xff);
+        }
+        print $outfile "\n";
+    }
+    print $outfile "];\n";
+    print $outfile "module.exports[null] = module.exports['$name'];\n";
+} else {
+    die sprintf("Unknown format: %s", $args->format);
 }
 
