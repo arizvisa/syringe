@@ -183,16 +183,21 @@ class float_t(type):
         elif value == 0.0 and math.atan2(value, value) == 0.0:
             sf, exponent, mantissa = 0, 0, 0
         else:
-            m,e = math.frexp(value)
+            # extract the exponent and mantissa
+            m, e = math.frexp(value)
 
-            # extract components from value
+            # grab the sign flag
             s = math.copysign(1.0, m)
             sf = 1 if s < 0 else 0
 
+            # adjust the exponent and remove the implicit bit
+            m = abs(m)
             exponent = e + exponentbias - 1
             if exponent != 0:
-                m = m*2.0 - 1.0     # remove the implicit bit
-            mantissa = int(m * (2**self.components[2]))
+                m = m * 2.0 - 1.0
+
+            # convert the fractional mantissa into a binary number
+            mantissa = math.trunc(m * (2**self.components[2]))
 
         # store components
         result = bitmap.zero
@@ -334,6 +339,7 @@ if __name__ == '__main__':
         (0x7f7fffff, 3.4028234663852886e+38),
         (0x3eaaaaab, 1.0/3),
         (0x41c80000, 25.0),
+        (0xc0b80aa6, -5.7513),
 
         (0xffc00000, +float('NaN')),
         (0x7fc00000, -float('NaN')),
@@ -351,6 +357,7 @@ if __name__ == '__main__':
         (0x4000000000000000, 2.0),
         (0xc000000000000000, -2.0),
         (0x3fd5555555555555, 0.3333333333333333),
+        (0xc00921fb54443000, -3.1415926535901235),
 
         (0xfff8000000000000, +float('NaN')),
         (0x7ff8000000000000, -float('NaN')),
@@ -406,7 +413,7 @@ if __name__ == '__main__':
             raise Success
         elif math.isinf(n) and math.isinf(expected) and n >= 0 and expected >= 0:
             raise Success
-        raise Failure('getf: {:#x} == {:f}? result:{:#x} ({:f}) python:{:#x}'.format(integer, expected, res.int(), n, i))
+        raise Failure('getf: {:#x} == {:f}? pfloat-int:{:#x} pfloat-get:{:f} python-expected:{:#x}'.format(integer, expected, res.int(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):
