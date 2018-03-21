@@ -188,6 +188,7 @@ if __name__ == '__main__':
     args = Args.parse_args(sys.argv[1:])
 
     result = collections.defaultdict(dict)
+    name = None
     for source in itertools.imap(ptypes.prov.fileobj, args.infile):
         Log.info("Beginning to process {:s}...".format(source.file.name))
         infile = pecoff.Executable.File(source=source)
@@ -213,7 +214,10 @@ if __name__ == '__main__':
         continue
 
     latest = sorted(result.keys())[-1]
+    print >>args.outfile, "module.exports['Name'] = {:s};".format(result[latest]['Name'])
+
     for version, structs in sorted(result.items(), key=operator.itemgetter(0)):
         print >>args.outfile, "module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.iteritems())))
+
     print >>args.outfile, "module.exports[null] = module.exports['{:s}'];".format(latest)
     sys.exit(0)
