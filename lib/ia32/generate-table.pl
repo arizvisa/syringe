@@ -270,7 +270,7 @@ if (lc $args->format eq "python") {
     @_ = map { sprintf("0x%02x", $_) } @result;
     @_ = chunkArray($group, @_);
     my $row=0;
-    @_ = map { sprintf("/*%02X*/ %s", ($row++)*$group, join(",", @{$_})); } @_;
+    @_ = map { sprintf("/* % 3X */ %s", ($row++)*$group, join(",", @{$_})); } @_;
     my $array = join(",\n", @_);
 
     print $outfile "#include <stdint.h>\n\n";
@@ -307,7 +307,7 @@ if (lc $args->format eq "python") {
     print $outfile "module.exports['$name'] = [\n";
     for (my $i=0; $i<@result; $i+=0x10) {
         my @slice = @result[$i..$i+0x10];
-        print $outfile "    ";
+        printf $outfile ("/* % 3X */ ", $i);
         for (my $j=0; $j<scalar(@slice)-1; $j++) {
             printf $outfile ("0x%02x, ", $slice[$j] & 0xff);
         }
