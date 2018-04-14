@@ -32,7 +32,7 @@ class ChunkType(ptype.definition):
 
 class ChunkGeneral(pstruct.type):
     def __data(self):
-        t = int(self['header'].li['type'])
+        t = self['header'].li['type'].int()
         return ChunkType.get(t, type=t, length=self.blocksize()-self['header'].size())
 
     _fields_ = [
@@ -41,7 +41,7 @@ class ChunkGeneral(pstruct.type):
     ]
 
     def blocksize(self):
-        return int(self['header']['size'])
+        return self['header']['size'].int()
 
 class ChunkArray(parray.type):
     _object_ = ChunkGeneral
@@ -86,21 +86,21 @@ class File(pstruct.type):
     _fields_ = [
         (ChunkHeader, 'header'),
         (FlicHeader, 'flicheader'),
-        (lambda s: dyn.clone(s._chunks, blocksize=lambda x: int(s['header'].li['size'])-s['flicheader'].size()-s['header'].size()), 'data'),
+        (lambda s: dyn.clone(s._chunks, blocksize=lambda x: s['header'].li['size'].int()-s['flicheader'].size()-s['header'].size()), 'data'),
     ]
 
     def summary(self):
         if self.initialized:
             lookup = {}
             for n in self['data']:
-                t = int(n['header']['type'])
+                t = n['header']['type'].int()
                 try:
                     lookup[t] += 1
                 except KeyError:
                     lookup[t] = 1
                 continue
             s = ','.join([ '(%x, %d)'% (k,v) for k,v in lookup.items() ])
-            return 'header=%x flicheader=. data=%s'% (int(self['header']['type']), s)
+            return 'header=%x flicheader=. data=%s'% (self['header']['type'].int(), s)
         return super(File, self).summary()
     repr = summary
 
@@ -168,7 +168,7 @@ class HUFFMAN_TABLE(pstruct.type):
         (WORD,  'codelength'),
         (WORD,  'numcodes'),
         (dyn.array(BYTE,6),  'reserved'),
-        (lambda s: dyn.array(HUFFMAN_CODE, int(s['numcodes'].li)), 'code')
+        (lambda s: dyn.array(HUFFMAN_CODE, s['numcodes'].li.int()), 'code')
     ]
 
 @ChunkType.define
@@ -180,7 +180,7 @@ class FRAME_TYPE(pstruct.type):
         (short, 'reserved'),
         (ushort, 'width'),
         (ushort, 'height'),
-        (lambda s: dyn.clone(ChunkArray, length=int(s['chunks'].li)), 'data')
+        (lambda s: dyn.clone(ChunkArray, length=s['chunks'].li.int()), 'data')
     ]
 
 @ChunkType.define
@@ -206,7 +206,7 @@ class LABELEX(pstruct.type):
     _fields_ = [
         (WORD, 'label'),
         (dyn.array(BYTE, 2), 'reserved'),
-        (lambda s: dyn.block( int(s['size'].li) - 4 - 2 - 2 - 2), 'name')
+        (lambda s: dyn.block( s['size'].li.int() - 4 - 2 - 2 - 2), 'name')
     ]
 
 @ChunkType.define
@@ -246,7 +246,7 @@ class ColorPacket(pstruct.type):
     _fields_ = [
         (BYTE, 'skip'),
         (BYTE, 'count'),
-        (lambda s: dyn.array(RGB, int(s['count'].li) or 256), 'color')
+        (lambda s: dyn.array(RGB, s['count'].li.int() or 256), 'color')
     ]
 
 @ChunkType.define
@@ -254,20 +254,20 @@ class COLOR_64(pstruct.type):
     type = 11
     _fields_ = [
         (WORD, 'numpackets'),
-        (lambda s: dyn.array(ColorPacket, int(s['numpackets'].li)), 'packets')
+        (lambda s: dyn.array(ColorPacket, s['numpackets'].li.int()), 'packets')
     ]
 
 class LinePacket(pstruct.type):
     _fields_ = [
         (BYTE, 'skip'),
         (BYTE, 'count'),
-        (lambda s: dyn.block((int(s['count'].li)&0x80) and 1 or int(s['count'].li)&0x7f ), 'data') #XXX
+        (lambda s: dyn.block((s['count'].li.int()&0x80) and 1 or s['count'].li.int()&0x7f), 'data') #XXX
     ]
 
 class Line(pstruct.type):
     _fields_ = [
         (BYTE, 'numpackets'),
-        (lambda s: dyn.array(LinePacket, int(s['numpackets'].li)), 'packets')
+        (lambda s: dyn.array(LinePacket, s['numpackets'].li.int()), 'packets')
     ]
 
 @ChunkType.define
@@ -276,7 +276,7 @@ class DELTA_FLI(pstruct.type):
     _fields_ = [
         (WORD, 'skip'),
         (WORD, 'numlines'),
-        (lambda s: dyn.array(Line, int(s['numlines'].li)), 'lines')
+        (lambda s: dyn.array(Line, s['numlines'].li.int()), 'lines')
     ]
 
 if __name__ == '__main__':
