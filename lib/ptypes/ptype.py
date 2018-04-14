@@ -1650,11 +1650,19 @@ class definition(object):
         cls.cache[type] = object
 
     @classmethod
-    def lookup(cls, type):
-        """Search ``cls.cache`` for a ptype keyed by the specified value ``type``
+    def lookup(cls, *type, **attrs):
+        """Search ``cls.cache`` for a ptype keyed by the specified value ``type``.
 
+        If ``attrs`` is specified, clone ``type`` with the specified attributes.
         Raises a KeyError if unable to find the ``type`` in it's cache.
         """
+        if len(type) != 1:
+            raise TypeError("lookup() takes exactly {:d} argument ({:d} given)".format(1, len(type)))
+        type, = type
+
+        if attrs:
+            t = cls.cache[type]
+            return clone(t, **attrs)
         return cls.cache[type]
 
     @classmethod
