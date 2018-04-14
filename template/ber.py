@@ -2,8 +2,6 @@ import logging,math
 import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
 
-ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
-
 ### Primitive types for records
 class IdentifierLong(pbinary.terminatedarray):
     class _object_(pbinary.struct):
@@ -29,7 +27,8 @@ class Length(pbinary.struct):
     __int__ = num = number = int
 
     def isIndefinite(self):
-        assert self.initialized
+        if not self.initializedQ():
+            raise ptypes.error.InitializationError(self, 'isIndefinite')
         return self['form'] == self['count'] == 0
 
     def summary(self):
@@ -80,15 +79,15 @@ class Element(pstruct.type):
     protocol = Protocol
     def Value(self):
         t = self['Type'].li
-        cons,n = t['Constructed'],t['Tag'].number()
+        cons, tag = t['Constructed'],t['Tag'].number()
         K = self.protocol.lookup(t['Class'])
 
         # Lookup type by it's class
         try:
-            result = K.lookup(n)
+            result = K.lookup(tag)
         except KeyError:
             result = self.protocol.UnknownConstruct if cons else self.protocol.Unknown
-            result = dyn.clone(result, type=(t['Class'],n))
+            result = dyn.clone(result, type=(t['Class'], tag))
         return result
 
     def __Value(self):
@@ -105,7 +104,9 @@ class Element(pstruct.type):
         if issubclass(result, parray.block):
             result = dyn.clone(result, blocksize=lambda _:length.number())
         elif length.isIndefinite() and issubclass(result, parray.terminated):
-            result = dyn.clone(result, isTerminator=lambda s,v: type(v['Value']) == EOC)
+            # Type['Constructed']
+            # Length['Form'] and !Length['Value']
+            result = dyn.clone(result, isTerminator=lambda s, v: isinstance(v['Value'], EOC))
         elif ptype.iscontainer(result):
             result = result
         elif ptype.istype(result):
@@ -165,7 +166,7 @@ class OBJECT_IDENTIFIER(ptype.type):
     type = 0x06
 
     def set(self, string):
-        res = map(int,string.split('.'))
+        res = map(int, string.split('.'))
         val = [res.pop(0)*40 + res.pop(0)]
         for n in res:
             if n <= 127:
@@ -193,10 +194,10 @@ class OBJECT_IDENTIFIER(ptype.type):
         data = iter(data)
         for n in data:
             v = bitmap.new(0,0)
-            while n&0x80:
-                v = bitmap.push(v,(n&0x7f,7))
+            while n & 0x80:
+                v = bitmap.push(v, (n & 0x7f, 7))
                 n = data.next()
-            v = bitmap.push(v,(n,7))
+            v = bitmap.push(v, (n, 7))
             res.append(bitmap.number(v))
         return '.'.join(map(str,res))
 
@@ -206,21 +207,66 @@ class OBJECT_IDENTIFIER(ptype.type):
             return '{:s} ({:s}) ({!r})'.format(self._values_[oid],oid,data)
         return '{:s} ({!r})'.format(oid,data)
 
+    # https://support.microsoft.com/en-us/help/287547/object-ids-associated-with-microsoft-cryptography
     _values_ = [
-        ('SPC_INDIRECT_DATA_OBJID', '1.3.6.1.4.1.311.2.1.4'),
-        ('SPC_STATEMENT_TYPE_OBJID', '1.3.6.1.4.1.311.2.1.11'),
-        ('SPC_SP_OPUS_INFO_OBJID', '1.3.6.1.4.1.311.2.1.12'),
-        ('SPC_INDIVIDUAL_SP_KEY_PURPOSE_OBJID', '1.3.6.1.4.1.311.2.1.21'),
-        ('SPC_COMMERCIAL_SP_KEY_PURPOSE_OBJID', '1.3.6.1.4.1.311.2.1.22'),
+        ('spcIndirectDataContext', '1.3.6.1.4.1.311.2.1.4'),
+        ('spcStatementType', '1.3.6.1.4.1.311.2.1.11'),
+        ('spcSpOpusInfo', '1.3.6.1.4.1.311.2.1.12'),
+        ('individualCodeSigning', '1.3.6.1.4.1.311.2.1.21'),
+        ('commercialCodeSigning', '1.3.6.1.4.1.311.2.1.22'),
         ('SPC_MS_JAVA_SOMETHING', '1.3.6.1.4.1.311.15.1'),
-        ('SPC_PE_IMAGE_DATA_OBJID', '1.3.6.1.4.1.311.2.1.15'),
-        ('SPC_CAB_DATA_OBJID', '1.3.6.1.4.1.311.2.1.25'),
+        ('spcPelmageData', '1.3.6.1.4.1.311.2.1.15'),
+        ('spcLink', '1.3.6.1.4.1.311.2.1.25'),
         ('SPC_TIME_STAMP_REQUEST_OBJID', '1.3.6.1.4.1.311.3.2.1'),
         ('SPC_SIPINFO_OBJID', '1.3.6.1.4.1.311.2.1.30'),
         ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1 */
         ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256 */
         ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
         ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
+
+        # Authenticode PE
+        ('codeSigning', '1.3.6.1.5.5.7.3.3'),
+        ('timeStamping', '1.3.6.1.5.5.7.3.8'),
+        ('SPC_KP_LIFETIME_SIGNING_OBJID',  '1.3.6.1.4.1.311.10.3.13'),
+
+        # PKCS #7 & #9
+        ('md5', '1.2.840.113549.2.5'),
+        ('rsa', '1.3.14.3.2.1.1'),
+        ('desMAC', '1.3.14.3.2.10'),
+        ('rsaSignature', '1.3.14.3.2.11'),
+        ('dsa', '1.3.14.3.2.12'),
+        ('dsaWithSHA', '1.3.14.3.2.13'),
+        ('mdc2WithRSASignature', '1.3.14.3.2.14'),
+        ('shaWithRSASignature', '1.3.14.3.2.15'),
+        ('dhWithCommonModulus', '1.3.14.3.2.16'),
+        ('desEDE', '1.3.14.3.2.17'),
+        ('sha', '1.3.14.3.2.18'),
+        ('mdc-2', '1.3.14.3.2.19'),
+        ('dsaCommon', '1.3.14.3.2.20'),
+        ('dsaCommonWithSHA', '1.3.14.3.2.21'),
+        ('rsaKeyTransport', '1.3.14.3.2.22'),
+        ('keyed-hash-seal', '1.3.14.3.2.23'),
+        ('md2WithRSASignature', '1.3.14.3.2.24'),
+        ('md5WithRSASignature', '1.3.14.3.2.25'),
+        ('sha1', '1.3.14.3.2.26'),
+        ('dsaWithSHA1', '1.3.14.3.2.27'),
+        ('dsaWithCommandSHA1', '1.3.14.3.2.28'),
+        ('sha-1WithRSAEncryption', '1.3.14.3.2.29'),
+        ('contentType', '1.2.840.113549.1.9.3'),
+        ('messageDigest', '1.2.840.113549.1.9.4'),
+        ('signingTime', '1.2.840.113549.1.9.5'),
+        ('counterSignature', '1.2.840.113549.1.9.6'),
+        ('challengePassword', '1.2.840.113549.1.9.7'),
+        ('unstructuredAddress', '1.2.840.113549.1.9.8'),
+        ('extendedCertificateAttributes', '1.2.840.113549.1.9.9'),
+        ('rsaEncryption', '1.2.840.113549.1.1.1'),
+        ('md2withRSAEncryption', '1.2.840.113549.1.1.2'),
+        ('md4withRSAEncryption', '1.2.840.113549.1.1.3'),
+        ('md5withRSAEncryption', '1.2.840.113549.1.1.4'),
+        ('sha1withRSAEncryption', '1.2.840.113549.1.1.5'),
+        ('rsaOAEPEncryptionSET', '1.2.840.113549.1.1.6'),
+        ('dsa', '1.2.840.10040.4.1'),
+        ('dsaWithSha1', '1.2.840.10040.4.3'),
     ]
     _values_ = dict(_values_)
 
@@ -292,9 +338,12 @@ class BMPString(pstr.string):
 
 ### Base structures
 class Packet(Element):
-    attributes = {'byteorder':ptypes.config.byteorder.bigendian}
+    byteorder = ptypes.config.byteorder.bigendian
+    attributes = {'byteorder':byteorder}
+
 class File(Element):
-    attributes = {'byteorder':ptypes.config.byteorder.bigendian}
+    byteorder = ptypes.config.byteorder.bigendian
+    attributes = {'byteorder':byteorder}
 
 # add an alias for exported objects
 protocol = Protocol

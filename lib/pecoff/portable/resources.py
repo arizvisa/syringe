@@ -5,7 +5,7 @@ from ..__base__ import *
 from . import headers
 from .headers import virtualaddress
 
-import itertools
+import logging, itertools
 
 class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
     _fields_ = [
@@ -21,14 +21,15 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
 
     def Iterate(self):
         return itertools.chain((n.Name() for n in self['Names']), (n.Name() for n in self['Ids']))
-    iterate = Iterate
     def List(self):
         return list(self.Iterate())
-    list = List
-
     def Entry(self, name):
         iterable = (n['Entry'].d for n in itertools.chain(iter(self['Names']), iter(self['Ids'])) if name == n.Name())
         return next(iterable, None)
+
+    # aliases
+    iterate = Iterate
+    list = List
     entry = Entry
 
 class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
@@ -93,90 +94,130 @@ class IMAGE_RESOURCE_DIRECTORY_NAME(parray.type):
 class IMAGE_RESOURCE_DIRECTORY_ID(parray.type):
     _object_ = IMAGE_RESOURCE_DIRECTORY_ENTRY
 
-## specific resources
-if True:
-    import ptypes.ptype as ptype
-    class VersionValue(ptype.definition): cache = {}
-    class VersionEntry(ptype.definition): cache = {}
+## Resource types
+class ResourceType(pint.enum):
+    _values_ = [
+        ('RT_CURSOR', 1),
+        ('RT_FONT', 8),
+        ('RT_BITMAP', 2),
+        ('RT_ICON', 3),
+        ('RT_MENU', 4),
+        ('RT_DIALOG', 5),
+        ('RT_STRING', 6),
+        ('RT_FONTDIR', 7),
+        ('RT_ACCELERATOR', 9),
+        ('RT_RCDATA', 10),
+        ('RT_MESSAGETABLE', 11),
+        ('RT_GROUP_CURSOR', 12),
+        ('RT_GROUP_ICON', 14),
+        ('RT_VERSION', 16),
+        ('RT_DLGINCLUDE', 17),
+        ('RT_PLUGPLAY', 19),
+        ('RT_VXD', 20),
+        ('RT_ANICURSOR', 21),
+        ('RT_ANIICON', 22),
+        ('RT_HTML', 23),
+        ('RT_MANIFEST', 24),
+    ]
 
-    class Entry(pstruct.type):
-        def Value(self):
-            szkey = self['szKey'].li.str()
-            sz = self['wValueLength'].li.int()
-            return VersionValue.get(szkey, type=szkey, length=sz)
+## resource navigation
+class RT_VERSION_ValueType(ptype.definition): cache = {}
+class RT_VERSION_EntryType(ptype.definition): cache = {}
 
-        def Child(self):
-            szkey = self['szKey'].li.str()
-            return VersionEntry.lookup(szkey)
-            #bs = self['wLength'].li.int() - self.blocksize()
-            #return VersionEntry.get(szkey, type=szkey, length=bs)
+class RT_VERSION(pstruct.type):
+    def __Type(self):
+        if callable(getattr(self, 'Type', None)):
+            return self.Type()
 
-        def __Children(self):
-            bs = self['wLength'].li.int() - sum(self[n].li.size() for _, n in self._fields_[:-1])
-            assert bs >= 0, bs
-            class Member(pstruct.type):
-                _fields_ = [
-                    (dyn.align(4), 'Padding'),
-                    (self.Child(), 'Child'),
-                ]
-            return dyn.clone(parray.block, _object_=Member, blocksize=lambda s, bs=bs:bs)
+        cls, key = self.__class__, self['szKey'].li.str()
+        if cls != RT_VERSION:
+            logging.warn("{:s} : Unknown type for entry {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
 
-        _fields_ = [
-            (word, 'wLength'),
-            (word, 'wValueLength'),
-            (word, 'wType'),
-            (pstr.szwstring, 'szKey'),
-            (dyn.align(4), 'Padding'),
-            (lambda s: s.Value(), 'Value'),
-            (__Children, 'Children'),
-        ]
+        sz = self['wValueLength'].li.int()
+        return RT_VERSION_ValueType.get(key, type=key, length=sz)
 
-    @VersionEntry.define
-    class StringTable(Entry):
-        type = "StringFileInfo"
-        def Child(self):
-            return String
+    def __ChildType(self):
+        if callable(getattr(self, 'ChildType', None)):
+            return self.ChildType()
 
-    class String(Entry):
-        def Child(self):
-            return Empty
-        def Value(self):
-            # wValueLength = number of 16-bit words of wValue
-            l = self['wValueLength'].li.int()
-            return dyn.clone(pstr.wstring, length=l)
+        cls, key = self.__class__, self['szKey'].li.str()
+        if self.__class__ != RT_VERSION:
+            logging.warn("{:s} : Unknown child type for entry {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
 
-    @VersionEntry.define
-    class Var(Entry):
-        type = "VarFileInfo"
-        def Value(self):
-            l = self['wValueLength'].li.int()
-            return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
-    @VersionEntry.define
-    class Empty(ptype.undefined):
-        type = "Translation"
+        return RT_VERSION_EntryType.lookup(key)
+        #bs = self['wLength'].li.int() - self.blocksize()
+        #return RT_VERSION_EntryType.get(szkey, type=szkey, length=bs)
 
-    @VersionValue.define
-    class VS_FIXEDFILEINFO(pstruct.type):
-        type = 'VS_VERSION_INFO'
-        _fields_ = [
-            (dword, 'dwSignature'),
-            (dword, 'dwStrucVersion'),
-            (dword, 'dwFileVersionMS'),
-            (dword, 'dwFileVersionLS'),
-            (dword, 'dwProductVersionMS'),
-            (dword, 'dwProductVersionLS'),
-            (dword, 'dwFileFlagsMask'),
-            (dword, 'dwFileFlags'),
-            (dword, 'dwFileOS'),
-            (dword, 'dwFileType'),
-            (dword, 'dwFileSubtype'),
-            (dword, 'dwFileDateMS'),
-            (dword, 'dwFileDateLS'),
-        ]
+    def __Children(self):
+        fields = self._fields_[:-1]
+        length, cb = self['wLength'].li.int(), sum(self[name].li.size() for _, name in fields)
 
-    class VS_VERSIONINFO(Entry):
-        def Child(self):
-            return Entry
+        if cb > length:
+            raise AssertionError("Invalid block size returned for child: {:d}".format(bs))
+
+        ct = self.__ChildType()
+        class Member(pstruct.type):
+            _fields_ = [
+                (dyn.align(4), 'Padding'),
+                (ct, 'Child'),
+            ]
+        return dyn.clone(parray.block, _object_=Member, blocksize=lambda s, bs=length-cb:bs)
+
+    _fields_ = [
+        (word, 'wLength'),
+        (word, 'wValueLength'),
+        (word, 'wType'),
+        (pstr.szwstring, 'szKey'),
+        (dyn.align(4), 'Padding'),
+        (__Type, 'Value'),
+        (__Children, 'Children'),
+    ]
+
+@RT_VERSION_EntryType.define
+class RT_VERSION_StringFileInfo(RT_VERSION):
+    type = "StringFileInfo"
+    def ChildType(self):
+        return RT_VERSION_String
+
+class RT_VERSION_String(RT_VERSION):
+    def ChildType(self):
+        return ptype.undefined
+    def Type(self):
+        # wValueLength = number of 16-bit words of wValue
+        l = self['wValueLength'].li.int()
+        return dyn.clone(pstr.wstring, length=l)
+
+@RT_VERSION_EntryType.define
+class RT_VERSION_VarFileInfo(RT_VERSION):
+    type = "VarFileInfo"
+    def Type(self):
+        l = self['wValueLength'].li.int()
+        return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
+@RT_VERSION_EntryType.define
+class RT_VERSION_Translation(ptype.undefined):
+    type = "Translation"
+@RT_VERSION_ValueType.define
+class VS_FIXEDFILEINFO(pstruct.type):
+    type = 'VS_VERSION_INFO'
+    _fields_ = [
+        (dword, 'dwSignature'),
+        (dword, 'dwStrucVersion'),
+        (dword, 'dwFileVersionMS'),
+        (dword, 'dwFileVersionLS'),
+        (dword, 'dwProductVersionMS'),
+        (dword, 'dwProductVersionLS'),
+        (dword, 'dwFileFlagsMask'),
+        (dword, 'dwFileFlags'),
+        (dword, 'dwFileOS'),
+        (dword, 'dwFileType'),
+        (dword, 'dwFileSubtype'),
+        (dword, 'dwFileDateMS'),
+        (dword, 'dwFileDateLS'),
+    ]
+
+class VS_VERSIONINFO(RT_VERSION):
+    def ChildType(self):
+        return RT_VERSION
 
 if __name__ == '__main__':
     import pecoff

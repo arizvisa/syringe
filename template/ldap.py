@@ -13,12 +13,11 @@ if False:
             return super(CHOICE,self).__init__(**kwds)
 
         def Value(self):
-            t = self['Type'].li
-            cons,n = t['Constructed'],t['Tag'].number()
-
+            cls, t = self.__class__, self['Type'].li
+            cons, tag = t['Constructed'], t['Tag'].number()
             ctx = self.protocol.get(Context.Class)
             try:
-                res = ctx.lookup((self.__class__,n))
+                res = ctx.lookup((cls, tag))
             except KeyError:
                 return super(CHOICE,self).Value()
             return res
@@ -37,17 +36,19 @@ if False:
             return super(CONSTRAINT,self).__init__(**kwds)
 
         def append(self, value):
-            Type = value['Type'].li
-            c,n = Type['Class'],Type['Tag'].number()
+            cls, Type = self.__class__, value['Type'].li
+            K, tag = Type['Class'], Type['Tag'].number()
             index = len(self)
+
+            cache = self.Optional.cache
             try:
-                parent = self.__class__
-                t = self.Optional.cache.get((parent,n), self.Local.lookup((parent,index)))
+                L = self.Local.lookup((cls, index))
+                T = cache.get((cls, tag), L)
             except KeyError:
                 res = value
             else:
-                res = value.copy(Value=lambda:t, __name__=t.__name__)
-            return super(CONSTRAINT,self).append(res)
+                res = value.copy(Value=(lambda type=T: type), __name__=T.__name__)
+            return super(CONSTRAINT, self).append(res)
 
 ###########
 @ber.protocol.copy
@@ -60,7 +61,7 @@ class Application(ber.Application): cache = {}
 class Context(ber.Context): cache = {}
 
 ### ber primitives
-class CHOICE(ber.CHOICE): protocol = protocol
+class CHOICE(ber.Element): protocol = protocol  # FIXME: this needs to be dynamic
 def OPTIONAL(t): return dyn.clone(t, OPTIONAL=True)
 
 def SETOF(t):
