@@ -10,7 +10,8 @@ import six
 #Language = 1033 # English
 
 def parseResourceDirectory(filename):
-    mz = pecoff.Executable.open(filename, mode='r')
+    source = ptypes.prov.file(filename, mode='r')
+    mz = pecoff.Executable.File(source=source).l
     pe = mz['Next']['Header']
     sections = pe['Sections']
     datadirectory = pe['DataDirectory']
