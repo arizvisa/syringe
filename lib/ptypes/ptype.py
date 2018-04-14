@@ -1648,13 +1648,14 @@ class definition(object):
     @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
-        assert __builtin__.isinstance(cls.cache, dict), 'ptype.definition {!r} has an invalid .cache attribute : {!r}'.format(cls, cls.cache.__class__)
+        if not __builtin__.isinstance(cls.cache, dict):
+            raise error.AssertionError(cls, 'definition.add', message='{:s} has an invalid .cache attribute : {!r}'.format(cls.__name__, cls.cache.__class__))
         cls.cache[type] = object
 
         """Search ``cls.cache`` for a type with the specified value ``type``."""
     @classmethod
     def lookup(cls, *type):
-        """D.lookup(type[, default]) -> Lookup a ptype by ``type`` and return it.
+        """D.lookup(type[, default]) -> Lookup a ptype in the defintion D by ``type`` and return it.
 
         If it's not found return ``default`` or raise a KeyError if not specified.
         """
@@ -1669,7 +1670,7 @@ class definition(object):
 
     @classmethod
     def get(cls, *type, **attrs):
-        """D.get(type[, default], **attrs) -> Lookup a ptype by ``type`` and return a clone with ``attrs`` applied to it.
+        """D.get(type[, default], **attrs) -> Lookup a ptype in the definition D by ``type`` and return a clone of it with ``attrs`` applied.
 
         If ``type`` was not found, then return ``default`` or D.default if it's undefined.
         """
@@ -1692,6 +1693,28 @@ class definition(object):
         return clone(res, **attrs)
 
     @classmethod
+    def withdefault(cls, *type, **missingattrs):
+        """D.withdefault(type[, default], **attrs) -> Lookup a ptype in the definition D by ``type``.
+
+        If ``type`` was not found, then return ``default`` or D.default with ``missingattrs`` applied to it.
+        """
+
+        # check the arguments
+        if len(type) not in {1, 2}:
+            raise TypeError("withdefault() takes 1 or 2 arguments ({:d} given)".format(len(type)))
+
+        # extract the information from the arguments
+        type, default = (type) if len(type) > 1 else (type[0], cls.default)
+
+        # search in the cache for the specified type
+        try:
+            res = cls.cache[type]
+        except KeyError:
+            res = dyn.clone(default, **missingattrs)
+
+        return res
+
+    @classmethod
     def update(cls, otherdefinition):
         """Import the definition cache from ``otherdefinition``, effectively merging the contents into the current definition"""
         a = set(cls.cache.keys())
@@ -1707,7 +1730,6 @@ class definition(object):
 
     @classmethod
     def copy(cls, otherdefinition):
-        #assert issubclass(otherdefinition, cls), 'ptype.definition :{:s} is not inheriting from{:s}
         if not issubclass(otherdefinition, cls):
             raise error.AssertionError(cls, 'definition.copy', message='{:s} is not inheriting from {:s}'.format(otherdefinition.__name__, cls.__name__))
 
@@ -1739,7 +1761,8 @@ class definition(object):
             return definition
 
         if attributes:
-            assert len(definition) == 0, 'Unexpected positional arguments'
+            if len(definition):
+                raise error.AssertionError(cls, 'definition.define', message='Unexpected number of positional arguments. : {:d}'.format(len(definition)))
             return clone
         res, = definition
         cls.add(getattr(res,cls.attribute),res)
@@ -2488,7 +2511,8 @@ if __name__ == '__main__':
         src = prov.string('\x04\x00\x00\x00AAAAAAAA')
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4)).l
         b = a.d.l
-        assert b.serialize() == '\x41\x41\x41\x41'
+        if b.serialize() != '\x41\x41\x41\x41':
+            raise Failure
 
         c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
         a.reference(c)
