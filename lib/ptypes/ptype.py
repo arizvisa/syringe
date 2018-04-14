@@ -1649,21 +1649,16 @@ class definition(object):
         assert __builtin__.isinstance(cls.cache, dict), 'ptype.definition {!r} has an invalid .cache attribute : {!r}'.format(cls, cls.cache.__class__)
         cls.cache[type] = object
 
+        """Search ``cls.cache`` for a type with the specified value ``type``."""
     @classmethod
-    def lookup(cls, *type, **attrs):
-        """Search ``cls.cache`` for a ptype keyed by the specified value ``type``.
+    def lookup(cls, *type):
+        """D.lookup(type[,unknown]) -> Lookup a ptype by ``type`` and return it.
 
-        If ``attrs`` is specified, clone ``type`` with the specified attributes.
-        Raises a KeyError if unable to find the ``type`` in it's cache.
+        If it's not found return ``unknown`` or raise a KeyError if not specified.
         """
-        if len(type) != 1:
-            raise TypeError("lookup() takes exactly {:d} argument ({:d} given)".format(1, len(type)))
-        type, = type
-
-        if attrs:
-            t = cls.cache[type]
-            return clone(t, **attrs)
-        return cls.cache[type]
+        if len(type) not in {1, 2}:
+            raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(type)))
+        return cls.cache[type] if len(type) == 1 else cls.cache.get(*type)
 
     @classmethod
     def has(cls, type):
@@ -1671,21 +1666,28 @@ class definition(object):
     contains = has
 
     @classmethod
-    def get(cls, *type, **unknownattrs):
-        """Lookup a ptype by a particular value.
+    def get(cls, *type, **attrs):
+        """D.get(type[, unknown], **attrs) -> Lookup a ptype by ``type`` and return a clone with ``attrs`` applied to it.
 
-        Returns cls.unknown with the provided ``unknownattrs`` if ``type`` is
-        not found.
+        If ``type`` was not found, then return ``unknown`` or D.unknown if it's undefined.
         """
-        if len(type) != 1:
-            raise TypeError("get() takes exactly {:d} argument ({:d} given)".format(1, len(type)))
-        type, = type
 
-        try: return cls.lookup(type)
-        except KeyError: pass
+        # check the arguments
+        if len(type) not in {1, 2}:
+            raise TypeError("get() takes 1 or 2 arguments ({:d} given)".format(len(type)))
 
-        #unknownattrs.setdefault(cls.attribute,type)
-        return clone(cls.unknown, **unknownattrs)
+        # extract the information from the arguments
+        type, unknown = (type) if len(type) > 1 else (type[0], cls.unknown)
+
+        # search in the cache for the specified type
+        try:
+            res = cls.cache[type]
+        except KeyError:
+            res = unknown
+
+        # now we can finally clone it
+        attrs.setdefault(cls.attribute, type)
+        return clone(res, **attrs)
 
     @classmethod
     def update(cls, otherdefinition):
