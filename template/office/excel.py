@@ -12,7 +12,7 @@ class RT_Excel(ptype.definition):
     type, cache = __name__, {}
     @classmethod
     def lookup(cls, type):
-        type,none = type
+        type, none = type
         if none is not None:
             raise KeyError
         return super(RT_Excel, cls).lookup(type)
@@ -2167,8 +2167,7 @@ class ExtProp(pstruct.type):
     def __extPropData(self):
         res = self['extType'].li.int()
         cb = self['cb'].li.int() - (2 + 2)
-        res = ExtPropType.lookup(res)
-        return dyn.clone(res, blocksize=lambda s,cb=cb:cb)
+        return ExtPropType.lookup(res, blocksize=lambda s, cb=cb: cb)
 
     _fields_ = [
         (_extType, 'extType'),

@@ -97,18 +97,17 @@ class RecordGeneral(pstruct.type):
 
     def __data(self):
         res = self['header'].li
-        t,i,l = res.Type(), res.Instance(), res.Length()
+        t, vi, length = res.Type(), res.Instance(), res.Length()
         Type = self.Record.get(t, type=t)
 
         # look for an explicit instance
         try:
-            res = Type.lookup(i)
+            res = Type.lookup(vi)
 
         # otherwise, the instance might modify the Instance in some way
         except KeyError:
-            ver,instance = i
-            i = ver,None
-            res = Type.get(i, type=i, length=l)
+            ver, _ = vi
+            res = Type.get((ver, None), type=(ver, None), length=length)
 
         # something good had to come out of that
         if getattr(self, 'lazy', False):
@@ -116,10 +115,10 @@ class RecordGeneral(pstruct.type):
                 @classmethod
                 def typename(cls):
                     return cls._object_.typename()
-            RecordData._value_ = dyn.block(l)
+            RecordData._value_ = dyn.block(length)
             RecordData._object_ = res
             return RecordData
-        return dyn.clone(res, blocksize=lambda s: l)
+        return dyn.clone(res, blocksize=lambda s, length=length: length)
 
     def __extra(self):
         bs = self['header'].li.Length()
