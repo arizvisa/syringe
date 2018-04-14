@@ -79,6 +79,16 @@ class MethodDeflatingFlags(pbinary.struct):
 class MethodLZMAFlags(pbinary.flags):
     _fields_ = [(1,'EOS'),(1,'unused')]
 
+## Extra data field mappings
+
+# FIXME: Add these from section 4.6
+class Extensible_data_field(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'id'),
+        (pint.uint16_t, 'size'),
+        (lambda s: dyn.block(s['size'].li.int()), 'data'),
+    ]
+
 ## File records
 class ZipRecord(ptype.definition):
     cache = {}
@@ -88,19 +98,19 @@ class ZipRecord(ptype.definition):
 class LocalFileHeader(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'version needed to extract'),
-        (BitFlags, 'general purpose bit flag'),
+        (pbinary.littleendian(BitFlags), 'general purpose bit flag'),
         (CompressionMethod, 'compression method'),
         (MSTime, 'last mod file time'),
         (MSDate, 'last mod file date'),
         (DataDescriptor, 'data descriptor'),
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
-        (lambda s: dyn.clone(pstr.string, length=s['file name length'].li.num()), 'file name'),
-        (lambda s: dyn.block(s['extra field length'].li.num()), 'extra field'),
-
-        (lambda s: dyn.block(s['data descriptor'].li['compressed size'].num()), 'file data'),
-
-        (lambda s: DataDescriptor if s['general purpose bit flag'].li.object['PostDescriptor'] else ptype.undefined, 'post data descriptor'),
+        (lambda self: dyn.clone(pstr.string, length=self['file name length'].li.num()), 'file name'),
+        (lambda self: dyn.clone(Extensible_data_field, blocksize=(lambda s, cb=self['extra field length'].li.num(): cb)), 'extra field'),
+        # XXX: if encrypted, include encryption header here
+        (lambda self: dyn.block(self['data descriptor'].li['compressed size'].num()), 'file data'),
+        # XXX: i think this record is actually encoded within the file data
+        (lambda self: DataDescriptor if self['general purpose bit flag'].li.object['PostDescriptor'] else ptype.undefined, 'post data descriptor'),
     ]
 
     def extract(self, **kwds):
@@ -146,10 +156,10 @@ class CentralDirectory(pstruct.type):
         (pint.uint16_t, 'disk number start'),
         (pint.uint16_t, 'internal file attributes'),
         (pint.uint32_t, 'external file attributes'),
-        (dyn.rpointer(ptype.undefined, pint.uint32_t), 'relative offset of local header'),
-        (lambda s: dyn.clone(pstr.string, length=s['file name length'].li.num()), 'file name'),
-        (lambda s: dyn.block(s['extra field length'].li.num()), 'extra field'),
-        (lambda s: dyn.clone(pstr.string, length=s['file comment length'].li.num()), 'file comment'),
+        (lambda self: dyn.pointer(Record, pint.uint32_t), 'relative offset of local header'),
+        (lambda self: dyn.clone(pstr.string, length=self['file name length'].li.num()), 'file name'),
+        (lambda self: dyn.block(self['extra field length'].li.num()), 'extra field'),
+        (lambda self: dyn.clone(pstr.string, length=self['file comment length'].li.num()), 'file comment'),
     ]
 
     def extract(self, **kwds):
@@ -172,7 +182,7 @@ class EndOfCentralDirectory(pstruct.type):
         (pint.uint16_t, 'total number of entries in the central directory on this disk'),
         (pint.uint16_t, 'total number of entries in the central directory'),
         (pint.uint32_t, 'size of the central directory'),
-        (pint.uint32_t, 'offset of start of central directory with respect to the starting disk number'),
+        (lambda self: dyn.pointer(Record, pint.uint32_t), 'offset of start of central directory with respect to the starting disk number'),
         (pint.uint16_t, '.ZIP file comment length'),
         (lambda s: dyn.clone(pstr.string, length=s['.ZIP file comment length'].li.num()), '.ZIP file comment'),
     ]
