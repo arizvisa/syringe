@@ -1596,14 +1596,14 @@ class definition(object):
     variable. The .attribute property defines which attribute to key the
     definition by. This defualts to 'type'
 
-    Another thing to define is the `.unknown` variable. This will be the
+    Another thing to define is the `.default` property. This will be the
     default type that is returned when an identifier is not located in the
     cache that was defined.
 
     i.e.
     class mytypelookup(ptype.definition):
         cache = {}
-        unknown = ptype.block
+        default = ptype.block
         attribute = 'type'
 
     In order to add entries to the cache, one can use the `.add` classmethod
@@ -1640,8 +1640,10 @@ class definition(object):
     """
 
     cache = None        # children must assign this empty dictionary
-    unknown = block     # default type to return an unknown class
     attribute = 'type'
+
+    class unknown(block): pass
+    default = unknown     # default type to return an unknown class
 
     @classmethod
     def add(cls, type, object):
@@ -1652,9 +1654,9 @@ class definition(object):
         """Search ``cls.cache`` for a type with the specified value ``type``."""
     @classmethod
     def lookup(cls, *type):
-        """D.lookup(type[,unknown]) -> Lookup a ptype by ``type`` and return it.
+        """D.lookup(type[, default]) -> Lookup a ptype by ``type`` and return it.
 
-        If it's not found return ``unknown`` or raise a KeyError if not specified.
+        If it's not found return ``default`` or raise a KeyError if not specified.
         """
         if len(type) not in {1, 2}:
             raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(type)))
@@ -1667,9 +1669,9 @@ class definition(object):
 
     @classmethod
     def get(cls, *type, **attrs):
-        """D.get(type[, unknown], **attrs) -> Lookup a ptype by ``type`` and return a clone with ``attrs`` applied to it.
+        """D.get(type[, default], **attrs) -> Lookup a ptype by ``type`` and return a clone with ``attrs`` applied to it.
 
-        If ``type`` was not found, then return ``unknown`` or D.unknown if it's undefined.
+        If ``type`` was not found, then return ``default`` or D.default if it's undefined.
         """
 
         # check the arguments
@@ -1677,13 +1679,13 @@ class definition(object):
             raise TypeError("get() takes 1 or 2 arguments ({:d} given)".format(len(type)))
 
         # extract the information from the arguments
-        type, unknown = (type) if len(type) > 1 else (type[0], cls.unknown)
+        type, default = (type) if len(type) > 1 else (type[0], cls.default)
 
         # search in the cache for the specified type
         try:
             res = cls.cache[type]
         except KeyError:
-            res = unknown
+            res = default
 
         # now we can finally clone it
         attrs.setdefault(cls.attribute, type)
@@ -1711,7 +1713,7 @@ class definition(object):
 
         otherdefinition.cache = dict(cls.cache)
         otherdefinition.attribute = cls.attribute
-        otherdefinition.unknown = cls.unknown
+        otherdefinition.default = cls.default
         return otherdefinition
 
     @classmethod
