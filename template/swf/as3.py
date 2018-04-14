@@ -208,7 +208,7 @@ class multiname_info(as3struct):
         ]
 
     def __data(self):
-        return MultiNameTypes.lookup( self['kind'].li.num() )
+        return MultiNameTypes.lookup(self['kind'].li.num())
 
     _fields_ = [
         (__kind, 'kind'),
