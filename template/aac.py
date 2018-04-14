@@ -89,7 +89,7 @@ class adts_raw_data_block_error_check(adts_error_check): pass
 class raw_data_block(pbinary.struct):
     def __element(self):
         try:
-            result = Element.lookup( self['id_syn_ele'] )
+            result = Element.lookup(self['id_syn_ele'])
         except KeyError:
             print 'unable to find', self['id_syn_ele']
             result = 0
