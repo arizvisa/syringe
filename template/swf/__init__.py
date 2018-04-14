@@ -76,8 +76,8 @@ class File(pstruct.type, ptype.boundary):
         sig = header['Signature'].str()
 
         # if it's compressed then use the 'zlib' structure
-        t = EncodedDataType.lookup(sig, dyn.clone(EncodedDataType.default, type=sig))
-        length = min(header['FileLength'].num(),self.source.size()) - header.size()
+        t = EncodedDataType.withdefault(sig, type=sig)
+        length = min(header['FileLength'].int(), self.source.size()) - header.size()
         return dyn.clone(t, _value_=dyn.clone(t._value_, length=length))
 
     _fields_ = [

@@ -76,11 +76,11 @@ class header_t(pstruct.type):
 
     def listing(self):
         name = self['filename'].str()
-        mode = self['mode'].num()
-        uid,gid = self['uid'].num(),self['gid'].num()
-        size = self['size'].num()
-        mtime,checksum = self['mtime'].num(),self['checksum'].num()
-        return '{!r} mode={:04o} uid={:d} gid={:d} size=0x{:x} mtime={:x} checksum={:x}'.format(name, mode, uid, gid, size, mtime, checksum) + (' -> {!r}'.format(self['linkname'].get()) if self['linkflag'].num() else '')
+        mode = self['mode'].int()
+        uid,gid = self['uid'].int(),self['gid'].int()
+        size = self['size'].int()
+        mtime,checksum = self['mtime'].int(),self['checksum'].int()
+        return '{!r} mode={:04o} uid={:d} gid={:d} size=0x{:x} mtime={:x} checksum={:x}'.format(name, mode, uid, gid, size, mtime, checksum) + (' -> {!r}'.format(self['linkname'].get()) if self['linkflag'].int() else '')
 
     def isempty(self):
         return self['filename'].str() == ''
@@ -100,9 +100,9 @@ class header_extended_t(pstruct.type):
         major,minor = self['devmajor'],self['devminor']
         uname = 'uname={:s}'.format(self['uname'].str()) if len(self['uname'].str()) > 0 else ''
         gname = 'gname={:s}'.format(self['gname'].str()) if len(self['uname'].str()) > 0 else ''
-        device = ('dev={:s}'.format('.'.join(map(str,(major.num(),minor.num()))))) if len(major.get() + minor.get()) > 0 else ''
+        device = ('dev={:s}'.format('.'.join(map(str,(major.int(),minor.int()))))) if len(major.get() + minor.get()) > 0 else ''
         res = (' ' + ' '.join(filter(None,(uname, gname, device)))) if any((uname, gname, device)) else ''
-        return 'ext v{:d}'.format(self['version'].num()) + res
+        return 'ext v{:d}'.format(self['version'].int()) + res
 
 class member_t(pstruct.type):
     def iseof(self):
@@ -212,7 +212,7 @@ class header_gnu(header_old):
         return '\n'.join(map(repr, (self, self['common'], self['extended'])))
 
     def listing(self):
-        res = 'atime=0x{:x} ctime=0x{:x}'.format(self['atime'].num(), self['ctime'].num())
+        res = 'atime=0x{:x} ctime=0x{:x}'.format(self['atime'].int(), self['ctime'].int())
         return ' | '.join((self['common'].listing(), self['extended'].listing(), res))
 
 class gnu(stream_t):
@@ -281,7 +281,7 @@ if __name__ == '__main__':
         for k in root.keys():
             v = root[k]
             if isinstance(v, pint.type):
-                res[k] = v.num()
+                res[k] = v.int()
             elif isinstance(v, pstr.type):
                 try:
                     res[k] = v.str()

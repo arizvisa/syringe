@@ -21,7 +21,8 @@ class SHORT(pint.uint16_t): type = 3
 class LONG(pint.uint32_t): type = 4
 
 @Type.define
-class RATIONAL(dyn.array(pint.uint32_t,2)):
+class RATIONAL(parray.type):
+    length, _object_ = 2, pint.uint32_t
     type = 5
     def float(self):
         numerator,denominator = map(operator.methodcaller('num'), (self[0],self[1]))
@@ -32,7 +33,7 @@ class RATIONAL(dyn.array(pint.uint32_t,2)):
     def get(self):
         return self.float()
     def summary(self):
-        return '{:f} (0x{:x}, 0x{:x})'.format(self.float(), self[0].num(), self[1].num())
+        return '{:f} (0x{:x}, 0x{:x})'.format(self.float(), self[0].int(), self[1].int())
 
 @Type.define
 class SBYTE(pint.sint8_t): type = 6
@@ -526,9 +527,9 @@ class YCBRPOSITION(pint.enum):
 ### file
 class Entry(pstruct.type):
     def __value(self):
-        count = self['count'].li.num()
+        count = self['count'].li.int()
         try:
-            res = Type.lookup(self['type'].li.num())
+            res = Type.lookup(self['type'].li.int())
         except KeyError:
             return pint.uint32_t
         else:
@@ -544,9 +545,9 @@ class Entry(pstruct.type):
         return dyn.block( max((0, cb)) )
 
     def __pointer(self):
-        count = self['count'].li.num()
+        count = self['count'].li.int()
         try:
-            object = Type.lookup(self['type'].li.num())
+            object = Type.lookup(self['type'].li.int())
             res = dyn.array(object, count)
         except KeyError:
             pass
@@ -575,7 +576,7 @@ class Directory(pstruct.type):
 
 Directory._fields_ = [
     (pint.uint16_t, 'count'),
-    (lambda s: dyn.array(Entry, s['count'].li.num()), 'entry'),
+    (lambda s: dyn.array(Entry, s['count'].li.int()), 'entry'),
     (dyn.pointer(Directory, pint.uint32_t), 'next')
 ]
 

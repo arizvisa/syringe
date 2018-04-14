@@ -224,7 +224,7 @@ class OfficeArtFOPTE(pstruct.type):
     def __op(self):
         res = self['opid'].li
         opid = res['id']
-        return OfficeArtFOPTEOP.lookup(opid, dyn.clone(OfficeArtFOPTEOP.default, type=opid))
+        return OfficeArtFOPTEOP.withdefault(opid, type=opid)
 
     _fields_ = [
         (OfficeArtFOPTEOPID, 'opid'),

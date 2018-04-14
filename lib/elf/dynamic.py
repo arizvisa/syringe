@@ -110,7 +110,7 @@ class Elf32_Dyn(pstruct.type):
 
     def __d_val(self):
         res = self['d_tag'].li.int()
-        return Type.lookup(res, dyn.clone(Type.default, type=res))
+        return Type.withdefault(res, type=res)
 
     _fields_ = [
         (d_tag, 'd_tag'),

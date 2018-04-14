@@ -33,7 +33,7 @@ class StreamHdr(pstruct.type):
         def _object_(self):
             res = self.getparent(StreamHdr)
             cb = res['Size'].int()
-            t = Stream.lookup(res['Name'].str(), dyn.clone(Stream.default, blocksize=lambda s, cb=cb: cb))
+            t = Stream.withdefault(res['Name'].str(), blocksize=lambda s, cb=cb: cb)
             if issubclass(t, parray.block):
                 return dyn.clone(t, blocksize=lambda s, cb=cb: cb)
             return t
@@ -479,7 +479,7 @@ class Tables(parray.type):
         if count:
             logging.debug("{:s} : {:s} : Loading {:s}({:d}) table with {:d} rows. : {:d} of {:d}".format('.'.join((res.typename(),self.__class__.__name__)), self.instance(), TableType.byvalue(index, 'undefined'), index, count, 1+len(self.value), self.length))
 
-        rowtype = Table.lookup(index, dyn.clone(Table.default, type=index))
+        rowtype = Table.withdefault(index, type=index)
         rowsize = rowtype.PreCalculateSize(res) if Table.has(index) else 0
         t = dyn.clone(TableRow, _object_=rowtype, _value_=dyn.block(rowsize))
 
@@ -487,7 +487,7 @@ class Tables(parray.type):
             if index > 0:
                 return self[index - 1]
             raise IndexError(index)
-        return dyn.array(t, count, Get=Get, blocksize=lambda s,cb=rowsize*count:cb)
+        return dyn.array(t, count, Get=Get, blocksize=(lambda s, cb=rowsize*count: cb))
 
     def __getindex__(self, index):
         return TableType.byname(index) if isinstance(index, basestring) else index

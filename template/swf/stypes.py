@@ -87,11 +87,11 @@ class MATRIX(pbinary.struct):
 class GLYPHENTRY(pbinary.struct):
     def __Index(self):
         p = self.getparent(pstruct.type)    # DefineText
-        return p['GlyphBits'].li.num()
+        return p['GlyphBits'].li.int()
 
     def __Advance(self):
         p = self.getparent(pstruct.type)    # DefineText
-        return p['AdvanceBits'].li.num()
+        return p['AdvanceBits'].li.int()
 
     _fields_ = [
         (__Index, 'Index'),
@@ -479,7 +479,7 @@ class SHAPERECORDLIST(pbinary.terminatedarray):
 ### shape styles
 class FILLSTYLE(pstruct.type):
     def __Color(self):
-        type = self['FillStyleType'].li.num()
+        type = self['FillStyleType'].li.int()
         tag = tags.DefineShape   # FIXME
         if type != 0:
             return Empty
@@ -490,13 +490,13 @@ class FILLSTYLE(pstruct.type):
 
     def __has(types, result):
         def has(self):
-            if self['FillStyleType'].li.num() in types:
+            if self['FillStyleType'].li.int() in types:
                 return result
             return Empty
         return has
 
     def __Gradient(self):
-        type = self['FillStyleType'].li.num()
+        type = self['FillStyleType'].li.int()
         if type in (0x10,0x12):
             return GRADIENT
         if type == 0x13:
@@ -551,12 +551,12 @@ class LINESTYLE2(pstruct.type):
 class FILLSTYLEARRAY(pstruct.type):
     _fields_ = [
         (UI8, 'FillStyleCount'),
-        (lambda s: UI16 if s['FillStyleCount'].li.num() == 0xff else Empty, 'FillStyleCountExtended'),
+        (lambda s: UI16 if s['FillStyleCount'].li.int() == 0xff else Empty, 'FillStyleCountExtended'),
         (lambda s: dyn.array(FILLSTYLE, s.getcount()), 'FillStyles'),
     ]
 
     def getcount(self):
-        return self['FillStyleCountExtended'] if self['FillStyleCount'].num() == 0xff else self['FillStyleCount']
+        return self['FillStyleCountExtended'] if self['FillStyleCount'].int() == 0xff else self['FillStyleCount']
 
 class LINESTYLEARRAY(pstruct.type):
     def __LineStyles(self):

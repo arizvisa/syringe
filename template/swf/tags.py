@@ -28,7 +28,7 @@ class Tag(pstruct.type):
         return dyn.block(total - used)
 
     def blocksize(self):
-        res = self['Header']['Length'] if self['Header'].li['Length'] < 0x3f else self['HeaderLongLength'].li.num()
+        res = self['Header']['Length'] if self['Header'].li['Length'] < 0x3f else self['HeaderLongLength'].li.int()
         return res + self['Header'].size() + self['HeaderLongLength'].size()
 
     def __HeaderLongLength(self):
@@ -37,7 +37,8 @@ class Tag(pstruct.type):
     def __data(self):
         res = self['Header'].li['Type']
         cb = self['Header'].size() + self['HeaderLongLength'].size()
-        return TagDef.lookup(res, dyn.clone(TagDef.default, type=res, length=self.blocksize() - cb))
+        length = self.blocksize() - cb
+        return TagDef.withdefault(res, type=res, length=length)
 
     _fields_ = [
         (RECORDHEADER, 'Header'),
@@ -294,7 +295,7 @@ class ImportAssets(pstruct.type):
     _fields_ = [
         (STRING, 'URL'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, s['Count'].li.num()), 'Asset')
+        (lambda s: dyn.array(_asset, s['Count'].li.int()), 'Asset')
     ]
 
 @TagDef.define
@@ -304,7 +305,7 @@ class ExportAssets(pstruct.type):
 
     _fields_ = [
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, s['Count'].li.num()), 'Asset')
+        (lambda s: dyn.array(_asset, s['Count'].li.int()), 'Asset')
     ]
 
 @TagDef.define
@@ -316,7 +317,7 @@ class ImportAssets2(pstruct.type):
         (UI8, 'Reserved1'),
         (UI8, 'Reserved2'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(_asset, s['Count'].li.num()), 'Asset')
+        (lambda s: dyn.array(_asset, s['Count'].li.int()), 'Asset')
     ]
 
 @TagDef.define
@@ -517,7 +518,7 @@ class DefineFontInfo(pstruct.type):
     _fields_ = [
         (UI16, 'FontID'),
         (UI8, 'FontNameLen'),
-        (lambda s: dyn.clone(pstr.string,length=s['FontNameLen'].li.num()), 'FontName'),
+        (lambda s: dyn.clone(pstr.string,length=s['FontNameLen'].li.int()), 'FontName'),
         (__FontFlags, 'FontFlags'),
         (__CodeTable, 'CodeTable'),
     ]
@@ -629,9 +630,9 @@ class DefineSceneAndFrameLabelData(pstruct.type):
 
     _fields_ = [
         (as3.u32, 'SceneCount'),
-        (lambda s: dyn.array(s.Scene, s['SceneCount'].li.num()), 'Scene'),
+        (lambda s: dyn.array(s.Scene, s['SceneCount'].li.int()), 'Scene'),
         (as3.u32, 'FrameLabelCount'),
-        (lambda s: dyn.array(s.Frame, s['FrameLabelCount'].li.num()), 'Frame'),
+        (lambda s: dyn.array(s.Frame, s['FrameLabelCount'].li.int()), 'Frame'),
     ]
 
 @TagDef.define

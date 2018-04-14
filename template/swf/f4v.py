@@ -23,7 +23,7 @@ class SAMPLEFLAGS(pbinary.struct):
 ## root types
 class BOXHEADER(pstruct.type):
     def __ExtendedSize(self):
-        return UI64 if s['TotalSize'].li.num() == 1 else pint.uint_t
+        return UI64 if s['TotalSize'].li.int() == 1 else pint.uint_t
 
     _fields_ = [
         (UI32, 'TotalSize'),
@@ -32,16 +32,16 @@ class BOXHEADER(pstruct.type):
     ]
 
     def BoxSize(self):
-        return s['ExtendedSize'].li.num() if s['TotalSize'].li.num() == 1 else s['TotalSize'].li.num()
+        return s['ExtendedSize'].li.int() if s['TotalSize'].li.int() == 1 else s['TotalSize'].li.int()
 
 class BOX(pstruct.type):
     def __Payload(self):
         bh = self['Header'].li
-        if bh['TotalSize'].num() == 0:
+        if bh['TotalSize'].int() == 0:
             return BOXLIST
 
-        t,sz = bh['BoxType'].li.serialize(),bh.BoxSize()
-        result = Boxes.lookup(t, dyn.clone(Boxes.default, __name__=t, length=sz))
+        t, sz = bh['BoxType'].li.serialize(), bh.BoxSize()
+        result = Boxes.withdefault(t, __name__=t, length=sz)
         return dyn.clone(result, blocksize=lambda s: sz)
 
     _fields_ = [
@@ -94,9 +94,9 @@ class afra(pstruct.type):
         (GlobalAfraEntryFlags, 'GlobalAfraEntryFlags'),
         (UI32, 'TimeScale'),
         (UI32, 'EntryCount'),
-        (lambda s: dyn.array(AFRAENTRY, s['EntryCount'].li.num()), 'LocalAccessEntries'),
+        (lambda s: dyn.array(AFRAENTRY, s['EntryCount'].li.int()), 'LocalAccessEntries'),
         (lambda s: UI32 if s['GlobalAfraEntrySize'].li['GlobalEntries'] == 1 else pint.uint_t, 'GlobalEntryCount'),
-        (lambda s: dyn.array(GLOBALAFRAENTRY,s['GlobalEntryCount'].li.num()), 'GlobalAccessEntries'),
+        (lambda s: dyn.array(GLOBALAFRAENTRY,s['GlobalEntryCount'].li.int()), 'GlobalAccessEntries'),
     ]
 
 @Boxes.define
@@ -120,15 +120,15 @@ class abst(pstruct.type):
         (UI64, 'SmpteTimeCodeOffset'),
         (STRING, 'MovieIdentifier'),
         (UI8, 'ServerEntryCount'),
-        (lambda s: dyn.array(SERVERENTRY,s['ServerEntryCount'].li.num()), 'ServerEntryTable'),
+        (lambda s: dyn.array(SERVERENTRY,s['ServerEntryCount'].li.int()), 'ServerEntryTable'),
         (UI8, 'QualityEntryCount'),
-        (lambda s: dyn.array(QUALITYENTRY,s['QualityEntryCount'].li.num()), 'QualityEntryTable'),
+        (lambda s: dyn.array(QUALITYENTRY,s['QualityEntryCount'].li.int()), 'QualityEntryTable'),
         (STRING, 'DrmData'),
         (STRING, 'MetaData'),
         (UI8, 'SegmentRunTableCount'),
-        (lambda s: dyn.array(SegmentRunTable,s['SegmentRunTableCount'].li.num()), 'SegmentRunTableEntries'),
+        (lambda s: dyn.array(SegmentRunTable,s['SegmentRunTableCount'].li.int()), 'SegmentRunTableEntries'),
         (UI8, 'FragmentRunTableCount'),
-        (lambda s: dyn.array(FragmentRunTable,s['FragmentRunTableCount'].li.num()), 'FragmentRunTableEntries'),
+        (lambda s: dyn.array(FragmentRunTable,s['FragmentRunTableCount'].li.int()), 'FragmentRunTableEntries'),
     ]
 
 @Boxes.define
@@ -139,9 +139,9 @@ class asrt(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI8, 'QualityEntryCount'),
-        (lambda s: dyn.array(STRING, s['QualityEntryCount'].li.num()), 'QualitySegmentUrlModifiers'),
+        (lambda s: dyn.array(STRING, s['QualityEntryCount'].li.int()), 'QualitySegmentUrlModifiers'),
         (UI32, 'SegmentRunEntryCount'),
-        (lambda s: dyn.array(SEGMENTRUNENTRY, s['SegmentRunEntryCount'].li.num()), 'SegmentRunEntryTable'),
+        (lambda s: dyn.array(SEGMENTRUNENTRY, s['SegmentRunEntryCount'].li.int()), 'SegmentRunEntryTable'),
     ]
 
 @Boxes.define
@@ -151,16 +151,16 @@ class afrt(pstruct.type):
             (UI32, 'FirstEntry'),
             (UI64, 'FirstFragmentTimestamp'),
             (UI32, 'FragmentDuration'),
-            (lambda s: UI8 if s['FragmentDuration'].li.num() == 0 else pint.uint_t, 'DiscontinuityIndicator'),
+            (lambda s: UI8 if s['FragmentDuration'].li.int() == 0 else pint.uint_t, 'DiscontinuityIndicator'),
         ]
     _fields_ = [
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'TimeScale'),
         (UI8, 'QualityEntryCount'),
-        (lambda s: dyn.array(STRING, s['QualityEntryCount'].li.num()), 'QualitySegmentUrlModifiers'),
+        (lambda s: dyn.array(STRING, s['QualityEntryCount'].li.int()), 'QualitySegmentUrlModifiers'),
         (UI32, 'FragmentRunEntryCount'),
-        (lambda s: dyn.array(FRAGMENTRUNENTRY, s['FragmentRunEntryCount'].li.num()), 'FragmentRunEntryTable'),
+        (lambda s: dyn.array(FRAGMENTRUNENTRY, s['FragmentRunEntryCount'].li.int()), 'FragmentRunEntryTable'),
     ]
 
 @Boxes.define
@@ -168,7 +168,7 @@ class moov(BOXLIST): pass
 
 @Boxes.define
 class mvhd(pstruct.type):
-    __versioned = lambda s: UI32 if s['Version'].li.num() == 0 else UI64
+    __versioned = lambda s: UI32 if s['Version'].li.int() == 0 else UI64
     _fields_ = [
         (UI8, 'Version'),
         (UI24, 'Flags'),
@@ -190,7 +190,7 @@ class trak(BOXLIST): pass
 
 @Boxes.define
 class tkhd(pstruct.type):
-    __versioned = lambda s: UI32 if s['Version'].li.num() == 0 else UI64
+    __versioned = lambda s: UI32 if s['Version'].li.int() == 0 else UI64
     _fields_ = [
         (UI8, 'Version'),
         (UI24, 'Flags'),
@@ -215,8 +215,8 @@ class edts(BOX): pass
 @Boxes.define
 class elst(pstruct.type):
     class ELSTRECORD(pstruct.type):
-        __versioned = lambda s: UI32 if s.getparent(elst)['Version'].li.num() == 0 else UI64
-        __sversioned = lambda s: SI32 if s.getparent(elst)['Version'].li.num() == 0 else SI64
+        __versioned = lambda s: UI32 if s.getparent(elst)['Version'].li.int() == 0 else UI64
+        __sversioned = lambda s: SI32 if s.getparent(elst)['Version'].li.int() == 0 else SI64
         _fields_ = [
             (__versioned, 'SegmentDuration'),
             (__sversioned, 'MediaTime'),
@@ -228,7 +228,7 @@ class elst(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'EntryCount'),
-        (lambda s: dyn.array(ELSTRECORD, s['EntryCount'].li.num()), 'EditListEntryTable'),
+        (lambda s: dyn.array(ELSTRECORD, s['EntryCount'].li.int()), 'EditListEntryTable'),
     ]
 
 @Boxes.define
@@ -236,7 +236,7 @@ class mdia(BOXLIST): pass
 
 @Boxes.define
 class mdhd(pstruct.type):
-    __versioned = lambda s: UI32 if s.getparent(elst)['Version'].li.num() == 0 else UI64
+    __versioned = lambda s: UI32 if s.getparent(elst)['Version'].li.int() == 0 else UI64
     _fields_ = [
         (UI8, 'Version'),
         (UI24, 'Flags'),
@@ -313,7 +313,7 @@ class dref(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'EntryCount'),
-        (lambda s: dyn.array(s.DataEntryBox, s['EntryCount'].li.num()), 'DataEntry'),
+        (lambda s: dyn.array(s.DataEntryBox, s['EntryCount'].li.int()), 'DataEntry'),
     ]
 
 @Boxes.define
@@ -333,7 +333,7 @@ class stsd(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'Count'),
-        (lambda s: dyn.array(DESCRIPTIONRECORD, s['Count'].li.num()), 'Descriptions'),
+        (lambda s: dyn.array(DESCRIPTIONRECORD, s['Count'].li.int()), 'Descriptions'),
     ]
 
 @Boxes.define
@@ -344,7 +344,7 @@ class stts(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'Count'),
-        (lambda s: dyn.array(STTSRECORD, s['Count'].li.num()), 'Entries'),
+        (lambda s: dyn.array(STTSRECORD, s['Count'].li.int()), 'Entries'),
     ]
 
 @Boxes.define
@@ -355,7 +355,7 @@ class ctts(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'Count'),
-        (lambda s: dyn.array(CTTSRECORD, s['Count'].li.num()), 'Entries'),
+        (lambda s: dyn.array(CTTSRECORD, s['Count'].li.int()), 'Entries'),
     ]
 
 @Boxes.define
@@ -366,7 +366,7 @@ class stsc(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'Count'),
-        (lambda s: dyn.array(STSCRECORD, s['Count'].li.num()), 'Entries'),
+        (lambda s: dyn.array(STSCRECORD, s['Count'].li.int()), 'Entries'),
     ]
 
 @Boxes.define
@@ -376,7 +376,7 @@ class stsz(pstruct.type):
         (UI24, 'Flags'),
         (UI32, 'ConstantSize'),
         (UI32, 'SizeCount'),
-        (lambda s: dyn.array(UI32, s['SizeCount'].li.num()) if s['ConstantSize'].li.num() == 0 else dyn.array(UI32,0), 'SizeTable'),
+        (lambda s: dyn.array(UI32, s['SizeCount'].li.int()) if s['ConstantSize'].li.int() == 0 else dyn.array(UI32,0), 'SizeTable'),
     ]
 
 @Boxes.define
@@ -385,7 +385,7 @@ class stco(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'OffsetCount'),
-        (lambda s: dyn.array(UI32, s['OffsetCount'].li.num()), 'Offsets'),
+        (lambda s: dyn.array(UI32, s['OffsetCount'].li.int()), 'Offsets'),
     ]
 
 @Boxes.define
@@ -394,7 +394,7 @@ class co64(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'OffsetCount'),
-        (lambda s: dyn.array(UI64, s['OffsetCount'].li.num()), 'Offsets'),
+        (lambda s: dyn.array(UI64, s['OffsetCount'].li.int()), 'Offsets'),
     ]
 
 @Boxes.define
@@ -407,7 +407,7 @@ class stss(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'SyncCount'),
-        (lambda s: dyn.array(UI32, s['SyncCount'].li.num()), 'SyncTable'),
+        (lambda s: dyn.array(UI32, s['SyncCount'].li.int()), 'SyncTable'),
     ]
 
 @Boxes.define
@@ -466,29 +466,29 @@ class tfhd(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'TrackID'),
-        (lambda s: UI64 if s['Flags'].li.num() & 0x01 else pint.uint_t, 'BaseDataOffset'),
-        (lambda s: UI32 if s['Flags'].li.num() & 0x02 else pint.uint_t, 'SampleDescriptionIndex'),
-        (lambda s: UI32 if s['Flags'].li.num() & 0x08 else pint.uint_t, 'DefaultSampleDuration'),
-        (lambda s: UI32 if s['Flags'].li.num() & 0x10 else pint.uint_t, 'DefaultSampleSize'),
-        (lambda s: SAMPLEFLAGS if s['Flags'].li.num() & 0x20 else pint.uint_t, 'DefaultSampleFlags'),
+        (lambda s: UI64 if s['Flags'].li.int() & 0x01 else pint.uint_t, 'BaseDataOffset'),
+        (lambda s: UI32 if s['Flags'].li.int() & 0x02 else pint.uint_t, 'SampleDescriptionIndex'),
+        (lambda s: UI32 if s['Flags'].li.int() & 0x08 else pint.uint_t, 'DefaultSampleDuration'),
+        (lambda s: UI32 if s['Flags'].li.int() & 0x10 else pint.uint_t, 'DefaultSampleSize'),
+        (lambda s: SAMPLEFLAGS if s['Flags'].li.int() & 0x20 else pint.uint_t, 'DefaultSampleFlags'),
     ]
 
 @Boxes.define
 class trun(pstruct.type):
     class SampleInformationStructure(pstruct.type):
         _fields_ = [
-            (lambda s: UI32 if s.getparent(trun)['Flags'].li.num() & 0x100 else pint.uint_t, 'SampleDuration'),
-            (lambda s: UI32 if s.getparent(trun)['Flags'].li.num() & 0x200 else pint.uint_t, 'SampleSize'),
-            (lambda s: SAMPLEFLAGS if s.getparent(trun)['Flags'].li.num() & 0x400 else pint.uint_t, 'SampleFlags'),
-            (lambda s: UI32 if s.getparent(trun)['Flags'].li.num() & 0x800 else pint.uint_t, 'SampleCompositionTimeOffset'),
+            (lambda s: UI32 if s.getparent(trun)['Flags'].li.int() & 0x100 else pint.uint_t, 'SampleDuration'),
+            (lambda s: UI32 if s.getparent(trun)['Flags'].li.int() & 0x200 else pint.uint_t, 'SampleSize'),
+            (lambda s: SAMPLEFLAGS if s.getparent(trun)['Flags'].li.int() & 0x400 else pint.uint_t, 'SampleFlags'),
+            (lambda s: UI32 if s.getparent(trun)['Flags'].li.int() & 0x800 else pint.uint_t, 'SampleCompositionTimeOffset'),
         ]
     _fields_ = [
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (UI32, 'SampleCount'),
-        (lambda s: SI32 if s['Flags'].li.num() & 0x01 else pint.uint_t, 'DataOffset'),
-        (lambda s: SAMPLEFLAGS if s['Flags'].li.num() & 0x04 else pint.uint_t, 'FirstSampleFlags'),
-        (lambda s: dyn.array(SampleInformationStructure,s['SampleCount'].li.num()), 'SampleInformation'),
+        (lambda s: SI32 if s['Flags'].li.int() & 0x01 else pint.uint_t, 'DataOffset'),
+        (lambda s: SAMPLEFLAGS if s['Flags'].li.int() & 0x04 else pint.uint_t, 'FirstSampleFlags'),
+        (lambda s: dyn.array(SampleInformationStructure,s['SampleCount'].li.int()), 'SampleInformation'),
     ]
 
 #@Boxes.define
@@ -517,8 +517,8 @@ class tfra(pstruct.type):
         _fields_ = [(26,'Reserved'),(2,'TrafNumMinus1'),(2,'TrunNumMinus1'),(2,'SampleNumMinus1')]
     class RandomAccessStructure(pstruct.type):
         _fields_ = [
-            (lambda s: UI64 if s.getparent(tfra)['Version'].li.num() == 1 else UI32, 'Time'),
-            (lambda s: UI64 if s.getparent(tfra)['Version'].li.num() == 1 else UI32, 'MoofOffset'),
+            (lambda s: UI64 if s.getparent(tfra)['Version'].li.int() == 1 else UI32, 'Time'),
+            (lambda s: UI64 if s.getparent(tfra)['Version'].li.int() == 1 else UI32, 'MoofOffset'),
             (lambda s: (UI8,UI16,UI24,UI32)[s.getparent(tfra)['LengthSize'].li['TrafNumMinus1']], 'TrafNumber'),
             (lambda s: (UI8,UI16,UI24,UI32)[s.getparent(tfra)['LengthSize'].li['TrunNumMinus1']], 'TrunNumber'),
             (lambda s: (UI8,UI16,UI24,UI32)[s.getparent(tfra)['LengthSize'].li['SampleNumMinus1']], 'SampleNumber'),
@@ -529,7 +529,7 @@ class tfra(pstruct.type):
         (UI32, 'TrackID'),
         (LengthSize, 'LengthSize'),
         (UI32, 'NumberEntry'),
-        (lambda s: dyn.array(RandomAccessStructure,s['NumberEntry'].li.num()), 'RandomAccessSample'),
+        (lambda s: dyn.array(RandomAccessStructure,s['NumberEntry'].li.int()), 'RandomAccessSample'),
     ]
 
 @Boxes.define
@@ -587,7 +587,7 @@ class ahdr(pstruct.type):
         (UI8, 'Version'),
         (UI24, 'Flags'),
         (StandardEncryptionParamsBox, 'StdEncryptionBox'),
-        (lambda s: AdobeSignatureBox if s['Version'].li.num() == 1 else ptype.undefined, 'Signature'),
+        (lambda s: AdobeSignatureBox if s['Version'].li.int() == 1 else ptype.undefined, 'Signature'),
     ]
 
 @Boxes.define
@@ -617,7 +617,7 @@ class akey(pstruct.type):
 
     def __Params(self):
         res = self.getparent(aprm)
-        return APSParamsBox if res['Version'].li.num() == 1 else FMRMSv2PAramsBox
+        return APSParamsBox if res['Version'].li.int() == 1 else FMRMSv2PAramsBox
 
     _fields_ = [
         (UI8, 'Version'),
@@ -738,7 +738,7 @@ class amhp(pstruct.type):
         (dyn.array(UI8,6), 'Reserved(0)'),
         (UI16, 'DataReferenceIndex'),
         (UI8, 'ModeCount'),
-        (lambda s: dyn.clone(pbinary.array, _object_=MuxHintProcessEntry, length=s['ModeCount'].li.num()), 'ENTRIES'),
+        (lambda s: dyn.clone(pbinary.array, _object_=MuxHintProcessEntry, length=s['ModeCount'].li.int()), 'ENTRIES'),
     ]
 
 @Boxes.define
@@ -782,11 +782,11 @@ class ilst(pstruct.type):
             (dyn.array(UI8,4), 'DataTag'),
             (UI32, 'DataType'),
             (UI32, 'Reserved'),
-            (lambda s: dyn.array(UI8,s['DataLength'].li.num()), 'Payload'),
+            (lambda s: dyn.array(UI8,s['DataLength'].li.int()), 'Payload'),
         ]
     _fields_ = [
         (UI32, 'TagCount'),
-        (lambda s: dyn.array(TAGRECORD,s['TagCount'].li.num()), 'Tags'),
+        (lambda s: dyn.array(TAGRECORD,s['TagCount'].li.int()), 'Tags'),
     ]
 
 @Boxes.define
@@ -802,7 +802,7 @@ class styl(pstruct.type):
         ]
     _fields_ = [
         (UI16, 'Count'),
-        (lambda s: dyn.array(STYLERECORD,s['Count'].li.num()), 'Styles'),
+        (lambda s: dyn.array(STYLERECORD,s['Count'].li.int()), 'Styles'),
     ]
 
 @Boxes.define
@@ -825,7 +825,7 @@ class krok(pstruct.type):
     _fields_ = [
         (UI32, 'StartTime'),
         (UI16, 'Count'),
-        (lambda s: dyn.array(KARAOKEREC, s['Count'].li.num()), 'KaraokeRecords'),
+        (lambda s: dyn.array(KARAOKEREC, s['Count'].li.int()), 'KaraokeRecords'),
     ]
 
 @Boxes.define
@@ -853,9 +853,9 @@ class href(pstruct.type):
         (UI16, 'StartChar'),
         (UI16, 'EndChar'),
         (UI8, 'URLSize'),
-        (lambda s: dyn.clone(STRING,length=s['URLSize'].li.num()), 'URL'),
+        (lambda s: dyn.clone(STRING,length=s['URLSize'].li.int()), 'URL'),
         (UI8, 'ALTSize'),
-        (lambda s: dyn.clone(STRING,length=s['ALTSize'].li.num()), 'ALT'),
+        (lambda s: dyn.clone(STRING,length=s['ALTSize'].li.int()), 'ALT'),
     ]
 
 @Boxes.define

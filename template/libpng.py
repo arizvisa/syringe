@@ -53,11 +53,11 @@ class signature(dyn.block(8)):
 class chunk(pstruct.type):
     def __data(self):
         cb, t = self['length'].li, self['type'].li
-        return Chunk.lookup(t.serialize(), dyn.clone(Chunk.default, length=cb.int()))
+        return Chunk.withdefault(t.serialize(), length=cb.int())
 
     def __data(self):
         type, length = self['type'].li, self['length'].li
-        result = Chunk.lookup(type.serialize(), dyn.clone(Chunk.default, type=type.serialize(), length=length.int()))
+        result = Chunk.withdefault(type.serialize(), type=type.serialize(), length=length.int())
         if ptype.iscontainer(result):
             return dyn.clone(result, blocksize=lambda s,cb=length.int():cb)
         return result

@@ -184,8 +184,7 @@ class MarkerStream(pstruct.type):
     Type, Table = MarkerType, Marker
 
     def __Value(self):
-        res = self.Table.lookup(self['Type'].li.str(), self.Table.default)
-        return res
+        return self.Table.withdefault(self['Type'].li.str())
 
     def __Extra(self):
         cb = self['Type'].li.size() + self['Value'].li.size()

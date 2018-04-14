@@ -371,7 +371,7 @@ if __name__ == '__main__':
         x = pbinary.new(ber.Tag,source=ptypes.prov.string(bitmap.data(res)))
         print x.l
         print x['TagLong'][0]
-        print x.num()
+        print x.int()
         print int(x['TagLong'])
 
     def test_length():

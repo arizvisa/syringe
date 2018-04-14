@@ -75,7 +75,7 @@ class VideoTagHeader(pstruct.type):
 
     def __Header(self):
         t = self['Type'].li
-        return VideoPacketHeader.lookup(t['CodecID'], dyn.clone(VideoPacketHeader.default, type=t['CodecID']))
+        return VideoPacketHeader.withdefault(t['CodecID'], type=t['CodecID'])
 
     _fields_ = [
         (Type, 'Type'),
@@ -178,7 +178,7 @@ class SCREENVIDEOPACKET(pstruct.type):
     class IMAGEBLOCK(pstruct.type):
         _fields_ = [
             (pint.bigendian(UI16), 'DataSize'), # UB[16], but whatever
-            (lambda s: dyn.block(s['DataSize'].li.num()), 'Data'),
+            (lambda s: dyn.block(s['DataSize'].li.int()), 'Data'),
         ]
 
     def __ImageBlocks(self):
@@ -219,7 +219,7 @@ class VP6FLVALPHAVIDEOPACKET(pstruct.type):
     def __Data(self):
         streamtag = self.getparent(StreamTag)
         sz = streamtag.DataSize()
-        ofs = self['OffsetToAlpha'].li.num()
+        ofs = self['OffsetToAlpha'].li.int()
 
         if ofs + self['Adjustment'].li.size() >= sz:
             logging.warn('OffsetToAlpha incorrect : %x', self.getoffset())
@@ -229,7 +229,7 @@ class VP6FLVALPHAVIDEOPACKET(pstruct.type):
     _fields_ = [
         (VP6FLVVIDEOPACKET.Adjustment, 'Adjustment'),
         (UI24, 'OffsetToAlpha'),
-#        (lambda s: dyn.block(s['OffsetToAlpha'].li.num()), 'Data'),
+#        (lambda s: dyn.block(s['OffsetToAlpha'].li.int()), 'Data'),
         (__Data, 'Data'),
         (lambda s: dyn.block(s.getparent(StreamTag).DataSize() - (s['Adjustment'].li.size()+s['OffsetToAlpha'].li.size()+s['Data'].li.size())), 'AlphaData'),
     ]
@@ -271,7 +271,7 @@ class SCREENV2VIDEOPACKET(pstruct.type):
             (pint.bigendian(UI16), 'DataSize'), # UB[16], but whatever
             (IMAGEFORMAT, 'Format'),
             (__ImageBlockHeader, 'ImageBlockHeader'),
-            (lambda s: dyn.block(s['DataSize'].li.num()), 'Data'),
+            (lambda s: dyn.block(s['DataSize'].li.int()), 'Data'),
         ]
 
     def __ImageBlocks(self):
@@ -303,7 +303,7 @@ class AVCVIDEOPACKET(pstruct.type):
     type = 7
     def __Data(self):
         h = self.getparent(StreamTag)['Header']
-        t = h['AVCPacketType'].num()
+        t = h['AVCPacketType'].int()
         if t == 0:
             # FIXME: ISO 14496-15, 5.2.4.1
             return AVCDecoderConfigurationRecord
@@ -319,20 +319,20 @@ class AVCVIDEOPACKET(pstruct.type):
 ### SCRIPTDATA
 class SCRIPTDATAVALUE(pstruct.type):
     def __ScriptDataValue(self):
-        t = self['Type'].li.num()
-        return SCRIPTDATATYPE.lookup(t, dyn.clone(SCRIPTDATATYPE.default, type=t))
+        t = self['Type'].li.int()
+        return SCRIPTDATATYPE.withdefault(t, type=t)
     _fields_ = [
         (UI8,'Type'),
         (__ScriptDataValue, 'Value'),
     ]
     def summary(self):
-        return '{:s}({:d})/{:s}'.format(self['Value'].classname(), self['Type'].num(), self['Value'].summary())
+        return '{:s}({:d})/{:s}'.format(self['Value'].classname(), self['Type'].int(), self['Value'].summary())
     repr = summary
 
 class SCRIPTDATATYPE(ptype.definition): cache = {}
 
 class SCRIPTDATASTRING(pstruct.type):
-    _fields_ = [(UI16,'StringLength'),(lambda s:dyn.clone(STRING,length=s['StringLength'].li.num()),'StringData')]
+    _fields_ = [(UI16,'StringLength'),(lambda s:dyn.clone(STRING,length=s['StringLength'].li.int()),'StringData')]
     def summary(self):
         return self['StringData'].summary()
     repr = summary
@@ -367,7 +367,7 @@ class SCRIPTDATAOBJECT(parray.terminated):
     _object_ = SCRIPTDATAOBJECTPROPERTY
     def isTerminator(self, value):
         return type(value['Value'].li['Value']) == SCRIPTDATAOBJECTEND
-        #return value['PropertyName'].li['StringLength'] == 0 and value['PropertyValue'].li['Type'].num() == SCRIPTDATAOBJECTEND.type
+        #return value['PropertyName'].li['StringLength'] == 0 and value['PropertyValue'].li['Type'].int() == SCRIPTDATAOBJECTEND.type
     def summary(self):
         return repr([ x.summary() for x in self ])
     repr = summary
@@ -388,7 +388,7 @@ class SCRIPTDATAOBJECTEND(ptype.type):
 @SCRIPTDATATYPE.define
 class SCRIPTDATASTRICTARRAY(pstruct.type):
     type = 10
-    _fields_ = [(UI32,'StrictArrayLength'),(lambda s:dyn.clone(SCRIPTDATAVALUE,length=s['StrictArrayLength'].li.num()),'StrictArrayValue')]
+    _fields_ = [(UI32,'StrictArrayLength'),(lambda s:dyn.clone(SCRIPTDATAVALUE,length=s['StrictArrayLength'].li.int()),'StrictArrayValue')]
     def summary(self):
         return '{!r}'.format([x.summary() for x in self['StrictArrayValue']])
     repr = summary
@@ -398,7 +398,7 @@ class SCRIPTDATADATE(pstruct.type):
     type = 11
     _fields_ = [(DOUBLE,'DateTime'),(SI16,'LocalDateTimeOffset')]
     def summary(self):
-        return 'DataTime:{:s} LocalDateTimeOffset:{:d}'.format(self['DateTime'].summary(), self['LocalDateTimeOffset'].num)
+        return 'DataTime:{:s} LocalDateTimeOffset:{:d}'.format(self['DateTime'].summary(), self['LocalDateTimeOffset'].int())
     repr = summary
 
 @SCRIPTDATATYPE.define
@@ -406,7 +406,7 @@ class SCRIPTDATALONGSTRING(pstruct.type):
     type = 12
     _fields_ = [
         (UI32, 'StringLength'),
-        (lambda s: dyn.clone(STRING,length=s['StringLength'].li.num()), 'StringData'),
+        (lambda s: dyn.clone(STRING,length=s['StringLength'].li.int()), 'StringData'),
     ]
 
     def summary(self):
@@ -418,7 +418,7 @@ class StreamTag(pstruct.type):
     def __Header(self):
         base = self.getparent(FLVTAG)
         t = base['Type'].li['TagType']
-        return TagHeader.lookup(t, dyn.clone(TagHeader.default, type=t))
+        return TagHeader.withdefault(t, type=t)
 
     def __FilterParams(self):
         base = self.getparent(FLVTAG)
@@ -427,11 +427,11 @@ class StreamTag(pstruct.type):
     def __Body(self):
         base = self.getparent(FLVTAG)
         t = base['Type'].li['TagType']
-        return TagBody.lookup(t, dyn.clone(TagBody.default, type=t, length=self.DataSize()))
+        return TagBody.withdefault(t, type=t, length=self.DataSize())
 
     def DataSize(self):
         base = self.getparent(FLVTAG)
-        sz = base['DataSize'].li.num()
+        sz = base['DataSize'].li.int()
         ex = self['Header'].li.size() + self['FilterParams'].li.size()
         return sz - ex
 
@@ -473,7 +473,7 @@ class FLVTAG(pstruct.type):
             return 'TagType:{:d} {:s}Reserved:{:d}'.format(self['TagType'], 'Filtered ' if self['Filter'] else '', self['Reserved'])
 
     def __Extra(self):
-        sz = self['DataSize'].li.num()
+        sz = self['DataSize'].li.int()
         ts = self['Stream'].li.size()
         return dyn.block(sz-ts)
 
@@ -499,7 +499,7 @@ class File(pstruct.type):
                 if self['Reserved(1)'] or self['Reserved(0)']: res.append('Reserved?')
                 return '/'.join(res)
         def __Padding(self):
-            sz = self['DataOffset'].li.num()
+            sz = self['DataOffset'].li.int()
             return dyn.block(sz - 9)
         _fields_ = [
             (dyn.array(UI8,3), 'Signature'),
@@ -511,7 +511,7 @@ class File(pstruct.type):
 
     def __Padding(self):
         h = self['Header'].li
-        sz = h['DataOffset'].num()
+        sz = h['DataOffset'].int()
         return dyn.block(sz - h.size())
 
     class Body(parray.block):
@@ -522,7 +522,7 @@ class File(pstruct.type):
             ]
 
     def __Body(self):
-        ex = self['Header'].li['DataOffset'].num()
+        ex = self['Header'].li['DataOffset'].int()
         return dyn.clone(self.Body, blocksize=lambda s:self.source.size() - ex)
 
     _fields_ = [

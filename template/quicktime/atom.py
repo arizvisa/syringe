@@ -6,8 +6,8 @@ class AtomType(ptype.definition):
 class Atom(pstruct.type):
     def __data(self):
         type = self['type'].li.serialize()
-        size = self.blocksize() - self.getheadersize()
-        t = AtomType.lookup(type, dyn.clone(AtomType.default, type=type, __name__='Unknown<{!r}>'.format(type), length=size))
+        name, size = 'Unknown<{!r}>'.format(type), self.blocksize() - self.getheadersize()
+        t = AtomType.withdefault(type, type=type, __name__=name, length=size)
         return dyn.clone(t, blocksize=lambda s:size)
 
     def getheadersize(self):
@@ -71,7 +71,7 @@ class AtomList(parray.block):
 ## atom templates
 class EntriesAtom(pstruct.type):
     def __Entry(self):
-        t,n = self.Entry,self['Number of entries'].li.num()
+        t,n = self.Entry,self['Number of entries'].li.int()
         return dyn.array(t,n)
 
     _fields_ = [
@@ -248,15 +248,16 @@ class MediaVideo(ptype.definition): attribute,cache = 'version',{}
 class MediaVideo_v1(pstruct.type):   #XXX: might need to be renamed
     version,type = 1,'vide'
     class CompressorName(pstruct.type):
-        _fields_ = [(pint.uint8_t,'length'),(lambda s: dyn.clone(pstr.string,length=s['length'].li.num()),'string'),(lambda s: dyn.block(0x20 - s['length'].li.num()), 'padding')]
+        _fields_ = [(pint.uint8_t,'length'),(lambda s: dyn.clone(pstr.string,length=s['length'].li.int()),'string'),(lambda s: dyn.block(0x20 - s['length'].li.int()), 'padding')]
     class ColorTable(pstruct.type):
         class argb(pstruct.type):
-            _fields_ = [(pint.uint16_t,n) for n in ('i','r','g','b')]
+            _fields_ = [(pint.uint16_t, n) for n in 'irgb']
             def summary(self):
-                return '{:d} ({:04x},{:04x},{:04x})'.format(self['i'].num(),self['r'].num(),self['g'].num(),self['b'].num())
+                i, r, g, b = (self[n].int() for n in 'irgb')
+                return '{:d} ({:04x},{:04x},{:04x})'.format(i, r, g, b)
             repr = summary
         def __entries(self):
-            n = self['end'].li.num() - self['start'].li.num()
+            n = self['end'].li.int() - self['start'].li.int()
             return dyn.array(self.argb, n+1)
         _fields_ = [
             (pint.uint32_t,'start'),
@@ -265,7 +266,7 @@ class MediaVideo_v1(pstruct.type):   #XXX: might need to be renamed
             (__entries, 'entries'),
         ]
     def __ColorTable(self):
-        n = self['Depth'].li.num()
+        n = self['Depth'].li.int()
         return self.ColorTable if n in (2,4,8) else ptype.undefined
 
     _fields_ = [
@@ -329,7 +330,7 @@ class stsd(EntriesAtom):
             (pint.uint16_t, 'Compression ID'),
             (pint.uint16_t, 'Packet size'),
             (pint.uint32_t, 'Sample rate'),
-            (lambda s: MediaAudio.lookup(s['Version'].li.int(), dyn.clone(MediaAudio.default, type=s['Version'].int())), 'Versioned'),
+            (lambda s: MediaAudio.withdefault(s['Version'].li.int(), type=s['Version'].int()), 'Versioned'),
         ]
 
     class Video(pstruct.type):
@@ -343,12 +344,12 @@ class stsd(EntriesAtom):
             (pint.uint16_t, 'Height'),
             (pQTInt, 'Horizontal Resolution'),
             (pQTInt, 'Vertical Resolution'),
-            (lambda s: MediaVideo.lookup(s['Version'].li.num(), dyn.clone(MediaVideo.default, type=s['Version'].int())), 'Versioned'),
+            (lambda s: MediaVideo.withdefault(s['Version'].li.int(), type=s['Version'].int()), 'Versioned'),
         ]
 
     class Entry(pstruct.type):
         def __Data_specific(self):
-            sz = self['Sample description size'].li.num()
+            sz = self['Sample description size'].li.int()
             return dyn.block(sz - 4 - 4 - 6 - 2)
 
         _fields_ = [

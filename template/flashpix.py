@@ -55,8 +55,8 @@ class PROPERTYSECTIONHEADER(pstruct.type):
     _fields_ = [
         (DWORD, 'cbSection'),
         (DWORD, 'cProperties'),
-        (lambda s: dyn.array(PROPERTYIDOFFSET, s['cProperties'].li.num()), 'rgprop'),
-        (lambda s: dyn.block( s['cbSection'].li.num() - (8+s['rgprop'].li.blocksize())), 'data')
+        (lambda s: dyn.array(PROPERTYIDOFFSET, s['cProperties'].li.int()), 'rgprop'),
+        (lambda s: dyn.block( s['cbSection'].li.int() - (8+s['rgprop'].li.blocksize())), 'data')
     ]
 
     def __getslice__(self, i, j):

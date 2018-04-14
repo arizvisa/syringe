@@ -6,7 +6,7 @@ pint.setbyteorder(ptypes.config.byteorder.bigendian)
 class u_char(pint.uint8_t): pass
 class u_short(pint.uint16_t): pass
 
-class lladdr(dyn.array(u_char, 6)): pass
+class lladdr(parray.type): length, _object_ = 6, u_char
 
 class header(pstruct.type, __base__.stackable):
     _fields_ = [
@@ -16,4 +16,4 @@ class header(pstruct.type, __base__.stackable):
     ]
 
     def nextlayer_id(self):
-        return self['type'].num()
+        return self['type'].int()

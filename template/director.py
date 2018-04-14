@@ -41,8 +41,8 @@ class Chunk(pstruct.type):
         return size
 
     def ckData(self):
-        res, size = self['ckID'].li.str(), self['ckSize'].li.num()
-        return Record.lookup(res, dyn.clone(Record.default, type=res, blocksize=lambda s:size))
+        res, size = self['ckID'].li.str(), self['ckSize'].li.int()
+        return Record.withdefault(res, type=res, blocksize=lambda s, size=size: size)
 
     def ckSize(self):
         return self.endian(LONG)
@@ -51,7 +51,7 @@ class Chunk(pstruct.type):
         (ID, 'ckID'),
         (ckSize, 'ckSize'),
 #        (ckData, 'ckData'),
-        (lambda self: Record.lookup(self['ckID'].li.str(), dyn.clone(Record.default, type=self['ckID'].str(), blocksize=lambda s:self['ckSize'].li.num())), 'ckData'),
+        (lambda self: Record.withdefault(self['ckID'].li.str(), type=self['ckID'].str(), blocksize=lambda s:self['ckSize'].li.int()), 'ckData'),
         (ckExtra, 'ckExtra'),
     ]
 
@@ -81,13 +81,13 @@ class File(pstruct.type):
 
     def __Data(self):
         type = self['Type'].li.serialize()
-        size = self['Size'].li.num()
-        return Record.lookup(type, dyn.clone(Record.default, type=type, blocksize=lambda s:size))
+        size = self['Size'].li.int()
+        return Record.withdefault(type, type=type, blocksize=lambda s, size=size:size)
 
     _fields_ = [
         (dyn.block(4), 'Type'),
         (__Size, 'Size'),
-        (lambda self: Record.lookup(self['Type'].li.serialize(), dyn.clone(Record.default, type=self['Type'].serialize(), blocksize=lambda s:self['Size'].li.num())), 'Data'),
+        (lambda self: Record.withdefault(self['Type'].li.serialize(), type=self['Type'].serialize(), blocksize=lambda s:self['Size'].li.int()), 'Data'),
 #        (__Data, 'Data'),
     ]
 
@@ -157,7 +157,7 @@ class demx(parray.block):
             (dyn.clone(HEX,length=4),'type'),
             (dyn.clone(HEX,length=8),'size'),
             (dyn.clone(HEX,length=8),'count'),
-            (lambda s: dyn.block(s['size'].li.num()),'data')         # FIXME: add a chunktype lookup for this too
+            (lambda s: dyn.block(s['size'].li.int()),'data')         # FIXME: add a chunktype lookup for this too
         ]
     _object_ = chunk
 

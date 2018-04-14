@@ -9,9 +9,10 @@ from ptypes import *
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
-class in_addr(dyn.array(pint.uint32_t, 4)):
+class in_addr(parray.type):
+    length, _object_ = 4, pint.uint32_t
     def summary(self):
-        num = bitmap.new(super(in_addr,self).num(), 128)
+        num = bitmap.new(super(in_addr,self).int(), 128)
         components = bitmap.split(num, 16)[::-1]
 
         # FIXME: there's got to be a more elegant way than a hacky state machine
@@ -48,16 +49,16 @@ class ip6_hdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        return self['ip6_nxt'].num()
+        return self['ip6_nxt'].int()
 
     def nextlayer(self):
         protocol = self.nextlayer_id()
-        sz = self['ip6_plen'].num()
+        sz = self['ip6_plen'].int()
 
         if protocol == 0:
             result = ip6_exthdr_hop
         else:
-            result = layer.lookup(protocol, dyn.clone(layer.default, type=protocol))
+            result = layer.withdefault(protocol, type=protocol)
         return result,sz
 
 @layer.define
@@ -66,12 +67,12 @@ class layer_ip6(ip6_hdr):
 
 class ip6_opt(pstruct.type):
     def __ip6_len(self):
-        type = self['ip6o_type'].li.num()
+        type = self['ip6o_type'].li.int()
         return (u_int8_t,pint.int_t)[type == 0]   # for Pad0
 
     def __ip6o_payload(self):
-        t,size = self['ip6o_type'].li.num(),self['ip6o_len'].li.num()
-        return Option.lookup(t, dyn.clone(Option.default, blocksize=lambda s:size))
+        t, size = self['ip6o_type'].li.int(), self['ip6o_len'].li.int()
+        return Option.withdefault(t, blocksize=lambda s:size)
 
     _fields_ = [
         (u_int8_t,'ip6o_type'),
@@ -83,9 +84,9 @@ class ip6_exthdr(pstruct.type, stackable):
     type = None
 
     def __ip6_payload(self):
-        t = self['ip6_nxt'].li.num()
-        size = self['ip6_len'].li.num() - 2
-        result = layer.lookup(self.type, dyn.clone(layer.default, length=size))
+        t = self['ip6_nxt'].li.int()
+        size = self['ip6_len'].li.int() - 2
+        result = layer.withdefault(self.type, length=size)
         return dyn.clone(result, blocksize=lambda s:size)
 
     _fields_ = [
@@ -95,11 +96,11 @@ class ip6_exthdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        protocol = self['ip6_nxt'].num()
+        protocol = self['ip6_nxt'].int()
         return protocol
 
     def blocksize(self):
-        return 8+self['ip6_len'].li.num()
+        return 8+self['ip6_len'].li.int()
 
 ### options
 if True:
@@ -128,8 +129,8 @@ if True:
         _fields_ = [
             (u_int8_t, 'ip6on_src_nsap_len'),
             (u_int8_t, 'ip6on_dst_nsap_len'),
-            (lambda s: dyn.block(self['ip6on_src_nsap_len'].li.num()), 'ip6on_src_nsap'),
-            (lambda s: dyn.block(self['ip6on_dst_nsap_len'].li.num()), 'ip6on_dst_nsap'),
+            (lambda s: dyn.block(self['ip6on_src_nsap_len'].li.int()), 'ip6on_src_nsap'),
+            (lambda s: dyn.block(self['ip6on_dst_nsap_len'].li.int()), 'ip6on_dst_nsap'),
         ]
 
     @Option.define

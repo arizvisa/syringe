@@ -57,7 +57,7 @@ class Packet(pstruct.type):
 
     _fields_ = [
         (__header, 'header'),
-        (lambda s: dyn.block(s['header']['incl_len'].li.num()), 'data'),
+        (lambda s: dyn.block(s['header']['incl_len'].li.int()), 'data'),
     ]
 
 class List(parray.infinite):

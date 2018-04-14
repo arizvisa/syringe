@@ -61,7 +61,7 @@ class s32(_vle):
 class string_info(as3struct):
     _fields_ = [
         (u30, 'size'),
-        (lambda s: dyn.clone(pstr.string, length=s['size'].li.num()), 'utf8')
+        (lambda s: dyn.clone(pstr.string, length=s['size'].li.int()), 'utf8')
     ]
     def details(self):
         return self.str() if self.initialized else '???'
@@ -86,7 +86,7 @@ class namespace_info(as3struct):
     ]
 
     def getname(self):
-        n = self['name'].num()
+        n = self['name'].int()
         if n == 0:
             return ''
         parent = self.getparent(cpool_info)
@@ -99,13 +99,13 @@ class namespace_info(as3struct):
 class ns_set_info(as3struct):
     _fields_ = [
         (u30, 'count'),
-        (lambda s: dyn.array(u30, s['count'].li.num()), 'ns')
+        (lambda s: dyn.array(u30, s['count'].li.int()), 'ns')
     ]
 
     def details(self):
         l = len(self['ns'])
         parent = self.getparent(cpool_info)
-        sets = [ x.num() for x in self['ns'] ]
+        sets = [ x.int() for x in self['ns'] ]
         return 'count:%x %s'%(l,repr(sets))
 
 ###
@@ -120,7 +120,7 @@ class multiname_kind_QName(as3struct):
 
     def str(self):
         parent = self.getparent(cpool_info)
-        a,b = self['ns'].num(), self['name'].num()
+        a,b = self['ns'].int(), self['name'].int()
         ns,name = '*', '*'
         if a > 0:
             ns = parent['string'][a-1].str()
@@ -141,7 +141,7 @@ class multiname_kind_RTQName(as3struct):
 
     def str(self):
         parent = self.getparent(cpool_info)
-        a = self['name'].num()
+        a = self['name'].int()
         name = '*'
         if a > 0:
             name = parent['string'][a-1].str()
@@ -155,14 +155,14 @@ class multiname_kind_Multiname(as3struct):
     type = 0x09
     _fields_ = [(u30, 'name'),(u30, 'ns_set')]
     def details(self):
-        b = self['ns_set'].num()
+        b = self['ns_set'].int()
         assert b > 0
         parent = self.getparent(cpool_info)
         nsset = repr(parent['ns_set'][b])
         return ' '.join([self.str(), nsset])
 
     def str(self):
-        a,b = self['name'].num(),self['ns_set'].num()
+        a,b = self['name'].int(),self['ns_set'].int()
         parent = self.getparent(cpool_info)
         name = '*'
         if a > 0:
@@ -173,7 +173,7 @@ class multiname_kind_MultinameL(as3struct):
     type = 0x1b
     _fields_ = [(u30, 'ns_set')]
     def details(self):
-        s = self['ns_set'].num()
+        s = self['ns_set'].int()
         nssets = self.getparent(cpool_info)['ns_set']
         return repr(nssets[s])
 
@@ -208,7 +208,7 @@ class multiname_info(as3struct):
         ]
 
     def __data(self):
-        return MultiNameTypes.lookup(self['kind'].li.num())
+        return MultiNameTypes.lookup(self['kind'].li.int())
 
     _fields_ = [
         (__kind, 'kind'),
@@ -230,17 +230,17 @@ class option_detail(pstruct.type):
 class option_info(pstruct.type):
     _fields_ = [
         (u30, 'option_count'),
-        (lambda s: dyn.array(option_detail, s['option_count'].num()), 'option')
+        (lambda s: dyn.array(option_detail, s['option_count'].int()), 'option')
     ]
 
 class param_info(pstruct.type):
     _fields_ = [
-        (lambda s: dyn.array(u30, s.parent['param_count'].num()), 'param_name')
+        (lambda s: dyn.array(u30, s.parent['param_count'].int()), 'param_name')
     ]
 
     def summary(self):
         cpool = self.getparent(abcFile)['constant_pool']
-        return ', '.join( cpool['string'][x.num()].str() for x in self['param_name'] )
+        return ', '.join( cpool['string'][x.int()].str() for x in self['param_name'] )
 
     def details(self):
         return self.summary()
@@ -269,7 +269,7 @@ class method_info(pstruct.type):
     _fields_ = [
         (u30, 'param_count'),
         (u30, 'return_type'),
-        (lambda s: dyn.array(u30, s['param_count'].num()), 'param_type'),
+        (lambda s: dyn.array(u30, s['param_count'].int()), 'param_type'),
         (u30, 'name'),
         (__flags, 'flags'),
         (__option_info, 'options'),
@@ -280,12 +280,12 @@ class method_info(pstruct.type):
         cpool = self.getparent(abcFile)['constant_pool']
         paramtype = [ cpool['multiname'][idx].str() for x in self['param_type'] ]
 
-        idx = self['return_type'].num()
+        idx = self['return_type'].int()
         returntype = '*'
         if idx > 0:
             returntype = cpool['multiname'][idx].str()
 
-        idx = self['name'].num()
+        idx = self['name'].int()
         name = '*'
         if idx > 0:
             name = cpool['string'][idx].str()
@@ -298,7 +298,7 @@ class metadata_info(pstruct.type):
     _fields_ = [
         (u30, 'name'),
         (u30, 'item_count'),
-        (lambda s: dyn.array(item_info, s['item_count'].num()), 'items')
+        (lambda s: dyn.array(item_info, s['item_count'].int()), 'items')
     ]
 
 class TraitTypes(ptype.definition):
@@ -319,7 +319,7 @@ class traits_info(pstruct.type):
 
     def __metadata(self):
         if self['kind']['a'] == 4:
-            return dyn.array(u30, self['metadata_count'].num())
+            return dyn.array(u30, self['metadata_count'].int())
         return ptype.type
 
     _fields_ = [
@@ -332,7 +332,7 @@ class traits_info(pstruct.type):
 
     def details(self):
         parent = self.getparent(abcFile)['constant_pool']
-        n = self['name'].num()
+        n = self['name'].int()
 
         multiname = parent['multiname'][n]['data'].str()
         data = self['data']
@@ -384,14 +384,14 @@ class trait_slot(pstruct.type):
 
     def str(self):
         parent = self.getparent(abcFile)['constant_pool']
-        n = self['type_name'].num()
+        n = self['type_name'].int()
         name = '*'
         if n > 0:
             name = parent['multiname'][n].str()
         return name
 
     def getvalue(self):
-        k,v = self['vkind'].num(), self['vindex'].num()
+        k,v = self['vkind'].int(), self['vindex'].int()
         if k == 0xb:
             return True
         if k == 0xa:
@@ -409,8 +409,8 @@ class trait_slot(pstruct.type):
 
     # FIXME
     def details(self):
-        slid = self['slot_id'].num()
-        vindex = self['vindex'].num()
+        slid = self['slot_id'].int()
+        vindex = self['vindex'].int()
         return ' '.join([ self.str(), self['vkind'].str(), repr(self.getvalue())])
 
 class trait_class(pstruct.type):
@@ -430,9 +430,9 @@ class trait_method(pstruct.type):
     ]
 
     def details(self):
-        dispid = self['disp_id'].num()
+        dispid = self['disp_id'].int()
         parent = self.getparent(abcFile)
-        m = self['method'].num()
+        m = self['method'].int()
         method = parent['method'][m]
         return '%x %s'% (dispid, method.summary())
 
@@ -455,7 +455,7 @@ TraitTypes.define(Trait_Const)
 class instance_info(pstruct.type):
     def _row(type, fieldlength):
         def fn(self):
-            s = self[fieldlength].num()
+            s = self[fieldlength].int()
             logging.warning("swf.as3.instance_info['%s'] loading %d records...", type.typename(), s)
             return dyn.array(type, s)
         return fn
@@ -490,14 +490,14 @@ class class_info(pstruct.type):
     _fields_ = [
         (u30, 'cinit'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, s['trait_count'].li.num()), 'traits')
+        (lambda s: dyn.array(traits_info, s['trait_count'].li.int()), 'traits')
     ]
 
 class script_info(pstruct.type):
     _fields_ = [
         (u30, 'init'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, s['trait_count'].li.num()), 'traits')
+        (lambda s: dyn.array(traits_info, s['trait_count'].li.int()), 'traits')
     ]
 
 class exception_info(pstruct.type):
@@ -517,11 +517,11 @@ class method_body_info(pstruct.type):
         (u30, 'init_scope_depth'),
         (u30, 'max_scope_depth'),
         (u30, 'code_length'),
-        (lambda s: dyn.block(s['code_length'].li.num()), 'code'),
+        (lambda s: dyn.block(s['code_length'].li.int()), 'code'),
         (u30, 'exception_count'),
-        (lambda s: dyn.array(exception_info, s['exception_count'].li.num()), 'exception'),
+        (lambda s: dyn.array(exception_info, s['exception_count'].li.int()), 'exception'),
         (u30, 'trait_count'),
-        (lambda s: dyn.array(traits_info, s['trait_count'].li.num()), 'trait'),
+        (lambda s: dyn.array(traits_info, s['trait_count'].li.int()), 'trait'),
     ]
 
 ###
@@ -532,7 +532,7 @@ class cpool_info(pstruct.type):
 
     def _row1(type, fieldlength):
         def fn(self):
-            s = self[fieldlength].num()
+            s = self[fieldlength].int()
             if s > 0:
                 s -= 1
             logging.warning("swf.as3.cpool_info['%s'] loading %d records...", type.typename(), s)
@@ -564,7 +564,7 @@ class abcFile(pstruct.type):
 
     def _row(type, fieldlength):
         def fn(self):
-            s = self[fieldlength].num()
+            s = self[fieldlength].int()
             logging.warning("swf.as3.abcFile['%s'] loading %d records...", type.typename(), s)
             return dyn.array(type, s)
         return fn

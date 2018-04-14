@@ -166,7 +166,7 @@ class iso_directory_record(pstruct.type):
 class iso_volume_descriptor(pstruct.type):
     def __data(self):
         res = self['type'].li.int()
-        return volume_descriptor.lookup(res, dyn.clone(volume_descriptor.default, type=res))
+        return volume_descriptor.withdefault(res, type=res)
 
     _fields_ = [
         (uchar, 'type'),

@@ -12,7 +12,7 @@ class u_long(pint.uint32_t): pass
 
 class in_addr(u_long):
     def summary(self):
-        num = bitmap.new(super(in_addr,self).num(), 32)
+        num = bitmap.new(super(in_addr,self).int(), 32)
         octets = bitmap.split(num, 8)[::-1]
         return '0x{:x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.number,[num]+octets))
 
@@ -39,10 +39,10 @@ class ip4_hdr(pstruct.type, stackable):
     ]
 
     def nextlayer_id(self):
-        return self['ip_p'].li.num()
+        return self['ip_p'].li.int()
     def nextlayer_size(self):
         headersize = self['ip_h'].li['hlen']*4
-        return self['ip_len'].li.num() - headersize
+        return self['ip_len'].li.int() - headersize
 
 @datalink.layer.define
 class datalink_ip4(ip4_hdr):

@@ -20,9 +20,9 @@ class FILETIME(pstruct.type):
 TIME_T = FILETIME
 
 class LengthPrefixedAnsiString(pstruct.type):
-    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.string,length=s['Length'].li.num()),'String')]
+    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.string,length=s['Length'].li.int()),'String')]
 class LengthPrefixedUnicodeString(pstruct.type):
-    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.num()),'String')]
+    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.int()),'String')]
 
 ### Sector types
 class Sector(ptype.definition):
@@ -65,13 +65,13 @@ class SECT(Sector.Pointer): pass
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
     def summary(self, **options):
-        return ''.join(Sector.lookup(n.int(), dyn.clone(Sector.default, type=n.int())).symbol for n in self)
+        return ''.join(Sector.withdefault(n.int(), type=n.int()).symbol for n in self)
     def _object_(self):
         return dyn.clone(Sector.Pointer,_object_=self.Pointer)
     def chain(self, index):
         yield index
-        while self[index].num() <= MAXREGSECT.type:
-            index = self[index].num()
+        while self[index].int() <= MAXREGSECT.type:
+            index = self[index].int()
             yield index
         return
 
@@ -92,7 +92,7 @@ class DIFAT(AllocationTable):
 
     def next(self):
         last = self.value[-1]
-        assert last.num() != ENDOFCHAIN.type, 'Encountered end of chain while trying to traverse to next DIFAT table'
+        assert last.int() != ENDOFCHAIN.type, 'Encountered end of chain while trying to traverse to next DIFAT table'
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
 
 class MINIFAT(DIFAT):
@@ -124,7 +124,7 @@ class DirectoryEntry(pstruct.type):
     ]
 
     def summary(self):
-        return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].num(), self['qwSize'].num(), self['clsid'].summary())
+        return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
 
 class Directory(parray.block):
     _object_ = DirectoryEntry
@@ -137,7 +137,7 @@ class Directory(parray.block):
         maxnamelength = max(len('{!r}'.format(n['Name'].str())) for n in self)
         for i,n in enumerate(self):
             offset = '[{:x}]'.format(n.getoffset())
-            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, n.classname(), i, n['Name'].str(), n['Type'].summary(), n['sectLocation'].num(), n['qwSize'].num(), n['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
+            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, n.classname(), i, n['Name'].str(), n['Type'].summary(), n['sectLocation'].int(), n['qwSize'].int(), n['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
         return '\n'.join(res)
     def repr(self):
         return self.details()
@@ -178,7 +178,7 @@ class File(pstruct.type):
         class sectDifat(SECT):
             def _object_(self):
                 difat = self.getparent(File.Difat)
-                l = difat['sectDifat'].li.num()
+                l = difat['sectDifat'].li.int()
                 return dyn.array(DIFAT.Sector, length=l)
         _fields_ = [
             (dyn.clone(SECT,_object_=DIFAT), 'sectDifat'),  # First difat sector location
@@ -187,14 +187,14 @@ class File(pstruct.type):
 
     def __reserved(self):
         header = self['Header'].li
-        assert header['uByteOrder'].li.num() == 0xfffe, "Invalid byte order specified for compound document"
+        assert header['uByteOrder'].li.int() == 0xfffe, "Invalid byte order specified for compound document"
 
         info = self['SectorShift'].li
-        sectorSize = 2**info['uSectorShift'].li.num()
+        sectorSize = 2**info['uSectorShift'].li.int()
         self._uSectorSize = self.attributes['_uSectorSize'] = sectorSize
         self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize / Sector.Pointer().blocksize()
 
-        miniSectorSize = 2**info['uMiniSectorShift'].li.num()
+        miniSectorSize = 2**info['uMiniSectorShift'].li.int()
         self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
         self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize / Sector.Pointer().blocksize()
 
@@ -221,15 +221,15 @@ class File(pstruct.type):
     @ptypes.utils.memoize(self=lambda s: s)
     def getDifat(self):
         '''Return an array containing the Difat'''
-        count = self['Difat']['csectDifat'].num()
+        count = self['Difat']['csectDifat'].int()
 
         # First Difat entries
         res = self.new(DIFAT, recurse=self.attributes, length=self._uSectorCount)
         map(res.append, (p for p in self['Table']))
 
         # Check if we need to find more
-        next,count = self['Difat']['sectDifat'],self['Difat']['csectDifat'].num()
-        if next.num() >= MAXREGSECT.type:
+        next,count = self['Difat']['sectDifat'],self['Difat']['csectDifat'].int()
+        if next.int() >= MAXREGSECT.type:
             return res
 
         # Append the contents of the other entries
@@ -242,7 +242,7 @@ class File(pstruct.type):
     def getMiniFat(self):
         '''Return an array containing the MiniFAT'''
         mf = self['MiniFat']
-        fat,count = mf['sectMiniFat'],mf['csectMiniFat'].num()
+        fat,count = mf['sectMiniFat'],mf['csectMiniFat'].int()
         res = self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount)
         for table in fat.d.l.collect(count-1):
             map(res.append, (p for p in table))
@@ -251,7 +251,7 @@ class File(pstruct.type):
     @ptypes.utils.memoize(self=lambda s: s)
     def getFat(self):
         '''Return an array containing the FAT'''
-        count,difat = self['Fat']['csectFat'].num(),self.getDifat()
+        count,difat = self['Fat']['csectFat'].int(),self.getDifat()
         res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount)
         for _,v in zip(xrange(count), difat):
             map(res.append, (p for p in v.d.l))
@@ -259,7 +259,7 @@ class File(pstruct.type):
 
     def getDirectory(self):
         fat = self.getFat()
-        dsect = self['Fat']['sectDirectory'].num()
+        dsect = self['Fat']['sectDirectory'].int()
         res = self.extract( fat.chain(dsect) )
         return res.cast(Directory, blocksize=lambda:res.size())
 
@@ -270,7 +270,7 @@ class File(pstruct.type):
 
 class ClipboardFormatOrAnsiString(pstruct.type):
     def __FormatOrAnsiString(self):
-        marker = self['MarkerOrLength'].li.num()
+        marker = self['MarkerOrLength'].li.int()
         if marker in (0x00000000,):
             return ptype.undefined
         elif marker in (0xfffffffe, 0xffffffff):
@@ -284,7 +284,7 @@ class ClipboardFormatOrAnsiString(pstruct.type):
 
 class ClipboardFormatOrUnicodeString(pstruct.type):
     def __FormatOrUnicodeString(self):
-        marker = self['MarkerOrLength'].li.num()
+        marker = self['MarkerOrLength'].li.int()
         if marker in (0x00000000,):
             return ptype.undefined
         elif marker in (0xfffffffe, 0xffffffff):
@@ -304,7 +304,7 @@ class MONIKERSTREAM(pstruct.type):
         ]
     _fields_ = [
         (DWORD, 'Size'),
-        (lambda s: ptype.undefined if s['Size'].li.num() == 0 else dyn.clone(MONIKERSTREAM.Stream, blocksize=lambda _:s['Size'].li.num()), 'Stream'),
+        (lambda s: ptype.undefined if s['Size'].li.int() == 0 else dyn.clone(MONIKERSTREAM.Stream, blocksize=lambda _:s['Size'].li.int()), 'Stream'),
     ]
 
 class OLEStream(pstruct.type):
@@ -376,7 +376,7 @@ if False:
             ]
 
         def __Padding(self):
-            sz = self['dmSize'].li.num()
+            sz = self['dmSize'].li.int()
             total = 32+32+2+2+2+2
             res = sz - (total+s['fields'].li.size())
             return dyn.block(res)
@@ -390,7 +390,7 @@ if False:
             (WORD, 'dmDriverExtra'),
             (Fields, 'Fields'),
             (__Padding, 'Padding'),
-            (lambda s: dyn.block(s['dmDriverExtra'].li.num()), 'PrinterData'),
+            (lambda s: dyn.block(s['dmDriverExtra'].li.int()), 'PrinterData'),
         ]
 
 class DVTARGETDEVICE(pstruct.type):
@@ -418,7 +418,7 @@ class TOCENTRY(pstruct.type):
         (dyn.block(12), 'Reserved1'),
         (DWORD, 'Advf'),
         (DWORD, 'Reserved2'),
-        (lambda s: dyn.clone(DVTARGETDEVICE, blocksize=lambda _:s['TargetDeviceSize'].li.num()), 'TargetDevice'),
+        (lambda s: dyn.clone(DVTARGETDEVICE, blocksize=lambda _:s['TargetDeviceSize'].li.int()), 'TargetDevice'),
     ]
 
 class OLEPresentationStream(pstruct.type):
@@ -429,7 +429,7 @@ class OLEPresentationStream(pstruct.type):
         _fields_ = [
             (DWORD, 'Signature'),
             (DWORD, 'Count'),
-            (lambda s: dyn.array(TOCENTRY, s['Count'].li.num()), 'Entry'),
+            (lambda s: dyn.array(TOCENTRY, s['Count'].li.int()), 'Entry'),
         ]
 
     _fields_ = [
@@ -442,7 +442,7 @@ class OLEPresentationStream(pstruct.type):
         (DWORD, 'Reserved1'),
         (Dimensions, 'Dimensions'),
         (DWORD, 'Size'),
-        (lambda s: dyn.block(s['Size'].num()), 'Data'),
+        (lambda s: dyn.block(s['Size'].int()), 'Data'),
         (dyn.block(18), 'Reserved2'),
         (TOC, 'Toc'),
     ]
@@ -450,7 +450,7 @@ class OLEPresentationStream(pstruct.type):
 class OLENativeStream(pstruct.type):
     _fields_ = [
         (DWORD, 'NativeDataSize'),
-        (lambda s: dyn.block(s['NativeDataSize'].li.num()), 'NativeData'),
+        (lambda s: dyn.block(s['NativeDataSize'].li.int()), 'NativeData'),
     ]
 
 class CompObjHeader(pstruct.type):
