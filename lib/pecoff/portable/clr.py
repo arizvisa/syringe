@@ -33,7 +33,7 @@ class StreamHdr(pstruct.type):
         def _object_(self):
             res = self.getparent(StreamHdr)
             cb = res['Size'].int()
-            t = Stream.get(res['Name'].str(), blocksize=lambda s, cb=cb: cb)
+            t = Stream.lookup(res['Name'].str(), dyn.clone(Stream.unknown, blocksize=lambda s, cb=cb: cb))
             if issubclass(t, parray.block):
                 return dyn.clone(t, blocksize=lambda s, cb=cb: cb)
             return t
@@ -479,7 +479,7 @@ class Tables(parray.type):
         if count:
             logging.debug("{:s} : {:s} : Loading {:s}({:d}) table with {:d} rows. : {:d} of {:d}".format('.'.join((res.typename(),self.__class__.__name__)), self.instance(), TableType.byvalue(index, 'undefined'), index, count, 1+len(self.value), self.length))
 
-        rowtype = Table.get(index)
+        rowtype = Table.lookup(index, dyn.clone(Table.unknown, type=index))
         rowsize = rowtype.PreCalculateSize(res) if Table.has(index) else 0
         t = dyn.clone(TableRow, _object_=rowtype, _value_=dyn.block(rowsize))
 

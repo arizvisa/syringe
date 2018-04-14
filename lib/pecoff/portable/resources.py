@@ -134,7 +134,7 @@ class RT_VERSION(pstruct.type):
             logging.warn("{:s} : Unknown type for entry {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
 
         sz = self['wValueLength'].li.int()
-        return RT_VERSION_ValueType.get(key, type=key, length=sz)
+        return RT_VERSION_ValueType.lookup(key, dyn.clone(RT_VERSION_ValueType.unknown, type=key, length=sz))
 
     def __ChildType(self):
         if callable(getattr(self, 'ChildType', None)):
@@ -146,7 +146,7 @@ class RT_VERSION(pstruct.type):
 
         return RT_VERSION_EntryType.lookup(key)
         #bs = self['wLength'].li.int() - self.blocksize()
-        #return RT_VERSION_EntryType.get(szkey, type=szkey, length=bs)
+        #return RT_VERSION_EntryType.lookup(szkey, dyn.clone(RT_Version_EntryType.unknown, type=szkey, length=bs))
 
     def __Children(self):
         fields = self._fields_[:-1]

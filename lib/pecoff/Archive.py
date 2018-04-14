@@ -158,7 +158,8 @@ class Member(pstruct.type):
     def __Data(self):
         header = self['Header'].li
         filename,size = header['Name'].str(),header['Size'].int()
-        res = MemberType.get(filename, internalname=filename, root=dyn.block(size))
+        unknown = dyn.clone(MemberType.unknown, internalname=filename, root=dyn.block(size))
+        res = MemberType.lookup(filename, unknown)
         return dyn.clone(res, length=size) if ptype.isrelated(res, ptype.block) else res
 
     def __newline(self):

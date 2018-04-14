@@ -98,7 +98,7 @@ class RecordGeneral(pstruct.type):
     def __data(self):
         res = self['header'].li
         t, vi, length = res.Type(), res.Instance(), res.Length()
-        Type = self.Record.get(t, type=t)
+        Type = self.Record.lookup(t, dyn.clone(self.Record.unknown, type=t))
 
         # look for an explicit instance
         try:
@@ -107,7 +107,7 @@ class RecordGeneral(pstruct.type):
         # otherwise, the instance might modify the Instance in some way
         except KeyError:
             ver, _ = vi
-            res = Type.get((ver, None), type=(ver, None), length=length)
+            res = Type.lookup((ver, None), dyn.clone(Type.unknown, type=(ver, None), length=length))
 
         # something good had to come out of that
         if getattr(self, 'lazy', False):

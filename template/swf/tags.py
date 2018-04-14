@@ -37,7 +37,7 @@ class Tag(pstruct.type):
     def __data(self):
         res = self['Header'].li['Type']
         cb = self['Header'].size() + self['HeaderLongLength'].size()
-        return TagDef.get(res, type=res, length=self.blocksize() - cb)
+        return TagDef.lookup(res, dyn.clone(TagDef.unknown, type=res, length=self.blocksize() - cb))
 
     _fields_ = [
         (RECORDHEADER, 'Header'),

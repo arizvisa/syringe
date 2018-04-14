@@ -99,7 +99,7 @@ class Box(pstruct.type):
     def __data(self):
         hdr = self['header'].li
         cb = hdr.DataLength()
-        res = Boxes.get(hdr.Type(), type=hdr.Type(), length=cb)
+        res = Boxes.lookup(hdr.Type(), dyn.clone(Boxes.unknown, type=hdr.Type(), length=cb))
         return dyn.clone(res, blocksize=lambda s, cb=cb: cb) if issubclass(res, (ptype.block, parray.block)) else res
 
     def __padding(self):

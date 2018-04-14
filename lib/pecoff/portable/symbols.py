@@ -125,7 +125,7 @@ class Symbol(pstruct.type):
             name, value = self['Name'].str(), self['Value'].int()
             sym_section, sym_type, sym_class = map(self.__getitem__, ('SectionNumber', 'Type', 'StorageClass'))
             res = sym_class.int()
-            aux = AuxiliaryRecord.get(res, type=res)
+            aux = AuxiliaryRecord.lookup(res, dyn.clone(AuxiliaryRecord.unknown, type=res))
             return '{:s} = {:#x} : Section={:s} : (Type={:s}, Class={:s}) : Aux={:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
         return super(Symbol, self).summary()
 
@@ -150,7 +150,7 @@ class SymbolTable(parray.terminated):
         if isinstance(value, Symbol):
             auxCount = value['NumberOfAuxSymbols'].int()
             res = value['StorageClass'].int()
-            auxSymbol = AuxiliaryRecord.get(value, type=value)
+            auxSymbol = AuxiliaryRecord.lookup(value, dyn.clone(AuxiliaryRecord.unknown, type=value))
             self.__auxiliary__.extend((auxSymbol,) * auxCount)
         return False
 

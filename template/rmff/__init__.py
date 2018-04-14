@@ -27,7 +27,7 @@ class Str8(pstruct.type):
 class RealMedia_Header(pstruct.type):
     def __object(self):
         id,ver = self['object_id'].li.serialize(),self['object_version'].li.int()
-        return self.Media_Type.get((ver,id), type=(ver,id), length=self['size'].li.int() - 10)
+        return self.Media_Type.lookup((ver,id), dyn.clone(self.Media_Type.unknown, type=(ver,id), length=self['size'].li.int() - 10))
 
     def blocksize(self):
         return self['size'].li.int()
@@ -47,7 +47,7 @@ class RealMedia_Structure(pstruct.type):
     _fields_ = [
         (ULONG32, 'size'),
         (UINT16, 'object_version'),
-        (lambda s: s.Media_Type.get(s['object_version'].li.num(), type=s['object_version'].int()), 'object'),
+        (lambda s: s.Media_Type.lookup(s['object_version'].li.num(), dyn.clone(s.Media_Type.unknown, type=s['object_version'].int())), 'object'),
     ]
     class Media_Type(ptype.definition):
         pass
@@ -55,7 +55,7 @@ class RealMedia_Structure(pstruct.type):
 class RealMedia_Record(pstruct.type):
     _fields_ = [
         (UINT16, 'object_version'),
-        (lambda s: s.Media_Type.get(s['object_version'].li.num(), type=s['object_version'].int()), 'object')
+        (lambda s: s.Media_Type.lookup(s['object_version'].li.num(), dyn.clone(s.Media_Type.unknown, type=s['object_version'].int())), 'object')
     ]
     class Media_Type(ptype.definition):
         pass
@@ -64,13 +64,13 @@ class RealMedia_Record(pstruct.type):
 class Type_Specific_RealAudio(pstruct.type):
     def __object(self):
         ver = self['object_version'].li.int()
-        return self.Media_Type.get(ver, type=ver)
+        return self.Media_Type.lookup(ver, dyn.clone(self.Media_Type.unknown, type=ver))
 
     def __codec(self):
         fourcc = self['object'].li.codec()
         version = self['object_version'].li.int()
 
-        type = self.Audio_Codec.get((version,fourcc), type=(version,fourcc), length=self['i_codec'].li.int())
+        type = self.Audio_Codec.lookup((version,fourcc), dyn.clone(self.Audio_Codec.unknown, type=(version,fourcc), length=self['i_codec'].li.int()))
         return dyn.clone(type, blocksize=lambda s: self['i_codec'].li.int())
 
     _fields_ = [
@@ -95,7 +95,7 @@ class Type_Specific_RealVideo(pstruct.type):
             raise NotImplementedError('Unknown Video Type Version at %x: %x'% (self.getoffset(), v))
 
         id = self['id'].li.serialize()
-        return self.Video_Codec.get(id, type=id)
+        return self.Video_Codec.lookup(id, dyn.clone(self.Video_Codec.unknown, type=id))
 
     def __unknown(self):
         fields = (n for _,n in self._fields_[:-1])

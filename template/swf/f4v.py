@@ -41,7 +41,7 @@ class BOX(pstruct.type):
             return BOXLIST
 
         t,sz = bh['BoxType'].li.serialize(),bh.BoxSize()
-        result = Boxes.get(t, __name__=t, length=sz)
+        result = Boxes.lookup(t, dyn.clone(Boxes.unknown, __name__=t, length=sz))
         return dyn.clone(result, blocksize=lambda s:sz)
 
     _fields_ = [

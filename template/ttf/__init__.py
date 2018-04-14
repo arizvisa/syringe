@@ -51,7 +51,7 @@ class cmap(pstruct.type):
             (uint16, 'format'),
             (uint16, 'length'),
             (uint16, 'version'),
-            (lambda s: cmap.table.get(s['format'].li.int(), type=s['format'].li.int(), length=s['length'].li.int()-6), 'data'),
+            (lambda s: cmap.table.lookup(s['format'].li.int(), dyn.clone(cmap.table.unknown, type=s['format'].li.int(), length=s['length'].li.int()-6)), 'data'),
         ]
     class table(ptype.definition):
         cache = {}
@@ -281,7 +281,7 @@ class File(pstruct.type):
         def __table(self):
             self = self.getparent(File.Entry)
             rec, l = self['tag'].li.str(), self['length'].li.int()
-            res = Table.get(rec, type=rec, length=l)
+            res = Table.lookup(rec, dyn.clone(Table.unknown, type=rec, length=l))
             return dyn.clone(res, blocksize=lambda s:l)
 
         _fields_ = [

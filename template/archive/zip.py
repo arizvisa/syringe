@@ -280,7 +280,7 @@ class Record(pstruct.type):
     def __Record(self):
         bits = 32
         sig = self['Signature'].li.num()
-        return ZipRecord.lookup((bits,sig))
+        return ZipRecord.lookup((bits, sig))
 
     _fields_ = [
         (pint.uint32_t, 'Signature'),

@@ -33,7 +33,7 @@ class ChunkType(ptype.definition):
 class ChunkGeneral(pstruct.type):
     def __data(self):
         t = self['header'].li['type'].int()
-        return ChunkType.get(t, type=t, length=self.blocksize()-self['header'].size())
+        return ChunkType.lookup(t, dyn.clone(ChunkType.unknown, type=t, length=self.blocksize()-self['header'].size()))
 
     _fields_ = [
         (ChunkHeader, 'header'),

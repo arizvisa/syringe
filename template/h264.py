@@ -1,5 +1,7 @@
 from ptypes import *
 
+v = 0       # FIXME: this file format is busted
+
 class seq_parameter_set_rbsp(pbinary.struct):
     class __pic_order_type_1(pbinary.struct):
         _fields_ = [

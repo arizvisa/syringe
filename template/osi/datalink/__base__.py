@@ -9,4 +9,4 @@ class stackable(osi.__base__.stackable):
 
     def nextlayer(self):
         id = self.nextlayer_id()
-        return (layer.get(id, type=id), None)
+        return (layer.lookup(id, dyn.clone(layer.unknown, type=id)), None)

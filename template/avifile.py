@@ -42,8 +42,8 @@ class LISTTYPE(ptype.definition): cache = {}
 
 class ID(pint.uint32_t):
     def summary(self):
-        return '{!r} {:#010x}'.format(self.get(), self.int())
-    def get(self):
+        return '{!r} {:#010x}'.format(self.bytes(), self.int())
+    def bytes(self):
         return self.value[:]
     def __setvalue__(self, value):
         if isinstance(value, bytes):
@@ -57,7 +57,8 @@ class LISTID(pint.enum, ID): pass
 class Chunk(pstruct.type):
     def __ckData(self):
         t, cb = self['ckID'].li, self['ckSize'].li
-        return FOURCC.get(t.get(), type=t.get(), length=cb.int())
+        tid, length = t.bytes(), cb.int()
+        return FOURCC.lookup(tid, dyn.clone(FOURCC.unknown, type=tid, length=length))
         
     _fields_ = [
         (FOURCCID, 'ckID'),
@@ -86,16 +87,16 @@ LISTTYPE.unknown = LISTDATA
 class LIST(pstruct.type):
     _fields_ = [
         (LISTID, 'listType'),
-        (lambda s: LISTTYPE.get(s['listType'].li.get(), type=s['listType'].get()), 'listData'),
+        (lambda s: LISTTYPE.lookup(s['listType'].li.bytes(), dyn.clone(LISTTYPE.unknown, type=s['listType'].bytes())), 'listData'),
     ]
 
     def classname(self):
-        cls, res = self.__class__, self['listType'].get() if len(self.value) else '???'
+        cls, res = self.__class__, self['listType'].bytes() if len(self.value) else '???'
         return '{:s}({:s})'.format(cls.__name__, res)
 
     def summary(self):
-        t = self['listType'].get()
-        res = ((res['ckID'].get(),res['ckSize'].int()) for res in self['listData'])
+        t = self['listType'].bytes()
+        res = ((res['ckID'].bytes(),res['ckSize'].int()) for res in self['listData'])
         return '{!r} [ {:s} ]'.format(t, ', '.join('{:s}={:#x}'.format(fcc, cb) for fcc,cb in res))
 
 @FOURCC.define
@@ -283,7 +284,7 @@ class File(pstruct.type):
     class _fileData(parray.block):
         _object_ = Chunk
         def summary(self):
-            res = ((res['ckID'].get(),res['ckSize'].int()) for res in self)
+            res = ((res['ckID'].bytes(),res['ckSize'].int()) for res in self)
             return ', '.join('{:s}={:#x}'.format(fcc, cb) for fcc,cb in res)
 
     def __fileData(self):
