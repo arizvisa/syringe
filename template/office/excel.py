@@ -1265,7 +1265,7 @@ class XFProperty(ptype.definition):
 class XFProp(pstruct.type):
     def __xfPropDataBlob(self):
         t, cb = self['xfPropType'].li.int(), self['cb'].li.int()
-        res = XFProperty.lookup(t, dyn.clone(XFProperty.unknown, propertyType=t, length=cb - (2+2)))
+        res = XFProperty.lookup(t, dyn.clone(XFProperty.default, propertyType=t, length=cb - (2+2)))
         return dyn.clone(res, blocksize=lambda s,cb=cb: cb - (2+2))
 
     _fields_ = [
@@ -1289,7 +1289,7 @@ if True:
     class SerAr(pstruct.type):
         def __Ser(self):
             res = self['reserved1'].li.int()
-            return SerArType.lookup(res, dyn.clone(SerArType.unknown, serType=res))
+            return SerArType.lookup(res, dyn.clone(SerArType.default, serType=res))
         _fields_ = [
             (uint4,'reserved1'),        # XXX: make this a pint.enum
             (__Ser, 'Ser'),
@@ -3329,7 +3329,7 @@ class Ft(ptype.definition):
 class FtGeneral(pstruct.type):
     def __data(self):
         res, cb = self['ft'].li.int(), self['cb'].li.int()
-        return Ft.lookup(res, dyn.clone(Ft.unknown, featureType=res, blocksize=lambda s,cb=cb:cb))
+        return Ft.lookup(res, dyn.clone(Ft.default, featureType=res, blocksize=lambda s,cb=cb:cb))
 
     _fields_ = [
         (uint2, 'ft'),          # XXX: Make this a pint.enum

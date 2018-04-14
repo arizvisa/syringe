@@ -33,7 +33,7 @@ class UncompressedData(ptype.encoded_t):
     _value_ = ptype.block
     _object_ = Data
 
-EncodedDataType.unknown = UncompressedData
+EncodedDataType.default = UncompressedData
 
 class CompressedData(ptype.encoded_t):
     _value_ = ptype.block
@@ -76,7 +76,7 @@ class File(pstruct.type, ptype.boundary):
         sig = header['Signature'].str()
 
         # if it's compressed then use the 'zlib' structure
-        t = EncodedDataType.lookup(sig, dyn.clone(EncodedDataType.unknown, type=sig))
+        t = EncodedDataType.lookup(sig, dyn.clone(EncodedDataType.default, type=sig))
         length = min(header['FileLength'].num(),self.source.size()) - header.size()
         return dyn.clone(t, _value_=dyn.clone(t._value_, length=length))
 

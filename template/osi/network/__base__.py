@@ -15,7 +15,7 @@ class stackable(osi.__base__.stackable):
 
     def nextlayer(self):
         id, sz = self.nextlayer_id(), self.nextlayer_size()
-        t = layer.lookup(id, dyn.clone(layer.unknown, type=id, length=sz))
+        t = layer.lookup(id, dyn.clone(layer.default, type=id, length=sz))
         return t,sz
 
     def nextlayer_size(self):

@@ -79,7 +79,7 @@ class MemberType(ptype.definition):
         def isImport(self):
             return self['Import']['Header'].valid()
 
-    unknown = Data
+    default = Data
 
 ## Linker objects
 @MemberType.define
@@ -158,8 +158,8 @@ class Member(pstruct.type):
     def __Data(self):
         header = self['Header'].li
         filename,size = header['Name'].str(),header['Size'].int()
-        unknown = dyn.clone(MemberType.unknown, internalname=filename, root=dyn.block(size))
-        res = MemberType.lookup(filename, unknown)
+        default = dyn.clone(MemberType.unknown, internalname=filename, root=dyn.block(size))
+        res = MemberType.lookup(filename, default)
         return dyn.clone(res, length=size) if ptype.isrelated(res, ptype.block) else res
 
     def __newline(self):

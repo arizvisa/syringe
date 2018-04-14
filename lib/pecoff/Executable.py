@@ -108,11 +108,11 @@ class NextData(ptype.definition):
 class Next(pstruct.type):
     def __Header(self):
         t = self['Signature'].li.serialize()
-        return NextHeader.lookup(t, dyn.clone(NextHeader.unknown, type=t))
+        return NextHeader.lookup(t, dyn.clone(NextHeader.default, type=t))
 
     def __Data(self):
         t = self['Signature'].li.serialize()
-        return NextData.lookup(t, dyn.clone(NextData.unknown, type=t))
+        return NextData.lookup(t, dyn.clone(NextData.default, type=t))
 
     _fields_ = [
         (uint16, 'Signature'),

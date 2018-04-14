@@ -57,7 +57,7 @@ class ip6_hdr(pstruct.type, stackable):
         if protocol == 0:
             result = ip6_exthdr_hop
         else:
-            result = layer.lookup(protocol, dyn.clone(layer.unknown, type=protocol))
+            result = layer.lookup(protocol, dyn.clone(layer.default, type=protocol))
         return result,sz
 
 @layer.define
@@ -71,7 +71,7 @@ class ip6_opt(pstruct.type):
 
     def __ip6o_payload(self):
         t,size = self['ip6o_type'].li.num(),self['ip6o_len'].li.num()
-        return Option.lookup(t, dyn.clone(Option.unknown, blocksize=lambda s:size))
+        return Option.lookup(t, dyn.clone(Option.default, blocksize=lambda s:size))
 
     _fields_ = [
         (u_int8_t,'ip6o_type'),
@@ -85,7 +85,7 @@ class ip6_exthdr(pstruct.type, stackable):
     def __ip6_payload(self):
         t = self['ip6_nxt'].li.num()
         size = self['ip6_len'].li.num() - 2
-        result = layer.lookup(self.type, dyn.clone(layer.unknown, length=size))
+        result = layer.lookup(self.type, dyn.clone(layer.default, length=size))
         return dyn.clone(result, blocksize=lambda s:size)
 
     _fields_ = [

@@ -7,7 +7,7 @@ class Atom(pstruct.type):
     def __data(self):
         type = self['type'].li.serialize()
         size = self.blocksize() - self.getheadersize()
-        t = AtomType.lookup(type, dyn.clone(AtomType.unknown, type=type, __name__='Unknown<{!r}>'.format(type), length=size))
+        t = AtomType.lookup(type, dyn.clone(AtomType.default, type=type, __name__='Unknown<{!r}>'.format(type), length=size))
         return dyn.clone(t, blocksize=lambda s:size)
 
     def getheadersize(self):
@@ -329,7 +329,7 @@ class stsd(EntriesAtom):
             (pint.uint16_t, 'Compression ID'),
             (pint.uint16_t, 'Packet size'),
             (pint.uint32_t, 'Sample rate'),
-            (lambda s: MediaAudio.lookup(s['Version'].li.int(), dyn.clone(MediaAudio.unknown, type=s['Version'].int())), 'Versioned'),
+            (lambda s: MediaAudio.lookup(s['Version'].li.int(), dyn.clone(MediaAudio.default, type=s['Version'].int())), 'Versioned'),
         ]
 
     class Video(pstruct.type):
@@ -343,7 +343,7 @@ class stsd(EntriesAtom):
             (pint.uint16_t, 'Height'),
             (pQTInt, 'Horizontal Resolution'),
             (pQTInt, 'Vertical Resolution'),
-            (lambda s: MediaVideo.lookup(s['Version'].li.num(), dyn.clone(MediaVideo.unknown, type=s['Version'].int())), 'Versioned'),
+            (lambda s: MediaVideo.lookup(s['Version'].li.num(), dyn.clone(MediaVideo.default, type=s['Version'].int())), 'Versioned'),
         ]
 
     class Entry(pstruct.type):

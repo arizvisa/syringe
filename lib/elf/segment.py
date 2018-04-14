@@ -33,7 +33,7 @@ class _p_flags(pbinary.flags):
 def _p_offset(size):
     def p_offset(self):
         res = self['p_type'].li.int()
-        type = Type.lookup(res, dyn.clone(Type.unknown, type=res))
+        type = Type.lookup(res, dyn.clone(Type.default, type=res))
         #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(ElfXX_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
 
         base = self.getparent(ElfXX_File)

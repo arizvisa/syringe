@@ -58,7 +58,7 @@ class Chunk(pstruct.type):
     def __ckData(self):
         t, cb = self['ckID'].li, self['ckSize'].li
         tid, length = t.bytes(), cb.int()
-        return FOURCC.lookup(tid, dyn.clone(FOURCC.unknown, type=tid, length=length))
+        return FOURCC.lookup(tid, dyn.clone(FOURCC.default, type=tid, length=length))
         
     _fields_ = [
         (FOURCCID, 'ckID'),
@@ -80,14 +80,14 @@ class LISTDATA(parray.block):
     def classname(self):
         cls = self.__class__
         return '{:s}({:s})'.format(cls.__name__, self.type)
-LISTTYPE.unknown = LISTDATA
+LISTTYPE.default = LISTDATA
 
 ## FOURCC definitions
 @FOURCC.define
 class LIST(pstruct.type):
     _fields_ = [
         (LISTID, 'listType'),
-        (lambda s: LISTTYPE.lookup(s['listType'].li.bytes(), dyn.clone(LISTTYPE.unknown, type=s['listType'].bytes())), 'listData'),
+        (lambda s: LISTTYPE.lookup(s['listType'].li.bytes(), dyn.clone(LISTTYPE.default, type=s['listType'].bytes())), 'listData'),
     ]
 
     def classname(self):

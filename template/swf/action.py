@@ -12,7 +12,7 @@ class action(ptype.definition):
         def details(self):
             if self.initialized:
                 return self.classname()
-            return super(action.unknown, self).details()
+            return super(action.default, self).details()
 
         def classname(self):
             s = self.typename()
@@ -31,7 +31,7 @@ class ACTIONRECORD(pstruct.type):
         hdr = self['header'].l
         code = hdr['ActionCode'].int()
         sz = hdr['Length'].int()
-        return action.lookup(code, dyn.clone(action.unknown, type=code, length=sz))
+        return action.lookup(code, dyn.clone(action.default, type=code, length=sz))
 
     _fields_ = [
         (ACTIONRECORDHEADER, 'header'),

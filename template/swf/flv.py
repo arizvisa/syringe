@@ -75,7 +75,7 @@ class VideoTagHeader(pstruct.type):
 
     def __Header(self):
         t = self['Type'].li
-        return VideoPacketHeader.lookup(t['CodecID'], dyn.clone(VideoPacketHeader.unknown, type=t['CodecID']))
+        return VideoPacketHeader.lookup(t['CodecID'], dyn.clone(VideoPacketHeader.default, type=t['CodecID']))
 
     _fields_ = [
         (Type, 'Type'),
@@ -320,7 +320,7 @@ class AVCVIDEOPACKET(pstruct.type):
 class SCRIPTDATAVALUE(pstruct.type):
     def __ScriptDataValue(self):
         t = self['Type'].li.num()
-        return SCRIPTDATATYPE.lookup(t, dyn.clone(SCRIPTDATATYPE.unknown, type=t))
+        return SCRIPTDATATYPE.lookup(t, dyn.clone(SCRIPTDATATYPE.default, type=t))
     _fields_ = [
         (UI8,'Type'),
         (__ScriptDataValue, 'Value'),
@@ -418,7 +418,7 @@ class StreamTag(pstruct.type):
     def __Header(self):
         base = self.getparent(FLVTAG)
         t = base['Type'].li['TagType']
-        return TagHeader.lookup(t, dyn.clone(TagHeader.unknown, type=t))
+        return TagHeader.lookup(t, dyn.clone(TagHeader.default, type=t))
 
     def __FilterParams(self):
         base = self.getparent(FLVTAG)
@@ -427,7 +427,7 @@ class StreamTag(pstruct.type):
     def __Body(self):
         base = self.getparent(FLVTAG)
         t = base['Type'].li['TagType']
-        return TagBody.lookup(t, dyn.clone(TagBody.unknown, type=t, length=self.DataSize()))
+        return TagBody.lookup(t, dyn.clone(TagBody.default, type=t, length=self.DataSize()))
 
     def DataSize(self):
         base = self.getparent(FLVTAG)
