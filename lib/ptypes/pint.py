@@ -418,13 +418,13 @@ class enum(type):
 
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
-        res = self.int()
+        res = self.get()
         return self.byvalue(res, u"{:x}".format(res))
 
     def summary(self, **options):
-        res = self.int()
+        res = self.get()
         try: return u"{:s}({:#x})".format(self.byvalue(res), res)
-        except KeyError: pass
+        except (ValueError,KeyError): pass
         return super(enum, self).summary()
 
     def __setvalue__(self, value):
@@ -435,7 +435,7 @@ class enum(type):
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
         res = self.byname(name)
-        return res == self.int()
+        return res == self.get()
 
     @classmethod
     def enumerations(cls):

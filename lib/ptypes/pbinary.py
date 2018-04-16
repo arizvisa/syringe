@@ -421,19 +421,19 @@ class enum(type):
 
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
-        res = self.int()
+        res = bitmap.int(self.get())
         return self.byvalue(res, u"{:x}".format(res))
 
     def summary(self, **options):
-        res, (value, size) = self.int(), self.bitmap()
-        try: return u"{:s}({:s})".format(self.byvalue(res), bitmap.hex((value, size)))
-        except KeyError: pass
+        res = self.get()
+        try: return u"{:s}({:s})".format(self.byvalue(bitmap.int(res)), bitmap.hex(res))
+        except (ValueError,KeyError): pass
         return super(enum, self).summary()
 
     def details(self, **options):
-        res, b = self.int(), self.bitmap()
-        try: return u"{:s} : {:s}".format(self.byvalue(res), bitmap.string(b, reversed=True))
-        except KeyError: pass
+        res = self.get()
+        try: return u"{:s} : {:s}".format(self.byvalue(bitmap.int(res)), bitmap.string(res, reversed=True))
+        except (ValueError,KeyError): pass
         return super(enum, self).details()
 
     def __setvalue__(self, value):
@@ -441,7 +441,8 @@ class enum(type):
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
-        return self.byname(name) == self.int()
+        res = self.get()
+        return self.byname(name) == bitmap.int(res)
 
     @classmethod
     def enumerations(cls):
@@ -2533,7 +2534,7 @@ if __name__ == '__main__':
 
         res = 0xff
         x = e().set(res)
-        if x.str() == '{:#x}'.format(res):
+        if x.str() == '{:x}'.format(res):
             raise Success
 
     @TestCase
