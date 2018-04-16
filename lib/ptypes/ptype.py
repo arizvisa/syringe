@@ -230,10 +230,9 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
-import __builtin__
-import sys,six,types
-import itertools,operator,functools
-import inspect,time,traceback
+import six
+import functools,operator,itertools,types
+import sys,inspect,time,traceback
 from six.moves import builtins
 
 from . import bitmap,provider,utils,config,error
@@ -254,12 +253,12 @@ def iscallable(t):
 
 @utils.memoize('t')
 def isinstance(t):
-    return __builtin__.isinstance(t, generic)
+    return builtins.isinstance(t, generic)
 
 @utils.memoize('t')
 def istype(t):
     """True if type ``t`` inherits from ptype.type"""
-    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (__builtin__.isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
+    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (builtins.isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
 
 @utils.memoize('t')
 def iscontainer(t):
@@ -269,7 +268,7 @@ def iscontainer(t):
 @utils.memoize('t')
 def isresolveable(t):
     """True if type ``t`` can be descended into"""
-    return __builtin__.isinstance(t, (types.FunctionType, types.MethodType))    # or isiterator(t)
+    return builtins.isinstance(t, (types.FunctionType, types.MethodType))    # or isiterator(t)
 
 def isrelated(t, t2):
     """True if type ``t`` is related to ``t2``"""
@@ -294,16 +293,16 @@ def force(t, self, chain=[]):
         return t
 
     # of type ptype
-    if istype(t) or __builtin__.isinstance(t, base):
+    if istype(t) or builtins.isinstance(t, base):
         return t
 
     # functions
-    if __builtin__.isinstance(t, types.FunctionType):
+    if builtins.isinstance(t, types.FunctionType):
         res = t(self)
         return force(res, self, chain)
 
     # bound methods
-    if __builtin__.isinstance(t, types.MethodType):
+    if builtins.isinstance(t, types.MethodType):
         return force(t(), self, chain)
 
     if inspect.isgenerator(t):
@@ -636,7 +635,7 @@ class _base_generic(object):
             return self.parent
 
         query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((__builtin__.isinstance(q,builtins.type) and __builtin__.isinstance(self,q)) or self.parent is q) for q in query)
+        match = lambda self: lambda query: any(((builtins.isinstance(q,builtins.type) and builtins.isinstance(self,q)) or self.parent is q) for q in query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -799,7 +798,7 @@ class base(generic):
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         attrs.setdefault('parent', self.parent)
         if 'value' not in attrs:
-            if not __builtin__.isinstance(self.value, (str, types.NoneType)):
+            if not builtins.isinstance(self.value, (str, types.NoneType)):
                 raise error.AssertionError(self, 'base.copy', message='Invalid type of .value while trying to duplicate object : {!r}'.format(self.value.__class__))
             attrs['value'] = None if self.value is None else self.value[:]
         result.__update__(attrs)
@@ -868,7 +867,7 @@ class base(generic):
             Log.warning("base.cast : {:s} : Result {:s} is partially initialized : {:#x} > {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         return result
 
-    def traverse(self, edges=lambda node:tuple(node.value) if __builtin__.isinstance(node, container) else (), filter=lambda node:True, **kwds):
+    def traverse(self, edges=lambda node:tuple(node.value) if builtins.isinstance(node, container) else (), filter=lambda node:True, **kwds):
         """
         This will traverse a tree in a top-down approach.
 
@@ -910,11 +909,11 @@ class base(generic):
         global encoded_t
         class parentTester(object):
             def __eq__(self, other):
-                return other.parent is None or __builtin__.isinstance(other, encoded_t)
+                return other.parent is None or builtins.isinstance(other, encoded_t)
         parentTester = parentTester()
 
         #edges = lambda node:tuple(node.value) if iscontainer(node.__class__) else ()
-        #encoded = lambda node: (node.d,) if __builtin__.isinstance(node, encoded_t) else ()
+        #encoded = lambda node: (node.d,) if builtins.isinstance(node, encoded_t) else ()
         #itertools.chain(self.traverse(edges, filter=filter, *args, **kwds), self.traverse(encoded, filter=filter, *args, **kwds)):
         duplicates = set()
         if parentTester == self:
@@ -997,7 +996,7 @@ class type(base):
                 parent = self.getparent(None)
 
             # check if child element is child of encoded_t which doesn't get checked since encoded types can have their sizes changed.
-            if __builtin__.isinstance(parent, encoded_t):
+            if builtins.isinstance(parent, encoded_t):
                 pass
 
             # check that child element is actually within bounds of parent
@@ -1005,7 +1004,7 @@ class type(base):
                 Log.info("type.serialize : {:s} : child element is outside the bounds of parent element {:s}. : {:#x} > {:#x}".format(self.instance(), parent.instance(), parent.getoffset(), self.getoffset()))
 
             # clamp the blocksize if it pushes the child element outside the bounds of the parent
-            elif __builtin__.isinstance(parent, container):
+            elif builtins.isinstance(parent, container):
                 parentSize = parent.blocksize()
                 childOffset = self.getoffset() - parent.getoffset()
                 maxElementSize = parentSize - childOffset
@@ -1038,7 +1037,7 @@ class type(base):
     ## set/get
     def __setvalue__(self, value, **attrs):
         """Set entire type equal to ``value``"""
-        if not __builtin__.isinstance(value, six.string_types):
+        if not builtins.isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
         res, self.value = self.value, value
         if hasattr(self, 'length'):
@@ -1118,7 +1117,7 @@ class container(base):
         (field,) = field
 
         # if a path is specified, then recursively get the offset
-        if __builtin__.isinstance(field, (tuple, list)):
+        if builtins.isinstance(field, (tuple, list)):
             (name, res) = (lambda hd,*tl:(hd,tl))(*field)
             return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
@@ -1139,7 +1138,7 @@ class container(base):
         return self.value[index]
 
     def __setitem__(self, index, value):
-        if not __builtin__.isinstance(value, base):
+        if not builtins.isinstance(value, base):
             raise error.TypeError(self, 'container.__setitem__',message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
         if self.value is None:
             raise error.InitializationError(self, 'container.__setitem__')
@@ -1175,7 +1174,7 @@ class container(base):
             return self
 
         # if we're already at a leaf of the trie, then no need to descend
-        if __builtin__.isinstance(res, (type, pbinary.partial)):
+        if builtins.isinstance(res, (type, pbinary.partial)):
             return res
 
         # drill into the trie's elements for more detail
@@ -1255,11 +1254,11 @@ class container(base):
             parent = self.getparent(None)
 
             # check to see if we should validate ourselves according to parent's boundaries
-            if parent is None or not __builtin__.isinstance(parent.value, list) or self not in parent.value:
+            if parent is None or not builtins.isinstance(parent.value, list) or self not in parent.value:
                 return data
 
         # check if child element is child of encoded_t which doesn't get checked since encoded types can have their sizes changed.
-        if __builtin__.isinstance(parent, encoded_t):
+        if builtins.isinstance(parent, encoded_t):
             pass
 
         # check that child element is actually within bounds of parent
@@ -1267,7 +1266,7 @@ class container(base):
             Log.info("container.serialize : {:s} : child element is outside the bounds of parent element {:s}. : {:#x} > {:#x}".format(self.instance(), parent.instance(), parent.getoffset(), self.getoffset()))
 
         # clamp the blocksize if we're outside the bounds of the parent
-        elif __builtin__.isinstance(parent, container):
+        elif builtins.isinstance(parent, container):
             parentSize = parent.blocksize()
             childOffset = self.getoffset() - parent.getoffset()
             maxElementSize = parentSize - childOffset
@@ -1307,7 +1306,7 @@ class container(base):
         try:
             # if any of the sub-elements are undefined, load each element separately
             if Config.ptype.noncontiguous and \
-                    any(__builtin__.isinstance(n,container) or __builtin__.isinstance(n,undefined) for n in self.value):
+                    any(builtins.isinstance(n,container) or builtins.isinstance(n,undefined) for n in self.value):
 
                 # load each element individually up to the blocksize
                 bs,value = 0,self.value[:]
@@ -1341,7 +1340,7 @@ class container(base):
     def commit(self, **attrs):
         """Commit the current state of all children back to the .source attribute"""
         if not Config.ptype.noncontiguous and \
-                all(not (__builtin__.isinstance(n,container) or __builtin__.isinstance(n,undefined)) for n in self.value):
+                all(not (builtins.isinstance(n,container) or builtins.isinstance(n,undefined)) for n in self.value):
 
             try:
                 return super(container, self).commit(**attrs)
@@ -1648,7 +1647,7 @@ class definition(object):
     @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
-        if not __builtin__.isinstance(cls.cache, dict):
+        if not builtins.isinstance(cls.cache, dict):
             raise error.AssertionError(cls, 'definition.add', message='{:s} has an invalid .cache attribute : {!r}'.format(cls.__name__, cls.cache.__class__))
         cls.cache[type] = object
 
@@ -2128,7 +2127,7 @@ class rpointer_t(pointer_t):
     def classname(self):
         if self.initializedQ():
             baseobject = self._baseobject_
-            basename = baseobject.classname() if __builtin__.isinstance(self._baseobject_, base) else baseobject.__name__
+            basename = baseobject.classname() if builtins.isinstance(self._baseobject_, base) else baseobject.__name__
             return '{:s}({:s}, {:s})'.format(self.typename(), self.object.classname(), basename)
         res = getattr(self, '_object_', undefined) or undefined
         objectname = force(res, self).typename() if istype(res) else res.__name__
@@ -2891,10 +2890,10 @@ if __name__ == '__main__':
         #b = a.new(ptype.pointer_t)
         class parentTester(object):
             def __eq__(self, other):
-                return other.parent is None or __builtin__.isinstance(other, ptype.encoded_t) or issubclass(other.__class__, ptype.encoded_t)
+                return other.parent is None or builtins.isinstance(other, ptype.encoded_t) or issubclass(other.__class__, ptype.encoded_t)
         parentTester = parentTester()
         #c = b.getparent(parentTester())
-        #print __builtin__.isinstance(b, ptype.encoded_t)
+        #print builtins.isinstance(b, ptype.encoded_t)
         a = pecoff.Executable.open('~/mshtml.dll')
 
         global result
@@ -2902,7 +2901,7 @@ if __name__ == '__main__':
         for n in result:
             print n
         #for n in a.traverse(filter=lambda n: parentTester == n):
-        #    if __builtin__.isinstance(n, ptype.encoded_t):
+        #    if builtins.isinstance(n, ptype.encoded_t):
         #        b = n.d.getparent(parentTester)
         #        print b.l
         #        continue
