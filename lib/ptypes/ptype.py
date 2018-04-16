@@ -1660,7 +1660,7 @@ class definition(object):
         """
         if len(type) not in {1, 2}:
             raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(type)))
-        return cls.cache[type] if len(type) == 1 else cls.cache.get(*type)
+        return cls.cache[type[0]] if len(type) == 1 else cls.cache.get(*type)
 
     @classmethod
     def has(cls, type):
