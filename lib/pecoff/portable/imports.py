@@ -5,7 +5,7 @@ from ..__base__ import *
 from . import headers
 from .headers import virtualaddress
 
-import array
+import itertools, array
 
 class IMAGE_IMPORT_HINT(pstruct.type):
     _fields_ = [
@@ -123,7 +123,8 @@ class IMAGE_IMPORT_ADDRESS_TABLE64(_IMAGE_IMPORT_ADDRESS_TABLE):
 class _IMAGE_IMPORT_NAME_TABLE(parray.terminated):
     _object_ = uint32
     def isTerminator(self, value):
-        return True if int(value['Name']['Name']) == 0 else False
+        data = array.array('B', value.serialize())
+        return True if sum(data) == 0 else False
 
 class IMAGE_IMPORT_NAME_TABLE(_IMAGE_IMPORT_NAME_TABLE):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
@@ -149,31 +150,39 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
 
     def iterate(self):
         '''[(hint, importentry_name, importentry_offset, importentry_value),...]'''
-        header = self.getparent(Header)
-        nametable, addresstable = self['INT'], self['IAT']
+        Header = headers.locateHeader(self)
+        int, iat = self['INT'], self['IAT']
 
-        section = header['Sections'].getsectionbyaddress(addresstable.int())
-        sectionva, data = section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())
-
-        for name, address in zip(nametable.d.l[:-1], addresstable.d.l[:-1]):
-            if name.OrdinalQ():
-                hint = name.object.int() & 0xffff
+        cache, sections = {}, Header['Sections']
+        for entry, address in itertools.izip(int.d.l[:-1], iat.d.l[:-1]):
+            if entry.OrdinalQ():
+                ordinal = entry['Ordinal']
+                hint = ordinal['Ordinal Number'] & 0xffff
                 yield hint, 'Ordinal{:d}'.format(hint), address.getoffset(), address.int()
                 continue
-            p = name['name']['name'] - sectionva
-            hint =  data[p] | data[p+1]*0x100
-            yield hint, utils.strdup(data[p+2:].tostring()), address.getoffset(), address.int()
+            name = entry['Name']
+            va = name['Name']
+            section = sections.getsectionbyaddress(va)
+            sectionofs = section.getoffset()
+            if sectionofs in cache:
+                sectionva, data = cache[sectionofs]
+            else:
+                sectionva, data = cache.setdefault(sectionofs, (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
+            hintofs = va - sectionva
+            hint = data[hintofs] | data[hintofs+1]*0x100
+            yield hint, utils.strdup(data[hintofs+2:].tostring()), address.getoffset(), address.int()
         return
 
 class IMAGE_IMPORT_DIRECTORY(parray.terminated):
     _object_ = IMAGE_IMPORT_DIRECTORY_ENTRY
 
-    def isTerminator(self, v):
-        return False if sum(ord(n) for n in v.serialize()) > 0 else True
+    def isTerminator(self, value):
+        data = array.array('B', value.serialize())
+        return False if sum(data) > 0 else True
 
     def iterate(self):
-        for x in self[:-1]:
-            yield x
+        for entry in self[:-1]:
+            yield entry
         return
 
     def search(self, key):
@@ -181,9 +190,9 @@ class IMAGE_IMPORT_DIRECTORY(parray.terminated):
         search the import list for an import dll that matches key
         return the rva
         '''
-        for n in self.iterate():
-            if key == n['Name'].d.li.str():
-                return n
+        for entry in self.iterate():
+            if key == entry['Name'].d.li.str():
+                return entry
             continue
         raise KeyError(key)
 
@@ -212,7 +221,7 @@ class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
         return False if sum(ord(n) for n in v.serialize()) > 0 else True
 
     def iterate(self):
-        for x in self[:-1]:
-            yield x
+        for entry in self[:-1]:
+            yield entry
         return
 

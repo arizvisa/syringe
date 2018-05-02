@@ -127,11 +127,11 @@ def list_exports(t, output):
     if not output:
         filename = result['Name'].d.li.str()
         six.print_("Name:{:s} NumberOfFunctions:{:d} NumberOfNames:{:d}".format(filename, result['NumberOfFunctions'].int(), result['NumberOfNames'].int()))
-        for ofs, ordinal, name, ordinalstring, value in result.iterate():
-            six.print_("[{:d}] {!r} {!r} {:#x}".format(ordinal, name, ordinalstring, value), file=sys.stdout)
+        for ofs, hint, name, ordinalstring, entrypoint, fwd in result.iterate():
+            six.print_("[{:d}] {!r} {!r} {:s}".format(hint, name, ordinalstring, "{:#x}".format(entrypoint) if fwd is None else fwd), file=sys.stdout)
         return
     if output == 'list':
-        return extract(("{:d}:{:s}:{:s}:{#x}".format(ordinal, name, ordinalstring, value) for _, ordinal, name, ordinalstring, value in result if n['Address'].int()), output)
+        return extract(("{:s}:{:s}:{:s}:{:s}:{:s}:{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '') for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), output)
     return extract(result, output)
 
 def list_imports(t, output):
@@ -149,7 +149,7 @@ def list_imports(t, output):
             six.print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=sys.stdout)
         return
     if output == 'list':
-        return extract((n['Name'].d.li.str() for n in result[:-1]), output)
+        return extract(("{:d}:{:s}".format(i, n['Name'].d.li.str()) for i, n in enumerate(result[:-1])), output)
     return extract(result, output)
 
 def extract_import(t, index, output):
