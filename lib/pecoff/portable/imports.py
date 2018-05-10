@@ -148,17 +148,48 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         ( virtualaddress(__IAT, type=dword), 'IAT')
     ]
 
+    def Hint(self, index):
+        '''Given an index into the import directory entry, return the hint'''
+        Header = headers.locateHeader(self)
+        sections = Header['Sections']
+        entry = self['INT'].d.li[index]
+        if entry.OrdinalQ():
+            res = entry['Ordinal']
+            return res['Ordinal Number'] & 0xffff
+        res = entry['Name']
+        name = res.d.li
+        return name['Hint'].int()
+
+    def Name(self, index):
+        '''Given an index into the import directory entry, return its name'''
+        Header = headers.locateHeader(self)
+        sections = Header['Sections']
+        entry = self['INT'].d.li[index]
+        if entry.OrdinalQ():
+            res = entry['Ordinal']
+            hint = res['Ordinal Number'] & 0xffff
+            return "Ordinal{:d}".format(hint)
+        res = entry['Name']
+        name = res.d.li
+        return name['String'].str()
+
+    def Offset(self, index):
+        '''Given an index into the import directory entry, return the va of the address containing the import.'''
+        entry = self['IAT'].d.li[index]
+        offset = headers.calculateRelativeOffset(self, self['IAT'].int())
+        return offset + index * entry.size()
+
     def iterate(self):
         '''[(hint, importentry_name, importentry_offset, importentry_value),...]'''
         Header = headers.locateHeader(self)
         int, iat = self['INT'], self['IAT']
 
         cache, sections = {}, Header['Sections']
-        for entry, address in itertools.izip(int.d.l[:-1], iat.d.l[:-1]):
+        for entry, address in itertools.izip(int.d.li[:-1], iat.d.li[:-1]):
             if entry.OrdinalQ():
                 ordinal = entry['Ordinal']
                 hint = ordinal['Ordinal Number'] & 0xffff
-                yield hint, 'Ordinal{:d}'.format(hint), address.getoffset(), address.int()
+                yield hint, "Ordinal{:d}".format(hint), address.getoffset(), address.int()
                 continue
             name = entry['Name']
             va = name['Name']
@@ -167,7 +198,7 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
             if sectionofs in cache:
                 sectionva, data = cache[sectionofs]
             else:
-                sectionva, data = cache.setdefault(sectionofs, (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
+                sectionva, data = cache.setdefault(sectionofs, (section['VirtualAddress'].int(), array.array('B', section.data().li.serialize())))
             hintofs = va - sectionva
             hint = data[hintofs] | data[hintofs+1]*0x100
             yield hint, utils.strdup(data[hintofs+2:].tostring()), address.getoffset(), address.int()
@@ -217,8 +248,10 @@ class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
 
 class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
     _object_ = IMAGE_DELAYLOAD_DIRECTORY_ENTRY
-    def isTerminator(self, v):
-        return False if sum(ord(n) for n in v.serialize()) > 0 else True
+
+    def isTerminator(self, value):
+        data = array.array('B', value.serialize())
+        return True if sum(data) == 0 else False
 
     def iterate(self):
         for entry in self[:-1]:

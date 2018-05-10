@@ -220,7 +220,7 @@ class IMAGE_SECTION_HEADER(pstruct.type):
     getrelocations = lambda self: self['PointerToRelocations'].d
     getlinenumbers = lambda self: self['NumberOfLinenumbers'].d
 
-    ## offset means section offset
+    ## offset means file offset
     def getoffsetbyaddress(self, address):
         return address - self['VirtualAddress'].int() + self['PointerToRawData'].int()
 

@@ -88,6 +88,110 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         block = data[offset: offset + 4*self['NumberOfFunctions'].int()]
         return address, array.array('L', block)
 
+    def Hint(self, index):
+        '''Returns the hint/ordinal of the specified export.'''
+        aono = self['AddressOfNameOrdinals']
+        if aono.int() == 0:
+            raise ValueError("{:s} : No ordinals found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aono.summary()))
+
+        # validate the index against the ordinals table
+        ordinals = aono.d.li
+        if not (0 <= index < len(ordinals)):
+            raise IndexError("{:s} : Specified index {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), index, 0, len(ordinals)))
+
+        # got it
+        res = ordinals[index]
+        return res.int()
+
+    def Offset(self, index):
+        '''Returns the va for the address of the export.'''
+        aof = self['AddressOfFunctions']
+        if aof.int() == 0:
+            raise ValueError("{:s} : No functions found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
+
+        # validate the ordinal
+        hint = self.Hint(index)
+        if not (0 <= hint < len(aof.d)):
+            raise IndexError("{:s} : Specified ordinal {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), hint, 0, len(aof.d)))
+
+        # now we can figure the index into the function table
+        res = headers.calculateRelativeOffset(self, aof.int())
+        return res + hint * 4
+
+    def Name(self, index):
+        '''Returns the name of the specified export.'''
+        aon = self['AddressOfNames']
+        if aon.int() == 0:
+            raise ValueError("{:s} : No names found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aon.summary()))
+
+        # validate the index
+        names = aon.d.li
+        if not (0 <= index < len(names)):
+            raise IndexError("{:s} : Specified index {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), index, 0, len(names)))
+
+        # got it
+        res = names[index]
+        return res.d.li.str()
+
+    def Ordinal(self, index):
+        hint = self.Hint(index)
+        return hint + self['Base'].int()
+
+    def OrdinalName(self, index):
+        '''Returns the ordinal name for the specified export.'''
+        return "Ordinal{:d}".format(self.Ordinal(index))
+
+    def ForwardQ(self, index):
+        '''Returns True if the specified index is a forwarded export.'''
+        ExportDirectory = self.getparent(headers.IMAGE_DATA_DIRECTORY)
+
+        aof = self['AddressOfFunctions']
+        if aof.int() == 0:
+            raise ValueError("{:s} : No functions found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
+
+        # validate the ordinal
+        hint = self.Hint(index)
+        if not (0 <= hint < len(aof.d)):
+            raise IndexError("{:s} : Specified ordinal {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), hint, 0, len(aof.d)))
+
+        # now check if it's a forwarded function or not
+        va = aof.d.li[hint]
+        return ExportDirectory.containsaddress(va.int())
+
+    def Entrypoint(self, index):
+        '''Returns the va of the entrypoint for the specified export.'''
+        ExportDirectory = self.getparent(headers.IMAGE_DATA_DIRECTORY)
+
+        aof = self['AddressOfFunctions']
+        if aof.int() == 0:
+            raise ValueError("{:s} : No functions found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
+
+        # validate the ordinal
+        hint = self.Hint(index)
+        if not (0 <= hint < len(aof.d)):
+            raise IndexError("{:s} : Specified ordinal {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), hint, 0, len(aof.d)))
+
+        # grab the address out of the function table
+        va = aof.d.li[hint]
+        return None if ExportDirectory.containsaddress(va.int()) else va.int()
+
+    def ForwardTarget(self, index):
+        '''Returns the string that the specified export is forwarded to.'''
+        ExportDirectory = self.getparent(headers.IMAGE_DATA_DIRECTORY)
+
+        aof = self['AddressOfFunctions']
+        if aof.int() == 0:
+            raise ValueError("{:s} : No functions found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
+
+        # validate the ordinal
+        hint = self.Hint(index)
+        if not (0 <= hint < len(aof.d)):
+            raise IndexError("{:s} : Specified ordinal {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), hint, 0, len(aof.d)))
+
+        # grab the address out of the function table
+        va = aof.d.li[hint]
+        return va.d.li.str() if ExportDirectory.containsaddress(va.int()) else None
+
     def iterate(self):
         """For each export, yields (rva offset, hint, name, ordinalname, entrypoint, forwardedrva)"""
         cls = self.__class__
@@ -184,10 +288,10 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
     def search(self, key):
         '''Search the export list for an export that matches key.
 
-        Return it's rva.
+        Return its index/hint.
         '''
         for offset, ordinal, name, ordinalstring, value, forwardedrva in self.iterate():
             if key == ordinal or key == name or key == ordinalstring or key == forwardedrva:
-                return value
+                return ordinal
             continue
         raise KeyError(key)
