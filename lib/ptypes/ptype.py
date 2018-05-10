@@ -1709,7 +1709,7 @@ class definition(object):
         try:
             res = cls.cache[type]
         except KeyError:
-            res = dyn.clone(default, **missingattrs)
+            res = clone(default, **missingattrs)
 
         return res
 
