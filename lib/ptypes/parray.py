@@ -166,7 +166,7 @@ class _parray_generic(ptype.container):
 
     def __setitem__(self, index, value):
         if isinstance(index, slice):
-            ivalue = itertools.repeat(value) if isinstance(value,ptype.generic) else iter(value)
+            ivalue = itertools.repeat(value) if isinstance(value, ptype.generic) else iter(value)
             res = self.value[:]
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 idx = self.__getindex__(idx)

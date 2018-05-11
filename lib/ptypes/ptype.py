@@ -1131,11 +1131,14 @@ class container(base):
         ptype.container.
         """
         raise error.ImplementationError(self, 'container.__getindex__', 'Developer forgot to overload this method')
-    def __getitem__(self, key):
+
+    def __field__(self, key):
         index = self.__getindex__(key)
         if self.value is None:
-            raise error.InitializationError(self, 'container.__getitem__')
+            raise error.InitializationError(self, 'container.__field__')
         return self.value[index]
+    def __getitem__(self, key):
+        return self.__field__(key)
 
     def __setitem__(self, index, value):
         if not builtins.isinstance(value, base):

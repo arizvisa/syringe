@@ -287,7 +287,7 @@ class type(_pstruct_generic):
                 idx = self.__getindex__(k)
                 if ptype.isresolveable(v) or ptype.istype(v):
                     result.value[idx] = self.new(v, __name__=k).a
-                elif isinstance(v,ptype.generic):
+                elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=k)
                 else:
                     result.value[idx].set(v)

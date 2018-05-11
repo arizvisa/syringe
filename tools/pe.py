@@ -1,13 +1,16 @@
 #!/usr/bin/env python
-import itertools,operator,logging,argparse
+import six,argparse
+import functools,operator,itertools,types
 import ptypes,pecoff,ber
-import six
 #ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 ptypes.config.defaults.ptype.clone_name = '{}'
 ptypes.config.defaults.pint.bigendian_name = 'be({})'
 ptypes.config.defaults.pint.littleendian_name = '{}'
 
-def extract(obj, out):
+def Locate(path, obj):
+    return Resolve(obj, path.split(':'))
+
+def Extract(obj, out):
     if out == 'print':
         res = obj.repr()
     elif out == 'hex':
@@ -16,13 +19,23 @@ def extract(obj, out):
         res = obj.serialize()
     elif out == 'list':
         res = '\n'.join((n.summary() if hasattr(n, 'summary') else str(n) for n in obj))
-    elif len(out) > 0:
-        res = resolve(obj, out[0].split(':'))
+
+    # default
+    elif not obj:
+        res = obj.details()
+    elif isinstance(obj, (ptypes.ptype.pointer_t, ptypes.pbinary.partial)):
+        res = repr(obj)
+    elif hasattr(obj, 'num'):
+        res = obj.num()
+    elif hasattr(obj, 'int'):
+        res = obj.int()
+    elif hasattr(obj, 'str'):
+        res = obj.str()
     else:
-        raise Exception(out)
+        res = repr(obj)
     six.print_(res, file=sys.stdout)
 
-def resolve(result, path):
+def Resolve(result, path):
     for p in path:
         if p == '':
             break
@@ -32,35 +45,26 @@ def resolve(result, path):
             result = result.p
         elif p == '!' and hasattr(result, 'd'):
             result = result.d.li
-        elif hasattr(result, 'keys'):
-            result = result.__field__(p) if isinstance(result, (ptypes.pbinary.type,ptypes.pbinary.partial)) else operator.getitem(result, p)
+        elif p == '@' and hasattr(result, 'o'):
+            result = result.o.li
+        elif hasattr(result, '__field__'):
+            result = result.__field__(p) if hasattr(result, '__keys__') else result.__field__(int(p))
         else:
-            result = result.__field__(int(p)) if isinstance(result, (ptypes.pbinary.type,ptypes.pbinary.partial)) else operator.getitem(result, int(p))
+            raise AttributeError(p, result)
         continue
-
-    if not p:
-        return result.details()
-    if isinstance(result, (ptypes.ptype.pointer_t, ptypes.pbinary.partial)):
-        return repr(result)
-    if hasattr(result, 'num'):
-        return result.num()
-    elif hasattr(result, 'int'):
-        return result.int()
-    elif hasattr(result, 'str'):
-        return result.str()
-    return repr(result)
+    return result
 
 ## commands
 def dump_exe(t, output):
     global result; result = t
-    if not output or output == 'print':
+    if not output or output in {'print'}:
         six.print_(result['Dos'].repr(), file=sys.stdout)
         six.print_(result['Stub'].hexdump(), file=sys.stdout)
         return
-    if isinstance(output, basestring):
+    if output in {'hex','raw'}:
         t = ptypes.dyn.block(result['Dos'].size() + result['Stub'].size())
-        return extract(t(offset=0).li, output)
-    return extract(result, output)
+        return Extract(t(offset=0).li, output)
+    return Extract(result, output)
 
 def dump_header(t, output):
     H = t['Next']['Header']
@@ -70,7 +74,7 @@ def dump_header(t, output):
         six.print_(result['FileHeader'].repr(), file=sys.stdout)
         six.print_(result['OptionalHeader'].repr(), file=sys.stdout)
         return
-    return extract(result, output)
+    return Extract(result, output)
 
 def list_sections(t, output):
     H = t['Next']['Header']
@@ -80,19 +84,21 @@ def list_sections(t, output):
         for i, S in enumerate(result):
             six.print_('[{:d}] {:s}'.format(i, summary(S)), file=sys.stdout)
         return
-    if output == 'list':
-        return extract((S['Name'].str() for S in result), output)
-    return extract(result, output)
+    if output in {'list'}:
+        return Extract((S['Name'].str() for S in result), output)
+    return Extract(result, output)
 
-def extract_section(t, index, output):
+def extract_section(t, index, output, F=None):
     H = t['Next']['Header']
     if not (0 <= index < len(H['Sections'])):
-        raise IndexError("Invalid section index.")
+        raise IndexError("Invalid section index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(H['Sections'])))
     S = H['Sections'][index]
     global result; result = S
     #if 'load' in kwds:
-    #    return extract(t['VirtualAddress'].d.li, output or 'raw')
-    return extract(result['PointerToRawData'].d.li, output or 'hex')
+    #    return Extract(t['VirtualAddress'].d.li, output or 'raw')
+    if F:
+        return Extract(F(result), output)
+    return Extract(result['PointerToRawData'].d.li, output or 'hex')
 
 def list_entries(t, output):
     H = t['Next']['Header']
@@ -102,26 +108,28 @@ def list_entries(t, output):
         for i, n in enumerate(result):
             six.print_('[{:d}] {}'.format(i, summary(n)), file=sys.stdout)
         return
-    if output == 'list':
-        return extract((n.classname() for n in result if n['Address'].int()), output)
-    return extract(result, output)
+    if output in {'list'}:
+        return Extract((n.classname() for n in result if n['Address'].int()), output)
+    return Extract(result, output)
 
-def extract_entry(t, index, output):
+def extract_entry(t, index, output, F=None):
     d = t['Next']['Header']['DataDirectory']
     if not(0 <= index < len(d)):
-        raise IndexError("Invalid DataDirectory entry number.")
+        raise IndexError("Invalid DataDirectory entry number was specified ({:d} <= {:d} < {:d}).".format(0, index, len(d)))
     E = d[index]
-    global result; result = E['Address'].d.li
+    global result; result = E
     T, cb = E['Address'], E['Size']
-    if output == 'print' or not isinstance(output, basestring):
-        return extract(T.d.li, output)
-    res = ptypes.dyn.block(cb.int())(offset=T.d.getoffset())
-    return extract(res.li, output or 'raw')
+    if F:
+        return Extract(F(result), output)
+    if output in {'hex', 'raw'}:
+        res = ptypes.dyn.block(cb.int())(offset=T.d.getoffset())
+        return Extract(res.li, output)
+    return Extract(result, output or 'print')
 
 def list_exports(t, output):
     E = t['Next']['Header']['DataDirectory']['Export']
     if E['Address'].int() == 0:
-        raise ValueError("No Exports directory entry.")
+        raise ValueError("No Exports directory entry was found.")
     et = E['Address'].d.li
     global result; result = et
     if not output:
@@ -130,14 +138,14 @@ def list_exports(t, output):
         for ofs, hint, name, ordinalstring, entrypoint, fwd in result.iterate():
             six.print_("[{:d}] {!r} {!r} {:s}".format(hint, name, ordinalstring, "{:#x}".format(entrypoint) if fwd is None else fwd), file=sys.stdout)
         return
-    if output == 'list':
-        return extract(("{:s}:{:s}:{:s}:{:s}:{:s}:{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '') for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), output)
-    return extract(result, output)
+    if output in {'list'}:
+        return Extract(("{:s}:{:s}:{:s}:{:s}:{:s}:{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '') for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), output)
+    return Extract(result, output)
 
 def list_imports(t, output):
     E = t['Next']['Header']['DataDirectory']['Import']
     if E['Address'].int() == 0:
-        raise ValueError("No Imports directory entry.")
+        raise ValueError("No Imports directory entry was found.")
     it = E['Address'].d.li
     global result; result = it
     if not output:
@@ -148,30 +156,30 @@ def list_imports(t, output):
             iat, int = ite['IAT'].d.li, ite['INT'].d.li
             six.print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=sys.stdout)
         return
-    if output == 'list':
-        return extract(("{:d}:{:s}".format(i, n['Name'].d.li.str()) for i, n in enumerate(result[:-1])), output)
-    return extract(result, output)
+    if output in {'list'}:
+        return Extract(("{:d}:{:s}".format(i, n['Name'].d.li.str()) for i, n in enumerate(result[:-1])), output)
+    return Extract(result, output)
 
-def extract_import(t, index, output):
+def extract_import(t, index, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Import']
     if E['Address'].int() == 0:
-        raise ValueError("No Imports directory entry.")
+        raise ValueError("No Imports directory entry was found.")
     it = E['Address'].d.li
     if not(0 <= index < len(it)):
-        raise IndexError("Invalid Imports table index.")
+        raise IndexError("Invalid Imports table index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(it)))
     ite = it[index]
     global result; result = ite
-    if not output:
+    if not F and output in {'list'}:
         summary = lambda (h,n,a,v): 'hint:{:d} name:{:s} offset:{:#x} value:{:#x}'.format(h,n,a,v)
         for ie in result.iterate():
             six.print_(summary(ie), file=sys.stdout)
         return
-    return extract(result, output)
+    return Extract(F(result) if F else result, output)
 
 def list_resources(t, output):
     E = t['Next']['Header']['DataDirectory']['Resource']
     if E['Address'].int() == 0:
-        raise ValueError("No Resource directory entry.")
+        raise ValueError("No Resource directory entry was found.")
     rt = E['Address'].d.li
     global result; result = rt
     summary = lambda n: '{:#x}:{:+#x} codepage:{:d}'.format(n['Data'].int(), n['Size'].int(), n['Codepage'].int())
@@ -180,61 +188,77 @@ def list_resources(t, output):
         for re in dumpresources(res):
             six.print_('/'.join(map(str, re)), summary(followresource(re, rt)), file=sys.stdout)
         return
-    return extract(result, output)
+    return Extract(result, output)
 
-def extract_resource(t, path, output):
+def extract_resource(t, path, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Resource']
     if E['Address'].int() == 0:
-        raise ValueError("No Resource directory entry.")
+        raise ValueError("No Resource directory entry was found.")
     rt = E['Address'].d.li
     rtp = []
     for p in path.split('/'):
         try: p = int(p)
         except ValueError: p = str(p)
         rtp.append(p)
-    rte = followresource(rtp, rt)
-    global result; result = rte['Data'].d.li if 'Data' in rte.keys() else rte
-    if output == 'print':
-        # FIXME: dump structure if it's not a record
-        return extract(result, 'print')
-    return extract(result, output or 'raw')
+
+    try:
+        global result; result = followresource(rtp, rt)
+
+    except LookupError, (p, rest, res):
+        leftover = (p,) + rest[:]
+        cp = rtp[:-len(leftover)]
+        raise ValueError("Unable to locate resource item {:s} in resource directory: {:s}".format('/'.join(map(str,leftover)), '/'.join(map(str,cp))))
+
+    if F:
+        return Extract(F(result), output)
+
+    if output in {'hex', 'raw'}:
+        res = result['Data'].d.li if 'Data' in result.keys() else result
+        return Extract(res, output)
+    return Extract(result, output or 'print')
 
 def dump_loadconfig(t, output):
     E = t['Next']['Header']['DataDirectory']['LoadConfig']
     if E['Address'].int() == 0:
-        raise ValueError("No LoadConfig directory entry.")
+        raise ValueError("No LoadConfig directory entry was found.")
     lc = E['Address'].d.li
     global result; result = lc
-    return extract(result, output or 'print')
+    return Extract(result, output or 'print')
 
 def list_signature(t, output):
     E = t['Next']['Header']['DataDirectory']['Security']
     if E['Address'].int() == 0:
-        raise ValueError("No Security directory entry.")
+        raise ValueError("No Security directory entry was found.")
     s = E['Address'].d.li
     global result; result = s
     summary = lambda i, e: '[{:d}] {:+#x} wRevision:{:s} wCertificateType:{:s} bCertificate:{:d}'.format(i, e.getoffset(), e['wRevision'].str(), e['wCertificateType'].str(), e['bCertificate'].size())
-    if not output or output == 'print':
+    if not output or output in {'print'}:
         for i, se in enumerate(result):
             six.print_(summary(i, se), file=sys.stdout)
         return
-    return extract(result, output or 'raw')
+    return Extract(result, output or 'raw')
 
-def extract_signature(t, index, output):
+def extract_signature(t, index, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Security']
     if E['Address'].int() == 0:
-        raise ValueError("No Security directory entry.")
+        raise ValueError("No Security directory entry was found.")
     s = E['Address'].d.li
     if not (0 <= index < len(s)):
-        raise IndexError("Invalid section index.")
+        raise IndexError("Invalid signature index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(s)))
     se = s[index]
-    cert = se['bCertificate'].cast(ber.File)
-    global result; result = cert
-    return extract(result, output or 'print')
+    global result; result = se['bCertificate']
+    if F:
+        result = result.cast(ber.File)
+        return Extract(F(result), output)
+    if output in {'hex', 'raw'}:
+        return Extract(result, output)
+    result = result.cast(ber.File)
+    return Extract(result, output or 'print')
 
 def args():
     p = argparse.ArgumentParser(prog="pe.py", description='Display some information about a portable executable file', add_help=True)
     p.add_argument('infile', type=argparse.FileType('rb'), help='a portable executable file')
+
     res = p.add_mutually_exclusive_group()
     res.add_argument('-m','--dump-exe', action='store_const', const=dump_exe, dest='command', help='display the MZ executable header')
     res.add_argument('-p','--dump-header', action='store_const', const=dump_header, dest='command', help='display the PE header')
@@ -246,33 +270,37 @@ def args():
     res.add_argument('-i','--list-imports', action='store_const', const=list_imports, dest='command', help='list all the libraries listed in the import directory')
     res.add_argument('-I','--dump-import', action='store', nargs=1, type=int, dest='ximport', metavar='index', help='list all the imported functions from the specified library')
     res.add_argument('-r','--list-resource', action='store_const', const=list_resources, dest='command', help='display the resource directory tree')
-    res.add_argument('-R','--dump-resource', action='store', nargs=1, type=str, dest='xresource', metavar='path', help='dump the resource with the specified path')
+    res.add_argument('-R','--dump-resource', action='store', nargs=1, type=str, dest='xresource', metavar='path', help='dump the resource with the \'/\'-separated specified path')
     res.add_argument('-l','--dump-loaderconfig', action='store_const', const=dump_loadconfig, dest='command', help='dump the LoadConfig directory entry')
     res.add_argument('-k','--list-signature', action='store_const', const=list_signature, dest='command', help='list the certificates at the Security directory entry')
     res.add_argument('-K','--dump-signature', action='store', nargs=1, type=int, dest='xsignature', metavar='index', help='dump the certificate at the specified index')
+
+    res = p.add_argument_group()
+    res.add_argument('--path', action='store', dest='location', metavar='path', help='navigate to a specific field described by a \':\' separated path.')
+    p.set_defaults(location='')
 
     res = p.add_mutually_exclusive_group(required=False)
     res.add_argument('--raw', action='store_const', dest='output', const='raw', help='output contents in raw mode')
     res.add_argument('--print', action='store_const', dest='output', const='print', help='output contents in a readable format')
     res.add_argument('--hex', action='store_const', dest='output', const='hex', help='output contents as a hex dump')
     res.add_argument('--list', action='store_const', dest='output', const='list', help='output item in a single line')
-    res.add_argument('--path', action='store', nargs=1, dest='output', help='output the field specifed by a \':\' separated path.')
     p.set_defaults(output='')
     return p
 
 def figureargs(ns):
+    F = functools.partial(Locate, ns.location) if ns.location else None
     if ns.command:
         return ns.command
     elif ns.xsection:
-        return lambda t,output: extract_section(t, ns.xsection[0], output)
+        return lambda t,output,loc=F: extract_section(t, ns.xsection[0], output, loc)
     elif ns.xentry:
-        return lambda t,output: extract_entry(t, ns.xentry[0], output)
+        return lambda t,output,loc=F: extract_entry(t, ns.xentry[0], output, loc)
     elif ns.ximport:
-        return lambda t,output: extract_import(t, ns.ximport[0], output)
+        return lambda t,output,loc=F: extract_import(t, ns.ximport[0], output, loc)
     elif ns.xresource:
-        return lambda t,output: extract_resource(t, ns.xresource[0], output)
+        return lambda t,output,loc=F: extract_resource(t, ns.xresource[0], output, loc)
     elif ns.xsignature:
-        return lambda t,output: extract_signature(t, ns.xsignature[0], output)
+        return lambda t,output,loc=F: extract_signature(t, ns.xsignature[0], output, loc)
     return None
 
 def collectresources(entry):
@@ -295,7 +323,10 @@ def dumpresources(r):
 def followresource(p, res):
     if len(p) > 0:
         p, rest = unpack(*p)
-        return followresource(rest, res.Entry(p).li)
+        entry = res.Entry(p)
+        if entry is None:
+            raise LookupError(p, rest, res)
+        return followresource(rest, entry.li)
     return res.li
 
 def unpack(first, *rest):
