@@ -461,7 +461,10 @@ class U8(pint.uint64_t): type=11
 class R4(pfloat.single): type=12
 @ElementType.define
 class R8(pfloat.double): type=13
+@ElementType.define
+class STRING(SerString): type=14
 # FIXME: Implement some more ElementType definitions
+# FIXME: Add a .summary() method for friendly output
 
 class TableRow(ptype.encoded_t):
     def __getitem__(self, name):
