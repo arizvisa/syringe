@@ -55,8 +55,10 @@ def Resolve(result, path):
     return result
 
 ## commands
-def dump_exe(t, output):
+def dump_exe(t, output, F=None):
     global result; result = t
+    if F:
+        return Extract(F(result), output)
     if not output or output in {'print'}:
         six.print_(result['Dos'].repr(), file=sys.stdout)
         six.print_(result['Stub'].hexdump(), file=sys.stdout)
@@ -66,9 +68,11 @@ def dump_exe(t, output):
         return Extract(t(offset=0).li, output)
     return Extract(result, output)
 
-def dump_header(t, output):
+def dump_header(t, output, F=None):
     H = t['Next']['Header']
     global result; result = H
+    if F:
+        return Extract(F(result), output)
     if not output:
         six.print_(result.p['Signature'], repr(result.p['Signature'].serialize()+result['SignaturePadding'].serialize()), file=sys.stdout)
         six.print_(result['FileHeader'].repr(), file=sys.stdout)
@@ -76,9 +80,11 @@ def dump_header(t, output):
         return
     return Extract(result, output)
 
-def list_sections(t, output):
+def list_sections(t, output, F=None):
     H = t['Next']['Header']
     global result; result = H['Sections']
+    if F:
+        return Extract(F(result), output)
     if not output:
         summary = lambda s: '{!r} {:#x}:{:+#x} Raw:{:#x}:{:+#x}'.format(s['Name'].str(), s['VirtualAddress'].int(), s['VirtualSize'].int(), s['PointerToRawData'].int(), s['SizeOfRawData'].int())
         for i, S in enumerate(result):
@@ -100,9 +106,11 @@ def extract_section(t, index, output, F=None):
         return Extract(F(result), output)
     return Extract(result['PointerToRawData'].d.li, output or 'hex')
 
-def list_entries(t, output):
+def list_entries(t, output, F=None):
     H = t['Next']['Header']
     global result; result = H['DataDirectory']
+    if F:
+        return Extract(F(result), output)
     summary = lambda n: '{:s} {:#x}:{:+#x}'.format(n.classname(), n['Address'].int(), n['Size'].int())
     if not output:
         for i, n in enumerate(result):
@@ -126,12 +134,14 @@ def extract_entry(t, index, output, F=None):
         return Extract(res.li, output)
     return Extract(result, output or 'print')
 
-def list_exports(t, output):
+def list_exports(t, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Export']
     if E['Address'].int() == 0:
         raise ValueError("No Exports directory entry was found.")
     et = E['Address'].d.li
     global result; result = et
+    if F:
+        return Extract(F(result), output)
     if not output:
         filename = result['Name'].d.li.str()
         six.print_("Name:{:s} NumberOfFunctions:{:d} NumberOfNames:{:d}".format(filename, result['NumberOfFunctions'].int(), result['NumberOfNames'].int()))
@@ -142,12 +152,14 @@ def list_exports(t, output):
         return Extract(("{:s}:{:s}:{:s}:{:s}:{:s}:{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '') for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), output)
     return Extract(result, output)
 
-def list_imports(t, output):
+def list_imports(t, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Import']
     if E['Address'].int() == 0:
         raise ValueError("No Imports directory entry was found.")
     it = E['Address'].d.li
     global result; result = it
+    if F:
+        return Extract(F(result), output)
     if not output:
         _ = list(result.iterate())
         imax = len(str(len(_)))
@@ -176,12 +188,14 @@ def extract_import(t, index, output, F=None):
         return
     return Extract(F(result) if F else result, output)
 
-def list_resources(t, output):
+def list_resources(t, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Resource']
     if E['Address'].int() == 0:
         raise ValueError("No Resource directory entry was found.")
     rt = E['Address'].d.li
     global result; result = rt
+    if F:
+        return Extract(F(result), output)
     summary = lambda n: '{:#x}:{:+#x} codepage:{:d}'.format(n['Data'].int(), n['Size'].int(), n['Codepage'].int())
     if not output:
         res = collectresources(result)
@@ -217,20 +231,24 @@ def extract_resource(t, path, output, F=None):
         return Extract(res, output)
     return Extract(result, output or 'print')
 
-def dump_loadconfig(t, output):
+def dump_loadconfig(t, output, F=None):
     E = t['Next']['Header']['DataDirectory']['LoadConfig']
     if E['Address'].int() == 0:
         raise ValueError("No LoadConfig directory entry was found.")
     lc = E['Address'].d.li
     global result; result = lc
+    if F:
+        return Extract(F(result), output)
     return Extract(result, output or 'print')
 
-def list_signature(t, output):
+def list_signature(t, output, F=None):
     E = t['Next']['Header']['DataDirectory']['Security']
     if E['Address'].int() == 0:
         raise ValueError("No Security directory entry was found.")
     s = E['Address'].d.li
     global result; result = s
+    if F:
+        return Extract(F(result), output)
     summary = lambda i, e: '[{:d}] {:+#x} wRevision:{:s} wCertificateType:{:s} bCertificate:{:d}'.format(i, e.getoffset(), e['wRevision'].str(), e['wCertificateType'].str(), e['bCertificate'].size())
     if not output or output in {'print'}:
         for i, se in enumerate(result):
@@ -290,7 +308,7 @@ def args():
 def figureargs(ns):
     F = functools.partial(Locate, ns.location) if ns.location else None
     if ns.command:
-        return ns.command
+        return lambda t,output,loc=F: ns.command(t, output, loc)
     elif ns.xsection:
         return lambda t,output,loc=F: extract_section(t, ns.xsection[0], output, loc)
     elif ns.xentry:
