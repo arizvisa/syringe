@@ -25,7 +25,9 @@ def getChildByKey(versionInfo, szKey):
 
 def extractLgCpIds(versionInfo):
     vfi = getChildByKey(versionInfo, u'VarFileInfo')
-    res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in vfi['Children']) ))
+    sfi = getChildByKey(versionInfo, u'StringFileInfo')
+    fichildren = itertools.chain(vfi['Children'], sfi['Children'])
+    res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in fichildren) ))
     return tuple((cp.int(), lg.int()) for cp, lg in res)
 
 def getStringTable(versionInfo, (Lgid, Cp)):

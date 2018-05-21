@@ -131,7 +131,7 @@ class RT_VERSION(pstruct.type):
 
         cls, key = self.__class__, self['szKey'].li.str()
         if cls != RT_VERSION:
-            logging.warn("{:s} : Unknown type for entry {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
+            logging.debug("{:s} : No type callback implemented for Value in {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
 
         sz = self['wValueLength'].li.int()
         return RT_VERSION_ValueType.withdefault(key, type=key, length=sz)
@@ -142,7 +142,7 @@ class RT_VERSION(pstruct.type):
 
         cls, key = self.__class__, self['szKey'].li.str()
         if self.__class__ != RT_VERSION:
-            logging.warn("{:s} : Unknown child type for entry {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
+            logging.debug("{:s} : No type callback implemented for Children in {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
 
         return RT_VERSION_EntryType.lookup(key)
         #bs = self['wLength'].li.int() - self.blocksize()
