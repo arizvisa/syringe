@@ -101,7 +101,7 @@ class IMAGE_DEBUG_DATA_MISC(pstruct.type):
         (uint32, 'Length'),
         (uint8, 'Unicode'),
         (dyn.block(3), 'align(Unicode)'),
-        (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'Data'),
+        (lambda s: dyn.clone(pstr.wstring if s['Unicode'].int() else pstr.string, length=s['Length'].li.int()), 'Data'),
     ]
 
 ## IMAGE_DEBUG_TYPE_COFF
