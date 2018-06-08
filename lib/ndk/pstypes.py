@@ -472,18 +472,6 @@ class TEB(pstruct.type, versioned):
             ])
         return
 
-class THREAD_BASIC_INFORMATION(pstruct.type, versioned):
-    def __init__(self, **attrs):
-        super(THREAD_BASIC_INFORMATION, self).__init__(**attrs)
-        self._fields_ = [
-            (umtypes.NTSTATUS, 'ExitStatus'),
-            (PVOID, 'TebBaseAddress'),
-            (umtypes.CLIENT_ID, 'ClientId'),
-            (umtypes.KAFFINITY, 'AffinityMask'),
-            (umtypes.KPRIORITY, 'Priority'),
-            (umtypes.KPRIORITY, 'BasePriority'),
-        ]
-
 class THREAD_INFORMATION_CLASS(pint.enum):
     _values_ = [(n,v) for v,n in (
         (0, 'ThreadBasicInformation'),
@@ -504,7 +492,171 @@ class THREAD_INFORMATION_CLASS(pint.enum):
         (15, 'ThreadSetTlsArrayAddress'),
         (16, 'ThreadIsIoPending'),
         (17, 'ThreadHideFromDebugger'),
+        (18, 'ThreadBreakOnTermination'),
+        (19, 'ThreadSwitchLegacyState'),
+        (20, 'ThreadIsTerminated'),
+        (21, 'ThreadLastSystemCall'),
+        (22, 'ThreadIoPriority'),
+        (23, 'ThreadCycleTime'),
+        (24, 'ThreadPagePriority'),
+        (25, 'ThreadActualBasePriority'),
+        (26, 'ThreadTebInformation'),
+        (27, 'ThreadCSwitchMon'),
+        (28, 'ThreadCSwitchPmu'),
+        (29, 'ThreadWow64Context'),
+        (30, 'ThreadGroupInformation'),
+        (31, 'ThreadUmsInformation'),
+        (32, 'ThreadCounterProfiling'),
+        (33, 'ThreadIdealProcessorEx'),
+        (34, 'ThreadCpuAccountingInformation'),
+        (35, 'ThreadSuspendCount'),
+        (36, 'ThreadHeterogeneousCpuPolicy'),
+        (37, 'ThreadContainerId'),
+        (38, 'ThreadNameInformation'),
+        (39, 'ThreadProperty'),
+        (40, 'ThreadSelectedCpuSets'),
+        (41, 'ThreadSystemThreadInformation'),
     )]
+
+class THREAD_BASIC_INFORMATION(pstruct.type, versioned):
+    type = THREAD_INFORMATION_CLASS.byname('ThreadBasicInformation')
+    def __init__(self, **attrs):
+        super(THREAD_BASIC_INFORMATION, self).__init__(**attrs)
+        self._fields_ = [
+            (umtypes.NTSTATUS, 'ExitStatus'),
+            (PVOID, 'TebBaseAddress'),
+            (umtypes.CLIENT_ID, 'ClientId'),
+            (umtypes.KAFFINITY, 'AffinityMask'),
+            (umtypes.KPRIORITY, 'Priority'),
+            (umtypes.KPRIORITY, 'BasePriority'),
+        ]
+
+class THREAD_PROPERTY_INFORMATION(pstruct.type):
+    type = THREAD_INFORMATION_CLASS.byname('ThreadProperty')
+    _fields_ = [
+        (ULONGLONG, 'Key'),
+        (PVOID, 'Object'),
+        (PVOID, 'Thread'),
+        (ULONG, 'Flags'),
+    ]
+
+class PROCESS_INFORMATION_CLASS(pint.enum):
+    _values_ = [(n,v) for v,n in (
+        (0, 'ProcessBasicInformation'),
+        (1, 'ProcessQuotaLimits'),
+        (2, 'ProcessIoCounters'),
+        (3, 'ProcessVmCounters'),
+        (4, 'ProcessTimes'),
+        (5, 'ProcessBasePriority'),
+        (6, 'ProcessRaisePriority'),
+        (7, 'ProcessDebugPort'),
+        (8, 'ProcessExceptionPort'),
+        (9, 'ProcessAccessToken'),
+        (9, 'ProcessLdtInformation'),
+        (10, 'ProcessLdtSize'),
+        (11, 'ProcessDefaultHardErrorMode'),
+        (12, 'ProcessIoPortHandlers'),
+        (13, 'ProcessPooledUsageAndLimits'),
+        (14, 'ProcessWorkingSetWatch'),
+        (15, 'ProcessUserModeIOPL'),
+        (16, 'ProcessEnableAlignmentFaultFixup'),
+        (17, 'ProcessPriorityClass'),
+        (18, 'ProcessWx86Information'),
+        (19, 'ProcessHandleCount'),
+        (20, 'ProcessAffinityMask'),
+        (21, 'ProcessPriorityBoost'),
+        (22, 'ProcessDeviceMap'),
+        (23, 'ProcessSessionInformation'),
+        (24, 'ProcessForegroundInformation'),
+        (25, 'ProcessWow64Information'),
+        (26, 'ProcessImageFileName'),
+        (27, 'ProcessLUIDDeviceMapsEnabled'),
+        (28, 'ProcessBreakOnTermination'),
+        (29, 'ProcessDebugObjectHandle'),
+        (30, 'ProcessDebugFlags'),
+        (31, 'ProcessHandleTracing'),
+        (32, 'ProcessIoPriority'),
+        (33, 'ProcessExecuteFlags'),
+        (34, 'ProcessResourceManagement'),
+        (35, 'ProcessCookie'),
+        (36, 'ProcessImageInformation'),
+        (37, 'ProcessCycleTime'),
+        (38, 'ProcessPagePriority'),
+        (39, 'ProcessInstrumentationCallback'),
+        (40, 'ProcessThreadStackAllocation'),
+        (41, 'ProcessWorkingSetWatchEx'),
+        (42, 'ProcessImageFileNameWin32'),
+        (43, 'ProcessImageFileMapping'),
+        (44, 'ProcessAffinityUpdateMode'),
+        (45, 'ProcessMemoryAllocationMode'),
+        (46, 'ProcessGroupInformation'),
+        (47, 'ProcessTokenVirtualizationEnabled'),
+        (48, 'ProcessConsoleHostProcess'),
+        (49, 'ProcessWindowInformation'),
+        (50, 'ProcessHandleInformation'),
+        (51, 'ProcessMitigationPolicy'),
+        (52, 'ProcessDynamicFunctionTableInformation'),
+        (53, 'ProcessHandleCheckingMode'),
+        (54, 'ProcessKeepAliveCount'),
+        (55, 'ProcessRevokeFileHandles'),
+        (56, 'ProcessWorkingSetControl'),
+        (57, 'ProcessHandleTable'),
+        (58, 'ProcessCheckStackExtentsMode'),
+        (59, 'ProcessCommandLineInformation'),
+        (60, 'ProcessProtectionInformation'),
+        (61, 'ProcessMemoryExhaustion'),
+        (62, 'ProcessFaultInformation'),
+        (63, 'ProcessTelemetryIdInformation'),
+        (64, 'ProcessCommitReleaseInformation'),
+        (65, 'ProcessDefaultCpuSetsInformation'),
+        (66, 'ProcessAllowedCpuSetsInformation'),
+        (67, 'ProcessReserved1Information'),
+        (68, 'ProcessReserved2Information'),
+        (69, 'ProcessSubsystemProcess'),
+        (70, 'ProcessJobMemoryInformation'),
+    )]
+
+class PROCESS_MEMORY_EXHAUSTION_TYPE(pint.enum, ULONG):
+    _values_ = [(n,v) for v,n in (
+        (0, 'PMETypeFaultFastOnCommitFailure'),
+    )]
+
+class PROCESS_MEMORY_EXHAUSTION_INFO(pstruct.type):
+    type = PROCESS_INFORMATION_CLASS.byname('ProcessMemoryExhaustion')
+    _fields_ = [
+        (USHORT, 'Version'),
+        (USHORT, 'Reserved'),
+        (PROCESS_MEMORY_EXHAUSTION_TYPE, 'Value'),
+        (ULONGLONG, 'Value'),
+    ]
+
+class PROCESS_FAULT_INFORMATION(pstruct.type):
+    type = PROCESS_INFORMATION_CLASS.byname('ProcessFaultInformation')
+    _fields_ = [
+        (ULONG, 'FaultFlags'),
+        (ULONG, 'AdditionalInfo'),
+    ]
+
+class PROCESS_TELEMETRY_ID_INFORMATION(pstruct.type):
+    type = PROCESS_INFORMATION_CLASS.byname('ProcessTelemetryIdInformation')
+    _fields_ = [
+        (ULONG, 'HeaderSize'),
+        (ULONG, 'ProcessId'),
+        (ULONGLONG, 'ProcessStartKey'),
+        (ULONGLONG, 'CreateTime'),
+        (ULONGLONG, 'CreateInterruptTime'),
+        (ULONGLONG, 'ProcessSequenceNumber'),
+        (ULONGLONG, 'SessionCreateTime'),
+        (ULONG, 'SessionId'),
+        (ULONG, 'BootId'),
+        (ULONG, 'ImageChecksum'),
+        (ULONG, 'ImageTimeDateStamp'),
+        (ULONG, 'UserIdOffset'),
+        (ULONG, 'ImagePathOffset'),
+        (ULONG, 'PackageNameOffset'),
+        (ULONG, 'RelativeAppNameOffset'),
+        (ULONG, 'CommandLineOffset'),
+    ]
 
 class _API_SET_HEADER(pstruct.type):
     _fields_ = [
