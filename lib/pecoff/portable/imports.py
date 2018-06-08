@@ -1,5 +1,5 @@
 import ptypes
-from ptypes import pstruct,parray,pbinary,pstr,dyn,utils
+from ptypes import pstruct,parray,pbinary,pstr,ptype,dyn,utils
 from ..__base__ import *
 
 from . import headers
@@ -258,10 +258,21 @@ class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
             yield entry
         return
 
+class IMAGE_BOUND_OffsetModuleName(ptype.opointer_t):
+    _object_ = pstr.szstring
+    _value_ = word
+    def _calculate_(self, number):
+        res = self.getparent(IMAGE_BOUND_IMPORT_DIRECTORY)
+        return res.getoffset() + number
+
+    def summary(self):
+        res = super(IMAGE_BOUND_OffsetModuleName, self).summary()
+        return "{:s} -> {:s}".format(res, self.d.li.str())
+
 class IMAGE_BOUND_FORWARDER_REF(pstruct.type):
     _fields_ = [
         (TimeDateStamp, 'TimeDateStamp'),
-        (word, 'OffsetModuleName'),
+        (IMAGE_BOUND_OffsetModuleName, 'OffsetModuleName'),
         (word, 'Reserved'),
     ]
 
@@ -272,7 +283,7 @@ class IMAGE_BOUND_IMPORT_DESCRIPTOR(pstruct.type):
 
     _fields_ = [
         (TimeDateStamp, 'TimeDateStamp'),
-        (word, 'OffsetModuleName'),
+        (IMAGE_BOUND_OffsetModuleName, 'OffsetModuleName'),
         (word, 'NumberOfModuleForwarderRefs'),
         (__ModuleForwarderRefs, 'ModuleForwarderRefs'),
     ]
