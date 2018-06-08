@@ -454,6 +454,7 @@ for k, v in globals().items():
     if isinstance(v, builtins.type) and issubclass(v, type):
         __state__.setdefault(Config.integer.order, {})[v] = v
     continue
+del(k, v)
 
 if __name__ == '__main__':
     class Result(Exception): pass

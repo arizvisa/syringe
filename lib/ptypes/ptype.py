@@ -1644,8 +1644,7 @@ class definition(object):
     cache = None        # children must assign this empty dictionary
     attribute = 'type'
 
-    class unknown(block): pass
-    default = unknown     # default type to return an unknown class
+    class default(block): pass  # default type to return an unknown class
 
     @classmethod
     def add(cls, type, object):
