@@ -1,5 +1,5 @@
 import ptypes
-from ptypes import pint,pfloat,dyn
+from ptypes import pint,pfloat,dyn,pstruct
 
 class Header(object): pass
 
@@ -49,3 +49,44 @@ class IMAGE_COMDAT_SELECT(ptypes.pint.enum, byte):
         ('LARGEST', 6)
     ]
 
+class rfc4122(pstruct.type):
+    class _Data1(pint.bigendian(pint.uint32_t)):
+        def summary(self):
+            return '{:08x}'.format(self.int())
+
+    class _Data2and3(pint.bigendian(pint.uint16_t)):
+        def summary(self):
+            return '{:04x}'.format(self.int())
+
+    class _Data4(pint.bigendian(pint.uint64_t)):
+        def summary(self):
+            res = list(self.serialize())
+            d1 = ''.join(map('{:02x}'.format,map(ord,res[:2])) )
+            d2 = ''.join(map('{:02x}'.format,map(ord,res[2:])) )
+            return '-'.join((d1,d2))
+
+    _fields_ = [
+        (_Data1, 'Data1'),
+        (_Data2and3, 'Data2'),
+        (_Data2and3, 'Data3'),
+        (_Data4, 'Data4'),
+    ]
+
+    def summary(self, **options):
+        if self.initializedQ():
+            return '{{Data1-Data2-Data3-Data4}} {:s}'.format(self.str())
+        return '{{Data1-Data2-Data3-Data4}} {{????????-????-????-????-????????????}}'
+
+    def str(self):
+        d1 = '{:08x}'.format(self['Data1'].int())
+        d2 = '{:04x}'.format(self['Data2'].int())
+        d3 = '{:04x}'.format(self['Data3'].int())
+        _ = list(self['Data4'].serialize())
+        d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
+        d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
+        return '{{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
+
+class GUID(rfc4122):
+    _fields_ = [
+        (bo(t), n) for bo, (t, n) in zip((pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian), rfc4122._fields_)
+    ]
