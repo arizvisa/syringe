@@ -258,3 +258,28 @@ class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
             yield entry
         return
 
+class IMAGE_BOUND_FORWARDER_REF(pstruct.type):
+    _fields_ = [
+        (TimeDateStamp, 'TimeDateStamp'),
+        (word, 'OffsetModuleName'),
+        (word, 'Reserved'),
+    ]
+
+class IMAGE_BOUND_IMPORT_DESCRIPTOR(pstruct.type):
+    def __ModuleForwarderRefs(self):
+        res = self['NumberOfModuleForwarderRefs'].li
+        return dyn.array(IMAGE_BOUND_FORWARDER_REF, res.int())
+
+    _fields_ = [
+        (TimeDateStamp, 'TimeDateStamp'),
+        (word, 'OffsetModuleName'),
+        (word, 'NumberOfModuleForwarderRefs'),
+        (__ModuleForwarderRefs, 'ModuleForwarderRefs'),
+    ]
+
+class IMAGE_BOUND_IMPORT_DIRECTORY(parray.terminated):
+    _object_ = IMAGE_BOUND_IMPORT_DESCRIPTOR
+    def isTerminator(self, value):
+        data = array.array('B', value.serialize())
+        return False if sum(data) > 0 else True
+

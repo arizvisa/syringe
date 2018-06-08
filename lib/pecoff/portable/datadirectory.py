@@ -2,81 +2,66 @@ import ptypes
 from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
 from ..__base__ import *
 
-from . import exports,relocations,imports,resources,exceptions,clr,loader,headers
+from . import exports,imports,resources,exceptions,relocations,debug,loader,clr,headers
 from .headers import virtualaddress,realaddress,fileoffset
 from .headers import IMAGE_DATA_DIRECTORY
 
-class AddressEntry(IMAGE_DATA_DIRECTORY):
-    addressing = staticmethod(virtualaddress)
+## directory entry base types
+class AddressEntry(IMAGE_DATA_DIRECTORY): addressing = staticmethod(virtualaddress)
+class OffsetEntry(IMAGE_DATA_DIRECTORY):  addressing = staticmethod(fileoffset)
 
-class OffsetEntry(IMAGE_DATA_DIRECTORY):
-    addressing = staticmethod(fileoffset)
-
-class Export(AddressEntry):
+## directory entry list
+class IMAGE_DIRECTORY_ENTRY_EXPORT(AddressEntry):
     _object_ = exports.IMAGE_EXPORT_DIRECTORY
 
-class Import(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_IMPORT(AddressEntry):
     _object_ = imports.IMAGE_IMPORT_DIRECTORY
 
-class Resource(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_RESOURCE(AddressEntry):
     #_object_ = resources.IMAGE_RESOURCE_DIRECTORY
     class _object_(resources.IMAGE_RESOURCE_DIRECTORY):
         _fields_ = resources.IMAGE_RESOURCE_DIRECTORY._fields_[:]
-        _fields_.append((lambda s: dyn.block(s.blocksize() - (s.value[-1].getoffset()+s.value[-1].blocksize()-s.value[0].getoffset())),'ResourceData'))
+        _fields_.append((lambda s: dyn.block(s.blocksize() - (s.value[-1].getoffset()+s.value[-1].blocksize()-s.value[0].getoffset())), 'ResourceData'))
 
-class Exception(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_EXCEPTION(AddressEntry):
     _object_ = exceptions.IMAGE_EXCEPTION_DIRECTORY
 
-class Security(OffsetEntry):
+class IMAGE_DIRECTORY_ENTRY_SECURITY(OffsetEntry):
     class _object_(parray.block):
         _object_ = headers.Certificate
 
-class BaseReloc(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_BASERELOC(AddressEntry):
     _object_ = relocations.IMAGE_BASERELOC_DIRECTORY
 
-class Debug(AddressEntry): pass
-class Architecture(AddressEntry): pass
-class GlobalPtr(AddressEntry): pass
+class IMAGE_DIRECTORY_ENTRY_DEBUG(AddressEntry):
+    _object_ = debug.IMAGE_DEBUG_DIRECTORY
+class IMAGE_DIRECTORY_ENTRY_ARCHITECTURE(AddressEntry):
+    '''IMAGE_DIRECTORY_ENTRY_COPYRIGHT'''
+class IMAGE_DIRECTORY_ENTRY_GLOBALPTR(AddressEntry):
+    pass
 
-class IMAGE_TLS_DIRECTORY(pstruct.type):
-    _fields_ = [
-        (uint32, 'StartAddressOfRawData'),
-        (uint32, 'EndAddressOfRawData'),
-        (uint32, 'AddressOfIndex'),
-        (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32), type=uint32), 'AddressOfCallbacks'),
-        (uint32, 'SizeOfZeroFill'),
-        (uint32, 'Characteristics'),
-    ]
-
-class IMAGE_TLS_DIRECTORY64(pstruct.type):
-    _fields_ = [
-        (uint64, 'StartAddressOfRawData'),
-        (uint64, 'EndAddressOfRawData'),
-        (uint64, 'AddressOfIndex'),
-        (virtualaddress(dyn.clone(parray.terminated, isTerminator=lambda x:int(x)==0, _object_=uint32), type=uint64), 'AddressOfCallbacks'),
-        (uint32, 'SizeOfZeroFill'),
-        (uint32, 'Characteristics'),
-    ]
-
-class Tls(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_TLS(AddressEntry):
     def _object_(self):
         res = self.getparent(Header)['OptionalHeader'].li
-        return IMAGE_TLS_DIRECTORY64 if res.is64() else IMAGE_TLS_DIRECTORY
+        return tls.IMAGE_TLS_DIRECTORY64 if res.is64() else tls.IMAGE_TLS_DIRECTORY
 
-class LoadConfig(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG(AddressEntry):
     def _object_(self):
         res = self.getparent(Header)['OptionalHeader'].li
         res = loader.IMAGE_LOADCONFIG_DIRECTORY64 if res.is64() else loader.IMAGE_LOADCONFIG_DIRECTORY
         return dyn.clone(res, blocksize=lambda s, cb=self['Size'].li.int(): cb)
 
-class BoundImport(AddressEntry): pass
-class IAT(AddressEntry):
-    _object_ = lambda s: IMAGE_IMPORT_ADDRESS_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_ADDRESS_TABLE
-class DelayLoad(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT(AddressEntry):
+    _object_ = imports.IMAGE_BOUND_IMPORT_DIRECTORY
+class IMAGE_DIRECTORY_ENTRY_IAT(AddressEntry):
+    def _object(self):
+        res = self.getparent(Header)['OptionalHeader'].li
+        return IMAGE_IMPORT_ADDRESS_TABLE64 if res.is64() else IMAGE_IMPORT_ADDRESS_TABLE
+class IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT(AddressEntry):
     _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY
-class ClrHeader(AddressEntry):
+class IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR(AddressEntry):
     _object_ = clr.IMAGE_COR20_HEADER
-class Reserved(AddressEntry): pass
+class IMAGE_DIRECTORY_ENTRY_RESERVED(AddressEntry): pass
 
 class DataDirectoryEntry(pint.enum):
     _values_ = [
@@ -136,10 +121,22 @@ class DataDirectory(parray.type):
 
     def _object_(self):
         entries = (
-            Export, Import, Resource, Exception, Security,
-            BaseReloc, Debug, Architecture, GlobalPtr,
-            Tls, LoadConfig, BoundImport, IAT,
-            DelayLoad, ClrHeader, Reserved
+            IMAGE_DIRECTORY_ENTRY_EXPORT,
+            IMAGE_DIRECTORY_ENTRY_IMPORT,
+            IMAGE_DIRECTORY_ENTRY_RESOURCE,
+            IMAGE_DIRECTORY_ENTRY_EXCEPTION,
+            IMAGE_DIRECTORY_ENTRY_SECURITY,
+            IMAGE_DIRECTORY_ENTRY_BASERELOC,
+            IMAGE_DIRECTORY_ENTRY_DEBUG,
+            IMAGE_DIRECTORY_ENTRY_ARCHITECTURE,
+            IMAGE_DIRECTORY_ENTRY_GLOBALPTR,
+            IMAGE_DIRECTORY_ENTRY_TLS,
+            IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG,
+            IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT,
+            IMAGE_DIRECTORY_ENTRY_IAT,
+            IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT,
+            IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR,
+            IMAGE_DIRECTORY_ENTRY_RESERVED,
         )
         return entries[len(self.value)]
 
