@@ -62,15 +62,19 @@ class Dos(pstruct.type):
         return pint.uint_t
 
     def filesize(self):
-        cp = self['e_cp'].li.int()-1
-        return cp*0x200 + self['e_cblp'].li.int()
+        res = self['e_cp'].li.int()
+        if res > 0:
+            cp = res - 1
+            return cp * 0x200 + self['e_cblp'].li.int()
+        return 0
 
     def headersize(self):
-        hdr = self['e_cparhdr'].li.int()
-        return hdr * 0x10
+        res = self['e_cparhdr'].li.int()
+        return res * 0x10
 
     def datasize(self):
-        return self.filesize() - self.headersize()
+        res = self.headersize()
+        return (self.filesize() - res) if res > 0 else 0
 
     #e_cparhdr << 4
     #e_cp << 9
@@ -450,12 +454,18 @@ class File(pstruct.type, ptype.boundary):
         ofs = dos['e_lfarlc'].int()
         return dyn.array(Dos.Relocation, dos['e_crlc'].li.int() if ofs == self.blocksize() else 0)
 
+    def __Extra(self):
+        res = self['Dos'].li.headersize()
+        if res > 0:
+            return dyn.block(res - self.blocksize())
+        return ptype.undefined
+
     def __Stub(self):
         # everything up to e_lfanew
         dos = self['Dos'].li
-        lfanew = dos['e_lfanew'].int()
-        if lfanew > 0:
-            return dyn.block(lfanew - self.blocksize())
+        res = dos['e_lfanew'].int()
+        if res > 0:
+            return dyn.block(res - self.blocksize())
         return ptype.undefined
 
     def __Next(self):
@@ -475,7 +485,7 @@ class File(pstruct.type, ptype.boundary):
 
     _fields_ = [
         (Dos, 'Dos'),
-        (lambda s: dyn.block(s['Dos'].li.headersize() - s.blocksize()), 'Extra'),
+        (__Extra, 'Extra'),
         (__Stub, 'Stub'),
         (__Next, 'Next'),
         #(__NotLoaded, 'NotLoaded'),
