@@ -125,7 +125,7 @@ def extract_entry(t, index, output, F=None):
     if not(0 <= index < len(d)):
         raise IndexError("Invalid DataDirectory entry number was specified ({:d} <= {:d} < {:d}).".format(0, index, len(d)))
     E = d[index]
-    global result; result = E
+    global result; result = E['Address'].d.li
     T, cb = E['Address'], E['Size']
     if F:
         return Extract(F(result), output)
