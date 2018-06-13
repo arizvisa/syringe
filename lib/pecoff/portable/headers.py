@@ -280,33 +280,51 @@ class SectionTableArray(parray.type):
     def repr(self, **options):
         return self.details(**options)
 
+class IMAGE_NT_OPTIONAL_MAGIC(pint.enum, uint16):
+    _values_ = [
+        ('HDR32', 0x10b),
+        ('HDR64', 0x20b),
+        ('HDR_ROM', 0x107),
+    ]
+
+class IMAGE_SUBSYSTEM_(pint.enum, uint16):
+    _values_ = [
+        ('UNKNOWN', 0),
+        ('NATIVE', 1),
+        ('WINDOWS_GUI', 2),
+        ('WINDOWS_CUI', 3),
+        ('OS2_CUI', 5),
+        ('POSIX_CUI', 7),
+        ('NATIVE_WINDOWS', 8),
+        ('WINDOWS_CE_GUI', 9),
+        ('EFI_APPLICATION', 10),
+        ('EFI_BOOT_SERVICE_DRIVER', 11),
+        ('EFI_RUNTIME_DRIVER', 12),
+        ('EFI_ROM', 13),
+        ('XBOX', 14),
+        ('WINDOWS_BOOT_APPLICATION', 16)
+    ]
+
+class IMAGE_DLLCHARACTERISTICS(pbinary.flags):
+    # TODO: GUARD_CF
+    _fields_ = [
+        (1, 'TERMINAL_SERVER_AWARE'),
+        (1, 'GUARD_CF'),
+        (1, 'WDM_DRIVER'),
+        (1, 'APPCONTAINER'),
+        (1, 'NO_BIND'),
+        (1, 'NO_SEH'),
+        (1, 'NO_ISOLATION'),
+        (1, 'NX_COMPAT'),
+        (1, 'FORCE_INTEGRITY'),
+        (1, 'DYNAMIC_BASE'),
+        (1, 'HIGH_ENTROPY_VA'),
+        (5, 'reserved_11'),
+    ]
+
+
 class IMAGE_OPTIONAL_HEADER(pstruct.type):
     """PE Executable Optional Header"""
-    class DllCharacteristics(pbinary.flags):
-        # TODO: GUARD_CF
-        _fields_ = [
-            (1, 'TERMINAL_SERVER_AWARE'),
-            (1, 'GUARD_CF'),
-            (1, 'WDM_DRIVER'),
-            (1, 'APPCONTAINER'),
-            (1, 'NO_BIND'),
-            (1, 'NO_SEH'),
-            (1, 'NO_ISOLATION'),
-            (1, 'NX_COMPAT'),
-            (1, 'FORCE_INTEGRITY'),
-            (1, 'DYNAMIC_BASE'),
-            (1, 'HIGH_ENTROPY_VA'),
-            (5, 'reserved_11'),
-        ]
-
-    class Subsystem(pint.enum, uint16):
-        _values_ = [
-            ('UNKNOWN', 0), ('NATIVE', 1), ('WINDOWS_GUI', 2), ('WINDOWS_CUI', 3),
-            ('OS2_CUI', 5), ('POSIX_CUI', 7), ('NATIVE_WINDOWS', 8), ('WINDOWS_CE_GUI', 9),
-            ('EFI_APPLICATION', 10), ('EFI_BOOT_SERVICE_DRIVER', 11), ('EFI_RUNTIME_DRIVER', 12),
-            ('EFI_ROM', 13), ('XBOX', 14),
-        ]
-
     def is64(self):
         '''Returns True if a 64-bit executable'''
         if len(self.v) > 0:
@@ -315,7 +333,7 @@ class IMAGE_OPTIONAL_HEADER(pstruct.type):
         return False
 
     _fields_ = [
-        ( uint16, 'Magic' ),
+        ( IMAGE_NT_OPTIONAL_MAGIC, 'Magic' ),
         ( uint8, 'MajorLinkerVersion' ),
         ( uint8, 'MinorLinkerVersion' ),
         ( uint32, 'SizeOfCode' ),
@@ -338,8 +356,8 @@ class IMAGE_OPTIONAL_HEADER(pstruct.type):
         ( uint32, 'SizeOfImage' ),
         ( uint32, 'SizeOfHeaders' ),
         ( uint32, 'CheckSum' ),
-        ( Subsystem, 'Subsystem' ),
-        ( pbinary.littleendian(DllCharacteristics), 'DllCharacteristics' ),
+        ( IMAGE_SUBSYSTEM_, 'Subsystem' ),
+        ( pbinary.littleendian(IMAGE_DLLCHARACTERISTICS), 'DllCharacteristics' ),
         ( lambda s: uint64 if s.is64() else uint32, 'SizeOfStackReserve' ),
         ( lambda s: uint64 if s.is64() else uint32, 'SizeOfStackCommit' ),
         ( lambda s: uint64 if s.is64() else uint32, 'SizeOfHeapReserve' ),

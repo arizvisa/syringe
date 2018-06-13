@@ -54,9 +54,9 @@ class IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG(AddressEntry):
 class IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT(OffsetEntry):
     _object_ = imports.IMAGE_BOUND_IMPORT_DIRECTORY
 class IMAGE_DIRECTORY_ENTRY_IAT(AddressEntry):
-    def _object(self):
+    def _object_(self):
         res = self.getparent(Header)['OptionalHeader'].li
-        return IMAGE_IMPORT_ADDRESS_TABLE64 if res.is64() else IMAGE_IMPORT_ADDRESS_TABLE
+        return imports.IMAGE_IMPORT_ADDRESS_TABLE64 if res.is64() else imports.IMAGE_IMPORT_ADDRESS_TABLE
 class IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT(AddressEntry):
     _object_ = imports.IMAGE_DELAYLOAD_DIRECTORY
 class IMAGE_DIRECTORY_ENTRY_COM_DESCRIPTOR(AddressEntry):
