@@ -1,6 +1,7 @@
-import ptypes,ndk
+import ptypes, ndk
 from ptypes import *
 
+import datetime
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### Primitive types
@@ -16,13 +17,42 @@ class QWORD(pint.uint64_t): pass
 class CLSID(ndk.rfc4122): pass
 
 class FILETIME(pstruct.type):
-    _fields_ = [(DWORD,'dwLowDateTime'),(DWORD,'dwHighDateTime')]
+    _fields_ = [
+        (DWORD, 'dwLowDateTime'),
+        (DWORD, 'dwHighDateTime')
+    ]
+    def timestamp(self):
+        low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
+        return high * 0x100000000 | + low
+    def datetime(self):
+        epoch = datetime.datetime(1601, 1, 1)
+        return epoch + datetime.timedelta(microseconds=self.timestamp() / 10.0)
+    def summary(self):
+        epoch, ts = datetime.datetime(1601, 1, 1), self.timestamp()
+        ts_s, ts_hns = ts // 1e7, ts % 1e7
+        ts_ns = ts_hns * 1e-7
+
+        res = epoch + datetime.timedelta(seconds=ts_s)
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.9f}".format(res.second + ts_ns).zfill(12), ts)
 TIME_T = FILETIME
 
 class LengthPrefixedAnsiString(pstruct.type):
-    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.string,length=s['Length'].li.int()),'String')]
+    _fields_ = [
+        (DWORD, 'Length'),
+        (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'String')
+    ]
+    def summary(self):
+        res = self['String'].str()
+        return "(length={:d}) {!r}".format(self['Length'].int(), res)
+
 class LengthPrefixedUnicodeString(pstruct.type):
-    _fields_ = [(DWORD, 'Length'),(lambda s: dyn.clone(pstr.wstring,length=s['Length'].li.int()),'String')]
+    _fields_ = [
+        (DWORD, 'Length'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int()), 'String')
+    ]
+    def summary(self):
+        res = self['String'].str()
+        return "(length={:d}) {!r}".format(self['Length'].int(), res)
 
 ### Sector types
 class Sector(ptype.definition):
@@ -45,29 +75,29 @@ class Sector(ptype.definition):
             return self.object.summary(**options)
 
 @Sector.define
-class REGSECT(Sector.Pointer): symbol,type = '+',None
+class REGSECT(Sector.Pointer): symbol, type = '+', None
 Sector.default = REGSECT
 @Sector.define
-class MAXREGSECT(REGSECT): symbol,type = '+',0xfffffffa
+class MAXREGSECT(REGSECT): symbol, type = '+', 0xfffffffa
 @Sector.define
-class NotApplicable(DWORD): symbol,type = '-',0xfffffffb
+class NotApplicable(DWORD): symbol, type = '-', 0xfffffffb
 @Sector.define
-class DIFSECT(DWORD): symbol,type = 'D',0xfffffffc
+class DIFSECT(DWORD): symbol, type = 'D', 0xfffffffc
 @Sector.define
-class FATSECT(DWORD): symbol,type = 'F',0xfffffffd
+class FATSECT(DWORD): symbol, type = 'F', 0xfffffffd
 @Sector.define
-class ENDOFCHAIN(DWORD): symbol,type = '$',0xfffffffe
+class ENDOFCHAIN(DWORD): symbol, type = '$', 0xfffffffe
 @Sector.define
-class FREESECT(DWORD): symbol,type = '.',0xffffffff
+class FREESECT(DWORD): symbol, type = '.', 0xffffffff
 
 class SECT(Sector.Pointer): pass
 
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
     def summary(self, **options):
-        return ''.join(Sector.withdefault(n.int(), type=n.int()).symbol for n in self)
+        return str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
     def _object_(self):
-        return dyn.clone(Sector.Pointer,_object_=self.Pointer)
+        return dyn.clone(Sector.Pointer, _object_=self.Pointer)
     def chain(self, index):
         yield index
         while self[index].int() <= MAXREGSECT.type:
@@ -82,30 +112,102 @@ class DIFAT(AllocationTable):
     Pointer = lambda s: dyn.clone(FAT, length=s._uSectorCount)
 
     def collect(self, count):
-        res = self
-        yield res
+        yield self
+
         while count > 0:
-            res = res.next()
-            yield res.l
+            self = self.next()
+            yield self.l
             count -= 1
         return
 
     def next(self):
         last = self.value[-1]
-        assert last.int() != ENDOFCHAIN.type, 'Encountered end of chain while trying to traverse to next DIFAT table'
+        if last['ENDOFCHAIN']:
+            cls = self.__class__
+            raise AssertionError("{:s}: Encountered {:s} while trying to traverse to next DIFAT table. {:s}".format('.'.join((__name__, cls.__name__)), ENDOFCHAIN.typename(), last.summary()))
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
 
 class MINIFAT(DIFAT):
     Pointer = lambda s: dyn.block(s._uSectorSize)
 
-### Types
+### Header types
+class uByteOrder(pint.enum, USHORT):
+    _values_ = [
+        ('LittleEndian', 0xfffe),
+        ('BigEndian', 0xfeff),
+    ]
+    def ByteOrder(self):
+        res = self.int()
+        if res == 0xfffe:
+            return ptypes.config.byteorder.littleendian
+        elif res == 0xfeff:
+            return ptypes.config.byteorder.bigendian
+        cls = self.__class__
+        raise ValueError("{:s}: Unsupported value set for enumeration \"uByteOrder\". {:s}".format('.'.join((__name__, cls.__name__)), self.summary()))
+
+class Header(pstruct.type):
+    _fields_ = [
+        (dyn.block(8), 'abSig'),
+        (CLSID, 'clsid'),
+
+        (USHORT, 'uMinorVersion'),      # Minor version (0x3e)
+        (USHORT, 'uMajorVersion'),      # Major version (3 or 4)
+        (uByteOrder, 'uByteOrder'),    # 0xfffe -- little-endian
+    ]
+    def ByteOrder(self):
+        return self['uByteOrder'].ByteOrder()
+
+class HeaderSectorShift(pstruct.type):
+    _fields_ = [
+        (USHORT, 'uSectorShift'),       # Major version | 3 -> 0x9 | 4 -> 0xc
+        (USHORT, 'uMiniSectorShift'),   # 6
+    ]
+    def SectorSize(self):
+        res = self['uSectorShift'].int()
+        return 2 ** res
+    def MiniSectorSize(self):
+        res = self['uMiniSectorShift'].int()
+        return 2 ** res
+
+class HeaderFat(pstruct.type):
+    _fields_ = [
+        (DWORD, 'csectDirectory'),      # Number of directory sectors
+        (DWORD, 'csectFat'),            # Number of fat sectors
+        (SECT, 'sectDirectory'),        # First directory sector location
+        (DWORD, 'dwTransaction'),
+    ]
+
+class HeaderMiniFat(pstruct.type):
+    class _sectMiniFat(SECT):
+        def _object_(self):
+            mf = self.getparent(HeaderMiniFat)
+            return dyn.clone(MINIFAT, length=self._uSectorCount)
+    _fields_ = [
+        (ULONG, 'ulMiniSectorCutoff'), # Mini stream cutoff size
+        (_sectMiniFat, 'sectMiniFat'), # First mini fat sector location
+        (DWORD, 'csectMiniFat'),       # Number of mini fat sectors
+    ]
+
+class HeaderDiFat(pstruct.type):
+    # FIXME: _sectDifat should be used instead of just a generic pointer to a SECT
+    class _sectDifat(SECT):
+        def _object_(self):
+            difat = self.getparent(HeaderDiFat)
+            res = difat['sectDifat'].li.int()
+            return dyn.array(DIFAT.Sector, length=res)
+    _fields_ = [
+        (dyn.clone(SECT, _object_=DIFAT), 'sectDifat'), # First difat sector location
+        (DWORD, 'csectDifat'),                          # Number of difat sectors
+    ]
+
+### Directory types
 class DirectoryEntry(pstruct.type):
     class Type(pint.enum, BYTE):
-        _values_=[('Unknown',0),('Storage',1),('Stream',2),('Root',5)]
+        _values_=[('Unknown', 0), ('Storage', 1), ('Stream', 2), ('Root', 5)]
     class Flag(pint.enum, BYTE):
-        _values_=[('red',0),('black',1)]
+        _values_=[('red', 0), ('black', 1)]
     class Identifier(pint.enum, DWORD):
-        _values_=[('MAXREGSID',0xfffffffa),('NOSTREAM',0xffffffff)]
+        _values_=[('MAXREGSID', 0xfffffffa), ('NOSTREAM', 0xffffffff)]
 
     _fields_ = [
         (dyn.clone(pstr.wstring, length=32), 'Name'),
@@ -119,12 +221,37 @@ class DirectoryEntry(pstruct.type):
         (DWORD, 'dwState'),
         (FILETIME, 'ftCreation'),
         (FILETIME, 'ftModified'),
-        (SECT, 'sectLocation'),
+        (SECT, 'sectLocation'),     # FIXME: This pointer only supports regular sectors and not mini-sectors
         (QWORD, 'qwSize'),
     ]
 
     def summary(self):
         return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
+
+    def Data(self, correctsize=True):
+        """Return the contents of the directory entry.
+        If correctsize is True, then resize the returned sectors according to the size specified in the directory entry.
+        """
+        F = self.getparent(File)
+
+        # If the entry is a root type, then the data uses the fat and represents the mini-sector data.
+        if self['Type']['Root']:
+            fat = F.Fat()
+            iterable = fat.chain(self['sectLocation'].int())
+            minisector = dyn.block(self._uMiniSectorSize, __name__='MiniSector')
+            datatype = dyn.blockarray(minisector, self['qwSize'].int())
+            return F.chain(iterable).cast(datatype)
+
+        # Determine whether the data is stored in the minifat or the regular fat
+        fat = F.MiniFat() if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Fat()
+        fData = F.MiniData if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Data
+
+        # Now we can look up our sectors in the fat
+        iterable = fat.chain(self['sectLocation'].int())
+        data = fData(iterable)
+
+        # Return a cropped block if specified, or the regular one if not.
+        return data.cast(ptype.block, length=self['qwSize'].int()) if correctsize else data
 
 class Directory(parray.block):
     _object_ = DirectoryEntry
@@ -133,145 +260,158 @@ class Directory(parray.block):
 
     def details(self):
         res = []
-        maxoffsetlength = max(len('[{:x}]'.format(n.getoffset())) for n in self)
-        maxnamelength = max(len('{!r}'.format(n['Name'].str())) for n in self)
-        for i,n in enumerate(self):
-            offset = '[{:x}]'.format(n.getoffset())
-            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, n.classname(), i, n['Name'].str(), n['Type'].summary(), n['sectLocation'].int(), n['qwSize'].int(), n['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
+        maxoffsetlength = max(len('[{:x}]'.format(item.getoffset())) for item in self)
+        maxnamelength = max(len('{!r}'.format(item['Name'].str())) for item in self)
+        for i, item in enumerate(self):
+            offset = '[{:x}]'.format(item.getoffset())
+            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, item.classname(), i, item['Name'].str(), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
         return '\n'.join(res)
+
     def repr(self):
         return self.details()
 
+    def RootEntry(self):
+        iterable = (entry for entry in self if entry['Type']['Root'])
+        return next(iterable, None)
+
+### File type
 class File(pstruct.type):
-    class Header(pstruct.type):
-        _fields_ = [
-            (dyn.block(8), 'abSig'),
-            (CLSID, 'clsid'),
-
-            (USHORT, 'uMinorVersion'),      # Minor version (0x3e)
-            (USHORT, 'uMajorVersion'),      # Major version (3 or 4)
-            (USHORT, 'uByteOrder'),         # 0xfffe -- little-endian
-        ]
-    class SectorShift(pstruct.type):
-        _fields_ = [
-            (USHORT, 'uSectorShift'),       # Major version | 3 -> 0x9 | 4 -> 0xc
-            (USHORT, 'uMiniSectorShift'),   # 6
-        ]
-    class Fat(pstruct.type):
-        _fields_ = [
-            (DWORD, 'csectDirectory'),      # Number of directory sectors
-            (DWORD, 'csectFat'),            # Number of fat sectors
-            (SECT, 'sectDirectory'),        # First directory sector location
-            (DWORD, 'dwTransaction'),
-        ]
-    class Minifat(pstruct.type):
-        class sectMinifat(SECT):
-            def _object_(self):
-                minifat = self.getparent(File.Minifat)
-                return dyn.clone(MINIFAT, length=self._uSectorCount)
-        _fields_ = [
-            (ULONG, 'ulMiniSectorCutoff'), # Mini stream cutoff size
-            (sectMinifat, 'sectMinifat'),  # First mini fat sector location
-            (DWORD, 'csectMiniFat'),       # Number of mini fat sectors
-        ]
-    class Difat(pstruct.type):
-        class sectDifat(SECT):
-            def _object_(self):
-                difat = self.getparent(File.Difat)
-                l = difat['sectDifat'].li.int()
-                return dyn.array(DIFAT.Sector, length=l)
-        _fields_ = [
-            (dyn.clone(SECT,_object_=DIFAT), 'sectDifat'),  # First difat sector location
-            (DWORD, 'csectDifat'),                          # Number of difat sectors
-        ]
-
     def __reserved(self):
+        '''Hook decoding of the "reserved" field in order to keep track of the sector and mini-sector dimensions.'''
         header = self['Header'].li
-        assert header['uByteOrder'].li.int() == 0xfffe, "Invalid byte order specified for compound document"
 
+        # Validate the byte-order
+        order = header.ByteOrder()
+
+        # Store the sector size attributes
         info = self['SectorShift'].li
-        sectorSize = 2**info['uSectorShift'].li.int()
+        sectorSize = info.SectorSize()
         self._uSectorSize = self.attributes['_uSectorSize'] = sectorSize
         self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize / Sector.Pointer().blocksize()
 
-        miniSectorSize = 2**info['uMiniSectorShift'].li.int()
+        # Store the mini-sector size attributes
+        miniSectorSize = info.MiniSectorSize()
         self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
         self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize / Sector.Pointer().blocksize()
 
         return dyn.block(6)
 
-    def __Table(self):
-        length = sum(self[n].size() for n in ('Header','SectorShift','reserved','Fat','MiniFat','Difat'))
-        return dyn.clone(DIFAT, length=109)
     def __Data(self):
         self.Sector = dyn.block(self._uSectorSize, __name__='Sector')
         return dyn.blockarray(self.Sector, self.source.size() - self._uSectorSize)
 
     _fields_ = [
         (Header, 'Header'),
-        (SectorShift, 'SectorShift'),
+        (HeaderSectorShift, 'SectorShift'),
         (__reserved, 'reserved'),
-        (Fat, 'Fat'),
-        (Minifat, 'MiniFat'),
-        (Difat, 'Difat'),
-        (dyn.clone(DIFAT,length=109), 'Table'),
+        (HeaderFat, 'Fat'),
+        (HeaderMiniFat, 'MiniFat'),
+        (HeaderDiFat, 'DiFat'),
+        (dyn.clone(DIFAT, length=109), 'Table'),    # FIXME: This hardcoded 109 is wrong if the Sector size is not 512
         (__Data, 'Data'),
     ]
 
     @ptypes.utils.memoize(self=lambda s: s)
-    def getDifat(self):
-        '''Return an array containing the Difat'''
-        count = self['Difat']['csectDifat'].int()
+    def DiFat(self):
+        '''Return an array containing the DiFat'''
+        count = self['DiFat']['csectDifat'].int()
 
-        # First Difat entries
+        # First DiFat entries
         res = self.new(DIFAT, recurse=self.attributes, length=self._uSectorCount)
-        map(res.append, (p for p in self['Table']))
+        map(res.append, iter(self['Table']))
 
         # Check if we need to find more
-        next,count = self['Difat']['sectDifat'],self['Difat']['csectDifat'].int()
+        next, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
         if next.int() >= MAXREGSECT.type:
             return res
 
         # Append the contents of the other entries
         next = next.d.l
         for table in next.collect(count):
-            map(res.append, (p for p in table))
+            map(res.append, iter(table))
         return res
+    getDiFat = DiFat
 
     @ptypes.utils.memoize(self=lambda s: s)
-    def getMiniFat(self):
-        '''Return an array containing the MiniFAT'''
+    def MiniFat(self):
+        '''Return an array containing the MiniFat'''
         mf = self['MiniFat']
-        fat,count = mf['sectMiniFat'],mf['csectMiniFat'].int()
+        fat, count = mf['sectMiniFat'], mf['csectMiniFat'].int()
+
         res = self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount)
         for table in fat.d.l.collect(count-1):
-            map(res.append, (p for p in table))
+            map(res.append, iter(table))
         return res
+    getMiniFat = MiniFat
 
     @ptypes.utils.memoize(self=lambda s: s)
-    def getFat(self):
+    def Fat(self):
         '''Return an array containing the FAT'''
-        count,difat = self['Fat']['csectFat'].int(),self.getDifat()
+        count, difat = self['Fat']['csectFat'].int(), self.getDiFat()
         res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount)
-        for _,v in zip(xrange(count), difat):
-            map(res.append, (p for p in v.d.l))
+        for _, v in zip(xrange(count), difat):
+            map(res.append, iter(v.d.l))
         return res
+    getFat = Fat
 
-    def getDirectory(self):
+    def Directory(self):
+        '''Return the whole Directory'''
         fat = self.getFat()
         dsect = self['Fat']['sectDirectory'].int()
-        res = self.extract( fat.chain(dsect) )
-        return res.cast(Directory, blocksize=lambda:res.size())
+        res = self.chain(fat.chain(dsect))
+        return res.cast(Directory, blocksize=lambda: res.size())
+    getDirectory = Directory
 
-    def extract(self, iterable):
+    def chain(self, iterable):
+        '''Return the sector for each index specified in iterable.'''
         res = self.new(ptype.container)
         map(res.append, map(self['Data'].__getitem__, iterable))
         return res
 
+    def Data(self, iterable):
+        '''Return the sectors for each index in iterable as a block.'''
+        # If an integer was specified, then just return the sector by index
+        if isinstance(iterable, (int, long)):
+            return self['Data'][iterable]
+
+        # Now grab the container, and then cast it to a block
+        res = self.chain(iterable)
+        return res.cast(ptype.block, length=res.size())
+
+    def __MiniData__(self):
+        '''Return the mini-sector table.'''
+        # First grab the directory
+        D = self.Directory()
+
+        # Find the first Root entry
+        R = D.RootEntry()
+        if R is None:
+            cls = self.__class__
+            raise ValueError("{:s}: Unable to locate a directory entry of type Root(5).".format('.'.join((__name__, cls.__name__))))
+
+        # Now we can return the whole table
+        return R.Data()
+
+    def MiniData(self, iterable):
+        '''Return the minisectors for each index in iterable as a block.'''
+        data = self.__MiniData__()
+
+        # If an integer was specified, then just return the minisector by index
+        if isinstance(iterable, (int, long)):
+            return data[iterable]
+
+        # Now make a container and then cast it to a block
+        res = self.new(ptype.container)
+        map(res.append, map(data.__getitem__, iterable))
+        return res.cast(ptype.block, length=res.size())
+
+### Specific stream types
+class Stream(ptype.definition): cache = {}
+
 class ClipboardFormatOrAnsiString(pstruct.type):
     def __FormatOrAnsiString(self):
         marker = self['MarkerOrLength'].li.int()
-        if marker in (0x00000000,):
+        if marker in (0x00000000, ):
             return ptype.undefined
         elif marker in (0xfffffffe, 0xffffffff):
             return DWORD
@@ -282,10 +422,13 @@ class ClipboardFormatOrAnsiString(pstruct.type):
         (__FormatOrAnsiString, 'FormatOrAnsiString'),
     ]
 
+    def summary(self):
+        return "MarkerOrLength={:#0{:d}x} FormatOrAnsiString={:s}".format(self['MarkerOrLength'].int(), 2+self['MarkerOrLength'].size()*2, self['FormatOrAnsiString'].summary())
+
 class ClipboardFormatOrUnicodeString(pstruct.type):
     def __FormatOrUnicodeString(self):
         marker = self['MarkerOrLength'].li.int()
-        if marker in (0x00000000,):
+        if marker in (0x00000000, ):
             return ptype.undefined
         elif marker in (0xfffffffe, 0xffffffff):
             return DWORD
@@ -338,37 +481,37 @@ if False:
             # FIXME: this can't be right, it doesn't even align
             class dmFields(pbinary.flags):
                 _fields_ = []
-                _fields_+= [(1,_) for _ in ('DM_ORIENTATION', 'DM_PAPERSIZE', 'DM_PAPERLENGTH', 'DM_PAPERWIDTH', 'DM_SCALE')]
-                _fields_+= [(1,_) for _ in ('DM_COPIES', 'DM_DEFAULTSOURCE', 'DM_PRINTQUALITY', 'DM_COLOR', 'DM_DUPLEX', 'DM_YRESOLUTION', 'DM_TTOPTION', 'DM_COLLATE', 'DM_NUP')]
-                _fields_+= [(1,_) for _ in ('DM_ICMMETHOD', 'DM_ICMINTENT', 'DM_MEDIATYPE', 'DM_DITHERTYPE')]
+                _fields_+= [(1, _) for _ in ('DM_ORIENTATION', 'DM_PAPERSIZE', 'DM_PAPERLENGTH', 'DM_PAPERWIDTH', 'DM_SCALE')]
+                _fields_+= [(1, _) for _ in ('DM_COPIES', 'DM_DEFAULTSOURCE', 'DM_PRINTQUALITY', 'DM_COLOR', 'DM_DUPLEX', 'DM_YRESOLUTION', 'DM_TTOPTION', 'DM_COLLATE', 'DM_NUP')]
+                _fields_+= [(1, _) for _ in ('DM_ICMMETHOD', 'DM_ICMINTENT', 'DM_MEDIATYPE', 'DM_DITHERTYPE')]
 
-            __cond = lambda n,t: lambda s: t if s['dmFields'][n] else pint.uint_t
+            __cond = lambda n, t: lambda s: t if s['dmFields'][n] else pint.uint_t
 
             _fields_ = [
                 (dmFields, 'dmFields'),
-                (__cond('DM_ORIENTATION',WORD), 'dmOrientation'),
-                (__cond('DM_PAPERSIZE',WORD), 'dmPaperSize'),
-                (__cond('DM_PAPERLENGTH',WORD), 'dmPaperLength'),
-                (__cond('DM_PAPERWIDTH',WORD), 'dmPaperWidth'),
-                (__cond('DM_SCALE',WORD), 'dmScale'),
-                (__cond('DM_COPIES',WORD), 'dmCopies'),
-                (__cond('DM_DEFAULTSOURCE',WORD), 'dmDefaultSource'),
-                (__cond('DM_PRINTQUALITY',WORD), 'dmPrintQuality'),
-                (__cond('DM_COLOR',WORD), 'dmColor'),
-                (__cond('DM_DUPLEX',WORD), 'dmDuplex'),
-                (__cond('DM_YRESOLUTION',WORD), 'dmYResolution'),
-                (__cond('DM_TTOPTION',WORD), 'dmTTOptions'),
-                (__cond('DM_COLLATE',WORD), 'dmCollate'),
+                (__cond('DM_ORIENTATION', WORD), 'dmOrientation'),
+                (__cond('DM_PAPERSIZE', WORD), 'dmPaperSize'),
+                (__cond('DM_PAPERLENGTH', WORD), 'dmPaperLength'),
+                (__cond('DM_PAPERWIDTH', WORD), 'dmPaperWidth'),
+                (__cond('DM_SCALE', WORD), 'dmScale'),
+                (__cond('DM_COPIES', WORD), 'dmCopies'),
+                (__cond('DM_DEFAULTSOURCE', WORD), 'dmDefaultSource'),
+                (__cond('DM_PRINTQUALITY', WORD), 'dmPrintQuality'),
+                (__cond('DM_COLOR', WORD), 'dmColor'),
+                (__cond('DM_DUPLEX', WORD), 'dmDuplex'),
+                (__cond('DM_YRESOLUTION', WORD), 'dmYResolution'),
+                (__cond('DM_TTOPTION', WORD), 'dmTTOptions'),
+                (__cond('DM_COLLATE', WORD), 'dmCollate'),
                 (WORD, 'reserved0'),
                 (DWORD, 'reserved1'),
                 (DWORD, 'reserved2'),
                 (DWORD, 'reserved3'),
-                (__cond('DM_NUP',DWORD), 'dmNup'),
+                (__cond('DM_NUP', DWORD), 'dmNup'),
                 (DWORD, 'reserved4'),
-                (__cond('DM_ICMMETHOD',DWORD), 'dmICMMethod'),
-                (__cond('DM_ICMINTENT',DWORD), 'dmICMIntent'),
-                (__cond('DM_MEDIATYPE',DWORD), 'dmMediaType'),
-                (__cond('DM_DITHERTYPE',DWORD), 'dmDitherType'),
+                (__cond('DM_ICMMETHOD', DWORD), 'dmICMMethod'),
+                (__cond('DM_ICMINTENT', DWORD), 'dmICMIntent'),
+                (__cond('DM_MEDIATYPE', DWORD), 'dmMediaType'),
+                (__cond('DM_DITHERTYPE', DWORD), 'dmDitherType'),
                 (DWORD, 'reserved5'),
                 (DWORD, 'reserved6'),
                 (DWORD, 'reserved7'),
@@ -382,8 +525,8 @@ if False:
             return dyn.block(res)
 
         _fields_ = [
-            (dyn.clone(pstr.string,length=32), 'dmDeviceName'),
-            (dyn.clone(pstr.string,length=32), 'dmFormName'),
+            (dyn.clone(pstr.string, length=32), 'dmDeviceName'),
+            (dyn.clone(pstr.string, length=32), 'dmFormName'),
             (WORD, 'dmSpecVersion'),
             (WORD, 'dmDriverVersion'),
             (WORD, 'dmSize'),
@@ -423,7 +566,7 @@ class TOCENTRY(pstruct.type):
 
 class OLEPresentationStream(pstruct.type):
     class Dimensions(pstruct.type):
-        _fields_ = [(DWORD,'Width'),(DWORD,'Height')]
+        _fields_ = [(DWORD, 'Width'), (DWORD, 'Height')]
 
     class TOC(pstruct.type):
         _fields_ = [
@@ -455,36 +598,40 @@ class OLENativeStream(pstruct.type):
 
 class CompObjHeader(pstruct.type):
     _fields_ = [
-        (DWORD, 'Reserved1'),
+        (WORD, 'Reserved1'),
+        (uByteOrder, 'ByteOrder'),
         (DWORD, 'Version'),
-        (dyn.block(20), 'Reserved2'),
+        (DWORD, 'Reserved2'),
+        (dyn.array(DWORD, 4), 'Reserved3'),
     ]
 
+@Stream.define
 class CompObjStream(pstruct.type):
+    type = '\x01CompObj'
     _fields_ = [
         (CompObjHeader, 'Header'),
         (LengthPrefixedAnsiString, 'AnsiUserType'),
         (ClipboardFormatOrAnsiString, 'AnsiClipboardFormat'),
-        (LengthPrefixedAnsiString, 'Reserved1'),
+        (LengthPrefixedAnsiString, 'AnsiProgramId'),
         (DWORD, 'UnicodeMarker'),
         (LengthPrefixedUnicodeString, 'UnicodeUserType'),
-        (ClipboardFormatOrUnicodeString, 'UnicodeUserType'),
-        (LengthPrefixedUnicodeString, 'Reserved2'),
+        (ClipboardFormatOrUnicodeString, 'UnicodeClipboardFormat'),
+        (LengthPrefixedUnicodeString, 'UnicodeProgramId'),
     ]
 
 if __name__ == '__main__':
-    import ptypes,storage
+    import ptypes, storage
     filename = 'test.xls'
     filename = 'plant_types.ppt'
-    ptypes.setsource(ptypes.prov.file(filename,mode='r'))
+    ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 
     a = storage.File()
     a = a.l
     print a['Header']
     print a['Fat']['sectDirectory'].d.l
-    print a['MiniFat']['sectMinifat'].d.l[-1]
-    print a['Difat']['sectDifat']
-    difat = a.getDifat()
+    print a['MiniFat']['sectMiniFat'].d.l[-1]
+    print a['DiFat']['sectDifat']
+    difat = a.getDiFat()
     fat = a.getFat()
     minifat = a.getMiniFat()
 
