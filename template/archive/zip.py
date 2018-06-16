@@ -1,5 +1,5 @@
 import logging
-logging.root.setLevel(logging.WARNING)
+logging.root.setLevel(logging.INFO)
 
 import ptypes
 from ptypes import *
@@ -21,7 +21,30 @@ class DataDescriptor(pstruct.type):
     ]
 
     def summary(self):
-        return 'crc-32=0x{:08x} compressed-size={:d} uncompressed-size={:d}'.format(self['crc-32'].int(), self['compressed size'].int(), self['uncompressed size'].int())
+        return 'crc-32={:08X} compressed-size={:d} uncompressed-size={:d}'.format(self['crc-32'].int(), self['compressed size'].int(), self['uncompressed size'].int())
+
+class ZipDataDescriptor(pstruct.type):
+    Signature = 0x08074b50
+    class _SignatureScan(parray.terminated):
+        _object_ = pint.uint8_t
+        def isTerminator(self, value):
+            octets = pint.uint32_t().set(ZipDataDescriptor.Signature)
+            return len(self.value) > 3 and self[-4:].serialize() == octets.serialize()
+        def int(self):
+            return self[-4:].cast(pint.uint32_t).int()
+        def data(self):
+            return self.serialize()[:-4]
+
+    _fields_ = [
+        (_SignatureScan, 'data'),
+        (DataDescriptor, 'descriptor'),
+    ]
+
+    def summary(self):
+        return 'descriptor={{{:s}}} data={{...}}'.format(self['descriptor'].summary())
+
+    def data(self, **kwds):
+        return self['data'].data()
 
 class BitFlags(pbinary.flags):
     _fields_ = [
@@ -110,35 +133,49 @@ class LocalFileHeader(pstruct.type):
         # XXX: if encrypted, include encryption header here
         (lambda self: dyn.block(self['data descriptor'].li['compressed size'].int()), 'file data'),
         # XXX: i think this record is actually encoded within the file data
-        (lambda self: DataDescriptor if self['general purpose bit flag'].li.object['PostDescriptor'] else ptype.undefined, 'post data descriptor'),
+        (lambda self: ZipDataDescriptor if self['general purpose bit flag'].li.o['PostDescriptor'] else ptype.undefined, 'post data descriptor'),
     ]
 
-    def extract(self, **kwds):
-        if not kwds.get('decompress', False):
-            return self['file data'].serialize()
+    def Name(self):
+        return self['file name'].str()
+    def Method(self):
+        return self['compression method']
+    def Descriptor(self):
+        PostDescriptorQ = self['general purpose bit flag'].o['PostDescriptor']
+        return self['post data descriptor']['descriptor'] if PostDescriptorQ else self['data descriptor']
+    def Data(self):
+        PostDescriptorQ = self['general purpose bit flag'].o['PostDescriptor']
+        return self['post data descriptor'].data() if PostDescriptorQ else self['file data'].serialize()
 
-        res, method = self['file data'].serialize(), self['compression method']
+    def extract(self, **kwds):
+        res = self.Data()
+        if not kwds.get('decompress', False):
+            logging.debug('Extracting {:d} bytes of compressed content'.format(len(res)))
+            return res
+
+        method = self['compression method']
         if method['Stored']:
+            logging.debug('Decompressing ({:s}) {:d} bytes of content.'.format('Uncompressed', len(res)))
             return res
         elif method['Deflated']:
             import zlib
+            logging.debug('Decompressing ({:s}) {:d} bytes of content.'.format('Zlib', len(res)))
             return zlib.decompress(res, -zlib.MAX_WBITS)
         elif method['BZIP2']:
             import bz2
+            logging.debug('Decompressing ({:s}) {:d} bytes of content.'.format('BZip2', len(res)))
             return bz2.decompress(res)
         elif method['LZMA']:
             import lzma
+            logging.debug('Decompressing ({:s}) {:d} bytes of content.'.format('Lzma', len(res)))
             return lzma.decompress(res)
         raise ValueError, method
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
-        meth = self['compression method'].str()
-        descr = self['data descriptor'].summary()
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
+        filename, meth, descr = self.Name(), self.Method(), self.Descriptor()
         time, date = self['last mod file time'], self['last mod file date']
-        filename = self['file name'].str()
-        return '{:s}) {:s} {!r} method={:s} {:s} time/date={:04x}:{:04x}'.format(index, cls, filename, meth, descr, time.int(), date.int())
+        return '{{{:d}}} {:s} ({:x}{:+x}) {!r} method={:s} {:s} time/date={:04x}:{:04x}'.format(index, cls, ofs, bs, filename, meth.str(), descr.summary(), time.int(), date.int())
 
 @ZipRecord.define(signature=(32, 0x02014b50))
 class CentralDirectory(pstruct.type):
@@ -162,17 +199,23 @@ class CentralDirectory(pstruct.type):
         (lambda self: dyn.clone(pstr.string, length=self['file comment length'].li.int()), 'file comment'),
     ]
 
+    def Name(self):
+        return self['file name'].str()
+    def Method(self):
+        return self['compression method']
+    def Descriptor(self):
+        return self['data descriptor']
+    def Comment(self):
+        return self['file comment'].str()
+
     def extract(self, **kwds):
         return self.serialize()
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
-        meth = self['compression method'].str()
-        descr = self['data descriptor'].summary()
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
+        filename, meth, descr = self.Name(), self.Method(), self.Descriptor()
         time, date = self['last mod file time'], self['last mod file date']
-        filename = self['file name'].str()
-        return '{:s}) {:s} {!r} version-made-by={:s} version-needed-to-extract={:s} compression-method={:s} {:s} last-mod-file-time/date={:04x}:{:04x} disk-number-start={:d} internal-file-attributes=0x{:x} external-file-attributes=0x{:x}'.format(index, cls, filename, self['version made by'].str(), self['version needed to extract'].str(), meth, descr, time.int(), date.int(), self['disk number start'].int(), self['internal file attributes'].int(), self['external file attributes'].int()) + ("// %s"%self['file comment'].str() if self['file comment length'].int() > 0 else '')
+        return '{{{:d}}} {:s} ({:x}{:+x}) {!r} version-made-by={:s} version-needed-to-extract={:s} compression-method={:s} {:s} last-mod-file-time/date={:04x}:{:04x} disk-number-start={:d} internal-file-attributes={:#x} external-file-attributes={:#x}'.format(index, cls, ofs, bs, filename, self['version made by'].str(), self['version needed to extract'].str(), meth.str(), descr.summary(), time.int(), date.int(), self['disk number start'].int(), self['internal file attributes'].int(), self['external file attributes'].int()) + ('// {:s}'.format(self.Comment()) if self['file comment length'].int() > 0 else '')
 
 @ZipRecord.define(signature=(32, 0x06054b50))
 class EndOfCentralDirectory(pstruct.type):
@@ -187,13 +230,15 @@ class EndOfCentralDirectory(pstruct.type):
         (lambda s: dyn.clone(pstr.string, length=s['.ZIP file comment length'].li.int()), '.ZIP file comment'),
     ]
 
+    def Comment(self):
+        return self['.ZIP file comment'].str()
+
     def extract(self, **kwds):
         return self.serialize()
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
-        return '{:s}) {:s} number-of-this-disk={:d} number-of-this-disk-with-the-start-of-the-central-directory={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory=0x{:x} offset-of-the-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, self['number of this disk'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number']) + ("// %s"%self['.ZIP file comment'].str() if self['.ZIP file comment length'].int() > 0 else '')
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
+        return '{{{:d}}} {:s} ({:x}{:+x}) number-of-this-disk={:d} number-of-this-disk-with-the-start-of-the-central-directory={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory={:d} offset-of-the-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, ofs, bs, self['number of this disk'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number']) + ('// {:s}'.format(self.Comment()) if self['.ZIP file comment length'].int() > 0 else '')
 
 @ZipRecord.define(signature=(64, 0x06054b50))
 class EndOfCentralDirectory64(pstruct.type):
@@ -201,7 +246,7 @@ class EndOfCentralDirectory64(pstruct.type):
         size = EndOfCentralDirectory().a.size()
         expectedSize = self['size of zip64 end of central directory record'].li.int()
         if expectedSize < size:
-            ptypes.log.warn("size of zip64 end of central directory record is less than the minimum size : %x : %x", expectedSize, size)
+            ptypes.log.warn('size of zip64 end of central directory record is less than the minimum size: {:#x} < {:#x}'.format(expectedSize, size))
         return dyn.block(expectedSize - size)
 
     _fields_ = [
@@ -224,10 +269,9 @@ class EndOfCentralDirectory64(pstruct.type):
         return self.serialize()
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
         data = self['zip64 extensible data sector'].summary()
-        return '{:s}) {:s} version-made-by={:s} version-needed-to-extract={:s} number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} number-of-the-disk-with-the-start-of-the-central-directory={:d} total-number-of-entires-in-the-central-directory-on-this-disk={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory=0x{:x} offset-of-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, self['number of the disk with the start of the zip64 end of central directory'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number'].int(), datasector)
+        return '{{{:d}}} {:s} ({:x}{:+x}) version-made-by={:s} version-needed-to-extract={:s} number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} number-of-the-disk-with-the-start-of-the-central-directory={:d} total-number-of-entires-in-the-central-directory-on-this-disk={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory={:#x} offset-of-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, ofs, bs, self['number of the disk with the start of the zip64 end of central directory'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number'].int(), datasector)
 
 @ZipRecord.define(signature=(64, 0x07054b50))
 class EndOfCentralDirectoryLocator64(pstruct.type):
@@ -241,9 +285,8 @@ class EndOfCentralDirectoryLocator64(pstruct.type):
         return self.serialize()
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
-        return '{:s}) {:s} number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} relative-offset-of-the-zip64-end-of-central-directory-record=0x{:x} total-number-of-disks={:d}'.format(index, cls, self['number of the disk with the start of the zip64 end of central directory'].int(), self['relative offset of the zip64 end of central directory record'].int(), self['total number of disks'].int())
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
+        return '{{{:d}}} {:s} ({:x}{:+x}) number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} relative-offset-of-the-zip64-end-of-central-directory-record={:#x} total-number-of-disks={:d}'.format(index, cls, ofs, bs, self['number of the disk with the start of the zip64 end of central directory'].int(), self['relative offset of the zip64 end of central directory record'].int(), self['total number of disks'].int())
 
 @ZipRecord.define(signature=(32, 0x08064b50))
 class ArchiveExtraData(pstruct.type):
@@ -256,9 +299,8 @@ class ArchiveExtraData(pstruct.type):
         return self['extra field data'].serialize()
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
-        return '{:s}) extra-field-length={:d} extra-field={:s}'.format(index, cls, self['extra field length'].int(), self['extra field data'].summary())
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
+        return '{{{:d}}} {:s} ({:x}{:+x}) extra-field-length={:d} extra-field={:s}'.format(index, cls, ofs, bs, self['extra field length'].int(), self['extra field data'].summary())
 
 @ZipRecord.define(signature=(32, 0x05054b50))
 class DigitalSignature(pstruct.type):
@@ -271,17 +313,17 @@ class DigitalSignature(pstruct.type):
         return self['signature data'].serialize()
 
     def listing(self):
-        index = self.getparent(Record).name()
-        cls = self.classname()
-        return '{:s}) size-of-data={:d} signature-data={:s}'.format(index, cls, self['size of data'].int(), self['signature data'].summary())
+        cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
+        return '{{{:d}}} {:s} ({:x}{:+x}) size-of-data={:d} signature-data={:s}'.format(index, cls, ofs, bs, self['size of data'].int(), self['signature data'].summary())
 
 ## File records
 class Record(pstruct.type):
     def __Record(self):
-        bits = 32
-        sig = self['Signature'].li.int()
+        bits, sig = 32, self['Signature'].li.int()
         return ZipRecord.lookup((bits, sig))
 
+    # FIXME: Signature should be a parray.terminated which seeks for a valid signature
+    #        and has a method which returns the correct code for __Record to be correct.
     _fields_ = [
         (pint.uint32_t, 'Signature'),
         (__Record, 'Record'),
@@ -299,20 +341,20 @@ if __name__ == '__main__':
     import ptypes, archive.zip
     if sys.platform == 'win32': import msvcrt
 
-    arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'zip.py', description="List or extract information out of a .zip file", add_help=False)
+    arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'zip.py', description='List or extract information out of a .zip file', add_help=False)
     arg_p.add_argument('FILE', nargs='*', action='append', type=str, help='list of filenames to extract')
-    arg_p.add_argument('-v', '--verbose', action='store_true', help="output verbose logging information", dest='verbose')
-    arg_commands_gr = arg_p.add_argument_group("main operation mode")
-    arg_commands_gr.add_argument('-h', '--help', action='store_const', help="show this help message and exit", dest='mode', const='help')
-    arg_commands_gr.add_argument('-l', '--list', action='store_const', help="list the contents of an archive", dest='mode', const='list')
-    arg_commands_gr.add_argument('-la', '--list-all', action='store_const', help="list the entire contents of an archive", dest='mode', const='list-all')
-    arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help="extract the specified file records", dest='mode', const='extract')
-    arg_commands_gr.add_argument('-d', '--dump', action='store_const', help="dump the specified file records", dest='mode', const='dump')
-    arg_device_gr = arg_p.add_argument_group("device selection and switching")
-    arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar="ARCHIVE", help="use archive file or device ARCHIVE", dest='source')
-    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar="DEVICE", help="extract files to specified DEVICE or FORMAT", dest='target', default=None)
-    arg_info_gr = arg_p.add_argument_group("format output")
-    arg_info_gr.add_argument('-j', '--compressed', action='store_true', help="extract data from archive in its compressed form", dest='compress', default=False)
+    arg_p.add_argument('-v', '--verbose', action='store_true', help='output verbose logging information', dest='verbose')
+    arg_commands_gr = arg_p.add_argument_group('main operation mode')
+    arg_commands_gr.add_argument('-h', '--help', action='store_const', help='show this help message and exit', dest='mode', const='help')
+    arg_commands_gr.add_argument('-l', '--list', action='store_const', help='list the contents of an archive', dest='mode', const='list')
+    arg_commands_gr.add_argument('-la', '--list-all', action='store_const', help='list the entire contents of an archive', dest='mode', const='list-all')
+    arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help='extract the specified file records', dest='mode', const='extract')
+    arg_commands_gr.add_argument('-d', '--dump', action='store_const', help='dump the specified file records', dest='mode', const='dump')
+    arg_device_gr = arg_p.add_argument_group('device selection and switching')
+    arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar='ARCHIVE', help='use archive file or device ARCHIVE', dest='source')
+    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar='DEVICE', help='extract files to specified DEVICE or FORMAT', dest='target', default=None)
+    arg_info_gr = arg_p.add_argument_group('format output')
+    arg_info_gr.add_argument('-j', '--compressed', action='store_true', help='extract data from archive in its compressed form', dest='compress', default=False)
 
     if len(sys.argv) <= 1:
         print >>sys.stdout, arg_p.format_usage()
@@ -375,7 +417,7 @@ if __name__ == '__main__':
 
     # set the verbosity
     if args.verbose:
-        logging.root.setLevel(logging.INFO)
+        logging.root.setLevel(logging.DEBUG)
 
     # create the file instance
     z = archive.zip.File(source=source)
@@ -408,7 +450,7 @@ if __name__ == '__main__':
         if args.mode == 'extract':
             data = rec['Record'].extract(decompress=not args.compress)
         elif args.mode == 'dump':
-            data = '\n'.join((' '.join((ptypes.utils.repr_class(rec.classname()), rec.name())), ptypes.utils.indent("{!r}".format(rec['Record']))))
+            data = '\n'.join((' '.join((ptypes.utils.repr_class(rec.classname()), rec.name())), ptypes.utils.indent('{!r}'.format(rec['Record']))))
         else:
             raise NotImplementedError(args.mode)
 
@@ -427,22 +469,23 @@ if __name__ == '__main__':
             res = os.path.join(dirpath, name)
             if res.endswith(os.path.sep):
                 if os.path.isdir(res):
-                    logging.warn("Refusing to overwrite already existing subdirectory for record({:d}) : {:s}".format(int(rec.name()), res))
+                    logging.warn('Refusing to overwrite already existing subdirectory for record({:d}): {:s}'.format(int(rec.name()), res))
                 else:
-                    logging.info("Creating subdirectory for record({:d}) : {:s}".format(int(rec.name()), res))
+                    logging.info('Creating subdirectory for record({:d}): {:s}'.format(int(rec.name()), res))
                     os.makedirs(res)
                 continue
 
             if os.path.exists(res):
-                logging.warn("Overwriting already existing file with record({:d}) : {:s}".format(int(rec.name()), res))
+                logging.warn('Overwriting already existing file with record({:d}): {:s}'.format(int(rec.name()), res))
             else:
-                logging.info("Creating new file for record({:d}) : {:s}".format(int(rec.name()), res))
+                logging.info('Creating new file for record({:d}): {:s}'.format(int(rec.name()), res))
 
-            logging.info("{:s}ing {:d} bytes from record({:d}) to file: {:s}".format(args.mode.title(), len(data), int(rec.name()), res))
+            logging.debug('{:s}ing {:d} bytes from record({:d}) to file: {:s}'.format(args.mode.title(), len(data), int(rec.name()), res))
             with file(res, 'wb') as out: print >>out, data
 
         # fall-back to writing to already open target
         else:
+            logging.debug('{:s}ing {:d} bytes from record({:d}) to stream: {:s}'.format(args.mode.title(), len(data), int(rec.name()), target.name))
             print >>target, data
         continue
 
