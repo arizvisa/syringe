@@ -1248,8 +1248,13 @@ class container(base):
         try:
             res = self.blocksize()
         except:
-            return str().join(n.serialize() for n in self.value)
-        data = str().join(n.serialize() for n in self.value)
+            return str().join(map(operator.methodcaller('serialize'), iter(self.value)))
+
+        # if there's no blocksize, then this field is empty
+        if res <= 0: return ''
+
+        # serialize all the elements that we currently have
+        data = str().join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         try:
             parent = self.getparent(encoded_t)
