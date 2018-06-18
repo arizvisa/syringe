@@ -995,8 +995,8 @@ class type(base):
             except error.NotFoundError:
                 parent = self.getparent(None)
 
-            # check if child element is child of encoded_t which doesn't get checked since encoded types can have their sizes changed.
-            if builtins.isinstance(parent, encoded_t):
+            # check if child element is child of encoded_t or we're a proxy since neither needs to get checked since the types aren't guaranteed to be related
+            if builtins.isinstance(parent, encoded_t) or builtins.isinstance(self.source, provider.proxy):
                 pass
 
             # check that child element is actually within bounds of parent
@@ -1224,11 +1224,11 @@ class container(base):
             block = block[bs:]
             total += bs
 
-        # ..and then fill out any zero sized elements
+        # ..and then fill out any zero sized elements to update any state
         while value:
             res = value.pop(0)
             bs = res.blocksize()
-            if bs != 0: break
+            if bs > 0: break
             res.__deserialize_block__(block[:bs])
 
         # log any information about deserialization errors
@@ -1315,7 +1315,6 @@ class container(base):
             # if any of the sub-elements are undefined, load each element separately
             if Config.ptype.noncontiguous and \
                     any(builtins.isinstance(n,container) or builtins.isinstance(n,undefined) for n in self.value):
-
                 # load each element individually up to the blocksize
                 bs,value = 0,self.value[:]
                 left,right = self.getoffset(),self.getoffset()+self.blocksize()
@@ -1325,10 +1324,10 @@ class container(base):
                     left = res.getoffset() if left + bs < ofs else left + bs
                     res.load(**attrs)
 
-                # ..and then load any zero-sized elements that were left
+                # ..and then load any zero-sized elements that were left to update state
                 while value:
                     res = value.pop(0)
-                    if res.blocksize() != 0: break
+                    if res.blocksize() > 0: break
                     res.load(**attrs)
                 return self
 

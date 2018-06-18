@@ -21,7 +21,7 @@ Within this module are the following functions:
 Also within this module is a type that's used to define a union. A union is a
 root type that can be transformed into a number of various types. The union
 interface is used similarly to a pstruct.type. When using a dynamic.union type,
-the root type can be defined as a property named `.root`. If this property is
+the root type can be defined as a property named `._value_`. If this property is
 not defined, the type will be inferred from the largest field that is defined.
 Once a union is instantiated, the different subtypes can be accessed as if they
 are field names of a pstruct.type.
@@ -259,7 +259,7 @@ class union(_union_generic):
 
     The hidden `.__object__` property contains a list of the instantiated types
     for each defined field. The `.object` property points to an instance of the
-    `.root` property.
+    `._value_` property.
 
     i.e.
     class myunion(dynamic.union):
@@ -328,8 +328,8 @@ class union(_union_generic):
         return self.value[0].serialize()
 
     def load(self, **attrs):
-        res = self.__create__() if self.value is None else self.value[0]
-        res.load(**attrs)
+        import sys
+        res = (self.__create__() if self.value is None else self.value[0]).load(**attrs)
         map(operator.methodcaller('load', offset=0), self.__object__)
         return self
 
