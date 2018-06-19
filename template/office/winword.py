@@ -4,6 +4,9 @@ import ptypes
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
+
+def rl(*l): return list(reversed(l))
 
 ## Atomic Types
 class LID(pint.enum, pint.uint16_t):
@@ -563,11 +566,11 @@ class Shd(pstruct.type):
 
 class Brc(pstruct.type):
     class _b(pbinary.flags):
-        _fields_ = [
+        _fields_ = rl(
             (5, 'dptSpace'),
             (1, 'fShadow'),
             (9, 'fReserved'),
-        ]
+        )
     _fields_ = [
         (COLORREF, 'cv'),
         (pint.uint8_t, 'dptLineWidth'),
@@ -585,7 +588,7 @@ class UFEL(pbinary.flags):
             (4, 'Curly brackets'),
         ]
 
-    _fields_ = [
+    _fields_ = rl(
         (1, 'fTNY'),
         (1, 'fWarichu'),
         (1, 'fKumimoji'),
@@ -599,7 +602,7 @@ class UFEL(pbinary.flags):
         (1, 'fTNYFetchTxm'),
         (1, 'fCellFitText'),
         (1, 'spare2'),
-    ]
+    )
 
 class PChgTabsDel(pstruct.type):
     _fields_ = [
@@ -636,19 +639,19 @@ class NumRM(pstruct.type):
 
 class Brc80(pbinary.struct):
     class _b(pbinary.flags):
-        _fields_ = [
+        _fields_ = rl(
             (5, 'dptSpace'),
             (1, 'fShadow'),
             (1, 'fFrame'),
             (1, 'reserved'),
-        ]
+        )
 
-    _fields_ = [
+    _fields_ = rl(
         (8, 'dptLineWidth'),
         (_BrcType, 'brcType'),
         (Ico, 'ico'),
         (_b, 'b'),
-    ]
+    )
 
 class Brc80MayBeNil(dynamic.union):
     _value_ = pint.uint32_t
@@ -669,7 +672,7 @@ class TCGRF(pbinary.flags):
             ('consecutive2', 3), # ???
         ]
 
-    _fields_ = [
+    _fields_ = rl(
         (_horzMerge, 'horzMerge'),
         (_TextFlow, 'textFlow'),
         (_VerticalMergeFlag, 'vertMerge'),
@@ -679,7 +682,7 @@ class TCGRF(pbinary.flags):
         (1, 'fNoWrap'),
         (1, 'fHideMark'),
         (1, 'fUnused'),
-    ]
+    )
 
 class TC80(pstruct.type):
     _fields_ = [
@@ -1220,10 +1223,10 @@ class SDxaColSpacingOperand(pstruct.type):
     ]
 
 class MathPrOperand(pbinary.flags):
-    _fields_ = [
+    _fields_ = rl(
         (3, 'jcMath'),
         (13, 'unused'),
-    ]
+    )
 
 class SPPOperand(pstruct.type):
     def __rgIstdPermute(self):
@@ -1474,7 +1477,7 @@ class sprmTSetBrc80(TableBrc80Operand): pass
 ## File Information Block
 class FibBase(pstruct.type):
     class _b(pbinary.flags):
-        _fields_ = [
+        _fields_ = rl(
             (1, 'fDot'),
             (1, 'fGlsy'),
             (1, 'fComplex'),
@@ -1488,16 +1491,16 @@ class FibBase(pstruct.type):
             (1, 'fLoadOverride'),
             (1, 'fFarEast'),
             (1, 'fObfuscated'),
-        ]
+        )
     class _b2(pbinary.flags):
-        _fields_ = [
+        _fields_ = rl(
             (1, 'fMac'),
             (1, 'fEmptySpecial'),
             (1, 'fLoadOverridePage'),
             (1, 'reserved1'),
             (1, 'reserved2'),
             (3, 'fSpare0'),
-        ]
+        )
     _fields_ = [
         (pint.uint16_t, 'wIdent'),
         (pint.uint16_t, 'nFib'),
