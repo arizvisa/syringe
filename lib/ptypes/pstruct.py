@@ -89,6 +89,15 @@ class _pstruct_generic(ptype.container):
                 continue
         raise KeyError(name)
 
+    # informational methods
+    def properties(self):
+        result = super(_pstruct_generic, self).properties()
+        if len(self.value) < len(self._fields_):
+            result['abated'] = True
+        elif len(self.value) > len(self._fields_):
+            result['inflated'] = True
+        return result
+
     # list methods
     def keys(self):
         return [ name for name in self.__keys__() ]
@@ -215,12 +224,10 @@ class type(_pstruct_generic):
                         n.load()
                     bs = n.blocksize()
                     if current is not None:
-                        try:
-                            _ = self.blocksize()
-                        except Exception, e:
-                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
+                        try: res = self.blocksize()
+                        except Exception, e: Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
-                            if current+bs > _:
+                            if current + bs >= res:
                                 path = " -> ".join(self.backtrace())
                                 Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
