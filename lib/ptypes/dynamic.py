@@ -328,7 +328,6 @@ class union(_union_generic):
         return self.value[0].serialize()
 
     def load(self, **attrs):
-        import sys
         res = (self.__create__() if self.value is None else self.value[0]).load(**attrs)
         map(operator.methodcaller('load', offset=0), self.__object__)
         return self

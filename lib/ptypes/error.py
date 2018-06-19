@@ -33,7 +33,7 @@ class ConsumeError(ProviderError):
     def __str__(self):
         identity,offset,desired,amount = self.consumed
         if amount > 0:
-            return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x} : Read {:#x}'.format(type(identity), offset, desired, amount)
+            return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x} : Read only {:#x} bytes'.format(type(identity), offset, desired, amount)
         return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x}'.format(type(identity), offset, desired)
 
 ### errors that can happen during deserialization or serialization

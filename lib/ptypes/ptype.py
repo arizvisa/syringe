@@ -654,8 +654,7 @@ class _base_generic(object):
         chain = ';'.join(utils.repr_instance(node.classname(),node.name()) for node in self.traverse(edges=parents))
         res = (q.typename() if istype(q) else str(q) for q in query)
         raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s} : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), chain))
-
-    def backtrace(self, fn=lambda s:u"<type:{:s} name:{:s} offset:{:x}>".format(s.classname(), s.name(), s.getoffset())):
+    def backtrace(self, fn=lambda self:u"<instance {:s} {!r}>".format(self.instance(), self.name())):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
 
@@ -715,17 +714,17 @@ class generic(_base_generic):
 
     def repr(self, **options):
         """The output that __repr__ displays"""
-        raise error.ImplementationError(self, 'base.repr')
+        raise error.ImplementationError(self, 'generic.repr')
 
     def __deserialize_block__(self, block):
-        raise error.ImplementationError(self, 'base.__deserialize_block__', message='Subclass {:s} must implement deserialize_block'.format(self.classname()))
+        raise error.ImplementationError(self, 'generic.__deserialize_block__', message='Subclass {:s} must implement deserialize_block'.format(self.classname()))
     def serialize(self):
-        raise error.ImplementationError(self, 'base.serialize')
+        raise error.ImplementationError(self, 'generic.serialize')
 
     def load(self, **attrs):
-        raise error.ImplementationError(self, 'base.load')
+        raise error.ImplementationError(self, 'generic.load')
     def commit(self, **attrs):
-        raise error.ImplementationError(self, 'base.commit')
+        raise error.ImplementationError(self, 'generic.commit')
     def alloc(self, **attrs):
         """Will zero the ptype instance with the provided ``attrs``.
 
@@ -756,7 +755,7 @@ class generic(_base_generic):
 
     def copy(self):
         """Return a new instance of self"""
-        raise error.ImplementationError(self, 'base.copy')
+        raise error.ImplementationError(self, 'generic.copy')
 
     def __cmp__(self, other):
         """Returns 0 if ``other`` represents the same data as ``self``
@@ -862,7 +861,7 @@ class base(generic):
         # log whether our size has changed somehow
         a,b = self.size(),result.size()
         if a > b:
-            Log.info("base.cast : {:s} : Result {:s} size is smaller than source : {:#x} < {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
+            Log.info("base.cast : {:s} : Result {:s} size is smaller than source type : {:#x} < {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         elif a < b:
             Log.warning("base.cast : {:s} : Result {:s} is partially initialized : {:#x} > {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         return result
@@ -889,7 +888,7 @@ class base(generic):
                 block = self.source.consume(bs)
                 self = self.__deserialize_block__(block)
             except (StopIteration,error.ProviderError), e:
-                #self.source.seek(ofs + bs)
+                self.source.seek(ofs + bs)
                 raise error.LoadError(self, consumed=bs, exception=e)
         return self
 
@@ -1173,7 +1172,7 @@ class container(base):
             res = self.at(offset, recurse=False, **kwds)
 
         except ValueError, msg:
-            Log.info('container.at : {:s} : Non-fatal exception raised : {!r}'.format(self.instance(), ValueError(msg)))
+            Log.info('container.at : {:s} : Non-fatal exception raised : {!r}'.format(self.instance(), ValueError(msg)), exc_info=True)
             return self
 
         # if we're already at a leaf of the trie, then no need to descend
@@ -1213,10 +1212,8 @@ class container(base):
         if self.value is None:
             raise error.SyntaxError(self, 'container.__deserialize_block__', message='caller is responsible for allocation of elements in self.value')
 
-        value,expected = self.value[:],self.blocksize()
-
         # read everything up to the blocksize
-        bs,total = 0,0
+        value, expected, bs, total = self.value[:], self.blocksize(), 0, 0
         while value and total < expected:
             res = value.pop(0)
             bs = res.blocksize()
@@ -1336,9 +1333,9 @@ class container(base):
 
         # we failed out, log what happened according to the variable state
         except error.LoadError, e:
-            ofs,s,bs = self.getoffset(),self.size(),self.blocksize()
+            ofs, s, bs = self.getoffset(), self.size(), self.blocksize()
             self.source.seek(ofs+bs)
-            if s < bs:
+            if s > 0 and s < bs:
                 Log.warning('container.load : {:s} : Unable to complete read : at {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs, s, e))
             else:
                 Log.debug('container.load : {:s} : Cropped to {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs, s, e))
