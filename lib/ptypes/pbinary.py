@@ -273,7 +273,7 @@ class type(ptype.generic):
 
     def summary(self, **options):
         res = self.bitmap()
-        return u"({:s},{:d})".format(bitmap.hex(res), self.bits())
+        return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def details(self, **options):
         return bitmap.string(self.bitmap(), reversed=True)
@@ -425,8 +425,8 @@ class enum(type):
         return self.byvalue(res, u"{:x}".format(res))
 
     def summary(self, **options):
-        res = self.get()
-        try: return u"{:s}({:s})".format(self.byvalue(bitmap.int(res)), bitmap.hex(res))
+        res = self.bitmap()
+        try: return u"({:s},{:d}) : {:s}({:s})".format(bitmap.hex(res), bitmap.size(res), self.byvalue(bitmap.int(res)), bitmap.hex(res))
         except (ValueError,KeyError): pass
         return super(enum, self).summary()
 
@@ -681,12 +681,13 @@ class _array_generic(container):
 
     def __details_initialized(self):
         _hex, _precision, value = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0, self.bitmap()
-        result = bitmap.string(value)
-        return u"[{:s}] {:s} ({:s},{:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), ('0b'+result) if len(result) else '0b0', bitmap.size(value))
+        # FIXME: instead of emitting just a consolidated bitmap, emit one for each element
+        result = "{:#0{:d}b}".format(bitmap.int(value), 2 + bitmap.size(value))
+        return u"[{:s}] {:s} ({:s},{:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), result, bitmap.size(value))
 
     def __details_uninitialized(self):
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-        return u"[{:s}] {:s} (???, {:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), self.blockbits())
+        return u"[{:s}] {:s} (???,{:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), self.blockbits())
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
@@ -835,9 +836,8 @@ class _struct_generic(container):
                 result.append(u"[{:s}] {:s} {:s} ???".format(utils.repr_position(self.getposition(name), hex=_hex, precision=_precision), i, name, v))
                 continue
 
-            _, s = b = value.bitmap()
+            b = value.bitmap()
             i = utils.repr_instance(value.classname(), value.name() or name)
-            v = u"({:s},{:d})".format(bitmap.hex(b), s)
             prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in value.properties().iteritems())
             _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
             result.append(u"[{:s}] {:s}{:s} {:s}".format(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision), i, ' {{{:s}}}'.format(prop) if prop else '', value.summary()))
