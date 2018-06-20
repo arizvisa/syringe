@@ -1,19 +1,18 @@
 #bitmap = (integer, bits)
-import sys,six
-import math,itertools
+import six, math
+import functools, operator, itertools, types
 from six.moves import builtins
 
 ## start somewhere
 def new(value, size):
     '''creates a new bitmap object. Bitmaps "grow" to the left.'''
+    mask = (2 ** abs(size)) - 1
     if size < 0:
-        signmask = 2**(abs(size)-1)
-        mask = 2**abs(size)-1
-        return (value & mask, size)
-    mask = 2**abs(size)-1
-    return (value & mask, size)
+        #signmask = 2 ** (abs(size)-1)
+        return value & mask, size
+    return value & mask, size
 
-zero = new(0,0)
+zero = new(0, 0)
 
 def isinteger(v):
     '''Returns true if provided variable is of type int or long'''
@@ -22,89 +21,79 @@ integerQ = isinteger
 
 def isbitmap(v):
     '''Returns true if provided variable is a valid bitmap type (i really shouldn't be keeping track of these)'''
-    return isinstance(v, tuple) and len(v) == 2  # and isinteger(v[0]) and isinteger(v[1])
+    return isinstance(v, tuple) and len(v) == 2 and all((isinstance(v[0], six.integer_types), isinstance(v[1], six.integer_types)))
 bitmapQ = isbitmap
 
 def isempty(bitmap):
     '''Returns true if specified bitmap has none of its bits set'''
-    integer,size = bitmap
+    integer, size = bitmap
     return not(integer > 0)
 emptyQ = isempty
 
 def fit(integer):
     '''Returns the number of bits necessary to contain integer'''
-    return builtins.int(math.log(integer,2))+1
+    return 1 + math.trunc(math.log(abs(integer), 2)) + (1 if integer < 0 else 0)
 
-    count = 0
-    while integer >= 2:
-        count += 1
-        integer >>= 1
-    return count + 1
-
-def string(bitmap, **kwds):
+def string(bitmap, **kwargs):
     '''Returns bitmap as a formatted binary string starting with the least-significant-bits first'''
-    reverse = kwds['reversed'] if 'reversed' in kwds else kwds.get('reverse', False)
-    integer,size = bitmap
-    size = abs(size)
-    res = []
-    for position in six.moves.range(size):
-        res = res + ['1' if integer&1 else '0']
-        integer >>= 1
+    reverse = builtins.next((kwargs[k] for k in ('reverse', 'reversed') if k in kwargs), False)
+    integer, size = bitmap
+    res = "{:0{:d}b}".format(integer, abs(size))
     return str().join(reversed(res) if reverse else res)
 
 def hex(bitmap):
     '''Return bitmap as a hex string'''
-    n,s = bitmap
+    n, s = bitmap
     size = abs(s)
-    length = builtins.int(math.ceil(size/4.0))
+    length = math.trunc(math.ceil(size / 4.0))
     if s < 0:
-        max,sf = 2**size,2**(size-1)
-        res = n & (max-1)
-        return '{:+#0{:d}x}'.format((res-max) if res&sf else res&(sf-1), length+3)
-    return '{:#0{:d}x}'.format(n&(2**size)-1, length+2)
+        max, sign = 2 ** size, 2 ** (size-1)
+        res = n & (max -1 )
+        return "{:+#0{:d}x}".format((res - max) if res & sign else res & (sign - 1), length + 3)
+    return "{:#0{:d}x}".format(n & (2 ** size) - 1, length + 2)
 
 def scan(bitmap, value=True, position=0):
-    '''Searches through bitmap for specified /value/ and returns it's position'''
-    integer,size = bitmap
+    '''Searches through bitmap for the specified value and returns it's position'''
+    integer, size = bitmap
 
     if position < 0 or position > abs(size):
         raise AssertionError("Invalid position : {:d}".format(position))
 
-    size,bitmask = abs(size), 1 << position
+    size, bitmask = abs(size), 2 ** position
     for i in six.moves.range(size):
         if bool(integer & bitmask) == value or position >= size:
             return position
-        bitmask <<= 1
+        bitmask *= 2
         position += 1
     return position
 
 def runscan(bitmap, value, length, position=0):
-    '''Will return the position of a run fulfilling the paramters in /bitmap/'''
+    '''Will return the position of a run fulfilling the parameters in bitmap'''
 
     if length >= 0 and position >= 0:
-        for run_integer,run_length in run(bitmap, position=position):
+        for run_integer, run_length in run(bitmap, position=position):
             # snag a run that best fits user's reqs
-            if bool(run_integer&1) == value and length <= run_length:
+            if bool(run_integer & 1) == bool(value) and length <= run_length:
                 return position
             position += run_length
-    raise ValueError('Unable to find a {:s} bit run of {:d} in bitmap'.format(length, value))
+    raise ValueError("Unable to find a {:s} bit run of {:d} in bitmap".format(length, value))
 
 def runlength(bitmap, value, position=0):
-    '''Returns the count of bits, starting at /position/'''
-    integer,size = bitmap
+    '''Returns the count of bits, starting at position'''
+    integer, size = bitmap
     if position < 0 or position > abs(size):
         raise AssertionError("Invalid position : {:d}".format(position))
     return scan(bitmap, not value, position) - position
 
 def run(bitmap, position=0):
     '''Iterates through all the runs in a given bitmap'''
-    integer,size = bitmap
+    integer, size = bitmap
     if position < 0 or position > abs(size):
         raise AssertionError("Invalid position : {:d}".format(position))
 
-    value,size = integer & 1, abs(size)
+    value, size = integer & 1, abs(size)
     while size > 0:
-        length = runlength( (integer,size), value, position)
+        length = runlength( (integer, size), value, position)
         yield get(bitmap, position, length)
         size -= length
         position += length
@@ -112,67 +101,70 @@ def run(bitmap, position=0):
     return
 
 def set(bitmap, position, value=True, count=1):
-    '''Store /value/ into /bitmap/ starting at /position/'''
-    integer,size = bitmap
+    '''Store value into bitmap starting at position'''
+    integer, size = bitmap
 
     if count < 0 or position < 0:
         raise AssertionError("Invalid count or position : {:d} : {:d}".format(count, position))
     if position + count > abs(size):
         raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask,size = six.moves.reduce(lambda r,v: 1<<v | r, six.moves.range(position, position+count), 0), abs(size)
+    mask, size = six.moves.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
     if value:
-        return (integer | mask, size)
-    return (integer & ~mask, size)
+        return integer | mask, size
+    return integer & ~mask, size
 
 def get(bitmap, position, count):
-    '''Fetch /count/ number of bits from /bitmap/ starting at /position/'''
-    integer,size = bitmap
+    '''Fetch count number of bits from bitmap starting at position'''
+    integer, size = bitmap
 
     if count < 0 or position < 0:
         raise AssertionError("Invalid count or position : {:d} : {:d}".format(count, position))
     if position + count > abs(size):
         raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask,size = six.moves.reduce(lambda r,v: 1<<v | r, six.moves.range(position, position+count), 0), abs(size)
-    return ((integer & mask) >> position, count)
+    mask, size = six.moves.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
+    return (integer & mask) >> position, count
 
 def add(bitmap, integer):
     '''Adds an integer to the specified bitmap whilst preserving signedness'''
-    n,sz = bitmap
-    if sz < 0:
+    res, size = bitmap
+    if size < 0:
         pass        # XXX: we trust that python handles signedness properly via &
-    mask = (1<<abs(sz))-1
-    return (integer+n) & mask,sz
+    mask = 2 ** abs(size) - 1
+    return (integer + res) & mask, size
 def sub(bitmap, integer):
     '''Subtracts an integer to the specified bitmap whilst preserving signedness'''
-    n,sz = bitmap
-    if sz < 0:
+    res, size = bitmap
+    if size < 0:
         pass        # XXX: we trust that python handles signedness properly via &
-    mask = (1<<abs(sz))-1
-    return (n-integer) & mask,sz
+    mask = 2 ** abs(size) - 1
+    return (res - integer) & mask, size
 
 def mul(bitmap, integer):
-    n,size = bitmap
-    max = 2**abs(size)
+    '''Multiplies the specified bitmap with an integer whilst preserving signedness'''
+    res, size = bitmap
+    max = 2 ** abs(size)
     if size < 0:
-        sf = 2**(abs(size)-1)
-        n = (n-max) if n&sf else n&(sf-1)
-    return (n*integer)&(max-1),size
+        sign = 2 ** (abs(size) -1 )
+        res = (res - max) if res & sign else res & (sign - 1)
+    return (res * integer) & (max - 1), size
 def div(bitmap, integer):
-    n,size = bitmap
-    max = 2**abs(size)
+    '''Divides the specified bitmap with an integer whilst preserving signedness'''
+    res, size = bitmap
+    max = 2 ** abs(size)
     if size < 0:
-        sf = 2**(abs(size)-1)
-        n = (n-max) if n&sf else n&(sf-1)
-    return builtins.int(float(n)/integer)&(max-1),size
+        sign = 2 ** (abs(size) - 1)
+        res = (res - max) if res & sign else res & (sign - 1)
+    return math.trunc(float(res) / integer) & (max -1 ), size
 def mod(bitmap, integer):
-    n,size = bitmap
-    max = 2**abs(size)
+    '''Modular divides the specified bitmap with an integer whilst preserving signedness'''
+    res, size = bitmap
+    max = 2 ** abs(size)
     if size < 0:
-        sf = 2**(abs(size)-1)
-        n = (n-max) if n&sf else n&(sf-1)
-    return (n%integer) & (max-1),size
+        sign = 2 ** (abs(size) - 1)
+        res = (res - max) if res & sign else res & (sign - 1)
+    return (res % integer) & (max - 1), size
 
 def grow(bitmap, count):
     '''Grow bitmap by some specified number of bits
@@ -181,8 +173,9 @@ def grow(bitmap, count):
     '''
     if count < 0:
         return shrink(bitmap, -count)
-    integer,size = bitmap
-    return (integer << count, size + (count*(1,-1)[size<0]))
+    integer, size = bitmap
+    shift, sign = 2 ** count, -1 if size < 0 else +1
+    return integer * shift, size + count * sign
 
 def shrink(bitmap, count):
     '''Shrink a bitmap by some specified size
@@ -191,8 +184,9 @@ def shrink(bitmap, count):
     '''
     if count < 0:
         return grow(bitmap, -count)
-    integer,size = bitmap
-    return (integer >> count, size - (count*(1,-1)[size<0]))
+    integer, size = bitmap
+    shift, sign = 2 ** count, -1 if size < 0 else +1
+    return integer / shift, size - count * sign
 
 ## for treating a bitmap like an integer stream
 def push(bitmap, operand):
@@ -203,13 +197,13 @@ def push(bitmap, operand):
     (result, rbits) = bitmap
     (number, nbits) = operand
 
-    rmask = 2**abs(rbits) - 1
-    nmask = 2**abs(nbits) - 1
+    rmask = 2 ** abs(rbits) - 1
+    nmask = 2 ** abs(nbits) - 1
+    shift = 2 ** abs(nbits)
 
-    res = result & rmask
-    res <<= abs(nbits)
+    res = (result & rmask) * shift
     res |= number & nmask
-    return (res, (rbits - abs(nbits)) if rbits < 0 else (rbits+abs(nbits)))
+    return res, rbits + (-abs(nbits) if rbits < 0 else +abs(nbits))
 
 def insert(bitmap, operand):
     '''Insert bitmap data at the beginning of the bitmap
@@ -218,13 +212,14 @@ def insert(bitmap, operand):
     '''
     (result, rbits) = bitmap
     (number, nbits) = operand
-    rmask = 2**rbits - 1
-    nmask = 2**nbits - 1
 
-    res = number & nmask
-    res <<= rbits
+    rmask = 2 ** abs(rbits) - 1
+    nmask = 2 ** abs(nbits) - 1
+    shift = 2 ** abs(rbits)
+
+    res = (number & nmask) * shift
     res |= result & rmask
-    return (res, nbits+rbits)
+    return res, rbits + (-abs(nbits) if rbits < 0 else +abs(nbits))
 
 def consume(bitmap, bits):
     '''Consume some number of bits off of the end of a bitmap
@@ -232,25 +227,21 @@ def consume(bitmap, bits):
     If bitmap is signed, then return a signed integer.
     '''
     if bits < 0:
-        raise AssertionError('Invalid bit count < 0 : {:d}'.format(bits))
+        raise AssertionError("Invalid bit count < 0 : {:d}".format(bits))
+    bitmapinteger, bitmapsize = bitmap
 
-    integersize,integermask = bits,2**bits
-    bitmapinteger,bitmapsize = bitmap
+    if bits > abs(bitmapsize):
+        return zero, bitmapinteger
+    integersize, integershift, integermask = bits, 2 ** bits, 2 ** bits - 1
 
-    if integersize > abs(bitmapsize):
-        integersize = abs(bitmapsize)
-
-    res = bitmapinteger&(integermask-1)
+    res = bitmapinteger & integermask
     if bitmapsize < 0:
-        signmask = integermask>>1
-        if res & signmask:
-            res = (res & (signmask-1)) - (integermask>>1)
-        else:
-            res = res & (signmask-1)
-        bitmap = (bitmapinteger>>integersize,(bitmapsize+integersize))
+        signmask = integershift / 2
+        res = (res & (signmask - 1)) - (integershift / 2 if res & signmask else 0)
+        bitmap = bitmapinteger / integershift, bitmapsize + integersize
     else:
-        bitmap = (bitmapinteger>>integersize,(bitmapsize-integersize))
-    return bitmap,res
+        bitmap = bitmapinteger / integershift, bitmapsize - integersize
+    return bitmap, res
 
 def shift(bitmap, bits):
     '''Shift some number of bits off of the front of a bitmap
@@ -258,28 +249,26 @@ def shift(bitmap, bits):
     If bitmap is signed, then return a signed integer.
     '''
     if bits < 0:
-        raise AssertionError('Invalid bit count < 0 : {:d}'.format(bits))
-    integersize,integermask = bits,2**bits
+        raise AssertionError("Invalid bit count < 0 : {:d}".format(bits))
+    bitmapinteger, bitmapsize = bitmap
 
-    bitmapinteger,bitmapsize = bitmap
     if bits > abs(bitmapsize):
-        bits = abs(bitmapsize)
+        return zero, bitmapinteger
+    integersize, integershift, integermask = bits, 2 ** bits, 2 ** bits - 1
 
-    shifty = abs(bitmapsize) - bits
-    mask = (integermask-1)<<shifty
+    resultsize = abs(bitmapsize) - integersize
+    resultshift = 2 ** resultsize
+    resultmask = integermask * resultshift
 
     if bitmapsize < 0:
-        signmask = integermask>>1
-        res = (bitmapinteger & mask)>>shifty
-        if res & signmask:
-            res = (res & (signmask-1)) - (integermask>>1)
-        else:
-            res = res & (signmask-1)
-        bitmap = (bitmapinteger&~mask, -shifty)
+        signmask = integershift / 2
+        res = (bitmapinteger & resultmask) / resultshift
+        res = (res & (signmask - 1)) - (integershift / 2 if res & signmask else 0)
+        bitmap = bitmapinteger & ~resultmask, -resultsize
     else:
-        res = (bitmapinteger & mask)>>shifty
-        bitmap = (bitmapinteger&~mask, shifty)
-    return bitmap,res
+        res = (bitmapinteger & resultmask) / resultshift
+        bitmap = bitmapinteger & ~resultmask, resultsize
+    return bitmap, res
 
 class consumer(object):
     '''Given an iterable of an ascii string, provide an interface that supplies bits'''
@@ -298,119 +287,123 @@ class consumer(object):
     def read(self, bytes):
         '''Reads the specified number of bytes from iterable'''
         if bytes < 0:
-            raise AssertionError('Invalid byte count < 0 : {:d}'.format(bytes))
-        result,count = 0,0
+            raise AssertionError("Invalid byte count < 0 : {:d}".format(bytes))
+
+        result, count = 0, 0
         while bytes > 0:
             result *= 256
             result += six.byte2int(six.next(self.source))
-            bytes,count = bytes-1,count+1
-        self.cache = push(self.cache, new(result, count*8))
+            bytes, count = bytes - 1, count + 1
+        self.cache = push(self.cache, new(result, count * 8))
         return count
 
     def consume(self, bits):
         '''Returns some number of bits as an integer'''
         if bits > self.cache[1]:
             count = bits - self.cache[1]
-            bs = (count+7)/8
+            bs = (count + 7) / 8
             self.read(bs)
             return self.consume(bits)
-        self.cache,result = shift(self.cache, bits)
+        self.cache, result = shift(self.cache, bits)
         return result
 
     def __repr__(self):
-        return ' '.join([str(self.__class__), self.cache.__repr__(), string(self.cache)])
+        cls = self.__class__
+        return "{!s} {!r} {:s}".format(cls, self.cache, string(self.cache))
 
 def repr(object):
-    integer,size = object
+    integer, size = object
     return "<type 'bitmap'> ({:#x}, {:d})".format(integer, size)
 
-def data(bitmap, reversed=False):
+def data(bitmap, **kwargs):
     '''Convert a bitmap to a string left-aligned to 8-bits. Defaults to big-endian.'''
-    fn = consume if reversed else shift
-    integer,size = bitmap
+    reverse = builtins.next((kwargs[k] for k in ('reverse', 'reversed') if k in kwargs), False)
+    integer, size = bitmap
 
-    # XXX: this is just like splitter...
+    # align to 8-bits
+    add, res = insert if reversed else push, size % 8
+    if res > 0:
+        bitmap = add(bitmap, (0, 8 - res))
 
-    l = size % 8
-    if l > 0:
-        bitmap = insert(bitmap,(0,8-l)) if reversed else push(bitmap,(0,8-l))
-
-    res = []
+    # convert to an array of octets
+    remove, res = consume if reverse else shift, []
     while bitmap[1] != 0:
-        bitmap,b = fn(bitmap, 8)
-        res.append(b)
-    return str().join(map(six.int2byte,res))
+        bitmap, n = remove(bitmap, 8)
+        res.append(n)
+
+    # convert it to a string
+    return str().join(map(six.int2byte, res))
 
 def size(bitmap):
     '''Return the size of the bitmap, ignoring signedness'''
-    v,s = bitmap
-    return abs(s)
+    integer, size = bitmap
+    return abs(size)
 def signed(bitmap):
     '''Returns true if bitmap is signed'''
-    integer,size = bitmap
+    integer, size = bitmap
     return size < 0
 def cast_signed(bitmap):
     '''Casts a bitmap to a signed integer'''
-    integer,size = bitmap
-    return (integer,-abs(size))
+    integer, size = bitmap
+    return integer, -abs(size)
 def cast_unsigned(bitmap):
     '''Casts a bitmap to a unsigned integer'''
-    integer,size = bitmap
-    return (integer,abs(size))
+    integer, size = bitmap
+    return integer, abs(size)
 def value(bitmap):
     '''Return the integral part of a bitmap, handling signedness if necessary'''
-    v,s = bitmap
-    if s < 0:
-        signmask = 2**(abs(s)-1)
-        res = v & (signmask-1)
-        if v&signmask:
-            return (signmask-res)*-1
-        return res & (signmask-1)
-    return v
+    integer, size = bitmap
+    if size < 0:
+        signmask = 2 ** (abs(size) - 1)
+        res = integer & (signmask - 1)
+        if integer & signmask:
+            return (signmask - res) * -1
+        return res & (signmask - 1)
+    return integer
 int = num = number = value
 
 def weight(bitmap):
-    v,s = bitmap
-    res,mask = 0, 2**s - 1
-    while v > 0:
-        res,v = res+1, v & (v - 1)
+    '''Return the number of bits that are set'''
+    integer, size = bitmap
+    res = 0
+    while integer > 0:
+        res, integer = res + 1, integer & (integer - 1)
     return res
 
 def count(bitmap, value=False):
     '''Returns the number of bits that are set to value and returns the count'''
-    _,s = bitmap
+    _, size = bitmap
     res = weight(bitmap)
-    return res if value else (s-res)
+    return res if value else (size - res)
 
 def splitter(bitmap, maxsize):
     '''Split bitmap into multiple of maxsize bits starting from the low bit.'''
 
-    sf,maxsize = -1 if maxsize < 0 else +1, abs(maxsize)
+    sign, maxsize = -1 if maxsize < 0 else +1, abs(maxsize)
     while True:
-        v,s = bitmap
-        if s < maxsize:
+        integer, size = bitmap
+        if size < maxsize:
             break
-        bitmap,v = consume(bitmap,maxsize)
-        yield (v,maxsize*sf)
+        bitmap, res = consume(bitmap, maxsize)
+        yield res, sign * maxsize
 
-    if s > 0:
-        yield (v,s*sf)
+    if size > 0:
+        yield integer, sign * size
     return
 
 def split(bitmap, maxsize):
     '''Returns a list of bitmaps resulting from the bitmap divided by maxsize bits.'''
-    return [x for x in splitter(bitmap,maxsize)][::-1]
+    return list(splitter(bitmap, maxsize))[::-1]
 
 def join(iterable):
     '''Join a list of bitmaps into a single one'''
-    return six.moves.reduce(push, iterable, (0,0))
+    return six.moves.reduce(push, iterable, zero)
 
 def groupby(sequence, count):
     '''Group sequence by number of elements'''
-    data = enumerate(sequence)
-    key = lambda (index,value): index/count
-    for _,res in itertools.groupby(data, key):
-        yield [v for _,v in res]
+    key, data = lambda (index, value): index / count, enumerate(sequence)
+    for key, res in itertools.groupby(data, key):
+        yield builtins.map(operator.itemgetter(1), res)
     return
 
 # jspelman. he's everywhere.
@@ -419,23 +412,23 @@ rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))
 
 def reverse(bitmap):
     '''Flip the bit order of the bitmap'''
-    res,(_,sz) = (0,0),bitmap
-    while size(res) < sz:
-        bitmap,value = consume(bitmap, 1)
-        res = push(res, (value,1))
+    res, (_, size) = zero, bitmap
+    while res[1] < size:
+        bitmap, value = consume(bitmap, 1)
+        res = push(res, (value, 1))
     return res
 
 def iterate(bitmap):
     '''Iterate through the bitmap returning True or False for each bit'''
-    while size(bitmap) > 0:
-        bitmap,value = shift(bitmap, 1)
+    while bitmap[1] > 0:
+        bitmap, value = shift(bitmap, 1)
         yield bool(value)
     return
 
 def riterate(bitmap):
     '''Reverse iterate through the bitmap returning True or False for each bit'''
-    while size(bitmap) > 0:
-        bitmap,value = consume(bitmap, 1)
+    while bitmap[1] > 0:
+        bitmap, value = consume(bitmap, 1)
         yield bool(value)
     return
 
