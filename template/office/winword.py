@@ -98,15 +98,18 @@ class USHORT(pint.uint16_t): pass
 class XAS(pint.sint16_t):
     def summary(self):
         return "{:d} twip{:s}".format(self.int(), '' if self.int() == 0 else 's')
+class YAS(XAS): pass
 
 class XAS_nonNeg(pint.uint16_t):
     def summary(self):
         return "{:d} twip{:s}".format(self.int(), '' if self.int() == 0 else 's')
+class YAS_nonNeg(XAS_nonNeg): pass
 
 class XAS_plusOne(pint.sint16_t):
     def summary(self):
         res = self.int() - 1
         return "{:d} twip{:s}".format(res, '' if res == 0 else 's')
+class YAS_plusOne(XAS_plusOne): pass
 
 class COLORREF(pstruct.type):
     _fields_ = [
@@ -544,6 +547,194 @@ class DTTM(pbinary.struct):
         (6, 'mint'),
     ]
 
+class _Copts60(pbinary.flags):
+    _fields_ = rl(
+        (1, 'fNoTabForInd'),
+        (1, 'fNoSpaceRaiseLower'),
+        (1, 'fSuppressSpBfAfterPgBrk'),
+        (1, 'fWrapTrailSpaces'),
+        (1, 'fMapPrintTextColor'),
+        (1, 'fNoColumnBalance'),
+        (1, 'fConvMailMergeEsc'),
+        (1, 'fSuppressTopSpacing'),
+        (1, 'fOrigWordTableRules'),
+        (1, 'unused14'),
+        (1, 'fShowBreaksInFrames'),
+        (1, 'fSwapBordersFacingPgs'),
+        (1, 'fLeaveBackslashAlone'),
+        (1, 'fExpShRtn'),
+        (1, 'fDntULTrlSpc'),
+        (1, 'fDntBlnSbDbWid'),
+    )
+class Copts60(_Copts60): pass
+
+class _Copts80(pbinary.flags):
+    _fields_ = rl(
+        (1, 'fSuppressTopSpacingMac5'),
+        (1, 'fTruncDxaExpand'),
+        (1, 'fPrintBodyBeforeHdr'),
+        (1, 'fNoExtLeading'),
+        (1, 'fDontMakeSpaceForUL'),
+        (1, 'fMWSmallCaps'),
+        (1, 'f2ptExtLeadingOnly'),
+        (1, 'fTruncFontHeight'),
+        (1, 'fSubOnSize'),
+        (1, 'fLineWrapLikeWord6'),
+        (1, 'fWW6BorderRules'),
+        (1, 'fExactOnTop'),
+        (1, 'fExtraAfter'),
+        (1, 'fWPSpace'),
+        (1, 'fWPJust'),
+        (1, 'fPrintMet'),
+    )
+
+class Copts80(pstruct.type):
+    _fields_ = [
+        (Copts60, 'copts60'),
+        (_Copts80, 'copts80'),
+    ]
+
+class _Copts(pbinary.flags):
+    _fields_ = rl(
+        (1, 'fSpLayoutLikeWW8'),
+        (1, 'fFtnLayoutLikeWW8'),
+        (1, 'fDontUseHTMLParagraphAutoSpacing'),
+        (1, 'fDontAdjustLineHeightInTable'),
+        (1, 'fForgetLastTabAlign'),
+        (1, 'fUseAutospaceForFullWidthAlpha'),
+        (1, 'fAlignTablesRowByRow'),
+        (1, 'fLayoutRawTableWidth'),
+        (1, 'fLayoutTableRowsApart'),
+        (1, 'fUseWord97LineBreakingRules'),
+        (1, 'fDontBreakWrappedTables'),
+        (1, 'fDontSnapToGridInCell'),
+        (1, 'fDontAllowFieldEndSelect'),
+        (1, 'fApplyBreakingRules'),
+        (1, 'fDontWrapTextWithPunct'),
+        (1, 'fDontUseAsianBreakRules'),
+        (1, 'fUseWord2002TableStyleRules'),
+        (1, 'fGrowAutoFit'),
+        (1, 'fUseNormalStyleForList'),
+        (1, 'fDontUseIndentAsNumberingTabStop'),
+        (1, 'fFELineBreak11'),
+        (1, 'fAllowSpaceOfSameStyleInTable'),
+        (1, 'fWW11IndentRules'),
+        (1, 'fDontAutofitConstrainedTables'),
+        (1, 'fAutofitLikeWW11'),
+        (1, 'fUnderlineTabInNumList'),
+        (1, 'fHangulWidthLikeWW11'),
+        (1, 'fSplitPgBreakAndParaMark'),
+        (1, 'fDontVertAlignCellWithSp'),
+        (1, 'fDontBreakConstrainedForcedTables'),
+        (1, 'fDontVertAlignInTxbx'),
+        (1, 'fWord11KerningPairs'),
+        (1, 'fCachedColBalance'),
+        (31, 'empty1'),
+    )
+
+class Copts(pstruct.type):
+    _fields_ = [
+        (_Copts60, 'copts60'),
+        (_Copts80, 'copts80'),
+        (_Copts, 'copts'),
+        (pint.uint32_t, 'empty2'),
+        (pint.uint32_t, 'empty3'),
+        (pint.uint32_t, 'empty4'),
+        (pint.uint32_t, 'empty5'),
+        (pint.uint32_t, 'empty6'),
+    ]
+
+class DopTypography(pstruct.type):
+    class _b(pbinary.flags):
+        class _iJustification(pbinary.enum):
+            width, _values_ = 2, [
+                ('doNotCompress', 0),
+                ('compressPunctuation', 1),
+                ('compressPunctuationAndJapaneseKana', 2),
+            ]
+        class _iLevelOfKinsoku(pbinary.enum):
+            width, _values_ = 2, [
+                # FIXME
+                ('forbidSpecifiedPunctuation', 2),
+            ]
+        class _iCustomKsu(pbinary.enum):
+            width, _values_ = 3, [
+                ('No language', 0),
+                ('Japanese', 1),
+                ('Chinese (simplified)', 2),
+                ('Korean', 3),
+                ('Chinese (traditional)', 4),
+            ]
+        _fields_ = rl(
+            (1, 'fKerningPunct'),
+            (_iJustification, 'iJustification'),
+            (_iLevelOfKinsoku, 'iLevelOfKinsoku'),
+            (1, 'f2on1'),
+            (1, 'unused'),
+            (_iCustomKsu, 'iCustomKsu'),
+            (1, 'fJapeneseUseLevel2'),
+            (5, 'reserved'),
+        )
+    _fields_ = [
+        (_b, 'b'),
+        (pint.uint16_t, 'cchFollowingPunct'),
+        (pint.uint16_t, 'cchLeadingPunct'),
+        # FIXME: the previous 2 uint16_t should be used for the following
+        #        2 arrays, but the specs set them to a static size.
+        (dyn.clone(pstr.wstring, length=202 / 2), 'rgxchFPunct'),
+        (dyn.clone(pstr.wstring, length=102 / 2), 'rgxchLPunct'),
+    ]
+
+class Dogrid(pstruct.type):
+    class _b(pbinary.flags):
+        _fields_ = rl(
+            (7, 'dyGridDisplay'),
+            (1, 'unused'),
+            (7, 'dxGridDisplay'),
+            (1, 'fFollowMargins'),
+        )
+    _fields_ = [
+        (XAS_nonNeg, 'xaGrid'),
+        (YAS_nonNeg, 'yaGrid'),
+        (XAS_nonNeg, 'dxaGrid'),
+        (YAS_nonNeg, 'dyaGrid'),
+        (_b, 'b'),
+    ]
+
+class Asumyi(pstruct.type):
+    class _b(pbinary.flags):
+        class _iViewBy(pbinary.enum):
+            width, _values_ = 2, [
+                ('highlight-summary', 0),
+                ('hide-non-summary', 0),
+                ('insert-summary', 0),
+                ('create-document', 0),
+            ]
+        _fields_ = rl(
+            (1, 'fValid'),
+            (1, 'fView'),
+            (_iViewBy, 'iViewBy'),
+            (1, 'fUpdateProps'),
+            (11, 'reserved'),
+        )
+    class _wDlgLevel(pint.enum, pint.uint16_t):
+        _values_ = [
+            ('10 sentences.', 0xFFFE),
+            ('20 sentences.', 0xFFFD),
+            ('100 words.', 0xFFFC),
+            ('500 words.', 0xFFFB),
+            ('10 percent of the original document size.', 0xFFFA),
+            ('25 percent of the original document size.', 0xFFF9),
+            ('50 percent of the original document size.', 0xFFF8),
+            ('75 percent of the original document size.', 0xFFF7),
+        ]
+    _fields_ = [
+        (_b, 'b'),
+        (_wDlgLevel, 'wDlgLevel'),
+        (pint.uint32_t, 'IHighestLevel'),
+        (pint.uint32_t, 'ICurrentLevel'),
+    ]
+
 class PropRMark(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'fPropRMark'),
@@ -694,14 +885,13 @@ class TC80(pstruct.type):
         (Brc80MayBeNil, 'brcRight'),
     ]
 
-
 class Shd80(pbinary.struct):
     _fields_ = [
         (_Ico, 'icoFore'),
         (_Ico, 'icoBack'),
         (_Ipat, 'ipat'),
     ]
-    
+
 # XXX: Primitive types
 
 ## Property Operand Types
@@ -852,7 +1042,6 @@ class Clx(pstruct.type):
         (Prc, 'RgPrc'),
         (Pcdt, 'Pcdt'),
     ]
-    
 
 ## Property enumerations
 Sprm_Enumeration._values_ = [
@@ -1474,6 +1663,271 @@ class sprmTSetBrc80(TableBrc80Operand): pass
 
 # XXX: Property operands (:40)
 
+## Document structures
+class DopBase(pstruct.type):
+    class _b(pbinary.flags):
+        class _fpc(pbinary.enum):
+            width, _values_ = 2, [
+                ('end-of-section', 0),
+                ('bottom-margin', 1),
+                ('last-line-of-page', 2),
+            ]
+        class _rncFtn(pbinary.enum):
+            width, _values_ = 2, [
+                ('previous-section', 0),
+                ('unique-section', 1),
+                ('unique-page', 2),
+            ]
+        _fields_ = rl(
+            (1, 'fFacingPages'),
+            (1, 'unused1'),
+            (1, 'fPMHMainDoc'),
+            (1, 'unused2'),
+            (_fpc, 'fpc'),
+            (1, 'unused3'),
+            (8, 'unused4'),
+            (_rncFtn, 'rncFtn'),
+            (14, 'nFtn'),
+            (1, 'unused5'),
+            (1, 'unused6'),
+            (1, 'unused7'),
+            (1, 'unused8'),
+            (1, 'unused9'),
+            (1, 'unused10'),
+            (1, 'fSplAllDone'),
+            (1, 'fSplAllClean'),
+            (1, 'fSplHideErrors'),
+            (1, 'fGramHideErrors'),
+            (1, 'fLabelDoc'),
+            (1, 'fHyphCapitals'),
+            (1, 'fAutoHyphen'),
+            (1, 'fFormNoFields'),
+            (1, 'fLinkStyles'),
+            (1, 'fRevMarking'),
+            (1, 'unused11'),
+            (1, 'fExactCWords'),
+            (1, 'fPagHidden'),
+            (1, 'fPagResults'),
+            (1, 'fLockAtn'),
+            (1, 'fMirrorMargins'),
+            (1, 'fWord97Compat'),
+            (1, 'unused12'),
+            (1, 'unused13'),
+            (1, 'fProtEnabled'),
+            (1, 'fDispFormFldSel'),
+            (1, 'fRMView'),
+            (1, 'fRMPrint'),
+            (1, 'fLockVbaProj'),
+            (1, 'fLockRev'),
+            (1, 'fEmbedFonts'),
+        )
+    class _b2(pbinary.flags):
+        class _rncEdn(pbinary.enum):
+            width, _values_ = 2, [
+                ('previous-section', 0),
+                ('unique-section', 1),
+                ('unique-page', 2),
+            ]
+        class _epc(pbinary.enum):
+            width, _values_ = 2, [
+                ('end-of-section', 0),
+                ('end-of-document', 3),
+            ]
+        _fields_ = rl(
+            (_rncEdn, 'rncEdn'),
+            (14, 'nEdn'),
+            (_epc, 'epc'),
+            (4, 'unused14'),
+            (4, 'unused15'),
+            (1, 'fPrintFormData'),
+            (1, 'fSaveFormData'),
+            (1, 'fShadeFormData'),
+            (1, 'fShadeMergeFields'),
+            (1, 'reserved2'),
+            (1, 'fIncludeSubdocsInStats'),
+        )
+    class _b3(pbinary.flags):
+        class _wvkoSaved(pbinary.enum):
+            width, _values_ = 3, [
+                ('none', 0),
+                ('print', 1),
+                ('outline', 2),
+                ('masterPages', 3),
+                ('normal', 4),
+                ('web', 5),
+            ]
+        class _zkSaved(pbinary.enum):
+            width, _values_ = 2, [
+                ('none', 0),
+                ('fullPage', 1),
+                ('bestFit', 2),
+                ('textFit', 3),
+            ]
+        _fields_ = rl(
+            (_wvkoSaved, 'wvkoSaved'),
+            (9, 'pctWwdSaved'),
+            (_zkSaved, 'zkSaved'),
+            (1, 'unused16'),
+            (1, 'iGutterPos'),
+        )
+    _fields_ = [
+        (_b, 'b'),
+        (Copts60, 'copts60'),
+        (pint.uint16_t, 'dxaTab'),
+        (pint.uint16_t, 'cpgWebOpt'),
+        (pint.uint16_t, 'dxaHotZ'),
+        (pint.uint16_t, 'cConsecHypLim'),
+        (pint.uint16_t, 'wSpare2'),
+        (DTTM, 'dttmCreated'),
+        (DTTM, 'dttmRevised'),
+        (DTTM, 'dttmLastPrint'),
+        (pint.sint16_t, 'nRevision'),
+        (pint.sint32_t, 'tmEdited'),
+        (pint.sint32_t, 'cWords'),
+        (pint.sint32_t, 'cCh'),
+        (pint.sint16_t, 'cPg'),
+        (pint.sint32_t, 'cParas'),
+        (_b2, 'b2'),
+        (pint.sint32_t, 'cLines'),
+        (pint.sint32_t, 'cWordsWithSubdocs'),
+        (pint.sint32_t, 'cChWithSubdocs'),
+        (pint.sint16_t, 'cPgWithSubdocs'),
+        (pint.sint32_t, 'cParasWithSubdocs'),
+        (pint.sint32_t, 'cLinesWithSubdocs'),
+        (pint.sint32_t, 'lKeyProtDoc'),
+        (_b3, 'b3'),
+    ]
+
+class Dop95(pstruct.type):
+    _fields_ = [
+        (DopBase, 'dopBase'),
+        (Copts80, 'copts80'),
+    ]
+
+class Dop97(pstruct.type):
+    class _adt(pint.enum, pint.uint16_t):
+        _values_ = [
+            ('notSpecified', 0x0000),
+            ('letter', 0x0001),
+            ('eMail', 0x0002),
+        ]
+    class _b(pbinary.flags):
+        class _lvlDop(pbinary.enum):
+            width, _values_ = 4, [
+                (                             'Heading 1', 0x0),
+                (                      'Headings 1 and 2', 0x1),
+                (                   'Headings 1, 2 and 3', 0x2),
+                (                'Headings 1, 2, 3 and 4', 0x3),
+                (             'Headings 1, 2, 3, 4 and 5', 0x4),
+                (          'Headings 1, 2, 3, 4, 5 and 6', 0x5),
+                (       'Headings 1, 2, 3, 4, 5, 6 and 7', 0x6),
+                (    'Headings 1, 2, 3, 4, 5, 6, 7 and 8', 0x7),
+                ('Headings 1, 2, 3, 4, 5 , 6, 7, 8 and 9', 0x8),
+                ('All levels', 0x9),
+                ('All levels', 0xF),
+            ]
+        _fields_ = rl(
+            (1, 'unused1'),
+            (_lvlDop, 'lvlDop'),
+            (1, 'fGramAllDone'),
+            (1, 'fGramAllClean'),
+            (1, 'fSubsetFonts'),
+            (1, 'unused2'),
+            (1, 'fHtmlDoc'),
+            (1, 'fDiskLvcInvalid'),
+            (1, 'fSnapBorder'),
+            (1, 'fIncludeHeader'),
+            (1, 'fIncludeFooter'),
+            (1, 'unused3'),
+            (1, 'unused4'),
+        )
+    class _grfDocEvents(pint.enum, pint.uint32_t):
+        # FIXME: This should be a pbinary.flags
+        _values_ = [
+            ('New', 0x00000001),
+            ('Open', 0x00000002),
+            ('Close', 0x00000004),
+            ('Sync', 0x00000008),
+            ('XMLAfterInsert', 0x00000010),
+            ('XMLBeforeDelete', 0x00000020),
+            ('BBAfterInsert', 0x00000100),
+            ('BBBeforeDelete', 0x00000200),
+            ('BBOnExit', 0x00000400),
+            ('BBOnEnter', 0x00000800),
+            ('StoreUpdate', 0x00001000),
+            ('BBContentUpdate', 0x00002000),
+            ('LegoAfterInsert', 0x00004000),
+        ]
+    class _b2(pbinary.flags):
+        _fields_ = rl(
+            (1, 'fVirusPrompted'),
+            (1, 'fVirusLoadSafe'),
+            (30, 'KeyVirusSession30'),
+        )
+    _fields_ = [
+        (Dop95, 'dop95'),
+        (_adt, 'adt'),
+        (DopTypography, 'doptypography'),
+        (Dogrid, 'dogrid'),
+        (_b, 'b'),
+        (pint.uint16_t, 'unused5'),
+        (Asumyi, 'asumyi'),
+        (pint.uint32_t, 'cChWS'),
+        (pint.uint32_t, 'cChWSWithSubdocs'),
+        (_grfDocEvents, 'grfDocEvents'),
+        (_b2, 'b2'),
+        (dyn.block(30), 'space'),
+        (pint.uint32_t, 'cpMaxListcacheMainDoc'),
+        (pint.uint16_t, 'ilfoLastBulletMain'),
+        (pint.uint16_t, 'ilfoLastNumberMain'),
+        (pint.uint32_t, 'cDBC'),
+        (pint.uint32_t, 'cDBCWithSubdocs'),
+        (pint.uint32_t, 'reserved3a'),
+        (MSONFC, 'nfcFtnRef'),
+        (MSONFC, 'nfcEdnRef'),
+        (pint.uint16_t, 'hpsZoomFontPag'),
+        (pint.uint16_t, 'dywDispPag'),
+    ]
+
+# FIXME: finish these
+class Dop2000(pstruct.type):
+    _fields_ = [
+        (Dop97, 'dop97'),
+    ]
+class Dop2002(pstruct.type):
+    _fields_ = [
+        (Dop2000, 'dop2000'),
+    ]
+class Dop2003(pstruct.type):
+    _fields_ = [
+        (Dop2002, 'dop2002'),
+    ]
+class Dop2007(pstruct.type):
+    _fields_ = [
+        (Dop2003, 'dop2002'),
+    ]
+class Dop2010(pstruct.type):
+    _fields_ = [
+        (Dop2007, 'dop2002'),
+    ]
+class Dop2013(pstruct.type):
+    _fields_ = [
+        (Dop2010, 'dop2010'),
+    ]
+
+class Dop(dynamic.union):
+    _fields_ = [
+        (lambda self: dyn.clone(DopBase, blocksize=lambda s, cb=min((DopBase().a.blocksize(), self.o.li.blocksize())): cb), 'Base'),
+        (lambda self: dyn.clone(Dop95, blocksize=lambda s, cb=min((Dop95().a.blocksize(), self.o.li.blocksize())): cb), '95'),
+        (lambda self: dyn.clone(Dop97, blocksize=lambda s, cb=min((Dop97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
+        (lambda self: dyn.clone(Dop2000, blocksize=lambda s, cb=min((Dop2000().a.blocksize(), self.o.li.blocksize())): cb), '2000'),
+        (lambda self: dyn.clone(Dop2002, blocksize=lambda s, cb=min((Dop2002().a.blocksize(), self.o.li.blocksize())): cb), '2002'),
+        (lambda self: dyn.clone(Dop2003, blocksize=lambda s, cb=min((Dop2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
+        (lambda self: dyn.clone(Dop2007, blocksize=lambda s, cb=min((Dop2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
+        (lambda self: dyn.clone(Dop2010, blocksize=lambda s, cb=min((Dop2010().a.blocksize(), self.o.li.blocksize())): cb), '2010'),
+        (lambda self: dyn.clone(Dop2013, blocksize=lambda s, cb=min((Dop2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
+    ]
+
 ## File Information Block
 class FibBase(pstruct.type):
     class _b(pbinary.flags):
@@ -1724,7 +2178,7 @@ class FibRgFcLcb2002(pstruct.type):
         (FcLcb, 'FactoidData'),
         (FcLcb, 'DocUndo'),
         (FcLcb, 'SttbfBkmkFcc'),
-        (FcLcb, 'PlcfBkfFcc'),        
+        (FcLcb, 'PlcfBkfFcc'),
         (FcLcb, 'PlcfBklFcc'),
         (FcLcb, 'SttbfbkmkBPRepairs'),
         (FcLcb, 'PlcfbkfBPRepairs'),
