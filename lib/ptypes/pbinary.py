@@ -477,6 +477,8 @@ class container(type):
         res = super(container, self).setposition((offset, suboffset))
 
         if recurse and self.value is not None:
+            # FIXME: if the byteorder is little-endian, then this fucks up
+            #        the positions pretty hard
             for n in self.value:
                 n.setposition((offset, suboffset), recurse=recurse)
                 suboffset += n.bits() if n.initializedQ() else n.blockbits()
@@ -567,6 +569,8 @@ class container(type):
             n.setposition(position)
             n.__deserialize_consumer__(consumer)
 
+            # FIXME: if the byteorder is little-endian, then this fucks up
+            #        the positions pretty hard
             size = n.blockbits()
             offset, suboffset = position
             suboffset += size
@@ -1187,6 +1191,8 @@ class blockarray(terminatedarray):
                 size = n.blockbits()
                 total -= size
 
+                # FIXME: if the byteorder is little-endian, then this fucks up
+                #        the positions pretty hard
                 (offset, suboffset) = position
                 suboffset += size
                 offset, suboffset = (offset + suboffset/8, suboffset % 8)
