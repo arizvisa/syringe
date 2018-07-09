@@ -252,6 +252,11 @@ class _union_generic(ptype.container):
         index = self.__getindex__(name)
         return self.__object__[index]
 
+    def __iter__(self):
+        for k in six.iterkeys(self):
+            yield k
+        return
+
 class union(_union_generic):
     """
     Provides a data structure with Union-like characteristics. If the root type
