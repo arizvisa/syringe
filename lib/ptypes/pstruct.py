@@ -92,10 +92,12 @@ class _pstruct_generic(ptype.container):
     # informational methods
     def properties(self):
         result = super(_pstruct_generic, self).properties()
-        if len(self.value) < len(self._fields_):
-            result['abated'] = True
-        elif len(self.value) > len(self._fields_):
-            result['inflated'] = True
+        if self.initializedQ():
+            if len(self.value) < len(self._fields_):
+                result['abated'] = True
+            elif len(self.value) > len(self._fields_):
+                result['inflated'] = True
+            return result
         return result
 
     # list methods
