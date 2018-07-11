@@ -124,7 +124,7 @@ class DIFAT(AllocationTable):
         last = self.value[-1]
         if last['ENDOFCHAIN']:
             cls = self.__class__
-            raise AssertionError("{:s}: Encountered {:s} while trying to traverse to next DIFAT table. {:s}".format('.'.join((__name__, cls.__name__)), ENDOFCHAIN.typename(), last.summary()))
+            raise AssertionError("{:s}: Encountered {:s} while trying to traverse to next DIFAT table. {:s}".format('.'.join((cls.__module__, cls.__name__)), ENDOFCHAIN.typename(), last.summary()))
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
 
 class MINIFAT(DIFAT):
@@ -143,7 +143,7 @@ class uByteOrder(pint.enum, USHORT):
         elif res == 0xfeff:
             return ptypes.config.byteorder.bigendian
         cls = self.__class__
-        raise ValueError("{:s}: Unsupported value set for enumeration \"uByteOrder\". {:s}".format('.'.join((__name__, cls.__name__)), self.summary()))
+        raise ValueError("{:s}: Unsupported value set for enumeration \"uByteOrder\". {:s}".format('.'.join((cls.__module__, cls.__name__)), self.summary()))
 
 class Header(pstruct.type):
     _fields_ = [
@@ -201,22 +201,29 @@ class HeaderDiFat(pstruct.type):
     ]
 
 ### Directory types
-class DirectoryEntry(pstruct.type):
-    class Type(pint.enum, BYTE):
-        _values_=[('Unknown', 0), ('Storage', 1), ('Stream', 2), ('Root', 5)]
-    class Flag(pint.enum, BYTE):
-        _values_=[('red', 0), ('black', 1)]
-    class Identifier(pint.enum, DWORD):
-        _values_=[('MAXREGSID', 0xfffffffa), ('NOSTREAM', 0xffffffff)]
+class DirectoryEntryData(ptype.block):
+    def properties(self):
+        parent, res = self.parent, super(DirectoryEntryData, self).properties()
+        if isinstance(parent, DirectoryEntry):
+            res['index'] = int(parent.__name__)
+            res['type'] = parent['Type'].str()
+        return res
+class DirectoryEntryType(pint.enum, BYTE):
+    _values_=[('Unknown', 0), ('Storage', 1), ('Stream', 2), ('Root', 5)]
+class DirectoryEntryFlag(pint.enum, BYTE):
+    _values_=[('red', 0), ('black', 1)]
+class DirectoryEntryIdentifier(pint.enum, DWORD):
+    _values_=[('MAXREGSID', 0xfffffffa), ('NOSTREAM', 0xffffffff)]
 
+class DirectoryEntry(pstruct.type):
     _fields_ = [
         (dyn.clone(pstr.wstring, length=32), 'Name'),
         (USHORT, 'uName'),
-        (Type, 'Type'),
-        (Flag, 'Flag'),
-        (Identifier, 'iLeftSibling'),
-        (Identifier, 'iRightSibling'),
-        (Identifier, 'iChild'),
+        (DirectoryEntryType, 'Type'),
+        (DirectoryEntryFlag, 'Flag'),
+        (DirectoryEntryIdentifier, 'iLeftSibling'),
+        (DirectoryEntryIdentifier, 'iRightSibling'),
+        (DirectoryEntryIdentifier, 'iChild'),
         (CLSID, 'clsid'),
         (DWORD, 'dwState'),
         (FILETIME, 'ftCreation'),
@@ -228,9 +235,9 @@ class DirectoryEntry(pstruct.type):
     def summary(self):
         return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
 
-    def Data(self, correctsize=True):
+    def Data(self, type=None, clamp=True):
         """Return the contents of the directory entry.
-        If correctsize is True, then resize the returned sectors according to the size specified in the directory entry.
+        If clamp is True, then resize the returned sectors according to the size specified in the directory entry.
         """
         F = self.getparent(File)
 
@@ -248,10 +255,16 @@ class DirectoryEntry(pstruct.type):
 
         # Now we can look up our sectors in the fat
         iterable = fat.chain(self['sectLocation'].int())
-        data = fData(iterable)
+        data = fData(iterable, type=DirectoryEntryData)
 
-        # Return a cropped block if specified, or the regular one if not.
-        return data.cast(ptype.block, length=self['qwSize'].int()) if correctsize else data
+        # Crop the block if specified, or use the regular one if not
+        res = data.cast(DirectoryEntryData, length=self['qwSize'].int()) if clamp else data
+        res.parent, res.__name__ = self, 'Data'
+
+        # Spawn the correct child type if one was suggested
+        if type is None:
+            return res.new(ptype.block, offset=0, length=res.size(), source=ptypes.prov.proxy(res))
+        return res.new(type, offset=0, source=ptypes.prov.proxy(res))
 
 class Directory(parray.block):
     _object_ = DirectoryEntry
@@ -359,7 +372,7 @@ class File(pstruct.type):
         fat = self.getFat()
         dsect = self['Fat']['sectDirectory'].int()
         res = self.chain(fat.chain(dsect))
-        return res.cast(Directory, blocksize=lambda: res.size())
+        return res.cast(Directory, __name__='Directory', blocksize=lambda: res.size())
     getDirectory = Directory
 
     def chain(self, iterable):
@@ -368,7 +381,7 @@ class File(pstruct.type):
         map(res.append, map(self['Data'].__getitem__, iterable))
         return res
 
-    def Data(self, iterable):
+    def Data(self, iterable, type=None):
         '''Return the sectors for each index in iterable as a block.'''
         # If an integer was specified, then just return the sector by index
         if isinstance(iterable, (int, long)):
@@ -376,7 +389,7 @@ class File(pstruct.type):
 
         # Now grab the container, and then cast it to a block
         res = self.chain(iterable)
-        return res.cast(ptype.block, length=res.size())
+        return res.cast(ptype.block, length=res.size()) if type is None else res.cast(type, blocksize=lambda cb=res.size(): cb)
 
     def __MiniData__(self):
         '''Return the mini-sector table.'''
@@ -387,12 +400,12 @@ class File(pstruct.type):
         R = D.RootEntry()
         if R is None:
             cls = self.__class__
-            raise ValueError("{:s}: Unable to locate a directory entry of type Root(5).".format('.'.join((__name__, cls.__name__))))
+            raise ValueError("{:s}: Unable to locate a directory entry of type Root(5).".format('.'.join((cls.__module__, cls.__name__))))
 
         # Now we can return the whole table
         return R.Data()
 
-    def MiniData(self, iterable):
+    def MiniData(self, iterable, type=None):
         '''Return the minisectors for each index in iterable as a block.'''
         data = self.__MiniData__()
 
@@ -403,7 +416,7 @@ class File(pstruct.type):
         # Now make a container and then cast it to a block
         res = self.new(ptype.container)
         map(res.append, map(data.__getitem__, iterable))
-        return res.cast(ptype.block, length=res.size())
+        return res.cast(ptype.block, length=res.size()) if type is None else res.cast(type, blocksize=lambda cb=res.size(): cb)
 
 ### Specific stream types
 class Stream(ptype.definition): cache = {}
