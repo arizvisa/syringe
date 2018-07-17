@@ -737,7 +737,7 @@ class generic(_base_generic):
     a = property(fget=lambda s: s.alloc())  # alloc
     c = property(fget=lambda s: s.commit()) # commit
     l = property(fget=lambda s: s.load())   # load
-    li = property(fget=lambda s: s.load() if not s.initializedQ() else s) # load if uninitialized
+    li = property(fget=lambda s: s.load() if s.value is None else s) # load if uninitialized
 
     def get(self):
         """Return a representation of a type.
