@@ -438,8 +438,8 @@ class uninitialized(terminated):
         # Grab all initialized elements near the beginning
         res = list(itertools.takewhile(operator.methodcaller('initializedQ'), self.value))
 
-        # Verify that the rest are uninitialized
-        return all(not n.initializedQ() for n in self.value[len(res):])
+        # Return True if the whole thing is initialized or just the tail is uninitialized
+        return len(res) == len(self.value) or all(not n.initializedQ() for n in self.value[len(res):])
 
 class infinite(uninitialized):
     '''An array that reads elements until an exception or interrupt happens'''
