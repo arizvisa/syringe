@@ -321,7 +321,7 @@ def data(bitmap, **kwargs):
     integer, size = bitmap
 
     # align to 8-bits
-    add, res = insert if reversed else push, size % 8
+    add, res = push if reversed else insert, size % 8
     if res > 0:
         bitmap = add(bitmap, (0, 8 - res))
 
@@ -805,6 +805,20 @@ if __name__ == '__main__':
         x = (-23983&mask,-64)
         res = bitmap.mod(x, -5)
         if bitmap.signed(res) and bitmap.value(res) == -3:
+            raise Success
+
+    @TestCase
+    def data_padding():
+        res = bitmap.new(0x123, 12)
+        data = bitmap.data(res, reversed=0)
+        if data.encode('hex') == '1230':
+            raise Success
+
+    @TestCase
+    def data_padding_reversed():
+        res = bitmap.new(0x123, 12)
+        data = bitmap.data(res, reversed=1)
+        if data.encode('hex') == '3012':
             raise Success
 
 if __name__ == '__main__':

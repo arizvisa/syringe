@@ -1875,8 +1875,6 @@ if __name__ == '__main__':
         a = bitmap.push(a, (0xd, 4))
 
         s = bitmap.data(a)
-
-        i = iter(s)
         z = pbinary.new(RECT,source=provider.string(s)).l
 
         if z['Nbits'] == 4 and z['Xmin'] == 0xd and z['Xmax'] == 0xe and z['Ymin'] == 0xa and z['Ymax'] == 0xd:
