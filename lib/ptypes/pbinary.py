@@ -264,7 +264,7 @@ class type(ptype.generic):
 
     def __deserialize_consumer__(self, consumer):
         try: self.__setvalue__(consumer.consume(self.blockbits()))
-        except StopIteration, error: raise error
+        except (StopIteration, error.ProviderError), e: raise e
         return self
 
     def new(self, pbinarytype, **attrs):
@@ -1281,7 +1281,7 @@ class partial(ptype.container):
             result.setoffset(result.getoffset())
             return result
 
-        except StopIteration, e:
+        except (StopIteration, error.ProviderError), e:
             raise error.LoadError(self, exception=e)
 
     def __load_bigendian(self, **attrs):
@@ -1303,6 +1303,7 @@ class partial(ptype.container):
 
         # XXX: self.new(t) can potentially get called due to this call to self.blocksize().
         #      This can cause a field's closure to get called and raise an InitializationError().
+
         # FIXME: check to see if there's a dynamic type that needs to be resolved
         #        and if so, throw up an error that explains why you can't use dynamic
         #        types with a non-constant in a little-endian binary type.

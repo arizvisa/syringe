@@ -887,7 +887,7 @@ class base(generic):
                 self.source.seek(ofs)
                 block = self.source.consume(bs)
                 self = self.__deserialize_block__(block)
-            except (StopIteration,error.ProviderError), e:
+            except (StopIteration, error.ProviderError), e:
                 self.source.seek(ofs + bs)
                 raise error.LoadError(self, consumed=bs, exception=e)
         return self
@@ -901,7 +901,7 @@ class base(generic):
                 self.source.store(data)
             return self
 
-        except (StopIteration,error.ProviderError), e:
+        except (StopIteration, error.ProviderError), e:
             raise error.CommitError(self, exception=e)
 
     def collect(self, *args, **kwds):
