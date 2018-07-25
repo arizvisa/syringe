@@ -1385,6 +1385,9 @@ class partial(ptype.container):
             raise error.InitializationError(self, 'partial.__len__')
         return len(self.object)
 
+    def __field__(self, key):
+        return self.object.__field__(key)
+
     def __getitem__(self, name):
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__getitem__')
