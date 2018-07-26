@@ -334,7 +334,12 @@ class union(_union_generic):
 
     def load(self, **attrs):
         res = (self.__create__() if self.value is None else self.value[0]).load(**attrs)
-        map(operator.methodcaller('load', offset=0), self.__object__)
+        for element in self.__object__:
+            try:
+                element.load(offset=0)
+            except error.LoadError, e:
+                Log.warn('dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}'.format(self.instance(), element.instance(), element.name()))
+            continue
         return self
 
     def commit(self, **attrs):
