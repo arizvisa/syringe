@@ -85,7 +85,7 @@ class empty(base):
         return '\x00'*amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('{:s}.store : Tried to write {:#x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
+        Log.info('{:s}.store : Tried to write {:d} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
 class proxy(base):
@@ -263,7 +263,7 @@ class string(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         if amount < 0:
-            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.offset,amount,self))
+            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(self.offset,amount,self))
         if amount == 0: return ''
         if self.offset >= len(self.data):
             raise error.ConsumeError(self,self.offset,amount)
@@ -316,7 +316,7 @@ class fileobj(base):
         '''Consume ``amount`` bytes from the given provider.'''
         offset = self.file.tell()
         if amount < 0:
-            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(offset,amount,self))
+            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(offset,amount,self))
 
         result = ''
         try:
@@ -401,7 +401,7 @@ class random(base):
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('{:s}.store : Tried to write {:#x} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
+        Log.info('{:s}.store : Tried to write {:d} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
         return len(data)
 
 ## special providers
@@ -461,7 +461,7 @@ class stream(base):
         '''Consume ``amount`` bytes from the given provider.'''
         o = self.offset - self.data_ofs
         if o < 0:
-            raise ValueError('{:s}.consume : Unable to seek to offset {:x} ({:x},+{:x})'.format(type(self).__name__, self.offset, self.data_ofs, len(self.data)))
+            raise ValueError('{:s}.consume : Unable to seek to offset {:x} ({:x}:{:+x})'.format(type(self).__name__, self.offset, self.data_ofs, len(self.data)))
 
         # select the requested data
         if (self.eof) or (o + amount <= len(self.data)):
@@ -493,7 +493,7 @@ class stream(base):
                     self.eof = False
                 self._write(data)
                 return len(data)
-            raise ValueError("{:s}.store : Unable to store {:x} bytes outside of provider's cache size ({:x},+{:x})".format(type(self), len(data), self.data_ofs, len(self.data)))
+            raise ValueError("{:s}.store : Unable to store {:+d} bytes outside of provider's cache size ({:x}:{:+x}).".format(type(self), len(data), self.data_ofs, len(self.data)))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -501,7 +501,7 @@ class stream(base):
         return self._write(data)
 
     def __repr__(self):
-        return '{:s}[eof={!r} base={:#x} length={:+#x}] ofs={:#x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
+        return '{:s}[eof={!r},base={:x},length={:+x}] offset={:x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
 
     def __getitem__(self, i):
         return self.data[i-self.data_ofs]
@@ -518,7 +518,7 @@ class iterable(stream):
         return str().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
-        Log.info('iter._write : Tried to write {:#x} bytes to an iterator'.format(len(data)))
+        Log.info('iter._write : Tried to write {:+x} bytes to an iterator'.format(len(data)))
         return len(data)
 
 class posixfile(fileobj):
@@ -687,7 +687,7 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.address,amount,self))
+                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(self.address,amount,self))
 
             NumberOfBytesRead = ctypes.c_int()
             res = ctypes.c_char*amount
@@ -873,7 +873,7 @@ try:
                 if isinstance(err, tuple) and len(err) == 2:
                     ofs, amount = err
                     raise error.ConsumeError(cls, ofs, amount, ofs-startofs)
-                Log.fatal("{:s} : Unable to read {:+d} bytes from {:#x} due to unexpected exception. : {:#x}:{:+#x}".format('.'.join((__name__,cls.__name__)), amount, startofs, cls.offset, amount), exc_info=True)
+                Log.fatal("{:s} : Unable to read {:+d} bytes from {:x} due to unexpected exception ({:x}:{:+x}).".format('.'.join((__name__,cls.__name__)), amount, startofs, cls.offset, amount), exc_info=True)
                 raise error.ConsumeError(cls, startofs, amount, cls.offset-startofs)
             cls.offset += len(result)
             return result
@@ -940,7 +940,7 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
             except RuntimeError, e:
-                raise StopIteration('Unable to read {:#x} bytes from address {:#x}'.format(amount, self.offset))
+                raise StopIteration('Unable to read {:+d} bytes from address {:x}'.format(amount, self.offset))
             return str(result)
 
         def store(self, data):
@@ -1086,7 +1086,7 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes. {:d}:+{:s} from {:s}'.format(self.address,amount,self))
+                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(self.address,amount,self))
             res = memory._read(self.address, amount)
             if len(res) == 0 and amount > 0:
                 raise error.ConsumeError(self,offset,amount,len(res))

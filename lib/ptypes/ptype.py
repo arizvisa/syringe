@@ -564,7 +564,7 @@ class _base_generic(object):
         name,ofs = self.classname(),self.getoffset()
         try:
             bs = self.blocksize()
-            return "{:s}[{:x}:+{:x}]".format(name, ofs, bs)
+            return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
         except:
             pass
         return "{:s}[{:x}:+???]".format(name, ofs)
@@ -1336,9 +1336,9 @@ class container(base):
             ofs, s, bs = self.getoffset(), self.size(), self.blocksize()
             self.source.seek(ofs+bs)
             if s > 0 and s < bs:
-                Log.warning('container.load : {:s} : Unable to complete read : at {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs, s, e))
+                Log.warning('container.load : {:s} : Unable to complete read at {{{:x}:{:+x}}} : {!r}'.format(self.instance(), ofs, s, e))
             else:
-                Log.debug('container.load : {:s} : Cropped to {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs, s, e))
+                Log.debug('container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}'.format(self.instance(), ofs, s, e))
         return self
 
     def commit(self, **attrs):
@@ -1349,7 +1349,7 @@ class container(base):
             try:
                 return super(container, self).commit(**attrs)
             except error.CommitError, e:
-                Log.warning('container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:+{:x}}} : {:s}'.format(self.instance(), self.getoffset(), self.size(), e))
+                Log.warning('container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:{:+x}}} : {:s}'.format(self.instance(), self.getoffset(), self.size(), e))
 
         # commit all elements of container individually
         with utils.assign(self, **attrs):
@@ -1361,7 +1361,7 @@ class container(base):
                     if current > sz: break
                 pass
             except error.CommitError, e:
-                Log.fatal('container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:+{:x}}} : {!r}'.format(self.instance(), ofs+current, self.blocksize()-current, e))
+                Log.fatal('container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:{:+x}}} : {!r}'.format(self.instance(), ofs+current, self.blocksize()-current, e))
         return self
 
     def copy(self, **attrs):

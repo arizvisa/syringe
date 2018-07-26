@@ -23,8 +23,8 @@ class StoreError(ProviderError):
     def __str__(self):
         identity,offset,amount,written = self.stored
         if written > 0:
-            return 'StoreError({:s}) : Unable to store object to {:#x}:{:+#x} : Wrote {:#x}'.format(type(identity), offset, amount, written)
-        return 'StoreError({:s}) : Unable to write object to {:#x}:{:+#x}'.format(type(identity), offset, amount)
+            return 'StoreError({:s}) : Unable to store bytes ({:x}:{:+x}) : Wrote only {:+d} bytes'.format(type(identity), offset, amount, written)
+        return 'StoreError({:s}) : Unable to store bytes ({:x}:{:+x})'.format(type(identity), offset, amount)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
     def __init__(self, identity, offset, desired, amount=0, **kwds):
@@ -33,8 +33,8 @@ class ConsumeError(ProviderError):
     def __str__(self):
         identity,offset,desired,amount = self.consumed
         if amount > 0:
-            return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x} : Read only {:#x} bytes'.format(type(identity), offset, desired, amount)
-        return 'ConsumeError({:s}) : Unable to read from {:#x}:{:+#x}'.format(type(identity), offset, desired)
+            return 'ConsumeError({:s}) : Unable to consume bytes ({:x}:{:+x}) : Read only {:+d} bytes'.format(type(identity), offset, desired, amount)
+        return 'ConsumeError({:s}) : Unable to consume bytes ({:x}:{:+x})'.format(type(identity), offset, desired)
 
 ### errors that can happen during deserialization or serialization
 class SerializationError(Base):
@@ -48,9 +48,9 @@ class SerializationError(Base):
     def path(self):
         return '{{{:s}}}'.format(' -> '.join(self.object.backtrace() or []))
     def position(self):
-        try: bs = '{:x}'.format(self.object.blocksize())
-        except: bs = '?'
-        return '{:x}:+{:s}'.format(self.object.getoffset(), bs)
+        try: bs = '{:+x}'.format(self.object.blocksize())
+        except: bs = '+?'
+        return '{:x}:{:s}'.format(self.object.getoffset(), bs)
     def __str__(self):
         return ' : '.join((self.objectname(), self.typename(), self.path(), super(SerializationError,self).__str__()))
 
