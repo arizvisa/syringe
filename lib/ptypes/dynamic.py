@@ -307,8 +307,14 @@ class union(_union_generic):
         """Return a ptype.block of a size that contain /objects/"""
         res = self._value_
         if res is None:
-            size = max(self.new(t).a.blocksize() for t in objects)
-            return clone(ptype.block, length=size)
+            # if the blocksize method is not modified, then allocate all fields and choose the largest
+            if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
+                iterable = (self.new(t) for t in objects)
+                size = max(n.a.blocksize() for n in iterable)
+                return clone(ptype.block, length=size)
+
+            # otherwise, just use the blocksize to build a ptype.block for the root type
+            return clone(ptype.block, length=self.blocksize())
         return res
 
     def __create__(self):
