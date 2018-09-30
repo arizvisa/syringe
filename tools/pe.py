@@ -13,7 +13,7 @@ def Locate(path, obj):
 def Extract(obj, outformat, file=None):
     out = lambda string, **kwargs: six.print_(string, **kwargs)
     if outformat == 'print':
-        res = obj.repr()
+        res = repr(obj)
     elif outformat == 'hex':
         res = obj.hexdump()
     elif outformat == 'raw':
@@ -62,7 +62,7 @@ def dump_exe(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat or outformat in {'print'}:
-        six.print_(result['Dos'].repr(), file=output)
+        six.print_(repr(result['Dos']) + '\n', file=output)
         six.print_(result['Stub'].hexdump(), file=output)
         return
     if outformat in {'hex','raw'}:
@@ -76,9 +76,9 @@ def dump_header(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
-        six.print_(result.p['Signature'], repr(result.p['Signature'].serialize()+result['SignaturePadding'].serialize()), file=output)
-        six.print_(result['FileHeader'].repr(), file=output)
-        six.print_(result['OptionalHeader'].repr(), file=output)
+        six.print_(repr(result.p['Signature']), repr(result.p['Signature'].serialize()+result['SignaturePadding'].serialize()) + '\n', file=output)
+        six.print_(repr(result['FileHeader']) + '\n', file=output)
+        six.print_(repr(result['OptionalHeader']) + '\n', file=output)
         return
     return Extract(result, outformat, file=output)
 
@@ -93,6 +93,7 @@ def list_sections(t, outformat, F=None, output=None):
             six.print_('[{:d}] {:s}'.format(i, summary(S)), file=output)
         return
     if outformat in {'list'}:
+        # FIXME: output some attributes that can be fielded
         return Extract((S['Name'].str() for S in result), outformat, file=output)
     return Extract(result, outformat, file=output)
 
@@ -106,6 +107,8 @@ def extract_section(t, index, outformat, F=None, output=None):
     #    return Extract(t['VirtualAddress'].d.li, outformat or 'raw', file=output)
     if F:
         return Extract(F(result), outformat, file=output)
+    if outformat == 'print':
+        return six.print_(repr(S), file=output)
     return Extract(result['PointerToRawData'].d.li, outformat or 'hex', file=output)
 
 def list_entries(t, outformat, F=None, output=None):
@@ -119,6 +122,7 @@ def list_entries(t, outformat, F=None, output=None):
             six.print_('[{:d}] {}'.format(i, summary(n)), file=output)
         return
     if outformat in {'list'}:
+        # FIXME: output some attributes that can be fielded
         return Extract((n.classname() for n in result if n['Address'].int()), outformat, file=output)
     return Extract(result, outformat, file=output)
 
@@ -184,6 +188,7 @@ def extract_import(t, index, outformat, F=None, output=None):
     ite = it[index]
     global result; result = ite
     if not F and outformat in {'list'}:
+        # FIXME: separate these fields somehow
         summary = lambda (h,n,a,v): 'hint:{:d} name:{:s} offset:{:#x} value:{:#x}'.format(h,n,a,v)
         for ie in result.iterate():
             six.print_(summary(ie), file=output)
