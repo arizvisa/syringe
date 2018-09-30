@@ -1,4 +1,4 @@
-import ptypes
+import logging, ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pbinary
 from ..__base__ import *
 
@@ -236,7 +236,7 @@ class SectionTableArray(parray.type):
         sections = [n for n in self if n.containsaddress(address)]
         if len(sections) > 1:
             cls = self.__class__
-            logging.warn("{:s} : More than one section was returned for address {:x}".format('.'.join((cls.__module__, cls.__name__)), address))
+            logging.warn("{:s} : More than one section was returned for address {:x} ({:s})".format('.'.join((cls.__module__, cls.__name__)), address, ', '.join(s['Name'].str() for s in sections)))
         if len(sections):
             return sections[0]
         raise KeyError('Address %x not in a known section'% (address))
@@ -245,7 +245,7 @@ class SectionTableArray(parray.type):
         """Identify the `IMAGE_SECTION_HEADER` by the file-offset specified in /offset/"""
         sections = [n for n in self if n.containsoffset(offset)]
         if len(sections) > 1:
-            logging.warn("{:s} : More than one section was returned for offset {:x}".format('.'.join((cls.__module__, cls.__name__)), address))
+            logging.warn("{:s} : More than one section was returned for offset {:x} ({:s})".format('.'.join((cls.__module__, cls.__name__)), address, ', '.join(s['Name'].str() for s in sections)))
         if len(sections):
             return sections[0]
         raise KeyError('Offset %x not in a known section'% (offset))
