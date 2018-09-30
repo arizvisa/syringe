@@ -3,6 +3,8 @@ import logging, datetime
 import ptypes
 from ptypes import *
 
+from . import storage
+
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 
@@ -87,7 +89,23 @@ class Bool8(pint.enum, pint.uint8_t):
         ('true', 0x00),
     ]
 
-class CP(pint.uint32_t): pass
+
+class character_position(pint.uint32_t):
+    def properties(self):
+        res = super(character_position, self).properties()
+        if isinstance(self.parent, parray.type):
+            container = self.parent
+
+            try: idx = int(self.name())
+            except ValueError: idx = container.index(self)
+
+            if idx + 1 < len(container):
+                res['deltaCP'] = container[idx + 1].int() - self.int()
+            return res
+        return res
+
+class CP(character_position): pass
+class FC(character_position): pass
 
 class BYTE(pint.uint8_t): pass
 
@@ -507,12 +525,125 @@ class _TextFlow(pbinary.enum):
         ('grpfTFtbrlv', 0x0005),
     ]
 
+class flt(pint.enum, pint.uint8_t):
+    _values_ = [
+        ('Unparseable', 0x01),
+        ('Unnamed', 0x02),
+        ('REF', 0x03),
+        ('FTNREF', 0x05),
+        ('SET', 0x06),
+        ('IF', 0x07),
+        ('INDEX', 0x08),
+        ('STYLEREF', 0x0A),
+        ('SEQ', 0x0C),
+        ('TOC', 0x0D),
+        ('INFO', 0x0E),
+        ('TITLE', 0x0F),
+        ('SUBJECT', 0x10),
+        ('AUTHOR', 0x11),
+        ('KEYWORDS', 0x12),
+        ('COMMENTS', 0x13),
+        ('LASTSAVEDBY', 0x14),
+        ('CREATEDATE', 0x15),
+        ('SAVEDATE', 0x16),
+        ('PRINTDATE', 0x17),
+        ('REVNUM', 0x18),
+        ('EDITTIME', 0x19),
+        ('NUMPAGES', 0x1A),
+        ('NUMWORDS', 0x1B),
+        ('NUMCHARS', 0x1C),
+        ('FILENAME', 0x1D),
+        ('TEMPLATE', 0x1E),
+        ('DATE', 0x1F),
+        ('TIME', 0x20),
+        ('PAGE', 0x21),
+        ('EQUAL', 0x22),
+        ('QUOTE', 0x23),
+        ('INCLUDE', 0x24),
+        ('PAGEREF', 0x25),
+        ('ASK', 0x26),
+        ('FILLIN', 0x27),
+        ('DATA', 0x28),
+        ('NEXT', 0x29),
+        ('NEXTIF', 0x2A),
+        ('SKIPIF', 0x2B),
+        ('MERGEREC', 0x2C),
+        ('DDE', 0x2D),
+        ('DDEAUTO', 0x2E),
+        ('GLOSSARY', 0x2F),
+        ('PRINT', 0x30),
+        ('EQ', 0x31),
+        ('GOTOBUTTON', 0x32),
+        ('MACROBUTTON', 0x33),
+        ('AUTONUMOUT', 0x34),
+        ('AUTONUMLGL', 0x35),
+        ('AUTONUM', 0x36),
+        ('IMPORT', 0x37),
+        ('LINK', 0x38),
+        ('SYMBOL', 0x39),
+        ('EMBED', 0x3A),
+        ('MERGEFIELD', 0x3B),
+        ('USERNAME', 0x3C),
+        ('USERINITIALS', 0x3D),
+        ('USERADDRESS', 0x3E),
+        ('BARCODE', 0x3F),
+        ('DOCVARIABLE', 0x40),
+        ('SECTION', 0x41),
+        ('SECTIONPAGES', 0x42),
+        ('INCLUDEPICTURE', 0x43),
+        ('INCLUDETEXT', 0x44),
+        ('FILESIZE', 0x45),
+        ('FORMTEXT', 0x46),
+        ('FORMCHECKBOX', 0x47),
+        ('NOTEREF', 0x48),
+        ('TOA', 0x49),
+        ('MERGESEQ', 0x4B),
+        ('AUTOTEXT', 0x4F),
+        ('COMPARE', 0x50),
+        ('ADDIN', 0x51),
+        ('FORMDROPDOWN', 0x53),
+        ('ADVANCE', 0x54),
+        ('DOCPROPERTY', 0x55),
+        ('CONTROL', 0x57),
+        ('HYPERLINK', 0x58),
+        ('AUTOTEXTLIST', 0x59),
+        ('LISTNUM', 0x5A),
+        ('HTMLCONTROL', 0x5B),
+        ('BIDIOUTLINE', 0x5C),
+        ('ADDRESSBLOCK', 0x5D),
+        ('GREETINGLINE', 0x5E),
+        ('SHAPE', 0x5F),
+    ]
+
 # XXX: Atomic types
 
 ## Primitive Types
 class FcLcb(pstruct.type):
+    def __fc(self):
+        if not isinstance(getattr(self, '_object_', None), tuple):
+            return FC
+
+        # FIXME: this should be a pointer type that correctly handles all this stuff
+
+        # extract the stream name and the structure
+        stream, type = self._object_
+
+        # figure out the name of the Table stream
+        fib = self.getparent(Fib)
+        table = "{:d}Table".format(fib['base']['b']['fWhichTblStm'])
+
+        # grab the stream entry
+        D = self.getparent(storage.Directory)
+        entry = D.byname(table if stream == 'Table' else stream)
+
+        # now we can somehow transition to the type within the specified stream
+        def newtype(self, type=type, entry=entry):
+            res, source = self.getparent(FcLcb).li, ptypes.provider.proxy(entry.Data())
+            return dyn.block(res['lcb'].int(), source=source) if type is None else dyn.clone(type, blocksize=(lambda s, cb=res['lcb'].int(): cb), source=source)
+        return dyn.pointer(newtype)
+
     _fields_ = [
-        (pint.uint32_t, 'fc'),      # offset
+        (__fc, 'fc'),      # offset
         (pint.uint32_t, 'lcb'),     # size
     ]
     def summary(self):
@@ -919,7 +1050,7 @@ class SprmOperandType(SprmOperandType):
             if cb - res >= 0:
                 return dyn.block(cb - res)
             cls = self.__class__
-            logging.warn("{:s}: Variable operand size ({:d}) is larger than specified size ({:d}): {:s}".format('.'.join((__name__, cls.__name__)), res, cb, self.instance()))
+            logging.warn("{:s}: Variable operand size ({:d}) is larger than specified size ({:d}): {:s}".format('.'.join((cls.__module__, cls.__name__)), res, cb, self.instance()))
             return dyn.block(0)
 
         _fields_ = [
@@ -953,12 +1084,20 @@ class Sprm_Unpacked(pbinary.struct):
         (9, 'ispmd'),
     ]
 
+    def summary(self):
+        spra, sgc = (self.__field__(fld) for fld in ('spra', 'sgc'))
+        return "spra={:s} sgc={:s} fSpec={:d} ispmd={:d}".format(spra.str(), sgc.str(), self['fSpec'], self['ispmd'])
+
 class Sprm(dynamic.union):
     _value_ = pint.uint16_t
     _fields_ = [
         (Sprm_Enumeration, 'enumeration'),
         (Sprm_Unpacked, 'unpacked'),
     ]
+
+    def summary(self):
+        e = self['enumeration']
+        return "{:s} : {:s}".format(e.summary(), self['unpacked'].summary())
 
 class SprmOperandValue(ptype.definition): cache = {}
 class SprmOperandValue(SprmOperandValue):
@@ -982,9 +1121,9 @@ class SprmOperandValue(SprmOperandValue):
 
 class Prl(pstruct.type):
     def __operand(self):
-        res = self['sprm']['spra']
+        res = self['sprm']['unpacked']['spra']
         # FIXME: lookup the correct operand type
-        return SprmOperand.lookup(res)
+        return SprmOperandType.lookup(res)
 
     _fields_ = [
         (Sprm, 'sprm'),
@@ -992,58 +1131,459 @@ class Prl(pstruct.type):
     ]
 
 ## For calculating CP
-class PrcData(pstruct.type):
+class PLC(ptype.base):
+    def blocksize(self):
+        raise NotImplementedError
+
+class FcCompressed(pbinary.struct):
+    _fields_ = rl(
+        (30, 'fc'),
+        (1, 'fCompressed'),
+        (1, 'r1'),
+    )
+    def fc(self):
+        fc = self['fc']
+        return fc / 2 if self.fCompressedQ() else fc
+    def fCompressedQ(self):
+        return True if self['fCompressed'] else False
+    def summary(self):
+        return "fCompressed={:d} r1={:d} fc={:#x} : offset -> {:#x}".format(self['fCompressed'], self['r1'], self['fc'], self.fc())
+
+class Prm0(pbinary.struct):
+    class _isprm(pbinary.enum):
+        width, _values_ = 7, [
+            ('sprmCLbcCRJ', 0x00),
+            ('sprmPIncLvl', 0x04),
+            ('sprmPJc', 0x05),
+            ('sprmPFKeep', 0x07),
+            ('sprmPFKeepFollow', 0x08),
+            ('sprmPFPageBreakBefore', 0x09),
+            ('sprmPIlvl', 0x0C),
+            ('sprmPFMirrorIndents', 0x0D),
+            ('sprmPFNoLineNumb', 0x0E),
+            ('sprmPTtwo', 0x0F),
+            ('sprmPFInTable', 0x18),
+            ('sprmPFTtp', 0x19),
+            ('sprmPPc', 0x1D),
+            ('sprmPWr', 0x25),
+            ('sprmPFNoAutoHyph', 0x2C),
+            ('sprmPFLocked', 0x32),
+            ('sprmPFWidowControl', 0x33),
+            ('sprmPFKinsoku', 0x35),
+            ('sprmPFWordWrap', 0x36),
+            ('sprmPFOverflowPunct', 0x37),
+            ('sprmPFTopLinePunct', 0x38),
+            ('sprmPFAutoSpaceDE', 0x39),
+            ('sprmPFAutoSpaceDN', 0x3A),
+            ('sprmCFRMarkDel', 0x41),
+            ('sprmCFRMarkIns', 0x42),
+            ('sprmCFFldVanish', 0x43),
+            ('sprmCFData', 0x47),
+            ('sprmCFOle2', 0x4B),
+            ('sprmCHighlight', 0x4D),
+            ('sprmCFEmboss', 0x4E),
+            ('sprmCSfxText', 0x4F),
+            ('sprmCFWebHidden', 0x50),
+            ('sprmCFSpecVanish', 0x51),
+            ('sprmCPlain', 0x53),
+            ('sprmCFBold', 0x55),
+            ('sprmCFItalic', 0x56),
+            ('sprmCFStrike', 0x57),
+            ('sprmCFOutline', 0x58),
+            ('sprmCFShadow', 0x59),
+            ('sprmCFSmallCaps', 0x5A),
+            ('sprmCFCaps', 0x5B),
+            ('sprmCFVanish', 0x5C),
+            ('sprmCKul', 0x5E),
+            ('sprmCIco', 0x62),
+            ('sprmCIss', 0x68),
+            ('sprmCFDStrike', 0x73),
+            ('sprmCFImprint', 0x74),
+            ('sprmCFSpec', 0x75),
+            ('sprmCFObj', 0x76),
+            ('sprmPOutLvl', 0x78),
+            ('sprmCFSdtVanish', 0x7B),
+            ('sprmCNeedFontFixup', 0x7C),
+            ('sprmPFNumRMIns', 0x7E),
+        ]
+    _fields_ = rl(
+        (1, 'fComplex'),
+        (_isprm, 'isprm'),
+        (8, 'val'),
+    )
+    def summary(self):
+        res, sprm = self['val'], self.__field__('isprm')
+        return "fComplex={:d} : isprm={:s} val={:d} ({:#x})".format(self['fComplex'], sprm.str(), res, res)
+
+class Prm1(pbinary.struct):
+    _fields_ = rl(
+        (1, 'fComplex'),
+        (15, 'igrpprl'),
+    )
+    def summary(self):
+        res = self['igrpprl']
+        return "fComplex={:d} : igrpprl={:d} ({:#x})".format(self['fComplex'], res, res)
+
+class Prm(dynamic.union):
+    class _value_(pbinary.struct):
+        _fields_ = rl(
+            (1, 'fComplex'),
+            (15, 'data'),
+        )
     _fields_ = [
-        (pint.uint16_t, 'cbGrpprl'),
+        (Prm0, 'prm0'),
+        (Prm1, 'prm1'),
+    ]
+
+    def prm(self):
+        return self['prm1' if self.o['fComplex'] else 'prm0']
+
+    def summary(self):
+        res = self.prm()
+        return "{:s} {!r} : {:s}".format(res.instance(), res.name(), res.summary())
+
+class Sepx(pstruct.type):
+    _fields_ = [
+        (pint.sint16_t, 'cb'),
+        (lambda self: dyn.blockarray(Prl, self['cb'].li.int()), 'grpprl'),
+    ]
+
+class Pcd(pstruct.type):
+    class _b(pbinary.flags):
+        _fields_ = rl(
+            (1, 'fNoParaLast'),
+            (1, 'fR1'),
+            (1, 'fDirty'),
+            (13, 'fR2'),
+        )
+    _fields_ = [
+        (_b, 'b'),
+        (FcCompressed, 'fc'),
+        (Prm, 'prm'),
+    ]
+
+    def fc(self):
+        return self['fc'].fc()
+
+    def fCompressedQ(self):
+        return self['fc'].fCompressedQ()
+
+    def prm(self):
+        return self['prm'].prm()
+
+    def properties(self):
+        fc, res = self.fc(), super(Pcd, self).properties()
+        res['FC'] = fc
+        if isinstance(self.parent, parray.type):
+            container = self.parent
+
+            try: idx = int(self.name())
+            except ValueError: idx = container.index(self)
+
+            if idx + 1 < len(container):
+                res['deltaFC'] = container[idx + 1].fc() - fc
+            return res
+        return res
+
+class PrcData(pstruct.type):
+    clxt = 0x01
+    _fields_ = [
+        (pint.sint16_t, 'cbGrpprl'),
         (lambda self: dyn.array(Prl, self['cbGrpprl'].li.int()), 'GrpPrl'),
     ]
+class Prc(PrcData): pass
 
-class Prc(pstruct.type):
-    _fields_ = [
-        (pint.uint8_t, 'clxt'),
-        (PrcData, 'data'),
-    ]
+class PlcPcd(PLC, pstruct.type):
+    #def __aCP(self):
+    #    D = self.getparent(storage.Directory)
+    #    entry = D.byname('WordDocument')
+    #    document = entry.Data(File).li
 
-class PlcPld(pstruct.type):
+    #    fib = document['fib']
+    #    rglw95 = fib['fibRgLw']['95']
+    #    ccpText, ccps = rglw95['ccpText'].li.int(), rglw95.SumCCP()
+
+    #    class _aCP(parray.terminated):
+    #        _object_ = CP
+    #        def isTerminator(self, value):
+    #            res = ccps if ccps > 0 else ccpText
+    #            return value.int() >= res
+    #    return _aCP
+
     def __aCP(self):
-        fib = self.getparent(File)['fib']
-        rglw97 = fib['fibRgLw']['97']
-
-        res, fields = rglw97['ccpText'].li.int(), ('ccpFtn', 'ccpHdd', 'ccpMcr', 'ccpAtn', 'ccpEdn', 'ccpTxBx', 'ccpHdrTxBx')
-        if any(rglw97[k] for k in fields):
-            res = res + 1 + sum(rglw97[k].li.int() for k in fields)
-
-        class _aCP(parray.terminated):
-            _object_ = CP
-            def isTerminator(self, value):
-                return value.int() == self.__LastCP__
-        _aCP.__LastCP__ = res
-        return _aCP
-
-    def __aPcd(self):
-        res = self.getparent(Pcdt)
-        cb = res['lcb'].li.int() - (res['clxt'].li.size() + res['lcb'].li.size())
-        return dyn.blockarray(Pcd, cb)
+        cp, res = CP().blocksize(), Pcd().a.blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
         (__aCP, 'aCP'),
-        (__aPcd, 'aPcd'),
+        (lambda self: dyn.blockarray(Pcd, self.blocksize() - self['aCP'].li.size()), 'aPcd'),
     ]
 
 class Pcdt(pstruct.type):
+    clxt = 0x02
     _fields_ = [
-        (pint.uint8_t, 'clxt'),
         (pint.uint32_t, 'lcb'),
-        (PlcPld, 'PlcPcd'),
+        (lambda self: dyn.clone(PlcPcd, blocksize=(lambda s, cb=self['lcb'].li.int(): cb)), 'PlcPcd'),
     ]
 
-class Clx(pstruct.type):
+class Clx(PLC, pstruct.type):
+    class _clxt(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('RgPrc', 0x01),
+            ('Pcdt', 0x02),
+        ]
     _fields_ = [
-        (Prc, 'RgPrc'),
-        (Pcdt, 'Pcdt'),
+        (pint.uint8_t, 'clxt'),
+        (lambda self: PrcData if self['clxt'].li.int() == 0x01 else ptype.undefined, 'RgPrc'),
+        (lambda self: Pcdt if self['clxt'].li.int() == 0x02 else ptype.undefined, 'Pcdt'),
+    ]
+
+class Plcfhdd(PLC, pstruct.type):
+    def __aCP(self):
+        items = self.blocksize() / CP().blocksize()
+        return dyn.clone(parray.type, _object_=CP, length=items)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+    ]
+
+class grffldEnd(pbinary.flags):
+    _fields_ = rl(
+        (1, 'fDiffer'),
+        (1, 'fZombieEmbed'),
+        (1, 'fResultsDirty'),
+        (1, 'fResultsEdited'),
+        (1, 'fLocked'),
+        (1, 'fPrivateResult'),
+        (1, 'fNested'),
+        (1, 'fHasSep'),
+    )
+
+class Fld(pstruct.type):
+    class _fldch(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('flt', 0x13),
+            ('unused', 0x14),
+            ('grffldEnd', 0x15),
+        ]
+
+    def __grffld(self):
+        res = self['fldch'].li.int()
+        if res == 0x13:
+            return flt
+        elif res == 0x15:
+            return grffldEnd
+        return pint.uint8_t
+
+    _fields_ = [
+        (_fldch, 'fldch'),
+        (__grffld, 'grffld'),
+    ]
+
+class Plcfld(PLC, pstruct.type):
+    def __aCP(self):
+        cp, res = CP().blocksize(), Fld().a.blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=CP, length=items + 1)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+        (lambda self: dyn.blockarray(Fld, self.blocksize() - self['aCP'].li.size()), 'aFld'),
+    ]
+
+class Sed(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'fn'),
+        (pint.sint32_t, 'fcSepx'),
+        (pint.uint16_t, 'fnMpr'),
+        (pint.uint32_t, 'fcMpr'),
+    ]
+
+class PlcfSed(PLC, pstruct.type):
+    def __aCP(self):
+        cp, res = CP().blocksize(), Sed().a.blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=CP, length=items + 1)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+        (lambda self: dyn.blockarray(Sed, self.blocksize() - self['aCP'].li.size()), 'aSed'),
+    ]
+
+class BKC(pbinary.flags):
+    _fields_ = rl(
+        (7, 'itcFirst'),
+        (1, 'fPub'),
+        (6, 'itcLim'),
+        (1, 'fNative'),
+        (1, 'fCol'),
+    )
+
+class FBKF(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'lbkl'),
+        (BKC, 'bkc'),
+    ]
+
+class Plcfbkf(PLC, pstruct.type):
+    def __aCP(self):
+        cp, res = CP().blocksize(), FBKF().a.blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=CP, length=items + 1)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+        (lambda self: dyn.blockarray(FBKF, self.blocksize() - self['aCP'].li.size()), 'aSed'),
+    ]
+
+class PlcfendRef(PLC, pstruct.type):
+    #def __aCP(self):
+    #    D = self.getparent(storage.Directory)
+    #    entry = D.byname('WordDocument')
+    #    document = entry.Data(File).li
+
+    #    fib = document['fib']
+    #    rglw95 = fib['fibRgLw']['95']
+    #    ccpText = rglw95['ccpText'].li.int()
+
+    #    class _aCP(parray.terminated):
+    #        _object_ = CP
+    #        def isTerminator(self, value):
+    #            return value.int() >= ccpText
+    #    return _aCP
+
+    def __aCP(self):
+        cp, res = CP().blocksize(), pint.uint16_t().blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=CP, length=items + 1)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+        (lambda self: dyn.blockarray(pint.uint16_t, self.blocksize() - self['aCP'].li.size()), 'aEndIdx'),
+    ]
+
+class PlcffndRef(PLC, pstruct.type):
+    #def __aCP(self):
+    #    D = self.getparent(storage.Directory)
+    #    entry = D.byname('WordDocument')
+    #    document = entry.Data(File).li
+
+    #    fib = document['fib']
+    #    rglw95 = fib['fibRgLw']['95']
+    #    ccpText = rglw95['ccpText'].li.int()
+
+    #    class _aCP(parray.terminated):
+    #        _object_ = CP
+    #        def isTerminator(self, value):
+    #            return value.int() >= ccpText
+    #    return _aCP
+
+    def __aCP(self):
+        cp, res = CP().blocksize(), pint.uint16_t().blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=CP, length=items + 1)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+        (lambda self: dyn.blockarray(pint.uint16_t, self.blocksize() - self['aCP'].li.size()), 'aFtnIdx'),
+    ]
+
+class PlcffndTxt(PLC, pstruct.type):
+    #def __aCP(self):
+    #    D = self.getparent(storage.Directory)
+    #    entry = D.byname('WordDocument')
+    #    document = entry.Data(File).li
+
+    #    fib = document['fib']
+    #    rglw95 = fib['fibRgLw']['95']
+    #    ccpFtn = rglw95['ccpFtn'].li.int()
+
+    #    class _aCP(parray.terminated):
+    #        _object_ = CP
+    #        def isTerminator(self, value):
+    #            return value.int() >= ccpFtn
+    #    return _aCP
+
+    def __aCP(self):
+        items = self.blocksize() / CP().blocksize()
+        return dyn.clone(parray.type, _object_=CP, length=items)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+    ]
+
+class PlcfendTxt(PLC, pstruct.type):
+    #def __aCP(self):
+    #    D = self.getparent(storage.Directory)
+    #    entry = D.byname('WordDocument')
+    #    document = entry.Data(File).li
+
+    #    fib = document['fib']
+    #    rglw95 = fib['fibRgLw']['95']
+    #    ccpEdn = rglw95['ccpEdn'].li.int()
+
+    #    class _aCP(parray.terminated):
+    #        _object_ = CP
+    #        def isTerminator(self, value):
+    #            return value.int() >= ccpEdn
+    #    return _aCP
+
+    def __aCP(self):
+        items = self.blocksize() / CP().blocksize()
+        return dyn.clone(parray.type, _object_=CP, length=items)
+
+    _fields_ = [
+        (__aCP, 'aCP'),
+    ]
+
+class SttbfBkmk(pstruct.type):
+    class _Data(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'cchData'),
+            (lambda self: dyn.clone(pstr.string, length=self['cchData'].li.int()), 'cchData'),
+        ]
+    _fields_ = [
+        (pint.uint16_t, 'fExtend'),
+        (pint.uint16_t, 'cData'),
+        (pint.uint16_t, 'cbExtra'),
+        (lambda self: dyn.array(_Data, self['cData'].li.int()), 'Data'),
+        (lambda self: dyn.block(self['cbExtra'].li.int()), 'extraData'),
+    ]
+
+class _PnFkp(pbinary.struct):
+    _fields_ = rl(
+        (22, 'pn'),
+        (10, 'unused'),
+    )
+class PnFkpPapx(_PnFkp): pass
+class PnFkpChpx(_PnFkp): pass
+
+class PlcfBtePapx(PLC, pstruct.type):
+    def __aFC(self):
+        cp, res = FC().blocksize(), PnFkpPapx().blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=FC, length=items + 1)
+
+    _fields_ = [
+        (__aFC, 'aFC'),
+        (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpPapx, blockbits=(lambda s, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBtePapx'),
+    ]
+
+class PlcfBteChpx(PLC, pstruct.type):
+    def __aFC(self):
+        cp, res = FC().blocksize(), PnFkpChpx().blocksize()
+        items = (self.blocksize() - cp) / (cp + res)
+        return dyn.clone(parray.type, _object_=FC, length=items + 1)
+
+    _fields_ = [
+        (__aFC, 'aFC'),
+        (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpChpx, blockbits=(lambda s, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBteChpx'),
     ]
 
 ## Property enumerations
+# https://www.opennet.ru/docs/formats/wword8.html
+# https://github.com/jonasfj/libreoffice-writer/blob/master/sw/source/filter/ww8/dump/ww8scan.cxx
 Sprm_Enumeration._values_ = [
     ('sprmCFRMarkDel', 0x0800),
     ('sprmCFRMarkIns', 0x0801),
@@ -1366,6 +1906,7 @@ Sprm_Enumeration._values_ = [
     ('sprmPicBrcLeft', 0xCE09),
     ('sprmPicBrcBottom', 0xCE0A),
     ('sprmPicBrcRight', 0xCE0B),
+    ('sprmSOlstAnm', 0xD202),
 ]
 
 ## Property Operand Definitions
@@ -1423,7 +1964,7 @@ class SPPOperand(pstruct.type):
         if last >= first:
             return dyn.array(pint.uint16_t, last - first + 1)
         cls = self.__class__
-        logging.warn("{:s}: SPPOperand's fields (istdFirst={first:d}, istdLast={first:d}) are not sorted in the correct order. Fixing them to istdFirst={last:d}, istdLast={first:d}.".format('.'.join((__name__, cls.__name__)), first=first, last=last))
+        logging.warn("{:s}: SPPOperand's fields (istdFirst={first:d}, istdLast={first:d}) are not sorted in the correct order. Fixing them to istdFirst={last:d}, istdLast={first:d}.".format('.'.join((cls.__module__, cls.__name__)), first=first, last=last))
         return dyn.array(pint.uint16_t, first - last + 1)
 
     _fields_ = [
@@ -1928,6 +2469,16 @@ class Dop(dynamic.union):
         (lambda self: dyn.clone(Dop2013, blocksize=lambda s, cb=min((Dop2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
     ]
 
+class ChpxFkp(pstruct.type):
+    # FIXME
+    _fields_ = [
+    ]
+
+class PapxFkp(pstruct.type):
+    # FIXME
+    _fields_ = [
+    ]
+
 ## File Information Block
 class FibBase(pstruct.type):
     class _b(pbinary.flags):
@@ -1966,27 +2517,27 @@ class FibBase(pstruct.type):
         (pint.uint32_t, 'lKey'),
         (pint.uint8_t, 'envr'),
         (_b2, 'b2'),
-        (pint.uint16_t, 'reserved3'),
-        (pint.uint16_t, 'reserved4'),
-        (pint.uint32_t, 'reserved5'),
-        (pint.uint32_t, 'reserved6'),
+        (pint.uint16_t, 'chs'),
+        (pint.uint16_t, 'chsTables'),
+        (pint.uint32_t, 'fcMin'),
+        (pint.uint32_t, 'fcMac'),
     ]
 
 class FibRgW97(pstruct.type):
     _fields_ = [
-        (pint.uint16_t, 'reserved1'),
-        (pint.uint16_t, 'reserved2'),
-        (pint.uint16_t, 'reserved3'),
-        (pint.uint16_t, 'reserved4'),
-        (pint.uint16_t, 'reserved5'),
-        (pint.uint16_t, 'reserved6'),
-        (pint.uint16_t, 'reserved7'),
-        (pint.uint16_t, 'reserved8'),
-        (pint.uint16_t, 'reserved9'),
-        (pint.uint16_t, 'reserved10'),
-        (pint.uint16_t, 'reserved11'),
-        (pint.uint16_t, 'reserved12'),
-        (pint.uint16_t, 'reserved13'),
+        (pint.uint16_t, 'wMagicCreated'),
+        (pint.uint16_t, 'wMagicRevised'),
+        (pint.uint16_t, 'wMagicCreatedPrivate'),
+        (pint.uint16_t, 'wMagicRevisedPrivate'),
+        (pint.uint16_t, 'pnFbpChpFirst_W6'),
+        (pint.uint16_t, 'pnChpFirst_W6'),
+        (pint.uint16_t, 'cpnBteChp_W6'),
+        (pint.uint16_t, 'pnFbpPapFirst_W6'),
+        (pint.uint16_t, 'pnPapFirst_W6'),
+        (pint.uint16_t, 'cpnBtePap_W6'),
+        (pint.uint16_t, 'pnFbpLvcFirst_W6'),
+        (pint.uint16_t, 'pnLvcFirst_W6'),
+        (pint.uint16_t, 'cpnBteLvc_W6'),
         (LID, 'lidFE'),
     ]
 
@@ -1995,6 +2546,7 @@ class FibRgW(dynamic.union):
         (lambda self: dyn.clone(FibRgW97, blocksize=lambda s, cb=min((FibRgW97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
     ]
 
+    @property
     def latest(self):
         res, cb = self.object, self.size()
         for k in self.keys():
@@ -2003,42 +2555,57 @@ class FibRgW(dynamic.union):
             continue
         return res
 
-class FibRgLw97(pstruct.type):
+class FibRgLw95(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'cbMac'),
-        (pint.uint32_t, 'reserved1'),
-        (pint.uint32_t, 'reserved2'),
-        (pint.sint32_t, 'ccpText'),
-        (pint.sint32_t, 'ccpFtn'),
-        (pint.sint32_t, 'ccpHdd'),
-        (pint.uint32_t, 'reserved3'),
-        (pint.sint32_t, 'ccpAtn'),
-        (pint.sint32_t, 'ccpEdn'),
-        (pint.sint32_t, 'ccpTxbx'),
-        (pint.sint32_t, 'ccpHdrTxbx'),
-        (pint.uint32_t, 'reserved4'),
-        (pint.uint32_t, 'reserved5'),
-        (pint.uint32_t, 'reserved6'),
-        (pint.uint32_t, 'reserved7'),
-        (pint.uint32_t, 'reserved8'),
-        (pint.uint32_t, 'reserved9'),
-        (pint.uint32_t, 'reserved10'),
-        (pint.uint32_t, 'reserved11'),
-        (pint.uint32_t, 'reserved12'),
-        (pint.uint32_t, 'reserved13'),
-        (pint.uint32_t, 'reserved14'),
+        (pint.uint32_t, 'lProductCreated'),
+        (pint.uint32_t, 'lProductRevised'),
+        (pint.uint32_t, 'ccpText'),
+        (pint.uint32_t, 'ccpFtn'),
+        (pint.uint32_t, 'ccpHdr'),
+        (pint.uint32_t, 'ccpMcr'),
+        (pint.uint32_t, 'ccpAtn'),
+        (pint.uint32_t, 'ccpEdn'),
+        (pint.uint32_t, 'ccpTxbx'),
+        (pint.uint32_t, 'ccpHdrTxbx'),
+    ]
+
+    def SumCCP(self):
+        return sum(self[n].int() for n in ('ccpFtn', 'ccpHdr', 'ccpMcr', 'ccpAtn', 'ccpEdn', 'ccpTxbx', 'ccpHdrTxbx'))
+
+class FibRgLw97(pstruct.type):
+    _fields_ = [
+        (FibRgLw95, 'rgLw95'),
+        (pint.uint32_t, 'pnFbpChpFirst'),
+        (pint.uint32_t, 'pnChpFirst'),
+        (pint.uint32_t, 'cpnBteChp'),
+        (pint.uint32_t, 'pnFbpPapFirst'),
+        (pint.uint32_t, 'pnPapFirst'),
+        (pint.uint32_t, 'cpnBtePap'),
+        (pint.uint32_t, 'pnFbLvcFirst'),
+        (pint.uint32_t, 'pnLvcFirst'),
+        (pint.sint32_t, 'cpnBteLvc'),
+    ]
+
+class FibRgLw97x(pstruct.type):
+    _fields_ = [
+        (FibRgLw97, 'rgLw97'),
+        (pint.sint32_t, 'fcIslandFirst'),
+        (pint.sint32_t, 'fcIslandLim'),
     ]
 
 class FibRgLw(dynamic.union):
     _fields_ = [
+        (lambda self: dyn.clone(FibRgLw95, blocksize=lambda s, cb=min((FibRgLw95().a.blocksize(), self.o.li.blocksize())): cb), '95'),
         (lambda self: dyn.clone(FibRgLw97, blocksize=lambda s, cb=min((FibRgLw97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
+        (lambda self: dyn.clone(FibRgLw97x, blocksize=lambda s, cb=min((FibRgLw97x().a.blocksize(), self.o.li.blocksize())): cb), '97x'),
     ]
 
+    @property
     def latest(self):
         res, cb = self.object, self.size()
         keys = iter(self.keys())
         k = next(keys)
-        print k
         for k in self.keys():
             if self[k].initializedQ() and not self[k].properties().get('abated', False):
                 res = self[k]
@@ -2261,6 +2828,7 @@ class FibRgFcLcb(dynamic.union):
         (lambda self: dyn.clone(FibRgFcLcb2007, blocksize=lambda s, cb=min((FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
     ]
 
+    @property
     def latest(self):
         res, cb = self.object, self.size()
         for k in self.keys():
@@ -2288,6 +2856,7 @@ class FibRgCswNew(dynamic.union):
         (lambda self: dyn.clone(FibRgCswNewData2007, blocksize=lambda s, cb=min((FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
     ]
 
+    @property
     def latest(self):
         res, cb = self.object, self.size()
         for k in self.keys():
@@ -2318,9 +2887,19 @@ class Fib(pstruct.type):
         return self['nFibNew'].int() if res > 0 else self['base']['nFib'].int()
 
 class File(pstruct.type):
+    def __init__(self, **attributes):
+        cls, res = self.__class__, super(File, self).__init__(**attributes)
+        if isinstance(self.parent, storage.DirectoryEntryData) and not isinstance(self.source, ptypes.provider.proxy):
+            logging.warn("{:s}: Class {:s} was instantiated with a source that does not point to the parent {:s}. Fixing it!".format('.'.join((cls.__module__, cls.__name__)), self.classname(), self.parent.classname()))
+            data = self.getparent(storage.DirectoryEntryData)
+            self.source = ptypes.provider.proxy(data)
+        elif not isinstance(self.parent, storage.DirectoryEntryData):
+            logging.warn("{:s}: Class {:s} was not instantiated as a child of {:s}. Fields that depend on other streams might not decode properly!".format('.'.join((cls.__module__, cls.__name__)), self.classname(), storage.DirectoryEntryData.typename()))
+        return res
+
     _fields_ = [
         (Fib, 'fib'),
-        (lambda self: dyn.block(self['fib'].li['fibRgLw']['97']['cbMac'].int() - self['fib'].size()), 'content'),
+        (lambda self: dyn.block(self['fib'].li['fibRgLw']['95']['cbMac'].int() - self['fib'].size()), 'content'),
     ]
 
 if __name__ == '__main__':
