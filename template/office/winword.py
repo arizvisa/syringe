@@ -669,14 +669,14 @@ class FILETIME(pstruct.type):
         return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.9f}".format(res.second + ts_ns).zfill(12), ts)
 
 class DTTM(pbinary.struct):
-    _fields_ = [
+    _fields_ = rl(
         (3, 'wdy'),
         (9, 'yr'),
         (4, 'mon'),
         (5, 'dom'),
         (5, 'hr'),
         (6, 'mint'),
-    ]
+    )
 
 class _Copts60(pbinary.flags):
     _fields_ = rl(
@@ -1381,7 +1381,8 @@ class Fld(pstruct.type):
         (__grffld, 'grffld'),
     ]
 
-class Plcfld(PLC, pstruct.type):
+class PlcFld(PLC, pstruct.type):
+
     def __aCP(self):
         cp, res = CP().blocksize(), Fld().a.blocksize()
         items = (self.blocksize() - cp) / (cp + res)
@@ -1391,6 +1392,14 @@ class Plcfld(PLC, pstruct.type):
         (__aCP, 'aCP'),
         (lambda self: dyn.blockarray(Fld, self.blocksize() - self['aCP'].li.size()), 'aFld'),
     ]
+
+class PlcfFldMom(PlcFld): pass
+class PlcfFldHdr(PlcFld): pass
+class PlcfFldFtn(PlcFld): pass
+class PlcfFldAtn(PlcFld): pass
+class PlcfFldEdn(PlcFld): pass
+class PlcfFldTxbx(PlcFld): pass
+class PlcfFldHdrTxbx(PlcFld): pass
 
 class Sed(pstruct.type):
     _fields_ = [
@@ -1560,6 +1569,8 @@ class PnFkpPapx(_PnFkp): pass
 class PnFkpChpx(_PnFkp): pass
 
 class PlcfBtePapx(PLC, pstruct.type):
+    '''Paragraph Properties'''
+    _object_ = PnFkpPapx
     def __aFC(self):
         cp, res = FC().blocksize(), PnFkpPapx().blocksize()
         items = (self.blocksize() - cp) / (cp + res)
@@ -1571,6 +1582,8 @@ class PlcfBtePapx(PLC, pstruct.type):
     ]
 
 class PlcfBteChpx(PLC, pstruct.type):
+    '''Character Properties'''
+    _object_ = PnFkpChpx
     def __aFC(self):
         cp, res = FC().blocksize(), PnFkpChpx().blocksize()
         items = (self.blocksize() - cp) / (cp + res)
@@ -1580,6 +1593,24 @@ class PlcfBteChpx(PLC, pstruct.type):
         (__aFC, 'aFC'),
         (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpChpx, blockbits=(lambda s, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBteChpx'),
     ]
+
+class GrpPrlAndIstd(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'istd'),
+        (lambda self: dyn.blockarray(Prl, self.blocksize() - self['istd'].li.size()), 'grpprl'),
+    ]
+class PapxInFkp(pstruct.type):
+    _fields_ = [
+        (pint.uint8_t, 'cb'),
+        (lambda self: dyn.clone(GrpPrlAndIstd, blocksize=(lambda s, cb=self['cb'].li.int(): cb * 2)), 'grpprlInPapx'),
+    ]
+class BxPap(pstruct.type):
+    _fields_ = [
+        (pint.uint8_t, 'bOffset'),  # points to PapxInFkp
+        (dyn.block(12), 'reserved'),
+    ]
+    def bOffset(self):
+        return self['bOffset'].int() * 2
 
 ## Property enumerations
 # https://www.opennet.ru/docs/formats/wword8.html
@@ -2469,6 +2500,23 @@ class Dop(dynamic.union):
         (lambda self: dyn.clone(Dop2013, blocksize=lambda s, cb=min((Dop2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
     ]
 
+    def latest(self):
+        res, cb = self.object, self.size()
+        for k in self.keys():
+            if self[k].initializedQ() and not self[k].properties().get('abated', False):
+                res = self[k]
+            continue
+        return res
+
+## Character stuff
+class CharacterType(pint.enum):
+    _values_ = [
+        ('Cell Mark', 0x0007),      # Also Table Terminating Paragraph Mark (TTP Mark)
+        ('Line Break', 0x000b),
+        ('Section Mark', 0x000c),
+        ('Paragraph Mark', 0x000d),
+    ]
+
 class ChpxFkp(pstruct.type):
     # FIXME
     _fields_ = [
@@ -2546,7 +2594,6 @@ class FibRgW(dynamic.union):
         (lambda self: dyn.clone(FibRgW97, blocksize=lambda s, cb=min((FibRgW97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
     ]
 
-    @property
     def latest(self):
         res, cb = self.object, self.size()
         for k in self.keys():
@@ -2601,7 +2648,6 @@ class FibRgLw(dynamic.union):
         (lambda self: dyn.clone(FibRgLw97x, blocksize=lambda s, cb=min((FibRgLw97x().a.blocksize(), self.o.li.blocksize())): cb), '97x'),
     ]
 
-    @property
     def latest(self):
         res, cb = self.object, self.size()
         keys = iter(self.keys())
@@ -2673,7 +2719,7 @@ class FibRgFcLcb97(pstruct.type):
         (FcLcb, 'PlcftxbxTxt'),
         (FcLcb, 'PlcfFldTxbx'),
         (FcLcb, 'PlcfHdrtxbxTxt'),
-        (FcLcb, 'PlcffldHdrTxbx'),
+        (FcLcb, 'PlcfFldHdrTxbx'),
         (FcLcb, 'StwUser'),
         (FcLcb, 'SttbTtmbd'),
         (FcLcb, 'CookieData'),
@@ -2828,7 +2874,6 @@ class FibRgFcLcb(dynamic.union):
         (lambda self: dyn.clone(FibRgFcLcb2007, blocksize=lambda s, cb=min((FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
     ]
 
-    @property
     def latest(self):
         res, cb = self.object, self.size()
         for k in self.keys():
@@ -2856,7 +2901,6 @@ class FibRgCswNew(dynamic.union):
         (lambda self: dyn.clone(FibRgCswNewData2007, blocksize=lambda s, cb=min((FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
     ]
 
-    @property
     def latest(self):
         res, cb = self.object, self.size()
         for k in self.keys():
@@ -2903,36 +2947,23 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    __name__ = '__main__'
-    import user, os, sys
-    import functools, operator, itertools, types
-    try_addpath = lambda path: False if operator.contains(sys.path, os.path.abspath(path)) else (sys.path.append(os.path.abspath(path)), True)[1]
+    import user, sys, os
+    import ptypes, office.storage, office.winword
 
-    try_addpath(os.path.join(user.home, 'work', 'syringe', 'lib'))
-    try_addpath(os.path.join(user.home, 'work', 'syringe', 'template'))
-    try_addpath('.')
-
-if __name__ == '__main__':
-    import ptypes, office.storage
-    ptypes.setsource(ptypes.prov.file('fuzzers/doc.corpus/10.doc', mode='rb'))
-    ptypes.setsource(ptypes.prov.file('work/file.doc', mode='rb'))
+    path, = sys.argv[1:]
+    ptypes.setsource(ptypes.prov.file(path, mode='rb'))
 
     store = office.storage.File().l
 
     entry = next((e for e in store.Directory() if e['Name'].str() == 'WordDocument'))
-    data = entry.Data()
+    data = entry.Data(office.winword.File).l
 
-if __name__ == '__main__':
-    import time
-    import winword; reload(winword)
+    fib = data['fib']
 
-    z = winword.File(source=ptypes.prov.string(data)).l
-    f = z['fib']
-
-    print "nFib: {:#x}".format(f.nFib())
-    print f
-    print f['base']
-    print f['fibRgW'].latest()
-    print f['fibRgLw'].latest()
-    print f['fibRgFcLcbBlob'].latest()
-    print f['fibRgCswNew'].latest()
+    print "nFib: {:#x}".format(fib.nFib())
+    print fib
+    print fib['base']
+    print fib['fibRgW'].latest()
+    print fib['fibRgLw'].latest()
+    print fib['fibRgFcLcbBlob'].latest()
+    print fib['fibRgCswNew'].latest()
