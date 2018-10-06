@@ -1,5 +1,6 @@
 import ptypes
-from . import stream, jp2, jfif
+from . import jp2, jfif
+from .stream import Stream
 
 if __name__ == '__main__' and False:
     #input = getFileContents('Q100-2.JPG')

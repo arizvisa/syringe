@@ -1,5 +1,5 @@
 import logging, array
-import functools,operator,itertools
+import functools,operator,itertools,types
 
 import ptypes
 from ptypes import *
@@ -101,7 +101,7 @@ class SOF0(pstruct.type):
         (pint.uint16_t, 'height'),
         (pint.uint16_t, 'width'),
         (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array( SOF.component, self['number of components'].li.int()), 'components')
+        (lambda self: dyn.array( self.component, self['number of components'].li.int()), 'components')
     ]
 
 @Marker.define   # XXX
@@ -130,10 +130,12 @@ class DHT(parray.block):
                 (4, 'class'),
                 (4, 'destination'),
             ]
+
         def __symbols(self):
             return ptype.block
             # FIXME: this needs to be calculated correctly somehow, but i can't find the docs for it
-            #return dyn.block(reduce(lambda x,y:x+y, [ord(x) for x in self['count'].li.serialize()]))
+            #return dyn.block(reduce(lambda t, c: t + c, map(ord, self['count'].li.serialize())))
+
         _fields_ = [
             (ClassAndDestination, 'table'),
             (dyn.block(16), 'count'),
@@ -145,14 +147,13 @@ class DHT(parray.block):
             symbols = iter(self['symbols'].value)
             def consume(iterable, count):
                 return [iterable.next() for x in xrange(count)]
+            F = functools.partial(consume, symbols)
 
-            res = [ord(x) for x in self['count'].value]
-            counts = res
-            res = [consume(symbols, x) for x in res]
-            codes = res
+            counts = map(ord, self['count'].value)
+            codes = map(F, counts)
 
-            res = [ indent+'codes of length[%d] bits (%d total): %s'% (index, len(code), utils.hexdump(''.join(code))) for ((index, code), count) in zip(enumerate(codes), counts)]
-            return '\n'.join(res)
+            res = [ 'codes of length[{:d}] bits ({:d} total): {:s}'.format(index, len(code), utils.hexdump(''.join(code))) for ((index, code), count) in zip(enumerate(codes), counts) ]
+            return '\n'.join(indent + row for row in res)
 
     _object_ = Table
 
@@ -171,6 +172,21 @@ class SOS(pstruct.type):
         (pint.uint8_t, 'start of spectral selection'),
         (pint.uint8_t, 'end of spectral selection'),
         (dyn.clone(pbinary.struct, _fields_=[(4,'high'),(4,'low')]), 'successive approximation')
+    ]
+
+#@Marker.define
+class APP0(pstruct.type):
+    class _Format(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('JPEG format', 10),
+            ('1 byte per pixel palettized', 11),
+            ('3 byte per pixel RGB format', 13),
+        ]
+    _fields_ = [
+        (pint.uint16_t, 'Length'),
+        (dyn.clone(pstr.string, length=5), 'Identifier'),
+        (_Format, 'Format'),
+        (ptype.undefined, 'Thumbnail'),
     ]
 
 @Marker.define
@@ -206,7 +222,7 @@ class Stream(ptype.block):
 
     # Copy from ptype.encoded_t so that it looks like the same interface
     d = property(fget=lambda self,**attrs: self.decode(**attrs))
-    deref = lambda self,**attrs: self.decode(**attrs)
+    deref = lambda self, **attrs: self.decode(**attrs)
     dereference = deref
 
     def decode(self):
@@ -239,7 +255,7 @@ class Stream(ptype.block):
         stream = self.new(self._object_, offset=self.getoffset(), source=self.__source__, value=[])
         for m, data in map(None, *(iter(result),)*2):
             edata = m + (data or '')
-            res = stream._object_(blocksize=lambda cb=len(edata):cb)
+            res = stream.new(stream._object_, blocksize=(lambda cb=len(edata): cb))
             stream.append(res.load(offset=0, source=ptypes.prov.string(edata)))
         return stream
 
