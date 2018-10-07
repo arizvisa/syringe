@@ -704,8 +704,10 @@ class generic(_base_generic):
     def initializedQ(self):
         raise error.ImplementationError(self, 'base.initializedQ')
     def __eq__(self, other):
+        '''x.__eq__(y) <==> x==y'''
         return id(self) == id(other)
     def __ne__(self, other):
+        '''x.__ne__(y) <==> x!=y'''
         return not(self == other)
     def __getstate__(self):
         return ()
@@ -758,7 +760,7 @@ class generic(_base_generic):
         raise error.ImplementationError(self, 'generic.copy')
 
     def __cmp__(self, other):
-        """Returns 0 if ``other`` represents the same data as ``self``
+        """x.__cmp__(y) <==> cmp(x,y)
 
         To compare the actual contents, see .compare(other)
         """
@@ -1137,9 +1139,11 @@ class container(base):
             raise error.InitializationError(self, 'container.__field__')
         return self.value[index]
     def __getitem__(self, key):
+        '''x.__getitem__(y) <==> x[y]'''
         return self.__field__(key)
 
     def __setitem__(self, index, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         if not builtins.isinstance(value, base):
             raise error.TypeError(self, 'container.__setitem__',message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
         if self.value is None:
@@ -1459,9 +1463,11 @@ class container(base):
         return current
 
     def __len__(self):
+        '''x.__len__() <==> len(x)'''
         return len(self.value)
 
     def __iter__(self):
+        '''x.__iter__() <==> iter(x)'''
         if self.value is None:
             raise error.InitializationError(self, 'container.__iter__')
 
@@ -1529,9 +1535,11 @@ class undefined(type):
 class block(type):
     """A ptype that can be accessed as an array"""
     def __getslice__(self, i, j):
+        '''x.__getslice__(i, j) <==> x[i:j]'''
         buffer = self.value[:]
         return buffer[i:j]
     def __getitem__(self, index):
+        '''x.__getitem__(y) <==> x[y]'''
         buffer = self.value[:]
         return buffer[index]
     def repr(self, **options):
@@ -1546,8 +1554,10 @@ class block(type):
         self.length = len(value)
         return super(block, self).__setvalue__(value, **attrs)
     def __setitem__(self, index, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         self.value = self.value[:index] + value + self.value[index+1:]
     def __setslice__(self, i, j, value):
+        '''x.__setslice__(i, j, y) <==> x[i:j]=y'''
         v = self.value
         if len(value) != j-i:
             raise ValueError('block.__setslice__ : {:s} : Unable to reassign slice outside of bounds of object : ({:d}, {:d}) : {:d}'.format(self.instance(), i, j, len(value)))

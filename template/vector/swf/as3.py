@@ -1,6 +1,7 @@
-import logging,ptypes
+import ptypes, logging
 from ptypes import *
-from primitives import *
+
+from .primitives import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 class u8(pint.uint8_t): pass

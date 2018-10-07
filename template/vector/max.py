@@ -43,7 +43,7 @@ class TRANSMATRIX(parray.type):
         
 ### Chunk base types
 class ChunkType(ptype.definition): cache = {}
-class ID(ptype.enumeration, pint.uint16_t):
+class ID(pint.enum, pint.uint16_t):
     Type, _values_ = ChunkType, []
     @classmethod
     def define(cls, t):
@@ -249,7 +249,7 @@ class MAT_TRANSPARENCY_FALLOFF(MaterialSubChunk): type = 0xa052
 @Material.define
 class MAT_REFLECT_BLUR(MaterialSubChunk): type = 0xa053
 @Material.define
-class MAT_TYPE(ptype.enumeration, pint.uint16_t):
+class MAT_TYPE(pint.enum, pint.uint16_t):
     type = 0xa100
     _values_ = [
         ('flat', 1),

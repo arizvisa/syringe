@@ -1,5 +1,6 @@
-import atom,ptypes
-from atom import AtomType,Atom,AtomList
+import ptypes
+from . import atom
+from .atom import AtomType, Atom, AtomList
 
 class File(ptypes.parray.block):
     _object_ = Atom

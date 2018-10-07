@@ -69,7 +69,7 @@ class _pstruct_generic(ptype.container):
         del self.__fastindex[alias.lower()]
 
     def append(self, object):
-        """Add an element to a pstruct.type. Return it's index."""
+        '''L.append(object) -- append an element to a pstruct.type and return its index'''
         return self.__append__(object)
     def __append__(self, object):
         name = object.shortname()
@@ -78,6 +78,7 @@ class _pstruct_generic(ptype.container):
         return current
 
     def __getindex__(self, name):
+        '''x.__getitem__(y) <==> x[y]'''
         if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__getindex__', message='Element names must be of a str type.')
         try:
@@ -89,7 +90,7 @@ class _pstruct_generic(ptype.container):
                 continue
         raise KeyError(name)
 
-    # informational methods
+    ## informational methods
     def properties(self):
         result = super(_pstruct_generic, self).properties()
         if self.initializedQ():
@@ -100,23 +101,29 @@ class _pstruct_generic(ptype.container):
             return result
         return result
 
-    # list methods
+    ## list methods
     def keys(self):
+        '''D.keys() -> list of all of the names of D's fields'''
         return [ name for name in self.__keys__() ]
     def values(self):
+        '''D.keys() -> list of all of the values of D's fields'''
         return [res for res in self.__values__()]
     def items(self):
+        '''D.items() -> list of D's (name, value) fields, as 2-tuples'''
         return [(k, v) for k, v in self.__items__()]
 
-    # iterator methods
+    ## iterator methods
     def iterkeys(self):
+        '''D.iterkeys() -> an iterator over the names of D's fields'''
         for name in self.__keys__(): yield name
     def itervalues(self):
+        '''D.itervalues() -> an iterator over the values of D's fields'''
         for res in self.__values__(): yield res
     def iteritems(self):
+        '''D.iteritems() -> an iterator over the (name, value) fields of D'''
         for name, value in self.__items__(): yield name, value
 
-    # internal dict methods
+    ## internal dict methods
     def __keys__(self):
         for _, name in self._fields_: yield name
     def __values__(self):
@@ -126,13 +133,15 @@ class _pstruct_generic(ptype.container):
             yield k, v
         return
 
-    # method overloads
+    ## method overloads
     def __contains__(self, name):
+        '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
         return name in self.__fastindex
 
     def __iter__(self):
+        '''D.__contains__(k) -> True if D has a field named k, else False'''
         if self.value is None:
             raise error.InitializationError(self, '_pstruct_generic.__iter__')
 
@@ -141,11 +150,13 @@ class _pstruct_generic(ptype.container):
         return
 
     def __getitem__(self, name):
+        '''x.__getitem__(y) <==> x[y]'''
         if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
         return super(_pstruct_generic, self).__getitem__(name)
 
     def __setitem__(self, name, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         index = self.__getindex__(name)
         result = super(_pstruct_generic, self).__setitem__(index, value)
         result.__name__ = name

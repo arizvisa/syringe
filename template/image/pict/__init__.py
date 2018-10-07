@@ -1,5 +1,6 @@
-import v1,v2
-from base import *
+import ptypes
+from . import v1, v2, base
+from .base import *
 
 class Header(pstruct.type):
     _fields_ = [

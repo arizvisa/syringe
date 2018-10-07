@@ -1,5 +1,5 @@
 import ptypes
-from . import jp2, jfif
+from . import jp2, jfif, stream
 from .stream import Stream
 
 if __name__ == '__main__' and False:

@@ -41,7 +41,8 @@ class Chunk(ptype.definition):
     cache = {}
     unknown = ChunkUnknown
 
-class ChunkType(pint.enum, pint.uint32_t): pass
+class ChunkType(pint.enum, pint.uint32_t):
+    _values_ = []
 
 ######
 class signature(dyn.block(8)):

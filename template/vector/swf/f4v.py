@@ -1,5 +1,7 @@
-from primitives import *
+import ptypes
 from ptypes import *
+
+from .primitives import *
 
 ### generic types
 class Language(pbinary.struct):

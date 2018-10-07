@@ -138,7 +138,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.littleendian)
     raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
-# instance tests
+## instance tests
 @utils.memoize('t')
 def istype(t):
     return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
@@ -290,7 +290,7 @@ class type(ptype.generic):
         nmax = nmin + self.blockbits()
         return nmin <= res < nmax
 
-    # default methods
+    ## default methods
     def size(self):
         return math.trunc(math.ceil(self.bits()/8.0))
     def blocksize(self):
@@ -456,7 +456,8 @@ class enum(type):
 
 class container(type):
     '''contains a list of variable-bit integers'''
-    # positioning
+
+    ## positioning
     def getposition(self, *field, **options):
         if not len(field):
             return super(container, self).getposition()
@@ -522,6 +523,7 @@ class container(type):
             raise error.InitializationError(self, 'container.__field__')
         return self.value[index]
     def __getitem__(self, key):
+        '''x.__getitem__(y) <==> x[y]'''
         res = self.__field__(key)
         return res if isinstance(res, container) else res.int()
     def item(self, key):
@@ -557,7 +559,7 @@ class container(type):
             raise error.AssertionError(self, 'container.update', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
         return self
 
-    # loading
+    ## loading
     def __deserialize_consumer__(self, consumer, generator):
         '''initialize container object with bitmap /consumer/ using the type produced by /generator/'''
         if self.value is None:
@@ -597,7 +599,7 @@ class container(type):
         return result
 
     def append(self, object):
-        '''Add an element to a pbinary.container. Return it's index.'''
+        '''L.append(object) -- append an element to a pbinary.container and return its index'''
         return self.__append__(object)
 
     def __append__(self, object):
@@ -629,13 +631,14 @@ class container(type):
             Log.warn('container.cast : {:s} : Incomplete cast to {:s}. Target has been left partially initialized.'.format(self.classname(), target.typename()))
         return target
 
-    # method overloads
+    ## method overloads
     def __iter__(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.__iter__')
         for res in self.value: yield res
 
     def __setitem__(self, index, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         ## validate the index
         #if not (0 <= index < len(self.value)):
         #    raise IndexError(self, 'container.__setitem__', index)
@@ -740,18 +743,21 @@ class _array_generic(container):
 
         return index
 
-    # method overloads
+    ## method overloads
     def __len__(self):
+        '''x.__len__() <==> len(x)'''
         if not self.initialized:
             return self.length
         return len(self.value)
 
     def __iter__(self):
+        '''x.__iter__() <==> iter(x)'''
         for res in super(_array_generic, self).__iter__():
             yield res if isinstance(res, container) else res.int()
         return
 
     def __getitem__(self, index):
+        '''x.__getitem__(y) <==> x[y]'''
         if isinstance(index, slice):
             res = [ self.value[self.__getindex__(idx)] for idx in six.moves.range(*index.indices(len(self))) ]
             t = ptype.clone(array, length=len(res), _object_=self._object_)
@@ -759,6 +765,7 @@ class _array_generic(container):
         return super(_array_generic, self).__getitem__(index)
 
     def __setitem__(self, index, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         if isinstance(index, slice):
             val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isbitmap(value)) else iter(value)
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
@@ -776,7 +783,7 @@ class _struct_generic(container):
         self.__fastindex = {}
 
     def append(self, object):
-        """Add an element to a pbinary.struct. Return it's index."""
+        '''L.append(object) -- append an element to a pbinary.struct and return its index'''
         return self.__append__(object)
 
     def __append__(self, object):
@@ -868,25 +875,29 @@ class _struct_generic(container):
             return '\n'.join(result)
         return u"[{:x}] Empty{{}} ???".format(self.getoffset())
 
-    # list methods
+    ## list methods
     def keys(self):
-        '''Return the name of each field.'''
+        '''D.keys() -> list of all of the names of D's fields'''
         return [name for name in self.__keys__()]
     def values(self):
-        '''Return all the integer values of each field.'''
+        '''D.keys() -> list of all of the values of D's fields'''
         return [res for res in self.__values__()]
     def items(self):
+        '''D.items() -> list of D's (name, value) fields, as 2-tuples'''
         return [(k, v) for k, v in self.__items__()]
 
-    # iterator methods
+    ## iterator methods
     def iterkeys(self):
+        '''D.iterkeys() -> an iterator over the names of D's fields'''
         for name in self.__keys__(): yield name
     def itervalues(self):
+        '''D.itervalues() -> an iterator over the values of D's fields'''
         for res in self.__values__(): yield res
     def iteritems(self):
+        '''D.iteritems() -> an iterator over the (name, value) fields of D'''
         for name, value in self.__items__(): yield name, value
 
-    # internal dict methods
+    ## internal dict methods
     def __keys__(self):
         for _, name in self._fields_: yield name
     def __values__(self):
@@ -899,13 +910,15 @@ class _struct_generic(container):
             yield k, v
         return
 
-    # method overloads
+    ## method overloads
     def __contains__(self, name):
+        '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, six.string_types):
             raise error.UserError(self, '_struct_generic.__contains__', message='Element names must be of a str type.')
         return name in self.__fastindex
 
     def __iter__(self):
+        '''x.__iter__() <==> iter(x)'''
         if self.value is None:
             raise error.InitializationError(self, '_struct_generic.__iter__')
 
@@ -914,6 +927,7 @@ class _struct_generic(container):
         return
 
     def __setitem__(self, name, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         index = self.__getindex__(name)
         value = super(_struct_generic, self).__setitem__(index, value)
         if isinstance(value, type):
@@ -1074,7 +1088,7 @@ class struct(_struct_generic):
         return sum((t if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isbitmap(t) else self.new(t).blockbits()) for t, _ in self._fields_)
 
     def __and__(self, field):
-        '''Returns the specified /field/'''
+        '''Used to test the value of the specified field'''
         return self[field]
 
     def __setvalue__(self, *_, **individual):
@@ -1372,7 +1386,7 @@ class partial(ptype.container):
                 result['byteorder'] = 'little'
         return result
 
-    ### passthrough
+    ## methods to passthrough if the object is initialized
     def summary(self, **options):
         return u"???" if not self.initializedQ() else self.object.summary(**options)
     def details(self, **options):
@@ -1381,6 +1395,7 @@ class partial(ptype.container):
         return u"???" if not self.initializedQ() else self.object.repr(**options)
 
     def __len__(self):
+        '''x.__len__() <==> len(x)'''
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__len__')
         return len(self.object)
@@ -1389,15 +1404,18 @@ class partial(ptype.container):
         return self.object.__field__(key)
 
     def __getitem__(self, name):
+        '''x.__getitem__(y) <==> x[y]'''
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__getitem__')
         return self.object[name]
     def __setitem__(self, name, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__setitem__')
         self.object[name] = value
 
     def __iter__(self):
+        '''x.__iter__() <==> iter(x)'''
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__iter__')
         for res in self.object: yield res
@@ -1483,7 +1501,7 @@ class flags(struct):
         return u"(?,{:d}) {:s}".format(self.blockbits(), ','.join(u"?{:s}".format(name) for t, name in self._fields_))
 
     def __and__(self, field):
-        '''Returns if the specified /field/ is set'''
+        '''Used to test the value of the specified field'''
         return bool(self[field] > 0)
 
 ## binary type conversion/generation

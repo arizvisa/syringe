@@ -7,6 +7,8 @@ class __mixin(object):
         fmt = '0x%%0%dx (%%d)'% (s*2)
         return fmt % (n,n)
 
+class code_t(ptype.type): pass
+
 class slong(__mixin,pint.int64_t): pass
 class ulong(__mixin,pint.uint64_t): pass
 class sint(__mixin,pint.int32_t): pass
@@ -234,7 +236,7 @@ class iso_boot_record(pstruct.type):
     _fields_ = [
         (dyn.clone(string,length=32), 'system_id'),
         (dyn.clone(unused,length=32), 'boot_id'),
-        (pointer(dyn.clone(ptype.code_t,mode=16, length=2048)), 'boot_catalog'),
+        (pointer(dyn.clone(code_t,mode=16, length=2048)), 'boot_catalog'),
         (dyn.clone(unused,length=1973), 'unused2'),
     ]
 

@@ -1,8 +1,10 @@
 import logging
 import functools,operator,itertools
 
-import ptypes, jpeg.stream
+import ptypes
 from ptypes import *
+
+from . import stream as jpegstream
 
 intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
 dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
@@ -10,17 +12,17 @@ dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer //
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### JFIF Markers
-class Marker(jpeg.stream.Marker):
+class Marker(jpegstream.Marker):
     attribute, cache = '__name__', {}
     Table = [
         # FIXME: Figure out which markers are JPEG-stream specific and
         #        which are JFIF-specific
     ]
 
-class MarkerType(jpeg.stream.MarkerType): pass
+class MarkerType(jpegstream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
 
-class MarkerStream(jpeg.stream.MarkerStream):
+class MarkerStream(jpegstream.MarkerStream):
     Type, Table = MarkerType, Marker
 
 ### JFIF Structures

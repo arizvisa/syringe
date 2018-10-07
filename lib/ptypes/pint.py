@@ -433,7 +433,7 @@ class enum(type):
         return super(enum, self).__setvalue__(value)
 
     def __getitem__(self, name):
-        '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
+        '''Return True if the enumeration matches the value of the constant specified by name.'''
         res = self.byname(name)
         return res == self.get()
 

@@ -93,9 +93,11 @@ __all__ = 'type,terminated,infinite,block'.split(',')
 class _parray_generic(ptype.container):
     '''provides the generic features expected out of an array'''
     def __contains__(self,v):
+        '''D.__contains__(k) -> True if D has a field named k, else False'''
         return any(x is v for x in self.value)
 
     def __len__(self):
+        '''x.__len__() <==> len(x)'''
         if not self.initializedQ():
             return self.length
         return len(self.value)
@@ -156,6 +158,7 @@ class _parray_generic(ptype.container):
         return index
 
     def __delitem__(self, index):
+        '''x.__delitem__(y) <==> del x[y]'''
         if isinstance(index, slice):
             origvalue = self.value[:]
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
@@ -165,6 +168,7 @@ class _parray_generic(ptype.container):
         return self.pop(index)
 
     def __setitem__(self, index, value):
+        '''x.__setitem__(i, y) <==> x[i]=y'''
         if isinstance(index, slice):
             ivalue = itertools.repeat(value) if isinstance(value, ptype.generic) else iter(value)
             res = self.value[:]
@@ -179,6 +183,7 @@ class _parray_generic(ptype.container):
         return result
 
     def __getitem__(self, index):
+        '''x.__getitem__(y) <==> x[y]'''
         if isinstance(index, slice):
             result = [ self.value[ self.__getindex__(idx) ] for idx in six.moves.range(*index.indices(len(self))) ]
             t = ptype.clone(type, length=len(result), _object_=self._object_)
@@ -361,6 +366,7 @@ class terminated(type):
         raise error.ImplementationError(self, 'terminated.isTerminator')
 
     def __len__(self):
+        '''x.__len__() <==> len(x)'''
         if self.length is None:
             if self.value is None:
                 raise error.InitializationError(self, 'terminated.__len__')

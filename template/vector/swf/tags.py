@@ -1,10 +1,9 @@
-import logging,ptypes
+import ptypes, logging
 from ptypes import *
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
-import stypes
-from stypes import *
-import as3,action
+from . import stypes, as3, action
+from .stypes import *
 
 class Unknown(ptype.type):
     def classname(self):

@@ -240,6 +240,7 @@ class proxy(base):
         if robj is not None: yield robj
 
     def __repr__(self):
+        '''x.__repr__() <=> repr(x)'''
         return '{:s} -> {:s}'.format(super(proxy, self).__repr__(), self.type.instance())
 
 class string(base):
@@ -355,6 +356,7 @@ class fileobj(base):
         return result
 
     def __repr__(self):
+        '''x.__repr__() <=> repr(x)'''
         return '{:s} -> {!r}'.format(super(filebase, self).__repr__(), self.file)
 
     def __del__(self):
@@ -501,12 +503,15 @@ class stream(base):
         return self._write(data)
 
     def __repr__(self):
+        '''x.__repr__() <=> repr(x)'''
         return '{:s}[eof={!r},base={:x},length={:+x}] offset={:x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
 
     def __getitem__(self, i):
+        '''x.__getitem__(y) <==> x[y]'''
         return self.data[i-self.data_ofs]
 
     def __getslice__(self, i, j):
+        '''x.__getslice__(i, j) <==> x[i:j]'''
         return self.data[i-self.data_ofs:j-self.data_ofs].tostring()
 
     def hexdump(self, **kwds):

@@ -1,5 +1,7 @@
-from primitives import *
+import ptypes
 from ptypes import *
+
+from .primitives import *
 
 class action(ptype.definition):
     cache = {}

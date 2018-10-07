@@ -1,4 +1,4 @@
-from primitives import *
+from .primitives import *
 
 class AtomType(ptype.definition):
     cache = {}

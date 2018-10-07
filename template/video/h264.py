@@ -33,6 +33,9 @@ class seq_parameter_set_rbsp(pbinary.struct):
             return __frame_crop_offset
         return dyn.clone(pbinary.struct,_fields_=[])
 
+    def __rbsp_trailing_bits(self):
+        return 0
+
     _fields_ = [
         (8, 'profile_idc'),
         (1, 'constraint_set0_flag'),
@@ -45,7 +48,7 @@ class seq_parameter_set_rbsp(pbinary.struct):
         (__pic_order, 'pic_order'),
         (v, 'num_ref_frames'),
         (1, 'gaps_in_frame_num_value_allowed_flag'),
-        (v, 'pic_width_in_mbs_minus1')
+        (v, 'pic_width_in_mbs_minus1'),
         (v, 'pic_height_in_map_units_minus1'),
         (1, 'frame_mbs_only_flag'),
         (lambda s: [0,1][s['frame_mbs_only_flag']], 'mb_adaptive_frame_field_flag'),

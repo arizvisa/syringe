@@ -1,6 +1,6 @@
 from ptypes import *
 
-class r_empty(ptype.int_t): pass
+class r_empty(pint.int_t): pass
 class r_long64(pint.int64_t): pass
 class r_long(pint.int32_t): pass
 class r_short(pint.int16_t): pass

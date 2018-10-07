@@ -23,7 +23,7 @@ class uint32(pint.uint32_t): pass
 class uint64(pint.uint64_t): pass
 
 ## Enumerations and misc
-class RARFORMAT(ptype.enumeration):
+class RARFORMAT(pint.enum):
     _values_ = [
         ('RARFMT_NONE', 0),
         ('RARFMT14', 1),
@@ -42,7 +42,7 @@ class RARFORMAT(ptype.enumeration):
             return cls.byName('RARFMT15') + ver
         return cls.byName('RARFMT_NONE')
 
-class HeaderType(ptype.enumeration):
+class HeaderType(pint.enum):
     _values_ = [
         ('HEAD_MARK', 0x00),
         ('HEAD_MAIN', 0x01),

@@ -1,6 +1,7 @@
-import ptypes,math,logging
-from primitives import *
+import ptypes, math, logging
 from ptypes import *
+
+from .primitives import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 ### primitives

@@ -1,8 +1,10 @@
 import logging
 import functools,operator,itertools
 
-import ptypes, jpeg.stream
+import ptypes
 from ptypes import *
+
+from . import stream as jpegstream
 
 intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
 dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
@@ -22,7 +24,7 @@ class u64(pint.uint64_t): pass
 class s64(pint.sint64_t): pass
 
 ### JPEG2k Markers
-class Marker(jpeg.stream.Marker):
+class Marker(jpegstream.Marker):
     attribute, cache = '__name__', {}
     Table = [
         ('SOC', dataofint(0xff4f)),
@@ -51,10 +53,10 @@ class Marker(jpeg.stream.Marker):
         ('MCO', dataofint(0xff77)),
     ]
 
-class MarkerType(jpeg.stream.MarkerType): pass
+class MarkerType(jpegstream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
 
-class MarkerStream(jpeg.stream.MarkerStream):
+class MarkerStream(jpegstream.MarkerStream):
     Type, Table = MarkerType, Marker
 
 ### enumerations
@@ -280,10 +282,10 @@ class ColourSpecification(pstruct.type):
     ]
 
 @Boxes.define
-class ContiguousCodeStream(jpeg.stream.Stream):
+class ContiguousCodeStream(jpegstream.Stream):
     type = '\x6a\x70\x32\x63'
 
-    _object_ = dyn.clone(jpeg.stream.DecodedStream, _object_=MarkerStream)
+    _object_ = dyn.clone(jpegstream.DecodedStream, _object_=MarkerStream)
 
 @Boxes.define
 class IntellectualProperty(ptype.block):

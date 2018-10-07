@@ -100,6 +100,9 @@ class Level(ptype.definition): cache = {}
 @Level.define
 class Level0(pstruct.type):
     type = 0
+    def __filename(self):
+        res = self['filename-length'].li.int()
+        return dyn.clone(pstr.string, length=res)
     _fields_ = [
         (u8, 'filename-length'),
         (__filename, 'filename'),
@@ -109,6 +112,9 @@ class Level0(pstruct.type):
 @Level.define
 class Level1(pstruct.type):
     type = 1
+    def __filename(self):
+        res = self['filename-length'].li.int()
+        return dyn.clone(pstr.string, length=res)
     _fields_ = [
         (u8, 'filename-length'),
         (__filename, 'filename'),

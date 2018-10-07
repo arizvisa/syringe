@@ -220,23 +220,29 @@ class _union_generic(ptype.container):
         self.__fastindex[name.lower()] = current
         return current
 
-    # list methods
+    ## list methods
     def keys(self):
+        '''D.keys() -> list of the names of D's fields'''
         return [name for name in self.__keys__()]
     def values(self):
+        '''D.values() -> list of the values of D's fields'''
         return list(self.__values__())
     def items(self):
+        '''D.items() -> list of D's (name, value) fields, as 2-tuples'''
         return [(k, v) for k, v in self.__items__()]
 
-    # iterator methods
+    ## iterator methods
     def iterkeys(self):
+        '''D.iterkeys() -> an iterator over the names of D's fields'''
         for name in self.__keys__(): yield name
     def itervalues(self):
+        '''D.itervalues() -> an iterator over the values of D's fields'''
         for res in self.__values__(): yield res
     def iteritems(self):
+        '''D.iteritems() -> an iterator over the (name, value) fields of D'''
         for k, v in self.__items__(): yield k, v
 
-    # internal dict methods
+    ## internal dictonary methods
     def __keys__(self):
         for type, name in self._fields_: yield name
     def __values__(self):
@@ -249,10 +255,12 @@ class _union_generic(ptype.container):
     def __getindex__(self, name):
         return self.__fastindex[name.lower()]
     def __getitem__(self, name):
+        '''x.__getitem__(y) <==> x[y]'''
         index = self.__getindex__(name)
         return self.__object__[index]
 
     def __iter__(self):
+        '''x.__iter__() <==> iter(x)'''
         for k in six.iterkeys(self):
             yield k
         return

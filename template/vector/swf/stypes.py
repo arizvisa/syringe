@@ -1,4 +1,5 @@
-from primitives import *
+import ptypes
+from .primitives import *
 
 class ShapeDefinition(ptype.boundary): pass
 
