@@ -1,9 +1,7 @@
-import ptypes
+import logging,itertools,ptypes
 from ptypes import *
 
 import Object
-
-import logging,itertools
 
 def open(filename, **kwds):
     logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))

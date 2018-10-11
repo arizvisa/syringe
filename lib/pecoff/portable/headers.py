@@ -1,88 +1,8 @@
-import logging, ptypes
+import logging,ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pbinary
-from ..__base__ import *
+from ..headers import *
 
 from . import symbols,relocations,linenumbers
-
-### locating particular parts of the executable
-def locateBase(self):
-    """Return the base object of the executable. This is used to find the base address."""
-    try:
-        nth = self.getparent(ptype.boundary)
-    except ValueError, msg:
-        nth = list(self.backtrace(fn=lambda x:x))[-1]
-    return nth
-
-def locateHeader(self):
-    """Return the executable sub-header. This will return the executable main header."""
-    try:
-        nth = self.getparent(Header)
-    except ValueError, msg:
-        nth = list(self.backtrace(fn=lambda x:x))[-1]
-    return nth
-
-## types of relative pointers in the executable
-def calculateRelativeAddress(self, address):
-    """given a va, returns offset relative to the baseaddress"""
-    base = locateBase(self).getoffset()
-
-    # file
-    if issubclass(self.source.__class__, ptypes.provider.filebase):
-        pe = locateHeader(self)
-        section = pe['Sections'].getsectionbyaddress(address)
-        return base + section.getoffsetbyaddress(address)
-
-    # memory
-    return base + address
-
-def calculateRelativeOffset(self, offset):
-    """return an offset relative to the baseaddress"""
-    base = locateBase(self).getoffset()
-
-    # file
-    if issubclass(self.source.__class__, ptypes.provider.filebase):
-        return base + offset
-
-    # memory
-    pe = locateHeader(self)
-    section = pe['Sections'].getsectionbyoffset(offset)
-    o = offset - section['PointerToRawData'].int()
-    return base + section['VirtualAddress'].int() + o
-
-def calculateRealAddress(self, address):
-    """given an rva, return offset relative to the baseaddress"""
-    base = locateBase(self)
-    address -= base['OptionalHeader']['ImageBase'].int()
-    base=base.getoffset()
-
-    # file
-    if issubclass(self.source.__class__, ptypes.provider.filebase):
-        pe = locateHeader(self)
-        section = pe['Sections'].getsectionbyaddress(address)
-        return base + section.getoffsetbyaddress(address)
-
-    # memory
-    return base + address
-
-def realaddress(target, **kwds):
-    """Returns a pointer to /target/ where value is an rva"""
-    kwds.setdefault('__name__', 'realaddress')
-    if 'type' in kwds:
-        return dyn.opointer(target, calculateRealAddress, kwds.pop('type'), **kwds)
-    return dyn.opointer(target, calculateRealAddress, **kwds)
-
-def fileoffset(target, **kwds):
-    """Returns a pointer to /target/ where value is a fileoffset"""
-    kwds.setdefault('__name__', 'fileoffset')
-    if 'type' in kwds:
-        return dyn.opointer(target, calculateRelativeOffset, kwds.pop('type'), **kwds)
-    return dyn.opointer(target, calculateRelativeOffset, **kwds)
-def virtualaddress(target, **kwds):
-    """Returns a pointer to /target/ where value is a va"""
-    kwds.setdefault('__name__', 'virtualaddress')
-    if 'type' in kwds:
-        return dyn.opointer(target, calculateRelativeAddress, kwds.pop('type'), **kwds)
-    return dyn.opointer(target, calculateRelativeAddress, **kwds)
 
 class IMAGE_DATA_DIRECTORY(pstruct.type):
     def _object_(self):
@@ -321,7 +241,6 @@ class IMAGE_DLLCHARACTERISTICS(pbinary.flags):
         (1, 'HIGH_ENTROPY_VA'),
         (5, 'reserved_11'),
     ]
-
 
 class IMAGE_OPTIONAL_HEADER(pstruct.type):
     """PE Executable Optional Header"""

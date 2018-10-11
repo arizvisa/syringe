@@ -2,7 +2,7 @@ import ptypes
 from ptypes import *
 
 from . import portable
-from .__base__ import *
+from .headers import *
 
 import logging
 

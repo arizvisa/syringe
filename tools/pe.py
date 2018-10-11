@@ -158,6 +158,25 @@ def list_exports(t, outformat, F=None, output=None):
         return Extract(("{:s}:{:s}:{:s}:{:s}:{:s}:{:s}".format('' if rva is None else "{:d}".format(rva), '' if hint is None else "{:d}".format(hint), name or '', ordinalstring or '', "{:d}".format(entrypoint) if fwd is None else '', fwd if entrypoint is None else '') for rva, hint, name, ordinalstring, entrypoint, fwd in result.iterate()), outformat, file=output)
     return Extract(result, outformat, file=output)
 
+def extract_export(t, index, outformat, F=None, output=None):
+    E = t['Next']['Header']['DataDirectory']['Export']
+    if E['Address'].int() == 0:
+        raise ValueError("No Exports directory entry was found.")
+    et = E['Address'].d.li
+    if not(0 <= index < len(et)):
+        raise IndexError("Invalid Exports table index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(it)))
+    ete = next(e for i, e in enumerate(et.iterate()) if i == index)
+    global result; result = ete
+    if not F and (not outformat or outformat in {'print'}):
+        # rva, hint, name, ordinalname, entry, forwarded
+        six.print_("index={:d} rva={:#x} hint={:#x} name={!s} ordinalname={!s} entry={:#x} forwarded={!s}".format(index, *ete), file=output)
+        return
+    if not F and outformat in {'raw','hex'}:
+        aof, aon, no = (et[n].d.li[index] for n in ('AddressOfFunctions', 'AddressOfNames', 'AddressOfNameOrdinals'))
+        data = ptypes.parray.type(length=3).set([aof, aon, no])
+        return Extract(data, outformat, file=output)
+    return Extract(F(et) if F else result, outformat, file=output)
+
 def list_imports(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Import']
     if E['Address'].int() == 0:
@@ -295,6 +314,7 @@ def args():
     res.add_argument('-d','--list-entry', action='store_const', const=list_entries, dest='command', help='list all the data directory entries')
     res.add_argument('-D','--extract-entry', action='store', nargs=1, type=int, dest='xentry', metavar='index', help='dump the contents of the datadirectory entry to stdout')
     res.add_argument('-e','--list-exports', action='store_const', const=list_exports, dest='command', help='display the contents of the export directory')
+    res.add_argument('-E','--dump-export', action='store', nargs=1, type=int, dest='xexport', metavar='index', help='dump the specified export')
     res.add_argument('-i','--list-imports', action='store_const', const=list_imports, dest='command', help='list all the libraries listed in the import directory')
     res.add_argument('-I','--dump-import', action='store', nargs=1, type=int, dest='ximport', metavar='index', help='list all the imported functions from the specified library')
     res.add_argument('-r','--list-resource', action='store_const', const=list_resources, dest='command', help='display the resource directory tree')
@@ -313,6 +333,8 @@ def figureargs(ns):
         return lambda t,format,loc=F,output=sys.stdout: extract_section(t, ns.xsection[0], format, loc, output=output)
     elif ns.xentry:
         return lambda t,format,loc=F,output=sys.stdout: extract_entry(t, ns.xentry[0], format, loc, output=output)
+    elif ns.xexport:
+        return lambda t,format,loc=F,output=sys.stdout: extract_export(t, ns.xexport[0], format, loc, output=output)
     elif ns.ximport:
         return lambda t,format,loc=F,output=sys.stdout: extract_import(t, ns.ximport[0], format, loc, output=output)
     elif ns.xresource:
@@ -360,8 +382,9 @@ if __name__ == '__main__':
         _.print_usage()
         sys.exit(1)
 
-    ptypes.setsource( ptypes.prov.filebase(res.infile) )
-    z = pecoff.Executable.File()
+    infile = ptypes.prov.filebase(res.infile)
+    ptypes.setsource(infile)
+    z = pecoff.Executable.File(source=infile)
     z = z.l
 
     result = None

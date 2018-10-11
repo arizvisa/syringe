@@ -1,14 +1,12 @@
 import ptypes
 from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
-from ..__base__ import *
+from ..headers import *
 
 from . import exports,imports,resources,exceptions,relocations,debug,loader,clr,headers
-from .headers import virtualaddress,realaddress,fileoffset
-from .headers import IMAGE_DATA_DIRECTORY
 
 ## directory entry base types
-class AddressEntry(IMAGE_DATA_DIRECTORY): addressing = staticmethod(virtualaddress)
-class OffsetEntry(IMAGE_DATA_DIRECTORY):  addressing = staticmethod(fileoffset)
+class AddressEntry(headers.IMAGE_DATA_DIRECTORY): addressing = staticmethod(virtualaddress)
+class OffsetEntry(headers.IMAGE_DATA_DIRECTORY):  addressing = staticmethod(fileoffset)
 
 ## directory entry list
 class IMAGE_DIRECTORY_ENTRY_EXPORT(AddressEntry):

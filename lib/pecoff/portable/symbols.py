@@ -1,8 +1,6 @@
-import ptypes
+import logging,itertools,ptypes
 from ptypes import pstruct,parray,dyn,ptype,pstr,pint
-from ..__base__ import *
-
-import logging,itertools
+from ..headers import *
 
 class IMAGE_SYM(pint.enum, uint16):
     _values_ = [

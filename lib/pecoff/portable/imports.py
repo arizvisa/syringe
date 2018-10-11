@@ -1,11 +1,6 @@
-import ptypes
+import itertools,array,ptypes
 from ptypes import pstruct,parray,pbinary,pstr,ptype,dyn,utils
-from ..__base__ import *
-
-from . import headers
-from .headers import virtualaddress
-
-import itertools, array
+from ..headers import *
 
 class IMAGE_IMPORT_HINT(pstruct.type):
     _fields_ = [
@@ -49,7 +44,7 @@ class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
     def dereference(self):
         """Dereferences Name into it's IMAGE_IMPORT_HINT structure"""
         parent = self.getparent(IMAGE_IMPORT_DIRECTORY)
-        offset = headers.calculateRelativeAddress(parent, self['Name'])
+        offset = CalculateRelativeAddress(parent, self['Name'])
         return self.p.p.new(IMAGE_IMPORT_HINT, __name__='ImportName', offset=offset)
 
     # set all the required attributes so that this is faking a ptype.pointer_t
@@ -150,7 +145,7 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
 
     def Hint(self, index):
         '''Given an index into the import directory entry, return the hint'''
-        Header = headers.locateHeader(self)
+        Header = LocateHeader(self)
         sections = Header['Sections']
         entry = self['INT'].d.li[index]
         if entry.OrdinalQ():
@@ -162,7 +157,7 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
 
     def Name(self, index):
         '''Given an index into the import directory entry, return its name'''
-        Header = headers.locateHeader(self)
+        Header = LocateHeader(self)
         sections = Header['Sections']
         entry = self['INT'].d.li[index]
         if entry.OrdinalQ():
@@ -176,12 +171,12 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
     def Offset(self, index):
         '''Given an index into the import directory entry, return the va of the address containing the import.'''
         entry = self['IAT'].d.li[index]
-        offset = headers.calculateRelativeOffset(self, self['IAT'].int())
+        offset = CalculateRelativeOffset(self, self['IAT'].int())
         return offset + index * entry.size()
 
     def iterate(self):
         '''[(hint, importentry_name, importentry_offset, importentry_value),...]'''
-        Header = headers.locateHeader(self)
+        Header = LocateHeader(self)
         int, iat = self['INT'], self['IAT']
 
         cache, sections = {}, Header['Sections']

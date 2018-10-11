@@ -1,11 +1,8 @@
-import ptypes
+import logging,ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
-from ..__base__ import *
+from ..headers import *
 
-from .headers import virtualaddress
 from . import headers
-
-import logging
 
 pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 

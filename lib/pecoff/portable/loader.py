@@ -1,8 +1,6 @@
 import ptypes
 from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
-
-from ..__base__ import *
-from .headers import virtualaddress,realaddress,fileoffset
+from ..headers import *
 
 class IMAGE_LOAD_CONFIG_CODE_INTEGRITY(pstruct.type):
     _fields_ = [

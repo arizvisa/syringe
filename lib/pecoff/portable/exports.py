@@ -1,11 +1,8 @@
-import ptypes
+import logging,itertools,array,ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils
-from ..__base__ import *
+from ..headers import *
 
 from . import headers
-from .headers import virtualaddress
-
-import itertools,array,logging
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
@@ -48,7 +45,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     def GetNames(self):
         """Returns a list of all the export names"""
-        Header = headers.locateHeader(self)
+        Header = LocateHeader(self)
         cache, sections = {}, Header['Sections']
 
         res = []
@@ -61,7 +58,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     def GetNameOrdinals(self):
         """Returns a list of all the Ordinals for each export"""
-        Header = headers.locateHeader(self)
+        Header = LocateHeader(self)
         address = self['AddressOfNameOrdinals'].int()
         section = Header['Sections'].getsectionbyaddress(address)
 
@@ -75,7 +72,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
     def GetExportAddressTable(self):
         """Returns (export address table offset,[virtualaddress of each export]) from the export address table"""
-        Header = headers.locateHeader(self)
+        Header = LocateHeader(self)
         ExportDirectory = self.getparent(headers.IMAGE_DATA_DIRECTORY)
 
         address = self['AddressOfFunctions'].int()
@@ -86,7 +83,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         data = section.data().l.serialize()
 
         block = data[offset: offset + 4*self['NumberOfFunctions'].int()]
-        return address, array.array('L', block)
+        return address, array.array('I', block)
 
     def Hint(self, index):
         '''Returns the hint/ordinal of the specified export.'''
@@ -115,7 +112,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             raise IndexError("{:s} : Specified ordinal {:d} is out of bounds for IMAGE_EXPORT_DIRECTORY. ({:d}{:+d})".format('.'.join((cls.__module__, cls.__name__)), hint, 0, len(aof.d)))
 
         # now we can figure the index into the function table
-        res = headers.calculateRelativeOffset(self, aof.int())
+        res = CalculateRelativeOffset(self, aof.int())
         return res + hint * 4
 
     def Name(self, index):
@@ -196,7 +193,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         """For each export, yields (rva offset, hint, name, ordinalname, entrypoint, forwardedrva)"""
         cls = self.__class__
         ExportDirectory = self.getparent(headers.IMAGE_DATA_DIRECTORY)
-        Header, Base = headers.locateHeader(self), self['Base'].int()
+        Header, Base = LocateHeader(self), self['Base'].int()
 
         # our section data cache
         cache, sections = {}, Header['Sections']
@@ -212,14 +209,14 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
             # convert the aof into an array that's wikiwiki
             data = aof.d.l.cast(dyn.array(dword, len(aof.d)))
-            eat = array.array('L', data.l.serialize())
+            eat = array.array('I', data.serialize())
 
             # check that the aof is within the bounds of the section, warn the user despite supporting it anyways
             if any(not section.containsaddress(ea) for ea in (aof.int(), aof.int() + 4*self['NumberOfFunctions'].int())):
                 logging.warn("{:s} : Export Address Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aof.int(), aof.int() + 4*self['NumberOfFunctions'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
         else:
             logging.warn("{:s} : No export addresses found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
-            eat = array.array('L', [])
+            eat = array.array('I', [])
 
         ## name ordinal table
         if aono.int() > 0:
@@ -246,7 +243,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
             nt = aon.d.l
 
         # now we can start returning things to the user
-        va = headers.calculateRelativeOffset(self, aof.int())
+        va = CalculateRelativeOffset(self, aof.int())
         for nameva, ordinal in map(None, nt, no):
 
             # grab the name if we can

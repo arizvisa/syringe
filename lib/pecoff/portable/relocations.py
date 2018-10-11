@@ -1,9 +1,6 @@
-import sys,ptypes
+import sys,array,ptypes
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
-
-from ..__base__ import *
-
-import array
+from ..headers import *
 
 class MachineRelocation(ptype.definition):
     cache = {}

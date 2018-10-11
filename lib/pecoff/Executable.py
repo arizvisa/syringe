@@ -1,10 +1,8 @@
-import ptypes
+import logging,operator,itertools,array,ptypes
 from ptypes import *
 
-from .__base__ import *
+from .headers import *
 from . import portable
-
-import logging,operator,itertools,array
 
 def open(filename, **kwds):
     logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))
@@ -207,7 +205,7 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         data[field.offset:field.offset+field.size()] = field.serialize()
 
         # FIXME: somehow I'm off-by-one occasionally here
-        res = sum(array.array('L', ''.join(data) + '\x00'*(4-len(data)%4)))
+        res = sum(array.array('I', ''.join(data) + '\x00'*(4-len(data)%4)))
         checksum = (res&0xffff) + (res>>16)
         checksum += (checksum>>16)
         return (checksum&0xffff) + len(data)

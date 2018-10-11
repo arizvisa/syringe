@@ -1,9 +1,6 @@
 import ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary
-from ..__base__ import *
-
-from . import headers
-from .headers import virtualaddress
+from ..headers import *
 
 class UNWIND_CODE(dyn.union):
     # http://msdn.microsoft.com/en-us/library/ck9asaa9.aspx

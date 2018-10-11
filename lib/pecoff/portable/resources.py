@@ -1,11 +1,8 @@
-import ptypes
+import logging,itertools,ptypes
 from ptypes import pstruct,parray,pbinary,ptype,dyn,pstr,config
+from ..headers import *
 
-from ..__base__ import *
 from . import headers
-from .headers import virtualaddress
-
-import logging, itertools
 
 class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
     _fields_ = [
