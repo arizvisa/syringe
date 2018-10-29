@@ -1,9 +1,12 @@
-import ptypes, osi.__base__
+import ptypes
 from ptypes import ptype
+
+from ..__base__ import stackable
+
 class layer(ptype.definition):
     cache = {}
 
-class stackable(osi.__base__.stackable):
+class stackable(stackable):
     def nextlayer_id(self):
         raise NotImplementedError
 

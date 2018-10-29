@@ -1,2 +1,3 @@
-from __base__ import layer
+from .__base__ import layer
+
 import ethernet, null

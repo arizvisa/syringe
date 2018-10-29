@@ -3,9 +3,10 @@
 
 # http://www.ietf.org/rfc/rfc2460.txt
 
-import ptypes, __base__
-from __base__ import layer,datalink,stackable
+import ptypes
 from ptypes import *
+
+from .__base__ import layer, datalink, stackable
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 

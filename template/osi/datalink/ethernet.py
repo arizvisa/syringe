@@ -1,5 +1,7 @@
-import ptypes, __base__
+import ptypes
 from ptypes import *
+
+from ..__base__ import stackable
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -8,7 +10,7 @@ class u_short(pint.uint16_t): pass
 
 class lladdr(parray.type): length, _object_ = 6, u_char
 
-class header(pstruct.type, __base__.stackable):
+class header(pstruct.type, stackable):
     _fields_ = [
         (lladdr, 'dhost'),
         (lladdr, 'shost'),

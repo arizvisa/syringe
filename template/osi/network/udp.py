@@ -1,7 +1,7 @@
-import ptypes, __base__
-from __base__ import layer,stackable
-
+import ptypes
 from ptypes import *
+
+from .__base__ import layer, stackable
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 

@@ -1,6 +1,7 @@
 import ptypes
-from __base__ import layer,datalink,stackable,terminal
 from ptypes import *
+
+from .__base__ import layer, datalink, stackable, terminal
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
 

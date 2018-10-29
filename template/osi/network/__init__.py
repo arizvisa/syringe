@@ -1,7 +1,7 @@
 import ptypes, logging
+from ptypes import parray, dyn
 
-from __base__ import layer
-from ptypes import parray,dyn
+from .__base__ import layer
 
 if False:
     class stack(parray.terminated):

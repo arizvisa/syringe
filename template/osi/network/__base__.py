@@ -1,6 +1,8 @@
-import ptypes, osi.__base__
-from osi import datalink
+import ptypes
 from ptypes import ptype,pstruct
+
+from ..__base__ import stackable, terminal
+from .. import datalink
 
 class layer(ptype.definition):
     cache = {}
@@ -9,7 +11,7 @@ class layer(ptype.definition):
         def nextlayer_type(self):
             return None
 
-class stackable(osi.__base__.stackable):
+class stackable(stackable):
     def nextlayer_id(self):
         raise NotImplementedError
 
@@ -21,4 +23,4 @@ class stackable(osi.__base__.stackable):
     def nextlayer_size(self):
         return None
 
-class terminal(osi.__base__.terminal): pass
+class terminal(terminal): pass

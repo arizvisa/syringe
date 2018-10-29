@@ -1,4 +1,5 @@
 from ptypes import ptype
+
 class stackable:
     def nextlayer(self):
         '''returns a tuple of (type,remaining)'''
@@ -6,4 +7,4 @@ class stackable:
 
 class terminal(stackable):
     def nextlayer(self):
-        return None,None
+        return None, None
