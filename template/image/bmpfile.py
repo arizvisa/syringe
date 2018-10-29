@@ -176,8 +176,8 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes, bmpfile
     import sys
+    import ptypes, image.bmpfile
     if len(sys.argv) != 2:
         print "Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__)
         sys.exit(0)
