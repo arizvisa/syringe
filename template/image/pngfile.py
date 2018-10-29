@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, logging
 from ptypes import *
 import array,functools
 
@@ -26,55 +26,71 @@ def update_crc(crc, data, table):
         res = table[(res ^ b) & 0xff] ^ (res >> 8)
     return res
 
-def crc(data, table):
+def make_crc(data, table):
     return update_crc(0xffffffff, data, table) ^ 0xffffffff
 
-####333
-class ChunkUnknown(ptype.block):
-    type, length = None, 0
-
-    def classname(self):
-        res = super(ChunkUnknown, self).classname()
-        return '{:s}<{:s}>[size:{:#x}]'.format(res, self.type, self.blocksize())
-
-class Chunk(ptype.definition):
+###
+class Chunks(ptype.definition):
     cache = {}
-    unknown = ChunkUnknown
+    class UnknownChunk(ptype.block):
+        type, length = None, 0
+
+        def classname(self):
+            res = super(Chunks.UnknownChunk, self).classname()
+            return '{:s}<{:s}>[size:{:#x}]'.format(res, self.type, self.blocksize())
+
+    unknown = UnknownChunk
 
 class ChunkType(pint.enum, pint.uint32_t):
     _values_ = []
 
 ######
-class signature(dyn.block(8)):
-    valid = property(fget=lambda s: s.serialize() == s.default())
+class Signature(dyn.block(8)):
+    Valid = property(fget=lambda s: s.serialize() == s.default())
     @classmethod
     def default(cls):
         return str().join(map(chr, (137,80,78,71,13,10,26,10)))
 
-class chunk(pstruct.type):
+class Chunk(pstruct.type):
     def __data(self):
-        cb, t = self['length'].li, self['type'].li
-        return Chunk.withdefault(t.serialize(), length=cb.int())
+        cb, res = self['length'].li, self['type'].li
+        return Chunks.withdefault(res.serialize(), length=cb.int())
 
     def __data(self):
         type, length = self['type'].li, self['length'].li
-        result = Chunk.withdefault(type.serialize(), type=type.serialize(), length=length.int())
-        if ptype.iscontainer(result):
-            return dyn.clone(result, blocksize=lambda s,cb=length.int():cb)
+        result = Chunks.withdefault(type.serialize(), type=type.serialize(), length=length.int())
+        if issubclass(result, (ptype.block, parray.block)):
+
+            # check if chunk data length seeks outside of file
+            if isinstance(self.source, ptypes.provider.filebase):
+                chunk = 0xc
+                default = self.source.size() - chunk - self.getoffset() - (type.size() + length.size() + 4)
+                if self.getoffset() + type.size() + 2*length.size() + length.int() < self.source.size():
+                    res = length.int()
+                elif default > 0:
+                    logging.fatal("{:s}: Size of data {:x}{:+x} for chunk type {:s} is larger than file contents and IEND chunk. Using {:+x} for data length instead to keep this included.".format(self.instance(), self.getoffset() + type.size() + length.size(), length.int(), type.str(), default))
+                    res = default
+                else:
+                    res = 0
+                return dyn.clone(result, blocksize=lambda _, cb=res: cb)
+
+            # otherwise we're just safe to use it
+            return dyn.clone(result, blocksize=lambda _, cb=length.int(): cb)
         return result
 
     def Calculate(self):
         res = self['type'].serialize() + self['data'].serialize()
-        return crc(res, Table)
+        return make_crc(res, Table)
 
     @property
-    def valid(self):
+    def Valid(self):
         return self.Calculate() == self['crc'].int()
 
     def properties(self):
-        res = super(chunk, self).properties()
+        res = super(Chunk, self).properties()
         res['CRC'] = self.Calculate()
-        res['Valid'] = res['CRC'] == self['crc'].int()
+        try: res['Valid'] = res['CRC'] == self['crc'].int()
+        except: res['Valid'] = False
         return res
 
     _fields_ = [
@@ -85,42 +101,100 @@ class chunk(pstruct.type):
     ]
 
 class File(pstruct.type):
-    class chunks(parray.terminated):
-        _object_ = chunk
+    class Data(parray.terminated):
+        _object_ = Chunk
         def isTerminator(self, value):
             return value['type'].serialize() == IEND.type
 
     _fields_ = [
-        (signature, 'signature'),
-        (chunks, 'data'),
+        (Signature, 'signature'),
+        (Data, 'data'),
     ]
 
-@Chunk.define
+@Chunks.define
 class IHDR(pstruct.type):
     type = 'IHDR'
+
+    class ColorType(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('Grayscale', 0),
+            ('TrueColor', 2),
+            ('Palette', 3),
+            ('Grayscale/Alpha', 4),
+            ('TrueColor/Alpha', 6),
+        ]
+
+    class CompressionMethod(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('Deflate/Inflate', 0),
+        ]
+
+    class FilterMethod(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('Adaptive', 0),
+        ]
+
+    class InterlaceMethod(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('None', 0),
+            ('Adam7', 0),
+        ]
 
     _fields_ = [
         (pint.uint32_t, 'Width'),
         (pint.uint32_t, 'Height'),
         (pint.uint8_t, 'Bit depth'),
-        (pint.uint8_t, 'Colour type'),
-        (pint.uint8_t, 'Compression method'),
-        (pint.uint8_t, 'Filter method'),
-        (pint.uint8_t, 'Interlace method'),
+        (ColorType, 'Colour type'),
+        (CompressionMethod, 'Compression method'),
+        (FilterMethod, 'Filter method'),
+        (InterlaceMethod, 'Interlace method'),
     ]
 
-@Chunk.define
+@Chunks.define
+class pHYs(pstruct.type):
+    type = 'pHYs'
+    class _unit(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('unspecified', 0),
+            ('meters', 1),
+        ]
+    _fields_ = [
+        (pint.uint32_t, 'X-axis'),
+        (pint.uint32_t, 'Y-axis'),
+        (_unit, 'Unit Specifier'),
+    ]
+
+@Chunks.define
+class sCAL(pstruct.type):
+    type = 'sCAL'
+    class _unit(pint.enum, pint.uint8_t):
+        _values_ = [
+            ('meters', 1),
+            ('radians', 2),
+        ]
+    _fields_ = [
+        (_unit, 'Unit Specifier'),
+        (pstr.szstring, 'X-axis'),
+        (pint.uint8_t, 'Null Separator'),
+        (pstr.szstring, 'Y-axis'),
+    ]
+
+@Chunks.define
+class IDAT(ptype.block):
+    type = 'IDAT'
+
+@Chunks.define
 class PLTE(parray.block):
     type = 'PLTE'
     class Entry(pstruct.type):
         _fields_ = [(pint.uint8_t,x) for x in 'rgb']
     _object_ = Entry
 
-@Chunk.define
-class IEND(ptype.type):
+@Chunks.define
+class IEND(ptype.block):
     type = 'IEND'
 
-ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunk.cache.iteritems()]
+ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunks.cache.iteritems()]
 
 if __name__ == '__main__':
     import sys
