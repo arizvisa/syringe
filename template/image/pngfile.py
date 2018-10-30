@@ -222,6 +222,7 @@ class IEND(ptype.block):
     type = 'IEND'
 
 ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunks.cache.iteritems()]
+del(t, key)
 
 if __name__ == '__main__':
     import sys
