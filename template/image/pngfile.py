@@ -184,6 +184,33 @@ class IDAT(ptype.block):
     type = 'IDAT'
 
 @Chunks.define
+class tEXt(pstruct.type):
+    type = 'tEXt'
+    def __Text(self):
+        res = self.getparent(Chunk)
+        cb, length = self['Keyword'].li.size(), res['length'].li
+        return dyn.clone(pstr.string, length=length.int() - cb)
+
+    _fields_ = [
+        (pstr.szstring, 'Keyword'),
+        (__Text, 'Text'),
+    ]
+
+@Chunks.define
+class zTXt(pstruct.type):
+    type = 'zTXt'
+    def __CompressedText(self):
+        res = self.getparent(Chunk)
+        cb, length = self['Keyword'].li.size() + self['Compression method'].li.size(), res['length'].li
+        return dyn.block(length.int() - cb)
+
+    _fields_ = [
+        (pstr.szstring, 'Keyword'),
+        (IHDR.CompressionMethod, 'Compression method'),
+        (__CompressedText, 'Compressed text'),
+    ]
+
+@Chunks.define
 class PLTE(parray.block):
     type = 'PLTE'
     class Entry(pstruct.type):
