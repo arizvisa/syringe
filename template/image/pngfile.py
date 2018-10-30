@@ -137,7 +137,7 @@ class IHDR(pstruct.type):
     class InterlaceMethod(pint.enum, pint.uint8_t):
         _values_ = [
             ('None', 0),
-            ('Adam7', 0),
+            ('Adam7', 1),
         ]
 
     _fields_ = [
