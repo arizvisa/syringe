@@ -106,10 +106,15 @@ class MethodLZMAFlags(pbinary.flags):
 
 # FIXME: Add these from section 4.6
 class Extensible_data_field(pstruct.type):
+    def __unknown(self):
+        cb = sum(self[k].li.size() for k in ('id','size','data'))
+        return dyn.block(self.blocksize() - cb)
+
     _fields_ = [
         (pint.uint16_t, 'id'),
         (pint.uint16_t, 'size'),
         (lambda s: dyn.block(s['size'].li.int()), 'data'),
+        (__unknown, 'unknown'),
     ]
 
 ## File records
