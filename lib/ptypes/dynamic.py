@@ -102,7 +102,7 @@ def block(size, **kwds):
     def classname(self):
         return 'dynamic.block({:d})'.format(self.blocksize())
     kwds.setdefault('classname', classname)
-    kwds.setdefault('__module__', 'ptypes.dynamic')
+    kwds.setdefault('__module__', __name__)
     kwds.setdefault('__name__', 'block')
     return clone(ptype.block, length=size, **kwds)
 
@@ -125,7 +125,7 @@ def blockarray(type, size, **kwds):
         def classname(self):
             t = type.typename() if ptype.istype(type) else type.__name__
             return 'dynamic.blockarray({:s},{:d})'.format(t, self.blocksize())
-    blockarray.__module__ = 'ptypes.dynamic'
+    blockarray.__module__ = __name__
     blockarray.__name__ = 'blockarray'
     blockarray.__getinitargs__ = lambda s: (type,size)
     return blockarray
@@ -152,7 +152,7 @@ def align(size, **kwds):
         class result(ptype.undefined):
             def classname(self): return 'dynamic.undefined({:d}, size={:d})'.format(size,self.blocksize())
         result.repr,result.blocksize,result.__getinitargs__ = repr,blocksize,getinitargs
-        result.__module__,result.__name__ = 'ptypes.dynamic','undefined'
+        result.__module__,result.__name__ = __name__,'undefined'
         return result
 
     # otherwise, padding
@@ -160,7 +160,7 @@ def align(size, **kwds):
         initializedQ = lambda self: self.value is not None
         def classname(self): return 'dynamic.align({:d}, size={:d})'.format(size,self.blocksize())
     result.repr,result.blocksize,result.__getinitargs__ = repr,blocksize,getinitargs
-    result.__module__,result.__name__ = 'ptypes.dynamic','align'
+    result.__module__,result.__name__ = __name__,'align'
     return result
 
 ## FIXME: might want to raise an exception or warning if we have too large of an array
@@ -185,14 +185,12 @@ def array(type, count, **kwds):
         Log.warn('dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.'.format(t.typename(), count, Config.parray.max_count))
 
     def classname(self):
-        obj = type
-        t = obj.typename() if ptype.istype(obj) else obj.__name__
-        return 'dynamic.array({:s},{:s})'.format(t, str(self.length))
+        return 'dynamic.array({:s},{:s})'.format(type.__name__, str(self.length))
 
     kwds.setdefault('classname', classname)
     kwds.setdefault('length', count)
     kwds.setdefault('_object_', type)
-    kwds.setdefault('__module__', 'ptypes.dynamic')
+    kwds.setdefault('__module__', __name__)
     kwds.setdefault('__name__', 'array')
     return ptype.clone(parray.type, **kwds)
 
