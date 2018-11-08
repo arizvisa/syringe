@@ -1575,7 +1575,9 @@ def clone(cls, **newattrs):
             cn = super(_clone, self).classname()
             return Config.ptype.clone_name.format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
-    newattrs.setdefault('__name__', cls.__name__)
+    if newattrs.get('__name__', None) is None:
+        newattrs['__name__'] = cls.__name__
+
     if hasattr(cls, '__module__'):
         newattrs.setdefault('__module__', cls.__module__)
 
