@@ -1,4 +1,4 @@
-import logging,ptypes
+import logging,functools,ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
@@ -108,12 +108,14 @@ class VtableFixup(pstruct.type):
 
     def __Entry(self):
         self = self.getparent(VtableFixup)
+        cls = self.__class__
+
         res = self['Type'].li
         if res['32BIT'] and res['64BIT']:
-            logging.warn("{:s} : {:s} : Both 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,self.__class__.__name__)), self.instance(), res.summary()))
+            logging.warn("{:s} : {:s} : Both 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,cls.__name__)), self.instance(), res.summary()))
             t = pint.uint_t
         elif not res['32BIT'] and not res['64BIT']:
-            logging.warn("{:s} : {:s} : Neither 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,self.__class__.__name__)), self.instance(), res.summary()))
+            logging.warn("{:s} : {:s} : Neither 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,cls.__name__)), self.instance(), res.summary()))
             t = pint.uint_t
         else:
             t = pint.uint32_t if res['32BIT'] else pint.uint64_t if res['64BIT'] else pint.uint_t
@@ -477,11 +479,14 @@ class Tables(parray.type):
         count = lengths[index].int()
 
         if count:
-            logging.debug("{:s} : {:s} : Loading {:s}({:d}) table with {:d} rows. : {:d} of {:d}".format('.'.join((res.typename(),self.__class__.__name__)), self.instance(), TableType.byvalue(index, 'undefined'), index, count, 1+len(self.value), self.length))
+            cls = self.__class__
+            logging.debug("{:s} : {:s} : Loading {:s}({:d}) table with {:d} rows. : {:d} of {:d}".format('.'.join((res.typename(),cls.__name__)), self.instance(), TableType.byvalue(index, 'undefined'), index, count, 1+len(self.value), self.length))
 
         rowtype = Table.withdefault(index, type=index)
         rowsize = rowtype.PreCalculateSize(res) if Table.has(index) else 0
-        t = dyn.clone(TableRow, _object_=rowtype, _value_=dyn.block(rowsize))
+
+        tr, tn = TableRow.__name__, TableType.byvalue(index, None)
+        t = dyn.clone(TableRow, _object_=rowtype, _value_=dyn.block(rowsize), typename=classmethod(lambda cls: "{:s}({:s})".format(tr, tn) if tn else tr))
 
         def Get(self, index):
             if index > 0:
