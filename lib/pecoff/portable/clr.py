@@ -492,6 +492,13 @@ class Tables(parray.type):
     def __getindex__(self, index):
         return TableType.byname(index) if isinstance(index, basestring) else index
 
+    def iterate(self):
+        for res in self:
+            if len(res) > 0:
+                yield res
+            continue
+        return
+
 @Stream.define
 class HTables(pstruct.type):
     type = "#~"
@@ -509,20 +516,20 @@ class HTables(pstruct.type):
         def index(self, index):
             res = len(self) - index
             return self[res - 1]
-        def indices(self, crit):
-            return [index for index, value in enumerate(reversed(self)) if crit(value)]
+        def iterate(self, crit):
+            return (index for index, value in enumerate(reversed(self)) if crit(value))
 
     class _Valid(BitVector):
         length = 64
-        def indices(self):
-            return super(HTables._Valid, self).indices(bool)
+        def iterate(self):
+            return super(HTables._Valid, self).iterate(bool)
         def summary(self):
-            return ', '.join(map('{:d}'.format, self.indices()))
+            return ', '.join(map('{:d}'.format, self.iterate()))
 
     class _Sorted(BitVector):
         length = 64
-        def indices(self):
-            return super(HTables._Sorted, self).indices(bool)
+        def iterate(self):
+            return super(HTables._Sorted, self).iterate(bool)
 
     class _RowLengths(parray.type):
         length = 64
@@ -549,6 +556,18 @@ class HTables(pstruct.type):
         (Tables, 'Tables'),
         (__padding_Tables, 'padding(Tables)'),
     ]
+
+    def Valid(self):
+        res = self['Tables']
+        for i in self['Valid'].iterate():
+            yield res[i]
+        return
+
+    def Sorted(self):
+        res = self['Tables']
+        for i in self['Sorted'].iterate():
+            yield res[i]
+        return
 
 ### #~ tables
 class Table(ptype.definition): cache = {}
