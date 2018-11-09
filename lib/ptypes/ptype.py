@@ -1817,14 +1817,14 @@ class wrapper_t(type):
 
         # if .__object__ is undefined or of a different type than self._value_
         if self.__object__ is None:     # or (self.__object__.__class__ != self._value_):
-            name = 'wrapped_object<{:s}>'.format(self._value_.typename() if istype(self._value_) else self._value_.__name__)
+            name = 'wrapped<{:s}>'.format(self._value_.typename() if istype(self._value_) else self._value_.__name__)
             self.__object__ = self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
 
         return self.__object__
 
     @object.setter
     def object(self, instance):
-        name = 'wrapped_object<{:s}>'.format(instance.name())
+        name = 'wrapped<{:s}>'.format(instance.name())
 
         # steal the type from the one the user specified
         self._value_ = instance.__class__
