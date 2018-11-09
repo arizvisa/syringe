@@ -214,12 +214,12 @@ Example core usage:
 
 Example pointer_t usage:
 # define a pointer to a uint32_t
-    from ptypes import ptype,pint
+    from ptypes import ptype, pint
     class type(ptype.pointer_t):
         _object_ = pint.uint32_t
 
 # define a pointer relative to the parent object
-    from ptypes import ptype,pint
+    from ptypes import ptype, pint
     class type(ptype.rpointer_t):
         _object_ = pint.uint32_t
         _baseobject_ = rootobject
@@ -231,11 +231,11 @@ Example pointer_t usage:
             return number + 0x100
 """
 import six
-import functools,operator,itertools,types
-import sys,inspect,time,traceback
+import functools, operator, itertools, types
+import sys, inspect, time, traceback
 from six.moves import builtins
 
-from . import bitmap,provider,utils,config,error
+from . import bitmap, provider, utils, config, error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
@@ -274,7 +274,7 @@ def isrelated(t, t2):
     """True if type ``t`` is related to ``t2``"""
     def getbases(result, bases):
         for x in bases:
-            if not istype(x) or x in (type,container):
+            if not istype(x) or x in (type, container):
                 continue
             result.add(x)
             getbases(result, x.__bases__)
@@ -322,9 +322,9 @@ def debug(ptype, **attributes):
         raise error.UserError(ptype, 'debug', message='{!r} is not a ptype'.format(ptype))
 
     def logentry(string, *args):
-        return (time.time(),traceback.extract_stack(), string.format(*args))
+        return (time.time(), traceback.extract_stack(), string.format(*args))
 
-    if any((hasattr(n) for n in ('_debug_','_dump_'))):
+    if any((hasattr(n) for n in ('_debug_', '_dump_'))):
         raise error.UserError(ptype, 'debug', message='{!r} has a private method name that clashes'.format(ptype))
 
     class decorated_ptype(ptype):
@@ -332,37 +332,37 @@ def debug(ptype, **attributes):
         _debug_ = {}
 
         def __init__(self, *args, **kwds):
-            self._debug_['creation'] = time.time(),traceback.extract_stack(),self.backtrace(lambda s:s)
-            return super(decorated_ptype, self).__init__(*args,**kwds)
+            self._debug_['creation'] = time.time(), traceback.extract_stack(), self.backtrace(lambda s:s)
+            return super(decorated_ptype, self).__init__(*args, **kwds)
 
         def _dump_(self, file):
             dbg = self._debug_
             if 'constructed' in dbg:
-                t,c = dbg['constructed']
-                _,st,bt = dbg['creation']
+                t, c = dbg['constructed']
+                _, st, bt = dbg['creation']
                 print >>file, u"[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), getattr(self, '__name__', u""))
             else:
-                t,st,bt = dbg['creation']
+                t, st, bt = dbg['creation']
                 print >>file, u"[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), getattr(self, '__name__', u""))
 
             print >>file, u"Created by:"
             print >>file, format_stack(st)
             print >>file, u"Located at:"
-            print >>file, '\n'.join(u"{:s} : {:s}".format(x.instance(),x.name()) for x in bt)
+            print >>file, '\n'.join(u"{:s} : {:s}".format(x.instance(), x.name()) for x in bt)
             print >>file, u"Loads from store"
-            print >>file, '\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i,(t,_,string) in enumerate(dbg['load']))
+            print >>file, '\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['load']))
             print >>file, u"Writes to store"
-            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i,(t,_,string) in enumerate(dbg['commit']))
+            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['commit']))
             print >>file, u"Serialized to a string:"
-            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i,(t,_,string) in enumerate(dbg['serialize']))
+            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['serialize']))
             return
 
         def serialize(self):
             result = super(decorated, self).serialize()
             size = len(result)
             _ = logentry(u"serialize() -> __len__() -> {:#x}", self.instance(), len(size))
-            Log.debug(" : ".join(self.instance(),_[-1]))
-            self._debug_.setdefault('serialize',[]).append(_)
+            Log.debug(" : ".join(self.instance(), _[-1]))
+            self._debug_.setdefault('serialize', []).append(_)
             return result
 
         def load(self, **kwds):
@@ -371,9 +371,9 @@ def debug(ptype, **attributes):
             end = time.time()
 
             offset, size, source = self.getoffset(), self.blocksize(), self.source
-            _ = logentry(u"load({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
-            Log.debug(" : ".join(self.instance(),_[-1]))
-            self._debug_.setdefault('load',[]).append(_)
+            _ = logentry(u"load({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k, v) for k, v in attrs.items()), end-start, offset, size, source)
+            Log.debug(" : ".join(self.instance(), _[-1]))
+            self._debug_.setdefault('load', []).append(_)
             return result
 
         def commit(self, **kwds):
@@ -381,9 +381,9 @@ def debug(ptype, **attributes):
             result = super(decorated, self).commit(**kwds)
             end = time.time()
 
-            _ = logentry(u"commit({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k,v) for k,v in attrs.items()), end-start, offset, size, source)
-            Log.debug(" : ".join(self.instance(),_[-1]))
-            self._debug_.setdefault('commit',[]).append(_)
+            _ = logentry(u"commit({:s}) {:f} seconds -> (offset={:#x},size={:#x}) -> source={!r}", ','.join(u"{:s}={!r}".format(k, v) for k, v in attrs.items()), end-start, offset, size, source)
+            Log.debug(" : ".join(self.instance(), _[-1]))
+            self._debug_.setdefault('commit', []).append(_)
             return result
 
     decorated.__name__ = "debug({:s})".format(ptype.__name__)
@@ -397,7 +397,7 @@ def debugrecurse(ptype):
         def new(self, t, **attrs):
             res = force(t, self)
             Log.debug('constructed : {!r} -> {:s} {:s}'.format(t, self.classname(), self.name()))
-            debugres = debug(res, constructed=(time.time(),t))
+            debugres = debug(res, constructed=(time.time(), t))
             return super(decorated, self).new(debugres, **attrs)
     decorated.__name__ = "debug({:s},recurse=True)".format(ptype.__name__)
     return decorated
@@ -412,7 +412,7 @@ class _base_generic(object):
     #           XXX meta-related information
     #           instance tree navigation
 
-    __slots__ = ('__source__','attributes','ignored','parent','value','position')
+    __slots__ = ('__source__', 'attributes', 'ignored', 'parent', 'value', 'position')
 
     # FIXME: it'd probably be a good idea to have this not depend on globals.source,
     #        and instead have globals.source depend on this.
@@ -428,7 +428,7 @@ class _base_generic(object):
         self.__source__ = value
 
     attributes = None        # {...}
-    ignored = set(('source','parent','attributes','value','__name__','position','offset'))
+    ignored = set(('source', 'parent', 'attributes', 'value', '__name__', 'position', 'offset'))
 
     parent = None       # ptype.base
     p = property(fget=lambda s: s.parent)   # abbr to get to .parent
@@ -446,14 +446,14 @@ class _base_generic(object):
         raise error.ImplementationError(self, 'generic.setoffset')
     def getoffset(self, **_):
         raise error.ImplementationError(self, 'generic.setoffset')
-    offset = property(fget=lambda s: s.getoffset(), fset=lambda s,v: s.setoffset(v))
+    offset = property(fget=lambda s: s.getoffset(), fset=lambda s, v: s.setoffset(v))
 
     ## position
     def setposition(self, position, **_):
         raise error.ImplementationError(self, 'generic.setposition')
     def getposition(self):
         raise error.ImplementationError(self, 'generic.getposition')
-    position = property(fget=lambda s: s.getposition(), fset=lambda s,v: s.setposition(v))
+    position = property(fget=lambda s: s.getposition(), fset=lambda s, v: s.setposition(v))
 
     def __update__(self, attrs={}, **moreattrs):
         """Update the attributes that will be assigned to object.
@@ -470,11 +470,11 @@ class _base_generic(object):
         res = {}
         res.update(recurse)
         res.update(attrs)
-        for k,v in res.iteritems():
+        for k, v in res.iteritems():
             setattr(self, k, v)
 
         # filter out ignored attributes from the recurse dictionary
-        recurse = dict((k,v) for k,v in recurse.iteritems() if k not in ignored)
+        recurse = dict((k, v) for k, v in recurse.iteritems() if k not in ignored)
 
         # update self (for instantiated elements)
         self.attributes.update(recurse)
@@ -522,19 +522,19 @@ class _base_generic(object):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().iteritems())
         result = self.repr()
 
         # multiline
         if result.count('\n') > 0:
             result = result.rstrip('\n') # remove trailing newlines
             if prop:
-                return u"{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,result)
-            return u"{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()),self.name(),result)
+                return u"{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, result)
+            return u"{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()), self.name(), result)
 
-        _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
+        _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
-        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(), self.name())
         if prop:
             return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
@@ -546,7 +546,7 @@ class _base_generic(object):
         if hasattr(cls, '__module__') and cls.__module__ is not None:
             if Config.display.show_module_name:
                 return '.'.join((cls.__module__, cls.__name__))
-            return '.'.join((cls.__module__.rsplit('.',1)[-1], cls.__name__))
+            return '.'.join((cls.__module__.rsplit('.', 1)[-1], cls.__name__))
         return cls.__name__
     def classname(self):
         """Return the dynamic classname. Can be overwritten."""
@@ -561,7 +561,7 @@ class _base_generic(object):
         return name
     def instance(self):
         """Returns a minimal string describing the type and it's location"""
-        name,ofs = self.classname(),self.getoffset()
+        name, ofs = self.classname(), self.getoffset()
         try:
             bs = self.blocksize()
             return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
@@ -590,7 +590,7 @@ class _base_generic(object):
         except: sz = self.blocksize()
 
         length = options.setdefault('width', Config.display.hexdump.width)
-        options.setdefault('offset',self.getoffset())
+        options.setdefault('offset', self.getoffset())
 
         # if larger than threshold...
         threshold = options.pop('threshold', Config.display.threshold.details)
@@ -619,7 +619,7 @@ class _base_generic(object):
             return u'"' + utils.emit_repr(buf, threshold, message, **options) + u'"'
         return u'"' + utils.emit_repr(buf, **options) + u'"'
 
-    @utils.memoize('self', self='parent', args=lambda n:(n[0],) if len(n) > 0 else (), kwds=lambda n:n.get('type',()))
+    @utils.memoize('self', self='parent', args=lambda n:(n[0],) if len(n) > 0 else (), kwds=lambda n:n.get('type', ()))
     def getparent(self, *args, **kwds):
         """Returns the creator of the current type.
 
@@ -635,7 +635,7 @@ class _base_generic(object):
             return self.parent
 
         query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((builtins.isinstance(q,builtins.type) and builtins.isinstance(self,q)) or self.parent is q) for q in query)
+        match = lambda self: lambda query: any(((builtins.isinstance(q, builtins.type) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -651,7 +651,7 @@ class _base_generic(object):
             continue
 
         # otherwise, we can bail since it wasn't found.
-        chain = ';'.join(utils.repr_instance(node.classname(),node.name()) for node in self.traverse(edges=parents))
+        chain = ';'.join(utils.repr_instance(node.classname(), node.name()) for node in self.traverse(edges=parents))
         res = (q.typename() if istype(q) else str(q) for q in query)
         raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s} : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), chain))
     def backtrace(self, fn=lambda self:u"<instance {:s} {!r}>".format(self.instance(), self.name())):
@@ -767,8 +767,8 @@ class generic(_base_generic):
         if not isinstance(other) or self.initializedQ() != other.initializedQ():
             return -1
         if self.initializedQ():
-            return 0 if (self.getposition(),self.serialize()) == (other.getposition(),other.serialize()) else -1
-        return 0 if (self.getposition(),self.blocksize()) == (other.getposition(),other.blocksize()) else +1
+            return 0 if (self.getposition(), self.serialize()) == (other.getposition(), other.serialize()) else -1
+        return 0 if (self.getposition(), self.blocksize()) == (other.getposition(), other.blocksize()) else +1
 
 class base(generic):
     padding = utils.padding.source.zero()
@@ -812,24 +812,24 @@ class base(generic):
 
         Each value in the iterable is composed of (index,(self.serialize(),other.serialize()))
         """
-        if False in (self.initializedQ(),other.initializedQ()):
+        if False in (self.initializedQ(), other.initializedQ()):
             Log.fatal('base.compare : {:s} : Instance not initialized ({:s})'.format(self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 
-        s,o = self.serialize(),other.serialize()
+        s, o = self.serialize(), other.serialize()
         if s == o:
             return
 
         comparison = (bool(six.byte2int(x)^six.byte2int(y)) for x, y in zip(s, o))
         result = [(different, len(list(times))) for different, times in itertools.groupby(comparison)]
         index = 0
-        for diff,length in result:
-            #if diff: yield index,length
+        for diff, length in result:
+            #if diff: yield index, length
             if diff: yield index, (s[index:index+length], o[index:index+length])
             index += length
 
         if len(s) != len(o):
-            #yield index,max(len(s),len(o))-index
+            #yield index, max(len(s), len(o))-index
             yield index, (s[index:], '') if len(s) > len(o) else ('', o[index:])
         return
 
@@ -853,7 +853,7 @@ class base(generic):
             result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda:bs)
             result.setoffset(result.getoffset(), recurse=True)
 
-        except Exception,e:
+        except Exception, e:
             Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e))
 
         # force partial or overcommited initializations
@@ -861,7 +861,7 @@ class base(generic):
         except (error.LoadError, StopIteration): pass
 
         # log whether our size has changed somehow
-        a,b = self.size(),result.size()
+        a, b = self.size(), result.size()
         if a > b:
             Log.info("base.cast : {:s} : Result {:s} size is smaller than source type : {:#x} < {:#x}".format(self.classname(), result.classname(), result.size(), self.size()))
         elif a < b:
@@ -883,7 +883,7 @@ class base(generic):
     def load(self, **attrs):
         """Synchronize the current instance with data from the .source attributes"""
         with utils.assign(self, **attrs):
-            ofs,bs = self.getoffset(),self.blocksize()
+            ofs, bs = self.getoffset(), self.blocksize()
 
             try:
                 self.source.seek(ofs)
@@ -898,7 +898,7 @@ class base(generic):
         """Commit the current state back to the .source attribute"""
         try:
             with utils.assign(self, **attrs):
-                ofs,data = self.getoffset(),self.serialize()
+                ofs, data = self.getoffset(), self.serialize()
                 self.source.seek(ofs)
                 self.source.store(data)
             return self
@@ -1076,9 +1076,9 @@ class type(base):
         return self.summary(**options) if self.initializedQ() else '???'
 
     def __getstate__(self):
-        return (super(type, self).__getstate__(),self.blocksize(),self.value,)
+        return (super(type, self).__getstate__(), self.blocksize(), self.value,)
     def __setstate__(self, state):
-        state,self.length,self.value = state
+        state, self.length, self.value = state
         super(type, self).__setstate__(state)
 
 class container(base):
@@ -1119,7 +1119,7 @@ class container(base):
 
         # if a path is specified, then recursively get the offset
         if builtins.isinstance(field, (tuple, list)):
-            (name, res) = (lambda hd,*tl:(hd,tl))(*field)
+            (name, res) = (lambda hd, *tl:(hd, tl))(*field)
             return self[name].getoffset(res) if len(res) > 0 else self.getoffset(name)
 
         index = self.__getindex__(field)
@@ -1145,12 +1145,12 @@ class container(base):
     def __setitem__(self, index, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         if not builtins.isinstance(value, base):
-            raise error.TypeError(self, 'container.__setitem__',message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
+            raise error.TypeError(self, 'container.__setitem__', message='Cannot assign a non-ptype to an element of a container. Use .set instead.')
         if self.value is None:
             raise error.InitializationError(self, 'container.__setitem__')
         offset = self.value[index].getoffset()
         value.setoffset(offset, recurse=True)
-        value.parent,value.source = self,None
+        value.parent, value.source = self, None
         self.value[index] = value
         return value
 
@@ -1315,13 +1315,13 @@ class container(base):
         try:
             # if any of the sub-elements are undefined, load each element separately
             if Config.ptype.noncontiguous and \
-                    any(builtins.isinstance(n,container) or builtins.isinstance(n,undefined) for n in self.value):
+                    any(builtins.isinstance(n, container) or builtins.isinstance(n, undefined) for n in self.value):
                 # load each element individually up to the blocksize
-                bs,value = 0,self.value[:]
-                left,right = self.getoffset(),self.getoffset()+self.blocksize()
+                bs, value = 0, self.value[:]
+                left, right = self.getoffset(), self.getoffset()+self.blocksize()
                 while value and left < right:
                     res = value.pop(0)
-                    bs,ofs = res.blocksize(),res.getoffset()
+                    bs, ofs = res.blocksize(), res.getoffset()
                     left = res.getoffset() if left + bs < ofs else left + bs
                     res.load(**attrs)
 
@@ -1348,7 +1348,7 @@ class container(base):
     def commit(self, **attrs):
         """Commit the current state of all children back to the .source attribute"""
         if not Config.ptype.noncontiguous and \
-                all(not (builtins.isinstance(n,container) or builtins.isinstance(n,undefined)) for n in self.value):
+                all(not (builtins.isinstance(n, container) or builtins.isinstance(n, undefined)) for n in self.value):
 
             try:
                 return super(container, self).commit(**attrs)
@@ -1357,7 +1357,7 @@ class container(base):
 
         # commit all elements of container individually
         with utils.assign(self, **attrs):
-            current,ofs,sz = 0,self.getoffset(),self.size()
+            current, ofs, sz = 0, self.getoffset(), self.size()
             try:
                 for n in self.value:
                     n.commit(source=self.source)
@@ -1386,34 +1386,34 @@ class container(base):
         extra arguments are passed to .getparent in order to only return
         differences in elements that are of a particular type.
         """
-        if False in (self.initializedQ(),other.initializedQ()):
+        if False in (self.initializedQ(), other.initializedQ()):
             Log.fatal('container.compare : {:s} : Instance not initialized ({:s})'.format(self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 
         if self.value == other.value:
             return
 
-        def between(object, (left,right)):
+        def between(object, (left, right)):
             objects = provider.proxy.collect(object, left, right)
             mapped = six.moves.map(lambda n: n.getparent(*args, **kwds) if kwds else n, objects)
-            for n,_ in itertools.groupby(mapped):
+            for n, _ in itertools.groupby(mapped):
                 if left+n.size() <= right:
                     yield n
                 left += n.size()
             return
 
-        for ofs,(s,o) in super(container, self).compare(other):
+        for ofs, (s, o) in super(container, self).compare(other):
             if len(s) == 0:
                 i = other.value.index(other.field(ofs, recurse=False))
-                yield ofs, (None, tuple(between(other,(ofs,other.blocksize()))))
+                yield ofs, (None, tuple(between(other, (ofs, other.blocksize()))))
             elif len(o) == 0:
                 i = self.value.index(self.field(ofs, recurse=False))
-                yield ofs, (tuple(between(self,(ofs,self.blocksize()))),None)
+                yield ofs, (tuple(between(self, (ofs, self.blocksize()))), None)
             else:
                 if len(s) != len(o):
                     raise error.AssertionError(self, 'container.compare', message='Invalid length between both objects : {:x} != {:x}'.format(len(s), len(o)))
                 length = len(s)
-                s,o = (between(o, (ofs,ofs+length)) for o in (self,other))
+                s, o = (between(o, (ofs, ofs+length)) for o in (self, other))
                 yield ofs, (tuple(s), tuple(o))
             continue
         return
@@ -1456,7 +1456,7 @@ class container(base):
             return self.__append__(res)
 
         # assume that object is now a ptype instance
-        object.parent,object.source = self,None
+        object.parent, object.source = self, None
 
         current = len(self.value)
         self.value.append(object if object.initializedQ() else object.a)
@@ -1488,7 +1488,7 @@ class container(base):
         """
         if self.initializedQ() and len(self.value) == len(value):
             for idx, (value, e) in enumerate(zip(self.value, value)):
-                name = getattr(value, '__name__',None)
+                name = getattr(value, '__name__', None)
                 if isresolveable(e) or istype(e):
                     self.value[idx] = self.new(e, __name__=name).a
                 elif isinstance(e):
@@ -1507,9 +1507,9 @@ class container(base):
         return tuple((res.get() for res in self.value))
 
     def __getstate__(self):
-        return (super(container, self).__getstate__(),self.source, self.attributes, self.ignored, self.parent, self.position)
+        return (super(container, self).__getstate__(), self.source, self.attributes, self.ignored, self.parent, self.position)
     def __setstate__(self, state):
-        state,self.source,self.attributes,self.ignored,self.parent,self.position = state
+        state, self.source, self.attributes, self.ignored, self.parent, self.position = state
         super(container, self).__setstate__(state)
 
 class undefined(type):
@@ -1588,11 +1588,11 @@ def clone(cls, **newattrs):
     res = {}
     res.update(recurse)
     res.update(newattrs)
-    for k,v in res.items():
+    for k, v in res.items():
         setattr(_clone, k, v)
 
     # filter out ignored attributes from recurse dictionary
-    recurse = dict((k,v) for k,v in recurse.iteritems() if k not in ignored)
+    recurse = dict((k, v) for k, v in recurse.iteritems() if k not in ignored)
 
     if hasattr(_clone, 'attributes'):
         _clone.attributes = getattr(_clone, 'attributes', None) or {}
@@ -1769,9 +1769,9 @@ class definition(object):
         def clone(definition):
             res = dict(definition.__dict__)
             res.update(attributes)
-            #res = builtins.type(res.pop('__name__',definition.__name__), definition.__bases__, res)
-            res = builtins.type(res.pop('__name__',definition.__name__), (definition,), res)
-            cls.add(getattr(res,cls.attribute),res)
+            #res = builtins.type(res.pop('__name__', definition.__name__), definition.__bases__, res)
+            res = builtins.type(res.pop('__name__', definition.__name__), (definition,), res)
+            cls.add(getattr(res, cls.attribute), res)
             return definition
 
         if attributes:
@@ -1779,7 +1779,7 @@ class definition(object):
                 raise error.AssertionError(cls, 'definition.define', message='Unexpected number of positional arguments. : {:d}'.format(len(definition)))
             return clone
         res, = definition
-        cls.add(getattr(res,cls.attribute),res)
+        cls.add(getattr(res, cls.attribute), res)
         return res
 
 class wrapper_t(type):
@@ -1887,10 +1887,10 @@ class wrapper_t(type):
 
     def classname(self):
         if self.initializedQ():
-            return "{:s}<{:s}>".format(self.typename(),self.object.classname())
+            return "{:s}<{:s}>".format(self.typename(), self.object.classname())
         if self._value_ is None:
             return "{:s}<?>".format(self.typename())
-        return "{:s}<{:s}>".format(self.typename(),self._value_.typename() if istype(self._value_) else self._value_.__name__)
+        return "{:s}<{:s}>".format(self.typename(), self._value_.typename() if istype(self._value_) else self._value_.__name__)
 
     def contains(self, offset):
         left = self.getoffset()
@@ -1898,14 +1898,14 @@ class wrapper_t(type):
         return left <= offset < right
 
     def __getstate__(self):
-        return super(wrapper_t, self).__getstate__(),self._value_,self.__object__
+        return super(wrapper_t, self).__getstate__(), self._value_, self.__object__
 
     def __setstate__(self, state):
-        state,self._value_,self.__object__ = state
+        state, self._value_, self.__object__ = state
         super(wrapper_t, self).__setstate__(state)
 
     def summary(self, **options):
-        options.setdefault('offset',self.getoffset())
+        options.setdefault('offset', self.getoffset())
         return super(wrapper_t, self).summary(**options)
 
     def details(self, **options):
@@ -1930,25 +1930,25 @@ class encoded_t(wrapper_t):
     _value_ = None      # source type
     _object_ = None     # new type
 
-    d = property(fget=lambda s,**a: s.dereference(**a), fset=lambda s,*x,**a:s.reference(*x,**a))
-    deref = lambda s,**a: s.dereference(**a)
-    ref = lambda s,*x,**a: s.reference(*x,**a)
+    d = property(fget=lambda s, **a: s.dereference(**a), fset=lambda s, *x, **a:s.reference(*x, **a))
+    deref = lambda s, **a: s.dereference(**a)
+    ref = lambda s, *x, **a: s.reference(*x, **a)
 
-    @utils.memoize('self', self=lambda n:(n._object_,n.value), attrs=lambda n:tuple(sorted(n.items())))
+    @utils.memoize('self', self=lambda n:(n._object_, n.value), attrs=lambda n:tuple(sorted(n.items())))
     def decode(self, object, **attrs):
         """Take ``data`` and decode it back to it's original form"""
-        for n in ('offset','source','parent'):
+        for n in ('offset', 'source', 'parent'):
             if attrs.has_key(n): attrs.pop(n)
 
         # attach decoded object to encoded_t
-        attrs['offset'], attrs['source'], attrs['parent'] = 0, provider.proxy(self,autocommit={}), self
+        attrs['offset'], attrs['source'], attrs['parent'] = 0, provider.proxy(self, autocommit={}), self
         object.__update__(recurse=self.attributes)
         object.__update__(attrs)
         return object
 
     def encode(self, object, **attrs):
         """Take ``data`` and return it in encoded form"""
-        for n in ('offset','source','parent'):
+        for n in ('offset', 'source', 'parent'):
             if attrs.has_key(n): attrs.pop(n)
 
         # attach encoded object to encoded_t
@@ -2026,7 +2026,7 @@ class encoded_t(wrapper_t):
 
         # ensure that all of it's children autoload/autocommit to the decoded object
         recurse = {'source':provider.proxy(dec, autocommit={}, autoload={})}
-        recurse.update(attrs.get('recurse',{}))
+        recurse.update(attrs.get('recurse', {}))
         attrs['recurse'] = recurse
 
         # and we now have a good working object
@@ -2055,7 +2055,7 @@ def setbyteorder(endianness):
     can be either .bigendian or .littleendian
     '''
     global pointer_t
-    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
+    if endianness in (config.byteorder.bigendian, config.byteorder.littleendian):
         pointer_t._value_.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
@@ -2067,13 +2067,13 @@ def setbyteorder(endianness):
 class pointer_t(encoded_t):
     _object_ = None
 
-    d = property(fget=lambda s,**a: s.dereference(**a), fset=lambda s,*x,**a:s.reference(*x,**a))
-    deref = lambda s,**a: s.dereference(**a)
-    ref = lambda s,*x,**a: s.reference(*x,**a)
+    d = property(fget=lambda s, **a: s.dereference(**a), fset=lambda s, *x, **a:s.reference(*x, **a))
+    deref = lambda s, **a: s.dereference(**a)
+    ref = lambda s, *x, **a: s.reference(*x, **a)
 
     class _value_(block):
         '''Default pointer value that can return an integer in any byteorder'''
-        length,byteorder = Config.integer.size, Config.integer.order
+        length, byteorder = Config.integer.size, Config.integer.order
 
         def __setvalue__(self, offset):
             bs = self.blocksize()
@@ -2086,7 +2086,7 @@ class pointer_t(encoded_t):
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            res = six.moves.reduce(bitmap.push, map(None, map(ord, value), (8,) * len(self.value)), bitmap.zero)
+            res = six.moves.reduce(bitmap.push, map(None, map(six.byte2int, value), (8,) * len(self.value)), bitmap.zero)
             return bitmap.value(res)
 
     def decode(self, object, **attrs):
@@ -2120,7 +2120,7 @@ class pointer_t(encoded_t):
 
     def classname(self):
         targetname = force(self._object_, self).typename() if istype(self._object_) else getattr(self._object_, '__name__', 'None')
-        return '{:s}<{:s}>'.format(self.typename(),targetname)
+        return '{:s}<{:s}>'.format(self.typename(), targetname)
 
     def summary(self, **options):
         return u'*{:#x}'.format(self.int())
@@ -2130,9 +2130,9 @@ class pointer_t(encoded_t):
         return self.summary(**options) if self.initializedQ() else u"*???"
 
     def __getstate__(self):
-        return super(pointer_t, self).__getstate__(),self._object_
+        return super(pointer_t, self).__getstate__(), self._object_
     def __setstate__(self, state):
-        state,self._object_ = state
+        state, self._object_ = state
         super(wrapper_t, self).__setstate__(state)
 
 class rpointer_t(pointer_t):
@@ -2156,14 +2156,14 @@ class rpointer_t(pointer_t):
         return res
 
     def __getstate__(self):
-        return super(rpointer_t, self).__getstate__(),self._baseobject_
+        return super(rpointer_t, self).__getstate__(), self._baseobject_
     def __setstate__(self, state):
-        state,self._baseobject_, = state
+        state, self._baseobject_, = state
         super(rpointer_t, self).__setstate__(state)
 
 class opointer_t(pointer_t):
     """a pointer_t that's calculated via a user-provided function that takes an integer value as an argument"""
-    _calculate_ = lambda s,x: x
+    _calculate_ = lambda self, value: value
 
     def classname(self):
         calcname = self._calculate_.__name__
@@ -2186,7 +2186,7 @@ class constant(type):
 
     This will log a warning if the loaded data does not match the expected string.
     """
-    length = property(fget=lambda s: len(s.__doc__),fset=lambda s,v:None)
+    length = property(fget=lambda self: len(self.__doc__), fset=lambda self, value: None)
 
     def __init__(self, **attrs):
         if self.__doc__ is None:
@@ -2219,9 +2219,9 @@ class constant(type):
         return self.load(**attrs)
 
     def __getstate__(self):
-        return super(constant, self).__getstate__(),self.__doc__
+        return super(constant, self).__getstate__(), self.__doc__
     def __setstate__(self, state):
-        state,self.__doc__ = state
+        state, self.__doc__ = state
         super(constant, self).__setstate__(state)
 
 from . import pbinary  # XXX: recursive. yay.
