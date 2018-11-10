@@ -95,6 +95,167 @@ class MetaDataRoot(pstruct.type):
         (__StreamData, 'StreamData'),
     ]
 
+## Resource directory structures
+class EncodedInteger(parray.terminated):
+    _object_ = pint.uint8_t
+    def isTerminator(self, value):
+        return value.int() & 0x80 == 0
+    def int(self):
+        res = 0
+        for item in self:
+            res *= 0x80
+            res += item.int() & 0x7f
+        return res
+    def summary(self):
+        res = self.int()
+        return "{:s} -> {:#0{:d}x} ({:d})".format(super(EncodedInteger, self).summary(), res, 2+self.blocksize()*2, res)
+
+class ResourceString(pstruct.type):
+    _fields_ = [
+        (EncodedInteger, 'Length'),
+        (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'Name'),
+    ]
+    def str(self):
+        return self['Name'].str()
+    def summary(self):
+        return "{:d} {!r}".format(self['Length'].int(), self['Name'].str())
+
+class ResourceWString(pstruct.type):
+    _fields_ = [
+        (EncodedInteger, 'Length'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int() / 2), 'Name'),
+        (lambda s: dyn.block(s['Length'].li.int() % 2), 'Padding'),
+    ]
+    def str(self):
+        return self['Name'].str()
+    def summary(self):
+        return "{:d} {!r}".format(self['Length'].int(), self['Name'].str())
+
+## Resource directory headers
+class ResourceFileType(ptype.definition): cache = {}
+
+class ResourceManagerHeader(pstruct.type):
+    _fields_ = [
+        #(pint.uint32_t, 'Magic'),
+        (pint.uint32_t, 'Version'),
+        (pint.uint32_t, 'Size'),
+        (lambda s: dyn.blockarray(ResourceString, s['Size'].li.int()), 'Parsers'),
+    ]
+
+class ResourceReaderHeader(pstruct.type):
+    class _Types(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'Count'),
+            (lambda s: dyn.array(ResourceString, s['Count'].li.int()), 'Name'),
+        ]
+    def __Padding(self):
+        cb = 0
+
+        ri = self.getparent(ResourceInfo)
+        cb += ri['Magic'].li.size()
+
+        rfi = self.getparent(ResourceFileInfo)
+        cb += rfi['Manager'].li.size()
+
+        cb += sum(self[n].li.size() for n in ('Version', 'Count', 'Types'))
+
+        top = ri.getoffset() + ri['Size'].li.size()
+        bottom = top + cb
+        res = (bottom - top) & 7
+        return dyn.block((8 - res) if res > 0 else 0)
+
+    _fields_ = [
+        (pint.uint32_t, 'Version'),
+        (pint.uint32_t, 'Count'),
+        (_Types, 'Types'),
+        (__Padding, 'Padding'),
+
+        (lambda s: dyn.array(pint.uint32_t, s['Count'].li.int()), 'Hash'),
+        (lambda s: dyn.array(pint.uint32_t, s['Count'].li.int()), 'NameOffset'),
+        (pint.uint32_t, 'DataOffset'),
+    ]
+
+class ResourceReaderName(pstruct.type):
+    _fields_ = [
+        (ResourceWString, 'Name'),
+        (pint.uint32_t, 'Offset'),
+    ]
+
+class ResourceReaderData(pstruct.type):
+    _fields_ = [
+        (EncodedInteger, 'Type'),
+        (EncodedInteger, 'Length'),
+        (lambda s: dyn.block(s['Length'].li.int()), 'Blob'),
+    ]
+
+@ResourceFileType.define
+class ResourceFileInfo(pstruct.type):
+    type = 0xbeefcace
+
+    class ResourceData(ptype.encoded_t): pass
+    class _ResourceData(pstruct.type):
+        def ResourceCount(type):
+            def result(self, type=type):
+                res = self.getparent(ResourceFileInfo)
+                header = res['Reader'].li
+                return dyn.array(type, header['Count'].int())
+            return result
+
+        _fields_ = [
+            (ResourceCount(ResourceReaderName), 'Names'),
+            (ResourceCount(ResourceReaderData), 'Values'),
+        ]
+
+    def __Data(self):
+        res = self.blocksize() - sum(self[n].li.size() for n in ('Manager', 'Reader')) 
+        return dyn.clone(self.ResourceData, _value_=dyn.block(res), _object_=self._ResourceData)
+
+    _fields_ = [
+        (ResourceManagerHeader, 'Manager'),
+        (ResourceReaderHeader, 'Reader'),
+        (__Data, 'Data'),
+    ]
+
+class ResourceInfo(pstruct.type):
+    def __Padding(self):
+        cb = self['Size'].li.size() + self['Size'].li.int()
+        res = cb & 7
+        return dyn.block((8 - res) if res > 0 else 0)
+
+    class _Magic(pint.uint32_t):
+        def Valid(self):
+            return self.int() == 0xbeefcace
+
+        def properties(self):
+            res = super(ResourceInfo._Magic, self).properties()
+            if self.initializedQ():
+                res['Valid'] = self.Valid()
+            return res
+
+    def __Magic(self):
+        res = self['Size'].li.int()
+        return dyn.block(0) if res < 4 else self._Magic
+
+    def __Info(self):
+        res = self['Size'].li.int()
+        if res < 4:
+            return dyn.block(res - self['Magic'].li.size())
+        return ResourceFileType.get(self['Magic'].int(), blocksize=lambda s, cb=res - self['Magic'].li.size(): cb)
+
+    _fields_ = [
+        (pint.uint32_t, 'Size'),
+        (__Magic, 'Magic'),
+        (__Info, 'Info'),
+        (__Padding, 'Padding'),
+    ]
+
+    def Data(self):
+        res = self['Size'].li.int()
+        if self['Magic'].Valid():
+            return self['Info']
+        t = dyn.block(res)
+        return self.new(t, offset=4, source=ptypes.prov.proxy(self)).li
+
 class VtableFixup(pstruct.type):
     class COR_VTABLE_(pbinary.flags):
         _fields_ = [
@@ -141,7 +302,7 @@ class IMAGE_COR20_HEADER(pstruct.type):
         (CORIMAGE_FLAGS_, 'Flags'),
         (pint.uint32_t, 'EntryPoint'),
 
-        (IMAGE_DATA_DIRECTORY, 'Resources'),
+        (dyn.clone(IMAGE_DATA_DIRECTORY, _object_=lambda s:dyn.blockarray(ResourceInfo, s.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int())), 'Resources'),
         (IMAGE_DATA_DIRECTORY, 'StrongNameSignature'),
 
         (IMAGE_DATA_DIRECTORY, 'CodeManagerTable'),
