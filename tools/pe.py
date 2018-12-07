@@ -62,11 +62,12 @@ def dump_exe(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat or outformat in {'print'}:
-        six.print_(repr(result['Dos']) + '\n', file=output)
+        six.print_(repr(result) + '\n', file=output)
+        six.print_(repr(result['Header']) + '\n', file=output)
         six.print_(result['Stub'].hexdump(), file=output)
         return
     if outformat in {'hex','raw'}:
-        t = ptypes.dyn.block(result['Dos'].size() + result['Stub'].size())
+        t = ptypes.dyn.block(result['Header'].size() + result['Stub'].size())
         return Extract(t(offset=0).li, outformat, file=output)
     return Extract(result, outformat, file=output)
 

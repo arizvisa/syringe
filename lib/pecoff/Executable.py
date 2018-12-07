@@ -9,7 +9,18 @@ def open(filename, **kwds):
     res = File(filename=filename, source=ptypes.provider.file(filename, **kwds))
     return res.load()
 
-class Dos(pstruct.type):
+class Signature(pint.enum, uint16):
+    # We'll just store all signature types here
+    _values_ = [
+        ('IMAGE_DOS_SIGNATURE', 0x5a4d),
+        ('IMAGE_OS2_SIGNATURE', 0x454e),
+        ('IMAGE_OS2_SIGNATURE_LE', 0x454c),
+        ('IMAGE_NT_SIGNATURE', 0x4550),
+    ]
+
+class IMAGE_DOS_HEADER(pstruct.type):
+    class e_magic(Signature): pass
+
     class Relocation(pstruct.type):
         _fields_ = [
             ( uint16, 'offset' ),
@@ -77,7 +88,7 @@ class Dos(pstruct.type):
     #e_cparhdr << 4
     #e_cp << 9
     _fields_ = [
-        ( uint16, 'e_magic' ),
+        ( e_magic, 'e_magic' ),
         ( uint16, 'e_cblp' ),        # bytes in last page / len mod 512 / UsedBytesInLastPage
         ( uint16, 'e_cp' ),          # pages / 512b pagees / FileSizeInPages
         ( uint16, 'e_crlc' ),        # relocation count / reloc entries count / NumberOfRelocationItems
@@ -89,7 +100,7 @@ class Dos(pstruct.type):
         ( uint16, 'e_csum' ),        # checksum / checksum (ignored) / Checksum
         ( uint16, 'e_ip' ),          # ip / ip of entry / InitialIP
         ( uint16, 'e_cs' ),          # cs / cs of entry / InitialrmwwelativeIp
-        ( lambda self: dyn.rpointer(dyn.array(Dos.Relocation,self['e_crlc'].li.int()), self, uint16), 'e_lfarlc' ), # relocation table
+        ( lambda self: dyn.rpointer(dyn.array(IMAGE_DOS_HEADER.Relocation,self['e_crlc'].li.int()), self, uint16), 'e_lfarlc' ), # relocation table
         ( uint16, 'e_ovno'),         # overlay number
         #( uint32, 'EXE_SYM_TAB'),   # from inc/exe.inc
 
@@ -117,7 +128,7 @@ class Next(pstruct.type):
         return NextData.withdefault(t, type=t)
 
     _fields_ = [
-        (uint16, 'Signature'),
+        (Signature, 'Signature'),
         (__Header, 'Header'),
         (__Data, 'Data'),
     ]
@@ -135,7 +146,7 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
 
     def __Padding(self):
         '''Figure out the PE header size and pad according to SizeOfHeaders'''
-        sz = self.getparent(File)['Dos']['e_lfanew'].li.int()
+        sz = self.getparent(File)['Header']['e_lfanew'].li.int()
         opt = self['OptionalHeader'].li
         res = map(self.__getitem__,('SignaturePadding','FileHeader','OptionalHeader','DataDirectory','Sections'))
         res = sum(map(operator.methodcaller('blocksize'),res))
@@ -443,37 +454,37 @@ class NeHeader(pstruct.type):
 ### FileBase
 class File(pstruct.type, ptype.boundary):
     def __Padding(self):
-        dos = self['Dos'].li
+        dos = self['Header'].li
         ofs = dos['e_lfarlc'].int()
         return dyn.block(ofs - self.blocksize()) if ofs > 0 else dyn.block(0)
 
     def __Relocations(self):
-        dos = self['Dos'].li
+        dos = self['Header'].li
         ofs = dos['e_lfarlc'].int()
         return dyn.array(Dos.Relocation, dos['e_crlc'].li.int() if ofs == self.blocksize() else 0)
 
     def __Extra(self):
-        res = self['Dos'].li.headersize()
+        res = self['Header'].li.headersize()
         if res > 0:
             return dyn.block(res - self.blocksize())
         return ptype.undefined
 
     def __Stub(self):
         # everything up to e_lfanew
-        dos = self['Dos'].li
+        dos = self['Header'].li
         res = dos['e_lfanew'].int()
         if res > 0:
             return dyn.block(res - self.blocksize())
         return ptype.undefined
 
     def __Next(self):
-        dos = self['Dos'].li
+        dos = self['Header'].li
         if dos['e_lfanew'].int() == self.blocksize():
             return Next
         return dyn.block(dos.filesize() - self.blocksize())
 
     def __NotLoaded(self):
-        sz = self['Dos'].blocksize()
+        sz = self['Header'].blocksize()
         sz+= self['Extra'].blocksize()
         sz+= self['Stub'].blocksize()
         sz+= self['Next'].blocksize()
@@ -482,7 +493,7 @@ class File(pstruct.type, ptype.boundary):
         return ptype.undefined
 
     _fields_ = [
-        (Dos, 'Dos'),
+        (IMAGE_DOS_HEADER, 'Header'),
         (__Extra, 'Extra'),
         (__Stub, 'Stub'),
         (__Next, 'Next'),

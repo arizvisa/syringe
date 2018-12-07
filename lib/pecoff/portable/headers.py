@@ -332,7 +332,7 @@ class Certificate(pstruct.type):
 if __name__ == '__main__':
     from ptypes import provider
     import pecoff
-    x = pecoff.Executable.Dos()
+    x = pecoff.Executable.IMAGE_DOS_HEADER()
     x.source = provider.file('./python.exe')
     offset = x.load()['e_lfanew']
     print x
