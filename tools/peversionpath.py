@@ -84,6 +84,9 @@ if __name__ == '__main__':
         sys.exit(1)
     resource = resource.l
 
+    # save it somewhere
+    pe = resource.getparent(pecoff.IMAGE_NT_HEADERS)
+
     # parse the resource names
     VERSION_INFO = 16
     if VERSION_INFO not in resource.List():
@@ -168,6 +171,7 @@ if __name__ == '__main__':
         strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
         strings.setdefault('__path__', filename)
         strings.setdefault('__name__', os.path.split(filename)[1])
+        strings.setdefault('__machine__', pe['FileHeader']['Machine'].str())
 
     # build the path
     if opts.dump:
