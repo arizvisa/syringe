@@ -639,7 +639,7 @@ try:
             self.file.seek(ofs)
 
 except ImportError:
-    Log.warning("__module__ : Unable to import the 'tempfile' module. Failed to load the `filecopy` provider.")
+    Log.info("{:s} : Unable to import the 'tempfile' module. Failed to define the `filecopy` provider.".format(__name__))
 
 ## platform-specific providers
 DEFAULT = []
@@ -817,12 +817,12 @@ try:
             self.handle = None
             return result
 
-    Log.info("__module__ : Successfully loaded the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
+    Log.info("{:s} : Successfully loaded the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
 except ImportError:
-    Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.")
+    Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
 
 except OSError, m:
-    Log.warning("__module__ : Unable to load 'kernel32.dll' ({:s}). Failed to load the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(m))
+    Log.info("{:s} : Unable to load 'kernel32.dll' ({:s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, m))
 
 try:
     _ = 'idaapi' in sys.modules
@@ -832,7 +832,7 @@ try:
         offset = _idaapi.BADADDR
 
         def __new__(cls):
-            Log.warn("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
+            Log.info("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
             return cls
 
         @classmethod
@@ -891,10 +891,10 @@ try:
             cls.offset += len(data)
             return len(data)
 
-    Log.info("__module__ : Successfully loaded the `Ida` provider.")
+    Log.info("{:s} : Successfully loaded the `Ida` provider.".format(__name__))
     if _: DEFAULT.append(Ida)
 except ImportError:
-    Log.info("__module__ : Unable to import the '_idaapi' module (not running IDA?). Failed to load the `Ida` provider.")
+    Log.info("{:s} : Unable to import the '_idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
 
 try:
     _ = '_PyDbgEng' in sys.modules
@@ -952,10 +952,10 @@ try:
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
             return self.client.DataSpaces.Virtual.Write(self.offset, data)
 
-    Log.info("__module__ : Successfully loaded the `PyDbgEng` provider.")
+    Log.info("{:s} : Successfully loaded the `PyDbgEng` provider.".format(__name__))
     if _: DEFAULT.append(PyDbgEng)
 except ImportError:
-    Log.info("__module__ : Unable to import the '_PyDbgEng' module. Failed to load the `PyDbgEng` provider.")
+    Log.info("{:s} : Unable to import the '_PyDbgEng' module. Failed to define the `PyDbgEng` provider.".format(__name__))
 
 try:
     _ = 'pykd' in sys.modules
@@ -993,10 +993,10 @@ try:
             self.addr += res
             return res
 
-    Log.info("__module__ : Successfully loaded the `Pykd` provider.")
+    Log.info("{:s} : Successfully loaded the `Pykd` provider.".format(__name__))
     if _: DEFAULT.append(Pykd)
 except ImportError:
-    Log.info("__module__ : Unable to import the 'pykd' module. Failed to load the `Pykd` provider.")
+    Log.info("{:s} : Unable to import the 'pykd' module. Failed to define the `Pykd` provider.".format(__name__))
 
 try:
     _ = 'lldb' in sys.modules
@@ -1030,10 +1030,10 @@ try:
             self.address += amount
             return amount
 
-    Log.info("__module__ : Successfully loaded the `lldb` provider.")
+    Log.info("{:s} : Successfully loaded the `lldb` provider.".format(__name__))
     if _: DEFAULT.append(lldb)
 except ImportError:
-    Log.info("__module__ : Unable to import the 'lldb' module. Failed to load the `lldb` provider.")
+    Log.info("{:s} : Unable to import the 'lldb' module. Failed to define the `lldb` provider.".format(__name__))
 
 try:
     _ = 'gdb' in sys.modules
@@ -1068,10 +1068,10 @@ try:
             self.address += len(data)
             return len(data)
 
-    Log.info("__module__ : Successfully loaded the `gdb` provider.")
+    Log.info("{:s} : Successfully loaded the `gdb` provider.".format(__name__))
     if _: DEFAULT.append(lldb)
 except ImportError:
-    Log.info("__module__ : Unable to import the 'gdb' module. Failed to load the `gdb` provider.")
+    Log.info("{:s} : Unable to import the 'gdb' module. Failed to define the `gdb` provider.".format(__name__))
 
 try:
     import ctypes
@@ -1126,7 +1126,7 @@ try:
 
     DEFAULT.append(memory)
 except ImportError:
-    Log.warning("__module__ : Unable to import the 'ctypes' module. Failed to load the `memory` provider.")
+    Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `memory` provider.".format(__name__))
 
 default = DEFAULT[0]
 
@@ -1331,7 +1331,7 @@ if __name__ == '__main__':
                 raise Success
 
     except ImportError:
-        Log.warning("__module__ : Skipping the `memory` provider tests.")
+        Log.warning("{:s} : Skipping the `memory` provider tests.".format(__name__))
         pass
 
     @TestCase
@@ -1441,7 +1441,7 @@ if __name__ == '__main__':
             pass
 
     except ImportError:
-        Log.warning("__module__ : Skipping the `WindowsProcessId` provider tests.")
+        Log.warning("{:s} : Skipping the `WindowsProcessId` provider tests.".format(__name__))
 
     testcert="""
     -----BEGIN CERTIFICATE-----
