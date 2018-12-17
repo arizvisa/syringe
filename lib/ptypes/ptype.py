@@ -2512,7 +2512,11 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_deref():
-        data = '\x04\x00\x00\x00AAAA'
+        import math
+        count = math.log(sys.maxint) / math.log(0x100)
+        prefix = chr(math.trunc(math.ceil(count))) + '\x00'*math.trunc(count)
+
+        data = prefix + 'AAAA'
 
         a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t)
         a = a.l
@@ -2522,8 +2526,59 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref():
-        src = prov.string('\x04\x00\x00\x00AAAAAAAA')
+        import math
+        count = math.log(sys.maxint) / math.log(0x100)
+        prefix = chr(math.trunc(math.ceil(count))) + '\x00'*math.trunc(count)
+
+        src = prov.string(prefix + 'AAAA' + 'AAAA')
+
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4)).l
+        b = a.d.l
+        if b.serialize() != '\x41\x41\x41\x41':
+            raise Failure
+
+        c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
+        a.reference(c)
+        if a.getoffset() == 0 and a.int() == c.getoffset() and a.d.l.int() == 0x42424242 and a.d.getoffset() == c.getoffset():
+            raise Success
+
+    @TestCase
+    def test_pointer_deref_32():
+        data = '\x04\x00\x00\x00AAAA'
+
+        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
+        a = a.l
+        b = a.dereference()
+        if b.l.int() == 0x41414141:
+            raise Success
+
+    @TestCase
+    def test_pointer_ref_32():
+        src = prov.string('\x04\x00\x00\x00AAAAAAAA')
+        a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
+        b = a.d.l
+        if b.serialize() != '\x41\x41\x41\x41':
+            raise Failure
+
+        c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
+        a.reference(c)
+        if a.getoffset() == 0 and a.int() == c.getoffset() and a.d.l.int() == 0x42424242 and a.d.getoffset() == c.getoffset():
+            raise Success
+
+    @TestCase
+    def test_pointer_deref_64():
+        data = '\x08\x00\x00\x00\x00\x00\x00\x00AAAA'
+
+        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint64_t)
+        a = a.l
+        b = a.dereference()
+        if b.l.int() == 0x41414141:
+            raise Success
+
+    @TestCase
+    def test_pointer_ref_64():
+        src = prov.string('\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA')
+        a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint64_t).l
         b = a.d.l
         if b.serialize() != '\x41\x41\x41\x41':
             raise Failure
