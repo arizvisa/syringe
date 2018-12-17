@@ -13,7 +13,7 @@ def Locate(path, obj):
 def Extract(obj, outformat, file=None):
     out = lambda string, **kwargs: six.print_(string, **kwargs)
     if outformat == 'print':
-        res = repr(obj)
+        res = "{!r}".format(obj)
     elif outformat == 'hex':
         res = obj.hexdump()
     elif outformat == 'raw':
@@ -26,7 +26,7 @@ def Extract(obj, outformat, file=None):
     elif not obj:
         res = obj.details()
     elif isinstance(obj, (ptypes.ptype.pointer_t, ptypes.pbinary.partial)):
-        res = repr(obj)
+        res = "{!r}".format(obj)
     elif hasattr(obj, 'num'):
         res = obj.num()
     elif hasattr(obj, 'int'):
@@ -34,7 +34,7 @@ def Extract(obj, outformat, file=None):
     elif hasattr(obj, 'str'):
         res = obj.str()
     else:
-        res = repr(obj)
+        res = "{!r}".format(obj)
     out(res, file=file)
 
 def Resolve(result, path):
@@ -62,8 +62,8 @@ def dump_exe(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat or outformat in {'print'}:
-        six.print_(repr(result) + '\n', file=output)
-        six.print_(repr(result['Header']) + '\n', file=output)
+        six.print_("{!r}\n".format(result), file=output)
+        six.print_("{!r}\n".format(result['Header']), file=output)
         six.print_(result['Stub'].hexdump(), file=output)
         return
     if outformat in {'hex','raw'}:
@@ -77,9 +77,9 @@ def dump_header(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
-        six.print_(repr(result.p['Signature']), repr(result.p['Signature'].serialize()+result['SignaturePadding'].serialize()) + '\n', file=output)
-        six.print_(repr(result['FileHeader']) + '\n', file=output)
-        six.print_(repr(result['OptionalHeader']) + '\n', file=output)
+        six.print_("{!r}".format(result.p['Signature']), "{!r}\n".format(result.p['Signature'].serialize()+result['SignaturePadding'].serialize()), file=output)
+        six.print_("{!r}\n".format(result['FileHeader']), file=output)
+        six.print_("{!r}\n".format(result['OptionalHeader']), file=output)
         return
     return Extract(result, outformat, file=output)
 
@@ -109,7 +109,7 @@ def extract_section(t, index, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if outformat == 'print':
-        return six.print_(repr(S), file=output)
+        return six.print_("{!r}".format(S), file=output)
     return Extract(result['PointerToRawData'].d.li, outformat or 'hex', file=output)
 
 def list_entries(t, outformat, F=None, output=None):
