@@ -207,7 +207,7 @@ def extract_import(t, index, outformat, F=None, output=None):
         raise IndexError("Invalid Imports table index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(it)))
     ite = it[index]
     global result; result = ite
-    if not F and outformat in {'list'}:
+    if not F and (not outformat or outformat in {'list'}):
         # FIXME: separate these fields somehow
         summary = lambda (h,n,a,v): 'hint:{:d} name:{:s} offset:{:#x} value:{:#x}'.format(h,n,a,v)
         for ie in result.iterate():
