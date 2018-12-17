@@ -1,4 +1,4 @@
-import abc,_bisect as bisect,itertools,operator,weakref
+import abc,itertools,operator,weakref
 import collections,sets,sparse
 
 class OrderedDict(collections.OrderedDict): pass

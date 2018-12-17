@@ -1686,14 +1686,14 @@ if __name__ == '__main__':
 
 #    @TestCase
     def test_ignore_moduleunpack():
-        import _ast
-        a = fu.package.pack(_ast)
+        import _ast as testpackage
+        a = fu.package.pack(testpackage)
         _,x,y = a
         if y[0][x][0] is not fu.module_.id:
             raise Failure
 
         b = fu.package.unpack(a, local=('_ast',))
-        if b is _ast:
+        if b is testpackage:
             raise Success
 
     #@TestCase
