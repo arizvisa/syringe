@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-import six,argparse
+import six,argparse,logging
 import functools,operator,itertools,types
-import ptypes,pecoff,ber
+import ptypes,pecoff
 #ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 ptypes.config.defaults.ptype.clone_name = '{}'
 ptypes.config.defaults.pint.bigendian_name = 'be({})'
@@ -291,13 +291,19 @@ def extract_signature(t, index, outformat, F=None, output=None):
     if not (0 <= index < len(s)):
         raise IndexError("Invalid signature index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(s)))
     se = s[index]
+
+    try:
+        rt = __import__('ber').File
+    except (ImportError, AttributeError):
+        rt, _ = None, logging.warn("Unable to import ptypes template, `ber`, in order to cast the Security directory entry.")
+
     global result; result = se['bCertificate']
     if F:
-        result = result.cast(ber.File)
+        result = result if rt is None else result.cast(rt)
         return Extract(F(result), outformat, file=output)
-    if outformat in {'hex', 'raw'}:
-        return Extract(result, outformat, file=output)
-    result = result.cast(ber.File)
+    if outformat in {'hex', 'raw'} or (outformat in {'list'} and rt is None):
+        return Extract(result, 'hex' if outformat in {'list'} else outformat, file=output)
+    result = result if rt is None else result.cast(rt)
     return Extract(result, outformat or 'print', file=output)
 
 def args():
