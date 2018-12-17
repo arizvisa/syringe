@@ -117,7 +117,9 @@ import math,types,inspect
 import itertools,operator,functools
 import six
 
-import ptype,utils,bitmap,config,error
+import ptype    # XXX: recursive. yay.
+from . import utils,bitmap,config,error
+
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
