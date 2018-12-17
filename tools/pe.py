@@ -77,7 +77,7 @@ def dump_header(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
-        six.print_("{!r}".format(result.p['Signature']), "{!r}\n".format(result.p['Signature'].serialize()+result['SignaturePadding'].serialize()), file=output)
+        six.print_("{!r}".format(result.p['Signature']), "{!r}\n".format(result.p['Signature'].serialize() + result['SignaturePadding'].serialize()), file=output)
         six.print_("{!r}\n".format(result['FileHeader']), file=output)
         six.print_("{!r}\n".format(result['OptionalHeader']), file=output)
         return
@@ -89,9 +89,9 @@ def list_sections(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
-        summary = lambda s: '{!r} {:#x}:{:+#x} Raw:{:#x}:{:+#x}'.format(s['Name'].str(), s['VirtualAddress'].int(), s['VirtualSize'].int(), s['PointerToRawData'].int(), s['SizeOfRawData'].int())
+        summary = lambda s: "{!r} {:#x}:{:+#x} Raw:{:#x}:{:+#x}".format(s['Name'].str(), s['VirtualAddress'].int(), s['VirtualSize'].int(), s['PointerToRawData'].int(), s['SizeOfRawData'].int())
         for i, S in enumerate(result):
-            six.print_('[{:d}] {:s}'.format(i, summary(S)), file=output)
+            six.print_("[{:d}] {:s}".format(i, summary(S)), file=output)
         return
     if outformat in {'list'}:
         # FIXME: output some attributes that can be fielded
@@ -117,10 +117,10 @@ def list_entries(t, outformat, F=None, output=None):
     global result; result = H['DataDirectory']
     if F:
         return Extract(F(result), outformat, file=output)
-    summary = lambda n: '{:s} {:#x}:{:+#x}'.format(n.classname(), n['Address'].int(), n['Size'].int())
+    summary = lambda n: "{:s} {:#x}:{:+#x}".format(n.classname(), n['Address'].int(), n['Size'].int())
     if not outformat:
         for i, n in enumerate(result):
-            six.print_('[{:d}] {}'.format(i, summary(n)), file=output)
+            six.print_("[{:d}] {:s}".format(i, summary(n)), file=output)
         return
     if outformat in {'list'}:
         # FIXME: output some attributes that can be fielded
@@ -209,7 +209,7 @@ def extract_import(t, index, outformat, F=None, output=None):
     global result; result = ite
     if not F and (not outformat or outformat in {'list'}):
         # FIXME: separate these fields somehow
-        summary = lambda (h,n,a,v): 'hint:{:d} name:{:s} offset:{:#x} value:{:#x}'.format(h,n,a,v)
+        summary = lambda (h,n,a,v): "hint:{:d} name:{:s} offset:{:#x} value:{:#x}".format(h,n,a,v)
         for ie in result.iterate():
             six.print_(summary(ie), file=output)
         return
@@ -223,7 +223,7 @@ def list_resources(t, outformat, F=None, output=None):
     global result; result = rt
     if F:
         return Extract(F(result), outformat, file=output)
-    summary = lambda n: '{:#x}:{:+#x} codepage:{:d}'.format(n['Data'].int(), n['Size'].int(), n['Codepage'].int())
+    summary = lambda n: "{:#x}:{:+#x} codepage:{:d}".format(n['Data'].int(), n['Size'].int(), n['Codepage'].int())
     if not outformat:
         res = collectresources(result)
         for re in dumpresources(res):
@@ -276,7 +276,7 @@ def list_signature(t, outformat, F=None, output=None):
     global result; result = s
     if F:
         return Extract(F(result), outformat, file=output)
-    summary = lambda i, e: '[{:d}] {:+#x} wRevision:{:s} wCertificateType:{:s} bCertificate:{:d}'.format(i, e.getoffset(), e['wRevision'].str(), e['wCertificateType'].str(), e['bCertificate'].size())
+    summary = lambda i, e: "[{:d}] {:+#x} wRevision:{:s} wCertificateType:{:s} bCertificate:{:d}".format(i, e.getoffset(), e['wRevision'].str(), e['wCertificateType'].str(), e['bCertificate'].size())
     if not outformat or outformat in {'print'}:
         for i, se in enumerate(result):
             six.print_(summary(i, se), file=output)
