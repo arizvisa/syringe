@@ -608,12 +608,13 @@ class file(fileobj):
         return builtins.open(filename, access, 0)
 
 try:
-    import tempfile
     class filecopy(fileobj):
         """A provider that reads/writes from a temporary copy of the specified file.
 
         If the user wishes to save the file to another location, a .save method is provided.
         """
+        import tempfile as __tempfile__
+
         def __init__(self, *args, **kwds):
             res = self.open(*args, **kwds)
             return super(filecopy, self).__init__(res)
@@ -623,7 +624,7 @@ try:
             '''Open the specified file as a temporary file.'''
             with open(filename, 'rb') as input:
                 input.seek(0)
-                output = tempfile.TemporaryFile(mode='w+b')
+                output = self.__tempfile__.TemporaryFile(mode='w+b')
                 for data in input:
                     output.write(data)
                 output.seek(0)
@@ -826,9 +827,10 @@ except OSError, m:
 
 try:
     _ = 'idaapi' in sys.modules
-    import idaapi
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
+        import idaapi as __idaapi__
+
         offset = idaapi.BADADDR
 
         def __new__(cls):
@@ -837,29 +839,29 @@ try:
 
         @classmethod
         def read(cls, offset, size, padding='\x00'):
-            result = idaapi.get_many_bytes(offset, size) or ''
+            result = cls.__idaapi__.get_many_bytes(offset, size) or ''
             if len(result) == size:
                 return result
 
             half = size // 2
             if half > 0:
                 return str().join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
-            if idaapi.isEnabled(offset):
-                return '' if size == 0 else (padding*size) if (idaapi.getFlags(offset) & idaapi.FF_IVL) == 0 else idaapi.get_many_bytes(offset, size)
+            if cls.__idaapi__.isEnabled(offset):
+                return '' if size == 0 else (padding*size) if (cls.__idaapi__.getFlags(offset) & cls.__idaapi__.FF_IVL) == 0 else cls.__idaapi__.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in six.moves.range(idaapi.get_nlist_size()) if string == idaapi.get_nlist_name(i))
+            index = (i for i in six.moves.range(cls.__idaapi__.get_nlist_size()) if string == cls.__idaapi__.get_nlist_name(i))
             try:
-                res = idaapi.get_nlist_ea(six.next(index))
+                res = cls.__idaapi__.get_nlist_ea(six.next(index))
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
             return res
 
         @classmethod
         def within_segment(cls, offset):
-            s = idaapi.getseg(offset)
+            s = cls.__idaapi__.getseg(offset)
             return s is not None and s.startEA <= offset < s.endEA
 
         @classmethod
@@ -886,8 +888,8 @@ try:
         @classmethod
         def store(cls, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            #idaapi.put_many_bytes(cls.offset, data)
-            idaapi.patch_many_bytes(cls.offset, data)
+            #cls.__idaapi__.put_many_bytes(cls.offset, data)
+            cls.__idaapi__.patch_many_bytes(cls.offset, data)
             cls.offset += len(data)
             return len(data)
 
@@ -898,9 +900,10 @@ except ImportError:
 
 try:
     _ = '_PyDbgEng' in sys.modules
-    import _PyDbgEng
     class PyDbgEng(debuggerbase):
         '''A provider that uses the PyDbgEng.pyd module to interact with the memory of the current debugged process.'''
+        import _PyDbgEng as __PyDbgEng__
+
         offset = 0
         def __init__(self, client=None):
             self.client = client
@@ -908,29 +911,29 @@ try:
         @classmethod
         def connect(cls, remote):
             if remote is None:
-                result = _PyDbgEng.Create()
+                result = cls.__PyDbgEng__.Create()
             elif type(remote) is tuple:
                 host,port = client
-                result = _PyDbgEng.Connect('tcp:port={},server={}'.format(port,host))
+                result = cls.__PyDbgEng__.Connect('tcp:port={},server={}'.format(port,host))
             elif type(remote) is dict:
-                result = _PyDbgEng.Connect('tcp:port={port},server={host}'.format(**client))
+                result = cls.__PyDbgEng__.Connect('tcp:port={port},server={host}'.format(**client))
             elif isinstance(type(remote), six.string_types):
-                result = _PyDbgEng.Connect(client)
+                result = cls.__PyDbgEng__.Connect(client)
             return cls(result)
         @classmethod
         def connectprocessserver(cls, remote):
-            result = _PyDbgEng.ConnectProcessServer(remoteOptions=remote)
+            result = cls.__PyDbgEng__.ConnectProcessServer(remoteOptions=remote)
             return cls(result)
         def connectkernel(self, remote):
             if remote is None:
-                result = _PyDbgEng.AttachKernel(flags=_PyDbgEng.ATTACH_LOCAL_KERNEL)
+                result = cls.__PyDbgEng__.AttachKernel(flags=cls.__PyDbgEng__.ATTACH_LOCAL_KERNEL)
             else:
-                result = _PyDbgEng.AttachKernel(flags=0, connectOptions=remote)
+                result = cls.__PyDbgEng__.AttachKernel(flags=0, connectOptions=remote)
             return cls(result)
 
         @classmethod
         def expr(cls, string):
-            control = _PyDbgEng.IDebugControl
+            control = cls.__PyDbgEng__.IDebugControl
             dtype = DEBUG_VALUE_INT32
             return control.Evaluate(string, dtype)
             raise NotImplementedError   # XXX
@@ -959,15 +962,16 @@ except ImportError:
 
 try:
     _ = 'pykd' in sys.modules
-    import pykd as _pykd
     class Pykd(debuggerbase):
         '''A provider that uses the Pykd library to interact with the memory of a debugged process.'''
+        import pykd as __pykd__
+
         def __init__(self):
             self.addr = 0
 
         @classmethod
         def expr(cls, string):
-            return _pykd.expr(string)
+            return self.__pykd__.expr(string)
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -980,7 +984,7 @@ try:
             if amount == 0:
                 return ''
             try:
-                res = map(six.int2byte,_pykd.loadBytes(self.addr, amount))
+                res = map(six.int2byte,self.__pykd__.loadBytes(self.addr, amount))
             except:
                 raise error.ConsumeError(self,self.addr,amount,0)
             self.addr += amount
