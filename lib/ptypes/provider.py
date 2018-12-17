@@ -826,10 +826,10 @@ except OSError, m:
 
 try:
     _ = 'idaapi' in sys.modules
-    import idaapi as _idaapi
+    import idaapi
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
-        offset = _idaapi.BADADDR
+        offset = idaapi.BADADDR
 
         def __new__(cls):
             Log.info("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
@@ -837,29 +837,29 @@ try:
 
         @classmethod
         def read(cls, offset, size, padding='\x00'):
-            result = _idaapi.get_many_bytes(offset, size) or ''
+            result = idaapi.get_many_bytes(offset, size) or ''
             if len(result) == size:
                 return result
 
             half = size // 2
             if half > 0:
                 return str().join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
-            if _idaapi.isEnabled(offset):
-                return '' if size == 0 else (padding*size) if (_idaapi.getFlags(offset) & _idaapi.FF_IVL) == 0 else _idaapi.get_many_bytes(offset, size)
+            if idaapi.isEnabled(offset):
+                return '' if size == 0 else (padding*size) if (idaapi.getFlags(offset) & idaapi.FF_IVL) == 0 else idaapi.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in six.moves.range(_idaapi.get_nlist_size()) if string == _idaapi.get_nlist_name(i))
+            index = (i for i in six.moves.range(idaapi.get_nlist_size()) if string == idaapi.get_nlist_name(i))
             try:
-                res = _idaapi.get_nlist_ea(six.next(index))
+                res = idaapi.get_nlist_ea(six.next(index))
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
             return res
 
         @classmethod
         def within_segment(cls, offset):
-            s = _idaapi.getseg(offset)
+            s = idaapi.getseg(offset)
             return s is not None and s.startEA <= offset < s.endEA
 
         @classmethod
@@ -886,15 +886,15 @@ try:
         @classmethod
         def store(cls, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            #_idaapi.put_many_bytes(cls.offset, data)
-            _idaapi.patch_many_bytes(cls.offset, data)
+            #idaapi.put_many_bytes(cls.offset, data)
+            idaapi.patch_many_bytes(cls.offset, data)
             cls.offset += len(data)
             return len(data)
 
     Log.info("{:s} : Successfully loaded the `Ida` provider.".format(__name__))
     if _: DEFAULT.append(Ida)
 except ImportError:
-    Log.info("{:s} : Unable to import the '_idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
+    Log.info("{:s} : Unable to import the 'idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
 
 try:
     _ = '_PyDbgEng' in sys.modules
