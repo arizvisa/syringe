@@ -88,3 +88,27 @@ class ACTIVATION_CONTEXT_STACK(pstruct.type, versioned):
         (ULONG, 'NextCookieSequenceNumber'),
         (ULONG, 'StackId'),
     ]
+
+# copied from https://improsec.com/tech-blog/windows-kernel-shellcode-on-windows-10-part-4-there-is-no-code
+class THREADINFO(pstruct.type):
+    _fields_ = [
+        (W32THREAD, 'ti'),
+    ]
+
+class THROBJHEAD(pstruct.type):
+    _fields_ = [
+        (PVOID, 'head'),    # FIXME: _HEAD should be typed as it's not a PVOID
+        (dyn.pointer(THREADINFO), 'pti'),
+    ]
+
+class THRDESKHEAD(pstruct.type):
+    _fields_ = [
+        (THROBJHEAD, 'head'),
+        (dyn.pointer(PVOID), 'rpdesk'), # FIXME: (PDESKTOP rpdesk) DESKTOP should be typed, it's not a PVOID
+        (PVOID, 'pSelf'),               # FIXME: this should be self-referential
+    ]
+
+class WND(pstruct.type):
+    _fields_ = [
+        (THRDESKHEAD, 'head'),
+    ]
