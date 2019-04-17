@@ -98,6 +98,11 @@ class AllocationTable(parray.type):
         return str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
     def _object_(self):
         return dyn.clone(Sector.Pointer, _object_=self.Pointer)
+
+class FAT(AllocationTable):
+    Pointer = lambda s: dyn.block(s._uSectorSize)
+
+    # Walk the linked-list of fat sectors
     def chain(self, index):
         yield index
         while self[index].int() <= MAXREGSECT.type:
@@ -105,12 +110,18 @@ class AllocationTable(parray.type):
             yield index
         return
 
-class FAT(AllocationTable):
-    Pointer = lambda s: dyn.block(s._uSectorSize)
-
 class DIFAT(AllocationTable):
     Pointer = lambda s: dyn.clone(FAT, length=s._uSectorCount)
 
+    # Walk
+    def chain(self, index):
+        yield index
+        while self[index].int() <= MAXREGSECT.type:
+            index = self[index].int()
+            yield index
+        return
+
+    # Collect all DIFAT components (linked-list) until we hit ENDOFCHAIN
     def collect(self, count):
         yield self
 
@@ -122,13 +133,19 @@ class DIFAT(AllocationTable):
 
     def next(self):
         last = self.value[-1]
-        if last['ENDOFCHAIN']:
+        if last.o['ENDOFCHAIN']:
             cls = self.__class__
             raise AssertionError("{:s}: Encountered {:s} while trying to traverse to next DIFAT table. {:s}".format('.'.join((cls.__module__, cls.__name__)), ENDOFCHAIN.typename(), last.summary()))
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
 
-class MINIFAT(DIFAT):
-    Pointer = lambda s: dyn.block(s._uSectorSize)
+class MINIFAT(AllocationTable):
+    Pointer = lambda self: dyn.clone(parray.type, length=self._uSectorSize / self._uMiniSectorSize, _object_=dyn.block(self._uMiniSectorSize))
+
+    def chain(self, index):
+        while self[index].int() <= MAXREGSECT.type:
+            yield index
+            index += 1
+        return
 
 ### Header types
 class uByteOrder(pint.enum, USHORT):
@@ -181,7 +198,7 @@ class HeaderMiniFat(pstruct.type):
     class _sectMiniFat(SECT):
         def _object_(self):
             mf = self.getparent(HeaderMiniFat)
-            return dyn.clone(MINIFAT, length=self._uSectorCount)
+            return dyn.clone(MINIFAT, length=self._uSectorCount) # FIXME: not sure if this works
     _fields_ = [
         (ULONG, 'ulMiniSectorCutoff'), # Mini stream cutoff size
         (_sectMiniFat, 'sectMiniFat'), # First mini fat sector location
@@ -355,19 +372,25 @@ class File(pstruct.type):
     @ptypes.utils.memoize(self=lambda s: s)
     def MiniFat(self):
         '''Return an array containing the MiniFat'''
-        mf = self['MiniFat']
-        fat, count = mf['sectMiniFat'], mf['csectMiniFat'].int()
+        res = self['MiniFat']
+        start, count = res['sectMiniFat'].int(), res['csectMiniFat'].int()
 
-        res = self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount)
-        for table in fat.d.l.collect(count-1):
-            map(res.append, iter(table))
+        # Walk through the chain of FAT sectors that contain the MiniFat
+        fat, res = self.Fat(), self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount)
+        for index in fat.chain(start):
+            sector = fat[index]
+            if sector.o['ENDOFCHAIN']: break
+
+            # Convert the sector into a MINIFAT, and append all its elements to our result
+            mf = sector.d.l.cast(MINIFAT, length=self._uSectorCount)
+            map(res.append, mf)
         return res
     getMiniFat = MiniFat
 
     @ptypes.utils.memoize(self=lambda s: s)
     def Fat(self):
         '''Return an array containing the FAT'''
-        count, difat = self['Fat']['csectFat'].int(), self.getDiFat()
+        count, difat = self['Fat']['csectFat'].int(), self.DiFat()
         res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount)
         for _, v in zip(xrange(count), difat):
             map(res.append, iter(v.d.l))
@@ -376,7 +399,7 @@ class File(pstruct.type):
 
     def Directory(self):
         '''Return the whole Directory'''
-        fat = self.getFat()
+        fat = self.Fat()
         dsect = self['Fat']['sectDirectory'].int()
         res = self.chain(fat.chain(dsect))
         return res.cast(Directory, __name__='Directory', blocksize=lambda: res.size())
@@ -386,6 +409,14 @@ class File(pstruct.type):
         '''Return the sector for each index specified in iterable.'''
         res = self.new(ptype.container)
         map(res.append, map(self['Data'].__getitem__, iterable))
+        return res
+
+    def minichain(self, iterable):
+        '''Return the minisector for each index specified in iterable.'''
+        mf = self.MiniFat()
+        res = self.new(ptype.container)
+        for sptr in map(mf.__getitem__, iterable):
+            map(res.append, sptr.d.l)
         return res
 
     def Data(self, iterable, type=None):
@@ -651,8 +682,8 @@ if __name__ == '__main__':
     print a['Fat']['sectDirectory'].d.l
     print a['MiniFat']['sectMiniFat'].d.l[-1]
     print a['DiFat']['sectDifat']
-    difat = a.getDiFat()
-    fat = a.getFat()
-    minifat = a.getMiniFat()
+    difat = a.DiFat()
+    fat = a.Fat()
+    minifat = a.MiniFat()
 
-    d = a.getDirectory()
+    d = a.Directory()
