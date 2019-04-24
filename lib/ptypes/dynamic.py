@@ -312,19 +312,20 @@ class union(_union_generic):
     def __choose__(self, objects):
         """Return a ptype.block of a size that contain /objects/"""
         res = self._value_
-        if res is None:
-            # if the blocksize method is not modified, then allocate all fields and choose the largest
-            if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
-                iterable = (self.new(t) for t in objects)
-                size = max(n.a.blocksize() for n in iterable)
-                return clone(ptype.block, length=size)
+        if res is not None:
+            return res
 
-            # otherwise, just use the blocksize to build a ptype.block for the root type
-            return clone(ptype.block, length=self.blocksize())
-        return res
+        # if the blocksize method is not modified, then allocate all fields and choose the largest
+        if getattr(self.blocksize, 'im_func', None) is union.blocksize.im_func:
+            iterable = (self.new(t) for t in objects)
+            size = max(n.a.blocksize() for n in iterable)
+            return clone(ptype.block, length=size)
+
+        # otherwise, just use the blocksize to build a ptype.block for the root type
+        return clone(ptype.block, length=self.blocksize())
 
     def __create__(self):
-        t = self.__choose__(t for t,n in self._fields_)
+        t = self.__choose__(t for t, _ in self._fields_)
         res = self.new(t, offset=self.getoffset())
         self.value = [res]
 
@@ -562,58 +563,58 @@ if __name__ == '__main__':
 
     @TestCase
     def test_dynamic_pointer_bigendian():
-        ptype.setbyteorder(config.byteorder.bigendian)
+        pint.setbyteorder(config.byteorder.bigendian)
 
         s = ptype.provider.string(string1)
-        p = dynamic.pointer(dynamic.block(0))
+        p = dynamic.pointer(dynamic.block(0), pint.uint32_t)
         x = p(source=s).l
         if x.d.getoffset() == 0x41424344 and x.serialize() == string1:
             raise Success
 
     @TestCase
     def test_dynamic_pointer_littleendian_1():
-        ptype.setbyteorder(config.byteorder.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         s = ptype.provider.string(string2)
 
-        t = dynamic.pointer(dynamic.block(0))
+        t = dynamic.pointer(dynamic.block(0), pint.uint32_t)
         x = t(source=s).l
         if x.d.getoffset() == 0x41424344 and x.serialize() == string2:
             raise Success
 
     @TestCase
     def test_dynamic_pointer_littleendian_2():
-        ptype.setbyteorder(config.byteorder.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         string = '\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
 
-        t = dynamic.pointer(dynamic.block(0))
+        t = dynamic.pointer(dynamic.block(0), pint.uint32_t)
         x = t(source=s).l
         if x.d.getoffset() == 0x771af826 and x.serialize() ==  string:
             raise Success
 
     @TestCase
     def test_dynamic_pointer_bigendian_deref():
-        ptype.setbyteorder(config.byteorder.bigendian)
+        pint.setbyteorder(config.byteorder.bigendian)
 
         s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
-        t = dynamic.pointer(dynamic.block(4))
+        t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
             raise Success
 
     @TestCase
     def test_dynamic_pointer_littleendian_deref():
-        ptype.setbyteorder(config.byteorder.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
 
         s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
-        t = dynamic.pointer(dynamic.block(4))
+        t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
             raise Success
 
     @TestCase
     def test_dynamic_pointer_littleendian_64bit_deref():
-        ptype.setbyteorder(config.byteorder.littleendian)
+        pint.setbyteorder(config.byteorder.littleendian)
         t = dynamic.pointer(dynamic.block(4), pint.uint64_t)
         x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
         if x.l.d.getoffset() == 8:
