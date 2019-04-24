@@ -217,24 +217,30 @@ class type(_pstruct_generic):
             self.setoffset(self.getoffset(), recurse=True)
         return result
 
+    def __append_type(self, offset, cons, name, **attrs):
+        if name in self.__fastindex:
+            _,name = name,u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+            Log.warn("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
+
+        res = self.new(cons, __name__=name, offset=offset, **attrs)
+        self.value.append(res)
+        if ptype.iscontainer(cons) or ptype.isresolveable(cons):
+            return res.load()
+        return res
+
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             self.value, path, n = [], " -> ".join(self.backtrace()), None
             self.__fastindex = {}
 
             try:
-                ofs = self.getoffset()
+                offset = self.getoffset()
                 current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
-                for i,(t,name) in enumerate(self._fields_):
-                    if name in self.__fastindex:
-                        _,name = name,u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
-                        Log.warn("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
-
+                for i, (t, name) in enumerate(self._fields_):
                     # create each element
-                    n = self.new(t, __name__=name, offset=ofs)
-                    self.value.append(n)
-                    if ptype.iscontainer(t) or ptype.isresolveable(t):
-                        n.load()
+                    n = self.__append_type(offset, t, name)
+
+                    # check if we've hit our blocksize
                     bs = n.blocksize()
                     if current is not None:
                         try: res = self.blocksize()
@@ -242,10 +248,10 @@ class type(_pstruct_generic):
                         else:
                             if current + bs >= res:
                                 path = " -> ".join(self.backtrace())
-                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
+                                Log.info("type.load : {:s} : Custm blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
                         current += bs
-                    ofs += bs
+                    offset += bs
 
             except KeyboardInterrupt:
                 path = " -> ".join(self.backtrace())
@@ -257,6 +263,15 @@ class type(_pstruct_generic):
 
             except error.LoadError, e:
                 raise error.LoadError(self, exception=e)
+
+            # add any missing elements with a 0 blocksize
+            count = len(self._fields_) - len(self.value)
+            if count > 0:
+                for i, (t, name) in enumerate(self._fields_[-count:]):
+                    n = self.__append_type(offset, t, name, blocksize=lambda: 0)
+                    offset += n.blocksize()
+
+            # complete the second pass
             result = super(type, self).load()
         return result
 
