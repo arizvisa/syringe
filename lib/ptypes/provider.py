@@ -831,7 +831,7 @@ try:
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
         import idaapi as __idaapi__
 
-        offset = idaapi.BADADDR
+        offset = __idaapi__.BADADDR
 
         def __new__(cls):
             Log.info("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
