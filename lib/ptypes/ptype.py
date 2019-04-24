@@ -2518,7 +2518,7 @@ if __name__ == '__main__':
 
         data = prefix + 'AAAA'
 
-        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t)
+        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
         a = a.l
         b = a.dereference()
         if b.l.int() == 0x41414141:
@@ -2532,7 +2532,7 @@ if __name__ == '__main__':
 
         src = prov.string(prefix + 'AAAA' + 'AAAA')
 
-        a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4)).l
+        a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
         if b.serialize() != '\x41\x41\x41\x41':
             raise Failure
