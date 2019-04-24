@@ -464,8 +464,8 @@ class MulBlank(pstruct.type):
     type = 0xbe
 
     def __rgixfe(self):
-        sz = self.size() + Col().size()
-        count = (self.blocksize()-sz) / IXFCell().size()
+        sz = self.size() + Col().blocksize()
+        count = (self.blocksize()-sz) / IXFCell().a.size()
         return dyn.array(IXFCell, count)
 
     _fields_ = [
@@ -1478,8 +1478,8 @@ class MulRk(pstruct.type):
     type = 0xbd
     type = 189
     def __rgrkrec(self):
-        sz = self.size() + Col().size()
-        count = (self.blocksize()-sz) / IXFCell().size()
+        sz = self.size() + Col().blocksize()
+        count = (self.blocksize()-sz) / IXFCell().a.size()
         return dyn.array(RkRec, count)
 
     _fields_ = [
