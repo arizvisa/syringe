@@ -68,6 +68,7 @@ class Record(ptype.definition):
     class unknown(ptype.block):
         def classname(self):
             return 'Unknown{%x}<%s>'% (self.length, self.type)
+    default = unknown
 
 ###
 class File(pstruct.type):

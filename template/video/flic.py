@@ -19,16 +19,7 @@ class ChunkType(ptype.definition):
     class unknown(ptype.block):
         def classname(self):
             return 'Unknown<0x%x>'% self.type
-    chunkLookup = dict()
-
-    def createUnknownChunk(t, s):
-        class Unknown(dyn.block(0)):
-            pass
-        Unknown.__name__ = 'Unknown<0x%x>'% t
-        Unknown.length = s
-        return Unknown
-
-    class Chunk(pstruct.type): pass
+    default = unknown
 
 class ChunkGeneral(pstruct.type):
     def __data(self):

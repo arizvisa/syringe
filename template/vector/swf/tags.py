@@ -14,7 +14,7 @@ class Unknown(ptype.type):
 
 class TagDef(ptype.definition):
     cache = {}
-    unknown = Unknown
+    default = Unknown
 
 class Tag(pstruct.type):
     '''this wraps around a tag'''

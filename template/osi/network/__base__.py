@@ -10,6 +10,7 @@ class layer(ptype.definition):
     class unknown(ptype.block):
         def nextlayer_type(self):
             return None
+    default = unknown
 
 class stackable(stackable):
     def nextlayer_id(self):

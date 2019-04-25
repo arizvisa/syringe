@@ -182,6 +182,7 @@ class volume_descriptor(ptype.definition):
 
     class unknown(unused):
         length = 2041
+    default = unknown
 
     class array(parray.terminated):
         _object_ = iso_volume_descriptor

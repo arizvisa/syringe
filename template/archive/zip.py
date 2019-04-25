@@ -88,6 +88,7 @@ class CompressionMethodFlags(ptype.definition):
     cache = {}
     class unknown(pbinary.struct):
         _fields_ = [(2, 'unknown')]
+    default = unknown
 
 @CompressionMethodFlags.define(type=6)
 class MethodImplodingFlags(pbinary.flags):

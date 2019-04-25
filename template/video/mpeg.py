@@ -5,6 +5,7 @@ class layer(ptype.definition):
     cache = {}
     class unknown(pbinary.array):
         _object_ = length = 0
+    default = unknown
 
 ###
 @layer.define

@@ -103,6 +103,7 @@ class VideoTagBody(pstruct.type):
 class VideoPacketHeader(ptype.definition):
     cache = {}
     class unknown(pstruct.type): _fields_ = []
+    default = unknown
 
 @VideoPacketHeader.define
 class AVCVIDEOPACKETHEADER(pstruct.type):

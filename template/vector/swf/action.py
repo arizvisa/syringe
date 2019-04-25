@@ -9,7 +9,7 @@ class action(ptype.definition):
     class command(pstruct.type):
         _fields_ = []
 
-    class unknown(ptype.block):
+    class ActionUnknown(ptype.block):
         _fields_=[]
         def details(self):
             if self.initialized:
@@ -21,6 +21,7 @@ class action(ptype.definition):
             names = s.split('.')
             names[-1] = '%s<%x>[size:0x%x]'%(names[-1], self.type, self.blocksize())
             return '.'.join(names)
+    default = ActionUnknown
 
 class ACTIONRECORDHEADER(pstruct.type):
     _fields_ = [

@@ -39,7 +39,7 @@ class Chunks(ptype.definition):
             res = super(Chunks.UnknownChunk, self).classname()
             return '{:s}<{:s}>[size:{:#x}]'.format(res, self.type, self.blocksize())
 
-    unknown = UnknownChunk
+    default = UnknownChunk
 
 class ChunkType(pint.enum, pint.uint32_t):
     _values_ = []
