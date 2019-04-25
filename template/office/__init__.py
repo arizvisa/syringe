@@ -40,8 +40,8 @@ class RecordUnknown(ptype.block):
 # record type lookup
 class Record(ptype.definition):
     cache = {}
-    class RT_Unknown(ptype.definition): cache,unknown = {},RecordUnknown
-    unknown = RT_Unknown
+    class RT_Unknown(ptype.definition): cache, default = {}, RecordUnknown
+    default = RT_Unknown
 
 class Instance(ptype.definition):
     @classmethod

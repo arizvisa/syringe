@@ -10,12 +10,22 @@ ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 @Record.define
 class RT_Excel(ptype.definition):
     type, cache = __name__, {}
+
+    class unknown(ptype.block):
+        def classname(self):
+            res = getattr(self, RT_Excel.attribute, None)
+            if res is None:
+                return self.typename()
+            type, none = res
+            return "{:s}<{:04x}>".format(self.typename(), type) if none is None else "{:s}<{:04x},{!r}>".format(self.typename(), type, none)
+    default = unknown
+
     @classmethod
-    def lookup(cls, type):
+    def __get__(cls, type):
         type, none = type
         if none is not None:
             raise KeyError
-        return super(RT_Excel, cls).lookup(type)
+        return super(RT_Excel, cls).__get__(type)
 
 class RecordGeneral(RecordGeneral):
     class Header(pstruct.type):
@@ -1260,6 +1270,12 @@ class Row(pstruct.type):
 class XFProperty(ptype.definition):
     attribute, cache = 'propertyType', {}
 
+    class XFUnknown(ptype.block):
+        def classname(self):
+            res = getattr(self, XFProperty.attribute, None)
+            return "{:s}<{:s}>".format(self.typename(), '????' if res is None else "{:04x}".format(res))
+    default = XFUnknown
+
 # FIXME: implement some XFProperty types
 
 class XFProp(pstruct.type):
@@ -1286,6 +1302,12 @@ class XFProps(pstruct.type):
 if True:
     class SerArType(ptype.definition):
         attribute, cache = 'serType', {}
+
+        class SerUnknown(ptype.block):
+            def classname(self):
+                res = getattr(self, SerArType.attribute, None)
+                return self.typename() if res is None else "{:s}<{:x}>".format(self.typename(), res)
+        default = SerUnknown
 
     class SerAr(pstruct.type):
         def __Ser(self):
@@ -1508,6 +1530,15 @@ class CellParsedFormula(pstruct.type):
 
 class Ptg(ptype.definition):
     attribute, cache = 'parseType', {}
+
+    class PtgUnknown(ptype.block):
+        def classname(self):
+            res = getattr(self, Ptg.attribute, None)
+            if res is None:
+                return self.typename()
+            first, second = res
+            return "{:s}<{:s},{:s}>".format(self.typename(), '*' if first is None else "{:x}".format(first), '*' if second is None else "{:x}".format(second))
+    default = PtgUnknown
 
 class PtgDataType(pbinary.enum):
     width = 2
@@ -2115,6 +2146,13 @@ class XFExtGradient(pstruct.type):
 
 class ExtPropType(ptype.definition):
     attribute, cache = 'extType', {}
+
+    class ET_Unknown(ptype.block):
+        def classname(self):
+            res = getattr(self, ExtPropType.attribute, None)
+            return self.typename() if res is None else "{:s}<{:04x}>".format(self.typename(), res)
+    default = ET_Unknown
+
 @ExtPropType.define
 class ET_Foreground_Color(FullColorExt):
     extType = 0x0004
@@ -3139,6 +3177,15 @@ class PublisherRecord(pstruct.type):
 class SST(pstruct.type):
     type = 252
     type = 0xfc
+
+    def __rgb(self):
+        try:
+            cb = self.blocksize()
+        except ptypes.error.InitializationError:
+            res = self['cstUnique'].li
+            return dyn.array(XLUnicodeRichExtendedString, abs(res.int()))
+        return dyn.blockarray(XLUnicodeRichExtendedString, cb - sum(self[fld].li.size() for fld in ['cstTotal', 'cstUnique']))
+
     _fields_ = [
         (sint4, 'cstTotal'),     # GUARD: >=0
         (sint4, 'cstUnique'),    # GUARD: >=0
@@ -3338,6 +3385,12 @@ class ObjFmlaNoSize(ObjectParsedFormula):
 
 class Ft(ptype.definition):
     attribute, cache = 'featureType', {}
+
+    class FtUnknown(ptype.block):
+        def classname(self):
+            res = getattr(self, Ft.attribute, None)
+            return self.typename() if res is None else "{:s}<{:04x}>".format(self.typename(), res)
+    default = FtUnknown
 
 class FtGeneral(pstruct.type):
     def __data(self):

@@ -219,6 +219,7 @@ class OfficeArtFOPTEOPID(pbinary.struct):
 class OfficeArtFOPTEOP(ptype.definition):
     cache = {}
     class unknown(sint4): pass
+    default = unknown
 
 class OfficeArtFOPTE(pstruct.type):
     def __op(self):
