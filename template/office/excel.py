@@ -3242,11 +3242,23 @@ class ExtSST(pstruct.type):
     def __rgISSTInf(self):
         rg = self.getparent(RecordGeneral)
         container = rg.p
-        idx = container.value.index(rg)
-        previous = container[idx-1].d
+        index = container.value.index(rg)
+        while index > 0 and isinstance(container.value[index - 1].d, Continue):
+            index -= 1
+
+        if index == 0 or not isinstance(container[index - 1].d, SST):
+            logging.warn("{:s}.__rgISSTInf : Unable to locate SST at index {:d}".format(self.instance(), index))
+            return dyn.array(ISSTInf, 0)
+        previous = container[index - 1].d
+
+        # Figure out how many ISSTInf records there are
         cu, dsst = previous['cstUnique'].li.int(), self['dsst'].li.int()
-        count = (cu / dsst) + (1 if cu % dsst else 0)
-        return dyn.array(ISSTInf, count)
+        if dsst > 0:
+            count = (cu / dsst) + (1 if cu % dsst else 0)
+            return dyn.array(ISSTInf, count)
+
+        # If dsst is 0, then just return 0 to avoid dividing by it
+        return dyn.array(ISSTInf, 0)
 
     _fields_ = [
         (uint2, 'dsst'),
