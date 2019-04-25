@@ -3189,7 +3189,7 @@ class SST(pstruct.type):
     _fields_ = [
         (sint4, 'cstTotal'),     # GUARD: >=0
         (sint4, 'cstUnique'),    # GUARD: >=0
-        (lambda s: dyn.array(XLUnicodeRichExtendedString, abs(s['cstUnique'].li.int())), 'rgb'),
+        (__rgb, 'rgb'),
     ]
 
 class FontIndex(pint.enum, uint2):
