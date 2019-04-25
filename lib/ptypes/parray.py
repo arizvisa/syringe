@@ -400,14 +400,6 @@ class terminated(type):
                         raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(n.classname()))
                     offset += size
 
-        except KeyboardInterrupt:
-            path = ' -> '.join(self.backtrace())
-            if n is None:
-                Log.fatal("terminated.load : {:s} : User interrupt while attempting to load first element. : {:s}".format(self.instance(), path), exc_info=True)
-                return self
-            Log.fatal("terminated.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path), exc_info=True)
-            return self
-
         except (Exception,error.LoadError), e:
             raise error.LoadError(self, exception=e)
 
@@ -502,14 +494,6 @@ class infinite(uninitialized):
                     # next iteration
                     offset += size
                     current += size
-
-            except KeyboardInterrupt:
-                path = ' -> '.join(self.backtrace())
-                if len(self.value):
-                    Log.fatal("infinite.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
-                else:
-                    Log.fatal("infinite.load : {:s} : User interrupt before load : {:s}".format(self.instance(), path), exc_info=True)
-                return self
 
             except (Exception,error.LoadError),e:
                 if self.parent is not None:

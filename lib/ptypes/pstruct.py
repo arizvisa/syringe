@@ -253,14 +253,6 @@ class type(_pstruct_generic):
                         current += bs
                     offset += bs
 
-            except KeyboardInterrupt:
-                path = " -> ".join(self.backtrace())
-                if n is None:
-                    Log.warn("type.load : {:s} : User interrupt while attempting to load first element. : {:s}".format(self.instance(), path))
-                    return self
-                Log.warn("type.load : {:s} : User interrupt at element {:s} : {:s}".format(self.instance(), n.instance(), path))
-                return self
-
             except error.LoadError, e:
                 raise error.LoadError(self, exception=e)
 
