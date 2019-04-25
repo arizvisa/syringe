@@ -1657,14 +1657,34 @@ class definition(object):
     cache = None        # children must assign this empty dictionary
     attribute = 'type'
 
-    class default(block): pass  # default type to return an unknown class
+    class default(block):
+        '''default type to return an unknown class'''
+
+        @classmethod
+        def typename(cls):
+            return '.'.join((__name__, 'unknown'))
+
+    @classmethod
+    def __set__(cls, type, object):
+        '''Overloadable: Map the specified type to an object'''
+        return cls.cache.setdefault(type, object)
+
+    @classmethod
+    def __has__(cls, type):
+        '''Overloadable: Check if the specified type has been mapped to an object'''
+        return type in six.viewkeys(cls.cache)
+
+    @classmethod
+    def __get__(cls, type):
+        '''Overloadable: Return the object for a specified type'''
+        return cls.cache[type]
 
     @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
         if not builtins.isinstance(cls.cache, dict):
             raise error.AssertionError(cls, 'definition.add', message='{:s} has an invalid .cache attribute : {!r}'.format(cls.__name__, cls.cache.__class__))
-        cls.cache[type] = object
+        return cls.__set__(type, object)
 
         """Search ``cls.cache`` for a type with the specified value ``type``."""
     @classmethod
@@ -1675,11 +1695,11 @@ class definition(object):
         """
         if len(type) not in {1, 2}:
             raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(type)))
-        return cls.cache[type[0]] if len(type) == 1 else cls.cache.get(*type)
+        return cls.__get__(type[0]) if len(type) == 1 else (cls.__get__(type[0]) if cls.__has__(type[0]) else type[1])
 
     @classmethod
     def has(cls, type):
-        return type in cls.cache
+        return cls.__has__(type)
     contains = has
 
     @classmethod
@@ -1698,7 +1718,7 @@ class definition(object):
 
         # search in the cache for the specified type
         try:
-            res = cls.cache[type]
+            res = cls.__get__(type)
         except KeyError:
             res = default
 
@@ -1722,7 +1742,7 @@ class definition(object):
 
         # search in the cache for the specified type
         try:
-            res = cls.cache[type]
+            res = cls.__get__(type)
         except KeyError:
             res = clone(default, **missingattrs)
 
@@ -1731,15 +1751,15 @@ class definition(object):
     @classmethod
     def update(cls, otherdefinition):
         """Import the definition cache from ``otherdefinition``, effectively merging the contents into the current definition"""
-        a = set(cls.cache.keys())
-        b = set(otherdefinition.cache.keys())
-        if a.intersection(b):
+        a, b = map(six.viewkeys, (cls.cache, otherdefinition.cache))
+        if a & b:
             Log.warn('definition.update : {:s} : Unable to import module {!r} due to multiple definitions of the same record'.format(cls.__module__, otherdefinition))
-            Log.warn('definition.update : {:s} : Duplicate records : {!r}'.format(cls.__module__, a.intersection(b)))
+            Log.warn('definition.update : {:s} : Duplicate records : {!r}'.format(cls.__module__, a & b))
             return False
 
         # merge record caches into a single one
-        cls.cache.update(otherdefinition.cache)
+        for type, object in six.viewitems(otherdefinition.cache):
+            cls.__set__(type, object)
         return True
 
     @classmethod
