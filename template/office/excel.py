@@ -467,16 +467,21 @@ class RK(pstruct.type):
         (RkRec, 'rkrec')
     ]
 
-#FIXME
 @RT_Excel.define
 class MulBlank(pstruct.type):
     type = 190
     type = 0xbe
 
     def __rgixfe(self):
-        sz = self.size() + Col().blocksize()
-        count = (self.blocksize()-sz) / IXFCell().a.size()
-        return dyn.array(IXFCell, count)
+        try:
+            cb = self.blocksize()
+
+        except ptypes.error.InitializationError:
+            # XXX: unable to calculate number of elements without the blocksize
+            return dyn.array(IXFCell, 0)
+
+        res = cb - sum(self[fld].li.size() for fld in ['rw', 'colFirst', 'colFirst'])
+        return dyn.blockarray(IXFCell, res)
 
     _fields_ = [
         (Rw, 'rw'),
@@ -1494,15 +1499,20 @@ class XF(pstruct.type):
         (lambda s: CellXF if s['flags'].li['fStyle'] == 0 else StyleXF, 'data'),
     ]
 
-# FIXME
 @RT_Excel.define
 class MulRk(pstruct.type):
     type = 0xbd
     type = 189
     def __rgrkrec(self):
-        sz = self.size() + Col().blocksize()
-        count = (self.blocksize()-sz) / IXFCell().a.size()
-        return dyn.array(RkRec, count)
+        try:
+            cb = self.blocksize()
+
+        except ptypes.error.InitializationError:
+            # XXX: unable to calculate number of elements without the blocksize
+            return dyn.array(RkRec, 0)
+
+        res = cb - sum(self[fld].li.size() for fld in ['rw', 'colFirst', 'colFirst'])
+        return dyn.blockarray(RkRec, res)
 
     _fields_ = [
         (Rw, 'rw'),
@@ -3133,6 +3143,15 @@ class List12(pstruct.type):
     ]
 
 @RT_Excel.define
+class GUIDTypeLib(pstruct.type):
+    type = 2199
+    type = 0x897
+    _fields_ = [
+        (FrtHeader, 'frtHeader'),
+        (dyn.block(16), 'guid'),
+    ]
+
+@RT_Excel.define
 class SerParent(uint2):
     type = 4170
     type = 0x104a
@@ -3257,9 +3276,8 @@ class XLUnicodeRichExtendedString(pstruct.type):
         return sint4 if f['fExtSt'] else pint.int_t
     def __rgb(self):
         f = self['flags'].l
-        if f['fHighByte']:
-            return dyn.clone(pstr.wstring, length=self['cch'].li.int())
-        return dyn.clone(pstr.string, length=self['cch'].li.int())
+        type = pstr.wstring if f['fHighByte'] else pstr.string
+        return dyn.clone(type, length=self['cch'].li.int())
     def __ExtRst(self):
         f = self['flags'].l
         return ExtRst if f['fExtSt'] else ptype.undefined
@@ -3716,14 +3734,14 @@ class FtGboData(pstruct.type):
 class Obj(pstruct.type):
     type = 0x05d
     type = 93
-    def __properties(self):
+    def __props(self):
         p = self.getparent(RecordGeneral)
         cb = p['header'].li.Length() - self['cmo'].li.size()
         return dyn.blockarray(FtGeneral, cb)
 
     _fields_ = [
         (FtGeneral, 'cmo'),
-        (__properties, 'props'),
+        (__props, 'props'),
     ]
 
 class FormatRun(pstruct.type):
@@ -3810,12 +3828,12 @@ class TxO(pstruct.type):
 
     def __fmla(self):
         try:
-            rg = self.getparent(RecordGeneral)
-        except ptypes.error.NotFoundError:
+            cb = self.blocksize()
+        except ptypes.error.InitializationError:
+            # XXX: unable to calculate size of element without the blocksize
             return dyn.block(0)
-        cb = rg['header'].li.Length()
-        flds = map(operator.itemgetter(1), self._fields_)[:-1]
-        res = sum(n.li.size() for n in map(self.__getitem__, flds))
+
+        res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
         return dyn.block(cb - res)
 
     def __reserved(type):
