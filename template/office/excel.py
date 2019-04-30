@@ -577,6 +577,14 @@ class Pos(pstruct.type):
 ###
 class XLUnicodeStringNoCch(pstruct.type):
     def __rgb(self):
+        res = pstr.wstring if self['fHighByte'].li.int() else pstr.string
+        try:
+            cb = self.blocksize()
+        except ptypes.error.InitializationError:
+            # XXX: unable to calculate length without the blocksize
+            return dyn.clone(res, length=0)
+        return dyn.clone(res, blocksize=lambda s, size=cb - 1: size)
+
         res = self['fHighByte'].li.int()
         hb = (res >> 7) & 1
         t = pstr.wstring if hb else pstr.string
@@ -589,15 +597,9 @@ class XLUnicodeStringNoCch(pstruct.type):
     ]
 
 class XLUnicodeString(pstruct.type):
-    def HighByte(self):
-        res = self['fHighByte'].li.int()
-        return bool(res >> 7) & 1
-
     def __rgb(self):
-        cch = self['cch'].li.int()
-        cb = (2*cch) if self.HighByte() else cch
-        # FIXME: should be a pstr.wstring
-        return dyn.block(cb)
+        res = pstr.wstring if self['fHighByte'].li.int() else pstr.string
+        return dyn.clone(res, length=self['cch'].li.int())
 
     _fields_ = [
         (uint2, 'cch'),
@@ -1072,6 +1074,28 @@ class Country(pstruct.type):
         (uint2, 'iCountryDef'),
         (_iCountryWinIni, 'iCountryWinIni'),
     ]
+
+@RT_Excel.define
+class ObProj(ptype.type):
+    '''
+    The existence of the ObProj record specifies that there is a VBA
+    project in the file.
+
+    This project is located in the VBA storage stream.
+    '''
+
+    type = 0xd3
+    type = 211
+
+@RT_Excel.define
+class CodeName(XLUnicodeString):
+    '''
+    The CodeName record specifies the name of a workbook object, a sheet
+    object in the VBA project located in this file. 
+    '''
+
+    type = 0x1ba
+    type = 442
 
 @RT_Excel.define
 class RecalcId(pstruct.type):
@@ -2030,17 +2054,16 @@ class TableStyles(pstruct.type):
         (lambda s: dyn.clone(pstr.wstring, length=s['cchDefPivotStyle'].li.int()), 'rgchDefPivotStyle'),
     ]
 
-# FIXME
-#@RT_Excel.define
+@RT_Excel.define
 class Style(pstruct.type):
     type = 659
     type = 0x293
 
     class _flags(pbinary.flags):
         _fields_ = R([
-            (1, 'fBuiltIn'),
-            (3, 'unused'),
             (12,'ixfe'),
+            (3, 'unused'),
+            (1, 'fBuiltIn'),
         ])
 
     _fields_ = [
