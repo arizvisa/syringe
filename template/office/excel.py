@@ -1091,7 +1091,7 @@ class ObProj(ptype.type):
 class CodeName(XLUnicodeString):
     '''
     The CodeName record specifies the name of a workbook object, a sheet
-    object in the VBA project located in this file. 
+    object in the VBA project located in this file.
     '''
 
     type = 0x1ba
@@ -1140,7 +1140,8 @@ class MsoDrawingGroup(art.OfficeArtDggContainer):
     type = 0xeb
     type = 235
     def blocksize(self):
-        return self.getparent(RecordGeneral)['header'].Length()
+        res = self.getparent(RecordGeneral)
+        return res['header'].li.Length()
 
 @RT_Excel.define
 class HFPicture(pstruct.type):
@@ -1156,15 +1157,23 @@ class HFPicture(pstruct.type):
     def __rgDrawing(self):
         res = self['flags'].li
         fd, fg = res['fIsDrawing'], res['fIsDrawingGroup']
-        cb = self.getparent(RecordGeneral)['header'].Length()
+
+        try:
+            cb = self.blocksize()
+
+        except ptypes.error.InitializationError:
+            res = self.getparent(RecordGeneral)
+            cb = res['header'].li.Length()
+
+        res = self['FrtHeader'].li.size() + self['flags'].li.size() + self['reserved'].li.size()
         if fd and not fg:
-            return dyn.clone(art.OfficeArtDgContainer, blocksize=lambda s,cb=cb: cb-(12+1+1))
+            return dyn.clone(art.OfficeArtDgContainer, blocksize=lambda s,size=cb-res: size)
         elif not fd and fg:
-            return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda s,cb=cb: cb-(12+1+1))
+            return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda s,size=cb-res: size)
         elif not fd and not fg:
             return ptype.undefined
         logging.warn('{:s}.__rgDrawing : Mutually exclusive fIsDrawing and fIsDrawing is set. Using a generic RecordContainer.'.format(self.classname()))
-        return dyn.clone(art.RecordContainer, blocksize=lambda s,cb=cb: cb - (12+1+1))
+        return dyn.clone(art.RecordContainer, blocksize=lambda s,size=cb-res: size)
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -1179,7 +1188,8 @@ class MsoDrawing(art.OfficeArtDgContainer):
     type = 236
 
     def blocksize(self):
-        return self.getparent(RecordGeneral)['header'].Length()
+        res = self.getparent(RecordGeneral)
+        return res['header'].li.Length()
 
 @RT_Excel.define
 class EOF(ptype.type):
@@ -1237,9 +1247,14 @@ class Theme(pstruct.type):
     type = 2198
     type = 0x896
     def __rgb(self):
-        res = self.getparent(RecordGeneral)
-        cb = res['header'].Length()
-        return dyn.block(cb - (12+4))
+        try:
+            cb = self.blocksize()
+        except ptypes.error.InitializationError:
+            # XXX: unable to calculate length without the blocksize
+            return dyn.block(0)
+
+        res = self['frtHeader'].li.size() + self['dwThemeVersion'].li.size()
+        return dyn.block(cb - res)
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -1302,8 +1317,14 @@ class ExternName(pstruct.type):
         #    (1, 0) : ExternDdeLinkNoOper,
         #}
         # FIXME: this is pretty poorly documented
-        cb = self.getparent(RecordGeneral)['header'].li.Length()
-        return dyn.block(cb - 2)
+        try:
+            cb = self.blocksize()
+
+        except ptypes.error.InitializationError:
+            res = self.getparent(RecordGeneral)
+            cb = res['header'].li.Length()
+
+        return dyn.block(cb - self['flags'].li.size())
 
     _fields_ = [
         (_flags, 'flags'),
@@ -3804,9 +3825,15 @@ class Obj(pstruct.type):
     type = 0x05d
     type = 93
     def __props(self):
-        p = self.getparent(RecordGeneral)
-        cb = p['header'].li.Length() - self['cmo'].li.size()
-        return dyn.blockarray(FtGeneral, cb)
+
+        try:
+            cb = self.blocksize()
+
+        except ptypes.error.InitializationError:
+            res = self.getparent(RecordGeneral)
+            cb = res['header'].li.Length()
+
+        return dyn.blockarray(FtGeneral, cb - self['cmo'].li.size())
 
     _fields_ = [
         (FtGeneral, 'cmo'),
@@ -3840,6 +3867,7 @@ class TxORuns(pstruct.type):
             res = rg.previousRecord(TxO, **count)
         except ptypes.error.NotFoundError:
             return dyn.array(Run, 0)
+
         cbRuns = res.d['cbRuns']
         return dyn.array(Run, cbRuns.int() / 8 - 1)
     _fields_ = [
@@ -3898,7 +3926,7 @@ class TxO(pstruct.type):
     def __fmla(self):
         try:
             cb = self.blocksize()
-        except ptypes.error.InitializationError:
+        except types.error.InitializationError:
             # XXX: unable to calculate size of element without the blocksize
             return dyn.block(0)
 
