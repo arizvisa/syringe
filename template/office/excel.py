@@ -1202,7 +1202,7 @@ class Lbl(pstruct.type):
     type = 24
     type = 0x18
 
-    class _flags(pbinary.struct):
+    class _flags(pbinary.flags):
         _fields_ = R([
             (1, 'fHidden'),
             (1, 'fFunc'),
@@ -1227,6 +1227,10 @@ class Lbl(pstruct.type):
         res = ptype.block
         return dyn.clone(res, blocksize=lambda s, size=cb: size)
 
+    def __NameIndex(self):
+        res = self['flags'].li
+        return ubyte1 if res.o['fBuiltin'] else pint.uint_t
+
     _fields_ = [
         (_flags, 'flags'),
         (ubyte1, 'chKey'),
@@ -1238,6 +1242,7 @@ class Lbl(pstruct.type):
         (ubyte1, 'reserved5'),
         (ubyte1, 'reserved6'),
         (ubyte1, 'reserved7'),
+        (__NameIndex, 'NameIndex'),
         (__Name, 'Name'),
         (__rgce, 'rgce'),
     ]
