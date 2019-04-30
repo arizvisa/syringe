@@ -578,18 +578,18 @@ class Pos(pstruct.type):
 class XLUnicodeStringNoCch(pstruct.type):
     def __rgb(self):
         res = pstr.wstring if self['fHighByte'].li.int() else pstr.string
+
+        # If there was a length that was specified, then use that
+        if hasattr(self, 'length'):
+            return dyn.clone(res, length=getattr(self, 'length', 0))
+
+        # Otherwise, we need to calculate it from the blocksize
         try:
             cb = self.blocksize()
         except ptypes.error.InitializationError:
             # XXX: unable to calculate length without the blocksize
             return dyn.clone(res, length=0)
         return dyn.clone(res, blocksize=lambda s, size=cb - 1: size)
-
-        res = self['fHighByte'].li.int()
-        hb = (res >> 7) & 1
-        t = pstr.wstring if hb else pstr.string
-        cb = self.blocksize()
-        return dyn.clone(t, blocksize=lambda s,cb=cb: cb-1)
 
     _fields_ = [
         (ubyte1, 'fHighByte'),
@@ -1182,9 +1182,55 @@ class MsoDrawing(art.OfficeArtDgContainer):
         return self.getparent(RecordGeneral)['header'].Length()
 
 @RT_Excel.define
-class EOF(pstruct.type):
+class EOF(ptype.type):
     type = 10
-    _fields_ = []
+    type = 0xa
+
+
+@RT_Excel.define
+class Lbl(pstruct.type):
+    type = 24
+    type = 0x18
+
+    class _flags(pbinary.struct):
+        _fields_ = R([
+            (1, 'fHidden'),
+            (1, 'fFunc'),
+            (1, 'fOB'),
+            (1, 'fProc'),
+            (1, 'fCalcExp'),
+            (1, 'fBuiltin'),
+            (6, 'fGrp'),
+            (1, 'reserved1'),
+            (1, 'fPublished'),
+            (1, 'fWorkbookParam'),
+            (1, 'reserved2'),
+        ])
+
+    def __Name(self):
+        res = self['cch'].li.int()
+        return dyn.clone(XLUnicodeStringNoCch, length=res)
+
+    def __rgce(self):
+        cb = self['cce'].li.int()
+        #res = NameParsedFormula
+        res = ptype.block
+        return dyn.clone(res, blocksize=lambda s, size=cb: size)
+
+    _fields_ = [
+        (_flags, 'flags'),
+        (ubyte1, 'chKey'),
+        (ubyte1, 'cch'),
+        (ubyte1, 'cce'),
+        (uint2, 'reserved3'),
+        (uint2, 'itab'),
+        (ubyte1, 'reserved4'),
+        (ubyte1, 'reserved5'),
+        (ubyte1, 'reserved6'),
+        (ubyte1, 'reserved7'),
+        (__Name, 'Name'),
+        (__rgce, 'rgce'),
+    ]
 
 @RT_Excel.define
 class Theme(pstruct.type):
