@@ -488,17 +488,29 @@ class _base_generic(object):
         """Return a tuple of properties/characteristics describing the current state of the object to the user"""
         result = {}
 
+        # Validate that we weren't constructed with a name per a field assignment,
+        # or explicitly specifying the name via a property. If the name is empty,
+        # then we are simply unnamed.
         if not hasattr(self, '__name__') or not self.__name__:
             result['unnamed'] = True
 
+        # Check if we're initialized
         if self.initializedQ():
             try:
                 size = self.size()
+
+            # If we can't get our size because of an InitializationError, then
+            # there's no reason to check our load/commit state
             except error.InitializationError:
                 pass
+
+            # Otherwise, we were successful and we need to check the state in
+            # order to update the type's properties
             else:
                 key = 'overcommit'  if self.blocksize() < size else 'underload' if self.blocksize() > size else None
                 if key: result[key] = True
+
+        # Otherwise, we're uninitialized and the properties should say this
         else:
             result['uninitialized'] = True
         return result

@@ -456,6 +456,21 @@ class infinite(uninitialized):
     def isTerminator(self, value):
         return False
 
+    def properties(self):
+        res = super(infinite, self).properties()
+
+        # Check if we're really an underloaded parray.infinite
+        if res.get('underload', False):
+
+            # If the size of our partially initialized last element is larger
+            # than what our expected size should be, then it's not.
+            if self.value[-1].blocksize() >= self.blocksize() - self.size():
+                res.pop('underload')
+            return res
+
+        # That was all we wanted..
+        return res
+
     def load(self, **attrs):
         # fallback to regular loading if user has hardcoded the length
         if attrs.get('length', self.length) is not None:
