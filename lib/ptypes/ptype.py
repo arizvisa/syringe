@@ -491,7 +491,7 @@ class _base_generic(object):
         # Validate that we weren't constructed with a name per a field assignment,
         # or explicitly specifying the name via a property. If the name is empty,
         # then we are simply unnamed.
-        if not hasattr(self, '__name__') or not self.__name__:
+        if not getattr(self, '__name__', ''):
             result['unnamed'] = True
 
         # Check if we're initialized
@@ -555,7 +555,7 @@ class _base_generic(object):
     @classmethod
     def typename(cls):
         """Return the name of the ptype"""
-        if hasattr(cls, '__module__') and cls.__module__ is not None:
+        if getattr(cls, '__module__', ''):
             if Config.display.show_module_name:
                 return '.'.join((cls.__module__, cls.__name__))
             return '.'.join((cls.__module__.rsplit('.', 1)[-1], cls.__name__))
