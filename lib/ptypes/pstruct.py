@@ -233,9 +233,16 @@ class type(_pstruct_generic):
             self.value, path, n = [], " -> ".join(self.backtrace()), None
             self.__fastindex = {}
 
+            # check if the user implement a custom blocksize so we can keep track
+            # of how far to populate our structure or if we don't even need to do
+            # anything
+            # XXX: it might be safer to call .blocksize() and check for InitializationError
+            current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
+            if current is not None and self.blocksize() <= 0:
+                return super(type, self).load()
+
             try:
                 offset = self.getoffset()
-                current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
                 for i, (t, name) in enumerate(self._fields_):
                     # create each element
                     n = self.__append_type(offset, t, name)
@@ -248,7 +255,7 @@ class type(_pstruct_generic):
                         else:
                             if current + bs >= res:
                                 path = " -> ".join(self.backtrace())
-                                Log.info("type.load : {:s} : Custm blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
+                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
                         current += bs
                     offset += bs
