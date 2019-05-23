@@ -72,24 +72,25 @@ class Protocol(ptype.definition):
         def classname(self):
             return 'UnknownConstruct<{!r}>'.format(self.type)
         def summary(self):
-            res = (n.Value().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
             return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
     class Unknown(ptype.block):
         def classname(self):
             return 'UnknownPrimitive<{!r}>'.format(self.type)
 
 class Element(pstruct.type):
-    protocol = Protocol
-    def Value(self, **attrs):
+    __protocol__ = Protocol
+
+    def _object_(self, **attrs):
         t = self['Type'].li
         cons, tag = t['Constructed'], t['Tag'].int()
-        K = self.protocol.lookup(t['Class'])
+        K = self.__protocol__.lookup(t['Class'])
 
         # Lookup type by it's class
         try:
             result = K.lookup(tag)
         except KeyError:
-            result = self.protocol.UnknownConstruct if cons else self.protocol.Unknown
+            result = self.__protocol__.UnknownConstruct if cons else self.__protocol__.Unknown
             attrs.setdefault('type', (t['Class'], tag))
             return dyn.clone(result, **attrs)
         return dyn.clone(result, **attrs)
@@ -97,7 +98,7 @@ class Element(pstruct.type):
     def __Value(self):
 
         # First make a clone of the type that we're supposed to use
-        length, result = self['Length'].li, self.Value()
+        length, result = self['Length'].li, self._object_()
 
         # Assign ourself as the ber array's element if it inherits from
         # us and ._object_ is undefined
@@ -306,9 +307,9 @@ class SEQUENCE(parray.block):
 
     def summary(self):
         if hasattr(self, '_fields_'):
-            res = ("{:s}={:s}".format(name, n.Value().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
+            res = ("{:s}={:s}".format(name, n._object_().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
         else:
-            res = (n.Value().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
         return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
 
 @Universal.define
@@ -325,9 +326,9 @@ class SET(parray.block):
 
     def summary(self):
         if hasattr(self, '_fields_'):
-            res = ("{:s}={:s}".format(name, n.Value().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
+            res = ("{:s}={:s}".format(name, n._object_().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
         else:
-            res = (n.Value().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
         return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
 
 @Universal.define
