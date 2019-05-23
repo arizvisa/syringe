@@ -71,6 +71,9 @@ class Protocol(ptype.definition):
     class UnknownConstruct(parray.block):
         def classname(self):
             return 'UnknownConstruct<{!r}>'.format(self.type)
+        def summary(self):
+            res = (n.Value().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+            return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
     class Unknown(ptype.block):
         def classname(self):
             return 'UnknownPrimitive<{!r}>'.format(self.type)
@@ -100,8 +103,7 @@ class Element(pstruct.type):
         # us and ._object_ is undefined
         if issubclass(result, parray.type):
             cls = type(self)
-            parent = cls if cls.Value == Element.Value else cls.__base__
-            result._object_ = parent if getattr(result, '_object_', None) == None else result._object_
+            result._object_ = cls if getattr(result, '_object_', None) == None else result._object_
 
         # Determine how to assign length
         if issubclass(result, parray.block):
@@ -294,9 +296,39 @@ class UTF8String(pstr.string):
 class SEQUENCE(parray.block):
     type = 0x10
 
+    def __getitem__(self, index):
+        try:
+            if hasattr(self, '_fields_'):
+                index = next(i for i, (_, name) in enumerate(self._fields_) if name == index)
+        except StopIteration:
+            return super(SEQUENCE, self).__getitem__(index)
+        return super(SEQUENCE, self).__getitem__(index)
+
+    def summary(self):
+        if hasattr(self, '_fields_'):
+            res = ("{:s}={:s}".format(name, n.Value().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
+        else:
+            res = (n.Value().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
+
 @Universal.define
 class SET(parray.block):
     type = 0x11
+
+    def __getitem__(self, index):
+        try:
+            if hasattr(self, '_fields_'):
+                index = next(i for i, (_, name) in enumerate(self._fields_) if name == index)
+        except StopIteration:
+            return super(SET, self).__getitem__(index)
+        return super(SET, self).__getitem__(index)
+
+    def summary(self):
+        if hasattr(self, '_fields_'):
+            res = ("{:s}={:s}".format(name, n.Value().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
+        else:
+            res = (n.Value().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
 
 @Universal.define
 class NumericString(ptype.block):
