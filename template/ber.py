@@ -32,7 +32,7 @@ class Length(pbinary.struct):
         return self['form'] == self['count'] == 0
 
     def summary(self):
-        res = self.number()
+        res = self.int()
         return '{:d} ({:#x}) -- {:s}'.format(res, res, super(Length,self).summary()) + (' Indefinite' if self.isIndefinite() else '')
 
 class Tag(pbinary.struct):
@@ -51,7 +51,7 @@ class Tag(pbinary.struct):
     __int__ = num = number = int
 
     def summary(self):
-        res = self.number()
+        res = self.int()
         return '{:d} ({:#x}) -- {:s}'.format(res,res,super(Tag,self).summary())
 
 class Type(pbinary.struct):
@@ -62,7 +62,7 @@ class Type(pbinary.struct):
     ]
 
     def summary(self):
-        c,p,t = self['Class'],self['Constructed'],self['Tag'].number()
+        c,p,t = self['Class'],self['Constructed'],self['Tag'].int()
         return 'class:{:d} tag:{:d} {:s}'.format(c,t, 'Constructed' if p else 'Universal')
 
 ### Element structure
@@ -77,9 +77,9 @@ class Protocol(ptype.definition):
 
 class Element(pstruct.type):
     protocol = Protocol
-    def Value(self):
+    def Value(self, **attrs):
         t = self['Type'].li
-        cons, tag = t['Constructed'],t['Tag'].number()
+        cons, tag = t['Constructed'], t['Tag'].int()
         K = self.protocol.lookup(t['Class'])
 
         # Lookup type by it's class
@@ -87,22 +87,25 @@ class Element(pstruct.type):
             result = K.lookup(tag)
         except KeyError:
             result = self.protocol.UnknownConstruct if cons else self.protocol.Unknown
-            result = dyn.clone(result, type=(t['Class'], tag))
-        return result
+            attrs.setdefault('type', (t['Class'], tag))
+            return dyn.clone(result, **attrs)
+        return dyn.clone(result, **attrs)
 
     def __Value(self):
-        length,result = self['Length'].li, self.Value()
+
+        # First make a clone of the type that we're supposed to use
+        length, result = self['Length'].li, self.Value()
 
         # Assign ourself as the ber array's element if it inherits from
         # us and ._object_ is undefined
         if issubclass(result, parray.type):
             cls = type(self)
             parent = cls if cls.Value == Element.Value else cls.__base__
-            result._object_ = parent if result._object_ == None else result._object_
+            result._object_ = parent if getattr(result, '_object_', None) == None else result._object_
 
         # Determine how to assign length
         if issubclass(result, parray.block):
-            result = dyn.clone(result, blocksize=lambda _:length.number())
+            result.blocksize = lambda _: length.int()
         elif length.isIndefinite() and issubclass(result, parray.terminated):
             # Type['Constructed']
             # Length['Form'] and !Length['Value']
@@ -110,7 +113,7 @@ class Element(pstruct.type):
         elif ptype.iscontainer(result):
             result = result
         elif ptype.istype(result):
-            result = dyn.clone(result, length=length.number())
+            result.length = length.int()
         return result
 
     _fields_ = [
@@ -198,7 +201,7 @@ class OBJECT_IDENTIFIER(ptype.type):
                 v = bitmap.push(v, (n & 0x7f, 7))
                 n = data.next()
             v = bitmap.push(v, (n, 7))
-            res.append(bitmap.number(v))
+            res.append(bitmap.int(v))
         return '.'.join(map(str,res))
 
     def summary(self):
