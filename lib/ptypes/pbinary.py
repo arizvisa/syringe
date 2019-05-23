@@ -1232,11 +1232,24 @@ class partial(ptype.container):
     def __pb_object(self, **attrs):
         offset, obj = self.getoffset(), force(self._object_, self)
         res = {}
+
+        # first include the type's attributes, then any user-supplied ones
         map(res.update, (self.attributes, attrs))
+
+        # then we'll add our current position, and our parent for the trie
         list(itertools.starmap(res.__setitem__, (('position', (offset, 0)), ('parent', self))))
-        if hasattr(self.blocksize, 'im_func') and self.blocksize.im_func is not partial.blocksize.im_func:
-            res.setdefault('blockbits', self.blockbits)
-        if hasattr(self, '__name__'): res.setdefault('__name__', self.__name__)
+
+        # if the user added a custom blocksize, then propagate that too
+        if getattr(self.blocksize, 'im_func', partial.blocksize.im_func) is not partial.blocksize.im_func:
+            res.setdefault('blocksize', self.blocksize)
+
+        # if we're named either by a field or explicitly, then propagate this
+        # name to our attributes as well
+        if getattr(self, '__name__', ''):
+            res.setdefault('__name__', self.__name__)
+
+        # now we can finally construct our object using the attributes we
+        # determined
         return obj(**res)
 
     def __update__(self, attrs={}, **moreattrs):
