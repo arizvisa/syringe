@@ -33,7 +33,7 @@ class Length(pbinary.struct):
 
     def summary(self):
         res = self.number()
-        return '{:d} (0x{:x}) -- {:s}'.format(res, res, super(Length,self).summary()) + (' Indefinite' if self.isIndefinite() else '')
+        return '{:d} ({:#x}) -- {:s}'.format(res, res, super(Length,self).summary()) + (' Indefinite' if self.isIndefinite() else '')
 
 class Tag(pbinary.struct):
     def __TagLong(self):
@@ -45,14 +45,14 @@ class Tag(pbinary.struct):
     ]
 
     def int(self):
-        res = self['Tag']
-        res += sum(x['integer'] for x in self['TagLong'])
-        return res
+        if self['Tag'] < 2**5 - 1:
+            return self['Tag']
+        return sum(n['integer'] for n in self['TagLong'])
     __int__ = num = number = int
 
     def summary(self):
         res = self.number()
-        return '{:d} (0x{:x}) -- {:s}'.format(res,res,super(Tag,self).summary())
+        return '{:d} ({:#x}) -- {:s}'.format(res,res,super(Tag,self).summary())
 
 class Type(pbinary.struct):
     _fields_ = [
@@ -63,7 +63,7 @@ class Type(pbinary.struct):
 
     def summary(self):
         c,p,t = self['Class'],self['Constructed'],self['Tag'].number()
-        return 'class:{:d} tag:0x{:x} {:s}'.format(c,t, 'Constructed' if p else 'Universal')
+        return 'class:{:d} tag:{:d} {:s}'.format(c,t, 'Constructed' if p else 'Universal')
 
 ### Element structure
 class Protocol(ptype.definition):
