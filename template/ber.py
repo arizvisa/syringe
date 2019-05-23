@@ -65,15 +65,34 @@ class Type(pbinary.struct):
         c,p,t = self['Class'],self['Constructed'],self['Tag'].int()
         return 'class:{:d} tag:{:d} {:s}'.format(c,t, 'Constructed' if p else 'Universal')
 
+class Structured(parray.type):
+    def __getitem__(self, index):
+        try:
+            if hasattr(self, '_fields_'):
+                index = next(i for i, (_, name) in enumerate(self._fields_) if name.lower() == index.lower())
+        except:
+            return super(Structured, self).__getitem__(index)
+        return super(Structured, self).__getitem__(index)
+
+    def summary(self):
+        if hasattr(self, '_fields_'):
+            res = ("{:s}={:s}".format(name, n._object_().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
+        else:
+            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
+        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
+
+    def _object_(self):
+        if hasattr(self, '_fields_') and len(self.value) < len(self._fields_):
+            t, name = self._fields_[len(self.value)]
+            return dyn.clone(Element, _object_=lambda self, res=dyn.clone(t): res)
+        return dyn.clone(Element)
+
 ### Element structure
 class Protocol(ptype.definition):
     attribute,cache = 'Class',{}
-    class UnknownConstruct(parray.block):
+    class UnknownConstruct(parray.block, Structured):
         def classname(self):
             return 'UnknownConstruct<{!r}>'.format(self.type)
-        def summary(self):
-            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
-            return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
     class Unknown(ptype.block):
         def classname(self):
             return 'UnknownPrimitive<{!r}>'.format(self.type)
@@ -82,6 +101,9 @@ class Element(pstruct.type):
     __protocol__ = Protocol
 
     def _object_(self, **attrs):
+        if hasattr(self, '__object__'):
+            return self.__object__
+
         t = self['Type'].li
         cons, tag = t['Constructed'], t['Tag'].int()
         K = self.__protocol__.lookup(t['Class'])
@@ -96,23 +118,18 @@ class Element(pstruct.type):
         return dyn.clone(result, **attrs)
 
     def __Value(self):
+        '''use ._object_() to determine the type to use for this element's value'''
 
         # First make a clone of the type that we're supposed to use
         length, result = self['Length'].li, self._object_()
 
-        # Assign ourself as the ber array's element if it inherits from
-        # us and ._object_ is undefined
-        if issubclass(result, parray.type):
-            cls = type(self)
-            result._object_ = cls if getattr(result, '_object_', None) == None else result._object_
-
         # Determine how to assign length
         if issubclass(result, parray.block):
-            result.blocksize = lambda _: length.int()
+            result.blocksize = lambda _, cb=length.int(): cb
         elif length.isIndefinite() and issubclass(result, parray.terminated):
             # Type['Constructed']
             # Length['Form'] and !Length['Value']
-            result = dyn.clone(result, isTerminator=lambda s, v: isinstance(v['Value'], EOC))
+            result.isTerminator = lambda self, value: isinstance(value['Value'], EOC)
         elif ptype.iscontainer(result):
             result = result
         elif ptype.istype(result):
@@ -202,7 +219,7 @@ class OBJECT_IDENTIFIER(ptype.type):
             v = bitmap.new(0,0)
             while n & 0x80:
                 v = bitmap.push(v, (n & 0x7f, 7))
-                n = data.next()
+                n = next(data)
             v = bitmap.push(v, (n, 7))
             res.append(bitmap.int(v))
         return '.'.join(map(str,res))
@@ -294,42 +311,12 @@ class UTF8String(pstr.string):
     type = 0x0c
 
 @Universal.define
-class SEQUENCE(parray.block):
+class SEQUENCE(parray.block, Structured):
     type = 0x10
 
-    def __getitem__(self, index):
-        try:
-            if hasattr(self, '_fields_'):
-                index = next(i for i, (_, name) in enumerate(self._fields_) if name == index)
-        except StopIteration:
-            return super(SEQUENCE, self).__getitem__(index)
-        return super(SEQUENCE, self).__getitem__(index)
-
-    def summary(self):
-        if hasattr(self, '_fields_'):
-            res = ("{:s}={:s}".format(name, n._object_().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
-        else:
-            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
-        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
-
 @Universal.define
-class SET(parray.block):
+class SET(parray.block, Structured):
     type = 0x11
-
-    def __getitem__(self, index):
-        try:
-            if hasattr(self, '_fields_'):
-                index = next(i for i, (_, name) in enumerate(self._fields_) if name == index)
-        except StopIteration:
-            return super(SET, self).__getitem__(index)
-        return super(SET, self).__getitem__(index)
-
-    def summary(self):
-        if hasattr(self, '_fields_'):
-            res = ("{:s}={:s}".format(name, n._object_().typename() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
-        else:
-            res = (n._object_().typename() if isinstance(n, Element) else n.classname() for n in self.value)
-        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
 
 @Universal.define
 class NumericString(ptype.block):
