@@ -361,8 +361,8 @@ class terminated(type):
     .isTerminator()
     '''
     length = None
-    def isTerminator(self, v):
-        '''intended to be overloaded. should return True if element /v/ represents the end of the array.'''
+    def isTerminator(self, value):
+        '''intended to be overloaded. should return True if element /value/ represents the end of the array.'''
         raise error.ImplementationError(self, 'terminated.isTerminator')
 
     def __len__(self):
@@ -374,16 +374,14 @@ class terminated(type):
         return super(terminated, self).__len__()
 
     def alloc(self, fields=(), **attrs):
+        attrs.setdefault('length', len(fields))
         return super(terminated, self).alloc(fields, **attrs)
 
     def load(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                forever = itertools.count() if self.length is None else six.moves.range(len(self))
+                forever = itertools.count() if self.length is None else six.moves.range(self.length)
                 offset, self.value, n = self.getoffset(), [], None
-
-                if isinstance(self.source, ptype.provider.empty):
-                    return self
 
                 for index in forever:
                     n = self.new(self._object_,__name__=str(index),offset=offset)
@@ -477,9 +475,6 @@ class infinite(uninitialized):
 
         with utils.assign(self, **attrs):
             offset, self.value = self.getoffset(), []
-
-            if isinstance(self.source, ptype.provider.empty):
-                return self
 
             current,maximum = 0,None if self.parent is None else self.parent.blocksize()
             try:
