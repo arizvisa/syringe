@@ -272,29 +272,29 @@ class type(_parray_generic):
     def alloc(self, fields=(), **attrs):
         result = super(type, self).alloc(**attrs)
         if len(fields) > 0 and isinstance(fields[0], tuple):
-            for k,v in fields:
+            for k, val in fields:
                 idx = result.__getindex__(k)
-                if ptype.istype(v) or ptype.isresolveable(v):
-                    result.value[idx] = result.new(v).alloc(**attrs)
-                elif isinstance(v, ptype.generic):
-                    result.value[idx] = result.new(v)
+                if ptype.istype(val) or ptype.isresolveable(val):
+                    result.value[idx] = result.new(val).alloc(**attrs)
+                elif isinstance(val, ptype.generic):
+                    result.value[idx] = result.new(val)
                 else:
-                    result.value[idx].__setvalue__(v)
+                    result.value[idx].__setvalue__(val)
                 continue
         else:
-            for idx,v in enumerate(fields):
+            for idx, val in enumerate(fields):
                 name = str(idx)
-                if ptype.istype(v) or ptype.isresolveable(v):
-                    result.value[idx] = result.new(v,__name__=name).alloc(**attrs)
-                elif isinstance(v, ptype.generic):
-                    result.value[idx] = result.new(v,__name__=name)
+                if ptype.istype(val) or ptype.isresolveable(val):
+                    result.value[idx] = result.new(val,__name__=name).alloc(**attrs)
+                elif isinstance(val, ptype.generic):
+                    result.value[idx] = result.new(val,__name__=name)
                 else:
-                    result.value[idx].__setvalue__(v)
+                    result.value[idx].__setvalue__(val)
                 continue
 
             # re-alloc elements that exist in the rest of the array
             for idx in six.moves.range(len(fields), len(result)):
-                result.value[idx].alloc(**attrs)
+                result.value[idx].a
 
         result.setoffset(self.getoffset(), recurse=True)
         return result
@@ -373,9 +373,8 @@ class terminated(type):
             return len(self.value)
         return super(terminated, self).__len__()
 
-    def alloc(self, **attrs):
-        attrs.setdefault('length', 0 if self.value is None else len(self.value))
-        return super(terminated, self).alloc(**attrs)
+    def alloc(self, fields=(), **attrs):
+        return super(terminated, self).alloc(fields, **attrs)
 
     def load(self, **attrs):
         try:
