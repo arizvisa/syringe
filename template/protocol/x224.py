@@ -272,20 +272,20 @@ class TPKT(pstruct.type):
         return dyn.clone(TPDU, blocksize=lambda self, cb=self['length'].int() - res: cb if cb > 0 else 0)
 
     def __userdata(self):
-        res = sum(self[fld].li.size() for fld in ['version','reserved','length','tpdu'])
+        res = sum(self[fld].li.size() for fld in ['version','reserved','length','pdu'])
         return dyn.block(self['length'].li.int() - res) if self['length'].int() >= res else dyn.block(0)
 
     _fields_ = [
         (pint.uint8_t, 'version'),
         (__reserved, 'reserved'),
         (pint.uint16_t, 'length'),
-        (TPDU, 'tpdu'),
+        (TPDU, 'pdu'),
         (__userdata, 'data'),
     ]
 
     def alloc(self, **attrs):
         res = super(TPKT, self).alloc(**attrs)
-        return res.set(length=sum(self[fld].size() for fld in ['version','reserved','length','tpdu','data']))
+        return res.set(length=sum(self[fld].size() for fld in ['version','reserved','length','pdu','data']))
 
 if __name__ == '__main__':
     import user, ptypes, x224
