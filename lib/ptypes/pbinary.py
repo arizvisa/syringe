@@ -118,7 +118,7 @@ import itertools,operator,functools
 import six
 
 import ptype    # XXX: recursive. yay.
-from . import utils,bitmap,config,error
+from . import utils,bitmap,config,error,provider
 
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
@@ -300,11 +300,25 @@ class type(ptype.generic):
 
     def alloc(self, **attrs):
         '''will initialize a pbinary.type with zeroes'''
-        try:
-            with utils.assign(self, **attrs):
-                result = self.__deserialize_consumer__(bitmap.consumer(itertools.repeat('\x00')))
-        except StopIteration, error:
-            raise error.LoadError(self, exception=error)
+        attrs.setdefault('source', provider.empty())
+
+        with utils.assign(self, **attrs):
+            position = self.getposition()
+            def repeat(position=position):
+                offset, _ = position
+                self.source.seek(offset)
+                while True:
+                    yield self.source.consume(1)
+                return
+
+            iterable = repeat()
+            consumer = bitmap.consumer(iterable)
+            _, boffset = position
+            try:
+                consumer.consume(boffset)
+                result = self.__deserialize_consumer__(consumer)
+            except (StopIteration, error.ProviderError), e:
+                raise error.LoadError(self, exception=e)
         return result
 
     def properties(self):
@@ -592,14 +606,6 @@ class container(type):
     def commit(self, **attrs):
         raise error.UserError(self, 'container.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
 
-    def alloc(self, **attrs):
-        try:
-            with utils.assign(self, **attrs):
-                result = self.__deserialize_consumer__(bitmap.consumer(itertools.repeat('\x00')))
-        except StopIteration, error:
-            raise error.LoadError(self, exception=error)
-        return result
-
     def append(self, object):
         '''L.append(object) -- append an element to a pbinary.container and return its index'''
         return self.__append__(object)
@@ -816,7 +822,7 @@ class _struct_generic(container):
 
     def alloc(self, __attrs__={}, **fields):
         attrs = __attrs__
-        result = super(struct, self).alloc(**attrs)
+        result = super(_struct_generic, self).alloc(**attrs)
         if fields:
             for idx, (t, n) in enumerate(self._fields_):
                 if n not in fields:
@@ -1134,6 +1140,7 @@ class terminatedarray(_array_generic):
     length = None
 
     def alloc(self, fields=(), **attrs):
+        attrs.setdefault('length', len(fields))
         return super(terminatedarray, self).alloc(fields, **attrs)
 
     def __deserialize_consumer__(self, consumer):
@@ -1151,9 +1158,9 @@ class terminatedarray(_array_generic):
                 continue
             return
 
-        p = generator()
+        iterable = generator()
         try:
-            return super(terminatedarray, self).__deserialize_consumer__(consumer, p)
+            return super(terminatedarray, self).__deserialize_consumer__(consumer, iterable)
 
         # terminated arrays can also stop when out-of-data
         except StopIteration, e:
@@ -1299,6 +1306,7 @@ class partial(ptype.container):
         return res.parent
 
     def load(self, **attrs):
+        '''Load a pbinary.partial using the current source'''
         try:
             self.value = [self.__pb_object()]
             result = self.__load_bigendian(**attrs) if self.byteorder is config.byteorder.bigendian else self.__load_littleendian(**attrs)
@@ -1351,14 +1359,9 @@ class partial(ptype.container):
             raise error.CommitError(self, exception=e)
 
     def alloc(self, **attrs):
-        # FIXME: use new alloc instead of **attrs
-        try:
-            self.value = [self.__pb_object()]
-            with utils.assign(self, **attrs):
-                result = self.object.__deserialize_consumer__(bitmap.consumer(itertools.repeat('\x00')))
-            return self
-        except (StopIteration, error.ProviderError), e:
-            raise error.LoadError(self, exception=e)
+        '''Load a pbinary.partial using the provider.empty source'''
+        attrs.setdefault('source', provider.empty())
+        return self.load(**attrs)
 
     def bits(self):
         return self.size()*8
