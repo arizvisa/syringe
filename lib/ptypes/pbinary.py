@@ -677,6 +677,36 @@ class container(type):
 class _array_generic(container):
     length = 0
 
+    def alloc(self, fields=(), **attrs):
+        result = super(_array_generic, self).alloc(**attrs)
+        if len(fields) > 0 and isinstance(fields[0], tuple):
+            for k, val in fields:
+                idx = result.__getindex__(k)
+                #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
+                if istype(val) or ptype.isresolveable(val):
+                    result.value[idx] = result.new(val, __name__=k).alloc(**attrs)
+                elif isinstance(val, type):
+                    result.value[idx] = result.new(val, __name__=k)
+                elif isbitmap(val):
+                    result.value[idx] = result.new(type, __name__=k).__setvalue__(val)
+                else:
+                    result.value[idx].__setvalue__(val)
+                continue
+
+        else:
+            for idx, val in enumerate(fields):
+                #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
+                if istype(val) or ptype.isresolveable(val) or isinstance(val, type):
+                    result.value[idx] = result.new(val, __name__=str(idx))
+                elif bitmap.isbitmap(val):
+                    result.value[idx] = result.new(type, __name__=str(idx)).__setvalue__(val)
+                else:
+                    result.value[idx].__setvalue__(val)
+                continue
+
+        result.setposition(result.getposition(), recurse=True)
+        return result
+
     def summary(self, **options):
         element, value = self.__element__(), self.bitmap()
         result = bitmap.hex(value) if bitmap.size(value) else '...'
@@ -783,6 +813,28 @@ class _struct_generic(container):
     def __init__(self, *args, **kwds):
         super(_struct_generic, self).__init__(*args, **kwds)
         self.__fastindex = {}
+
+    def alloc(self, __attrs__={}, **fields):
+        attrs = __attrs__
+        result = super(struct, self).alloc(**attrs)
+        if fields:
+            for idx, (t, n) in enumerate(self._fields_):
+                if n not in fields:
+                    if ptype.isresolveable(t): result.value[idx] = result.new(t, __name__=n).alloc(**attrs)
+                    continue
+                v = fields[n]
+                #if any((istype(v), isinstance(v, type), ptype.isresolveable(v))):
+                if istype(v) or ptype.isresolveable(v):
+                    result.value[idx] = result.new(v, __name__=n).alloc(**attrs)
+                elif isinstance(v, type):
+                    result.value[idx] = result.new(v, __name__=n)
+                elif bitmap.isbitmap(v):
+                    result.value[idx] = result.new(type, __name__=n).__setvalue__(v)
+                else:
+                    result.value[idx].__setvalue__(v)
+                continue
+            self.setposition(self.getposition(), recurse=True)
+        return result
 
     def append(self, object):
         '''L.append(object) -- append an element to a pbinary.struct and return its index'''
@@ -962,35 +1014,6 @@ class array(_array_generic):
         result.length = self.length
         return result
 
-    def alloc(self, *fields, **attrs):
-        result = super(array, self).alloc(**attrs)
-        if len(fields) > 0 and isinstance(fields[0], tuple):
-            for k, v in fields:
-                idx = result.__getindex__(k)
-                #if any((istype(v), isinstance(v, type), ptype.isresolveable(v))):
-                if istype(v) or ptype.isresolveable(v):
-                    result.value[idx] = result.new(v, __name__=k).alloc(**attrs)
-                elif isinstance(v, type):
-                    result.value[idx] = result.new(v, __name__=k)
-                elif isbitmap(v):
-                    result.value[idx] = result.new(type, __name__=k).__setvalue__(v)
-                else:
-                    result.value[idx].__setvalue__(v)
-                continue
-            result.setposition(result.getposition(), recurse=True)
-            return result
-        for idx, v in enumerate(fields):
-            #if any((istype(v), isinstance(v, type), ptype.isresolveable(v))):
-            if istype(v) or ptype.isresolveable(v) or isinstance(v, type):
-                result.value[idx] = result.new(v, __name__=str(idx))
-            elif bitmap.isbitmap(v):
-                result.value[idx] = result.new(type, __name__=str(idx)).__setvalue__(v)
-            else:
-                result.value[idx].__setvalue__(v)
-            continue
-        result.setposition(result.getposition(), recurse=True)
-        return result
-
     def __setvalue__(self, *value):
         value, = value
         if self.initializedQ():
@@ -1054,28 +1077,6 @@ class struct(_struct_generic):
         result._fields_ = self._fields_[:]
         return result
 
-    def alloc(self, __attrs__={}, **fields):
-        attrs = __attrs__
-        result = super(struct, self).alloc(**attrs)
-        if fields:
-            for idx, (t, n) in enumerate(self._fields_):
-                if n not in fields:
-                    if ptype.isresolveable(t): result.value[idx] = result.new(t, __name__=n).alloc(**attrs)
-                    continue
-                v = fields[n]
-                #if any((istype(v), isinstance(v, type), ptype.isresolveable(v))):
-                if istype(v) or ptype.isresolveable(v):
-                    result.value[idx] = result.new(v, __name__=n).alloc(**attrs)
-                elif isinstance(v, type):
-                    result.value[idx] = result.new(v, __name__=n)
-                elif bitmap.isbitmap(v):
-                    result.value[idx] = result.new(type, __name__=n).__setvalue__(v)
-                else:
-                    result.value[idx].__setvalue__(v)
-                continue
-            self.setposition(self.getposition(), recurse=True)
-        return result
-
     def __deserialize_consumer__(self, consumer):
         self.value = []
         position = self.getposition()
@@ -1132,14 +1133,8 @@ class struct(_struct_generic):
 class terminatedarray(_array_generic):
     length = None
 
-    def alloc(self, *fields, **attrs):
-        if 'length' in attrs:
-            return super(terminatedarray, self).alloc(*fields, **attrs)
-
-        # a terminatedarray will always have at least 1 element if it's
-        #   initialized
-        attrs.setdefault('length', 1)
-        return super(terminatedarray, self).alloc(*fields, **attrs)
+    def alloc(self, fields=(), **attrs):
+        return super(terminatedarray, self).alloc(fields, **attrs)
 
     def __deserialize_consumer__(self, consumer):
         self.value = []
@@ -1476,7 +1471,7 @@ class partial(ptype.container):
             res, = self.value
             cn = res.classname()
         else:
-            cn = self._object_.typename() if istype(self._object_) else self._object_.__name__
+            cn = self._object_.typename() if istype(self._object_) else self._object_ if isinstance(self._object_, six.integer_types) else self._object_.__name__
         return fmt[self.byteorder].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     def contains(self, offset):
