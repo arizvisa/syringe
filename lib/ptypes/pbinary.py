@@ -1141,6 +1141,7 @@ class terminatedarray(_array_generic):
 
     def alloc(self, fields=(), **attrs):
         attrs.setdefault('length', len(fields))
+        attrs.setdefault('isTerminator', lambda value: False)
         return super(terminatedarray, self).alloc(fields, **attrs)
 
     def __deserialize_consumer__(self, consumer):

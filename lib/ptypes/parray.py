@@ -375,6 +375,7 @@ class terminated(type):
 
     def alloc(self, fields=(), **attrs):
         attrs.setdefault('length', len(fields))
+        attrs.setdefault('isTerminator', lambda value: False)
         return super(terminated, self).alloc(fields, **attrs)
 
     def load(self, **attrs):
