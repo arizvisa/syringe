@@ -1358,10 +1358,15 @@ class partial(ptype.container):
         except (StopIteration, error.ProviderError), e:
             raise error.CommitError(self, exception=e)
 
-    def alloc(self, **attrs):
+    def alloc(self, *args, **attrs):
         '''Load a pbinary.partial using the provider.empty source'''
-        attrs.setdefault('source', provider.empty())
-        return self.load(**attrs)
+        try:
+            self.value = [self.__pb_object()]
+            self.object.alloc(*args, **attrs)
+            return self
+
+        except (StopIteration, error.ProviderError), e:
+            raise error.LoadError(self, exception=e)
 
     def bits(self):
         return self.size()*8
