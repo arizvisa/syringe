@@ -212,7 +212,7 @@ class type(_pstruct_generic):
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=n)
                 else:
-                    result.value[idx].__setvalue__(v)
+                    result.value[idx].set(v)
                 continue
             self.setoffset(self.getoffset(), recurse=True)
         return result

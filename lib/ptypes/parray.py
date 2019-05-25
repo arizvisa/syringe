@@ -279,7 +279,7 @@ class type(_parray_generic):
                 elif isinstance(val, ptype.generic):
                     result.value[idx] = result.new(val)
                 else:
-                    result.value[idx].__setvalue__(val)
+                    result.value[idx].set(val)
                 continue
         else:
             for idx, val in enumerate(fields):
@@ -289,7 +289,7 @@ class type(_parray_generic):
                 elif isinstance(val, ptype.generic):
                     result.value[idx] = result.new(val,__name__=name)
                 else:
-                    result.value[idx].__setvalue__(val)
+                    result.value[idx].set(val)
                 continue
 
             # re-alloc elements that exist in the rest of the array
