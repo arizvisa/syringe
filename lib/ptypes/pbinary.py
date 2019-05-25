@@ -181,14 +181,19 @@ class type(ptype.generic):
 
     This type is backed by a bitmap of some kind
     """
+
+    ## Methods for fetching and altering the position of a binary type
     __position__ = (0, 0)
     def setoffset(self, value, **options):
         (_, suboffset) = self.getposition()
         return self.setposition((value, suboffset))[0]
+
     def getoffset(self, **options):
         return self.getposition()[0]
+
     def getposition(self, **options):
         return self.__position__[:]
+
     def setposition(self, position, **options):
         (offset, suboffset) = position
         if suboffset >= 8:
@@ -206,61 +211,32 @@ class type(ptype.generic):
         return self.setposition((offset, value))
     bofs = boffset = suboffset
 
+    ## Methods for interacting with the value of a binary type
     value = None
     def initializedQ(self):
         return self.value is not None
 
-    def __getvalue__(self):
-        if self.value is None:
-            raise ptypes.error.InitializationError(self, '__getvalue__')
-        return self.value[:]
-    def __setvalue__(self, value):
-        # FIXME: clamp bitmaps and integers according to .blockbits()
-
-        if bitmap.isbitmap(value):
-            size = bitmap.size(value)
-            if size != self.blockbits():
-                Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
-
-            # check signedness for backwards compatibility
-            smult = (1,-1)[getattr(self, 'signed', False)]
-
-            self.value = bitmap.new(bitmap.value(value), size * smult)
-            return self
-
-        elif isinstance(value, six.integer_types):
-            # backwards compatibility
-            smult = (1,-1)[getattr(self, 'signed', False)]
-
-            try: _, size = self.value or (0, self.blockbits() * smult)
-            except: size = 0
-
-            self.value = bitmap.new(value, size)
-            return self
-
-        raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
-
-    def bitmap(self):
-        if self.value is None:
-            return None
-        res = self.__getvalue__()
-        return tuple(self.value)
-
-    def update(self, value):
-        if bitmap.isbitmap(value):
-            self.value = bitmap.new(*value)
-            return self
-        raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
-
     def copy(self, **attrs):
         result = self.new(self.__class__, position=self.getposition())
-        attrs.setdefault('value', self.value[:])
+        attrs.setdefault('value', self.__getvalue__())
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         result.__update__(attrs)
         return result
 
     def __eq__(self, other):
         return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
+
+    def bitmap(self):
+        raise NotImplementedError
+
+    def update(self, value):
+        raise NotImplementedError
+
+    def __getvalue__(self):
+        raise NotImplementedError
+
+    def __setvalue__(self, value):
+        raise NotImplementedError
 
     def __deserialize_consumer__(self, consumer):
         raise NotImplementedError
@@ -284,6 +260,7 @@ class type(ptype.generic):
     ## default methods
     def size(self):
         return math.trunc(math.ceil(self.bits()/8.0))
+
     def blocksize(self):
         return math.trunc(math.ceil(self.blockbits()/8.0))
 
@@ -361,6 +338,49 @@ class integer(type):
         if self.initializedQ() and bitmap.signed(self.bitmap()):
             result['signed'] = True
         return result
+
+    def __getvalue__(self):
+        if self.value is None:
+            raise ptypes.error.InitializationError(self, '__getvalue__')
+        return self.value[:]
+
+    def __setvalue__(self, value):
+        # FIXME: clamp bitmaps and integers according to .blockbits()
+
+        if bitmap.isbitmap(value):
+            size = bitmap.size(value)
+            if size != self.blockbits():
+                Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
+
+            # check signedness for backwards compatibility
+            smult = (1,-1)[getattr(self, 'signed', False)]
+
+            self.value = bitmap.new(bitmap.value(value), size * smult)
+            return self
+
+        elif isinstance(value, six.integer_types):
+            # backwards compatibility
+            smult = (1,-1)[getattr(self, 'signed', False)]
+
+            try: _, size = self.value or (0, self.blockbits() * smult)
+            except: size = 0
+
+            self.value = bitmap.new(value, size)
+            return self
+
+        raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
+
+    def bitmap(self):
+        if self.value is None:
+            return None
+        res = self.__getvalue__()
+        return tuple(self.value)
+
+    def update(self, value):
+        if bitmap.isbitmap(value):
+            self.value = bitmap.new(*value)
+            return self
+        raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
 
 # FIXME: mostly copied from pint.enum
 class enum(integer):
@@ -543,37 +563,45 @@ class container(type):
         res = self.bitmap()
         return bitmap.value(res)
     num = int
+
     def bitmap(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.bitmap')
         res = map(operator.methodcaller('bitmap'), self.value)
         return six.moves.reduce(bitmap.push, filter(None, res), bitmap.new(0, 0))
+
     def bits(self):
         return sum(item.bits() for item in self.value or [])
+
     def blockbits(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.blockbits')
         return sum(item.blockbits() for item in self.value)
+
     def blocksize(self):
         res = math.ceil(self.blockbits() / 8.0)
         return math.trunc(res)
 
     def __getindex__(self, key):
         raise error.ImplementationError(self, 'container.__getindex__')
+
     def __field__(self, key):
         index = self.__getindex__(key)
         if self.value is None:
             raise error.InitializationError(self, 'container.__field__')
         return self.value[index]
+
     def __getitem__(self, key):
         '''x.__getitem__(y) <==> x[y]'''
         res = self.__field__(key)
         return res if isinstance(res, container) else res.int()
+
     def item(self, key):
         return self.__field__(key)
 
     def __getvalue__(self):
         return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
+
     def __setvalue__(self, *value):
         value, = value
         if not isinstance(value, six.integer_types):
