@@ -206,19 +206,26 @@ class type(ptype.generic):
         return self.setposition((offset, value))
     bofs = boffset = suboffset
 
-    initializedQ = lambda s: s.value is not None
+    initializedQ = lambda self: self.value is not None
 
     def int(self):
-        return bitmap.value(self.bitmap())
+        res = self.__getvalue__()
+        return bitmap.value(res)
     num = int
     def bits(self):
-        if self.value is not None:
-            return bitmap.size(self.bitmap())
-        Log.info("type.size : {:s} : Unable to get size of pbinary.type, as object is still uninitialized.".format(self.instance()))
-        return 0
+        if self.value is None:
+            Log.info("type.size : {:s} : Unable to get size of pbinary.type, as object is still uninitialized.".format(self.instance()))
+            return 0
+        res = self.__getvalue__()
+        return bitmap.size(res)
     def blockbits(self):
-        return self.bits()
+        if self.value is None:
+            return 0
+        res = self.__getvalue__()
+        return bitmap.size(res)
     def __getvalue__(self):
+        if self.value is None:
+            raise ptypes.error.InitializationError(self, '__getvalue__')
         return self.value[:]
     def __setvalue__(self, value):
         # FIXME: clamp bitmaps and integers according to .blockbits()
@@ -247,7 +254,10 @@ class type(ptype.generic):
         raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
 
     def bitmap(self):
-        return None if self.value is None else tuple(self.value)
+        if self.value is None:
+            return None
+        res = self.__getvalue__()
+        return tuple(self.value)
     def update(self, value):
         if bitmap.isbitmap(value):
             self.value = bitmap.new(*value)
@@ -262,7 +272,7 @@ class type(ptype.generic):
         return result
 
     def __eq__(self, other):
-        return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.bitmap() == other.bitmap()
+        return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
 
     def __deserialize_consumer__(self, consumer):
         try: self.__setvalue__(consumer.consume(self.blockbits()))
@@ -397,7 +407,7 @@ class enum(type):
         return
 
     def blockbits(self):
-        return getattr(self, 'width', bitmap.size(self.value) if bitmap.isbitmap(self.value) else 0)
+        return getattr(self, 'width', bitmap.size(self.value))
 
     @classmethod
     def byvalue(cls, value, *default):
@@ -496,9 +506,9 @@ class container(type):
         if recurse and self.value is not None:
             # FIXME: if the byteorder is little-endian, then this fucks up
             #        the positions pretty hard
-            for n in self.value:
-                n.setposition((offset, suboffset), recurse=recurse)
-                suboffset += n.bits() if n.initializedQ() else n.blockbits()
+            for item in self.value:
+                item.setposition((offset, suboffset), recurse=recurse)
+                suboffset += item.bits() if item.initializedQ() else item.blockbits()
             pass
         return res
 
@@ -511,11 +521,12 @@ class container(type):
         return result
 
     def initializedQ(self):
-        return self.value is not None and all(x is not None and isinstance(x, type) and x.initializedQ() for x in self.value)
+        return self.value is not None and all(item is not None and isinstance(item, type) and item.initializedQ() for item in self.value)
 
     ### standard stuff
     def int(self):
-        return bitmap.value(self.bitmap())
+        res = self.bitmap()
+        return bitmap.value(res)
     num = int
     def bitmap(self):
         if self.value is None:
@@ -523,13 +534,14 @@ class container(type):
         res = map(operator.methodcaller('bitmap'), self.value)
         return six.moves.reduce(bitmap.push, filter(None, res), bitmap.new(0, 0))
     def bits(self):
-        return sum(n.bits() for n in self.value or [])
+        return sum(item.bits() for item in self.value or [])
     def blockbits(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.blockbits')
-        return sum(n.blockbits() for n in self.value)
+        return sum(item.blockbits() for item in self.value)
     def blocksize(self):
-        return math.trunc(math.ceil(self.blockbits()/8.0))
+        res = math.ceil(self.blockbits() / 8.0)
+        return math.trunc(res)
 
     def __getindex__(self, key):
         raise error.ImplementationError(self, 'container.__getindex__')
@@ -546,7 +558,7 @@ class container(type):
         return self.__field__(key)
 
     def __getvalue__(self):
-        return tuple(n.int() if isinstance(n, type) else n.get() for n in self.value)
+        return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
     def __setvalue__(self, *value):
         value, = value
         if not isinstance(value, six.integer_types):
@@ -582,14 +594,14 @@ class container(type):
             raise error.SyntaxError(self, 'container.__deserialize_consumer__', message='caller is responsible for pre-allocating the elements in self.value')
 
         position = self.getposition()
-        for n in generator:
-            self.__append__(n)
-            n.setposition(position)
-            n.__deserialize_consumer__(consumer)
+        for item in generator:
+            self.__append__(item)
+            item.setposition(position)
+            item.__deserialize_consumer__(consumer)
 
             # FIXME: if the byteorder is little-endian, then this fucks up
             #        the positions pretty hard
-            size = n.blockbits()
+            size = item.blockbits()
             offset, suboffset = position
             suboffset += size
             offset, suboffset = (offset + suboffset/8, suboffset % 8)
@@ -1323,9 +1335,9 @@ class partial(ptype.container):
             raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
 
         with utils.assign(self, **attrs):
-            o = self.getoffset()
-            self.source.seek(o)
-            bc = bitmap.consumer(self.source.consume(1) for x in itertools.count())
+            offset = self.getoffset()
+            self.source.seek(offset)
+            bc = bitmap.consumer(self.source.consume(1) for index in itertools.count())
             self.object.__deserialize_consumer__(bc)
         return self
 
@@ -1343,8 +1355,8 @@ class partial(ptype.container):
         with utils.assign(self, **attrs):
             offset, size = self.getoffset(), self.blocksize()
             self.source.seek(offset)
-            block = str().join(reversed(self.source.consume(size)))
-            bc = bitmap.consumer(x for x in block)
+            data = str().join(reversed(self.source.consume(size)))
+            bc = bitmap.consumer(octet for octet in data)
             self.object.__deserialize_consumer__(bc)
         return self
 
