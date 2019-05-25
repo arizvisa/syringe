@@ -384,10 +384,16 @@ if __name__ == '__main__':
 
     @TestCase
     def test_mapexception_1():
-        blah_failure_to_success()
+        try:
+            blah_failure_to_success()
+        except Success:
+            raise Success
     @TestCase
     def test_mapexception_2():
-        blah_success()
+        try:
+            blah_success()
+        except Success:
+            raise Success
     @TestCase
     def test_mapexception_3():
         try:
@@ -403,14 +409,23 @@ if __name__ == '__main__':
         raise Success
     @TestCase
     def test_mapexception_5():
-        blah_multiple_1()
+        try:
+            blah_multiple_1()
+        except Success:
+            raise Success
     @TestCase
     def test_mapexception_6():
-        blah_multiple_2()
+        try:
+            blah_multiple_2()
+        except Success:
+            raise Success
     @TestCase
     def test_mapexception_7():
-        x = blah()
-        x.method()
+        try:
+            x = blah()
+            x.method()
+        except Success:
+            raise Success
     @TestCase
     def test_mapexception_8():
         try:

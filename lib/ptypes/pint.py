@@ -537,7 +537,7 @@ if __name__ == '__main__':
         pint.setbyteorder(config.byteorder.littleendian)
         s = '\xff\xff\xff\xff'
         a = pint.int32_t(source=provider.string(s)).l
-        b, = struct.unpack('l',s)
+        b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
         print b, a, a.serialize().encode('hex')
@@ -547,7 +547,7 @@ if __name__ == '__main__':
         pint.setbyteorder(config.byteorder.littleendian)
         s = '\x00\x00\x00\x80'
         a = pint.int32_t(source=provider.string(s)).l
-        b, = struct.unpack('l',s)
+        b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
         print b, a, a.serialize().encode('hex')
@@ -557,7 +557,7 @@ if __name__ == '__main__':
         pint.setbyteorder(config.byteorder.littleendian)
         s = '\xff\xff\xff\x7f'
         a = pint.int32_t(source=provider.string(s)).l
-        b, = struct.unpack('l',s)
+        b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
         print b, a, a.serialize().encode('hex')
@@ -567,7 +567,7 @@ if __name__ == '__main__':
         pint.setbyteorder(config.byteorder.littleendian)
         s = '\x00\x00\x00\x00'
         a = pint.int32_t(source=provider.string(s)).l
-        b, = struct.unpack('l',s)
+        b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
         print b, a, a.serialize().encode('hex')
