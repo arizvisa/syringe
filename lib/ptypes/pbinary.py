@@ -156,9 +156,9 @@ def force(t, self, chain=[]):
 
     # conversions
     if bitmap.isinteger(t):
-        return ptype.clone(type, value=(0, t))
+        return ptype.clone(integer, value=(0, t))
     if bitmap.isbitmap(t):
-        return ptype.clone(type, value=t)
+        return ptype.clone(integer, value=t)
 
     # passthrough
     if istype(t) or isinstance(t, type):
@@ -177,11 +177,11 @@ def force(t, self, chain=[]):
     raise error.TypeError(self, 'force<pbinary>', message='chain={!r} : refusing request to resolve {!r} to a type that does not inherit from pbinary.type : {:s}'.format(chain, t, path))
 
 class type(ptype.generic):
-    """An atomic component of any binary array or structure.
+    """The base type that all pbinary types must inherit from.,
 
-    This type is used internally to represent an element of any binary container.
+    This type is backed by a bitmap of some kind
     """
-    value, __position__ = None, (0, 0)
+    __position__ = (0, 0)
     def setoffset(self, value, **options):
         (_, suboffset) = self.getposition()
         return self.setposition((value, suboffset))[0]
@@ -206,23 +206,10 @@ class type(ptype.generic):
         return self.setposition((offset, value))
     bofs = boffset = suboffset
 
-    initializedQ = lambda self: self.value is not None
+    value = None
+    def initializedQ(self):
+        return self.value is not None
 
-    def int(self):
-        res = self.__getvalue__()
-        return bitmap.value(res)
-    num = int
-    def bits(self):
-        if self.value is None:
-            Log.info("type.size : {:s} : Unable to get size of pbinary.type, as object is still uninitialized.".format(self.instance()))
-            return 0
-        res = self.__getvalue__()
-        return bitmap.size(res)
-    def blockbits(self):
-        if self.value is None:
-            return 0
-        res = self.__getvalue__()
-        return bitmap.size(res)
     def __getvalue__(self):
         if self.value is None:
             raise ptypes.error.InitializationError(self, '__getvalue__')
@@ -258,6 +245,7 @@ class type(ptype.generic):
             return None
         res = self.__getvalue__()
         return tuple(self.value)
+
     def update(self, value):
         if bitmap.isbitmap(value):
             self.value = bitmap.new(*value)
@@ -275,20 +263,11 @@ class type(ptype.generic):
         return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
 
     def __deserialize_consumer__(self, consumer):
-        try: self.__setvalue__(consumer.consume(self.blockbits()))
-        except (StopIteration, error.ProviderError), e: raise e
-        return self
+        raise NotImplementedError
 
     def new(self, pbinarytype, **attrs):
         res = force(pbinarytype, self)
         return super(type, self).new(res, **attrs)
-
-    def summary(self, **options):
-        res = self.bitmap()
-        return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
-
-    def details(self, **options):
-        return bitmap.string(self.bitmap(), reversed=True)
 
     def contains(self, offset):
         if isinstance(offset, six.integer_types):
@@ -309,7 +288,7 @@ class type(ptype.generic):
         return math.trunc(math.ceil(self.blockbits()/8.0))
 
     def alloc(self, **attrs):
-        '''will initialize a pbinary.type with zeroes'''
+        '''Initialize the binary type with provider.empty()'''
         attrs.setdefault('source', provider.empty())
 
         with utils.assign(self, **attrs):
@@ -331,12 +310,6 @@ class type(ptype.generic):
                 raise error.LoadError(self, exception=e)
         return result
 
-    def properties(self):
-        result = super(type, self).properties()
-        if self.initializedQ() and bitmap.signed(self.bitmap()):
-            result['signed'] = True
-        return result
-
     def repr(self, **options):
         return self.details(**options) if self.initializedQ() else '???'
 
@@ -347,10 +320,52 @@ class type(ptype.generic):
     #    state, self.value, self.position, = state
     #    super(type, self).__setstate__(state)
 
+class integer(type):
+    """An atomic component of any binary array or structure.
+
+    This type is used internally to represent an element of any binary container.
+    """
+
+    def int(self):
+        res = self.__getvalue__()
+        return bitmap.value(res)
+    num = int
+
+    def bits(self):
+        if self.value is None:
+            Log.info("integer.size : {:s} : Refusing to get size of uninitialized type.".format(self.instance()))
+            return 0
+        res = self.__getvalue__()
+        return bitmap.size(res)
+
+    def blockbits(self):
+        if self.value is None:
+            return 0
+        res = self.__getvalue__()
+        return bitmap.size(res)
+
+    def __deserialize_consumer__(self, consumer):
+        try: self.__setvalue__(consumer.consume(self.blockbits()))
+        except (StopIteration, error.ProviderError), e: raise e
+        return self
+
+    def summary(self, **options):
+        res = self.bitmap()
+        return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
+
+    def details(self, **options):
+        return bitmap.string(self.bitmap(), reversed=True)
+
+    def properties(self):
+        result = super(type, self).properties()
+        if self.initializedQ() and bitmap.signed(self.bitmap()):
+            result['signed'] = True
+        return result
+
 # FIXME: mostly copied from pint.enum
-class enum(type):
+class enum(integer):
     '''
-    A pbinary.type for managing constants used when you define a binary type.
+    A pbinary.integer for managing constants used when definiing a binary type.
     i.e. class myinteger(pbinary.enum): width = N
 
     Settable properties:
@@ -407,7 +422,7 @@ class enum(type):
         return
 
     def blockbits(self):
-        return getattr(self, 'width', bitmap.size(self.value))
+        return getattr(self, 'width', 0 if self.value is None else bitmap.size(self.value))
 
     @classmethod
     def byvalue(cls, value, *default):
@@ -688,7 +703,7 @@ class container(type):
         if not isinstance(value, six.integer_types):
             raise error.UserError(self, 'container.__setitem__', message='tried to assign to index {:d} with an unknown type {:s}'.format(index, value.__class__))
 
-        # update a pbinary.type with the provided value
+        # update the element with the provided value
         return res.set(value)
 
 ### generics
@@ -2595,8 +2610,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_type_clamped_64():
-        class v(pbinary.type):
+    def test_pbinary_integer_clamped_64():
+        class v(pbinary.integer):
             def blockbits(self):
                 return 7*4
         x = v().set(0xfaaaaaaa)
@@ -2604,8 +2619,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_type_clamped_sign_65():
-        class v(pbinary.type):
+    def test_pbinary_integer_clamped_sign_65():
+        class v(pbinary.integer):
             signed = True
             def blockbits(self):
                 return 8*4

@@ -286,7 +286,7 @@ def force(t, self, chain=[]):
     chain = chain[:]
     chain.append(t)
 
-    # of type pbinary.type. we insert a partial node into the tree
+    # if type is a pbinary type, we insert a partial node into the tree
     if pbinary.istype(t):
         Log.debug("{:s}.force : {:s} : Implicitly promoting binary type `{:s}` to partial for storing in non-binary container.".format(__name__, self.instance(), t.typename()))
         t = clone(pbinary.partial, _object_=t)

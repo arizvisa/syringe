@@ -40,7 +40,7 @@ class t_packet(pbinary.struct):
 
 ## first bit : positive-fixint or other
 @bit0.define
-class t_positive_fixint(pbinary.type):
+class t_positive_fixint(pbinary.integer):
     type = 0
     def blockbits(self): return 7
     def PackedType(self): return 0b00000000
@@ -85,7 +85,7 @@ class t_fixgroup(pbinary.struct):
 
 ## third bit : str or array/map
 @bit2container.define
-class t_fixstr(pbinary.type):
+class t_fixstr(pbinary.integer):
     type = 1
     def blockbits(self): return 5
     def PackedType(self): return 0b10100000
@@ -105,13 +105,13 @@ class t_2fixcontainer(pbinary.struct):
 
 ## fourth bit: array or map
 @bit3arraymap.define
-class t_fixmap(pbinary.type):
+class t_fixmap(pbinary.integer):
     type = 0
     def blockbits(self): return 4
     def PackedType(self): return 0b10000000
     def PackedValue(self): return self.int()
 @bit3arraymap.define
-class t_fixarray(pbinary.type):
+class t_fixarray(pbinary.integer):
     type = 1
     def blockbits(self): return 4
     def PackedType(self): return 0b10010000
@@ -119,7 +119,7 @@ class t_fixarray(pbinary.type):
 
 ## third bit : negative-fixint or messagetype
 @bit2msgtype.define
-class t_negative_fixint(pbinary.type):
+class t_negative_fixint(pbinary.integer):
     type = 1
     def blockbits(self): return 5
     def PackedType(self): return 0b11100000
@@ -186,7 +186,7 @@ class PackedIntegerHolder(pint.uint_t):
         return '{integer:d} ({integer:+#x})'.format(integer=self.get())
     def set(self, value):
         pkt = self.getparent(packet)
-        leafs = pkt['type'].traverse(edges=lambda s: s.value, filter=lambda s: isinstance(s,pbinary.type) and s.bits() > 1)
+        leafs = pkt['type'].traverse(edges=lambda self: self.value, filter=lambda self: isinstance(self, pbinary.type) and self.bits() > 1)
         res = list(leafs)[-1]
         if res.name() != 'value':
             raise AssertionError
