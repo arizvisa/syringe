@@ -696,10 +696,6 @@ class container(type):
     def commit(self, **attrs):
         raise error.UserError(self, 'container.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
 
-    def append(self, object):
-        '''L.append(object) -- append an element to a pbinary.container and return its index'''
-        return self.__append__(object)
-
     def __append__(self, object):
         current, size = len(self.value), 0 if self.value is None else self.bits()
 
@@ -862,6 +858,10 @@ class _array_generic(container):
         if not self.initialized:
             return self.length
         return len(self.value)
+
+    def append(self, object):
+        '''L.append(object) -- append an element to a pbinary.array and return its index'''
+        return self.__append__(object)
 
     def __iter__(self):
         '''x.__iter__() <==> iter(x)'''
