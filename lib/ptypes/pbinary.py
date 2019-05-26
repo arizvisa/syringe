@@ -758,7 +758,7 @@ class _array_generic(container):
                 elif isinstance(val, type):
                     result.value[idx] = result.new(val, __name__=k)
                 elif isbitmap(val):
-                    result.value[idx] = result.new(type, __name__=k).__setvalue__(val)
+                    result.value[idx] = result.new(integer, __name__=k).__setvalue__(val)
                 else:
                     result.value[idx].__setvalue__(val)
                 continue
@@ -769,7 +769,7 @@ class _array_generic(container):
                 if istype(val) or ptype.isresolveable(val) or isinstance(val, type):
                     result.value[idx] = result.new(val, __name__=str(idx))
                 elif bitmap.isbitmap(val):
-                    result.value[idx] = result.new(type, __name__=str(idx)).__setvalue__(val)
+                    result.value[idx] = result.new(integer, __name__=str(idx)).__setvalue__(val)
                 else:
                     result.value[idx].__setvalue__(val)
                 continue
@@ -899,7 +899,7 @@ class _struct_generic(container):
                 elif isinstance(v, type):
                     result.value[idx] = result.new(v, __name__=n)
                 elif bitmap.isbitmap(v):
-                    result.value[idx] = result.new(type, __name__=n).__setvalue__(v)
+                    result.value[idx] = result.new(integer, __name__=n).__setvalue__(v)
                 else:
                     result.value[idx].__setvalue__(v)
                 continue
