@@ -226,6 +226,12 @@ class type(ptype.generic):
     def __eq__(self, other):
         return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
 
+    def copy(self, **attrs):
+        result = self.new(self.__class__, position=self.getposition())
+        if hasattr(self, '__name__'):
+            attrs.setdefault('__name__', self.__name__)
+        return result.__update__(attrs)
+
     def bitmap(self):
         raise NotImplementedError
 
@@ -381,6 +387,10 @@ class integer(type):
             self.value = bitmap.new(*value)
             return self
         raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
+
+    def copy(self, **attrs):
+        attrs.setdefault('value', self.value[:])
+        return super(integer, self).copy(**attrs)
 
 # FIXME: mostly copied from pint.enum
 class enum(integer):
@@ -603,18 +613,24 @@ class container(type):
         return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
 
     def __setvalue__(self, *value):
-        value, = value
-        if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'container.set', message='Unable to .set() with an unknown type. : {:s}'.format(value.__class__))
+        # If an integer was passed to us
+        if len(value) == 1 and bitmap.isbitmap(value[0]) or isinstance(value[0], six.integer_types):
+            result = value[0] if bitmap.isbitmap(value[0]) else bitmap.new(value[0], self.blockbits())
+            for item in self.value:
+                result, number = bitmap.shift(result, item.bits())
+                item.set(number)
 
-        result = bitmap.new(value, self.blockbits())
-        for e in self.value:
-            result, number = bitmap.shift(result, e.bits())
-            e.set(number)
+            if bitmap.size(result) > 0:
+                raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
+            return self
 
-        if bitmap.size(result) > 0:
-            raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
-        return self
+        # If an iterable was passed to us, then just .set() it to each member
+        elif len(value) > 0:
+            for val, item in zip(value, self.value):
+                item.set(val)
+            return self
+
+        raise error.UserError(self, 'container.set', message='Unable to .set() with an unknown type. : {:s}'.format(value.__class__))
 
     def update(self, value):
         result = value if bitmap.isbitmap(value) else (value, self.blockbits())
@@ -622,9 +638,9 @@ class container(type):
             raise error.UserError(self, 'container.update', message="Unable to change size of bitmap container. : {:d} != {:d}".format(bitmap.size(result), self.blockbits()))
 
         value = self.value if self.initializedQ() else self.a.value
-        for e in value:
-            result, number = bitmap.shift(result, e.bits())
-            e.set(number)
+        for item in value:
+            result, number = bitmap.shift(result, item.bits())
+            item.set(number)
 
         if bitmap.size(result) > 0:
             raise error.AssertionError(self, 'container.update', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
@@ -1153,7 +1169,7 @@ class struct(_struct_generic):
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
-        return self[field]
+        return operator.getitem(self, field)
 
     def __setvalue__(self, *_, **individual):
         result = self
