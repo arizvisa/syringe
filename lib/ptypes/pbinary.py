@@ -764,7 +764,7 @@ class _array_generic(container):
                     result.value[idx] = result.new(val, __name__=k).alloc(**attrs)
                 elif isinstance(val, type):
                     result.value[idx] = result.new(val, __name__=k)
-                elif isbitmap(val):
+                elif bitmap.isbitmap(val):
                     result.value[idx] = result.new(integer, __name__=k).__setvalue__(val)
                 else:
                     result.value[idx].__setvalue__(val)
