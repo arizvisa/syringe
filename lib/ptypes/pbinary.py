@@ -366,15 +366,15 @@ class integer(type):
             if size != self.blockbits():
                 Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
 
-            # check signedness for backwards compatibility
-            smult = (1,-1)[getattr(self, 'signed', False)]
+            # check signedness value by the attribute (for backwards compatibility) or the bitmap size
+            smult = -1 if getattr(self, 'signed', bitmap.signed(value)) else +1
 
             self.value = bitmap.new(bitmap.value(value), size * smult)
             return self
 
         elif isinstance(value, six.integer_types):
-            # backwards compatibility
-            smult = (1,-1)[getattr(self, 'signed', False)]
+            # check signedness value by the attribute (for backwards compatibility) or the value
+            smult = -1 if getattr(self, 'signed', value < 0) else +1
 
             try: _, size = self.value or (0, self.blockbits() * smult)
             except: size = 0
