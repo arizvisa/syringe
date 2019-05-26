@@ -216,13 +216,6 @@ class type(ptype.generic):
     def initializedQ(self):
         return self.value is not None
 
-    def copy(self, **attrs):
-        result = self.new(self.__class__, position=self.getposition())
-        attrs.setdefault('value', self.__getvalue__())
-        if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
-        result.__update__(attrs)
-        return result
-
     def __eq__(self, other):
         return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
 
@@ -913,10 +906,6 @@ class _struct_generic(container):
             self.setposition(self.getposition(), recurse=True)
         return result
 
-    def append(self, object):
-        '''L.append(object) -- append an element to a pbinary.struct and return its index'''
-        return self.__append__(object)
-
     def __append__(self, object):
         current = super(_struct_generic, self).__append__(object)
         self.__fastindex[object.name().lower()] = current
@@ -969,7 +958,7 @@ class _struct_generic(container):
                 elif bitmap.isbitmap(t):
                     typename = 'signed<{:s}>'.format(bitmap.size(t)) if bitmap.signed(t) else 'unsigned<{:s}>'.format(bitmap.size(t))
                 elif isinstance(t, six.integer_types):
-                    typename = 'signed<{:d}>'.format(t) if t<0 else 'unsigned<{:d}>'.format(t)
+                    typename = 'signed<{:d}>'.format(t) if t < 0 else 'unsigned<{:d}>'.format(t)
                 else:
                     typename = 'unknown<{!r}>'.format(t)
 
@@ -1592,7 +1581,8 @@ class flags(struct):
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
-        return bool(self[field] > 0)
+        res = operator.getitem(self, field)
+        return bool(res > 0)
 
 ## binary type conversion/generation
 def new(pb, **attrs):
