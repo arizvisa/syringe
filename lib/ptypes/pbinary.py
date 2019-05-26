@@ -211,6 +211,24 @@ class type(ptype.generic):
         return self.setposition((offset, value))
     bofs = boffset = suboffset
 
+    def size(self):
+        return math.trunc(math.ceil(self.bits()/8.0))
+
+    def blocksize(self):
+        return math.trunc(math.ceil(self.blockbits()/8.0))
+
+    def contains(self, offset):
+        if isinstance(offset, six.integer_types):
+            nmin = self.getoffset()
+            nmax = nmin + self.blocksize()
+            return nmin <= offset < nmax
+
+        offset, sub = offset
+        res = offset * 8 + sub
+        nmin = self.getoffset() * 8 + self.suboffset
+        nmax = nmin + self.blockbits()
+        return nmin <= res < nmax
+
     ## Methods for interacting with the value of a binary type
     value = None
     def initializedQ(self):
@@ -244,24 +262,21 @@ class type(ptype.generic):
         res = force(pbinarytype, self)
         return super(type, self).new(res, **attrs)
 
-    def contains(self, offset):
-        if isinstance(offset, six.integer_types):
-            nmin = self.getoffset()
-            nmax = nmin + self.blocksize()
-            return nmin <= offset < nmax
-
-        offset, sub = offset
-        res = offset * 8 + sub
-        nmin = self.getoffset() * 8 + self.suboffset
-        nmax = nmin + self.blockbits()
-        return nmin <= res < nmax
-
     ## default methods
-    def size(self):
-        return math.trunc(math.ceil(self.bits()/8.0))
+    def cast(self, type, **attrs):
+        if not istype(type):
+            raise error.UserError(self, 'type.cast', message='Unable to cast binary type to a none-binary type. : {:s}'.format(type.typename()))
 
-    def blocksize(self):
-        return math.trunc(math.ceil(self.blockbits()/8.0))
+        source = bitmap.consumer()
+        source.push(self.bitmap())
+
+        target = self.new(type, __name__=self.name(), position=self.getposition(), **attrs)
+        target.value = []
+        try:
+            target.__deserialize_consumer__(source)
+        except StopIteration:
+            Log.warn('type.cast : {:s} : Incomplete cast to {:s}. Target has been left partially initialized.'.format(self.classname(), target.typename()))
+        return target
 
     def alloc(self, **attrs):
         '''Initialize the binary type with provider.empty()'''
@@ -687,21 +702,6 @@ class container(type):
         if self.value is None: self.value = []
         self.value.append(object)
         return current
-
-    def cast(self, container, **attrs):
-        if not iscontainer(container):
-            raise error.UserError(self, 'container.cast', message='Unable to cast binary-type to a none-container. : {:s}'.format(container.typename()))
-
-        source = bitmap.consumer()
-        source.push(self.bitmap())
-
-        target = self.new(container, __name__=self.name(), position=self.getposition(), **attrs)
-        target.value = []
-        try:
-            target.__deserialize_consumer__(source)
-        except StopIteration:
-            Log.warn('container.cast : {:s} : Incomplete cast to {:s}. Target has been left partially initialized.'.format(self.classname(), target.typename()))
-        return target
 
     ## method overloads
     def __iter__(self):
