@@ -304,6 +304,13 @@ class type(ptype.generic):
     def repr(self, **options):
         return self.details(**options) if self.initializedQ() else '???'
 
+    def __getvalue__(self):
+        return self.value[:]
+
+    def __setvalue__(self, value):
+        self.value = value[:]
+        return self
+
     #def __getstate__(self):
     #    return super(type, self).__getstate__(), self.value, self.position,
 
@@ -359,30 +366,33 @@ class integer(type):
         return self.value[:]
 
     def __setvalue__(self, value):
-        # FIXME: clamp bitmaps and integers according to .blockbits()
 
-        if bitmap.isbitmap(value):
-            size = bitmap.size(value)
-            if size != self.blockbits():
-                Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
+        # If an integer was passed to us, then convert it to a bitmap and try again
+        if isinstance(value, six.integer_types):
 
-            # check signedness value by the attribute (for backwards compatibility) or the bitmap size
-            smult = -1 if getattr(self, 'signed', bitmap.signed(value)) else +1
-
-            self.value = bitmap.new(bitmap.value(value), size * smult)
-            return self
-
-        elif isinstance(value, six.integer_types):
             # check signedness value by the attribute (for backwards compatibility) or the value
             smult = -1 if getattr(self, 'signed', value < 0) else +1
 
             try: _, size = self.value or (0, self.blockbits() * smult)
             except: size = 0
 
-            self.value = bitmap.new(value, size)
-            return self
+            res = bitmap.new(value, size)
+            return self.__setvalue__(res)
 
-        raise error.UserError(self, 'type.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
+        # Otherwise, this is a bitmap and we can proceed to assign it
+        if not bitmap.isbitmap(value):
+            raise error.UserError(self, 'integer.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
+
+        # FIXME: clamp bitmaps and integers according to .blockbits()
+        size = bitmap.size(value)
+        if size != self.blockbits():
+            Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
+
+        # check signedness value by the attribute (for backwards compatibility) or the bitmap size
+        smult = -1 if getattr(self, 'signed', bitmap.signed(value)) else +1
+
+        res = bitmap.new(bitmap.value(value), size * smult)
+        return super(integer, self).__setvalue__(res)
 
     def bitmap(self):
         if self.value is None:
@@ -621,18 +631,19 @@ class container(type):
         return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
 
     def __setvalue__(self, *value):
-        # If an integer was passed to us
-        if len(value) == 1 and bitmap.isbitmap(value[0]) or isinstance(value[0], six.integer_types):
+        # If a bitmap or an integer was passed to us, then break it down and assign
+        # to each of our members using the lower-level .__setvalue__() method
+        if len(value) == 1 and (bitmap.isbitmap(value[0]) or isinstance(value[0], six.integer_types)):
             result = value[0] if bitmap.isbitmap(value[0]) else bitmap.new(value[0], self.blockbits())
             for item in self.value:
                 result, number = bitmap.shift(result, item.bits())
-                item.set(number)
+                item.__setvalue__(number)
 
             if bitmap.size(result) > 0:
                 raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
             return self
 
-        # If an iterable was passed to us, then just .set() it to each member
+        # If an iterable was passed to us, then just .set() the value to each member
         elif len(value) > 0:
             for val, item in zip(value, self.value):
                 item.set(val)
