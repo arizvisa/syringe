@@ -286,15 +286,28 @@ def force(t, self, chain=[]):
     chain = chain[:]
     chain.append(t)
 
+    ## First check if we're inserting types into our tree
+
     # if type is a pbinary type, we insert a partial node into the tree
     if pbinary.istype(t):
         Log.debug("{:s}.force : {:s} : Implicitly promoting binary type `{:s}` to partial for storing in non-binary container.".format(__name__, self.instance(), t.typename()))
-        t = clone(pbinary.partial, _object_=t)
+        return clone(pbinary.partial, _object_=t)
+
+    # if type is a straight-up ptype
+    elif istype(t):
         return t
 
-    # of type ptype
-    if istype(t) or builtins.isinstance(t, base):
+    ## Next we'll check instances (for setting and allocating)
+
+    # if type is a pbinary instance
+    if builtins.isinstance(t, pbinary.type):
+        return pbinary.new(t)
+
+    # if type is just a regular ptype instance
+    elif builtins.isinstance(t, base):
         return t
+
+    ## Now we'll try callables and see if it's one of those
 
     # functions
     if builtins.isinstance(t, types.FunctionType):
@@ -302,14 +315,15 @@ def force(t, self, chain=[]):
         return force(res, self, chain)
 
     # bound methods
-    if builtins.isinstance(t, types.MethodType):
+    elif builtins.isinstance(t, types.MethodType):
         return force(t(), self, chain)
 
-    if inspect.isgenerator(t):
+    # generators
+    elif inspect.isgenerator(t):
         return force(six.next(t), self, chain)
 
+    # and lastly iterators (unsupported)
     if False:
-        # and lastly iterators
         if isiterator(t):
             return force(six.next(t), self, chain)
 
