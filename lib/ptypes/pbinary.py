@@ -631,10 +631,14 @@ class container(type):
         return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
 
     def __setvalue__(self, *value):
+        if len(value) > 1:
+            raise error.UserError(self, 'container.set', message="Too many values ({:d}) passed to .set()".format(len(value)))
+        value, = value
+
         # If a bitmap or an integer was passed to us, then break it down and assign
         # to each of our members using the lower-level .__setvalue__() method
-        if len(value) == 1 and (bitmap.isbitmap(value[0]) or isinstance(value[0], six.integer_types)):
-            result = value[0] if bitmap.isbitmap(value[0]) else bitmap.new(value[0], self.blockbits())
+        if (bitmap.isbitmap(value) or isinstance(value, six.integer_types)):
+            result = value if bitmap.isbitmap(value) else bitmap.new(value, self.blockbits())
             for item in self.value:
                 result, number = bitmap.shift(result, item.bits())
                 item.__setvalue__(number)
@@ -643,13 +647,14 @@ class container(type):
                 raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
             return self
 
-        # If an iterable was passed to us, then just .set() the value to each member
-        elif len(value) > 0:
+        # If a list was passed to us, then just .set() the value to each member
+        elif isinstance(value, list):
             for val, item in zip(value, self.value):
                 item.set(val)
             return self
 
-        raise error.UserError(self, 'container.set', message='Unable to .set() with an unknown type. : {:s}'.format(value.__class__))
+        # Otherwise, we'll just fail here because we don't know what to do
+        raise error.UserError(self, 'container.set', message='Unable to apply value with an unsupported type ({:s})'.format(value.__class__.__name__))
 
     def update(self, value):
         result = value if bitmap.isbitmap(value) else (value, self.blockbits())
