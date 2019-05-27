@@ -43,20 +43,20 @@ class u30(_vle):
         if n[1] > 30:
             n = bitmap.shrink(n, n[1] - 30)
         return n[0]
-    __int__ = num = number = int
+    __int__ = int
 
 class u32(_vle):
     def int(self):
         n = self.bitmap()
         return n[0]
-    __int__ = num = number = int
+    __int__ = int
 
 class s32(_vle):
     def int(self):
         n = self.bitmap()
         n, sign = bitmap.shift(n, 1)
         return [1, -1][ sign ] * (n[0]&0x7fffffff)
-    __int__ = num = number = int
+    __int__ = int
 
 ###
 class string_info(as3struct):

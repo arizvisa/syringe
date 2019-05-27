@@ -14,7 +14,7 @@ if False:
 
         def Value(self):
             cls, t = self.__class__, self['Type'].li
-            cons, tag = t['Constructed'], t['Tag'].number()
+            cons, tag = t['Constructed'], t['Tag'].int()
             ctx = self.protocol.get(Context.Class)
             try:
                 res = ctx.lookup((cls, tag))
@@ -37,7 +37,7 @@ if False:
 
         def append(self, value):
             cls, Type = self.__class__, value['Type'].li
-            K, tag = Type['Class'], Type['Tag'].number()
+            K, tag = Type['Class'], Type['Tag'].int()
             index = len(self)
 
             cache = self.Optional.cache

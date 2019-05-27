@@ -83,7 +83,7 @@ class msg_field(ptype.definition):
 
 class as_msg_field_s(pstruct.type):
     def __data(self):
-        t = self['type'].li.num()
+        t = self['type'].li.int()
         return msg_field.lookup(t)
 
     _fields_ = [
