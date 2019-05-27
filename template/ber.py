@@ -1,4 +1,4 @@
-import logging,math
+import logging,math,six
 import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
 
@@ -9,10 +9,37 @@ class IdentifierLong(pbinary.terminatedarray):
             (1, 'continue'),
             (7, 'integer'),
         ]
+
     def isTerminator(self, value):
         return value['continue'] == 0
 
+    def int(self):
+        '''Return the integer from the structure'''
+        return reduce(lambda t, item: (t * 2**7) | item['integer'], self, 0)
+
+    def set(self, *integer, **fields):
+        '''Apply the specified integer to the structure'''
+        if len(integer) == 1 and isinstance(integer[0], six.integer_types):
+            integer, = integer
+
+            # calculate the number of 7-bit pieces for our integer
+            res = math.floor(math.log(integer) / math.log(2**7) + 1)
+            length = fields.pop('length', math.trunc(res))
+
+            # slice the integer into 7-bit pieces. we could use ptypes.bitmap, but
+            # that requires reading documentation and things. so let's avoid that.
+            res = []
+            while integer > 0:
+                res.insert(0, integer & (2**7 - 1))
+                integer >>= 7
+
+            # append any extra zeroes in order to pad the list to the specified length
+            res = [0] * (length - len(res)) + res
+            return self.alloc(length=length).set([[1, n] for n in res[:-1]] + [[0, res[-1]]])
+        return super(IdentifierLong, self).set(*integer, **fields)
+
 class Length(pbinary.struct):
+    '''Indefinite Length (short form) 8.1.3.3'''
     def __value(self):
         return (self['count']*8) if self['form'] else 0
 
@@ -21,10 +48,25 @@ class Length(pbinary.struct):
         (7, 'count'),
         (__value, 'value'),
     ]
+
     def int(self):
-        #assert not self.isIndefinite()
+        '''Return the length from the structure'''
         return self['value'] if self['form'] else self['count']
-    __int__ = num = number = int
+
+    def set(self, *integer, **fields):
+        '''Apply the specified length to the structure'''
+        if len(integer) == 1 and isinstance(integer[0], six.integer_types):
+            integer, = integer
+
+            # if our integer can be fit within 7 bits, then just assign it to 'count'
+            if integer < 2**7:
+                return self.alloc(form=0).set(count=integer)
+
+            # otherwise, figure out how many bytes we need to allocate and then
+            # simply assign the integer to them
+            res = math.floor(math.log(integer) / math.log(2**8) + 1)
+            return self.alloc(form=1, count=math.trunc(res)).set(value=integer)
+        return super(Length, self).set(*integer, **fields)
 
     def isIndefinite(self):
         if not self.initializedQ():
@@ -37,18 +79,25 @@ class Length(pbinary.struct):
 
 class Tag(pbinary.struct):
     def __TagLong(self):
-        return IdentifierLong if self['Tag'] == 0x1f else dyn.clone(IdentifierLong, length=0)
+        return IdentifierLong if self['TagShort'] == 0x1f else dyn.clone(IdentifierLong, length=0)
 
     _fields_ = [
-        (5, 'Tag'),
+        (5, 'TagShort'),
         (__TagLong, 'TagLong'),
     ]
 
     def int(self):
-        if self['Tag'] < 2**5 - 1:
-            return self['Tag']
-        return sum(n['integer'] for n in self['TagLong'])
-    __int__ = num = number = int
+        '''Return the tag number based on the values in our fields'''
+        if self['TagShort'] < 2**5 - 1:
+            return self['TagShort']
+        return self['TagLong'].int()
+
+    def set(self, *integer, **fields):
+        '''Apply the tag number to the structure'''
+        if len(integer) == 1 and isinstance(integer[0], six.integer_types):
+            integer, = integer
+            return self.alloc(TagShort=integer) if integer < 2**5 - 1 else self.alloc(TagShort=2**5 - 1).set(TagLong=integer)
+        return super(Tag, self).set(*integer, **fields)
 
     def summary(self):
         res = self.int()
@@ -138,7 +187,7 @@ class Element(pstruct.type):
 
     _fields_ = [
         (Type, 'Type'),
-        (Length, 'Length'),
+        (Length, 'Length'), # FIXME: Distinguish between definite and indefinite (long and short) forms
         (__Value, 'Value'),
     ]
 
@@ -403,11 +452,11 @@ if __name__ == '__main__':
         res = bitmap.push(res, (38, 7))
         x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
         print x.l
-        print x.number()
+        print x.int()
 
         res = bitmap.zero
         res = bitmap.push(res, (0x81,8))
         res = bitmap.push(res, (0xc9,8))
         x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
         print x.l
-        print x.number()
+        print x.int()
