@@ -1361,6 +1361,28 @@ class partial(ptype.container):
             res, = self.value
             return res
         return None
+
+    @object.setter
+    def object(self, obj):
+
+        # Figure out the attributes we need to copy
+        res = dict(self.attributes)
+
+        # now we'll add our current position, and our parent for the trie
+        list(itertools.starmap(res.__setitem__, (('position', (self.getoffset(), 0)), ('parent', self))))
+
+        # if the user added a custom blocksize, then propagate that too
+        if getattr(self.blocksize, 'im_func', partial.blocksize.im_func) is not partial.blocksize.im_func:
+            res.setdefault('blocksize', self.blocksize)
+
+        # if we're named either by a field or explicitly, then propagate this
+        # name to our attributes as well
+        if getattr(self, '__name__', ''):
+            res.setdefault('__name__', self.__name__)
+
+        # now we can pivot our object using the attributes we determined
+        self.value = [ obj.__update__(**res) ]
+
     o = object
 
     def serialize(self):
@@ -1612,7 +1634,7 @@ def new(pb, **attrs):
     # create a partial type for the specified pbinary instance
     if isinstance(pb, type):
         Log.debug("{:s}.new : Promoting binary type for `{:s}` to a partial type.".format(__name__, pb.typename()))
-        attrs.setdefault('value', pb)
+        attrs.setdefault('object', pb)
         attrs.setdefault('offset', pb.getposition()[0])
         t = ptype.clone(partial, _object_=pb.__class__)
         return t(**attrs)
