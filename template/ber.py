@@ -136,6 +136,10 @@ class Structured(parray.type):
             return dyn.clone(Element, _object_=lambda self, res=dyn.clone(t): res)
         return dyn.clone(Element)
 
+class String(pstr.string):
+    def set(self, value):
+        return self.alloc(length=len(value)).__setvalue__(value)
+
 ### Element structure
 class Protocol(ptype.definition):
     attribute,cache = 'Class',{}
@@ -232,7 +236,7 @@ class BITSTRING(ptype.block):
     type = 0x03
 
 @Universal.define
-class OCTETSTRING(pstr.string):
+class OCTETSTRING(String):
     type = 0x04
     def summary(self):
         return ''.join('{:02X}'.format(ord(_)) for _ in self.serialize())
@@ -350,7 +354,6 @@ class OBJECT_IDENTIFIER(ptype.type):
     ]
     _values_ = dict(_values_)
 
-
 @Universal.define
 class EXTERNAL(ptype.block):
     type = 0x08
@@ -364,7 +367,7 @@ class ENUMERATED(ptype.block):
     type = 0x0a
 
 @Universal.define
-class UTF8String(pstr.string):
+class UTF8String(String):
     type = 0x0c
 
 @Universal.define
@@ -380,19 +383,19 @@ class NumericString(ptype.block):
     type = 0x12
 
 @Universal.define
-class PrintableString(pstr.string):
+class PrintableString(String):
     type = 0x13
 
 @Universal.define
-class T61String(pstr.string):
+class T61String(String):
     type = 0x14
 
 @Universal.define
-class IA5String(pstr.string):
+class IA5String(String):
     type = 0x16
 
 @Universal.define
-class UTCTime(pstr.string):
+class UTCTime(String):
     type = 0x17
 
 @Universal.define
@@ -400,20 +403,21 @@ class VisibleString(ptype.block):
     type = 0x1a
 
 @Universal.define
-class GeneralString(pstr.string):
+class GeneralString(String):
     type = 0x1b
 
 @Universal.define
-class UniversalString(pstr.string):
+class UniversalString(String):
     type = 0x1c
 
 @Universal.define
-class CHARACTER_STRING(pstr.string):
+class CHARACTER_STRING(String):
     type = 0x1d
 
 @Universal.define
-class BMPString(pstr.string):
+class BMPString(String):
     type = 0x1e
+
 ### End of Universal definitions
 
 ### Base structures
