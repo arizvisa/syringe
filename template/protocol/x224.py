@@ -243,11 +243,11 @@ class TPDU(pstruct.type):
         (__parameters, 'parameters'),
     ]
 
-    def alloc(self, **attrs):
-        if 'length' in attrs.viewkeys():
-            return super(TPDU, self).alloc(**attrs)
+    def alloc(self, **fields):
+        if 'length' in fields.viewkeys():
+            return super(TPDU, self).alloc(**fields)
 
-        res = super(TPDU, self).alloc(**attrs)
+        res = super(TPDU, self).alloc(**fields)
         return res.set(length=sum(res[fld].size() for fld in ['type','variable','parameters']))
     
     def summary(self):
@@ -286,11 +286,11 @@ class TPKT(pstruct.type):
         (__userdata, 'data'),
     ]
 
-    def alloc(self, **attrs):
-        if 'length' in attrs.viewkeys():
-            return super(TPKT, self).alloc(**attrs)
+    def alloc(self, **fields):
+        if 'length' in fields.viewkeys():
+            return super(TPKT, self).alloc(**fields)
 
-        res = super(TPKT, self).alloc(**attrs)
+        res = super(TPKT, self).alloc(**fields)
         return res.set(length=sum(res[fld].size() for fld in ['version','reserved','length','pdu','data']))
 
 if __name__ == '__main__':
