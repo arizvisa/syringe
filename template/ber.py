@@ -75,7 +75,7 @@ class Length(pbinary.struct):
 
     def summary(self):
         res = self.int()
-        return '{:d} ({:#x}) -- {:s}'.format(res, res, super(Length,self).summary()) + (' Indefinite' if self.isIndefinite() else '')
+        return '{:d} ({:#x}) -- {:s}'.format(res, res, super(Length, self).summary()) + (' Indefinite' if self.isIndefinite() else '')
 
 class Tag(pbinary.struct):
     def __TagLong(self):
