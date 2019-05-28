@@ -191,6 +191,14 @@ class Element(pstruct.type):
         (__Value, 'Value'),
     ]
 
+    def alloc(self, *args, **fields):
+        if 'Length' in fields or len(args) >= 2:
+            return super(Element, self).alloc(*args, **fields)
+
+        res = super(Element, self).alloc(*args, **fields)
+        res['Length'].set(res['Value'].size())
+        return res
+
 ### Element classes
 @Protocol.define
 class Universal(ptype.definition):
