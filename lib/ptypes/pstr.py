@@ -70,7 +70,7 @@ import itertools,operator,functools
 import codecs
 from six.moves import builtins
 
-from . import ptype,parray,pint,dynamic,utils,error,pstruct,provider,config
+from . import ptype,parray,pint,utils,error,pstruct,provider,config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
@@ -207,7 +207,7 @@ class string(ptype.type):
 
     def __getitem__(self, index):
         '''Return the character at the specified ``index``.'''
-        res = self.cast(dynamic.array(self._object_, len(self)))
+        res = self.cast(ptype.clone(parray.type, _object_=self._object_, length=len(self)))
 
         # handle a slice of glyphs
         if isinstance(index, slice):
@@ -229,7 +229,7 @@ class string(ptype.type):
         '''Replace the character at ``index`` with the character ``value``'''
 
         # convert self into an array we can modify
-        res = self.cast(dynamic.array(self._object_, len(self)))
+        res = self.cast(ptype.clone(parray.type, _object_=self._object_, length=len(self)))
 
         # handle a slice of glyphs
         if isinstance(index, slice):
@@ -268,7 +268,7 @@ class string(ptype.type):
         '''Replaces the contents of ``self`` with the string ``value``.'''
         size, esize = self.blocksize(), self.new(self._object_).a.size()
         glyphs = [res for res in value]
-        t = dynamic.array(self._object_, size / esize)
+        t = ptype.clone(parray.type, _object_=self._object_, length=size / esize)
         result = t(blocksize=lambda:size)
         for element,glyph in zip(result.alloc(), value):
             element.__setvalue__(glyph)
@@ -278,7 +278,7 @@ class string(ptype.type):
 
     def str(self):
         '''Decode the string into the specified encoding type.'''
-        t = dynamic.array(self._object_, len(self))
+        t = ptype.clone(parray.type, _object_=self._object_, length=len(self))
         data = self.cast(t).serialize()
         try:
             res = data.decode(t._object_.encoding.name)
@@ -288,7 +288,7 @@ class string(ptype.type):
 
     def __getvalue__(self):
         '''Try and decode the string into the specified encoding type.'''
-        t = dynamic.array(self._object_, len(self))
+        t = ptype.clone(parray.type, _object_=self._object_, length=len(self))
         data = self.cast(t).serialize()
         try:
             res = data.decode(t._object_.encoding.name)
@@ -348,7 +348,7 @@ class szstring(string):
         if not value.endswith('\x00'.encode(self._object_.encoding.name)):
             value += '\x00'.encode(self._object_.encoding.name)
 
-        t = dynamic.array(self._object_, len(value))
+        t = ptype.clone(parray.type, _object_=self._object_, length=len(value))
         result = t()
         for glyph,element in zip(value, result.alloc()):
             element.__setvalue__(glyph)
