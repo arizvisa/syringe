@@ -270,7 +270,7 @@ class BITSTRING(ptype.block):
 class OCTETSTRING(String):
     type = 0x04
     def summary(self):
-        return ''.join('{:02X}'.format(map(six.byte2int, self.serialize())))
+        return str().join(map('{:02X}'.format, map(six.byte2int, self.serialize())))
 
 @Universal.define
 class NULL(ptype.block):
@@ -305,7 +305,7 @@ class OBJECT_IDENTIFIER(ptype.type):
                 y.insert(0, v)
 
             val.extend([x|0x80 for x in y[:-1]] + [y[-1]])
-        return super(OBJECT_IDENTIFIER, self).set(''.join(map(six.int2byte, val)))
+        return super(OBJECT_IDENTIFIER, self).set(str().join(map(six.int2byte, val)))
 
     def str(self):
         data = map(six.byte2int, self.serialize())
