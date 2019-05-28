@@ -170,24 +170,48 @@ class Element(pstruct.type):
             return dyn.clone(result, **attrs)
         return dyn.clone(result, **attrs)
 
-    def __Value(self):
-        '''use ._object_() to determine the type to use for this element's value'''
+    def __apply_length_type(self, result, length, indefiniteQ=False):
+        '''Apply the specified length to the type specified by variable'''
 
-        # First make a clone of the type that we're supposed to use
-        length, result = self['Length'].li, self._object_()
-
-        # Determine how to assign length
+        # Determine how to assign length to a type
+        # FIXME: These cases should be implicitly defined instead of explicitly
         if issubclass(result, parray.block):
-            result.blocksize = lambda _, cb=length.int(): cb
-        elif length.isIndefinite() and issubclass(result, parray.terminated):
+            result.blocksize = lambda self, cb=length: cb
+        elif indefiniteQ and issubclass(result, parray.terminated):
             # Type['Constructed']
             # Length['Form'] and !Length['Value']
             result.isTerminator = lambda self, value: isinstance(value['Value'], EOC)
         elif ptype.iscontainer(result):
             result = result
         elif ptype.istype(result):
-            result.length = length.int()
+            result.length = length
         return result
+
+    def __apply_length_instance(self, result, length, indefiniteQ=False):
+        '''Apply the specified length to the instance specified by variable'''
+
+        # Determine how to assign length to an already existing instance
+        # FIXME: These cases should be implicitly defined instead of explicitly
+        if isinstance(result, parray.block):
+            result.blocksize = lambda cb=length: cb
+        elif indefiniteQ and issubclass(result, parray.terminated):
+            # Type['Constructed']
+            # Length['Form'] and !Length['Value']
+            result.isTerminator = lambda value: isinstance(value['Value'], EOC)
+        elif isinstance(result, ptype.container):
+            result = result
+        elif isinstance(result, ptype.type):
+            result.length = length
+        return result
+
+    def __Value(self):
+        '''use ._object_() to determine the type to use for this element's value'''
+
+        # First make a clone of the type that we're supposed to use
+        length, result = self['Length'].li, self._object_()
+
+        # Apply our length to the given type
+        return self.__apply_length_type(result, length.int(), length.isIndefinite())
 
     _fields_ = [
         (Type, 'Type'),
@@ -195,12 +219,19 @@ class Element(pstruct.type):
         (__Value, 'Value'),
     ]
 
-    def alloc(self, *args, **fields):
-        if 'Length' in fields or len(args) >= 2:
-            return super(Element, self).alloc(*args, **fields)
+    def alloc(self, **fields):
 
-        res = super(Element, self).alloc(*args, **fields)
+        # If a Value was provided during allocation without the Type, then assign
+        # one from the Universal/Primitive class using whatever its Tag is in .type
+        if hasattr(fields.get('Value', None), 'type'):
+            fields.setdefault('Type', Type().alloc(Class=0, Constructed=0).set(Tag=fields['Value'].type))
+
+        if 'Length' in fields:
+            return super(Element, self).alloc(**fields)
+
+        res = super(Element, self).alloc(**fields)
         res['Length'].set(res['Value'].size())
+        self.__apply_length_instance(res['Value'], res['Value'].size(), res['Length'].isIndefinite())
         return res
 
 ### Element classes
