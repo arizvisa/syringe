@@ -270,7 +270,7 @@ class BITSTRING(ptype.block):
 class OCTETSTRING(String):
     type = 0x04
     def summary(self):
-        return ''.join('{:02X}'.format(ord(_)) for _ in self.serialize())
+        return ''.join('{:02X}'.format(map(six.byte2int, self.serialize())))
 
 @Universal.define
 class NULL(ptype.block):
@@ -305,20 +305,22 @@ class OBJECT_IDENTIFIER(ptype.type):
                 y.insert(0, v)
 
             val.extend([x|0x80 for x in y[:-1]] + [y[-1]])
-        return super(OBJECT_IDENTIFIER, self).set(''.join(map(chr,val)))
+        return super(OBJECT_IDENTIFIER, self).set(''.join(map(six.int2byte, val)))
 
     def str(self):
-        data = map(ord,self.serialize())
-        res = [data[0]/40, data.pop(0)%40]
-        data = iter(data)
-        for n in data:
-            v = bitmap.new(0,0)
-            while n & 0x80:
-                v = bitmap.push(v, (n & 0x7f, 7))
-                n = next(data)
-            v = bitmap.push(v, (n, 7))
-            res.append(bitmap.int(v))
-        return '.'.join(map(str,res))
+        data = map(six.byte2int, self.serialize())
+        if len(data) > 0:
+            res = [data[0] / 40, data.pop(0) % 40]
+            data = iter(data)
+            for n in data:
+                val = bitmap.new(0,0)
+                while n & 0x80:
+                    val = bitmap.push(val, (n & 0x7f, 7))
+                    n = next(data)
+                val = bitmap.push(val, (n, 7))
+                res.append(bitmap.int(val))
+            return '.'.join(map("{:d}".format, res))
+        return '0'
 
     def summary(self):
         oid,data = self.str(),self.serialize().encode('hex')
