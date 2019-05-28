@@ -281,6 +281,10 @@ class OBJECT_IDENTIFIER(ptype.type):
     type = 0x06
 
     def set(self, string):
+        if string in self._values_.viewvalues():
+            res = dict((v, k) for k, v in self._values_.viewitems())
+            return self.set(res[string])
+
         res = map(int, string.split('.'))
         val = [res.pop(0)*40 + res.pop(0)]
         for n in res:
@@ -301,7 +305,7 @@ class OBJECT_IDENTIFIER(ptype.type):
                 y.insert(0, v)
 
             val.extend([x|0x80 for x in y[:-1]] + [y[-1]])
-        return super(OBJECT_IDENTIFIER).set(''.join(map(chr,val)))
+        return super(OBJECT_IDENTIFIER, self).set(''.join(map(chr,val)))
 
     def str(self):
         data = map(ord,self.serialize())
@@ -317,10 +321,10 @@ class OBJECT_IDENTIFIER(ptype.type):
         return '.'.join(map(str,res))
 
     def summary(self):
-        oid,data = self.str(),self.serialize()
+        oid,data = self.str(),self.serialize().encode('hex')
         if oid in self._values_:
-            return '{:s} ({:s}) ({!r})'.format(self._values_[oid],oid,data)
-        return '{:s} ({!r})'.format(oid,data)
+            return '{:s} ({:s}) ({:s})'.format(self._values_[oid],oid,data)
+        return '{:s} ({:s})'.format(oid,data)
 
     # https://support.microsoft.com/en-us/help/287547/object-ids-associated-with-microsoft-cryptography
     _values_ = [
@@ -382,8 +386,10 @@ class OBJECT_IDENTIFIER(ptype.type):
         ('rsaOAEPEncryptionSET', '1.2.840.113549.1.1.6'),
         ('dsa', '1.2.840.10040.4.1'),
         ('dsaWithSha1', '1.2.840.10040.4.3'),
+
+        ('itu-t recommendation t 124 version(0) 1', '0.0.20.124.0.1'),
     ]
-    _values_ = dict(_values_)
+    _values_ = dict((__oid, __name) for __name, __oid in _values_)
 
 @Universal.define
 class EXTERNAL(ptype.block):
