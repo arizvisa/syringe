@@ -1176,9 +1176,9 @@ class struct(_struct_generic):
         '''Used to test the value of the specified field'''
         return operator.getitem(self, field)
 
-    def __setvalue__(self, *_, **individual):
+    def __setvalue__(self, *value, **fields):
         result = self
-        value, = _ or ((),)
+        value, = value or ((),)
 
         def assign((index, value)):
             if istype(value) or ptype.isresolveable(value):
@@ -1193,17 +1193,17 @@ class struct(_struct_generic):
 
         if result.initializedQ():
             if isinstance(value, dict):
-                value = individual.update(value)
+                value = fields.update(value)
 
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'struct.set', message='iterable value to assign with is not of the same length as struct')
                 map(assign, enumerate(value))
 
-            map(assign, ((self.__getindex__(k), v) for k, v in individual.iteritems()) )
+            map(assign, ((self.__getindex__(k), v) for k, v in fields.iteritems()) )
             result.setposition(result.getposition(), recurse=True)
             return result
-        return result.a.__setvalue__(value, **individual)
+        return result.a.__setvalue__(value, **fields)
 
     #def __getstate__(self):
     #    return super(struct, self).__getstate__(), self._fields_,

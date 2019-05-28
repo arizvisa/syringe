@@ -1062,7 +1062,7 @@ class type(base):
         return data
 
     ## set/get
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, value):
         """Set entire type equal to ``value``"""
         if not builtins.isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
