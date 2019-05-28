@@ -320,9 +320,9 @@ class type(_parray_generic):
             raise error.LoadError(self, exception=e)
         raise error.AssertionError(self, 'type.load')
 
-    def __setvalue__(self, *value):
+    def __setvalue__(self, *value, **attrs):
         """Update self with the contents of the first argument in ``value``"""
-        value, = value
+        value = value[0]
         if isinstance(value, dict):
             iterable = value.items()
         elif self.initializedQ() and len(self) == len(value):

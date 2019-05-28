@@ -138,7 +138,7 @@ class type(pint.type):
         res = super(type, self).__getvalue__()
         return '{:f} ({:#x})'.format(self.float(), res)
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         raise error.ImplementationError(self, 'type.__setvalue__')
 
     def __getvalue__(self):
@@ -169,7 +169,7 @@ class float_t(type):
         """round the floating-point number to the specified number of bits"""
         raise error.ImplementationError(self, 'float_t.round')
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         """store /value/ into a binary format"""
         exponentbias = (2**self.components[1])/2 - 1
 
@@ -205,7 +205,7 @@ class float_t(type):
         result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
         result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
 
-        return super(type, self).__setvalue__(result[0])
+        return super(type, self).__setvalue__(result[0], **attrs)
 
     def __getvalue__(self):
         """convert the stored floating-point number into a python native float"""
@@ -258,7 +258,7 @@ class sfixed_t(type):
             return float((value & intm) - (mask&intm+1)) / shift
         return float(value & intm) / shift
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         integral,fraction = math.trunc(value),value-math.trunc(value)
         magnitude = 2**(8*self.length - self.fractional)
         shift = 2**self.fractional
@@ -271,7 +271,7 @@ class sfixed_t(type):
         #integral |= (mask ^ intm)
 
         n = integral + math.trunc(fraction*shift)
-        return super(type, self).__setvalue__(n)
+        return super(type, self).__setvalue__(n, **attrs)
 
 class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.
