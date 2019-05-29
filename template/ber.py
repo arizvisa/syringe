@@ -136,6 +136,22 @@ class Structured(parray.type):
             return dyn.clone(Element, _object_=lambda self, res=dyn.clone(t): res)
         return dyn.clone(Element)
 
+    def alloc(self, *args, **fields):
+        if hasattr(self, '_fields_'):
+            res = []
+            for t, name in self._fields_:
+                if name not in fields:
+                    E = Element().alloc(Value=t)
+                elif isinstance(fields[name], ptype.base):
+                    E = Element().alloc(Value=fields[name])
+                elif ptypes.istype(fields[name]):
+                    E = Element().alloc(Value=fields[name]().a)
+                else:
+                    E = Element().alloc(Value=t().a.set(fields[name]))
+                res.append(E)
+            return super(Structured, self).alloc(res, length=len(res))
+        return super(Structured, self).alloc(*args, **fields)
+
 class String(pstr.string):
     def set(self, value):
         return self.alloc(length=len(value)).__setvalue__(value)
@@ -194,7 +210,7 @@ class Element(pstruct.type):
         # FIXME: These cases should be implicitly defined instead of explicitly
         if isinstance(result, parray.block):
             result.blocksize = lambda cb=length: cb
-        elif indefiniteQ and issubclass(result, parray.terminated):
+        elif indefiniteQ and isinstance(result, parray.terminated):
             # Type['Constructed']
             # Length['Form'] and !Length['Value']
             result.isTerminator = lambda value: isinstance(value['Value'], EOC)
