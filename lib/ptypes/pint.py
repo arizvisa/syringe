@@ -162,7 +162,7 @@ def setbyteorder(endianness):
         return setbyteorder(config.byteorder.littleendian)
     raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
-def bigendian(integral):
+def bigendian(integral, **attrs):
     '''Will convert an integer_t to bigendian form'''
     if not issubclass(integral, type):
         raise error.TypeError(integral, 'bigendian')
@@ -178,10 +178,11 @@ def bigendian(integral):
         if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
         newintegral.__name__ = integral.__name__
         be.setdefault(newintegral, integral)
-        return newintegral
-    return ptype.clone(integral, byteorder=config.byteorder.bigendian)
+        return ptype.clone(newintegral, **attrs) if attrs else newintegral
+    attrs.setdefault('byteorder', config.byteorder.bigendian)
+    return ptype.clone(integral, **attrs)
 
-def littleendian(integral):
+def littleendian(integral, **attrs):
     '''Will convert an integer_t to littleendian form'''
     if not issubclass(integral, type):
         raise error.TypeError(integral, 'littleendian')
@@ -197,8 +198,9 @@ def littleendian(integral):
         if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
         newintegral.__name__ = integral.__name__
         be.setdefault(newintegral, integral)
-        return newintegral
-    return ptype.clone(integral, byteorder=config.byteorder.littleendian)
+        return ptype.clone(newintegral, **attrs) if attrs else newintegral
+    attrs.setdefault('byteorder', config.byteorder.littleendian)
+    return ptype.clone(integral, **attrs)
 
 class type(ptype.type):
     """Provides basic integer-like support
