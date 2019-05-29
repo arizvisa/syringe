@@ -139,15 +139,30 @@ class Structured(parray.type):
     def alloc(self, *args, **fields):
         if hasattr(self, '_fields_'):
             res = []
+
+            # iterate through all of our fields
             for t, name in self._fields_:
+
+                # If no field was specified, then construct the default
                 if name not in fields:
                     E = Element().alloc(Value=t)
+
+                # If an Element instance was specified, then use that
+                elif isinstance(fields[name], Element):
+                    E = fields[name]
+
+                # If a ptype instance was provided, then use that as the Value for an Element
                 elif isinstance(fields[name], ptype.base):
                     E = Element().alloc(Value=fields[name])
+
+                # If a just a ptype was specified, then instantiate it as the Value for an element
                 elif ptypes.istype(fields[name]):
                     E = Element().alloc(Value=fields[name]().a)
+
+                # Otherwise, we just simply assign the field to the Element's Value
                 else:
                     E = Element().alloc(Value=t().a.set(fields[name]))
+
                 res.append(E)
             return super(Structured, self).alloc(res, length=len(res))
         return super(Structured, self).alloc(*args, **fields)
@@ -239,8 +254,10 @@ class Element(pstruct.type):
 
         # If a Value was provided during allocation without the Type, then assign
         # one from the Universal/Primitive class using whatever its Tag is in .type
-        if hasattr(fields.get('Value', None), 'type'):
-            fields.setdefault('Type', Type().alloc(Class=0, Constructed=0).set(Tag=fields['Value'].type))
+        value = fields.get('Value', None)
+        if hasattr(value, 'type'):
+            cons = 1 if (ptypes.istype(value) and issublass(value, Structured)) or isinstance(value, Structured) else 0
+            fields.setdefault('Type', Type().alloc(Class=0, Constructed=cons).set(Tag=fields['Value'].type))
 
         if 'Length' in fields:
             return super(Element, self).alloc(**fields)
