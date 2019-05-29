@@ -12,7 +12,7 @@ class X224Variable(ptype.definition):
 
 @X224Variable.define
 class CR_TPDU(pstruct.type):
-    '''Conection Request'''
+    '''Connection Request'''
     type = 0xe
 
     class _class_option(pbinary.struct):
@@ -201,7 +201,7 @@ class TPDU(pstruct.type):
             width, _values_ = 4, [
                 ('Connection request', 0xe),
                 ('Connection confirm', 0xd),
-                ('Disconenct request', 0x8),
+                ('Disconnect request', 0x8),
                 ('Disconnect confirm', 0xc),
                 ('Data', 0xf),
                 ('Expedited data', 0x1),
