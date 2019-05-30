@@ -138,6 +138,14 @@ class Structured(parray.type):
             return dyn.clone(Element, _object_=lambda self, res=dyn.clone(t): res)
         return dyn.clone(Element)
 
+    def __fields(self):
+        if not hasattr(self, '_fields_'): raise AttributeError('_fields_')
+        for _, name in self._fields_: yield name
+    def fields(self):
+        return [ name for name in self.__fields() ]
+    def iterfields(self):
+        for name in self.__fields(): yield name
+
     def alloc(self, *args, **fields):
         if hasattr(self, '_fields_'):
             res = []
@@ -258,7 +266,7 @@ class Element(pstruct.type):
         # one from the Universal/Primitive class using whatever its Tag is in .type
         value = fields.get('Value', None)
         if hasattr(value, 'type'):
-            cons = 1 if (ptypes.istype(value) and issublass(value, Structured)) or isinstance(value, Structured) else 0
+            cons = 1 if (ptypes.istype(value) and issubclass(value, Structured)) or isinstance(value, Structured) else 0
             fields.setdefault('Type', Type().alloc(Class=0, Constructed=cons).set(Tag=fields['Value'].type))
 
         if 'Length' in fields:
