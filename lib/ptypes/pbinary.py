@@ -362,7 +362,7 @@ class integer(type):
 
     def __getvalue__(self):
         if self.value is None:
-            raise ptypes.error.InitializationError(self, '__getvalue__')
+            raise error.InitializationError(self, '__getvalue__')
         return self.value[:]
 
     def __setvalue__(self, value):
