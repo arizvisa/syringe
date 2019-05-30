@@ -2,6 +2,8 @@ import logging,math,six
 import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
 
+pint.setbyteorder(ptypes.config.byteorder.bigendian)
+
 ### Primitive types for records
 class IdentifierLong(pbinary.terminatedarray):
     class _object_(pbinary.struct):
@@ -495,11 +497,9 @@ class BMPString(String):
 ### Base structures
 class Packet(Element):
     byteorder = ptypes.config.byteorder.bigendian
-    attributes = {'byteorder':byteorder}
 
 class File(Element):
     byteorder = ptypes.config.byteorder.bigendian
-    attributes = {'byteorder':byteorder}
 
 # add an alias for exported objects
 protocol = Protocol
