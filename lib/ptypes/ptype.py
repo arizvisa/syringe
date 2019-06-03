@@ -2033,7 +2033,7 @@ class encoded_t(wrapper_t):
             res = self.cast(block, length=self.blocksize())
 
             # now turn it into the type that the encoded_t expects
-            res = res.cast(self._value_)
+            res = self.cast(self._value_ or res.__class__)
 
             # now decode the block into an object
             dec = self.decode(res, **attrs)
@@ -2051,7 +2051,7 @@ class encoded_t(wrapper_t):
     def dereference(self, **attrs):
         """Dereference object into the target type specified by self._object_"""
         attrs.setdefault('__name__', '*'+self.name())
-        res = self.cast(self._value_)
+        res = self.cast(self._value_ or self.object.__class__)
 
         # ensure decoded object writes to self
         dec = self.decode(res, offset=0, source=provider.proxy(self, autocommit={}))
@@ -2081,12 +2081,8 @@ class encoded_t(wrapper_t):
         # take object, and encode it to an encoded type
         res = self.encode(object, **attrs)
 
-        # if self._value_ is not defined, then assign it from our reference
-        if self._value_ is None:
-            self._value_ = res.__class__
-
         # take encoded type and cast it to self's wrapped type in order to preserve length
-        res = res.cast(self._value_, **attrs)
+        res = res.cast(self._value_ or res.__class__, **attrs)
 
         # now that the length is correct, write it to the wrapper_t
         res.commit(offset=0, source=provider.proxy(self))
