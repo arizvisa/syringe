@@ -1857,15 +1857,16 @@ class wrapper_t(type):
     def object(self):
         '''Returns the instance that is used to back the wrapper_t.'''
 
-        # if use hasn't defined the backing type
-        if self._value_ is None:
-            raise error.UserError(self, 'wrapper_t.object', message='unable to instantiate .object due to wrapper_t._value_ is undefined.')
+        # Check if .__object__ is undefined or of a different type than self._value_
+        if self.__object__ is None or (self._value_ and not builtins.isinstance(self.__object__, self._value_)):
+            if not istype(self._value_):
+                raise error.UserError(self, 'wrapper_t.object', message='unable to instantiate .object due to wrapper_t._value_ is undefined.')
 
-        # if .__object__ is undefined or of a different type than self._value_
-        if self.__object__ is None:     # or (self.__object__.__class__ != self._value_):
-            name = 'wrapped<{:s}>'.format(self._value_.typename() if istype(self._value_) else self._value_.__name__)
-            self.__object__ = self.new(self._value_, __name__=name, offset=0, source=provider.proxy(self))
+            res = self._value_
+            name = 'wrapped<{:s}>'.format(res.typename() if istype(res) else res.__name__)
+            self.__object__ = self.new(res, __name__=name, offset=0, source=provider.proxy(self))
 
+        # Otherwise, we can simply return it
         return self.__object__
 
     @object.setter
@@ -1885,20 +1886,15 @@ class wrapper_t(type):
     o = object
 
     def initializedQ(self):
-        return self._value_ is not None and self.__object__ is not None and self.__object__.initializedQ()
+        return self.__object__ is not None and self.__object__.initializedQ()
 
     def blocksize(self):
-        if self.object.initializedQ():
-            return self.object.blocksize()
-        elif self.value is not None:
-            return len(self.value)
-
-        if self._value_ is None:
-            raise error.InitializationError(self, 'wrapper_t.blocksize')
+        if self.__object__ is not None:
+            return self.__object__.blocksize()
 
         # if blocksize can't be calculated by loading (invalid dereference)
         #   then guess the size by allocating an empty version of the type
-        value = self.new(self._value_, offset=self.getoffset(), source=self.source)
+        value = self.new(self._value_ or undefined, offset=self.getoffset(), source=self.source)
         try:
             res = value.l.blocksize()
         except error.LoadError:
@@ -1924,8 +1920,8 @@ class wrapper_t(type):
         return super(wrapper_t, self).commit(**attrs)
 
     def size(self):
-        if self.object.initializedQ():
-            return self.object.size()
+        if self.__object__ is not None and self.__object__.initializedQ():
+            return self.__object__.size()
         elif self.__value__ is not None:
             return len(self.__value__)
         Log.info("wrapper_t.size : {:s} : Unable to determine size of ptype.wrapper_t, as object is still uninitialized.".format(self.instance()))
@@ -2083,10 +2079,14 @@ class encoded_t(wrapper_t):
         object = self.__hook(object)
 
         # take object, and encode it to an encoded type
-        enc = self.encode(object, **attrs)
+        res = self.encode(object, **attrs)
+
+        # if self._value_ is not defined, then assign it from our reference
+        if self._value_ is None:
+            self._value_ = res.__class__
 
         # take encoded type and cast it to self's wrapped type in order to preserve length
-        res = enc.cast(self._value_, **attrs)
+        res = res.cast(self._value_, **attrs)
 
         # now that the length is correct, write it to the wrapper_t
         res.commit(offset=0, source=provider.proxy(self))
