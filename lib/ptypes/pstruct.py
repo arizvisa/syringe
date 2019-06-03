@@ -184,9 +184,9 @@ class type(_pstruct_generic):
         if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
             return super(type, self).initializedQ()
 
-        res = False
+        res = self.value is not None
         try:
-            res = self.size() >= self.blocksize()
+            res = res and self.size() >= self.blocksize()
         except Exception,e:
             Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, " -> ".join(self.backtrace())), exc_info=True)
         finally:
