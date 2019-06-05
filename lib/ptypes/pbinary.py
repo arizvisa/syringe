@@ -515,7 +515,7 @@ class enum(integer):
 
     def summary(self, **options):
         res = self.bitmap()
-        try: return u"({:s},{:d}) : {:s}({:s})".format(bitmap.hex(res), bitmap.size(res), self.byvalue(bitmap.int(res)), bitmap.hex(res))
+        try: return u"{:s}({:s},{:d})".format(self.byvalue(bitmap.int(res)), bitmap.hex(res), bitmap.size(res))
         except (ValueError,KeyError): pass
         return super(enum, self).summary()
 
@@ -961,7 +961,7 @@ class _struct_generic(container):
         res = self.bitmap()
         items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in map(None, self._fields_, self.value)]
         if items:
-            return u"({:s},{:d}) : {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(items))
+            return u"({:s},{:d}) :> {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(items))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __details_initialized(self):
@@ -1611,11 +1611,11 @@ class flags(struct):
         res, fval = self.bitmap(), lambda v: '?' if v is None else '={:s}'.format(v.str()) if isinstance(v, enum) else '={:d}'.format(v.int()) if v.int() > 1 else ''
         items = [(n, v) for n, v in flags if v is None or isinstance(v, enum) or v.int() > 0]
         if items:
-            return u"({:s},{:d}) : {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(map(str().join, ((n, fval(v)) for n, v in items))))
+            return u"({:s},{:d}) :> {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(map(str().join, ((n, fval(v)) for n, v in items))))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __summary_uninitialized(self):
-        return u"(?,{:d}) {:s}".format(self.blockbits(), ','.join(u"?{:s}".format(name) for t, name in self._fields_))
+        return u"(?,{:d}) :> {:s}".format(self.blockbits(), ','.join(u"?{:s}".format(name) for t, name in self._fields_))
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
