@@ -6,10 +6,11 @@ Config = config.defaults
 __all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','dynamic','dyn','prov'
 
 ## globally changing the ptype provider
-def setsource(prov):
+def setsource(provider):
     '''Sets the default ptype provider to the one specified'''
-    prov.seek,prov.consume,prov.store
-    ptype.source = prov
+    provider.seek,provider.consume,provider.store
+    ptype.source = provider
+    return provider
 
 ## globally changing the byte order
 def setbyteorder(endianness):
