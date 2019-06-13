@@ -383,7 +383,6 @@ class integer(type):
         if not bitmap.isbitmap(value):
             raise error.UserError(self, 'integer.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
 
-        # FIXME: clamp bitmaps and integers according to .blockbits()
         size = bitmap.size(value)
         if size != self.blockbits():
             Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
@@ -410,7 +409,6 @@ class integer(type):
         attrs.setdefault('value', self.value[:])
         return super(integer, self).copy(**attrs)
 
-# FIXME: mostly copied from pint.enum
 class enum(integer):
     '''
     A pbinary.integer for managing constants used when definiing a binary type.
@@ -462,7 +460,8 @@ class enum(integer):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
             continue
 
-        # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
+        # XXX: we could fix all the constants within ._values_ by validating that
+        #      they're within the boundaries of our type
 
         # cache the validation for the class so we don't need to check anything again
         if cls is not enum:
@@ -676,6 +675,11 @@ class container(type):
         if self.value is None:
             raise error.SyntaxError(self, 'container.__deserialize_consumer__', message='caller is responsible for pre-allocating the elements in self.value')
 
+        # FIXME: We should be reading this data at the byte (8bit) boundary and
+        #        so we can probably consume objects that have a hardcoded blocksize
+        #        first as long as it fits within a byte (or the consumer already has
+        #        data cached) so that we can read a field that depends on bits
+        #        that follow it
         position = self.getposition()
         for item in generator:
             self.__append__(item)
@@ -749,10 +753,8 @@ class container(type):
                 self.setposition(self.getposition(), recurse=True)
             return value
 
-        if not isinstance(value, six.integer_types):
-            raise error.UserError(self, 'container.__setitem__', message='tried to assign to index {:d} with an unknown type {:s}'.format(index, value.__class__))
-
-        # update the element with the provided value
+        # try update the element with the provided value, because if
+        # it doesn't work than it should fail
         return res.set(value)
 
 ### generics
@@ -1279,7 +1281,7 @@ class blockarray(terminatedarray):
                 n.setposition(position)
                 value.append(n)
 
-                n.__deserialize_consumer__(consumer)    #
+                n.__deserialize_consumer__(consumer)
                 if self.isTerminator(n):
                     break
 
@@ -1468,20 +1470,19 @@ class partial(ptype.container):
             raise error.LoadError(self, exception=e)
 
     def bits(self):
-        return self.size()*8
+        return self.size() * 8
     def blockbits(self):
-        return self.blocksize()*8
+        return self.blocksize() * 8
 
-    # FIXME: these calculations can be fixed
     def size(self):
         value = self.value[0] if self.initializedQ() else self.__pb_object()
         size = value.bits()
-        res = (size) if (size&7) == 0x0 else ((size+8)&~7)
+        res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
         return res / 8
     def blocksize(self):
         value = self.value[0] if self.initializedQ() else self.__pb_object()
         size = value.blockbits()
-        res = (size) if (size&7) == 0x0 else ((size+8)&~7)
+        res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
         return res / 8
 
     def properties(self):
@@ -2764,6 +2765,22 @@ if __name__ == '__main__':
 
         x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
         if ''.join(map(operator.methodcaller('str'), map(x.item, range(len(x))))) == 'dead':
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_struct_set_dict_70():
+        class s(pbinary.struct):
+            _fields_ = [
+                (1, 'k'),
+                (15, 'n'),
+            ]
+
+        class argh(pbinary.array):
+            length, _object_ = 5, s
+
+        x = pbinary.new(argh).load(source=ptypes.prov.string('\x8f\xff'*5))
+        x.set([dict(k=0)]*5)
+        if all(item['k'] == 0 and item['n'] == 0xfff for item in x):
             raise Success
 
 if __name__ == '__main__':
