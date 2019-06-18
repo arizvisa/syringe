@@ -327,7 +327,7 @@ def force(t, self, chain=[]):
         if isiterator(t):
             return force(six.next(t), self, chain)
 
-    path = ','.join(self.backtrace())
+    path = str().join(map("<{:s}>".format, self.backtrace()))
     raise error.TypeError(self, 'force<ptype>', message='chain={!r} : Refusing request to resolve {!r} to a type that does not inherit from ptype.type : {{{:s}}}'.format(chain, t, path))
 
 def debug(ptype, **attributes):
@@ -1260,11 +1260,11 @@ class container(base):
 
         # log any information about deserialization errors
         if total < expected:
-            path = str().join(self.backtrace())
+            path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.warn('container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise StopIteration(self.name(), total) # XXX
         elif total > expected:
-            path = str().join(self.backtrace())
+            path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.debug('container.__deserialize_block__ : {:s} : Container larger than expected blocksize : {:#x} > {:#x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise error.LoadError(self, consumed=total) # XXX
         return self

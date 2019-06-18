@@ -173,7 +173,7 @@ def force(t, self, chain=[]):
     if inspect.isgenerator(t):
         return force(six.next(t), self, chain)
 
-    path = str().join(self.backtrace())
+    path = str().join(map("<{:s}>".format, self.backtrace()))
     raise error.TypeError(self, 'force<pbinary>', message='chain={!r} : refusing request to resolve {!r} to a type that does not inherit from pbinary.type : {:s}'.format(chain, t, path))
 
 class type(ptype.generic):
@@ -1244,7 +1244,7 @@ class terminatedarray(_array_generic):
         # terminated arrays can also stop when out-of-data
         except StopIteration, e:
             n = self.value[-1]
-            path = str().join(self.backtrace())
+            path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.info("terminatedarray : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), n.typename(), n.getoffset(), path))
 
         return self

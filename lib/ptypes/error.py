@@ -46,7 +46,7 @@ class SerializationError(Base):
     def objectname(self):
         return self.object.__name__ if type(self.object) is type else self.object.shortname()
     def path(self):
-        return '{{{:s}}}'.format(str().join(self.object.backtrace() or []))
+        return '{{{:s}}}'.format(str().join(map("<{:s}>".format, self.object.backtrace() or [])))
     def position(self):
         try: bs = '{:+x}'.format(self.object.blocksize())
         except: bs = '+?'
