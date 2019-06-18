@@ -188,7 +188,7 @@ class type(_pstruct_generic):
         try:
             res = res and self.size() >= self.blocksize()
         except Exception,e:
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, " -> ".join(self.backtrace())), exc_info=True)
+            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, str().join(self.backtrace())), exc_info=True)
         finally:
             return res
 
@@ -230,7 +230,7 @@ class type(_pstruct_generic):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.value, path, n = [], " -> ".join(self.backtrace()), None
+            self.value, path, n = [], str().join(self.backtrace()), None
             self.__fastindex = {}
 
             # check if the user implement a custom blocksize so we can keep track
@@ -254,7 +254,7 @@ class type(_pstruct_generic):
                         except Exception, e: Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
                             if current + bs >= res:
-                                path = " -> ".join(self.backtrace())
+                                path = str().join(self.backtrace())
                                 Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
                         current += bs

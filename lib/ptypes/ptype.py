@@ -677,10 +677,10 @@ class _base_generic(object):
             continue
 
         # otherwise, we can bail since it wasn't found.
-        chain = ';'.join(utils.repr_instance(node.classname(), node.name()) for node in self.traverse(edges=parents))
+        chain = str().join("<{:s}>".format(node.instance()) for node in self.traverse(edges=parents))
         res = (q.typename() if istype(q) else str(q) for q in query)
-        raise error.NotFoundError(self, 'base.getparent', message="match {:s} not found in chain : {:s} : {:s}".format('({:s})'.format(', '.join(res)), self.instance(), chain))
-    def backtrace(self, fn=lambda self:u"<instance {:s} {!r}>".format(self.instance(), self.name())):
+        raise error.NotFoundError(self, 'base.getparent', message="The requested match ({:s}) was not found while traversing from {:s} : {:s}".format(', '.join(res), self.instance(), chain))
+    def backtrace(self, fn=operator.methodcaller('instance')):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
 
@@ -1260,11 +1260,11 @@ class container(base):
 
         # log any information about deserialization errors
         if total < expected:
-            path = ' -> '.join(self.backtrace())
+            path = str().join(self.backtrace())
             Log.warn('container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise StopIteration(self.name(), total) # XXX
         elif total > expected:
-            path = ' -> '.join(self.backtrace())
+            path = str().join(self.backtrace())
             Log.debug('container.__deserialize_block__ : {:s} : Container larger than expected blocksize : {:#x} > {:#x} : {{{:s}}}'.format(self.instance(), total, expected, path))
             raise error.LoadError(self, consumed=total) # XXX
         return self

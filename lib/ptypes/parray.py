@@ -447,7 +447,7 @@ class infinite(uninitialized):
         try:
             n.load(**attrs)
         except (error.LoadError,error.InitializationError),e:
-            path = ' -> '.join(self.backtrace())
+            path = str().join(self.backtrace())
             Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), n.instance(), path))
         return n
 
@@ -507,7 +507,7 @@ class infinite(uninitialized):
 
             except (Exception,error.LoadError),e:
                 if self.parent is not None:
-                    path = ' -> '.join(self.backtrace())
+                    path = str().join(self.backtrace())
                     if len(self.value):
                         Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
                     else:
@@ -550,7 +550,7 @@ class infinite(uninitialized):
 
             except error.LoadError, e:
                 if self.parent is not None:
-                    path = ' -> '.join(self.backtrace())
+                    path = str().join(self.backtrace())
                     Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=e)
             pass
@@ -586,7 +586,7 @@ class block(uninitialized):
 
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
-                        path = ' -> '.join(n.backtrace())
+                        path = str().join(n.backtrace())
                         Log.warn("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), n.instance(), path))
                         self.value.append(n)
 
@@ -606,7 +606,7 @@ class block(uninitialized):
 
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
-                    path = ' -> '.join(n.backtrace())
+                    path = str().join(n.backtrace())
                     Log.debug("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), n.instance(), path))
                     self.value.append(n)
                     break
