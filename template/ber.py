@@ -313,7 +313,8 @@ class BITSTRING(ptype.block):
 class OCTETSTRING(String):
     type = 0x04
     def summary(self):
-        return str().join(map('{:02X}'.format, map(six.byte2int, self.serialize())))
+        res = str().join(map('{:02X}'.format, map(six.byte2int, self.serialize())))
+        return "({:d}) {:s}".format(self.size(), res)
 
 @Universal.define
 class NULL(ptype.block):
