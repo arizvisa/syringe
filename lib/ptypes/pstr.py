@@ -119,7 +119,10 @@ class _char_t(pint.type):
         return super(_char_t, self).__getvalue__()
 
     def summary(self, **options):
-        return u'{!r}'.format(self.serialize())
+        res = self.__getvalue__()
+        escaped = res.encode('unicode_escape')
+        q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
+        return u"{:#0{:d}x} {:s}".format(ord(res), 2 + 2 * self.size(), q + escaped + q)
 
     @classmethod
     def typename(cls):
@@ -280,12 +283,7 @@ class string(ptype.type):
 
     def str(self):
         '''Decode the string into the specified encoding type.'''
-        t = ptype.clone(parray.type, _object_=self._object_, length=len(self))
-        data = self.cast(t).serialize()
-        try:
-            res = data.decode(t._object_.encoding.name)
-        except UnicodeDecodeError, e:
-            raise UnicodeDecodeError(e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, t._object_.encoding.name))
+        res = self.__getvalue__()
         return utils.strdup(res)
 
     def __getvalue__(self):
@@ -297,6 +295,10 @@ class string(ptype.type):
         except UnicodeDecodeError:
             Log.warn('{:s}.str : {:s} : Unable to decode to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename()))
             res = data.decode(t._object_.encoding.name, 'ignore')
+        return res
+
+    def get(self):
+        res = self.__getvalue__()
         return utils.strdup(res)
 
     def load(self, **attrs):
@@ -320,11 +322,13 @@ class string(ptype.type):
 
     def summary(self, **options):
         try:
-            result = u'{!r}'.format(self.str())
+            res = self.__getvalue__()
         except UnicodeDecodeError:
-            Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(),self.instance()))
+            Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(string, self).summary(**options)
-        return result
+        escaped = res.encode('unicode_escape')
+        q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
+        return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
     def repr(self, **options):
         return self.summary(**options) if self.initializedQ() else '???'
@@ -388,6 +392,16 @@ class szstring(string):
 
     def blocksize(self):
         return self.size() if self.initializedQ() else self.load().size()
+
+    def summary(self, **options):
+        try:
+            res = self.__getvalue__()
+        except UnicodeDecodeError:
+            Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
+            return super(szstring, self).summary(**options)
+        escaped = utils.strdup(res).encode('unicode_escape')
+        q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
+        return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
 class wstring(string):
     '''String of wide-characters'''
