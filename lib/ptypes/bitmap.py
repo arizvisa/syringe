@@ -16,13 +16,15 @@ zero = new(0, 0)
 
 def isinteger(v):
     '''Returns true if provided variable is of type int or long'''
-    return isinstance(v, six.integer_types)
+    return builtins.isinstance(v, six.integer_types)
 integerQ = isinteger
 
-def isbitmap(v):
-    '''Returns true if provided variable is a valid bitmap type (i really shouldn't be keeping track of these)'''
-    return isinstance(v, tuple) and len(v) == 2 and all((isinstance(v[0], six.integer_types), isinstance(v[1], six.integer_types)))
-bitmapQ = isbitmap
+def isinstance(v):
+    '''Returns true if provided variable is a valid bitmap type'''
+
+    # We really shouldn't be manually keeping track of types like this...
+    return builtins.isinstance(v, tuple) and len(v) == 2 and all((builtins.isinstance(v[0], six.integer_types), builtins.isinstance(v[1], six.integer_types)))
+bitmapQ = isinstance
 
 def isempty(bitmap):
     '''Returns true if specified bitmap has none of its bits set'''

@@ -157,7 +157,7 @@ def force(t, self, chain=[]):
     # conversions
     if bitmap.isinteger(t):
         return ptype.clone(integer, value=(0, t))
-    if bitmap.isbitmap(t):
+    if bitmap.isinstance(t):
         return ptype.clone(integer, value=t)
 
     # passthrough
@@ -312,7 +312,7 @@ class type(ptype.generic):
             return self
 
         value, = values
-        if not bitmap.isbitmap(value):
+        if not bitmap.isinstance(value):
             raise error.TypeError(self, 'type.set', message='The specified value {!r} is not a bitmap'.format(value.__class__))
 
         self.value = value[:]
@@ -390,7 +390,7 @@ class integer(type):
             return self.__setvalue__(res, **attrs)
 
         # Otherwise, this is a bitmap and we can proceed to assign it
-        if not bitmap.isbitmap(value):
+        if not bitmap.isinstance(value):
             raise error.UserError(self, 'integer.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
 
         size = bitmap.size(value)
@@ -410,7 +410,7 @@ class integer(type):
         return tuple(self.value)
 
     def update(self, value):
-        if bitmap.isbitmap(value):
+        if bitmap.isinstance(value):
             self.value = bitmap.new(*value)
             return self
         raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
@@ -652,8 +652,8 @@ class container(type):
 
         # If a bitmap or an integer was passed to us, then break it down and assign
         # to each of our members using the lower-level .__setvalue__() method
-        if (bitmap.isbitmap(value) or isinstance(value, six.integer_types)):
-            result = value if bitmap.isbitmap(value) else bitmap.new(value, self.blockbits())
+        if (bitmap.isinstance(value) or isinstance(value, six.integer_types)):
+            result = value if bitmap.isinstance(value) else bitmap.new(value, self.blockbits())
             for item in self.value:
                 result, number = bitmap.shift(result, item.bits())
                 item.__setvalue__(number)
@@ -672,7 +672,7 @@ class container(type):
         raise error.UserError(self, 'container.set', message='Unable to apply value with an unsupported type ({:s})'.format(value.__class__.__name__))
 
     def update(self, value):
-        result = value if bitmap.isbitmap(value) else (value, self.blockbits())
+        result = value if bitmap.isinstance(value) else (value, self.blockbits())
         if bitmap.size(result) != self.blockbits():
             raise error.UserError(self, 'container.update', message="Unable to change size of bitmap container. : {:d} != {:d}".format(bitmap.size(result), self.blockbits()))
 
@@ -762,7 +762,7 @@ class container(type):
             raise error.AssertionError(self, 'container.__setitem__', message='Unknown {:s} at index {:d} while trying to assign to it'.format(res.__class__, index))
 
         # if value is a bitmap
-        if bitmap.isbitmap(value):
+        if bitmap.isinstance(value):
             size = res.blockbits()
             res.update(value)
             if bitmap.size(value) != size:
@@ -787,7 +787,7 @@ class _array_generic(container):
                     result.value[idx] = result.new(val, __name__=k).alloc(**attrs)
                 elif isinstance(val, type):
                     result.value[idx] = result.new(val, __name__=k)
-                elif bitmap.isbitmap(val):
+                elif bitmap.isinstance(val):
                     result.value[idx] = result.new(integer, __name__=k).__setvalue__(val)
                 else:
                     result.value[idx].__setvalue__(val)
@@ -798,7 +798,7 @@ class _array_generic(container):
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
                 if istype(val) or ptype.isresolveable(val) or isinstance(val, type):
                     result.value[idx] = result.new(val, __name__=str(idx))
-                elif bitmap.isbitmap(val):
+                elif bitmap.isinstance(val):
                     result.value[idx] = result.new(integer, __name__=str(idx)).__setvalue__(val)
                 else:
                     result.value[idx].__setvalue__(val)
@@ -854,7 +854,7 @@ class _array_generic(container):
     def __element__(self):
         try: count = len(self)
         except TypeError: count = None
-        if bitmap.isbitmap(self._object_):
+        if bitmap.isinstance(self._object_):
             result = ('signed<{:d}>' if bitmap.signed(self._object_) else 'unsigned<{:d}>').format(bitmap.size(self._object_))
         elif istype(self._object_):
             result = self._object_.typename()
@@ -903,7 +903,7 @@ class _array_generic(container):
     def __setitem__(self, index, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         if isinstance(index, slice):
-            val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isbitmap(value)) else iter(value)
+            val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isinstance(value)) else iter(value)
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 super(_array_generic, self).__setitem__(idx, six.next(val))
             return
@@ -932,7 +932,7 @@ class _struct_generic(container):
                     result.value[idx] = result.new(v, __name__=n).a
                 elif isinstance(v, type):
                     result.value[idx] = result.new(v, __name__=n)
-                elif bitmap.isbitmap(v):
+                elif bitmap.isinstance(v):
                     result.value[idx] = result.new(integer, __name__=n).__setvalue__(v)
                 else:
                     result.value[idx].__setvalue__(v)
@@ -989,7 +989,7 @@ class _struct_generic(container):
             if value is None:
                 if istype(t):
                     typename = t.typename()
-                elif bitmap.isbitmap(t):
+                elif bitmap.isinstance(t):
                     typename = 'signed<{:s}>'.format(bitmap.size(t)) if bitmap.signed(t) else 'unsigned<{:s}>'.format(bitmap.size(t))
                 elif isinstance(t, six.integer_types):
                     typename = 'signed<{:d}>'.format(t) if t < 0 else 'unsigned<{:d}>'.format(t)
@@ -1015,7 +1015,7 @@ class _struct_generic(container):
         for t, name in self._fields_:
             if istype(t):
                 s, typename = self.new(t).blockbits(), t.typename()
-            elif bitmap.isbitmap(t):
+            elif bitmap.isinstance(t):
                 s, typename = bitmap.size(s), 'signed' if bitmap.signed(t) else 'unsigned'
             elif isinstance(t, six.integer_types):
                 s, typename = abs(t), 'signed' if t<0 else 'unsigned'
@@ -1157,7 +1157,7 @@ class array(_array_generic):
         res = self._object_
         if isinstance(res, six.integer_types):
             size = res
-        elif bitmap.isbitmap(res):
+        elif bitmap.isinstance(res):
             size = bitmap.size(res)
         elif istype(res):
             size = self.new(res).blockbits()
@@ -1191,7 +1191,7 @@ class struct(_struct_generic):
             return super(struct, self).blockbits()
         # FIXME: self.new(t) can potentially execute a function that it shouldn't
         #        when .blockbits() is called by .__load_littleendian
-        return sum((t if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isbitmap(t) else self.new(t).blockbits()) for t, _ in self._fields_)
+        return sum((t if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_)
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
