@@ -1519,6 +1519,8 @@ class container(base):
                     self.value[idx] = self.new(e, __name__=name).a
                 elif isinstance(e):
                     self.value[idx] = self.new(e, __name__=name)
+                elif builtins.isinstance(e, dict):
+                    value.set(**e)
                 else:
                     value.set(e)
                 continue

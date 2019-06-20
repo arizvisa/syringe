@@ -1189,6 +1189,8 @@ class struct(_struct_generic):
             elif isinstance(value, type):
                 k = result.value[index].__name__
                 result.value[index] = result.new(value, __name__=k)
+            elif isinstance(value, dict):
+                result.value[index].set(**value)
             else:
                 result.value[index].set(value)
             return
@@ -2782,6 +2784,20 @@ if __name__ == '__main__':
         x.set([dict(k=0)]*5)
         if all(item['k'] == 0 and item['n'] == 0xfff for item in x):
             raise Success
+
+    def test_pbinary_struct_postbyte_71():
+        # TODO
+        class s(pbinary.struct):
+            def __type(self):
+                print 'not found', self.value
+                return 4
+            _fields_ = [
+                (__type, 'type'),
+                (4, 'enum'),
+            ]
+
+        x = pbinary.new(s, source=ptypes.prov.string('\x77')).l
+        raise Failure
 
 if __name__ == '__main__':
     import logging

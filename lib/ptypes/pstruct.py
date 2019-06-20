@@ -323,6 +323,8 @@ class type(_pstruct_generic):
                     result.value[idx] = self.new(v, __name__=k).a
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=k)
+                elif isinstance(v, dict):
+                    result.value[idx].set(**v)
                 else:
                     result.value[idx].set(v)
                 continue
