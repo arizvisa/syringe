@@ -236,9 +236,13 @@ class type(ptype.type):
             return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), reversed(self.serialize()), 0)
         raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
-    def __setvalue__(self, integer, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(type, self).__setvalue__(*values, **attrs)
+
+        integer, = values
         if self.byteorder is config.byteorder.bigendian:
-            transform = lambda x: reversed(x)
+            transform = reversed
         elif self.byteorder is config.byteorder.littleendian:
             transform = lambda x: x
         else:
@@ -263,13 +267,6 @@ class uinteger_t(type):
         res = self.int()
         return '{:-#0{:d}x} ({:d})'.format(res, 2+self.blocksize()*2, res)
 
-    def __getvalue__(self):
-        '''Convert integer type into a number'''
-        return super(uinteger_t, self).__getvalue__()
-
-    def __setvalue__(self, integer, **attrs):
-        return super(uinteger_t, self).__setvalue__(integer, **attrs)
-
 class sinteger_t(type):
     '''Provides signed integer support'''
     def summary(self, **options):
@@ -286,7 +283,11 @@ class sinteger_t(type):
             return (signmask-res)*-1
         return res & (signmask-1)
 
-    def __setvalue__(self, integer, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(sinteger_t, self).__setvalue__(*values, **attrs)
+
+        integer, = values
         signmask = int(2**(8*self.blocksize()))
         res = integer & (signmask-1)
         if integer < 0:
@@ -429,10 +430,13 @@ class enum(type):
         except (ValueError,KeyError): pass
         return super(enum, self).summary()
 
-    def __setvalue__(self, value, **attrs):
-        if isinstance(value, six.string_types):
-            value = self.byname(value)
-        return super(enum, self).__setvalue__(value, **attrs)
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(enum, self).__setvalue__(*values, **attrs)
+
+        integer, = values
+        res = self.byname(integer) if isinstance(integer, six.string_types) else integer
+        return super(enum, self).__setvalue__(res, **attrs)
 
     def __getitem__(self, name):
         '''Return True if the enumeration matches the value of the constant specified by name.'''

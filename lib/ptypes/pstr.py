@@ -84,8 +84,12 @@ class _char_t(pint.type):
         res = builtins.unicode('\x00', 'ascii').encode(self.encoding.name)
         self.length = len(res)
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         '''Set the _char_t to the str ``value``.'''
+        if not values:
+            return super(pint.type, self).__setvalue__(*values, **attrs)
+
+        value, = values
         if isinstance(value, builtins.str):
             try: value = builtins.unicode(value, 'ascii')
             except UnicodeDecodeError: return super(pint.type, self).__setvalue__(str(value))
@@ -267,8 +271,13 @@ class string(ptype.type):
             self.append(x)
         return
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         '''Replaces the contents of ``self`` with the string ``value``.'''
+        if not values:
+            return self
+
+        value, = values
+
         size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(self._object_).a.size()
         glyphs = [res for res in value]
 
@@ -344,11 +353,15 @@ class szstring(string):
     def isTerminator(self, value):
         return value.int() == 0
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         """Set the null-terminated string to ``value``.
 
         Resizes the string according to the length of ``value``.
         """
+        if not values:
+            return self
+
+        value, = values
 
         # FIXME: if .isTerminator() is altered for any reason, this won't work.
         if not value.endswith('\x00'.encode(self._object_.encoding.name)):

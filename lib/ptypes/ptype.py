@@ -1062,10 +1062,14 @@ class type(base):
         return data
 
     ## set/get
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         """Set entire type equal to ``value`` if defined."""
+        if not values: return self
+
+        value, = values
         if not builtins.isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
+
         self.value = value[:]
 
         # If there's a length attribute, then make sure to update it with
@@ -1505,10 +1509,10 @@ class container(base):
             yield res
         return
 
-    def __setvalue__(self, *value, **attrs):
-        """Set ``self`` with instances or copies of the types provided in the iterable ``value``.
+    def __setvalue__(self, *items, **attrs):
+        """Set ``self`` with instances or copies of the types provided in the iterable ``items``.
 
-        If uninitialized, this will make a copy of all the instances in ``value`` and update the
+        If uninitialized, this will make a copy of all the instances in ``items`` and update the
         'parent' and 'source' attributes to match. All the offsets will be
         recursively updated.
 
@@ -1516,22 +1520,22 @@ class container(base):
 
         This is an internal function and is not intended to be used outside of ptypes.
         """
-        if self.initializedQ() and len(self.value) == len(value):
-            for idx, (value, e) in enumerate(zip(self.value, value)):
+        if self.initializedQ() and len(self.value) == len(items):
+            for idx, (value, item) in enumerate(zip(self.value, items)):
                 name = getattr(value, '__name__', None)
-                if isresolveable(e) or istype(e):
-                    self.value[idx] = self.new(e, __name__=name).a
-                elif isinstance(e):
-                    self.value[idx] = self.new(e, __name__=name)
-                elif builtins.isinstance(e, dict):
-                    value.set(**e)
+                if isresolveable(item) or istype(item):
+                    self.value[idx] = self.new(item, __name__=name).a
+                elif isinstance(item):
+                    self.value[idx] = self.new(item, __name__=name)
+                elif builtins.isinstance(item, dict):
+                    value.set(**item)
                 else:
-                    value.set(e)
+                    value.set(item)
                 continue
-        elif all(isresolveable(e) or istype(e) or isinstance(e) for e in value):
-            self.value = [ self.new(e) if isinstance(e) else self.new(e).a for e in value ]
+        elif all(isresolveable(item) or istype(item) or isinstance(item) for item in items):
+            self.value = [ self.new(item) if isinstance(item) else self.new(item).a for item in items ]
         else:
-            raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(value))
+            raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(items))
 
         # Re-calculate all our offsets after applying our value iterable
         self.setoffset(self.getoffset(), recurse=True)
@@ -1584,8 +1588,11 @@ class block(type):
         if self.blocksize() > 0:
             return self.details(**options) + '\n'
         return self.summary(**options)
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         """Set entire type equal to ``value``"""
+        if not values:
+            return super(block, self).__setvalue__(*values, **attrs)
+        value, = values
         self.length = len(value)
         return super(block, self).__setvalue__(value, **attrs)
     def __setitem__(self, index, value):
@@ -1919,7 +1926,11 @@ class wrapper_t(type):
     def __getvalue__(self):
         return self.object.get()
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return self
+
+        value, = value
         res = self.object.set(value, **attrs)
         self.object.commit(offset=0, source=provider.proxy(self))
         return self
@@ -2126,7 +2137,11 @@ class pointer_t(encoded_t):
         '''Default pointer value that can return an integer in any byteorder'''
         length, byteorder = Config.integer.size, Config.integer.order
 
-        def __setvalue__(self, offset, **attrs):
+        def __setvalue__(self, *values, **attrs):
+            if not values:
+                return super(pointer_t._value_, self).__setvalue__(*values, **attrs)
+
+            offset, = values
             bs = self.blocksize()
             res = bitmap.new(offset, bs*8)
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
@@ -2245,7 +2260,11 @@ class constant(type):
             self.__doc__ = ''
         return super(constant, self).__init__(**attrs)
 
-    def __setvalue__(self, newdata, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return self
+
+        newdata, = values
         bs, res, data = self.blocksize(), newdata[:], self.__doc__
 
         if (data != res) or (bs != len(res)):

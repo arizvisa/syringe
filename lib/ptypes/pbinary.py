@@ -252,7 +252,7 @@ class type(ptype.generic):
     def __getvalue__(self):
         raise NotImplementedError
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         raise NotImplementedError
 
     def __deserialize_consumer__(self, consumer):
@@ -307,7 +307,14 @@ class type(ptype.generic):
     def __getvalue__(self):
         return self.value[:]
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return self
+
+        value, = values
+        if not bitmap.isbitmap(value):
+            raise error.TypeError(self, 'type.set', message='The specified value {!r} is not a bitmap'.format(value.__class__))
+
         self.value = value[:]
         return self
 
@@ -365,9 +372,12 @@ class integer(type):
             raise error.InitializationError(self, '__getvalue__')
         return self.value[:]
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(integer, self).__setvalue__(*values, **attrs)
 
         # If an integer was passed to us, then convert it to a bitmap and try again
+        value, = values
         if isinstance(value, six.integer_types):
 
             # check signedness value by the attribute (for backwards compatibility) or the value
@@ -524,7 +534,10 @@ class enum(integer):
         except (ValueError,KeyError): pass
         return super(enum, self).details()
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(enum, self).__setvalue__(*values, **attrs)
+        value, = values
         res = self.byname(value) if isinstance(value, six.string_types) else value
         return super(enum, self).__setvalue__(res, **attrs)
 
@@ -630,10 +643,12 @@ class container(type):
     def __getvalue__(self):
         return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
 
-    def __setvalue__(self, *value, **attrs):
-        if len(value) > 1:
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return self
+        elif len(values) > 1:
             raise error.UserError(self, 'container.set', message="Too many values ({:d}) passed to .set()".format(len(value)))
-        value, = value
+        value, = values
 
         # If a bitmap or an integer was passed to us, then break it down and assign
         # to each of our members using the lower-level .__setvalue__() method
@@ -1099,10 +1114,13 @@ class array(_array_generic):
         result.length = self.length
         return result
 
-    def __setvalue__(self, *value, **attrs):
-        value, = value
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return self
+
+        items, = values
         if self.initializedQ():
-            iterable = iter(value) if isinstance(value, (tuple, list)) and len(value) > 0 and isinstance(value[0], tuple) else iter(enumerate(value))
+            iterable = iter(items) if isinstance(items, (tuple, list)) and len(items) > 0 and isinstance(items[0], tuple) else iter(enumerate(items))
             for idx, value in iterable:
                 if istype(value) or ptype.isresolveable(value) or isinstance(value, type):
                     self.value[idx] = self.new(value, __name__=str(idx))
@@ -1113,7 +1131,7 @@ class array(_array_generic):
             return self
 
         self.value = result = []
-        for idx, value in enumerate(value):
+        for idx, value in enumerate(items):
             if istype(value) or ptype.isresolveable(value):
                 res = self.new(value, __name__=str(idx)).a
             elif isinstance(value, type):
@@ -1179,9 +1197,9 @@ class struct(_struct_generic):
         '''Used to test the value of the specified field'''
         return operator.getitem(self, field)
 
-    def __setvalue__(self, *value, **fields):
+    def __setvalue__(self, *values, **fields):
         result = self
-        value, = value or ((),)
+        value, = values or ((),)
 
         def assign((index, value)):
             if istype(value) or ptype.isresolveable(value):
@@ -1202,7 +1220,7 @@ class struct(_struct_generic):
 
             if value:
                 if len(result._fields_) != len(value):
-                    raise error.UserError(result, 'struct.set', message='iterable value to assign with is not of the same length as struct')
+                    raise error.UserError(result, 'struct.set', message='Refusing to assign iterable to instance due to different lengths')
                 map(assign, enumerate(value))
 
             map(assign, ((self.__getindex__(k), v) for k, v in fields.iteritems()) )
@@ -1564,10 +1582,10 @@ class partial(ptype.container):
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__getvalue__')
         return self.object.get()
-    def __setvalue__(self, *args, **kwds):
+    def __setvalue__(self, *values, **attrs):
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__setvalue__')
-        return self.object.set(*args, **kwds)
+        return self.object.set(*values, **attrs)
     def __getattr__(self, name):
         if not self.initializedQ():
             return object.__getattribute__(self, name)

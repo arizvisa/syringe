@@ -304,9 +304,9 @@ class type(_pstruct_generic):
             return '\n'.join(result)
         return u"[{:x}] Empty[]".format(self.getoffset())
 
-    def __setvalue__(self, *value, **fields):
+    def __setvalue__(self, *values, **fields):
         result = self
-        value, = value or ((),)
+        value, = values or ((),)
 
         if result.initializedQ():
             if isinstance(value, dict):

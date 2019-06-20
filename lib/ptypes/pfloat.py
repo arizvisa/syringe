@@ -138,7 +138,7 @@ class type(pint.type):
         res = super(type, self).__getvalue__()
         return '{:f} ({:#x})'.format(self.float(), res)
 
-    def __setvalue__(self, value, **attrs):
+    def __setvalue__(self, *values, **attrs):
         raise error.ImplementationError(self, 'type.__setvalue__')
 
     def __getvalue__(self):
@@ -169,22 +169,26 @@ class float_t(type):
         """round the floating-point number to the specified number of bits"""
         raise error.ImplementationError(self, 'float_t.round')
 
-    def __setvalue__(self, value, **attrs):
-        """store /value/ into a binary format"""
+    def __setvalue__(self, *values, **attrs):
+        """store ``value`` into a binary format"""
+        if not values:
+            return super(type, self).__setvalue__(*values, **attrs)
+
         exponentbias = (2**self.components[1])/2 - 1
+        number, = values
 
         # convert to integrals
-        if math.isnan(value):
+        if math.isnan(number):
             sf, exponent, mantissa = 0, 2**self.components[1] - 1, ~0
-        elif math.isinf(value):
-            sf, exponent, mantissa = 1 if value < 0 else 0, 2**self.components[1] - 1, 0
-        elif value == 0.0 and math.atan2(value, value) < 0.0:
+        elif math.isinf(number):
+            sf, exponent, mantissa = 1 if number < 0 else 0, 2**self.components[1] - 1, 0
+        elif number == 0.0 and math.atan2(number, number) < 0.0:
             sf, exponent, mantissa = 1, 0, 0
-        elif value == 0.0 and math.atan2(value, value) == 0.0:
+        elif number == 0.0 and math.atan2(number, number) == 0.0:
             sf, exponent, mantissa = 0, 0, 0
         else:
             # extract the exponent and mantissa
-            m, e = math.frexp(value)
+            m, e = math.frexp(number)
 
             # grab the sign flag
             s = math.copysign(1.0, m)
@@ -210,8 +214,8 @@ class float_t(type):
     def __getvalue__(self):
         """convert the stored floating-point number into a python native float"""
         exponentbias = (2**self.components[1])/2 - 1
-        value = super(type, self).__getvalue__()
-        res = bitmap.new(value, sum(self.components))
+        integer = super(type, self).__getvalue__()
+        res = bitmap.new(integer, sum(self.components))
 
         # extract components
         res,sign = bitmap.shift(res, self.components[0])
@@ -258,8 +262,12 @@ class sfixed_t(type):
             return float((value & intm) - (mask&intm+1)) / shift
         return float(value & intm) / shift
 
-    def __setvalue__(self, value, **attrs):
-        integral,fraction = math.trunc(value),value-math.trunc(value)
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(type, self).__setvalue__(*values, **attrs)
+
+        number, = values
+        integral, fraction = math.trunc(number), number - math.trunc(number)
         magnitude = 2**(8*self.length - self.fractional)
         shift = 2**self.fractional
 
@@ -270,8 +278,7 @@ class sfixed_t(type):
         integral *= magnitude
         #integral |= (mask ^ intm)
 
-        value = integral + math.trunc(fraction * shift)
-        return super(type, self).__setvalue__(value, **attrs)
+        return super(type, self).__setvalue__(integral + math.trunc(fraction * shift), **attrs)
 
 class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.
