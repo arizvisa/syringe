@@ -1062,13 +1062,17 @@ class type(base):
         return data
 
     ## set/get
-    def __setvalue__(self, value):
-        """Set entire type equal to ``value``"""
+    def __setvalue__(self, value, **attrs):
+        """Set entire type equal to ``value`` if defined."""
         if not builtins.isinstance(value, six.string_types):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
-        res, self.value = self.value, value
+        self.value = value[:]
+
+        # If there's a length attribute, then make sure to update it with
+        # the length of the value that was assigned
         if hasattr(self, 'length'):
             self.length = len(self.value)
+
         return self
 
     def __getvalue__(self):
@@ -1501,7 +1505,7 @@ class container(base):
             yield res
         return
 
-    def __setvalue__(self, *value):
+    def __setvalue__(self, *value, **attrs):
         """Set ``self`` with instances or copies of the types provided in the iterable ``value``.
 
         If uninitialized, this will make a copy of all the instances in ``value`` and update the
@@ -1528,7 +1532,10 @@ class container(base):
             self.value = [ self.new(e) if isinstance(e) else self.new(e).a for e in value ]
         else:
             raise error.AssertionError(self, 'container.set', message='Invalid number or type of elements to assign with : {!r}'.format(value))
+
+        # Re-calculate all our offsets after applying our value iterable
         self.setoffset(self.getoffset(), recurse=True)
+
         return self
 
     def __getvalue__(self):
@@ -1912,8 +1919,8 @@ class wrapper_t(type):
     def __getvalue__(self):
         return self.object.get()
 
-    def __setvalue__(self, value):
-        res = self.object.set(value)
+    def __setvalue__(self, value, **attrs):
+        res = self.object.set(value, **attrs)
         self.object.commit(offset=0, source=provider.proxy(self))
         return self
 
@@ -2119,11 +2126,11 @@ class pointer_t(encoded_t):
         '''Default pointer value that can return an integer in any byteorder'''
         length, byteorder = Config.integer.size, Config.integer.order
 
-        def __setvalue__(self, offset):
+        def __setvalue__(self, offset, **attrs):
             bs = self.blocksize()
             res = bitmap.new(offset, bs*8)
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
-            return super(pointer_t._value_, self).__setvalue__(res)
+            return super(pointer_t._value_, self).__setvalue__(res, **attrs)
 
         def __getvalue__(self):
             if self.value is None:
@@ -2238,17 +2245,13 @@ class constant(type):
             self.__doc__ = ''
         return super(constant, self).__init__(**attrs)
 
-    def __setvalue__(self, string):
-        bs, data = self.blocksize(), self.__doc__
+    def __setvalue__(self, newdata, **attrs):
+        bs, res, data = self.blocksize(), newdata[:], self.__doc__
 
-        if (data != string) or (bs != len(string)):
-            Log.warn('constant.set : {:s} : Data did not match expected value : {!r} != {!r}'.format(self.classname(), string, data))
+        if (data != res) or (bs != len(res)):
+            Log.warn('constant.set : {:s} : Data did not match expected value : {!r} != {!r}'.format(self.classname(), res, data))
 
-        if len(string) < bs:
-            self.value = string + utils.padding.fill(bs - len(string), self.padding)
-            return self
-
-        self.value = string
+        self.value = res + utils.padding.fill(bs - len(res), self.padding) if len(res) < bs else res
         return self
 
     def __deserialize_block__(self, block):

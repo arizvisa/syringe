@@ -84,7 +84,7 @@ class _char_t(pint.type):
         res = builtins.unicode('\x00', 'ascii').encode(self.encoding.name)
         self.length = len(res)
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         '''Set the _char_t to the str ``value``.'''
         if isinstance(value, builtins.str):
             try: value = builtins.unicode(value, 'ascii')
@@ -94,7 +94,7 @@ class _char_t(pint.type):
         else:
             raise ValueError(self, '_char_t.set', 'User tried to set a value of an incorrect type : {:s}'.format(value.__class__))
         res = value.encode(self.encoding.name)
-        return super(pint.type, self).__setvalue__(res)
+        return super(pint.type, self).__setvalue__(res, **attrs)
 
     def str(self):
         '''Try to decode the _char_t to a character.'''
@@ -267,7 +267,7 @@ class string(ptype.type):
             self.append(x)
         return
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         '''Replaces the contents of ``self`` with the string ``value``.'''
         size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(self._object_).a.size()
         glyphs = [res for res in value]
@@ -279,7 +279,7 @@ class string(ptype.type):
             if element is None: break
             element.__setvalue__(glyph or '\x00')
 
-        return self.load(offset=0, source=provider.proxy(result), blocksize=lambda cb=result.blocksize(): cb)
+        return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
 
     def str(self):
         '''Decode the string into the specified encoding type.'''
@@ -344,7 +344,7 @@ class szstring(string):
     def isTerminator(self, value):
         return value.int() == 0
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         """Set the null-terminated string to ``value``.
 
         Resizes the string according to the length of ``value``.

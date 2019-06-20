@@ -252,7 +252,7 @@ class type(ptype.generic):
     def __getvalue__(self):
         raise NotImplementedError
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         raise NotImplementedError
 
     def __deserialize_consumer__(self, consumer):
@@ -307,7 +307,7 @@ class type(ptype.generic):
     def __getvalue__(self):
         return self.value[:]
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
         self.value = value[:]
         return self
 
@@ -365,7 +365,7 @@ class integer(type):
             raise error.InitializationError(self, '__getvalue__')
         return self.value[:]
 
-    def __setvalue__(self, value):
+    def __setvalue__(self, value, **attrs):
 
         # If an integer was passed to us, then convert it to a bitmap and try again
         if isinstance(value, six.integer_types):
@@ -377,7 +377,7 @@ class integer(type):
             except: size = 0
 
             res = bitmap.new(value, size)
-            return self.__setvalue__(res)
+            return self.__setvalue__(res, **attrs)
 
         # Otherwise, this is a bitmap and we can proceed to assign it
         if not bitmap.isbitmap(value):
@@ -391,7 +391,7 @@ class integer(type):
         smult = -1 if getattr(self, 'signed', bitmap.signed(value)) else +1
 
         res = bitmap.new(bitmap.value(value), size * smult)
-        return super(integer, self).__setvalue__(res)
+        return super(integer, self).__setvalue__(res, **attrs)
 
     def bitmap(self):
         if self.value is None:
@@ -524,8 +524,9 @@ class enum(integer):
         except (ValueError,KeyError): pass
         return super(enum, self).details()
 
-    def __setvalue__(self, value):
-        return super(enum, self).__setvalue__(self.byname(value) if isinstance(value, six.string_types) else value)
+    def __setvalue__(self, value, **attrs):
+        res = self.byname(value) if isinstance(value, six.string_types) else value
+        return super(enum, self).__setvalue__(res, **attrs)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
@@ -629,7 +630,7 @@ class container(type):
     def __getvalue__(self):
         return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
 
-    def __setvalue__(self, *value):
+    def __setvalue__(self, *value, **attrs):
         if len(value) > 1:
             raise error.UserError(self, 'container.set', message="Too many values ({:d}) passed to .set()".format(len(value)))
         value, = value
@@ -1098,7 +1099,7 @@ class array(_array_generic):
         result.length = self.length
         return result
 
-    def __setvalue__(self, *value):
+    def __setvalue__(self, *value, **attrs):
         value, = value
         if self.initializedQ():
             iterable = iter(value) if isinstance(value, (tuple, list)) and len(value) > 0 and isinstance(value[0], tuple) else iter(enumerate(value))
