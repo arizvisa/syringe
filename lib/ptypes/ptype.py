@@ -1334,13 +1334,6 @@ class container(base):
         # otherwise, our data should appear correct
         return data
 
-    def alloc(self, **attrs):
-        """Will zero the ptype.container instance with the provided ``attrs``.
-
-        This can be overloaded in order to allocate physical space for the new ptype.
-        """
-        return super(container, self).alloc(**attrs)
-
     def load(self, **attrs):
         """Allocate the current instance with data from the .source attributes"""
         if self.value is None and 'value' not in attrs:
