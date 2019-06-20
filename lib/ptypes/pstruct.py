@@ -197,18 +197,19 @@ class type(_pstruct_generic):
         result._fields_ = self._fields_[:]
         return result
 
-    def alloc(self, __attrs__={}, **fields):
+    def alloc(self, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
-        attrs = __attrs__
-        result = super(type, self).alloc(**attrs)
+        #attrs = __attrs__
+        result = super(type, self).alloc()
         if fields:
             for idx,(t,n) in enumerate(self._fields_):
                 if n not in fields:
-                    if ptype.isresolveable(t): result.value[idx] = self.new(t, __name__=n).alloc(**attrs)
+                    if ptype.isresolveable(t):
+                        result.value[idx] = self.new(t, __name__=n).a
                     continue
                 v = fields[n]
                 if ptype.isresolveable(v) or ptype.istype(v):
-                    result.value[idx] = self.new(v, __name__=n).alloc(**attrs)
+                    result.value[idx] = self.new(v, __name__=n).a
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=n)
                 else:
@@ -306,15 +307,15 @@ class type(_pstruct_generic):
 
     def __setvalue__(self, *values, **fields):
         result = self
-        value, = values or ((),)
 
         if result.initializedQ():
+            value, = values or ((),)
             if isinstance(value, dict):
                 value = fields.update(value)
 
             if value:
                 if len(result._fields_) != len(value):
-                    raise error.UserError(result, 'type.set', message='iterable value to assign with is not of the same length as struct')
+                    raise error.UserError(result, 'type.set', message='Refusing to assign iterable to instance due to differing lengths')
                 result = super(type, result).__setvalue__(*value)
 
             for k,v in fields.iteritems():
@@ -330,7 +331,7 @@ class type(_pstruct_generic):
                 continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
-        return result.a.__setvalue__(value, **fields)
+        return result.a.__setvalue__(*values, **fields)
 
     def __getstate__(self):
         return super(type, self).__getstate__(),self._fields_,

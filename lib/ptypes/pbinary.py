@@ -918,18 +918,18 @@ class _struct_generic(container):
         super(_struct_generic, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
-    def alloc(self, __attrs__={}, **fields):
-        attrs = __attrs__
-        result = super(_struct_generic, self).alloc(**attrs)
+    def alloc(self, **fields):
+        result = super(_struct_generic, self).alloc()
         if fields:
             for idx, (t, n) in enumerate(self._fields_):
                 if n not in fields:
-                    if ptype.isresolveable(t): result.value[idx] = result.new(t, __name__=n).alloc(**attrs)
+                    if ptype.isresolveable(t):
+                        result.value[idx] = result.new(t, __name__=n).a
                     continue
                 v = fields[n]
                 #if any((istype(v), isinstance(v, type), ptype.isresolveable(v))):
                 if istype(v) or ptype.isresolveable(v):
-                    result.value[idx] = result.new(v, __name__=n).alloc(**attrs)
+                    result.value[idx] = result.new(v, __name__=n).a
                 elif isinstance(v, type):
                     result.value[idx] = result.new(v, __name__=n)
                 elif bitmap.isbitmap(v):
