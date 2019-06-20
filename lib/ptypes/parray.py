@@ -326,9 +326,7 @@ class type(_parray_generic):
             return self
 
         value, = values
-        if isinstance(value, dict):
-            iterable = value.items()
-        elif self.initializedQ() and len(self) == len(value):
+        if self.initializedQ() and len(self) == len(value):
             return super(type, self).__setvalue__(*value)
         else:
             iterable = enumerate(value)
@@ -340,7 +338,7 @@ class type(_parray_generic):
             elif isinstance(ivalue, ptype.generic):
                 res = ivalue
             else:
-                res = self.new(self._object_, __name__=str(idx)).a
+                res = self.new(self._object_, __name__=str(idx)).a.set(ivalue)
             self.value.append(res)
 
         # output a warning if the length is already set to something and the user explicitly changed it to something different.
@@ -1135,6 +1133,16 @@ if __name__ == '__main__':
         if a.initializedQ() and a.serialize() == '':
             raise Success
 
+    @TestCase
+    def test_array_set_array_with_dict():
+        class blah(parray.type):
+            length = 4
+            class _object_(pstruct.type):
+                _fields_ = [(pint.uint32_t, 'a'), (pint.uint32_t, 'b')]
+
+        res = blah().a.set([dict(a=1, b=2), dict(a=3, b=4), dict(a=5), dict(b=6)])
+        if res.get() == ((1, 2), (3, 4), (5, 0), (0, 6)):
+            raise Success
 
 if __name__ == '__main__':
     import logging
