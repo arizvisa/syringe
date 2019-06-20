@@ -241,11 +241,11 @@ class string(ptype.type):
         # handle a slice of glyphs
         if isinstance(index, slice):
             indices = six.moves.range(*index.indices(len(res)))
-            [ res[index].__setvalue__(glyph) for glyph,index in map(None,value,indices) ]
+            [ res[index].set(glyph) for glyph, index in map(None,value,indices) ]
 
         # handle a single glyph
         else:
-            res[index].__setvalue__(value)
+            res[index].set(value)
 
         # now we can re-load ourselves from it
         return self.load(offset=0, source=provider.proxy(res))
@@ -286,7 +286,7 @@ class string(ptype.type):
 
         for element, glyph in map(None, result.alloc(), value):
             if element is None: break
-            element.__setvalue__(glyph or '\x00')
+            element.set(glyph or '\x00')
 
         return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
 
@@ -372,7 +372,7 @@ class szstring(string):
 
         for element, glyph in map(None, result.alloc(), value):
             if element is None or glyph is None: break
-            element.__setvalue__(glyph)
+            element.set(glyph)
 
         return self.load(offset=0, source=provider.proxy(result))
 

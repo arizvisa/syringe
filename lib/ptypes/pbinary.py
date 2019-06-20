@@ -790,7 +790,7 @@ class _array_generic(container):
                 elif bitmap.isinstance(val):
                     result.value[idx] = result.new(integer, __name__=k).__setvalue__(val)
                 else:
-                    result.value[idx].__setvalue__(val)
+                    result.value[idx].set(val)
                 continue
 
         else:
@@ -801,7 +801,7 @@ class _array_generic(container):
                 elif bitmap.isinstance(val):
                     result.value[idx] = result.new(integer, __name__=str(idx)).__setvalue__(val)
                 else:
-                    result.value[idx].__setvalue__(val)
+                    result.value[idx].set(val)
                 continue
 
         result.setposition(result.getposition(), recurse=True)
@@ -934,8 +934,10 @@ class _struct_generic(container):
                     result.value[idx] = result.new(v, __name__=n)
                 elif bitmap.isinstance(v):
                     result.value[idx] = result.new(integer, __name__=n).__setvalue__(v)
+                elif isinstance(v, dict):
+                    result.value[idx].alloc(**v)
                 else:
-                    result.value[idx].__setvalue__(v)
+                    result.value[idx].set(v)
                 continue
             self.setposition(self.getposition(), recurse=True)
         return result

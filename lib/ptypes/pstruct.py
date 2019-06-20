@@ -199,7 +199,6 @@ class type(_pstruct_generic):
 
     def alloc(self, **fields):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
-        #attrs = __attrs__
         result = super(type, self).alloc()
         if fields:
             for idx,(t,n) in enumerate(self._fields_):
@@ -212,6 +211,8 @@ class type(_pstruct_generic):
                     result.value[idx] = self.new(v, __name__=n).a
                 elif isinstance(v, ptype.generic):
                     result.value[idx] = self.new(v, __name__=n)
+                elif isinstance(v, dict):
+                    result.value[idx].alloc(**v)
                 else:
                     result.value[idx].set(v)
                 continue
