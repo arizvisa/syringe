@@ -2,7 +2,7 @@ import logging,math,six
 import ptypes,ptypes.bitmap as bitmap
 from ptypes import *
 
-pint.setbyteorder(ptypes.config.byteorder.bigendian)
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### Primitive types for records
 class IdentifierLong(pbinary.terminatedarray):
