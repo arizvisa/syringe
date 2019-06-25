@@ -2,8 +2,6 @@ import ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
-pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
-
 class TLS_Callbacks(parray.terminated):
     _object_ = uint32
     def isTerminator(self, value):

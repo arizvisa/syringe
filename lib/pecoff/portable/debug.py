@@ -2,8 +2,6 @@ import ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
-pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
-
 class IMAGE_DEBUG_TYPE_(pint.enum, uint32):
     _values_ = [
         ('UNKNOWN', 0),
@@ -131,6 +129,7 @@ class FRAME_(pbinary.enum):
     ]
 
 class FPO_DATA(pstruct.type):
+    @pbinary.littleendian
     class _BitValues(pbinary.struct):
         _fields_ = [
             (8, 'cbProlog'),

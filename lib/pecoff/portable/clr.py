@@ -4,12 +4,11 @@ from ..headers import *
 
 from . import headers
 
-pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
-
 ### DataDirectory entry
 class IMAGE_DATA_DIRECTORY(headers.IMAGE_DATA_DIRECTORY):
     addressing = staticmethod(virtualaddress)
 
+@pbinary.littleendian
 class CORIMAGE_FLAGS_(pbinary.flags):
     _fields_ = [
         (15, 'reserved_0'),
@@ -75,6 +74,7 @@ class MetaDataRoot(pstruct.type):
         res = max((0, cb-total))
         return dyn.block(res)
 
+    @pbinary.littleendian
     class StorageFlags(pbinary.flags):
         _fields_ = [
             (15, 'Reserved'),
@@ -89,7 +89,7 @@ class MetaDataRoot(pstruct.type):
         (pint.uint32_t, 'Length'),
         (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'Version'),
         (dyn.align(4), 'aligned(Version)'),
-        (pbinary.littleendian(StorageFlags), 'Flags'),
+        (StorageFlags, 'Flags'),
         (pint.uint16_t, 'Streams'),
         (__StreamHeaders, 'StreamHeaders'),
         (__StreamData, 'StreamData'),
@@ -257,6 +257,7 @@ class ResourceInfo(pstruct.type):
         return self.new(t, offset=4, source=ptypes.prov.proxy(self)).li
 
 class VtableFixup(pstruct.type):
+    @pbinary.littleendian
     class COR_VTABLE_(pbinary.flags):
         _fields_ = [
             (11, 'UNUSED'),
@@ -429,6 +430,7 @@ class AssemblyHashAlgorithm(pint.enum, pint.uint32_t):
     ]
 
 ### Base types
+@pbinary.bigendian
 class CInt(pbinary.struct):
     '''Compressed Integer'''
     class _next_x(pbinary.struct):
@@ -472,7 +474,6 @@ class CInt(pbinary.struct):
     def summary(self):
         res = self.Get()
         return "{:s} -> {:d} ({:#x})".format(ptypes.bitmap.repr(self.bitmap()), res, res)
-CInt = pbinary.bigendian(CInt)
 
 class rfc4122(pstruct.type):
     class _Data1(pint.bigendian(pint.uint32_t)):
@@ -669,6 +670,7 @@ class Tables(parray.type):
 class HTables(pstruct.type):
     type = "#~"
 
+    @pbinary.littleendian
     class HeapSizes(pbinary.flags):
         _fields_ = [
             (5, 'Unused'),
@@ -685,6 +687,7 @@ class HTables(pstruct.type):
         def iterate(self, crit):
             return (index for index, value in enumerate(reversed(self)) if crit(value))
 
+    @pbinary.littleendian
     class _Valid(BitVector):
         length = 64
         def iterate(self):
@@ -692,6 +695,7 @@ class HTables(pstruct.type):
         def summary(self):
             return ', '.join(map('{:d}'.format, self.iterate()))
 
+    @pbinary.littleendian
     class _Sorted(BitVector):
         length = 64
         def iterate(self):
@@ -716,8 +720,8 @@ class HTables(pstruct.type):
         (pint.uint8_t, 'MinorVersion'),
         (HeapSizes, 'HeapSizes'),
         (pint.uint8_t, 'Reserved'),
-        (pbinary.littleendian(_Valid), 'Valid'),
-        (pbinary.littleendian(_Sorted), 'Sorted'),
+        (_Valid, 'Valid'),
+        (_Sorted, 'Sorted'),
         (_RowLengths, 'Rows'),
         (Tables, 'Tables'),
         (__padding_Tables, 'padding(Tables)'),
