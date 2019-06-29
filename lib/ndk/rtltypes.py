@@ -87,23 +87,3 @@ class _RTL_RELATIVE_NAME(pstruct.type):
         (HANDLE, 'ContainingDirectory'),
         (PVOID, 'CurDirRef'),
     ]
-
-class POOL_TYPE(pint.enum, pint.uint16_t):
-    _values_ = [
-        ('NonPagedPool', 0x0000),
-        ('PagedPool', 0x0001),
-        ('NonPagedPoolMustSucceed', 0x0002),
-        ('DontUseThisType', 0x0003),
-        ('NonPagedPoolCacheAligned', 0x0004),
-        ('PagedPoolCacheAligned', 0x0005),
-        ('NonPagedPoolCacheAlignedMustS', 0x0006),
-        ('MaxPoolType', 0x0007),
-        ('NonPagedPoolSession', 0x0020),
-        ('PagedPoolSession', 0x0021),
-        ('NonPagedPoolMustSucceedSession', 0x0022),
-        ('DontUseThisTypeSession', 0x0023),
-        ('NonPagedPoolCacheAlignedSession', 0x0024),
-        ('PagedPoolCacheAlignedSession', 0x0025),
-        ('NonPagedPoolCacheAlignedMustSSession', 0x0026),
-    ]
-
