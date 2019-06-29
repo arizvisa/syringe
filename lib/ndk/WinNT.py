@@ -177,14 +177,14 @@ _SLIST_ENTRY._object_ = _SLIST_ENTRY
 _SLIST_ENTRY._path_ = ()
 SLIST_ENTRY = _SLIST_ENTRY
 
-class SLIST_HEADER(pstruct.type, versioned):
+class _SLIST_HEADER(pstruct.type, versioned):
     def __Next(self):
         p = getattr(self, '_path_', _SLIST_ENTRY._path_)
         o = getattr(self, '_object_', _SLIST_ENTRY._object_)
         return dyn.clone(_SLIST_ENTRY, _path_=p, _object_=o)
 
     def __init__(self, **attrs):
-        super(SLIST_HEADER, self).__init__(**attrs)
+        super(_SLIST_HEADER, self).__init__(**attrs)
         f = self._fields_ = []
         aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
 
@@ -197,6 +197,8 @@ class SLIST_HEADER(pstruct.type, versioned):
 
     def summary(self):
         return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].int(), self['Sequence'].int())
+
+SLIST_HEADER = _SLIST_HEADER
 
 ### Doubly-linked list
 class _LIST_ENTRY(pstruct.type):
