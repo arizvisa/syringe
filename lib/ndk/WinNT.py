@@ -1,7 +1,9 @@
+import ptypes
 from ptypes import *
 
+from . import sdkddkver
+
 ###
-import sdkddkver
 class versioned(ptype.type):
     '''will update the attrs with the operating systems NTDDI_VERSION'''
     NTDDI_VERSION = sdkddkver.NTDDI_VERSION
@@ -355,8 +357,8 @@ class rfc4122(pstruct.type):
 
     def summary(self, **options):
         if self.initializedQ():
-            return '{{Data1-Data2-Data3-Data4}} {:s}'.format(self.str())
-        return '{{Data1-Data2-Data3-Data4}} {{????????-????-????-????-????????????}}'
+            return self.str()
+        return '{{????????-????-????-????-????????????}}'
 
     def str(self):
         d1 = '{:08x}'.format(self['Data1'].int())
@@ -369,7 +371,7 @@ class rfc4122(pstruct.type):
 
 class GUID(rfc4122):
     _fields_ = [
-        (endian(t),n) for endian,(t,n) in zip((pint.littleendian,pint.littleendian,pint.littleendian,pint.bigendian),rfc4122._fields_)
+        (transformation(t),n) for transformation,(t,n) in zip((pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian), rfc4122._fields_)
     ]
 
 class CLIENT_ID(pstruct.type):

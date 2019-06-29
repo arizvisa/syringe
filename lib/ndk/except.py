@@ -1,4 +1,7 @@
-from WinNT import *
+import ptypes
+from ptypes import *
+
+from .WinNT import *
 
 # from Recon-2012-Skochinsky-Compiler-Internals.pdf
 

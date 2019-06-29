@@ -1,6 +1,7 @@
-from exceptions import Exception
+import functools, itertools, types, builtins, operator, six
+import exceptions
 
-class NdkException(Exception):
+class NdkException(exceptions.Exception):
     '''Base class for exceptions raised by the ndk library'''
     def __init__(self, *args, **kwds):
         super(NdkException,self).__init__(*args)

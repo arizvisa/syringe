@@ -1,9 +1,9 @@
 ### Implement the WIN64 version of this.
+import functools,itertools,types,builtins,operator,six
+import math, logging
 
-import ptypes,sdkddkver,rtltypes
-from WinNT import *
-import itertools,functools,operator,math
-import logging
+import ptypes, sdkddkver, rtltypes
+from .WinNT import *
 
 class HeapException(ptypes.error.RequestError):
     '''Base class for exceptions raised by the heap types'''

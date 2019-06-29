@@ -1,6 +1,8 @@
-from WinNT import *
+import ptypes
 from ptypes import *
-import sdkddkver
+
+from . import sdkddkver
+from .WinNT import *
 
 class KSEMAPHORE(pstruct.type):
     _fields_ = [

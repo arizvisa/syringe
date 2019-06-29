@@ -1,3 +1,4 @@
+import ptypes
 from ptypes import *
 
 ### ntdll.dll!ZwQueryObject

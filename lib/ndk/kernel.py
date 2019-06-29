@@ -1,7 +1,8 @@
 import ptypes
-import umtypes
 from ptypes import *
-from WinNT import *
+
+from . import umtypes
+from .WinNT import *
 
 # FIXME: most of these should be within a file called obtypes.py
 

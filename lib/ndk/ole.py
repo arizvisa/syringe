@@ -1,5 +1,4 @@
-import ptypes,ndk.dtyp
-from ndk.dtyp import CLSID,FILETIME
+import ptypes
 from ptypes import *
 
 ## string primitives

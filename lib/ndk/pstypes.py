@@ -1,8 +1,8 @@
+import ptypes, pecoff
 from ptypes import *
-from WinNT import *
-import ldrtypes,rtltypes,umtypes,Ntddk
-import heaptypes,sdkddkver
-import pecoff
+
+from . import ldrtypes, rtltypes, umtypes, Ntddk, heaptypes, sdkddkver
+from .WinNT import *
 
 class PEB_FREE_BLOCK(pstruct.type): pass
 class PPEB_FREE_BLOCK(P(PEB_FREE_BLOCK)): pass

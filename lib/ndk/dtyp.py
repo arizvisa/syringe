@@ -1,6 +1,7 @@
-import ndk
+import ptypes
 from ptypes import *
-from ndk.WinNT import *
+
+from .WinNT import *
 
 class int8(pint.sint8_t): pass
 class int16(pint.sint16_t): pass
@@ -117,14 +118,14 @@ class EVENT_HEADER(pstruct.type):
         (USHORT, 'EventProperty'),
         (ULONG, 'ThreadId'),
         (ULONG, 'ProcessId'),
-        (ndk.LARGE_INTEGER, 'TimeStamp'),
+        (LARGE_INTEGER, 'TimeStamp'),
         (GUID, 'ProviderId'),
         (EVENT_DESCRIPTOR, 'EventDescriptor'),
         (Time, 'Time'),
         (GUID, 'ActivityId'),
     ]
 
-CLSID = UUID = GUID = ndk.GUID
+CLSID = UUID = GUID
 
 class FILETIME(pstruct.type):
     _fields_ = [

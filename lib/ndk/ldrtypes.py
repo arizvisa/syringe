@@ -1,5 +1,7 @@
-from WinNT import *
-import umtypes,pecoff
+import ptypes, pecoff
+
+from . import umtypes
+from .WinNT import *
 
 class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
     class SectionPointerUnion(dynamic.union):

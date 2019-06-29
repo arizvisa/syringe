@@ -1,4 +1,4 @@
-import sys,logging
+import sys, logging
 
 # service packs
 SP0 = 0x00000000

@@ -1,5 +1,9 @@
-from WinNT import *
 import logging
+
+import ptypes
+from ptypes import *
+
+from .WinNT import *
 
 NT_SUCCESS = lambda Status: ((int(Status)) >= 0)
 NT_INFORMATION = lambda Status: (((int(Status)) >> 30) == 1)
