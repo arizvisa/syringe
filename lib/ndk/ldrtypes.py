@@ -1,7 +1,7 @@
 import ptypes, pecoff
 
 from . import umtypes
-from .dtyp import *
+from .datatypes import *
 
 class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
     class SectionPointerUnion(dynamic.union):

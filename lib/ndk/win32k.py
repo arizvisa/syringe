@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .dtyp import *
+from .datatypes import *
 
 # constants
 MAX_GDI_CELLS = 0x10000

@@ -3,7 +3,7 @@ import logging
 import ptypes
 from ptypes import *
 
-from .dtyp import *
+from .datatypes import *
 
 NT_SUCCESS = lambda Status: ((int(Status)) >= 0)
 NT_INFORMATION = lambda Status: (((int(Status)) >> 30) == 1)

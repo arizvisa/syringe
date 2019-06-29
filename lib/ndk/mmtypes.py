@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .dtyp import *
+from .datatypes import *
 
 class _POOL_TYPE(pbinary.enum):
     _values_ = [

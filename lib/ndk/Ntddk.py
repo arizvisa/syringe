@@ -2,7 +2,7 @@ import ptypes
 from ptypes import *
 
 from . import sdkddkver
-from .dtyp import *
+from .datatypes import *
 
 class KSEMAPHORE(pstruct.type):
     _fields_ = [

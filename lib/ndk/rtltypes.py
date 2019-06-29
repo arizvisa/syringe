@@ -2,7 +2,7 @@ import ptypes
 from ptypes import *
 
 from . import umtypes
-from .dtyp import *
+from .datatypes import *
 
 class _RTL_CRITICAL_SECTION(pstruct.type):
     _fields_ = [
