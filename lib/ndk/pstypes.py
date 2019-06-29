@@ -2,7 +2,7 @@ import ptypes, pecoff
 from ptypes import *
 
 from . import ldrtypes, rtltypes, umtypes, Ntddk, heaptypes, sdkddkver
-from .WinNT import *
+from .dtyp import *
 
 class PEB_FREE_BLOCK(pstruct.type): pass
 class PPEB_FREE_BLOCK(P(PEB_FREE_BLOCK)): pass

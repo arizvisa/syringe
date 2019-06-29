@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .WinNT import *
+from .dtyp import *
 
 # constants
 MAX_GDI_CELLS = 0x10000

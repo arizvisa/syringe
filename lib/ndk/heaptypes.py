@@ -3,7 +3,7 @@ import functools,itertools,types,builtins,operator,six
 import math, logging
 
 import ptypes, sdkddkver, rtltypes
-from .WinNT import *
+from .dtyp import *
 
 class HeapException(ptypes.error.RequestError):
     '''Base class for exceptions raised by the heap types'''

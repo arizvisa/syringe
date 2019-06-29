@@ -7,4 +7,4 @@ from . import mmtypes
 
 import sdkddkver as ver
 
-from .WinNT import *
+from .dtyp import *

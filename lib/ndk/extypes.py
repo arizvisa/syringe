@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .WinNT import *
+from .dtyp import *
 
 class SYSTEM_INFORMATION_CLASS(pint.enum):
     _values_ = [(n,v) for v,n in (

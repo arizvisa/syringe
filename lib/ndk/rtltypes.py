@@ -2,7 +2,7 @@ import ptypes
 from ptypes import *
 
 from . import umtypes
-from .WinNT import *
+from .dtyp import *
 
 class _RTL_CRITICAL_SECTION(pstruct.type):
     _fields_ = [

@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .WinNT import *
+from .dtyp import *
 
 class _RTL_VERIFIER_THUNK_DESCRIPTOR(pstruct.type):
     _fields_ = [

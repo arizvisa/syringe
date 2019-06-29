@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from .WinNT import *
+from .dtyp import *
 
 # from Recon-2012-Skochinsky-Compiler-Internals.pdf
 
