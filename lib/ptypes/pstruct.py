@@ -238,9 +238,16 @@ class type(_pstruct_generic):
             # check if the user implement a custom blocksize so we can keep track
             # of how far to populate our structure or if we don't even need to do
             # anything
+
             # XXX: it might be safer to call .blocksize() and check for InitializationError
             current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
             if current is not None and self.blocksize() <= 0:
+                offset = self.getoffset()
+
+                # Populate the structure with undefined fields so that things are still
+                # somewhat initialized...
+                for i, (t, name) in enumerate(self._fields_):
+                    self.__append_type(offset, ptype.undefined, name)
                 return super(type, self).load()
 
             try:
