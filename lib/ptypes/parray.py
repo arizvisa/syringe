@@ -587,7 +587,7 @@ class block(uninitialized):
 
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
-                        path = str().join("<{:s}>".format, n.backtrace())
+                        path = str().join(map("<{:s}>".format, n.backtrace()))
                         Log.warn("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), n.instance(), path))
                         self.value.append(n)
 
