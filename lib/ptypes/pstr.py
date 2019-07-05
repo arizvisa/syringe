@@ -420,7 +420,7 @@ class wstring(string):
     '''String of wide-characters'''
     _object_ = wchar_t
 
-class szwstring(szstring):
+class szwstring(szstring, wstring):
     '''Standard null-terminated string of wide-characters'''
     _object_ = wchar_t
 
