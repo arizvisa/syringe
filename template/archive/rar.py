@@ -36,11 +36,11 @@ class RARFORMAT(pint.enum):
     def signature(cls, instance):
         data = instance.serialize()
         if data.startswith('\x52\x45\x7e\x5e'):
-            return cls.byName('RARFMT14'),
+            return cls.byname('RARFMT14'),
         elif data.startswith('\x52\x61\x72\x21\x1a\x07'):
             ver = instance[6].int()
-            return cls.byName('RARFMT15') + ver
-        return cls.byName('RARFMT_NONE')
+            return cls.byname('RARFMT15') + ver
+        return cls.byname('RARFMT_NONE')
 
 class HeaderType(pint.enum):
     _values_ = [

@@ -129,7 +129,7 @@ class msg_proto(ptype.definition):
 
 @msg_proto.define
 class as_msg_s(pstruct.type):
-    type = proto_type.byName("AS_MSG")
+    type = proto_type.byname("AS_MSG")
 
     _fields_ = [
         (pint.uint8_t, 'header_sz'),
@@ -152,7 +152,7 @@ class as_msg_s(pstruct.type):
 
 @msg_proto.define
 class as_comp_proto_s(pstruct.type):
-    type = proto_type.byName("AS_MSG_COMPRESSED")
+    type = proto_type.byname("AS_MSG_COMPRESSED")
 
     def __data(self):
         p = self.getparent(as_proto_s)
@@ -166,7 +166,7 @@ class as_comp_proto_s(pstruct.type):
 
 @msg_proto.define
 class as_sec_msg_s(pstruct.type):
-    type = proto_type.byName("SECURITY")
+    type = proto_type.byname("SECURITY")
 
     _fields_ = [
         (pint.uint8_t, 'scheme'),
