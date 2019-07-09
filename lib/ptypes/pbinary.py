@@ -492,7 +492,6 @@ class enum(integer):
         except StopIteration:
             if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byvalue', value)
-    byValue = byvalue
 
     @classmethod
     def byname(cls, name, *default):
@@ -505,7 +504,6 @@ class enum(integer):
         except StopIteration:
             if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byname', name)
-    byName = byname
 
     def __getattr__(self, name):
         # if getattr fails, then assume the user wants the value of

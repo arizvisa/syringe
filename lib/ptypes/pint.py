@@ -394,7 +394,6 @@ class enum(type):
         except StopIteration:
             if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byvalue', value)
-    byValue = byvalue
 
     @classmethod
     def byname(cls, name, *default):
@@ -407,7 +406,6 @@ class enum(type):
         except StopIteration:
             if default: return six.next(iter(default))
         raise KeyError(cls, 'enum.byname', name)
-    byName = byname
 
     def __getattr__(self, name):
         # if getattr fails, then assume the user wants the value of
@@ -446,7 +444,7 @@ class enum(type):
     @classmethod
     def enumerations(cls):
         '''Return all values in enumeration as a set.'''
-        return {v : k for k, v in cls._values_}
+        return {v for k, v in cls._values_}
 
     @classmethod
     def mapping(cls):
