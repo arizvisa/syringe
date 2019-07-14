@@ -1,6 +1,7 @@
 import ptypes
 from ptypes import *
 
+from . import extypes
 from .datatypes import *
 
 class STANDARD_RIGHTS_(pbinary.flags):
@@ -255,6 +256,90 @@ class _SECURITY_DESCRIPTOR(pstruct.type):
         # XXX: These are conditional depending on the SE_*_PRESENT flags in the Control field being set
         (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_ACL), 'Sacl'),
         (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_ACL), 'Dacl'),
+    ]
+
+class TOKEN_SOURCE(pstruct.type):
+    TOKEN_SOURCE_LENGTH = 8
+    _fields_ = [
+        (dyn.clone(pstr.string, length=TOKEN_SOURCE_LENGTH), 'SourceName'),
+        (LUID, 'SourceIdentifier'),
+    ]
+
+class _SEP_AUDIT_POLICY_CATEGORIES(pbinary.struct):
+    _fields_ = [
+        (4, 'System'),
+        (4, 'Logon'),
+        (4, 'ObjectAccess'),
+        (4, 'PrivilegeUse'),
+        (4, 'DetailedTracking'),
+        (4, 'PolicyChange'),
+        (4, 'AccountManagement'),
+        (4, 'DirectoryServiceAccess'),
+        (4, 'AccountLogon'),
+    ]
+
+class SEP_AUDIT_POLICY(ULONGLONG):
+    pass
+
+class TOKEN_TYPE(pint.enum, ULONG):
+    _values_ = [
+        ('TokenPrimary', 1),
+        ('TokenImpersonation', 2),
+    ]
+
+class _SID_AND_ATTRIBUTES(pstruct.type):
+    _fields_ = [
+        (P(_SID), 'Sid'),
+        (ULONG, 'Attributes'),
+    ]
+
+class _LUID_AND_ATTRIBUTES(pstruct.type):
+    _fields_ = [
+        (LUID, 'Luid'),
+        (ULONG, 'Attributes'),
+    ]
+
+class SECURITY_IMPERSONATION_LEVEL(pint.enum, ULONG):
+    _fields_ = [
+        ('SecurityAnonymous', 0),
+        ('SecurityIdentification', 1),
+        ('SecurityImpersonation', 2),
+        ('SecurityDelegation', 3),
+    ]
+
+class _TOKEN(pstruct.type):
+    _fields_ = [
+        (TOKEN_SOURCE, 'TokenSource'),
+        (LUID, 'TokenId'),
+        (LUID, 'AuthenticationId'),
+        (LUID, 'ParentTokenId'),
+        (LARGE_INTEGER, 'ExpirationTime'),
+        (P(extypes._ERESOURCE), 'TokenLock'),
+        (lambda self: dyn.block(8 - self['TokenLock'].li.size()), 'padding(TokenLock)'),
+        (SEP_AUDIT_POLICY, 'AuditPolicy'),
+        (LUID, 'ModifiedId'),
+        (ULONG, 'SessionId'),
+        (ULONG, 'UserAndGroupCount'),
+        (ULONG, 'RestrictedSidCount'),
+        (ULONG, 'PrivilegeCount'),
+        (ULONG, 'VariableLength'),
+        (ULONG, 'DynamicCharged'),
+        (ULONG, 'DynamicAvailable'),
+        (ULONG, 'DefaultOwnersIndex'),
+        (P(_SID_AND_ATTRIBUTES), 'UserAndGroups'),
+        (P(_SID_AND_ATTRIBUTES), 'RestrictedSids'),
+        (P(_SID), 'PrimaryGroup'),
+        (P(_LUID_AND_ATTRIBUTES), 'Privileges'),
+        (P(ULONG), 'DynamicPart'),
+        (P(_ACL), 'DefaultDacl'),
+        (TOKEN_TYPE, 'TokenType'),
+        (SECURITY_IMPERSONATION_LEVEL, 'ImpersionationLevel'),
+        (ULONG, 'TokenFlags'),
+        (dyn.clone(BOOLEAN, length=4), 'TokenInUse'),
+        (PVOID, 'ProxyData'),
+        (PVOID, 'AuditData'),
+        (LUID, 'OriginatingLogonSession'),
+        (ULONG, 'VariablePart'),
     ]
 
 if __name__ == '__main__':

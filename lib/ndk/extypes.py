@@ -1,6 +1,7 @@
 import ptypes
 from ptypes import *
 
+from . import umtypes, rtltypes
 from .datatypes import *
 
 class SYSTEM_INFORMATION_CLASS(pint.enum):
@@ -183,14 +184,14 @@ class SYSTEM_INFORMATION_CLASS(pint.enum):
     )]
 
 class SYSTEM_MANUFACTURING_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemManufacturingInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemManufacturingInformation')
     _fields_ = [
         (ULONG, 'Options'),
-        (UNICODE_STRING, 'ProfileName'),
+        (umtypes.UNICODE_STRING, 'ProfileName'),
     ]
 
 class SYSTEM_ENERGY_ESTIMATION_CONFIG_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemEnergyEstimationConfigInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemEnergyEstimationConfigInformation')
     _fields_ = [
         (UCHAR, 'Enabled'),
     ]
@@ -199,7 +200,7 @@ class HV_DETAILS(parray.type):
     _object_, length = ULONG, 4
 
 class SYSTEM_HYPERVISOR_DETAIL_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemHypervisorInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemHypervisorInformation')
     _fields_ = [
         (HV_DETAILS, 'HvVendorAndMaxFunction'),
         (HV_DETAILS, 'HypervisorInterface'),
@@ -211,28 +212,28 @@ class SYSTEM_HYPERVISOR_DETAIL_INFORMATION(pstruct.type):
     ] 
 
 class SYSTEM_PROCESSOR_CYCLE_STATS_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemProcessorCycleStatsInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemProcessorCycleStatsInformation')
     _fields_ = [
         (dyn.array(dyn.array(ULONGLONG, 2), 4), 'Cycles'),
     ]
 
 class SYSTEM_KERNEL_DEBUGGER_FLAGS(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemKernelDebuggerFlags')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemKernelDebuggerFlags')
     _fields_ = [
         (UCHAR, 'KernelDebuggerIgnoreUmExceptions'),
     ]
 
 class SYSTEM_CODEINTEGRITYPOLICY_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemCodeIntegrityPolicyInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemCodeIntegrityPolicyInformation')
     _fields_ = [
         (ULONG, 'Options'),
         (ULONG, 'HVCIOptions'),
         (ULONGLONG, 'Version'),
-        (_GUID, 'PolicyGuid'),
+        (GUID, 'PolicyGuid'),
     ]
 
 class SYSTEM_ISOLATED_USER_MODE_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemIsolatedUserModeInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemIsolatedUserModeInformation')
     _fields_ = [
         (UCHAR, 'SecureKernelRunning'),
         (UCHAR, 'HvciEnabled'),
@@ -246,21 +247,21 @@ class SYSTEM_ISOLATED_USER_MODE_INFORMATION(pstruct.type):
     ]
 
 class SYSTEM_SINGLE_MODULE_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemSingleModuleInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemSingleModuleInformation')
     _fields_ = [
         (PVOID, 'TargetModuleAddress'),
-        (RTL_PROCESS_MODULE_INFORMATION, 'ExInfo'),
+        (rtltypes._RTL_PROCESS_MODULE_INFORMATION, 'ExInfo'),
     ]
 
 class SYSTEM_DMA_PROTECTION_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemDmaProtectionInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemDmaProtectionInformation')
     _fields_ = [
         (UCHAR, 'DmaProtectionsAvailable'),
         (UCHAR, 'DmaProtectionsInUse'),
     ]
 
 class SYSTEM_INTERRUPT_CPU_SET_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemInterruptCpuSetsInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemInterruptCpuSetsInformation')
     _fields_ = [
         (ULONG, 'Gsiv'),
         (USHORT, 'Group'),
@@ -268,15 +269,15 @@ class SYSTEM_INTERRUPT_CPU_SET_INFORMATION(pstruct.type):
     ]
 
 class SYSTEM_SECUREBOOT_POLICY_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemSecureBootPolicyInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemSecureBootPolicyInformation')
     _fields_ = [
-        (_GUID, 'PolicyPublisher'),
+        (GUID, 'PolicyPublisher'),
         (ULONG, 'PolicyVersion'),
         (ULONG, 'PolicyOptions'),
     ] 
 
 class SYSTEM_SECUREBOOT_POLICY_FULL_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemSecureBootPolicyFullInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemSecureBootPolicyFullInformation')
     _fields_ = [
         (SYSTEM_SECUREBOOT_POLICY_INFORMATION, 'PolicyInformation'),
         (ULONG, 'PolicySize'),
@@ -284,8 +285,30 @@ class SYSTEM_SECUREBOOT_POLICY_FULL_INFORMATION(pstruct.type):
     ]
 
 class SYSTEM_ROOT_SILO_INFORMATION(pstruct.type):
-    type = PROCESS_INFORMATION_CLASS.byname('SystemRootSiloInformation')
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemRootSiloInformation')
     _fields_ = [
         (ULONG, 'NumberOfSilos'),
         (PVOID, 'SiloList'),
+    ]
+
+class _KSEMAPHORE(ptype.undefined): pass
+class _KEVENT(ptype.undefined): pass
+
+class _OWNER_ENTRY(pstruct.type):
+    _fields_ = [(pint.uint32_t, 'OwnerThread'), (pint.uint32_t, 'OwnerCount')]
+
+class _ERESOURCE(pstruct.type):
+    _fields_ = [
+        (LIST_ENTRY, 'SystemResourcesList'),
+        (P(_OWNER_ENTRY), 'OwnerTable'),
+        (SHORT, 'ActiveCount'),
+        (USHORT, 'Flag'),
+        (P(_KSEMAPHORE), 'SharedWaiters'),
+        (P(_KEVENT), 'ExclusiveWatiers'),
+        (dyn.array(_OWNER_ENTRY, 2), 'OwnerThreads'),
+        (ULONG, 'ContentionCount'),
+        (pint.uint16_t, 'NumberOfSharedWaiters'),
+        (pint.uint16_t, 'NumberOfExclusiveWaiters'),
+        (PVOID, 'Address'),
+        (KSPIN_LOCK, 'SpinLock'),
     ]

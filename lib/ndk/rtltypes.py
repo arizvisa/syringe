@@ -87,3 +87,16 @@ class _RTL_RELATIVE_NAME(pstruct.type):
         (HANDLE, 'ContainingDirectory'),
         (PVOID, 'CurDirRef'),
     ]
+
+class _RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
+    _fields_ = [
+        (PVOID, 'MappedBase'),
+        (PVOID, 'ImageBase'),
+        (ULONG, 'ImageSize'),
+        (ULONG, 'Flags'),
+        (USHORT, 'LoadOrderIndex'),
+        (USHORT, 'InitOrderIndex'),
+        (USHORT, 'LoadCount'),
+        (USHORT, 'OffsetToFileName'),
+        (dyn.clone(pstr.string, length=256), 'FullPathName'),
+    ]

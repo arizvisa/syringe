@@ -195,3 +195,5 @@ class ULARGE_INTEGER(pstruct.type):
         (pint.uint64_t, 'QuadPart'),
         (UINT64, 'upper'),
     ]
+
+class KSPIN_LOCK(ULONG): pass

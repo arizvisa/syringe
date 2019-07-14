@@ -4,7 +4,9 @@ from . import ldrtypes
 from . import heaptypes
 from . import rtltypes
 from . import mmtypes
+from . import ketypes
 from . import setypes
+from . import extypes
 
 import sdkddkver as ver
 
