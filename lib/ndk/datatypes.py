@@ -151,24 +151,6 @@ class LARGE_INTEGER(pstruct.type):
         (pint.sint64_t, 'QuadPart'),
     ]
 
-class ACCESS_MASK(pbinary.struct):
-    _fields_ = [
-        (1, 'Generic Read (GR)'),
-        (1, 'Generic Write (GW)'),
-        (1, 'Generic Execute (GX)'),
-        (1, 'Generic All (GA)'),
-        (2, 'Reserved'),
-        (1, 'Maximum Allowed (MA)'),
-        (1, 'Access System Security (AS)'),
-        (3, 'Reserved'),
-        (1, 'Synchronize (SY)'),
-        (1, 'Write Owner (WO)'),
-        (1, 'Write DACL (WD)'),
-        (1, 'Read Control (RC)'),
-        (1, 'Delete (DE)'),
-        (16, 'Implementation'),
-    ]
-
 class LCID(DWORD): pass
 
 class LUID(pstruct.type):
@@ -188,13 +170,6 @@ class MULTI_SZ(pstruct.type):
     _fields_ = [
         (pointer(lambda s: s.getparent(MULTI_SZ).StringsValue), 'Value'),
         (DWORD, 'nChar'),
-    ]
-
-class OBJECT_TYPE_LIST(pstruct.type):
-    _fields_ = [
-        (WORD, 'Level'),
-        (ACCESS_MASK, 'Remaining'),
-        (pointer(GUID), 'ObjectType'),
     ]
 
 class SYSTEMTIME(pstruct.type):
@@ -220,72 +195,3 @@ class ULARGE_INTEGER(pstruct.type):
         (pint.uint64_t, 'QuadPart'),
         (UINT64, 'upper'),
     ]
-
-### Security Descriptor Related Things
-class SID_IDENTIFIER_AUTHORITY(parray.type):
-    length = 6
-    _object_ = pint.uint8_t
-
-    def summary(self):
-        return '{' + ','.join(str(x.int()) for x in self) + '}'
-
-class SID(pstruct.type):
-    _fields_ = [
-        (pint.uint8_t, 'Revision'),
-        (pint.uint8_t, 'SubAuthorityCount'),
-        (SID_IDENTIFIER_AUTHORITY, 'IdentifierAuthority'),
-        (lambda s: dyn.array(pint.uint32_t,s['SubAuthorityCount'].li.int()), 'SubAuthority'),
-    ]
-
-class ACE_HEADER(pstruct.type):
-    class AceType(pint.enum, pint.uint8_t): _values_ = []
-    class AceFlags(pbinary.flags): _fields_ = [(32,'Flags')]
-    _fields_ = [
-        (AceType, 'AceType'),
-        (AceFlags, 'AceFlags'),
-        (pint.uint16_t, 'AceSize'),
-    ]
-
-class ACCESS_ALLOWED_ACE(pstruct.type):
-    _fields_ = [
-        (ACE_HEADER, 'Header'),
-        (ACCESS_MASK ,'Mask'),
-        (SID, 'Sid'),
-    ]
-
-class ACCESS_ALLOWED_OBJECT_ACE(pstruct.type):
-    _fields_ = [
-        (ACE_HEADER, 'Header'),
-        (ACCESS_MASK ,'Mask'),
-        (pint.uint32_t, 'Flags'),
-        (GUID, 'ObjectType'),
-        (GUID, 'InheritedObjectType'),
-        (SID, 'Sid'),
-    ]
-
-class ACCESS_DENIED_ACE(pstruct.type):
-    _fields_ = [
-        (ACE_HEADER, 'Header'),
-        (ACCESS_MASK ,'Mask'),
-        (SID, 'Sid'),
-    ]
-
-class ACCESS_DENIED_OBJECT_ACE(pstruct.type):
-    _fields_ = [
-        (ACE_HEADER, 'Header'),
-        (ACCESS_MASK ,'Mask'),
-        (pint.uint32_t, 'Flags'),
-        (GUID, 'ObjectType'),
-        (GUID, 'InheritedObjectType'),
-        (SID, 'Sid'),
-    ]
-
-class ACCESS_ALLOWED_CALLBACK_ACE(pstruct.type):
-    _fields_ = [
-        (ACE_HEADER, 'Header'),
-        (ACCESS_MASK ,'Mask'),
-        (SID, 'Sid'),
-        (lambda s: dyn.block(s['Header'].li['AceSize'].int()), 'ApplicationData'),
-    ]
-
-# TODO: Implement the rest of the ACCESS_ and SYSTEM_ constructed security types

@@ -2,21 +2,18 @@ import ptypes
 from ptypes import *
 
 from . import umtypes
+from . import setypes
 from .datatypes import *
 
 # FIXME: most of these should be within a file called obtypes.py
 
 pint.setbyteorder(ptypes.config.byteorder.littleendian)
-class SID(pstruct.type):
+class OBJECT_TYPE_LIST(pstruct.type):
     _fields_ = [
-        (pint.uint8_t, 'Revision'),
-        (pint.uint8_t, 'Count'),
-        (dyn.clone(pint.uint_t, length=6, byteorder=ptypes.config.byteorder.bigendian), 'Top-authority'),
-        (lambda s: dyn.array(pint.uint32_t, s['Count'].li), 'Sub-authority'),
+        (WORD, 'Level'),
+        (ACCESS_MASK, 'Remaining'),
+        (pointer(GUID), 'ObjectType'),
     ]
-    def summary(self):
-        return 'S-{:d}-{:d}'.format(self['Revision'].int(),self['Top-authority'].int()) + ('-' if self['Count'].int() > 0 else '') + '-'.join(str(_.int()) for _ in self['Sub-authority'])
-    repr = lambda s: s.summary()
 
 class OBJECT_TYPE_CODE(pint.enum):
     _values_ = [
@@ -453,68 +450,43 @@ class PgContext_8_1(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    a = """
-    01 04 00 00 00 00 00 05
-    15 00 00 00 A7 40 4F 46
-    FE 3C DA 76 44 37 1D 25
     """
-    a = """
-    01 02 00 00 00 00 00 05
-    20 00 00 00 20 02 00 00
+    typedef struct _HHIVE {
+        ULONG                   Signature;
+        PGET_CELL_ROUTINE       GetCellRoutine;
+        PALLOCATE_ROUTINE       Allocate;
+        PFREE_ROUTINE           Free;
+        PFILE_SET_SIZE_ROUTINE  FileSetSize;
+        PFILE_WRITE_ROUTINE     FileWrite;
+        PFILE_READ_ROUTINE      FileRead;
+        PFILE_FLUSH_ROUTINE     FileFlush;
+        struct _HBASE_BLOCK     *BaseBlock;
+        RTL_BITMAP              DirtyVector;    // only for Stable bins
+        ULONG                   DirtyCount;
+        ULONG                   DirtyAlloc;     // allocated bytges for dirty vect
+        ULONG                   Cluster;        // Usually 1 512 byte sector.  Set up force writes to be done in larger units on machines with larger sectors.  Is number of logical 512 sectors.
+        BOOLEAN                 Flat;               // TRUE if FLAT
+        BOOLEAN                 ReadOnly;           // TRUE if READONLY
+        BOOLEAN                 Log;
+        BOOLEAN                 Alternate;
+        ULONG                   HiveFlags;
+        ULONG                   LogSize;
+        ULONG                   RefreshCount;       // debugging aid
+        ULONG                   StorageTypeCount;   // 1 > Number of largest valid type. (1 for Stable only, 2 for stable & volatile)
+        ULONG                   Version;            // hive version, to allow supporting multiple formats simultaneously.
+        struct _DUAL {
+            ULONG               Length;
+            PHMAP_DIRECTORY     Map;
+            PHMAP_TABLE         SmallDir;
+            ULONG               Guard;          // Always == -1
+            HCELL_INDEX         FreeDisplay[HHIVE_FREE_DISPLAY_SIZE];
+            ULONG               FreeSummary;
+            LIST_ENTRY          FreeBins;           // list of freed HBINs (FREE_HBIN)
+        } Storage[ HTYPE_COUNT ];
+
+        //
+        // Caller defined data goes here
+        //
+
+    } HHIVE, *PHHIVE;
     """
-    a = """
-    01 01 00 00 00 00 00 01
-    00 00 00 00
-    """
-    b = a.strip().replace('\n','').replace(' ','').decode('hex')
-    c = SID(__name__='sid').load(source=prov.string(b))
-    print c['Revision']
-    print c['Top-authority']
-    print c['Sub-authority'][0]
-    print c['Sub-authority'][1]
-    print c['Sub-authority'][2]
-    print c['Sub-authority'][3]
-    print c.summary()
-
-"""
-typedef struct _HHIVE {
-    ULONG                   Signature;
-    PGET_CELL_ROUTINE       GetCellRoutine;
-    PALLOCATE_ROUTINE       Allocate;
-    PFREE_ROUTINE           Free;
-    PFILE_SET_SIZE_ROUTINE  FileSetSize;
-    PFILE_WRITE_ROUTINE     FileWrite;
-    PFILE_READ_ROUTINE      FileRead;
-    PFILE_FLUSH_ROUTINE     FileFlush;
-    struct _HBASE_BLOCK     *BaseBlock;
-    RTL_BITMAP              DirtyVector;    // only for Stable bins
-    ULONG                   DirtyCount;
-    ULONG                   DirtyAlloc;     // allocated bytges for dirty vect
-    ULONG                   Cluster;        // Usually 1 512 byte sector.  Set up force writes to be done in larger units on machines with larger sectors.  Is number of logical 512 sectors.
-    BOOLEAN                 Flat;               // TRUE if FLAT
-    BOOLEAN                 ReadOnly;           // TRUE if READONLY
-    BOOLEAN                 Log;
-    BOOLEAN                 Alternate;
-    ULONG                   HiveFlags;
-    ULONG                   LogSize;
-    ULONG                   RefreshCount;       // debugging aid
-    ULONG                   StorageTypeCount;   // 1 > Number of largest valid type. (1 for Stable only, 2 for stable & volatile)
-    ULONG                   Version;            // hive version, to allow supporting multiple formats simultaneously.
-    struct _DUAL {
-        ULONG               Length;
-        PHMAP_DIRECTORY     Map;
-        PHMAP_TABLE         SmallDir;
-        ULONG               Guard;          // Always == -1
-        HCELL_INDEX         FreeDisplay[HHIVE_FREE_DISPLAY_SIZE];
-        ULONG               FreeSummary;
-        LIST_ENTRY          FreeBins;           // list of freed HBINs (FREE_HBIN)
-    } Storage[ HTYPE_COUNT ];
-
-    //
-    // Caller defined data goes here
-    //
-
-} HHIVE, *PHHIVE;
-"""
-if __name__ == '__main__':
-    pass

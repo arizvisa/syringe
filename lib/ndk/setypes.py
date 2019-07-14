@@ -1,0 +1,286 @@
+import ptypes
+from ptypes import *
+
+from .datatypes import *
+
+class STANDARD_RIGHTS_(pbinary.flags):
+    _fields_ = [
+        (1, 'SYNCHRONIZE'),
+        (1, 'WRITE_OWNER'),
+        (1, 'WRITE_DAC'),
+        (1, 'READ_CONTROL'),
+        (1, 'DELETE'),
+    ]
+
+class GENERIC_(pbinary.flags):
+    _fields_ = [
+        (1, 'READ'),
+        (1, 'WRITE'),
+        (1, 'EXECUTE'),
+        (1, 'ALL'),
+    ]
+
+class ACCESS_MASK(pbinary.flags):
+    _fields_ = [
+        (GENERIC_, 'GENERIC_RIGHTS_ALL'),
+        (2, 'RESERVED1'),
+        (1, 'MAXIMUM_ALLOWED'),
+        (1, 'ACCESS_SYSTEM_SECURITY'),
+        (3, 'RESERVED2'),
+        (STANDARD_RIGHTS_, 'STANDARD_RIGHTS_ALL'),
+        (16, 'SPECIFIC_RIGHTS_ALL'),
+    ]
+
+### Security Descriptor Related Things
+class _SID_IDENTIFIER_AUTHORITY(parray.type):
+    length = 6
+    _object_ = pint.uint8_t
+
+    _values_ = [
+        ('NULL_SID_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x00)),
+        ('WORLD_SID_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x01)),
+        ('LOCAL_SID_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x02)),
+        ('CREATOR_SID_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x03)),
+        ('NON_UNIQUE_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x04)),
+        ('SECURITY_NT_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x05)),
+        ('SECURITY_APP_PACKAGE_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x0f)),
+        ('SECURITY_MANDATORY_LABEL_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x10)),
+        ('SECURITY_SCOPED_POLICY_ID_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x11)),
+        ('SECURITY_AUTHENTICATION_AUTHORITY', (0x00, 0x00, 0x00, 0x00, 0x00, 0x12)),
+    ]
+
+    def authority(self):
+        res = self.get()
+        return next((name for name, value in self._values_ if res == value), None)
+
+    def str(self):
+        items = (item.int() for item in self)
+        return "{{{:s}}}".format(','.join(map("{:d}".format, items)))
+
+    def summary(self):
+        res = self.authority()
+        return "{:s}{:s}".format('' if res is None else "{:s} ".format(res), self.str())
+
+    def int(self):
+        res = 0
+        for item in self:
+            res *= 0x100
+            res += item.int()
+        return res
+
+class _SID(pstruct.type):
+    _fields_ = [
+        (UCHAR, 'Revision'),
+        (UCHAR, 'SubAuthorityCount'),
+        (_SID_IDENTIFIER_AUTHORITY, 'IdentifierAuthority'),
+        (lambda s: dyn.array(DWORD, s['SubAuthorityCount'].li.int()), 'SubAuthority'),
+    ]
+
+    def summary(self):
+        res = (item.int() for item in self['SubAuthority'])
+        return 'S-{:d}-{:d}'.format(self['Revision'].int(), self['IdentifierAuthority'].int()) + ('-' if self['SubAuthorityCount'].int() > 0 else '') + '-'.join(map("{:d}".format, res))
+
+class ACE_TYPE(ptype.definition):
+    cache = {}
+
+class _ACE_TYPE(pint.enum, UCHAR):
+    _values_ = [
+        ('ACCESS_ALLOWED', 0x0),
+        ('ACCESS_DENIED', 0x1),
+        ('SYSTEM_AUDIT', 0x2),
+        ('SYSTEM_ALARM', 0x3),
+        ('ACCESS_ALLOWED_COMPOUND', 0x4),
+        ('ACCESS_ALLOWED_OBJECT', 0x5),
+        ('ACCESS_DENIED_OBJECT', 0x6),
+        ('SYSTEM_AUDIT_OBJECT', 0x7),
+        ('SYSTEM_ALARM_OBJECT', 0x8),
+        ('ACCESS_ALLOWED_CALLBACK', 0x9),
+        ('ACCESS_DENIED_CALLBACK', 0xa),
+        ('ACCESS_ALLOWED_CALLBACK_OBJECT', 0xb),
+        ('ACCESS_DENIED_CALLBACK_OBJECT', 0xc),
+        ('SYSTEM_AUDIT_CALLBACK', 0xd),
+        ('SYSTEM_ALARM_CALLBACK', 0xe),
+        ('SYSTEM_AUDIT_CALLBACK_OBJECT', 0xf),
+        ('SYSTEM_ALARM_CALLBACK_OBJECT', 0x10),
+        ('SYSTEM_MANDATORY_LABEL', 0x11),
+    ]
+
+class _INHERIT_ACE(pbinary.flags):
+    _fields_ = [
+        (1, 'INHERITED_ACE'),
+        (1, 'INHERIT_ONLY_ACE'),
+        (1, 'NO_PROPAGATE_INHERIT_ACE'),
+        (1, 'CONTAINER_INHERIT_ACE'),
+        (1, 'OBJECT_INHERIT_ACE'),
+    ]
+
+class _ACE_FLAG(pbinary.flags):
+    _fields_ = [
+        (1, 'FAILED_ACCESS'),
+        (1, 'SUCCESSFUL_ACCESS'),
+        (1, 'RESERVED'),
+        (_INHERIT_ACE, 'VALID_INHERIT_FLAGS'),
+    ]
+
+class _ACE_HEADER(pstruct.type):
+    _fields_ = [
+        (_ACE_TYPE, 'AceType'),
+        (_ACE_FLAG, 'AceFlags'),
+        (USHORT, 'AceSize'),
+    ]
+
+class ACE(pstruct.type):
+    def __Access(self):
+        res = self['Header'].li
+        return ACE_TYPE.lookup(res['AceType'].int())
+
+    def __ApplicationData(self):
+        res = self['Header'].li
+        return dyn.block(max((0, res['AceSize'].size() - self['Access'].li.size())))
+
+    _fields_ = [
+        (_ACE_HEADER, 'Header'),
+        (__Access, 'Access'),
+        (__ApplicationData, 'ApplicationData'),
+    ]
+
+class ACCESS_ACE_MASK_AND_SID(pstruct.type):
+    _fields_ = [
+        (ACCESS_MASK ,'Mask'),
+        (_SID, 'Sid'),
+    ]
+
+class ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE(pstruct.type):
+    _fields_ = [
+        (ACCESS_MASK ,'Mask'),
+        (DWORD, 'Flags'),
+        (GUID, 'ObjectType'),
+        (GUID, 'InheritedObjectType'),
+        (_SID, 'Sid'),
+    ]
+
+# TODO: Implement the rest of the ACCESS_ and SYSTEM_ constructed security types
+ 
+@ACE_TYPE.define
+class ACCESS_ALLOWED_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 0
+
+@ACE_TYPE.define
+class ACCESS_DENIED_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 1
+
+@ACE_TYPE.define
+class SYSTEM_AUDIT_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 2
+
+@ACE_TYPE.define
+class SYSTEM_ALARM_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 3
+
+@ACE_TYPE.define
+class ACCESS_ALLOWED_OBJECT_ACE(ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE):
+    type = 5
+
+@ACE_TYPE.define
+class ACCESS_DENIED_OBJECT_ACE(ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE):
+    type = 6
+
+@ACE_TYPE.define
+class ACCESS_ALLOWED_CALLBACK_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 9
+
+@ACE_TYPE.define
+class ACCESS_DENIED_CALLBACK_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 10
+
+@ACE_TYPE.define
+class ACCESS_ALLOWED_CALLBACK_OBJECT_ACE(ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE):
+    type = 11
+
+@ACE_TYPE.define
+class ACCESS_DENIED_CALLBACK_OBJECT_ACE(ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE):
+    type = 12
+
+@ACE_TYPE.define
+class SYSTEM_AUDIT_CALLBACK_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 13
+
+@ACE_TYPE.define
+class SYSTEM_AUDIT_CALLBACK_OBJECT_ACE(ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE):
+    type = 15
+
+@ACE_TYPE.define
+class SYSTEM_MANDATORY_LABEL_ACE(ACCESS_ACE_MASK_AND_SID):
+    type = 17
+
+class _ACL(pstruct.type):
+    _fields_ = [
+        (UCHAR, 'AclRevision'),
+        (UCHAR, 'Sbz1'),
+        (USHORT, 'AclSize'),
+        (USHORT, 'AceCount'),
+        (USHORT, 'Sbz2'),
+    ]
+
+class SECURITY_DESCRIPTOR_CONTROL(pbinary.flags):
+    _fields_ = [
+        (1, 'SE_SELF_RELATIVE'),
+        (1, 'SE_RM_CONTROL_VALID'),
+        (1, 'SE_SACL_PROTECTED'),
+        (1, 'SE_DACL_PROTECTED'),
+        (1, 'SE_SACL_AUTO_INHERITED'),
+        (1, 'SE_DACL_AUTO_INHERITED'),
+        (1, 'SE_SACL_AUTO_INHERIT_REQ'),
+        (1, 'SE_DACL_AUTO_INHERIT_REQ'),
+        (1, 'SE_SERVER_SECURITY'),
+        (1, 'SE_DACL_UNTRUSTED'),
+        (1, 'SE_SACL_DEFAULTED'),
+        (1, 'SE_SACL_PRESENT'),
+        (1, 'SE_DACL_DEFAULTED'),
+        (1, 'SE_DACL_PRESENT'),
+        (1, 'SE_GROUP_DEFAULTED'),
+        (1, 'SE_OWNER_DEFAULTED'),
+    ]
+
+class _SECURITY_DESCRIPTOR(pstruct.type):
+    _fields_ = [
+        (UCHAR, 'Revision'),
+        (UCHAR, 'Sbz1'),
+        (SECURITY_DESCRIPTOR_CONTROL, 'Control'),
+
+        # XXX: These are conditional depending on the SE_*_DEFAULTED flags in the Control field being unset
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_SID), 'Owner'),
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_SID), 'Group'),
+
+        # XXX: These are conditional depending on the SE_*_PRESENT flags in the Control field being set
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_ACL), 'Sacl'),
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_ACL), 'Dacl'),
+    ]
+
+if __name__ == '__main__':
+    sids = []; push = sids.append
+    push("""
+    01 04 00 00 00 00 00 05
+    15 00 00 00 A7 40 4F 46
+    FE 3C DA 76 44 37 1D 25
+    """)
+    push("""
+    01 02 00 00 00 00 00 05
+    20 00 00 00 20 02 00 00
+    """)
+    push("""
+    01 01 00 00 00 00 00 01
+    00 00 00 00
+    """)
+
+    for siddata in sids:
+        data = siddata.translate(None, ' \n')
+        print "decoding {!s}".format(data)
+
+        c = _SID(__name__='sid').load(source=prov.string(data.decode('hex')))
+        print c
+
+        for i, item in enumerate(c['SubAuthority']):
+            print i, item
+
+        print c.summary()
