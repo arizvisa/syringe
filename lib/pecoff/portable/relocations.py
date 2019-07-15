@@ -196,7 +196,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
 
     def fetchrelocations(self):
         block = self['Relocations'].serialize()
-        relocations = array.array('H').fromstring(block)
+        relocations = array.array('H', block)
         return [((v&0xf000)/0x1000, v&0x0fff) for v in relocations]
 
     def getrelocations(self, section):
@@ -299,7 +299,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
 
 #                relo = t.write(targetva, imagebase)
                 relo = t.write(targetoffset, namespace[targetsectionname])
-                data[offset : offset + len(relo)] = array.array('c',relo)
+                data[offset : offset + len(relo)] = array.array('c', relo)
             continue
 
         return data
