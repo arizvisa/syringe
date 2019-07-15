@@ -1923,7 +1923,7 @@ class wrapper_t(type):
         if not values:
             return self
 
-        value, = value
+        value, = values
         res = self.object.set(value, **attrs)
         self.object.commit(offset=0, source=provider.proxy(self))
         return self
