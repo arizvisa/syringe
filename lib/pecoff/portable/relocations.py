@@ -194,20 +194,21 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
 #        (lambda s: dyn.clone(BaseRelocationArray, blocksize=lambda _:s['Size'].li.int()-8), 'Relocations')
     ]
 
-    def fetchrelocations(self):
+    def extract(self):
+        '''Return a list of tuples containing the relocation type and offset contained within this entry.'''
         block = self['Relocations'].serialize()
         relocations = array.array('H', block)
-        return [((v&0xf000)/0x1000, v&0x0fff) for v in relocations]
+        return [((item & 0xf000) / 0x1000, item & 0x0fff) for item in relocations]
 
     def getrelocations(self, section):
         pageoffset = self['Page RVA'].int() - section['VirtualAddress'].int()
         if not (pageoffset >= 0 and pageoffset < section.getloadedsize()):
             raise AssertionError("Page Offset in RVA outside bounds of section : not(0 <= {:#x} < {:#x}) : Page RVA {:#x}, VA = {:#x}, Section = {:s}".format(pageoffset, section.getloadedsize(), self['Page RVA'].int(), section['VirtualAddress'].int(), section['Name'].str()))
 
-        for type,offset in self.fetchrelocations():
+        for type, offset in self.extract():
             if type == 0:
                 continue
-            yield type,pageoffset+offset
+            yield type, pageoffset + offset
         return
 
 # yeah i really made this an object
@@ -256,8 +257,14 @@ if False:       # deprecated because we would like to be able to separate segmen
 
 class IMAGE_BASERELOC_DIRECTORY(parray.block):
     _object_ = IMAGE_BASERELOC_DIRECTORY_ENTRY
-    def getbysection(self, section):
-        return ( entry for entry in self if section.containsaddress(entry['Page RVA'].int()) )
+    def filter(self, section):
+        '''Return each relocation item that is within the specified IMAGE_SECTION_HEADER.'''
+        for item in self:
+            res = item['Page RVA']
+            if section.containsaddress(res.int()):
+                yield item
+            continue
+        return
 
     def relocate(self, data, section, namespace):
         if not isinstance(data, array.array):
@@ -272,9 +279,9 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
         # relocation type 3
         t = relocationtype()
         t.length = 4
-        t.write = lambda o, b: t._write(o+b)
+        t.write = lambda offset, base: t._write(base + offset)
 
-        for entry in self.getbysection(section):
+        for entry in self.filter(section):
             for type,offset in entry.getrelocations(section):
                 if type != 3:
                     raise NotImplementedError("Relocations other than type 3 aren't implemented because I couldn't find any to test with")
@@ -297,9 +304,10 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
                 targetsectionname = targetsection['Name'].str()
                 targetoffset = targetva - sectionvaLookup[targetsectionname]
 
-#                relo = t.write(targetva, imagebase)
-                relo = t.write(targetoffset, namespace[targetsectionname])
-                data[offset : offset + len(relo)] = array.array('c', relo)
+#                relocation = t.write(targetva, imagebase)
+                # apply the relocation to the data that was passed to us
+                relocation = t.write(targetoffset, namespace[targetsectionname])
+                data[offset : offset + len(relocation)] = array.array('c', relocation)
             continue
 
         return data

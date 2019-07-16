@@ -534,7 +534,7 @@ if __name__ == '__main__':
     baseaddress = v['OptionalHeader']['ImageBase']
     section = sections[0]
     data = section.data().serialize()
-    for e in relo.getbysection(section):
+    for e in relo.filter(section):
         for a,r in e.getrelocations(section):
             print e
             data = r.relocate(data, 0, section)
