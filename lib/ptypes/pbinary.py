@@ -1670,10 +1670,8 @@ def bigendian(p, **attrs):
 
     if not issubclass(p, partial):
         Log.debug("{:s}.bigendian : Explicitly promoting binary type for `{:s}` to a partial type.".format(__name__, p.typename()))
-        p = ptype.clone(partial, _object_=p, **attrs)
-    else:
-        p.__update__(attrs)
-    return p
+        return ptype.clone(partial, _object_=p, **attrs)
+    return ptype.clone(p, **attrs)
 
 def littleendian(p, **attrs):
     '''Force binary type /p/ to be ordered in the littleendian integer format'''
@@ -1682,10 +1680,8 @@ def littleendian(p, **attrs):
 
     if not issubclass(p, partial):
         Log.debug("{:s}.littleendian : Explicitly promoting binary type for `{:s}` to a partial type.".format(__name__, p.typename()))
-        p = ptype.clone(partial, _object_=p, **attrs)
-    else:
-        p.__update__(attrs)
-    return p
+        return ptype.clone(partial, _object_=p, **attrs)
+    return ptype.clone(p, **attrs)
 
 def align(bits):
     '''Returns a type that will align fields to the specified bit size'''
