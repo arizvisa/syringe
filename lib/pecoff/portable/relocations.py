@@ -224,15 +224,25 @@ class RelocationType10(RelocationTypeBase):
         res = address + (delta & 0xffffffffffffffff)
         return super(RelocationType10, self).write(res, 8)
 
-class BaseRelocationEntry(pbinary.struct):
+class BaseRelocationEntry_(pbinary.struct):
     def __Offset(self):
         res = self['Type']
-        return RelocationType.lookup(res)
+        return RelocationType.lookup(res, 12)
+
+    def blockbits(self):
+        # hardcode the number of bits since despite this structure being
+        # variably-sized, we know what it's supposed to be. this way we
+        # can be formatted as little-endian without having to be tricky.
+        return 16
 
     _fields_ = [
         (4, 'Type'),
         (__Offset, 'Offset'),
     ]
+
+@pbinary.littleendian
+class BaseRelocationEntry(pbinary.partial):
+    _object_ = BaseRelocationEntry_
 
     def apply(self, entry, imagebase, sectiontable, segment, **addresses):
         '''
@@ -261,12 +271,13 @@ class BaseRelocationEntry(pbinary.struct):
         return segment
 
 class BaseRelocationArray(parray.block):
-    _object_ = pbinary.littleendian(BaseRelocationEntry)
+    _object_ = BaseRelocationEntry
 
 class BaseRelocationBlock(ptype.block):
     def array(self):
         '''Return this type casted to a BaseRelocationArray with the correct types.'''
-        return self.cast(pbinary.new(BaseRelocationArray), blocksize=self.blocksize)
+        return self.cast(BaseRelocationArray, blocksize=self.blocksize)
+
     def iterate(self):
         '''Iterate through each relocation wrapped by this type.'''
         res = self.array()
