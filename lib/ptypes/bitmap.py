@@ -434,7 +434,136 @@ def riterate(bitmap):
         yield bool(value)
     return
 
-if False:
+class WBitmap(object):
+    '''
+    A write-only bitmap for stuffing bits into.
+    '''
+    def __init__(self):
+        import array
+        self.bits, self.data = 0, array.array('B')
+
+    def push(self, integer, bits):
+        '''Stash an integer of the specified number of bits to the object.'''
+        current = self.bits
+        used = self.bits & 7
+        leftover = 8 - used
+
+        # If our current size is not aligned to 8, then we should just
+        # need to extract the number of bits from the top of our integer
+        # to pad our data to a multiple of 8 so that we can append the
+        # rest of it with the logic that follows this next statement.
+
+        if used and bits <= leftover:
+            shift, mask = 2 ** bits, 2 ** bits - 1
+            self.data[-1] *= shift
+            self.data[-1] |= integer & mask
+            self.bits += bits
+            return self.bits - current
+
+        # If we're trying to push more than 8 bits, then we simply need
+        # to consume what is left to pad our data to 8-bits and then
+        # proceed through the logic that follows
+        elif used:
+            shift, mask = 2 ** leftover, 2 ** leftover - 1
+
+            # Shift the last byte of our data up by the number of bits
+            # that we're going to append
+            self.data[-1] *= shift
+
+            # Extract the bits from our integer, and OR it into the
+            # last byte of our data so that we should now be padded
+            # along a byte boundary (multiple of 8).
+            offset = bits - leftover
+            res = integer & (mask * 2**offset)
+            self.data[-1] |= res / 2**offset
+
+            # Update the bits that we've processed
+            self.bits, bits = self.bits + leftover, bits - leftover
+
+        # If our current size is aligned to 8, then we simply need to
+        # just push the integer to our data and update our size. This
+        # same logic should also apply if our data is empty.
+        while bits >= 8:
+            shift = 2 ** bits / 0x100
+            res = integer & (0xff * shift)
+            self.data.append(res / shift)
+            self.bits, bits = self.bits + 8, bits - 8
+
+        # Add any extra bits that were leftover as the last byte
+        if bits:
+            mask = 2 ** bits - 1
+            self.data.append(integer & mask)
+            self.bits += bits
+
+        return self.bits - current
+
+    def int(self):
+        '''Return the bitmap as an integer.'''
+        used = self.bits & 7
+        if used:
+            shift, mask = 2 ** used, 2 ** used - 1
+            res = reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
+            return (res * shift) | (self.data[-1] & mask)
+        return reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
+
+    def size(self):
+        '''Return the current number of bits that have been stored.'''
+        return self.bits
+
+    def serialize(self):
+        '''Return the object rendered to a string (serialized).'''
+        return self.data.tostring()
+
+    def __repr__(self):
+        cls, length = self.__class__, math.ceil(self.bits / 4.0)
+        return "{!s} ({:#0{:d}x}, {:d})".format(cls, self.int(), 2 + math.trunc(length), self.bits)
+
+class RBitmap(object):
+    '''
+    A read-only bitmap for consuming bits from some arbitrary data.
+    '''
+    def __init__(self, data):
+        import array
+        self.offset, self.data = 0, array.array('B', data)
+
+    def size(self):
+        '''Return the number of bits that are available.'''
+        return 8 * len(self.data) - self.offset
+
+    def consume(self, bits):
+        '''Consume the specified number of bits from the object.'''
+        leftover = 8 - self.offset
+
+        if self.offset and bits < leftover:
+            shift, mask = 2 ** (leftover - bits), 2 ** bits - 1
+            result = self.data[0] / shift
+            self.offset, self.data[0] = self.offset + bits, self.data[0] & (2 * shift - 1)
+            return result & mask
+
+        elif self.offset:
+            shift, mask = 2 ** leftover, 2 ** leftover - 1
+            result = self.data[0] & mask
+            self.offset, bits = 0, bits - leftover
+            self.data[:] = self.data[1:]
+
+        else:
+            result = 0
+
+        shift = 2 ** 8
+        while bits >= 8:
+            result *= shift
+            result += self.data[0]
+            bits, self.data[:] = bits - 8, self.data[1:]
+
+        leftover = 8 - bits
+        if bits > 0:
+            shift, mask = 2 ** leftover, 2 ** bits - 1
+            result *= 2 ** bits
+            result += ((self.data[0] / shift) & mask) if len(self.data) else 0
+            self.offset = bits
+        return result
+
+if 'TODO':
     # are bits clear
     # are bits set
     # check bit
