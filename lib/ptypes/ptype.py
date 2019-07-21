@@ -861,7 +861,7 @@ class base(generic):
 
     def cast(self, t, **kwds):
         """Cast the contents of the current instance into a differing ptype"""
-        data, bs = self.serialize(), self.blocksize()
+        data, size = self.serialize(), self.size()
 
         # copy attributes that make the new instantiation similar
         kwds.setdefault('offset', self.getoffset())
@@ -876,7 +876,7 @@ class base(generic):
 
         # try and load the contents using the correct blocksize
         try:
-            result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda:bs)
+            result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size)
             result.setoffset(result.getoffset(), recurse=True)
 
         except Exception, e:
