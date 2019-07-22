@@ -97,9 +97,9 @@ def mapexception(map={}, any=None, ignored=()):
 
             for src,dst in map.iteritems():
                 if t is src or (hasattr(src,'__contains__') and t in src):
-                    raise dst(t, *v)
+                    raise dst(t, v)
                 continue
-            raise v if t in ignored or any is None else any(t, *v)
+            raise v if t in ignored or any is None else any(t, v)
 
         functools.update_wrapper(decorated, fn)
         return decorated
