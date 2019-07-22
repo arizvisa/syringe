@@ -1989,7 +1989,6 @@ class encoded_t(wrapper_t):
     deref = lambda s, **a: s.dereference(**a)
     ref = lambda s, *x, **a: s.reference(*x, **a)
 
-    @utils.memoize('self', self=lambda n:(n._object_, n.value), attrs=lambda n:tuple(sorted(n.items())))
     def decode(self, object, **attrs):
         """Take ``data`` and decode it back to it's original form"""
         for n in ('offset', 'source', 'parent'):
@@ -2021,17 +2020,18 @@ class encoded_t(wrapper_t):
             delattr(object, prefix+'_commit')
 
         def commit(**attrs):
-            # first cast our object into a block
-            res = object.cast(block, length=object.blocksize())
+            # now turn it into the type that the encoded_t should expect
+            res = object.cast(self._object_) if self._object_ else object
 
-            # now turn it into the type that the encoded_t expects
-            res = res.cast(self._value_)
-
-            # now encode it
+            # so that we can encode it
             enc = self.encode(res, **attrs)
 
-            # commit it to the encoded_t
-            enc.commit(offset=0, source=provider.proxy(self))
+            # cast whatever was returned from the encoded type to our backing
+            backing = enc.cast(self._value_ or clone(type, length=enc.size()))
+
+            # so that we can simply assign it to our object and be good to go
+            self.object = backing
+
             return object
         setattr(object, prefix+'_commit', object.commit)
         object.commit = commit
@@ -2042,31 +2042,34 @@ class encoded_t(wrapper_t):
             delattr(object, prefix+'_load')
 
         def load(**attrs):
-            # first cast our encoded_t into a block
-            res = self.cast(block, length=self.blocksize())
 
-            # now turn it into the type that the encoded_t expects
-            res = self.cast(self._value_ or res.__class__)
+            # first cast into our backing type, or use what we have
+            res = self.cast(self._value_) if self._value_ else self.object
 
-            # now decode the block into an object
+            # use it to decode the type into an object
             dec = self.decode(res, **attrs)
 
             # finally load the decoded obj into self
             fn = getattr(object, prefix+'_load')
-            return fn(offset=0, source=provider.proxy(dec))
+            return fn(offset=0, source=provider.proxy(dec), blocksize=dec.blocksize)
         setattr(object, prefix+'_load', object.load)
         object.load = load
 
         # ..and we're done
         return object
 
-    @utils.memoize('self', self=lambda n:(n.object, n.source, n._object_), attrs=lambda n:tuple(sorted(n.items())))
+    @utils.memoize('self', self=lambda n:(n.source, n._object_), attrs=lambda n:tuple(sorted(n.items())))
     def dereference(self, **attrs):
         """Dereference object into the target type specified by self._object_"""
         attrs.setdefault('__name__', '*'+self.name())
-        res = self.cast(self._value_ or self.object.__class__)
 
-        # ensure decoded object writes to self
+        # First cast ourselves into our backing type so that our decode implementation
+        # knows how to handle the type we give it.
+        res = self.cast(self._value_) if self._value_ else self.object
+
+        # Hand off the casted object to our decode implementation along with
+        # some necessary attributes. This allows the decode implementation to
+        # change something if necessary
         dec = self.decode(res, offset=0, source=provider.proxy(self, autocommit={}))
 
         # also ensure that decoded object will encode/decode depending on commit/load
@@ -2075,34 +2078,29 @@ class encoded_t(wrapper_t):
         # update attributes
         dec.__update__(recurse=self.attributes)
 
-        # tweak the blocksize so that self._object_ will use dec's entire contents
-        blocksize = dec.size()
-        attrs.setdefault('blocksize', lambda bs=blocksize:bs)
-
         # ensure that all of it's children autoload/autocommit to the decoded object
-        recurse = {'source':provider.proxy(dec, autocommit={}, autoload={})}
+        recurse = {'source': provider.proxy(dec, autocommit={}, autoload={})}
         recurse.update(attrs.get('recurse', {}))
         attrs['recurse'] = recurse
+        attrs.setdefault('blocksize', dec.size)
 
         # and we now have a good working object
-        return dec.new(self._object_, **attrs)
+        return dec.new(self._object_ or type, **attrs)
 
     def reference(self, object, **attrs):
         """Reference ``object`` and encode it into self"""
         object = self.__hook(object)
 
-        # take object, and encode it to an encoded type
-        res = self.encode(object, **attrs)
-
-        # take encoded type and cast it to self's wrapped type in order to preserve length
-        res = res.cast(self._value_ or res.__class__, **attrs)
-
-        # now that the length is correct, write it to the wrapper_t
-        res.commit(offset=0, source=provider.proxy(self))
-
         # assign some default attributes to object
         object.__name__ = '*'+self.name()
+
+        # update our ._object_ attribute since the user explicitly
+        # called .reference() to change what is being referenced
         self._object_ = object.__class__
+
+        # now we can just pass through to our hooked .commit method
+        object.commit()
+
         return self
 
 def setbyteorder(endianness):
@@ -2406,8 +2404,9 @@ if __name__ == '__main__':
 
     @TestCase
     def test_decoded_b64():
-        input = 'AAAABBBBCCCCDDDD\x00'
-        result = 'AAAABBBBCCCCDDDD\x00'.encode('base64')
+        input = 'AAAABBBBCCCCDDDD'
+        result = input.encode('base64')
+        instance = pstr.string(length=len(input)).set(input)
 
         class b64(ptype.encoded_t):
             _value_ = dynamic.block(len(result))
@@ -2421,11 +2420,9 @@ if __name__ == '__main__':
                 data = object.serialize().decode('base64')
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
-        instance = pstr.szstring().set(input)
-
         x = b64(source=ptypes.prov.string('A'*0x100+'\x00')).l
         x = x.reference(instance)
-        if x.serialize() == result:
+        if builtins.isinstance(x.d, pstr.string) and x.serialize() == result:
             raise Success
 
     @TestCase
@@ -2788,15 +2785,17 @@ if __name__ == '__main__':
 
     @TestCase
     def test_decompression_block():
+        message = 'hi there.'
+        cmessage = message.encode('zlib')
         class cblock(pstruct.type):
             class _zlibblock(ptype.encoded_t):
-                _object_ = ptype.block
+                _object_ = ptype.clone(ptype.block, length=len(message))
                 def encode(self, object, **attrs):
                     data = object.serialize().encode('zlib')
-                    return super(cblock._zlibblock, self).encode(ptype.block().set(data), length=len(data))
+                    return super(cblock._zlibblock, self).encode(ptype.block(length=len(data)).set(data))
                 def decode(self, object, **attrs):
                     data = object.serialize().decode('zlib')
-                    return super(cblock._zlibblock, self).decode(ptype.block().set(data), length=len(data))
+                    return super(cblock._zlibblock, self).decode(ptype.block(length=len(data)).set(data))
 
             def __zlibblock(self):
                 return ptype.clone(self._zlibblock, _value_=dynamic.block(self['size'].l.int()))
@@ -2805,8 +2804,6 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'size'),
                 (__zlibblock, 'data'),
             ]
-        message = 'hi there.'
-        cmessage = message.encode('zlib')
         data = pint.uint32_t().set(len(cmessage)).serialize()+cmessage
         a = cblock(source=prov.string(data)).l
         if a['data'].d.l.serialize() == message:
@@ -2814,18 +2811,20 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compression_block():
+        global message, data, a
+        message = 'hi there.'
+        class mymessage(ptype.block):
+            length = len(message)
+        data = mymessage().set(message)
+
         class zlibblock(ptype.encoded_t):
-            _object_ = ptype.block
+            _object_ = ptype.clone(ptype.block, length=len(message))
             def encode(self, object, **attrs):
                 data = object.serialize().encode('zlib')
                 return super(zlibblock, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
                 data = object.serialize().decode('zlib')
                 return super(zlibblock, self).decode(ptype.block(length=len(data)).set(data))
-
-        class mymessage(ptype.block): pass
-        message = 'hi there.'
-        data = mymessage().set(message)
 
         source = prov.string('\x00'*1000)
         a = zlibblock(source=source)
@@ -3100,6 +3099,36 @@ if __name__ == '__main__':
             raise Failure
 
         x.object = b
+        if x.serialize() == b.serialize():
+            raise Success
+
+    @TestCase
+    def test_encoded_double_reference():
+        class T(ptype.encoded_t): pass
+        a = pstr.szstring().set('i still love you and fucking miss you, camacho.')
+        b = pstr.szstring().set('i made the wrong decision, im sorry man :-/')
+
+        x = T()
+        x.reference(a)
+        if x.serialize() != a.serialize():
+            raise Failure
+
+        x.reference(b)
+        if x.serialize() == b.serialize():
+            raise Success
+
+    @TestCase
+    def test_encoded_reference_commit():
+        class T(ptype.encoded_t):
+            _object_ = pstr.szstring
+        a = pstr.szstring().set('i still love you and fucking miss you, camacho.')
+        b = pstr.szstring().set('i made the wrong decision, im sorry man :-/')
+
+        x = T()
+        x.reference(a)
+        if x.serialize() != a.serialize():
+            raise Failure
+        x.d.l.set(b.serialize()).c
         if x.serialize() == b.serialize():
             raise Success
 
