@@ -1871,7 +1871,7 @@ class wrapper_t(type):
             if not istype(self._value_):
                 raise error.UserError(self, 'wrapper_t.object', message='unable to instantiate .object due to wrapper_t._value_ is undefined.')
 
-            res = self._value_
+            res = self._value_ or type
             name = 'wrapped<{:s}>'.format(res.typename() if istype(res) else res.__name__)
             self.__object__ = self.new(res, __name__=name, offset=0, source=provider.proxy(self))
 
@@ -1882,16 +1882,16 @@ class wrapper_t(type):
     def object(self, instance):
         name = 'wrapped<{:s}>'.format(instance.name())
 
-        # steal the type from the one the user specified
-        self._value_ = instance.__class__
-
         # re-assign the object the user specified
         self.__object__ = res = instance.copy(__name__=name, offset=0, source=provider.proxy(self), parent=self)
-        if self.__value__ is None and res.initializedQ():
-            self.__deserialize_block__(res.serialize())
 
-        # commit using the upper-level mechanics just to be sure
-        res.commit()
+        # if the backing type wasn't created yet, then create it
+        if self.__value__ is None and res.initializedQ():
+            return self.__deserialize_block__(res.serialize())
+
+        # update our value with the type that we assigned
+        self.value = res.serialize()
+
     o = object
 
     def initializedQ(self):
@@ -1903,7 +1903,7 @@ class wrapper_t(type):
 
         # if blocksize can't be calculated by loading (invalid dereference)
         #   then guess the size by allocating an empty version of the type
-        value = self.new(self._value_ or undefined, offset=self.getoffset(), source=self.source)
+        value = self.new(self._value_ or type, offset=self.getoffset(), source=self.source)
         try:
             res = value.l.blocksize()
         except error.LoadError:
@@ -3086,6 +3086,21 @@ if __name__ == '__main__':
         x.append(pint.uint32_t)
         x.append(pint.uint32_t)
         if x.serialize() == '\x00\x00\x00\x00\x00\x00\x00\x00':
+            raise Success
+
+    @TestCase
+    def test_wrapped_double_assignment():
+        class T(ptype.wrapper_t): pass
+        a = pstr.szstring().set('i still love you and fucking miss you, camacho.')
+        b = pstr.szstring().set('i love you, camacho')
+
+        x = T()
+        x.object = a
+        if x.serialize() != a.serialize():
+            raise Failure
+
+        x.object = b
+        if x.serialize() == b.serialize():
             raise Success
 
 if __name__ == '__main__':
