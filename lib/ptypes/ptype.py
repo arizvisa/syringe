@@ -825,7 +825,7 @@ class base(generic):
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         attrs.setdefault('parent', self.parent)
         if 'value' not in attrs:
-            if not builtins.isinstance(self.value, (str, types.NoneType)):
+            if not builtins.isinstance(self.value, (bytes, types.NoneType)):
                 raise error.AssertionError(self, 'base.copy', message='Invalid type of .value while trying to duplicate object : {!r}'.format(self.value.__class__))
             attrs['value'] = None if self.value is None else self.value[:]
         result.__update__(attrs)
@@ -1067,7 +1067,7 @@ class type(base):
         if not values: return self
 
         value, = values
-        if not builtins.isinstance(value, six.string_types):
+        if not builtins.isinstance(value, bytes):
             raise error.TypeError(self, 'type.set', message='type {!r} is not serialized data'.format(value.__class__))
 
         self.value = value[:]
