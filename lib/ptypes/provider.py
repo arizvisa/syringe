@@ -61,16 +61,107 @@ Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 class base(object):
-    '''Base provider class. Intended to be used as a template for a provider implementation.'''
+    '''
+    Base provider class.
+
+    Intended to be used as a template for a provider implementation.
+    '''
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        raise error.ImplementationError(self, 'seek', message='Developer forgot to overload this method')
+        raise error.ImplementationError(self, 'seek', message='User forgot to implement this method')
     def consume(self, amount):
         '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
-        raise error.ImplementationError(self, 'seek', message='Developer forgot to overload this method')
+        raise error.ImplementationError(self, 'consume', message='User forgot to implement this method')
     def store(self, data):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
-        raise error.ImplementationError(self, 'seek', message='Developer forgot to overload this method')
+        raise error.ImplementationError(self, 'store', message='User forgot to implement this method')
+
+class remote(base):
+    '''
+    Base remote provider class.
+
+    Intended to be inherited from when defining a remote provider that needs to
+    cache any data that is being read or written. To use this, simply inherit
+    from this class and implement the remote.read(), remote.reset(), and the
+    remote.send() methods.
+
+    Once the provider is instantiated, the user may call the .send() method to
+    submit any committed data, or the .reset() method when it is necessary to
+    reset the data that was cached.
+    '''
+    __cons__ = staticmethod(functools.partial(array.array, 'B'))
+
+    def __init__(self):
+        """This initializes any attributes required by a remote provider.
+
+        This is required to be called by any child implementation.
+        """
+        self.offset = 0
+
+        # This is the buffer that gets committed to before sending
+        self.__buffer__ = self.__cons__()
+
+        # This is a cache that remote data will be read into as a
+        # ptype instance needs it. We make a copy to avoid re-construction.
+        self.__cache__ = self.__buffer__[:]
+
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res, self.offset = self.offset, offset
+        return res
+
+    def consume(self, amount):
+        '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
+        left, right = self.offset, self.offset + amount
+        if len(self.__cache__) >= right:
+            return buffer(self.__cache__)[left : right]
+
+        try:
+            data = self.read(right - len(self.__cache__))
+            self.__cache__.fromstring(data)
+            return self.consume(amount)
+
+        except Exception, e:
+            self.log.warn("Unable to consume {:d} bytes from offset {:#x} while trying to preread {:d} bytes".format(amount, self.offset, right - len(self.__cache__)), exc_info=True)
+            raise error.ConsumeError(self, self.offset, amount)
+
+    def store(self, data):
+        '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
+        data = self.__cons__(data)
+        if self.offset > len(self.__buffer__):
+            self.__buffer__.fromstring('\0' * (self.offset - len(self.__buffer__)))
+        self.__buffer__[self.offset:] = data
+        return len(data)
+
+    def reset(self, *args):
+        """Reset the reader for the remote provider.
+
+        Parent implementation resets the current cache state and is required
+        to be called by the child implementation.
+        """
+        self.offset = 0
+
+        # Delete all elements in the cache to avoid re-construction
+        del(self.__cache__[:])
+
+    def send(self, *args):
+        """Submit the currently committed data to the remote provider.
+
+        Parent implementation returns a buffer containing the data to be sent
+        by the child implementation.
+        """
+
+        # We make an empty copy of .__buffer__ here to avoid reconstructing
+        # the buffer instance.
+        res, self.__buffer__ = self.__buffer__, self.__buffer__[0:0]
+        return buffer(res)
+
+    def read(self, amount):
+        """Read some number of bytes from the provider and return it.
+
+        User must implement this in order for remote data to be cached properly.
+        """
+        raise error.ImplementationError(self, 'read', message='User forgot to implement this method')
 
 ## core providers
 class empty(base):
