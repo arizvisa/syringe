@@ -2089,6 +2089,11 @@ class encoded_t(wrapper_t):
 
     def reference(self, object, **attrs):
         """Reference ``object`` and encode it into self"""
+
+        # re-parent the object to us
+        object = self.new(object)
+
+        # hook the object that we're referencing
         object = self.__hook(object)
 
         # assign some default attributes to object
