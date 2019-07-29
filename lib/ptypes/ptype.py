@@ -2106,6 +2106,11 @@ class encoded_t(wrapper_t):
         # now we can just pass through to our hooked .commit method
         object.commit()
 
+        # last thing to do is cache it in the memoization by reloading
+        res = self.dereference()
+        if not res.initializedQ():
+            res.load()
+
         return self
 
 def setbyteorder(endianness):
