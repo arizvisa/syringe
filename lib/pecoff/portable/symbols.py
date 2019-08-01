@@ -148,7 +148,7 @@ class SymbolTable(parray.terminated):
         if isinstance(value, Symbol):
             auxCount = value['NumberOfAuxSymbols'].int()
             res = value['StorageClass'].int()
-            auxSymbol = AuxiliaryRecord.withdefault(value, type=value)
+            auxSymbol = AuxiliaryRecord.withdefault(res, type=res)
             self.__auxiliary__.extend((auxSymbol,) * auxCount)
         return False
 
@@ -171,7 +171,7 @@ class SymbolTable(parray.terminated):
     def details(self, **options):
         result = []
         for sym, aux in self.iterate():
-            result.append(repr(s))
+            result.append("{!r}".format(sym))
             if sym['NumberOfAuxSymbols'].int() > 0:
                 result.extend(ptypes.utils.indent('\n'.join(map('{!r}'.format, aux))).split('\n'))
             continue
