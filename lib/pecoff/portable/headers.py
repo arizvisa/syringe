@@ -146,6 +146,9 @@ class IMAGE_SECTION_HEADER(pstruct.type):
 
     def getaddressbyoffset(self, offset):
         return offset - self['PointerToRawData'].int() + self['VirtualAddress'].int()
+
+    def summary(self):
+        return 'Name:{} Raw[{:#x}:+{:#x}] Virtual[{:#x}:+{:#x}] NumberOfRelocations:{:d} Characteristics:{:s}'.format(self['Name'].str(), self['PointerToRawData'].int(), self['SizeOfRawData'].int(), self['VirtualAddress'].int(), self['VirtualSize'].int(), self['NumberOfRelocations'].int(), self['Characteristics'].summary())
 SectionTable = IMAGE_SECTION_HEADER
 
 class SectionTableArray(parray.type):
