@@ -45,7 +45,7 @@ class Relocation(pstruct.type):
         sectionarray = currentsection.getparent(headers.SectionTableArray)
 
         # if the symbol is undefined or absolute, then assume the current section
-        symbolsectionnumber = symbol.GetSectionIndex()
+        symbolsectionnumber = symbol.SectionIndex()
         if symbolsectionnumber is None:
             section = currentsection
         # otherwise use the symbol's section index

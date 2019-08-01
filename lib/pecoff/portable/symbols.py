@@ -9,7 +9,7 @@ class IMAGE_SYM(pint.enum, uint16):
         ('DEBUG', 0xfffe)       #-2)
     ]
 
-    def GetSectionIndex(self):
+    def Index(self):
         '''Returns the physical section number index if defined, otherwise None'''
         res = self.int()
         if res in (0, 0xffff, 0xfffe, -1, -2):
@@ -17,7 +17,7 @@ class IMAGE_SYM(pint.enum, uint16):
         return res - 1
 
     def summary(self):
-        res = self.GetSectionIndex()
+        res = self.Index()
         return super(IMAGE_SYM, self).summary() if res is None else 'SectionIndex({:d})'.format(res)
 
 class IMAGE_SYM_TYPE(pint.enum, uint16):
@@ -115,8 +115,16 @@ class Symbol(pstruct.type):
         (uint8, 'NumberOfAuxSymbols')
     ]
 
-    def GetSectionIndex(self):
-        return self['SectionNumber'].GetSectionIndex()
+    def Name(self):
+        return self['Name'].str()
+
+    def SectionIndex(self):
+        return self['SectionNumber'].Index()
+
+    def Auxiliary(self):
+        res = self.parent.value
+        index = res.index(self)+1
+        return tuple(res[index:index+self['NumberOfAuxSymbols'].int()])
 
     def summary(self, **options):
         if self.initializedQ():
@@ -128,13 +136,6 @@ class Symbol(pstruct.type):
         return super(Symbol, self).summary()
 
     def repr(self): return self.summary()
-
-    @property
-    def auxiliary(self):
-        res = self.parent.value
-        index = res.index(self)+1
-        return tuple(res[index:index+self['NumberOfAuxSymbols'].int()])
-    aux = auxiliary
 
 class SymbolTable(parray.terminated):
     def _object_(self):
@@ -163,7 +164,7 @@ class SymbolTable(parray.terminated):
             yield sym, aux
         return
 
-    def GetSymbolAndAuxiliary(self, symbol):
+    def SymbolAndAuxiliary(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
         return self.value[index : index+1 + symbol['NumberOfAuxSymbols'].int()]
@@ -307,13 +308,13 @@ class SymbolTableAndStringTable(pstruct.type):
             yield sym
         return
 
-    def GetSymbol(self, name=None):
+    def Symbol(self, name=None):
         if name:
             return self.li.fetch(name)[0]
         self.li
         return [sym for sym, aux in self['Symbols'].iterate()]
 
-    def GetAuxiliary(self, name):
+    def Auxiliary(self, name):
         res = self.fetch(name)
         return tuple(res[1:]) if len(res) > 1 else ()
 
