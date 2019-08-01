@@ -8,4 +8,7 @@ class LineNumber(pstruct.type):
         (uint16, 'Linenumber'),
     ]
 
+class LineNumberTable(parray.type):
+    _object_ = LineNumber
+
 # heh..

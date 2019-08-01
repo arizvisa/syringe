@@ -2,14 +2,17 @@ import sys,array,ptypes
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
 from ..headers import *
 
+## Base Relocation class (Sub-class for each machine type)
 class MachineRelocation(ptype.definition):
     cache = {}
 
-## Base Relocation class (Sub-class for each machine type)
+## Segment relocation entries
 class Relocation(pstruct.type):
     def __Type(self):
         header = LocateHeader(self)
-        res = header['FileHeader']
+
+        # FileHeader is for PE executables, Signature is for COFF objects
+        res = header['FileHeader'] if 'FileHeader' in header else header['Signature']
         return MachineRelocation.lookup(res['Machine'].int())
 
     _fields_ = [
@@ -52,6 +55,9 @@ class Relocation(pstruct.type):
         # convert the data into an array that can be processed
         data = array.array('B', data)
         return self['Type'].__relocate__(data, symbol, section, namespace).tostring()
+
+class RelocationTable(parray.type):
+    _object_ = Relocation
 
 ### Each relocation entry
 
