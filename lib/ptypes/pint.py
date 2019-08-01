@@ -383,6 +383,16 @@ class enum(type):
             cls.__pint_enum_validated__ = True
         return
 
+    def has(self, *value):
+        '''Return True if the provided parameter is contained by the enumeration. If no value is provided, then use the current instance.'''
+        if not value:
+            value = (self.get(),)
+        res, = value
+
+        if isinstance(res, six.string_types):
+            return self.byname(res, None) == self.get()
+        return self.byvalue(res, False) and True or False
+
     @classmethod
     def byvalue(cls, value, *default):
         '''Lookup the string in an enumeration by it's first-defined value'''
@@ -438,8 +448,9 @@ class enum(type):
 
     def __getitem__(self, name):
         '''Return True if the enumeration matches the value of the constant specified by name.'''
-        res = self.byname(name)
-        return res == self.get()
+        if isinstance(name, six.string_types):
+            return self.has(name)
+        return False
 
     @classmethod
     def enumerations(cls):

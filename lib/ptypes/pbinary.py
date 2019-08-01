@@ -481,6 +481,16 @@ class enum(integer):
     def blockbits(self):
         return getattr(self, 'width', 0 if self.value is None else bitmap.size(self.value))
 
+    def has(self, *value):
+        '''Return True if the provided parameter is contained by the enumeration. If no value is provided, then use the current instance.'''
+        if not value:
+            value = (bitmap.int(self.get()),)
+        res, = value
+
+        if isinstance(res, six.string_types):
+            return self.byname(res, None) == bitmap.int(self.get())
+        return self.byvalue(res, False) and True or False
+
     @classmethod
     def byvalue(cls, value, *default):
         '''Lookup the string in an enumeration by it's first-defined value'''
@@ -541,8 +551,9 @@ class enum(integer):
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
-        res = self.get()
-        return self.byname(name) == bitmap.int(res)
+        if isinstance(name, six.string_types):
+            return self.has(name)
+        return False
 
     @classmethod
     def enumerations(cls):
