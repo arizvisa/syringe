@@ -121,7 +121,7 @@ class Symbol(pstruct.type):
     def SectionIndex(self):
         return self['SectionNumber'].Index()
 
-    def Auxiliary(self):
+    def AuxiliarySymbols(self):
         res = self.parent.value
         index = res.index(self)+1
         return tuple(res[index:index+self['NumberOfAuxSymbols'].int()])
@@ -130,9 +130,8 @@ class Symbol(pstruct.type):
         if self.initializedQ():
             name, value = self['Name'].str(), self['Value'].int()
             sym_section, sym_type, sym_class = map(self.__getitem__, ('SectionNumber', 'Type', 'StorageClass'))
-            res = sym_class.int()
-            aux = AuxiliaryRecord.withdefault(res, type=res)
-            return '{:s} = {:#x} : Section={:s} : (Type={:s}, Class={:s}) : Aux={:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
+            aux = AuxiliaryRecord.withdefault(sym_class.int(), type=sym_class.int())
+            return '{:s} = {:#x} : SectionNumber={:s} : (Type={:s}, StorageClass={:s}) : AuxiliarySymbols={:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
         return super(Symbol, self).summary()
 
     def repr(self): return self.summary()

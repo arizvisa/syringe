@@ -143,7 +143,7 @@ if __name__ == 'CoffObject':
         sym = sst.Symbol(name)
         if sym['StorageClass'].int() == sym['StorageClass'].byname('STATIC') and sym['Value'].int() == 0:
             idx = sym.SectionIndex()
-            sym_static[idx] = (sym, sst.Auxiliary(name))
+            sym_static[idx] = (sym, sst.AuxiliarySymbols(name))
         continue
 
     for x in sym_static.keys():
