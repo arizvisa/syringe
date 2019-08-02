@@ -15,7 +15,6 @@ class IMAGE_IMPORT_HINT(pstruct.type):
         return self['String'].li.str()
 
 class _IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
-    byteorder = ptypes.config.byteorder.bigendian
 
     def GetOrdinal(self):
         """Returns (Ordinal Hint, Ordinal String)"""
@@ -25,12 +24,14 @@ class _IMAGE_IMPORT_NAME_TABLE_ORDINAL(pbinary.struct):
     def summary(self):
         return repr(self.GetOrdinal())
 
+@pbinary.littleendian
 class IMAGE_IMPORT_NAME_TABLE_ORDINAL(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
     _fields_ = [
         (1, 'OrdinalFlag'),   # True if an ordinal
         (15, 'Zero'),
         (16, 'Ordinal Number'),
     ]
+@pbinary.littleendian
 class IMAGE_IMPORT_NAME_TABLE_ORDINAL64(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
     _fields_ = [
         (1, 'OrdinalFlag'),   # True if an ordinal
@@ -39,8 +40,6 @@ class IMAGE_IMPORT_NAME_TABLE_ORDINAL64(_IMAGE_IMPORT_NAME_TABLE_ORDINAL):
     ]
 
 class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
-    byteorder = ptypes.config.byteorder.bigendian
-
     def dereference(self):
         """Dereferences Name into it's IMAGE_IMPORT_HINT structure"""
         parent = self.getparent(IMAGE_IMPORT_DIRECTORY)
@@ -62,11 +61,13 @@ class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
         hint,string = self.GetName()
         return '({:d}, {:s})'.format(hint, repr(string) if string is None else '"%s"'%string)
 
+@pbinary.littleendian
 class IMAGE_IMPORT_NAME_TABLE_NAME(_IMAGE_IMPORT_NAME_TABLE_NAME):
     _fields_ = [
         (1, 'OrdinalFlag'),
         (31, 'Name'),
     ]
+@pbinary.littleendian
 class IMAGE_IMPORT_NAME_TABLE_NAME64(_IMAGE_IMPORT_NAME_TABLE_NAME):
     _fields_ = [
         (1, 'OrdinalFlag'),
