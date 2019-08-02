@@ -126,11 +126,11 @@ class IMAGE_IMPORT_NAME_TABLE(_IMAGE_IMPORT_NAME_TABLE):
 class IMAGE_IMPORT_NAME_TABLE64(_IMAGE_IMPORT_NAME_TABLE):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY64
 
-class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
+class IMAGE_IMPORT_DESCRIPTOR(pstruct.type):
     def __IAT(self):
         res = IMAGE_IMPORT_ADDRESS_TABLE64 if self.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_ADDRESS_TABLE
         if hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida:
-            entry = self.getparent(IMAGE_IMPORT_DIRECTORY_ENTRY)
+            entry = self.getparent(IMAGE_IMPORT_DESCRIPTOR)
             count = entry['INT'].li.d.l
             return dyn.clone(res, length=len(count))
         return res
@@ -200,7 +200,7 @@ class IMAGE_IMPORT_DIRECTORY_ENTRY(pstruct.type):
         return
 
 class IMAGE_IMPORT_DIRECTORY(parray.terminated):
-    _object_ = IMAGE_IMPORT_DIRECTORY_ENTRY
+    _object_ = IMAGE_IMPORT_DESCRIPTOR
 
     def isTerminator(self, value):
         data = array.array('B', value.serialize())
