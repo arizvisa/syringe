@@ -163,6 +163,13 @@ class SymbolTable(parray.terminated):
             yield sym, aux
         return
 
+    def enumerate(self):
+        for index, item in enumerate(self):
+            if isinstance(item, Symbol):
+                yield index, item
+            continue
+        return
+
     def SymbolAndAuxiliary(self, symbol):
         '''Fetch Symbol and all its Auxiliary data'''
         index = self.value.index(symbol)
