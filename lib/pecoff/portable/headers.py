@@ -106,25 +106,25 @@ class IMAGE_SECTION_HEADER(pstruct.type):
         try:
             nt = portable.p
             alignment = nt['OptionalHeader']['FileAlignment'].int()
-            mask = alignment - 1
 
         # otherwise, there's no alignment necessary
         except KeyError:
-            mask = 0
+            alignment = 1
 
-        res = (self['SizeOfRawData'].int() + mask) & ~mask
-        return min((self.source.size() - self['PointerToRawData'].int(), res)) if hasattr(self.source, 'size') else res
+        res = (alignment - self['SizeOfRawData'].int() % alignment) & (alignment - 1)
+        return self['SizeOfRawData'].int() + res
 
     def getloadedsize(self):
+
+        nt = self.getparent(Header)
+        alignment = max((nt['OptionalHeader']['SectionAlignment'].int(), 0x1000))
+
         # XXX: even though the loadedsize is aligned to SectionAlignment,
         #      the loader doesn't actually map data there and thus the
-        #      actual mapped size is rounded to pagesize
+        #      actual mapped size is usually rounded to pagesize
 
-        # nt = self.getparent(Header)
-        # alignment = nt['OptionalHeader']['SectionAlignment'].int()
-        alignment = 0x1000  # pagesize
-        mask = alignment - 1
-        return (self['VirtualSize'].int() + mask) & ~mask
+        res = (alignment - self['VirtualSize'].int() % alignment) & (alignment - 1)
+        return self['VirtualSize'].int() + res
 
     def containsaddress(self, address):
         start = self['VirtualAddress'].int()
