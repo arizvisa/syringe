@@ -81,13 +81,19 @@ class _pstruct_generic(ptype.container):
         '''x.__getitem__(y) <==> x[y]'''
         if not isinstance(name, six.string_types):
             raise error.UserError(self, '_pstruct_generic.__getindex__', message='Element names must be of a str type.')
+
         try:
-            return self.__fastindex[name.lower()]
+            index = self.__fastindex[name.lower()]
+            if 0 <= index < len(self.value):
+                return index
+
         except KeyError:
-            for i,(_,n) in enumerate(self._fields_):
-                if n.lower() == name.lower():
-                    return self.__fastindex.setdefault(name.lower(), i)
-                continue
+            pass
+
+        for index, (_, fld) in enumerate(self._fields_):
+            if fld.lower() == name.lower():
+                return self.__fastindex.setdefault(name.lower(), index)
+            continue
         raise KeyError(name)
 
     ## informational methods
