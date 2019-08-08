@@ -2013,11 +2013,11 @@ class encoded_t(wrapper_t):
     def __hook(self, object):
         '''This hooks ``object`` with a .load and .commit that will write to the encoded_t'''
 
-        prefix = '_encoded_t'
+        fmt = '_encoded_t__{:s}'.format
         ## overriding the `commit` method
-        if hasattr(object, prefix+'_commit'):
-            object.commit = getattr(object, prefix+'_commit')
-            delattr(object, prefix+'_commit')
+        if hasattr(object, fmt('commit')):
+            object.commit = getattr(object, fmt('commit'))
+            delattr(object, fmt('commit'))
 
         def commit(**attrs):
             # now turn it into the type that the encoded_t should expect
@@ -2033,13 +2033,13 @@ class encoded_t(wrapper_t):
             self.object = backing
 
             return object
-        setattr(object, prefix+'_commit', object.commit)
+        setattr(object, fmt('commit'), object.commit)
         object.commit = commit
 
         ## overloading the `load` method
-        if hasattr(object, prefix+'_load'):
-            object.load = getattr(object, prefix+'_load')
-            delattr(object, prefix+'_load')
+        if hasattr(object, fmt('load')):
+            object.load = getattr(object, fmt('load'))
+            delattr(object, fmt('load'))
 
         def load(**attrs):
 
@@ -2050,9 +2050,9 @@ class encoded_t(wrapper_t):
             dec = self.decode(res, **attrs)
 
             # finally load the decoded obj into self
-            fn = getattr(object, prefix+'_load')
+            fn = getattr(object, fmt('load'))
             return fn(offset=0, source=provider.proxy(dec), blocksize=dec.blocksize)
-        setattr(object, prefix+'_load', object.load)
+        setattr(object, fmt('load'), object.load)
         object.load = load
 
         # ..and we're done
