@@ -249,7 +249,7 @@ class TPDU(pstruct.type):
 
         res = super(TPDU, self).alloc(**fields)
         return res.set(length=sum(res[fld].size() for fld in ['type','variable','parameters']))
-    
+
     def summary(self):
         res = []
         res.append("length={:#x}".format(self['length'].int()))

@@ -207,7 +207,7 @@ class ResourceFileInfo(pstruct.type):
         ]
 
     def __Data(self):
-        res = self.blocksize() - sum(self[n].li.size() for n in ('Manager', 'Reader')) 
+        res = self.blocksize() - sum(self[n].li.size() for n in ('Manager', 'Reader'))
         return dyn.clone(self.ResourceData, _value_=dyn.block(res), _object_=self._ResourceData)
 
     _fields_ = [
@@ -282,7 +282,7 @@ class VtableFixup(pstruct.type):
         else:
             t = pint.uint32_t if res['32BIT'] else pint.uint64_t if res['64BIT'] else pint.uint_t
         count = self['Size'].li.int()
-        return dyn.array(t, count)            
+        return dyn.array(t, count)
 
     _fields_ = [
         (virtualaddress(__Entry, type=uint32), 'VirtualAddress'),
@@ -1058,7 +1058,7 @@ class FieldAttributes(pbinary.flags):
             ('FAMOrAssme', 5),
             ('Public', 6),
         ]
-        
+
     _fields_ = [
         (1, 'HasDefault'),
         (1, 'Unused'),
@@ -1272,7 +1272,7 @@ class GenericParamAttributes(pbinary.flags):
             ('NotNullableValueTypeConstraint', 2),
             ('DefaultConstructorConstraint', 4),
         ]
-    
+
     _fields_ = [
         (11, 'Unused'),
         (SpecialConstraintMask, 'SpecialConstraint'),
@@ -1284,7 +1284,7 @@ class PreCalculatableTable(ptype.generic):
     @classmethod
     def PreCalculateSize(cls, htables):
         rows, heapsizes = htables['Rows'].li, htables['HeapSizes'].li
-    
+
         res = []
         for t, name in cls._fields_:
             if issubclass(t, Index):

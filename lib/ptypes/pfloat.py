@@ -150,7 +150,6 @@ class type(pint.type):
     # wrappers for backwards compatibility
     setf = lambda self, value: self.__setvalue__(value)
     getf = lambda self: self.__getvalue__()
-    
 
 class float_t(type):
     """Represents a packed floating-point number.

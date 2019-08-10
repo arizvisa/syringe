@@ -40,7 +40,7 @@ class TRANSMATRIX(parray.type):
 
     def repr(self):
         return self.details()
-        
+
 ### Chunk base types
 class ChunkType(ptype.definition): cache = {}
 class ID(pint.enum, pint.uint16_t):
@@ -519,7 +519,7 @@ class TRI_FACEL1(pstruct.type):
 class TRI_SMOOTH(parray.block):
     type = 0x4150
     _object_ = pint.uint32_t
-        
+
 @Tri.define
 class TRI_MATERIAL(pstruct.type):
     type = 0x4130

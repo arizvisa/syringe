@@ -49,8 +49,8 @@ def hex(bitmap):
     size = abs(s)
     length = math.trunc(math.ceil(size / 4.0))
     if s < 0:
-        max, sign = 2 ** size, 2 ** (size-1)
-        res = n & (max -1 )
+        max, sign = 2 ** size, 2 ** (size - 1)
+        res = n & (max - 1)
         return "{:+#0{:d}x}".format((res - max) if res & sign else res & (sign - 1), length + 3)
     return "{:#0{:d}x}".format(n & (2 ** size) - 1, length + 2)
 
@@ -148,7 +148,7 @@ def mul(bitmap, integer):
     res, size = bitmap
     max = 2 ** abs(size)
     if size < 0:
-        sign = 2 ** (abs(size) -1 )
+        sign = 2 ** (abs(size) - 1)
         res = (res - max) if res & sign else res & (sign - 1)
     return (res * integer) & (max - 1), size
 def div(bitmap, integer):
@@ -158,7 +158,7 @@ def div(bitmap, integer):
     if size < 0:
         sign = 2 ** (abs(size) - 1)
         res = (res - max) if res & sign else res & (sign - 1)
-    return math.trunc(float(res) / integer) & (max -1 ), size
+    return math.trunc(float(res) / integer) & (max - 1), size
 def mod(bitmap, integer):
     '''Modular divides the specified bitmap with an integer whilst preserving signedness'''
     res, size = bitmap

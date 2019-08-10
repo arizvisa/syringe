@@ -308,7 +308,7 @@ if __name__ == '__main__':
 
     elif args.mode == 'dump':
         target = target or sys.stdout
-    
+
     # help
     else:
         print >>sys.stdout, arg_p.format_help()

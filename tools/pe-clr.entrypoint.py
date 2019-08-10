@@ -30,7 +30,7 @@ e = dn['EntryPoint'].cast(pieces)
 if e['table'] != pecoff.portable.clr.TMethodDef.type:
     print >>sys.stderr, 'No CLR entrypoint found!'
     sys.exit(1)
-    
+
 emethod = root['Tables'][e['table']][e['index']]
 print >>sys.stdout, 'Method:\n{!r}\n'.format(emethod)
 

@@ -161,7 +161,7 @@ class ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE(pstruct.type):
     ]
 
 # TODO: Implement the rest of the ACCESS_ and SYSTEM_ constructed security types
- 
+
 @ACE_TYPE.define
 class ACCESS_ALLOWED_ACE(ACCESS_ACE_MASK_AND_SID):
     type = 0

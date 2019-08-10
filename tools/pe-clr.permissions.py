@@ -62,7 +62,7 @@ if __name__ == '__main__':
     guids = meta['StreamHeaders'].Get('#GUID')['Offset'].d
     blobs = meta['StreamHeaders'].Get('#Blob')['Offset'].d
     htables = meta['StreamHeaders'].Get('#~')['Offset'].d
-    
+
     ts = time.time()
     L.send("Loading heap \"{:s}\"".format('#~'))
     htables.l

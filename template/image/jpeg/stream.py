@@ -246,7 +246,7 @@ class Stream(ptype.block):
                     data = ''
                     continue
                 data += chr(m)
-                
+
         except StopIteration:
             result.append(data)
         result = result[1:]
@@ -262,7 +262,7 @@ class Stream(ptype.block):
 if __name__ == '__main__':
     blah = z[3]['data'].copy()
     #source = array.array('B', blah.serialize())
-    
+
     x = Stream(source=ptypes.prov.string(blah.serialize()), blocksize=lambda :blah.size()).l
     y = x.decode()
     for x in y: print x['type']

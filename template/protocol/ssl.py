@@ -23,7 +23,7 @@ PROTO_DTLS_1_1 = 0xfefd
 
 class ssl_session_st(pstruct.type):
     _fields_ = [
-        (pint.int32_t, 'version'), 
+        (pint.int32_t, 'version'),
         (pint.uint32_t, 'key_arg_length'),
         (dyn.clone(pstr.string,length=SSL_MAX_KEY_ARG_LENGTH), 'key_arg'),
         (c_int, "master_key_length"),

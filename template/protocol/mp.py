@@ -417,7 +417,7 @@ if __name__ == '__main__':
     res = [130,196,4,116,121,112,101,196,7,119,111,114,107,101,114,115, 196,4,100,97,116,97,145,130,196,8,119,111,114,107,101,114,105,100, 196,5,115,116,100,46,49,196,5,115,108,111,116,115,160]
     res = str().join(map(chr,res))
 
-    # https://github.com/msgpack/msgpack-python/blob/master/test/test_format.py 
+    # https://github.com/msgpack/msgpack-python/blob/master/test/test_format.py
     #res = b"\x96" b"\xde\x00\x00" b"\xde\x00\x01\xc0\xc2" b"\xde\x00\x02\xc0\xc2\xc3\xc2" b"\xdf\x00\x00\x00\x00" b"\xdf\x00\x00\x00\x01\xc0\xc2" b"\xdf\x00\x00\x00\x02\xc0\xc2\xc3\xc2"
     _fixnum = res = b"\x92\x93\x00\x40\x7f\x93\xe0\xf0\xff"
     _fixarray = res = b"\x92\x90\x91\x91\xc0"

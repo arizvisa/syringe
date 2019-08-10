@@ -213,7 +213,7 @@ class DDSPixelFormat(pstruct.type):
         @classmethod
         def default(cls):
             return cls().set('DX10')
-        
+
     _fields_ = [
         (_size, 'size'),
         (DDPF, 'flags'),
@@ -258,7 +258,7 @@ class DDSHeader(pstruct.type):
         @classmethod
         def default(cls):
             return cls().set(124)
-        
+
     def __header10(self):
         pf = self['pf'].li
         return DDSHeader10 if pf['fourcc'] == 'DX10' else ptype.undefined

@@ -59,7 +59,7 @@ class Chunk(pstruct.type):
         t, cb = self['ckID'].li, self['ckSize'].li
         tid, length = t.bytes(), cb.int()
         return FOURCC.withdefault(tid, type=tid, length=length)
-        
+
     _fields_ = [
         (FOURCCID, 'ckID'),
         (pint.uint32_t, 'ckSize'),

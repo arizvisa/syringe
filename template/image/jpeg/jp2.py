@@ -91,7 +91,7 @@ class BoxHeader(pstruct.type):
 
     def DataLength(self):
         return self.Length() - self.size()
-    
+
     def summary(self):
         boxType = self['boxType']
         boxLength = self.Length()
@@ -181,7 +181,7 @@ class Palette(pstruct.type):
     def __C(self):
         res = self['NPC'].li.int()
         return dyn.block(res * self['NE'].li.int())
-        
+
     _fields_ = [
         (u16, 'NE'),
         (u8, 'NPC'),
