@@ -18,7 +18,7 @@ class IMAGE_SYM(pint.enum, uint16):
 
     def summary(self):
         res = self.Index()
-        return super(IMAGE_SYM, self).summary() if res is None else 'SectionIndex({:d})'.format(res)
+        return super(IMAGE_SYM, self).summary() if res is None else "SectionIndex({:d})".format(res)
 
 class IMAGE_SYM_TYPE(pint.enum, uint16):
     _values_ = [
@@ -90,13 +90,19 @@ class ShortName(pstruct.type):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
         if self['IsShort'].int() != 0x00000000:
             return ptypes.utils.strdup( self.serialize(), terminator='\x00')
-        stringtable = self.getparent(SymbolTableAndStringTable)['Strings']
+
+        try:
+            res = self.getparent(SymbolTableAndStringTable)
+        except ptypes.error.NotFoundError:
+            logging.warn("{:s} : unable to return symbol name at offset {:#x} due to missing {:s}".format(self.instance(), self['Offset'].int(), SymbolTableAndStringTable.typename()))
+            return '<MissingStringTable>'
+
+        stringtable = res['Strings']
         return stringtable.extract( self['Offset'].int() )
 
     def set(self, string):
         if len(string) <= 8:
-            self.load(source=ptypes.provider.string(string + '\x00'*(8-len(string))), offset=0)
-            return self
+            return self.load(source=ptypes.provider.string(string + '\x00' * (8 - len(string))), offset=0)
 
         table = self.getparent(SymbolTableAndStringTable)
         res = table.AddString(string)
@@ -131,10 +137,11 @@ class Symbol(pstruct.type):
             name, value = self['Name'].str(), self['Value'].int()
             sym_section, sym_type, sym_class = map(self.__getitem__, ('SectionNumber', 'Type', 'StorageClass'))
             aux = AuxiliaryRecord.withdefault(sym_class.int(), type=sym_class.int())
-            return '{:s} = {:#x} : SectionNumber={:s} : (Type={:s}, StorageClass={:s}) : AuxiliarySymbols={:s}[{:d}]'.format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
+            return "{:s} = {:#x} : SectionNumber={:s} : (Type={:s}, StorageClass={:s}) : AuxiliarySymbols={:s}[{:d}]".format(name, value, sym_section.summary(), sym_type.summary(), sym_class.summary(), aux.typename(), self['NumberOfAuxSymbols'].int())
         return super(Symbol, self).summary()
 
-    def repr(self): return self.summary()
+    def repr(self):
+        return self.summary()
 
 class SymbolTable(parray.terminated):
     def _object_(self):
@@ -180,7 +187,7 @@ class SymbolTable(parray.terminated):
         for sym, aux in self.iterate():
             result.append("{!r}".format(sym))
             if sym['NumberOfAuxSymbols'].int() > 0:
-                result.extend(ptypes.utils.indent('\n'.join(map('{!r}'.format, aux))).split('\n'))
+                result.extend(ptypes.utils.indent('\n'.join(map("{!r}".format, aux))).split('\n'))
             continue
         return '\n'.join(result)
         #return '\n'.join(repr(s) for s,a in self.iterate())
@@ -199,7 +206,7 @@ class AuxiliaryRecord(ptype.definition):
         type = None
         @classmethod
         def typename(cls):
-            return '{:s}<{:d}>'.format(cls.__name__, cls.type)
+            return "{:s}<{:d}>".format(cls.__name__, cls.type)
     default = NotImplementedAuxiliaryRecord
 
 @AuxiliaryRecord.define
@@ -296,7 +303,7 @@ class StringTable(pstruct.type):
         res, data = string + '\x00', self['Data'].serialize()
         index = data.find(res)
         if index == -1:
-            raise LookupError("{:s} : Unable to find null-terminated string within string table {:s} : {!r}".format('.'.join((cls.__module__, cls.__name__))), self.instance(), string)
+            raise LookupError("{:s} : Unable to find null-terminated string ({!r}) within string table".format(self.instance(), string))
         return index + self['Size'].size()
 
 class SymbolTableAndStringTable(pstruct.type):
@@ -314,6 +321,11 @@ class SymbolTableAndStringTable(pstruct.type):
             yield sym
         return
 
+    def enumerate(self):
+        for item in self['Symbols'].enumerate():
+            yield item
+        return
+
     def Symbol(self, name=None):
         if name:
             return self.li.fetch(name)[0]
@@ -326,8 +338,8 @@ class SymbolTableAndStringTable(pstruct.type):
 
     def AddSymbol(self):
         '''Add a new unnamed symbol to the 'Symbols' table. Return the Symbol instance.'''
-        cls, index, symbols = self.__class__, len(self['Symbols']), self['Symbols']
-        logging.info('{:s} : adding a new symbol at index {:d}'.format('.'.join((cls.__module__, cls.__name__)), index))
+        index, symbols = len(self['Symbols']), self['Symbols']
+        logging.info("{:s} : adding a new symbol at index {:d}".format(self.instance(), index))
 
         res = symbols.new(Symbol, __name__=str(index), offset=self.getoffset() + self.size(), source=None).alloc()
         res['SectionNumber'].set('UNDEFINED')      # set as undefined since we aren't gonna be placing it anywhere
@@ -336,18 +348,18 @@ class SymbolTableAndStringTable(pstruct.type):
 
     def AddString(self, string):
         '''Add the specified `string` to the 'Strings' table and return the offset into the table'''
-        cls, table = self.__class__, self['Strings']
+        table = self['Strings']
         res = table.add(string)
-        logging.info('{:s} : added a new string to string table {:s} at offset {:d} : {!r}'.format('.'.join((cls.__module__, cls.__name__)), table.instance(), res, string))
+        logging.info("{:s} : added a new string to string table {:s} at offset {:d} : {!r}".format(self.instance(), table.instance(), res, string))
         return res
 
     ## symbol discovery and construction
     def fetch(self, name):
         for sym, aux in self['Symbols'].iterate():
             if sym['Name'].str() == name:
-                return tuple(itertools.chain( (sym,), aux ))
+                return tuple(itertools.chain( [sym], aux ))
             continue
-        raise KeyError('Symbol {:s} not found'.format(name))
+        raise KeyError("Symbol {:s} not found".format(name))
 
     def assign(self, name, value):
         '''Find the symbol identified by `name` and set its `value`'''
