@@ -1803,11 +1803,16 @@ class definition(object):
         If ``recurse`` is true, then also make copies of any definitions that are cached or defined underneath it.
         """
 
+        # Create a dictionary that keeps track of references so that if there's more
+        # than one reference to the same definition, they're properly retained in the
+        # duplicate definition that we return.
+        identity, duplicates = builtins.id, {}
+
         # Make a copy of the type's namespace
         ns = {}
         for name, attribute in cls.__dict__.iteritems():
             if recurse and builtins.isinstance(attribute, types.TypeType) and issubclass(attribute, definition):
-                ns[name] = attribute.copy(recurse=recurse)
+                ns[name] = duplicates.setdefault(identity(attribute), attribute.copy(recurse=recurse))
             else:
                 ns[name] = attribute
             continue
@@ -1820,7 +1825,7 @@ class definition(object):
         ns['cache'] = res = {}
         for type, object in cls.cache.iteritems():
             if recurse and builtins.isinstance(object, types.TypeType) and issubclass(object, definition):
-                res[type] = object.copy(recurse=recurse)
+                res[type] = duplicates.setdefault(identity(object), object.copy(recurse=recurse))
             else:
                 res[type] = object
             continue
