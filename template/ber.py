@@ -1,5 +1,5 @@
-import logging,math,six
-import ptypes,ptypes.bitmap as bitmap
+import logging, math, six, builtins
+import ptypes, ptypes.bitmap as bitmap
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
@@ -280,21 +280,28 @@ class Element(pstruct.type):
 ### Element classes
 @Protocol.define
 class Universal(ptype.definition):
-    Class,cache = 00, {}
+    Class, cache = 00, {}
     # FIXME: These types need to distinguish between constructed and non-constructed
     #        types instead of just generalizing them.
+Protocol.Universal = Universal
+
 @Protocol.define
 class Application(ptype.definition):
-    Class,cache = 01, {}
+    Class, cache = 01, {}
     # FIXME: This needs to be unique to the instance of all ber.Element types
     #        used by the application.
+Protocol.Application = Application
+
 @Protocol.define
 class Context(ptype.definition):
-    Class,cache = 02, {}
+    Class, cache = 02, {}
     # FIXME: This needs to be unique to a specific ber.Element type
+Protocol.Context = Context
+
 @Protocol.define
 class Private(ptype.definition):
-    Class,cache = 03, {}
+    Class, cache = 03, {}
+Protocol.Private = Private
 
 ### Tag definitions (X.208)
 @Universal.define
