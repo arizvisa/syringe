@@ -281,12 +281,17 @@ class Element(pstruct.type):
 @Protocol.define
 class Universal(ptype.definition):
     Class,cache = 00, {}
+    # FIXME: These types need to distinguish between constructed and non-constructed
+    #        types instead of just generalizing them.
 @Protocol.define
 class Application(ptype.definition):
     Class,cache = 01, {}
+    # FIXME: This needs to be unique to the instance of all ber.Element types
+    #        used by the application.
 @Protocol.define
 class Context(ptype.definition):
     Class,cache = 02, {}
+    # FIXME: This needs to be unique to a specific ber.Element type
 @Protocol.define
 class Private(ptype.definition):
     Class,cache = 03, {}
