@@ -183,7 +183,7 @@ class String(pstr.string):
 
 ### Element structure
 class Protocol(ptype.definition):
-    attribute,cache = 'Class',{}
+    attribute, cache = 'Class', {}
     class UnknownConstruct(parray.block, Structured):
         def classname(self):
             return 'UnknownConstruct<{!r}>'.format(self.type)
@@ -192,7 +192,7 @@ class Protocol(ptype.definition):
             return 'UnknownPrimitive<{!r}>'.format(self.type)
 
 class Element(pstruct.type):
-    __protocol__ = Protocol
+    Protocol = Protocol
 
     def _object_(self, **attrs):
         if hasattr(self, '__object__'):
@@ -200,13 +200,13 @@ class Element(pstruct.type):
 
         t = self['Type'].li
         cons, tag = t['Constructed'], t['Tag'].int()
-        K = self.__protocol__.lookup(t['Class'])
+        K = self.Protocol.lookup(t['Class'])
 
         # Lookup type by it's class
         try:
             result = K.lookup(tag)
         except KeyError:
-            result = self.__protocol__.UnknownConstruct if cons else self.__protocol__.Unknown
+            result = self.Protocol.UnknownConstruct if cons else self.Protocol.Unknown
             attrs.setdefault('type', (t['Class'], tag))
             return dyn.clone(result, **attrs)
         return dyn.clone(result, **attrs)
