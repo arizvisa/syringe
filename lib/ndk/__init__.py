@@ -1,3 +1,6 @@
+import ptypes
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
 from . import umtypes
 from . import pstypes
 from . import ldrtypes
