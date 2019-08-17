@@ -2,7 +2,7 @@ import exceptions
 class Base(exceptions.StandardError):
     """Root exception type in ptypes"""
     def __init__(self, *args):
-        return super(Base,self).__init__(args)
+        return super(Base, self).__init__(args)
 
     def name(self):
         module = self.__module__
@@ -11,6 +11,59 @@ class Base(exceptions.StandardError):
 
     def __repr__(self):
         return self.__str__()
+
+class ObjectBase(Base):
+    '''Exception type that wraps a particular ptype instance'''
+    def __init__(self, object, **kwargs):
+        super(ObjectBase, self).__init__(kwargs)
+        self.__object = object
+
+    @property
+    def object(self):
+        return self.__object
+
+    def instanceQ(self):
+        return False if isinstance(self.__object, type) else True
+
+    def instance(self):
+        return self.__object.instance()
+
+    def objectname(self):
+        res = self.__object
+        if self.instanceQ():
+            return res.shortname()
+        return '.'.join((res.__module__, res.__name__))
+
+    def __str__(self):
+        if self.instanceQ():
+            return ' : '.join((self.objectname(), self.instance()))
+        return self.objectname()
+
+class MethodBase(ObjectBase):
+    '''Exception type that wraps the method of a particular ptype instance'''
+    def __init__(self, object, method, **kwargs):
+        super(MethodBase, self).__init__(object, **kwargs)
+        self.__method = method
+
+    def methodname(self):
+        return "{!s}".format(self.__method)
+
+    def __str__(self):
+        if self.instanceQ():
+            return ' : '.join((self.objectname(), self.methodname(), self.instance()))
+        return ' : '.join((self.objectname(), self.methodname()))
+
+class MethodBaseWithMessage(MethodBase):
+    '''Exception type that wraps the method of a particular ptype instance with some message'''
+    def __init__(self, object, method, message='', **kwargs):
+        super(MethodBaseWithMessage, self).__init__(object, method, **kwargs)
+        self.__message = message
+
+    def __str__(self):
+        res = super(MethodBaseWithMessage, self).__str__()
+        if self.__message:
+            return ' : '.join((res, self.__message))
+        return res
 
 ### errors that are caused by a provider
 class ProviderError(Base):
@@ -37,14 +90,7 @@ class ConsumeError(ProviderError):
         return 'ConsumeError({:s}) : Unable to consume bytes ({:x}:{:+x})'.format(type(identity), offset, desired)
 
 ### errors that can happen during deserialization or serialization
-class SerializationError(Base):
-    def __init__(self, object, **kwds):
-        super(SerializationError,self).__init__(kwds)
-        self.object = object
-    def typename(self):
-        return self.object.instance()
-    def objectname(self):
-        return self.object.__name__ if type(self.object) is type else self.object.shortname()
+class SerializationError(ObjectBase):
     def path(self):
         return '{{{:s}}}'.format(str().join(map("<{:s}>".format, self.object.backtrace() or [])))
     def position(self):
@@ -52,7 +98,7 @@ class SerializationError(Base):
         except: bs = '+?'
         return '{:x}:{:s}'.format(self.object.getoffset(), bs)
     def __str__(self):
-        return ' : '.join((self.objectname(), self.typename(), self.path(), super(SerializationError,self).__str__()))
+        return ' : '.join((self.objectname(), self.instance(), self.path(), super(SerializationError,self).__str__()))
 
 class LoadError(SerializationError, exceptions.EnvironmentError):
     """Error while initializing object from source"""
@@ -63,7 +109,7 @@ class LoadError(SerializationError, exceptions.EnvironmentError):
     def __str__(self):
         consumed, = self.loaded
         if consumed > 0:
-            return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.typename(), self.path(), consumed, super(LoadError,self).__str__())
+            return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.instance(), self.path(), consumed, super(LoadError,self).__str__())
         return super(LoadError,self).__str__()
 
 class CommitError(SerializationError, exceptions.EnvironmentError):
@@ -75,28 +121,15 @@ class CommitError(SerializationError, exceptions.EnvironmentError):
     def __str__(self):
         written, = self.committed
         if written > 0:
-            return '{:s} : wrote {:+#x} : {:s}'.format(self.typename(), written, self.path())
+            return '{:s} : wrote {:+#x} : {:s}'.format(self.instance(), written, self.path())
         return super(CommitError,self).__str__()
 
 class MemoryError(SerializationError, exceptions.MemoryError):
     """Out of memory or unable to load type due to not enough memory"""
 
 ### errors that happen due to different requests on a ptypes trie
-class RequestError(Base):
-    def __init__(self, object, method, message='', **kwds):
-        super(RequestError,self).__init__(kwds)
-        self.object,self.message = object,message
-        self.method = method
-    def typename(self):
-        return self.object.instance()
-    def objectname(self):
-        return self.object.__name__ if type(self.object) is type else self.object.shortname()
-    def methodname(self):
-        return str(self.method)
-    def __str__(self):
-        if self.message:
-            return ' : '.join((self.methodname(), self.objectname(), self.typename(), self.message))
-        return ' : '.join((self.methodname(), self.objectname(), self.typename()))
+class RequestError(MethodBaseWithMessage):
+    """Error that happens when requesting from a ptypes trie."""
 
 class TypeError(RequestError, exceptions.TypeError):
     """Error while generating type or casting to type"""
@@ -108,24 +141,8 @@ class InitializationError(RequestError, exceptions.ValueError):
     """Object is uninitialized"""
 
 ### assertion errors. doing things invalid
-class AssertionError(Base, exceptions.AssertionError):
-    def __init__(self, object, method, message='', **kwds):
-        super(AssertionError,self).__init__(kwds)
-        self.object,self.message = object,message
-        self.method = method
-
-    def typename(self):
-        return self.object.instance()
-    def objectname(self):
-        return self.object.__name__ if type(self.object) is type else self.object.shortname()
-
-    def methodname(self):
-        return str(self.method)
-
-    def __str__(self):
-        if self.message:
-            return ' : '.join((self.methodname(), self.objectname(), self.typename(), self.message))
-        return ' : '.join((self.methodname(), self.objectname(), self.typename()))
+class AssertionError(MethodBaseWithMessage, exceptions.AssertionError):
+    """Assertion error where the implementation fails a sanity check"""
 
 class UserError(AssertionError):
     """User tried to do something invalid (assertion)"""
