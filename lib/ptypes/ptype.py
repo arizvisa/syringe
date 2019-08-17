@@ -1719,6 +1719,11 @@ class definition(object):
         return operator.getitem(cls.cache, type)
 
     @classmethod
+    def __pop__(cls, type):
+        res, _ = operator.getitem(cls.cache, type), operator.delitem(cls.cache, type)
+        return res
+
+    @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
         if not builtins.isinstance(cls.cache, dict):
@@ -1740,6 +1745,11 @@ class definition(object):
         '''Return True if the specified ``type`` is defined to a ptype.'''
         return cls.__has__(type)
     contains = has
+
+    @classmethod
+    def pop(cls, type):
+        '''Removes the definition associated with the specified ``type`` from the cache.'''
+        return cls.__pop__(type)
 
     @classmethod
     def get(cls, *type, **attrs):
