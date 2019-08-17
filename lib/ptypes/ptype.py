@@ -661,7 +661,7 @@ class _base_generic(object):
             return self.parent
 
         query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((builtins.isinstance(q, builtins.type) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
+        match = lambda self: lambda query: any(((builtins.isinstance(q, types.TypeType) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -1799,7 +1799,7 @@ class definition(object):
     @classmethod
     def copy(cls):
         """Make a duplicate of the current definition and its members."""
-        res = types.TypeType(cls.__name__, cls.__bases__, dict(cls.__dict__))
+        res = builtins.type(cls.__name__, cls.__bases__, dict(cls.__dict__))
         res.cache = dict(cls.cache or {})
         res.attribute = cls.attribute
         res.default = cls.default
@@ -1822,7 +1822,7 @@ class definition(object):
         def clone(definition):
             res = dict(definition.__dict__)
             res.update(attributes)
-            #res = builtins.type(res.pop('__name__', definition.__name__), definition.__bases__, res)
+            #res = types.TypeType(res.pop('__name__', definition.__name__), definition.__bases__, res)
             res = builtins.type(res.pop('__name__', definition.__name__), (definition,), res)
             cls.add(getattr(res, cls.attribute), res)
             return definition
