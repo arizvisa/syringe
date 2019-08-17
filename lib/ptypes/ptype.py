@@ -1702,17 +1702,21 @@ class definition(object):
     @classmethod
     def __set__(cls, type, object):
         '''Overloadable: Map the specified type to an object'''
-        return cls.cache.setdefault(type, object)
+        if cls.__has__(type):
+            original, new = cls.cache[type], object
+            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for {:s} {!r} with new definition ({:s})".format(cls.__module__, '.'.join((original.__module__, original.__name__)), cls.attribute, type, '.'.join((new.__module__, new.__name__))))
+        return operator.setitem(cls.cache, type, object)
 
     @classmethod
     def __has__(cls, type):
         '''Overloadable: Check if the specified type has been mapped to an object'''
-        return type in six.viewkeys(cls.cache)
+        res = six.viewkeys(cls.cache)
+        return operator.contains(res, type)
 
     @classmethod
     def __get__(cls, type):
         '''Overloadable: Return the object for a specified type'''
-        return cls.cache[type]
+        return operator.getitem(cls.cache, type)
 
     @classmethod
     def add(cls, type, object):
