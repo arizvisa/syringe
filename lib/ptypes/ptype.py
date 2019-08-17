@@ -1797,13 +1797,36 @@ class definition(object):
         return True
 
     @classmethod
-    def copy(cls):
-        """Make a duplicate of the current definition and its members."""
-        res = builtins.type(cls.__name__, cls.__bases__, dict(cls.__dict__))
-        res.cache = dict(cls.cache or {})
-        res.attribute = cls.attribute
-        res.default = cls.default
-        return res
+    def copy(cls, recurse=False):
+        """Make a duplicate of the current definition and its members.
+
+        If ``recurse`` is true, then also make copies of any definitions that are cached or defined underneath it.
+        """
+
+        # Make a copy of the type's namespace
+        ns = {}
+        for name, attribute in cls.__dict__.iteritems():
+            if recurse and builtins.isinstance(attribute, types.TypeType) and issubclass(attribute, definition):
+                ns[name] = attribute.copy(recurse=recurse)
+            else:
+                ns[name] = attribute
+            continue
+
+        # Copy the default properties that are used by definitions
+        ns['attribute'] = cls.attribute
+        ns['default'] = cls.default
+
+        # Copy the cache making sure to recurse into it if necessary
+        ns['cache'] = res = {}
+        for type, object in cls.cache.iteritems():
+            if recurse and builtins.isinstance(object, types.TypeType) and issubclass(object, definition):
+                res[type] = object.copy(recurse=recurse)
+            else:
+                res[type] = object
+            continue
+
+        # Finally re-construct the type using the original name, base-classes, and new namespace
+        return builtins.type(cls.__name__, cls.__bases__, ns)
 
     @classmethod
     def merge(cls, other):
