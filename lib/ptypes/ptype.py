@@ -1721,7 +1721,6 @@ class definition(object):
             raise error.AssertionError(cls, 'definition.add', message='{:s} has an invalid .cache attribute : {!r}'.format(cls.__name__, cls.cache.__class__))
         return cls.__set__(type, object)
 
-        """Search ``cls.cache`` for a type with the specified value ``type``."""
     @classmethod
     def lookup(cls, *type):
         """D.lookup(type[, default]) -> Lookup a ptype in the defintion D by ``type`` and return it.
@@ -1734,6 +1733,7 @@ class definition(object):
 
     @classmethod
     def has(cls, type):
+        '''Return True if the specified ``type`` is defined to a ptype.'''
         return cls.__has__(type)
     contains = has
 
@@ -1780,38 +1780,36 @@ class definition(object):
             res = cls.__get__(type)
         except KeyError:
             res = clone(default, **missingattrs)
-
         return res
 
     @classmethod
-    def update(cls, otherdefinition):
-        """Import the definition cache from ``otherdefinition``, effectively merging the contents into the current definition"""
-        a, b = map(six.viewkeys, (cls.cache, otherdefinition.cache))
+    def update(cls, other):
+        """Import the definition cache from ``other``, effectively merging the contents into the current definition"""
+        a, b = map(six.viewkeys, (cls.cache, other.cache))
         if a & b:
-            Log.warn('definition.update : {:s} : Unable to import module {!r} due to multiple definitions of the same record'.format(cls.__module__, otherdefinition))
+            Log.warn('definition.update : {:s} : Unable to import module {!r} due to multiple definitions of the same record'.format(cls.__module__, other))
             Log.warn('definition.update : {:s} : Duplicate records : {!r}'.format(cls.__module__, a & b))
             return False
 
         # merge record caches into a single one
-        for type, object in six.viewitems(otherdefinition.cache):
+        for type, object in six.viewitems(other.cache):
             cls.__set__(type, object)
         return True
 
     @classmethod
-    def copy(cls, otherdefinition):
-        if not issubclass(otherdefinition, cls):
-            raise error.AssertionError(cls, 'definition.copy', message='{:s} is not inheriting from {:s}'.format(otherdefinition.__name__, cls.__name__))
-
-        otherdefinition.cache = dict(cls.cache)
-        otherdefinition.attribute = cls.attribute
-        otherdefinition.default = cls.default
-        return otherdefinition
+    def copy(cls):
+        """Make a duplicate of the current definition and its members."""
+        res = types.TypeType(cls.__name__, cls.__bases__, dict(cls.__dict__))
+        res.cache = dict(cls.cache or {})
+        res.attribute = cls.attribute
+        res.default = cls.default
+        return res
 
     @classmethod
-    def merge(cls, otherdefinition):
-        """Merge contents of current ptype.definition with ``otherdefinition`` and update both with the resulting union"""
-        if cls.update(otherdefinition):
-            otherdefinition.cache = cls.cache
+    def merge(cls, other):
+        """Merge contents of current ptype.definition with ``other`` and update both with the resulting union"""
+        if cls.update(other):
+            other.cache = cls.cache
             return True
         return False
 
