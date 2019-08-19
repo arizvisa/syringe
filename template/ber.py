@@ -132,14 +132,6 @@ class Structured(parray.type):
             res = (n.__element__() if isinstance(n, Element) else n.classname() for n in self.value)
         return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
 
-    def __protocol__(self):
-        try:
-            parent = self.getparent(Element)
-            res = parent.Protocol
-        except (ptypes.error.NotFoundError, AttributeError):
-            res = Protocol
-        return res
-
     def _object_(self):
         protocol = getattr(self.parent, 'Protocol', Protocol)
         if hasattr(self, '_fields_') and len(self.value) < len(self._fields_):
@@ -148,19 +140,19 @@ class Structured(parray.type):
         return dyn.clone(protocol.default)
 
     def __fields(self):
-        if not hasattr(self, '_fields_'):
-            raise AttributeError('_fields_')
         for _, name in self._fields_:
             yield name
         return
     def fields(self):
         return [ name for name in self.__fields() ]
     def iterfields(self):
-        for name in self.__fields(): yield name
+        for name in self.__fields():
+            yield name
+        return
 
     def alloc(self, *args, **fields):
         if hasattr(self, '_fields_'):
-            res, protocol = [], self.Protocol
+            res, protocol = [], getattr(self.parent, 'Protocol', Protocol)
 
             # iterate through all of our fields
             for t, name in self._fields_:
@@ -204,6 +196,7 @@ class Protocol(ptype.definition):
             return 'UnknownPrimitive<{!r}>'.format(self.type)
 
 class Element(pstruct.type):
+    Protocol = Protocol
     def __apply_length_type(self, result, length, indefiniteQ=False):
         '''Apply the specified length to the type specified by variable'''
 
@@ -246,13 +239,12 @@ class Element(pstruct.type):
 
         return result
 
-    @classmethod
-    def __type__(cls, type, length, **attrs):
+    def __type__(self, type, length, **attrs):
         klass, constructedQ, tag = (type[fld] for fld in ['Class','Constructed','Tag'])
 
         # Now we can look up the type that we need by grabbing hte protocol, then
         # using it to determine the class, and then its tag.
-        protocol = cls.Protocol
+        protocol = self.Protocol
 
         K = protocol.lookup(klass)
         try:
@@ -264,12 +256,18 @@ class Element(pstruct.type):
         return dyn.clone(result, **attrs)
 
     def __element__(self):
-        res = self.__type__(self['Type'], self['Length'])
+        '''Return the typename so that it's a lot easier to read.'''
+
+        # XXX: This is tied into the Structured mixin
+        res = self._object_() if hasattr(self, '_object_') else self.__type__(self['Type'], self['Length'])
         return res.typename()
 
     def __Value(self):
+        '''Return the correct ptype and size it correctly according to Element's properties.'''
         t, length = (self[fld].li for fld in ['Type','Length'])
-        result = self.__type__(t, length)
+
+        # XXX: This is tied into the Structured mixin
+        result = self._object_() if hasattr(self, '_object_') else self.__type__(t, length)
 
         # Apply our length to the type we determined
         return self.__apply_length_type(result, length.int(), length.isIndefinite())
