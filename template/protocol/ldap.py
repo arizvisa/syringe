@@ -51,8 +51,7 @@ if False:
             return super(CONSTRAINT, self).append(res)
 
 ###########
-@ber.protocol.copy
-class protocol(ber.protocol): pass
+class protocol(ber.Protocol.copy()): pass
 class record(ber.Element): protocol = protocol
 
 @protocol.define
