@@ -1835,6 +1835,17 @@ class definition(object):
         ns['attribute'] = cls.attribute
         ns['default'] = cls.default
 
+        # Figure out which module name is calling us
+        fr = sys._getframe()
+        while fr.f_back is not None:
+            if fr.f_globals['__name__'] != __name__:
+                break
+            fr = fr.f_back
+
+        # Update the module name with the one that was found in the frame.
+        if fr is not None and fr.f_globals['__name__'] != __name__:
+            ns['__module__'] = fr.f_globals['__name__']
+
         # Copy the cache making sure to recurse into it if necessary
         ns['cache'] = res = {}
         for type, object in cls.cache.iteritems():
