@@ -204,11 +204,23 @@ class Protocol(ptype.definition):
             return 'UnknownPrimitive<{!r}>'.format(self.type)
 
 class Element(pstruct.type):
+    def __protocol__(self):
+        if hasattr(self, 'Protocol'):
+            return self.Protocol
+
+        try:
+            parent = self.parent.getparent(Element)
+
+        except (ptypes.error.NotFoundError, AttributeError):
+            return Protocol
+
+        return parent.__protocol__()
+
     def _object_(self, **attrs):
         t = self['Type'].li
         cons, tag = t['Constructed'], t['Tag'].int()
 
-        protocol = getattr(self, 'Protocol', Protocol)
+        protocol = self.__protocol__()
         K = protocol.lookup(t['Class'])
 
         # Lookup type by it's class
@@ -229,14 +241,18 @@ class Element(pstruct.type):
         # FIXME: These cases should be implicitly defined instead of explicitly
         if issubclass(result, parray.block):
             result.blocksize = lambda self, cb=length: cb
+
         elif indefiniteQ and issubclass(result, parray.terminated):
             # Type['Constructed']
             # Length['Form'] and !Length['Value']
             result.isTerminator = lambda self, value: isinstance(value['Value'], EOC)
+
         elif ptype.iscontainer(result):
             result = result
+
         elif ptype.istype(result):
             result.length = length
+
         return result
 
     def __apply_length_instance(self, result, length, indefiniteQ=False):
@@ -246,14 +262,18 @@ class Element(pstruct.type):
         # FIXME: These cases should be implicitly defined instead of explicitly
         if isinstance(result, parray.block):
             result.blocksize = lambda cb=length: cb
+
         elif indefiniteQ and isinstance(result, parray.terminated):
             # Type['Constructed']
             # Length['Form'] and !Length['Value']
             result.isTerminator = lambda value: isinstance(value['Value'], EOC)
+
         elif isinstance(result, ptype.container):
             result = result
+
         elif isinstance(result, ptype.type):
             result.length = length
+
         return result
 
     def __Value(self):
