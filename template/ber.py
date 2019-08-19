@@ -354,7 +354,7 @@ class BITSTRING(ptype.block):
     type = 0x03
 
 @Universal.define
-class OCTETSTRING(String):
+class OCTETSTRING(ptype.block):
     type = 0x04
     def summary(self):
         res = str().join(map('{:02X}'.format, map(six.byte2int, self.serialize())))
