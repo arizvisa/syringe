@@ -273,8 +273,11 @@ class string(ptype.type):
             self.append(x)
         return
 
-    def __setvalue__(self, *values, **attrs):
-        '''Replaces the contents of ``self`` with the string ``value``.'''
+    def __setvalue__(self, *values, **retain):
+        """Replaces the contents of ``self`` with the string ``value``.
+
+        Resizes the string according to the length of ``value`` unless the ``retain`` attribute is set.
+        """
         if not values:
             return self
 
@@ -284,13 +287,17 @@ class string(ptype.type):
         glyphs = [res for res in value]
 
         t = ptype.clone(parray.type, _object_=self._object_)
-        result = t(length=size / esize)
+        result = t(length=size / esize) if retain.get('retain', False) else t(length=len(glyphs))
 
         for element, glyph in map(None, result.alloc(), value):
             if element is None: break
             element.set(glyph or '\x00')
 
-        return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
+        if retain.get('retain', False):
+            return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
+
+        self.length = len(result)
+        return self.load(offset=0, source=provider.proxy(result))
 
     def str(self):
         '''Decode the string into the specified encoding type.'''
@@ -615,6 +622,36 @@ if __name__ == '__main__':
         x = pstr.string(length=5, offset=0x10).a
         offset = x.append(pstr.char_t().set('F'))
         if offset == x.getoffset() + 5:
+            raise Success
+
+    @TestCase
+    def test_str_set_retained():
+        data = 'hola'
+        x = pstr.string(length=10).a
+        if x.serialize() != '\0\0\0\0\0\0\0\0\0\0':
+            raise Failure
+        x.set(data, retain=True)
+        if x.serialize() == 'hola\0\0\0\0\0\0':
+            raise Success
+
+    @TestCase
+    def test_str_set_resized():
+        data = 'hola'
+        x = pstr.string(length=10).a
+        if x.serialize() != '\0\0\0\0\0\0\0\0\0\0':
+            raise Failure
+        x.set(data, retain=False)
+        if x.serialize() == 'hola':
+            raise Success
+
+    @TestCase
+    def test_str_set_default():
+        data = 'hola'
+        x = pstr.string(length=10).a
+        if x.serialize() != '\0\0\0\0\0\0\0\0\0\0':
+            raise Failure
+        x.set(data)
+        if x.serialize() == 'hola':
             raise Success
 
 if __name__ == '__main__':
