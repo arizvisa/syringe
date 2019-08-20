@@ -190,10 +190,12 @@ class Protocol(ptype.definition):
     attribute, cache = 'Class', {}
     class UnknownConstruct(parray.block, Structured):
         def classname(self):
-            return 'UnknownConstruct<{!r}>'.format(self.type)
+            klass, tag = self.type
+            return "UnknownConstruct<{:d,{:d}>".format(klass, tag)
     class Unknown(ptype.block):
         def classname(self):
-            return 'UnknownPrimitive<{!r}>'.format(self.type)
+            klass, tag = self.type
+            return "UnknownPrimitive<{:d},{:d}>".format(klass, tag)
 
 class Element(pstruct.type):
     Protocol = Protocol
@@ -248,7 +250,7 @@ class Element(pstruct.type):
 
         K = protocol.lookup(klass)
         try:
-            result = K.lookup((klass, tag.int()))
+            result = K.lookup(tag.int())
 
         except KeyError:
             result = protocol.UnknownConstruct if constructedQ else protocol.Unknown
@@ -302,11 +304,13 @@ Protocol.default = Element
 
 ### Element classes
 class ProtocolClass(ptype.definition):
+    attribute = 'tag'
+
     @classmethod
     def __set__(cls, type, object):
         if isinstance(type, six.integer_types):
             object.type = cls.Class, type
-            return super(ProtocolClass, cls).__set__((cls.Class, type), object)
+            return super(ProtocolClass, cls).__set__(type, object)
         return super(ProtocolClass, cls).__set__(type, object)
 
 @Protocol.define
@@ -337,35 +341,35 @@ Protocol.Private = Private
 ### Tag definitions (X.208)
 @Universal.define
 class EOC(ptype.type):
-    type = 0x00
+    tag = 0x00
     # Required only if the length field specifies it
 
 @Universal.define
 class BOOLEAN(ptype.block):
-    type = 0x01
+    tag = 0x01
 
 @Universal.define
 class INTEGER(pint.uint_t):
-    type = 0x02
+    tag = 0x02
 
 @Universal.define
 class BITSTRING(ptype.block):
-    type = 0x03
+    tag = 0x03
 
 @Universal.define
 class OCTETSTRING(ptype.block):
-    type = 0x04
+    tag = 0x04
     def summary(self):
         res = str().join(map('{:02X}'.format, map(six.byte2int, self.serialize())))
         return "({:d}) {:s}".format(self.size(), res)
 
 @Universal.define
 class NULL(ptype.block):
-    type = 0x05
+    tag = 0x05
 
 @Universal.define
 class OBJECT_IDENTIFIER(ptype.type):
-    type = 0x06
+    tag = 0x06
 
     def set(self, string):
         if string in self._values_.viewvalues():
@@ -482,67 +486,67 @@ class OBJECT_IDENTIFIER(ptype.type):
 
 @Universal.define
 class EXTERNAL(ptype.block):
-    type = 0x08
+    tag = 0x08
 
 @Universal.define
 class REAL(ptype.block):
-    type = 0x09
+    tag = 0x09
 
 @Universal.define
 class ENUMERATED(ptype.block):
-    type = 0x0a
+    tag = 0x0a
 
 @Universal.define
 class UTF8String(String):
-    type = 0x0c
+    tag = 0x0c
 
 @Universal.define
 class SEQUENCE(parray.block, Structured):
-    type = 0x10
+    tag = 0x10
 
 @Universal.define
 class SET(parray.block, Structured):
-    type = 0x11
+    tag = 0x11
 
 @Universal.define
 class NumericString(ptype.block):
-    type = 0x12
+    tag = 0x12
 
 @Universal.define
 class PrintableString(String):
-    type = 0x13
+    tag = 0x13
 
 @Universal.define
 class T61String(String):
-    type = 0x14
+    tag = 0x14
 
 @Universal.define
 class IA5String(String):
-    type = 0x16
+    tag = 0x16
 
 @Universal.define
 class UTCTime(String):
-    type = 0x17
+    tag = 0x17
 
 @Universal.define
 class VisibleString(ptype.block):
-    type = 0x1a
+    tag = 0x1a
 
 @Universal.define
 class GeneralString(String):
-    type = 0x1b
+    tag = 0x1b
 
 @Universal.define
 class UniversalString(String):
-    type = 0x1c
+    tag = 0x1c
 
 @Universal.define
 class CHARACTER_STRING(String):
-    type = 0x1d
+    tag = 0x1d
 
 @Universal.define
 class BMPString(String):
-    type = 0x1e
+    tag = 0x1e
 
 ### End of Universal definitions
 

@@ -101,15 +101,7 @@ class as_msg_key_s(pstruct.type):
         (as_msg_field_s, 'f'),
         (ptype.block, 'key'),
     ]
-
-@msg_field.define
-class as_msg_number_s(pstruct.type):
-    type = AS_MSG_FIELD_TYPE.byname("KEY")
-
-    _fields_ = [
-        (as_msg_field_s, 'f'),
-        (pint.uint32_t, 'number'),
-    ]
+as_msg_number_s = as_msg_key_s
 
 class as_msg_op_s(pstruct.type):
     _fields_ = [
