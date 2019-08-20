@@ -287,8 +287,9 @@ class Element(pstruct.type):
         # one from the Universal/Primitive class using whatever its Tag is in .type
         value = fields.get('Value', None)
         if hasattr(value, 'type'):
-            cons = 1 if (ptypes.istype(value) and issubclass(value, Structured)) or isinstance(value, Structured) else 0
-            fields.setdefault('Type', Type().alloc(Class=0, Constructed=cons).set(Tag=fields['Value'].type))
+            klass, tag = getattr(value, 'Class', Context.Class), value.type
+            constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Structured)) or isinstance(value, Structured) else  0
+            fields.setdefault('Type', Type().alloc(Class=klass, Constructed=constructedQ).set(Tag=tag))
 
         if 'Length' in fields:
             return super(Element, self).alloc(**fields)
@@ -300,28 +301,34 @@ class Element(pstruct.type):
 Protocol.default = Element
 
 ### Element classes
+class ProtocolClass(ptype.definition):
+    @classmethod
+    def __set__(cls, type, object):
+        setattr(object, 'Class', cls.Class)
+        return super(ProtocolClass, cls).__set__(type, object)
+
 @Protocol.define
-class Universal(ptype.definition):
+class Universal(ProtocolClass):
     Class, cache = 00, {}
     # FIXME: These types need to distinguish between constructed and non-constructed
     #        types instead of just generalizing them.
 Protocol.Universal = Universal
 
 @Protocol.define
-class Application(ptype.definition):
+class Application(ProtocolClass):
     Class, cache = 01, {}
     # FIXME: This needs to be unique to the instance of all ber.Element types
     #        used by the application.
 Protocol.Application = Application
 
 @Protocol.define
-class Context(ptype.definition):
+class Context(ProtocolClass):
     Class, cache = 02, {}
     # FIXME: This needs to be unique to a specific ber.Element type
 Protocol.Context = Context
 
 @Protocol.define
-class Private(ptype.definition):
+class Private(ProtocolClass):
     Class, cache = 03, {}
 Protocol.Private = Private
 
