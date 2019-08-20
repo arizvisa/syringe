@@ -248,7 +248,7 @@ class Element(pstruct.type):
 
         K = protocol.lookup(klass)
         try:
-            result = K.lookup(tag.int())
+            result = K.lookup((klass, tag.int()))
 
         except KeyError:
             result = protocol.UnknownConstruct if constructedQ else protocol.Unknown
@@ -287,7 +287,7 @@ class Element(pstruct.type):
         # one from the Universal/Primitive class using whatever its Tag is in .type
         value = fields.get('Value', None)
         if hasattr(value, 'type'):
-            klass, tag = getattr(value, 'Class', Context.Class), value.type
+            klass, tag = value.type
             constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Structured)) or isinstance(value, Structured) else  0
             fields.setdefault('Type', Type().alloc(Class=klass, Constructed=constructedQ).set(Tag=tag))
 
@@ -304,7 +304,9 @@ Protocol.default = Element
 class ProtocolClass(ptype.definition):
     @classmethod
     def __set__(cls, type, object):
-        setattr(object, 'Class', cls.Class)
+        if isinstance(type, six.integer_types):
+            object.type = cls.Class, type
+            return super(ProtocolClass, cls).__set__((cls.Class, type), object)
         return super(ProtocolClass, cls).__set__(type, object)
 
 @Protocol.define
