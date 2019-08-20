@@ -1,4 +1,4 @@
-import datetime
+import math, datetime
 
 import ptypes
 from ptypes import *
@@ -134,12 +134,27 @@ class FILETIME(pstruct.type):
         (DWORD, 'dwLowDateTime'),
         (DWORD, 'dwHighDateTime')
     ]
+
     def timestamp(self):
         low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
-        return high * 0x100000000 | + low
+        return high * 2**32 + low
+
     def datetime(self):
         epoch = datetime.datetime(1601, 1, 1)
-        return epoch + datetime.timedelta(microseconds=self.timestamp() / 10.0)
+        return epoch + datetime.timedelta(microseconds=self.timestamp() / 1e1)
+
+    def set(self, *dt, **fields):
+        if not fields:
+            dt, = dt or (datetime.datetime.now(),)
+            delta = dt - datetime.datetime(1601, 1, 1)
+            day_ms, second_ms, ms_100ns = map(math.trunc, (8.64e10, 1e6, 1e1))
+            microseconds = delta.days * day_ms + delta.seconds * second_ms + delta.microseconds
+
+            res = microseconds * ms_100ns
+            fields['dwLowDateTime']  = (res // 2**0 ) & 0xffffffff
+            fields['dwHighDateTime'] = (res // 2**32) & 0xffffffff
+        return super(FILETIME, self).set(**fields)
+
     def summary(self):
         epoch, ts = datetime.datetime(1601, 1, 1), self.timestamp()
         ts_s, ts_hns = ts // 1e7, ts % 1e7
