@@ -258,8 +258,11 @@ class Element(pstruct.type):
     def __element__(self):
         '''Return the typename so that it's a lot easier to read.'''
 
-        # XXX: This is tied into the Structured mixin
-        res = self._object_() if hasattr(self, '_object_') else self.__type__(self['Type'], self['Length'])
+        if self.initializedQ():
+            res = self['Value']
+        else:
+            # XXX: This is tied into the Structured mixin
+            res = self._object_() if hasattr(self, '_object_') else self.__type__(self['Type'], self['Length'])
         return res.typename()
 
     def __Value(self):
