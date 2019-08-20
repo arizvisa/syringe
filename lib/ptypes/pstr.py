@@ -283,8 +283,8 @@ class string(ptype.type):
         size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(self._object_).a.size()
         glyphs = [res for res in value]
 
-        t = ptype.clone(parray.type, _object_=self._object_, length=size / esize)
-        result = t()
+        t = ptype.clone(parray.type, _object_=self._object_)
+        result = t(length=size / esize)
 
         for element, glyph in map(None, result.alloc(), value):
             if element is None: break
