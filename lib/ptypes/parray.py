@@ -315,7 +315,7 @@ class type(_parray_generic):
 
                 else:
                     # XXX: should never be encountered
-                    raise error.ImplementationError(self, 'type.load', "Unknown load type -> {!r}".format(obj))
+                    raise error.ImplementationError(self, 'type.load', "Refusing to load array with an unknown element type ({!s})".format(obj))
             return super(type, self).load(**attrs)
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
