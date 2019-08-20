@@ -120,13 +120,14 @@ class _parray_generic(ptype.container):
         return
 
     def __append__(self, object):
-        idx = super(_parray_generic, self).__append__(object)
-        offset = (self.value[idx-1].getoffset() + self.value[idx-1].size()) if idx > 0 else self.getoffset()
+        idx = len(self.value)
+        offset = super(_parray_generic, self).__append__(object)
+        offset = (self.value[idx - 1].getoffset() + self.value[idx - 1].size()) if idx > 0 else self.getoffset()
         self.value[idx].setoffset(offset)
-        return idx
+        return offset
 
     def append(self, object):
-        """Append ``object`` to a ``self``. Return the index it was inserted at.
+        """Append ``object`` to a ``self``. Return the offset it was inserted at.
 
         This will update the offset of ``object`` so that it will appear at the
         end of the array.
@@ -1142,6 +1143,13 @@ if __name__ == '__main__':
 
         res = blah().a.set([dict(a=1, b=2), dict(a=3, b=4), dict(a=5), dict(b=6)])
         if res.get() == ((1, 2), (3, 4), (5, 0), (0, 6)):
+            raise Success
+
+    @TestCase
+    def test_array_append_getoffset():
+        x = parray.type(length=2, _object_=pint.uint32_t, offset=0x10).a
+        offset = x.append(pint.uint16_t)
+        if offset == x.getoffset() + x[0].size() * 2:
             raise Success
 
 if __name__ == '__main__':

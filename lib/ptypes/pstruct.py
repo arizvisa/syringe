@@ -69,13 +69,14 @@ class _pstruct_generic(ptype.container):
         del self.__fastindex[alias.lower()]
 
     def append(self, object):
-        '''L.append(object) -- append an element to a pstruct.type and return its index'''
+        '''L.append(object) -- append an element to a pstruct.type and return its offset.'''
         return self.__append__(object)
+
     def __append__(self, object):
-        name = object.shortname()
-        current = super(_pstruct_generic, self).__append__(object)
+        current, name = len(self.value), object.shortname()
+        offset = super(_pstruct_generic, self).__append__(object)
         self.__fastindex[name.lower()] = current
-        return current
+        return offset
 
     def __getindex__(self, name):
         '''x.__getitem__(y) <==> x[y]'''

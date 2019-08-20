@@ -1463,7 +1463,7 @@ class container(base):
         return u"???"
 
     def append(self, value):
-        """Add ``object`` to the ptype.container ``self``. Return the element's index.
+        """Add ``object`` to the ptype.container ``self``. Return the element's offset.
 
         When adding ``object`` to ``self``, none of the offsets are updated and
         thus will need to be manually updated before committing to a provider.
@@ -1485,9 +1485,9 @@ class container(base):
         # assume that object is now a ptype instance
         object.parent, object.source = self, None
 
-        current = len(self.value)
+        offset = self.getoffset() + self.size()
         self.value.append(object if object.initializedQ() else object.a)
-        return current
+        return offset
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''

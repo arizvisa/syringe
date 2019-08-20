@@ -731,8 +731,7 @@ class container(type):
         raise error.UserError(self, 'container.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
 
     def __append__(self, object):
-        current, size = len(self.value), 0 if self.value is None else self.bits()
-
+        size = 0 if self.value is None else self.bits()
         offset, suboffset = self.getposition()
         offset, suboffset = res = offset + (size / 8), suboffset + (size % 8)
 
@@ -742,7 +741,7 @@ class container(type):
 
         if self.value is None: self.value = []
         self.value.append(object)
-        return current
+        return res
 
     ## method overloads
     def __iter__(self):
@@ -892,8 +891,17 @@ class _array_generic(container):
         return len(self.value)
 
     def append(self, object):
-        '''L.append(object) -- append an element to a pbinary.array and return its index'''
-        return self.__append__(object)
+        '''L.append(object) -- append an element to a pbinary.array and return its position'''
+        name = "{!s}".format(len(self.value))
+        if bitmap.isinstance(object):
+            res = self.new(integer, __name__=name).__setvalue__(object)
+        elif isinstance(object, type):
+            res = object
+        elif istype(object) or ptype.isresolveable(object):
+            res = self.new(object, __name__=name).a
+        else:
+            res = self.new(self._object_, __name__=name).__setvalue__(object)
+        return self.__append__(res)
 
     def __iter__(self):
         '''x.__iter__() <==> iter(x)'''
@@ -952,9 +960,10 @@ class _struct_generic(container):
         return result
 
     def __append__(self, object):
-        current = super(_struct_generic, self).__append__(object)
+        current = len(self.value)
+        position = super(_struct_generic, self).__append__(object)
         self.__fastindex[object.name().lower()] = current
-        return current
+        return position
 
     def alias(self, alias, target):
         """Add an alias from /alias/ to the field /target/"""
@@ -2824,6 +2833,56 @@ if __name__ == '__main__':
 
         x = pbinary.new(s, source=ptypes.prov.string('\x77')).l
         raise Failure
+
+    @TestCase
+    def test_pbinary_array_append_bitmap_72():
+        x = pbinary.array(length=2, _object_=8).a
+        x.append(bitmap.new(0xa, 4))
+        if x.bitmap() == bitmap.new(0x0000a, 8+8+4):
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_append_integer_73():
+        x = pbinary.array(length=2, _object_=8).a
+        x.append(0xaa)
+        if x.bitmap() == bitmap.new(0x0000aa, 8+8+8):
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_append_integerinstance_73():
+        n = pbinary.integer(blockbits=lambda: 4).set(0xf)
+        x = pbinary.array(length=2, _object_=8).a
+        x.append(n)
+        if x.bitmap() == bitmap.new(0x0000f, 8+8+n.bits()):
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_append_instance_74():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+            ]
+        n = t().a.set(a=0xa, b=0x5)
+        x = pbinary.array(length=2, _object_=8).a
+        x.append(n)
+        if x.bitmap() == bitmap.new(0x0000a5, 8+8+n.bits()):
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_append_type_75():
+        n = ptype.clone(pbinary.integer, blockbits=lambda _: 8)
+        x = pbinary.array(length=2, _object_=8).a
+        x.append(n)
+        if x.bitmap() == bitmap.new(0x000000, 8+8+n().blockbits()):
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_append_getoffset_76():
+        x = pbinary.array(length=2, _object_=8, offset=0x10).a
+        position = x.append(bitmap.new(0, 0x200))
+        if position == (x.getoffset() + 2, 0):
+            raise Success
 
 if __name__ == '__main__':
     import logging

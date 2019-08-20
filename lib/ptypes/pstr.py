@@ -257,13 +257,15 @@ class string(ptype.type):
         self.__insert(index, value.serialize())
 
     def append(self, object):
-        '''Append the character ``object`` to the string.'''
+        '''Append the character ``object`` to the string and return its offset.'''
         return self.__append__(object)
 
     def __append__(self, object):
         if not isinstance(object, self._object_):
             raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
+        offset = self.getoffset() + self.size()
         self.value += object.serialize()
+        return offset
 
     def extend(self, iterable):
         '''Extend the string ``self`` with the characters provided by ``iterable``.'''
@@ -597,6 +599,22 @@ if __name__ == '__main__':
         t = dyn.blockarray(pstr.szwstring, 30)
         a = t(source=source).l
         if (a[0].str(),a[1].str(),a[2].str()) == ('=::=::\\','e.log','') and a[2].blocksize() == 2 and len(a) == 3:
+            raise Success
+
+    @TestCase
+    def test_str_append_data():
+        global x
+        x = pstr.string(length=5).a
+        data = 'hola mundo'
+        map(x.append, (pstr.char_t().set(by) for by in data))
+        if x[5:].serialize() == data:
+            raise Success
+
+    @TestCase
+    def test_str_append_data_getoffset():
+        x = pstr.string(length=5, offset=0x10).a
+        offset = x.append(pstr.char_t().set('F'))
+        if offset == x.getoffset() + 5:
             raise Success
 
 if __name__ == '__main__':

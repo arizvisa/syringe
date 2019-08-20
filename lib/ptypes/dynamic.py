@@ -207,8 +207,9 @@ class _union_generic(ptype.container):
         self.__fastindex = {}
 
     def append(self, object):
-        """Add an element as part of a union. Return it's index."""
+        """Add an element as part of a union. Return its offset."""
         return self.__append__(object)
+
     def __append__(self, object):
         name = object.name()
 
@@ -216,7 +217,7 @@ class _union_generic(ptype.container):
         self.__object__.append(object)
 
         self.__fastindex[name.lower()] = current
-        return current
+        return self.getoffset()
 
     ## list methods
     def keys(self):
