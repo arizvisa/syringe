@@ -58,16 +58,25 @@ NTDDI_WINBLUE = 0x06020000
 
 # try to automatically identify which NTDDI_VERSION to use by default
 if not hasattr(sys,'getwindowsversion'):
-    NTDDI_VERSION = 0x06010100
-    logging.fatal("Loading ndk without running on a windows-based platform. Defaulting to Windows 7 SP1 (%08x): %s", NTDDI_VERSION, sys.platform)
+    NTDDI_VERSION = NTDDI_WIN7SP1
+    logging.fatal("Importing ndk on an alternative non-windows based platform ({:s}). Defaulting to Windows 7 SP1 (NTDDI_VERSION={:#0{:d}x})".format(sys.platform, NTDDI_VERSION, 2+8))
 
 else:
-    _ = sys.getwindowsversion()
-    NTDDI_VERSION = ((_.major&0xff) << 24) | ((_.minor&0xff) << 16) | ((_.service_pack_major&0xff) << 8)
-    del(_)
-    logging.info("Loading ndk with auto-detected %s-based operating-system : %04x SP%x", sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8)
+    version = sys.getwindowsversion()
+    NTDDI_VERSION = ((version.major & 0xff) << 24) | ((version.minor & 0xff) << 16) | ((version.service_pack_major & 0xff) << 8)
+    logging.warn("Importing ndk on a {:s}-based platform {:04x} SP{:d} (auto-detected): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, NTDDI_VERSION, 2 + 8))
+    del(version)
 
-WIN64 = 0
+# calculate size of uintptr_t using a trick to calculate the size of a lock which
+# always has 4 slots for it.
+import sys, thread
+SIZEOF_UINTPTR_T = sys.getsizeof(thread.allocate()) // 4
+
+# try and determine what to set WIN64 to. unfortunately this is supposed to
+# detect the architecture of the platform, but the best we can do is to get
+# the processor on windows and hope it corresponds.
+import platform
+WIN64 = 1 if platform.architecture()[0] in {"64bit"} else 0
 
 def NTDDI_MAJOR(dword):
     return dword & 0xffff0000
