@@ -198,12 +198,13 @@ class _parray_generic(ptype.container):
         try: length = len(self)
         except: length = self.length or 0
 
-        if self._object_ is None:
-            obj = '(untyped)'
+        object = self._object_
+        if object is None:
+            res = '(untyped)'
         else:
-            obj = self._object_.typename() if ptype.istype(self._object_) else self._object_.__name__
+            res = object.typename() if ptype.istype(object) else object.__name__
 
-        return u"{:s}[{:d}]".format(obj, length)
+        return u"{:s}[{:d}]".format(res, length)
 
     def summary(self, **options):
         res = super(_parray_generic, self).summary(**options)
@@ -276,7 +277,7 @@ class type(_parray_generic):
             for k, val in fields:
                 idx = result.__getindex__(k)
                 if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val).alloc(**attrs)
+                    result.value[idx] = result.new(val).a
                 elif isinstance(val, ptype.generic):
                     result.value[idx] = result.new(val)
                 else:
@@ -286,7 +287,7 @@ class type(_parray_generic):
             for idx, val in enumerate(fields):
                 name = str(idx)
                 if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val,__name__=name).alloc(**attrs)
+                    result.value[idx] = result.new(val,__name__=name).a
                 elif isinstance(val, ptype.generic):
                     result.value[idx] = result.new(val,__name__=name)
                 else:
@@ -294,7 +295,7 @@ class type(_parray_generic):
                 continue
 
             # re-alloc elements that exist in the rest of the array
-            for idx in six.moves.range(len(fields), len(result)):
+            for idx in six.moves.range(len(fields), len(result.value)):
                 result.value[idx].a
 
         result.setoffset(self.getoffset(), recurse=True)
@@ -303,19 +304,18 @@ class type(_parray_generic):
     def load(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                obj = self._object_
+                object = self._object_
                 self.value = []
 
                 # which kind of load are we
-                if ptype.istype(obj) and not ptype.iscontainer(obj):
+                if ptype.istype(object) and not ptype.iscontainer(object):
                     self.__load_block()
 
-                elif ptype.iscontainer(obj) or ptype.isresolveable(obj):
+                elif ptype.iscontainer(object) or ptype.isresolveable(object):
                     self.__load_container()
 
                 else:
-                    # XXX: should never be encountered
-                    raise error.ImplementationError(self, 'type.load', "Refusing to load array with an unknown element type ({!s})".format(obj))
+                    Log.info("type.load : {:s} : Unable to load array due to an unknown element type ({!s}).".format(self.instance(), object))
             return super(type, self).load(**attrs)
         except error.LoadError, e:
             raise error.LoadError(self, exception=e)
@@ -344,7 +344,7 @@ class type(_parray_generic):
 
         # output a warning if the length is already set to something and the user explicitly changed it to something different.
         if length and length != len(self):
-            Log.warn("parray.__setvalue__ : {:s} : Length of array was explicitly changed. : {:d} != {:d}".format(self.instance(), length, len(self)))
+            Log.warn("type.__setvalue__ : {:s} : Length of array was explicitly changed ({:d} != {:d}).".format(self.instance(), length, len(self)))
 
         result = super(type, self).__setvalue__(*value)
         result.length = len(self)

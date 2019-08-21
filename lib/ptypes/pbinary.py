@@ -792,7 +792,7 @@ class _array_generic(container):
                 idx = result.__getindex__(k)
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
                 if istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=k).alloc(**attrs)
+                    result.value[idx] = result.new(val, __name__=k).a
                 elif isinstance(val, type):
                     result.value[idx] = result.new(val, __name__=k)
                 elif bitmap.isinstance(val):
@@ -862,14 +862,16 @@ class _array_generic(container):
     def __element__(self):
         try: count = len(self)
         except TypeError: count = None
-        if bitmap.isinstance(self._object_):
-            result = ('signed<{:d}>' if bitmap.signed(self._object_) else 'unsigned<{:d}>').format(bitmap.size(self._object_))
-        elif istype(self._object_):
-            result = self._object_.typename()
-        elif isinstance(self._object_, six.integer_types):
-            result = ('signed<{:d}>' if self._object_ < 0 else 'unsigned<{:d}>').format(abs(self._object_))
+
+        object = getattr(self, '_object_', 0)
+        if bitmap.isinstance(object):
+            result = ('signed<{:d}>' if bitmap.signed(object) else 'unsigned<{:d}>').format(bitmap.size(object))
+        elif istype(object):
+            result = object.typename()
+        elif isinstance(object, six.integer_types):
+            result = ('signed<{:d}>' if object < 0 else 'unsigned<{:d}>').format(abs(object))
         else:
-            result = self._object_.__name__
+            result = object.__name__
         return u"{:s}[{:s}]".format(result, str(count))
 
     def __getindex__(self, index):
@@ -1165,7 +1167,7 @@ class array(_array_generic):
 
     def __deserialize_consumer__(self, consumer):
         position = self.getposition()
-        obj = self._object_
+        obj = getattr(self, '_object_', 0)
         self.value = []
         generator = (self.new(obj, __name__=str(index), position=position) for index in six.moves.range(self.length))
         return super(array, self).__deserialize_consumer__(consumer, generator)
@@ -1305,8 +1307,8 @@ class blockarray(terminatedarray):
         return False
 
     def __deserialize_consumer__(self, consumer):
-        obj, position = self._object_, self.getposition()
-        total = self.blocksize()*8
+        obj, position = getattr(self, '_object_', 0), self.getposition()
+        total = self.blocksize() * 8
         if total != self.blockbits():
             total = self.blockbits()
         value = self.value = []
