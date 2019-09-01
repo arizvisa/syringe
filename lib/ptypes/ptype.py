@@ -1950,7 +1950,11 @@ class wrapper_t(type):
 
     def blocksize(self):
         if self.__object__ is not None:
-            return self.__object__.blocksize()
+            try:
+                return self.__object__.blocksize()
+            except error.InitializationError:
+                res = self.__object__.copy()
+            return res.a.blocksize()
 
         # if blocksize can't be calculated by loading (invalid dereference)
         #   then guess the size by allocating an empty version of the type
