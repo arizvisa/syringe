@@ -195,7 +195,8 @@ class type(_pstruct_generic):
         try:
             res = res and self.size() >= self.blocksize()
         except Exception,e:
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, str().join(map("<{:s}>".format, self.backtrace()))), exc_info=True)
+            path = str().join(map("<{:s}>".format, self.backtrace()))
+            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, path), exc_info=True)
         finally:
             return res
 
@@ -239,7 +240,7 @@ class type(_pstruct_generic):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.value, path, n = [], str().join(map("<{:s}>".format, self.backtrace())), None
+            self.value = []
             self.__fastindex = {}
 
             # check if the user implement a custom blocksize so we can keep track
@@ -266,8 +267,11 @@ class type(_pstruct_generic):
                     # check if we've hit our blocksize
                     bs = n.blocksize()
                     if current is not None:
-                        try: res = self.blocksize()
-                        except Exception, e: Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
+                        try:
+                            res = self.blocksize()
+                        except Exception, e:
+                            path = str().join(map("<{:s}>".format, self.backtrace()))
+                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
                             if current + bs >= res:
                                 path = str().join(map("<{:s}>".format, self.backtrace()))
