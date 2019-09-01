@@ -691,13 +691,17 @@ if 'Frontend':
                 _fields_ = [
                     (pint.uint16_t, 'UnknownEvenCount'),
                     (pint.uint16_t, 'AllocationCount'),
+                    (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'Padding'),
                 ]
                 def get(self):
-                    return self.cast(pint.uint32_t).int()
+                    t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+                    res = self.cast(t)
+                    return res.int()
             _value_ = _HeapBucketCounter
             _object_ = _HEAP_BUCKET
             def decode(self, object, **attrs):
-                res = object.cast(pint.uint32_t)
+                t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+                res = object.cast(t)
                 if res.int() & 1:
                     res.set(res.int() & ~1)
                 else:
@@ -705,13 +709,15 @@ if 'Frontend':
                     raise ValueError('{:s}.decode : Address {:x} is not a valid _HEAP_BUCKET'.format('.'.join((__name__,'FreeListBucket','_HeapBucketUnion',self.__class__.__name__)),res.int()))
                 return super(FreeListBucket._HeapBucketLink,self).decode(res, **attrs)
             def summary(self):
+                t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object
-                if res.cast(pint.uint32_t).int() & 1:
+                if res.cast(t).int() & 1:
                     return super(FreeListBucket._HeapBucketLink,self).summary()
                 return 'AllocationCount={:#x} UnknownEvenCount={:#x}'.format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
             def details(self):
-                res = self.object
-                if res.cast(pint.uint32_t).int() & 1:
+                t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+                res = self.object.cast(t)
+                if res.int() & 1:
                     return super(FreeListBucket._HeapBucketLink,self).summary()
                 return self.object.details()
             repr = details
