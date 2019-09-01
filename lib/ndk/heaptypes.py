@@ -1160,7 +1160,7 @@ if 'Heap':
 
         def Segments(self):
             '''Iterate through the list of Segments(SegmentList) for the _HEAP'''
-            for n in self['SegmentListEntry'].walk():
+            for n in self['SegmentList'].walk():
                 yield n
             return
 
