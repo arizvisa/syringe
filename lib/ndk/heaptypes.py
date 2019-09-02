@@ -265,7 +265,7 @@ if 'HeapEntry':
             super(_HEAP_ENTRY, self).__init__(**attrs)
             f = []
             if getattr(self, 'WIN64', False):
-                f.append((pint.uint64_t,'ReservedForAlignment'))
+                f.append((pint.uint64_t, 'ReservedForAlignment'))
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
                 #f.extend([
@@ -378,7 +378,8 @@ if 'HeapEntry':
                 super(_BACKEND_HEAP_ENTRY._HEAP_ENTRY, self).__init__(**attrs)
                 f = self._fields_ = []
                 if getattr(self, 'WIN64', False):
-                    f.append((pint.uint64_t,'ReservedForAlignment'))
+                    f.append((pint.uint64_t, 'ReservedForAlignment'))
+
                 f.extend([
                     (pint.uint16_t, 'Size'),
                     (pint.uint16_t, 'Checksum'),
@@ -476,11 +477,10 @@ if 'HeapEntry':
             def __init__(self, **attrs):
                 super(_FRONTEND_HEAP_ENTRY._HEAP_ENTRY, self).__init__(**attrs)
                 f = self._fields_ = []
-                if getattr(self, 'WIN64', False):
-                    f.append((pint.uint64_t,'ReservedForAlignment'))
 
                 f.extend([
-                    (pint.uint32_t, 'SubSegment'),
+                    (pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
+                    (dyn.clone(pointer_t, _value_=PVALUE32, _object_=_HEAP_SUBSEGMENT, source=self.getparent(_FRONTEND_HEAP_ENTRY).source), 'SubSegment'),
                     (pint.uint16_t, 'Unknown'),
                     (pint.uint8_t, 'EntryOffset'),
                     (_HEAP_ENTRY.UnusedBytes, 'Flags'),
@@ -1211,8 +1211,8 @@ if 'Heap':
                 super(_HEAP._Encoding, self).__init__(**attrs)
                 f = self._fields_ = []
                 if getattr(self, 'WIN64', False):
-                    f.append((pint.uint64_t,'ReservedForAlignment'))
-                f.append((dyn.array(pint.uint32_t,2), 'Keys'))
+                    f.append((pint.uint64_t, 'ReservedForAlignment'))
+                f.append((dyn.array(pint.uint32_t, 2), 'Keys'))
 
         def __PointerKeyEncoding(self):
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_WIN7:
