@@ -186,14 +186,22 @@ class _SLIST_HEADER(pstruct.type, versioned):
     def __init__(self, **attrs):
         super(_SLIST_HEADER, self).__init__(**attrs)
         f = self._fields_ = []
-        aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
 
-        f.extend([
-            (pint.uint32_t if getattr(self,'WIN64',False) else pint.uint_t, 'Alignment'),
-            (self.__Next, 'Next'),
-            (pint.uint16_t, 'Depth'),
-            (pint.uint16_t, 'Sequence'),
-        ])
+        if getattr(self, 'WIN64', False):
+            f.extend([
+                (dyn.align(16), 'Alignment'),
+                (pint.uint16_t, 'Depth'),
+                (pint.uint16_t, 'Sequence'),
+                (dyn.block(4), 'Padding(Depth,Sequence)'),
+                (self.__Next, 'Next'),
+            ])
+        else:
+            f.extend([
+                (dyn.align(4), 'Alignment'),
+                (self.__Next, 'Next'),
+                (pint.uint16_t, 'Depth'),
+                (pint.uint16_t, 'Sequence'),
+            ])
 
     def summary(self):
         return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].int(), self['Sequence'].int())
