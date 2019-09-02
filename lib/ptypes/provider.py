@@ -1062,12 +1062,12 @@ try:
 
         @classmethod
         def expr(cls, string):
-            return self.__pykd__.expr(string)
+            return cls.__pykd__.expr(string)
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
             # FIXME: check to see if we're at an invalid address
-            res,self.addr = self.addr,offset
+            res, self.addr = self.addr, offset
             return res
 
         def consume(self, amount):
@@ -1075,9 +1075,10 @@ try:
             if amount == 0:
                 return ''
             try:
-                res = map(six.int2byte,self.__pykd__.loadBytes(self.addr, amount))
+                data = self.__pykd__.loadBytes(self.addr, amount)
+                res = map(six.int2byte, data)
             except:
-                raise error.ConsumeError(self,self.addr,amount,0)
+                raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
             return str().join(res)
 
