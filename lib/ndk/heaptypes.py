@@ -16,8 +16,8 @@ class HeapException(ptypes.error.RequestError):
         for n in self.__iterdata__: yield n
     def __str__(self):
         iterdata = (repr(v) for v in self.__iterdata__)
-        mapdata = ('%s=%r'%(k,v) for k,v in self.__mapdata__.iteritems())
-        self.message = '({:s})'.format(', '.join(itertools.chain(iterdata, mapdata)) if self.__iterdata__ or self.__mapdata__ else '')
+        mapdata = ("{:s}={!r}".format(k, v) for k,v in self.__mapdata__.iteritems())
+        self.message = "({:s})".format(', '.join(itertools.chain(iterdata, mapdata)) if self.__iterdata__ or self.__mapdata__ else '')
         return super(HeapException, self).__str__()
 
 class NotFoundException(HeapException): pass
@@ -39,7 +39,7 @@ if 'HeapMeta':
             (ULONG, 'SubSegmentCounts'),
         ]
         def summary(self):
-            return 'TotalBlocks:{:#x} SubSegmentCounts:{:#x}'.format(self['TotalBlocks'].int(), self['SubSegmentCounts'].int())
+            return "TotalBlocks:{:#x} SubSegmentCounts:{:#x}".format(self['TotalBlocks'].int(), self['SubSegmentCounts'].int())
 
     class _HEAP_COUNTERS(pstruct.type, versioned):
         def __init__(self, **attrs):
@@ -80,7 +80,7 @@ if 'HeapMeta':
                 (SIZE_T64 if getattr(self,'WIN64',False) else SIZE_T,'MaxPreCommittThreshold')
             ])
         def summary(self):
-            return ' '.join('{:s}={:s}'.format(k,v.summary()) for k,v in self.iteritems())
+            return ' '.join("{:s}={:s}".format(k,v.summary()) for k,v in self.iteritems())
 
     class _HEAP_PSEUDO_TAG_ENTRY(pstruct.type, versioned):
         def __init__(self, **attrs):
@@ -259,7 +259,7 @@ if 'HeapEntry':
             def summary(self):
                 frontend = 'FE' if self['AllocatedByFrontend'] else 'BE'
                 busy = 'BUSY' if self['Busy'] else 'FREE'
-                return '{:s} {:s} Type:{:d}'.format(frontend, busy, self['Type'])
+                return "{:s} {:s} Type:{:d}".format(frontend, busy, self['Type'])
 
         def __init__(self, **attrs):
             super(_HEAP_ENTRY, self).__init__(**attrs)
@@ -300,10 +300,10 @@ if 'HeapEntry':
 
         def summary(self):
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
-                res = 'Size={:x} SmallTagIndex={:x} PreviousSize={:x} SegmentOffset={:x}'
+                res = "Size={:x} SmallTagIndex={:x} PreviousSize={:x} SegmentOffset={:x}"
                 res = [res.format(self['Size'].int(), self['SmallTagIndex'].int(), self['PreviousSize'].int(), self['SegmentOffset'].int())]
-                res+= ['UnusedBytes ({:s})'.format(self['UnusedBytes'].summary())]
-                res+= ['Flags ({:s})'.format(self['Flags'].summary())]
+                res+= ["UnusedBytes ({:s})".format(self['UnusedBytes'].summary())]
+                res+= ["Flags ({:s})".format(self['Flags'].summary())]
                 return ' : '.join(res)
             return super(_HEAP_ENTRY, self).summary()
 
@@ -332,7 +332,7 @@ if 'HeapEntry':
             return super(_ENCODED_POINTER, self).decode(self._value_().set(res))
 
         def summary(self):
-            return '*{:#x} -> *{:#x}'.format(self.get(), self.d.getoffset())
+            return "*{:#x} -> *{:#x}".format(self.get(), self.d.getoffset())
 
     class _ENCODED_HEAP_ENTRY(ptype.encoded_t):
         @property
@@ -442,13 +442,13 @@ if 'HeapEntry':
 
             cs = 16 if getattr(self,'WIN64',False) else 8
             data, res = self.serialize().encode('hex'), self.d.li
-            return '{:s} : {:-#x} <-> {:+#x} : Flags:{:s}'.format(data, -res['PreviousSize'].int()*cs, res['Size'].int()*cs, res['Flags'].summary())
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data, -res['PreviousSize'].int()*cs, res['Size'].int()*cs, res['Flags'].summary())
 
         def ChecksumQ(self):
             cls = self.__class__
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
-                raise IncorrectChunkVersion(self, '{:s}.ChecksumQ'.format(cls.__name__), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            res = map(ord, self.d.li.serialize())
+                raise IncorrectChunkVersion(self, "{:s}.ChecksumQ".format(cls.__name__), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            res = map(six.byte2int, self.d.li.serialize())
             chk = reduce(operator.xor, res[:3], 0)
             return chk == res[3]
 
@@ -561,7 +561,7 @@ if 'HeapEntry':
 
         def EntryOffset(self):
             if not self.EntryOffsetQ():
-                logging.warn('{:s}.__EntryOffset : {:s} : Flags.Type != 5'.format( '.'.join((__name__, self.__class__.__name__)), self.instance()))
+                logging.warn("{:s}.__EntryOffset : {:s} : Flags.Type != 5".format( '.'.join((__name__, self.__class__.__name__)), self.instance()))
             return self['EntryOffset'].int() * 8
 
         def SubSegment(self):
@@ -598,10 +598,10 @@ if 'HeapChunk':
         def __Data(self):
             header = self['Header'].li
             if self.HEADER == _BACKEND_HEAP_ENTRY and header.FrontEndQ():
-                logging.warn('{:s}.__Data : Header.Flags.AllocatedByFrontend bit is set on a chunk within the Backend. Potential corruption of HEAP_ENTRY. : {:s}'.format( '.'.join((__name__, self.__class__.__name__)), header['Flags'].summary()))
+                logging.warn("{:s}.__Data : Header.Flags.AllocatedByFrontend bit is set on a chunk within the Backend. Potential corruption of HEAP_ENTRY. : {:s}".format( '.'.join((__name__, self.__class__.__name__)), header['Flags'].summary()))
                 size = header.Size()
             elif self.HEADER == _FRONTEND_HEAP_ENTRY and not header.FrontEndQ():
-                logging.warn('{:s}.__Data : Header.Flags.AllocatedByFrontend bit is clear on a chunk within the Frontend. Potential corruption of HEAP_ENTRY. : {:s}'.format( '.'.join((__name__, self.__class__.__name__)), header['Flags'].summary()))
+                logging.warn("{:s}.__Data : Header.Flags.AllocatedByFrontend bit is clear on a chunk within the Frontend. Potential corruption of HEAP_ENTRY. : {:s}".format( '.'.join((__name__, self.__class__.__name__)), header['Flags'].summary()))
                 size = self.blocksize()
             else:
                 size = self.blocksize() if header.FrontEndQ() else header.Size()
@@ -638,13 +638,13 @@ if 'HeapChunk':
         def next(self):
             cls, header = self.__class__, self['Header']
             if header.FrontEndQ():
-                raise IncorrectChunkType(self, '{:s}.next'.format(cls.__name__), FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise IncorrectChunkType(self, "{:s}.next".format(cls.__name__), FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(_HEAP)
             return parent.new(cls, offset=self.getoffset() + header.Size())
         def previous(self):
             cls, header = self.__class__, self['Header']
             if header.FrontEndQ():
-                raise IncorrectChunkType(self, '{:s}.previous'.format(cls.__name__), FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise IncorrectChunkType(self, "{:s}.previous".format(cls.__name__), FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(_HEAP)
             return parent.new(cls, offset=self.getoffset() - header.PreviousSize())
         prev = previous
@@ -653,7 +653,7 @@ if 'HeapChunk':
             '''Walk to the next entry in the free-list'''
             cls, header = self.__class__, self['Header']
             if header.Type() != 0 or header.FrontEndQ() or header.BusyQ():
-                raise IncorrectChunkType(self, '{:s}.nextfree'.format(cls.__name__), FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise IncorrectChunkType(self, "{:s}.nextfree".format(cls.__name__), FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Flink'].d.l
 
@@ -661,7 +661,7 @@ if 'HeapChunk':
             '''Moonwalk to the previous entry in the free-list'''
             cls, header = self.__class__, self['Header']
             if header.Type() != 0 or header.FrontEndQ() or header.BusyQ():
-                raise IncorrectChunkType(self, '{:s}.previousfree'.format(cls.__name__), FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise IncorrectChunkType(self, "{:s}.previousfree".format(cls.__name__), FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Blink'].d.l
         prevfree = previousfree
@@ -707,7 +707,7 @@ if 'Frontend':
                 else:
                     res.set(res.int() & ~0)
                     cls = self.__class__
-                    raise ValueError('{:s}.decode : Address {:x} is not a valid _HEAP_BUCKET'.format('.'.join((__name__, 'FreeListBucket', '_HeapBucketUnion', cls.__name__)), res.int()))
+                    raise ValueError("{:s}.decode : Address {:x} is not a valid _HEAP_BUCKET".format('.'.join((__name__, 'FreeListBucket', '_HeapBucketUnion', cls.__name__)), res.int()))
                 return super(FreeListBucket._HeapBucketLink, self).decode(res, **attrs)
 
             def FrontEndQ(self):
@@ -775,10 +775,6 @@ if 'LookasideList':
         HEAP_MAX_FREELIST = 0x80
         length = HEAP_MAX_FREELIST
 
-    class FreeListsInUseBitmap(pbinary.array):
-        _object_ = 1
-        length = 0x80
-
 if 'LFH':
     class _INTERLOCK_SEQ(pstruct.type):
         _fields_ = [
@@ -787,7 +783,7 @@ if 'LFH':
             (ULONG, 'Sequence'),
         ]
         def summary(self):
-            return 'Depth:{:#x} FreeEntryOffset:{:#x} Sequence:{:#x}'.format(self['Depth'].int(), self['FreeEntryOffset'].int(), self['Sequence'].int())
+            return "Depth:{:#x} FreeEntryOffset:{:#x} Sequence:{:#x}".format(self['Depth'].int(), self['FreeEntryOffset'].int(), self['Sequence'].int())
 
     class _HEAP_USERDATA_HEADER(pstruct.type):
         def __Blocks(self):
@@ -888,7 +884,7 @@ if 'LFH':
             (ULONG, 'RunLength'),
         ]
         def summary(self):
-            return 'Bucket:{:#x} RunLength:{:#x}'.format(self['Bucket'].int(), self['RunLength'].int())
+            return "Bucket:{:#x} RunLength:{:#x}".format(self['Bucket'].int(), self['RunLength'].int())
 
     class _USER_MEMORY_CACHE_ENTRY(pstruct.type, versioned):
         # FIXME: Figure out which SizeIndex is used for a specific cache entry
@@ -1199,7 +1195,7 @@ if 'Heap':
             '''Find the correct Heap Bucket from the FreeListEntry for the given ``size``'''
             entry = self.FindFreeListEntry(size)
             if entry['Blink'].int() == 0:
-                raise NotFoundException(self, '_HEAP.FindHeapBucket', 'Unable to find a Heap Bucket for the requested size : 0x%x'% size, entry=entry, size=size)
+                raise NotFoundException(self, '_HEAP.FindHeapBucket', "Unable to find a Heap Bucket for the requested size : {:#x}".format(size), entry=entry, size=size)
             return entry['Blink'].d.l
 
         def FindFreeListEntry(self, size):
@@ -1294,7 +1290,7 @@ if 'Heap':
         def FindFreeListEntry(self, blockindex):
             '''Find the correct ListHint for the specified ``blockindex``'''
             res = blockindex - self['BaseIndex'].int()
-            assert 0 <= res < self.GetFreeListsCount(), '_HEAP_LIST_LOOKUP.FindFreeListEntry : Requested BlockIndex is out of bounds : %d <= %d < %d'% (self['BaseIndex'].int(), blockindex, self['ArraySize'].int())
+            assert 0 <= res < self.GetFreeListsCount(), "_HEAP_LIST_LOOKUP.FindFreeListEntry : Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int())
             freelist = self['ListsInUseUlong'].d.l
             list = self['ListHints'].d.l
             if freelist[res] == 1:
@@ -1311,9 +1307,9 @@ if 'Heap':
                 return ' '.join((objectname, ptypes.bitmap.hex(res)))
             def details(self):
                 bits = 32 if self.bits() < 256 else 64
-                w = len('{:x}'.format(self.bits()))
+                w = len("{:x}".format(self.bits()))
                 res = ptypes.bitmap.split(self.run(), bits)
-                return '\n'.join(('[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}'.format(self.getoffset() + bits*i, bits*i, w, bits*i+bits-1, w, ptypes.bitmap.string(n)) for i,n in enumerate(reversed(res))))
+                return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + bits*i, bits*i, w, bits*i+bits-1, w, ptypes.bitmap.string(n)) for i,n in enumerate(reversed(res))))
             def repr(self):
                 return self.details()
 
@@ -1345,8 +1341,8 @@ if 'Heap':
 
                 items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
 
-                width = len('{:x}'.format(self.bits()))
-                return '\n'.join(('[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}'.format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item, reversed=True)) for i, item in enumerate(items)))
+                width = len("{:x}".format(self.bits()))
+                return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item, reversed=True)) for i, item in enumerate(items)))
 
             def repr(self):
                 return self.details()
@@ -1408,7 +1404,7 @@ if __name__ == '__main__':
     # grab process handle
     if len(sys.argv) > 1:
         pid = int(sys.argv[1])
-        print 'opening process %d'% pid
+        print "opening process {:d}".format(pid)
         handle = openprocess(pid)
     else:
         handle = getcurrentprocess()
