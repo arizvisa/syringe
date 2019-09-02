@@ -215,7 +215,7 @@ if 'HeapEntry':
             (BucketFlags, 'BucketFlags'),
         ]
         def AllocationCount(self):
-            return self['BlockUnits'].li.int() // 2
+            return self['BlockUnits'].li.int() >> 1
 
     class _HEAP_ENTRY_EXTRA(pstruct.type):
         _fields_ = [
@@ -706,19 +706,24 @@ if 'Frontend':
                     res.set(res.int() & ~1)
                 else:
                     res.set(res.int() & ~0)
-                    raise ValueError('{:s}.decode : Address {:x} is not a valid _HEAP_BUCKET'.format('.'.join((__name__,'FreeListBucket','_HeapBucketUnion',self.__class__.__name__)),res.int()))
-                return super(FreeListBucket._HeapBucketLink,self).decode(res, **attrs)
+                    cls = self.__class__
+                    raise ValueError('{:s}.decode : Address {:x} is not a valid _HEAP_BUCKET'.format('.'.join((__name__, 'FreeListBucket', '_HeapBucketUnion', cls.__name__)), res.int()))
+                return super(FreeListBucket._HeapBucketLink, self).decode(res, **attrs)
+
+            def FrontEndQ(self):
+                res = self.object.cast(pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t)
+                return bool(res.int() & 1)
             def summary(self):
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object
                 if res.cast(t).int() & 1:
-                    return super(FreeListBucket._HeapBucketLink,self).summary()
-                return 'AllocationCount={:#x} UnknownEvenCount={:#x}'.format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
+                    return "Frontend {:s}".format(super(FreeListBucket._HeapBucketLink, self).summary())
+                return "Backend AllocationCount={:#x} UnknownEvenCount={:#x}".format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
             def details(self):
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object.cast(t)
                 if res.int() & 1:
-                    return super(FreeListBucket._HeapBucketLink,self).summary()
+                    return super(FreeListBucket._HeapBucketLink, self).summary()
                 return self.object.details()
             repr = details
 
@@ -727,8 +732,17 @@ if 'Frontend':
             (_HeapBucketLink, 'Blink'),
         ]
 
+        def FrontEndQ(self):
+            return self['Blink'].FrontEndQ()
+
+        def properties(self):
+            res = super(FreeListBucket, self).properties()
+            if self.initializedQ():
+                res['use_frontend'] = self.FrontEndQ()
+            return res
+
         def collect(self, size=None):
-            '''Collect chunks that begin at the current chunk that are less than ``size``'''
+            '''Collect chunks beginning at the current chunk which are less than ``size``'''
             for n in self.walk():
                 if size is None: size = n['Header'].Size()
                 if n['Header'].Size() > size:
@@ -1303,6 +1317,40 @@ if 'Heap':
             def repr(self):
                 return self.details()
 
+        class _ListsInUseUlong(parray.type):
+            _object_ = pint.uint32_t
+
+            # Make this type look like a pbinary.array sorta
+            def bits(self):
+                return self.size() << 3
+            def bitmap(self):
+                iterable = (item.int() for item in self)
+                res = reduce(lambda agg, n: agg * 0x100000000 + n, iterable)
+                return ptypes.bitmap.new(res, self.bits())
+
+            def check(self, index):
+                res, offset = self[index >> 5], index & 0x1f
+                return res.int() & (2 ** offset) and 1
+            def run(self):
+                return self.bitmap()
+            def summary(self):
+                objectname,_ = super(_HEAP_LIST_LOOKUP._ListsInUseUlong,self).summary().split(' ', 2)
+                res = self.bitmap()
+                return ' '.join((objectname, ptypes.bitmap.hex(res)))
+            def details(self):
+                bytes_per_item = self._object_().a.size()
+                bits_per_item = bytes_per_item * 8
+                bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
+                bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
+
+                items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
+
+                width = len('{:x}'.format(self.bits()))
+                return '\n'.join(('[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}'.format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item, reversed=True)) for i, item in enumerate(items)))
+
+            def repr(self):
+                return self.details()
+
         def __init__(self, **attrs):
             super(_HEAP_LIST_LOOKUP, self).__init__(**attrs)
             f = self._fields_ = []
@@ -1319,7 +1367,7 @@ if 'Heap':
 
                 (aligned, 'align(ListHead)'),
                 (P(dyn.clone(LIST_ENTRY,_path_=('ListEntry',),_object_=fptr(_HEAP_FREE_CHUNK,'ListEntry'))), 'ListHead'),
-                (P(lambda s: dyn.clone(_HEAP_LIST_LOOKUP._ListsInUseUlong, length=s.p.GetFreeListsCount())), 'ListsInUseUlong'),
+                (P(lambda s: dyn.clone(_HEAP_LIST_LOOKUP._ListsInUseUlong, length=s.p.GetFreeListsCount() >> 5)), 'ListsInUseUlong'),
                 (P(lambda s: dyn.array(dyn.clone(FreeListBucket,_object_=fptr(_HEAP_FREE_CHUNK,'ListEntry'),_path_=('ListEntry',),_sentinel_=s.p['ListHead'].int()), s.p.GetFreeListsCount())), 'ListHints'),
             ])
 
