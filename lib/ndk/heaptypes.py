@@ -317,7 +317,7 @@ if 'HeapEntry':
             try:
                 heap = self.getparent(type=_HEAP)
                 self._HEAP_PointerKey = heap['PointerKey'].int()
-            except ptypes.NotFoundError:
+            except ptypes.error.NotFoundError:
                 # FIXME: Log that this encoded-pointer is non-encoded due to not being able to find a _HEAP
                 pass
             if hasattr(self, '_HEAP_PointerKey'):
@@ -393,7 +393,7 @@ if 'HeapEntry':
                 heap = self.getparent(type=_HEAP)
                 self._HEAP_ENTRY_Encoding = tuple(n.int() for n in heap['Encoding'].li['Keys'])
                 self._HEAP_ENTRY_EncodeFlagMask = heap['EncodeFlagMask'].li.int()
-            except ptypes.NotFoundError:
+            except ptypes.error.NotFoundError:
                 # FIXME: Log that this heap-entry is non-encoded due to not being able to find a _HEAP
                 pass
 
@@ -494,7 +494,7 @@ if 'HeapEntry':
                 res = self.source.expr('ntdll!RtlpLFHKey')
                 self._HEAP_ENTRY_LFHKey = self.new(pint.uint64_t if getattr(self,'WIN64',False) else pint.uint32_t, offset=res).l.int()
 
-            except ptypes.NotFoundError:
+            except ptypes.error.NotFoundError:
                 # FIXME: Log that this heap-entry is non-encoded due to not being able to find a _HEAP
                 pass
             except AttributeError:
@@ -527,7 +527,7 @@ if 'HeapEntry':
                     res = self.source.expr('ntdll!RtlpLFHKey')
                     self._HEAP_ENTRY_LFHKey = self.new(pint.uint64_t if getattr(self,'WIN64',False) else pint.uint32_t, offset=res).l.int()
 
-            except ptypes.NotFoundError:
+            except ptypes.error.NotFoundError:
                 # FIXME: Log that this heap-entry is non-encoded due to not being able to find a _HEAP
                 pass
             except AttributeError:
