@@ -29,6 +29,7 @@ class IncorrectChunkVersion(HeapException): pass
 class InvalidBlockSize(HeapException): pass
 class CorruptStructureException(HeapException): pass
 class CrtZoneNotFoundError(HeapException): pass
+class MissingSegmentException(HeapException): pass
 
 class _HEAP_LOCK(pint.uint32_t): pass
 
@@ -837,9 +838,21 @@ if 'LFH':
 
         def Bucket(self):
             '''Return the LFH bin associated with the current _HEAP_LOCAL_SEGMENT_INFO'''
-            bin = self['BucketIndex'].int()
+            bi = self['BucketIndex'].int()
             lfh = self.getparent(_LFH_HEAP)
-            return lfh['Buckets'][bin]
+            return lfh['Buckets'][bi]
+
+        def Segment(self):
+            '''
+            Return the correct _HEAP_SUBSEGMENT by checking "Hint" first, and then
+            falling back to "ActiveSubSegment".
+            '''
+
+            if self['Hint'].int():
+                return self['Hint'].d
+            elif self['ActiveSubSegment'].int():
+                return self['ActiveSubSegment'].d
+            raise MissingSegmentException(self, '_HEAP_LOCAL_SEGMENT_INFO.Segment', heap=self.getparent(_HEAP), localdata=self.getparent(_HEAP_LOCAL_DATA))
 
         def __init__(self, **attrs):
             super(_HEAP_LOCAL_SEGMENT_INFO, self).__init__(**attrs)
