@@ -198,7 +198,7 @@ if False and 'HeapCache':
 
             (lambda s: dyn.array(P(_HEAP_FREE_CHUNK), s['NumBuckets'].li.int()), 'Buckets'),
             (lambda s: dyn.clone(pbinary.array, _object_=1, length=s['NumBuckets'].li.int()), 'Bitmask'),    # XXX: This array is too huge
-    #        (lambda s: dyn.block(s['NumBuckets'].li.int()/8), 'Bitmask'),
+    #        (lambda s: dyn.block(s['NumBuckets'].li.int() / 8), 'Bitmask'),
         ]
 
 if 'HeapEntry':
@@ -291,7 +291,7 @@ if 'HeapEntry':
                     (_HEAP_ENTRY.Flags, 'Flags'),
                     (pint.uint8_t, 'SmallTagIndex'),    # Checksum
                     (pint.uint16_t, 'PreviousSize'),
-                    (pint.uint8_t, 'SegmentOffset'),    # Size // 8
+                    (pint.uint8_t, 'SegmentOffset'),    # Size // blocksize
                     (_HEAP_ENTRY.UnusedBytes, 'UnusedBytes'),  # XXX: for some reason this is checked against 0x055
                 ])
             else:
@@ -562,7 +562,8 @@ if 'HeapEntry':
         def EntryOffset(self):
             if not self.EntryOffsetQ():
                 logging.warn("{:s}.__EntryOffset : {:s} : Flags.Type != 5".format( '.'.join((__name__, self.__class__.__name__)), self.instance()))
-            return self['EntryOffset'].int() * 8
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return self['EntryOffset'].int() * blocksize
 
         def SubSegment(self):
             header = self.d.l
@@ -834,9 +835,6 @@ if 'LFH':
         # FIXME: Figure out how and what to use 'CachedItems' for. This might
         #        be used by the 'LastUsed' field.
 
-        # FIXME: Implement the logic to find the correct _HEAP_SUBSEGMENT by
-        #        starting with 'Hint', and then falling back to 'ActiveSubSegment'
-
         def Bucket(self):
             '''Return the LFH bin associated with the current _HEAP_LOCAL_SEGMENT_INFO'''
             bin = self['BucketIndex'].int()
@@ -891,8 +889,10 @@ if 'LFH':
         class _UserBlocks(pstruct.type):
             def __Blocks(self):
                 entry = self.getparent(_USER_MEMORY_CACHE_ENTRY)
-                idx = [n.getoffset() for n in entry.p.value].index(entry.getoffset())+1
-                sz = idx * 8 + _HEAP_ENTRY().a.size()
+                res = [n.getoffset() for n in entry.p.value]
+                idx = res.index(entry.getoffset()) + 1
+                blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+                sz = idx * blocksize + self.new(_HEAP_ENTRY).a.size()
                 block = dyn.clone(_FE_HEAP_CHUNK, blocksize=lambda s,sz=sz:sz)
                 return dyn.array(block, entry['AvailableBlocks'].int() * 8)
 
@@ -907,7 +907,7 @@ if 'LFH':
             f.extend([
                 #(dyn.clone(SLIST_HEADER,_object_=UserBlocks), 'UserBlocks'),
                 (SLIST_HEADER, 'UserBlocks'),   # XXX
-                (ULONG, 'AvailableBlocks'),     # AvailableBlocks*8 seems to be the actual size
+                (ULONG, 'AvailableBlocks'),     # AvailableBlocks * 8 seems to be the actual size
                 (ULONG, 'MinimumDepth'),
                 (pint.uint64_t if getattr(self,'WIN64',False) else pint.uint_t, 'Padding'),
             ])
@@ -915,13 +915,16 @@ if 'LFH':
     class _HEAP_SUBSEGMENT(pstruct.type):
         def BlockSize(self):
             '''Returns the size of each block within the subsegment'''
-            return self['BlockSize'].int() * 8
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return self['BlockSize'].int() * blocksize
         def ChunkSize(self):
             '''Return the size of the chunks that this _HEAP_SUBSEGMENT is responsible for providing'''
-            return self.BlockSize() - 8
+            res = self.new(_HEAP_ENTRY).a
+            return self.BlockSize() - res.size()
         def GetFreeBlockIndex(self):
             '''Returns the index into UserBlocks of the next block to allocate given the `FreeEntryOffset` of the current _HEAP_SUBSEGMENT'''
-            fo = self['AggregateExchg']['FreeEntryOffset'].int() * 8
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            fo = self['AggregateExchg']['FreeEntryOffset'].int() * blocksize
             return fo / self.BlockSize()
         def NextBlock(self):
             '''Return the next block HeapAllocate will return if there's no free chunks available to return'''
@@ -1040,7 +1043,7 @@ if 'LFH':
                     (ULONG, 'CacheAllocs'),
                     (ULONG, 'CacheFrees'),
                     (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'SizeInCache'),
-                    (dyn.align(8), 'align(RunInfo)'),   # FIXME: is this alignment right?
+                    (dyn.align(8), 'align(RunInfo)'),                           # FIXME: is this alignment right?
                     (_HEAP_BUCKET_RUN_INFO, 'RunInfo'),
                     (dyn.array(_USER_MEMORY_CACHE_ENTRY,12), 'UserBlockCache'), # FIXME: Not sure what this cache is used for
                     (dyn.array(_HEAP_BUCKET,128), 'Buckets'),
@@ -1061,7 +1064,7 @@ if 'Heap':
             f.extend([
                 (dyn.clone(LIST_ENTRY,_path_=('ListEntry',),_object_=P(_HEAP_UCR_DESCRIPTOR)), 'ListEntry'),
                 (dyn.clone(LIST_ENTRY,_path_=('UCRSegmentList',),_object_=fptr(_HEAP_SEGMENT,'UCRSegmentList')), 'SegmentEntry'),
-                (P(lambda s: dyn.clone(ptype.undefined, length=s.p['Size'].li.int())), 'Address'),
+                (P(lambda s: dyn.clone(ptype.undefined, length=s.p['Size'].li.int())), 'Address'),  # Sentinel Address
                 (SIZE_T64 if getattr(self,'WIN64',False) else SIZE_T, 'Size'),
             ])
 
@@ -1181,7 +1184,7 @@ if 'Heap':
             return
 
         def FindHeapListLookup(self, blockindex):
-            '''Return the correct _HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / 8)'''
+            '''Return the correct _HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / blocksize)''' # FIXME
             if not self['FrontEndHeapType']['LFH']:
                 raise IncorrectHeapType(self, '_HEAP.FindHeapListLookup', self['FrontEndHeapType'], version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             p = self['LargeBlocksIndex'].d.l
@@ -1202,7 +1205,8 @@ if 'Heap':
             '''Return the FreeListEntry according to the specified ``size``'''
             if not self['FrontEndHeapType']['LFH']:
                 raise IncorrectHeapType(self, '_HEAP.FindFreeListEntry', self['FrontEndHeapType'], version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            bi = math.trunc(math.ceil(size / 8.0))
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            bi = math.trunc(math.ceil(size / float(blocksize)))
             heaplist = self.FindHeapListLookup(bi)
             return heaplist.FindFreeListEntry(bi)
 
@@ -1293,7 +1297,7 @@ if 'Heap':
             assert 0 <= res < self.GetFreeListsCount(), "_HEAP_LIST_LOOKUP.FindFreeListEntry : Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int())
             freelist = self['ListsInUseUlong'].d.l
             list = self['ListHints'].d.l
-            if freelist[res] == 1:
+            if freelist.check(res):
                 return list[res]
             return list[res]
 
