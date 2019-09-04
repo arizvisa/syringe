@@ -1,5 +1,6 @@
 #https://www.ietf.org/rfc/rfc4511.txt
-import ptypes,ber
+import ptypes
+from . import ber
 from ptypes import *
 
 ### Helpers
