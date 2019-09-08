@@ -3,7 +3,7 @@ import math, datetime
 import ptypes
 from ptypes import *
 
-from . import sdkddkver
+from . import sdkddkver, winerror
 
 ### versioned base-class
 class versioned(ptype.base):
@@ -153,16 +153,20 @@ class PHANDLE(pointer(HANDLE)): pass
 class HCALL(DWORD): pass
 
 class HRESULT(dynamic.union):
-    class hresult(pbinary.struct):
+    @pbinary.littleendian
+    class _hresult(pbinary.struct):
+        class _severity(pbinary.enum):
+            width, _values_ = 1, [('TRUE', 1), ('FALSE', 0)]
         _fields_ = [
-            (1, 'severity'),
+            (_severity, 'severity'),
             (4, 'reserved'),
-            (11, 'facility'),
+            (winerror.FACILITY_, 'facility'),
             (16, 'code'),
         ]
+    class _result(winerror.HRESULT, LONG): pass
     _fields_ = [
-        (LONG, 'result'),
-        (hresult, 'hresult'),
+        (_result, 'result'),
+        (_hresult, 'hresult'),
     ]
 
 class LMCSTR(pstr.szwstring): pass
@@ -173,7 +177,7 @@ class PWSTR(pointer(pstr.wstring)): pass
 class LPWSTR(pointer(pstr.szwstring)): pass
 class LPCVOID(PVOID): pass
 class NET_API_STATUS(DWORD): pass
-class NTSTATUS(LONG): pass
+class NTSTATUS(winerror.NTSTATUS, LONG): pass
 class PCONTEXT_HANDLE(PVOID): pass
 class RPC_BINDING_HANDLE(PVOID): pass
 
