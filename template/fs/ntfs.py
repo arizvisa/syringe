@@ -1,6 +1,6 @@
 import ndk, ptypes
 from ptypes import *
-from ndk.WinNT import *
+from ndk.datatypes import *
 
 class _REPARSE_DATA_BUFFER(pstruct.type):
     def __PathBuffer(self):
