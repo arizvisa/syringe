@@ -11,6 +11,5 @@ from . import ketypes
 from . import setypes
 from . import extypes
 
-import sdkddkver as ver
-
+from . import sdkddkver as ver
 from .datatypes import *
