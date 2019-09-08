@@ -11,5 +11,7 @@ from . import ketypes
 from . import setypes
 from . import extypes
 
+from . import winerror
 from . import sdkddkver as ver
+
 from .datatypes import *
