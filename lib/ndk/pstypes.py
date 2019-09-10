@@ -778,6 +778,9 @@ class KSYSTEM_TIME(pstruct.type):
         (LONG, 'High2Time'),
     ]
 
+    def summary(self):
+        return "LowPart={:#x} High1Time={:#x} High2Time={:#x}".format(self['LowPart'].int(), self['High1Time'].int(), self['High2Time'].int())
+
 class WOW64_SHARED_INFORMATION(pint.enum):
     _values_ = [
         ('SharedNtdll32LdrInitializeThunk', 0),
