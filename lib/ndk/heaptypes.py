@@ -271,7 +271,7 @@ if 'HeapEntry':
                     (_HEAP_ENTRY.UnusedBytes, 'UnusedBytes'),  # XXX: for some reason this is checked against 0x055
                 ])
             else:
-                raise error.NdkUnsupportedVersion(self.NTDDI_VERSION)
+                raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
         def summary(self):
