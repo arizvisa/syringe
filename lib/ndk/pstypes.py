@@ -666,14 +666,14 @@ class API_SET_SCHEMA_FLAGS_(pbinary.flags):
         (1, 'SEALED'),
     ]
 
-class _API_SET_HEADER(pstruct.type):
+class API_SET_HEADER(pstruct.type):
     def __init__(self, **attrs):
-        super(_API_SET_HEADER, self).__init__(**attrs)
+        super(API_SET_HEADER, self).__init__(**attrs)
         self._fields_ = f = []
 
         # https://www.geoffchappell.com/studies/windows/win32/apisetschema/index.htm
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
-            f.extend([
+           f.extend([
                 (ULONG, 'Version'),
                 (ULONG, 'Count'),
             ])
@@ -690,17 +690,17 @@ class _API_SET_HEADER(pstruct.type):
             raise error.ImplementationError(self, 'API_SET_HEADER.__init__')
         return
 
-class _API_SET_VALUE_ENTRY(pstruct.type):
+class API_SET_VALUE_ENTRY(pstruct.type):
     class _Value(rpointer_t):
         _value_ = ULONG
         def summary(self):
-            res = super(_API_SET_VALUE_ENTRY._Value, self).summary()
+            res = super(API_SET_VALUE_ENTRY._Value, self).summary()
             return '{:s} -> {!r}'.format(res, self.d.l.str())
 
         class _object_(pstr.wstring):
             def blocksize(self):
                 try:
-                    parent = self.getparent(_API_SET_VALUE_ENTRY)
+                    parent = self.getparent(API_SET_VALUE_ENTRY)
                     result = parent['Size'].li.int()
                 except (error.NotFoundError, error.InitializationError):
                     result = 0
@@ -708,38 +708,38 @@ class _API_SET_VALUE_ENTRY(pstruct.type):
 
     def __Value(self):
         def _object_(self, parent=self):
-            parent = self.getparent(_API_SET_VALUE_ENTRY)
+            parent = self.getparent(API_SET_VALUE_ENTRY)
             res = parent['Size'].li.int()
             return dyn.clone(pstr.wstring, blocksize=lambda s,sz=res: sz)
 
-        return dyn.clone(_API_SET_VALUE_ENTRY._Value, _baseobject_=self._baseobject_, _object_=_object_)
+        return dyn.clone(API_SET_VALUE_ENTRY._Value, _baseobject_=self._baseobject_, _object_=_object_)
 
     _fields_ = [
         (lambda s: dyn.clone(s._Value, _baseobject_=s._baseobject_), 'Value'),
         (ULONG, 'Size'),
     ]
 
-class _API_SET_VALUE(pstruct.type):
+class API_SET_VALUE(pstruct.type):
     _fields_ = [
         (ULONG, 'Count'),
         (ULONG, 'EndOfEntriesOffset'),
         (ULONG, 'Hash'),
-        (lambda s: _API_SET_VALUE_ENTRY if s['Count'].li.int() > 1 else ptype.undefined, 'OriginalRedirect'),
-        (lambda s: dyn.array(_API_SET_VALUE_ENTRY, s['Count'].li.int()), 'Entry'),
+        (lambda s: API_SET_VALUE_ENTRY if s['Count'].li.int() > 1 else ptype.undefined, 'OriginalRedirect'),
+        (lambda s: dyn.array(API_SET_VALUE_ENTRY, s['Count'].li.int()), 'Entry'),
     ]
 
-class _API_SET_ENTRY(pstruct.type):
+class API_SET_ENTRY(pstruct.type):
     _baseobject_ = None
     class _NameOffset(rpointer_t):
         _value_ = ULONG
         def summary(self):
-            res = super(_API_SET_ENTRY._NameOffset, self).summary()
+            res = super(API_SET_ENTRY._NameOffset, self).summary()
             return '{:s} -> {!r}'.format(res, self.d.li.str())
 
         class _object_(pstr.wstring):
             def blocksize(self):
                 try:
-                    parent = self.getparent(_API_SET_ENTRY)
+                    parent = self.getparent(API_SET_ENTRY)
                     result = parent['NameLength'].li.int()
                 except (error.NotFoundError, error.InitializationError):
                     result = 0
@@ -747,7 +747,7 @@ class _API_SET_ENTRY(pstruct.type):
 
     class _ValueOffset(rpointer_t):
         _value_ = ULONG
-        _object_ = _API_SET_VALUE
+        _object_ = API_SET_VALUE
 
     _fields_ = [
         (lambda s: dyn.clone(s._NameOffset, _baseobject_=s._baseobject_), 'NameOffset'),
@@ -758,10 +758,10 @@ class _API_SET_ENTRY(pstruct.type):
 class API_SET_MAP(pstruct.type, versioned):
     def __Entry(self):
         res = self['Header'].li
-        return dyn.array(_API_SET_ENTRY, res['Count'].int(), recurse={'_baseobject_':self})
+        return dyn.array(API_SET_ENTRY, res['Count'].int(), recurse={'_baseobject_':self})
 
     _fields_ = [
-        (_API_SET_HEADER, 'Header'),
+        (API_SET_HEADER, 'Header'),
         (__Entry, 'Entry'),
     ]
 
@@ -772,7 +772,7 @@ class KSYSTEM_TIME(pstruct.type):
         (LONG, 'High2Time'),
     ]
 
-class _WOW64_SHARED_INFORMATION(pint.enum):
+class WOW64_SHARED_INFORMATION(pint.enum):
     _values_ = [
         ('SharedNtdll32LdrInitializeThunk', 0),
         ('SharedNtdll32KiUserExceptionDispatcher', 1),
