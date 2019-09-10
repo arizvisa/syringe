@@ -29,9 +29,11 @@ class NdkUnsupportedVersion(NdkException):
     Raised when the structure does not support the NTDDI_VERSION that the user has specified.
     '''
     def __init__(self, object):
-        version = self.NTDDI_VERSION
+        version = object.NTDDI_VERSION
         major, minor = sdkddkver.NTDDI_MAJOR(version) / 0x10000, sdkddkver.NTDDI_MINOR(version)
         super(NdkUnsupportedVersion, self).__init__(object, '__init__', major=major, minor=minor, message="An unsupported version ({:#x}.{:#x}) was specified!".format(major, minor))
+
+class NdkAssertionError(NdkException, AssertionError): pass
 
 ### Exceptions used by ndk.heaptypes
 class NdkHeapException(NdkException):
@@ -42,6 +44,7 @@ class NdkHeapException(NdkException):
 class NotFoundException(NdkHeapException): pass
 class ListHintException(NdkHeapException): pass
 class InvalidPlatformException(NdkHeapException): pass
+class InvalidHeapType(NdkHeapException): pass
 class IncorrectHeapType(NdkHeapException): pass
 class IncorrectChunkType(NdkHeapException): pass
 class IncorrectChunkVersion(NdkHeapException): pass

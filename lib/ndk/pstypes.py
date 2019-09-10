@@ -1,7 +1,7 @@
 import ptypes, pecoff
 from ptypes import *
 
-from . import ldrtypes, rtltypes, umtypes, Ntddk, heaptypes, sdkddkver
+from . import error, ldrtypes, rtltypes, umtypes, Ntddk, heaptypes, sdkddkver
 from .datatypes import *
 
 class PEB_FREE_BLOCK(pstruct.type): pass
@@ -99,7 +99,7 @@ class PEB(pstruct.type, versioned):
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
             f.append( (pbinary.littleendian(PEB.BitField), 'BitField') )
         else:
-            raise NotImplementedError
+            raise error.NdkUnsupportedVersion(self)
             f.append( (BOOLEAN, 'SpareBool') )
 
         f.extend([
@@ -126,7 +126,7 @@ class PEB(pstruct.type, versioned):
             ])
 
         elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
-            raise NotImplementedError
+            raise error.NdkUnsupportedVersion(self)
             f.extend([
                 (P(rtltypes._RTL_CRITICAL_SECTION), 'FastPebLock'),
                 (PVOID, 'AltThunkSListPtr'),
@@ -138,7 +138,7 @@ class PEB(pstruct.type, versioned):
                 (PVOID, 'SparePebPtr0'),
             ])
         else:
-            raise NotImplementedError
+            raise error.NdkUnsupportedVersion(self)
             f.extend([
                 (P(rtltypes._RTL_CRITICAL_SECTION), 'FastPebLock'),
                 (PVOID, 'FastPebLockRoutine'),
@@ -687,7 +687,7 @@ class API_SET_HEADER(pstruct.type):
             ])
 
         else:
-            raise error.ImplementationError(self, 'API_SET_HEADER.__init__')
+            raise error.NdkUnsupportedVersion(self)
         return
 
     def summary(self):

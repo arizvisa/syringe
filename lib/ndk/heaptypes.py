@@ -424,7 +424,7 @@ if 'HeapEntry':
         def ChecksumQ(self):
             cls = self.__class__
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
-                raise error.IncorrectChunkVersion(self, "{:s}.ChecksumQ".format(cls.__name__), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkVersion(self, 'ChecksumQ', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             res = map(six.byte2int, self.d.li.serialize())
             chk = reduce(operator.xor, res[:3], 0)
             return chk == res[3]
@@ -563,7 +563,7 @@ if 'HeapChunk':
                     self._FrontEndHeapType = heap['FrontEndHeapType'].li.int()
                 if self._FrontEndHeapType == 2:
                     return pint.uint_t if header.BusyQ() else pint.uint16_t
-                raise NotImplementedError(self._FrontEndHeapType)
+                raise error.InvalidHeapType(self, '__ChunkFreeEntryOffset', heap=self.getparent(_HEAP), FrontEndHeapType=self._FrontEndHeapType)
             return pint.uint_t
 
         def __ListEntry(self):
@@ -615,13 +615,13 @@ if 'HeapChunk':
         def next(self):
             cls, header = self.__class__, self['Header']
             if header.FrontEndQ():
-                raise error.IncorrectChunkType(self, "{:s}.next".format(cls.__name__), FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'next', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(_HEAP)
             return parent.new(cls, offset=self.getoffset() + header.Size())
         def previous(self):
             cls, header = self.__class__, self['Header']
             if header.FrontEndQ():
-                raise error.IncorrectChunkType(self, "{:s}.previous".format(cls.__name__), FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'previous', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(_HEAP)
             return parent.new(cls, offset=self.getoffset() - header.PreviousSize())
         prev = previous
@@ -630,7 +630,7 @@ if 'HeapChunk':
             '''Walk to the next entry in the free-list'''
             cls, header = self.__class__, self['Header']
             if header.Type() != 0 or header.FrontEndQ() or header.BusyQ():
-                raise error.IncorrectChunkType(self, "{:s}.nextfree".format(cls.__name__), FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'nextfree', FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Flink'].d.l
 
@@ -638,7 +638,7 @@ if 'HeapChunk':
             '''Moonwalk to the previous entry in the free-list'''
             cls, header = self.__class__, self['Header']
             if header.Type() != 0 or header.FrontEndQ() or header.BusyQ():
-                raise error.IncorrectChunkType(self, "{:s}.previousfree".format(cls.__name__), FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'previousfree', FrontEndQ=header.FrontEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Blink'].d.l
         prevfree = previousfree
@@ -684,7 +684,7 @@ if 'Frontend':
                 else:
                     res.set(res.int() & ~0)
                     cls = self.__class__
-                    raise ValueError("{:s}.decode : Address {:x} is not a valid _HEAP_BUCKET".format('.'.join((__name__, 'FreeListBucket', '_HeapBucketUnion', cls.__name__)), res.int()))
+                    raise error.InvalidHeapType(self, 'decode', message="Address {:#x} is not a valid _HEAP_BUCKET".format(res.int()))
                 return super(FreeListBucket._HeapBucketLink, self).decode(res, **attrs)
 
             def FrontEndQ(self):
@@ -780,7 +780,7 @@ if 'LFH':
             res = self.ByOffset(offset)
             if isinstance(res, _FRONTEND_HEAP_ENTRY):
                 return res
-            raise error.NotFoundException(self, '_HEAP_USERDATA_HEADER.HeaderByOffset', message="Object at entry offset {:#x} does not point to a header ({:s}). An invalid entry offset was specified.".format(offset, _FRONTEND_HEAP_ENTRY.typename()))
+            raise error.NotFoundException(self, 'HeaderByOffset', message="Object at entry offset {:#x} does not point to a header ({:s}). An invalid entry offset was specified.".format(offset, _FRONTEND_HEAP_ENTRY.typename()))
         def BlockByOffset(self, offset):
             '''Return the block at the given entry offset.'''
             res = self.HeaderByOffset(offset)
@@ -850,7 +850,7 @@ if 'LFH':
                 return self['Hint'].d
             elif self['ActiveSubSegment'].int():
                 return self['ActiveSubSegment'].d
-            raise error.MissingSegmentException(self, '_HEAP_LOCAL_SEGMENT_INFO.Segment', heap=self.getparent(_HEAP), localdata=self.getparent(_HEAP_LOCAL_DATA))
+            raise error.MissingSegmentException(self, 'Segment', heap=self.getparent(_HEAP), localdata=self.getparent(_HEAP_LOCAL_DATA))
 
         def __init__(self, **attrs):
             super(_HEAP_LOCAL_SEGMENT_INFO, self).__init__(**attrs)
@@ -1000,7 +1000,7 @@ if 'LFH':
             try:
                 res = next(zoneiterator)
             except StopIteration:
-                raise error.CrtZoneNotFoundError(self, '_HEAP_LOCAL_DATA.CrtZone', zone=zone, frontendheap=fe.getoffset(), heap=fe.p.p.getoffset())
+                raise error.CrtZoneNotFoundError(self, 'CrtZone', zone=zone, frontendheap=fe.getoffset(), heap=fe.p.p.getoffset())
             return res
 
         def __init__(self, **attrs):
@@ -1070,9 +1070,9 @@ if 'LFH':
                 ])
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN8:
                 # http://illmatics.com/Windows%208%20Heap%20Internals.pdf
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
             else:
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
 if 'Heap':
@@ -1110,7 +1110,7 @@ if 'Heap':
             aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
             f = []
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
                 f.extend([
                     (LIST_ENTRY, 'ListEntry'),
                     (pint.uint32_t, 'Signature'),
@@ -1129,7 +1129,7 @@ if 'Heap':
                     (P(_ENCODED_HEAP_ENTRY), 'LastEntryInSegment'),
                 ])
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7+1:
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
                 f.extend([
                     (pint.uint32_t, 'Signature'),
                     (pint.uint32_t, 'Flags'),
@@ -1172,7 +1172,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY,_path_=('ListEntry',),_object_=fptr(_HEAP_UCR_DESCRIPTOR,'SegmentEntry')), 'UCRSegmentList'),
                 ])
             else:
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
     class _HEAP_VIRTUAL_ALLOC_ENTRY(pstruct.type):
@@ -1205,11 +1205,11 @@ if 'Heap':
         def FindHeapListLookup(self, blockindex):
             '''Return the correct _HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / blocksize)''' # FIXME
             if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, '_HEAP.FindHeapListLookup', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectHeapType(self, 'FindHeapListLookup', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             p = self['LargeBlocksIndex'].d.l
             while blockindex >= p['ArraySize'].int():
                 if p['ExtendedLookup'].int() == 0:
-                    raise error.ListHintException(self, '_HEAP.FindHeapListLookup', message='Unable to locate ListHint for blockindex', blockindex=blockindex, index=p['ArraySize'].int()-1, lookup=p)
+                    raise error.ListHintException(self, 'FindHeapListLookup', message='Unable to locate ListHint for blockindex', blockindex=blockindex, index=p['ArraySize'].int()-1, lookup=p)
                 p = p['ExtendedLookup'].d.l
             return p
 
@@ -1217,13 +1217,13 @@ if 'Heap':
             '''Find the correct Heap Bucket from the FreeListEntry for the given ``size``'''
             entry = self.FindFreeListEntry(size)
             if entry['Blink'].int() == 0:
-                raise error.NotFoundException(self, '_HEAP.FindHeapBucket', message="Unable to find a Heap Bucket for the requested size ({:#x})".format(size), entry=entry, size=size)
+                raise error.NotFoundException(self, 'FindHeapBucket', message="Unable to find a Heap Bucket for the requested size ({:#x})".format(size), entry=entry, size=size)
             return entry['Blink'].d.l
 
         def FindFreeListEntry(self, size):
             '''Return the FreeListEntry according to the specified ``size``'''
             if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, '_HEAP.FindFreeListEntry', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectHeapType(self, 'FindFreeListEntry', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             size_and_header = size + blocksize
             bi = math.trunc(math.ceil(size_and_header / float(blocksize)))
@@ -1240,7 +1240,7 @@ if 'Heap':
 
         def __PointerKeyEncoding(self):
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_WIN7:
-                raise error.InvalidPlatformException(self, '_HEAP.__PointerKeyEncoding', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), expected=sdkddkver.NTDDI_WIN7)
+                raise error.InvalidPlatformException(self, '__PointerKeyEncoding', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), expected=sdkddkver.NTDDI_WIN7)
             if self['EncodeFlagMask']:
                 self.attributes['_HEAP_ENTRY_EncodeFlagMask'] = self['EncodeFlagMask'].li.int()
                 self.attributes['_HEAP_ENTRY_Encoding'] = tuple(n.int() for n in self['Encoding'].li['Keys'])
@@ -1301,9 +1301,9 @@ if 'Heap':
                 ])
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN8:
                 # http://illmatics.com/Windows%208%20Heap%20Internals.pdf
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
             else:
-                raise NotImplementedError
+                raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
     class _HEAP_LIST_LOOKUP(pstruct.type):
@@ -1314,7 +1314,8 @@ if 'Heap':
         def FindFreeListEntry(self, blockindex):
             '''Find the correct ListHint for the specified ``blockindex``'''
             res = blockindex - self['BaseIndex'].int()
-            assert 0 <= res < self.GetFreeListsCount(), "_HEAP_LIST_LOOKUP.FindFreeListEntry : Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int())
+            if 0 > res or self.GetFreeListsCount() < res:
+                raise error.NdkAssertionError(self, 'FindFreeListEntry', message="Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int()))
             freelist = self['ListsInUseUlong'].d.l
             list = self['ListHints'].d.l
             if freelist.check(res):
