@@ -690,6 +690,12 @@ class API_SET_HEADER(pstruct.type):
             raise error.ImplementationError(self, 'API_SET_HEADER.__init__')
         return
 
+    def summary(self):
+        res = []
+        for fld in self:
+            res.append("{:s}={:s}".format(fld, "{:#x}".format(self[fld].int()) if isinstance(self[fld], pint.type) else self[fld].summary()))
+        return ' '.join(res)
+
 class API_SET_VALUE_ENTRY(pstruct.type):
     class _Value(rpointer_t):
         _value_ = ULONG
