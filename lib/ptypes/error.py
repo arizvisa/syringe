@@ -7,7 +7,7 @@ class Base(exceptions.StandardError):
     def name(self):
         module = self.__module__
         name = type(self).__name__
-        return '.'.join((module,name))
+        return '.'.join((module, name))
 
     def __repr__(self):
         return self.__str__()
@@ -36,7 +36,7 @@ class ObjectBase(Base):
 
     def __str__(self):
         if self.instanceQ():
-            return ' : '.join((self.objectname(), self.instance()))
+            return "{:s} ({:s})".format(self.instance(), self.objectname())
         return self.objectname()
 
 class MethodBase(ObjectBase):
@@ -50,7 +50,7 @@ class MethodBase(ObjectBase):
 
     def __str__(self):
         if self.instanceQ():
-            return ' : '.join((self.objectname(), self.methodname(), self.instance()))
+            return ' : '.join(("{:s} ({:s})".format(self.instance(), self.objectname()), self.methodname()))
         return ' : '.join((self.objectname(), self.methodname()))
 
 class MethodBaseWithMessage(MethodBase):
