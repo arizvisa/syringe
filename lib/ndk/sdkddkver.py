@@ -1,14 +1,14 @@
 import sys, logging
 
-# service packs
+### Include/sdkddkver.h
+
+## Service Packs
 SP0 = 0x00000000
 SP1 = 0x00000100
 SP2 = 0x00000200
 SP3 = 0x00000300
 SP4 = 0x00000400
 SP5 = 0x00000500
-
-### Include/sdkddkver.h
 
 ## Windows XP
 NTDDI_WINXP = 0x05010000
@@ -73,30 +73,46 @@ NTDDI_WIN10_RS4 = NTDDI_WIN10 | 0x03
 NTDDI_WIN10_RS3 = NTDDI_WIN10 | 0x04
 NTDDI_WIN10_RS4 = NTDDI_WIN10 | 0x05
 
-# try to automatically identify which NTDDI_VERSION to use by default
-if not hasattr(sys, 'getwindowsversion'):
-    NTDDI_VERSION = NTDDI_WIN7SP1
-    logging.fatal("Importing ndk on an alternative non-windows based platform ({:s}). Defaulting to Windows 7 SP1 (NTDDI_VERSION={:#0{:d}x})".format(sys.platform, NTDDI_VERSION, 2+8))
-
-else:
-    version = sys.getwindowsversion()
-    NTDDI_VERSION = ((version.major & 0xff) << 24) | ((version.minor & 0xff) << 16) | ((version.service_pack_major & 0xff) << 8) | ((version.service_pack_minor & 0xff) << 0)
-    logging.warn("Importing ndk on a {:s}-based platform {:04x} SP{:d} (auto-detected): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, NTDDI_VERSION, 2 + 8))
-    del(version)
-
-# calculate size of uintptr_t using a trick to calculate the size of a lock which
-# always has 4 slots for it.
-import sys, thread
-SIZEOF_UINTPTR_T = sys.getsizeof(thread.allocate()) // 4
-
-# try and determine what to set WIN64 to. unfortunately this is supposed to
-# detect the architecture of the platform, but the best we can do is to get
-# the processor on windows and hope it corresponds.
-import platform
-WIN64 = 1 if platform.architecture()[0] in {"64bit"} else 0
-
+### Utilities
 def NTDDI_MAJOR(dword):
     return dword & 0xffff0000
 
 def NTDDI_MINOR(dword):
     return dword & 0x0000ffff
+
+### Target platform architecture
+
+# Calculate size of uintptr_t using a trick to calculate the size of a lock which
+# always has 4 slots for it.
+import sys, thread
+SIZEOF_UINTPTR_T = sys.getsizeof(thread.allocate()) // 4
+
+# Try and determine what to set WIN64 to based on the platform. Unfortunately
+# this is supposed to detect the architecture of the platform, but the best we
+# can do is to get the processor on windows and hope it corresponds.
+import platform
+WIN64 = 1 if platform.architecture()[0] in {"64bit"} else 0
+
+### Target platform auto-detection
+NTDDI_VERSION = 0
+
+# If we're on Windows, Python exposes sys.getwindowsversion() which we can use
+# to determine some things. Unfortunately the Service Pack (CSVersion) is already
+# stringified, so we have to conver it back to an integer
+if hasattr(sys, 'getwindowsversion'):
+    version = sys.getwindowsversion()
+    NTDDI_VERSION = ((version.major & 0xff) << 24) | ((version.minor & 0xff) << 16) | ((version.service_pack_major & 0xff) << 8) | ((version.service_pack_minor & 0xff) << 0)
+    del(version)
+
+### Inform the user what was determined
+
+# Let the user know what we auto-detected so that way the user knows that they
+# need to explicitly assign a default, or assign it as an attribute during
+# instantiation.
+if NTDDI_VERSION:
+    logging.warn("Importing ndk for a {:s}-based platform {:04x} SP{:d} (auto-detected): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, NTDDI_VERSION, 2 + 8))
+
+# Fall-back to some default since NTDDI_VERSION was not able to be detected..
+else:
+    NTDDI_VERSION = NTDDI_WIN7SP1
+    logging.fatal("Importing ndk from an alternative non-windows based platform ({:s}). Defaulting to Windows 7 SP1 (NTDDI_VERSION={:#0{:d}x})".format(sys.platform, NTDDI_VERSION, 2+8))
