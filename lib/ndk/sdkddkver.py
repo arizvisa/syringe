@@ -9,24 +9,29 @@ SP4 = 0x00000400
 SP5 = 0x00000500
 
 ### Include/sdkddkver.h
-NTDDI_WIN2K = 0x05000000
-NTDDI_WIN2KSP1 = NTDDI_WIN2K | SP1
-NTDDI_WIN2KSP2 = NTDDI_WIN2K | SP2
-NTDDI_WIN2KSP3 = NTDDI_WIN2K | SP3
-NTDDI_WIN2KSP4 = NTDDI_WIN2K | SP4
 
+## Windows XP
 NTDDI_WINXP = 0x05010000
 NTDDI_WINXPSP1 = NTDDI_WINXP | SP1
 NTDDI_WINXPSP2 = NTDDI_WINXP | SP2
 NTDDI_WINXPSP3 = NTDDI_WINXP | SP3
 NTDDI_WINXPSP4 = NTDDI_WINXP | SP4
 
+## Windows 2000
+NTDDI_WIN2K = 0x05000000
+NTDDI_WIN2KSP1 = NTDDI_WIN2K | SP1
+NTDDI_WIN2KSP2 = NTDDI_WIN2K | SP2
+NTDDI_WIN2KSP3 = NTDDI_WIN2K | SP3
+NTDDI_WIN2KSP4 = NTDDI_WIN2K | SP4
+
+## Windows Server 2003
 NTDDI_WS03 = 0x05020000
 NTDDI_WS03SP1 = NTDDI_WS03 | SP1
 NTDDI_WS03SP2 = NTDDI_WS03 | SP2
 NTDDI_WS03SP3 = NTDDI_WS03 | SP3
 NTDDI_WS03SP4 = NTDDI_WS03 | SP4
 
+## Windows Vista
 NTDDI_WIN6 = 0x06000000
 NTDDI_WIN6SP1 = NTDDI_WIN6 | SP1
 NTDDI_WIN6SP2 = NTDDI_WIN6 | SP2
@@ -41,29 +46,41 @@ NTDDI_VISTASP4 = NTDDI_WIN6SP4
 
 NTDDI_LONGHORN = NTDDI_VISTA
 
+## Windows Server 2008
 NTDDI_WS08 = NTDDI_WIN6SP1
 NTDDI_WS08SP2 = NTDDI_WIN6SP2
 NTDDI_WS08SP3 = NTDDI_WIN6SP3
 NTDDI_WS08SP4 = NTDDI_WIN6SP4
 
+## Windows 7
 NTDDI_WIN7 = 0x06010000
 NTDDI_WIN7SP1 = NTDDI_WIN7 | SP1
 NTDDI_WIN7SP2 = NTDDI_WIN7 | SP2
 NTDDI_WIN7SP3 = NTDDI_WIN7 | SP3
 NTDDI_WIN7SP4 = NTDDI_WIN7 | SP4
 
+## Windows 8
 NTDDI_WIN8 = 0x06020000
 
-NTDDI_WINBLUE = 0x06020000
+## Windows 8.1
+NTDDI_WINBLUE = 0x06030000
+
+## Windows 10
+NTDDI_WIN10 = 0x0a000000
+NTDDI_WIN10_TH2 = NTDDI_WIN10 | 0x01
+NTDDI_WIN10_RS1 = NTDDI_WIN10 | 0x02
+NTDDI_WIN10_RS4 = NTDDI_WIN10 | 0x03
+NTDDI_WIN10_RS3 = NTDDI_WIN10 | 0x04
+NTDDI_WIN10_RS4 = NTDDI_WIN10 | 0x05
 
 # try to automatically identify which NTDDI_VERSION to use by default
-if not hasattr(sys,'getwindowsversion'):
+if not hasattr(sys, 'getwindowsversion'):
     NTDDI_VERSION = NTDDI_WIN7SP1
     logging.fatal("Importing ndk on an alternative non-windows based platform ({:s}). Defaulting to Windows 7 SP1 (NTDDI_VERSION={:#0{:d}x})".format(sys.platform, NTDDI_VERSION, 2+8))
 
 else:
     version = sys.getwindowsversion()
-    NTDDI_VERSION = ((version.major & 0xff) << 24) | ((version.minor & 0xff) << 16) | ((version.service_pack_major & 0xff) << 8)
+    NTDDI_VERSION = ((version.major & 0xff) << 24) | ((version.minor & 0xff) << 16) | ((version.service_pack_major & 0xff) << 8) | ((version.service_pack_minor & 0xff) << 0)
     logging.warn("Importing ndk on a {:s}-based platform {:04x} SP{:d} (auto-detected): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, NTDDI_VERSION, 2 + 8))
     del(version)
 
