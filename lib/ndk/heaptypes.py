@@ -770,16 +770,38 @@ if 'LFH':
             t = dyn.clone(_FE_HEAP_CHUNK, blocksize=lambda s,cs=cs:cs)
             return dyn.array(t, ss['BlockCount'].int())
 
-        def NextIndex(self):
-            '''Return the next UserBlock index that will be allocated from this structure'''
-            ss = self['SubSegment'].d.l
-            return ss.GetFreeBlockIndex()
+        def ByOffset(self, entryoffset):
+            '''Return the field at the specified `entryoffset`.'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return self.field(blocksize * entryoffset, recurse=True)
 
+        def HeaderByOffset(self, offset):
+            '''Return the header for the given entry offset.'''
+            res = self.ByOffset(offset)
+            if isinstance(res, _FRONTEND_HEAP_ENTRY):
+                return res
+            raise error.NotFoundException(self, '_HEAP_USERDATA_HEADER.HeaderByOffset', message="Object at entry offset {:#x} does not point to a header ({:s}). An invalid entry offset was specified.".format(offset, _FRONTEND_HEAP_ENTRY.typename()))
+        def BlockByOffset(self, offset):
+            '''Return the block at the given entry offset.'''
+            res = self.HeaderByOffset(offset)
+            return res.getparent(Chunk)
+        def ChunkByOffset(self, offset):
+            '''Return the chunk (data) for the entry offset.'''
+            res = self.BlockByOffset(offset)
+            return res['Data']
+
+        def NextIndex(self):
+            '''Return the next UserBlock index that will be allocated from this structure's segment'''
+            ss = self['SubSegment'].d.l
+            return ss.GetFreeEntryBlockIndex()
         def NextBlock(self):
-            '''Return the next block that will be allocated from this segment'''
+            '''Return the next block that will be allocated from this structure's segment'''
             index = self.NextIndex()
             return self['Blocks'][index]
-        NextChunk = NextBlock
+        def NextChunk(self):
+            '''Return a pointer to the next chunk (data) that will be returned from this structure's segment.'''
+            res = self.NextBlock()
+            return res['Data']
 
         def UsageBitmap(self):
             '''Return a bitmap showing the busy/free chunks that are available'''
@@ -808,9 +830,6 @@ if 'LFH':
 
     class _HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
 
-        # FIXME: Figure out how and what to use 'CachedItems' for. This might
-        #        be used by the 'LastUsed' field.
-
         def Bucket(self):
             '''Return the LFH bin associated with the current _HEAP_LOCAL_SEGMENT_INFO'''
             bi = self['BucketIndex'].int()
@@ -822,6 +841,10 @@ if 'LFH':
             Return the correct _HEAP_SUBSEGMENT by checking "Hint" first, and then
             falling back to "ActiveSubSegment".
             '''
+
+            # FIXME: CachedItems seems to point to segments that have previously
+            #        been in the 'Hint' field. However, when this happens the
+            #        current segment to honor for allocations is 'ActiveSubSegment'.
 
             if self['Hint'].int():
                 return self['Hint'].d
@@ -902,24 +925,31 @@ if 'LFH':
 
     class _HEAP_SUBSEGMENT(pstruct.type):
         def BlockSize(self):
-            '''Returns the size of each block within the subsegment'''
+            '''Returns the size of each block (data + header) within the subsegment'''
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             return self['BlockSize'].int() * blocksize
         def ChunkSize(self):
-            '''Return the size of the chunks that this _HEAP_SUBSEGMENT is responsible for providing'''
+            '''Return the size of the chunks (data) that this _HEAP_SUBSEGMENT is responsible for providing'''
             res = self.new(_HEAP_ENTRY).a
             return self.BlockSize() - res.size()
-        def GetFreeBlockIndex(self):
-            '''Returns the index into UserBlocks of the next block to allocate given the `FreeEntryOffset` of the current _HEAP_SUBSEGMENT'''
+
+        def GetBlockIndexByOffset(self, offset):
+            '''Return the expected block index for the given offset.'''
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            fo = self['AggregateExchg']['FreeEntryOffset'].int() * blocksize
-            return fo / self.BlockSize()
-        def NextBlock(self):
-            '''Return the next block HeapAllocate will return if there's no free chunks available to return'''
-            index = self.GetFreeBlockIndex()
+            fo = offset * blocksize
+            shift = self.new(_HEAP_USERDATA_HEADER).a.size()
+            return (fo - shift) / self.BlockSize()
+
+        def GetFreeEntryBlockIndex(self):
+            '''Returns the index into UserBlocks of the next block to allocate given the `FreeEntryOffset` of the current _HEAP_SUBSEGMENT'''
+            res = self['AggregateExchg']['FreeEntryOffset']
+            return self.GetBlockIndexByOffset(res.int())
+
+        def NextFreeBlock(self):
+            '''Return the next block HeapAllocate will return for the current segment.'''
+            index = self.GetFreeEntryBlockIndex()
             ub = self['UserBlocks'].d.l
             return ub['Blocks'][index]
-        NextChunk = NextBlock
 
         def UsedBlockCount(self):
             '''Return the total number of UserBlocks that have been allocated'''
@@ -927,11 +957,12 @@ if 'LFH':
         def UnusedBlockCount(self):
             '''Return the number of UserBlocks that have been either freed or unallocated'''
             return self['AggregateExchg']['Depth'].int()
-        def Usage(self):
+        def UsageString(self):
             '''Return a binary string showing the busy/free chunks that are available within `UserBlocks`'''
             ub = self['UserBlocks'].d.l
             res = ub.UsageBitmap()
             return ptypes.bitmap.string(res)
+        Usage = UsageString
 
         def properties(self):
             res = super(_HEAP_SUBSEGMENT, self).properties()
