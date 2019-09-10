@@ -658,11 +658,37 @@ class PROCESS_TELEMETRY_ID_INFORMATION(pstruct.type):
         (ULONG, 'CommandLineOffset'),
     ]
 
-class _API_SET_HEADER(pstruct.type):
+@pbinary.littleendian
+class API_SET_SCHEMA_FLAGS_(pbinary.flags):
     _fields_ = [
-        (ULONG, 'Version'),
-        (ULONG, 'Count'),
+        (30, 'unused'),
+        (1, 'HOST_EXTENSION'),
+        (1, 'SEALED'),
     ]
+
+class _API_SET_HEADER(pstruct.type):
+    def __init__(self, **attrs):
+        super(_API_SET_HEADER, self).__init__(**attrs)
+        self._fields_ = f = []
+
+        # https://www.geoffchappell.com/studies/windows/win32/apisetschema/index.htm
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
+            f.extend([
+                (ULONG, 'Version'),
+                (ULONG, 'Count'),
+            ])
+
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+            f.extend([
+                (ULONG, 'Version'),
+                (ULONG, 'Size'),
+                (API_SET_SCHEMA_FLAGS_, 'Flags'),
+                (ULONG, 'Count'),
+            ])
+
+        else:
+            raise error.ImplementationError(self, 'API_SET_HEADER.__init__')
+        return
 
 class _API_SET_VALUE_ENTRY(pstruct.type):
     class _Value(rpointer_t):
@@ -738,12 +764,6 @@ class API_SET_MAP(pstruct.type, versioned):
         (_API_SET_HEADER, 'Header'),
         (__Entry, 'Entry'),
     ]
-
-    def __init__(self, **attrs):
-        super(API_SET_MAP, self).__init__(**attrs)
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_WIN7:
-            raise error.ImplementationError(self, 'API_SET_MAP.__init__')
-        return
 
 class KSYSTEM_TIME(pstruct.type):
     _fields_ = [
