@@ -4,7 +4,9 @@ import ptypes, exceptions
 from . import sdkddkver
 
 class NdkException(ptypes.error.RequestError):
-    '''Base class for exceptions raised by the ndk library'''
+    '''
+    Base class for exceptions raised by the ndk library
+    '''
     def __init__(self, object, method, *args, **kwds):
         super(NdkException, self).__init__(*((object, method) + args))
         map(None, itertools.starmap(functools.partial(setattr, self), kwds.items()))
@@ -29,9 +31,9 @@ class NdkUnsupportedVersion(NdkException):
 
 ### Exceptions used by ndk.heaptypes
 class NdkHeapException(NdkException):
-    '''Base class for exceptions raised by the heap types'''
-    def __init__(self, object, method, *args, **kwds):
-        super(NdkHeapException, self).__init__(object, method)
+    '''
+    Base class for exceptions raised by the heaptypes module
+    '''
 
 class NotFoundException(NdkHeapException): pass
 class ListHintException(NdkHeapException): pass
