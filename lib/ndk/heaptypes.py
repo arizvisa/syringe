@@ -1194,7 +1194,8 @@ if 'Heap':
             if not self['FrontEndHeapType']['LFH']:
                 raise error.IncorrectHeapType(self, '_HEAP.FindFreeListEntry', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            bi = math.trunc(math.ceil(size / float(blocksize)))
+            size_and_header = size + blocksize
+            bi = math.trunc(math.ceil(size_and_header / float(blocksize)))
             heaplist = self.FindHeapListLookup(bi)
             return heaplist.FindFreeListEntry(bi)
 
