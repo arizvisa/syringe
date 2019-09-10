@@ -95,6 +95,7 @@ WIN64 = 1 if platform.architecture()[0] in {"64bit"} else 0
 
 ### Target platform auto-detection
 NTDDI_VERSION = 0
+__SOURCE__ = None
 
 # If we're on Windows, Python exposes sys.getwindowsversion() which we can use
 # to determine some things. Unfortunately the Service Pack (CSVersion) is already
@@ -103,6 +104,28 @@ if hasattr(sys, 'getwindowsversion'):
     version = sys.getwindowsversion()
     NTDDI_VERSION = ((version.major & 0xff) << 24) | ((version.minor & 0xff) << 16) | ((version.service_pack_major & 0xff) << 8) | ((version.service_pack_minor & 0xff) << 0)
     del(version)
+    __SOURCE__ = 'sys-module'
+
+# If the pykd module was imported at some point, then we should be able to use
+# it to find the PEB. From the PEB, we can seek to some offsets to extract the
+# version components.
+if 'pykd' in sys.modules and sys.modules['pykd'].isWindbgExt():
+    pykd = sys.modules['pykd']
+    pebaddr = pykd.expr('@$peb')
+    if pykd.is64bitSystem():
+        WIN64 = 1
+        version = pykd.ptrDWord(pebaddr + 0x118), pykd.ptrDWord(pebaddr + 0x11c), pykd.ptrWord(pebaddr + 0x120), pykd.ptrWord(pebaddr + 0x122), pykd.ptrDWord(pebaddr + 0x124)
+    else:
+        WIN64 = 0
+        version = pykd.ptrDWord(pebaddr + 0xa4), pykd.ptrDWord(pebaddr + 0xa8), pykd.ptrWord(pebaddr + 0xac), pykd.ptrWord(pebaddr + 0xae), pykd.ptrDWord(pebaddr + 0xb0)
+    del(pebaddr)
+    del(pykd)
+
+    # Assign the NTDDI_VERSION from the version components we found
+    NTDDI_VERSION = ((version[0] & 0xff) << 24) | ((version[1] & 0xff) << 16) | version[3]
+    del(version)
+
+    __SOURCE__ = 'pykd-peb'
 
 ### Inform the user what was determined
 
@@ -110,7 +133,7 @@ if hasattr(sys, 'getwindowsversion'):
 # need to explicitly assign a default, or assign it as an attribute during
 # instantiation.
 if NTDDI_VERSION:
-    logging.warn("Importing ndk for a {:s}-based platform {:04x} SP{:d} (auto-detected): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, NTDDI_VERSION, 2 + 8))
+    logging.warn("Importing ndk for a {:s}-based platform {:04x} SP{:d} (auto-detected from {:s}): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, __SOURCE__, NTDDI_VERSION, 2 + 8))
 
 # Fall-back to some default since NTDDI_VERSION was not able to be detected..
 else:
