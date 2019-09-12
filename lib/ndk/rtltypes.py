@@ -4,14 +4,14 @@ from ptypes import *
 from . import umtypes
 from .datatypes import *
 
-class _RTL_CRITICAL_SECTION(pstruct.type):
+class _RTL_CRITICAL_SECTION(pstruct.type, versioned):
     _fields_ = [
         (PVOID, 'DebugInfo'),
         (LONG, 'LockCount'),
         (LONG, 'RecursionCount'),
         (PVOID, 'OwningThread'),
         (PVOID, 'LockSemaphore'),
-        (ULONG, 'SpinCount'),
+        (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SpinCount'),
     ]
 
 class _RTL_BITMAP(pstruct.type):
@@ -99,4 +99,15 @@ class _RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
         (USHORT, 'LoadCount'),
         (USHORT, 'OffsetToFileName'),
         (dyn.clone(pstr.string, length=256), 'FullPathName'),
+    ]
+
+# XXX: These should probably be unions
+class _RTL_RUN_ONCE(pstruct.type, versioned):
+    _fields_ = [
+        (P(ptype.undefined), 'Ptr'),
+    ]
+
+class _RTL_SRWLOCK(pstruct.type, versioned):
+    _fields_ = [
+        (P(ptype.undefined), 'Ptr'),
     ]
