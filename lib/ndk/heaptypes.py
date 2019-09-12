@@ -283,6 +283,7 @@ if 'HeapEntry':
                     (pint.uint8_t, 'Index'),
                     (pint.uint8_t, 'Mask'),
                 ])
+
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 f.extend([
                     (pint.uint16_t, 'Size'),
@@ -292,6 +293,7 @@ if 'HeapEntry':
                     (pint.uint8_t, 'SegmentOffset'),    # Size // blocksize
                     (_HEAP_ENTRY.UnusedBytes, 'UnusedBytes'),  # XXX: for some reason this is checked against 0x05
                 ])
+
             else:
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
@@ -353,6 +355,11 @@ if 'HeapEntry':
             return "*{:#x} -> *{:#x}".format(self.get(), self.d.getoffset())
 
     class _ENCODED_HEAP_ENTRY(ptype.encoded_t):
+        '''
+        This is the base class that all encoded _HEAP_ENTRY types inherit from
+        so that they all can have a similar interface.
+        '''
+
         @property
         def _value_(self):
             if getattr(self, 'WIN64', False):
@@ -363,6 +370,7 @@ if 'HeapEntry':
         def FrontEndQ(self):
             self = self.d.li
             return bool(self['Flags']['AllocatedByFrontend'])
+
         def BackEndQ(self):
             # Back-to-Front(242)
             return not self.FrontEndQ()
@@ -381,22 +389,20 @@ if 'HeapEntry':
             res['Encoded'] = True
             return res
 
-        def classname(self): return self.typename()
-        def repr(self): return self.details()
-        def __getitem__(self, name): return self.d.li.__getitem__(name)
-        def __setitem__(self, name, value): return self.d.li.__setitem__(name, value)
+        def classname(self):
+            return self.typename()
+        def repr(self):
+            return self.details()
+        def __getitem__(self, name):
+            return self.d.li.__getitem__(name)
+        def __setitem__(self, name, value):
+            return self.d.li.__setitem__(name, value)
 
         def details(self):
             res = self.d.li.copy(offset=self.getoffset())
             return res.details()
 
     class _BACKEND_HEAP_ENTRY(_ENCODED_HEAP_ENTRY, versioned):
-        class _value_(pstruct.type):
-            _fields_ = [
-                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'Unencoded'),
-                (dyn.array(pint.uint32_t, 2), 'Encoded'),
-            ]
-
         class _HEAP_ENTRY(pstruct.type, versioned):
             def __init__(self, **attrs):
                 super(_BACKEND_HEAP_ENTRY._HEAP_ENTRY, self).__init__(**attrs)
@@ -413,12 +419,23 @@ if 'HeapEntry':
                 ])
         _object_ = _HEAP_ENTRY
 
+        class _HEAP_ENTRY_Encoded(pstruct.type):
+            '''
+            This type is used strictly for encoding/decoding and is used when
+            casting the backing type.
+            '''
+            _fields_ = [
+                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'Unencoded'),
+                (dyn.array(pint.uint32_t, 2), 'Encoded'),
+            ]
+
         def __GetEncoding(self):
             heap = self.getparent(type=_HEAP)
             encoding = heap['Encoding'].li
             return heap['EncodeFlagMask'].li.int(), tuple(item.int() for item in encoding['Keys'])
 
         def encode(self, object, **attrs):
+            object = object.cast(self._HEAP_ENTRY_Encoded)
 
             # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'EncodeFlagMask', 'Encoding'}):
@@ -433,6 +450,7 @@ if 'HeapEntry':
             return super(_BACKEND_HEAP_ENTRY,self).encode(object)
 
         def decode(self, object, **attrs):
+            object = object.cast(self._HEAP_ENTRY_Encoded)
 
             # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'EncodeFlagMask', 'Encoding'}):
@@ -499,9 +517,13 @@ if 'HeapEntry':
                 ])
         _object_ = _HEAP_ENTRY
 
-        class _value_(pstruct.type):
+        class _HEAP_ENTRY_Encoded(pstruct.type):
+            '''
+            This type is used strictly for encoding/decoding and is used when
+            casting the backing type.
+            '''
             def __init__(self, **attrs):
-                super(_FRONTEND_HEAP_ENTRY._value_, self).__init__(**attrs)
+                super(_FRONTEND_HEAP_ENTRY._HEAP_ENTRY_Encoded, self).__init__(**attrs)
                 f = self._fields_ = []
                 if getattr(self, 'WIN64', False):
                     f.extend([
@@ -530,6 +552,7 @@ if 'HeapEntry':
             return res.l.int()
 
         def encode(self, object, **attrs):
+            object = object.cast(self._HEAP_ENTRY_Encoded)
 
             # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
@@ -567,6 +590,7 @@ if 'HeapEntry':
             return super(_FRONTEND_HEAP_ENTRY,self).encode(object)
 
         def decode(self, object, **attrs):
+            object = object.cast(self._HEAP_ENTRY_Encoded)
 
             # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
@@ -594,7 +618,8 @@ if 'HeapEntry':
 
         def summary(self):
             # FIXME: log a warning suggesting that the flags are incorrect
-            if not self.FrontEndQ(): pass
+            if not self.FrontEndQ():
+                pass
             return self.serialize().encode('hex')
 
         def EntryOffsetQ(self):
@@ -647,13 +672,12 @@ if 'HeapChunk':
                 size = self.blocksize()
             else:
                 size = self.blocksize() if header.FrontEndQ() else header.Size()
-            total = self['Header'].li.size() + self['ListEntry'].li.size() + self['ChunkFreeEntryOffset'].li.size()
-            res = size - total
-            return dyn.block(res if res >= 0 else 0)
+            res = sum(self[fld].li.size() for fld in ['Header', 'ListEntry', 'ChunkFreeEntryOffset'])
+            return dyn.block(max({0, size - res}))
 
         def properties(self):
             res = super(Chunk, self).properties()
-            types = {0:'Chunk',1:'Segment',5:'Linked'}
+            types = {0: 'Chunk', 1:'Segment', 5:'Linked'}
             if self.initializedQ():
                 t = self['Header'].Type()
                 if t == 0:
@@ -670,12 +694,19 @@ if 'HeapChunk':
             (__Data, 'Data'),
         ]
 
-        def FreeQ(self): return not self.BusyQ()
         def BusyQ(self):
             return self['Header'].BusyQ()
-        def BackEndQ(self): return not self.FrontEndQ()
+
+        def FreeQ(self):
+            res = self.BusyQ()
+            return not res
+
         def FrontEndQ(self):
             return self['Header'].FrontEndQ()
+
+        def BackEndQ(self):
+            res = self.FrontEndQ()
+            return not res
 
         def next(self):
             cls, header = self.__class__, self['Header']
@@ -683,6 +714,7 @@ if 'HeapChunk':
                 raise error.IncorrectChunkType(self, 'next', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(_HEAP)
             return parent.new(cls, offset=self.getoffset() + header.Size())
+
         def previous(self):
             cls, header = self.__class__, self['Header']
             if header.FrontEndQ():
@@ -708,13 +740,18 @@ if 'HeapChunk':
             return link['Blink'].d.l
         prevfree = previousfree
 
-    class _BE_HEAP_CHUNK(Chunk): HEADER = _BACKEND_HEAP_ENTRY
-    class _FE_HEAP_CHUNK(Chunk): HEADER = _FRONTEND_HEAP_ENTRY
+    class _BE_HEAP_CHUNK(Chunk):
+        HEADER = _BACKEND_HEAP_ENTRY
+    class _FE_HEAP_CHUNK(Chunk):
+        HEADER = _FRONTEND_HEAP_ENTRY
 
-    class _HEAP_CHUNK(_BE_HEAP_CHUNK): pass
-    class _HEAP_FREE_CHUNK(_HEAP_CHUNK): pass
+    class _HEAP_CHUNK(_BE_HEAP_CHUNK):
+        pass
+    class _HEAP_FREE_CHUNK(_HEAP_CHUNK):
+        pass
 
-    class ChunkLookaside(Chunk): HEADER = _HEAP_ENTRY
+    class ChunkLookaside(Chunk):
+        HEADER = _HEAP_ENTRY
 
 if 'Frontend':
     class FrontEndHeapType(pint.enum, pint.uint8_t):
@@ -785,18 +822,19 @@ if 'Frontend':
 
         def collect(self, size=None):
             '''Collect chunks beginning at the current chunk which are less than ``size``'''
-            for n in self.walk():
-                if size is None: size = n['Header'].Size()
-                if n['Header'].Size() > size:
+            for item in self.walk():
+                if size is None:
+                    size = item['Header'].Size()
+                if item['Header'].Size() > size:
                     break
-                yield n
+                yield item
             return
 
 if 'LookasideList':
     @FrontEndHeap.define
     class LAL(parray.type):
         type = 1
-        attributes = {'_FrontEndHeapType':type}
+        attributes = {'_FrontEndHeapType': type}
 
         class _object_(pstruct.type):
             _fields_ = [
@@ -867,7 +905,7 @@ if 'LFH':
             Q = 0x10 if getattr(self, 'WIN64', False) else 8
             ss = self['SubSegment'].li.d.l
             cs = ss['BlockSize'].int() * Q
-            t = dyn.clone(_FE_HEAP_CHUNK, blocksize=lambda s,cs=cs:cs)
+            t = dyn.clone(_FE_HEAP_CHUNK, blocksize=lambda s, cs=cs: cs)
             return dyn.array(t, ss['BlockCount'].int())
 
         def ByOffset(self, entryoffset):
@@ -1035,7 +1073,7 @@ if 'LFH':
                 idx = res.index(entry.getoffset()) + 1
                 blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
                 sz = idx * blocksize + self.new(_HEAP_ENTRY).a.size()
-                block = dyn.clone(_FE_HEAP_CHUNK, blocksize=lambda s,sz=sz:sz)
+                block = dyn.clone(_FE_HEAP_CHUNK, blocksize=lambda s, sz=sz: sz)
                 return dyn.array(block, entry['AvailableBlocks'].int() * 8)
 
             _fields_ = [
@@ -1207,7 +1245,7 @@ if 'LFH':
     @FrontEndHeap.define
     class _LFH_HEAP(pstruct.type,versioned):
         type = 2
-        attributes = {'_FrontEndHeapType':type}
+        attributes = {'_FrontEndHeapType': type}
 
         # FIXME: Figure out how caching in 'UserBlockCache' works
 
@@ -1316,7 +1354,9 @@ if 'Heap':
 
         def walk(self):
             yield self
-            for n in self['SegmentListEntry'].walk(): yield n
+            for n in self['SegmentListEntry'].walk():
+                yield n
+            return
 
         def __init__(self, **attrs):
             super(_HEAP_SEGMENT, self).__init__(**attrs)
