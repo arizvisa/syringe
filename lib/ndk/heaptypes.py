@@ -311,48 +311,6 @@ if 'HeapEntry':
             res['Encoded'] = False
             return res
 
-    class ENCODED_POINTER(PVOID):
-        def __HeapPointerKey(self):
-            heap = self.getparent(HEAP)
-            return heap['PointerKey'].int()
-
-        def __RtlpHeapKey(self):
-            RtlpHeapKey = self.source.expr('ntdll!RtlpHeapKey')
-            t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-            res = self.new(t, offset=RtlpHeapKey)
-            return res.l.int()
-
-        def __GetPointerKey(self):
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
-                return self.__RtlpHeapKey()
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
-                return self.__HeapPointerKey()
-            raise error.InvalidPlatformException(self, '__GetPointerKey', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), expected=sdkddkver.NTDDI_WIN7)
-
-        def encode(self, object, **attrs):
-            try:
-                res = self.__GetPointerKey()
-                self._EncodedPointerKey = res
-
-            # FIXME: Log that this encoded-pointer is non-encoded due to being unable to locate the key
-            except:
-                pass
-
-            if hasattr(self, '_EncodedPointerKey'):
-                return super(ENCODED_POINTER, self).encode(self._value_().set(object.get() ^ self._EncodedPointerKey))
-            return super(ENCODED_POINTER, self).encode(object)
-
-        def decode(self, object, **attrs):
-            if not hasattr(self, '_EncodedPointerKey'):
-                res = self.__GetPointerKey()
-                self._EncodedPointerKey = res
-
-            res = object.get() ^ self._EncodedPointerKey
-            return super(ENCODED_POINTER, self).decode(self._value_().set(res))
-
-        def summary(self):
-            return "*{:#x} -> *{:#x}".format(self.get(), self.d.getoffset())
-
     class ENCODED_HEAP_ENTRY(ptype.encoded_t):
         '''
         This is the base class that all encoded HEAP_ENTRY types inherit from
@@ -647,6 +605,48 @@ if 'HeapEntry':
             if self.initializedQ():
                 res['EntryOffsetQ'] = self.EntryOffsetQ()
             return res
+
+    class ENCODED_POINTER(PVOID):
+        def __HeapPointerKey(self):
+            heap = self.getparent(HEAP)
+            return heap['PointerKey'].int()
+
+        def __RtlpHeapKey(self):
+            RtlpHeapKey = self.source.expr('ntdll!RtlpHeapKey')
+            t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+            res = self.new(t, offset=RtlpHeapKey)
+            return res.l.int()
+
+        def __GetPointerKey(self):
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
+                return self.__RtlpHeapKey()
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
+                return self.__HeapPointerKey()
+            raise error.InvalidPlatformException(self, '__GetPointerKey', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), expected=sdkddkver.NTDDI_WIN7)
+
+        def encode(self, object, **attrs):
+            try:
+                res = self.__GetPointerKey()
+                self._EncodedPointerKey = res
+
+            # FIXME: Log that this encoded-pointer is non-encoded due to being unable to locate the key
+            except:
+                pass
+
+            if hasattr(self, '_EncodedPointerKey'):
+                return super(ENCODED_POINTER, self).encode(self._value_().set(object.get() ^ self._EncodedPointerKey))
+            return super(ENCODED_POINTER, self).encode(object)
+
+        def decode(self, object, **attrs):
+            if not hasattr(self, '_EncodedPointerKey'):
+                res = self.__GetPointerKey()
+                self._EncodedPointerKey = res
+
+            res = object.get() ^ self._EncodedPointerKey
+            return super(ENCODED_POINTER, self).decode(self._value_().set(res))
+
+        def summary(self):
+            return "*{:#x} -> *{:#x}".format(self.get(), self.d.getoffset())
 
 if 'HeapChunk':
     class Chunk(pstruct.type):
