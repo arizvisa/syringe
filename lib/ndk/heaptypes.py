@@ -70,11 +70,13 @@ if 'HeapMeta':
             super(_HEAP_TUNING_PARAMETERS, self).__init__(**attrs)
             f = self._fields_ = []
             f.extend([
-                (ULONG,'CommittThresholdShift'),
-                (SIZE_T64 if getattr(self,'WIN64',False) else SIZE_T,'MaxPreCommittThreshold')
+                (ULONG, 'CommittThresholdShift'),
+                (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(CommittThresholdShift)'),
+                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'MaxPreCommittThreshold')
             ])
+
         def summary(self):
-            return ' '.join("{:s}={:s}".format(k,v.summary()) for k,v in self.iteritems())
+            return ' '.join("{:s}={:s}".format(k, v.summary()) for k, v in self.iteritems())
 
     class _HEAP_PSEUDO_TAG_ENTRY(pstruct.type, versioned):
         def __init__(self, **attrs):
@@ -309,7 +311,6 @@ if 'HeapEntry':
             return res
 
     class _ENCODED_POINTER(PVOID):
-
         def __HeapPointerKey(self):
             heap = self.getparent(_HEAP)
             return heap['PointerKey'].int()
@@ -321,11 +322,11 @@ if 'HeapEntry':
             return res.l.int()
 
         def __GetPointerKey(self):
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) > sdkddkver.NTDDI_WIN8:
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
                 return self.__RtlpHeapKey()
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) > sdkddkver.NTDDI_WIN7:
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
                 return self.__HeapPointerKey()
-            return None
+            raise error.InvalidPlatformException(self, '__GetPointerKey', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), expected=sdkddkver.NTDDI_WIN7)
 
         def encode(self, object, **attrs):
             try:
