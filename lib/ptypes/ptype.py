@@ -1912,14 +1912,22 @@ class wrapper_t(type):
     @property
     def object(self):
         '''Returns the instance that is used to back the wrapper_t.'''
+        cls = self.__class__
 
-        # Check if .__object__ is undefined or of a different type than self._value_
-        if self.__object__ is None or (self._value_ and not builtins.isinstance(self.__object__, self._value_)):
+        # Check if wrapper_t.__object__ is undefined
+        if self.__object__ is None:
             if not istype(self._value_):
-                raise error.UserError(self, 'wrapper_t.object', message='unable to instantiate .object due to wrapper_t._value_ is undefined.')
+                Log.info("wrapper_t.object : {:s} : Using wrapper_t._value_{:s} as a closure for instantiatiation of object.".format(self.instance(), '' if self._value_.__name__ == '_value_' else " ({:s})".format(self._value_.__name__)))
             res = self._value_ or type
             name = "wrapped<{:s}>".format(res.typename() if istype(res) else res.__name__)
             self.__object__ = self.new(res, __name__=name, offset=0, source=provider.proxy(self))
+
+        # Check if wrapper_t.__object__ is a different type than self._value_ but not a callable or a property
+        elif not builtins.isinstance(cls._value_, (types.FunctionType, types.MethodType, property)) and self._value_ and not builtins.isinstance(self.__object__, self._value_):
+            t, res = self._value_, self.__object__
+            Log.warn("wrapper_t.object : {:s} : Casting object with incompatible type {:s} to wrapper_t._value_ ({:s}).".format(self.instance(), res.instance(), t.typename()))
+            name = "wrapped<{:s}>".format(t.typename() if istype(res) else t.__name__)
+            self.__object__ = res.cast(t, __name__=name, offset=0, source=provider.proxy(self))
 
         # Otherwise, we can simply return it
         return self.__object__
@@ -1992,7 +2000,7 @@ class wrapper_t(type):
 
     def classname(self):
         if self.initializedQ():
-            return "{:s}<{:s}>".format(self.typename(), self.object.classname())
+            return "{:s}<{:s}>".format(self.typename(), self.__object__.classname())
         if self._value_ is None:
             return "{:s}<?>".format(self.typename())
         return "{:s}<{:s}>".format(self.typename(), self._value_.typename() if istype(self._value_) else self._value_.__name__)
@@ -3226,6 +3234,60 @@ if __name__ == '__main__':
         if x.size() == 16:
             raise Success
         raise Failure
+
+    @TestCase
+    def test_wrapper_value_property():
+        class t(ptype.wrapper_t):
+            @property
+            def _value_(self):
+                class fuck(ptype.block):
+                    length = 4
+                return fuck
+
+        x = t()
+        a, b = x.object, x.object
+        if a is b:
+            raise Success
+
+    @TestCase
+    def test_wrapper_value_closure():
+        class t(ptype.wrapper_t):
+            def _value_(self):
+                class fuck(ptype.block):
+                    length = 4
+                return fuck
+
+        x = t()
+        a, b = x.object, x.object
+        if a is b:
+            raise Success
+
+    @TestCase
+    def test_encoded_object_property():
+        class t(ptype.encoded_t):
+            class _value_(ptype.block):
+                length = 4
+
+            @property
+            def _object_(self):
+                return pint.uint32_t
+
+        x = t()
+        a, b = x.d, x.d
+        if a is b:
+            raise Success
+
+    @TestCase
+    def test_wrapper_object_assign():
+        class wt(ptype.wrapper_t):
+            _value_ = pint.uint32_t
+        class bt(ptype.block):
+            length = 4
+
+        x = wt().a
+        x.object = bt().set('DCBA')
+        if hasattr(x.object, 'int') and x.object.int() == 0x41424344:
+            raise Success
 
 if __name__ == '__main__':
     import logging
