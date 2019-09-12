@@ -273,7 +273,7 @@ class type(_pstruct_generic):
                             path = str().join(map("<{:s}>".format, self.backtrace()))
                             Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
-                            if current + bs >= res:
+                            if current + bs > res:
                                 path = str().join(map("<{:s}>".format, self.backtrace()))
                                 Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
                                 break
