@@ -391,6 +391,12 @@ if 'HeapEntry':
             return res.details()
 
     class _BACKEND_HEAP_ENTRY(_ENCODED_HEAP_ENTRY, versioned):
+        class _value_(pstruct.type):
+            _fields_ = [
+                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'Unencoded'),
+                (dyn.array(pint.uint32_t, 2), 'Encoded'),
+            ]
+
         class _HEAP_ENTRY(pstruct.type, versioned):
             def __init__(self, **attrs):
                 super(_BACKEND_HEAP_ENTRY._HEAP_ENTRY, self).__init__(**attrs)
@@ -407,61 +413,49 @@ if 'HeapEntry':
                 ])
         _object_ = _HEAP_ENTRY
 
-        def encode(self, object, **attrs):
-            try:
-                heap = self.getparent(type=_HEAP)
-                self._HEAP_ENTRY_Encoding = tuple(n.int() for n in heap['Encoding'].li['Keys'])
-                self._HEAP_ENTRY_EncodeFlagMask = heap['EncodeFlagMask'].li.int()
-            except ptypes.error.NotFoundError:
-                # FIXME: Log that this heap-entry is non-encoded due to not being able to find a _HEAP
-                pass
+        def __GetEncoding(self):
+            heap = self.getparent(type=_HEAP)
+            encoding = heap['Encoding'].li
+            return heap['EncodeFlagMask'].li.int(), tuple(item.int() for item in encoding['Keys'])
 
-            if hasattr(self, '_HEAP_ENTRY_EncodeFlagMask') and hasattr(self, '_HEAP_ENTRY_Encoding'):
-                if getattr(self, 'WIN64', False):
-                    o1,o2 = self._HEAP_ENTRY_Encoding
-                    n1,n2 = map(operator.methodcaller('int'), object[1].cast(dyn.array(pint.uint32_t, 2)))
-                    d1 = ptypes.bitmap.data((n1^o1 | self._HEAP_ENTRY_EncodeFlagMask,32), reversed=True)
-                    d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                    return super(_BACKEND_HEAP_ENTRY,self).encode(ptype.block(length=object[0].size()+len(d1+d2)).set(object[0].serialize()+d1+d2))
-                o1,o2 = self._HEAP_ENTRY_Encoding
-                n1,n2 = object[0].int(),object[1].int()
-                d1 = ptypes.bitmap.data((n1^o1 | self._HEAP_ENTRY_EncodeFlagMask,32), reversed=True)
-                d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                return super(_BACKEND_HEAP_ENTRY,self).encode(ptype.block(length=len(d1+d2)).set(d1+d2))
+        def encode(self, object, **attrs):
+
+            # Cache some attributes
+            if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'EncodeFlagMask', 'Encoding'}):
+                self._HEAP_ENTRY_EncodeFlagMask, self._HEAP_ENTRY_Encoding = self.__GetEncoding()
+
+            # If _HEAP.EncodeFlagMask has been set to something, then we'll just use it
+            if self._HEAP_ENTRY_EncodeFlagMask:
+                iterable = (ptypes.bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
+                data = object['Unencoded'].serialize() + reduce(operator. add, iterable)
+                res = ptype.block().set(data)
+                return super(_BACKEND_HEAP_ENTRY,self).encode(res)
             return super(_BACKEND_HEAP_ENTRY,self).encode(object)
 
         def decode(self, object, **attrs):
-            # cache some attributes
-            if not hasattr(self, '_HEAP_ENTRY_Encoding'):
-                heap = self.getparent(type=_HEAP)
-                self._HEAP_ENTRY_Encoding = tuple(n.int() for n in heap['Encoding'].li['Keys'])
-                self._HEAP_ENTRY_EncodeFlagMask = heap['EncodeFlagMask'].li.int()
+
+            # Cache some attributes
+            if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'EncodeFlagMask', 'Encoding'}):
+                self._HEAP_ENTRY_EncodeFlagMask, self._HEAP_ENTRY_Encoding = self.__GetEncoding()
 
             # Now determine if we're encoded, and decode it if so.
-            res = object.cast(dyn.array(pint.uint32_t,4))[2] if getattr(self,'WIN64',False) else object[0]
-            if res.int() & self._HEAP_ENTRY_EncodeFlagMask:
-                if getattr(self, 'WIN64', False):
-                    o1,o2 = self._HEAP_ENTRY_Encoding
-                    n1,n2 = map(operator.methodcaller('int'), object[1].cast(dyn.array(pint.uint32_t, 2)))
-                    d1 = ptypes.bitmap.data((n1^o1 | self._HEAP_ENTRY_EncodeFlagMask,32), reversed=True)
-                    d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                    return super(_BACKEND_HEAP_ENTRY,self).encode(ptype.block(length=object[0].size()+len(d1+d2)).set(object[0].serialize()+d1+d2))
-                n1,n2 = object[0].int(),object[1].int()
-                o1,o2 = self._HEAP_ENTRY_Encoding
-                d1 = ptypes.bitmap.data((n1^o1,32), reversed=True)
-                d2 = ptypes.bitmap.data((n2^o2,32), reversed=True)
-                return super(_BACKEND_HEAP_ENTRY, self).decode( ptype.block(length=len(d1+d2)).set(d1+d2) )
+            if object['Encoded'][0].int() & self._HEAP_ENTRY_EncodeFlagMask:
+                iterable = (ptypes.bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
+                data = object['Unencoded'].serialize() + reduce(operator.add, iterable)
+                res = ptype.block().set(data)
+                return super(_BACKEND_HEAP_ENTRY, self).decode(res)
 
             # Otherwise, we're not encoded. So, just pass-through...
             return super(_BACKEND_HEAP_ENTRY, self).decode(object, **attrs)
 
         def summary(self):
-            # FIXME: log a warning suggesting that the flags are incorrect
-            if self.BackEndQ(): pass
+            # FIXME: log a warning saying that this is busted
+            if self.BackEndQ():
+                pass
 
-            cs = 16 if getattr(self,'WIN64',False) else 8
+            cs = 16 if getattr(self, 'WIN64', False) else 8
             data, res = self.serialize().encode('hex'), self.d.li
-            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data, -res['PreviousSize'].int()*cs, res['Size'].int()*cs, res['Flags'].summary())
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data, -res['PreviousSize'].int() * cs, res['Size'].int() * cs, res['Flags'].summary())
 
         def ChecksumQ(self):
             cls = self.__class__
@@ -481,14 +475,14 @@ if 'HeapEntry':
         def Size(self):
             '''Return the decoded Size field'''
             self = self.d.li
-            cs = 16 if getattr(self,'WIN64',False) else 8
-            return self['Size'].int()*cs
+            cs = 16 if getattr(self, 'WIN64', False) else 8
+            return self['Size'].int() * cs
 
         def PreviousSize(self):
             '''Return the decoded PreviousSize field'''
             self = self.d.li
-            cs = 16 if getattr(self,'WIN64',False) else 8
-            return self['PreviousSize'].int()*cs
+            cs = 16 if getattr(self, 'WIN64', False) else 8
+            return self['PreviousSize'].int() * cs
 
     class _FRONTEND_HEAP_ENTRY(_ENCODED_HEAP_ENTRY):
         class _HEAP_ENTRY(pstruct.type):
@@ -505,19 +499,19 @@ if 'HeapEntry':
                 ])
         _object_ = _HEAP_ENTRY
 
-        def encode(self, object, **attrs):
-            try:
-                # FIXME: _HEAP_USERDATA_HEADER['SubSegment'].d.l['LocalInfo'].d.l['LocalData'].d.l['LowFragHeap'].d.l['Heap'].d.l
-                self._HEAP_ENTRY_Heap = heap = self.getparent(type=_HEAP)
-                res = self.source.expr('ntdll!RtlpLFHKey')
-                self._HEAP_ENTRY_LFHKey = self.new(pint.uint64_t if getattr(self,'WIN64',False) else pint.uint32_t, offset=res).l.int()
+        def __RtlpLFHKey(self):
+            RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
+            t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+            res = self.new(t, offset=RtlpLFHKey)
+            return res.l.int()
 
-            except ptypes.error.NotFoundError:
-                # FIXME: Log that this heap-entry is non-encoded due to not being able to find a _HEAP
-                pass
-            except AttributeError:
-                # FIXME: Log that this heap-entry is non-encoded due to not being to determine LFHKey
-                pass
+        def encode(self, object, **attrs):
+            if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
+                try:
+                    self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=_HEAP), self.__RtlpLFHKey()
+                except (ptypes.error.NotFoundError, AttributeError):
+                    # FIXME: Log that this heap-entry is non-encoded due to inability to determine required keys
+                    pass
 
             if hasattr(self, '_HEAP_ENTRY_LFHKey'):
                 if getattr(self, 'WIN64', False):
@@ -528,6 +522,7 @@ if 'HeapEntry':
                     dn <<= 4
                     d = pint.uint64_t().set(dn | (object[1].int() & ~mask))
                     return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=object[0].size()+d.size()).set(object[0].serialize()+d.serialize()))
+
                 dn = self._HEAP_ENTRY_Heap.getoffset()
                 dn ^= self._HEAP_ENTRY_LFHKey
                 dn ^= object[0].int()
@@ -538,21 +533,9 @@ if 'HeapEntry':
 
         def decode(self, object, **attrs):
             # cache some attributes
-            try:
-                if any(not hasattr(self, '_HEAP_ENTRY_'+attr) for attr in ['Heap', 'LFHKey']):
-                    # FIXME: _HEAP_USERDATA_HEADER['SubSegment'].d.l['LocalInfo'].d.l['LocalData'].d.l['LowFragHeap'].d.l['Heap'].d.l
-                    self._HEAP_ENTRY_Heap = heap = self.getparent(type=_HEAP)
-                    res = self.source.expr('ntdll!RtlpLFHKey')
-                    self._HEAP_ENTRY_LFHKey = self.new(pint.uint64_t if getattr(self,'WIN64',False) else pint.uint32_t, offset=res).l.int()
+            if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
+                self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=_HEAP), self.__RtlpLFHKey()
 
-            except ptypes.error.NotFoundError:
-                # FIXME: Log that this heap-entry is non-encoded due to not being able to find a _HEAP
-                pass
-            except AttributeError:
-                # FIXME: Log that this heap-entry is non-encoded due to not being to determine LFHKey
-                pass
-
-            # Now we can decode us
             if getattr(self, 'WIN64', False):
                 mask = 0xffffffffff
                 dn = (self.getoffset() ^ self._HEAP_ENTRY_Heap.getoffset()) >> 4
@@ -560,14 +543,14 @@ if 'HeapEntry':
                 dn ^= self._HEAP_ENTRY_LFHKey
                 dn <<= 4
                 d = pint.uint64_t().set(dn | (object[1].int() & ~mask))
-                return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=object[0].size()+d.size()).set(object[0].serialize()+d.serialize()))
+                return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=object[0].size() + d.size()).set(object[0].serialize() + d.serialize()))
 
             dn = self.getoffset() >> 3
             dn ^= object[0].int()
             dn ^= self._HEAP_ENTRY_LFHKey
             dn ^= self._HEAP_ENTRY_Heap.getoffset()
             d = pint.uint32_t().set(dn)
-            return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=d.size()+object[1].size()).set(d.serialize()+object[1].serialize()))
+            return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=d.size() + object[1].size()).set(d.serialize() + object[1].serialize()))
 
         def summary(self):
             # FIXME: log a warning suggesting that the flags are incorrect
@@ -1194,7 +1177,7 @@ if 'LFH':
         def __SizeIndex(self, size):
             '''Return the size index when given a ``size``'''
             heap = self.getparent(_HEAP)
-            bucket = heap.HeapBucket(size)
+            bucket = heap.Bucket(size)
             return bucket['SizeIndex'].int()
         def Bucket(self, size):
             '''Return the LFH bin given a ``size``'''
