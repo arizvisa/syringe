@@ -470,20 +470,9 @@ if 'HeapEntry':
 
     class _FRONTEND_HEAP_ENTRY(ENCODED_HEAP_ENTRY):
         class HEAP_ENTRY(pstruct.type):
-            def __SubSegment(self):
-                '''
-                This pointer makes this definition kind of a different flavor
-                of ptype.encoded_t due to this pointer requiring us to transition
-                to a different parent to steal its source. This essentially
-                re-parents the pointer in a sense.
-                '''
-                p = self.getparent(ENCODED_HEAP_ENTRY)
-                t = dyn.clone(HEAP_SUBSEGMENT, source=p.source)
-                return dyn.clone(pointer_t, _value_=PVALUE32, _object_=t)
-
             _fields_ = [
                 (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
-                (__SubSegment, 'SubSegment'),
+                (lambda self: dyn.clone(PHEAP_SUBSEGMENT, _value_=PVALUE32), 'SubSegment'),
                 (pint.uint16_t, 'Unknown'),
                 (pint.uint8_t, 'EntryOffset'),
                 (HEAP_ENTRY.UnusedBytes, 'Flags'),
@@ -607,10 +596,8 @@ if 'HeapEntry':
             return self['EntryOffset'].int() * blocksize
 
         def SubSegment(self):
-            header = self.d.l
-            offset = header['SubSegment'].int()
-            res = self.new(P(HEAP_SUBSEGMENT)).a
-            return res.set(offset).d
+            header = self.d
+            return header['SubSegment'].d
 
         def properties(self):
             res = super(_FRONTEND_HEAP_ENTRY, self).properties()
@@ -1217,6 +1204,18 @@ if 'LFH':
 
             else:
                 raise error.NdkUnsupportedVersion(self)
+
+    class PHEAP_SUBSEGMENT(ptype.pointer_t):
+        '''
+        This points to a HEAP_SUBSEGMENT, but ensures that it uses the same
+        source of any ptype.encoded_t that parented it.
+        '''
+        _object_ = HEAP_SUBSEGMENT
+        def dereference(self, **attrs):
+            if isinstance(self.source, ptypes.provider.proxy) and self.parent is not None:
+                p = self.parent.getparent(ptype.encoded_t)
+                attrs.setdefault('source', p.source)
+            return super(PHEAP_SUBSEGMENT, self).dereference(**attrs)
 
     class HEAP_LOCAL_DATA(pstruct.type):
         def CrtZone(self):
