@@ -51,14 +51,14 @@ Example usage:
     print( repr(instance) )
 """
 import six
-import sys,os
-import itertools,operator,functools
-import array,exceptions,random as _random
+import sys, os
+import itertools, operator, functools
+import array, exceptions, random as _random
 from six.moves import builtins
 
-from . import config,utils,error
+from . import config, utils, error
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild(__name__[len(__package__) + 1:])
 
 class base(object):
     '''
@@ -153,7 +153,7 @@ class remote(base):
 
         # We make an empty copy of .__buffer__ here to avoid reconstructing
         # the buffer instance.
-        res, self.__buffer__ = self.__buffer__, self.__buffer__[0:0]
+        res, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
         return buffer(res)
 
     def read(self, amount):
@@ -169,14 +169,14 @@ class empty(base):
     offset = 0
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        offset=0
+        offset = 0
         return 0
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
-        return '\x00'*amount
+        return '\x00' * amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('{:s}.store : Tried to write {:d} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
+        Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
         return len(data)
 
 class proxy(base):
@@ -191,62 +191,62 @@ class proxy(base):
         autoload -- A dict that will be passed to the source type's .load method when data is read from the provider.
         """
 
-        self.type = source
+        self.instance = source
         self.offset = 0
 
         valid = ('autocommit', 'autoload')
         res = set(six.iterkeys(kwds)).difference(valid)
         if res.difference(valid):
-            raise error.UserError(self, '__init__', message='Invalid keyword(s) specified. Expected ({!r}) : {!r}'.format(valid, tuple(res)))
+            raise error.UserError(self, '__init__', message="Invalid keyword(s) specified. Expected ({!r}) : {!r}".format(valid, tuple(res)))
 
         self.autoload = kwds.get('autoload', None)
         self.autocommit = kwds.get('autocommit', None)
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res,self.offset = self.offset,offset
+        res, self.offset = self.offset, offset
         return res
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
-        left,right = self.offset,self.offset+amount
+        left, right = self.offset, self.offset + amount
 
-        buf = self.type.serialize() if self.autoload is None else self.type.load(**self.autoload).serialize()
+        buf = self.instance.serialize() if self.autoload is None else self.instance.load(**self.autoload).serialize()
 #        if self.autoload is not None:
-#            Log.debug('{:s}.consume : Autoloading : {:s} : {!r}'.format(type(self).__name__, self.type.instance(), self.type.source))
+#            Log.debug("{:s}.consume : Autoloading : {:s} : {!r}".format(type(self).__name__, self.instance.instance(), self.instance.source))
 
         if amount >= 0 and left >= 0 and right <= len(buf):
-            result = buf[left:right]
+            result = buf[left : right]
             self.offset += amount
             return result
 
-        raise error.ConsumeError(self, left, amount, amount=right-len(buf))
+        raise error.ConsumeError(self, left, amount, amount=right - len(buf))
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        left,right = self.offset, self.offset+len(data)
+        left, right = self.offset, self.offset + len(data)
 
-        # if trying to store within the bounds of self.type..
-        if left >= 0 and right <= self.type.blocksize():
-            from . import ptype,pbinary
-            if isinstance(self.type, pbinary.partial):
-                self.__write_partial(self.type, self.offset, data)
+        # if trying to store within the bounds of self.instance..
+        if left >= 0 and right <= self.instance.blocksize():
+            from . import ptype, pbinary
+            if isinstance(self.instance, pbinary.partial):
+                self.__write_partial(self.instance, self.offset, data)
 
-            elif isinstance(self.type, ptype.type):
-                self.__write_object(self.type, self.offset, data)
+            elif isinstance(self.instance, ptype.type):
+                self.__write_object(self.instance, self.offset, data)
 
-            elif isinstance(self.type, ptype.container):
-                self.__write_range(self.type, self.offset, data)
+            elif isinstance(self.instance, ptype.container):
+                self.__write_range(self.instance, self.offset, data)
 
             else:
-                raise NotImplementedError(self.type.__class__)
+                raise NotImplementedError(self.instance.__class__)
 
             self.offset += len(data)
-            self.type if self.autocommit is None else self.type.commit(**self.autocommit)
+            self.instance if self.autocommit is None else self.instance.commit(**self.autocommit)
 #            if self.autocommit is not None:
-#                Log.debug('{:s}.store : Autocommitting : {:s} : {!r}'.format(type(self).__name__, self.type.instance(), self.type.source))
+#                Log.debug("{:s}.store : Autocommitting : {:s} : {!r}".format(type(self).__name__, self.instance.instance(), self.instance.source))
             return len(data)
 
         # otherwise, check if nothing is being written
@@ -257,29 +257,29 @@ class proxy(base):
 
     @classmethod
     def __write_partial(cls, object, offset, data):
-        left,right = offset, offset+len(data)
-        size,value = object.blocksize(),object.serialize()
-        padding = utils.padding.fill(size - min(size,len(data)), object.padding)
+        left, right = offset, offset + len(data)
+        size, value = object.blocksize(), object.serialize()
+        padding = utils.padding.fill(size - min(size, len(data)), object.padding)
         object.load(offset=0, source=string(value[:left] + data + padding + value[right:]))
-        return len(data)+len(padding)
+        return sum({data, padding})
 
     @classmethod
     def __write_object(cls, object, offset, data):
-        left,right = offset, offset+len(data)
+        left, right = offset, offset + len(data)
         res = object.blocksize()
         object.value = object.value[:left] + data + object.value[right:]
         return res
 
     @classmethod
     def __write_range(cls, object, offset, data):
-        result,left,right = 0, offset, offset+len(data)
+        result, left, right = 0, offset, offset + len(data)
         sl = list(cls.collect(object, left, right))
 
         # fix beginning element
         n = sl.pop(0)
-        source,bs,l = n.serialize(),n.blocksize(),left-n.getoffset()
-        s = bs-l
-        _ = source[:l] + data[:s] + source[l+s:]
+        source, bs, l = n.serialize(), n.blocksize(), left - n.getoffset()
+        s = bs - l
+        _ = source[:l] + data[:s] + source[l + s:]
         n.load(offset=0, source=string(_))
         data = data[s:]
         result += s    # sum the blocksize
@@ -287,7 +287,7 @@ class proxy(base):
         # fix elements in the middle
         while len(sl) > 1:
             n = sl.pop(0)
-            source,bs = n.serialize(),n.blocksize()
+            source, bs = n.serialize(), n.blocksize()
             _ = data[:bs] + source[len(data[:bs]):]
             n.load(offset=0, source=string(_))
             data = data[bs:]
@@ -296,9 +296,9 @@ class proxy(base):
         # fix last element
         if len(sl) > 0:
             n = sl.pop(0)
-            source,bs = n.serialize(),n.blocksize()
+            source, bs = n.serialize(), n.blocksize()
             _ = data[:bs] + source[len(data[:bs]):]
-            padding = utils.padding.fill(bs - min(bs,len(_)), n.padding)
+            padding = utils.padding.fill(bs - min(bs, len(_)), n.padding)
             n.load(offset=0, source=string(_ + padding))
             data = data[bs:]
             result += len(data[:bs])    # sum the final blocksize
@@ -318,7 +318,7 @@ class proxy(base):
         robj = object.field(right, recurse=True) if right < object.blocksize() else None
 
         # return all leaf objects with a .value that's not a pbinary
-        from . import ptype,pbinary
+        from . import ptype, pbinary
         leaves = object.traverse(lambda s: s.value, filter=lambda s: isinstance(s, ptype.type) or isinstance(s, pbinary.partial))
 
         # consume everything up to lobj
@@ -332,7 +332,7 @@ class proxy(base):
 
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
-        return '{:s} -> {:s}'.format(super(proxy, self).__repr__(), self.type.instance())
+        return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
 class string(base):
     '''Basic writeable string provider.'''
@@ -348,36 +348,37 @@ class string(base):
         self.data = array.array('c', string)
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res,self.offset = self.offset,offset
+        res, self.offset = self.offset, offset
         return res
 
-    @utils.mapexception(any=error.ProviderError,ignored=(error.ConsumeError,error.UserError))
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         if amount < 0:
-            raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(self.offset,amount,self))
-        if amount == 0: return ''
+            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.offset, amount, self))
+        if amount == 0:
+            return ''
         if self.offset >= len(self.data):
-            raise error.ConsumeError(self,self.offset,amount)
+            raise error.ConsumeError(self, self.offset, amount)
 
-        minimum = min((self.offset+amount, len(self.data)))
+        minimum = min((self.offset + amount, len(self.data)))
         res = self.data[self.offset : minimum].tostring()
         if res == '' and amount > 0:
-            raise error.ConsumeError(self,self.offset,amount,len(res))
+            raise error.ConsumeError(self, self.offset, amount, len(res))
         if len(res) == amount:
             self.offset += amount
         return str(res)
 
-    @utils.mapexception(any=error.ProviderError,ignored=(error.StoreError,))
+    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
             left, right = self.offset, self.offset + len(data)
-            self.data[left:right] = array.array('c',data)
+            self.data[left:right] = array.array('c', data)
             self.offset = right
             return len(data)
-        except Exception,e:
-            raise error.StoreError(self,self.offset,len(data),exception=e)
+        except Exception, e:
+            raise error.StoreError(self, self.offset, len(data), exception=e)
         raise error.ProviderError
 
     @utils.mapexception(any=error.ProviderError)
@@ -408,17 +409,17 @@ class fileobj(base):
         '''Consume ``amount`` bytes from the given provider.'''
         offset = self.file.tell()
         if amount < 0:
-            raise error.UserError(self, 'consume', message='Tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(offset,amount,self))
+            raise error.UserError(self, 'consume', message="Tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(offset, amount, self))
 
         result = ''
         try:
             result = self.file.read(amount)
         except OverflowError, e:
             self.file.seek(offset)
-            raise error.ConsumeError(self,offset,amount, len(result), exception=e)
+            raise error.ConsumeError(self, offset, amount, len(result), exception=e)
 
         if result == '' and amount > 0:
-            raise error.ConsumeError(self,offset,amount, len(result))
+            raise error.ConsumeError(self, offset, amount, len(result))
 
         if len(result) != amount:
             self.file.seek(offset)
@@ -448,7 +449,7 @@ class fileobj(base):
 
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
-        return '{:s} -> {!r}'.format(super(filebase, self).__repr__(), self.file)
+        return "{:s} -> {!r}".format(super(filebase, self).__repr__(), self.file)
 
     def __del__(self):
         try: self.close()
@@ -460,12 +461,12 @@ filebase = fileobj
 class base64(string):
     '''A provider that accesses data in a Base64 encoded string.'''
     def __init__(self, base64string, begin='', end=''):
-        result = map(operator.methodcaller('strip'),base64string.split('\n'))
+        result = map(operator.methodcaller('strip'), base64string.split('\n'))
         if begin and begin in base64string:
-            res = [i for i,_ in enumerate(result) if _.startswith(begin)][0]
-            result[:] = result[res+1:]
+            res = [i for i, _ in enumerate(result) if _.startswith(begin)][0]
+            result[:] = result[res + 1:]
         if end and end in base64string:
-            res = [i for i,_ in enumerate(result) if _.startswith(end)][0]
+            res = [i for i, _ in enumerate(result) if _.startswith(end)][0]
             result[:] = result[:res]
         result = str().join(result).translate(None, ' \t\n\r\v')
         super(base64, self).__init__(result.decode('base64'))
@@ -481,20 +482,20 @@ class random(base):
     @utils.mapexception(any=error.ProviderError)
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res,self.offset = self.offset,offset
+        res, self.offset = self.offset, offset
         _random.seed(self.offset)   # lol
         return res
 
     @utils.mapexception(any=error.ProviderError)
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
-        res = map(_random.randint, (0,)*amount, (255,)*amount)
+        res = map(_random.randint, (0,) * amount, (255,) * amount)
         return str().join(map(six.int2byte, res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        Log.info('{:s}.store : Tried to write {:d} bytes to a read-only medium.'.format(type(self).__name__, len(data)))
+        Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
         return len(data)
 
 ## special providers
@@ -516,7 +517,7 @@ class stream(base):
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res,self.offset = self.offset,offset
+        res, self.offset = self.offset, offset
         return res
     def _read(self, amount):
         return self.source.read(amount)
@@ -554,11 +555,11 @@ class stream(base):
         '''Consume ``amount`` bytes from the given provider.'''
         o = self.offset - self.data_ofs
         if o < 0:
-            raise ValueError('{:s}.consume : Unable to seek to offset {:x} ({:x}:{:+x})'.format(type(self).__name__, self.offset, self.data_ofs, len(self.data)))
+            raise ValueError("{:s}.consume : Unable to seek to offset {:x} ({:x}:{:+x})".format(type(self).__name__, self.offset, self.data_ofs, len(self.data)))
 
         # select the requested data
         if (self.eof) or (o + amount <= len(self.data)):
-            result = self.data[o:o+amount].tostring()
+            result = self.data[o : o + amount].tostring()
             self.offset += amount
             return result
 
@@ -573,16 +574,16 @@ class stream(base):
             self.preread(o - len(self.data))
             return self.consume(amount)
 
-        raise error.ConsumeError(self, self.offset,amount)
+        raise error.ConsumeError(self, self.offset, amount)
 
     if False:
         def store(self, data):
             '''updates data at an offset in the stream's cache.'''
             # FIXME: this logic _apparently_ hasn't been thought out at all..check notes
             o = self.offset - self.data_ofs
-            if o>=0 and o<=len(self.data):
-                self.data[o:o+len(data)] = array.array('c', data)
-                if o+len(data) >= len(self.data):
+            if o >= 0 and o <= len(self.data):
+                self.data[o : o + len(data)] = array.array('c', data)
+                if o + len(data) >= len(self.data):
                     self.eof = False
                 self._write(data)
                 return len(data)
@@ -595,15 +596,15 @@ class stream(base):
 
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
-        return '{:s}[eof={!r},base={:x},length={:+x}] offset={:x}'.format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
+        return "{:s}[eof={!r},base={:x},length={:+x}] offset={:x}".format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
 
     def __getitem__(self, i):
         '''x.__getitem__(y) <==> x[y]'''
-        return self.data[i-self.data_ofs]
+        return self.data[i - self.data_ofs]
 
     def __getslice__(self, i, j):
         '''x.__getslice__(i, j) <==> x[i:j]'''
-        return self.data[i-self.data_ofs:j-self.data_ofs].tostring()
+        return self.data[i - self.data_ofs : j - self.data_ofs].tostring()
 
     def hexdump(self, **kwds):
         return utils.hexdump(self.data.tostring(), offset=self.data_ofs, **kwds)
@@ -614,7 +615,7 @@ class iterable(stream):
         return str().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
-        Log.info('iter._write : Tried to write {:+x} bytes to an iterator'.format(len(data)))
+        Log.info("iter._write : Tried to write {:+x} bytes to an iterator".format(len(data)))
         return len(data)
 
 class posixfile(fileobj):
@@ -645,7 +646,7 @@ class posixfile(fileobj):
 
         access = 'read/write' if (flags&os.O_RDWR) else 'write' if (flags&os.O_WRONLY) else 'read-only' if flags & os.O_RDONLY else 'unknown'
 
-        if os.access(filename,6):
+        if os.access(filename, 6):
             Log.info("{:s}({!r}, {!r}) : Opening file for {:s}".format(type(self).__name__, filename, mode, access))
         else:
             flags |= os.O_CREAT|os.O_TRUNC
@@ -685,7 +686,7 @@ class file(fileobj):
 
         straccess = 'read/write' if access =='r+b' else 'write' if access == 'wb' else 'read-only' if access == 'rb' else 'unknown'
 
-        if os.access(filename,0):
+        if os.access(filename, 0):
             if 'wb' in access:
                 Log.warn("{:s}({!r}, {!r}) : Truncating file by user-request.".format(type(self).__name__, filename, access))
             Log.info("{:s}({!r}, {!r}) : Opening file for {:s}".format(type(self).__name__, filename, access, straccess))
@@ -739,7 +740,7 @@ try:
     import ctypes
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
-    except Exception,m:
+    except Exception, m:
         raise OSError(m)
 
     class win32error:
@@ -759,7 +760,7 @@ try:
             errorString = str(res.value)
             res = k32.LocalFree(res)
             if res == 0:
-                raise AssertionError("KERNEL32.dll!LocalFree failed. Error {:#0{:d}x}.".format(k32.GetLastError(), 2+8))
+                raise AssertionError("KERNEL32.dll!LocalFree failed. Error {:#0{:d}x}.".format(k32.GetLastError(), 2 + 8))
 
             return (errorCode, errorString)
 
@@ -777,24 +778,24 @@ try:
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            res,self.address = self.address,offset
+            res, self.address = self.address, offset
             return res
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(self.address,amount,self))
+                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.address, amount, self))
 
             NumberOfBytesRead = ctypes.c_int()
-            res = ctypes.c_char*amount
+            res = ctypes.c_char * amount
             Buffer = res()
 
             # FIXME: instead of failing on an incomplete read, perform a partial read
             res = k32.ReadProcessMemory(self.handle, self.address, Buffer, amount, ctypes.byref(NumberOfBytesRead))
             if (res == 0) or (NumberOfBytesRead.value != amount):
-                e = ValueError('Unable to read pid({:x})[{:08x}:{:08x}].'.format(self.handle, self.address, self.address+amount))
-                raise error.ConsumeError(self, self.address,amount, NumberOfBytesRead.value)
+                e = ValueError("Unable to read pid({:x})[{:08x}:{:08x}].".format(self.handle, self.address, self.address + amount))
+                raise error.ConsumeError(self, self.address, amount, NumberOfBytesRead.value)
 
             self.address += amount
             # XXX: test this shit out
@@ -805,14 +806,14 @@ try:
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
             NumberOfBytesWritten = ctypes.c_int()
 
-            res = ctypes.c_char*len(value)
+            res = ctypes.c_char * len(value)
             Buffer = res()
             Buffer.value = value
 
             res = k32.WriteProcessMemory(self.handle, self.address, Buffer, len(value), ctypes.byref(NumberOfBytesWritten))
             if (res == 0) or (NumberOfBytesWritten.value != len(value)):
-                e = OSError('Unable to write to pid({:x})[{:08x}:{:08x}].'.format(self.id, self.address, self.address+len(value)))
-                raise error.StoreError(self, self.address,len(value), written=NumberOfBytesWritten.value, exception=e)
+                e = OSError("Unable to write to pid({:x})[{:08x}:{:08x}].".format(self.id, self.address, self.address + len(value)))
+                raise error.StoreError(self, self.address, len(value), written=NumberOfBytesWritten.value, exception=e)
 
             self.address += len(value)
             return NumberOfBytesWritten.value
@@ -828,9 +829,9 @@ try:
         def __init__(self, filename, mode='rb'):
             self.offset = 0
 
-            GENERIC_READ, GENERIC_WRITE = 0x40000000,0x80000000
-            FILE_SHARE_READ,FILE_SHARE_WRITE = 1,2
-            OPEN_EXISTING,OPEN_ALWAYS = 3,4
+            GENERIC_READ, GENERIC_WRITE = 0x40000000, 0x80000000
+            FILE_SHARE_READ, FILE_SHARE_WRITE = 1, 2
+            OPEN_EXISTING, OPEN_ALWAYS = 3, 4
             FILE_ATTRIBUTE_NORMAL = 0x80
             INVALID_HANDLE_VALUE = -1
 
@@ -856,7 +857,7 @@ try:
         @utils.mapexception(any=error.ProviderError)
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            distance,resultDistance = ctypes.c_longlong(offset),ctypes.c_longlong(offset)
+            distance, resultDistance = ctypes.c_longlong(offset), ctypes.c_longlong(offset)
             FILE_BEGIN = 0
             result = k32.SetFilePointerEx(
                 self.handle, distance, ctypes.byref(resultDistance),
@@ -864,14 +865,14 @@ try:
             )
             if result == 0:
                 raise OSError(win32error.getLastErrorTuple())
-            res,self.offset = self.offset,resultDistance.value
+            res, self.offset = self.offset, resultDistance.value
             return res
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
-            resultBuffer = (ctypes.c_char*amount)()
-            amount,resultAmount = ctypes.c_ulong(amount),ctypes.c_ulong(amount)
+            resultBuffer = (ctypes.c_char * amount)()
+            amount, resultAmount = ctypes.c_ulong(amount), ctypes.c_ulong(amount)
             result = k32.ReadFile(
                 self.handle, ctypes.byref(resultBuffer),
                 amount, ctypes.byref(resultAmount),
@@ -879,7 +880,7 @@ try:
             )
             if (result == 0) or (resultAmount.value == 0 and amount > 0):
                 e = OSError(win32error.getLastErrorTuple())
-                raise error.ConsumeError(self,self.offset,amount,resultAmount.value, exception=e)
+                raise error.ConsumeError(self, self.offset, amount, resultAmount.value, exception=e)
 
             if resultAmount.value == amount:
                 self.offset += resultAmount.value
@@ -888,7 +889,7 @@ try:
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            buffer = (c_char*len(value))(value)
+            buffer = (c_char * len(value))(value)
             resultWritten = ctypes.c_ulong()
             result = k32.WriteFile(
                 self.handle, buffer,
@@ -897,7 +898,7 @@ try:
             )
             if (result == 0) or (resultWritten.value != len(value)):
                 e = OSError(win32error.getLastErrorTuple())
-                raise error.StoreError(self, self.offset,len(value),resultWritten.value,exception=e)
+                raise error.StoreError(self, self.offset, len(value), resultWritten.value, exception=e)
             self.offset += resultWritten.value
             return resultWritten
 
@@ -936,9 +937,9 @@ try:
 
             half = size // 2
             if half > 0:
-                return str().join((cls.read(offset, half, padding=padding),cls.read(offset+half, half+size%2, padding=padding)))
+                return str().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
             if cls.__idaapi__.isEnabled(offset):
-                return '' if size == 0 else (padding*size) if (cls.__idaapi__.getFlags(offset) & cls.__idaapi__.FF_IVL) == 0 else cls.__idaapi__.get_many_bytes(offset, size)
+                return '' if size == 0 else (padding * size) if (cls.__idaapi__.getFlags(offset) & cls.__idaapi__.FF_IVL) == 0 else cls.__idaapi__.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
@@ -958,7 +959,7 @@ try:
         @classmethod
         def seek(cls, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            res,cls.offset = cls.offset,offset
+            res, cls.offset = cls.offset, offset
             return res
 
         @classmethod
@@ -970,9 +971,9 @@ try:
             except Exception, err:
                 if isinstance(err, tuple) and len(err) == 2:
                     ofs, amount = err
-                    raise error.ConsumeError(cls, ofs, amount, ofs-startofs)
-                Log.fatal("{:s} : Unable to read {:+d} bytes from {:x} due to unexpected exception ({:x}:{:+x}).".format('.'.join((__name__,cls.__name__)), amount, startofs, cls.offset, amount), exc_info=True)
-                raise error.ConsumeError(cls, startofs, amount, cls.offset-startofs)
+                    raise error.ConsumeError(cls, ofs, amount, ofs - startofs)
+                Log.fatal("{:s} : Unable to read {:+d} bytes from {:x} due to unexpected exception ({:x}:{:+x}).".format('.'.join((__name__, cls.__name__)), amount, startofs, cls.offset, amount), exc_info=True)
+                raise error.ConsumeError(cls, startofs, amount, cls.offset - startofs)
             cls.offset += len(result)
             return result
 
@@ -1004,10 +1005,10 @@ try:
             if remote is None:
                 result = cls.__PyDbgEng__.Create()
             elif type(remote) is tuple:
-                host,port = client
-                result = cls.__PyDbgEng__.Connect('tcp:port={},server={}'.format(port,host))
+                host, port = client
+                result = cls.__PyDbgEng__.Connect("tcp:port={}, server={}".format(port, host))
             elif type(remote) is dict:
-                result = cls.__PyDbgEng__.Connect('tcp:port={port},server={host}'.format(**client))
+                result = cls.__PyDbgEng__.Connect("tcp:port={port}, server={host}".format(**client))
             elif isinstance(type(remote), six.string_types):
                 result = cls.__PyDbgEng__.Connect(client)
             return cls(result)
@@ -1031,7 +1032,7 @@ try:
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            res,self.offset = self.offset,offset
+            res, self.offset = self.offset, offset
             return res
 
         def consume(self, amount):
@@ -1039,7 +1040,7 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
             except RuntimeError, e:
-                raise StopIteration('Unable to read {:+d} bytes from address {:x}'.format(amount, self.offset))
+                raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
             return str(result)
 
         def store(self, data):
@@ -1105,12 +1106,12 @@ try:
         def expr(cls, string):
             raise NotImplementedError   # XXX
         def seek(self, offset):
-            res,self.address = self.address, offset
+            res, self.address = self.address, offset
             return res
         def consume(self, amount):
             if amount < 0:
                 raise error.ConsumeError(self, self.address, amount)
-            process,err = self.__process, self.module.SBError()
+            process, err = self.__process, self.module.SBError()
             if amount > 0:
                 data = process.ReadMemory(self.address, amount, err)
                 if err.Fail() or len(data) != amount:
@@ -1119,7 +1120,7 @@ try:
                 return six.binary_type(data)
             return ''
         def store(self, data):
-            process,err = self.__process, self.module.SBError()
+            process, err = self.__process, self.module.SBError()
             amount = process.WriteMemory(self.address, six.binary_type(data), err)
             if err.Fail() or len(data) != amount:
                 raise error.StoreError(self, self.address, len(data))
@@ -1143,7 +1144,7 @@ try:
             res = gdb.parse_and_eval(string)
             return res.cast( gdb.lookup_type("long") )
         def seek(self, offset):
-            res,self.address = self.address, offset
+            res, self.address = self.address, offset
             return res
         def consume(self, amount):
             process = self.__process
@@ -1180,17 +1181,17 @@ try:
         address = 0
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-            res,self.address = self.address,offset
+            res, self.address = self.address, offset
             return res
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message='tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}'.format(self.address,amount,self))
+                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.address, amount, self))
             res = memory._read(self.address, amount)
             if len(res) == 0 and amount > 0:
-                raise error.ConsumeError(self,offset,amount,len(res))
+                raise error.ConsumeError(self, offset, amount, len(res))
             if len(res) == amount:
                 self.address += amount
             return res
@@ -1200,25 +1201,25 @@ try:
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
             res = memory._write(self.address, data)
             if res != len(data):
-                raise error.StoreError(self,self.address,len(data),written=res)
+                raise error.StoreError(self, self.address, len(data), written=res)
             self.address += len(data)
             return res
 
         @staticmethod
         def _read(address, length):
-            blockpointer = ctypes.POINTER(ctypes.c_char*length)
+            blockpointer = ctypes.POINTER(ctypes.c_char * length)
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
             return str().join(p.contents)
 
         @staticmethod
         def _write(address, value):
-            blockpointer = ctypes.POINTER(ctypes.c_char*len(value))
+            blockpointer = ctypes.POINTER(ctypes.c_char * len(value))
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
-            for i,c in enumerate(value):
-                p.contents[i] = c
-            return i+1
+            for i, item in enumerate(value):
+                p.contents[i] = item
+            return 1 + i
 
     DEFAULT.append(memory)
 except ImportError:
@@ -1523,7 +1524,7 @@ if __name__ == '__main__':
             p = multiprocessing.Process(target=stringspin, args=(q,string,))
             p.start()
             address = q.get()
-            print '{:#x}'.format(address)
+            print "{:#x}".format(address)
 
             src = provider.WindowsProcessId(p.pid)
             src.seek(address)
