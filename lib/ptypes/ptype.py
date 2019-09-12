@@ -859,20 +859,16 @@ class base(generic):
             yield index, (s[index:], '') if len(s) > len(o) else ('', o[index:])
         return
 
-    def cast(self, t, **kwds):
+    def cast(self, t, **attrs):
         """Cast the contents of the current instance into a differing ptype"""
         data, size = self.serialize(), self.size()
 
         # copy attributes that make the new instantiation similar
-        kwds.setdefault('offset', self.getoffset())
-        kwds.setdefault('parent', self.parent)
+        attrs.setdefault('offset', self.getoffset())
+        attrs.setdefault('parent', self.parent)
 
-        # disable propagating any specific attributes when instantiating
-        with utils.assign(self, attributes={}):
-            result = self.new(t, **kwds)
-
-        # update with any attributes that need to be propagated
-        result.__update__(recurse=self.attributes)
+        # create the new type with the attributes from our parameters
+        result = self.new(t, **attrs)
 
         # try and load the contents using the correct blocksize
         try:
@@ -3196,6 +3192,41 @@ if __name__ == '__main__':
         x.d.l.set(b.serialize()).c
         if x.serialize() == b.serialize():
             raise Success
+
+    @TestCase
+    def test_wrapper_cast_attributes():
+        class t(ptype.encoded_t):
+            class _value_(pstruct.type):
+                def __init__(self, **attrs):
+                    super(t._value_, self).__init__(**attrs)
+                    f = self._fields_ = []
+                    if getattr(self, 'WIN64', False):
+                        f.extend([
+                            (pint.uint64_t, 'Unencoded'),
+                            (pint.uint64_t, 'Encoded'),
+                        ])
+                    else:
+                        f.extend([
+                            (pint.uint32_t, 'Encoded'),
+                            (pint.uint32_t, 'Unencoded'),
+                        ])
+                    return
+
+        class wtf(pstruct.type):
+            _fields_ = [
+                (t, 'what'),
+            ]
+
+        a = wtf(recurse=dict(WIN64=1)).a
+        if a.WIN64 != 1 or a.attributes['WIN64'] != 1:
+            raise Exception
+        if a['what'].size() != 16 or a['what'].o.size() != 16:
+            raise Exception
+
+        x = a['what'].cast(t._value_)
+        if x.size() == 16:
+            raise Success
+        raise Failure
 
 if __name__ == '__main__':
     import logging
