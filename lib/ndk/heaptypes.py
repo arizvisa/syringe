@@ -262,8 +262,7 @@ if 'HeapEntry':
         def __init__(self, **attrs):
             super(_HEAP_ENTRY, self).__init__(**attrs)
             f = []
-            if getattr(self, 'WIN64', False):
-                f.append((pint.uint64_t, 'ReservedForAlignment'))
+            f.append((pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'))
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
                 #f.extend([
@@ -394,9 +393,11 @@ if 'HeapEntry':
         def repr(self):
             return self.details()
         def __getitem__(self, name):
-            return self.d.li.__getitem__(name)
+            res = self.d.li
+            return operator.getitem(res, name)
         def __setitem__(self, name, value):
-            return self.d.li.__setitem__(name, value)
+            res = self.d.li
+            return operator.setitem(res, name, value)
 
         def details(self):
             res = self.d.li.copy(offset=self.getoffset())
@@ -404,19 +405,14 @@ if 'HeapEntry':
 
     class _BACKEND_HEAP_ENTRY(_ENCODED_HEAP_ENTRY, versioned):
         class _HEAP_ENTRY(pstruct.type, versioned):
-            def __init__(self, **attrs):
-                super(_BACKEND_HEAP_ENTRY._HEAP_ENTRY, self).__init__(**attrs)
-                f = self._fields_ = []
-                if getattr(self, 'WIN64', False):
-                    f.append((pint.uint64_t, 'ReservedForAlignment'))
-
-                f.extend([
-                    (pint.uint16_t, 'Size'),
-                    (pint.uint16_t, 'Checksum'),
-                    (pint.uint16_t, 'PreviousSize'),
-                    (pint.uint8_t, 'SegmentOffset'),
-                    (_HEAP_ENTRY.UnusedBytes, 'Flags'),
-                ])
+            _fields_ = [
+                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
+                (pint.uint16_t, 'Size'),
+                (pint.uint16_t, 'Checksum'),
+                (pint.uint16_t, 'PreviousSize'),
+                (pint.uint8_t, 'SegmentOffset'),
+                (_HEAP_ENTRY.UnusedBytes, 'Flags'),
+            ]
         _object_ = _HEAP_ENTRY
 
         class _HEAP_ENTRY_Encoded(pstruct.type):
@@ -472,8 +468,8 @@ if 'HeapEntry':
                 pass
 
             cs = 16 if getattr(self, 'WIN64', False) else 8
-            data, res = self.serialize().encode('hex'), self.d.li
-            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data, -res['PreviousSize'].int() * cs, res['Size'].int() * cs, res['Flags'].summary())
+            data, res = self.serialize(), self.d.li
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex'), -res['PreviousSize'].int() * cs, res['Size'].int() * cs, res['Flags'].summary())
 
         def ChecksumQ(self):
             cls = self.__class__
@@ -504,17 +500,24 @@ if 'HeapEntry':
 
     class _FRONTEND_HEAP_ENTRY(_ENCODED_HEAP_ENTRY):
         class _HEAP_ENTRY(pstruct.type):
-            def __init__(self, **attrs):
-                super(_FRONTEND_HEAP_ENTRY._HEAP_ENTRY, self).__init__(**attrs)
-                f = self._fields_ = []
+            def __SubSegment(self):
+                '''
+                This pointer makes this definition kind of a different flavor
+                of ptype.encoded_t due to this pointer requiring us to transition
+                to a different parent to steal its source. This essentially
+                re-parents the pointer in a sense.
+                '''
+                p = self.getparent(_ENCODED_HEAP_ENTRY)
+                t = dyn.clone(_HEAP_SUBSEGMENT, source=p.source)
+                return dyn.clone(pointer_t, _value_=PVALUE32, _object_=t)
 
-                f.extend([
-                    (pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
-                    (dyn.clone(pointer_t, _value_=PVALUE32, _object_=_HEAP_SUBSEGMENT, source=self.getparent(_FRONTEND_HEAP_ENTRY).source), 'SubSegment'),
-                    (pint.uint16_t, 'Unknown'),
-                    (pint.uint8_t, 'EntryOffset'),
-                    (_HEAP_ENTRY.UnusedBytes, 'Flags'),
-                ])
+            _fields_ = [
+                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
+                (__SubSegment, 'SubSegment'),
+                (pint.uint16_t, 'Unknown'),
+                (pint.uint8_t, 'EntryOffset'),
+                (_HEAP_ENTRY.UnusedBytes, 'Flags'),
+            ]
         _object_ = _HEAP_ENTRY
 
         class _HEAP_ENTRY_Encoded(pstruct.type):
@@ -620,10 +623,12 @@ if 'HeapEntry':
             # FIXME: log a warning suggesting that the flags are incorrect
             if not self.FrontEndQ():
                 pass
-            return self.serialize().encode('hex')
+            res = self.serialize()
+            return res.encode('hex')
 
         def EntryOffsetQ(self):
-            return self['Flags']['Type'] == 5
+            res = self.Type()
+            return res == 5
 
         def EntryOffset(self):
             if not self.EntryOffsetQ():
@@ -1484,12 +1489,10 @@ if 'Heap':
             return heaplist.ListHint(bi)
 
         class _Encoding(pstruct.type, versioned):
-            def __init__(self, **attrs):
-                super(_HEAP._Encoding, self).__init__(**attrs)
-                f = self._fields_ = []
-                if getattr(self, 'WIN64', False):
-                    f.append((pint.uint64_t, 'ReservedForAlignment'))
-                f.append((dyn.array(pint.uint32_t, 2), 'Keys'))
+            _fields_ = [
+                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
+                (dyn.array(pint.uint32_t, 2), 'Keys')
+            ]
 
         def __PointerKeyEncoding(self):
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_WIN7:
@@ -1658,7 +1661,7 @@ if 'Heap':
             def run(self):
                 return self.bitmap()
             def summary(self):
-                objectname,_ = super(_HEAP_LIST_LOOKUP._ListsInUseUlong,self).summary().split(' ', 2)
+                objectname, _ = super(_HEAP_LIST_LOOKUP._ListsInUseUlong, self).summary().split(' ', 2)
                 res = self.run()
                 return ' '.join((objectname, ptypes.bitmap.hex(res)))
             def details(self):
@@ -1685,7 +1688,7 @@ if 'Heap':
             def run(self):
                 return self.bitmap()
             def summary(self):
-                objectname,_ = super(_HEAP_LIST_LOOKUP._ListsInUseUlong, self).summary().split(' ', 2)
+                objectname, _ = super(_HEAP_LIST_LOOKUP._ListsInUseUlong, self).summary().split(' ', 2)
                 res = self.bitmap()
                 return ' '.join((objectname, ptypes.bitmap.hex(res)))
             def details(self):
