@@ -1,4 +1,4 @@
-import math, datetime
+import six, math, datetime
 
 import ptypes
 from ptypes import *
@@ -54,7 +54,7 @@ class fpointer_t(ptype.opointer_t, versioned):
         return self.typename() + '(' + res.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
 
 def fpointer(type, fieldname):
-    return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname,'__iter__') else (fieldname,))
+    return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname, '__iter__') else (fieldname,))
 fptr = fpointer
 
 ## pointer types
@@ -86,8 +86,8 @@ class rpointer_t(ptype.rpointer_t, versioned):
 
     def decode(self, object, **attrs):
         root = ptype.force(self._baseobject_, self)
-        base = root.getoffset() if isinstance(root,ptype.generic) else root().getoffset()
-        t = pint.uint64_t if getattr(self,'WIN64',False) else pint.uint32_t
+        base = root.getoffset() if isinstance(root, ptype.generic) else root().getoffset()
+        t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
         return t().set(base + object.get())
 
 def rpointer(target, base, **attrs):
@@ -235,16 +235,16 @@ class ULARGE_INTEGER(pstruct.type):
     ]
 
 ## Singly-linked list
-class _SLIST_ENTRY(fpointer_t):
+class SLIST_ENTRY(fpointer_t):
     _object_ = None
     _sentinel_ = 0
 
     def __init__(self, **attrs):
-        super(_SLIST_ENTRY,self).__init__(**attrs)
+        super(SLIST_ENTRY, self).__init__(**attrs)
         if not issubclass(self._object_, ptype.pointer_t):
-            raise AssertionError('{:s}._object_ is not a valid pointer.'.format( '.'.join((self.__module__,self.__class__.__name__)) ))
+            raise AssertionError('{:s}._object_ is not a valid pointer.'.format( '.'.join((self.__module__, self.__class__.__name__)) ))
 
-    def __walk_nextentry(self,state,path):
+    def __walk_nextentry(self, state, path):
         try:
             # python doesn't tail-recurse anyways...
             next = path.next()
@@ -257,7 +257,7 @@ class _SLIST_ENTRY(fpointer_t):
         '''Walks through a linked list'''
         if self._sentinel_ is None:
             sentinel = {0}
-        elif hasattr(self._sentinel_,'__iter__'):
+        elif hasattr(self._sentinel_, '__iter__'):
             sentinel = set(self._sentinel_)
         else:
             sentinel = {self._sentinel_}
@@ -270,18 +270,17 @@ class _SLIST_ENTRY(fpointer_t):
             if n.int() == 0: break
         return
 
-_SLIST_ENTRY._object_ = _SLIST_ENTRY
-_SLIST_ENTRY._path_ = ()
-SLIST_ENTRY = _SLIST_ENTRY
+SLIST_ENTRY._object_ = SLIST_ENTRY
+SLIST_ENTRY._path_ = ()
 
-class _SLIST_HEADER(pstruct.type, versioned):
+class SLIST_HEADER(pstruct.type, versioned):
     def __Next(self):
-        p = getattr(self, '_path_', _SLIST_ENTRY._path_)
-        o = getattr(self, '_object_', _SLIST_ENTRY._object_)
-        return dyn.clone(_SLIST_ENTRY, _path_=p, _object_=o)
+        p = getattr(self, '_path_', SLIST_ENTRY._path_)
+        o = getattr(self, '_object_', SLIST_ENTRY._object_)
+        return dyn.clone(SLIST_ENTRY, _path_=p, _object_=o)
 
     def __init__(self, **attrs):
-        super(_SLIST_HEADER, self).__init__(**attrs)
+        super(SLIST_HEADER, self).__init__(**attrs)
         f = self._fields_ = []
 
         if getattr(self, 'WIN64', False):
@@ -289,7 +288,7 @@ class _SLIST_HEADER(pstruct.type, versioned):
                 (dyn.align(16), 'Alignment'),
                 (pint.uint16_t, 'Depth'),
                 (pint.uint16_t, 'Sequence'),
-                (dyn.block(4), 'Padding(Depth,Sequence)'),
+                (dyn.block(4), 'Padding(Depth+Sequence)'),
                 (self.__Next, 'Next'),
             ])
         else:
@@ -303,23 +302,22 @@ class _SLIST_HEADER(pstruct.type, versioned):
     def summary(self):
         return 'Next->{:s} Depth:{:d} Sequence:{:d}'.format(self['Next'].summary(), self['Depth'].int(), self['Sequence'].int())
 
-SLIST_HEADER = _SLIST_HEADER
-
 ## Doubly-linked list
-class _LIST_ENTRY(pstruct.type):
+class LIST_ENTRY(pstruct.type):
     _fields_ = [
         (lambda s: s._object_, 'Flink'),
         (lambda s: s._object_, 'Blink'),
     ]
-    flink,blink = 'Flink','Blink'
+    flink, blink = 'Flink', 'Blink'
     _object_ = None
     _path_ = ()
     _sentinel_ = None
 
     def __init__(self, **attrs):
-        super(_LIST_ENTRY,self).__init__(**attrs)
+        super(LIST_ENTRY, self).__init__(**attrs)
         if not issubclass(self._object_, ptype.pointer_t):
-            raise AssertionError('{:s}._object_ is not a valid pointer'.format( '.'.join((self.__module__,self.__class__.__name__)) ))
+            cls = self.__class__
+            raise AssertionError('{:s}._object_ is not a valid pointer'.format( '.'.join((self.__module__, cls.__name__)) ))
 
     def summary(self):
         return '<->'.join(('f:'+hex(self['Flink'].int()), 'b:'+hex(self['Blink'].int())))
@@ -332,7 +330,7 @@ class _LIST_ENTRY(pstruct.type):
     def backward(self):
         return self[self.blink].d
 
-    def __walk_nextentry(self,state,path):
+    def __walk_nextentry(self, state, path):
         try:
             # python doesn't tail-recurse anyways...
             key = next(path)
@@ -349,7 +347,7 @@ class _LIST_ENTRY(pstruct.type):
             sentinel = {self.getoffset()}
         elif isinstance(self._sentinel_, basestring):
             sentinel = {self[self._sentinel_].int()}
-        elif hasattr(self._sentinel_,'__iter__'):
+        elif hasattr(self._sentinel_, '__iter__'):
             sentinel = set(self._sentinel_)
         else:
             sentinel = {self._sentinel_}
@@ -364,9 +362,8 @@ class _LIST_ENTRY(pstruct.type):
     def moonwalk(self):
         return self.walk(direction=self.blink)
 
-_LIST_ENTRY._object_ = pointer(_LIST_ENTRY)
-_LIST_ENTRY._path_ = ()
-LIST_ENTRY = _LIST_ENTRY
+LIST_ENTRY._object_ = pointer(LIST_ENTRY)
+LIST_ENTRY._path_ = ()
 
 ### Thread-Information-Block and other user primitives
 class LCID(DWORD): pass
@@ -464,9 +461,9 @@ class rfc4122(pstruct.type):
     class _Data4(pint.bigendian(pint.uint64_t)):
         def summary(self):
             res = list(self.serialize())
-            d1 = ''.join(map('{:02x}'.format,map(ord,res[:2])) )
-            d2 = ''.join(map('{:02x}'.format,map(ord,res[2:])) )
-            return '-'.join((d1,d2))
+            d1 = ''.join(map('{:02x}'.format, map(six.byte2int, res[:2])) )
+            d2 = ''.join(map('{:02x}'.format, map(six.byte2int, res[2:])) )
+            return '-'.join((d1, d2))
     _fields_ = [
         (_Data1, 'Data1'),
         (_Data2and3, 'Data2'),
@@ -484,13 +481,13 @@ class rfc4122(pstruct.type):
         d2 = '{:04x}'.format(self['Data2'].int())
         d3 = '{:04x}'.format(self['Data3'].int())
         _ = list(self['Data4'].serialize())
-        d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
-        d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
-        return '{{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
+        d4 = ''.join( map('{:02x}'.format, map(six.byte2int, _[:2])) )
+        d5 = ''.join( map('{:02x}'.format, map(six.byte2int, _[2:])) )
+        return '{{{:s}}}'.format('-'.join((d1, d2, d3, d4, d5)))
 
 class GUID(rfc4122):
     _fields_ = [
-        (transformation(t),n) for transformation,(t,n) in zip((pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian), rfc4122._fields_)
+        (transformation(t), n) for transformation, (t, n) in zip((pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian), rfc4122._fields_)
     ]
 
 CLSID = UUID = GUID
@@ -555,7 +552,7 @@ class EVENT_DESCRIPTOR(pstruct.type):
 
 class EVENT_HEADER(pstruct.type):
     class Time(dynamic.union):
-        class UserTime(pstruct.type): _fields_ = [(ULONG,name) for name in ('Kernel','User')]
+        class UserTime(pstruct.type): _fields_ = [(ULONG, name) for name in ('Kernel', 'User')]
         _fields_ = [
             (UserTime, 'System'),
             (ULONG64, 'Processor'),

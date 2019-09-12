@@ -1,11 +1,11 @@
 import ptypes
 from ptypes import *
 
-from . import umtypes, rtltypes
+from . import umtypes, rtltypes, ketypes
 from .datatypes import *
 
 class SYSTEM_INFORMATION_CLASS(pint.enum):
-    _values_ = [(n,v) for v,n in (
+    _values_ = [(n, v) for v, n in (
         (1, 'SystemBasicInformation'),
         (2, 'SystemProcessorInformation'),
         (3, 'SystemPerformanceInformation'),
@@ -250,7 +250,7 @@ class SYSTEM_SINGLE_MODULE_INFORMATION(pstruct.type):
     type = SYSTEM_INFORMATION_CLASS.byname('SystemSingleModuleInformation')
     _fields_ = [
         (PVOID, 'TargetModuleAddress'),
-        (rtltypes._RTL_PROCESS_MODULE_INFORMATION, 'ExInfo'),
+        (rtltypes.RTL_PROCESS_MODULE_INFORMATION, 'ExInfo'),
     ]
 
 class SYSTEM_DMA_PROTECTION_INFORMATION(pstruct.type):
@@ -291,21 +291,21 @@ class SYSTEM_ROOT_SILO_INFORMATION(pstruct.type):
         (PVOID, 'SiloList'),
     ]
 
-class _KSEMAPHORE(ptype.undefined): pass
-class _KEVENT(ptype.undefined): pass
+class OWNER_ENTRY(pstruct.type):
+    _fields_ = [
+        (pint.uint32_t, 'OwnerThread'),
+        (pint.uint32_t, 'OwnerCount')
+    ]
 
-class _OWNER_ENTRY(pstruct.type):
-    _fields_ = [(pint.uint32_t, 'OwnerThread'), (pint.uint32_t, 'OwnerCount')]
-
-class _ERESOURCE(pstruct.type):
+class ERESOURCE(pstruct.type):
     _fields_ = [
         (LIST_ENTRY, 'SystemResourcesList'),
-        (P(_OWNER_ENTRY), 'OwnerTable'),
+        (P(OWNER_ENTRY), 'OwnerTable'),
         (SHORT, 'ActiveCount'),
         (USHORT, 'Flag'),
-        (P(_KSEMAPHORE), 'SharedWaiters'),
-        (P(_KEVENT), 'ExclusiveWatiers'),
-        (dyn.array(_OWNER_ENTRY, 2), 'OwnerThreads'),
+        (P(ketypes.KSEMAPHORE), 'SharedWaiters'),
+        (P(ketypes.KEVENT), 'ExclusiveWatiers'),
+        (dyn.array(OWNER_ENTRY, 2), 'OwnerThreads'),
         (ULONG, 'ContentionCount'),
         (pint.uint16_t, 'NumberOfSharedWaiters'),
         (pint.uint16_t, 'NumberOfExclusiveWaiters'),

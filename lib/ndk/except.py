@@ -17,7 +17,7 @@ class __except_handler4(PVOID): pass
 
 class PSCOPETABLE_ENTRY(PVOID): pass
 
-class _SCOPETABLE_ENTRY(pstruct.type):
+class SCOPETABLE_ENTRY(pstruct.type):
     _fields_ = [
         (DWORD, 'EnclosingLevel'),
         (PVOID, 'FilterFunc'),
@@ -33,7 +33,7 @@ class _SCOPETABLE_ENTRY(pstruct.type):
 #        };
 #    };
 
-class _EH4_SCOPETABLE_RECORD(pstruct.type):
+class EH4_SCOPETABLE_RECORD(pstruct.type):
     _fields_ = [
         (DWORD, 'EnclosingLevel'),
         (PVOID, 'FilterFunc'),  #long (*FilterFunc)()
@@ -41,7 +41,7 @@ class _EH4_SCOPETABLE_RECORD(pstruct.type):
         #(PVOID, 'FinallyFunc'),
     ]
 
-class _EH4_SCOPETABLE(pstruct.type):
+class EH4_SCOPETABLE(pstruct.type):
     _fields_ = [
         (DWORD, 'GSCookieOffset'),
         (DWORD, 'GSCookieXOROffset'),
@@ -50,7 +50,7 @@ class _EH4_SCOPETABLE(pstruct.type):
         (dyn.array(_EH4_SCOPETABLE_RECORD, 0), 'ScopeRecord'),
     ]
 
-class _EH3_EXCEPTION_REGISTRATION(pstruct.type):
+class EH3_EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
         (lambda s: pointer(_EH3_EXCEPTION_REGISTRATION), 'Next'),
         (PVOID, 'ExceptionHandler'),
@@ -140,7 +140,7 @@ class ThrowInfo(pstruct.type):
 
 class FuncInfo(pstruct.type):
     _fields_ = [
-        (dyn.clone(pbinary.struct, _fields_=[(29,'magicNumber'),(3,'bbtFlags')]), 'header'),
+        (dyn.clone(pbinary.struct, _fields_=[(29, 'magicNumber'), (3, 'bbtFlags')]), 'header'),
 
         # 0x19930520    - pre-vc2005
         # 0x19930521    - pESTypeList is valid
@@ -159,7 +159,7 @@ class FuncInfo(pstruct.type):
         (pint.int32_t, 'EHFlags'),
     ]
 
-class _RUNTIME_FUNCTION(pstruct.type):
+class RUNTIME_FUNCTION(pstruct.type):
     _fields_ = [
         (DWORD, 'BeginAddress'),
         (DWORD, 'EndAddress'),
@@ -204,7 +204,7 @@ class RTTIBaseClassDescriptor(pstruct.type):
     ]
 
 if False:
-    class _SCOPE_TABLE_AMD64(pstruct.type):
+    class SCOPE_TABLE_AMD64(pstruct.type):
         class _ScopeRecord(pstruct.type):
             _fields_ = [
                 (DWORD, 'BeginAddress'),
@@ -218,7 +218,7 @@ if False:
             (lambda s: dyn.array(s._ScopeRecord, s['Count'].li.int()), 'ScopeRecord'),
         ]
 
-    class _GS_HANDLER_DATA(pstruct.type):
+    class GS_HANDLER_DATA(pstruct.type):
         _fields_ = [
             (int, 'CookieOffset'),
             (long, 'AlignedBaseOffset'),

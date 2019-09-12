@@ -3,14 +3,14 @@ from ptypes import *
 
 from .datatypes import *
 
-class _RTL_VERIFIER_THUNK_DESCRIPTOR(pstruct.type):
+class RTL_VERIFIER_THUNK_DESCRIPTOR(pstruct.type):
     _fields_ = [
         (PCHAR, 'ThunkName'),
         (PVOID, 'ThunkOldAddress'),
         (PVOID, 'ThunkNewAddress'),
     ]
 
-class _RTL_VERIFIER_DLL_DESCRIPTOR(pstruct.type):
+class RTL_VERIFIER_DLL_DESCRIPTOR(pstruct.type):
     _fields_ = [
         (PWCHAR, 'DllName'),
         (DWORD, 'DllFlags'),
@@ -18,11 +18,11 @@ class _RTL_VERIFIER_DLL_DESCRIPTOR(pstruct.type):
         (PRTL_VERIFIER_THUNK_DESCRIPTOR, 'DllThunks'),
     ]
 
-class _RTL_VERIFIER_PROVIDER_DESCRIPTOR(pstruct.type):
-    class RTL_VERIFIER_DLL_LOAD_CALLBACK(PVOID): pass
-    class RTL_VERIFIER_DLL_UNLOAD_CALLBACK(PVOID): pass
-    class RTL_VERIFIER_NTDLLHEAPFREE_CALLBACK(PVOID): pass
+class RTL_VERIFIER_DLL_LOAD_CALLBACK(PVOID): pass
+class RTL_VERIFIER_DLL_UNLOAD_CALLBACK(PVOID): pass
+class RTL_VERIFIER_NTDLLHEAPFREE_CALLBACK(PVOID): pass
 
+class RTL_VERIFIER_PROVIDER_DESCRIPTOR(pstruct.type):
     _fields_ = [
         (DWORD, 'Length'),
         (PRTL_VERIFIER_DLL_DESCRIPTOR, 'ProviderDlls'),

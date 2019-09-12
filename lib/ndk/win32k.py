@@ -196,7 +196,7 @@ class PALETTE32(pstruct.type):
         (ULONG32, 'pRGBXlate'),
         (ULONG32, 'pFirstColor'),
         (ULONG32, 'ppalThis'),
-        (dyn.array(PALETTEENTRY,1), 'apalColors'),
+        (dyn.array(PALETTEENTRY, 1), 'apalColors'),
     ]
 
 class PALETTE64(pstruct.type):
@@ -219,7 +219,7 @@ class PALETTE64(pstruct.type):
         (ULONG64, 'pRGBXlate'),
         (P(PALETTEENTRY), 'pFirstColor'),
         (P(PALETTE), 'ppalThis'),
-        (dyn.array(PALETTEENTRY,3), 'apalColors'),
+        (dyn.array(PALETTEENTRY, 3), 'apalColors'),
     ]
 
 class FONTOBJ(pstruct.type):
@@ -242,9 +242,9 @@ class LFONT32(pstruct.type):
         (ULONG32, 'lft'),
         (FLONG, 'fl'),
         (ULONG32, 'Font'),
-        (dyn.array(WCHAR,LF_FULLFACESIZE), 'FullName'),
-        (dyn.array(WCHAR,LF_FACESIZE), 'Style'),
-        (dyn.array(WCHAR,LF_FACESIZE), 'FaceName'),
+        (dyn.array(WCHAR, LF_FULLFACESIZE), 'FullName'),
+        (dyn.array(WCHAR, LF_FACESIZE), 'Style'),
+        (dyn.array(WCHAR, LF_FACESIZE), 'FaceName'),
         (DWORD, 'dwOffsetEndArray'),
         (ENUMLOGFONTEXDVW, 'logfont'),
         (ULONG32, 'lock'),
@@ -258,9 +258,9 @@ class LFONT64(pstruct.type):
         (ULONG32, 'res2'),
         (FLONG, 'fl'),
         (P(FONTOBJ), 'Font'),
-        (dyn.array(WCHAR,LF_FULLFACESIZE), 'FullName'),
-        (dyn.array(WCHAR,LF_FACESIZE), 'Style'),
-        (dyn.array(WCHAR,LF_FACESIZE), 'FaceName'),
+        (dyn.array(WCHAR, LF_FULLFACESIZE), 'FullName'),
+        (dyn.array(WCHAR, LF_FACESIZE), 'Style'),
+        (dyn.array(WCHAR, LF_FACESIZE), 'FaceName'),
         (DWORD, 'dwOffsetEndArray'),
         (ENUMLOGFONTEXDVW, 'logfont'),
         (ULONG64, 'lock'),
@@ -269,26 +269,26 @@ class LFONT64(pstruct.type):
 class LFONT_ACTUAL32(pstruct.type):
     _fields_ = [
         (BASEOBJECT32, 'BaseObject'),
-        (dyn.array(ULONG32,3), 'unk0'),
+        (dyn.array(ULONG32, 3), 'unk0'),
         (DWORD, 'flags'),
-        (dyn.array(BYTE,0x30), 'unk1'),
+        (dyn.array(BYTE, 0x30), 'unk1'),
         (ULONG32, 'pCleanup'),
-        (dyn.array(BYTE,0x74), 'unk3'),
-        (dyn.array(WCHAR,0x30), 'FONTFAMILY'),
-        (dyn.array(WCHAR,0x30), 'FONTNAME'),
+        (dyn.array(BYTE, 0x74), 'unk3'),
+        (dyn.array(WCHAR, 0x30), 'FONTFAMILY'),
+        (dyn.array(WCHAR, 0x30), 'FONTNAME'),
     ]
 
 
 class LFONT_ACTUAL64(pstruct.type):
     _fields_ = [
         (BASEOBJECT64, 'BaseObject'),
-        (dyn.array(ULONG32,3), 'unk0'),
+        (dyn.array(ULONG32, 3), 'unk0'),
         (DWORD, 'flags'),
-        (dyn.array(BYTE,0x30), 'unk1'),
+        (dyn.array(BYTE, 0x30), 'unk1'),
         (ULONG64, 'pCleanup'),
-        (dyn.array(BYTE,0x70), 'unk3'),
-        (dyn.array(WCHAR,0x30), 'FONTFAMILY'),
-        (dyn.array(WCHAR,0x30), 'FONTNAME'),
+        (dyn.array(BYTE, 0x70), 'unk3'),
+        (dyn.array(WCHAR, 0x30), 'FONTFAMILY'),
+        (dyn.array(WCHAR, 0x30), 'FONTNAME'),
     ]
 
 class SURFACE32(pstruct.type):
@@ -331,13 +331,13 @@ class SURFACE64(pstruct.type):
 class UNKNOWNOBJ32(pstruct.type):
     _fields_ = [
         (BASEOBJECT32, 'BaseObject'),
-        (dyn.array(BYTE,0x100), 'Buffer'),
+        (dyn.array(BYTE, 0x100), 'Buffer'),
     ]
 
 class UNKNOWNOBJ64(pstruct.type):
     _fields_ = [
         (BASEOBJECT64, 'BaseObject'),
-        (dyn.array(BYTE,0x100), 'Buffer'),
+        (dyn.array(BYTE, 0x100), 'Buffer'),
     ]
 
 class GDI_HANDLE_TABLE(pstruct.type):

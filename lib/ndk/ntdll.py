@@ -2,7 +2,7 @@ import ptypes
 from ptypes import *
 
 ### ntdll.dll!ZwQueryObject
-#ntdll_ZwQueryObject = __stdcall(NTSTATUS, (HANDLE,'Handle'), (DWORD,'ObjectInformationClass'), (PVOID,'ObjectInformation'), (ULONG,'ObjectInformationLength'), (PULONG,'ReturnLength'))
+#ntdll_ZwQueryObject = __stdcall(NTSTATUS, (HANDLE, 'Handle'), (DWORD, 'ObjectInformationClass'), (PVOID, 'ObjectInformation'), (ULONG, 'ObjectInformationLength'), (PULONG, 'ReturnLength'))
 
 class OBJECT_INFORMATION_CLASS(pint.enum, pint.uint32_t):
     _values_ = [

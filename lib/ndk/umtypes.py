@@ -20,7 +20,7 @@ MAXUCHAR = 0xff
 MAXUSHORT = 0xffff
 MAXULONG = 0xffffffff
 
-CSR_MAKE_OPCODE = lambda s,m: ((s) << 16) | (m)
+CSR_MAKE_OPCODE = lambda s, m: ((s) << 16) | (m)
 CSR_API_ID_FROM_OPCODE = lambda n: (int(int(n)))
 CSR_SERVER_ID_FROM_OPCODE = lambda n: int((n) >> 16)
 
@@ -51,7 +51,7 @@ class UNICODE_STRING(pstruct.type, versioned):
         (USHORT, 'MaximumLength'),
 #        (PWSTR, 'Buffer'),
 #        (lambda s: P(dyn.clone(WSTR, length=s['MaximumLength'].li.int())), 'Buffer')
-        (lambda s: ULONG if getattr(s,'WIN64',False) else pint.uint_t, 'Unknown'),
+        (lambda s: ULONG if getattr(s, 'WIN64', False) else pint.uint_t, 'Unknown'),
         (lambda s: P(dyn.clone(WSTR, length=s['Length'].li.int()/2)), 'Buffer')
     ]
 

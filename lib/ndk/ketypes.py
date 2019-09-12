@@ -10,15 +10,15 @@ class DISPATCHER_HEADER(pstruct.type):
         (LIST_ENTRY, 'WaitListHead'),
     ]
 
-class _KEVENT(pstruct.type):
+class KEVENT(pstruct.type):
     _fields_ = [
         (DISPATCHER_HEADER, 'Header'),
     ]
 
-class _KSEMAPHORE(pstruct.type):
+class KSEMAPHORE(pstruct.type):
     _fields_ = [
         (DISPATCHER_HEADER, 'Header'),
         (LONG, 'Limit'),
     ]
 
-class _KGATE(_KEVENT): pass
+class KGATE(KEVENT): pass

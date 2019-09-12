@@ -33,7 +33,7 @@ class ACCESS_MASK(pbinary.flags):
     ]
 
 ### Security Descriptor Related Things
-class _SID_IDENTIFIER_AUTHORITY(parray.type):
+class SID_IDENTIFIER_AUTHORITY(parray.type):
     length = 6
     _object_ = pint.uint8_t
 
@@ -69,11 +69,11 @@ class _SID_IDENTIFIER_AUTHORITY(parray.type):
             res += item.int()
         return res
 
-class _SID(pstruct.type):
+class SID(pstruct.type):
     _fields_ = [
         (UCHAR, 'Revision'),
         (UCHAR, 'SubAuthorityCount'),
-        (_SID_IDENTIFIER_AUTHORITY, 'IdentifierAuthority'),
+        (SID_IDENTIFIER_AUTHORITY, 'IdentifierAuthority'),
         (lambda s: dyn.array(DWORD, s['SubAuthorityCount'].li.int()), 'SubAuthority'),
     ]
 
@@ -85,6 +85,10 @@ class ACE_TYPE(ptype.definition):
     cache = {}
 
 class _ACE_TYPE(pint.enum, UCHAR):
+    '''
+    The name of this enumeration comes from the suffix of all the symbols
+    that it contains.
+    '''
     _values_ = [
         ('ACCESS_ALLOWED', 0x0),
         ('ACCESS_DENIED', 0x1),
@@ -106,7 +110,7 @@ class _ACE_TYPE(pint.enum, UCHAR):
         ('SYSTEM_MANDATORY_LABEL', 0x11),
     ]
 
-class _INHERIT_ACE(pbinary.flags):
+class INHERIT_ACE(pbinary.flags):
     _fields_ = [
         (1, 'INHERITED_ACE'),
         (1, 'INHERIT_ONLY_ACE'),
@@ -115,18 +119,18 @@ class _INHERIT_ACE(pbinary.flags):
         (1, 'OBJECT_INHERIT_ACE'),
     ]
 
-class _ACE_FLAG(pbinary.flags):
+class ACE_FLAG(pbinary.flags):
     _fields_ = [
         (1, 'FAILED_ACCESS'),
         (1, 'SUCCESSFUL_ACCESS'),
         (1, 'RESERVED'),
-        (_INHERIT_ACE, 'VALID_INHERIT_FLAGS'),
+        (INHERIT_ACE, 'VALID_INHERIT_FLAGS'),
     ]
 
-class _ACE_HEADER(pstruct.type):
+class ACE_HEADER(pstruct.type):
     _fields_ = [
         (_ACE_TYPE, 'AceType'),
-        (_ACE_FLAG, 'AceFlags'),
+        (ACE_FLAG, 'AceFlags'),
         (USHORT, 'AceSize'),
     ]
 
@@ -140,24 +144,24 @@ class ACE(pstruct.type):
         return dyn.block(max((0, res['AceSize'].size() - self['Access'].li.size())))
 
     _fields_ = [
-        (_ACE_HEADER, 'Header'),
+        (ACE_HEADER, 'Header'),
         (__Access, 'Access'),
         (__ApplicationData, 'ApplicationData'),
     ]
 
 class ACCESS_ACE_MASK_AND_SID(pstruct.type):
     _fields_ = [
-        (ACCESS_MASK ,'Mask'),
-        (_SID, 'Sid'),
+        (ACCESS_MASK, 'Mask'),
+        (SID, 'Sid'),
     ]
 
 class ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE(pstruct.type):
     _fields_ = [
-        (ACCESS_MASK ,'Mask'),
+        (ACCESS_MASK, 'Mask'),
         (DWORD, 'Flags'),
         (GUID, 'ObjectType'),
         (GUID, 'InheritedObjectType'),
-        (_SID, 'Sid'),
+        (SID, 'Sid'),
     ]
 
 # TODO: Implement the rest of the ACCESS_ and SYSTEM_ constructed security types
@@ -214,7 +218,7 @@ class SYSTEM_AUDIT_CALLBACK_OBJECT_ACE(ACCESS_ACE_MASK_FLAGS_AND_OBJECTTYPE):
 class SYSTEM_MANDATORY_LABEL_ACE(ACCESS_ACE_MASK_AND_SID):
     type = 17
 
-class _ACL(pstruct.type):
+class ACL(pstruct.type):
     _fields_ = [
         (UCHAR, 'AclRevision'),
         (UCHAR, 'Sbz1'),
@@ -243,19 +247,19 @@ class SECURITY_DESCRIPTOR_CONTROL(pbinary.flags):
         (1, 'SE_OWNER_DEFAULTED'),
     ]
 
-class _SECURITY_DESCRIPTOR(pstruct.type):
+class SECURITY_DESCRIPTOR(pstruct.type):
     _fields_ = [
         (UCHAR, 'Revision'),
         (UCHAR, 'Sbz1'),
         (SECURITY_DESCRIPTOR_CONTROL, 'Control'),
 
         # XXX: These are conditional depending on the SE_*_DEFAULTED flags in the Control field being unset
-        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_SID), 'Owner'),
-        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_SID), 'Group'),
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=SID), 'Owner'),
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=SID), 'Group'),
 
         # XXX: These are conditional depending on the SE_*_PRESENT flags in the Control field being set
-        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_ACL), 'Sacl'),
-        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=_ACL), 'Dacl'),
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=ACL), 'Sacl'),
+        (lambda self: dyn.clone(ptype.opointer_t, _baseobject_=self, _object_=ACL), 'Dacl'),
     ]
 
 class TOKEN_SOURCE(pstruct.type):
@@ -265,7 +269,7 @@ class TOKEN_SOURCE(pstruct.type):
         (LUID, 'SourceIdentifier'),
     ]
 
-class _SEP_AUDIT_POLICY_CATEGORIES(pbinary.struct):
+class SEP_AUDIT_POLICY_CATEGORIES(pbinary.struct):
     _fields_ = [
         (4, 'System'),
         (4, 'Logon'),
@@ -287,13 +291,13 @@ class TOKEN_TYPE(pint.enum, ULONG):
         ('TokenImpersonation', 2),
     ]
 
-class _SID_AND_ATTRIBUTES(pstruct.type):
+class SID_AND_ATTRIBUTES(pstruct.type):
     _fields_ = [
-        (P(_SID), 'Sid'),
+        (P(SID), 'Sid'),
         (ULONG, 'Attributes'),
     ]
 
-class _LUID_AND_ATTRIBUTES(pstruct.type):
+class LUID_AND_ATTRIBUTES(pstruct.type):
     _fields_ = [
         (LUID, 'Luid'),
         (ULONG, 'Attributes'),
@@ -307,14 +311,14 @@ class SECURITY_IMPERSONATION_LEVEL(pint.enum, ULONG):
         ('SecurityDelegation', 3),
     ]
 
-class _TOKEN(pstruct.type):
+class TOKEN(pstruct.type):
     _fields_ = [
         (TOKEN_SOURCE, 'TokenSource'),
         (LUID, 'TokenId'),
         (LUID, 'AuthenticationId'),
         (LUID, 'ParentTokenId'),
         (LARGE_INTEGER, 'ExpirationTime'),
-        (P(extypes._ERESOURCE), 'TokenLock'),
+        (P(extypes.ERESOURCE), 'TokenLock'),
         (lambda self: dyn.block(8 - self['TokenLock'].li.size()), 'padding(TokenLock)'),
         (SEP_AUDIT_POLICY, 'AuditPolicy'),
         (LUID, 'ModifiedId'),
@@ -326,12 +330,12 @@ class _TOKEN(pstruct.type):
         (ULONG, 'DynamicCharged'),
         (ULONG, 'DynamicAvailable'),
         (ULONG, 'DefaultOwnersIndex'),
-        (P(_SID_AND_ATTRIBUTES), 'UserAndGroups'),
-        (P(_SID_AND_ATTRIBUTES), 'RestrictedSids'),
-        (P(_SID), 'PrimaryGroup'),
-        (P(_LUID_AND_ATTRIBUTES), 'Privileges'),
+        (P(SID_AND_ATTRIBUTES), 'UserAndGroups'),
+        (P(SID_AND_ATTRIBUTES), 'RestrictedSids'),
+        (P(SID), 'PrimaryGroup'),
+        (P(LUID_AND_ATTRIBUTES), 'Privileges'),
         (P(ULONG), 'DynamicPart'),
-        (P(_ACL), 'DefaultDacl'),
+        (P(ACL), 'DefaultDacl'),
         (TOKEN_TYPE, 'TokenType'),
         (SECURITY_IMPERSONATION_LEVEL, 'ImpersionationLevel'),
         (ULONG, 'TokenFlags'),
@@ -362,7 +366,7 @@ if __name__ == '__main__':
         data = siddata.translate(None, ' \n')
         print "decoding {!s}".format(data)
 
-        c = _SID(__name__='sid').load(source=prov.string(data.decode('hex')))
+        c = SID(__name__='sid').load(source=prov.string(data.decode('hex')))
         print c
 
         for i, item in enumerate(c['SubAuthority']):

@@ -3,7 +3,7 @@ from ptypes import *
 
 from .datatypes import *
 
-class _POOL_TYPE(pbinary.enum):
+class POOL_TYPE(pbinary.enum):
     _values_ = [
         ('NonPagedPool', 0x0000),
         ('PagedPool', 0x0001),
@@ -23,17 +23,17 @@ class _POOL_TYPE(pbinary.enum):
     ]
 
 @pbinary.littleendian
-class POOL_TYPE16(_POOL_TYPE):
+class POOL_TYPE16(POOL_TYPE):
     width = 16
 
 @pbinary.littleendian
-class POOL_TYPE32(_POOL_TYPE):
+class POOL_TYPE32(POOL_TYPE):
     width = 32
 
-class _POOL_HEADER(pstruct.type, versioned):
+class POOL_HEADER(pstruct.type, versioned):
     class _Ulong1(pbinary.struct):
         _fields_ = [
-            (dyn.clone(_POOL_TYPE, width=7), 'PoolType'),
+            (dyn.clone(POOL_TYPE, width=7), 'PoolType'),
             (9, 'BlockSize'),
             (7, 'PoolIndex'),
             (9, 'PreviousSize'),
@@ -49,52 +49,42 @@ class _POOL_HEADER(pstruct.type, versioned):
 
     class _Ulong164(_Ulong1):
         _fields_ = [
-            (dyn.clone(_POOL_TYPE, width=8), 'PoolType'),
+            (dyn.clone(POOL_TYPE, width=8), 'PoolType'),
             (8, 'BlockSize'),
             (8, 'PoolIndex'),
             (8, 'PreviousSize'),
         ]
 
-    def __init__(self, **attrs):
-        super(_POOL_HEADER, self).__init__(**attrs)
-        self._fields_ = res = []
-
-        ulong1 = _POOL_HEADER._Ulong164 if getattr(self, 'WIN64', False) else _POOL_HEADER._Ulong1
-
-        res.extend([
-            (pbinary.littleendian(ulong1), 'Ulong1'),
-            (dyn.clone(pstr.string, length=4), 'PoolTag'),
-        ])
-
-        if getattr(self, 'WIN64', False):
-            res.append((PVOID, 'ProcessBilled'))
-        return
+    def __Ulong1(self):
+        res = POOL_HEADER._Ulong164 if getattr(self, 'WIN64', False) else POOL_HEADER._Ulong1
+        return pbinary.littleendian(res)
 
     _fields_ = [
-        (_Ulong1, 'Ulong1'),
+        (__Ulong1, 'Ulong1'),
         (dyn.clone(pstr.string, length=4), 'PoolTag'),
+        (lambda self: PVOID if getattr(self, 'WIN64', False) else pint.uint_t, 'ProcessBilled'),
     ]
 
     def summary(self):
         res = self['Ulong1']
         return "\"{:s}\" {:s}".format(self['PoolTag'].str().encode('escape_unicode').replace('"', '\\"'), res.summary())
 
-class _POOL_FREE_CHUNK(pstruct.type, versioned): pass
-class _POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):
-    _object_ = fptr(_POOL_FREE_CHUNK, 'ListEntry')
+class POOL_FREE_CHUNK(pstruct.type, versioned): pass
+class POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):
+    _object_ = fptr(POOL_FREE_CHUNK, 'ListEntry')
     _path_ = ('ListEntry',)
 
-_POOL_FREE_CHUNK._fields_ = [
-    (_POOL_HEADER, 'Header'),
-    (_POOL_FREE_CHUNK_LIST_ENTRY, 'ListEntry'),
+POOL_FREE_CHUNK._fields_ = [
+    (POOL_HEADER, 'Header'),
+    (POOL_FREE_CHUNK_LIST_ENTRY, 'ListEntry'),
 ]
 
-class _POOL_DESCRIPTOR(pstruct.type, versioned):
+class POOL_DESCRIPTOR(pstruct.type, versioned):
     def __ListHeads(self):
         PAGE_SIZE = 2**12
         POOL_BLOCK_SIZE = 16 if getattr(self, 'WIN64', False) else 8
         POOL_LISTS_PER_PAGE = PAGE_SIZE / POOL_BLOCK_SIZE
-        return dyn.array(_POOL_FREE_CHUNK_LIST_ENTRY, POOL_LISTS_PER_PAGE)
+        return dyn.array(POOL_FREE_CHUNK_LIST_ENTRY, POOL_LISTS_PER_PAGE)
 
     _fields_ = [
         (POOL_TYPE32, 'PoolType;'),
@@ -110,9 +100,9 @@ class _POOL_DESCRIPTOR(pstruct.type, versioned):
         (__ListHeads, 'ListHeads'),
     ]
 
-class _GENERAL_LOOKASIDE(pstruct.type):
+class GENERAL_LOOKASIDE(pstruct.type):
     _fields_ = [
-        (dyn.clone(SLIST_HEADER, _object_=_POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
+        (dyn.clone(SLIST_HEADER, _object_=POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
         (UINT16, 'Depth'),
         (UINT16, 'MaximumDepth'),
         (ULONG32, 'TotalAllocates'),
@@ -130,8 +120,8 @@ class _GENERAL_LOOKASIDE(pstruct.type):
         (dyn.array(ULONG32, 2), 'Future'),
     ]
 
-class _PP_LOOKASIDE_LIST(pstruct.type):
+class PP_LOOKASIDE_LIST(pstruct.type):
     _fields_ = [
-        (P(_GENERAL_LOOKASIDE), 'P'),
-        (P(_GENERAL_LOOKASIDE), 'L'),
+        (P(GENERAL_LOOKASIDE), 'P'),
+        (P(GENERAL_LOOKASIDE), 'L'),
     ]

@@ -68,7 +68,7 @@ class OBJECT_TYPE_INITIALIZER(pstruct.type):
 class POB_PRE_OPERATION_CALLBACK(PVOID): pass
 class POB_POST_OPERATION_CALLBACK(PVOID): pass
 class OB_OPERATION(pint.enum, ULONG):
-    _values_ = [('HANDLE_CREATE',1),('HANDLE_DUPLICATE',2)]
+    _values_ = [('HANDLE_CREATE', 1), ('HANDLE_DUPLICATE', 2)]
 
 class OBJECT_TYPE(pstruct.type): pass
 class OB_OPERATION_REGISTRATION(pstruct.type): pass
@@ -76,7 +76,7 @@ class CALLBACK_ENTRY_ITEM(pstruct.type): pass
 class CALLBACK_ENTRY(pstruct.type): pass
 
 OBJECT_TYPE._fields_ = [
-        (dyn.clone(LIST_ENTRY,_object_=OBJECT_TYPE), 'TypeList'),
+        (dyn.clone(LIST_ENTRY, _object_=OBJECT_TYPE), 'TypeList'),
         (umtypes.UNICODE_STRING, 'Name'),
         (PVOID, 'DefaultObject'),
         (UCHAR, 'Index'),
@@ -87,7 +87,7 @@ OBJECT_TYPE._fields_ = [
         (OBJECT_TYPE_INITIALIZER, 'TypeInfo'),
         (umtypes.EX_PUSH_LOCK, 'TypeLock'),
         (ULONG, 'Key'),
-        (dyn.clone(LIST_ENTRY,_object_=CALLBACK_ENTRY_ITEM), 'CallbackList'),
+        (dyn.clone(LIST_ENTRY, _object_=CALLBACK_ENTRY_ITEM), 'CallbackList'),
     ]
 
 OB_OPERATION_REGISTRATION._fields_ = [
@@ -98,7 +98,7 @@ OB_OPERATION_REGISTRATION._fields_ = [
 ]
 
 CALLBACK_ENTRY_ITEM._fields_ = [
-        (dyn.clone(LIST_ENTRY,_object_=CALLBACK_ENTRY_ITEM), 'EntryItemList'),
+        (dyn.clone(LIST_ENTRY, _object_=CALLBACK_ENTRY_ITEM), 'EntryItemList'),
         (OB_OPERATION, 'Operations'),
         (P(CALLBACK_ENTRY), 'CallbackEntry'),
         (P(OBJECT_TYPE), 'ObjectType'),

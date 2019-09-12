@@ -3,17 +3,17 @@ from ptypes import *
 
 pbinary.setbyteorder(ptypes.config.byteorder.bigendian)
 class selector(pbinary.struct):
-    _fields_ = [(13, 'Index'),(1,'TI'),(2,'RPL')]
+    _fields_ = [(13, 'Index'), (1, 'TI'), (2, 'RPL')]
 class systemtable(pstruct.type):
-    _fields_ = [(pint.uint32_t,'base'),(pint.uint16_t,'limit')]
+    _fields_ = [(pint.uint32_t, 'base'), (pint.uint16_t, 'limit')]
 class systemsegment(pstruct.type):
-    _fields_ = [(selector,'selector'),(systemtable,'address')]
+    _fields_ = [(selector, 'selector'), (systemtable, 'address')]
 
 class descriptor(pbinary.struct):
     class flags(pbinary.struct):
-        _fields_ = [(1,n) for n in ('G','D/B','L','AVL')]
+        _fields_ = [(1, n) for n in ('G', 'D/B', 'L', 'AVL')]
     class access(pbinary.struct):
-        _fields_ = [(1,'P'),(2,'DPL'),(1,'S'),(4,'Type')]
+        _fields_ = [(1, 'P'), (2, 'DPL'), (1, 'S'), (4, 'Type')]
 
     _fields_ = [
         (8, 'Base[3]'),
@@ -25,47 +25,47 @@ class descriptor(pbinary.struct):
         (16, 'Limit[Low]'),
     ]
 class descriptor64(descriptor):
-    _fields_ = [(32,'Reserved'),(32,'Base[High]')] + descriptor._fields_
+    _fields_ = [(32, 'Reserved'), (32, 'Base[High]')] + descriptor._fields_
 
 class general(pbinary.struct):
-    _fields_ = [(32,name) for name in ('eax','ecx','edx','ebx','esp','ebp','esi','edi')]
+    _fields_ = [(32, name) for name in ('eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi')]
 class rex(pbinary.struct):
-    _fields_ = list(itertools.chain(((64,name) for name in ('rax','rbx','rcx','rdx','rsi','rdi','rbp','rsp',)), ((64,'r%d'%num) for num in range(8,16))))
+    _fields_ = list(itertools.chain(((64, name) for name in ('rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp', )), ((64, 'r%d'%num) for num in range(8, 16))))
 class segment(pbinary.struct):
-    _fields_ = [(32,name) for name in ('cs','ds','ss','es','fs','gs')]
+    _fields_ = [(32, name) for name in ('cs', 'ds', 'ss', 'es', 'fs', 'gs')]
 
 class flags(pbinary.flags):
     _fields_ = [
-        (1,'0'),
-        (1,'NT'), #Nested Task Flag
-        (2,'IOPL'), #I/O Privilege Level
-        (1,'OF'), #Overflow Flag
-        (1,'DF'), #Direction Flag
-        (1,'IF'), #Interrupt-enable Flag
-        (1,'TF'), #Trap Flag
-        (1,'SF'), #Sign Flag
-        (1,'ZF'), #Zero Flag
-        (1,'0'),
-        (1,'AF'), #Adjust Flag
-        (1,'0'),
-        (1,'PF'), #Parity Flag
-        (1,'1'),
-        (1,'CF'), #Carry Flag
+        (1, '0'),
+        (1, 'NT'), #Nested Task Flag
+        (2, 'IOPL'), #I/O Privilege Level
+        (1, 'OF'), #Overflow Flag
+        (1, 'DF'), #Direction Flag
+        (1, 'IF'), #Interrupt-enable Flag
+        (1, 'TF'), #Trap Flag
+        (1, 'SF'), #Sign Flag
+        (1, 'ZF'), #Zero Flag
+        (1, '0'),
+        (1, 'AF'), #Adjust Flag
+        (1, '0'),
+        (1, 'PF'), #Parity Flag
+        (1, '1'),
+        (1, 'CF'), #Carry Flag
     ]
 
 class eflags(pbinary.flags):
     _fields_ = [
-        (10,'reserved'),
-        (1,'ID'), #CPUID-Available
-        (1,'VIP'), #Virtual Interrupt Pending
-        (1,'VIF'), #Virtual Interrupt Flag
-        (1,'AC'), #Alignment Check
-        (1,'VM'), #V8086 Mode
-        (1,'RF'), #Resume Flag
+        (10, 'reserved'),
+        (1, 'ID'), #CPUID-Available
+        (1, 'VIP'), #Virtual Interrupt Pending
+        (1, 'VIF'), #Virtual Interrupt Flag
+        (1, 'AC'), #Alignment Check
+        (1, 'VM'), #V8086 Mode
+        (1, 'RF'), #Resume Flag
     ] + flags._fields_
 
 class rflags(pbinary.flags):
-    _fields_ = [(10+32,'reserved')]+eflags._fields_[1:]
+    _fields_ = [(10+32, 'reserved')]+eflags._fields_[1:]
 
 class fpstate(pbinary.struct):
     """
@@ -91,11 +91,11 @@ class fpstate(pbinary.struct):
     ]
 
 class sse(pbinary.array):
-    _object_,length = 32*8,8
+    _object_, length = 32 * 8, 8
 class mmx(pbinary.array):
-    _object_,length = 16*8,8
+    _object_, length = 16 * 8, 8
 class fpu(pbinary.array):
-    _object_,length = 10*8,8
+    _object_, length = 10 * 8, 8
 
 class fpctrl(pbinary.struct):
     _fields_ = [
@@ -184,12 +184,12 @@ class cr4(pbinary.flags):
 
 class tss16(pstruct.type):
     class SPSS(pstruct.type):
-        _fields_ = [(pint.uint16_t,'SP'),(pint.uint16_t,'SS')]
+        _fields_ = [(pint.uint16_t, 'SP'), (pint.uint16_t, 'SS')]
 
     class general(pstruct.type):
-        _fields_ = [(pint.uint16_t,name) for name in ('AX','CX','DX','BX','SP','BP','SI','DI')]
+        _fields_ = [(pint.uint16_t, name) for name in ('AX', 'CX', 'DX', 'BX', 'SP', 'BP', 'SI', 'DI')]
     class segment(pstruct.type):
-        _fields_ = [(pint.uint16_t,name) for name in ('ES','CS','SS','DS')]
+        _fields_ = [(pint.uint16_t, name) for name in ('ES', 'CS', 'SS', 'DS')]
 
     _fields_ = [
         (pint.uint16_t, 'Previous Task Link'),
@@ -206,16 +206,16 @@ class tss16(pstruct.type):
 
 class tss32(pstruct.type):
     class align16(pstruct.type):
-        _fields_ = [(pint.uint16_t,'reserved'),(pint.uint16_t,'value')]
+        _fields_ = [(pint.uint16_t, 'reserved'), (pint.uint16_t, 'value')]
     class general(pstruct.type):
-        _fields_ = [(pint.uint32_t,name) for name in ('EAX','ECX','EDX','EBX','ESP','EBP','ESI','EDI')]
+        _fields_ = [(pint.uint32_t, name) for name in ('EAX', 'ECX', 'EDX', 'EBX', 'ESP', 'EBP', 'ESI', 'EDI')]
     class segment(pstruct.type):
-        _fields_ = [(align16,name) for name in ('ES','CS','SS','DS','FS','GS')]
+        _fields_ = [(align16, name) for name in ('ES', 'CS', 'SS', 'DS', 'FS', 'GS')]
     class ESPSS(pstruct.type):
-        _fields_ = [(align16,'SS'),(pint.uint32_t,'ESP')]
+        _fields_ = [(align16, 'SS'), (pint.uint32_t, 'ESP')]
 
     _fields_ = [
-        (align16,'Previous Task Link'),
+        (align16, 'Previous Task Link'),
         (dyn.clone(parray.type, length=3, _object_=SPSS), 'ESPSS'),
         (pint.uint32_t, 'CR3'),
 
@@ -241,7 +241,7 @@ class tss64(pstruct.type):
         (pint.uint16_t, 'I/O Map Base Address'),
     ]
 
-class _HARDWARE_PTE(pbinary.flags):
+class HARDWARE_PTE(pbinary.flags):
     _fields_ = [
         ('Valid', 1),
         ('Write', 1),

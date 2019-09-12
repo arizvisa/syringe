@@ -1,22 +1,16 @@
 import ptypes
 from ptypes import *
 
-from . import sdkddkver
+from . import sdkddkver, ketypes
 from .datatypes import *
 
-class KSEMAPHORE(pstruct.type):
+class TL(pstruct.type):
     _fields_ = [
-        (dyn.block(0x10), 'Header'),    # XXX
-        (LONG, 'Limit'),
+        (P(lambda self: TL), 'next'),
+        (PVOID, 'pobj'),
+        (PVOID, 'pfnFree'),
     ]
-
-class _TL(pstruct.type):
-    _fields_ = [
-        (P(lambda s:_TL), 'next'),
-        (PVOID,'pobj'),
-        (PVOID,'pfnFree'),
-    ]
-class PTL(P(_TL)): pass
+class PTL(P(TL)): pass
 
 class W32THREAD(pstruct.type, versioned):
     def __init__(self, **attrs):
@@ -51,7 +45,7 @@ class ETHREAD(pstruct.type, versioned):
         (ULONG, 'ActiveTimerListLock'),
         (LIST_ENTRY, 'ActiveTimerListHead'),
         (CLIENT_ID, 'Cid'),
-        (KSEMAPHORE, 'KeyedWaitSemaphore'), # XXX: union
+        (ketypes.KSEMAPHORE, 'KeyedWaitSemaphore'), # XXX: union
 #        (PS_CLIENT_SECURITY_CONTEXT, 'ClientSecurity'),
         (dyn.block(4), 'ClientSecurity'),
         (LIST_ENTRY, 'IrpList'),

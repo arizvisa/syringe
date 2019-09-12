@@ -6,7 +6,7 @@ from .datatypes import *
 class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
     class SectionPointerUnion(dynamic.union):
         class SectionPointer(pstruct.type):
-            _fields_ = [(PVOID, 'SectionPointer'),(ULONG,'CheckSum')]
+            _fields_ = [(PVOID, 'SectionPointer'), (ULONG, 'CheckSum')]
         _fields_ = [
             (LIST_ENTRY, 'HashLinks'),
             (SectionPointer, 'SectionPointer')
@@ -53,15 +53,15 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
     def __init__(self, **attrs):
         super(LDR_DATA_TABLE_ENTRY, self).__init__(**attrs)
         self._fields_ = f = []
-        aligned = dyn.align(8 if getattr(self,'WIN64',False) else 4)
+        aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
 
         f.extend([
-            (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
-            (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
-            (lambda s:_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
+            (lambda s:LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
+            (lambda s:LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
+            (lambda s:LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
             (P(pecoff.Executable.File), 'DllBase'),
             (PVOID, 'EntryPoint'),
-            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'SizeOfImage'),
+            (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeOfImage'),
             (aligned, 'align(FullDllName)'),
             (umtypes.UNICODE_STRING, 'FullDllName'),
             (umtypes.UNICODE_STRING, 'BaseDllName'),
@@ -84,7 +84,7 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
             (LIST_ENTRY, 'ServiceTagLinks'),
             (LIST_ENTRY, 'StaticLinks'),        # FIXME: points to 0x18/0x30 byte entries in the heap?
             (PVOID, 'ContextInformation'),
-            (ULONGLONG if getattr(self,'WIN64',False) else ULONG, 'OriginalBase'),
+            (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'OriginalBase'),
             (LARGE_INTEGER, 'LoadTime'),
         ])
 
@@ -94,12 +94,12 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
         return (address >= left) and (address < right)
 
 ## declarations, heh.
-class _LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
+class LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
     _object_ = P(LDR_DATA_TABLE_ENTRY)
 
-class _LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InLoadOrderLinks',)
-class _LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InMemoryOrderModuleList',)
-class _LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(_LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InInitializationOrderModuleList',)
+class LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InLoadOrderLinks',)
+class LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InMemoryOrderModuleList',)
+class LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InInitializationOrderModuleList',)
 
 class PEB_LDR_DATA(pstruct.type, versioned):
     def __init__(self, **attrs):
@@ -110,9 +110,9 @@ class PEB_LDR_DATA(pstruct.type, versioned):
             (ULONG, 'Initialized'),         # BOOLEAN
             (PVOID, 'SsHandle'),
 
-            (_LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
-            (_LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
-            (_LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
+            (LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderModuleList'),
+            (LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
+            (LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
 
             (PVOID, 'EntryInProgress'),
             (ULONG, 'ShutdownInProgress'),  # BOOLEAN

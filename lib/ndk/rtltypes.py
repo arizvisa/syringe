@@ -4,7 +4,7 @@ from ptypes import *
 from . import umtypes
 from .datatypes import *
 
-class _RTL_CRITICAL_SECTION(pstruct.type, versioned):
+class RTL_CRITICAL_SECTION(pstruct.type, versioned):
     _fields_ = [
         (PVOID, 'DebugInfo'),
         (LONG, 'LockCount'),
@@ -14,13 +14,13 @@ class _RTL_CRITICAL_SECTION(pstruct.type, versioned):
         (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SpinCount'),
     ]
 
-class _RTL_BITMAP(pstruct.type):
+class RTL_BITMAP(pstruct.type):
     _fields_ = [
         (ULONG, 'SizeOfBitMap'),
         (P(ULONG), 'Buffer'),
     ]
 
-class _RTL_DRIVE_LETTER_CURDIR(pstruct.type):
+class RTL_DRIVE_LETTER_CURDIR(pstruct.type):
     _fields_ = [
         (WORD, 'Flags'),
         (WORD, 'Length'),
@@ -28,12 +28,15 @@ class _RTL_DRIVE_LETTER_CURDIR(pstruct.type):
         (umtypes.STRING, 'DosPath'),
     ]
 
-class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
-    class CURDIR(pstruct.type):
-        _fields_ = [(umtypes.UNICODE_STRING,'DosPath'), (HANDLE,'Handle')]
-        def summary(self):
-            return 'Handle={:x} DosPath={!r}'.format(self['Handle'].int(), self['DosPath'].str())
+class CURDIR(pstruct.type):
+    _fields_ = [
+        (umtypes.UNICODE_STRING, 'DosPath'),
+        (HANDLE, 'Handle'),
+    ]
+    def summary(self):
+        return 'Handle={:x} DosPath={!r}'.format(self['Handle'].int(), self['DosPath'].str())
 
+class RTL_USER_PROCESS_PARAMETERS(pstruct.type):
     _fields_ = [
         (ULONG, 'MaximumLength'),
         (ULONG, 'Length'),
@@ -48,7 +51,7 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (umtypes.UNICODE_STRING, 'DllPath'),
         (umtypes.UNICODE_STRING, 'ImagePathName'),
         (umtypes.UNICODE_STRING, 'CommandLine'),
-#        (P(lambda s: dyn.block(s.getparent(_RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
+#        (P(lambda s: dyn.block(s.getparent(RTL_USER_PROCESS_PARAMETERS)['EnvironmentSize'].int())), 'Environment'),
 #        (P(lambda s: dyn.lazyblockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
         (P(lambda s: dyn.blockarray(pstr.szwstring, s.getparent()['EnvironmentSize'].li.int())), 'Environment'),
         (ULONG, 'StartingX'),
@@ -65,11 +68,11 @@ class _RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (umtypes.UNICODE_STRING, 'ShellInfo'),
         (umtypes.UNICODE_STRING, 'RuntimeData'),
 
-        (dyn.array(_RTL_DRIVE_LETTER_CURDIR,32), 'CurrentDirectories'),
+        (dyn.array(RTL_DRIVE_LETTER_CURDIR, 32), 'CurrentDirectories'),
         (ULONG, 'EnvironmentSize'),
     ]
 
-class _RLT_PATH_TYPE(pint.enum):
+class RLT_PATH_TYPE(pint.enum):
     _values_ = [
         ('RtlPathTypeUnknown', 0),
         ('RtlPathTypeUncAbsolute', 1),
@@ -81,14 +84,14 @@ class _RLT_PATH_TYPE(pint.enum):
         ('RtlPathTypeRootLocalDevice', 7),
     ]
 
-class _RTL_RELATIVE_NAME(pstruct.type):
+class RTL_RELATIVE_NAME(pstruct.type):
     _fields_ = [
         (umtypes.UNICODE_STRING, 'RelativeName'),
         (HANDLE, 'ContainingDirectory'),
         (PVOID, 'CurDirRef'),
     ]
 
-class _RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
+class RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
     _fields_ = [
         (PVOID, 'MappedBase'),
         (PVOID, 'ImageBase'),
@@ -102,12 +105,12 @@ class _RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
     ]
 
 # XXX: These should probably be unions
-class _RTL_RUN_ONCE(pstruct.type, versioned):
+class RTL_RUN_ONCE(pstruct.type, versioned):
     _fields_ = [
         (P(ptype.undefined), 'Ptr'),
     ]
 
-class _RTL_SRWLOCK(pstruct.type, versioned):
+class RTL_SRWLOCK(pstruct.type, versioned):
     _fields_ = [
         (P(ptype.undefined), 'Ptr'),
     ]
