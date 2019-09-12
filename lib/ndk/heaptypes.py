@@ -223,26 +223,28 @@ if 'HeapEntry':
             (pint.uint32_t, 'Settable'),
         ]
 
-    class HEAP_ENTRY(pstruct.type, versioned):
-        class Flags(pbinary.flags):
-            _fields_ = [
-                (1, 'SETTABLE_FLAG3'),   # No Coalesce
-                (1, 'SETTABLE_FLAG2'),   # FFU2
-                (1, 'SETTABLE_FLAG1'),   # FFU1
-                (1, 'LAST_ENTRY'),
-                (1, 'VIRTUAL_ALLOC'),
-                (1, 'FILL_PATTERN'),
-                (1, 'EXTRA_PRESENT'),
-                (1, 'BUSY'),
-            ]
+    class HEAP_ENTRY_(pbinary.flags):
+        _fields_ = [
+            (1, 'SETTABLE_FLAG3'),   # No Coalesce
+            (1, 'SETTABLE_FLAG2'),   # FFU2
+            (1, 'SETTABLE_FLAG1'),   # FFU1
+            (1, 'LAST_ENTRY'),
+            (1, 'VIRTUAL_ALLOC'),
+            (1, 'FILL_PATTERN'),
+            (1, 'EXTRA_PRESENT'),
+            (1, 'BUSY'),
+        ]
 
+    class HEAP_ENTRY(pstruct.type, versioned):
         class UnusedBytes(pbinary.flags):
             def __init__(self, **attrs):
                 super(HEAP_ENTRY.UnusedBytes, self).__init__(**attrs)
                 f = self._fields_ = []
                 f.append((1, 'AllocatedByFrontend'))
+
+                # FIXME: These flags are wrong, and I don't think they're
+                #        different for 64-bit vs 32-bit
                 if getattr(self, 'WIN64', False):
-                    # FIXME: what the fuck do these flags mean?
                     f.extend([
                         (2, 'Unknown'),
                         (2, 'Busy'),
@@ -252,6 +254,7 @@ if 'HeapEntry':
                         (3, 'Unknown'),
                         (1, 'Busy'),
                     ])
+                # FIXME: This is wrong too and it needs to be figured out
                 f.append((3, 'Type'))
 
             def summary(self):
@@ -269,7 +272,7 @@ if 'HeapEntry':
                 #   (pint.uint16_t, 'Size'),
                 #   (pint.uint16_t, 'PreviousSize'),
                 #   (pint.uint8_t, 'SmallTagIndex'),
-                #   (HEAP_ENTRY.Flags, 'Flags'),
+                #   (HEAP_ENTRY_, 'Flags'),
                 #   (pint.uint8_t, 'UnusedBytes'),
                 #   (pint.uint8_t, 'SegmentIndex'),
                 #   (pint.uint8_t, 'SegmentOffset'),
@@ -278,7 +281,7 @@ if 'HeapEntry':
                     (pint.uint16_t, 'Size'),
                     (pint.uint16_t, 'PreviousSize'),
                     (pint.uint8_t, 'SegmentIndex'),
-                    (HEAP_ENTRY.Flags, 'Flags'),
+                    (HEAP_ENTRY_, 'Flags'),
                     (pint.uint8_t, 'Index'),
                     (pint.uint8_t, 'Mask'),
                 ])
@@ -286,7 +289,7 @@ if 'HeapEntry':
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 f.extend([
                     (pint.uint16_t, 'Size'),
-                    (HEAP_ENTRY.Flags, 'Flags'),
+                    (HEAP_ENTRY_, 'Flags'),
                     (pint.uint8_t, 'SmallTagIndex'),    # Checksum
                     (pint.uint16_t, 'PreviousSize'),
                     (pint.uint8_t, 'SegmentOffset'),    # Size // blocksize
@@ -297,6 +300,22 @@ if 'HeapEntry':
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
+        def Type(self):
+            res = self['UnusedBytes']
+            return res['Type']
+
+        def FrontEndQ(self):
+            res = self['UnusedBytes']
+            return bool(res['AllocatedByFrontend'])
+        def BackEndQ(self):
+            return not self.FrontEndQ()
+
+        def BusyQ(self):
+            res = self['UnusedBytes']
+            return bool(res['Busy'])
+        def FreeQ(self):
+            return not self.BusyQ()
+
         def summary(self):
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 res = "Size={:x} SmallTagIndex={:x} PreviousSize={:x} SegmentOffset={:x}"
@@ -306,50 +325,38 @@ if 'HeapEntry':
                 return ' : '.join(res)
             return super(HEAP_ENTRY, self).summary()
 
-        def properties(self):
-            res = super(HEAP_ENTRY, self).properties()
-            res['Encoded'] = False
-            return res
-
     class ENCODED_HEAP_ENTRY(ptype.encoded_t):
         '''
         This is the base class that all encoded HEAP_ENTRY types inherit from
         so that they all can have a similar interface.
         '''
+        _value_ = HEAP_ENTRY
 
-        @property
-        def _value_(self):
-            if getattr(self, 'WIN64', False):
-                # FIXME: this might not make sense for encoding/decoding
-                return dyn.array(pint.uint64_t, 2)
-            return dyn.array(pint.uint32_t, 2)
+        ## These are all the flags that are unencoded
+        def Type(self):
+            res = self.object
+            return res.Type()
 
         def FrontEndQ(self):
-            self = self.d.li
-            return bool(self['Flags']['AllocatedByFrontend'])
+            res = self.object
+            return res.FrontEndQ()
 
         def BackEndQ(self):
             # Back-to-Front(242)
-            return not self.FrontEndQ()
-
-        def Type(self):
-            self = self.d.li
-            return self['Flags']['Type']
+            res = self.object
+            return res.BackEndQ()
 
         def BusyQ(self):
             '''Returns whether the chunk is in use or not'''
-            self = self.d.li
-            return bool(self['Flags']['Busy'])
+            res = self.object
+            return res.BusyQ()
 
-        def properties(self):
-            res = super(ENCODED_HEAP_ENTRY, self).properties()
-            res['Encoded'] = True
-            return res
+        def FreeQ(self):
+            '''Returns whether the chunk is free or not'''
+            res = self.object
+            return res.FreeQ()
 
-        def classname(self):
-            return self.typename()
-        def repr(self):
-            return self.details()
+        ## If the user tries to access any field, look in the decoded version first
         def __getitem__(self, name):
             res = self.d.li
             return operator.getitem(res, name)
@@ -357,6 +364,11 @@ if 'HeapEntry':
             res = self.d.li
             return operator.setitem(res, name, value)
 
+        ## Output details that correspond to our decoded entry
+        def classname(self):
+            return self.typename()
+        def repr(self):
+            return self.details()
         def details(self):
             res = self.d.li.copy(offset=self.getoffset())
             return res.details()
@@ -498,11 +510,11 @@ if 'HeapEntry':
                     ])
                 return
 
-            def Encoded(self):
+            def EncodedValue(self):
                 res = self['Encoded'].int()
                 return res & 0xffffffffff
 
-            def EncodedUntouched(self):
+            def EncodedUntouchedValue(self):
                 res = self['Encoded'].int()
                 return res & ~0xffffffffff
 
@@ -531,14 +543,14 @@ if 'HeapEntry':
                     dn = self.getoffset()
                     dn ^= self._HEAP_ENTRY_Heap.getoffset()
                     dn >>= 4
-                    dn ^= object.Encoded()
+                    dn ^= object.EncodedValue()
                     dn ^= self._HEAP_ENTRY_LFHKey
                     dn <<= 4
-                    dn |= object.EncodedUntouched()
+                    dn |= object.EncodedUntouchedValue()
 
                 # Encode the 32-bit header
                 else:
-                    dn = object.Encoded()
+                    dn = object.EncodedValue()
                     dn = self.getoffset() >> 3
                     dn ^= self._HEAP_ENTRY_LFHKey
                     dn ^= self._HEAP_ENTRY_Heap.getoffset()
@@ -562,14 +574,14 @@ if 'HeapEntry':
                 dn = self.getoffset()
                 dn ^= self._HEAP_ENTRY_Heap.getoffset()
                 dn >>= 4
-                dn ^= object.Encoded()
+                dn ^= object.EncodedValue()
                 dn ^= self._HEAP_ENTRY_LFHKey
                 dn <<= 4
-                dn |= object.EncodedUntouched()
+                dn |= object.EncodedUntouchedValue()
 
             # Decode the 32-bit header
             else:
-                dn = object.Encoded()
+                dn = object.EncodedValue()
                 dn ^= self.getoffset() >> 3
                 dn ^= self._HEAP_ENTRY_LFHKey
                 dn ^= self._HEAP_ENTRY_Heap.getoffset()
