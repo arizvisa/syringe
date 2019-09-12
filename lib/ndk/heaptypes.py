@@ -355,7 +355,7 @@ if 'HeapEntry':
     class _ENCODED_HEAP_ENTRY(ptype.encoded_t):
         @property
         def _value_(self):
-            if getattr(self,'WIN64', False):
+            if getattr(self, 'WIN64', False):
                 # FIXME: this might not make sense for encoding/decoding
                 return dyn.array(pint.uint64_t, 2)
             return dyn.array(pint.uint32_t, 2)
@@ -499,6 +499,30 @@ if 'HeapEntry':
                 ])
         _object_ = _HEAP_ENTRY
 
+        class _value_(pstruct.type):
+            def __init__(self, **attrs):
+                super(_FRONTEND_HEAP_ENTRY._value_, self).__init__(**attrs)
+                f = self._fields_ = []
+                if getattr(self, 'WIN64', False):
+                    f.extend([
+                        (pint.uint64_t, 'Unencoded'),
+                        (pint.uint64_t, 'Encoded'),
+                    ])
+                else:
+                    f.extend([
+                        (pint.uint32_t, 'Encoded'),
+                        (pint.uint32_t, 'Unencoded'),
+                    ])
+                return
+
+            def Encoded(self):
+                res = self['Encoded'].int()
+                return res & 0xffffffffff
+
+            def EncodedUntouched(self):
+                res = self['Encoded'].int()
+                return res & ~0xffffffffff
+
         def __RtlpLFHKey(self):
             RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
             t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
@@ -506,6 +530,8 @@ if 'HeapEntry':
             return res.l.int()
 
         def encode(self, object, **attrs):
+
+            # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
                 try:
                     self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=_HEAP), self.__RtlpLFHKey()
@@ -513,44 +539,58 @@ if 'HeapEntry':
                     # FIXME: Log that this heap-entry is non-encoded due to inability to determine required keys
                     pass
 
-            if hasattr(self, '_HEAP_ENTRY_LFHKey'):
+            # If we were able to find the LFHKey, then use it to encode our object
+            if hasattr(self, "_HEAP_ENTRY_{:s}".format('LFHKey')):
+
+                # Now to encode our 64-bit header
                 if getattr(self, 'WIN64', False):
-                    mask = 0xffffffffff
-                    dn = (self.getoffset() ^ self._HEAP_ENTRY_Heap.getoffset()) >> 4
-                    dn ^= object[1].int() & mask
+                    dn = self.getoffset()
+                    dn ^= self._HEAP_ENTRY_Heap.getoffset()
+                    dn >>= 4
+                    dn ^= object.Encoded()
                     dn ^= self._HEAP_ENTRY_LFHKey
                     dn <<= 4
-                    d = pint.uint64_t().set(dn | (object[1].int() & ~mask))
-                    return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=object[0].size()+d.size()).set(object[0].serialize()+d.serialize()))
+                    dn |= object.EncodedUntouched()
 
-                dn = self._HEAP_ENTRY_Heap.getoffset()
-                dn ^= self._HEAP_ENTRY_LFHKey
-                dn ^= object[0].int()
-                dn ^= self.getoffset()
-                d = pint.uint32_t().set(dn)
-                return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=d.size()+object[1].size()).set(d.serialize()+object[1].serialize()))
+                # Encode the 32-bit header
+                else:
+                    dn = object.Encoded()
+                    dn = self.getoffset() >> 3
+                    dn ^= self._HEAP_ENTRY_LFHKey
+                    dn ^= self._HEAP_ENTRY_Heap.getoffset()
+
+                res = object.copy().set(Encoded=dn)
+                return super(_FRONTEND_HEAP_ENTRY, self).decode(res)
+
+            # FIXME: We should probably throw an exception here since the header
+            #        is _required_ to be encoded.
             return super(_FRONTEND_HEAP_ENTRY,self).encode(object)
 
         def decode(self, object, **attrs):
-            # cache some attributes
+
+            # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
                 self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=_HEAP), self.__RtlpLFHKey()
 
+            # Now we can decode our 64-bit header
             if getattr(self, 'WIN64', False):
-                mask = 0xffffffffff
-                dn = (self.getoffset() ^ self._HEAP_ENTRY_Heap.getoffset()) >> 4
-                dn ^= object[1].int() & mask
+                dn = self.getoffset()
+                dn ^= self._HEAP_ENTRY_Heap.getoffset()
+                dn >>= 4
+                dn ^= object.Encoded()
                 dn ^= self._HEAP_ENTRY_LFHKey
                 dn <<= 4
-                d = pint.uint64_t().set(dn | (object[1].int() & ~mask))
-                return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=object[0].size() + d.size()).set(object[0].serialize() + d.serialize()))
+                dn |= object.EncodedUntouched()
 
-            dn = self.getoffset() >> 3
-            dn ^= object[0].int()
-            dn ^= self._HEAP_ENTRY_LFHKey
-            dn ^= self._HEAP_ENTRY_Heap.getoffset()
-            d = pint.uint32_t().set(dn)
-            return super(_FRONTEND_HEAP_ENTRY, self).decode(ptype.block(length=d.size() + object[1].size()).set(d.serialize() + object[1].serialize()))
+            # Decode the 32-bit header
+            else:
+                dn = object.Encoded()
+                dn ^= self.getoffset() >> 3
+                dn ^= self._HEAP_ENTRY_LFHKey
+                dn ^= self._HEAP_ENTRY_Heap.getoffset()
+
+            res = object.copy().set(Encoded=dn)
+            return super(_FRONTEND_HEAP_ENTRY, self).decode(res)
 
         def summary(self):
             # FIXME: log a warning suggesting that the flags are incorrect
