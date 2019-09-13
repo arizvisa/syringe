@@ -258,16 +258,16 @@ class SLIST_ENTRY(fpointer_t):
         if self._sentinel_ is None:
             sentinel = {0}
         elif hasattr(self._sentinel_, '__iter__'):
-            sentinel = set(self._sentinel_)
+            sentinel = {item for item in self._sentinel_}
         else:
             sentinel = {self._sentinel_}
 
-        n = self
-        while n.int() not in sentinel:
-            result = n.d
+        item = self
+        while item.int() not in sentinel:
+            result = item.d
             yield result.l
-            n = self.__walk_nextentry(result, iter(self._path_))
-            if n.int() == 0: break
+            item = self.__walk_nextentry(result, iter(self._path_))
+            if item.int() == 0: break
         return
 
 SLIST_ENTRY._object_ = SLIST_ENTRY
@@ -275,25 +275,25 @@ SLIST_ENTRY._path_ = ()
 
 class SLIST_HEADER(pstruct.type, versioned):
     def __Next(self):
-        p = getattr(self, '_path_', SLIST_ENTRY._path_)
-        o = getattr(self, '_object_', SLIST_ENTRY._object_)
-        return dyn.clone(SLIST_ENTRY, _path_=p, _object_=o)
+        path = getattr(self, '_path_', SLIST_ENTRY._path_)
+        target = getattr(self, '_object_', SLIST_ENTRY._object_)
+        return dyn.clone(SLIST_ENTRY, _path_=path, _object_=target)
 
     def __init__(self, **attrs):
         super(SLIST_HEADER, self).__init__(**attrs)
         f = self._fields_ = []
 
+        # HeaderX64
         if getattr(self, 'WIN64', False):
             f.extend([
-                (dyn.align(16), 'Alignment'),
                 (pint.uint16_t, 'Depth'),
-                (pint.uint16_t, 'Sequence'),
-                (dyn.block(4), 'Padding(Depth+Sequence)'),
+                (dyn.clone(pint.uint_t, length=6), 'Sequence'),
                 (self.__Next, 'Next'),
             ])
+
+        # DUMMYSTRUCTNAME
         else:
             f.extend([
-                (dyn.align(4), 'Alignment'),
                 (self.__Next, 'Next'),
                 (pint.uint16_t, 'Depth'),
                 (pint.uint16_t, 'Sequence'),
@@ -305,13 +305,12 @@ class SLIST_HEADER(pstruct.type, versioned):
 ## Doubly-linked list
 class LIST_ENTRY(pstruct.type):
     _fields_ = [
-        (lambda s: s._object_, 'Flink'),
-        (lambda s: s._object_, 'Blink'),
+        (lambda self: self._object_, 'Flink'),
+        (lambda self: self._object_, 'Blink'),
     ]
-    flink, blink = 'Flink', 'Blink'
-    _object_ = None
     _path_ = ()
-    _sentinel_ = None
+    flink, blink = 'Flink', 'Blink'
+    _object_ = _sentinel_ = None
 
     def __init__(self, **attrs):
         super(LIST_ENTRY, self).__init__(**attrs)
@@ -320,7 +319,7 @@ class LIST_ENTRY(pstruct.type):
             raise AssertionError('{:s}._object_ is not a valid pointer'.format( '.'.join((self.__module__, cls.__name__)) ))
 
     def summary(self):
-        return '<->'.join(('f:'+hex(self['Flink'].int()), 'b:'+hex(self['Blink'].int())))
+        return "F:{:#x}<->B:{:#x}".format(self['Flink'].int(), self['Blink'].int())
 
     def forward(self):
         if self[self.flink].int() == self._sentinel_:
@@ -341,22 +340,21 @@ class LIST_ENTRY(pstruct.type):
 
     def walk(self, direction=flink):
         '''Walks through a circular linked list'''
-        n = self[direction]
-
         if self._sentinel_ is None:
             sentinel = {self.getoffset()}
         elif isinstance(self._sentinel_, basestring):
             sentinel = {self[self._sentinel_].int()}
         elif hasattr(self._sentinel_, '__iter__'):
-            sentinel = set(self._sentinel_)
+            sentinel = {item for item in self._sentinel_}
         else:
             sentinel = {self._sentinel_}
 
-        while n.int() != 0 and n.int() not in sentinel:
-            result = n.d
+        item = self[direction]
+        while item.int() != 0 and item.int() not in sentinel:
+            result = item.d
             yield result.l
-            n = self.__walk_nextentry(result, iter(self._path_))
-            n = n[direction]
+            item = self.__walk_nextentry(result, iter(self._path_))
+            item = item[direction]
         return
 
     def moonwalk(self):
