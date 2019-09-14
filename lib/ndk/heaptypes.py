@@ -309,6 +309,11 @@ if 'HeapEntry':
             res = self.Flags()
             return res['Type']
 
+        def Unused(self):
+            # Since this is just a regular HEAP_ENTRY, there's no way to
+            # determine any unused bytes. So just return 0
+            return 0
+
         def FrontEndQ(self):
             res = self.Flags()
             return bool(res['AllocatedByFrontend'])
@@ -353,9 +358,6 @@ if 'HeapEntry':
         def details(self):
             res = self.d.li.copy(offset=self.getoffset())
             return res.details()
-        def Type(self):
-            res = self.object
-            return res.Type()
         def summary(self):
             if self.FrontEndQ():
                 res = self.serialize()
@@ -365,25 +367,40 @@ if 'HeapEntry':
             return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex'), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
 
         ## Unencoded flags grabbed from the original HEAP_ENTRY
+        def Flags(self):
+            res = self.d.li
+            return res.Flags()
+
+        def Type(self):
+            res = self.object
+            return res.Type()
+
         def FrontEndQ(self):
-            res = self.d if self.d.initializedQ() else self.object
+            res = self.object
             return res.FrontEndQ()
 
         def BackEndQ(self):
             # Back-to-Front(242)
-            res = self.d if self.d.initializedQ() else self.object
+            res = self.object
             return res.BackEndQ()
 
         def BusyQ(self):
             '''Returns whether the chunk (decoded) is in use or not'''
             # XXX: optimize by checking FrontEndQ which requires decoding
-            res = self.d
+            res = self.d.li
             return res.BusyQ()
+
         def FreeQ(self):
             '''Returns whether the chunk (decoded) is free or not'''
             # XXX: optimize by checking FrontEndQ which requires decoding
-            res = self.d
+            res = self.d.li
             return res.FreeQ()
+
+        def Unused(self):
+            res = self.object
+            if res.BackEndQ():
+                return 0
+            return res.Flags().int() & 0x3f
 
         ## Backend
         class __BE_HEAP_ENTRY(HEAP_ENTRY):
@@ -399,6 +416,11 @@ if 'HeapEntry':
 
             def Flags(self):
                 return self['Flags']
+
+            def Unused(self):
+                # The backend allocator doesn't give us any information on
+                # the unused bytes, so return 0 here.
+                return 0
 
             def __init__(self, **attrs):
                 return super(HEAP_ENTRY, self).__init__(**attrs)
@@ -471,12 +493,29 @@ if 'HeapEntry':
             chk = reduce(operator.xor, data[:3], 0)
             return chk == res['Checksum'].int()
 
+        def Size(self):
+            '''Return the decoded Size field'''
+            if not self.BackEndQ():
+                raise error.InvalidHeapType(self, 'Size')
+            self = self.d.li
+            bs = 16 if getattr(self, 'WIN64', False) else 8
+            return bs * self['Size'].int()
+
+        def PreviousSize(self):
+            '''Return the decoded PreviousSize field'''
+            if not self.BackEndQ():
+                raise error.InvalidHeapType(self, 'Size')
+            self = self.d.li
+            bs = 16 if getattr(self, 'WIN64', False) else 8
+            return bs * self['PreviousSize'].int()
+
         ## Frontend
         class __FE_HEAP_ENTRY(HEAP_ENTRY):
             '''HEAP_ENTRY after decoding'''
             class UnusedBytes(HEAP_ENTRY.UnusedBytes):
-                # XXX: I think one of these bits is for RtlpLogHeapFailure
-                #      because RtlpAllocateHeap &s with 0x3f
+                # XXX: I think one of these bits (Unknown) is for
+                #      RtlpLogHeapFailure because this byte is &'d
+                #      by RtlpAllocateHeap with 0x3f...
                 _fields_ = [
                     (1, 'AllocatedByFrontend'),
                     (2, 'Unknown'),
@@ -506,6 +545,10 @@ if 'HeapEntry':
             def BusyQ(self):
                 res = self.Flags()
                 return bool(res['Unused'])
+
+            def Unused(self):
+                res = self.Flags()
+                return res['Unused']
 
             def __init__(self, **attrs):
                 return super(HEAP_ENTRY, self).__init__(**attrs)
@@ -614,20 +657,20 @@ if 'HeapEntry':
         def EntryOffsetQ(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'EntryOffsetQ', message='Unable to query the entry-offset for a non-frontend type')
-            res = self.d
+            res = self.d.li
             return bool(res['EntryOffset'].int())
 
         def EntryOffset(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'EntryOffset', message='Unable to fetch the entry-offset for a non-frontend type')
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            res = self.d
+            res = self.d.li
             return res['EntryOffset'].int() * blocksize
 
         def SubSegment(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'SubSegment', message='Unable to dereference the subsegment for a non-frontend type')
-            header = self.d
+            header = self.d.li
             return header['SubSegment'].d
 
         ## encoded_t properties/methods
@@ -671,22 +714,6 @@ if 'HeapEntry':
             if res.initializedQ():
                 return res.summary()
             return super(_HEAP_ENTRY, self).summary()
-
-        def Size(self):
-            '''Return the decoded Size field'''
-            if not self.BackEndQ():
-                raise error.InvalidHeapType(self, 'Size')
-            self = self.d.li
-            bs = 16 if getattr(self, 'WIN64', False) else 8
-            return self['Size'].int() * bs
-
-        def PreviousSize(self):
-            '''Return the decoded PreviousSize field'''
-            if not self.BackEndQ():
-                raise error.InvalidHeapType(self, 'Size')
-            self = self.d.li
-            bs = 16 if getattr(self, 'WIN64', False) else 8
-            return self['PreviousSize'].int() * bs
 
     class ENCODED_POINTER(PVOID):
         '''
@@ -742,96 +769,116 @@ if 'HeapChunk':
         backend heap.
         '''
         def __ListEntry(self):
-            res = self['Header'].li
-            if self.BackEndQ() and not res.object.BusyQ():
+            header = self['Header'].li
+
+            # Use the backing object here to check the busy flag since there's
+            # really no need to decode anything when loading
+            if header.BackEndQ() and not header.object.BusyQ():
                 return dyn.clone(LIST_ENTRY, _object_=fptr(self.__class__, 'ListEntry'), _path_=('ListEntry',))
+
             return ptype.undefined
 
         def __ChunkFreeEntryOffset(self):
-            res = self['Header'].li
-            if self.FrontEndQ():
+            header = self['Header'].li
+            if header.FrontEndQ():
                 if not hasattr(self, '_FrontEndHeapType'):
                     heap = self.getparent(type=HEAP)
                     self._FrontEndHeapType = heap['FrontEndHeapType'].li.int()
 
+                # Use the backing object here to grab the UnusedBytes field
+                # since it doesn't need to be decoded in order to determine
+                # whether the frontend is actually using the chunk or not.
+                unusedBytes = header.object['UnusedBytes']
                 if self._FrontEndHeapType == 2:
-                    # XXX: some way to optimize this?
-                    res.d.li
-                    return pint.uint_t if self.BusyQ() else pint.uint16_t
+                    return pint.uint_t if unusedBytes.int() & 0x3f else pint.uint16_t
+
                 raise error.InvalidHeapType(self, '__ChunkFreeEntryOffset', heap=self.getparent(HEAP), FrontEndHeapType=self._FrontEndHeapType)
             return pint.uint_t
 
         def __Data(self):
-            res = self['Header'].li
-            size = self.blocksize() if res.FrontEndQ() else self['Header'].Size()
-            res = sum(self[fld].li.size() for fld in ['Header', 'ListEntry', 'ChunkFreeEntryOffset'])
+            header = self['Header'].li
+
+            # Grab the heap type from the header's backing type since it's only
+            # a single unencoded bit that distinguishes between how the sizes
+            # are calculated
+            if header.FrontEndQ():
+                size = self.blocksize()
+
+            else:
+                size = header.Size()
+
+            res = header.Unused() + sum(self[fld].li.size() for fld in ['Header', 'ListEntry', 'ChunkFreeEntryOffset'])
             return dyn.block(max({0, size - res}))
 
-        def properties(self):
-            res = super(_HEAP_CHUNK, self).properties()
-            types = {0: 'Chunk', 1: 'Segment', 5: 'Linked'}
-            if self.initializedQ():
-                res['Busy'] = self.BusyQ()
-                if self.FrontEndQ():
-                    res['Type'] = 'FE'
-                    return res
-
-                t = self['Header'].Type()
-                res['Type'] = types.get(t, t)
-            return res
+        def __Unused(self):
+            header = self['Header'].li
+            if header.FrontEndQ():
+                return dyn.block(header.Unused())
+            return dyn.block(0)
 
         _fields_ = [
             (_HEAP_ENTRY, 'Header'),
             (__ListEntry, 'ListEntry'),
             (__ChunkFreeEntryOffset, 'ChunkFreeEntryOffset'),
             (__Data, 'Data'),
+            (__Unused, 'Unused'),
         ]
 
         def BusyQ(self):
             return self['Header'].BusyQ()
         def FreeQ(self):
             return self['Header'].FreeQ()
-        def FrontEndQ(self):
-            return self['Header'].FrontEndQ()
-        def BackEndQ(self):
-            return self['Header'].BackEndQ()
+
+        def properties(self):
+            res = super(_HEAP_CHUNK, self).properties()
+            if self.initializedQ():
+                header = self['Header']
+                res['Busy'] = header.BusyQ()
+                if header.FrontEndQ():
+                    res['Type'] = 'FE'
+                    return res
+
+                # FIXME: We can just use t.str() here
+                t = header.Type()
+                res['Type'] = {0: 'Chunk', 1: 'Segment', 5: 'Linked'}.get(t, t)
+            return res
 
         def next(self):
-            cls = self.__class__
-            if not self.BackEndQ():
-                raise error.InvalidHeapType(self, 'next', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            if self['Header'].Type() != 0:
-                raise error.IncorrectChunkType(self, 'next', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), Type=self['Header'].Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            cls, header = self.__class__, self['Header']
+            if not header.BackEndQ():
+                raise error.InvalidHeapType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            if header.Type() != 0:
+                raise error.IncorrectChunkType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(HEAP)
             return parent.new(cls, offset=self.getoffset() + self['Header'].Size())
 
         def previous(self):
-            cls = self.__class__
-            if not self.BackEndQ():
-                raise error.InvalidHeapType(self, 'previous', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            if self['Header'].Type() != 0:
-                raise error.IncorrectChunkType(self, 'previous', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), Type=self['Header'].Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            cls, header = self.__class__, self['Header']
+            if not header.BackEndQ():
+                raise error.InvalidHeapType(self, 'previous', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            if header.Type() != 0:
+                raise error.IncorrectChunkType(self, 'previous', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(HEAP)
-            return parent.new(cls, offset=self.getoffset() - self['Header'].PreviousSize())
+            return parent.new(cls, offset=self.getoffset() - header.PreviousSize())
         prev = previous
 
         def nextfree(self):
             '''Walk to the next entry in the free-list'''
-            cls = self.__class__
-            if not self.BackEndQ():
-                raise error.InvalidHeapType(self, 'nextfree', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            cls, header = self.__class__, self['Header']
+            if not header.BackEndQ():
+                raise error.InvalidHeapType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             if self['Header'].Type() != 0:
-                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), Type=self['Header'].Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Flink'].d.l
 
         def previousfree(self):
             '''Moonwalk to the previous entry in the free-list'''
-            cls = self.__class__
-            if not self.BackEndQ():
-                raise error.InvalidHeapType(self, 'previousfree', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            cls, header = self.__class__, self['Header']
+            if not header.BackEndQ():
+                raise error.InvalidHeapType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             if self['Header'].Type() != 0:
-                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=self.BackEndQ(), BusyQ=self['Header'].BusyQ(), Type=self['Header'].Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Blink'].d.l
         prevfree = previousfree
@@ -984,13 +1031,6 @@ if 'LFH':
         ]
 
     class HEAP_USERDATA_HEADER(pstruct.type):
-        def __Blocks(self):
-            Q = 0x10 if getattr(self, 'WIN64', False) else 8
-            ss = self['SubSegment'].li.d.l
-            bs = ss['BlockSize'].int() * Q
-            t = dyn.clone(_HEAP_CHUNK, blocksize=lambda s, bs=bs: bs)
-            return dyn.array(t, ss['BlockCount'].int())
-
         def ByOffset(self, entryoffset):
             '''Return the field at the specified `entryoffset`.'''
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
@@ -1031,23 +1071,20 @@ if 'LFH':
                 res = ptypes.bitmap.push(res, (int(block['Header'].BusyQ()), 1))
             return res
 
-        def __init__(self, **attrs):
-            super(HEAP_USERDATA_HEADER, self).__init__(**attrs)
-            f = self._fields_ = []
+        def __Blocks(self):
+            pss = self['SubSegment'].li
+            ss = pss.d.li
+            block = ss['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
+            chunk = dyn.clone(_HEAP_CHUNK, blocksize=lambda s, bs=block: bs)
+            return dyn.array(chunk, ss['BlockCount'].int())
 
-            # FIXME: NTDDI_WIN8 changes this structure entirely
-            f.extend([
-                (P(HEAP_SUBSEGMENT), 'SubSegment'),
-                (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),    # FIXME: figure out what this actually points to
-                (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
-                (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Signature'),
-                (lambda s: s.__Blocks(), 'Blocks'),
-
-            #    (pint.uint16_t, 'FirstAllocationOffset'),
-            #    (pint.uint16_t, 'BlockStride'),
-            #    (rtltypes.RTL_BITMAP, 'BusyBitmap'),
-            #    (ULONG, 'BitmapData'),
-            ])
+        _fields_ = [
+            (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
+            (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),    # FIXME: figure out what this actually points to
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Signature'),
+            (__Blocks, 'Blocks'),
+        ]
 
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
 
