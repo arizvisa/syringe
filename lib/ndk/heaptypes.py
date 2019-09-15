@@ -309,9 +309,9 @@ if 'HeapEntry':
             res = self.Flags()
             return res['Type']
 
-        def Unused(self):
+        def Extra(self):
             # Since this is just a regular HEAP_ENTRY, there's no way to
-            # determine any unused bytes. So just return 0
+            # determine any extra bytes. So just return 0
             return 0
 
         def FrontEndQ(self):
@@ -396,10 +396,11 @@ if 'HeapEntry':
             res = self.d.li
             return res.FreeQ()
 
-        def Unused(self):
+        def Extra(self):
             res = self.object
             if res.BackEndQ():
                 return 0
+            # FIXME
             return res.Flags().int() & 0x3f
 
         ## Backend
@@ -417,9 +418,9 @@ if 'HeapEntry':
             def Flags(self):
                 return self['Flags']
 
-            def Unused(self):
-                # The backend allocator doesn't give us any information on
-                # the unused bytes, so return 0 here.
+            def Extra(self):
+                # The backend allocator doesn't support the concept of having
+                # extra bytes, so return 0 here.
                 return 0
 
             def __init__(self, **attrs):
@@ -453,7 +454,7 @@ if 'HeapEntry':
             # If HEAP.EncodeFlagMask has been set to something, then we'll just use it
             if self._HEAP_ENTRY_EncodeFlagMask:
                 iterable = (ptypes.bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
-                data = object['Unencoded'].serialize() + reduce(operator. add, iterable)
+                data = object['Unencoded'].serialize() + reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).encode(res)
             return super(_HEAP_ENTRY, self).encode(object)
@@ -487,11 +488,11 @@ if 'HeapEntry':
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) != sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 raise error.IncorrectChunkVersion(self, 'ChecksumQ', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
 
-            # FIXME: this checksum calculation is busted
-            res = self.d.li
-            data = map(six.byte2int, res.serialize())
+            # Calculate checksum (a^9^8 == b)
+            res = self.d.li.cast(self._BE_Encoded)
+            data = map(six.byte2int, res['Encoded'].serialize())
             chk = reduce(operator.xor, data[:3], 0)
-            return chk == res['Checksum'].int()
+            return chk == data[3]
 
         def Size(self):
             '''Return the decoded Size field'''
@@ -518,21 +519,25 @@ if 'HeapEntry':
                 #      by RtlpAllocateHeap with 0x3f...
                 _fields_ = [
                     (1, 'AllocatedByFrontend'),
-                    (2, 'Unknown'),
-                    (5, 'Unused'),
+                    (1, 'LogFailure'),
+                    (2, 'Reserved'),
+                    (4, 'Busy'),
                 ]
                 def BusyQ(self):
-                    return bool(self['Unused'])
+                    return bool(self['Busy'])
                 def FreeQ(self):
                     return not self.BusyQ()
+
+                def Extra(self):
+                    return 0x10 - (self['Busy'] or 0x10)
 
                 def summary(self):
                     frontend = 'FE' if self.FrontEndQ() else 'BE'
                     busy = 'BUSY' if self.BusyQ() else 'FREE'
-                    return "{:s} {:s} Unused:{:d}".format(frontend, busy, self['Unused'])
+                    return "{:s} {:s} Extra:{:+x}".format(frontend, busy, self.Extra())
 
             _fields_ = [
-                (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
+                (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
                 (lambda self: dyn.clone(PHEAP_SUBSEGMENT, _value_=PVALUE32), 'SubSegment'),
                 (pint.uint16_t, 'Unknown'),
                 (pint.uint8_t, 'EntryOffset'),
@@ -544,11 +549,11 @@ if 'HeapEntry':
 
             def BusyQ(self):
                 res = self.Flags()
-                return bool(res['Unused'])
+                return res.BusyQ()
 
-            def Unused(self):
+            def Extra(self):
                 res = self.Flags()
-                return res['Unused']
+                return res.Extra()
 
             def __init__(self, **attrs):
                 return super(HEAP_ENTRY, self).__init__(**attrs)
@@ -769,30 +774,37 @@ if 'HeapChunk':
         backend heap.
         '''
         def __ListEntry(self):
-            header = self['Header'].li
+
+            # If we have a .__SubSegment__ attribute, then this is a frontend
+            # chunk and this there's no linked-list for any free'd chunks.
+            if hasattr(self, '__SubSegment__'):
+                return ptype.undefined
 
             # Use the backing object here to check the busy flag since there's
             # really no need to decode anything when loading
-            if header.BackEndQ() and not header.object.BusyQ():
+            header = self['Header'].li
+            if header.object.FreeQ():
                 return dyn.clone(LIST_ENTRY, _object_=fptr(self.__class__, 'ListEntry'), _path_=('ListEntry',))
 
+            # No linked-list as the chunk is busy
             return ptype.undefined
 
         def __ChunkFreeEntryOffset(self):
-            header = self['Header'].li
-            if header.FrontEndQ():
-                if not hasattr(self, '_FrontEndHeapType'):
-                    heap = self.getparent(type=HEAP)
-                    self._FrontEndHeapType = heap['FrontEndHeapType'].li.int()
+
+            # If we have a .__SubSegment__ attribute, then this should
+            # definitely be a front-end chunk, and so we need to check
+            # if it's in-use or not.
+            if hasattr(self, '__SubSegment__'):
+                header = self['Header'].li
 
                 # Use the backing object here to grab the UnusedBytes field
                 # since it doesn't need to be decoded in order to determine
                 # whether the frontend is actually using the chunk or not.
                 unusedBytes = header.object['UnusedBytes']
-                if self._FrontEndHeapType == 2:
-                    return pint.uint_t if unusedBytes.int() & 0x3f else pint.uint16_t
+                return pint.uint_t if unusedBytes.int() & 0x0f else pint.uint16_t
 
-                raise error.InvalidHeapType(self, '__ChunkFreeEntryOffset', heap=self.getparent(HEAP), FrontEndHeapType=self._FrontEndHeapType)
+            # Backend heap doesn't use a chunk offset, so just return an
+            # unsized integer.
             return pint.uint_t
 
         def __Data(self):
@@ -801,27 +813,21 @@ if 'HeapChunk':
             # Grab the heap type from the header's backing type since it's only
             # a single unencoded bit that distinguishes between how the sizes
             # are calculated
-            if header.FrontEndQ():
-                size = self.blocksize()
+            if hasattr(self, '__SubSegment__'):
+                ss = self.__SubSegment__
+                size = ss['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
 
             else:
                 size = header.Size()
 
-            res = header.Unused() + sum(self[fld].li.size() for fld in ['Header', 'ListEntry', 'ChunkFreeEntryOffset'])
+            res = sum(self[fld].li.size() for fld in ['Header', 'ListEntry', 'ChunkFreeEntryOffset'])
             return dyn.block(max({0, size - res}))
-
-        def __Unused(self):
-            header = self['Header'].li
-            if header.FrontEndQ():
-                return dyn.block(header.Unused())
-            return dyn.block(0)
 
         _fields_ = [
             (_HEAP_ENTRY, 'Header'),
             (__ListEntry, 'ListEntry'),
             (__ChunkFreeEntryOffset, 'ChunkFreeEntryOffset'),
             (__Data, 'Data'),
-            (__Unused, 'Unused'),
         ]
 
         def BusyQ(self):
@@ -863,7 +869,7 @@ if 'HeapChunk':
         prev = previous
 
         def nextfree(self):
-            '''Walk to the next entry in the free-list'''
+            '''Walk to the next entry in the free-list (recent)'''
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
@@ -873,7 +879,7 @@ if 'HeapChunk':
             return link['Flink'].d.l
 
         def previousfree(self):
-            '''Moonwalk to the previous entry in the free-list'''
+            '''Moonwalk to the previous entry in the free-list (recent)'''
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
@@ -964,7 +970,6 @@ if 'LookasideList':
     @FrontEndHeap.define
     class LAL(parray.type):
         type = 1
-        attributes = {'_FrontEndHeapType': type}
 
         class _object_(pstruct.type):
             _fields_ = [
@@ -1053,7 +1058,7 @@ if 'LFH':
 
         def NextIndex(self):
             '''Return the next UserBlock index that will be allocated from this structure's segment'''
-            ss = self['SubSegment'].d.l
+            ss = self['SubSegment'].d.li
             return ss.FreeEntryBlockIndex()
         def NextBlock(self):
             '''Return the next block that will be allocated from this structure's segment'''
@@ -1074,8 +1079,10 @@ if 'LFH':
         def __Blocks(self):
             pss = self['SubSegment'].li
             ss = pss.d.li
-            block = ss['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
-            chunk = dyn.clone(_HEAP_CHUNK, blocksize=lambda s, bs=block: bs)
+
+            # Copy the SubSegment as a hidden attribute so that the
+            # chunk can quickly lookup what it's related to.
+            chunk = dyn.clone(_HEAP_CHUNK, __SubSegment__=ss)
             return dyn.array(chunk, ss['BlockCount'].int())
 
         _fields_ = [
@@ -1087,6 +1094,44 @@ if 'LFH':
         ]
 
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
+        def __init__(self, **attrs):
+            super(HEAP_LOCAL_SEGMENT_INFO, self).__init__(**attrs)
+            f = self._fields_ = []
+            integral = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+
+            # FIXME NTDDI_WIN8 changes the order of these
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
+                f.extend([
+                    (P(HEAP_SUBSEGMENT), 'Hint'),
+                    (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
+                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),
+                    (SLIST_HEADER, 'SListHeader'),
+                    (HEAP_BUCKET_COUNTERS, 'Counters'),
+                    (P(HEAP_LOCAL_DATA), 'LocalData'),
+                    (ULONG, 'LastOpSequence'),
+                    (USHORT, 'BucketIndex'),
+                    (USHORT, 'LastUsed'),
+                    (integral, 'Reserved'),         # FIXME: Is this right?
+                ])
+
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
+                f.extend([
+                    (P(HEAP_LOCAL_DATA), 'LocalData'),
+                    (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
+                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),
+                    (SLIST_HEADER, 'SListHeader'),
+                    (HEAP_BUCKET_COUNTERS, 'Counters'),
+                    (ULONG, 'LastOpSequence'),
+                    (USHORT, 'BucketIndex'),
+                    (USHORT, 'LastUsed'),
+                    (USHORT, 'NoThrashCount'),
+
+                    (USHORT, 'Reserved'),           # XXX: added manually
+                    (dyn.block(0xc if getattr(self, 'WIN64', False) else 4), 'unknown'), # XXX: there's got to be another field here
+                ])
+
+            else:
+                raise error.NdkUnsupportedVersion(self)
 
         def Bucket(self):
             '''Return the LFH bin associated with the current HEAP_LOCAL_SEGMENT_INFO'''
@@ -1110,44 +1155,12 @@ if 'LFH':
                 return self['ActiveSubSegment'].d
             raise error.MissingSegmentException(self, 'Segment', heap=self.getparent(HEAP), localdata=self.getparent(HEAP_LOCAL_DATA))
 
-        def __init__(self, **attrs):
-            super(HEAP_LOCAL_SEGMENT_INFO, self).__init__(**attrs)
-            f = self._fields_ = []
-            integral = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-
-            # FIXME NTDDI_WIN8 changes the order of these
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
-                f.extend([
-                    (P(HEAP_SUBSEGMENT), 'Hint'),
-                    (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),
-                    (SLIST_HEADER, 'SListHeader'),
-                    (HEAP_BUCKET_COUNTERS, 'Counters'),
-                    (P(HEAP_LOCAL_DATA), 'LocalData'),
-                    (ULONG, 'LastOpSequence'),
-                    (USHORT, 'BucketIndex'),
-                    (USHORT, 'LastUsed'),    # FIXME: Does this point into CachedItems?
-                    (integral, 'Reserved'),         # FIXME: Is this right?
-                ])
-
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
-                f.extend([
-                    (P(HEAP_LOCAL_DATA), 'LocalData'),
-                    (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),
-                    (SLIST_HEADER, 'SListHeader'),
-                    (HEAP_BUCKET_COUNTERS, 'Counters'),
-                    (ULONG, 'LastOpSequence'),
-                    (USHORT, 'BucketIndex'),
-                    (USHORT, 'LastUsed'),
-                    (USHORT, 'NoThrashCount'),
-
-                    (USHORT, 'Reserved'),           # XXX: added manually
-                    (dyn.block(0xc if getattr(self, 'WIN64', False) else 4), 'unknown'), # XXX: there's got to be another field here
-                ])
-
-            else:
-                raise error.NdkUnsupportedVersion(self)
+        def LastSegment(self):
+            '''
+            Return the last-used HEAP_SUBSEGMENT from the cache.
+            '''
+            res = self['LastUsed']
+            return self['CachedItems'][res.int()].d
 
     class LFH_BLOCK_ZONE(pstruct.type):
         def __init__(self, **attrs):
@@ -1257,7 +1270,7 @@ if 'LFH':
         def NextFreeBlock(self):
             '''Return the next block HeapAllocate will return for the current segment.'''
             index = self.FreeEntryBlockIndex()
-            ub = self['UserBlocks'].d.l
+            ub = self['UserBlocks'].d.li
             return ub['Blocks'][index]
 
         def UsedBlockCount(self):
@@ -1268,7 +1281,7 @@ if 'LFH':
             return self['AggregateExchg']['Depth'].int()
         def UsageString(self):
             '''Return a binary string showing the busy/free chunks that are available within `UserBlocks`'''
-            ub = self['UserBlocks'].d.l
+            ub = self['UserBlocks'].d.li
             res = ub.UsageBitmap()
             return ptypes.bitmap.string(res)
         Usage = UsageString
@@ -1375,12 +1388,11 @@ if 'LFH':
     @FrontEndHeap.define
     class LFH_HEAP(pstruct.type, versioned):
         type = 2
-        attributes = {'_FrontEndHeapType': type}
 
         # FIXME: Figure out how caching in 'UserBlockCache' works
 
-        # FIXME: Figure out why HEAP_LOCAL_DATA is defined as an array in all LFH material
-        #        but only referenced as a single-element array
+        # FIXME: Figure out why HEAP_LOCAL_DATA is defined as an array in all
+        #        LFH material but only gets referenced as a single-element.
 
         def __SizeIndex(self, size):
             '''Return the size index when given a ``size``'''
@@ -1586,7 +1598,7 @@ if 'Heap':
             return
 
         def __HeapList(self, blockindex):
-            '''Return the correct HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / blocksize)''' # FIXME
+            '''Return the correct (recent) HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / blocksize)'''
             if not self['FrontEndHeapType']['LFH']:
                 raise error.IncorrectHeapType(self, '__HeapList', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             p = self['BlocksIndex'].d.l
@@ -1601,7 +1613,7 @@ if 'Heap':
             entry = self.ListHint(size)
             if entry['Blink'].int() == 0:
                 raise error.NotFoundException(self, 'Bucket', message="Unable to find a Bucket for the requested size ({:#x})".format(size), entry=entry, size=size)
-            return entry['Blink'].d.l
+            return entry['Blink'].d.li
 
         def ListHint(self, size):
             '''Return the ListHint according to the specified ``size``'''
@@ -1771,7 +1783,7 @@ if 'Heap':
             return self['ArraySize'].li.int() - self['BaseIndex'].li.int()
 
         def ListHint(self, blockindex):
-            '''Find the correct ListHint for the specified ``blockindex``'''
+            '''Find the correct (recent) ListHint for the specified ``blockindex``'''
             res = blockindex - self['BaseIndex'].int()
             if 0 > res or self.ListHintsCount() < res:
                 raise error.NdkAssertionError(self, 'ListHint', message="Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int()))
