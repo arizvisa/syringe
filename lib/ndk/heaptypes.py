@@ -1638,7 +1638,7 @@ if 'Heap':
                 raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             size_and_header = size + blocksize
-            bi = math.trunc(math.ceil(size_and_header / float(blocksize)))
+            bi = math.trunc(math.floor(size_and_header / float(blocksize)))
             heaplist = self.__HeapList(bi)
             return heaplist.ListHint(bi)
 
