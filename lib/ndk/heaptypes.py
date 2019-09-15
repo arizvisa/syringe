@@ -717,18 +717,16 @@ if 'HeapEntry':
 
         def encode(self, object, **attrs):
             res = self.object
-            t = res.Type()
-            if t['Linked']:
-                return self.__fe_encode(object, **attrs)
+            if res['UnusedBytes'].int() == 5:
+                raise error.InvalidHeapType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
             elif res.FrontEndQ():
                 return self.__fe_encode(object, **attrs)
             return self.__be_encode(object, **attrs)
 
         def decode(self, object, **attrs):
             res = self.object
-            t = res.Type()
-            if t['Linked']:
-                return self.__fe_decode(object, **attrs)
+            if res['UnusedBytes'].int() == 5:
+                raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
             elif res.FrontEndQ():
                 return self.__fe_decode(object, **attrs)
             return self.__be_decode(object, **attrs)
