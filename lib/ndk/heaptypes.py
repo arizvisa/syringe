@@ -1296,12 +1296,14 @@ if 'LFH':
         def UnusedBlockCount(self):
             '''Return the number of UserBlocks that have been either freed or unallocated'''
             return self['AggregateExchg']['Depth'].int()
+        def Usage(self):
+            '''Return a bitmap showing the busy/free chunks that are available within `UserBlocks`'''
+            ub = self['UserBlocks'].d.li
+            return ub.UsageBitmap()
         def UsageString(self):
             '''Return a binary string showing the busy/free chunks that are available within `UserBlocks`'''
-            ub = self['UserBlocks'].d.li
-            res = ub.UsageBitmap()
+            res = self.Usage()
             return ptypes.bitmap.string(res)
-        Usage = UsageString
 
         def properties(self):
             res = super(HEAP_SUBSEGMENT, self).properties()
