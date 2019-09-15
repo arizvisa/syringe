@@ -359,7 +359,8 @@ class integer(type):
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def details(self, **options):
-        return bitmap.string(self.bitmap(), reversed=True)
+        res = self.bitmap()
+        return bitmap.string(res)
 
     def properties(self):
         result = super(type, self).properties()
@@ -538,7 +539,7 @@ class enum(integer):
 
     def details(self, **options):
         res = self.get()
-        try: return u"{:s} : {:s}".format(self.byvalue(bitmap.int(res)), bitmap.string(res, reversed=True))
+        try: return u"{:s} : {:s}".format(self.byvalue(bitmap.int(res)), bitmap.string(res))
         except (ValueError,KeyError): pass
         return super(enum, self).details()
 
