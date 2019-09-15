@@ -311,7 +311,7 @@ if 'HeapEntry':
 
         def Extra(self):
             # Since this is just a regular HEAP_ENTRY, there's no way to
-            # determine any extra bytes. So just return 0
+            # determine extra bytes used by the block. So just return 0 here.
             return 0
 
         def FrontEndQ(self):
@@ -399,16 +399,21 @@ if 'HeapEntry':
 
         def Extra(self):
             res = self.object
+
+            # If this is a backend chunk, then there's no way to determinue
+            # extra bytes. So simply return 0.
             if res.BackEndQ():
                 return 0
 
-            # Check the bottom 4-bits to determine the extra-bytes used
-            # for by frontend chunk
+            # Check the bottom 6-bits to determine the unused bytes used by
+            # the frontend block
             f = res.Flags()
-            used = f.int() & 0x0f
-            if getattr(self, 'WIN64', False):
-                return 0x10 - (used or 0x10)
-            return 8 - (used or 8)
+            unused = f.int() & 0x3f
+
+            # Subtract from the header size so we know how many extra bytes
+            # are used by the chunk instead of subtracting from the block.
+            hs = self.size()
+            return hs - (unused or hs)
 
         ## Backend
         class __BE_HEAP_ENTRY(HEAP_ENTRY):
@@ -527,23 +532,22 @@ if 'HeapEntry':
                 _fields_ = [
                     (1, 'AllocatedByFrontend'),
                     (1, 'LogFailure'),
-                    (2, 'Reserved'),
-                    (4, 'Busy'),
+                    (6, 'Busy'),
                 ]
                 def BusyQ(self):
                     return bool(self['Busy'])
                 def FreeQ(self):
                     return not self.BusyQ()
-
-                def Extra(self):
-                    if getattr(self, 'WIN64', False):
-                        return 0x10 - (self['Busy'] or 0x10)
-                    return 8 - (self['Busy'] or 8)
-
+                def Unused(self):
+                    '''Return the number of unused bytes for the chunk.'''
+                    # Subtract it from our HEAP_ENTRY size so that we convert
+                    # it from the block's unused bytes to the chunk's unused.
+                    res = 0x10 if getattr(self, 'WIN64', False) else 8
+                    return (self['Busy'] or res) - res
                 def summary(self):
                     frontend = 'FE' if self.FrontEndQ() else 'BE'
                     busy = 'BUSY' if self.BusyQ() else 'FREE'
-                    return "{:s} {:s} Extra:{:+x}".format(frontend, busy, self.Extra())
+                    return "{:s} {:s}".format(frontend, busy)
 
             _fields_ = [
                 (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
@@ -562,12 +566,12 @@ if 'HeapEntry':
 
             def Extra(self):
                 res = self.Flags()
-                return res.Extra()
+                return -res.Unused()
 
             def __init__(self, **attrs):
                 return super(HEAP_ENTRY, self).__init__(**attrs)
             def summary(self):
-                return "{:s} SubSegment=*{:#x} EntryOffset={:#x}".format(self['Flags'].summary(), self['SubSegment'].int(), self['EntryOffset'].int())
+                return "{:s} Extra={:+d} SubSegment=*{:#x} EntryOffset={:#x}".format(self['Flags'].summary(), self.Extra(), self['SubSegment'].int(), self['EntryOffset'].int())
 
         class _FE_Encoded(pstruct.type):
             '''
@@ -715,7 +719,7 @@ if 'HeapEntry':
             res = self.object
             t = res.Type()
             if t['Linked']:
-                raise NotImplementedError(t)
+                return self.__fe_encode(object, **attrs)
             elif res.FrontEndQ():
                 return self.__fe_encode(object, **attrs)
             return self.__be_encode(object, **attrs)
@@ -724,7 +728,7 @@ if 'HeapEntry':
             res = self.object
             t = res.Type()
             if t['Linked']:
-                raise NotImplementedError(t)
+                return self.__fe_decode(object, **attrs)
             elif res.FrontEndQ():
                 return self.__fe_decode(object, **attrs)
             return self.__be_decode(object, **attrs)
@@ -945,12 +949,15 @@ if 'Frontend':
             def FrontEndQ(self):
                 res = self.object.cast(pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t)
                 return bool(res.int() & 1)
+            def BackEndQ(self):
+                return not self.BackEndQ()
+
             def summary(self):
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object
                 if res.cast(t).int() & 1:
-                    return "Frontend {:s}".format(super(FreeListBucket._HeapBucketLink, self).summary())
-                return "Backend AllocationCount={:#x} UnknownEvenCount={:#x}".format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
+                    return "FE :> {:s}".format(super(FreeListBucket._HeapBucketLink, self).summary())
+                return "BE :> AllocationCount={:#x} UnknownEvenCount={:#x}".format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
             def details(self):
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object.cast(t)
@@ -966,11 +973,13 @@ if 'Frontend':
 
         def FrontEndQ(self):
             return self['Blink'].FrontEndQ()
+        def BackEndQ(self):
+            return self['Blink'].BackEndQ()
 
         def properties(self):
             res = super(FreeListBucket, self).properties()
             if self.initializedQ():
-                res['use_frontend'] = self.FrontEndQ()
+                res['Type'] = 'FE' if self.FrontEndQ() else 'BE'
             return res
 
         def collect(self, size=None):
@@ -1418,15 +1427,19 @@ if 'LFH':
             heap = self.getparent(HEAP)
             bucket = heap.Bucket(size)
             return bucket['SizeIndex'].int()
+        def BucketByIndex(self, index):
+            return self['Buckets'][index]
+        def SegmentInfoByIndex(self, index):
+            return self['LocalData']['SegmentInfo'][index]
         def Bucket(self, size):
             '''Return the LFH bin given a ``size``'''
             index = self.__SizeIndex(size)
-            return self['Buckets'][index]
+            return self.BucketByIndex(index)
         def SegmentInfo(self, size):
             '''Return the HEAP_LOCAL_SEGMENT_INFO for a specific ``size``'''
             bin = self.Bucket(size)
             index = bin['SizeIndex'].int()
-            return self['LocalData']['SegmentInfo'][index]
+            return SegmentInfoByIndex(index)
 
         def __init__(self, **attrs):
             super(LFH_HEAP, self).__init__(**attrs)
@@ -1797,21 +1810,6 @@ if 'Heap':
             self._fields_ = f
 
     class HEAP_LIST_LOOKUP(pstruct.type):
-        def ListHintsCount(self):
-            '''Return the number of FreeLists entries within this structure'''
-            return self['ArraySize'].li.int() - self['BaseIndex'].li.int()
-
-        def ListHint(self, blockindex):
-            '''Find the correct (recent) ListHint for the specified ``blockindex``'''
-            res = blockindex - self['BaseIndex'].int()
-            if 0 > res or self.ListHintsCount() < res:
-                raise error.NdkAssertionError(self, 'ListHint', message="Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int()))
-            freelist = self['ListsInUseUlong'].d.l
-            list = self['ListHints'].d.l
-            if freelist.check(res):
-                return list[res]
-            return list[res]
-
         class _ListsInUseUlong(pbinary.array):
             _object_ = 1
             def run(self):
@@ -1880,6 +1878,36 @@ if 'Heap':
                 (P(lambda s: dyn.clone(HEAP_LIST_LOOKUP._ListsInUseUlong, length=s.p.ListHintsCount() >> 5)), 'ListsInUseUlong'),
                 (P(lambda s: dyn.array(dyn.clone(FreeListBucket, _object_=fptr(_HEAP_CHUNK, 'ListEntry'), _path_=('ListEntry',), _sentinel_=s.p['ListHead'].int()), s.p.ListHintsCount())), 'ListHints'),
             ])
+
+        def ListHintsCount(self):
+            '''Return the number of FreeLists entries within this structure'''
+            return self['ArraySize'].li.int() - self['BaseIndex'].li.int()
+
+        def ListHint(self, blockindex):
+            '''Find the correct (recent) ListHint for the specified ``blockindex``'''
+            res = blockindex - self['BaseIndex'].int()
+            if 0 > res or self.ListHintsCount() < res:
+                raise error.NdkAssertionError(self, 'ListHint', message="Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int()))
+            freelist = self['ListsInUseUlong'].d.l
+            list = self['ListHints'].d.l
+            if freelist.check(res):
+                return list[res]
+            return list[res]
+
+        def enumerate(self):
+            inuse, hints = (self[fld].d.li for fld in ['ListsInUseUlong', 'ListHints'])
+            if inuse.bits() != len(hints):
+                raise error.NdkAssertionError(self, 'ListHint', message="ListsInUseUlong ({:d}) is a different length than ListHints ({:d})".format(inuse.bits(), len(hints)))
+            for i, item in enumerate(hints):
+                if inuse.check(i):
+                    yield i, item
+                continue
+            return
+
+        def iterate(self):
+            for _, item in self.enumerate():
+                yield item
+            return
 
 class ProcessHeapEntries(parray.type):
     _object_ = P(HEAP)
