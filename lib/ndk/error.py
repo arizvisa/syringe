@@ -52,4 +52,4 @@ class InvalidBlockSize(NdkHeapException): pass
 class CorruptStructureException(NdkHeapException): pass
 class CrtZoneNotFoundError(NdkHeapException): pass
 class MissingSegmentException(NdkHeapException): pass
-
+class InvalidChunkAddress(NdkHeapException): pass

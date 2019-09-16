@@ -1505,27 +1505,6 @@ if 'Heap':
             ])
 
     class HEAP_SEGMENT(pstruct.type, versioned):
-        def Bounds(self):
-            PAGE_SIZE = 0x1000
-            ucr = self['NumberOfUncommittedPages'].int() * PAGE_SIZE
-            start, end = (self[fld].li for fld in ['FirstEntry', 'LastValidEntry'])
-            return start.int(), end.int() - ucr
-
-        def iterate(self):
-            '''Iterate through all the chunks in the current segment.'''
-            start, end = self.Bounds()
-            res = self['FirstEntry'].d
-            while res.getoffset() < end:
-                yield res.l
-                res = res.next()
-            return
-
-        def walk(self):
-            yield self
-            for n in self['SegmentListEntry'].walk():
-                yield n
-            return
-
         def __init__(self, **attrs):
             super(HEAP_SEGMENT, self).__init__(**attrs)
             aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
@@ -1595,6 +1574,35 @@ if 'Heap':
             else:
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
+
+        def Bounds(self):
+            PAGE_SIZE = 0x1000
+            ucr = self['NumberOfUncommittedPages'].int() * PAGE_SIZE
+            start, end = (self[fld].li for fld in ['FirstEntry', 'LastValidEntry'])
+            return start.int(), end.int() - ucr
+
+        def Chunk(self, address):
+            start, end = self.Bounds()
+            if start <= address < end:
+                # FIXME: implement this
+                raise NotImplementedError
+            cls = self.__class__
+            raise error.InvalidChunkAddress(self, 'Chunk', message="The requested address ({:#x}) is not within the boundaries of the current {:s} ({:#x}<>{:#x}).".format(address, cls.typename(), start, end), Segment=self)
+
+        def iterate(self):
+            '''Iterate through all the chunks in the current segment.'''
+            start, end = self.Bounds()
+            res = self['FirstEntry'].d
+            while res.getoffset() < end:
+                yield res.l
+                res = res.next()
+            return
+
+        def walk(self):
+            yield self
+            for n in self['SegmentListEntry'].walk():
+                yield n
+            return
 
     class HEAP_VIRTUAL_ALLOC_ENTRY(pstruct.type):
         def __init__(self, **attrs):
