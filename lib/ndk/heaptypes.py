@@ -262,7 +262,8 @@ if 'HeapEntry':
             def summary(self):
                 frontend = 'FE' if self.FrontEndQ() else 'BE'
                 busy = 'BUSY' if self.BusyQ() else 'FREE'
-                return "{:s} {:s} Type:{:d}".format(frontend, busy, self['Type'])
+                res = self.item('Type')
+                return "{:s} {:s} Type:{:s}".format(frontend, busy, res.str())
 
         def __init__(self, **attrs):
             super(HEAP_ENTRY, self).__init__(**attrs)
@@ -800,10 +801,10 @@ if 'HeapChunk':
             # Use the backing object here to check the busy flag since there's
             # really no need to decode anything when loading
             header = self['Header'].li
-            if header.object.FreeQ():
+            if header.object.Type()['Chunk'] and header.object.FreeQ():
                 return dyn.clone(LIST_ENTRY, _object_=fptr(self.__class__, 'ListEntry'), _path_=('ListEntry',))
 
-            # No linked-list as the chunk is busy
+            # No linked-list as the chunk is busy or not a chunk
             return ptype.undefined
 
         def __ChunkFreeEntryOffset(self):
@@ -868,9 +869,6 @@ if 'HeapChunk':
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            t = header.Type()
-            if not t['Chunk']:
-                raise error.IncorrectChunkType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(HEAP)
             return parent.new(cls, offset=self.getoffset() + self['Header'].Size())
 
@@ -878,9 +876,6 @@ if 'HeapChunk':
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'previous', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            t = header.Type()
-            if not t['Chunk']:
-                raise error.IncorrectChunkType(self, 'previous', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             parent = self.getparent(HEAP)
             return parent.new(cls, offset=self.getoffset() - header.PreviousSize())
         prev = previous
@@ -1516,7 +1511,8 @@ if 'Heap':
             start, end = (self[fld].li for fld in ['FirstEntry', 'LastValidEntry'])
             return start.int(), end.int() - ucr
 
-        def Chunks(self):
+        def iterate(self):
+            '''Iterate through all the chunks in the current segment.'''
             start, end = self.Bounds()
             res = self['FirstEntry'].d
             while res.getoffset() < end:
