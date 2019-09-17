@@ -676,15 +676,16 @@ if 'HeapEntry':
         def EntryOffsetQ(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'EntryOffsetQ', message='Unable to query the entry-offset for a non-frontend type')
-            res = self.d.li
-            return bool(res['EntryOffset'].int())
+            f, res = self.object.Flags(), self.d.li
+            return f.int() == 5 and bool(res['EntryOffset'].int())
 
         def EntryOffset(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'EntryOffset', message='Unable to fetch the entry-offset for a non-frontend type')
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+
+            # FIXME: this should probably return an rpointer_t to a _HEAP_ENTRY
             res = self.d.li
-            return res['EntryOffset'].int() * blocksize
+            return res['EntryOffset'].int() * res.size()
 
         def SubSegment(self):
             if not self.FrontEndQ():
@@ -719,6 +720,8 @@ if 'HeapEntry':
         def encode(self, object, **attrs):
             res = self.object
             if res['UnusedBytes'].int() == 5:
+                # FIXME: figure out what to do with the new chunk header
+                offset = self.getoffset() - res['SegmentOffset'] * res.size()
                 raise error.InvalidHeapType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
             elif res.FrontEndQ():
                 return self.__fe_encode(object, **attrs)
@@ -727,6 +730,9 @@ if 'HeapEntry':
         def decode(self, object, **attrs):
             res = self.object
             if res['UnusedBytes'].int() == 5:
+                # FIXME: we shouldn't need to decode anything since our chunk
+                #        header is elsewhere.
+                offset = self.getoffset() - res['SegmentOffset'] * res.size()
                 raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
             elif res.FrontEndQ():
                 return self.__fe_decode(object, **attrs)
