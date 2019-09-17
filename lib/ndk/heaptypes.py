@@ -910,15 +910,15 @@ if 'HeapChunk':
         prevfree = previousfree
 
 if 'Frontend':
-    class FrontEndHeapType(pint.enum, pint.uint8_t):
-        _values_ = [
-            ('Backend', 0),
-            ('LAL', 1),
-            ('LFH', 2),
-        ]
-
     class FrontEndHeap(ptype.definition):
         cache = {}
+
+        class Type(pint.enum, pint.uint8_t):
+            _values_ = [
+                ('Backend', 0),
+                ('LAL', 1),
+                ('LFH', 2),
+            ]
 
     class FreeListBucket(LIST_ENTRY):
         class _HeapBucketLink(ptype.pointer_t):
@@ -955,8 +955,8 @@ if 'Frontend':
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object
                 if res.cast(t).int() & 1:
-                    return "FE :> {:s}".format(super(FreeListBucket._HeapBucketLink, self).summary())
-                return "BE :> AllocationCount={:#x} UnknownEvenCount={:#x}".format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
+                    return "(FRONTEND) {:s}".format(super(FreeListBucket._HeapBucketLink, self).summary())
+                return "(BACKEND) AllocationCount={:#x} UnknownEvenCount={:#x}".format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
             def details(self):
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = self.object.cast(t)
@@ -1188,6 +1188,43 @@ if 'LFH':
             return self['CachedItems'][res.int()].d
 
     class LFH_BLOCK_ZONE(pstruct.type):
+        def __SubSegments(self):
+            try:
+                fh = self.getparent(LFH_HEAP)
+                cb = fh['ZoneBlockSize'].int()
+
+            # If we couldn't find the subsegment size in the LFH_HEAP, then just
+            # fake-allocate it in order to grab its size
+            except ptypes.error.NotFoundError:
+                cb = self.new(HEAP_SUBSEGMENT).a.size()
+
+            # Calculate the offset to our current field so that we can determine
+            # how many subsegments are in use.
+            base = self.getoffset() + sum(self[fld].li.size() for fld in ['ListEntry', 'FreePointer', 'Limit'])
+
+            # Figure out how many HEAP_SUBSEGMENT elements are in use.
+            res = self['FreePointer'].li.int() - base
+            return dyn.array(HEAP_SUBSEGMENT, res / cb)
+
+        def __Available(self):
+            try:
+                fh = self.getparent(LFH_HEAP)
+                cb = fh['ZoneBlockSize'].int()
+
+            # If we couldn't find the subsegment size in the LFH_HEAP, then just
+            # fake-allocate it in order to grab its size
+            except ptypes.error.NotFoundError:
+                cb = self.new(HEAP_SUBSEGMENT).a.size()
+
+            # Take the free pointer (points to a chunk), and subtract a HEAP_ENTRY
+            # so that we divide evenly as for some reason there's about that
+            # amount of space between its value and the last segment
+            base = self['FreePointer'].li.int() - (0x10 if getattr(self, 'WIN64', False) else 8)
+
+            # Calculate the number of elements before we hit the limit
+            res = self['Limit'].li.int() - base
+            return dyn.array(HEAP_SUBSEGMENT, res / cb)
+
         def __init__(self, **attrs):
             super(LFH_BLOCK_ZONE, self).__init__(**attrs)
             f = self._fields_ = []
@@ -1195,11 +1232,11 @@ if 'LFH':
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
                     (dyn.clone(LIST_ENTRY, _object_=P(LFH_BLOCK_ZONE), _path_=('ListEntry',)), 'ListEntry'),
-                    (PVOID, 'FreePointer'),         # XXX: wtf is this for
-                    (P(_HEAP_CHUNK), 'Limit'),
-                    (P(HEAP_LOCAL_SEGMENT_INFO), 'SegmentInfo'),
-                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (INTERLOCK_SEQ, 'AggregateExchg'),
+                    (P(HEAP_SUBSEGMENT), 'FreePointer'),         # Points to the next HEAP_SUBSEGMENT to use
+                    (P(_HEAP_CHUNK), 'Limit'),                   # End of HEAP_SUBSEGMENTs
+
+                    (self.__SubSegments, 'SubSegments'),
+                    (self.__Available, 'Available'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
@@ -1338,6 +1375,7 @@ if 'LFH':
                     (pint.uint8_t, 'AffinityIndex'),
                     (dyn.clone(SLIST_ENTRY, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
                     (ULONG, 'Lock'),
+                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
@@ -1748,7 +1786,7 @@ if 'Heap':
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
                     (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (pint.uint16_t, 'FrontHeapLockCount'),
-                    (FrontEndHeapType, 'FrontEndHeapType'),
+                    (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
                     (HEAP_COUNTERS, 'Counters'),
                     (HEAP_TUNING_PARAMETERS, 'TuningParameters'),
@@ -1800,8 +1838,8 @@ if 'Heap':
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
                     (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (pint.uint16_t, 'FrontHeapLockCount'),
-                    (FrontEndHeapType, 'FrontEndHeapType'),
-                    (FrontEndHeapType, 'RequestedFrontEndHeapType'),
+                    (FrontEndHeap.Type, 'FrontEndHeapType'),
+                    (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
 
                     (aligned, 'align(FrontEndHeapUsageData)'),
                     (P(pint.uint16_t), 'FrontEndHeapUsageData'),    # XXX: this target doesn't seem right
