@@ -100,18 +100,15 @@ if 'HeapMeta':
 
     class HEAP_DEBUGGING_INFORMATION(pstruct.type, versioned):
         # http://blog.airesoft.co.uk/2010/01/a-whole-heap-of-trouble-part-1/
-        def __init__(self, **attrs):
-            super(HEAP_DEBUGGING_INFORMATION, self).__init__(**attrs)
-            f = self._fields_ = []
-            f.extend([
-                (PVOID, 'InterceptorFunction'),
-                (WORD, 'InterceptorValue'),
-                (DWORD, 'ExtendedOptions'),
-                (DWORD, 'StackTraceDepth'),
-                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'MinTotalBlockSize'),
-                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'MaxTotalBlockSize'),
-                (PVOID, 'HeapLeakEnumerationRoutine'),
-            ])
+        _fields_ = [
+            (PVOID, 'InterceptorFunction'),
+            (WORD, 'InterceptorValue'),
+            (ULONG, 'ExtendedOptions'),
+            (ULONG, 'StackTraceDepth'),
+            (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'MinTotalBlockSize'),
+            (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'MaxTotalBlockSize'),
+            (PVOID, 'HeapLeakEnumerationRoutine'),
+        ]
 
     class DPH_BLOCK_INFORMATION(pstruct.type, versioned):
         '''Structure of a Page Heap Block when Full Page Heap is Enabled'''
@@ -199,7 +196,8 @@ if False and 'HeapCache':
 
 if 'HeapEntry':
     class HEAP_BUCKET(pstruct.type):
-        class BucketFlags(pbinary.flags):
+        @pbinary.littleendian
+        class _BucketFlags(pbinary.flags):
             _fields_ = [
                 (5, 'Reserved'),
                 (2, 'DebugFlags'),
@@ -207,9 +205,9 @@ if 'HeapEntry':
             ]
 
         _fields_ = [
-            (pint.uint16_t, 'BlockUnits'),
-            (pint.uint8_t, 'SizeIndex'),
-            (BucketFlags, 'BucketFlags'),
+            (WORD, 'BlockUnits'),
+            (UCHAR, 'SizeIndex'),
+            (_BucketFlags, 'BucketFlags'),
         ]
 
         def AllocationCount(self):
@@ -274,7 +272,10 @@ if 'HeapEntry':
         def __init__(self, **attrs):
             super(HEAP_ENTRY, self).__init__(**attrs)
             f = []
-            f.append((pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'))
+
+            f.extend([
+                (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'ReservedForAlignment')
+            ])
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
                 #f.extend([
@@ -287,21 +288,21 @@ if 'HeapEntry':
                 #   (pint.uint8_t, 'SegmentOffset'),
                 #])
                 f.extend([
-                    (pint.uint16_t, 'Size'),
-                    (pint.uint16_t, 'PreviousSize'),
-                    (pint.uint8_t, 'SegmentIndex'),
+                    (USHORT, 'Size'),
+                    (USHORT, 'PreviousSize'),
+                    (UCHAR, 'SegmentIndex'),
                     (HEAP_ENTRY_, 'Flags'),
-                    (pint.uint8_t, 'Index'),
-                    (pint.uint8_t, 'Mask'),
+                    (UCHAR, 'Index'),
+                    (UCHAR, 'Mask'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 f.extend([
-                    (pint.uint16_t, 'Size'),
+                    (USHORT, 'Size'),
                     (HEAP_ENTRY_, 'Flags'),
-                    (pint.uint8_t, 'SmallTagIndex'),    # Checksum
-                    (pint.uint16_t, 'PreviousSize'),
-                    (pint.uint8_t, 'SegmentOffset'),    # Size // blocksize
+                    (UCHAR, 'SmallTagIndex'),    # Checksum
+                    (USHORT, 'PreviousSize'),
+                    (UCHAR, 'SegmentOffset'),    # Size // blocksize
                     (HEAP_ENTRY.UnusedBytes, 'UnusedBytes'),  # XXX: for some reason this is checked against 0x05
                 ])
 
@@ -427,10 +428,10 @@ if 'HeapEntry':
             '''HEAP_ENTRY after decoding'''
             _fields_ = [
                 (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
-                (pint.uint16_t, 'Size'),
-                (pint.uint16_t, 'Checksum'),
-                (pint.uint16_t, 'PreviousSize'),
-                (pint.uint8_t, 'SegmentOffset'),
+                (USHORT, 'Size'),
+                (USHORT, 'Checksum'),
+                (USHORT, 'PreviousSize'),
+                (UCHAR, 'SegmentOffset'),
                 (HEAP_ENTRY.UnusedBytes, 'Flags'),
             ]
 
@@ -444,6 +445,7 @@ if 'HeapEntry':
 
             def __init__(self, **attrs):
                 return super(HEAP_ENTRY, self).__init__(**attrs)
+
             def summary(self):
                 bs = 0x10 if getattr(self, 'WIN64', False) else 8
                 return "{:s} PreviousSize={:+#x} Size={:+#x} SegmentOffset={:#x} Checksum={:#x}".format(self['Flags'].summary(), -self['PreviousSize'].int() * bs, self['Size'].int() * bs, self['SegmentOffset'].int(), self['Checksum'].int())
@@ -559,8 +561,8 @@ if 'HeapEntry':
             _fields_ = [
                 (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
                 (lambda self: dyn.clone(PHEAP_SUBSEGMENT, _value_=PVALUE32), 'SubSegment'),
-                (pint.uint16_t, 'Unknown'),     # seems to be diff on 32-bit?
-                (pint.uint8_t, 'EntryOffset'),
+                (USHORT, 'Unknown'),     # seems to be diff on 32-bit?
+                (UCHAR, 'EntryOffset'),
                 (UnusedBytes, 'Flags'),
             ]
 
@@ -577,6 +579,7 @@ if 'HeapEntry':
 
             def __init__(self, **attrs):
                 return super(HEAP_ENTRY, self).__init__(**attrs)
+
             def summary(self):
                 return "{:s} Extra={:+d} SubSegment=*{:#x} EntryOffset={:#x}".format(self['Flags'].summary(), self.Extra(), self['SubSegment'].int(), self['EntryOffset'].int())
 
@@ -947,7 +950,7 @@ if 'Frontend':
     class FrontEndHeap(ptype.definition):
         cache = {}
 
-        class Type(pint.enum, pint.uint8_t):
+        class Type(pint.enum, UCHAR):
             _values_ = [
                 ('Backend', 0),
                 ('LAL', 1),
@@ -958,16 +961,19 @@ if 'Frontend':
         class _HeapBucketLink(ptype.pointer_t):
             class _HeapBucketCounter(pstruct.type):
                 _fields_ = [
-                    (pint.uint16_t, 'UnknownEvenCount'),
-                    (pint.uint16_t, 'AllocationCount'),
+                    (USHORT, 'UnknownEvenCount'),
+                    (USHORT, 'AllocationCount'),
                     (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'Padding'),
                 ]
+
                 def get(self):
                     t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                     res = self.cast(t)
                     return res.int()
+
             _value_ = _HeapBucketCounter
             _object_ = HEAP_BUCKET
+
             def decode(self, object, **attrs):
                 t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
                 res = object.cast(t)
@@ -1026,28 +1032,27 @@ if 'Frontend':
             return
 
 if 'LookasideList':
+    class HEAP_LOOKASIDE(pstruct.type):
+        _fields_ = [
+            (dyn.clone(SLIST_HEADER, _object_=fptr(_HEAP_CHUNK, 'ListHead'), _path_=('ListHead',)), 'ListHead'),
+            (USHORT, 'Depth'),
+            (USHORT, 'MaximumDepth'),
+            (ULONG, 'TotalAllocates'),
+            (ULONG, 'AllocateMisses'),
+            (ULONG, 'TotalFrees'),
+            (ULONG, 'FreeMisses'),
+            (ULONG, 'LastTotalAllocates'),
+            (ULONG, 'LastAllocateMisses'),
+            (dyn.array(ULONG, 2), 'Counters'),
+            (ULONG, 'Unknown'),     # XXX: missing from all definitions
+            (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'Padding'),
+        ]
+
     @FrontEndHeap.define
     class LAL(parray.type):
         type = 1
-
-        class _object_(pstruct.type):
-            _fields_ = [
-                (dyn.clone(SLIST_ENTRY, _object_=fptr(_HEAP_CHUNK, 'ListHead'), _path_=('ListHead',)), 'ListHead'),
-                (pint.uint16_t, 'Depth'),
-                (pint.uint16_t, 'MaximumDepth'),
-                #(pint.uint32_t, 'none'),
-                (pint.uint32_t, 'TotalAlloc'),
-                (pint.uint32_t, 'AllocateMisses'),
-                (pint.uint32_t, 'TotalFrees'),
-                (pint.uint32_t, 'FreeMisses'),
-                (pint.uint32_t, 'LastTotalAllocates'),
-                (pint.uint32_t, 'LastAllocateMisses'),
-                (dyn.array(pint.uint32_t, 2), 'Counters'),
-                (dyn.block(4), 'Unknown'),
-            ]
-
         HEAP_MAX_FREELIST = 0x80
-        length = HEAP_MAX_FREELIST
+        length, _object_ = HEAP_MAX_FREELIST, HEAP_LOOKASIDE
 
 if 'SegmentHeap':
     # FIXME: These are just placeholders for now
@@ -1068,15 +1073,15 @@ if 'LFH':
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (pint.uint16_t, 'Depth'),
-                    (pint.uint16_t, 'FreeEntryOffset'),
+                    (USHORT, 'Depth'),
+                    (USHORT, 'FreeEntryOffset'),
                     (ULONG, 'Sequence'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
                 f.extend([
-                    (pint.uint16_t, 'Depth'),
-                    (pint.uint16_t, 'FreeEntryOffset'),
+                    (USHORT, 'Depth'),
+                    (USHORT, 'FreeEntryOffset'),
                     (pint.uint_t, 'Sequence'),
                 ])
 
@@ -1300,24 +1305,30 @@ if 'LFH':
     class USER_MEMORY_CACHE_ENTRY(pstruct.type, versioned):
         # FIXME: Figure out which SizeIndex is used for a specific cache entry
         class _UserBlocks(pstruct.type):
+            # FIXME: Is this the correct structure for USER_MEMORY_CACHE_ENTRY's
+            #        SLIST_HEADER?
             def __Blocks(self):
                 entry = self.getparent(USER_MEMORY_CACHE_ENTRY)
-                res = [n.getoffset() for n in entry.p.value]
+
+                res = [ n.getoffset() for n in entry.p.value ]
                 idx = res.index(entry.getoffset()) + 1
+
                 blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-                sz = idx * blocksize + self.new(_HEAP_ENTRY).a.size()
-                block = dyn.clone(_HEAP_CHUNK, blocksize=lambda s, sz=sz: sz)
+                rees = idx * blocksize + blocksize
+
+                block = dyn.clone(_HEAP_CHUNK, blocksize=lambda s, sz=res: sz)
                 return dyn.array(block, entry['AvailableBlocks'].int() * 8)
 
             _fields_ = [
                 (dyn.array(pint.uint32_t, 4), 'unknown'),
                 (__Blocks, 'Blocks'),
             ]
+
         def __init__(self, **attrs):
             super(USER_MEMORY_CACHE_ENTRY, self).__init__(**attrs)
             f = self._fields_ = []
             f.extend([
-                #(dyn.clone(SLIST_HEADER, _object_=UserBlocks), 'UserBlocks'),
+                #(dyn.clone(SLIST_HEADER, _object_=_UserBlocks), 'UserBlocks'),
                 (SLIST_HEADER, 'UserBlocks'),   # XXX: check this offset
                 (ULONG, 'AvailableBlocks'),     # AvailableBlocks * 8 seems to be the actual size
                 (ULONG, 'MinimumDepth'),
@@ -1325,7 +1336,7 @@ if 'LFH':
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'Padding')
+                    (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'Padding')
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
@@ -1407,11 +1418,11 @@ if 'LFH':
                     (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
                     (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
                     (INTERLOCK_SEQ, 'AggregateExchg'),
-                    (pint.uint16_t, 'BlockSize'),
-                    (pint.uint16_t, 'Flags'),
-                    (pint.uint16_t, 'BlockCount'),
-                    (pint.uint8_t, 'SizeIndex'),
-                    (pint.uint8_t, 'AffinityIndex'),
+                    (USHORT, 'BlockSize'),
+                    (USHORT, 'Flags'),
+                    (USHORT, 'BlockCount'),
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'AffinityIndex'),
                     (dyn.clone(SLIST_ENTRY, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
                     (ULONG, 'Lock'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
@@ -1426,8 +1437,8 @@ if 'LFH':
                     (USHORT, 'BlockSize'),
                     (USHORT, 'Flags'),
                     (USHORT, 'BlockCount'),
-                    (pint.uint8_t, 'SizeIndex'),
-                    (pint.uint8_t, 'AffinityIndex'),
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'AffinityIndex'),
                     (dyn.array(ULONG, 2), 'Alignment'),     # XXX: This is not really an alignment as claimed
                     (ULONG, 'Lock'),
                     (dyn.clone(SLIST_ENTRY, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
@@ -1483,7 +1494,7 @@ if 'LFH':
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
                     (ULONG, 'DeleteRateThreshold'),
-                    (pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'padding(DeleteRateThreshold)'),
+                    (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(DeleteRateThreshold)'),
                 ])
 
             else:
@@ -1579,68 +1590,46 @@ if 'Heap':
             super(HEAP_SEGMENT, self).__init__(**attrs)
             aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
             f = []
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
-                raise error.NdkUnsupportedVersion(self)
+
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
                 f.extend([
-                    (LIST_ENTRY, 'ListEntry'),
-                    (pint.uint32_t, 'Signature'),
-                    (pint.uint32_t, 'Flags'),
+                    (_HEAP_ENTRY, 'Entry'),
+                    (ULONG, 'Signature'),
+                    (ULONG, 'Flags'),
                     (P(HEAP), 'Heap'),
-                    (pint.uint32_t, 'LargestUnCommittedRange'),
+                    (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'LargestUnCommittedRange'),
                     (PVOID, 'BaseAddress'),
-                    (pint.uint32_t, 'NumberOfPages'),
-                    (PVOID, 'FirstEntry'),
-                    (PVOID, 'LastValidEntry'),
-                    (pint.uint32_t, 'NumberOfUnCommittedPages'),
-                    (pint.uint32_t, 'NumberOfUnCommittedRanges'),
-                    (P(_HEAP_UNCOMMMTTED_RANGE), 'UnCommittedRanges'),
-                    (pint.uint16_t, 'AllocatorBackTraceIndex'),
-                    (pint.uint16_t, 'Reserved'),
-                    (P(_HEAP_ENTRY), 'LastEntryInSegment'),
+                    (ULONG, 'NumberOfPages'),
+                    (P(_HEAP_CHUNK), 'FirstEntry'),
+                    (P(_HEAP_CHUNK), 'LastValidEntry'),
+                    (ULONG, 'NumberOfUnCommittedPages'),
+                    (ULONG, 'NumberOfUnCommittedRanges'),
+                    (P(HEAP_UNCOMMMTTED_RANGE), 'UnCommittedRanges'),
+                    (USHORT, 'AllocatorBackTraceIndex'),
+                    (USHORT, 'Reserved'),
+                    (P(_HEAP_CHUNK), 'LastEntryInSegment'),
                 ])
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7+1:
-                raise error.NdkUnsupportedVersion(self)
-                f.extend([
-                    (pint.uint32_t, 'Signature'),
-                    (pint.uint32_t, 'Flags'),
-                    (LIST_ENTRY, 'ListEntry'),
-                    (pint.uint32_t, 'ForceFlags'),
-                    (pint.uint32_t, 'VirtualMemoryThreshold'),
 
-                    (pint.uint32_t, 'SegmentReserve'),
-                    (pint.uint32_t, 'SegmentCommit'),
-                    (pint.uint32_t, 'DeCommitFreeBlockThreshold'),
-                    (pint.uint32_t, 'DeCommitTotalFreeThreshold'),
-                    (pint.uint32_t, 'TotalFreeSize'),
-                    (pint.uint32_t, 'MaximumAllocationSize'),
-
-                    (pint.uint16_t, 'ProcessHeapsListIndex'),
-                    (pint.uint16_t, 'HeaderValidateLength'),
-                    (pint.uint32_t, 'HeaderValidateCopy'),
-                    (pint.uint16_t, 'NextAvailableTagIndex'),
-                    (pint.uint16_t, 'MaximumTagIndex'),
-                    (P(HEAP_TAG_ENTRY), 'TagEntries'),
-                    (LIST_ENTRY, 'UCRSegments'),
-                ])
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
                 f.extend([
                     (_HEAP_ENTRY, 'Entry'),
-                    (pint.uint32_t, 'SegmentSignature'),
-                    (pint.uint32_t, 'SegmentFlags'),
+                    (ULONG, 'SegmentSignature'),
+                    (ULONG, 'SegmentFlags'),
                     (lambda s: dyn.clone(LIST_ENTRY, _sentinel_='Blink', _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from HEAP
                     (P(HEAP), 'Heap'),
                     (PVOID, 'BaseAddress'),
-                    (pint.uint32_t, 'NumberOfPages'),
+                    (ULONG, 'NumberOfPages'),
                     (aligned, 'align(FirstEntry)'),     # FIXME: padding, or alignment?
                     (P(_HEAP_CHUNK), 'FirstEntry'),
                     (PVOID, 'LastValidEntry'),
-                    (pint.uint32_t, 'NumberOfUnCommittedPages'),
-                    (pint.uint32_t, 'NumberOfUnCommittedRanges'),
-                    (pint.uint16_t, 'AllocatorBackTraceIndex'),
-                    (pint.uint16_t, 'Reserved'),
+                    (ULONG, 'NumberOfUnCommittedPages'),
+                    (ULONG, 'NumberOfUnCommittedRanges'),
+                    (USHORT, 'AllocatorBackTraceIndex'),
+                    (USHORT, 'Reserved'),
                     (aligned, 'align(UCRSegmentList)'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fptr(HEAP_UCR_DESCRIPTOR, 'SegmentEntry')), 'UCRSegmentList'),
                 ])
+
             else:
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
@@ -1673,6 +1662,14 @@ if 'Heap':
             for n in self['SegmentListEntry'].walk():
                 yield n
             return
+
+    class HEAP_UNCOMMMTTED_RANGE(pstruct.type):
+        _fields_ = [
+            (lambda self: P(HEAP_UNCOMMMTTED_RANGE), 'Next'),
+            (PVOID, 'Address'),
+            (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'Size'),
+            (ULONG, 'filler'),
+        ]
 
     class HEAP_UCR_DESCRIPTOR(pstruct.type):
         def __ListEntry(self):
@@ -1746,8 +1743,10 @@ if 'Heap':
             '''Return the ListHint according to the specified ``size``'''
             if not self['FrontEndHeapType']['LFH']:
                 raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             size_and_header = size + blocksize
+
             bi = math.trunc(math.floor(size_and_header / float(blocksize)))
             heaplist = self.__HeapList(bi)
             return heaplist.ListHint(bi)
@@ -1789,43 +1788,47 @@ if 'Heap':
         def __init__(self, **attrs):
             super(HEAP, self).__init__(**attrs)
             aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
-            integral = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-            f = [(HEAP_SEGMENT, 'Segment')]
+            size_t = SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T
+            f = []
 
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
+                raise error.NdkUnsupportedVersion(self)
+
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (pint.uint32_t, 'Flags'),
-                    (pint.uint32_t, 'ForceFlags'),
-                    (pint.uint32_t, 'CompatibilityFlags'),
-                    (pint.uint32_t, 'EncodeFlagMask'),
+                    (HEAP_SEGMENT, 'Segment'),
+                    (ULONG, 'Flags'),
+                    (ULONG, 'ForceFlags'),
+                    (ULONG, 'CompatibilityFlags'),
+                    (ULONG, 'EncodeFlagMask'),
                     (HEAP._Encoding, 'Encoding'),
                     (self.__PointerKeyEncoding, 'PointerKey'),
-                    (pint.uint32_t, 'Interceptor'),
-                    (pint.uint32_t, 'VirtualMemoryThreshold'),
-                    (pint.uint32_t, 'Signature'),
+                    (ULONG, 'Interceptor'),
+                    (ULONG, 'VirtualMemoryThreshold'),
+                    (ULONG, 'Signature'),
                     (aligned, 'align(SegmentReserve)'), # FIXME: alignment or padding?
-                    (integral, 'SegmentReserve'),
-                    (integral, 'SegmentCommit'),
-                    (integral, 'DeCommitFreeBlockThreshold'),
-                    (integral, 'DeCommitTotalFreeThreshold'),
-                    (integral, 'TotalFreeSize'),
-                    (integral, 'MaximumAllocationSize'),
-                    (pint.uint16_t, 'ProcessHeapsListIndex'),
-                    (pint.uint16_t, 'HeaderValidateLength'),
+                    (size_t, 'SegmentReserve'),
+                    (size_t, 'SegmentCommit'),
+                    (size_t, 'DeCommitFreeBlockThreshold'),
+                    (size_t, 'DeCommitTotalFreeThreshold'),
+                    (size_t, 'TotalFreeSize'),
+                    (size_t, 'MaximumAllocationSize'),
+                    (USHORT, 'ProcessHeapsListIndex'),
+                    (USHORT, 'HeaderValidateLength'),
                     (aligned, 'align(HeaderValidateCopy)'),
                     (PVOID, 'HeaderValidateCopy'),
-                    (pint.uint16_t, 'NextAvailableTagIndex'),
-                    (pint.uint16_t, 'MaximumTagIndex'),
+                    (USHORT, 'NextAvailableTagIndex'),
+                    (USHORT, 'MaximumTagIndex'),
                     (aligned, 'align(TagEntries)'),
                     (P(HEAP_TAG_ENTRY), 'TagEntries'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_UCR_DESCRIPTOR)), 'UCRList'),
-                    (integral, 'AlignRound'),
-                    (integral, 'AlignMask'),
+                    (ULONG_PTR, 'AlignRound'),
+                    (ULONG_PTR, 'AlignMask'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
                     (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
-                    (pint.uint16_t, 'FreeListInUseTerminate'),
-                    (pint.uint16_t, 'AllocatorBackTraceIndex'),
-                    (pint.uint32_t, 'NonDedicatedListLength'),
+                    (USHORT, 'AllocatorBackTraceIndex'),
+                    (USHORT, 'FreeListInUseTerminate'),  # XXX: Is this for real?
+                    (ULONG, 'NonDedicatedListLength'),
                     (P(HEAP_LIST_LOOKUP), 'BlocksIndex'),
                     (fptr(_HEAP_CHUNK, 'ListEntry'), 'UCRIndex'),
                     (P(HEAP_PSEUDO_TAG_ENTRY), 'PseudoTagEntries'),
@@ -1833,7 +1836,7 @@ if 'Heap':
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
                     (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
-                    (pint.uint16_t, 'FrontHeapLockCount'),
+                    (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
                     (HEAP_COUNTERS, 'Counters'),
@@ -1846,36 +1849,37 @@ if 'Heap':
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
                 f.extend([
-                    (pint.uint32_t, 'Flags'),
-                    (pint.uint32_t, 'ForceFlags'),
-                    (pint.uint32_t, 'CompatibilityFlags'),
-                    (pint.uint32_t, 'EncodeFlagMask'),
+                    (HEAP_SEGMENT, 'Segment'),
+                    (ULONG, 'Flags'),
+                    (ULONG, 'ForceFlags'),
+                    (ULONG, 'CompatibilityFlags'),
+                    (ULONG, 'EncodeFlagMask'),
                     (HEAP._Encoding, 'Encoding'),
-                    (pint.uint32_t, 'Interceptor'),
-                    (pint.uint32_t, 'VirtualMemoryThreshold'),
-                    (pint.uint32_t, 'Signature'),
+                    (ULONG, 'Interceptor'),
+                    (ULONG, 'VirtualMemoryThreshold'),
+                    (ULONG, 'Signature'),
                     (aligned, 'align(SegmentReserve)'), # FIXME: alignment or padding?
-                    (integral, 'SegmentReserve'),
-                    (integral, 'SegmentCommit'),
-                    (integral, 'DeCommitFreeBlockThreshold'),
-                    (integral, 'DeCommitTotalFreeThreshold'),
-                    (integral, 'TotalFreeSize'),
-                    (integral, 'MaximumAllocationSize'),
-                    (pint.uint16_t, 'ProcessHeapsListIndex'),
-                    (pint.uint16_t, 'HeaderValidateLength'),
+                    (size_t, 'SegmentReserve'),
+                    (size_t, 'SegmentCommit'),
+                    (size_t, 'DeCommitFreeBlockThreshold'),
+                    (size_t, 'DeCommitTotalFreeThreshold'),
+                    (size_t, 'TotalFreeSize'),
+                    (size_t, 'MaximumAllocationSize'),
+                    (USHORT, 'ProcessHeapsListIndex'),
+                    (USHORT, 'HeaderValidateLength'),
                     (aligned, 'align(HeaderValidateCopy)'),
                     (PVOID, 'HeaderValidateCopy'),
-                    (pint.uint16_t, 'NextAvailableTagIndex'),
-                    (pint.uint16_t, 'MaximumTagIndex'),
+                    (USHORT, 'NextAvailableTagIndex'),
+                    (USHORT, 'MaximumTagIndex'),
                     (aligned, 'align(TagEntries)'),
                     (P(HEAP_TAG_ENTRY), 'TagEntries'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_UCR_DESCRIPTOR)), 'UCRList'),
-                    (integral, 'AlignRound'),
-                    (integral, 'AlignMask'),
+                    (size_t, 'AlignRound'),
+                    (size_t, 'AlignMask'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
                     (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
-                    (pint.uint32_t, 'AllocatorBackTraceIndex'),
-                    (pint.uint32_t, 'NonDedicatedListLength'),
+                    (ULONG, 'AllocatorBackTraceIndex'),
+                    (ULONG, 'NonDedicatedListLength'),
                     (P(HEAP_LIST_LOOKUP), 'BlocksIndex'),
                     (fptr(_HEAP_CHUNK, 'ListEntry'), 'UCRIndex'),
                     (P(HEAP_PSEUDO_TAG_ENTRY), 'PseudoTagEntries'),
@@ -1885,13 +1889,13 @@ if 'Heap':
                     #(P(ptype.undefined), 'CommitRoutine'),
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
                     (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
-                    (pint.uint16_t, 'FrontHeapLockCount'),
+                    (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
 
                     (aligned, 'align(FrontEndHeapUsageData)'),
                     (P(pint.uint16_t), 'FrontEndHeapUsageData'),    # XXX: this target doesn't seem right
-                    (pint.uint16_t, 'FrontEndHeapMaximumIndex'),
+                    (USHORT, 'FrontEndHeapMaximumIndex'),
                     (dyn.clone(self._HeapStatusBitmap, length=129 if getattr(self, 'WIN64', False) else 257), 'FrontEndHeapStatusBitmap'),
 
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
