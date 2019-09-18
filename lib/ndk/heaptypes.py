@@ -136,65 +136,6 @@ if 'HeapMeta':
                 (ULONG, 'EndStamp'),    # 0xdcbaaaaa
             ])
 
-if False and 'HeapCache':
-    class HeapCache(pstruct.type):
-        # IBM X-Force - Heap Cache Exploitation
-        _fields_ = [
-            (ULONG, 'NumBuckets'),
-            (pint.int32_t, 'CommittedSize'),
-            (LARGE_INTEGER, 'CounterFrequency'),
-            (LARGE_INTEGER, 'AverageAllocTime'),
-            (LARGE_INTEGER, 'AverageFreeTime'),
-            (pint.int32_t, 'SampleCounter'),
-            (pint.int32_t, 'field_24'),
-            (LARGE_INTEGER, 'AllocTimeRunningTotal'),
-            (LARGE_INTEGER, 'FreeTimeRunningTotal'),
-            (pint.int32_t, 'AllocTimeCount'),
-            (pint.int32_t, 'FreeTimeCount'),
-            (pint.int32_t, 'Depth'),
-            (pint.int32_t, 'HighDepth'),
-            (pint.int32_t, 'LowDepth'),
-            (pint.int32_t, 'Sequence'),
-            (pint.int32_t, 'ExtendCount'),
-            (pint.int32_t, 'CreateUCRCount'),
-            (pint.int32_t, 'LargestHighDepth'),
-            (pint.int32_t, 'HighLowDifference'),
-
-            (P(pint.uint8_t), 'pBitmap'), # XXX
-
-            (P(_HEAP_CHUNK), 'pBucket'),  # XXX
-            (lambda s: P(dyn.array(_HEAP_CHUNK, s['NumBuckets'].li.int())), 'Buckets'),
-            (lambda s: dyn.array(pint.uint32_t, s['NumBuckets'].li.int() / 32), 'Bitmap'),
-        ]
-
-    class imm_HeapCache(pstruct.type):
-        _fields_ = [
-            (pint.uint32_t, 'NumBuckets'),
-            (pint.uint32_t, 'CommittedSize'),
-            (pint.uint64_t, 'CounterFrequency'),
-            (pint.uint64_t, 'AverageAllocTime'),
-            (pint.uint64_t, 'AverageFreeTime'),
-            (pint.uint32_t, 'SampleCounter'),
-            (pint.uint32_t, 'field_24'),
-            (pint.uint64_t, 'AllocTimeRunningTotal'),
-            (pint.uint64_t, 'FreeTimeRunningTotal'),
-            (pint.uint32_t, 'AllocTimeCount'),
-            (pint.uint32_t, 'FreeTimeCount'),
-            (pint.uint32_t, 'Depth'),
-            (pint.uint32_t, 'HighDepth'),
-            (pint.uint32_t, 'LowDepth'),
-            (pint.uint32_t, 'Sequence'),
-            (pint.uint32_t, 'ExtendCount'),
-            (pint.uint32_t, 'CreateUCRCount'),
-            (pint.uint32_t, 'LargestHighDepth'),
-            (pint.uint32_t, 'HighLowDifference'),
-            (pint.uint64_t, 'pBitmap'),
-
-            (lambda s: dyn.array(P(_HEAP_CHUNK), s['NumBuckets'].li.int()), 'Buckets'),
-            (lambda s: dyn.clone(pbinary.array, _object_=1, length=s['NumBuckets'].li.int()), 'Bitmask'),    # XXX: This array can be too large and should be a simulated pbinary.array
-    #        (lambda s: dyn.block(s['NumBuckets'].li.int() / 8), 'Bitmask'),
-        ]
-
 if 'HeapEntry':
     class HEAP_BUCKET(pstruct.type):
         @pbinary.littleendian
@@ -273,7 +214,7 @@ if 'HeapEntry':
         def __init__(self, **attrs):
             super(HEAP_ENTRY, self).__init__(**attrs)
             f = [
-                (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'ReservedForAlignment')
+                (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData')
             ]
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
@@ -1021,6 +962,39 @@ if 'Frontend':
                 yield item
             return
 
+    class ListsInUseUlong(parray.type):
+        _object_ = ULONG
+
+        # Make this type look like a pbinary.array sorta
+        def bits(self):
+            return self.size() << 3
+        def bitmap(self):
+            iterable = (ptypes.bitmap.new(item.int(), 32) for item in self)
+            return reduce(ptypes.bitmap.push, map(ptypes.bitmap.reverse, iterable), ptypes.bitmap.zero)
+
+        def check(self, index):
+            res, offset = self[index >> 5], index & 0x1f
+            return res.int() & (2 ** offset) and 1
+        def run(self):
+            return self.bitmap()
+        def summary(self):
+            objectname, _ = super(ListsInUseUlong, self).summary().split(' ', 2)
+            res = self.bitmap()
+            return ' '.join((objectname, "({:s}, {:d})".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))))
+        def details(self):
+            bytes_per_item = self._object_().a.size()
+            bits_per_item = bytes_per_item * 8
+            bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
+            bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
+
+            items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
+
+            width = len("{:x}".format(self.bits()))
+            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item)) for i, item in enumerate(items)))
+
+        def repr(self):
+            return self.details()
+
 if 'LookasideList':
     class HEAP_LOOKASIDE(pstruct.type):
         _fields_ = [
@@ -1043,6 +1017,47 @@ if 'LookasideList':
         type = 1
         HEAP_MAX_FREELIST = 0x80
         length, _object_ = HEAP_MAX_FREELIST, HEAP_LOOKASIDE
+
+    class HeapCache(pstruct.type):
+        # ISS X-Force - Heap Cache Exploitation
+        # ftp://ftp.software.ibm.com/common/ssi/sa/wh/n/sew03014usen/SEW03014USEN.PDF
+        def __Bitmap(self):
+            p = self.getparent(HeapCache)
+            res = p['NumBuckets'].li
+            return dyn.clone(ListsInUseUlong, length=res.int() / 32)
+
+        def __Buckets(self):
+            p = self.getparent(HeapCache)
+            res = self['NumBuckets'].li
+            return dyn.array(_HEAP_CHUNK, res.int())
+
+        _fields_ = [
+            (ULONG, 'NumBuckets'),
+            (pint.int32_t, 'CommittedSize'),
+            (LARGE_INTEGER, 'CounterFrequency'),
+            (LARGE_INTEGER, 'AverageAllocTime'),
+            (LARGE_INTEGER, 'AverageFreeTime'),
+            (pint.int32_t, 'SampleCounter'),
+            (pint.int32_t, 'field_24'),
+            (LARGE_INTEGER, 'AllocTimeRunningTotal'),
+            (LARGE_INTEGER, 'FreeTimeRunningTotal'),
+            (pint.int32_t, 'AllocTimeCount'),
+            (pint.int32_t, 'FreeTimeCount'),
+            (pint.int32_t, 'Depth'),
+            (pint.int32_t, 'HighDepth'),
+            (pint.int32_t, 'LowDepth'),
+            (pint.int32_t, 'Sequence'),
+            (pint.int32_t, 'ExtendCount'),
+            (pint.int32_t, 'CreateUCRCount'),
+            (pint.int32_t, 'LargestHighDepth'),
+            (pint.int32_t, 'HighLowDifference'),
+
+            (P(__Bitmap), 'pBitmap'), # XXX
+            (P(__Buckets), 'pBucket'),  # XXX
+
+            (__Buckets, 'Buckets'),
+            (__Bitmap, 'Bitmap'),
+        ]
 
 if 'SegmentHeap':
     # FIXME: These are just placeholders for now
@@ -1962,39 +1977,6 @@ if 'Heap':
             else:
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
-
-    class ListsInUseUlong(parray.type):
-        _object_ = pint.uint32_t
-
-        # Make this type look like a pbinary.array sorta
-        def bits(self):
-            return self.size() << 3
-        def bitmap(self):
-            iterable = (ptypes.bitmap.new(item.int(), 32) for item in self)
-            return reduce(ptypes.bitmap.push, map(ptypes.bitmap.reverse, iterable))
-
-        def check(self, index):
-            res, offset = self[index >> 5], index & 0x1f
-            return res.int() & (2 ** offset) and 1
-        def run(self):
-            return self.bitmap()
-        def summary(self):
-            objectname, _ = super(ListsInUseUlong, self).summary().split(' ', 2)
-            res = self.bitmap()
-            return ' '.join((objectname, ptypes.bitmap.hex(res)))
-        def details(self):
-            bytes_per_item = self._object_().a.size()
-            bits_per_item = bytes_per_item * 8
-            bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
-            bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
-
-            items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
-
-            width = len("{:x}".format(self.bits()))
-            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item)) for i, item in enumerate(items)))
-
-        def repr(self):
-            return self.details()
 
     class HEAP_LIST_LOOKUP(pstruct.type):
         def __init__(self, **attrs):
