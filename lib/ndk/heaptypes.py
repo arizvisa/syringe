@@ -216,11 +216,16 @@ if 'HeapEntry':
             return self['BlockUnits'].li.int() >> 1
 
     class HEAP_ENTRY_EXTRA(pstruct.type):
+        def __padding(self):
+            size = 8 if getattr(self, 'WIN64', False) else 4
+            res = sum(self[fld].li.size() for fld in ['AllocatorBacktraceIndex', 'TagIndex'])
+            return dyn.block(size - res)
+
         _fields_ = [
-            (pint.uint16_t, 'AllocatorBacktraceIndex'),
-            (pint.uint64_t, 'ZeroInit'),
-            (pint.uint16_t, 'TagIndex'),
-            (pint.uint32_t, 'Settable'),
+            (USHORT, 'AllocatorBacktraceIndex'),
+            (USHORT, 'TagIndex'),
+            (__padding, 'padding(AllocatorBacktraceIndex,TagIndex)'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Settable'),
         ]
 
     class HEAP_ENTRY_(pbinary.flags):
@@ -241,6 +246,7 @@ if 'HeapEntry':
                 width, _values_ = 3, [
                     ('Chunk', 0),
                     ('Segment', 1),
+                    ('LargeChunk', 4),
                     ('Linked', 5),
                 ]
             _fields_ = [
@@ -331,9 +337,9 @@ if 'HeapEntry':
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 res = "Size={:x} SmallTagIndex={:x} PreviousSize={:x} SegmentOffset={:x}"
                 res = [res.format(self['Size'].int(), self['SmallTagIndex'].int(), self['PreviousSize'].int(), self['SegmentOffset'].int())]
-                res+= ["UnusedBytes ({:s})".format(self['UnusedBytes'].summary())]
-                res+= ["Flags ({:s})".format(self['Flags'].summary())]
-                return ' : '.join(res)
+                res+= ["UnusedBytes=({:s})".format(self['UnusedBytes'].summary())]
+                res+= ["Flags=({:s})".format(self['Flags'].summary())]
+                return ' '.join(res)
             return super(HEAP_ENTRY, self).summary()
 
     class _HEAP_ENTRY(ptype.encoded_t):
@@ -791,6 +797,34 @@ if 'HeapEntry':
             return "*{:#x} -> *{:#x}".format(self.get(), self.d.getoffset())
 
 if 'HeapChunk':
+    class HEAP_UNCOMMITTED_DATA(ptype.block):
+        def blocksize(self):
+            return 0
+        def summary(self):
+            return "...{:d} bytes...".format(self.length)
+        def dereference(self, **attrs):
+            attrs.setdefault('length', self.length)
+            return self.cast(ptype.block, **attrs)
+        d = property(fget=lambda self, **attrs: self.dereference(**attrs))
+
+    class HEAP_BLOCK_UNCOMMITTED(HEAP_UNCOMMITTED_DATA):
+        pass
+
+    class HEAP_CHUNK_LARGE(pstruct.type):
+        length = 0
+        def __Data(self):
+            res = self['Header'].li.size()
+            return dyn.clone(HEAP_UNCOMMITTED_DATA, length=max({0, self.length - res}))
+
+        _fields_ = [
+            (HEAP_ENTRY, 'Header'),
+            (__Data, 'Data'),
+        ]
+
+        def summary(self):
+            res = map(r'\x{:02x}'.format, six.iterbytes(self['Header'].serialize()))
+            return "Header=\"{:s}\" Data=...{:d} bytes...".format(str().join(res), self['Data'].length)
+
     class _HEAP_CHUNK(pstruct.type):
         '''
         This is an internal definition that isn't defined by Microsoft, but is
@@ -1249,6 +1283,12 @@ if 'LFH':
             else:
                 raise error.NdkUnsupportedVersion(self)
 
+        def iterate(self):
+            '''Iterate through all the used subsegments in this particular zone.'''
+            for item in self['SubSegments']:
+                yield item
+            return
+
     class HEAP_BUCKET_RUN_INFO(pstruct.type):
         _fields_ = [
             (ULONG, 'Bucket'),
@@ -1275,7 +1315,6 @@ if 'LFH':
             ]
         def __init__(self, **attrs):
             super(USER_MEMORY_CACHE_ENTRY, self).__init__(**attrs)
-            aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
             f = self._fields_ = []
             f.extend([
                 #(dyn.clone(SLIST_HEADER, _object_=UserBlocks), 'UserBlocks'),
@@ -1481,7 +1520,6 @@ if 'LFH':
         def __init__(self, **attrs):
             super(LFH_HEAP, self).__init__(**attrs)
             integral = ULONGLONG if getattr(self, 'WIN64', False) else ULONG
-            aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
             f = self._fields_ = []
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN7:
@@ -1498,7 +1536,6 @@ if 'LFH':
                     (ULONG, 'CacheFrees'),
                     (integral, 'SizeInCache'),
                     (HEAP_BUCKET_RUN_INFO, 'RunInfo'),
-                    (aligned, 'align(UserBlockCache)'),
                     (dyn.array(USER_MEMORY_CACHE_ENTRY, 12), 'UserBlockCache'), # FIXME: Not sure what this cache is used for
                     (dyn.array(HEAP_BUCKET, 128), 'Buckets'),
                     (HEAP_LOCAL_DATA, 'LocalData'),
@@ -1537,17 +1574,6 @@ if 'LFH':
             self._fields_ = f
 
 if 'Heap':
-    class HEAP_UCR_DESCRIPTOR(pstruct.type):
-        def __init__(self, **attrs):
-            super(HEAP_UCR_DESCRIPTOR, self).__init__(**attrs)
-            f = self._fields_ = []
-            f.extend([
-                (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_UCR_DESCRIPTOR)), 'ListEntry'),
-                (dyn.clone(LIST_ENTRY, _path_=('UCRSegmentList',), _object_=fptr(HEAP_SEGMENT, 'UCRSegmentList')), 'SegmentEntry'),
-                (P(lambda s: dyn.clone(ptype.undefined, length=s.p['Size'].li.int())), 'Address'),  # Sentinel Address
-                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'Size'),
-            ])
-
     class HEAP_SEGMENT(pstruct.type, versioned):
         def __init__(self, **attrs):
             super(HEAP_SEGMENT, self).__init__(**attrs)
@@ -1648,19 +1674,42 @@ if 'Heap':
                 yield n
             return
 
-    class HEAP_VIRTUAL_ALLOC_ENTRY(pstruct.type):
-        def __init__(self, **attrs):
-            super(HEAP_VIRTUAL_ALLOC_ENTRY, self).__init__(**attrs)
-            f = self._fields_ = []
+    class HEAP_UCR_DESCRIPTOR(pstruct.type):
+        def __ListEntry(self):
+            res = P(HEAP_UCR_DESCRIPTOR)
+            return dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=res)
 
-            # FIXME: is this right that HEAP.UCRIndex points to this?
-            f.extend([
-                (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'ListEntry'),
-                (HEAP_ENTRY_EXTRA, 'ExtraStuff'),
-                (pint.uint32_t, 'CommitSize'),
-                (pint.uint32_t, 'ReserveSize'),
-                (_HEAP_ENTRY, 'BusyBlock'),
-            ])
+        def __Address(self):
+            def target(self):
+                p = self.getparent(HEAP_UCR_DESCRIPTOR)
+                res = p['Size'].li
+                return dyn.clone(HEAP_BLOCK_UNCOMMITTED, length=res.int())
+            return P(target)
+
+        _fields_ = [
+            (__ListEntry, 'ListEntry'),
+            (dyn.clone(LIST_ENTRY, _path_=('UCRSegmentList',), _object_=fptr(HEAP_SEGMENT, 'UCRSegmentList')), 'SegmentEntry'),
+            (__Address, 'Address'),  # Sentinel Address
+            (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'Size'),
+        ]
+
+    class HEAP_VIRTUAL_ALLOC_ENTRY(pstruct.type):
+        def __ListEntry(self):
+            res = P(HEAP_VIRTUAL_ALLOC_ENTRY)
+            return dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=res)
+
+        def __BusyBlock(self):
+            cb = self['CommitSize'].li
+            res = sum(self[fld].li.size() for fld in ['ListEntry', 'ExtraStuff', 'CommitSize', 'ReserveSize'])
+            return dyn.clone(HEAP_CHUNK_LARGE, length=max({0, cb.int() - res}))
+
+        _fields_ = [
+            (__ListEntry, 'ListEntry'),
+            (HEAP_ENTRY_EXTRA, 'ExtraStuff'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'CommitSize'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'ReserveSize'),
+            (__BusyBlock, 'BusyBlock'),
+        ]
 
     class HEAP(pstruct.type, versioned):
         def UncommittedRanges(self):
@@ -1772,7 +1821,6 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_UCR_DESCRIPTOR)), 'UCRList'),
                     (integral, 'AlignRound'),
                     (integral, 'AlignMask'),
-
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
                     (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
                     (pint.uint16_t, 'FreeListInUseTerminate'),
