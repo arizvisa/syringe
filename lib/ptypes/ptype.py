@@ -156,10 +156,10 @@ within their definition of a complex data structure. These types are:
 
 There are certain complex-structures that contain a field that is used to refer
 to another part or different field. To dereference a pointer, one simply has to
-call the .dereference (or .deref) method to return the new instance. If one wants
-to assign a reference to an object to the pointer, one may call .reference with
-the ptype as it's argument. In order to expose these various pointer types, this
-moduel contains the following types:
+call the .dereference method to return the new instance. If one wants to assign
+a reference to an object to the pointer, one may call .reference with the ptype
+as it's argument. In order to expose these various pointer types, this moduel
+contains the following types:
 
     pointer_t -- A integral type that points to another type. The target type is
                  defined by the ._object_ attribute.
@@ -2044,7 +2044,6 @@ class encoded_t(wrapper_t):
     _object_ = None     # new type
 
     d = property(fget=lambda s, **a: s.dereference(**a), fset=lambda s, *x, **a:s.reference(*x, **a))
-    deref = lambda s, **a: s.dereference(**a)
     ref = lambda s, *x, **a: s.reference(*x, **a)
 
     def decode(self, object, **attrs):
@@ -2189,7 +2188,6 @@ class pointer_t(encoded_t):
     _object_ = None
 
     d = property(fget=lambda s, **a: s.dereference(**a), fset=lambda s, *x, **a:s.reference(*x, **a))
-    deref = lambda s, **a: s.dereference(**a)
     ref = lambda s, *x, **a: s.reference(*x, **a)
 
     class _value_(block):
@@ -2635,7 +2633,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pointer_deref():
+    def test_pointer_dereference():
         import math
         count = math.log(sys.maxint) / math.log(0x100)
         prefix = chr(math.trunc(math.ceil(count))) + '\x00'*math.trunc(count)

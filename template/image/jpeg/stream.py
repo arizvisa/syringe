@@ -222,8 +222,7 @@ class Stream(ptype.block):
 
     # Copy from ptype.encoded_t so that it looks like the same interface
     d = property(fget=lambda self,**attrs: self.decode(**attrs))
-    deref = lambda self, **attrs: self.decode(**attrs)
-    dereference = deref
+    dereference = lambda self, **attrs: self.decode(**attrs)
 
     def decode(self):
         if not self.initializedQ():

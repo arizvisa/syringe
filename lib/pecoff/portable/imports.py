@@ -48,12 +48,11 @@ class _IMAGE_IMPORT_NAME_TABLE_NAME(pbinary.struct):
 
     # set all the required attributes so that this is faking a ptype.pointer_t
     d = property(fget=lambda s,**a: s.dereference(**a))
-    deref = lambda s,**a: s.dereference(**a)
 
     def GetName(self):
         """Returns (Import Hint, Import String)"""
         if self['Name'] != 0:
-            res = self.deref().li
+            res = self.dereference().li
             return (res.Hint(), res.String())
         return (0, None)
 
