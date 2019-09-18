@@ -138,6 +138,7 @@ if 'HeapMeta':
 
 if False and 'HeapCache':
     class HeapCache(pstruct.type):
+        # IBM X-Force - Heap Cache Exploitation
         _fields_ = [
             (ULONG, 'NumBuckets'),
             (pint.int32_t, 'CommittedSize'),
@@ -271,29 +272,18 @@ if 'HeapEntry':
 
         def __init__(self, **attrs):
             super(HEAP_ENTRY, self).__init__(**attrs)
-            f = []
-
-            f.extend([
+            f = [
                 (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'ReservedForAlignment')
-            ])
+            ]
 
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WINXP:
-                #f.extend([
-                #   (pint.uint16_t, 'Size'),
-                #   (pint.uint16_t, 'PreviousSize'),
-                #   (pint.uint8_t, 'SmallTagIndex'),
-                #   (HEAP_ENTRY_, 'Flags'),
-                #   (pint.uint8_t, 'UnusedBytes'),
-                #   (pint.uint8_t, 'SegmentIndex'),
-                #   (pint.uint8_t, 'SegmentOffset'),
-                #])
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
                 f.extend([
-                    (USHORT, 'Size'),
-                    (USHORT, 'PreviousSize'),
-                    (UCHAR, 'SegmentIndex'),
-                    (HEAP_ENTRY_, 'Flags'),
-                    (UCHAR, 'Index'),
-                    (UCHAR, 'Mask'),
+                   (pint.uint16_t, 'Size'),
+                   (pint.uint16_t, 'PreviousSize'),
+                   (pint.uint8_t, 'SmallTagIndex'),
+                   (HEAP_ENTRY_, 'Flags'),
+                   (pint.uint8_t, 'UnusedBytes'),
+                   (pint.uint8_t, 'SegmentIndex'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
@@ -1663,12 +1653,37 @@ if 'Heap':
                 yield n
             return
 
+    class HEAP_TAG_ENTRY(pstruct.type):
+        _fields_ = [
+            (ULONG, 'Allocs'),
+            (ULONG, 'Frees'),
+            (ULONG, 'Size'),
+            (USHORT, 'TagIndex'),
+            (USHORT, 'CreatorBackTraceIndex'),
+            (dyn.array(USHORT, 24), 'TagName'),
+        ]
+
+    class HEAP_UCR_SEGMENT(pstruct.type):
+        _fields_ = [
+            (lambda self: P(HEAP_UCR_SEGMENT), 'Next'),
+            (ULONG, 'ReservedSize'),
+            (ULONG, 'CommittedSize'),
+            (ULONG, 'filler'),
+        ]
+
     class HEAP_UNCOMMMTTED_RANGE(pstruct.type):
         _fields_ = [
             (lambda self: P(HEAP_UNCOMMMTTED_RANGE), 'Next'),
             (PVOID, 'Address'),
             (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'Size'),
             (ULONG, 'filler'),
+        ]
+
+    class HEAP_PSEUDO_TAG_ENTRY(pstruct.type):
+        _fields_ = [
+            (ULONG, 'Allocs'),
+            (ULONG, 'Frees'),
+            (ULONG, 'Size'),
         ]
 
     class HEAP_UCR_DESCRIPTOR(pstruct.type):
@@ -1788,11 +1803,52 @@ if 'Heap':
         def __init__(self, **attrs):
             super(HEAP, self).__init__(**attrs)
             aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
+            integral = ULONGLONG if getattr(self, 'WIN64', False) else ULONG
             size_t = SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T
             f = []
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
-                raise error.NdkUnsupportedVersion(self)
+                f.extend([
+                    (HEAP_ENTRY, 'Entry'),
+
+                    (ULONG, 'Signature'),
+                    (ULONG, 'Flags'),
+                    (ULONG, 'ForceFlags'),
+                    (ULONG, 'VirtualMemoryThreshold'),
+                    (integral, 'SegmentReserve'),
+                    (integral, 'SegmentCommit'),
+                    (integral, 'DeCommitFreeBlockThreshold'),
+                    (integral, 'DeCommitTotalFreeThreshold'),
+                    (integral, 'TotalFreeSize'),
+                    (integral, 'MaximumAllocationSize'),
+                    (USHORT, 'ProcessHeapsListIndex'),
+                    (USHORT, 'HeaderValidateLength'),
+                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(HeaderValidateLength)'),
+                    (PVOID, 'HeaderValidateCopy'),
+                    (USHORT, 'NextAvailableTagIndex'),
+                    (USHORT, 'MaximumTagIndex'),
+                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(MaximumTagIndex)'),
+                    (P(HEAP_TAG_ENTRY), 'TagEntries'),         # XXX: likely points to an array
+                    (P(HEAP_UCR_SEGMENT), 'UCRSegments'),
+                    (P(HEAP_UNCOMMMTTED_RANGE), 'UnusedUnCommittedRanges'),
+                    (ULONG_PTR, 'AlignRound'),
+                    (ULONG_PTR, 'AlignMask'),
+                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocdBlocks'),
+                    (dyn.array(P(HEAP_SEGMENT), 64), 'Segments'),
+                    (dyn.clone(ListsInUseUlong, length=4), 'FreeListsInUseUlong'),
+                    (USHORT, 'FreeListsInUseTerminate'),
+                    (USHORT, 'AllocatorBackTraceIndex'),
+                    (ULONG, 'NonDedicatedListLength'),
+                    (PVOID, 'LargeBlocksIndex'),
+                    (P(HEAP_PSEUDO_TAG_ENTRY), 'PseudoTagEntries'),     # FIXME: probably an array
+                    (dyn.array(LIST_ENTRY, 128), 'FreeLists'),
+                    (P(HEAP_LOCK), 'LockVariable'),
+                    (PVOID, 'CommitRoutine'),
+                    (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (USHORT, 'FrontHeapLockCount'),
+                    (FrontEndHeap.Type, 'FrontEndHeapType'),
+                    (UCHAR, 'LastSegmentIndex'),
+                ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
@@ -1907,56 +1963,40 @@ if 'Heap':
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
+    class ListsInUseUlong(parray.type):
+        _object_ = pint.uint32_t
+
+        # Make this type look like a pbinary.array sorta
+        def bits(self):
+            return self.size() << 3
+        def bitmap(self):
+            iterable = (ptypes.bitmap.new(item.int(), 32) for item in self)
+            return reduce(ptypes.bitmap.push, map(ptypes.bitmap.reverse, iterable))
+
+        def check(self, index):
+            res, offset = self[index >> 5], index & 0x1f
+            return res.int() & (2 ** offset) and 1
+        def run(self):
+            return self.bitmap()
+        def summary(self):
+            objectname, _ = super(ListsInUseUlong, self).summary().split(' ', 2)
+            res = self.bitmap()
+            return ' '.join((objectname, ptypes.bitmap.hex(res)))
+        def details(self):
+            bytes_per_item = self._object_().a.size()
+            bits_per_item = bytes_per_item * 8
+            bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
+            bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
+
+            items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
+
+            width = len("{:x}".format(self.bits()))
+            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item)) for i, item in enumerate(items)))
+
+        def repr(self):
+            return self.details()
+
     class HEAP_LIST_LOOKUP(pstruct.type):
-        class _ListsInUseUlong(pbinary.array):
-            _object_ = 1
-            def run(self):
-                return self.bitmap()
-            def summary(self):
-                objectname, _ = super(HEAP_LIST_LOOKUP._ListsInUseUlong, self).summary().split(' ', 2)
-                res = self.run()
-                return ' '.join((objectname, ptypes.bitmap.hex(res)))
-            def details(self):
-                bits = 32 if self.bits() < 256 else 64
-                w = len("{:x}".format(self.bits()))
-                res = ptypes.bitmap.split(self.run(), bits)
-                return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + bits*i, bits*i, w, bits*i+bits-1, w, ptypes.bitmap.string(n)) for i, n in enumerate(reversed(res))))
-            def repr(self):
-                return self.details()
-
-        class _ListsInUseUlong(parray.type):
-            _object_ = pint.uint32_t
-
-            # Make this type look like a pbinary.array sorta
-            def bits(self):
-                return self.size() << 3
-            def bitmap(self):
-                iterable = (ptypes.bitmap.new(item.int(), 32) for item in self)
-                return reduce(ptypes.bitmap.push, map(ptypes.bitmap.reverse, iterable))
-
-            def check(self, index):
-                res, offset = self[index >> 5], index & 0x1f
-                return res.int() & (2 ** offset) and 1
-            def run(self):
-                return self.bitmap()
-            def summary(self):
-                objectname, _ = super(HEAP_LIST_LOOKUP._ListsInUseUlong, self).summary().split(' ', 2)
-                res = self.bitmap()
-                return ' '.join((objectname, ptypes.bitmap.hex(res)))
-            def details(self):
-                bytes_per_item = self._object_().a.size()
-                bits_per_item = bytes_per_item * 8
-                bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
-                bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
-
-                items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
-
-                width = len("{:x}".format(self.bits()))
-                return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item)) for i, item in enumerate(items)))
-
-            def repr(self):
-                return self.details()
-
         def __init__(self, **attrs):
             super(HEAP_LIST_LOOKUP, self).__init__(**attrs)
             f = self._fields_ = []
@@ -1973,7 +2013,7 @@ if 'Heap':
 
                 (aligned, 'align(ListHead)'),
                 (P(dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fptr(_HEAP_CHUNK, 'ListEntry'))), 'ListHead'),
-                (P(lambda s: dyn.clone(HEAP_LIST_LOOKUP._ListsInUseUlong, length=s.p.ListHintsCount() >> 5)), 'ListsInUseUlong'),
+                (P(lambda s: dyn.clone(ListsInUseUlong, length=s.p.ListHintsCount() >> 5)), 'ListsInUseUlong'),
                 (P(lambda s: dyn.array(dyn.clone(FreeListBucket, _object_=fptr(_HEAP_CHUNK, 'ListEntry'), _path_=('ListEntry',), _sentinel_=s.p['ListHead'].int()), s.p.ListHintsCount())), 'ListHints'),
             ])
 
