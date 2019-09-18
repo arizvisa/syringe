@@ -96,8 +96,8 @@ rptr = rpointer
 
 ### core datatypes (handles and such)
 class BYTE(pint.uint8_t): pass
-class UCHAR(pstr.char_t): pass
-class CHAR(pstr.char_t): pass
+class UCHAR(pint.uint8_t): pass
+class CHAR(pint.sint8_t): pass
 class PCHAR(pointer(CHAR)): pass
 class WORD(pint.uint16_t): pass
 class DWORD(pint.uint32_t): pass
