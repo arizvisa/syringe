@@ -3,6 +3,8 @@ import functools, itertools, types, builtins, operator, six
 import math, logging
 
 import ptypes
+from ptypes import bitmap
+
 from . import sdkddkver, rtltypes, error
 from .datatypes import *
 
@@ -405,7 +407,7 @@ if 'HeapEntry':
 
             # If HEAP.EncodeFlagMask has been set to something, then we'll just use it
             if self._HEAP_ENTRY_EncodeFlagMask:
-                iterable = (ptypes.bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
+                iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
                 data = object['Unencoded'].serialize() + reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).encode(res)
@@ -420,7 +422,7 @@ if 'HeapEntry':
 
             # Now determine if we're encoded, and decode it if so.
             if object['Encoded'][0].int() & self._HEAP_ENTRY_EncodeFlagMask:
-                iterable = (ptypes.bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
+                iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
                 data = object['Unencoded'].serialize() + reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).decode(res)
@@ -969,8 +971,8 @@ if 'Frontend':
         def bits(self):
             return self.size() << 3
         def bitmap(self):
-            iterable = (ptypes.bitmap.new(item.int(), 32) for item in self)
-            return reduce(ptypes.bitmap.push, map(ptypes.bitmap.reverse, iterable), ptypes.bitmap.zero)
+            iterable = (bitmap.new(item.int(), 32) for item in self)
+            return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
 
         def check(self, index):
             res, offset = self[index >> 5], index & 0x1f
@@ -980,17 +982,17 @@ if 'Frontend':
         def summary(self):
             objectname, _ = super(ListsInUseUlong, self).summary().split(' ', 2)
             res = self.bitmap()
-            return ' '.join((objectname, "({:s}, {:d})".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))))
+            return ' '.join((objectname, "({:s}, {:d})".format(bitmap.hex(res), bitmap.size(res))))
         def details(self):
             bytes_per_item = self._object_().a.size()
             bits_per_item = bytes_per_item * 8
             bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
             bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
 
-            items = ptypes.bitmap.split(self.bitmap(), bits_per_row)
+            items = bitmap.split(self.bitmap(), bits_per_row)
 
             width = len("{:x}".format(self.bits()))
-            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, ptypes.bitmap.string(item)) for i, item in enumerate(items)))
+            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, bitmap.string(item)) for i, item in enumerate(items)))
 
         def repr(self):
             return self.details()
@@ -1140,10 +1142,9 @@ if 'LFH':
 
         def UsageBitmap(self):
             '''Return a bitmap showing the busy/free chunks that are available'''
-            res = (0, 0)
-            for block in self['Blocks']:
-                res = ptypes.bitmap.push(res, (int(block['Header'].BusyQ()), 1))
-            return res
+            iterable = (int(item['Header'].BusyQ()) for item in self['Blocks'])
+            iterable = (bitmap.new(item, 1) for item in iterable)
+            return reduce(bitmap.push, iterable, bitmap.zero)
 
         def __Blocks(self):
             pss = self['SubSegment'].li
@@ -1403,7 +1404,7 @@ if 'LFH':
         def UsageString(self):
             '''Return a binary string showing the busy/free chunks that are available within `UserBlocks`'''
             res = self.Usage()
-            return ptypes.bitmap.string(res)
+            return bitmap.string(res)
 
         def properties(self):
             res = super(HEAP_SUBSEGMENT, self).properties()
@@ -1799,8 +1800,8 @@ if 'Heap':
             def bits(self):
                 return self.size() << 3
             def bitmap(self):
-                iterable = (ptypes.bitmap.new(six.byte2int(item), 8) for item in self.serialize())
-                return reduce(ptypes.bitmap.push, map(ptypes.bitmap.reverse, iterable))
+                iterable = (bitmap.new(six.byte2int(item), 8) for item in self.serialize())
+                return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
             def check(self, index):
                 res, offset = self[index >> 3], index & 7
                 return six.byte2int(res) & (2 ** offset) and 1
@@ -1809,7 +1810,7 @@ if 'Heap':
 
             def details(self):
                 bytes_per_row = 8
-                iterable = iter(ptypes.bitmap.string(self.bitmap()))
+                iterable = iter(bitmap.string(self.bitmap()))
                 res = zip(*(iterable,) * 8 * bytes_per_row)
                 items = map(str().join, res)
                 width = len("{:x}".format(self.bits()))
