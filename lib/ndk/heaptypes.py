@@ -965,24 +965,25 @@ if 'Frontend':
             return
 
     class ListsInUseUlong(parray.type):
-        _object_ = ULONG
+        _object_, length = ULONG, 0
 
-        # Make this type look like a pbinary.array sorta
+        # Make this type look sorta like a pbinary.array
         def bits(self):
             return self.size() << 3
         def bitmap(self):
             iterable = (bitmap.new(item.int(), 32) for item in self)
             return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
-
         def check(self, index):
             res, offset = self[index >> 5], index & 0x1f
             return res.int() & (2 ** offset) and 1
         def run(self):
             return self.bitmap()
+
+        def repr(self):
+            return self.details()
         def summary(self):
-            objectname, _ = super(ListsInUseUlong, self).summary().split(' ', 2)
             res = self.bitmap()
-            return ' '.join((objectname, "({:s}, {:d})".format(bitmap.hex(res), bitmap.size(res))))
+            return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
         def details(self):
             bytes_per_item = self._object_().a.size()
             bits_per_item = bytes_per_item * 8
@@ -992,10 +993,40 @@ if 'Frontend':
             items = bitmap.split(self.bitmap(), bits_per_row)
 
             width = len("{:x}".format(self.bits()))
-            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, i * bits_per_row + bits_per_row - 1, width, bitmap.string(item)) for i, item in enumerate(items)))
+            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, min(self.bits(), i * bits_per_row + bits_per_row) - 1, width, bitmap.string(item)) for i, item in enumerate(items)))
+
+    class ListsInUseBytes(ptype.block):
+        _object_, length = UCHAR, 0
+        def __element__(self):
+            res = self.size()
+            return "{:s}[{:d}]".format(self._object_.typename(), res)
+
+        # Make this type look sorta like a pbinary.array
+        def bits(self):
+            return self.size() << 3
+        def bitmap(self):
+            iterable = (bitmap.new(six.byte2int(item), 8) for item in self.serialize())
+            return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        def check(self, index):
+            res, offset = self[index >> 3], index & 7
+            return six.byte2int(res) & (2 ** offset) and 1
+        def run(self):
+            return self.bitmap()
 
         def repr(self):
             return self.details()
+        def summary(self):
+            res = self.bitmap()
+            return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
+        def details(self):
+            bytes_per_row = 8
+            iterable = iter(bitmap.string(self.bitmap()))
+            rows = map(None, *(iterable,) * 8 * bytes_per_row)
+            res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
+            items = map(str().join, res)
+
+            width = len("{:x}".format(self.bits()))
+            return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, 8 * i * bytes_per_row, width, min(self.bits(), 8 * i * bytes_per_row + 8 * bytes_per_row) - 1, width, item) for i, item in enumerate(items)))
 
 if 'LookasideList':
     class HEAP_LOOKASIDE(pstruct.type):
@@ -1796,26 +1827,6 @@ if 'Heap':
                 self.attributes['_HEAP_ENTRY_Encoding'] = tuple(n.int() for n in self['Encoding'].li['Keys'])
             return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
 
-        class _HeapStatusBitmap(ptype.block):
-            def bits(self):
-                return self.size() << 3
-            def bitmap(self):
-                iterable = (bitmap.new(six.byte2int(item), 8) for item in self.serialize())
-                return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
-            def check(self, index):
-                res, offset = self[index >> 3], index & 7
-                return six.byte2int(res) & (2 ** offset) and 1
-            def run(self):
-                return self.bitmap()
-
-            def details(self):
-                bytes_per_row = 8
-                iterable = iter(bitmap.string(self.bitmap()))
-                res = zip(*(iterable,) * 8 * bytes_per_row)
-                items = map(str().join, res)
-                width = len("{:x}".format(self.bits()))
-                return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, 8 * i * bytes_per_row, width, 8 * i * bytes_per_row + 8 * bytes_per_row - 1, width, item) for i, item in enumerate(items)))
-
         def __init__(self, **attrs):
             super(HEAP, self).__init__(**attrs)
             aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
@@ -1968,7 +1979,7 @@ if 'Heap':
                     (aligned, 'align(FrontEndHeapUsageData)'),
                     (P(pint.uint16_t), 'FrontEndHeapUsageData'),    # XXX: this target doesn't seem right
                     (USHORT, 'FrontEndHeapMaximumIndex'),
-                    (dyn.clone(self._HeapStatusBitmap, length=129 if getattr(self, 'WIN64', False) else 257), 'FrontEndHeapStatusBitmap'),
+                    (dyn.clone(ListsInUseBytes, length=129 if getattr(self, 'WIN64', False) else 257), 'FrontEndHeapStatusBitmap'),
 
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
                     (HEAP_COUNTERS, 'Counters'),
