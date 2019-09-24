@@ -529,7 +529,7 @@ class _base_generic(object):
             result['uninitialized'] = True
         return result
 
-    def traverse(self, edges, filter=lambda node:True, **kwds):
+    def traverse(self, edges, filter=lambda node: True, **kwds):
         """Will walk the elements returned by the generator ``edges -> node -> ptype.type``
 
         This will iterate in a top-down approach.
@@ -538,11 +538,15 @@ class _base_generic(object):
             if not isinstance(self):
                 continue
 
+            # Check to see if our current instance is filtered, and yield it
+            # if it is.
             if filter(self):
                 yield self
 
-            for y in self.traverse(edges=edges, filter=filter, **kwds):
-                yield y
+            # Recurse into each of our edges to see if any items are requested
+            # by the caller and need to be yielded
+            for item in self.traverse(edges=edges, filter=filter, **kwds):
+                yield item
             continue
         return
 
