@@ -56,6 +56,23 @@ class ImportData(pstruct.type):
         (pstr.szstring, 'Library'),
     ]
 
+class SegmentEntry(ptype.block):
+    # FIXME: This SegmentEntry is defined incorrectly as there's things such
+    #        as relocations, alignment, etc. that need to be included. Without
+    #        these fields, the sizes of each segment are incorrect.
+    def properties(self):
+        res = super(SegmentEntry, self).properties()
+        if hasattr(self, 'Section'):
+            res['SectionName'] = self.Section['Name'].str()
+        return res
+
+class SegmentTableArray(parray.type):
+    def _object_(self):
+        p = self.getparent(Header)
+        sections = p['Sections'].li
+        section = sections[len(self.value)]
+        return dynamic.clone(SegmentEntry, length=section['SizeOfRawData'].li.int(), Section=section)
+
 class File(pstruct.type, Header, ptype.boundary):
     """Coff Object File"""
     def __Sections(self):
@@ -67,14 +84,7 @@ class File(pstruct.type, Header, ptype.boundary):
         sig = self['Signature'].li
         if sig.isImportSignature():
             return ImportData
-
-        sections = filter(lambda n: not n['Characteristics']['CNT_UNINITIALIZED_DATA'], self['Sections'].li)
-        class result(parray.type):
-            length = len(sections)
-            def _object_(self):
-                sect = sections[len(self.value)]
-                return dynamic.clone(dynamic.block(sect['SizeOfRawData'].li.int()), Section=sect, SectionName=sect['Name'].str())
-        return result
+        return dynamic.clone(SegmentTableArray, length=sig['NumberOfSections'].int())
 
     _fields_ = [
         (Signature, 'Signature'),
