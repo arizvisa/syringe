@@ -2,6 +2,17 @@ import os,sys
 import pecoff
 from ptypes import utils
 
+def traverse_address(address):
+    def edges(self, address=address, **kwargs):
+        if not isinstance(self, ptypes.ptype.container):
+            return
+        for item in self.value:
+            if item.contains(address):
+                yield item
+            continue
+        return
+    return edges
+
 def rightjustify(string, size, space=' '):
     # i don't know if python has support for right justification with character
     #  filling. their fmtstring doesn't seem to..
@@ -21,22 +32,22 @@ def processexecutable(filename, address):
     print 'ImageBase: %x'% imagebase
 
     # try exe header first
-    try:
-        mz.setoffset(imagebase,recurse=True)
+    mz.setoffset(imagebase, recurse=True)
+    if mz.contains(address):
         result = mz
-        for x in reversed(mz.at(address)):
-            print rightjustify(' ------- %s'%x, 70, '-')
-            result = result[x]
+        for item in mz.traverse(traverse_address(address)):
+            x = item.__name__
+            print rightjustify('------- %s'%x, 70, '-')
+            result = result[int(x) if isinstance(result, ptypes.parray.type) else x]
             print result
-        pass
 
     # try sections
-    except ValueError:
+    else:
         mz.setoffset(0,recurse=True)
-        va = address-imagebase
+        va = address - imagebase
         s = pe['Sections'].getsectionbyaddress(va)
-        offset = va - int(s['VirtualAddress'])
-        data = s.get().load().serialize()
+        offset = va - s['VirtualAddress'].int()
+        data = s['PointerToRawData'].d.load().serialize()
 
         left = offset - 8
         left &= ~0xf
@@ -47,24 +58,24 @@ def processexecutable(filename, address):
 
         sectionname = s['Name'].get()
         print rightjustify(' section %s'% sectionname, 76, '-')
-        print utils.hexdump(data[left:right], offset=int(s['VirtualAddress'])+offset+imagebase)
+        print utils.hexdump(data[left:right], offset=s['VirtualAddress'].int()+offset+imagebase)
 
     mz.setoffset(0, recurse=True)
     return
 
 from ptypes import ptype
 def dumpcontainer(pc, indent=''):
-    if type(pc.value) is list:
+    if isinstance(pc.value, list):
         for p in pc.value:
             a = p.getoffset()
             range ='%x-%x'% (a, a+p.size())
             sym = '%s -> %s'%( p.__name__, p.__class__.__name__)
             r = repr(p.serialize())
 
-            if type(p.value) is not list:
+            if not isinstance(p.value, list):
                 print indent, range, sym, ' | ', r
                 continue
-            print indent, range, sym
+            print indent, range, sy
             dumpcontainer(p, indent+' ')
         pass
     return
@@ -81,7 +92,7 @@ def dumpexecutable(filename):
     print pe
     for x in sections:
         name = x['Name'].str()
-        address = int(x['VirtualAddress']) + imagebase
+        address = x['VirtualAddress'].int() + imagebase
         print x['Name'].str(), hex(address), hex(address + x.getloadedsize())
     mz.setoffset(0,recurse=True)
     return
@@ -89,13 +100,13 @@ def dumpexecutable(filename):
 def dumpversion(filename):
     global mz,pe,imagebase,sections,datadirectory,imports
     opt = pe['OptionalHeader']
-    print 'OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].num(), opt['MinorOperatingSystemVersion'].num()))
-    print 'ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].num(), opt['MinorImageVersion'].num()))
-    print 'SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].num(), opt['MinorSubsystemVersion'].num()))
+    print 'OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].int(), opt['MinorOperatingSystemVersion'].int()))
+    print 'ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].int(), opt['MinorImageVersion'].int()))
+    print 'SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].int(), opt['MinorSubsystemVersion'].int()))
     print opt['Win32VersionValue']
 
     global root
-    rsrc = pe['OptionalHeader']['DataDirectory'][2]
+    rsrc = datadirectory[2]
     root = rsrc['VirtualAddress'].d.l
     global a,b
     a,b = root['Ids']
@@ -117,17 +128,15 @@ if __name__ == '__main__':
 
     source = ptypes.provider.file(filename)
     mz = pecoff.Executable.File(source=source).l
-    pe = mz['Pe']
+    pe = mz['Next']['Header']
     sections = pe['Sections']
-    imagebase = int(pe['OptionalHeader']['ImageBase'])
-    datadirectory = pe['OptionalHeader']['DataDirectory']
+    imagebase = pe['OptionalHeader']['ImageBase'].int()
+    datadirectory = pe['DataDirectory']
 
     if zerobase:
         imagebase = 0
 
-    exports = datadirectory[0].get()
-    imports = datadirectory[1].get()
-    resources = datadirectory[2].get()
+    imports = datadirectory[1]['Address'].d.l
 
     if len(sys.argv) == 2:
         dumpexecutable(filename)
