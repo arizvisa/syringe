@@ -6,11 +6,6 @@ from .headers import *
 
 import logging
 
-def open(filename, **kwds):
-    logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))
-    res = File(filename=filename, source=ptypes.provider.file(filename, **kwds))
-    return res.load()
-
 class Signature(portable.IMAGE_FILE_HEADER):
     _fields_ = [
         (Machine, 'Machine'),
@@ -162,11 +157,11 @@ if __name__ == 'CoffObject':
         if len(aux) > 0:
             symbolcount = aux[0]['NumberOfRelocations'].int()
             if sectioncount != symbolcount:
-                logging.warn('number of relocations (%d) for section %s differs from section definition (%d)'% (symbolcount,sym['Name'].str(),sectioncount))
+                logging.warn("number of relocations ({:d}) for section {:s} differs from section definition ({:d})".format(symbolcount, sym['Name'].str(), sectioncount))
                 logging.warn(aux[0])
-                print 'failed with relocated section %r'% section
+                print 'failed with relocated section {!r}'.format(section)
                 continue
-        print 'successfully relocated section %r'% section
+        print 'successfully relocated section {!r}'.format(section)
 
     print '-'*20 + 'adding some symbols'
     ## reassign some symbols
@@ -222,6 +217,6 @@ if __name__ == 'CoffObject':
     #        print ptypes.utils.hexdump( section.getdata().serialize() )
             print ptypes.utils.hexdump( data )
 
-            x = file('%s.section'% name[1:], 'wb')
+            x = file("{:s}.section".format(name[1:]), 'wb')
             x.write(data)
             x.close()

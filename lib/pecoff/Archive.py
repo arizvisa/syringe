@@ -3,11 +3,6 @@ from ptypes import *
 
 import Object
 
-def open(filename, **kwds):
-    logging.warn("{package:s} : {package:s}.open({filename!r}{kwds:s}) has been deprecated. Try using {package:s}.File(source=ptypes.prov.file({filename!r}{kwds:s})) instead.".format(package=__name__, filename=filename, kwds=(', '+', '.join('{:s}={!r}'.format(k, v) for k, v in kwds.iteritems())) if kwds else ''))
-    res = File(filename=filename, source=ptypes.provider.file(filename, **kwds))
-    return res.load()
-
 class ulong(pint.bigendian(pint.uint32_t)): pass
 
 class stringinteger(pstr.string):
@@ -51,8 +46,8 @@ class Import(pstruct.type):
             return sig1 == 0 and sig2 == 0xffff
 
         def repr(self):
-            if self.initialized:
-                return '%s!%s'%( self['Module'].str(), self['Name'].str() )
+            if self.initializedQ():
+                return '!'.join(self[fld].str() for fld in ['Module', 'Name'])
             return super(Import, self).repr()
 
     _fields_ = [
@@ -210,8 +205,8 @@ class Members(parray.terminated):
         return
 
     def repr(self):
-        if self.initialized:
-            return '%s %d members'%( self.name(), len(self) )
+        if self.initializedQ():
+            return "{:s} {:d} members".format(self.name(), len(self))
         return super(Members,self).repr()
 
 class File(pstruct.type):
@@ -222,14 +217,14 @@ class File(pstruct.type):
     ]
 
     def repr(self):
-        if self.initialized:
-            return '%s signature:%s members:%d'% (self.name(), repr(self['signature'].serialize()), self.getmembercount())
+        if self.initializedQ():
+            return "{:s} signature:{:s} members:{:d}".format(self.name(), self['signature'].summary(), self.getmembercount())
         return super(File,self).repr()
 
     ## really slow interface
     def getmember(self, index):
         offsets = self['members'].Linker['Offsets']
-        return self.new(MemberHeader, __name__='member[%d]'% index, offset=offsets[index])
+        return self.new(MemberHeader, __name__="member[{:d}]".format(index), offset=offsets[index])
 
     def getmemberdata(self, index):
         return self.getmember(index).li.data().l.serialize()
@@ -273,7 +268,7 @@ class File(pstruct.type):
             if p.load().serialize() == '\x00\x00\xff\xff':
                 continue
 
-#            yield self.new(Object.File, __name__='Member[%d]'% index, offset=o)
+#            yield self.new(Object.File, __name__="Member[{:d}]".format(index), offset=o)
             yield self.new(Object.File, offset=o)
         return
 
