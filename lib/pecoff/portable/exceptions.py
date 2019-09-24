@@ -86,8 +86,9 @@ class IMAGE_EXCEPTION_DIRECTORY(parray.block):
         return self.p.p['Size'].int()
 
 if __name__ == '__main__':
-    import pecoff,ptypes
-    a = pecoff.Executable.open('c:/windows/system32/wow64win.dll', mode='rb')
+    import ptypes, pecoff
+    source = ptypes.provider.file('c:/windows/system32/wow64win.dll', mode='rb')
+    a = pecoff.Executable.File(source=source).l
     print a['Next']['Header']['padding'].hexdump()
     print a['Next']['Data']['Sections'][0]
     #b = a.new(dyn.block(0x5b74), offset=0x50e00)

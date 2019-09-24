@@ -217,9 +217,10 @@ class VS_VERSIONINFO(RT_VERSION):
         return RT_VERSION
 
 if __name__ == '__main__':
-    import pecoff
-#    z = pecoff.Executable.open('c:/Program Files (x86)/Debugging Tools for Windows (x86)/windbg.exe', mode='r')
-    z = pecoff.Executable.open('obj/windbg.exe')
+    import ptypes, pecoff
+    #source = ptypes.provider.file('c:/Program Files (x86)/Debugging Tools for Windows (x86)/windbg.exe', mode='r')
+    source = ptypes.provider.file('obj/windbg.exe')
+    z = pecoff.Executable.File(source=source).l
 
     a = z['DataDirectory'][2]['Address'].d.l
     b = a['Ids'][0]

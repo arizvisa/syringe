@@ -101,7 +101,7 @@ def dumpversion(filename):
     a,b = root['Ids']
 
 if __name__ == '__main__':
-    import sys
+    import sys, ptypes
     zerobase = False
     if '-z' in sys.argv:
         i = sys.argv.index('-z')
@@ -115,7 +115,8 @@ if __name__ == '__main__':
         print 'Usage: %s [-z] filename [hexaddress]'% sys.argv[0]
         sys.exit(0)
 
-    mz = pecoff.Executable.open(filename)
+    source = ptypes.provider.file(filename)
+    mz = pecoff.Executable.File(source=source).l
     pe = mz['Pe']
     sections = pe['Sections']
     imagebase = int(pe['OptionalHeader']['ImageBase'])

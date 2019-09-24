@@ -3088,7 +3088,8 @@ if __name__ == '__main__':
         parentTester = parentTester()
         #c = b.getparent(parentTester())
         #print builtins.isinstance(b, ptype.encoded_t)
-        a = pecoff.Executable.open('~/mshtml.dll')
+        source = ptypes.provider.file('~/mshtml.dll')
+        a = pecoff.Executable.File(source=source).l
 
         global result
         result = list(a.collect())

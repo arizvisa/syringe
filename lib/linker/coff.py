@@ -181,7 +181,8 @@ class executable(coff):
 
     @classmethod
     def open(cls, path):
-        p = pecoff.Executable.open(path, mode='r')
+        source = ptypes.provider.file(path, mode='r')
+        p = pecoff.Executable.File(source=source).l
 
         result = cls()
         result.modulename = os.path.basename(path)
@@ -427,7 +428,8 @@ class object(coff):
 
     @classmethod
     def open(cls, path):
-        p = pecoff.Object.open(path, mode='r')
+        source = ptypes.provider.file(path, mode='r')
+        p = pecoff.Object.File(source=source).l
 
         result = cls()
         result.modulename = os.path.basename(path)
@@ -599,7 +601,8 @@ class library(store.container, coff):
 
     @classmethod
     def open(cls, path):
-        p = pecoff.Archive.open(path, mode='r')
+        source = ptypes.provider.file(path, mode='r')
+        p = pecoff.Archive.File(source=source).l
 
         result = cls()
         result.modulename = os.path.basename(path)
