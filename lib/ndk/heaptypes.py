@@ -172,9 +172,9 @@ if 'HeapEntry':
 
     class HEAP_ENTRY_(pbinary.flags):
         _fields_ = [
-            (1, 'SETTABLE_FLAG3'),   # No Coalesce
-            (1, 'SETTABLE_FLAG2'),   # FFU2
-            (1, 'SETTABLE_FLAG1'),   # FFU1
+            (1, 'NO_COALESCE'),     # SETTABLE_FLAG3
+            (1, 'FFU2'),            # SETTABLE_FLAG2
+            (1, 'FFU1'),            # SETTABLE_FLAG1
             (1, 'LAST_ENTRY'),
             (1, 'VIRTUAL_ALLOC'),
             (1, 'FILL_PATTERN'),
@@ -221,12 +221,12 @@ if 'HeapEntry':
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
                 f.extend([
-                   (pint.uint16_t, 'Size'),
-                   (pint.uint16_t, 'PreviousSize'),
-                   (pint.uint8_t, 'SmallTagIndex'),
+                   (USHORT, 'Size'),
+                   (USHORT, 'PreviousSize'),
+                   (UCHAR, 'SegmentIndex'),
                    (HEAP_ENTRY_, 'Flags'),
-                   (pint.uint8_t, 'UnusedBytes'),
-                   (pint.uint8_t, 'SegmentIndex'),
+                   (UCHAR, 'UnusedBytes'),
+                   (UCHAR, 'TagIndex'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
@@ -268,9 +268,18 @@ if 'HeapEntry':
             return not self.BusyQ()
 
         def summary(self):
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WS03):
+                res = "Size={:x} SegmentIndex={:x} PreviousSize={:x} TagIndex={:x}"
+                res = [res.format(self['Size'].int(), self['SegmentIndex'].int(), self['PreviousSize'].int(), self['TagIndex'].int())]
+
+                res+= ["UnusedBytes=({:s})".format(self['UnusedBytes'].summary())]
+                res+= ["Flags=({:s})".format(self['Flags'].summary())]
+                return ' '.join(res)
+
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 res = "Size={:x} SmallTagIndex={:x} PreviousSize={:x} SegmentOffset={:x}"
                 res = [res.format(self['Size'].int(), self['SmallTagIndex'].int(), self['PreviousSize'].int(), self['SegmentOffset'].int())]
+
                 res+= ["UnusedBytes=({:s})".format(self['UnusedBytes'].summary())]
                 res+= ["Flags=({:s})".format(self['Flags'].summary())]
                 return ' '.join(res)
@@ -1066,24 +1075,24 @@ if 'LookasideList':
 
         _fields_ = [
             (ULONG, 'NumBuckets'),
-            (pint.int32_t, 'CommittedSize'),
+            (LONG, 'CommittedSize'),
             (LARGE_INTEGER, 'CounterFrequency'),
             (LARGE_INTEGER, 'AverageAllocTime'),
             (LARGE_INTEGER, 'AverageFreeTime'),
-            (pint.int32_t, 'SampleCounter'),
-            (pint.int32_t, 'field_24'),
+            (LONG, 'SampleCounter'),
+            (LONG, 'field_24'),
             (LARGE_INTEGER, 'AllocTimeRunningTotal'),
             (LARGE_INTEGER, 'FreeTimeRunningTotal'),
-            (pint.int32_t, 'AllocTimeCount'),
-            (pint.int32_t, 'FreeTimeCount'),
-            (pint.int32_t, 'Depth'),
-            (pint.int32_t, 'HighDepth'),
-            (pint.int32_t, 'LowDepth'),
-            (pint.int32_t, 'Sequence'),
-            (pint.int32_t, 'ExtendCount'),
-            (pint.int32_t, 'CreateUCRCount'),
-            (pint.int32_t, 'LargestHighDepth'),
-            (pint.int32_t, 'HighLowDifference'),
+            (LONG, 'AllocTimeCount'),
+            (LONG, 'FreeTimeCount'),
+            (LONG, 'Depth'),
+            (LONG, 'HighDepth'),
+            (LONG, 'LowDepth'),
+            (LONG, 'Sequence'),
+            (LONG, 'ExtendCount'),
+            (LONG, 'CreateUCRCount'),
+            (LONG, 'LargestHighDepth'),
+            (LONG, 'HighLowDifference'),
 
             (P(__Bitmap), 'pBitmap'), # XXX
             (P(__Buckets), 'pBucket'),  # XXX
@@ -1977,7 +1986,7 @@ if 'Heap':
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
 
                     (aligned, 'align(FrontEndHeapUsageData)'),
-                    (P(pint.uint16_t), 'FrontEndHeapUsageData'),    # XXX: this target doesn't seem right
+                    (P(pint.uint16_t), 'FrontEndHeapUsageData'),    # XXX: this pointer target doesn't seem right
                     (USHORT, 'FrontEndHeapMaximumIndex'),
                     (dyn.clone(ListsInUseBytes, length=129 if getattr(self, 'WIN64', False) else 257), 'FrontEndHeapStatusBitmap'),
 
