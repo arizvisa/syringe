@@ -163,6 +163,15 @@ class remote(base):
         """
         raise error.ImplementationError(self, 'read', message='User forgot to implement this method')
 
+class memorybase(base):
+    '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
+
+class debuggerbase(memorybase):
+    '''Base provider class for reading/writing with a debugger-type backing. Intended to be inherited from.'''
+
+    def expr(self, string):
+        raise error.ImplementationError(self, 'expr', message='User forgot to implement this method')
+
 ## core providers
 class empty(base):
     '''Empty provider. Returns only zeroes.'''
@@ -385,12 +394,6 @@ class string(base):
     def size(self):
         return len(self.data)
 
-class memorybase(base):
-    '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
-
-class debuggerbase(memorybase):
-    '''Base provider class for reading/writing with a debugger-type backing. Intended to be inherited from.'''
-
 class fileobj(base):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
     file = None
@@ -454,7 +457,6 @@ class fileobj(base):
     def __del__(self):
         try: self.close()
         except: pass
-        return
 filebase = fileobj
 
 ## other providers
@@ -987,6 +989,7 @@ try:
 
     Log.info("{:s} : Successfully loaded the `Ida` provider.".format(__name__))
     if _: DEFAULT.append(Ida)
+
 except ImportError:
     Log.info("{:s} : Unable to import the 'idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
 
@@ -1092,6 +1095,7 @@ try:
 
     Log.info("{:s} : Successfully loaded the `Pykd` provider.".format(__name__))
     if _: DEFAULT.append(Pykd)
+
 except ImportError:
     Log.info("{:s} : Unable to import the 'pykd' module. Failed to define the `Pykd` provider.".format(__name__))
 
@@ -1129,6 +1133,7 @@ try:
 
     Log.info("{:s} : Successfully loaded the `lldb` provider.".format(__name__))
     if _: DEFAULT.append(lldb)
+
 except ImportError:
     Log.info("{:s} : Unable to import the 'lldb' module. Failed to define the `lldb` provider.".format(__name__))
 
@@ -1167,6 +1172,7 @@ try:
 
     Log.info("{:s} : Successfully loaded the `gdb` provider.".format(__name__))
     if _: DEFAULT.append(lldb)
+
 except ImportError:
     Log.info("{:s} : Unable to import the 'gdb' module. Failed to define the `gdb` provider.".format(__name__))
 
@@ -1222,6 +1228,7 @@ try:
             return 1 + i
 
     DEFAULT.append(memory)
+
 except ImportError:
     Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `memory` provider.".format(__name__))
 
