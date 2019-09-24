@@ -302,7 +302,7 @@ class SegmentTableArray(parray.type):
 class IMAGE_NT_HEADERS_data(pstruct.type, Header):
     type = 'PE'
 
-    def __Sections(self):
+    def __Segments(self):
         header = self.p.Header()
         fileheader = header['FileHeader'].li
 
@@ -324,7 +324,7 @@ class IMAGE_NT_HEADERS_data(pstruct.type, Header):
         if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
             return ptype.undefined
 
-        lastoffset = self['Sections'].li.getoffset() + self['Sections'].blocksize()
+        lastoffset = self['Segments'].li.getoffset() + self['Segments'].blocksize()
         if hasattr(self.source, 'size') and offset < self.source.size():
             return dyn.block(offset - lastoffset)
 
@@ -346,7 +346,7 @@ class IMAGE_NT_HEADERS_data(pstruct.type, Header):
         return ptype.undefined
 
     _fields_ = [
-        (__Sections, 'Sections'),
+        (__Segments, 'Segments'),
         (__CertificatePadding, 'CertificatePadding'),
         (__Certificate, 'Certificate'),
     ]
