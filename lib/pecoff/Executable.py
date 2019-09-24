@@ -1,4 +1,4 @@
-import logging,operator,itertools,array,ptypes
+import logging, operator, functools, itertools, array, ptypes
 from ptypes import *
 
 from .headers import *
@@ -36,18 +36,18 @@ class IMAGE_DOS_HEADER(pstruct.type):
             return self.new(ptype.undefined, **attrs)
 
         def summary(self):
-            s,o = self['segment'],self['offset']
-            return '(segment:offset) %04x:%04x (linear) %05x'% (s.int(),o.int(),(s.int()*0x10+o.int())&0xfffff)
+            seg, offset = self['segment'], self['offset']
+            return "(segment:offset) {:04x}:{:04x} (linear) {:05x}".format(seg.int(), offset.int(), (seg.int() * 0x10 + offset.int()) & 0xfffff)
 
         def repr(self):
             return self.summary()
 
     class Oem(pstruct.type):
         _fields_ = [
-            ( dyn.array(uint16,4), 'e_reserved' ),
+            ( dyn.array(uint16, 4), 'e_reserved' ),
             ( uint16, 'e_oemid' ),
             ( uint16, 'e_oeminfo' ),
-            ( dyn.array(uint16,10), 'e_reserved2' ),
+            ( dyn.array(uint16, 10), 'e_reserved2' ),
         ]
 
     # FIXME: this padding implementation should be properly tested as there's a
@@ -57,8 +57,8 @@ class IMAGE_DOS_HEADER(pstruct.type):
         # add Oem structure if within the relocation size (if defined), or
         ofs = self['e_lfarlc'].li.int()
         if ofs > 0:
-            leftover = ofs-sz
-            return self.Oem if sz+self.Oem().a.blocksize() <= ofs else dyn.clone(self.Oem,blocksize=lambda s:leftover)
+            leftover = ofs - sz
+            return self.Oem if sz + self.Oem().a.blocksize() <= ofs else dyn.clone(self.Oem, blocksize=lambda s: leftover)
         # otherwise insert it if we're still within the total header size
         return self.Oem if sz+self.Oem().a.blocksize() <= self.headersize() else dyn.block(0)
 
@@ -100,7 +100,7 @@ class IMAGE_DOS_HEADER(pstruct.type):
         ( uint16, 'e_csum' ),        # checksum / checksum (ignored) / Checksum
         ( uint16, 'e_ip' ),          # ip / ip of entry / InitialIP
         ( uint16, 'e_cs' ),          # cs / cs of entry / InitialrmwwelativeIp
-        ( lambda self: dyn.rpointer(dyn.array(IMAGE_DOS_HEADER.Relocation,self['e_crlc'].li.int()), self, uint16), 'e_lfarlc' ), # relocation table
+        ( lambda self: dyn.rpointer(dyn.array(IMAGE_DOS_HEADER.Relocation, self['e_crlc'].li.int()), self, uint16), 'e_lfarlc' ), # relocation table
         ( uint16, 'e_ovno'),         # overlay number
         #( uint32, 'EXE_SYM_TAB'),   # from inc/exe.inc
 
@@ -146,10 +146,14 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
 
     def __Padding(self):
         '''Figure out the PE header size and pad according to SizeOfHeaders'''
-        sz = self.getparent(File)['Header']['e_lfanew'].li.int()
+        p = self.getparent(File)
+
+        sz = p['Header']['e_lfanew'].li.int()
         opt = self['OptionalHeader'].li
-        res = map(self.__getitem__,('SignaturePadding','FileHeader','OptionalHeader','DataDirectory','Sections'))
-        res = sum(map(operator.methodcaller('blocksize'),res))
+
+        f = functools.partial(operator.getitem, self)
+        res = map(f, ('SignaturePadding', 'FileHeader', 'OptionalHeader', 'DataDirectory', 'Sections'))
+        res = sum(map(operator.methodcaller('blocksize'), res))
         res += 2
         return dyn.block(opt['SizeOfHeaders'].int() - res - sz)
 
@@ -236,7 +240,7 @@ class IMAGE_NT_HEADERS_data(pstruct.type, Header):
         optionalheader = header['OptionalHeader'].li
 
         # memory
-        if isinstance(self.source, ptypes.provider.memorybase) or (hasattr(ptypes.provider, 'Ida') and self.source is ptypes.provider.Ida):
+        if isinstance(self.source, ptypes.provider.memorybase):
             class sectionentry(pstruct.type):
                 noncontiguous = True
                 _fields_ = [
@@ -290,7 +294,7 @@ class IMAGE_NT_HEADERS_data(pstruct.type, Header):
             return ptype.undefined
 
         if hasattr(self.source, 'size') and offset < self.source.size():
-            return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda self,size=size: size)
+            return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda self, size=size: size)
 
         return ptype.undefined
 
@@ -366,7 +370,7 @@ class PharLap3(PharLap, Header):
         ]
 
         def summary(self):
-            return '{:#x}:{:+#x}'.format(self['Offset'].int(),self['Size'].int())
+            return '{:#x}:{:+#x}'.format(self['Offset'].int(), self['Size'].int())
 
     _fields_ = [
         (word, 'Level'),
@@ -374,9 +378,9 @@ class PharLap3(PharLap, Header):
         (dword, 'FileSize'),
         (word, 'CheckSum'),
 
-        (dyn.clone(OffsetSize,_object_=PharLap.RunTimeParams), 'RunTimeParams'),
+        (dyn.clone(OffsetSize, _object_=PharLap.RunTimeParams), 'RunTimeParams'),
         (OffsetSize, 'Reloc'),
-        (dyn.clone(OffsetSize,_object_=dyn.clone(parray.block,_object_=PharLap.SegInfo)), 'SegInfo'),
+        (dyn.clone(OffsetSize, _object_=dyn.clone(parray.block, _object_=PharLap.SegInfo)), 'SegInfo'),
         (word, 'SegEntrySize'),
         (OffsetSize, 'Image'),
         (OffsetSize, 'SymTab'),
@@ -489,7 +493,7 @@ class File(pstruct.type, ptype.boundary):
         sz+= self['Stub'].blocksize()
         sz+= self['Next'].blocksize()
         if isinstance(self.source, ptypes.provider.filebase):
-            return dyn.block( self.source.size() - sz)
+            return dyn.block(self.source.size() - sz)
         return ptype.undefined
 
     _fields_ = [
@@ -534,9 +538,9 @@ if __name__ == '__main__':
     baseaddress = v['OptionalHeader']['ImageBase']
     section = sections[0]
     data = section.data().serialize()
-    for e in relo.filter(section):
-        for a,r in e.getrelocations(section):
-            print e
+    for item in relo.filter(section):
+        for _, r in item.getrelocations(section):
+            print item
             data = r.relocate(data, 0, section)
         continue
 
