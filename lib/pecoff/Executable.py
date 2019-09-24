@@ -238,43 +238,81 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         return self['FileHeader']['Machine']
 Portable = IMAGE_NT_HEADERS64 = IMAGE_NT_HEADERS
 
+class SegmentEntry(pstruct.type):
+    '''
+    Base class for a section entry that both memory-backed and file-backed
+    entries inherit from.
+    '''
+    def properties(self):
+        res = super(SegmentEntry, self).properties()
+        if hasattr(self, 'Section'):
+            res['SectionName'] = self.Section['Name'].str()
+        return res
+
+class MemorySegmentEntry(SegmentEntry):
+    '''
+    This SegmentEntry represents the structure of a segment that has been
+    already mapped into memory. This honors the SectionAlignment field from
+    the OptionalHeader when padding the segment's data.
+    '''
+    noncontiguous = True
+    def __Padding(self):
+        p = self.getparent(Next)
+        header = p.Header()
+        optionalheader = header['OptionalHeader'].li
+        return dyn.align(optionalheader['SectionAlignment'].int(), undefined=True)
+
+    _fields_ = [
+        (__Padding, 'Padding'),
+        (lambda self: dyn.block(self.Section.getloadedsize()), 'Data'),
+    ]
+
+class FileSegmentEntry(SegmentEntry):
+    '''
+    This SegmentEntry represents the structure of a segment that is on the
+    disk and hasn't been mapped into memory. This honors the FileAlignment
+    field from the OptionalHeader when padding the segment's data.
+    '''
+    def __Padding(self):
+        p = self.getparent(Next)
+        header = p.Header()
+        optionalheader = header['OptionalHeader'].li
+        return dyn.align(optionalheader['FileAlignment'].int(), undefined=True)
+
+    _fields_ = [
+        (__Padding, 'Padding'),
+        (lambda self: dyn.block(self.Section.getreadsize()), 'Data'),
+    ]
+
+class SegmentTableArray(parray.type):
+    '''
+    This is a simple array of segment entries where each entry is individually
+    tied directly to the SectionTableEntry that it is associated with. Each
+    entry is aligned depending on whether it is being loaded from disk or has
+    been already loaded into memory.
+    '''
+    def _object_(self):
+        p = self.getparent(Next)
+        header = p.Header()
+        sections = header['Sections']
+        entry = MemorySegmentEntry if isinstance(self.source, ptypes.provider.memorybase) else FileSegmentEntry
+        return dyn.clone(entry, Section=sections[len(self.value)])
+
 @NextData.define
 class IMAGE_NT_HEADERS_data(pstruct.type, Header):
     type = 'PE'
 
     def __Sections(self):
-        cls = self.__class__
         header = self.p.Header()
-        sections = header['Sections'].li
-        optionalheader = header['OptionalHeader'].li
+        fileheader = header['FileHeader'].li
 
-        # memory
-        if isinstance(self.source, ptypes.provider.memorybase):
-            class sectionentry(pstruct.type):
-                noncontiguous = True
-                _fields_ = [
-                    (dyn.align(optionalheader['SectionAlignment'].int(), undefined=True), 'Padding'),
-                    (lambda s: dyn.block(s.Section.getloadedsize()), 'Data'),
-                ]
+        # Warn the user if we're unable to determine whether the source is a
+        # file-backed or memory-backed provider.
+        if all(not isinstance(self.source, item) for item in {ptypes.provider.memorybase, ptypes.provider.filebase}):
+            cls = self.__class__
+            logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
 
-        # file (default)
-        else:
-            if not isinstance(self.source, ptypes.provider.filebase):
-                logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
-
-            class sectionentry(pstruct.type):
-                _fields_ = [
-                    (dyn.align(optionalheader['FileAlignment'].int()), 'Padding'),
-                    (lambda s: dyn.block(s.Section.getreadsize()), 'Data'),
-                ]
-
-        sectionentry.properties = lambda self: dict(itertools.chain(super(pstruct.type, self).properties().iteritems(), {'SectionName':self.SectionName}.iteritems()))
-        class result(parray.type):
-            length = len(sections)
-            def _object_(self):
-                sect = sections[len(self.value)]
-                return dyn.clone(sectionentry, Section=sect, SectionName=sect['Name'].str())
-        return result
+        return dyn.clone(SegmentTableArray, length=fileheader['NumberOfSections'].int())
 
     def __CertificatePadding(self):
         header = self.p.Header()
