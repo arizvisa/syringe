@@ -304,7 +304,7 @@ class SegmentTableArray(parray.type):
         return dyn.clone(entry, Section=sections[len(self.value)])
 
 @NextData.define
-class IMAGE_NT_HEADERS_data(pstruct.type, Header):
+class IMAGE_NT_DATA(pstruct.type, Header):
     type = 'PE'
 
     def __Segments(self):
