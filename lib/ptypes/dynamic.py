@@ -182,13 +182,8 @@ def align(size, **kwds):
         return self.summary(**options)
 
     def blocksize(self):
-        parent = self.parent
-        if parent is None or not isinstance(parent, ptype.container) or not operator.contains(parent.value, self):
-            return 0
-        idx = parent.value.index(self)
-        res = sum(item.blocksize() for item in parent.value[:idx])
-        offset = parent.getoffset() + res
-        return (-offset) & (size - 1)
+        res = self.getoffset()
+        return (-res) & (size - 1)
     getinitargs = lambda self: (type, kwds)
 
     # if alignment is undefined and represents empty space
@@ -746,6 +741,34 @@ if __name__ == '__main__':
 
         a = test().a
         if a['b'].size() == 7:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_noparent_zero():
+        t = dynamic.align(0x10)
+        a = t().a
+        if a.size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_noparent_nonzero():
+        t = dynamic.align(0x10)
+        a = t(offset=4).a
+        if a.size() == 0xc:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_noparent_zero():
+        t = dynamic.padding(0x10)
+        a = t().a
+        if a.size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_noparent_nonzero():
+        t = dynamic.padding(0x10)
+        a = t(offset=8).a
+        if a.size() == 0:
             raise Success
 
 if __name__ == '__main__':
