@@ -89,7 +89,7 @@ class File(pstruct.type, Header, ptype.boundary):
         count = 0 if sig.isImportSignature() else sig['NumberOfSections'].int()
         return dynamic.clone(portable.SectionTableArray, length=count)
 
-    def __Data(self):
+    def __Segments(self):
         sig = self['Signature'].li
         if sig.isImportSignature():
             return ImportData
@@ -104,7 +104,7 @@ class File(pstruct.type, Header, ptype.boundary):
         #        aligned, so there's a large chance that that empty space
         #        could exist in between each item, or the segments could
         #        be in a completely different order.
-        (__Data, 'Data'),
+        (__Segments, 'Segments'),
         (portable.symbols.SymbolTableAndStringTable, 'SymbolTable'),
     ]
 
