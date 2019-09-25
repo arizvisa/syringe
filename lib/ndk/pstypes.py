@@ -82,7 +82,8 @@ class PEB(pstruct.type, versioned):
         _fields_ = [
             (1, 'HeapTracingEnabled'),
             (1, 'CritSecTracingEnabled'),
-            (30, 'SpareTracingBits'),
+            (1, 'LibLoaderTracingEnabled'),
+            (29, 'SpareTracingBits'),
         ]
 
     def __init__(self, **attrs):
@@ -96,7 +97,7 @@ class PEB(pstruct.type, versioned):
             (UCHAR, 'BeingDebugged'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.append( (pbinary.littleendian(PEB.BitField), 'BitField') )
         else:
             raise error.NdkUnsupportedVersion(self)
@@ -125,7 +126,7 @@ class PEB(pstruct.type, versioned):
                 (P(API_SET_MAP), 'ApiSetMap'),
             ])
 
-        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             raise error.NdkUnsupportedVersion(self)
             f.extend([
                 (P(rtltypes.RTL_CRITICAL_SECTION), 'FastPebLock'),
@@ -158,7 +159,7 @@ class PEB(pstruct.type, versioned):
             (PVOID, 'ReadOnlySharedMemoryBase'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.append((PVOID, 'HotpatchInformation'))
         else:
             f.append((PVOID, 'ReadOnlySharedMemoryHeap'))
@@ -209,6 +210,11 @@ class PEB(pstruct.type, versioned):
             (ULONG, 'SessionId'),
         ])
 
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WINBLUE:
+            f.extend([
+                (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'Padding5'),
+            ])
+
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WINXP:
             f.extend([
                 (aligned, 'align(AppCompatFlags)'),
@@ -231,17 +237,52 @@ class PEB(pstruct.type, versioned):
                 (dyn.array(ULONG, 4), 'FlsBitmapBits'),
                 (ULONG, 'FlsHighIndex'),
             ])
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.extend([
                 (aligned, 'align(WerRegistrationData)'),
                 (PVOID, 'WerRegistrationData'),
                 (PVOID, 'WerShipAssertPtr'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
+            f.extend([
                 (PVOID, 'pContextData'),
                 (PVOID, 'pImageHeaderHash'),
                 (pbinary.littleendian(PEB.TracingFlags), 'TracingFlags')
             ])
 
-        # FIXME: Some fields added for windows 8
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WINBLUE:
+            f.extend([
+                (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'Padding6'),
+                (ULONGLONG, 'CsrServerReadOnlySharedMemoryBase')
+            ])
+
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+            f.extend([
+                (ULONGLONG, 'CsrServerReadOnlySharedMemoryBase')
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10_TH2:
+            f.extend([
+                (ULONG, 'TppWorkerpListLock'),
+                (LIST_ENTRY, 'TppWorkerpList'),
+                (dyn.array(PVOID, 128), 'WaitOnAddressHashTable'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10_RS3:
+            f.extend([
+                (PVOID, 'TelemetryCoverageHeader'),
+                (ULONG, 'CloudFileFlags'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10_RS4:
+            f.extend([
+                (ULONG, 'CloudFileDiagFlags'),
+                (CHAR, 'PlaceHolderCompatibilityMode'),
+                (dyn.block(7), 'PlaceHolderCompatibilityModeReserved'),
+            ])
+
+        # FIXME: Some fields added for windows 10 RS5
         # See https://www.geoffchappell.com/studies/windows/win32/ntdll/structs/peb/index.htm
         return
 
@@ -386,7 +427,7 @@ class TEB(pstruct.type, versioned):
             (PVOID, 'EtwTraceData'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.append((PVOID, 'EtwLocalData'))
 
         f.extend([
@@ -394,7 +435,7 @@ class TEB(pstruct.type, versioned):
             (ULONG, 'GdiBatchCount'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.extend([
                 (UCHAR, 'SpareBool0'),
                 (UCHAR, 'SpareBool1'),
@@ -416,7 +457,7 @@ class TEB(pstruct.type, versioned):
             (ULONG, 'WaitingOnLoaderLock'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_LONGHORN:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.append((aligned, 'align(SavedPriorityState)'))
             f.append((PVOID, 'SavedPriorityState'))
         else:
