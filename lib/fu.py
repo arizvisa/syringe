@@ -384,6 +384,8 @@ if 'constants':
 
         @classmethod
         def instancelocal(cls, modulename, **kwds):
+            # XXX: this might be broken when re-constructing package modules
+            #      where relative imports are used.
             return __import__(modulename)
 
         @classmethod
@@ -1319,11 +1321,11 @@ def unpack(data, **attributes):
 
 import sys
 def caller(frame=None):
-    """Return the (module,name) of the requested frame.
+    """Return the (module, name) of the requested frame.
 
     This will default to the calling function if a frame is not supplied.
     """
-    sys = __import__('sys')
+    import sys
     fr = sys._getframe().f_back if frame is None else frame
     source,name = fr.f_code.co_filename,fr.f_code.co_name
     module = [x for x in sys.modules.itervalues() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
@@ -1803,7 +1805,7 @@ if __name__ == '__main__':
         results.append( t() )
 
 if __name__ == 'bootstrap':
-    import fu
+    import importlib, fu
     from fu import package
 
     ## figure out which type methods we need
@@ -1856,9 +1858,9 @@ if __name__ == 'bootstrap':
 
     ## ensure that we can recreate all these type methods
     result,namespace = {},{}
-    namespace['thread'] = __import__('thread')
-    namespace['imp'] = __import__('imp')
-    namespace['_weakref'] = __import__('_weakref')
+    namespace['thread'] = importlib.import_module('thread')
+    namespace['imp'] = importlib.import_module('imp')
+    namespace['_weakref'] = importlib.import_module('_weakref')
     for n,(name,new,get,cons,inst) in methods:
         objspace = {
             'new' : myfunc(new,namespace),

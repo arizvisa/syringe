@@ -879,8 +879,11 @@ class base(generic):
             result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size)
             result.setoffset(result.getoffset(), recurse=True)
 
+        except error.ProviderError, e:
+            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e), exc_info=False)
+
         except Exception, e:
-            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e))
+            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e), exc_info=True)
 
         # force partial or overcommited initializations
         try: result = result.__deserialize_block__(data)

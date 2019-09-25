@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import six,argparse,logging
+import six,argparse,logging,importlib
 import functools,operator,itertools,types
 import ptypes,pecoff
 #ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -293,7 +293,9 @@ def extract_signature(t, index, outformat, F=None, output=None):
     se = s[index]
 
     try:
-        rt = __import__('ber').File
+        module = importlib.import_module('protocol.ber')
+        rt = module.File
+
     except (ImportError, AttributeError):
         rt, _ = None, logging.warn("Unable to import ptypes template, `ber`, in order to cast the Security directory entry.")
 

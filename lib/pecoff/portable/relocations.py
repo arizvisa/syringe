@@ -1,4 +1,4 @@
-import sys,array,ptypes
+import sys,array,importlib,ptypes
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
 from ..headers import *
 
@@ -35,7 +35,7 @@ class Relocation(pstruct.type):
         raise NotImplementedError('This has been deprecated due to a refactor')
 
         # FIXME: stupid fucking python and it's issues recursive module importing
-        headers = sys.modules.get('pecoff.portable.headers', __import__('pecoff.portable.headers'))
+        headers = sys.modules.get('pecoff.portable.headers', importlib.import_module('pecoff.portable.headers'))
 
         # find the symbol used by the relocation
         symbol = symboltable[self['SymbolTableIndex'].int()]

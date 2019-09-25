@@ -1,4 +1,4 @@
-import time,sys,os.path,inspect,traceback
+import time,sys,os.path,inspect,traceback,importlib
 
 __file__ = os.path.abspath(inspect.getfile(inspect.currentframe()))
 sys.path.append('%s/lib'% os.path.dirname(__file__))
@@ -11,7 +11,8 @@ def log(s, *fmt):
     sys.stderr.write(string + "\n")
 
 def getparser(path):
-    return __import__(path,globals(),locals(),['File'],-1).File
+    module = importlib.import_module(path)
+    return module.File
 
 def iterfiles(parser, paths):
     parser_name = '%s.%s'% (parser.__module__, parser.__name__)

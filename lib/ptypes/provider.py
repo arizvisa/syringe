@@ -53,7 +53,7 @@ Example usage:
 import six
 import sys, os
 import itertools, operator, functools
-import array, exceptions, random as _random
+import importlib, array, exceptions, random as _random
 from six.moves import builtins
 
 from . import config, utils, error
@@ -944,7 +944,7 @@ try:
     _ = 'idaapi' in sys.modules
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
-        module = __import__('idaapi')
+        module = importlib.import_module('idaapi')
         offset = module.BADADDR
         def __new__(cls):
             Log.info("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
@@ -1127,7 +1127,7 @@ except ImportError:
 try:
     _ = 'lldb' in sys.modules
     class lldb(debuggerbase):
-        module = __import__('lldb')
+        module = importlib.import_module('lldb')
         def __init__(self, sbprocess=None):
             self.__process = sbprocess or self.module.process
             self.address = 0
@@ -1169,7 +1169,7 @@ except ImportError:
 try:
     _ = 'gdb' in sys.modules
     class gdb(debuggerbase):
-        module = __import__('gdb')
+        module = importlib.import_module('gdb')
         def __init__(self, inferior=None):
             self.__process = inferior or self.module.selected_inferior()
             self.address = 0
