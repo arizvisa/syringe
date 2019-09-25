@@ -329,9 +329,9 @@ class IMAGE_NT_DATA(pstruct.type, Header):
         if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
             return ptype.undefined
 
-        lastoffset = self['Segments'].li.getoffset() + self['Segments'].blocksize()
-        if hasattr(self.source, 'size') and offset < self.source.size():
-            return dyn.block(offset - lastoffset)
+        if isinstance(self.source, ptypes.provider.bounded) and offset < self.source.size():
+            res = self['Segments'].li.getoffset() + self['Segments'].blocksize()
+            return dyn.block(offset - res)
 
         return ptype.undefined
 
@@ -345,7 +345,7 @@ class IMAGE_NT_DATA(pstruct.type, Header):
         if offset == 0 or isinstance(self.source, ptypes.provider.memorybase):
             return ptype.undefined
 
-        if hasattr(self.source, 'size') and offset < self.source.size():
+        if isinstance(self.source, ptypes.provider.bounded) and offset < self.source.size():
             return dyn.clone(parray.block, _object_=portable.headers.Certificate, blocksize=lambda self, size=size: size)
 
         return ptype.undefined
