@@ -172,6 +172,12 @@ class debuggerbase(memorybase):
     def expr(self, string):
         raise error.ImplementationError(self, 'expr', message='User forgot to implement this method')
 
+class bounded(base):
+    '''Base provider class for describing a backing that has boundaries of some kind.'''
+
+    def size(self):
+        raise error.ImplementationError(self, 'size', message='User forgot to implement this method')
+
 ## core providers
 class empty(base):
     '''Empty provider. Returns only zeroes.'''
@@ -182,13 +188,13 @@ class empty(base):
         return 0
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
-        return '\x00' * amount
+        return '\0' * amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
         return len(data)
 
-class proxy(base):
+class proxy(bounded):
     """Provider that will read or write it's data to/from the specified ptype.
 
     If autoload or autocommit is specified during construction, the object will sync the proxy with it's source before performing any operations requested of the proxied-type.
@@ -210,6 +216,11 @@ class proxy(base):
 
         self.autoload = kwds.get('autoload', None)
         self.autocommit = kwds.get('autocommit', None)
+
+    def size(self):
+        '''Return the size of the object.'''
+        res = self.instance
+        return res.size()
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -343,18 +354,22 @@ class proxy(base):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
-class string(base):
+class string(bounded):
     '''Basic writeable string provider.'''
     offset = int
     data = str     # this is backed by an array.array type
 
     @property
-    def value(self): return self.data.tostring()
+    def value(self):
+        return self.data.tostring()
+
     @value.setter
-    def value(self, value): self.data = value
+    def value(self, value):
+        self.data = value
 
     def __init__(self, string=''):
         self.data = array.array('c', string)
+
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
         res, self.offset = self.offset, offset
@@ -394,7 +409,7 @@ class string(base):
     def size(self):
         return len(self.data)
 
-class fileobj(base):
+class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
     file = None
     def __init__(self, fileobj):
@@ -417,6 +432,7 @@ class fileobj(base):
         result = ''
         try:
             result = self.file.read(amount)
+
         except OverflowError, e:
             self.file.seek(offset)
             raise error.ConsumeError(self, offset, amount, len(result), exception=e)
@@ -434,6 +450,7 @@ class fileobj(base):
         offset = self.file.tell()
         try:
             return self.file.write(data)
+
         except Exception, e:
             self.file.seek(offset)
         raise error.StoreError(self, offset, len(data), exception=e)
@@ -464,12 +481,15 @@ class base64(string):
     '''A provider that accesses data in a Base64 encoded string.'''
     def __init__(self, base64string, begin='', end=''):
         result = map(operator.methodcaller('strip'), base64string.split('\n'))
+
         if begin and begin in base64string:
             res = [i for i, _ in enumerate(result) if _.startswith(begin)][0]
             result[:] = result[res + 1:]
+
         if end and end in base64string:
             res = [i for i, _ in enumerate(result) if _.startswith(end)][0]
             result[:] = result[:res]
+
         result = str().join(result).translate(None, ' \t\n\r\v')
         super(base64, self).__init__(result.decode('base64'))
 
@@ -479,8 +499,9 @@ class base64(string):
 
 class random(base):
     """Provider that returns random data when read from."""
+    def __init__(self):
+        self.offset = 0
 
-    offset = 0
     @utils.mapexception(any=error.ProviderError)
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -923,39 +944,38 @@ try:
     _ = 'idaapi' in sys.modules
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
-        import idaapi as __idaapi__
-
-        offset = __idaapi__.BADADDR
-
+        module = __import__('idaapi')
+        offset = module.BADADDR
         def __new__(cls):
             Log.info("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
             return cls
 
         @classmethod
-        def read(cls, offset, size, padding='\x00'):
-            result = cls.__idaapi__.get_many_bytes(offset, size) or ''
+        def read(cls, offset, size, padding='\0'):
+            result = cls.module.get_many_bytes(offset, size) or ''
             if len(result) == size:
                 return result
 
-            half = size // 2
+            half = size / 2
             if half > 0:
                 return str().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
-            if cls.__idaapi__.isEnabled(offset):
-                return '' if size == 0 else (padding * size) if (cls.__idaapi__.getFlags(offset) & cls.__idaapi__.FF_IVL) == 0 else cls.__idaapi__.get_many_bytes(offset, size)
+            if cls.module.isEnabled(offset):
+                return '' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in six.moves.range(cls.__idaapi__.get_nlist_size()) if string == cls.__idaapi__.get_nlist_name(i))
+            index = (i for i in six.moves.range(cls.module.get_nlist_size()) if string == cls.module.get_nlist_name(i))
             try:
-                res = cls.__idaapi__.get_nlist_ea(six.next(index))
+                res = cls.module.get_nlist_ea(six.next(index))
+
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
             return res
 
         @classmethod
         def within_segment(cls, offset):
-            s = cls.__idaapi__.getseg(offset)
+            s = cls.module.getseg(offset)
             return s is not None and s.startEA <= offset < s.endEA
 
         @classmethod
@@ -970,20 +990,22 @@ try:
             startofs = cls.offset
             try:
                 result = cls.read(cls.offset, amount)
+
             except Exception, err:
                 if isinstance(err, tuple) and len(err) == 2:
                     ofs, amount = err
                     raise error.ConsumeError(cls, ofs, amount, ofs - startofs)
                 Log.fatal("{:s} : Unable to read {:+d} bytes from {:x} due to unexpected exception ({:x}:{:+x}).".format('.'.join((__name__, cls.__name__)), amount, startofs, cls.offset, amount), exc_info=True)
                 raise error.ConsumeError(cls, startofs, amount, cls.offset - startofs)
+
             cls.offset += len(result)
             return result
 
         @classmethod
         def store(cls, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            #cls.__idaapi__.put_many_bytes(cls.offset, data)
-            cls.__idaapi__.patch_many_bytes(cls.offset, data)
+            #cls.module.put_many_bytes(cls.offset, data)
+            cls.module.patch_many_bytes(cls.offset, data)
             cls.offset += len(data)
             return len(data)
 
@@ -1015,10 +1037,12 @@ try:
             elif isinstance(type(remote), six.string_types):
                 result = cls.__PyDbgEng__.Connect(client)
             return cls(result)
+
         @classmethod
         def connectprocessserver(cls, remote):
             result = cls.__PyDbgEng__.ConnectProcessServer(remoteOptions=remote)
             return cls(result)
+
         def connectkernel(self, remote):
             if remote is None:
                 result = cls.__PyDbgEng__.AttachKernel(flags=cls.__PyDbgEng__.ATTACH_LOCAL_KERNEL)
@@ -1031,7 +1055,6 @@ try:
             control = cls.__PyDbgEng__.IDebugControl
             dtype = DEBUG_VALUE_INT32
             return control.Evaluate(string, dtype)
-            raise NotImplementedError   # XXX
 
         def seek(self, offset):
             '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -1042,6 +1065,7 @@ try:
             '''Consume ``amount`` bytes from the given provider.'''
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
+
             except RuntimeError, e:
                 raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
             return str(result)
@@ -1052,6 +1076,7 @@ try:
 
     Log.info("{:s} : Successfully loaded the `PyDbgEng` provider.".format(__name__))
     if _: DEFAULT.append(PyDbgEng)
+
 except ImportError:
     Log.info("{:s} : Unable to import the '_PyDbgEng' module. Failed to define the `PyDbgEng` provider.".format(__name__))
 
@@ -1106,12 +1131,15 @@ try:
         def __init__(self, sbprocess=None):
             self.__process = sbprocess or self.module.process
             self.address = 0
+
         @classmethod
         def expr(cls, string):
             raise NotImplementedError   # XXX
+
         def seek(self, offset):
             res, self.address = self.address, offset
             return res
+
         def consume(self, amount):
             if amount < 0:
                 raise error.ConsumeError(self, self.address, amount)
@@ -1123,6 +1151,7 @@ try:
                 self.address += len(data)
                 return six.binary_type(data)
             return ''
+
         def store(self, data):
             process, err = self.__process, self.module.SBError()
             amount = process.WriteMemory(self.address, six.binary_type(data), err)
@@ -1144,13 +1173,16 @@ try:
         def __init__(self, inferior=None):
             self.__process = inferior or self.module.selected_inferior()
             self.address = 0
+
         @classmethod
         def expr(cls, string):
             res = gdb.parse_and_eval(string)
             return res.cast( gdb.lookup_type("long") )
+
         def seek(self, offset):
             res, self.address = self.address, offset
             return res
+
         def consume(self, amount):
             process = self.__process
             try:
@@ -1161,6 +1193,7 @@ try:
                 raise error.ConsumeError(self, self.address, amount)
             self.address += len(data)
             return six.binary_type(data)
+
         def store(self, data):
             process = self.__process
             try:
