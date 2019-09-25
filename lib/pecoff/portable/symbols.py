@@ -93,6 +93,7 @@ class ShortName(pstruct.type):
 
         try:
             res = self.getparent(SymbolTableAndStringTable)
+
         except ptypes.error.NotFoundError:
             logging.warn("{:s} : unable to return symbol name at offset {:#x} due to missing {:s}".format(self.instance(), self['Offset'].int(), SymbolTableAndStringTable.typename()))
             return '<MissingStringTable>'
@@ -307,8 +308,13 @@ class StringTable(pstruct.type):
         return index + self['Size'].size()
 
 class SymbolTableAndStringTable(pstruct.type):
+    def __Symbols(self):
+        p = self.getparent(Header)
+        header = p.FileHeader()
+        return dyn.clone(SymbolTable, length=header['NumberOfSymbols'].int())
+
     _fields_ = [
-        (lambda s: dyn.clone(SymbolTable, length=s.p.p['NumberOfSymbols'].li.int()), 'Symbols'),
+        (__Symbols, 'Symbols'),
         (StringTable, 'Strings'),
     ]
 
@@ -367,9 +373,11 @@ class SymbolTableAndStringTable(pstruct.type):
         try:
             res = self.fetch(name)
             sym = next(iter(res))
+
         except KeyError:
             sym = self.AddSymbol()
             sym['Name'].set(name)
+
         sym['Value'].set(value)
         sym['SectionNumber'].set('ABSOLUTE')    # absolute address
         return sym

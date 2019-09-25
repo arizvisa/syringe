@@ -174,9 +174,14 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         (__Padding, 'Padding'),
     ]
 
+    def FileHeader(self):
+        '''Return the FileHeader which contains a number of sizes used by the file.'''
+        return self['FileHeader']
+
     def getaddressbyoffset(self, offset):
         section = self['Sections'].getsectionbyoffset(offset)
         return section.getaddressbyoffset(offset)
+
     def getoffsetbyaddress(self, address):
         section = self['Sections'].getsectionbyaddress(address)
         return section.getoffsetbyaddress(address)
