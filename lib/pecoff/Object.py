@@ -56,10 +56,19 @@ class ImportData(pstruct.type):
         (pstr.szstring, 'Library'),
     ]
 
-class SegmentEntry(ptype.block):
-    # FIXME: This SegmentEntry is defined incorrectly as there's things such
-    #        as relocations, alignment, etc. that need to be included. Without
-    #        these fields, the sizes of each segment are incorrect.
+class SegmentEntry(pstruct.type):
+    def __Data(self):
+        section = self.Section
+        return dyn.block(section['SizeOfRawData'].li.int())
+
+    def __Relocations(self):
+        section = self.Section
+        return dyn.clone(portable.relocations.RelocationTable, length=section['NumberOfRelocations'].int())
+
+    _fields_ = [
+        (__Data, 'Data'),
+        (__Relocations, 'Relocations'),
+    ]
     def properties(self):
         res = super(SegmentEntry, self).properties()
         if hasattr(self, 'Section'):
@@ -71,7 +80,7 @@ class SegmentTableArray(parray.type):
         p = self.getparent(Header)
         sections = p['Sections'].li
         section = sections[len(self.value)]
-        return dynamic.clone(SegmentEntry, length=section['SizeOfRawData'].li.int(), Section=section)
+        return dynamic.clone(SegmentEntry, Section=section)
 
 class File(pstruct.type, Header, ptype.boundary):
     """Coff Object File"""
@@ -90,8 +99,18 @@ class File(pstruct.type, Header, ptype.boundary):
         (Signature, 'Signature'),
         (lambda s: ImportHeader if s['Signature'].li.isImportSignature() else ObjectHeader, 'Header'),
         (__Sections, 'Sections'),
+
+        # FIXME: we're actually assuming that these fields are packed and
+        #        aligned, so there's a large chance that that empty space
+        #        could exist in between each item, or the segments could
+        #        be in a completely different order.
         (__Data, 'Data'),
+        (portable.symbols.SymbolTableAndStringTable, 'SymbolTable'),
     ]
+
+    def FileHeader(self):
+        '''Return the Header which contains a number of sizes used by the file.'''
+        return self['Header']
 
     def Machine(self):
         sig = self['Signature']
