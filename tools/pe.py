@@ -294,7 +294,14 @@ def extract_signature(t, index, outformat, F=None, output=None):
 
     try:
         module = importlib.import_module('protocol.ber')
-        rt = module.File
+
+        class CertificatePadded(ptypes.pstruct.type):
+            _fields_ = [
+                (module.File, 'SignedData'),
+                (ptypes.dynamic.padding(8), 'Padding'),
+            ]
+
+        rt = CertificatePadded
 
     except (ImportError, AttributeError):
         rt, _ = None, logging.warn("Unable to import ptypes template, `ber`, in order to cast the Security directory entry.")

@@ -228,12 +228,6 @@ class UINT128(pstruct.type):
         (UINT64, 'upper'),
     ]
 
-class ULARGE_INTEGER(pstruct.type):
-    _fields_ = [
-        (pint.uint64_t, 'QuadPart'),
-        (UINT64, 'upper'),
-    ]
-
 ## Singly-linked list
 class SLIST_ENTRY(fpointer_t):
     _object_ = None

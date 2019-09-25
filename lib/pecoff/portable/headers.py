@@ -317,6 +317,7 @@ class Certificate(pstruct.type):
             ('WIN_CERT_REVISION_1_0', 0x0100),
             ('WIN_CERT_REVISION_2_0', 0x0200),
         ]
+
     class wCertificateType(pint.enum, uint16):
         _values_ = [
             ('WIN_CERT_TYPE_X509', 0x0001),
@@ -324,6 +325,9 @@ class Certificate(pstruct.type):
             ('WIN_CERT_TYPE_RESERVED_1', 0x0003),
             ('WIN_CERT_TYPE_TS_STACK_SIGNED', 0x0004),
         ]
+
+    # XXX: The bCertificate field is padded to a qword-boundary. Keep
+    #      this in mind if trying to DER decode it.
 
     _fields_ = [
         (uint32, 'dwLength'),
