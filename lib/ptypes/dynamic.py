@@ -130,6 +130,47 @@ def blockarray(type, size, **kwds):
     blockarray.__getinitargs__ = lambda s: (type,size)
     return blockarray
 
+def padding(size, **kwds):
+    '''Return a block that will pad a container to a multiple of the specified number of bytes.'''
+    if not isinstance(size, six.integer_types):
+        res = ptype.type(length=0)
+        raise error.UserError(res, 'padding', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
+
+    # methods to get assigned
+    def repr(self, **options):
+        return self.summary(**options)
+
+    def blocksize(self):
+        parent = self.parent
+        if parent is None or not isinstance(parent, ptype.container) or not operator.contains(parent.value, self):
+            return 0
+        idx = parent.value.index(self)
+        res = sum(item.blocksize() for item in parent.value[:idx])
+        return (-res) & (size - 1)
+    getinitargs = lambda self: (type, kwds)
+
+    # if padding is undefined and represents empty space
+    if kwds.get('undefined', False):
+        class result(ptype.undefined):
+            def classname(self):
+                res = self.blocksize()
+                return "dynamic.padding({:d}, size={:d}, undefined={!s})".format(size, res, True)
+
+        result.repr, result.blocksize, result.__getinitargs__ = repr, blocksize, getinitargs
+        result.__module__, result.__name__ = __name__, 'undefined'
+        return result
+
+    # otherwise, this is simply padding
+    class result(ptype.block):
+        initializedQ = lambda self: self.value is not None
+        def classname(self):
+            res = self.blocksize()
+            return "dynamic.padding({:d}, size={:d})".format(size, res)
+
+    result.repr, result.blocksize, result.__getinitargs__ = repr, blocksize, getinitargs
+    result.__module__, result.__name__ = __name__, 'padding'
+    return result
+
 def align(size, **kwds):
     '''Return a block that will align a structure to a multiple of the specified number of bytes for its address.'''
     if not isinstance(size, six.integer_types):
@@ -677,6 +718,30 @@ if __name__ == '__main__':
             _fields_ = [
                 (pint.uint8_t, 'a'),
                 (dynamic.align(8), 'b'),
+            ]
+
+        a = test().a
+        if a['b'].size() == 7:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_nonzero():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.padding(8), 'b'),
+            ]
+
+        a = test(offset=6).a
+        if a['b'].size() == 7:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_zero():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.padding(8), 'b'),
             ]
 
         a = test().a
