@@ -56,7 +56,7 @@ class ImportData(pstruct.type):
         (pstr.szstring, 'Library'),
     ]
 
-class SegmentEntry(pstruct.type):
+class FileSegmentEntry(pstruct.type):
     def __Data(self):
         section = self.Section
         return dyn.block(section['SizeOfRawData'].li.int())
@@ -70,7 +70,7 @@ class SegmentEntry(pstruct.type):
         (__Relocations, 'Relocations'),
     ]
     def properties(self):
-        res = super(SegmentEntry, self).properties()
+        res = super(FileSegmentEntry, self).properties()
         if hasattr(self, 'Section'):
             res['SectionName'] = self.Section['Name'].str()
         return res
@@ -80,7 +80,7 @@ class SegmentTableArray(parray.type):
         p = self.getparent(Header)
         sections = p['Sections'].li
         section = sections[len(self.value)]
-        return dynamic.clone(SegmentEntry, Section=section)
+        return dynamic.clone(FileSegmentEntry, Section=section)
 
 class File(pstruct.type, Header, ptype.boundary):
     """Coff Object File"""
