@@ -191,7 +191,7 @@ class Protocol(ptype.definition):
     class UnknownConstruct(parray.block, Structured):
         def classname(self):
             klass, tag = self.type
-            return "UnknownConstruct<{:d,{:d}>".format(klass, tag)
+            return "UnknownConstruct<{:d},{:d}>".format(klass, tag)
     class Unknown(ptype.block):
         def classname(self):
             klass, tag = self.type
