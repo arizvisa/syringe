@@ -80,9 +80,9 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import six,operator
+import six, operator
 
-from . import ptype,parray,pstruct,config,error,utils,provider,pint
+from . import ptype, parray, pstruct, config, error, utils, provider, pint
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
@@ -92,15 +92,15 @@ def block(size, **kwds):
     """Returns a ptype.block type with the specified ``size``"""
     if not isinstance(size, six.integer_types):
         t = ptype.block(length=size)
-        raise error.UserError(t, 'block', message='Argument size must be integral : {:s} -> {!r}'.format(size.__class__, size))
+        raise error.UserError(t, 'block', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
 
     if size < 0:
         t = ptype.block(length=size)
-        Log.error('block : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0'.format(t.typename(), size))
+        Log.error("block : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(), size))
         size = 0
 
     def classname(self):
-        return 'dynamic.block({:d})'.format(self.blocksize())
+        return "dynamic.block({:d})".format(self.blocksize())
     kwds.setdefault('classname', classname)
     kwds.setdefault('__module__', __name__)
     kwds.setdefault('__name__', 'block')
@@ -110,11 +110,11 @@ def blockarray(type, size, **kwds):
     """Returns a parray.block with the specified ``size`` and ``type``"""
     if not isinstance(size, six.integer_types):
         t = parray.block(_object_=type)
-        raise error.UserError(t, 'blockarray', message='Argument size must be integral : {:s} -> {!r}'.format(size.__class__, size))
+        raise error.UserError(t, 'blockarray', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
 
     if size < 0:
         t = parray.block(_object_=type)
-        Log.error('blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0'.format(t.typename(),size))
+        Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(),size))
         size = 0
 
     class blockarray(parray.block):
@@ -124,43 +124,52 @@ def blockarray(type, size, **kwds):
 
         def classname(self):
             t = type.typename() if ptype.istype(type) else type.__name__
-            return 'dynamic.blockarray({:s},{:d})'.format(t, self.blocksize())
+            return "dynamic.blockarray({:s}, {:d})".format(t, self.blocksize())
     blockarray.__module__ = __name__
     blockarray.__name__ = 'blockarray'
     blockarray.__getinitargs__ = lambda s: (type,size)
     return blockarray
 
 def align(size, **kwds):
-    '''return a block that will align a structure to a multiple of the specified number of bytes'''
+    '''Return a block that will align a structure to a multiple of the specified number of bytes for its address.'''
     if not isinstance(size, six.integer_types):
-        t = ptype.type(length=0)
-        raise error.UserError(t, 'align', message='Argument size must be integral : {:s} -> {!r}'.format(size.__class__, size))
+        res = ptype.type(length=0)
+        raise error.UserError(res, 'align', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
 
     # methods to get assigned
-    def repr(self, **options): return self.summary(**options)
+    def repr(self, **options):
+        return self.summary(**options)
+
     def blocksize(self):
         parent = self.parent
-        if parent is None or self not in parent.value:
+        if parent is None or not isinstance(parent, ptype.container) or not operator.contains(parent.value, self):
             return 0
         idx = parent.value.index(self)
-        offset = parent.getoffset()+sum(n.blocksize() for n in parent.value[:idx])
-        return (-offset) & (size-1)
-    getinitargs = lambda s: (type,kwds)
+        res = sum(item.blocksize() for item in parent.value[:idx])
+        offset = parent.getoffset() + res
+        return (-offset) & (size - 1)
+    getinitargs = lambda self: (type, kwds)
 
-    # if alignment is undefined
+    # if alignment is undefined and represents empty space
     if kwds.get('undefined', False):
         class result(ptype.undefined):
-            def classname(self): return 'dynamic.undefined({:d}, size={:d})'.format(size,self.blocksize())
-        result.repr,result.blocksize,result.__getinitargs__ = repr,blocksize,getinitargs
-        result.__module__,result.__name__ = __name__,'undefined'
+            def classname(self):
+                res = self.blocksize()
+                return "dynamic.align({:d}, size={:d}, undefined={!s})".format(size, res, True)
+
+        result.repr, result.blocksize, result.__getinitargs__ = repr, blocksize, getinitargs
+        result.__module__, result.__name__ = __name__, 'undefined'
         return result
 
-    # otherwise, padding
+    # otherwise, this is simply padding
     class result(ptype.block):
         initializedQ = lambda self: self.value is not None
-        def classname(self): return 'dynamic.align({:d}, size={:d})'.format(size,self.blocksize())
-    result.repr,result.blocksize,result.__getinitargs__ = repr,blocksize,getinitargs
-    result.__module__,result.__name__ = __name__,'align'
+        def classname(self):
+            res = self.blocksize()
+            return "dynamic.align({:d}, size={:d})".format(size, res)
+
+    result.repr, result.blocksize, result.__getinitargs__ = repr, blocksize, getinitargs
+    result.__module__, result.__name__ = __name__, 'align'
     return result
 
 ## FIXME: might want to raise an exception or warning if we have too large of an array
@@ -170,22 +179,22 @@ def array(type, count, **kwds):
     '''
     if not isinstance(count, six.integer_types):
         t = parray.type(_object_=type,length=count)
-        raise error.UserError(t, 'array', message='Argument count must be integral : {:s} -> {!r}'.format(count.__class__, count))
+        raise error.UserError(t, 'array', message="Argument count must be integral : {:s} -> {!r}".format(count.__class__, count))
 
     if count < 0:
         t = parray.type(_object_=type,length=count)
-        Log.error('dynamic.array : {:s} : Invalid argument count={:d} cannot be < 0. Defaulting to 0.'.format(t.typename(), count))
+        Log.error("dynamic.array : {:s} : Invalid argument count={:d} cannot be < 0. Defaulting to 0.".format(t.typename(), count))
         count = 0
 
     if Config.parray.max_count > 0 and count > Config.parray.max_count:
         t = parray.type(_object_=type,length=count)
         if Config.parray.break_on_max_count:
-            Log.fatal('dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.'.format(t.typename(), count, Config.parray.max_count))
-            raise error.UserError(t, 'array', message='Requested array count={:d} is larger than configuration max_count={:d}'.format(count, Config.parray.max_count))
-        Log.warn('dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.'.format(t.typename(), count, Config.parray.max_count))
+            Log.fatal("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
+            raise error.UserError(t, 'array', message="Requested array count={:d} is larger than configuration max_count={:d}".format(count, Config.parray.max_count))
+        Log.warn("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
 
     def classname(self):
-        return 'dynamic.array({:s},{:s})'.format(type.__name__, str(self.length))
+        return "dynamic.array({:s}, {:s})".format(type.__name__, str(self.length))
 
     kwds.setdefault('classname', classname)
     kwds.setdefault('length', count)
@@ -352,7 +361,7 @@ class union(_union_generic):
             try:
                 element.load(offset=0)
             except error.LoadError, e:
-                Log.warn('dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}'.format(self.instance(), element.instance(), element.name()))
+                Log.warn("dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}".format(self.instance(), element.instance(), element.name()))
             continue
         return self
 
@@ -366,9 +375,9 @@ class union(_union_generic):
     def properties(self):
         result = super(union,self).properties()
         if self.initializedQ():
-            result['object'] = ['{:s}<{:s}>'.format(v.name(),v.classname()) for v in self.__object__]
+            result['object'] = ["{:s}<{:s}>".format(v.name(),v.classname()) for v in self.__object__]
         else:
-            result['object'] = ['{:s}<{:s}>'.format(n,t.typename()) for t,n in self._fields_]
+            result['object'] = ["{:s}<{:s}>".format(n,t.typename()) for t,n in self._fields_]
         return result
 
     def __getitem__(self, key):
@@ -386,50 +395,50 @@ class union(_union_generic):
     repr = details
 
     def __details_initialized(self):
-        gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
+        gettypename = lambda cls: cls.typename() if ptype.istype(cls) else cls.__name__
         result = []
 
         # do the root object first
         inst = utils.repr_instance(self.object.classname(), '{object}')
-        prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.object.properties().iteritems())
-        result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
+        prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().iteritems())
+        result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
         for fld, value in map(None, self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
-            result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', value.summary()))
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().iteritems())
+            result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary()))
 
         if len(result) > 0:
             return '\n'.join(result)
-        return '[{:x}] Empty []'.format(self.getoffset())
+        return "[{:x}] Empty []".format(self.getoffset())
 
     def __details_uninitialized(self):
-        gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
+        gettypename = lambda cls: cls.typename() if ptype.istype(cls) else cls.__name__
         result = []
 
         # first the object if it's been allocated
         if self.object is not None:
             inst = utils.repr_instance(self.object.classname(), '{object}')
-            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in self.object.properties().iteritems())
-            result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', self.object.summary()))
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().iteritems())
+            result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
         else:
-            result.append('[{:x}] {:s} ???'.format(self.getoffset(), gettypename(self._value_)))
+            result.append("[{:x}] {:s} ???".format(self.getoffset(), gettypename(self._value_)))
 
         # now the rest of the fields
         for fld, value in map(None, self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             if value is None:
-                result.append('[{:x}] {:s} {:s} ???'.format(self.getoffset(), utils.repr_class(gettypename(t)), name))
+                result.append("[{:x}] {:s} {:s} ???".format(self.getoffset(), utils.repr_class(gettypename(t)), name))
                 continue
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join('{:s}={!r}'.format(k,v) for k,v in value.properties().iteritems())
-            result.append('[{:x}] {:s}{:s} {:s}'.format(self.getoffset(), inst, ' {{{:s}}}'.format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().iteritems())
+            result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
 
         if len(result) > 0:
             return '\n'.join(result)
-        return '[{:x}] Empty []'.format(self.getoffset())
+        return "[{:x}] Empty []".format(self.getoffset())
 
     def blocksize(self):
         return self.object.blocksize()
@@ -452,10 +461,10 @@ def pointer(target, *optional_type, **attrs):
     type -- optional argument specifying the base type of the pointer.
     """
     if len(optional_type) > 1:
-        raise TypeError('{:s}.pointer takes exactly 1 or 2 arguments ({:d} given)'.format(__name__, 1 + len(optional_type)))
+        raise TypeError("{:s}.pointer takes exactly 1 or 2 arguments ({:d} given)".format(__name__, 1 + len(optional_type)))
     type = ptype.pointer_t._value_ if len(optional_type) == 0 or optional_type[0] is None else optional_type[0]
     def classname(self):
-        return 'dynamic.pointer({:s})'.format(target.typename() if ptype.istype(target) else target.__name__)
+        return "dynamic.pointer({:s})".format(target.typename() if ptype.istype(target) else target.__name__)
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if type is None else type
     res = ptype.clone(t, **attrs)
@@ -469,10 +478,10 @@ def rpointer(target, *optional, **attrs):
     type -- optional argument specifying the base type of the pointer.
     """
     if len(optional) > 2:
-        raise TypeError('{:s}.rpointer takes exactly 1 - 3 arguments ({:d} given)'.format(__name__, 1 + len(optional)))
-    object = (lambda s: list(s.walk())[-1]) if len(optional) == 0 or optional[0] is None else optional[0]
+        raise TypeError("{:s}.rpointer takes exactly 1 - 3 arguments ({:d} given)".format(__name__, 1 + len(optional)))
+    object = (lambda self: list(self.walk())[-1]) if len(optional) == 0 or optional[0] is None else optional[0]
     def classname(self):
-        return 'dynamic.rpointer({:s}, ...)'.format(target.typename() if ptype.istype(target) else target.__name__)
+        return "dynamic.rpointer({:s}, ...)".format(target.typename() if ptype.istype(target) else target.__name__)
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
     res = ptype.clone(t, **attrs)
@@ -486,10 +495,10 @@ def opointer(target, *optional, **attrs):
     type -- optional argument specifying the base type of the pointer.
     """
     if len(optional) > 2:
-        raise TypeError('{:s}.opointer takes exactly 1 - 3 arguments ({:d} given)'.format(__name__, 1 + len(optional)))
-    calculate = (lambda s,o: o) if len(optional) == 0 or optional[0] is None else optional[0]
+        raise TypeError("{:s}.opointer takes exactly 1 - 3 arguments ({:d} given)".format(__name__, 1 + len(optional)))
+    calculate = (lambda self, offset: offset) if len(optional) == 0 or optional[0] is None else optional[0]
     def classname(self):
-        return 'dynamic.opointer({:s}, ...)'.format(target.typename() if ptype.istype(target) else target.__name__)
+        return "dynamic.opointer({:s}, ...)".format(target.typename() if ptype.istype(target) else target.__name__)
 #    attrs.setdefault('classname', classname)
     t = ptype.pointer_t._value_ if len(optional) == 1 or optional[1] is None else optional[1]
     res = ptype.clone(t, **attrs)
@@ -648,6 +657,30 @@ if __name__ == '__main__':
         a = test()
         a=a.a
         if a['a'].blocksize() == 4 and a['b'].size() == 2 and a['c'].size() == 1 and a.blocksize() == 4:
+            raise Success
+
+    @TestCase
+    def test_dynamic_align_nonzero():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.align(8), 'b'),
+            ]
+
+        a = test(offset=6).a
+        if a['b'].size() == 1:
+            raise Success
+
+    @TestCase
+    def test_dynamic_align_zero():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.align(8), 'b'),
+            ]
+
+        a = test().a
+        if a['b'].size() == 7:
             raise Success
 
 if __name__ == '__main__':
