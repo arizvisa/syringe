@@ -2,6 +2,7 @@ import six, math, datetime
 
 import ptypes
 from ptypes import *
+from ptypes import bitmap
 
 from . import sdkddkver, winerror
 
@@ -563,3 +564,67 @@ class EVENT_HEADER(pstruct.type):
         (GUID, 'ActivityId'),
     ]
 
+# Various bitmap types
+class BitmapBitsUlong(parray.type):
+    _object_, length = ULONG, 0
+
+    # Make this type look sorta like a pbinary.array
+    def bits(self):
+        return self.size() << 3
+    def bitmap(self):
+        iterable = (bitmap.new(item.int(), 32) for item in self)
+        return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+    def check(self, index):
+        res, offset = self[index >> 5], index & 0x1f
+        return res.int() & (2 ** offset) and 1
+    def run(self):
+        return self.bitmap()
+
+    def repr(self):
+        return self.details()
+    def summary(self):
+        res = self.bitmap()
+        return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
+    def details(self):
+        bytes_per_item = self._object_().a.size()
+        bits_per_item = bytes_per_item * 8
+        bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
+        bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
+
+        items = bitmap.split(self.bitmap(), bits_per_row)
+
+        width = len("{:x}".format(self.bits()))
+        return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, min(self.bits(), i * bits_per_row + bits_per_row) - 1, width, bitmap.string(item)) for i, item in enumerate(items)))
+
+class BitmapBitsBytes(ptype.block):
+    _object_, length = UCHAR, 0
+    def __element__(self):
+        res = self.size()
+        return "{:s}[{:d}]".format(self._object_.typename(), res)
+
+    # Make this type look sorta like a pbinary.array
+    def bits(self):
+        return self.size() << 3
+    def bitmap(self):
+        iterable = (bitmap.new(six.byte2int(item), 8) for item in self.serialize())
+        return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+    def check(self, index):
+        res, offset = self[index >> 3], index & 7
+        return six.byte2int(res) & (2 ** offset) and 1
+    def run(self):
+        return self.bitmap()
+
+    def repr(self):
+        return self.details()
+    def summary(self):
+        res = self.bitmap()
+        return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
+    def details(self):
+        bytes_per_row = 8
+        iterable = iter(bitmap.string(self.bitmap()))
+        rows = map(None, *(iterable,) * 8 * bytes_per_row)
+        res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
+        items = map(str().join, res)
+
+        width = len("{:x}".format(self.bits()))
+        return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, 8 * i * bytes_per_row, width, min(self.bits(), 8 * i * bytes_per_row + 8 * bytes_per_row) - 1, width, item) for i, item in enumerate(items)))
