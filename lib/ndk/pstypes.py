@@ -155,7 +155,7 @@ class PEB(pstruct.type, versioned):
             (ULONG, 'TlsExpansionCounter'),
             (aligned, 'align(TlsBitmap)'),
             (PVOID, 'TlsBitmap'),           # FIXME: Does TlsBitmapBits represent the number of bytes that are in use?
-            (pbinary.littleendian(dyn.clone(pbinary.array, _object_=1, length=32*2)), 'TlsBitmapBits'),
+            (dyn.clone(BitmapBitsUlong, _object_=ULONG, length=2), 'TlsBitmapBits'),
             (PVOID, 'ReadOnlySharedMemoryBase'),
         ])
 
@@ -206,7 +206,7 @@ class PEB(pstruct.type, versioned):
             (dyn.array(ULONG, 0x3c if getattr(self, 'WIN64', False) else 0x22), 'GdiHandleBuffer'),
             (PVOID, 'PostProcessInitRoutine'),
             (PVOID, 'TlsExpansionBitmap'),
-            (dyn.array(ULONG, 0x20), 'TlsExpansionBitmapBits'),
+            (dyn.clone(BitmapBitsUlong, _object_=ULONG, length=0x20), 'TlsExpansionBitmapBits'),
             (ULONG, 'SessionId'),
         ])
 
@@ -234,7 +234,7 @@ class PEB(pstruct.type, versioned):
                 (PVOID, 'FlsCallback'),  # FIXME: P(_FLS_CALLBACK_INFO)
                 (LIST_ENTRY, 'FlsListHead'),
                 (PVOID, 'FlsBitmap'),
-                (dyn.array(ULONG, 4), 'FlsBitmapBits'),
+                (dyn.clone(BitmapBitsUlong, _object_=ULONG, length=4), 'FlsBitmapBits'),
                 (ULONG, 'FlsHighIndex'),
             ])
         if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
