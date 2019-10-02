@@ -565,17 +565,18 @@ class EVENT_HEADER(pstruct.type):
     ]
 
 # Various bitmap types
-class BitmapBitsUlong(parray.type):
-    _object_, length = ULONG, 0
+class BitmapBitsArray(parray.type):
+    _object_, length = ptype.undefined, 0
 
     # Make this type look sorta like a pbinary.array
     def bits(self):
         return self.size() << 3
     def bitmap(self):
-        iterable = (bitmap.new(item.int(), 32) for item in self)
+        iterable = (bitmap.new(item.int(), 8 * item.size()) for item in self)
         return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
     def check(self, index):
-        res, offset = self[index >> 5], index & 0x1f
+        bits = 8 * self.new(self._object_).a.size()
+        res, offset = self[index / bits], index % bits
         return res.int() & (2 ** offset) and 1
     def run(self):
         return self.bitmap()
@@ -586,7 +587,7 @@ class BitmapBitsUlong(parray.type):
         res = self.bitmap()
         return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
     def details(self):
-        bytes_per_item = self._object_().a.size()
+        bytes_per_item = self.new(self._object_).a.size()
         bits_per_item = bytes_per_item * 8
         bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
         bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
@@ -595,6 +596,9 @@ class BitmapBitsUlong(parray.type):
 
         width = len("{:x}".format(self.bits()))
         return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, min(self.bits(), i * bits_per_row + bits_per_row) - 1, width, bitmap.string(item)) for i, item in enumerate(items)))
+
+class BitmapBitsUlong(BitmapBitsArray):
+    _object_, length = ULONG, 0
 
 class BitmapBitsBytes(ptype.block):
     _object_, length = UCHAR, 0
