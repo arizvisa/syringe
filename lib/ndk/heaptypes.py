@@ -554,17 +554,21 @@ if 'HeapEntry':
                 return res & ~0xffffffffff
 
         def __RtlpLFHKey(self):
-            if isinstance(self.source, ptypes.provider.debuggerbase):
-                RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
+            if not isinstance(self.source, ptypes.provider.debuggerbase):
 
-            elif hasattr(self, 'RtlpLFHKey'):
+                # First check for any attributes on our HEAP
                 p = self.getparent(HEAP)
-                logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', p.RtlpLFHKey, p.instance(), 'RtlpLFHKey'))
-                RtlpHeapKey = p.RtlpLFHKey
+                if not hasattr(p, 'RtlpLFHKey'):
+                    logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
+                    return 0
 
+                # Found one that we can use, so use it.
+                logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', p.RtlpLFHKey, p.instance(), 'RtlpLFHKey'))
+                RtlpLFHKey = p.RtlpLFHKey
+
+            # We can simply use the debugger to evaluate the expression for our key
             else:
-                logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
-                return 0
+                RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
 
             t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
             res = self.new(t, offset=RtlpLFHKey)
@@ -716,17 +720,21 @@ if 'HeapEntry':
             return heap['PointerKey'].int()
 
         def __RtlpHeapKey(self):
-            if isinstance(self.source, ptypes.provider.debuggerbase):
-                RtlpHeapKey = self.source.expr('ntdll!RtlpHeapKey')
+            if not isinstance(self.source, ptypes.provider.debuggerbase):
 
-            elif hasattr(self, 'RtlpHeapKey'):
+                # First check for any attributes on our HEAP
                 p = self.getparent(HEAP)
+                if not hasattr(p, 'RtlpHeapKey'):
+                    logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpHeapKey'))
+                    return 0
+
+                # Found one that we can use, so use it.
                 logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpHeapKey', p.RtlpHeapKey, p.instance(), 'RtlpHeapKey'))
                 RtlpHeapKey = p.RtlpHeapKey
 
+            # We can simply use the debugger to evaluate the expression for our key
             else:
-                logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpHeapKey'))
-                return 0
+                RtlpHeapKey = self.source.expr('ntdll!RtlpHeapKey')
 
             t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
             res = self.new(t, offset=RtlpHeapKey)
