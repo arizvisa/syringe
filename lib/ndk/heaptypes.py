@@ -1167,13 +1167,32 @@ if 'LFH':
             chunk = dyn.clone(_HEAP_CHUNK, __SubSegment__=ss)
             return dyn.array(chunk, ss['BlockCount'].int())
 
-        _fields_ = [
-            (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
-            (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),    # FIXME: figure out what this actually points to
-            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
-            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Signature'),
-            (__Blocks, 'Blocks'),
-        ]
+        def __init__(self, **attrs):
+            super(HEAP_USERDATA_HEADER, self).__init__(**attrs)
+            f = self._fields_ = []
+
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10:
+                f.extend([
+                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
+                    (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
+                    (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
+                    (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Signature'),
+                    (__Blocks, 'Blocks'),
+                ])
+
+            else:
+                f.extend([
+                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
+                    (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'GuardPagePresent'),
+                    (USHORT, 'PaddingBytes'),
+                    (ULONG, 'Signature'),
+                    (HEAP_USERDATA_OFFSETS, 'EncodedOffsets'),
+                    (RTL_BITMAP_EX if getattr(self, 'WIN64', False) else RTL_BITMAP, 'BusyBitmap'),
+                    (ptype.undefined, 'BitmapData'),                # FIXME: this data is based on the size of the BusyBitmap
+                ])
+            return
 
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
         def __init__(self, **attrs):
