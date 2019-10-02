@@ -1118,6 +1118,12 @@ if 'LFH':
             (1, 'DisableAffinity'),
         ]
 
+    class HEAP_USERDATA_OFFSETS(pstruct.type):
+        _fields_ = [
+            (USHORT, 'FirstAllocationOffset'),
+            (USHORT, 'BlockStride'),
+        ]
+
     class HEAP_USERDATA_HEADER(pstruct.type):
         def ByOffset(self, entryoffset):
             '''Return the field at the specified `entryoffset`.'''
@@ -1167,6 +1173,12 @@ if 'LFH':
             chunk = dyn.clone(_HEAP_CHUNK, __SubSegment__=ss)
             return dyn.array(chunk, ss['BlockCount'].int())
 
+        def __BitmapData(self):
+            res = self['BusyBitmap'].li
+            bits = 64 if getattr(self, 'WIN64', False) else 32
+            fractionQ = 1 if res['SizeOfBitmap'].int() % bits else 0
+            return dyn.clone(res._Buffer, length=fractionQ + res['SizeOfBitmap'].int() / bits)
+
         def __init__(self, **attrs):
             super(HEAP_USERDATA_HEADER, self).__init__(**attrs)
             f = self._fields_ = []
@@ -1189,8 +1201,9 @@ if 'LFH':
                     (USHORT, 'PaddingBytes'),
                     (ULONG, 'Signature'),
                     (HEAP_USERDATA_OFFSETS, 'EncodedOffsets'),
-                    (RTL_BITMAP_EX if getattr(self, 'WIN64', False) else RTL_BITMAP, 'BusyBitmap'),
-                    (ptype.undefined, 'BitmapData'),                # FIXME: this data is based on the size of the BusyBitmap
+                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(EncodedOffsets)'),
+                    (rtltypes.RTL_BITMAP_EX if getattr(self, 'WIN64', False) else rtltypes.RTL_BITMAP, 'BusyBitmap'),
+                    (self.__BitmapData, 'BitmapData'),
                 ])
             return
 
@@ -1250,7 +1263,7 @@ if 'LFH':
             #        been in the 'Hint' field. However, when this happens the
             #        current segment to honor for allocations is 'ActiveSubSegment'.
 
-            if self['Hint'].int():
+            if operator.contains(self, 'Hint') and self['Hint'].int():
                 return self['Hint'].d
             elif self['ActiveSubSegment'].int():
                 return self['ActiveSubSegment'].d
