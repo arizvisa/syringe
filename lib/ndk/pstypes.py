@@ -335,20 +335,24 @@ class GDI_TEB_BATCH(pstruct.type):
     ]
 
 class TEB(pstruct.type, versioned):
-    class SameTebFlags(pbinary.flags):
+    @pbinary.littleendian
+    class _SameTebFlags(pbinary.flags):
         _fields_ = [
-            (1, 'DbgSafeThunkCall'),
-            (1, 'DbgInDebugPrint'),
-            (1, 'DbgHasFiberData'),
-            (1, 'DbgSkipThreadAttach'),
-            (1, 'DbgWerInShipAssertCode'),
-            (1, 'DbgRanProcessInit'),
-            (1, 'DbgClonedThread'),
-            (1, 'DbgSupressDebugMsg'),
-            (1, 'DbgDisableUserStackWalk'),
-            (1, 'DbgRtlExceptionAttached'),
-            (1, 'DbgInitialThread'),
-            (5, 'SpareSameTebBits'),
+            (1, 'SafeThunkCall'),
+            (1, 'InDebugPrint'),
+            (1, 'HasFiberData'),
+            (1, 'SkipThreadAttach'),
+            (1, 'WerInShipAssertCode'),
+            (1, 'RanProcessInit'),
+            (1, 'ClonedThread'),
+            (1, 'SuppressDebugMsg'),
+            (1, 'DisableUserStackWalk'),
+            (1, 'RtlExceptionAttached'),
+            (1, 'InitialThread'),
+            (1, 'SessionAware'),
+            (1, 'LoadOwner'),
+            (1, 'LoaderWorker'),
+            (2, 'SpareSameTebBits'),
         ]
 
     def __init__(self, **attrs):
@@ -359,7 +363,7 @@ class TEB(pstruct.type, versioned):
         f.extend([
             (NT_TIB, 'Tib'),
             (PVOID, 'EnvironmentPointer'),
-            (umtypes.CLIENT_ID, 'Cid'),
+            (umtypes.CLIENT_ID, 'ClientId'),
             (PVOID, 'ActiveRpcHandle'),
             (PVOID, 'ThreadLocalStoragePointer'),
             (P(PEB), 'ProcessEnvironmentBlock'),
@@ -379,10 +383,19 @@ class TEB(pstruct.type, versioned):
             (P(Ntddk.ACTIVATION_CONTEXT_STACK), 'ActivationContextStackPointer'),
         ])
 
-        f.append((dyn.block(24 if getattr(self, 'WIN64', False) else 0x24), 'SpareBytes1'))
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WS03:
+            f.append((dyn.block(28 if getattr(self, 'WIN64', False) else 24), 'SpareBytes1'))
+
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WS03:
+            f.append((dyn.block(28 if getattr(self, 'WIN64', False) else 0x28), 'SpareBytes1'))
+
+        else:
+            f.append((dyn.block(24 if getattr(self, 'WIN64', False) else 0x24), 'SpareBytes1'))
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
+            f.append((ULONG, 'TxFsContext'))
 
         f.extend([
-            (ULONG, 'TxFsContext'),
             (aligned, 'align(GdiTebBatch)'),
             (GDI_TEB_BATCH, 'GdiTebBatch'),
             (aligned, 'align(RealClientId)'),
@@ -404,7 +417,6 @@ class TEB(pstruct.type, versioned):
             (umtypes.NTSTATUS, 'LastStatusValue'),
             (aligned, 'align(StaticUnicodeString)'),
             (umtypes.UNICODE_STRING, 'StaticUnicodeString'),
-#            (WCHAR, 'StaticUnicodeBuffer[0x105]'),
             (dyn.clone(pstr.wstring, length=0x106), 'StaticUnicodeBuffer'),
             (aligned, 'align(DeallocationStack)'),
             (PVOID, 'DeallocationStack'),
@@ -416,56 +428,68 @@ class TEB(pstruct.type, versioned):
             (ULONG, 'HardErrorMode'),
         ])
 
-        f.extend([
-            (aligned, 'align(Instrumentation)'),
-            (dyn.array(PVOID, 11 if getattr(self, 'WIN64', False) else 9), 'Instrumentation')
-        ])
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_VISTA:
+            f.extend([
+                (aligned, 'align(Instrumentation)'),
+                (dyn.array(PVOID, 14 if getattr(self, 'WIN64', False) else 16), 'Instrumentation')
+            ])
 
-        f.extend([
-            (GUID, 'ActivityId'),
-            (PVOID, 'SubProcessTag'),
-            (PVOID, 'EtwTraceData'),
-        ])
+        else:
+            f.extend([
+                (aligned, 'align(Instrumentation)'),
+                (dyn.array(PVOID, 11 if getattr(self, 'WIN64', False) else 9), 'Instrumentation')
+            ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
-            f.append((PVOID, 'EtwLocalData'))
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
+            f.extend([
+                (PVOID, 'SubProcessTag'),
+                (PVOID, 'EtwTraceData'),
+            ])
+
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
+            f.extend([
+                (GUID, 'ActivityId'),
+                (PVOID, 'SubProcessTag'),
+                (PVOID, 'EtwLocalData'),
+                (PVOID, 'EtwTraceData'),
+            ])
 
         f.extend([
             (PVOID, 'WinSockData'),
             (ULONG, 'GdiBatchCount'),
         ])
-
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
-            f.extend([
-                (UCHAR, 'SpareBool0'),
-                (UCHAR, 'SpareBool1'),
-                (UCHAR, 'SpareBool2'),
-            ])
-        else:
-            f.extend([
-                (UCHAR, 'InDbgPrint'),
-                (UCHAR, 'FreeStackOnTermination'),
-                (UCHAR, 'HasFiberData'),
-            ])
-
         f.extend([
+            (UCHAR, 'InDbgPrint'),
+            (UCHAR, 'FreeStackOnTermination'),
+            (UCHAR, 'HasFiberData'),
             (UCHAR, 'IdealProcessor'),
+        ])
+        f.extend([
             (ULONG, 'GuaranteedStackBytes'),
             (aligned, 'align(ReservedForPerf)'),
             (PVOID, 'ReservedForPerf'),
+            (aligned, 'align(ReservedForOle)'),
             (PVOID, 'ReservedForOle'),
             (ULONG, 'WaitingOnLoaderLock'),
+            (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(WaitingOnLoaderLock)'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
-            f.append((aligned, 'align(SavedPriorityState)'))
-            f.append((PVOID, 'SavedPriorityState'))
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
+            f.extend([
+                (ULONGLONG, 'SparePointer1'),
+                (ULONGLONG, 'SoftPatchPtr1'),
+                (ULONGLONG, 'SoftPatchPtr2'),
+            ])
+
         else:
-            f.append((ULONG, 'SparePointer1'))
+            f.extend([
+                (aligned, 'align(SavedPriorityState)'),
+                (PVOID, 'SavedPriorityState'),
+                (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SoftPatchPtr1'),
+                (PVOID, 'ThreadPoolData'),
+            ])
 
         f.extend([
-            (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SoftPatchPtr1'),
-            (PVOID, 'ThreadPoolData'),
             (PVOID, 'TlsExpansionSlots'),
         ])
 
@@ -475,41 +499,90 @@ class TEB(pstruct.type, versioned):
                 (PVOID, 'BStoreLimit'),
             ])
 
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN7:
+            f.append((ULONG, 'ImpersonationLocale'))
+
+        else:
+            f.append((ULONG, 'MuiGeneration'))
+
         f.extend([
-            (ULONG, 'MuiGeneration'),
             (ULONG, 'IsImpersonating'),
             (PVOID, 'NlsCache'),
             (PVOID, 'pShimData'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
-            f.append((ULONG, 'LowFragHeapDataSlot'))
-        else:
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WIN7:
             f.append((ULONG, 'HeapVirtualAffinity'))
+
+        else:
+            f.extend([
+                (USHORT, 'HeapVirtualAffinity'),
+                (USHORT, 'LowFragHeapDataSlot'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WINBLUE:
+            f.extend([
+                (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'Padding7'),
+            ])
 
         f.extend([
             (aligned, 'align(CurrentTransactionHandle)'),
             (PVOID, 'CurrentTransactionHandle'),
             (PTEB_ACTIVE_FRAME, 'ActiveFrame'),
+            (PVOID, 'FlsData'),
         ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
-            f.append((PVOID, 'FlsData'))
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
+            f.extend([
+                (UCHAR, 'SafeThunkCall'),
+                (dyn.array(UCHAR, 3), 'BooleanSpare'),
+            ])
+            return
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_VISTA:
             f.extend([
                 (PVOID, 'PreferredLangauges'),
                 (PVOID, 'UserPrefLanguages'),
                 (PVOID, 'MergedPrefLanguages'),
                 (ULONG, 'MuiImpersonation'),
                 (USHORT, 'CrossTebFlags'),
-                (TEB.SameTebFlags, 'SameTebFlags'),   # XXX
-                (PVOID, 'TxnScopeEntercallback'),
-                (PVOID, 'TxnScopeExitCAllback'),
+                (TEB._SameTebFlags, 'SameTebFlags'),
+                (PVOID, 'TxnScopeEnterCallback'),
+                (PVOID, 'TxnScopeExitCallback'),
                 (PVOID, 'TxnScopeContext'),
                 (ULONG, 'LockCount'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_VISTA:
+            f.extend([
+                (ULONG, 'ProcessRundown'),
+                (ULONGLONG, 'LastSwitchTime'),
+                (ULONGLONG, 'TotalSwitchOutTime'),
+                (LARGE_INTEGER, 'WaitReasonBitmap'),
+            ])
+            return
+
+        elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10:
+            f.extend([
                 (ULONG, 'SpareUlong0'),
                 (PVOID, 'ResourceRetValue'),
+            ])
+
+        else:
+            f.extend([
+                (ULONG, 'WowTebOffset'),
+                (PVOID, 'ResourceRetValue'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+            f.extend([
+                (PVOID, 'ReservedForWdf'),
+            ])
+
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN10:
+            f.extend([
+                (ULONGLONG, 'ReservedForCrt'),
+                (GUID, 'EffectiveContainerId'),
             ])
         return
 
