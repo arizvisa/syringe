@@ -554,7 +554,18 @@ if 'HeapEntry':
                 return res & ~0xffffffffff
 
         def __RtlpLFHKey(self):
-            RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
+            if isinstance(self.source, ptypes.provider.debuggerbase):
+                RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
+
+            elif hasattr(self, 'RtlpLFHKey'):
+                p = self.getparent(HEAP)
+                logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', p.RtlpLFHKey, p.instance(), 'RtlpLFHKey'))
+                RtlpHeapKey = p.RtlpLFHKey
+
+            else:
+                logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
+                return 0
+
             t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
             res = self.new(t, offset=RtlpLFHKey)
             return res.l.int()
@@ -705,7 +716,18 @@ if 'HeapEntry':
             return heap['PointerKey'].int()
 
         def __RtlpHeapKey(self):
-            RtlpHeapKey = self.source.expr('ntdll!RtlpHeapKey')
+            if isinstance(self.source, ptypes.provider.debuggerbase):
+                RtlpHeapKey = self.source.expr('ntdll!RtlpHeapKey')
+
+            elif hasattr(self, 'RtlpHeapKey'):
+                p = self.getparent(HEAP)
+                logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpHeapKey', p.RtlpHeapKey, p.instance(), 'RtlpHeapKey'))
+                RtlpHeapKey = p.RtlpHeapKey
+
+            else:
+                logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpHeapKey'))
+                return 0
+
             t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
             res = self.new(t, offset=RtlpHeapKey)
             return res.l.int()
