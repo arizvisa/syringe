@@ -14,18 +14,34 @@ class RTL_CRITICAL_SECTION(pstruct.type, versioned):
         (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SpinCount'),
     ]
 
-# FIXME: fix the following RTL_BITMAP types so that they can be interacted with
-#        as a bitmap instead of a structure.
 class RTL_BITMAP(pstruct.type):
+    class _Buffer(BitmapBitsArray):
+        _object_ = ULONG
+
+    def __Buffer(self):
+        res = self['SizeOfBitMap'].l
+        fractionQ = 1 if res.int() % 32 else 0
+        target = dyn.clone(RTL_BITMAP._Buffer, length=fractionQ + res.int() / 32)
+        return P(target)
+
     _fields_ = [
         (ULONG, 'SizeOfBitMap'),
-        (P(ULONG), 'Buffer'),
+        (__Buffer, 'Buffer'),
     ]
 
 class RTL_BITMAP_EX(pstruct.type):
+    class _Buffer(BitmapBitsArray):
+        _object_ = ULONGLONG
+
+    def __Buffer(self):
+        res = self['SizeOfBitMap'].l
+        fractionQ = 1 if res.int() % 64 else 0
+        target = dyn.clone(RTL_BITMAP_EX._Buffer, length=fractionQ + res.int() / 64)
+        return P(target)
+
     _fields_ = [
         (ULONGLONG, 'SizeOfBitMap'),
-        (P(ULONGLONG), 'Buffer'),
+        (__Buffer, 'Buffer'),
     ]
 
 class RTL_DRIVE_LETTER_CURDIR(pstruct.type):
