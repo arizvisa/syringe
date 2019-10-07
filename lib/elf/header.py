@@ -115,6 +115,11 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         res = self['e_machine'].li.int()
         return e_flags.withdefault(res, type=res)
 
+    def __padding(self):
+        res = self['e_ehsize'].li
+        cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + e_ident().a.blocksize()
+        return dyn.block(res.int() - cb)
+
     _fields_ = [
         (e_type, 'e_type'),
         (e_machine, 'e_machine'),
@@ -129,10 +134,8 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         (Elf32_Half, 'e_shentsize'),
         (Elf32_Half, 'e_shnum'),
         (Elf32_Half, 'e_shstrndx'),
+        (__padding, 'padding'),
     ]
-
-    def blocksize(self):
-        return self['e_ehsize'].li.int()-e_ident().a.blocksize()
 
     def stringtable(self):
         res, index = self['e_shoff'].d.li, self['e_shstrndx'].int()
@@ -150,6 +153,11 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         res = self['e_machine'].li.int()
         return e_flags.withdefault(res, type=res)
 
+    def __padding(self):
+        res = self['e_ehsize'].li
+        cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + e_ident().a.blocksize()
+        return dyn.block(res.int() - cb)
+
     _fields_ = [
         (e_type, 'e_type'),
         (e_machine, 'e_machine'),
@@ -164,9 +172,8 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         (Elf64_Half, 'e_shentsize'),
         (Elf64_Half, 'e_shnum'),
         (Elf64_Half, 'e_shstrndx'),
+        (__padding, 'padding'),
     ]
-    def blocksize(self):
-        return self['e_ehsize'].li.int() - e_ident().a.blocksize()
 
     def stringtable(self):
         res, index = self['e_shoff'].d.li, self['e_shstrndx'].int()
