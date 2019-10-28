@@ -82,15 +82,15 @@ class _sh_flags(pbinary.flags):
         (1, 'SHF_WRITE'),
     ]
 
-def _sh_offset(size):
-    def sh_offset(self):
-        res = self['sh_type'].li.int()
-        type = Type.withdefault(res, type=res)   # XXX: not 64-bit
-        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda _:int(s.getparent(Elf32_Shdr)['sh_size'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
+def _sh_offset(ptr):
+    def sh_size(self):
+        p = self.getparent(ElfXX_Shdr)
+        return p['sh_size'].li.int()
 
-        base = self.getparent(ElfXX_File)
-        result = dyn.clone(type, blocksize=lambda s: self['sh_size'].li.int())
-        return dyn.rpointer(result, base, size)
+    def sh_offset(self):
+        res = self['sh_type'].li
+        target = Type.get(res.int(), type=res.int(), blocksize=sh_size)
+        return dyn.clone(ptr, _object_=target)
     return sh_offset
 
 class _sh_index(pint.enum):
@@ -172,15 +172,13 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_type(_sh_type, Elf32_Word): pass
     class sh_flags(_sh_flags): pass
     def __sh_unknown(self):
-        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
-        return dyn.block(max((0,self.blocksize()-res)))
+        res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
+        return dyn.block(max(0, self.blocksize() - res))
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
         (Elf32_Addr, 'sh_addr'),
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), Elf32_Off), 'sh_offset'),
-#        (dyn.rpointer(lambda s: dyn.block(int(s.parent['sh_size'])), lambda s: s.getparent(ElfXX_Header), Elf32_Off), 'sh_offset'),
         (_sh_offset(Elf32_Off), 'sh_offset'),
         (Elf32_Word, 'sh_size'),
         (Elf32_Word, 'sh_link'),
@@ -196,8 +194,8 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_flags(_sh_flags):
         _fields_ = [(32,'SHF_RESERVED2')] + _sh_flags._fields_
     def __sh_unknown(self):
-        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
-        return dyn.block(max((0,self.blocksize()-res)))
+        res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
+        return dyn.block(max(0, self.blocksize() - res))
     _fields_ = [
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),

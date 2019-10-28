@@ -30,15 +30,15 @@ class _p_flags(pbinary.flags):
         (1, 'PF_X'),
     ]
 
-def _p_offset(size):
-    def p_offset(self):
-        res = self['p_type'].li.int()
-        type = Type.withdefault(res, type=res)
-        #return dyn.rpointer( lambda s: dyn.clone(type, blocksize=lambda x:int(s.getparent(ElfXX_Phdr)['p_filesz'].li)), lambda s: s.getparent(ElfXX_File), Elf32_Off)
+def _p_offset(ptr):
+    def p_size(self):
+        p = self.getparent(ElfXX_Phdr)
+        return p['p_filesz'].li.int()
 
-        base = self.getparent(ElfXX_File)
-        result = dyn.clone(type, blocksize=lambda _:self['p_filesz'].li.int())
-        return dyn.rpointer(result, base, size)
+    def p_offset(self):
+        res = self['p_type'].li
+        target = Type.get(res.int(), type=res.int(), blocksize=p_size)
+        return dyn.clone(ptr, _object_=target)
     return p_offset
 
 ### Program Headers
@@ -46,8 +46,8 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf32_Word): pass
     class p_flags(_p_flags): pass   # XXX
     def __p_unknown(self):
-        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
-        return dyn.block(max((0,self.blocksize()-res)))
+        res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
+        return dyn.block(max(0, self.blocksize() - res))
     _fields_ = [
         (p_type, 'p_type'),
         (_p_offset(Elf32_Off), 'p_offset'),
@@ -64,8 +64,8 @@ class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf64_Word): pass
     class p_flags(_p_flags): pass   # XXX
     def __p_unknown(self):
-        res = sum(self.new(t).a.size() for t,_ in self._fields_[:-1])
-        return dyn.block(max((0,self.blocksize()-res)))
+        res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
+        return dyn.block(max(0, self.blocksize() - res))
     _fields_ = [
         (p_type, 'p_type'),
         (p_flags, 'p_flags'),
