@@ -45,9 +45,11 @@ def _p_offset(ptr):
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf32_Word): pass
     class p_flags(_p_flags): pass   # XXX
+
     def __p_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
         return dyn.block(max(0, self.blocksize() - res))
+
     _fields_ = [
         (p_type, 'p_type'),
         (_p_offset(Elf32_Off), 'p_offset'),
@@ -63,9 +65,11 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
 class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf64_Word): pass
     class p_flags(_p_flags): pass   # XXX
+
     def __p_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
         return dyn.block(max(0, self.blocksize() - res))
+
     _fields_ = [
         (p_type, 'p_type'),
         (p_flags, 'p_flags'),
@@ -122,12 +126,27 @@ class PT_SHLIB(ptype.block):
 @Type.define
 class PT_PHDR(parray.block):
     type = 6
-    _object_ = Elf32_Phdr
+    def _object_(self):
+        if not hasattr(self, '__boundary__'):
+            res = self.getparent(ElfXX_File)
+            setattr(self, '__boundary__', res)
+
+        # figure out what elf class we're using
+        p = self.__boundary__
+        e_ident = p['e_ident']
+        ei_class = e_ident['EI_CLASS']
+
+        # so that we can determine which Phdr type to use
+        if ei_class['ELFCLASS32']:
+            return Elf32_Phdr
+        elif ei_class['ELFCLASS64']:
+            return Elf64_Phdr
+        raise NotImplementedError(ei_class)
 
 @Type.define
 class PT_GNU_EH_FRAME(ptype.block):
     type = 0x6474e550
-    # FIXME: this structure is part of the dwarf standard
+    # TODO: this structure is part of the dwarf standard
 
 @Type.define
 class PT_GNU_STACK(ptype.block):
