@@ -14,14 +14,14 @@ class ElfXX_Off(ptype.rpointer_t):
     def classname(self):
         try: type = self.d.classname() if self.initializedQ() else self._object_().classname()
         except: pass
-        else: return '%s<%s>'%(self.typename(), type)
+        else: return "{:s}<{:s}>".format(self.typename(), type)
 
         try: type = self._object_.typename() if ptype.istype(self._object_) else self._object_().classname()
         except: pass
-        else: return '%s<%s>'%(self.typename(), type)
+        else: return "{:s}<{:s}>".format(self.typename(), type)
 
         type = self._object_.__name__
-        return '%s<%s>'%(self.typename(), type)
+        return "{:s}<{:s}>".format(self.typename(), type)
 
 class ULEB128(pbinary.terminatedarray):
     class septet(pbinary.struct):
@@ -62,14 +62,14 @@ class ElfXX_Shdr(ElfXX_Header): pass
 class Elf32_Addr(pint.uint32_t): pass
 class Elf32_Half(pint.uint16_t): pass
 class Elf32_Off(ElfXX_Off):
-    _value_ = pint.uint32_t
+    _value_ = Elf32_Addr
 class Elf32_Sword(pint.int32_t): pass
 class Elf32_Word(pint.uint32_t): pass
 
 ### elf64
 class Elf64_Addr(pint.uint64_t): pass
 class Elf64_Off(ElfXX_Off):
-    _value_ = pint.uint64_t
+    _value_ = Elf64_Addr
 class Elf64_Half(Elf32_Half): pass
 class Elf64_Word(Elf32_Word): pass
 class Elf64_Sword(Elf32_Sword): pass
