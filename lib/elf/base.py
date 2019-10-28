@@ -1,6 +1,6 @@
 import ptypes
 from ptypes import ptype,parray,pstruct,pint,pstr,dyn,pbinary
-ptypes.setbyteorder( ptypes.config.byteorder.littleendian )
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### base
 class uchar(pint.uint8_t): pass
@@ -79,12 +79,14 @@ class Elf64_Sxword(pint.int64_t): pass
 ### elf general
 class e_ident(pstruct.type):
     EI_NIDENT=16
+
     class EI_CLASS(pint.enum, uchar):
         _values_ = [
             ('ELFCLASSNONE', 0),
             ('ELFCLASS32', 1),
             ('ELFCLASS64', 2),
         ]
+
     class EI_DATA(pint.enum, uchar):
         # FIXME: switch the byteorder of everything based on this value
         _values_ = [
@@ -93,12 +95,12 @@ class e_ident(pstruct.type):
             ('ELFDATA2MSB', 2),
         ]
         def order(self):
-            res = self.int()
-            if res == 1:
+            if self['ELFDATA2LSB']:
                 return ptypes.config.byteorder.littleendian
-            elif res == 2:
+            elif self['ELFDATA2MSB']:
                 return ptypes.config.byteorder.bigendian
             return ptypes.config.defaults.integer.order
+
     class EI_OSABI(pint.enum, uchar):
         _values_ = [
             ('ELFOSABI_SYSV', 0),
@@ -106,6 +108,7 @@ class e_ident(pstruct.type):
             ('ELFOSABI_ARM_EABI', 64),
             ('ELFOSABI_STANDALONE', 255),
         ]
+
     _fields_ = [
         (dyn.block(4), 'EI_MAG'),
         (EI_CLASS, 'EI_CLASS'),
@@ -115,8 +118,14 @@ class e_ident(pstruct.type):
         (uchar, 'EI_ABIVERSION'),
         (dyn.block(EI_NIDENT-9), 'EI_PAD'),
     ]
+
     def valid(self):
         return self.initialized and self['EI_MAG'].serialize() == '\x7fELF'
+    def properties(self):
+        res = super(e_ident, self).properties()
+        if self.initializedQ():
+            res['valid'] = self.valid()
+        return res
 
 class e_type(pint.enum, Elf32_Half):
     ET_LOOS, ET_HIOS = 0xfe00, 0xfeff
@@ -151,4 +160,3 @@ class e_version(pint.enum, Elf32_Word):
         ('EV_NONE',0),
         ('EV_CURRENT',1),
     ]
-

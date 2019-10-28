@@ -7,13 +7,19 @@ from . import base
 class File(ptypes.pstruct.type, base.ElfXX_File):
     def __e_data(self):
         e_ident = self['e_ident'].li
-        type = e_ident['EI_CLASS'].int()
-        order = e_ident['EI_DATA'].order()
-        if type == 1:
-            return dyn.clone(header.Elf32_Ehdr, recurse=dict(byteorder=order))
-        elif type == 2:
-            return dyn.clone(header.Elf64_Ehdr, recurse=dict(byteorder=order))
-        raise ValueError(type)
+
+        # Figure out the EI_CLASS to determine the Ehdr size
+        ei_class = e_ident['EI_CLASS']
+        if ei_class['ELFCLASS32']:
+            t = header.Elf32_Ehdr
+        elif ei_class['ELFCLASS64']:
+            t = header.Elf64_Ehdr
+        else:
+            raise NotImplementedError(ei_class)
+
+        # Now we can clone it using the byteorder from EI_DATA
+        ei_data = e_ident['EI_DATA']
+        return dyn.clone(t, recurse=dict(byteorder=ei_data.order()))
 
     _fields_ = [
         (base.e_ident, 'e_ident'),
