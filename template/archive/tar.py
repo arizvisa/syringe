@@ -3,6 +3,8 @@ import ptypes
 from ptypes import *
 import sys, operator, six
 
+BLOCKSIZE = 2**9
+
 class stringinteger(pstr.string):
     def int(self):
         try: res = self.str()
@@ -15,6 +17,10 @@ class stringinteger(pstr.string):
         n = str(integer)
         prefix = '0' * (self.length - 1 - len(n))
         return super(stringinteger, self).set(prefix + n + '\x00')
+
+    def summary(self):
+        res = super(stringinteger, self).summary()
+        return "{:s} :> {:d}".format(res, self.int())
 
 class stringoctal(stringinteger):
     def int(self):
@@ -54,12 +60,12 @@ class linkflag(pint.enum, linkflag_t):
     ]
     _values_ = [(_, six.byte2int(by)) for _, by in _values_]
 
-class header_t(pstruct.type):
+class common_t(pstruct.type):
     _fields_ = [
         (dyn.clone(pstr.string, length=100), 'filename'),
         (dyn.clone(stringoctal, length=8), 'mode'),
-        (dyn.clone(stringoctal, length=8), 'uid'),
-        (dyn.clone(stringoctal, length=8), 'gid'),
+        (dyn.clone(stringinteger, length=8), 'uid'),
+        (dyn.clone(stringinteger, length=8), 'gid'),
         (dyn.clone(stringoctal, length=12), 'size'),
         (dyn.clone(stringoctal, length=12), 'mtime'),
         (dyn.clone(stringoctal, length=8), 'checksum'),
@@ -67,21 +73,32 @@ class header_t(pstruct.type):
         (dyn.clone(pstr.string, length=100), 'linkname'),
     ]
 
+    def summary(self):
+        filename = self['filename'].str()
+        mode, uid, gid, sz = (self[fld] for fld in ['mode', 'uid', 'gid', 'size'])
+        mtime, checksum = (self[fld] for fld in ['mtime', 'checksum'])
+        return "filename=\"{:s}\" size={:#x} mode={:04d} uid={:d} gid={:d} mtime={:#x} checksum={:#x} linkflag={:s}{:s}".format(filename.encode('unicode_escape'), sz.int(), mode.int(), uid.int(), gid.int(), mtime.int(), checksum.int(), self['linkflag'].summary(), " linkname={:s}".format(self['linkname'].str()) if self['linkflag']['LNKTYPE'] else '')
+
+    def isempty(self):
+        return False
+
     def listing(self):
         name = self['filename'].str()
         mode = self['mode'].int()
         uid, gid = self['uid'].int(), self['gid'].int()
         size = self['size'].int()
         mtime, checksum = self['mtime'].int(), self['checksum'].int()
-        return "{:s} :> {:s} size={:#x} mode={:04o} uid={:d} gid={:d} mtime={:#x} checksum={:#x}".format(name.encode('unicode_escape'), self['linkflag'].summary(), size, mode, uid, gid, mtime, checksum) + (" -> {:s}".format(self['linkname'].str().encode('unicode_escape')) if self['linkflag']['LNKTYPE'] else '')
+        return "\"{:s}\" {:s} size={:#x} mode={:04o} uid={:d} gid={:d} mtime={:#x} checksum={:#x}".format(name.encode('unicode_escape'), self['linkflag'].summary(), size, mode, uid, gid, mtime, checksum) + (" -> {:s}".format(self['linkname'].str().encode('unicode_escape')) if self['linkflag']['LNKTYPE'] else '')
 
-    def isempty(self):
-        return self['filename'].str() == ''
+### Extended headers
+class header(ptype.definition):
+    attribute, cache = 'magic', {}
+class header_member(ptype.definition):
+    attribute, cache = 'magic', {}
 
 # FIXME: we can auto-detect which header we are by checking 'magic'
-class header_extended_t(pstruct.type):
+class extended_t(pstruct.type):
     _fields_ = [
-        (dyn.clone(pstr.string, length=6), 'magic'),
         (dyn.clone(stringinteger, length=2), 'version'),
         (dyn.clone(pstr.string, length=32), 'uname'),
         (dyn.clone(pstr.string, length=32), 'gname'),
@@ -89,96 +106,174 @@ class header_extended_t(pstruct.type):
         (dyn.clone(stringinteger, length=8), 'devminor'),
     ]
 
+    def summary(self):
+        major, minor = self['devmajor'], self['devminor']
+        uname = "uname=\"{:s}\"".format(self['uname'].str()) if len(self['uname'].str()) > 0 else ''
+        gname = "gname=\"{:s}\"".format(self['gname'].str()) if len(self['uname'].str()) > 0 else ''
+        device = ("dev={:s}".format('.'.join(map("{:d}".format, [major.int(), minor.int()])))) if sum(map(len, {item.str() for item in [major, minor]})) > 0 else ''
+        res = (' ' + ' '.join(filter(None, [uname, gname, device]))) if any({uname, gname, device}) else ''
+        return "version={:d}".format(self['version'].int()) + res
+
+    def isempty(self):
+        return False
+
     def listing(self):
         major, minor = self['devmajor'], self['devminor']
         uname = "uname=\"{:s}\"".format(self['uname'].str()) if len(self['uname'].str()) > 0 else ''
         gname = "gname=\"{:s}\"".format(self['gname'].str()) if len(self['uname'].str()) > 0 else ''
         device = ("dev={:s}".format('.'.join(map("{:d}".format, [major.int(), minor.int()])))) if sum(map(len, {item.str() for item in [major, minor]})) > 0 else ''
         res = (' ' + ' '.join(filter(None, [uname, gname, device]))) if any({uname, gname, device}) else ''
-        return "ext v{:d}".format(self['version'].int()) + res
+        return "(extended) v{:d}".format(self['version'].int()) + res
+
+class header_t(pstruct.type):
+    def __extended(self):
+        res = self['magic'].li
+        return header.lookup(res.str())
+
+    def __member(self):
+        res = self['magic'].li
+        return header_member.lookup(res.str())
+
+    _fields_ = [
+        (common_t, 'common'),
+        (dyn.clone(pstr.string, length=6), 'magic'),
+        (__extended, 'extended'),
+        (__member, 'member'),
+    ]
+
+    def member_name(self):
+        res = self['common']
+        return res['filename'].str()
+
+    def member_type(self):
+        res = self['common']
+        return res['linkflag']
+
+    def member_linkname(self):
+        res = self['common']
+        return res['linkname'].str()
+
+    def member_mode(self):
+        res = self['common']
+        return res['mode'].int()
+
+    def member_owner(self):
+        res = self['common']
+        return res['uid'].int(), res['gid'].int()
+
+    def member_checksum(self):
+        res = self['common']
+        return res['checksum'].int()
+
+    def member_size(self):
+        res = self['extended']
+        return res.member_size()
+
+    def listing(self):
+        res = self['magic'].str()
+        iterable = ( self[fld].listing() for fld in ['common', 'extended', 'member'] if hasattr(self[fld], 'isempty') and not self[fld].isempty() )
+        return "{:s}{:s}".format("<{:s}> ".format(res.encode('unicode_escape')) if res else '', ' | '.join(iterable))
+
+    def dump(self):
+        res = []
+        for item in self.traverse(filter=lambda node: isinstance(node, pstruct.type)):
+            repr = "{!r}".format(item)
+            res.extend(repr.split('\n'))
+        return '\n'.join(res)
 
 class member_t(pstruct.type):
+    def __data(self):
+        header = self['header'].li
+        return dyn.block(header.member_size())
+
+    _fields_ = [
+        (header_t, 'header'),
+        (__data, 'data'),
+    ]
+
     def iseof(self):
-        return all(n == '\x00' for n in self.serialize())
+        iterable = self.serialize()
+        return all(item == '\0' for item in iterable)
 
     def listing(self):
         index = int(self.name())
         return "{:d}) {:s}".format(index, self['header'].listing())
 
-    def summary(self):
-        common = self['header']['common']
-        filename = common['filename']
-        mode = common['mode']
-        uid, gid = common['uid'], common['gid']
-        sz, rsz = common['size'], self['data'].size()
-        return '\n'.join(map("{!r}".format, [filename, mode, uid, gid, sz])) + '\n' + self['data'].hexdump(rows=4)
+    def filename(self):
+        res = self['header']
+        return res.member_name()
+
+    def filemode(self):
+        res = self['header']
+        return res.member_mode()
+
+    def fileowner(self):
+        res = self['header']
+        return res.member_owner()
+
+    def filesize(self):
+        res = self['header']['common']
+        return res['size'].int()
+
+    def data(self):
+        res = self['data']
+        return res.serialize()
+
+class File(stream_t):
+    _object_ = member_t
 
 ### old
+@header.define
 class header_old(pstruct.type):
-    _fields_ = [
-        (header_t, 'common'),
+    magic, _fields_ = '', []
+    def member_size(self):
+        p = self.getparent(header_t)
+        res = p['common']
+        return res['size'].int()
+
+@header_member.define
+class header_old_member(pstruct.type):
+    magic, _fields_ = '', [
         (dyn.clone(pstr.string, length=255), 'pad'),
     ]
 
-    def dump(self):
-        res = [self['common']]
-        return '\n'.join(map("{!r}".format, res))
+    def summary(self):
+        res = self['pad'].str()
+        return "pad=\"{:s}\"".format(res.encode('unicode_escape'))
+
+    def isempty(self):
+        return self['pad'].str() == ""
 
     def listing(self):
-        return self['common'].listing()
-
-    def getsize(self):
-        res = self['common']
-        return res['size'].int()
-
-class old(stream_t):
-    class member(member_t):
-        def __data(self):
-            res = self['header'].li
-            cb = res.getsize()
-            return dyn.block(cb)
-
-        _fields_ = [
-            (header_old, 'header'),
-            (__data, 'data')
-        ]
-    _object_ = member
+        return "(header_old) {:s}".format(self.summary()) if self['pad'].str() else ''
 
 ### ustar
-class header_ustar(header_old):
-    _fields_ = [
-        (header_t, 'common'),
-        (header_extended_t, 'extended'),
+@header.define
+class header_ustar(extended_t):
+    magic = 'ustar'
+    def member_size(self):
+        p = self.getparent(header_t)
+        res = p['common']
+        count = res['size'].int()
+        return count + BLOCKSIZE - (count % BLOCKSIZE)
 
+@header_member.define
+class header_ustar_member(pstruct.type):
+    magic = 'ustar'
+    _fields_ = [
         (dyn.clone(pstr.string, length=155), 'prefix'),
         (dyn.block(12), 'padding'),
     ]
 
-    def dump(self):
-        res = self.getoffset('prefix')
-        return '\n'.join(map("{!r}".format, [self['common'], self['extended']]) + filter(lambda item: item.startswith("[{:x}] ".format(res)), self.details().split('\n')))
+    def summary(self):
+        prefix = self['prefix'].str()
+        return "prefix=\"{:s}\" padding={:s}".format(prefix.encode('unicode_escape'), self['padding'].summary())
+
+    def isempty(self):
+        return self['prefix'].str() == ""
 
     def listing(self):
-        res = (self[fld].listing() for fld in ['common', 'extended'])
-        return ' | '.join(res)
-
-    def getsize(self):
-        res = self['common']
-        count = res['size'].int()
-        return (count + 511) / 512 * 512
-
-class ustar(stream_t):
-    class member(member_t):
-        def __data(self):
-            res = self['header']
-            cb = res.getsize()
-            return dyn.block(cb)
-
-        _fields_ = [
-            (header_ustar, 'header'),
-            (__data, 'data')
-        ]
-    _object_ = member
+        return "(header_ustar) {:s}".format(self.summary())
 
 ### gnu
 class gnu_sparse(pstruct.type):
@@ -186,6 +281,9 @@ class gnu_sparse(pstruct.type):
        (dyn.clone(stringoctal, length=12), 'offset'),
        (dyn.clone(stringoctal, length=12), 'numbytes'),
     ]
+    def summary(self):
+        offset, numbytes = (self[fld].int() for fld in ['offset', 'numbytes'])
+        return "offset={:#x} numbytes={:#x}".format(offset, numbytes)
 
 class gnu_sparse_header(pstruct.type):
     _fields_ = [
@@ -199,16 +297,23 @@ class gnu_sparse_array(parray.terminated):
     def isTerminator(self, value):
         return value['isextended'].str() == '\x00'
 
-class header_gnu(header_old):
+@header.define
+class header_gnu(extended_t):
+    magic = 'gnu'
+    def member_size(self):
+        p = self.getparent(header_t)
+        res = p['common']
+        return res['size'].int()
+
+@header_member.define
+class header_gnu_member(pstruct.type):
+    magic = 'gnu'
     def __extended_data(self):
         if self['isextended'].li.str() == '\x00':
             return dyn.clone(parray.type, _object_=gnu_sparse_header)
         return gnu_sparse_array
 
     _fields_ = [
-        (header_t, 'common'),
-        (header_extended_t, 'extended'),
-
         (dyn.clone(stringoctal, length=12), 'atime'),
         (dyn.clone(stringoctal, length=12), 'ctime'),
         (dyn.clone(stringoctal, length=12), 'offset'),
@@ -221,43 +326,28 @@ class header_gnu(header_old):
         (__extended_data, 'extended_data'),
     ]
 
-    def dump(self):
-        res = [self, self['common'], self['extended']]
-        return '\n'.join(map("{!r}".format, res))
+    def isempty(self):
+        return False
 
     def listing(self):
-        res = "atime={:#x} ctime={:#x}".format(self['atime'].int(), self['ctime'].int())
-        return ' | '.join([self[fld].listing() for fld in ['common', 'extended']] + [res])
-
-class gnu(stream_t):
-    class member(member_t):
-        def __data(self):
-            res = self['header'].li
-            cb = res.getsize()
-            return dyn.block(cb)
-
-        _fields_=[
-            (header_gnu, 'header'),
-            (__data, 'data')
-        ]
-    _object_ = member
+        # TODO
+        return "(header_gnu) atime={:#x} ctime={:#x} offset={:#x} longnames={:s} ...".format(self['atime'].int(), self['ctime'].int(), self['offset'].int(), self['longnames'].summary())
 
 if __name__ == '__main__':
-    import sys, os, os.path, logging, argparse
+    import sys, os, os.path, logging, argparse, fnmatch
     import ptypes, archive.tar
     if sys.platform == 'win32': import msvcrt
 
     arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'tar.py', description="List or extract information out of a .tar file", add_help=False)
-    arg_p.add_argument('FILE', nargs='*', action='append', type=str, help='list of filenames to extract')
+    arg_p.add_argument('FILE', nargs='*', action='append', type=str, help='list of globs to filter members to extract')
     arg_commands_gr = arg_p.add_argument_group("Main operation mode")
     arg_commands_gr.add_argument('-h', '--help', action='store_const', help="show this help message and exit", dest='mode', const='help')
     arg_commands_gr.add_argument('-l', '--list', action='store_const', help="list the contents of an archive", dest='mode', const='list')
     arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help="extract files from an archive", dest='mode', const='extract')
-    arg_commands_gr.add_argument('-d', '--dump', action='store_const', help="dump the specified file records", dest='mode', const='dump')
+    arg_commands_gr.add_argument('-d', '--dump', action='store_const', help="dump the specified file members", dest='mode', const='dump')
     arg_device_gr = arg_p.add_argument_group("Device selection and switching")
     arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar="ARCHIVE", help="use archive file or device ARCHIVE", dest='source')
-    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar="DEVICE", help="extract files to specified DEVICE or FORMAT", dest='target', default=None)
-    arg_device_gr.add_argument('-t', '--type', nargs=1, action='store', type=str.lower, metavar="TYPE", help="specify tar type (old, ustar, gnu)", dest='type', choices=('old', 'ustar', 'gnu'), default=('ustar',))
+    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar="FORMATSPEC", help="extract members by applying attributes to specified FORMATSPEC (or DEVICE)", dest='target', default=None)
 
     if len(sys.argv) <= 1:
         print >>sys.stdout, arg_p.format_usage()
@@ -283,18 +373,17 @@ if __name__ == '__main__':
         target = target_a
 
     filelist, = args.FILE
-    filetype, = args.type
     filelookup = {item for item in filelist}
     indexlookup = {int(n) for n in filelist if n.isdigit()}
 
-    isMatchedName = lambda r: (not filelookup) or (r['header']['common']['filename'].str() in filelookup)
-    isMatchedIndex = lambda r: int(r.name()) in indexlookup
+    isMatchedName = lambda record: (not filelookup) or any(fnmatch.fnmatch(record.filename(), pattern) for pattern in filelookup)
+    isMatchedIndex = lambda record: int(record.name()) in indexlookup
 
     # some useful functions
     def iterate(root):
-        for rec in root:
-            if isMatchedIndex(rec) or isMatchedName(rec):
-                yield rec
+        for item in root:
+            if isMatchedIndex(item) or isMatchedName(item):
+                yield item
             continue
         return
 
@@ -302,9 +391,9 @@ if __name__ == '__main__':
         res = {}
         for k in root.keys():
             v = root[k]
-            if isinstance(v, pint.type):
+            if hasattr(v, 'int'):
                 res[k] = v.int()
-            elif isinstance(v, pstr.type):
+            elif hasattr(v, 'str'):
                 try:
                     res[k] = v.str()
                 except UnicodeDecodeError:
@@ -315,14 +404,12 @@ if __name__ == '__main__':
         return res
 
     # create the file type
-    lookup = {'old': archive.tar.old, 'ustar': archive.tar.ustar, 'gnu': archive.tar.gnu}
-    cls = lookup[filetype]
-    z = cls(source=source)
+    z = archive.tar.File(source=source)
 
     # implement each mode
     if args.mode == 'list':
-        for rec in iterate(z.l[:-1]):
-            print rec.listing()
+        for member in iterate(z.l[:-1]):
+            print member.listing()
         sys.exit(0)
 
     elif args.mode == 'extract':
@@ -337,23 +424,28 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # for each member...
-    for rec in iterate(z.l[:-1]):
+    for member in iterate(z.l[:-1]):
 
         # assign what data we're writing
         if args.mode == 'extract':
-            sz = rec['header'].getsize()
-            data = rec['data'].serialize()[:sz]
+            sz = member.filesize()
+            data = member.data()[:sz]
 
         elif args.mode == 'dump':
-            data = '\n'.join((' '.join([ptypes.utils.repr_class(rec.classname()), rec.name()]), ptypes.utils.indent(rec['header'].dump())))
+            magic = member['header']['magic'].str()
+            data = '\n'.join((' '.join([ptypes.utils.repr_class(member.classname()), member.name()] + (["({:s})".format(magic)] if magic else [])), ptypes.utils.indent(member['header'].dump())))
 
-        # set some reasonable defaults
-        res = dictionary(rec['header']['common'])
-        res['index'] = int(rec.name())
-        res['path'], res['name'] = os.path.split(res['filename'].replace('/', os.sep))
+        # set some reasonable defaults from each header (back2front)
+        res = {}
+        for key in reversed(member['header'].keys()):
+            if isinstance(member['header'][key], pstruct.type):
+                res.update(dictionary(member['header'][key]))
+            continue
+        res['index'] = int(member.name())
+        res['path'], res['name'] = os.path.split(member.filename().replace('/', os.sep))
 
         # write to a generated filename
-        if isinstance(target, basestring):
+        if isinstance(target, six.string_types):
             outname = target.format(**res)
 
             dirpath, name = os.path.split(outname)
@@ -362,16 +454,16 @@ if __name__ == '__main__':
             res = os.path.join(dirpath, name)
             if res.endswith(os.path.sep):
                 if os.path.isdir(res):
-                    logging.warn("Unable to create already existing subdirectory for record : {:d} : {:s}".format(int(rec.name()), res))
+                    logging.warn("Unable to create already existing subdirectory for member : {:d} : {:s}".format(int(member.name()), res))
                 else:
-                    logging.info("Creating subdirectory due to member : {:d} : {:s}".format(int(rec.name()), res))
+                    logging.info("Creating subdirectory due to member : {:d} : {:s}".format(int(member.name()), res))
                     os.makedirs(res)
                 continue
 
             if os.path.exists(res):
-                logging.warn("Overwriting already existing file due to member : {:d} : {:s}".format(int(rec.name()), res))
+                logging.warn("Overwriting already existing file due to member : {:d} : {:s}".format(int(member.name()), res))
             else:
-                logging.info("Creating file for member : {:d} : {:s}".format(int(rec.name()), res))
+                logging.info("Creating file for member : {:d} : {:s}".format(int(member.name()), res))
 
             with file(res, 'wb') as out: print >>out, data
 
@@ -381,4 +473,3 @@ if __name__ == '__main__':
         continue
 
     sys.exit(0)
-
