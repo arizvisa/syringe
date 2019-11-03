@@ -148,7 +148,7 @@ class _pstruct_generic(ptype.container):
         return name in self.__fastindex
 
     def __iter__(self):
-        '''D.__contains__(k) -> True if D has a field named k, else False'''
+        '''D.__iter__() <==> iter(D)'''
         if self.value is None:
             raise error.InitializationError(self, '_pstruct_generic.__iter__')
 

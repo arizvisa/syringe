@@ -1095,7 +1095,7 @@ class _struct_generic(container):
         return name in self.__fastindex
 
     def __iter__(self):
-        '''x.__iter__() <==> iter(x)'''
+        '''D.__iter__() <==> iter(D)'''
         if self.value is None:
             raise error.InitializationError(self, '_struct_generic.__iter__')
 
