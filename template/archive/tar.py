@@ -1,55 +1,47 @@
 # http://www.freebsd.org/cgi/man.cgi?query=tar&sektion=5&manpath=FreeBSD+8-current
 import ptypes
 from ptypes import *
-import operator
+import sys, operator, six
 
 class stringinteger(pstr.string):
     def int(self):
         try: res = self.str()
         except UnicodeDecodeError: res = self.get()
-        try: res = int(res)
+        try: res = int(res) if long(res) < sys.maxint else long(res)
         except ValueError: res = 0
         return res
-    def long(self):
-        try: res = self.str()
-        except UnicodeDecodeError: res = self.get()
-        try: res = long(res)
-        except ValueError: res = 0
-        return res
-    __int__ = int
+
     def set(self, integer):
         n = str(integer)
-        prefix = '0'*(self.length-1 - len(n))
-        return super(stringinteger,self).set(prefix+n+'\x00')
+        prefix = '0' * (self.length - 1 - len(n))
+        return super(stringinteger, self).set(prefix + n + '\x00')
 
 class stringoctal(stringinteger):
     def int(self):
         try: res = self.str()
         except UnicodeDecodeError: res = self.get()
-        try: res = int(res,8)
-        except ValueError: res = 0
-        return res
-    def long(self):
-        try: res = self.str()
-        except UnicodeDecodeError: res = self.get()
-        try: res = long(res,8)
+        try: res = int(res, 8) if long(res, 8) < sys.maxint else long(res, 8)
         except ValueError: res = 0
         return res
 
     def set(self, integer):
         n = oct(integer)[1:]
-        prefix = '0'*(self.length-1 - len(n))
-        return super(stringoctal,self).set(prefix+n+'\x00')
+        prefix = '0' * (self.length - 1 - len(n))
+        return super(stringoctal, self).set(prefix + n + '\x00')
 
 class stream_t(parray.infinite):
     def summary(self):
-        return '%s size: %x, %d files.'% (self._object_.typename(), self.size(), len(self))
+        return "{:s} size: {:#x}, {:d} files.".format(self._object_.typename(), self.size(), len(self))
 
     def isTerminator(self, value):
         return value.iseof()
 
-class linkflag(pint.enum, pstr.char_t):
-    _values_ = [(_, ord(n)) for _,n in [
+class linkflag_t(pstr.char_t):
+    def get(self):
+        return self.int()
+
+class linkflag(pint.enum, linkflag_t):
+    _values_ = [
         ('REGTYPE',  '0'),  # regular file
         ('AREGTYPE', '\0'), # regular file
         ('LNKTYPE',  '1'),  # link
@@ -59,28 +51,29 @@ class linkflag(pint.enum, pstr.char_t):
         ('DIRTYPE',  '5'),  # directory (in this case, the size field has no meaning)
         ('FIFOTYPE', '6'),  # FIFO special (archiving a FIFO file archives its existence, not contents)
         ('CONTTYPE', '7'),  # reserve
-    ]]
+    ]
+    _values_ = [(_, six.byte2int(by)) for _, by in _values_]
 
 class header_t(pstruct.type):
     _fields_ = [
-        (dyn.clone(pstr.string,length=100), 'filename'),
-        (dyn.clone(stringoctal,length=8), 'mode'),
-        (dyn.clone(stringoctal,length=8), 'uid'),
-        (dyn.clone(stringoctal,length=8), 'gid'),
-        (dyn.clone(stringoctal,length=12), 'size'),
-        (dyn.clone(stringoctal,length=12), 'mtime'),
-        (dyn.clone(stringoctal,length=8), 'checksum'),
+        (dyn.clone(pstr.string, length=100), 'filename'),
+        (dyn.clone(stringoctal, length=8), 'mode'),
+        (dyn.clone(stringoctal, length=8), 'uid'),
+        (dyn.clone(stringoctal, length=8), 'gid'),
+        (dyn.clone(stringoctal, length=12), 'size'),
+        (dyn.clone(stringoctal, length=12), 'mtime'),
+        (dyn.clone(stringoctal, length=8), 'checksum'),
         (linkflag, 'linkflag'),
-        (dyn.clone(pstr.string,length=100), 'linkname'),
+        (dyn.clone(pstr.string, length=100), 'linkname'),
     ]
 
     def listing(self):
         name = self['filename'].str()
         mode = self['mode'].int()
-        uid,gid = self['uid'].int(),self['gid'].int()
+        uid, gid = self['uid'].int(), self['gid'].int()
         size = self['size'].int()
-        mtime,checksum = self['mtime'].int(),self['checksum'].int()
-        return '{!r} mode={:04o} uid={:d} gid={:d} size=0x{:x} mtime={:x} checksum={:x}'.format(name, mode, uid, gid, size, mtime, checksum) + (' -> {!r}'.format(self['linkname'].get()) if self['linkflag'].int() else '')
+        mtime, checksum = self['mtime'].int(), self['checksum'].int()
+        return "{:s} :> {:s} size={:#x} mode={:04o} uid={:d} gid={:d} mtime={:#x} checksum={:#x}".format(name.encode('unicode_escape'), self['linkflag'].summary(), size, mode, uid, gid, mtime, checksum) + (" -> {:s}".format(self['linkname'].str().encode('unicode_escape')) if self['linkflag']['LNKTYPE'] else '')
 
     def isempty(self):
         return self['filename'].str() == ''
@@ -88,21 +81,21 @@ class header_t(pstruct.type):
 # FIXME: we can auto-detect which header we are by checking 'magic'
 class header_extended_t(pstruct.type):
     _fields_ = [
-        (dyn.clone(pstr.string,length=6), 'magic'),
-        (dyn.clone(stringinteger,length=2), 'version'),
-        (dyn.clone(pstr.string,length=32), 'uname'),
-        (dyn.clone(pstr.string,length=32), 'gname'),
-        (dyn.clone(stringinteger,length=8), 'devmajor'),
-        (dyn.clone(stringinteger,length=8), 'devminor'),
+        (dyn.clone(pstr.string, length=6), 'magic'),
+        (dyn.clone(stringinteger, length=2), 'version'),
+        (dyn.clone(pstr.string, length=32), 'uname'),
+        (dyn.clone(pstr.string, length=32), 'gname'),
+        (dyn.clone(stringinteger, length=8), 'devmajor'),
+        (dyn.clone(stringinteger, length=8), 'devminor'),
     ]
 
     def listing(self):
-        major,minor = self['devmajor'],self['devminor']
-        uname = 'uname={:s}'.format(self['uname'].str()) if len(self['uname'].str()) > 0 else ''
-        gname = 'gname={:s}'.format(self['gname'].str()) if len(self['uname'].str()) > 0 else ''
-        device = ('dev={:s}'.format('.'.join(map(str,(major.int(),minor.int()))))) if len(major.get() + minor.get()) > 0 else ''
-        res = (' ' + ' '.join(filter(None,(uname, gname, device)))) if any((uname, gname, device)) else ''
-        return 'ext v{:d}'.format(self['version'].int()) + res
+        major, minor = self['devmajor'], self['devminor']
+        uname = "uname=\"{:s}\"".format(self['uname'].str()) if len(self['uname'].str()) > 0 else ''
+        gname = "gname=\"{:s}\"".format(self['gname'].str()) if len(self['uname'].str()) > 0 else ''
+        device = ("dev={:s}".format('.'.join(map("{:d}".format, [major.int(), minor.int()])))) if sum(map(len, {item.str() for item in [major, minor]})) > 0 else ''
+        res = (' ' + ' '.join(filter(None, [uname, gname, device]))) if any({uname, gname, device}) else ''
+        return "ext v{:d}".format(self['version'].int()) + res
 
 class member_t(pstruct.type):
     def iseof(self):
@@ -110,35 +103,45 @@ class member_t(pstruct.type):
 
     def listing(self):
         index = int(self.name())
-        return '{:d}) {:s}'.format(index, self['header'].listing())
+        return "{:d}) {:s}".format(index, self['header'].listing())
 
     def summary(self):
         common = self['header']['common']
         filename = common['filename']
         mode = common['mode']
-        uid,gid = common['uid'],common['gid']
-        sz,rsz = common['size'],self['data'].size()
-        return '\n'.join(map(repr,(filename,mode,uid,gid,sz))) + '\n' + self['data'].hexdump(rows=4)
+        uid, gid = common['uid'], common['gid']
+        sz, rsz = common['size'], self['data'].size()
+        return '\n'.join(map("{!r}".format, [filename, mode, uid, gid, sz])) + '\n' + self['data'].hexdump(rows=4)
 
 ### old
 class header_old(pstruct.type):
     _fields_ = [
         (header_t, 'common'),
-        (dyn.clone(pstr.string,length=255), 'pad'),
+        (dyn.clone(pstr.string, length=255), 'pad'),
     ]
 
     def dump(self):
-        return '\n'.join(map(repr,(self['common'],)))
+        res = [self['common']]
+        return '\n'.join(map("{!r}".format, res))
 
     def listing(self):
         return self['common'].listing()
 
     def getsize(self):
-        return self['common'].li['size'].int()
+        res = self['common']
+        return res['size'].int()
 
 class old(stream_t):
     class member(member_t):
-        _fields_=[(header_old,'header'),(lambda s: dyn.block(s['header'].getsize()),'data')]
+        def __data(self):
+            res = self['header'].li
+            cb = res.getsize()
+            return dyn.block(cb)
+
+        _fields_ = [
+            (header_old, 'header'),
+            (__data, 'data')
+        ]
     _object_ = member
 
 ### ustar
@@ -147,38 +150,48 @@ class header_ustar(header_old):
         (header_t, 'common'),
         (header_extended_t, 'extended'),
 
-        (dyn.clone(pstr.string,length=155), 'prefix'),
+        (dyn.clone(pstr.string, length=155), 'prefix'),
         (dyn.block(12), 'padding'),
     ]
 
     def dump(self):
-        prefixofs = self.getoffset('prefix')
-        return '\n'.join(map(repr, (self['common'], self['extended'])) + filter(lambda n:n.startswith('[%x] '%prefixofs), self.details().split('\n')))
+        res = self.getoffset('prefix')
+        return '\n'.join(map("{!r}".format, [self['common'], self['extended']]) + filter(lambda item: item.startswith("[{:x}] ".format(res)), self.details().split('\n')))
 
     def listing(self):
-        return ' | '.join((self['common'].listing(), self['extended'].listing()))
+        res = (self[fld].listing() for fld in ['common', 'extended'])
+        return ' | '.join(res)
 
     def getsize(self):
-        sz = self['common'].li['size'].int()
-        return (sz+511)/512*512
+        res = self['common']
+        count = res['size'].int()
+        return (count + 511) / 512 * 512
 
 class ustar(stream_t):
     class member(member_t):
-        _fields_=[(header_ustar,'header'),(lambda s: dyn.block(s['header'].getsize()),'data')]
+        def __data(self):
+            res = self['header']
+            cb = res.getsize()
+            return dyn.block(cb)
+
+        _fields_ = [
+            (header_ustar, 'header'),
+            (__data, 'data')
+        ]
     _object_ = member
 
 ### gnu
 class gnu_sparse(pstruct.type):
     _fields_ = [
-           (dyn.clone(stringoctal,length=12), 'offset'),
-           (dyn.clone(stringoctal,length=12), 'numbytes'),
+       (dyn.clone(stringoctal, length=12), 'offset'),
+       (dyn.clone(stringoctal, length=12), 'numbytes'),
     ]
 
 class gnu_sparse_header(pstruct.type):
     _fields_ = [
-        (dyn.array(gnu_sparse,21), 'sparse'),
+        (dyn.array(gnu_sparse, 21), 'sparse'),
         (pstr.char_t, 'isextended'),
-        (dyn.clone(pstr.string,length=7), 'padding'),
+        (dyn.clone(pstr.string, length=7), 'padding'),
     ]
 
 class gnu_sparse_array(parray.terminated):
@@ -189,40 +202,49 @@ class gnu_sparse_array(parray.terminated):
 class header_gnu(header_old):
     def __extended_data(self):
         if self['isextended'].li.str() == '\x00':
-            return dyn.clone(parray.type,_object_=gnu_sparse_header)
+            return dyn.clone(parray.type, _object_=gnu_sparse_header)
         return gnu_sparse_array
 
     _fields_ = [
         (header_t, 'common'),
         (header_extended_t, 'extended'),
 
-        (dyn.clone(stringoctal,length=12), 'atime'),
-        (dyn.clone(stringoctal,length=12), 'ctime'),
-        (dyn.clone(stringoctal,length=12), 'offset'),
-        (dyn.clone(pstr.string,length=4), 'longnames'),
+        (dyn.clone(stringoctal, length=12), 'atime'),
+        (dyn.clone(stringoctal, length=12), 'ctime'),
+        (dyn.clone(stringoctal, length=12), 'offset'),
+        (dyn.clone(pstr.string, length=4), 'longnames'),
         (pstr.char_t, 'unused'),
-        (dyn.array(gnu_sparse,4), 'sparse'),
+        (dyn.array(gnu_sparse, 4), 'sparse'),
         (pstr.char_t, 'isextended'),
-        (dyn.clone(pstr.string,length=12), 'realsize'),
-        (dyn.clone(pstr.string,length=17), 'pad'),
+        (dyn.clone(pstr.string, length=12), 'realsize'),
+        (dyn.clone(pstr.string, length=17), 'pad'),
         (__extended_data, 'extended_data'),
     ]
 
     def dump(self):
-        return '\n'.join(map(repr, (self, self['common'], self['extended'])))
+        res = [self, self['common'], self['extended']]
+        return '\n'.join(map("{!r}".format, res))
 
     def listing(self):
-        res = 'atime=0x{:x} ctime=0x{:x}'.format(self['atime'].int(), self['ctime'].int())
-        return ' | '.join((self['common'].listing(), self['extended'].listing(), res))
+        res = "atime={:#x} ctime={:#x}".format(self['atime'].int(), self['ctime'].int())
+        return ' | '.join([self[fld].listing() for fld in ['common', 'extended']] + [res])
 
 class gnu(stream_t):
     class member(member_t):
-        _fields_=[(header_gnu,'header'),(lambda s: dyn.block(s['header'].getsize()),'data')]
+        def __data(self):
+            res = self['header'].li
+            cb = res.getsize()
+            return dyn.block(cb)
+
+        _fields_=[
+            (header_gnu, 'header'),
+            (__data, 'data')
+        ]
     _object_ = member
 
 if __name__ == '__main__':
-    import sys,os,os.path,logging,argparse
-    import ptypes,archive.tar
+    import sys, os, os.path, logging, argparse
+    import ptypes, archive.tar
     if sys.platform == 'win32': import msvcrt
 
     arg_p = argparse.ArgumentParser(prog=sys.argv[0] if len(sys.argv) > 0 else 'tar.py', description="List or extract information out of a .tar file", add_help=False)
@@ -235,7 +257,7 @@ if __name__ == '__main__':
     arg_device_gr = arg_p.add_argument_group("Device selection and switching")
     arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar="ARCHIVE", help="use archive file or device ARCHIVE", dest='source')
     arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar="DEVICE", help="extract files to specified DEVICE or FORMAT", dest='target', default=None)
-    arg_device_gr.add_argument('-t', '--type', nargs=1, action='store', type=str.lower, metavar="TYPE", help="specify tar type (old, ustar, gnu)", dest='type', choices=('old','ustar','gnu'), default=('ustar',))
+    arg_device_gr.add_argument('-t', '--type', nargs=1, action='store', type=str.lower, metavar="TYPE", help="specify tar type (old, ustar, gnu)", dest='type', choices=('old', 'ustar', 'gnu'), default=('ustar',))
 
     if len(sys.argv) <= 1:
         print >>sys.stdout, arg_p.format_usage()
@@ -247,7 +269,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # fix up arguments
-    source_a,target_a = args.source[0],None if args.target is None else args.target[0]
+    source_a, target_a = args.source[0], None if args.target is None else args.target[0]
     if source_a == '-':
         if sys.platform == 'win32': msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
         source = ptypes.prov.stream(sys.stdin)
@@ -262,8 +284,8 @@ if __name__ == '__main__':
 
     filelist, = args.FILE
     filetype, = args.type
-    filelookup = set(filelist)
-    indexlookup = set((int(n) for n in filelist if n.isdigit()))
+    filelookup = {item for item in filelist}
+    indexlookup = {int(n) for n in filelist if n.isdigit()}
 
     isMatchedName = lambda r: (not filelookup) or (r['header']['common']['filename'].str() in filelookup)
     isMatchedIndex = lambda r: int(r.name()) in indexlookup
@@ -304,7 +326,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     elif args.mode == 'extract':
-        target = target or os.path.join('.','{path:s}','{name:s}')
+        target = target or os.path.join('.', '{path:s}', '{name:s}')
 
     elif args.mode == 'dump':
         target = target or sys.stdout
@@ -321,19 +343,20 @@ if __name__ == '__main__':
         if args.mode == 'extract':
             sz = rec['header'].getsize()
             data = rec['data'].serialize()[:sz]
+
         elif args.mode == 'dump':
-            data = '\n'.join((' '.join((ptypes.utils.repr_class(rec.classname()),rec.name())), ptypes.utils.indent(rec['header'].dump())))
+            data = '\n'.join((' '.join([ptypes.utils.repr_class(rec.classname()), rec.name()]), ptypes.utils.indent(rec['header'].dump())))
 
         # set some reasonable defaults
         res = dictionary(rec['header']['common'])
         res['index'] = int(rec.name())
-        res['path'],res['name'] = os.path.split(res['filename'].replace('/', os.sep))
+        res['path'], res['name'] = os.path.split(res['filename'].replace('/', os.sep))
 
         # write to a generated filename
         if isinstance(target, basestring):
             outname = target.format(**res)
 
-            dirpath,name = os.path.split(outname)
+            dirpath, name = os.path.split(outname)
             dirpath and not os.path.isdir(dirpath) and os.makedirs(dirpath)
 
             res = os.path.join(dirpath, name)
