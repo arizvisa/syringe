@@ -4,9 +4,42 @@ logging.root.setLevel(logging.INFO)
 import six, ptypes
 from ptypes import *
 
+import datetime
+
 ## General structures
-class MSTime(pint.uint16_t): pass
-class MSDate(pint.uint16_t): pass
+@pbinary.littleendian
+class MSTime(pbinary.struct):
+    _fields_ = [
+        (6, 'Hour'),
+        (5, 'Minute'),
+        (5, '2Seconds'),
+    ]
+    def time(self):
+        return datetime.time(self['Hour'], self['Minute'], 2 * self['2Seconds'])
+
+    def isoformat(self):
+        res = self.time()
+        return res.isoformat()
+
+    def summary(self):
+        return self.isoformat()
+
+@pbinary.littleendian
+class MSDate(pbinary.struct):
+    _fields_ = [
+        (7, 'Year'),
+        (4, 'Month'),
+        (5, 'Day'),
+    ]
+    def date(self):
+        return datetime.date(1980 + self['Year'], self['Month'], self['Day'])
+
+    def isoformat(self):
+        res = self.date()
+        return res.isoformat()
+
+    def summary(self):
+        return self.isoformat()
 
 class VersionMadeBy(pint.enum, pint.uint16_t):
     _values_ = [(n, i) for i, n in enumerate(('MSDOS', 'Amiga', 'OpenVMS', 'Unix', 'VM/CMS', 'Atari ST', 'OS/2', 'Macintosh', 'Z-System', 'CP/M', 'Windows', 'MVS', 'VSE', 'Acorn', 'VFAT', 'Alternate MVS', 'BeOS', 'Tandem', 'Os/400', 'OSX'))]
@@ -48,6 +81,7 @@ class ZipDataDescriptor(pstruct.type):
     def data(self, **kwds):
         return self['data'].data()
 
+@pbinary.littleendian
 class BitFlags(pbinary.flags):
     _fields_ = [
         (2, 'Reserved'),
@@ -60,7 +94,6 @@ class BitFlags(pbinary.flags):
         (1, 'EnhancedDeflating'),
         (1, 'PostDescriptor'),
         (2, 'Compression'),
-#       (lambda s: CompressionMethodFlags.get(s.getparent(type=pstruct.type)['Method'].li.int()), 'Compression'),
         (1, 'Encrypted'),
     ]
 
@@ -68,7 +101,7 @@ class BitFlags(pbinary.flags):
 class CompressionMethod(pint.enum, pint.uint16_t):
     _values_ = [
         ('Stored', 0),
-        ('Shrunk', 1),  # LZW
+        ('Shrunk', 1),      # LZW
         ('Reduced(1)', 2),  # Expanding
         ('Reduced(2)', 3),
         ('Reduced(3)', 4),
@@ -112,6 +145,55 @@ class MethodLZMAFlags(pbinary.flags):
     _fields_ = [(1, 'EOS'), (1, 'unused')]
 
 ## Extra data field mappings
+class ExtraField(ptype.definition):
+    cache = {}
+
+class Extra_NTFS_TagType(ptype.definition):
+    attribute, cache = 'tag', {}
+
+class Extra_NTFS_Tag(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'Tag'),
+        (pint.uint16_t, 'Size'),
+        (lambda self: Extra_NTFS_TagType.get(self['Tag'].li.int(), length=self['Size'].li.int()), 'Attribute'),
+    ]
+
+    def summary(self):
+        return "({:+#x}) {:s}".format(self['Size'].int(), self['Attribute'].summary())
+
+@Extra_NTFS_TagType.define
+class NTFS_Attributes(pstruct.type):
+    tag = 1
+    class TenthOfAMicrosecond(pint.uint64_t):
+        def datetime(self):
+            epoch = datetime.datetime(1601, 1, 1, 0, 0, 0)
+            res = datetime.timedelta(microseconds=self.int() / 10.)
+            return epoch + res
+        def isoformat(self):
+            res = self.datetime()
+            return res.isoformat()
+        def summary(self):
+            return self.isoformat()
+
+    _fields_ = [
+        (TenthOfAMicrosecond, 'Mtime'),
+        (TenthOfAMicrosecond, 'Atime'),
+        (TenthOfAMicrosecond, 'Ctime'),
+    ]
+
+    def summary(self):
+        return "Mtime={:s} Atime={:s} Ctime={:s}".format(self['Mtime'].isoformat(), self['Atime'].isoformat(), self['Ctime'].isoformat())
+
+@ExtraField.define
+class Extra_NTFS(pstruct.type):
+    type = 0x000a
+    _fields_ = [
+        (pint.uint32_t, 'Reserved'),
+        (lambda self: dyn.blockarray(Extra_NTFS_Tag, self.blocksize() - self['Reserved'].li.size()), 'Tags'),
+    ]
+
+    def summary(self):
+        return "Reserved={:#x} [{:s}]".format(self['Reserved'].int(), ', '.join(item.summary() for item in self['Tags']))
 
 # FIXME: Add these from section 4.6
 class Extensible_data_field(pstruct.type):
@@ -119,12 +201,19 @@ class Extensible_data_field(pstruct.type):
         cb = sum(self[k].li.size() for k in ('id','size','data'))
         return dyn.block(self.blocksize() - cb)
 
+    def __data(self):
+        id, size = (self[item].li for item in ['id', 'size'])
+        return ExtraField.get(id.int(), blocksize=lambda self, bs=size.int(): bs)
+
     _fields_ = [
         (pint.uint16_t, 'id'),
         (pint.uint16_t, 'size'),
-        (lambda s: dyn.block(s['size'].li.int()), 'data'),
+        (__data, 'data'),
         (__unknown, 'unknown'),
     ]
+
+    def summary(self):
+        return "{:s} {:s}".format(self['data'].classname(), self['data'].summary())
 
 ## File records
 class ZipRecord(ptype.definition):
@@ -155,7 +244,7 @@ class LocalFileHeader32(LocalFileHeader):
 
     _fields_ = [
         (pint.uint16_t, 'version needed to extract'),
-        (pbinary.littleendian(BitFlags), 'general purpose bit flag'),
+        (BitFlags, 'general purpose bit flag'),
         (CompressionMethod, 'compression method'),
         (MSTime, 'last mod file time'),
         (MSDate, 'last mod file date'),
@@ -169,6 +258,12 @@ class LocalFileHeader32(LocalFileHeader):
         # XXX: i think this record is actually encoded within the file data
         (__post_data_descriptor, 'post data descriptor'),
     ]
+
+    def summary(self):
+        needed = self['version needed to extract']
+        method, desc = self.Method(), self.Descriptor()
+        dt = datetime.datetime.combine(self['last mod file date'].date(), self['last mod file time'].time())
+        return "{:s} (version {:d}) {!r} datetime={:s} compressed={:#x} uncompressed={:#x} crc32={:#x}{:s}".format(method.str(), needed.int(), self.Name(), dt.isoformat(), desc['compressed size'].int(), desc['uncompressed size'].int(), desc['crc-32'].int(), " {:s}".format(self['general purpose bit flag'].summary()) if self['general purpose bit flag'].int() > 0 else '')
 
     def Name(self):
         return self['file name'].str()
@@ -208,8 +303,8 @@ class LocalFileHeader32(LocalFileHeader):
     def listing(self):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
         filename, meth, descr = self.Name(), self.Method(), self.Descriptor()
-        time, date = self['last mod file time'], self['last mod file date']
-        return '{{{:d}}} {:s} ({:x}{:+x}) {!r} method={:s} {:s} time/date={:04x}:{:04x}'.format(index, cls, ofs, bs, filename, meth.str(), descr.summary(), time.int(), date.int())
+        dt = datetime.datetime.combine(self['last mod file date'].date(), self['last mod file time'].time())
+        return '{{{:d}}} {:s} ({:x}{:+x}) {!r} method={:s} {:s} timestamp={:s}'.format(index, cls, ofs, bs, filename, meth.str(), descr.summary(), dt.isoformat())
 
 class CentralDirectoryEntry(pstruct.type):
     signature = 0, 0x02014b50
@@ -227,8 +322,8 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         return dyn.clone(pstr.string, length=res.int())
 
     def __extra_field(self):
-        res = self['extra field length'].li
-        return dyn.block(res.int())
+        cb = self['extra field length'].li
+        return dyn.clone(Extensible_data_field, blocksize=lambda s, bs=cb.int(): bs)
 
     def __file_comment(self):
         res = self['file comment length'].li
@@ -254,6 +349,13 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         (__file_comment, 'file comment'),
     ]
 
+    def summary(self):
+        disk, offset = (self[item] for item in ['disk number start', 'relative offset of local header'])
+        version, needed = (self[item] for item in ['version made by', 'version needed to extract'])
+        method, desc = self.Method(), self.Descriptor()
+        dt = datetime.datetime.combine(self['last mod file date'].date(), self['last mod file time'].time())
+        return "disk#{:d} {:s} (version={:d}<{:d}) offset={:+#x} {!r}{:s} datetime={:s} compressed={:#x} uncompressed={:#x} crc32={:#x}{:s}".format(disk.int(), method.str(), needed.int(), version.int(), offset.int(), self.Name(), " ({:s})".format(self['file comment'].str()) if self['file comment length'].int() else '', dt.isoformat(), desc['compressed size'].int(), desc['uncompressed size'].int(), desc['crc-32'].int(), " {:s}".format(self['general purpose bit flag'].summary()) if self['general purpose bit flag'].int() > 0 else '')
+
     def Name(self):
         return self['file name'].str()
     def Method(self):
@@ -269,8 +371,8 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
     def listing(self):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
         filename, meth, descr = self.Name(), self.Method(), self.Descriptor()
-        time, date = self['last mod file time'], self['last mod file date']
-        return '{{{:d}}} {:s} ({:x}{:+x}) {!r} version-made-by={:s} version-needed-to-extract={:s} compression-method={:s} {:s} last-mod-file-time/date={:04x}:{:04x} disk-number-start={:d} internal-file-attributes={:#x} external-file-attributes={:#x}'.format(index, cls, ofs, bs, filename, self['version made by'].str(), self['version needed to extract'].str(), meth.str(), descr.summary(), time.int(), date.int(), self['disk number start'].int(), self['internal file attributes'].int(), self['external file attributes'].int()) + ('// {:s}'.format(self.Comment()) if self['file comment length'].int() > 0 else '')
+        dt = datetime.datetime.combine(self['last mod file date'].date(), self['last mod file time'].time())
+        return '{{{:d}}} {:s} ({:x}{:+x}) {!r} version-made-by={:s} version-needed-to-extract={:s} compression-method={:s} {:s} timestamp={:s} disk-number-start={:d} internal-file-attributes={:#x} external-file-attributes={:#x}'.format(index, cls, ofs, bs, filename, self['version made by'].str(), self['version needed to extract'].str(), meth.str(), descr.summary(), dt.isoformat(), self['disk number start'].int(), self['internal file attributes'].int(), self['external file attributes'].int()) + ('// {:s}'.format(self.Comment()) if self['file comment length'].int() > 0 else '')
 
 
 class EndOfCentralDirectory(pstruct.type):
@@ -289,6 +391,15 @@ class EndOfCentralDirectory32(EndOfCentralDirectory):
         (pint.uint16_t, '.ZIP file comment length'),
         (lambda s: dyn.clone(pstr.string, length=s['.ZIP file comment length'].li.int()), '.ZIP file comment'),
     ]
+
+    def summary(self):
+        disk = self['number of this disk']
+        socdisk = self['number of the disk with the start of the central directory']
+        offset = self['offset of start of central directory with respect to the starting disk number']
+        length = self['total number of entries in the central directory on this disk']
+        total = self['total number of entries in the central directory']
+        size = self['size of the central directory']
+        return "disk#{:d} soc-disk#{:d} soc-offset={:#x} soc-length={:d}/{:d} soc-size={:+d}{:s}".format(disk.int(), socdisk.int(), offset.int(), length.int(), total.int(), size.int(), " ({:s})".format(self['.ZIP file comment'].str()) if self['.ZIP file comment length'].int() else '')
 
     def Comment(self):
         return self['.ZIP file comment'].str()
@@ -327,6 +438,12 @@ class EndOfCentralDirectory64(EndOfCentralDirectory):
         (__ExtensibleDataSector, 'zip64 extensible data sector'),
     ]
 
+    def summary(self):
+        offset = self['offset of start of central directory with respect to the starting disk number']
+        length = self['total number of entries in the central directory on this disk']
+        size = self['size of the central directory']
+        return "(version {:d}>{:d} index {:d}) offset={:#x} length={:d} size={:+d}{:s}".format(self['version made by'].int(), self['version needed to extract'].int(), self['number of this disk'].int(), offset.int(), length.int(), size.int(), " ({:s})".format(self['.ZIP file comment'].str()) if self['.ZIP file comment length'].int() else '')
+
     def extract(self, **kwds):
         return self.serialize()
 
@@ -346,6 +463,11 @@ class EndOfCentralDirectoryLocator64(EndOfCentralDirectoryLocator):
         (pint.uint64_t, 'relative offset of the zip64 end of central directory record'),
         (pint.uint32_t, 'total number of disks'),
     ]
+
+    def summary(self):
+        disk = self['number of the disk with the start of the zip64 end of central directory']
+        offset = self['relative offset of the zip64 end of central directory record']
+        return "disk#={:d} eoc={:#0{:d}x} disks={:d}".format(disk.int(), offset.int(), 2 + 2 * offset.size(), self['total number of disks'].int())
 
     def extract(self, **kwds):
         return self.serialize()
@@ -414,6 +536,9 @@ class Record(pstruct.type):
         (__Record, 'Record'),
     ]
 
+    def summary(self):
+        return "{:0{:d}x}".format(self['Signature'].int(), 2 * self['Signature'].size(), self['Record'].summary())
+
 # Central Directory
 class Directory(parray.terminated):
     _object_ = Record
@@ -435,7 +560,7 @@ class File(Directory):
     _object_ = Record
 
     def isTerminator(self, value):
-        return isinstance(value, EndOfCentralDirectory)
+        return isinstance(value['record'], EndOfCentralDirectory)
 
 if __name__ == '__main__':
     import sys, os, os.path
@@ -453,6 +578,7 @@ if __name__ == '__main__':
     arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help='extract the specified file records', dest='mode', const='extract')
     arg_commands_gr.add_argument('-d', '--dump', action='store_const', help='dump the specified file records', dest='mode', const='dump')
     arg_device_gr = arg_p.add_argument_group('device selection and switching')
+    arg_device_gr.add_argument('-F', action='store_false', default=True, dest='use_eoc', help='use entire file instead of central directory')
     arg_device_gr.add_argument('-f', '--file', action='store', type=argparse.FileType('rb'), default='-', metavar='ARCHIVE', help='use archive file or device ARCHIVE', dest='source')
     arg_device_gr.add_argument('-o', '--output', action='store', type=str, metavar='DEVICE', help='extract files to specified DEVICE or FORMAT', dest='target', default='-')
     arg_info_gr = arg_p.add_argument_group('format output')
@@ -469,12 +595,15 @@ if __name__ == '__main__':
 
     # fix up arguments
     source_a, target_a = args.source, args.target
-    if source_a.name == '<stdin>':
-        if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
-        source_data = source_a.read()
+    if args.use_eoc:
+        if source_a.name == '<stdin>':
+            if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
+            source_data = source_a.read()
+        else:
+            source_data = source_a.read()
+        source = ptypes.prov.string(source_data)
     else:
-        source_data = source_a.read()
-    source = ptypes.prov.string(source_data)
+        source = ptypes.prov.fileobj(source_a)
 
     if target_a == '-':
         if sys.platform == 'win32': msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
@@ -534,18 +663,18 @@ if __name__ == '__main__':
         logging.root.setLevel(logging.DEBUG)
 
     # first locate the EndOfCentralDirectory
-    logging.debug("Locating EndOfCentralDirectory in {:#x} bytes...".format(len(source_data)))
-    signature = pint.uint32_t().set(EndOfCentralDirectory.signature[1])
-    idx = signature.size() + source_data[::-1].index(signature.serialize()[::-1])
-    rec = archive.zip.Record(source=ptypes.prov.string(source_data[-idx:])).l
+    eoc = None
+    if args.use_eoc:
+        logging.debug("Locating EndOfCentralDirectory in {:#x} bytes...".format(len(source_data)))
+        signature = pint.uint32_t().set(EndOfCentralDirectory.signature[1])
+        idx = signature.size() + source_data[::-1].index(signature.serialize()[::-1])
+        rec = archive.zip.Record(source=ptypes.prov.string(source_data[-idx:])).l
 
-    # validate it
-    if rec['Signature'].int() == signature.int():
-        eoc = rec['Record']
-
-    else:
-        logging.fatal("Unable to locate end of central directory")
-        eoc = None
+        # validate it
+        if rec['Signature'].int() == signature.int():
+            eoc = rec['Record']
+        else:
+            logging.fatal("Unable to locate end of central directory")
 
     # now we can read the central directory
     if eoc is None:
@@ -591,7 +720,7 @@ if __name__ == '__main__':
         if args.mode == 'extract':
             if isinstance(rec['Record'], archive.zip.CentralDirectoryEntry):
                 drec = rec['Record']['relative offset of local header'].d.li
-                data = drec['Record'].extract(decompress=not args.compress) 
+                data = drec['Record'].extract(decompress=not args.compress)
             else:
                 data = rec['Record'].extract(decompress=not args.decompress)
 
