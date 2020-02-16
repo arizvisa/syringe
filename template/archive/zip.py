@@ -1,7 +1,7 @@
 import logging
 logging.root.setLevel(logging.INFO)
 
-import ptypes
+import six, ptypes
 from ptypes import *
 
 ## General structures
@@ -28,8 +28,10 @@ class ZipDataDescriptor(pstruct.type):
     class _SignatureScan(parray.terminated):
         _object_ = pint.uint8_t
         def isTerminator(self, value):
-            octets = pint.uint32_t().set(ZipDataDescriptor.Signature)
-            return len(self.value) > 3 and self[-4:].serialize() == octets.serialize()
+            if len(self.value) > 3:
+                octets = pint.uint32_t().set(ZipDataDescriptor.Signature)
+                return self[-4:].serialize() == octets.serialize()
+            return False
         def int(self):
             return self[-4:].cast(pint.uint32_t).int()
         def data(self):
@@ -90,17 +92,23 @@ class CompressionMethodFlags(ptype.definition):
         _fields_ = [(2, 'unknown')]
     default = unknown
 
-@CompressionMethodFlags.define(type=6)
+@CompressionMethodFlags.define
 class MethodImplodingFlags(pbinary.flags):
+    type = 6
     _fields_ = [(1, '8kDictionary'), (1, '3Shannon-FanoTrees')]
 
-@CompressionMethodFlags.define(type=8)
-@CompressionMethodFlags.define(type=9)
 class MethodDeflatingFlags(pbinary.struct):
     _fields_ = [(2, 'Quality')]
+@CompressionMethodFlags.define
+class MethodDeflatingFlags8(MethodDeflatingFlags):
+    type = 8
+@CompressionMethodFlags.define
+class MethodDeflatingFlags9(MethodDeflatingFlags):
+    type = 9
 
-@CompressionMethodFlags.define(type=14)
+@CompressionMethodFlags.define
 class MethodLZMAFlags(pbinary.flags):
+    type = 14
     _fields_ = [(1, 'EOS'), (1, 'unused')]
 
 ## Extra data field mappings
@@ -123,8 +131,28 @@ class ZipRecord(ptype.definition):
     cache = {}
     attribute = 'signature'
 
-@ZipRecord.define(signature=(32, 0x04034b50))
 class LocalFileHeader(pstruct.type):
+    signature = 0, 0x04034b50
+
+@ZipRecord.define
+class LocalFileHeader32(LocalFileHeader):
+    signature = 32, 0x04034b50
+
+    def __extra_field(self):
+        cb = self['extra field length'].li
+        return dyn.clone(Extensible_data_field, blocksize=lambda s, bs=cb.int(): bs)
+
+    def __file_data(self):
+        desc = self.p.DirectoryRecord['data descriptor'] if hasattr(self.p, 'DirectoryRecord') else self['data descriptor'].li
+        return dyn.block(desc['compressed size'].int())
+
+    def __post_data_descriptor(self):
+        if hasattr(self.p, 'DirectoryRecord'):
+            flags = self.p.DirectoryRecord['general purpose bit flag']
+            return DataDescriptor if flags['PostDescriptor'] else ptype.undefined
+        flags = self['general purpose bit flag'].li
+        return ZipDataDescriptor if flags['PostDescriptor'] else ptype.undefined
+
     _fields_ = [
         (pint.uint16_t, 'version needed to extract'),
         (pbinary.littleendian(BitFlags), 'general purpose bit flag'),
@@ -135,11 +163,11 @@ class LocalFileHeader(pstruct.type):
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
         (lambda self: dyn.clone(pstr.string, length=self['file name length'].li.int()), 'file name'),
-        (lambda self: dyn.clone(Extensible_data_field, blocksize=(lambda s, cb=self['extra field length'].li.int(): cb)), 'extra field'),
+        (__extra_field, 'extra field'),
         # XXX: if encrypted, include encryption header here
-        (lambda self: dyn.block(self['data descriptor'].li['compressed size'].int()), 'file data'),
+        (__file_data, 'file data'),
         # XXX: i think this record is actually encoded within the file data
-        (lambda self: ZipDataDescriptor if self['general purpose bit flag'].li.o['PostDescriptor'] else ptype.undefined, 'post data descriptor'),
+        (__post_data_descriptor, 'post data descriptor'),
     ]
 
     def Name(self):
@@ -183,8 +211,29 @@ class LocalFileHeader(pstruct.type):
         time, date = self['last mod file time'], self['last mod file date']
         return '{{{:d}}} {:s} ({:x}{:+x}) {!r} method={:s} {:s} time/date={:04x}:{:04x}'.format(index, cls, ofs, bs, filename, meth.str(), descr.summary(), time.int(), date.int())
 
-@ZipRecord.define(signature=(32, 0x02014b50))
-class CentralDirectory(pstruct.type):
+class CentralDirectoryEntry(pstruct.type):
+    signature = 0, 0x02014b50
+
+@ZipRecord.define
+class CentralDirectoryEntry32(CentralDirectoryEntry):
+    signature = 32, 0x02014b50
+
+    def __relative_offset_of_local_header(self):
+        t = dyn.clone(Record, DirectoryRecord=self)
+        return dyn.pointer(t, pint.uint32_t)
+
+    def __file_name(self):
+        res = self['file name length'].li
+        return dyn.clone(pstr.string, length=res.int())
+
+    def __extra_field(self):
+        res = self['extra field length'].li
+        return dyn.block(res.int())
+
+    def __file_comment(self):
+        res = self['file comment length'].li
+        return dyn.clone(pstr.string, length=res.int())
+
     _fields_ = [
         (VersionMadeBy, 'version made by'),
         (VersionNeeded, 'version needed to extract'),
@@ -199,10 +248,10 @@ class CentralDirectory(pstruct.type):
         (pint.uint16_t, 'disk number start'),
         (pint.uint16_t, 'internal file attributes'),
         (pint.uint32_t, 'external file attributes'),
-        (lambda self: dyn.pointer(Record, pint.uint32_t), 'relative offset of local header'),
-        (lambda self: dyn.clone(pstr.string, length=self['file name length'].li.int()), 'file name'),
-        (lambda self: dyn.block(self['extra field length'].li.int()), 'extra field'),
-        (lambda self: dyn.clone(pstr.string, length=self['file comment length'].li.int()), 'file comment'),
+        (__relative_offset_of_local_header, 'relative offset of local header'),
+        (__file_name, 'file name'),
+        (__extra_field, 'extra field'),
+        (__file_comment, 'file comment'),
     ]
 
     def Name(self):
@@ -223,8 +272,13 @@ class CentralDirectory(pstruct.type):
         time, date = self['last mod file time'], self['last mod file date']
         return '{{{:d}}} {:s} ({:x}{:+x}) {!r} version-made-by={:s} version-needed-to-extract={:s} compression-method={:s} {:s} last-mod-file-time/date={:04x}:{:04x} disk-number-start={:d} internal-file-attributes={:#x} external-file-attributes={:#x}'.format(index, cls, ofs, bs, filename, self['version made by'].str(), self['version needed to extract'].str(), meth.str(), descr.summary(), time.int(), date.int(), self['disk number start'].int(), self['internal file attributes'].int(), self['external file attributes'].int()) + ('// {:s}'.format(self.Comment()) if self['file comment length'].int() > 0 else '')
 
-@ZipRecord.define(signature=(32, 0x06054b50))
+
 class EndOfCentralDirectory(pstruct.type):
+    signature = 0, 0x06054b50
+
+@ZipRecord.define
+class EndOfCentralDirectory32(EndOfCentralDirectory):
+    signature = 32, 0x06054b50
     _fields_ = [
         (pint.uint16_t, 'number of this disk'),
         (pint.uint16_t, 'number of the disk with the start of the central directory'),
@@ -246,8 +300,10 @@ class EndOfCentralDirectory(pstruct.type):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
         return '{{{:d}}} {:s} ({:x}{:+x}) number-of-this-disk={:d} number-of-this-disk-with-the-start-of-the-central-directory={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory={:d} offset-of-the-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, ofs, bs, self['number of this disk'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number']) + ('// {:s}'.format(self.Comment()) if self['.ZIP file comment length'].int() > 0 else '')
 
-@ZipRecord.define(signature=(64, 0x06054b50))
-class EndOfCentralDirectory64(pstruct.type):
+@ZipRecord.define
+class EndOfCentralDirectory64(EndOfCentralDirectory):
+    signature = 64, 0x06054b50
+
     def __ExtensibleDataSector(self):
         size = EndOfCentralDirectory().a.size()
         expectedSize = self['size of zip64 end of central directory record'].li.int()
@@ -279,8 +335,12 @@ class EndOfCentralDirectory64(pstruct.type):
         data = self['zip64 extensible data sector'].summary()
         return '{{{:d}}} {:s} ({:x}{:+x}) version-made-by={:s} version-needed-to-extract={:s} number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} number-of-the-disk-with-the-start-of-the-central-directory={:d} total-number-of-entires-in-the-central-directory-on-this-disk={:d} total-number-of-entries-in-the-central-directory={:d} size-of-the-central-directory={:#x} offset-of-start-of-central-directory-with-respect-to-the-starting-disk-number={:d}'.format(index, cls, ofs, bs, self['number of the disk with the start of the zip64 end of central directory'].int(), self['number of the disk with the start of the central directory'].int(), self['total number of entries in the central directory on this disk'].int(), self['total number of entries in the central directory'].int(), self['size of the central directory'].int(), self['offset of start of central directory with respect to the starting disk number'].int(), datasector)
 
-@ZipRecord.define(signature=(64, 0x07054b50))
-class EndOfCentralDirectoryLocator64(pstruct.type):
+class EndOfCentralDirectoryLocator(pstruct.type):
+    signature = 0, 0x07054b50
+
+@ZipRecord.define
+class EndOfCentralDirectoryLocator64(EndOfCentralDirectoryLocator):
+    signature = 64, 0x07054b50
     _fields_ = [
         (pint.uint32_t, 'number of the disk with the start of the zip64 end of central directory'),
         (pint.uint64_t, 'relative offset of the zip64 end of central directory record'),
@@ -294,8 +354,13 @@ class EndOfCentralDirectoryLocator64(pstruct.type):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
         return '{{{:d}}} {:s} ({:x}{:+x}) number-of-the-disk-with-the-start-of-the-zip64-end-of-central-directory={:d} relative-offset-of-the-zip64-end-of-central-directory-record={:#x} total-number-of-disks={:d}'.format(index, cls, ofs, bs, self['number of the disk with the start of the zip64 end of central directory'].int(), self['relative offset of the zip64 end of central directory record'].int(), self['total number of disks'].int())
 
-@ZipRecord.define(signature=(32, 0x08064b50))
 class ArchiveExtraData(pstruct.type):
+    signature = 0, 0x08064b50
+
+@ZipRecord.define
+class ArchiveExtraData32(ArchiveExtraData):
+    signature = 32, 0x08064b50
+
     _fields_ = [
         (pint.uint32_t, 'extra field length'),
         (lambda s: dyn.block(s['extra field length'].li.int()), 'extra field data'),
@@ -308,8 +373,13 @@ class ArchiveExtraData(pstruct.type):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
         return '{{{:d}}} {:s} ({:x}{:+x}) extra-field-length={:d} extra-field={:s}'.format(index, cls, ofs, bs, self['extra field length'].int(), self['extra field data'].summary())
 
-@ZipRecord.define(signature=(32, 0x05054b50))
 class DigitalSignature(pstruct.type):
+    signature = 0, 0x05054b50
+
+@ZipRecord.define
+class DigitalSignature32(DigitalSignature):
+    signature = 32, 0x05054b50
+
     _fields_ = [
         (pint.uint16_t, 'size of data'),
         (lambda s: dyn.block(s['size of data'].li.int()), 'signature data'),
@@ -326,7 +396,16 @@ class DigitalSignature(pstruct.type):
 class Record(pstruct.type):
     def __Record(self):
         bits, sig = 32, self['Signature'].li.int()
-        return ZipRecord.lookup((bits, sig))
+        try:
+            p = self.getparent(Directory)
+        except ptypes.error.NotFoundError:
+            return ZipRecord.lookup((bits, sig))
+
+        t = ZipRecord.lookup((bits, sig))
+        if isinstance(p, File) and hasattr(p, 'Directory'):
+            cd = p.Directory
+            return dyn.clone(t, DirectoryRecord=cd.member(self.getoffset()))
+        return t
 
     # FIXME: Signature should be a parray.terminated which seeks for a valid signature
     #        and has a method which returns the correct code for __Record to be correct.
@@ -335,11 +414,28 @@ class Record(pstruct.type):
         (__Record, 'Record'),
     ]
 
-class File(parray.infinite):
+# Central Directory
+class Directory(parray.terminated):
     _object_ = Record
 
     def isTerminator(self, value):
-        return value.__class__ == EndOfCentralDirectory
+        if isinstance(value['record'], EndOfCentralDirectory):
+            return True
+        return isinstance(self.length, six.integer_types) and len(self.value) >= self.length
+
+    def member(self, offset):
+        for item in self:
+            rec = item['record']
+            if isinstance(rec, CentralDirectoryEntry) and offset == rec['relative offset of local header'].int():
+                return rec
+            continue
+        raise IndexError(offset)
+
+class File(Directory):
+    _object_ = Record
+
+    def isTerminator(self, value):
+        return isinstance(value, EndOfCentralDirectory)
 
 if __name__ == '__main__':
     import sys, os, os.path
@@ -375,9 +471,10 @@ if __name__ == '__main__':
     source_a, target_a = args.source, args.target
     if source_a.name == '<stdin>':
         if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
-        source = ptypes.prov.stream(source_a)
+        source_data = source_a.read()
     else:
-        source = ptypes.prov.fileobj(source_a)
+        source_data = source_a.read()
+    source = ptypes.prov.string(source_data)
 
     if target_a == '-':
         if sys.platform == 'win32': msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
@@ -394,13 +491,24 @@ if __name__ == '__main__':
     isMatched = lambda r: isMatchedName(r) or isMatchedIndex(r)
 
     # some useful functions
-    def iterate(root):
+    def iterate_file(root):
         for rec in root:
             if args.mode == 'list-all' and isMatched(rec):
                 yield rec
             elif isMatchedIndex(rec):
                 yield rec
             elif isMatchedName(rec) and isinstance(rec['Record'], archive.zip.LocalFileHeader):
+                yield rec
+            continue
+        return
+
+    def iterate_directory(root):
+        for rec in root:
+            if args.mode == 'list-all' and isMatched(rec):
+                yield rec
+            elif isMatchedIndex(rec):
+                yield rec
+            elif isMatchedName(rec) and isinstance(rec['Record'], archive.zip.CentralDirectoryEntry):
                 yield rec
             continue
         return
@@ -425,8 +533,31 @@ if __name__ == '__main__':
     if args.verbose:
         logging.root.setLevel(logging.DEBUG)
 
-    # create the file instance
-    z = archive.zip.File(source=source)
+    # first locate the EndOfCentralDirectory
+    logging.debug("Locating EndOfCentralDirectory in {:#x} bytes...".format(len(source_data)))
+    signature = pint.uint32_t().set(EndOfCentralDirectory.signature[1])
+    idx = signature.size() + source_data[::-1].index(signature.serialize()[::-1])
+    rec = archive.zip.Record(source=ptypes.prov.string(source_data[-idx:])).l
+
+    # validate it
+    if rec['Signature'].int() == signature.int():
+        eoc = rec['Record']
+
+    else:
+        logging.fatal("Unable to locate end of central directory")
+        eoc = None
+
+    # now we can read the central directory
+    if eoc is None:
+        logging.debug("Reading zip file without CentralDirectory...")
+        z = archive.zip.File(source=source)
+        iterate = iterate_file
+
+    else:
+        offset_f, length_f = (eoc[item] for item in ['offset of start of central directory with respect to the starting disk number', 'total number of entries in the central directory on this disk'])
+        logging.debug("Reading {:d} elements from CentralDirectory at offset {:#x}...".format(length_f.int(), offset_f.int()))
+        z = archive.zip.Directory(source=source, offset=offset_f.int())
+        iterate = iterate_directory
 
     # handle the mode that the user specified
     if args.mode == 'list':
@@ -455,9 +586,16 @@ if __name__ == '__main__':
     # for each record...
     z = z.l
     for rec in iterate(z[:-1]):
+
         # assign what data we're writing
         if args.mode == 'extract':
-            data = rec['Record'].extract(decompress=not args.compress)
+            if isinstance(rec['Record'], archive.zip.CentralDirectoryEntry):
+                drec = rec['Record']['relative offset of local header'].d.li
+                data = drec['Record'].extract(decompress=not args.compress) 
+            else:
+                data = rec['Record'].extract(decompress=not args.decompress)
+
+            data = rec['Record']['relative offset of local header'].d.li['Record'].extract(decompress=not args.compress) if isinstance(rec['Record'], archive.zip.CentralDirectoryEntry) else rec['Record'].extract(decompress=not args.decompress)
         elif args.mode == 'dump':
             data = '\n'.join((' '.join((ptypes.utils.repr_class(rec.classname()), rec.name())), ptypes.utils.indent('{!r}'.format(rec['Record']))))
         else:
@@ -469,7 +607,7 @@ if __name__ == '__main__':
         res['path'], res['name'] = os.path.split(res['file name'] if 'file name' in res.keys() else rec.name())
 
         # write to a generated filename
-        if isinstance(target, basestring):
+        if isinstance(target, six.string_types):
             outname = target.format(**res)
 
             dirpath, name = os.path.split(outname)
