@@ -2,7 +2,7 @@ import exceptions
 class Base(exceptions.StandardError):
     """Root exception type in ptypes"""
     def __init__(self, *args):
-        return super(Base, self).__init__(args)
+        return super(Base, self).__init__(*args)
 
     def name(self):
         module = self.__module__
@@ -15,7 +15,7 @@ class Base(exceptions.StandardError):
 class ObjectBase(Base):
     '''Exception type that wraps a particular ptype instance'''
     def __init__(self, object, **kwargs):
-        super(ObjectBase, self).__init__(kwargs)
+        super(ObjectBase, self).__init__(*kwargs.items())
         self.__object = object
 
     @property
@@ -36,7 +36,7 @@ class ObjectBase(Base):
 
     def __str__(self):
         if self.instanceQ():
-            return "{:s} ({:s})".format(self.instance(), self.objectname())
+            return "{:s} ({:s})".format(self.instance(), self.objectname()) + (" : {!r}".format(self.args) if self.args else '')
         return self.objectname()
 
 class MethodBase(ObjectBase):
@@ -70,8 +70,8 @@ class ProviderError(Base):
     """Generic error raised by a provider"""
 class StoreError(ProviderError):
     """Error while attempting to store some number of bytes"""
-    def __init__(self, identity, offset, amount, written=0,  **kwds):
-        super(StoreError,self).__init__(kwds)
+    def __init__(self, identity, offset, amount, written=0, **kwds):
+        super(StoreError,self).__init__(**kwds)
         self.stored = identity,offset,amount,written
     def __str__(self):
         identity,offset,amount,written = self.stored
@@ -81,7 +81,7 @@ class StoreError(ProviderError):
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
     def __init__(self, identity, offset, desired, amount=0, **kwds):
-        super(ConsumeError,self).__init__(kwds)
+        super(ConsumeError,self).__init__(**kwds)
         self.consumed = identity,offset,desired,amount
     def __str__(self):
         identity,offset,desired,amount = self.consumed
