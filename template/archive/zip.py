@@ -357,8 +357,8 @@ if __name__ == '__main__':
     arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help='extract the specified file records', dest='mode', const='extract')
     arg_commands_gr.add_argument('-d', '--dump', action='store_const', help='dump the specified file records', dest='mode', const='dump')
     arg_device_gr = arg_p.add_argument_group('device selection and switching')
-    arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar='ARCHIVE', help='use archive file or device ARCHIVE', dest='source')
-    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar='DEVICE', help='extract files to specified DEVICE or FORMAT', dest='target', default=None)
+    arg_device_gr.add_argument('-f', '--file', action='store', type=argparse.FileType('rb'), default='-', metavar='ARCHIVE', help='use archive file or device ARCHIVE', dest='source')
+    arg_device_gr.add_argument('-o', '--output', action='store', type=str, metavar='DEVICE', help='extract files to specified DEVICE or FORMAT', dest='target', default='-')
     arg_info_gr = arg_p.add_argument_group('format output')
     arg_info_gr.add_argument('-j', '--compressed', action='store_true', help='extract data from archive in its compressed form', dest='compress', default=False)
 
@@ -372,12 +372,12 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # fix up arguments
-    source_a, target_a = args.source[0], None if args.target is None else args.target[0]
-    if source_a == '-':
-        if sys.platform == 'win32': msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-        source = ptypes.prov.stream(sys.stdin)
+    source_a, target_a = args.source, args.target
+    if source_a.name == '<stdin>':
+        if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
+        source = ptypes.prov.stream(source_a)
     else:
-        source = ptypes.prov.file(source_a, mode='rb')
+        source = ptypes.prov.fileobj(source_a)
 
     if target_a == '-':
         if sys.platform == 'win32': msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
@@ -430,12 +430,14 @@ if __name__ == '__main__':
 
     # handle the mode that the user specified
     if args.mode == 'list':
-        for rec in iterate(z.l[:-1]):
+        z = z.l
+        for rec in iterate(z[:-1]):
             print rec['Record'].listing()
         sys.exit(0)
 
     elif args.mode == 'list-all':
-        for rec in iterate(z.l[:-1]):
+        z = z.l
+        for rec in iterate(z[:-1]):
             print rec['Record'].listing()
         sys.exit(0)
 
@@ -451,7 +453,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # for each record...
-    for rec in iterate(z.l[:-1]):
+    z = z.l
+    for rec in iterate(z[:-1]):
         # assign what data we're writing
         if args.mode == 'extract':
             data = rec['Record'].extract(decompress=not args.compress)

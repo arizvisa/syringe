@@ -35,6 +35,11 @@ class stringoctal(stringinteger):
         prefix = '0' * (self.length - 1 - len(n))
         return super(stringoctal, self).set(prefix + n + '\x00')
 
+class padstring(pstr.string):
+    def str(self):
+        res = super(padstring, self).str()
+        return res.rstrip()
+
 class stream_t(parray.infinite):
     def summary(self):
         return "{:s} size: {:#x}, {:d} files.".format(self._object_.typename(), self.size(), len(self))
@@ -136,7 +141,7 @@ class header_t(pstruct.type):
 
     _fields_ = [
         (common_t, 'common'),
-        (dyn.clone(pstr.string, length=6), 'magic'),
+        (dyn.clone(padstring, length=6), 'magic'),
         (__extended, 'extended'),
         (__member, 'member'),
     ]
@@ -255,7 +260,7 @@ class header_ustar(extended_t):
         p = self.getparent(header_t)
         res = p['common']
         count = res['size'].int()
-        return count + BLOCKSIZE - (count % BLOCKSIZE)
+        return count + BLOCKSIZE - (count % BLOCKSIZE) if count > 0 else 0
 
 @header_member.define
 class header_ustar_member(pstruct.type):
@@ -346,8 +351,8 @@ if __name__ == '__main__':
     arg_commands_gr.add_argument('-x', '--extract', '--get', action='store_const', help="extract files from an archive", dest='mode', const='extract')
     arg_commands_gr.add_argument('-d', '--dump', action='store_const', help="dump the specified file members", dest='mode', const='dump')
     arg_device_gr = arg_p.add_argument_group("Device selection and switching")
-    arg_device_gr.add_argument('-f', '--file', nargs=1, action='store', type=str, metavar="ARCHIVE", help="use archive file or device ARCHIVE", dest='source')
-    arg_device_gr.add_argument('-o', '--output', nargs=1, action='store', type=str, metavar="FORMATSPEC", help="extract members by applying attributes to specified FORMATSPEC (or DEVICE)", dest='target', default=None)
+    arg_device_gr.add_argument('-f', '--file', action='store', type=argparse.FileType('rb'), default='-', metavar="ARCHIVE", help="use archive file or device ARCHIVE", dest='source')
+    arg_device_gr.add_argument('-o', '--output', action='store', type=str, metavar="FORMATSPEC", help="extract members by applying attributes to specified FORMATSPEC (or DEVICE)", dest='target', default='-')
 
     if len(sys.argv) <= 1:
         print >>sys.stdout, arg_p.format_usage()
@@ -359,12 +364,12 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # fix up arguments
-    source_a, target_a = args.source[0], None if args.target is None else args.target[0]
+    source_a, target_a = args.source, args.target
     if source_a == '-':
-        if sys.platform == 'win32': msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-        source = ptypes.prov.stream(sys.stdin)
+        if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
+        source = ptypes.prov.stream(source_a)
     else:
-        source = ptypes.prov.file(source_a, mode='rb')
+        source = ptypes.prov.fileobj(source_a)
 
     if target_a == '-':
         if sys.platform == 'win32': msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
@@ -408,7 +413,8 @@ if __name__ == '__main__':
 
     # implement each mode
     if args.mode == 'list':
-        for member in iterate(z.l[:-1]):
+        z = z.l
+        for member in iterate(z[:-1]):
             print member.listing()
         sys.exit(0)
 
@@ -424,7 +430,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # for each member...
-    for member in iterate(z.l[:-1]):
+    z = z.l
+    for member in iterate(z[:-1]):
 
         # assign what data we're writing
         if args.mode == 'extract':
