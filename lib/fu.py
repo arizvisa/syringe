@@ -25,6 +25,13 @@ VERSION = '0.7'
 
 ########
 class package:
+    '''
+    This class is responsible for exposing the interface used to marshal/unmarshal
+    an object. The reason for the class is to close around the internals of this
+    module hiding the functionality that is used for serialization. The only
+    interfaces that are exposed are the pack() and unpack() classmethods.
+    '''
+
     @classmethod
     def pack(cls, object, **attributes):
         '''convert any python object into a packable format'''
@@ -43,7 +50,13 @@ class package:
 
     ### stuff that's hidden within this namespace
     class cache(object):
-        '''static class for looking up a class used for serializing a particular object'''
+        '''
+        This class is used to handle the registration of the different serializers
+        and deserializers for a python type/constant. The registration of the
+        different implementations is done via decorator at which point one can
+        use the .by*() classmethods to identify the handler for their type or
+        instance.
+        '''
         class registration:
             id,const,type = {},{},{}
 
@@ -149,6 +162,15 @@ class package:
             raise KeyError, instance
 
     class stash(__builtin__.object):
+        '''
+        This class is used to recursively serialize/deserialize an instance or
+        type. It is temporarily constructed and will use the cache to identify
+        how to serialize/deserialize the data that is passed to it. Once all
+        the references are processed, a tuple of the objects and constants are
+        then returned. This can then be re-packed into a bytestream which can
+        then be transported wherever the user needs it.
+        '''
+
         def __init__(self):
             # cache for .fetch
             self.fetch_cache = {}
@@ -290,37 +312,76 @@ class package:
             return instance
 
 class __type__(__builtin__.object):
+    '''
+    This base class is used to help register an instance of a type. Once
+    identifying the type of an instance, the class will be responsible for
+    returning any attributes that are necessary to re-construct or
+    re-instantiate that object.
+    '''
+
     @classmethod
     def getclass(cls, *args, **kwds):
+        '''
+        This returns the type to search for. The type is snuck from an instance
+        by using the __class__ attribute.
+        '''
         raise NotImplementedError, cls
 
     @classmethod
     def new(cls):
+        '''
+        This method returns an instance of the type that the class is supposed
+        to be responsible for.
+        '''
         return cls.getclass()
 
     @classmethod
     def repr(cls, object):
-        '''default method for displaying a repr of an object'''
+        '''
+        This method will output an instance in a readable manner.
+        '''
         return repr(object)
 
     @classmethod
     def p_constructor(cls, object, **attributes):
-        '''returns all arguments required to construct this type'''
+        '''
+        This method will extract any attributees that are required to create
+        the initial instance of a type. The necessary attributes are then
+        returned as a tuple.
+        '''
         return ()
 
     @classmethod
     def p_instance(cls, object, **attributes):
-        '''return attributes of type that will be used to update'''
+        '''
+        This method will extract any attributes that will be updated after
+        the type has been instantiated. It is prudent to note that these
+        attributes are not necessary to construct the object, only that the
+        object's users expect these fields to be set. The necessary attributes
+        are then returned as a tuple.
+        '''
         raise NotImplementedError, cls
 
     @classmethod
     def u_constructor(cls, data, **attributes):
-        '''using the provided data, construct an instance of the object'''
+        '''
+        This method will take the tuple that is provided by the data parameter,
+        and use it to re-instantiate the specified type. The tuple in data is
+        the same as the tuple returned by the p_constructor() classmethod. The
+        method will return the properly instantiated type.
+        '''
         raise NotImplementedError, cls
 
     @classmethod
     def u_instance(cls, instance, data, **attributes):
-        '''update the object with the provided data'''
+        '''
+        This method will take the tuple that is provided by the data parameter,
+        and do whatever is necessary to update the instance parameter with it.
+        This can include (but is not limited to), assigning any attributes with
+        the setattr() keyword, calling any methods to update the state, etc.
+        The tuple in data corresponds to the tuple returned by the p_instance()
+        classmethod. The method will then return the instance that was updated.
+        '''
         return instance
 
 @package.cache.register_type
@@ -353,15 +414,35 @@ class partial(__type__):
 ### constants
 if 'constants':
     class __constant(__type__):
+        '''
+        This parent class is used to assist defining a constant. A constant
+        will typically not have any attributes or anything and in most cases
+        will only exist once in an interpreter. These are things like the
+        "object" type, or "float" type, etc.
+        '''
+
         @classmethod
         def new(cls, *args, **kwds):
-            '''instantiate a new instance of the object'''
+            '''
+            This method will create a new instance of the class returned by
+            the getclass() classmethod with the parameters provided as its
+            arguments.
+            '''
             return cls.getclass()(*args, **kwds)
         @classmethod
         def p_instance(cls, object, **attributes):
+            '''
+            As the type is a constant, there are no attributes that are needed
+            to update the type. This method will simply return an empty tuple.
+            '''
             return ()
         @classmethod
         def u_constructor(cls, data, **attributes):
+            '''
+            As the type is a constant, there are no parameters needed to
+            construct it. this method will simply return the type returned by
+            the getclass() classmethod.
+            '''
             return cls.getclass()
 
     @package.cache.register_const
@@ -912,10 +993,10 @@ if 'custom':
     except ImportError:
         print '_sre serialization not really completed yet'
 
-if 'immuteable':
+if 'immutable':
     @package.cache.register_type
     class tuple_(__type__):
-        '''an immuteable tuple'''
+        '''an immutable tuple'''
         @classmethod
         def getclass(cls):
             return tuple.getclass()
@@ -1081,7 +1162,7 @@ if 'special':
         # FIXME: having to include the globals for an unbound function (__module__ is undefined) might be weird
         @classmethod
         def p_constructor(cls, object, **attributes):
-            # so...it turns out that only the closure property is immuteable
+            # so...it turns out that only the closure property is immutable
             func_closure = object.func_closure if object.func_closure is not None else ()
             assert object.__module__ is not None, 'FIXME: Unable to pack an unbound function'
 #            return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure),object.func_globals
