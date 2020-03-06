@@ -1381,6 +1381,39 @@ if 'special':
             fn, = data
             return cls.new(fn)
 
+if 'operator':
+    import operator
+
+    @package.cache.register_const
+    class attrgetter(__constant):
+        @classmethod
+        def getclass(cls):
+            return operator.attrgetter
+
+    class __attrgetter_helper(object):
+        def __getattribute__(self, name):
+            raise Exception(name)
+    _attrgetter_helper = __attrgetter_helper()
+
+    @package.cache.register_type
+    class attrgetter_(__constant):
+        @classmethod
+        def getclass(cls):
+            return operator.attrgetter
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            try:
+                object(_attrgetter_helper)
+            except Exception as E:
+                name, = E
+            return (name,)
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name, = data
+            return cls.new(name)
+
 ## regular functions
 #import cPickle as pickle
 import marshal as pickle
