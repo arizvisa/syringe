@@ -194,9 +194,9 @@ class type(_pstruct_generic):
         res = self.value is not None
         try:
             res = res and self.size() >= self.blocksize()
-        except Exception,e:
+        except Exception as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, path), exc_info=True)
+            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), E, path), exc_info=True)
         finally:
             return res
 
@@ -269,7 +269,7 @@ class type(_pstruct_generic):
                     if current is not None:
                         try:
                             res = self.blocksize()
-                        except Exception, e:
+                        except Exception as E:
                             path = str().join(map("<{:s}>".format, self.backtrace()))
                             Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
                         else:
@@ -280,8 +280,8 @@ class type(_pstruct_generic):
                         current += bs
                     offset += bs
 
-            except error.LoadError, e:
-                raise error.LoadError(self, exception=e)
+            except error.LoadError as E:
+                raise error.LoadError(self, exception=E)
 
             # add any missing elements with a 0 blocksize
             count = len(self._fields_) - len(self.value)
@@ -400,13 +400,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn

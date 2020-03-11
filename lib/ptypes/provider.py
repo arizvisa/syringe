@@ -121,7 +121,7 @@ class remote(base):
             self.__cache__.fromstring(data)
             return self.consume(amount)
 
-        except Exception, e:
+        except Exception as E:
             self.log.warn("Unable to consume {:d} bytes from offset {:#x} while trying to preread {:d} bytes".format(amount, self.offset, right - len(self.__cache__)), exc_info=True)
             raise error.ConsumeError(self, self.offset, amount)
 
@@ -401,8 +401,8 @@ class string(bounded):
             self.data[left:right] = array.array('c', data)
             self.offset = right
             return len(data)
-        except Exception, e:
-            raise error.StoreError(self, self.offset, len(data), exception=e)
+        except Exception as E:
+            raise error.StoreError(self, self.offset, len(data), exception=E)
         raise error.ProviderError
 
     @utils.mapexception(any=error.ProviderError)
@@ -433,9 +433,9 @@ class fileobj(bounded):
         try:
             result = self.file.read(amount)
 
-        except OverflowError, e:
+        except OverflowError as E:
             self.file.seek(offset)
-            raise error.ConsumeError(self, offset, amount, len(result), exception=e)
+            raise error.ConsumeError(self, offset, amount, len(result), exception=E)
 
         if result == '' and amount > 0:
             raise error.ConsumeError(self, offset, amount, len(result))
@@ -451,9 +451,9 @@ class fileobj(bounded):
         try:
             return self.file.write(data)
 
-        except Exception, e:
+        except Exception as E:
             self.file.seek(offset)
-        raise error.StoreError(self, offset, len(data), exception=e)
+        raise error.StoreError(self, offset, len(data), exception=E)
 
     @utils.mapexception(any=error.ProviderError)
     def close(self):
@@ -763,8 +763,8 @@ try:
     import ctypes
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
-    except Exception, m:
-        raise OSError(m)
+    except Exception as E:
+        raise OSError(E)
 
     class win32error:
         @staticmethod
@@ -937,8 +937,8 @@ try:
 except ImportError:
     Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
 
-except OSError, m:
-    Log.info("{:s} : Unable to load 'kernel32.dll' ({:s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, m))
+except OSError as E:
+    Log.info("{:s} : Unable to load 'kernel32.dll' ({:s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, E))
 
 try:
     _ = 'idaapi' in sys.modules
@@ -991,7 +991,7 @@ try:
             try:
                 result = cls.read(cls.offset, amount)
 
-            except Exception, err:
+            except Exception as err:
                 if isinstance(err, tuple) and len(err) == 2:
                     ofs, amount = err
                     raise error.ConsumeError(cls, ofs, amount, ofs - startofs)
@@ -1066,7 +1066,7 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
 
-            except RuntimeError, e:
+            except RuntimeError as E:
                 raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
             return str(result)
 
@@ -1279,13 +1279,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn

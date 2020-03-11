@@ -297,8 +297,8 @@ class type(ptype.generic):
             try:
                 consumer.consume(boffset)
                 result = self.__deserialize_consumer__(consumer)
-            except (StopIteration, error.ProviderError), e:
-                raise error.LoadError(self, exception=e)
+            except (StopIteration, error.ProviderError) as E:
+                raise error.LoadError(self, exception=E)
         return result
 
     def repr(self, **options):
@@ -351,7 +351,7 @@ class integer(type):
 
     def __deserialize_consumer__(self, consumer):
         try: self.__setvalue__(consumer.consume(self.blockbits()))
-        except (StopIteration, error.ProviderError), e: raise e
+        except (StopIteration, error.ProviderError) as E: raise E
         return self
 
     def summary(self, **options):
@@ -534,13 +534,13 @@ class enum(integer):
     def summary(self, **options):
         res = self.bitmap()
         try: return u"{:s}({:s},{:d})".format(self.byvalue(bitmap.int(res)), bitmap.hex(res), bitmap.size(res))
-        except (ValueError,KeyError): pass
+        except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
     def details(self, **options):
         res = self.get()
         try: return u"{:s} : {:s}".format(self.byvalue(bitmap.int(res)), bitmap.string(res))
-        except (ValueError,KeyError): pass
+        except (ValueError, KeyError): pass
         return super(enum, self).details()
 
     def __setvalue__(self, *values, **attrs):
@@ -1286,7 +1286,7 @@ class terminatedarray(_array_generic):
             return super(terminatedarray, self).__deserialize_consumer__(consumer, iterable)
 
         # terminated arrays can also stop when out-of-data
-        except StopIteration, e:
+        except StopIteration as E:
             n = self.value[-1]
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.info("terminatedarray : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), n.typename(), n.getoffset(), path))
@@ -1342,7 +1342,7 @@ class blockarray(terminatedarray):
             if total < 0:
                 Log.info('blockarray.__deserialize_consumer__ : {:s} : Read {:d} extra bits'.format(self.instance(), -total))
 
-        except StopIteration, e:
+        except StopIteration as E:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
             Log.warn('blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!r} while consuming {:d} bits'.format(self.instance(), position, n.blockbits()))
         return self
@@ -1458,8 +1458,8 @@ class partial(ptype.container):
             result.setoffset(result.getoffset())
             return result
 
-        except (StopIteration, error.ProviderError), e:
-            raise error.LoadError(self, exception=e)
+        except (StopIteration, error.ProviderError) as E:
+            raise error.LoadError(self, exception=E)
 
     def __load_bigendian(self, **attrs):
         # big-endian. stream-based
@@ -1500,8 +1500,8 @@ class partial(ptype.container):
                 self.source.store(data)
             return self
 
-        except (StopIteration, error.ProviderError), e:
-            raise error.CommitError(self, exception=e)
+        except (StopIteration, error.ProviderError) as E:
+            raise error.CommitError(self, exception=E)
 
     def alloc(self, *args, **attrs):
         '''Load a pbinary.partial using the provider.empty source'''
@@ -1510,8 +1510,8 @@ class partial(ptype.container):
             self.object.alloc(*args, **attrs)
             return self
 
-        except (StopIteration, error.ProviderError), e:
-            raise error.LoadError(self, exception=e)
+        except (StopIteration, error.ProviderError) as E:
+            raise error.LoadError(self, exception=E)
 
     def bits(self):
         return self.size() * 8
@@ -1728,13 +1728,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn

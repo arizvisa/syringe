@@ -435,7 +435,7 @@ class enum(type):
     def summary(self, **options):
         res = self.get()
         try: return u"{:s}({:#x})".format(self.byvalue(res), res)
-        except (ValueError,KeyError): pass
+        except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
     def __setvalue__(self, *values, **attrs):
@@ -483,13 +483,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn

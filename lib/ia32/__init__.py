@@ -326,7 +326,7 @@ if __name__ == '__main__':
                 print('%s: Success'% name)
                 return True
 
-            except Failure,e:
+            except Failure as E:
                 pass
 
             print('%s: Failure'% name)

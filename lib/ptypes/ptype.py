@@ -879,11 +879,11 @@ class base(generic):
             result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size)
             result.setoffset(result.getoffset(), recurse=True)
 
-        except error.ProviderError, e:
-            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e), exc_info=False)
+        except error.ProviderError as E:
+            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), E), exc_info=False)
 
-        except Exception, e:
-            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), e), exc_info=True)
+        except Exception as E:
+            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), E), exc_info=True)
 
         # force partial or overcommited initializations
         try: result = result.__deserialize_block__(data)
@@ -918,9 +918,9 @@ class base(generic):
                 self.source.seek(ofs)
                 block = self.source.consume(bs)
                 self = self.__deserialize_block__(block)
-            except (StopIteration, error.ProviderError), e:
+            except (StopIteration, error.ProviderError) as E:
                 self.source.seek(ofs + bs)
-                raise error.LoadError(self, consumed=bs, exception=e)
+                raise error.LoadError(self, consumed=bs, exception=E)
         return self
 
     def commit(self, **attrs):
@@ -932,8 +932,8 @@ class base(generic):
                 self.source.store(data)
             return self
 
-        except (StopIteration, error.ProviderError), e:
-            raise error.CommitError(self, exception=e)
+        except (StopIteration, error.ProviderError) as E:
+            raise error.CommitError(self, exception=E)
 
     def collect(self, *args, **kwds):
         global encoded_t
@@ -1212,8 +1212,8 @@ class container(base):
         try:
             res = self.at(offset, recurse=False, **kwds)
 
-        except ValueError, msg:
-            Log.info("container.at : {:s} : Non-fatal exception raised : {!r}".format(self.instance(), ValueError(msg)), exc_info=True)
+        except ValueError as E:
+            Log.info("container.at : {:s} : Non-fatal exception raised : {!r}".format(self.instance(), E), exc_info=True)
             return self
 
         # if we're already at a leaf of the trie, then no need to descend
@@ -1366,13 +1366,13 @@ class container(base):
             return super(container, self).load(**attrs)
 
         # we failed out, log what happened according to the variable state
-        except error.LoadError, e:
+        except error.LoadError as E:
             ofs, s, bs = self.getoffset(), self.size(), self.blocksize()
             self.source.seek(ofs+bs)
             if s > 0 and s < bs:
-                Log.warning("container.load : {:s} : Unable to complete read at {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, e))
+                Log.warning("container.load : {:s} : Unable to complete read at {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
             else:
-                Log.debug("container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, e))
+                Log.debug("container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
         return self
 
     def commit(self, **attrs):
@@ -1382,8 +1382,8 @@ class container(base):
 
             try:
                 return super(container, self).commit(**attrs)
-            except error.CommitError, e:
-                Log.warning("container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:{:+x}}} : {:s}".format(self.instance(), self.getoffset(), self.size(), e))
+            except error.CommitError as E:
+                Log.warning("container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:{:+x}}} : {:s}".format(self.instance(), self.getoffset(), self.size(), E))
 
         # commit all elements of container individually
         with utils.assign(self, **attrs):
@@ -1394,8 +1394,8 @@ class container(base):
                     current += n.size()
                     if current > sz: break
                 pass
-            except error.CommitError, e:
-                Log.fatal("container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs+current, self.blocksize()-current, e))
+            except error.CommitError as E:
+                Log.fatal("container.commit : {:s} : Unable to complete non-contiguous store : write stopped at {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs+current, self.blocksize()-current, E))
         return self
 
     def copy(self, **attrs):
@@ -2368,13 +2368,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -3052,7 +3052,7 @@ if __name__ == '__main__':
         class container(ptype.container): pass
         a = container().set(ptype.type,ptype.type)
         try: a.set(5,10,20)
-        except error.AssertionError,e:
+        except error.AssertionError as E:
             raise Success
         raise Failure
 

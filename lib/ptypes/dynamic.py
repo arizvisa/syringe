@@ -396,7 +396,7 @@ class union(_union_generic):
         for element in self.__object__:
             try:
                 element.load(offset=0)
-            except error.LoadError, e:
+            except error.LoadError as E:
                 Log.warn("dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}".format(self.instance(), element.instance(), element.name()))
             continue
         return self
@@ -420,8 +420,8 @@ class union(_union_generic):
         result = super(union,self).__getitem__(key)
         try:
             result.li
-        except error.UserError, e:
-            Log.warning("union.__getitem__ : {:s} : Ignoring exception {:s}".format(self.instance(), e))
+        except error.UserError as E:
+            Log.warning("union.__getitem__ : {:s} : Ignoring exception {:s}".format(self.instance(), E))
         return result
 
     def details(self):
@@ -552,13 +552,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn

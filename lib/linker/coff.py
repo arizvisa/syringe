@@ -628,7 +628,7 @@ class library(store.container, coff):
                 first = n[:n.rindex('$')]
                 index = int(n[n.rindex('$')+1:])
 
-            except ValueError, e:
+            except ValueError as E:
                 first = n
                 index = 0           # default to 0 to give section first priority
 

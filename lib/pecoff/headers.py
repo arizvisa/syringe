@@ -24,7 +24,7 @@ def LocateBase(self):
     """Return the base object of the executable. This is used to find the base address."""
     try:
         nth = self.getparent(ptype.boundary)
-    except ValueError, msg:
+    except ValueError as msg:
         nth = list(self.backtrace(fn=lambda x:x))[-1]
     return nth
 
@@ -32,7 +32,7 @@ def LocateHeader(self):
     """Return the executable sub-header. This will return the executable main header."""
     try:
         nth = self.getparent(Header)
-    except ValueError, msg:
+    except ValueError as msg:
         nth = list(self.backtrace(fn=lambda x:x))[-1]
     return nth
 

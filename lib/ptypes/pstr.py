@@ -105,8 +105,8 @@ class _char_t(pint.type):
         data = self.serialize()
         try:
             res = data.decode(self.encoding.name)
-        except UnicodeDecodeError, e:
-            raise UnicodeDecodeError(e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
+        except UnicodeDecodeError as E:
+            raise UnicodeDecodeError(E.encoding, E.object, E.start, E.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
         return res
 
     def __getvalue__(self):
@@ -449,13 +449,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn

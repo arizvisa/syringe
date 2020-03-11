@@ -124,7 +124,7 @@ class package:
             # any constant
             try:
                 return package.cache.byconst(instance)
-            except (KeyError,TypeError):
+            except (KeyError, TypeError):
                 pass
 
             # special types
@@ -139,7 +139,7 @@ class package:
             # by type
             try:
                 return package.cache.byclass(t)
-            except (KeyError,TypeError):
+            except (KeyError, TypeError):
                 pass
 
             # builtins for known-modules that can be copied from
@@ -755,7 +755,7 @@ if 'core':
                 try:
                     _ = package.cache.byinstance(v)
 
-                except (KeyError,TypeError):
+                except (KeyError, TypeError):
                     continue
                 result[k] = v
             return result
@@ -765,7 +765,7 @@ if 'core':
             for k,v in data.items():
                 try:
                     setattr(instance, k, v)
-                except (TypeError,AttributeError):
+                except (TypeError, AttributeError):
                     pass
             return instance
 
@@ -1460,13 +1460,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             print(traceback.format_exc())
             return False
         TestCaseList.append(harness)

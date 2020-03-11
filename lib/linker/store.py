@@ -620,7 +620,7 @@ class container(base):
         for st in index,sectionname,store in segments:
             try:
                 protections.add(st.getsegmentprotection(name))
-            except KeyError, e:
+            except KeyError as E:
                 pass
             continue
 

@@ -317,8 +317,8 @@ class type(_parray_generic):
                 else:
                     Log.info("type.load : {:s} : Unable to load array due to an unknown element type ({!s}).".format(self.instance(), object))
             return super(type, self).load(**attrs)
-        except error.LoadError, e:
-            raise error.LoadError(self, exception=e)
+        except error.LoadError as E:
+            raise error.LoadError(self, exception=E)
         raise error.AssertionError(self, 'type.load')
 
     def __setvalue__(self, *values, **attrs):
@@ -400,8 +400,8 @@ class terminated(type):
                         raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(n.classname()))
                     offset += size
 
-        except (Exception,error.LoadError), e:
-            raise error.LoadError(self, exception=e)
+        except (Exception, error.LoadError) as E:
+            raise error.LoadError(self, exception=E)
 
         return self
 
@@ -448,7 +448,7 @@ class infinite(uninitialized):
         n = self.new(self._object_, __name__=str(index), offset=offset)
         try:
             n.load(**attrs)
-        except (error.LoadError,error.InitializationError),e:
+        except (error.LoadError, error.InitializationError) as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), n.instance(), path))
         return n
@@ -507,14 +507,14 @@ class infinite(uninitialized):
                     offset += size
                     current += size
 
-            except (Exception,error.LoadError),e:
+            except (Exception, error.LoadError) as E:
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
                     if len(self.value):
                         Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
                     else:
                         Log.warn("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
-                raise error.LoadError(self, exception=e)
+                raise error.LoadError(self, exception=E)
         return self
 
     def loadstream(self, **attr):
@@ -550,11 +550,11 @@ class infinite(uninitialized):
                     offset += size
                     current += size
 
-            except error.LoadError, e:
+            except error.LoadError as E:
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
                     Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
-                raise error.LoadError(self, exception=e)
+                raise error.LoadError(self, exception=E)
             pass
         super(type, self).load()
 
@@ -582,8 +582,8 @@ class block(uninitialized):
                 try:
                     n = n.load()
 
-                except error.LoadError, e:
-                    #e = error.LoadError(self, exception=e)
+                except error.LoadError as E:
+                    #E = error.LoadError(self, exception=E)
                     o = current + n.blocksize()
 
                     # if we error'd while decoding too much, then let user know
@@ -594,7 +594,7 @@ class block(uninitialized):
 
                     # otherwise add the incomplete element to the array
                     elif o < self.blocksize():
-                        Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), n.instance(), e))
+                        Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), n.instance(), E))
                         self.value.append(n)
 
                     break
@@ -637,13 +637,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print('%s: %r'% (name,e))
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print('%s: %r'% (name,e))
-            except Exception,e:
-                print('%s: %r : %r'% (name,Failure(), e))
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
