@@ -117,7 +117,13 @@ import math,types,inspect
 import itertools,operator,functools
 import six
 
-from . import ptype    # XXX: recursive. yay.
+try:
+    from . import ptype
+
+except ImportError:
+    # XXX: recursive. yay.
+    import ptype
+
 from . import utils,bitmap,config,error,provider
 
 Config = config.defaults

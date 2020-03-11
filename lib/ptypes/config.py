@@ -91,7 +91,8 @@ class field:
 def namespace(cls):
     # turn all instances of things into read-only attributes
     readonly = []
-    readonly.append(property.__isabstractmethod__)
+    if hasattr(property, '__isabstractmethod__'):
+        readonly.append(property.__isabstractmethod__)
     readonly.append(property.deleter)
 
     attrs, properties, subclass = {}, {}, {}
@@ -259,7 +260,12 @@ class defaults:
         raise ValueError("Invalid source object")
     source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
-from . import ptype # recursive
+try:
+    from . import ptype
+
+except ImportError:
+    # XXX: recursive
+    import ptype
 
 ### defaults
 # logging
