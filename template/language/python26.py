@@ -107,7 +107,7 @@ class TYPE_DICT(parray.terminated):
         _fields_ = [(r_object,'k'),(r_object,'v')]
     _object_ = member
     def isTerminator(self, value):
-        return type(value['k']) is TYPE_NULL
+        return isinstance(value['k'], TYPE_NULL)
 
 @pobject.define
 class TYPE_CODE(pstruct.type):

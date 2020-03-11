@@ -711,7 +711,7 @@ if 'core':
         @classmethod
         def subclasses(cls, type):
             '''return all subclasses of type'''
-            assert __builtin__.type(type) is __builtin__.type, '%s is not a valid python type'% __builtin__.type(type)
+            assert __builtin__.isinstance(type, __builtin__.type), '%s is not a valid python type'% __builtin__.type(type)
             if type.__bases__ == ():
                 return ()
             result = type.__bases__

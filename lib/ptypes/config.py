@@ -94,7 +94,7 @@ def namespace(cls):
     for k,v in cls.__dict__.items():
         if hasattr(v, '__name__'):
             v.__name__ = '{}.{}'.format(cls.__name__,k)
-        if k.startswith('_') or type(v) is property:
+        if k.startswith('_') or isinstance(v, property):
             attrs[k] = v
         elif not six.callable(v) or isinstance(v,type):
             properties[k] = v

@@ -1029,12 +1029,12 @@ try:
         def connect(cls, remote):
             if remote is None:
                 result = cls.__PyDbgEng__.Create()
-            elif type(remote) is tuple:
+            elif isinstance(remote, tuple):
                 host, port = client
                 result = cls.__PyDbgEng__.Connect("tcp:port={}, server={}".format(port, host))
-            elif type(remote) is dict:
+            elif isinstance(remote, dict):
                 result = cls.__PyDbgEng__.Connect("tcp:port={port}, server={host}".format(**client))
-            elif isinstance(type(remote), six.string_types):
+            elif isinstance(remote, six.string_types):
                 result = cls.__PyDbgEng__.Connect(client)
             return cls(result)
 

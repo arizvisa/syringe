@@ -103,7 +103,8 @@ class raw_data_block(pbinary.struct):
 class raw_data_stream(pbinary.terminatedarray):
     _object_ = raw_data_block
     def isTerminator(self, value):
-        return type(v) is _END
+        # FIXME
+        return isinstance(v, _END)
 
 class adts_frame(pbinary.struct):
     class data_block_0(pbinary.struct):

@@ -191,14 +191,14 @@ class Members(parray.terminated):
         return False if len(self.value) < res else True
 
     def iterate(self):
-        for m in (x['Member'] for x in self if type(x) is ArchiveMember):
+        for m in (x['Member'] for x in self if isinstance(x, ArchiveMember)):
             if m.isImport():
                 continue
             yield m['Object']
         return
 
     def iterate_imports(self):
-        for m in (x['Member'] for x in self if type(x) is ArchiveMember):
+        for m in (x['Member'] for x in self if isinstance(x, ArchiveMember)):
             if m.isImport():
                 yield m['Import']
             continue

@@ -64,7 +64,7 @@ class fileserver(BaseHTTPRequestHandler):
         self.filesystem = {}
 
         for path,loc in self.root:
-            if type(loc) is not type(()):
+            if not isinstance(loc, tuple):
                 self.filesystem[path] = loc
                 continue
             if path.endswith('/') and loc[0][-1] in (os.sep,'/'):

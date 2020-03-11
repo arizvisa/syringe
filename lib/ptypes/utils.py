@@ -83,7 +83,7 @@ def mapexception(map={}, any=None, ignored=()):
     /ignored/ will allow exceptions of these types to fall through
 
     """
-    assert type(map) is dict, 'exception /map/ expected to be of a dictionary type'
+    assert isinstance(map, dict), 'exception /map/ expected to be of a dictionary type'
     assert hasattr(ignored, '__contains__'), '/ignored/ is expected to be a list of exceptions'
     if any is not None:
         assert issubclass(any,BaseException), '/any/ expected to be a solitary exception'

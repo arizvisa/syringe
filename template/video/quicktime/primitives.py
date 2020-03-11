@@ -1,4 +1,4 @@
-import ptypes
+import six, ptypes
 from ptypes import *
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -10,7 +10,7 @@ class pQTType(pQTInt):
         return "%s uninitialized"%(self.name())
 
     def __cmp__(self, x):
-        if type(x) is str:
+        if isinstance(x, six.string_types):
             return cmp('%c%c%c%c'% tuple(self.value[:4]), x)
         return cmp(int(self), x)
 

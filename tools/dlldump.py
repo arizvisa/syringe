@@ -1,6 +1,6 @@
 import itertools,logging,argparse,os
 import ptypes,pecoff,ndk
-import ctypes
+import six,ctypes
 
 def searchpath(filename):
     sep = ';' if os.sep == '\\' else ':'
@@ -115,8 +115,8 @@ if __name__ == '__main__':
 
     def out(v):
         if v is None: return '?'
-        if type(v) is bool: return 'Y' if v else 'N'
-        if type(v) in (int,long): return '%08x'% v
+        if isinstance(v, bool): return 'Y' if v else 'N'
+        if isinstance(v, six.integer_types): return '%08x'% v
         return str(v)
 
     filenamelength = max(map(len,filter(lambda x:'-' not in x,filenames)))

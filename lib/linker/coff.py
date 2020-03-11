@@ -1,6 +1,6 @@
 import os,array
 import pecoff,ptypes
-import logging,warnings
+import six,logging,warnings
 import store
 
 raise NotImplementedError(".do and .loadsymbol logic needs to be redesigned")
@@ -305,7 +305,7 @@ class executable(coff):
         exportDirectory = exportDirectory.get().l
 
         for (ofs,ordinal,name,ordinalstring,value) in exportDirectory.enumerateAllExports():
-            if type(value) is str:
+            if isinsstance(value, six.string_types):
                 externalname = self.__split_modulename(value, (ordinal,name))
                 if externalname[0] == self.modulename:
                     raise NotImplementedError("Self-referencing RVA's not implemented")
@@ -341,7 +341,7 @@ class executable(coff):
         exportDirectory = exportDirectory.get().l
         baseaddress = self.value['OptionalHeader']['ImageBase'].int()
         for (ofs,ordinal,name,ordinalstring,value) in exportDirectory.enumerateAllExports():
-            if type(value) is str:
+            if isinstance(value, six.string_types):
                 # FIXME: should we assign to externalname, because i'm still not sure how
                 #        to get the external name while staying within a module
                 continue

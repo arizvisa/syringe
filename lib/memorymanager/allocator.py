@@ -8,7 +8,7 @@ allocator.new(pid=yourpid)
 allocator.new(handle=yourhandle)
 """
 
-import sys,ctypes
+import sys,ctypes,six
 ### this is written this way in case we need to target this at PaX.
 ## logic is like:
 ##    1] address = getWriteableMemory(suggestion, length)
@@ -82,7 +82,7 @@ class Local(OSExecPageAllocator):
         return ''.join(p.contents)
 
     def write(self, address, value):
-        assert type(value) is str
+        assert isinstance(value, six.string_types)
         length = len(value)
         blockpointer = ctypes.POINTER(ctypes.c_char*length)
         v = ctypes.c_void_p(address)
@@ -281,8 +281,8 @@ if sys.platform == 'win32':
             return str(Buffer.raw)
 
         def write(self, address, value):
-            assert type(address) in (int,long), "Invalid address type {!r}".format(address)
-            assert type(value) is str
+            assert isinstance(address, six.integer_types), "Invalid address type {!r}".format(address)
+            assert isinstance(value, six.string_types)
             NumberOfBytesWritten = ctypes.c_int()
 
             res = ctypes.c_char*len(value)

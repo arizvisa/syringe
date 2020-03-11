@@ -43,7 +43,7 @@ class system(dict):
         self.scope = kwds
 
     def register(self, id, function):
-        if type(id) is not tuple:
+        if not isinstance(id, tuple):
             id = id,
         if id not in self:
             self[id] = event(self)
@@ -51,7 +51,7 @@ class system(dict):
         return function
 
     def unregister(self, id, function):
-        if type(id) is not tuple:
+        if not isinstance(id, tuple):
             id = id,
         self[id].remove(function)
         if len(self[id]) == 0:
@@ -59,14 +59,14 @@ class system(dict):
         return function
 
     def unregister_all(self, id):
-        if type(id) is not tuple:
+        if not isinstance(id, tuple):
             id = id,
         self[id].clear()
         del(self[id])
         return id
 
     def dispatch(self, id, *args, **kwds):
-        if type(id) is not tuple:
+        if not isinstance(id, tuple):
             id = id,
 
         # globals

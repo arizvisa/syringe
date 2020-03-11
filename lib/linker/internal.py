@@ -119,7 +119,7 @@ class HookedDict(AliasDict):
             self.__hooks[target] = lambda *_: False
             res = p(self, key, value)
             self.__hooks[target] = p
-            return res if type(res) is bool else True
+            return res if isinstance(res, bool) else True
         return True
 
     def __setitem__(self, key, value):

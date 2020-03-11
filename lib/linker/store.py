@@ -169,21 +169,21 @@ class symboltable(dict):
         self.__del_record(id)
 
     def __getitem__(self, key):
-        key = [(None,key), key][ type(key) is tuple and len(key) == 2 ]
+        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
         return self.__getitem__direct(key)
 
     def __setitem__(self, key, value):
-        key = [(None,key), key][ type(key) is tuple and len(key) == 2 ]
+        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
         return self.__setitem__direct(key, value)
 
     def __delitem__(self, key):
         '''Delete a symbol from the store. Warning: This will delete all aliases and hooks to the symbol as well'''
-        key = [(None,key), key][ type(key) is tuple and len(key) == 2 ]
+        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
         return self.__delitem__direct(key)
 
     ### aliases
     def __alias_expand(self, names):
-        for x in ([(None,n),n][type(n) is tuple and len(n) == 2] for n in names):
+        for x in ([(None,n),n][isinstance(key, tuple) and len(n) == 2] for n in names):
             yield x
         return
 
@@ -325,7 +325,7 @@ class base(symboltable):
 
     def __delitem__(self, key):
         '''Delete a symbol from the store. This will also delete scopes.'''
-        key = [(None,key), key][ type(key) is tuple and len(key) == 2 ]
+        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
 
         for sc,names in self.scope.iteritems():
             names.discard(key)

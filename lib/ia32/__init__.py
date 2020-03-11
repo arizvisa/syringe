@@ -79,7 +79,7 @@ def setImmediate(instruction, value):
 
 def isInstruction(value):
     '''returns true if provided a valid instruction'''
-    return type(value) is tuple and len(value) == 6
+    return isinstance(value, tuple) and len(value) == 6
 
 def promoteBranch(instruction, size):
     return { 1 : promoteBranch_8, 2 : promoteBranch_16, 4 : promoteBranch_32 }[size](instruction)

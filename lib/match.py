@@ -12,7 +12,7 @@ class base(object):
     def __cmp__(self, value):
         return (0, -1)[ not bool(self.compare(value)) ]
 
-import re
+import six, re
 class regex(base):
     '''Given a regular expression, return an object that when compared to a matching string will return equivalency'''
     regex = None
@@ -20,7 +20,7 @@ class regex(base):
         self.regex = re.compile(regularexpression, flags=flags)
 
     def compare(self, string, flags=re.I):
-        if type(string) is not str:  # if compared to against something not a string
+        if not isinstance(string, six.string_types):  # if compared to against something not a string
             return False
         return re.match(self.regex, string) is not None
 

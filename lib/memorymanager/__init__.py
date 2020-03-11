@@ -208,7 +208,7 @@ class Managed(MemoryManager):
 
         # free that pointer
         allocation = self.allocations[page]
-        if type(allocation) is tuple:
+        if isinstance(allocation, tuple):
             chunksize,bitmap = allocation
             # we're a smaller chunk
             self.__free_arena(pointer)

@@ -115,7 +115,7 @@ class dbgeng(object):
         executable = executable.replace('/', os.sep)    # fix the paths
         if args is None:
             args = executable.split(IFS, 1)
-        assert type(args) is tuple, 'args must be a tuple'
+        assert isinstance(args, tuple), 'args must be a tuple'
 
         # build commandline (for windows)
         assert len(args) > 0
