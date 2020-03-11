@@ -276,7 +276,7 @@ def memoize(*kargs,**kattrs):
     F_VARARG = 0x4
     F_VARKWD = 0x8
     F_VARGEN = 0x20
-    kargs = map(None,kargs)
+    kargs = list(kargs)
     kattrs = tuple((o,a) for o,a in sorted(kattrs.items()))
     def prepare_callable(fn, kargs=kargs, kattrs=kattrs):
         if hasattr(fn,'im_func'):
@@ -284,7 +284,7 @@ def memoize(*kargs,**kattrs):
         assert isinstance(fn,memoize.__class__), 'Callable {!r} is not of a function type'.format(fn)
         functiontype = type(fn)
         cache = {}
-        co = fn.func_code
+        co = fn.__code__
         flags,varnames = co.co_flags,iter(co.co_varnames)
         assert (flags & F_VARGEN) == 0, 'Not able to memoize {!r} generator function'.format(fn)
         argnames = itertools.islice(varnames, co.co_argcount)
@@ -322,8 +322,8 @@ def memoize(*kargs,**kattrs):
         callee.force = lambda *args,**kwargs: force(*args, **kwargs)
         callee.force.__doc__ = """Force calling the function whilst updating the memoize cache."""
 
-        callee.func_name = fn.func_name
-        callee.func_doc = fn.func_doc
+        callee.__name__ = fn.__name__
+        callee.__doc__ = fn.__doc__
         callee.callable = fn
         return callee if isinstance(callee,functiontype) else functiontype(callee)
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
