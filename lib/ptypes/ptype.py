@@ -499,11 +499,11 @@ class _base_generic(object):
         res = {}
         res.update(recurse)
         res.update(attrs)
-        for k, v in res.iteritems():
+        for k, v in six.iteritems(res):
             setattr(self, k, v)
 
         # filter out ignored attributes from the recurse dictionary
-        recurse = dict((k, v) for k, v in recurse.iteritems() if k not in ignored)
+        recurse = dict((k, v) for k, v in six.iteritems(recurse) if k not in ignored)
 
         # update self (for instantiated elements)
         self.attributes.update(recurse)
@@ -567,7 +567,7 @@ class _base_generic(object):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
         result = self.repr()
 
         # multiline
@@ -1301,13 +1301,13 @@ class container(base):
         try:
             res = self.blocksize()
         except:
-            return str().join(map(operator.methodcaller('serialize'), iter(self.value)))
+            return bytes().join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         # if there's no blocksize, then this field is empty
         if res <= 0: return ''
 
         # serialize all the elements that we currently have
-        data = str().join(map(operator.methodcaller('serialize'), iter(self.value)))
+        data = bytes().join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         try:
             parent = self.getparent(encoded_t)
@@ -1478,7 +1478,7 @@ class container(base):
                 return res
 
             #data = ''.join((x.serialize() if x.initializedQ() else '?'*blocksizeorelse(x)) for x in self.value)
-            data = str().join(n.serialize() if n.initializedQ() else '' for n in self.value)
+            data = bytes().join(n.serialize() if n.initializedQ() else '' for n in self.value)
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
@@ -1618,7 +1618,7 @@ class block(type):
             raise ValueError("block.__setslice__ : {:s} : Unable to reassign slice outside of bounds of object : ({:d}, {:d}) : {:d}".format(self.instance(), i, j, len(value)))
         self.value = v[:i] + value + v[j:]
 
-#@utils.memoize('cls', newattrs=lambda n:tuple(sorted(n.iteritems())))
+#@utils.memoize('cls', newattrs=lambda n:tuple(sorted(six.iteritems(n()))))
 def clone(cls, **newattrs):
     '''
     will clone a class, and set its attributes to **newattrs
@@ -1647,7 +1647,7 @@ def clone(cls, **newattrs):
         setattr(_clone, k, v)
 
     # filter out ignored attributes from recurse dictionary
-    recurse = dict((k, v) for k, v in recurse.iteritems() if k not in ignored)
+    recurse = dict((k, v) for k, v in six.iteritems(recurse) if k not in ignored)
 
     def slot_getter(t, name, *default):
         res = getattr(t, name, *default)
@@ -1850,7 +1850,7 @@ class definition(object):
 
         # Make a copy of the type's namespace
         ns = {}
-        for name, attribute in cls.__dict__.iteritems():
+        for name, attribute in six.iteritems(cls.__dict__):
             if recurse and builtins.isinstance(attribute, types.TypeType) and issubclass(attribute, definition):
                 ns[name] = duplicates.setdefault(identity(attribute), attribute.copy(recurse=recurse))
             else:
@@ -1874,7 +1874,7 @@ class definition(object):
 
         # Copy the cache making sure to recurse into it if necessary
         ns['cache'] = res = {}
-        for type, object in cls.cache.iteritems():
+        for type, object in six.iteritems(cls.cache):
             if recurse and builtins.isinstance(object, types.TypeType) and issubclass(object, definition):
                 res[type] = duplicates.setdefault(identity(object), object.copy(recurse=recurse))
             else:
