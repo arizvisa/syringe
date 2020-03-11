@@ -452,6 +452,15 @@ class _base_generic(object):
 
     def __init__(self, **attrs):
         """Create a new instance of object. Will assign provided named arguments to self.attributes"""
+        # As python3 seems to have broken the way that slots work, we simulate
+        # the assignment of the default values for each slot attribute by
+        # walking the __slots__ dictionary, and assigning its values to our
+        # instance.
+        for attribute, default in six.iteritems(self.__slots__):
+            setattr(self, attribute, default)
+
+        # Make a copy of our current attributes for our new instance, and then
+        # update ourself with them.
         self.attributes = {} if self.attributes is None else dict(self.attributes)
         self.__update__(attrs)
 
