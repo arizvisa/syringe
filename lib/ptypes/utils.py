@@ -1,5 +1,5 @@
 import sys,math,random
-import itertools,functools
+import functools,operator,itertools,types
 import six
 
 ## string formatting
@@ -26,7 +26,7 @@ class assign(object):
 
     def __init__(self, *objects, **attrs):
         self.objects = objects
-        self.attributes = { self.magical.get(k, k) : v for k, v in attrs.iteritems() }
+        self.attributes = { self.magical.get(k, k) : v for k, v in six.iteritems(attrs) }
 
     def __enter__(self):
         objects,attrs = self.objects,self.attributes
@@ -68,38 +68,38 @@ class padding:
     @classmethod
     def fill(cls, amount, source):
         """Returns a bytearray of ``amount`` elements, from the specified ``source``"""
-        return str().join(itertools.islice(source, amount))
+        return bytes().join(itertools.islice(source, amount))
 
 ## exception remapping
 def mapexception(map={}, any=None, ignored=()):
     """Decorator for a function that maps exceptions from one type into another.
 
-    /map/ is a dictionary describing how to map exceptions.
-        Each tuple can be one of the following formats and will map any instance of Source to Destination
-            (Source, Destination)
-            ((Source1,Source2...), Destination)
-    /any/ describes the exception to raise if any exception is raised.
-        use None to pass the original exception through
-    /ignored/ will allow exceptions of these types to fall through
-
+    ``map`` is a dictionary describing how to map exceptions. Each key can be a single item or a tuple which will then be mapped to the exception type specified in the value.
+    ``any`` describes the exception to raise if any exception is raised. None can be used to use the raised exception.
+    ``ignored`` specifies a list of exceptions to pass through unmodified
     """
-    assert isinstance(map, dict), 'exception /map/ expected to be of a dictionary type'
-    assert hasattr(ignored, '__contains__'), '/ignored/ is expected to be a list of exceptions'
-    if any is not None:
-        assert issubclass(any,BaseException), '/any/ expected to be a solitary exception'
+    if not isinstance(map, dict):
+        raise AssertionError("The type of the exception map ({!s}) is expected to be of a mappable type".format(type(map)))
+    if not hasattr(ignored, '__contains__'):
+        raise AssertionError("The type of the ignored list ({!s}) is expected to contain of exceptions".format(type(ignored)))
+    if any is not None and not issubclass(any, BaseException):
+        raise AssertionError("The type of the exception to raise ({!s}) is expected to inherit from the {!s} type".format(any, BaseException))
 
     def decorator(fn):
         def decorated(*args, **kwds):
             try:
                 return fn(*args, **kwds)
-            except:
-                t,v,_ = sys.exc_info()
 
-            for src,dst in map.iteritems():
-                if t is src or (hasattr(src,'__contains__') and t in src):
-                    raise dst(t, v)
+            except Exception:
+                type, value, traceback = sys.exc_info()
+
+            with_traceback = (lambda item: item) if sys.version_info.major < 3 else operator.methodcaller('with_traceback', traceback)
+
+            for src, dst in six.iteritems(map):
+                if type is src or (hasattr(src, '__contains__') and type in src):
+                    raise with_traceback(dst(type, value))
                 continue
-            raise v if t in ignored or any is None else any(t, v)
+            raise value if type in ignored or any is None else with_traceback(any(type, value))
 
         functools.update_wrapper(decorated, fn)
         return decorated
@@ -167,10 +167,10 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
     getRow = lambda o: hexrow(data, offset=o, **kwds)
 
     res = []
-    (ofs, data) = offset, str().join(itertools.islice(value, width))
+    (ofs, data) = offset, bytes().join(itertools.islice(value, width))
     for i in (itertools.count(1) if rows is None else six.moves.range(1, rows)):
         res.append( getRow(ofs) )
-        ofs, data = (ofs + width, str().join(itertools.islice(value, width)))
+        ofs, data = (ofs + width, bytes().join(itertools.islice(value, width)))
         if len(data) < width:
             break
         continue
