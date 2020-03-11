@@ -1224,7 +1224,8 @@ class struct(_struct_generic):
         result = self
         value, = values or ((),)
 
-        def assign((index, value)):
+        def assign(pack_indexvalue):
+            (index, value) = pack_indexvalue
             if istype(value) or ptype.isresolveable(value):
                 k = result.value[index].__name__
                 result.value[index] = result.new(value, __name__=k).a

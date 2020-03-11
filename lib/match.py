@@ -25,8 +25,9 @@ class regex(base):
         return re.match(self.regex, string) is not None
 
 class block(base):
-    def __init__(self, (offset, size)):
-        self.left,self.right = offset,offset+size
+    def __init__(self, pack_offsetsize):
+        (offset, size) = pack_offsetsize
+        self.left, self.right = offset, offset+size
 
     def compare(self, integer):
         return (integer >= self.left) and (integer < self.right)

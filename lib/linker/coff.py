@@ -62,13 +62,14 @@ class linktable(dict):
     def __init__(self, symboltable):
         self.table = symboltable
 
-    def mangle(self, (module,name)):
+    def mangle(self, pack_modulename):
         '''
         converts a symbolname to a mangled version which is used internally
         by just the linktable. this name is used to correlate symbol entries
         with the symboltable and should be assigned locally
         '''
-        return None,'%s!%s'%(module, name)
+        (module, name) = pack_modulename
+        return None, '%s!%s'%(module, name)
 
     def new_entry(self, name, address=0):
         '''allocates space for a new entry, and updates the store's symboltable scope'''
@@ -158,17 +159,19 @@ class linktable(dict):
 
 class table_eat(linktable):
     '''coff export address table'''
-    def mangle(self, (module,name)):
-        return None,'%s!%s'%(module,name)
+    def mangle(self, pack_modulename):
+        (module, name) = pack_modulename
+        return None, '%s!%s'%(module,name)
 
 class table_iat(linktable):
     '''coff import address table'''
-    def mangle(self, (module,name)):
+    def mangle(self, pack_modulename):
         '''
         convert a name tuple into an internally mangled name, because microsot
         is weird with their __imp_ name prefix, so i'll be weirder
         '''
-        return None,'__imp__<%s!%s>'% (module,name)      # include the full module name
+        (module, name) = pack_modulename
+        return None, '__imp__<%s!%s>'% (module,name)      # include the full module name
 
 class executable(coff):
     relocations = None          # cache of relocations

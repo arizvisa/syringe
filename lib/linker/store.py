@@ -144,11 +144,14 @@ class symboltable(dict):
         del(self.__hooks[id])
         return True
 
-    def __getitem__direct(self, (module,symbolname)):
-        return super(symboltable,self).__getitem__(self.aliases[(module,symbolname)])
+    def __getitem__direct(self, pack_modulesymbol):
+        (module, symbolname) = pack_modulesymbol
+        return super(symboltable,self).__getitem__(self.aliases[(module, symbolname)])
 
-    def __setitem__direct(self, (module,symbolname), value):
-        key = (module,symbolname)
+    def __setitem__direct(self, pack_modulesymbol, value):
+        (module, symbolname) = pack_modulesymbol
+
+        key = (module, symbolname)
         if key not in self.aliases:
             id = self.__new_record()
             self.aliases[key] = id
@@ -157,12 +160,14 @@ class symboltable(dict):
         super(symboltable, self).__setitem__(id, value)
 
         p = self.__hooks[id]
-        self.__hooks[id] = lambda symboltable,symbolname:True
+        self.__hooks[id] = lambda symboltable, symbolname:True
         p(self, key)
         self.__hooks[id] = p
 
-    def __delitem__direct(self, (module,symbolname)):
-        id = self.aliases[(module,symbolname)]
+    def __delitem__direct(self, pack_modulesymbol):
+        (module, symbolname) = pack_modulesymbol
+
+        id = self.aliases[(module, symbolname)]
         aliases = (k for k,v in self.aliases.items() if v == id)
         for name in aliases:
             del(self.aliases[name])
@@ -402,25 +407,27 @@ class base(symboltable):
 
         super(base,self).__setitem__(name, value)
 
-    def add(self, (module,symbolname), value, scope=GlobalScope, segment=None):
+    def add(self, pack_modulesymbol, value, scope=GlobalScope, segment=None):
         '''Store the specified symbol in the symbol store'''
-        if (module,symbolname) in self.keys():
-            raise KeyError('Symbol {!r} is already defined as {!r} in {:s}'.format(symbolname, self[module,symbolname], self.modulename))
+        (module, symbolname) = pack_modulesymbol
+
+        if (module, symbolname) in self.keys():
+            raise KeyError('Symbol {!r} is already defined as {!r} in {:s}'.format(symbolname, self[module, symbolname], self.modulename))
 
         # store our symbol and its value
-        super(base, self).__setitem__((module,symbolname), value)
+        super(base, self).__setitem__((module, symbolname), value)
 
         # store in our segment index
         try:
-            self.scopesegment[segment].add((module,symbolname))
+            self.scopesegment[segment].add((module, symbolname))
         except KeyError:
-            self.scopesegment[segment] = set([(module,symbolname)])
+            self.scopesegment[segment] = set([(module, symbolname)])
 
         # store it in our scope index
         try:
-            self.scope[scope].add((module,symbolname))
+            self.scope[scope].add((module, symbolname))
         except KeyError:
-            self.scope[scope] = set((module,symbolname))
+            self.scope[scope] = set((module, symbolname))
         return
 
     ## general functions

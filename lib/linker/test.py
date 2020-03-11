@@ -24,13 +24,14 @@ class customdict(dict):
     def __setitem__(self, key, target):
         raise KeyError, key
 
-    def add(self,(module,name),scope):
+    def add(self, pack_modulename, scope):
+        (module, name) = pack_modulename
         # dictionary where each entry has an identifier
         pass
 
 class symbols(customdict):
-    pass
-    def add((module,name), scope, target):
+    def add(self, pack_modulename, scope, target):
+        (module, name) = pack_modulename
         pass
 
 if __name__ == '__main__':

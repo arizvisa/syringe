@@ -403,14 +403,31 @@ def join(iterable):
 
 def groupby(sequence, count):
     '''Group sequence by number of elements'''
-    key, data = lambda (index, value): index / count, enumerate(sequence)
-    for key, res in itertools.groupby(data, key):
+    idata = enumerate(sequence)
+    def fkey(item):
+        (index, value) = item
+        return index / count
+
+    for key, res in itertools.groupby(idata, fkey):
         yield builtins.map(operator.itemgetter(1), res)
     return
 
+def ror(bitmap, shift=1):
+    '''
+    jspelman. he's everywhere.
+    ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
+    '''
+    (value, size) = bitmap
+    return new((((value & 2**shift - 1) << size - shift) | (value >> shift)) & 2**size - 1, size)
+
 # jspelman. he's everywhere.
-ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
-rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
+def rol(bitmap, shift=1):
+    '''
+    jspelman. he's everywhere.
+    rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
+    '''
+    (value, size) = bitmap
+    return new(((value << shift) | ((value & ((2**size - 1) ^ (2**(size - shift) - 1))) >> (size - shift))) & 2**size - 1, size)
 
 def reverse(bitmap):
     '''Flip the bit order of the bitmap'''
