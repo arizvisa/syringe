@@ -196,7 +196,7 @@ class type(_pstruct_generic):
             res = res and self.size() >= self.blocksize()
         except Exception as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), E, path), exc_info=True)
+            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
         finally:
             return res
 

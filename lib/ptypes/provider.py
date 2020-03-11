@@ -53,7 +53,7 @@ Example usage:
 import six
 import sys, os
 import itertools, operator, functools
-import importlib, array, exceptions, random as _random
+import importlib, array, random as _random
 from six.moves import builtins
 
 from . import config, utils, error
@@ -648,7 +648,7 @@ class posixfile(fileobj):
         super(posixfile, self).__init__(res)
 
     @utils.mapexception(any=error.ProviderError)
-    def open(self, filename, mode='rw', perms=0644):
+    def open(self, filename, mode='rw', perms=0o644):
         mode = str().join(sorted(set(x.lower() for x in mode)))
         flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
 
@@ -938,7 +938,7 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
 
 except OSError as E:
-    Log.info("{:s} : Unable to load 'kernel32.dll' ({:s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, E))
+    Log.info("{:s} : Unable to load 'kernel32.dll' ({!s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, E))
 
 try:
     _ = 'idaapi' in sys.modules

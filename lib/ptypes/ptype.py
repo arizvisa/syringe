@@ -1383,7 +1383,7 @@ class container(base):
             try:
                 return super(container, self).commit(**attrs)
             except error.CommitError as E:
-                Log.warning("container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:{:+x}}} : {:s}".format(self.instance(), self.getoffset(), self.size(), E))
+                Log.warning("container.commit : {:s} : Unable to complete contiguous store : write at {{{:x}:{:+x}}} : {!s}".format(self.instance(), self.getoffset(), self.size(), E))
 
         # commit all elements of container individually
         with utils.assign(self, **attrs):
@@ -1423,7 +1423,9 @@ class container(base):
         if self.value == other.value:
             return
 
-        def between(object, (left, right)):
+        def between(object, bounds):
+            (left, right) = bounds
+
             objects = provider.proxy.collect(object, left, right)
             mapped = six.moves.map(lambda n: n.getparent(*args, **kwds) if kwds else n, objects)
             for n, _ in itertools.groupby(mapped):
@@ -2931,7 +2933,9 @@ if __name__ == '__main__':
     def test_compare_type():
         a = pstr.szstring().set('this sentence is over the top!')
         b = pstr.szstring().set('this sentence is unpunctuaTed')
-        getstr = lambda s,(i,(x,_)): s[i:i+len(x)].serialize()
+        def getstr(string, result):
+            index, (self, other) = result
+            return self[index : index + len(self)].serialize()
         result = list(a.compare(b))
         c,d = result
         if getstr(a, c) == 'over the top!' and getstr(b,c) == 'unpunctuaTed\x00' and d[0] >= b.size() and getstr(a,d) == '\x00':

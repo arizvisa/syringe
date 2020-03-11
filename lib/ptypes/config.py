@@ -90,13 +90,17 @@ class field:
 
 def namespace(cls):
     # turn all instances of things into read-only attributes
-    attrs,properties,subclass = {},{},{}
+    readonly = []
+    readonly.append(property.__isabstractmethod__)
+    readonly.append(property.deleter)
+
+    attrs, properties, subclass = {}, {}, {}
     for k,v in cls.__dict__.items():
-        if hasattr(v, '__name__'):
+        if hasattr(v, '__name__') and all(not isinstance(v, t.__class__) for t in readonly):
             v.__name__ = '{}.{}'.format(cls.__name__,k)
         if k.startswith('_') or isinstance(v, property):
             attrs[k] = v
-        elif not six.callable(v) or isinstance(v,type):
+        elif not six.callable(v) or isinstance(v, type):
             properties[k] = v
         elif not hasattr(v, '__class__'):
             subclass[k] = namespace(v)
@@ -255,7 +259,7 @@ class defaults:
         raise ValueError("Invalid source object")
     source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
-import ptype # recursive
+from . import ptype # recursive
 
 ### defaults
 # logging
@@ -268,7 +272,7 @@ log.addHandler(res)
 del(res,log)
 
 # general integers
-defaults.integer.size = long(math.log((sys.maxsize+1)*2,2)/8)
+defaults.integer.size = int(math.log((sys.maxsize+1)*2,2)/8)
 defaults.integer.order = byteorder.littleendian if sys.byteorder == 'little' else byteorder.bigendian if sys.byteorder == 'big' else None
 
 # display

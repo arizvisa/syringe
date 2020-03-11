@@ -421,7 +421,7 @@ class union(_union_generic):
         try:
             result.li
         except error.UserError as E:
-            Log.warning("union.__getitem__ : {:s} : Ignoring exception {:s}".format(self.instance(), E))
+            Log.warning("union.__getitem__ : {:s} : Ignoring exception {!s}".format(self.instance(), E))
         return result
 
     def details(self):
