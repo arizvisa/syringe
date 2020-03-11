@@ -1649,8 +1649,14 @@ def clone(cls, **newattrs):
     # filter out ignored attributes from recurse dictionary
     recurse = dict((k, v) for k, v in recurse.iteritems() if k not in ignored)
 
+    def slot_getter(t, name, *default):
+        res = getattr(t, name, *default)
+        if builtins.isinstance(res, property.fset.__class__):
+            return t.__slots__.get(name, *default)
+        return res
+
     if hasattr(_clone, 'attributes'):
-        _clone.attributes = getattr(_clone, 'attributes', None) or {}
+        _clone.attributes = slot_getter(_clone, 'attributes', None) or {}
         _clone.attributes.update(recurse)
     return _clone
 
