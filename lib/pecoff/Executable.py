@@ -565,7 +565,7 @@ if __name__ == '__main__':
     else:
         filename = 'obj/kernel32.dll'
         for x in range(10):
-            print filename
+            print(filename)
             try:
                 v = Executable.open(filename)
                 break
@@ -577,13 +577,13 @@ if __name__ == '__main__':
     exports = v['DataDirectory'][0]
     while exports['Address'].int() != 0:
         exports = exports['Address'].d.l
-        print exports.l
+        print(exports.l)
         break
 
     imports = v['DataDirectory'][1]
     while imports['Address'].int() != 0:
         imports = imports['Address'].d.l
-        print imports.l
+        print(imports.l)
         break
 
     relo = v['DataDirectory'][5]['Address'].d.l
@@ -592,7 +592,7 @@ if __name__ == '__main__':
     data = section.data().serialize()
     for item in relo.filter(section):
         for _, r in item.getrelocations(section):
-            print item
+            print(item)
             data = r.relocate(data, 0, section)
         continue
 

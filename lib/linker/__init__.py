@@ -46,7 +46,7 @@ if __name__ == '__main__':
     if False:
         self = coff.object.open('%s/obj/python-test.obj'%root)
 
-        print self.keys()
+        print(self.keys())
         segments = [
             ('.data', 0xccccc000),
             ('.text', 0xaaaaa000),
@@ -56,12 +56,12 @@ if __name__ == '__main__':
         self['__imp_PyRun_SimpleStringFlags'] = 0xdddddddd
         self['__imp_Py_Finalize'] = 0xdddddddd
 
-        print self.listsegments()
+        print(self.listsegments())
         for name,baseaddress in segments:
             self[name] = baseaddress
 
         for name,baseaddress in segments:
-            print '-'*70
+            print('-'*70)
             ## get useful shit
             data = self.getsegment(name)
             globals = self.getglobalsbysegmentname(name)
@@ -69,14 +69,14 @@ if __name__ == '__main__':
             externals = self.getexternals()
 
             ## output it
-            print 'globals', globals
-            print 'locals', locals
-            print 'externals', externals
+            print('globals', globals)
+            print('locals', locals)
+            print('externals', externals)
 
             ## relocate segment
             r = self.relocatesegment(name, data)
-            print repr(r)
-            print ptypes.utils.hexdump(r, offset=baseaddress)
+            print(repr(r))
+            print(ptypes.utils.hexdump(r, offset=baseaddress))
         pass
 
     # smoke test for coff.executable
@@ -85,7 +85,7 @@ if __name__ == '__main__':
         #self.open('../obj/test.exe')
         self = coff.executable.open('~/../../windows/system32/python26.dll')
 
-        print self.listsegments()
+        print(self.listsegments())
 
         # assign default segment bases
         ofs = 0
@@ -104,7 +104,7 @@ if __name__ == '__main__':
         out = file(filename, 'wb')
 
         for name in self.listsegments():
-            print '-'*70
+            print('-'*70)
             ## get useful shit
             data = self.getsegment(name)
             globals = self.getglobalsbysegmentname(name)
@@ -112,7 +112,7 @@ if __name__ == '__main__':
             externals = self.getexternals()
 
             ## relocate segment
-            print 'relocating %s to %08x'% (name, self[name])
+            print('relocating %s to %08x'% (name, self[name]))
             r = self.relocatesegment(name, data)
             out.write(r)
 
@@ -147,21 +147,21 @@ if __name__ == '__main__':
         for x in self.getexternals():
             self[x] = 0x41414141
         data = self.relocatesegment('.rdata', data, 0xdddddddd)
-#        print repr(data)
+#        print(repr(data))
 
         out = file('out/blah.bin', 'wb')
         out.write(data)
         out.close()
 
     if False:
-        print 'opening file'
+        print('opening file')
         self = pecoff.Archive.open('~/../../python26/libs/python26.lib')
-        print 'fetching members'
+        print('fetching members')
         for i in self.fetchmembers():
-            print repr(i.load())
-        print 'fetching imports'
+            print(repr(i.load()))
+        print('fetching imports')
         for i in self.fetchimports():
-            print repr(i)
+            print(repr(i))
         pass
 
     if False:
@@ -170,33 +170,33 @@ if __name__ == '__main__':
         for n in names:
             self[n] = 0x0abcdef
 
-#        print self.getexternals()
-#        print self.getlocals()
+#        print(self.getexternals())
+#        print(self.getlocals())
 
-        print self.listsegments()
+        print(self.listsegments())
 
         data = self.getsegment('.idata')
-        print self.getglobals()
+        print(self.getglobals())
 
         data = self.relocatesegment('.idata', data, 0xcccccccc)
-        print self.getglobals()
+        print(self.getglobals())
 
-        print ptypes.utils.hexdump(data,offset=0xcccccccc)
+        print(ptypes.utils.hexdump(data,offset=0xcccccccc))
 
     if False:
         # this is in shell32.dll
         fullname = 'shlwapi.dll!Ordinal546'
         module,name = fullname.split('!')
-        print name
+        print(name)
 
-        print 'linker:'
-        print fullname in self.keys()
-        print fullname,self[fullname]
+        print('linker:')
+        print(fullname in self.keys())
+        print(fullname,self[fullname])
 
-        print 'store:'
+        print('store:')
         ugh = lookup[module]
-        print name in ugh.keys()
-        print name,ugh[name]
+        print(name in ugh.keys())
+        print(name,ugh[name])
 
     if False:
         dllname = '~/../../windows/syswow64/user32.dll'
@@ -205,21 +205,21 @@ if __name__ == '__main__':
 #        raise NotImplementedError("Need to figure out how to import ordinal numbers, and enumerate import modules')
         for n in self.getglobals():
             if self[n]:
-                print n, repr(self[n])
+                print(n, repr(self[n]))
             continue
         pass
 
     if False:
-        print '-'*50
-        print 'loading .obj file'
+        print('-'*50)
+        print('loading .obj file')
         obj = coff.object.open('~/../../work/syringe/obj/test.obj')
 
-        print '-'*50
-        print 'loading .lib file'
+        print('-'*50)
+        print('loading .lib file')
         lib = coff.library.open('~/../../python26/libs/python26.lib')
 
-        print '-'*50
-        print 'linking them'
+        print('-'*50)
+        print('linking them')
         self = linker.new()
         self.add(obj)
         self.add(lib)
@@ -266,11 +266,11 @@ if __name__ == '__main__':
 
         lookup = {}
         for name in dllnames:
-            print 'loading .dll file %s'% name
+            print('loading .dll file %s'% name)
             dll = coff.executable.open('~/../../windows/syswow64/%s'%name)
             lookup[dll.modulename] = dll
 
-            print 'linking .dll file %s'% name
+            print('linking .dll file %s'% name)
             self.add(dll)
         pass
 
@@ -292,9 +292,9 @@ if __name__ == '__main__':
             address += 0x1000000
 
         # output
-        print 'segment->(name,address)'
+        print('segment->(name,address)')
         for n in segmentnames:
-            print repr( (n, hex(segmentaddress[n])) )
+            print(repr( (n, hex(segmentaddress[n])) ))
 
         # collect segments
         for n in segmentnames:
@@ -302,9 +302,9 @@ if __name__ == '__main__':
             self[n] = segmentaddress[n]
 
         # output
-        print 'segment->(name,size)'
+        print('segment->(name,size)')
         for n in segmentnames:
-            print (n,len(segments[n]))
+            print((n,len(segments[n])))
 
         # join things
 #        self['__imp__Py_Initialize'] = self['python26.dll!Py_Initialize']  #XXX
@@ -313,23 +313,23 @@ if __name__ == '__main__':
 
         # relocations
         for n in segmentnames:
-            print 'relocating segment',n
+            print('relocating segment',n)
             segments[n] = self.relocatesegment(n, segments[n], segmentaddress[n])
 
         # output of .text
         from ptypes.utils import hexdump
-#        print hexdump(segments['.text'], offset=segmentaddress['.text'])
+#        print(hexdump(segments['.text'], offset=segmentaddress['.text']))
 
     if False:
-        print '-'*50
+        print('-'*50)
         for n in self.keys():
             if self[n] is None:
-                print n, repr(self[n])
+                print(n, repr(self[n]))
             continue
 
     if False:
-        print '-'*50
+        print('-'*50)
         for n in self.keys():
             if not n.startswith('__imp__') and '!' not in n:
-                print n, hex(self[n])
+                print(n, hex(self[n]))
             continue

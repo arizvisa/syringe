@@ -118,7 +118,7 @@ class IMAGE_REL_I386(pint.enum, uint16):
         # XXX: will these relocations work?
         elif relocationtype == 6:                                           # 32-bit VA
             result = (value+result)
-        #    print '>',name,hex(result),targetsectionname,hex(namespace[targetsectionname])
+        #    print('>',name,hex(result),targetsectionname,hex(namespace[targetsectionname]))
         elif relocationtype == 0x14:                                        # 32-bit relative displacement
             result = (value+result+4) - (currentva)
             #raise NotImplementedError(relocationtype)
@@ -357,7 +357,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
 
                 except KeyError:
                     currentrva = imagebase+currentva
-                    print "Relocation target at {:#x} to {:#x} lands outside section space".format(currentrva, targetrva)
+                    print("Relocation target at {:#x} to {:#x} lands outside section space".format(currentrva, targetrva))
 
                     # XXX: is it possible to hack support for relocations to the
                     #      'mz' header into this? that only fixes that case...but why else would you legitimately need something outside a section?

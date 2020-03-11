@@ -991,7 +991,7 @@ if 'custom':
         raise ImportError
 
     except ImportError:
-        print '_sre serialization not really completed yet'
+        print('_sre serialization not really completed yet')
 
 if 'immutable':
     @package.cache.register_type
@@ -1461,13 +1461,13 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
-            print traceback.format_exc()
+                print('%s: %r : %r'% (name,Failure(), e))
+            print(traceback.format_exc())
             return False
         TestCaseList.append(harness)
         return fn
@@ -1929,13 +1929,13 @@ if __name__ == 'bootstrap':
     t1 = set()
     t1.update(n for n,_ in st.cons_data.values())
     t1.update(n for n,_ in st.inst_data.values())
-    print len(t1)
+    print(len(t1))
     [st.store(fu.package.cache.byid(n)) for n in t]
     t2 = set()
     t2.update(n for n,_ in st.cons_data.values())
     t2.update(n for n,_ in st.inst_data.values())
-    print len(t2)
-    print sum(map(len,(fu.package.cache.registration.id,fu.package.cache.registration.type,fu.package.cache.registration.const)))
+    print(len(t2))
+    print(sum(map(len,(fu.package.cache.registration.id,fu.package.cache.registration.type,fu.package.cache.registration.const))))
     t = t2
 
     mymethod = type(fu.function.new)
@@ -1994,8 +1994,8 @@ if __name__ == 'bootstrap':
     #    if any(len(x.func_dict) != 0 for x in (cons,inst)):
     #        raise Exception, n
     #    for attr in ['func_code', 'func_name']:
-    #        print n, attr, repr(getattr(cons, attr))
-    #        print n, attr, repr(getattr(inst, attr))
+    #        print(n, attr, repr(getattr(cons, attr)))
+    #        print(n, attr, repr(getattr(inst, attr)))
 
     consdata = st.cons_data
     instances = {}

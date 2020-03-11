@@ -34,5 +34,5 @@ class block(base):
 if __name__ == '__main__':
     import match
 
-    print 'hiihello' == match.regex('.*hello$')
+    print('hiihello' == match.regex('.*hello$'))
 

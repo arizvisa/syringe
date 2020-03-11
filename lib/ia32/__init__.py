@@ -323,13 +323,13 @@ if __name__ == '__main__':
                 res = fn(**kwds)
 
             except Success:
-                print '%s: Success'% name
+                print('%s: Success'% name)
                 return True
 
             except Failure,e:
                 pass
 
-            print '%s: Failure'% name
+            print('%s: Failure'% name)
             return False
 
         TestCaseList.append(harness)
@@ -339,36 +339,36 @@ if __name__ == '__main__':
     if False:
         code = '\xE8\x72\xFB\xFF\xFF'
         insn = decode(code)
-        print 'rel',isRelativeCall(insn)
+        print('rel',isRelativeCall(insn))
 
     # register
     # 11 010 110
     if False:
         code = '\xff\xd6'
         insn = decode(code)
-        print 'reg',isRegisterCall(insn)
+        print('reg',isRegisterCall(insn))
 
     # memory
     # 00 010 101
     if False:
         code = '\xFF\x15\xC0\x52\x5C\x00'
         insn = decode(code)
-        print 'mem',isMemoryCall(insn)
+        print('mem',isMemoryCall(insn))
 
     # forgot
     # 00 100 101
     if False:
         code = '\xFF\x25\xB0\x51\x5C\x00'
         insn = decode(code)
-        print repr(insn)
-        print 'mem',isBranch(insn),isMemoryBranch(insn)
+        print(repr(insn))
+        print('mem',isBranch(insn),isMemoryBranch(insn))
 
     if False:
         code = '\x0f\x0f\xe1\xb4'
         insn = decode(code)
-        print getOpcode(insn) == '\x0f\x0f'
-        print getModrm(insn) == '\xe1'
-        print getImmediate(insn) == '\xb4'
+        print(getOpcode(insn) == '\x0f\x0f')
+        print(getModrm(insn) == '\xe1')
+        print(getImmediate(insn) == '\xb4')
 
     @TestCase
     def relative_0():
@@ -436,8 +436,8 @@ if __name__ == '__main__':
         b = promoteBranch_16(a)
         if a == b:
             raise Success
-        print repr(a)
-        print repr(b)
+        print(repr(a))
+        print(repr(b))
         return
 
     @TestCase
@@ -467,8 +467,8 @@ if __name__ == '__main__':
         a = promoteBranch_16(a)
         if a == b:
             raise Success
-        print repr(a)
-        print repr(b)
+        print(repr(a))
+        print(repr(b))
         return
 
     @TestCase
@@ -495,7 +495,7 @@ if __name__ == '__main__':
         res = getRelativeAddress(source, n)
 
         if res != target:
-            print '%x -- %x != %x'% (source,res,target)
+            print('%x -- %x != %x'% (source,res,target))
             raise Failure
         raise Success
 
@@ -565,7 +565,7 @@ if __name__ == '__main__':
         n = ia32.promoteBranch_32( ia32.decode(code) )
         if ''.join(n) == '\xe9\xed\xff\xff\xff':
             raise Success
-        print repr(decode(code)), repr(n)
+        print(repr(decode(code)), repr(n))
         raise Failure
 
     @TestCase
@@ -581,20 +581,20 @@ if __name__ == '__main__':
     if False:
         code = '\x0f\x85\x7f\xff\xff\xff'
         n = setRelativeAddress(0, decode(code), -5)
-        print hex(getRelativeAddress(0, n))
+        print(hex(getRelativeAddress(0, n)))
         n = setRelativeAddress(0, decode(code), 0x2)
-        print repr(n)
-        print hex(getRelativeAddress(0, n))
-        print hex(decodeInteger(getImmediate(n)) + length(n))
+        print(repr(n))
+        print(hex(getRelativeAddress(0, n)))
+        print(hex(decodeInteger(getImmediate(n)) + length(n)))
 
     if False:
         code = '\x77\x08'
         code = '\x0f\x87\x04\x00\x00\x00'
         n = decode(code)
         x = promoteBranch_8(n)
-        print repr(x)
+        print(repr(x))
 
-        print '%x:%x -> %x'% (0x70, 0x72, 0x7a)
+        print('%x:%x -> %x'% (0x70, 0x72, 0x7a))
 
     @TestCase
     def Test_10():
@@ -614,7 +614,7 @@ if __name__ == '__main__':
         source = iter(res[0].decode('hex'))
 
         import ia32
-        print repr(ia32.consume(source))
+        print(repr(ia32.consume(source)))
         raise NotImplementedError
 
 

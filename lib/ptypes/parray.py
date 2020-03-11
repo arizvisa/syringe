@@ -77,10 +77,10 @@ Example usage:
     instance.load()
 
     # fetch an element from the array
-    print instance[index]
+    print(instance[index])
 
     # print the length of the array
-    print len(instance)
+    print(len(instance))
 """
 import six
 import itertools,operator,functools
@@ -638,12 +638,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn
@@ -668,7 +668,7 @@ if __name__ == '__main__':
     def function(self):
 #        if len(self.value) > 0:
 #            self[0].load()
-#            print self[0]
+#            print(self[0])
         return random.sample([byte, word, dword, function2], 1)[0]
 
     def function2(self):
@@ -681,12 +681,12 @@ if __name__ == '__main__':
             _object_ = dword
 
         x = myarray()
-#        print x
-#        print x.length,len(x), x.value
+#        print(x)
+#        print(x.length,len(x), x.value)
         x.source = provider.string('AAAA'*15)
         x.l
-#        print x.length,len(x), x.value
-#        print "{!r}".format(x)
+#        print(x.length,len(x), x.value)
+#        print("{!r}".format(x))
         if len(x) == 5 and x[4].serialize() == 'AAAA':
             raise Success
 
@@ -700,7 +700,7 @@ if __name__ == '__main__':
         x.source = provider.memory()
         x.setoffset(id(x))
         x.load()
-#        print x
+#        print(x)
 
         if len(x) == 16:
             raise Success

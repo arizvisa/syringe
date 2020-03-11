@@ -584,7 +584,7 @@ class object(coff):
         # do each relocation entry
         for r in relocations.l:
             sym = symboltable[ int(r['SymbolTableIndex']) ]
-            print r, sym
+            print(r, sym)
             data = r.relocate(data, symboltable, self)
         return data
 
@@ -641,7 +641,7 @@ class library(store.container, coff):
     def do_iat(self):
         logging.info('%s : doing iat'% self.name())
         ofs = 0
-#        print self.listsegments()
+#        print(self.listsegments())
         for module,symbol,ordinal,type in self.value.fetchimports():
             assert symbol[0] == '_', 'malformed import library symbol name?'
             name = module,symbol[1:]
@@ -706,8 +706,8 @@ if __name__ == '__main__':
 
     if False:
         a = coff.object.open('~/work/syringe/obj/test.obj')
-        print len(a.globals) == 3
-        print len(a.externals) == 3
+        print(len(a.globals) == 3)
+        print(len(a.externals) == 3)
 
     if False:
         import ptypes,pecoff
@@ -716,11 +716,11 @@ if __name__ == '__main__':
         z = pecoff.Archive.File()
         z=z.l
         for x in z.fetchimports():
-            print x
+            print(x)
 
     if False:
         z = coff.library.open('~/python26/libs/python26.lib')
-        print z.stores[2]
+        print(z.stores[2])
     #    z['.idata']=5
 
     if False:
@@ -737,10 +737,10 @@ if __name__ == '__main__':
 #        z = coff.table_eat(self)
         z = coff.table_iat(self)
 
-#        print type(z)
-#        print z.table
+#        print(type(z))
+#        print(z.table)
 
-#        print z
+#        print(z)
 #        z.add_export( (None,'somesymbol1') )
 #        z.add_forward( ('kernel32.dll', 'Whee'), [(None,'remote1')] )
 #        a=(None,'remote1')
@@ -769,5 +769,5 @@ if __name__ == '__main__':
     if True:
         import coff
         a = coff.object.open('../../obj/python-test.obj')
-        print a.do()
-        print a
+        print(a.do())
+        print(a)

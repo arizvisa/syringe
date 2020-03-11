@@ -649,7 +649,7 @@ class container(base):
             externals = store.getexternals()
 
             # merge in externals
-            print index,store,externals
+            print(index,store,externals)
             store.merge(self, externals)
 
             # grab chunk
@@ -690,18 +690,18 @@ if __name__ == '__main__':
         z = store.symboltable()
         z['test'] = True
         z['blah'] = False
-        print z
-        print z.aliases
+        print(z)
+        print(z.aliases)
 
-        print 'whee -> blah'
+        print('whee -> blah')
         z.alias('whee', 'blah')
-        print 'whoo -> test'
+        print('whoo -> test')
         z.alias('whoo', 'test')
 
-        print 'test',z['test']
-        print 'blah',z['blah']
-        print 'whee',z['whee']
-        print 'whoo',z['whoo']
+        print('test',z['test'])
+        print('blah',z['blah'])
+        print('whee',z['whee'])
+        print('whoo',z['whoo'])
 
     if False:
         import random
@@ -720,8 +720,8 @@ if __name__ == '__main__':
         for x in externals:
             b[x] = address()
 
-        print a.merge(b, a.getglobals()+a.getexternals())
-        print a['GameInit'] == b['GameInit']
+        print(a.merge(b, a.getglobals()+a.getexternals()))
+        print(a['GameInit'] == b['GameInit'])
 
     if False:
         import random
@@ -741,7 +741,7 @@ if __name__ == '__main__':
 
         def updatesymbols(store, name):
             o = store[name]
-            print 'hook called with base %s:%x'%(name,o)
+            print('hook called with base %s:%x'%(name,o))
             for i,x in enumerate(codes):
                 store[x] = o + 1000*i
             return
@@ -752,15 +752,15 @@ if __name__ == '__main__':
         a['.rdata'] = 0x4000
         a.hook('.rdata', updatesymbols)
 
-        print a
+        print(a)
         a['.rdata'] = 0
-        print a
+        print(a)
 
     if False:
         a = store.symboltable()
         b = {'_main':100,'_exit':400}
         a.updatesymbols(b)
-        print a
+        print(a)
         c = {'_main':0xdeaddead,'_exit':0}
         a.updatesymbols(c, ['_exit'])
 
@@ -781,15 +781,15 @@ if __name__ == '__main__':
         globally = (a.modulename,'globally')
         externally = (a.modulename,'externally')
 
-        print b[locally] == 0x10101010
-        print b[globally] == 0x02020202
-        print b[externally] == 0x30303030
+        print(b[locally] == 0x10101010)
+        print(b[globally] == 0x02020202)
+        print(b[externally] == 0x30303030)
 
         scopes = [store.LocalScope, store.GlobalScope, store.ExternalScope]
 
-        print locally in b.scope[store.LocalScope] and locally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope])
-        print globally in b.scope[store.GlobalScope] and globally not in (b.scope[store.LocalScope], b.scope[store.ExternalScope])
-        print externally in b.scope[store.ExternalScope] and externally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope])
+        print(locally in b.scope[store.LocalScope] and locally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope]))
+        print(globally in b.scope[store.GlobalScope] and globally not in (b.scope[store.LocalScope], b.scope[store.ExternalScope]))
+        print(externally in b.scope[store.ExternalScope] and externally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope]))
 
     if False:
         import coff
@@ -797,10 +797,10 @@ if __name__ == '__main__':
         b = coff.object.open('../../obj/test.obj')
         a.addstore(b)
 
-        print a.listsegments() == b.listsegments()
+        print(a.listsegments() == b.listsegments())
 
-#        print a.getglobals()
-#        print b.getglobals()
+#        print(a.getglobals())
+#        print(b.getglobals())
 
     if False:
         import coff

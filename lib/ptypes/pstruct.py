@@ -34,7 +34,7 @@ Example usage:
     instance.load()
 
     # fetch a particular sub-element
-    print instance['name1']
+    print(instance['name1'])
 
     # assign a sub-element
     instance['name2'] = new-instance
@@ -401,12 +401,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn

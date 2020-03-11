@@ -5,11 +5,11 @@ if False:
     b = linker.coff.executable.open('~/../../windows/system32/kernel32.dll')
     c = linker.coff.executable.open('~/../../windows/system32/user32.dll')
     d = linker.coff.executable.open('~/../../windows/system32/msvcr100.dll')
-    print a
+    print(a)
     u32,wsprintf = list(a.externals)[0]
-    print c[None,wsprintf]
+    print(c[None,wsprintf])
 
-    print a,b,c,d
+    print(a,b,c,d)
 
 # all of these are static classes
 class Scope(object):

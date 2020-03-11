@@ -2091,11 +2091,11 @@ if __name__ == '__main__':
     # grab process handle
     if len(sys.argv) > 1:
         pid = int(sys.argv[1])
-        print "opening process {:d}".format(pid)
+        print("opening process {:d}".format(pid))
         handle = openprocess(pid)
     else:
         handle = getcurrentprocess()
-        print 'using current process'
+        print('using current process')
     ptypes.setsource(ptypes.provider.WindowsProcessHandle(handle))
 
     # grab peb
@@ -2107,7 +2107,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         heaphandle = eval(sys.argv[2])
         for x in z['ProcessHeaps'].d.l:
-            print hex(x.int()), hex(heaphandle)
+            print(hex(x.int()), hex(heaphandle))
             if x.int() == heaphandle:
                 b = x
                 break
@@ -2119,29 +2119,29 @@ if __name__ == '__main__':
 
     a = ndk.heaptypes.HEAP(offset=b.getoffset())
     a=a.l
-#    print a.l
+#    print(a.l)
 #    b = a['Segment']
-#    print a['BlocksIndex']
-#    print a['UCRIndex']
-#    print list(b.walk())
+#    print(a['BlocksIndex'])
+#    print(a['UCRIndex'])
+#    print(list(b.walk()))
 
     c = a['FreeLists']
 
 #    list(c.walk())
  #   x = c['Flink'].d.l
 
- #   print x['Value']['a']
+ #   print(x['Value']['a'])
  #   x =  x['Entry']['Flink'].d.l
-#    print [x for x in c.walk()]
-#    print a['BlocksIndex']
+#    print([x for x in c.walk()])
+#    print(a['BlocksIndex'])
 
-#    print a['FrontEndHeap'].d.l
+#    print(a['FrontEndHeap'].d.l)
 #
-#    print a['CommitRoutine']
+#    print(a['CommitRoutine'])
 
-#    print c['Flink'].d.l
+#    print(c['Flink'].d.l)
 
-#    print list(c.walk())
-#    print c['Flink'].d.l['Flink'].d.l['Flink'].d.l
+#    print(list(c.walk()))
+#    print(c['Flink'].d.l['Flink'].d.l['Flink'].d.l)
 #    d = [x for x in c.walk()]
-#    print help(d[1])
+#    print(help(d[1]))

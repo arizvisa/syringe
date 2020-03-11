@@ -1,4 +1,4 @@
-#instruction = (prefix, opcode, modrm, sib, disp, immediate)
+#instruction = (prefix( opcode, modrm, sib, disp, immediate))
 from ptypes import bitmap
 import optable,typesize
 
@@ -101,8 +101,8 @@ def consume(iterable):
 
             elif rm == 4:
                 sib = iterable.next()
-                #print 'modrm',hex(ord(modrm)),extractmodrm(ord(modrm))
-                #print 'sib',hex(ord(sib)),extractsib(ord(sib))
+                #print('modrm',hex(ord(modrm)),extractmodrm(ord(modrm)))
+                #print('sib',hex(ord(sib)),extractsib(ord(sib)))
 
                 displength = getdisp32length(modrm, prefixes)   # XXX: i feel like this was hacked in
                 if displength == 0:
@@ -110,7 +110,7 @@ def consume(iterable):
                 pass
             pass
         pass
-#    print 'disp',displength
+#    print('disp',displength)
     disp = ''.join([x for i,x in zip(xrange(displength), iterable)])   #
 
     ## immediates
@@ -154,8 +154,8 @@ if __name__ == '__main__':
 
     def checkinsn():
         if len(''.join(insn)) != len(code):
-            print repr(code)
-            print repr(insn)
+            print(repr(code))
+            print(repr(insn))
             raise ValueError
         return
     def checklist():
@@ -169,11 +169,11 @@ if __name__ == '__main__':
         code = "55 89 e5 83 ec 08 a1 48 26 05 08 85 c0 74 12 b8 00 00 00 00 85 c0 74 09 c7 04 24 48 26 05 08 ff d0 c9 c3"
         code = ''.join([chr(int(x,16)) for x in code.split(' ')])
 
-        print decoder.consume('\xff\x15\xe0\x11\xde\x77')
+        print(decoder.consume('\xff\x15\xe0\x11\xde\x77'))
     #    import optable
     #    opcode = '\xff'
     #    lookup = optable.Lookup(opcode)
-    #    print optable.HasImmediate(lookup)
+    #    print(optable.HasImmediate(lookup))
 
     #    mov edi, [esp+10]
     #    mov [esp], ebx
@@ -183,7 +183,7 @@ if __name__ == '__main__':
         code = ''.join([chr(int(x,16)) for x in code.split(' ')])
 
         x = iter(code)
-        print repr(''.join(decoder.consume(x)))
+        print(repr(''.join(decoder.consume(x))))
 
         # i think these should be paired together, and should return a tuple of opcode, argument, type
         labels = ('prefixes', 'instruction', 'modrm', 'disp', 'sib', 'imm')
@@ -195,7 +195,7 @@ if __name__ == '__main__':
             list.append(res)
             code = code[ len(''.join(opcode)) : ]
 
-        print '\n'.join(['%s -> %d'% (repr(x), len(''.join(x.values()))) for x in list])
+        print('\n'.join(['%s -> %d'% (repr(x), len(''.join(x.values()))) for x in list]))
 
     if True:
         code = '3D 5D 74 D1 05'
@@ -248,11 +248,11 @@ if __name__ == '__main__':
     if False:
         code = '\x6b\xc0\x2c'
         lookup = optable.Lookup('\x6b')
-#        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
+#        print(optable.HasModrm(lookup),optable.HasImmediate(lookup))
 
         modrm = '\xc0'
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
-#        print mod,reg,rm
+#        print(mod,reg,rm)
 
     if True:
         list = ['f7 d8', '1a c0', '68 80 00 00 00']
@@ -278,10 +278,10 @@ if __name__ == '__main__':
         code = '\xa0\x50\xc0\xa8\x6f' + '\xa8\x08' + '\x75\x18'
         source = iter(code)
         insn = decoder.consume(source)
-#        print insn
+#        print(insn)
 
         lookup = optable.Lookup('\xa0')
-#        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
+#        print(optable.HasModrm(lookup),optable.HasImmediate(lookup))
 
     if True:
         import struct
@@ -292,32 +292,32 @@ if __name__ == '__main__':
             a, = struct.unpack(structed[size], n)
             return a == number
 
-        print '1 byte'
+        print('1 byte')
         for n in xrange(-0x80, 0x7f):
             res = test(n, 1)
             if res is True:
                 continue
-            print n, 1
+            print(n, 1)
 
-        print '2 byte'
+        print('2 byte')
         for n in xrange(-0x8000, 0x7fff):
             res = test(n, 2)
             if res is True:
                 continue
-            print n, 1
+            print(n, 1)
 
     if False:
-        print '4 byte'
+        print('4 byte')
         for n in xrange(-0x80000000, 0x7fffffff):
             res = test(n, 4)
             if res is True:
                 continue
-            print n, 1
+            print(n, 1)
 
     if True:
         code = "\x9b\xd9\x7d\xfc"
         source = iter(code)
         insn = decoder.consume(source)
-        print insn
+        print(insn)
         lookup = optable.Lookup('\x9b')
-        print optable.HasModrm(lookup),optable.HasImmediate(lookup)
+        print(optable.HasModrm(lookup),optable.HasImmediate(lookup))

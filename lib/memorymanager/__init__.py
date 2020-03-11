@@ -258,18 +258,18 @@ if False and __name__ == '__main__':
         res = v.alloc(0x400)
         list.append(res)
 
-    print '\n'.join(map(hex,list))
+    print('\n'.join(map(hex,list)))
 
-    print '=' * 80
+    print('=' * 80)
     for n in list:
-        print 'free(%x)'% n
+        print('free(%x)'% n)
         v.free(n)
 
-    print '.' * 80
+    print('.' * 80)
     page = v.alloc(0x4000)
-    print 'malloc(0x4000) = %x'% page
+    print('malloc(0x4000) = %x'% page)
     v.free(page)
-    print 'free(%x)'% page
+    print('free(%x)'% page)
 
 #    debugger.detach()
 
@@ -279,4 +279,4 @@ if __name__ == '__main__':
 
     a = mm.alloc(84)
     b = mm.alloc(88)
-    print hex(a),hex(b)
+    print(hex(a),hex(b))

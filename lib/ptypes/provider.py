@@ -1280,12 +1280,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn
@@ -1564,7 +1564,7 @@ if __name__ == '__main__':
             p = multiprocessing.Process(target=stringspin, args=(q,string,))
             p.start()
             address = q.get()
-            print "{:#x}".format(address)
+            print("{:#x}".format(address))
 
             src = provider.WindowsProcessId(p.pid)
             src.seek(address)
@@ -1623,8 +1623,8 @@ if __name__ == '__main__' and 0:
     a = provider.virtual()
     a.available = [0,6]
     a.data = {0:'hello',6:'world'}
-    print a.available
-    print a.data
+    print(a.available)
+    print(a.data)
 
     @TestCase
     def test_first():

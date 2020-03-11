@@ -337,12 +337,12 @@ if __name__ == '__main__':
     x = allocator.new()
 
     res = x.getWriteable(0x0, 4)
-    print hex(res)
+    print(hex(res))
     x.write(res, 'ehlo')
 
     v = x.getExecutable(res, 4)
-    print hex(v)
-    print repr(x.read(res, 4))
+    print(hex(v))
+    print(repr(x.read(res, 4)))
 
     x.freeWriteable(res, 4)
     # should fail on windows

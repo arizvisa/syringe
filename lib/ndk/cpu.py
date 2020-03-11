@@ -132,7 +132,7 @@ class ldt(pbinary.array):
     _object_ = descriptor
 
 #a=gdt.entry()
-#print a
+#print(a)
 
 class cr0(pbinary.flags):
     _fields_ = [

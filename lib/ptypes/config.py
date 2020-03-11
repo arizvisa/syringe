@@ -350,5 +350,5 @@ if __name__ == '__main__':
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
     #ptypes.config.logger = logging.root
-    print '{!r}'.format(consts)
-    print '{!r}'.format(config)
+    print('{!r}'.format(consts))
+    print('{!r}'.format(config))

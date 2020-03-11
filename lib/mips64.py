@@ -29,9 +29,9 @@ if True:
     a = bitmap.new(0x0b058547, 32)
     b = bitmap.data(a)
 
-    print bitmap.string(a)
+    print(bitmap.string(a))
     j,(instr_index,) = decode(b)
-    print hex(instr_index<<2)
+    print(hex(instr_index<<2))
 
     #RAM:8C161580 0B 05 85 47                             j       loc_9FC7A134     # [note] simulator branches to 8c16151c
     #AC 82 00 00
@@ -43,12 +43,12 @@ if True:
     b = bitmap.data(a)
 
     addr,(bne,(rs,rt,offset)) = 0x8c161560, decode(b, (5,5,-16))
-    print '%x: bne $%d, $%d, %x   # %x'%(addr, rs,rt,offset, addr+4+(offset*4))
+    print('%x: bne $%d, $%d, %x   # %x'%(addr, rs,rt,offset, addr+4+(offset*4)))
 
-    print hex(0x8c161560+4 + -0x1ff40)
+    print(hex(0x8c161560+4 + -0x1ff40))
 
 if True:
     a = bitmap.new(0x11000003, 32)
     b = bitmap.data(a)
     addr,(beq,(rs,rt,offset)) = (0x8C100048,decode(b, (5,5,-16)))
-    print '%x: beq $%d, $%d, %x   # %x'%(addr, rs,rt,offset, addr+4+(offset*4))
+    print('%x: beq $%d, $%d, %x   # %x'%(addr, rs,rt,offset, addr+4+(offset*4)))

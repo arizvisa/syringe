@@ -126,30 +126,30 @@ if __name__ == '__main__':
     from ptypes import provider
     import logging
 
-    print '-'*20 + 'loading file..'
+    print('-'*20 + 'loading file..')
     coff = pecoff.Object.File(source=provider.file(sys.argv[1]))
     coff.load()
 
     __name__ = 'ImportLibrary' if coff.isImportLibrary() else 'CoffObject'
 
 if __name__ == 'ImportLibrary':
-    print coff['Signature']
-    print coff['Header']
-    print coff['Data']
+    print(coff['Signature'])
+    print(coff['Header'])
+    print(coff['Data'])
 
 if __name__ == 'CoffObject':
-    print coff['Signature']
-    print coff['Header']
-    print coff['Sections']
+    print(coff['Signature'])
+    print(coff['Header'])
+    print(coff['Sections'])
 
     ### check everything from the symbol table's perspective
     sst = coff['Header']['PointerToSymbolTable'].d
-    print sst
+    print(sst)
     sst.load()
 
     symboltable = sst['Symbols']
 
-    print '-'*20 + 'printing external symbols'
+    print('-'*20 + 'printing external symbols')
     ## build list of external symbols
     sym_external = {}
     for name in sst.names():
@@ -158,9 +158,9 @@ if __name__ == 'CoffObject':
             sym_external[name] = v
         continue
 
-    print '\n'.join(map(repr, sym_external.values()))
+    print('\n'.join(map(repr, sym_external.values())))
 
-    print '-'*20 + 'printing statically defined symbols'
+    print('-'*20 + 'printing statically defined symbols')
     ## build list of static symbols
     sym_static = {}
     for name in sst.names():
@@ -172,11 +172,11 @@ if __name__ == 'CoffObject':
 
     for x in sym_static.keys():
         sym,aux = sym_static[x]
-        print sym
+        print(sym)
         if aux:
-            print '\n'.join(map(repr,aux))
+            print('\n'.join(map(repr,aux)))
 
-    print '-'*20 + 'check that the number of relocations in the symboltable matches the section\'s'
+    print('-'*20 + 'check that the number of relocations in the symboltable matches the section\'s')
     ## build list of static symbols
     ## sanity check that the number of relocations are correct
     sections = coff['Sections']
@@ -188,26 +188,26 @@ if __name__ == 'CoffObject':
             if sectioncount != symbolcount:
                 logging.warn("number of relocations ({:d}) for section {:s} differs from section definition ({:d})".format(symbolcount, sym['Name'].str(), sectioncount))
                 logging.warn(aux[0])
-                print 'failed with relocated section {!r}'.format(section)
+                print('failed with relocated section {!r}'.format(section))
                 continue
-        print 'successfully relocated section {!r}'.format(section)
+        print('successfully relocated section {!r}'.format(section))
 
-    print '-'*20 + 'adding some symbols'
+    print('-'*20 + 'adding some symbols')
     ## reassign some symbols
     sy = sst.assign('_TlsAlloc@0', 0xcccccccc)
-    print 'added symbol', sy
+    print('added symbol', sy)
     sy = sst.assign('.text', 0x4010000)
-    print 'added symbol', sy
+    print('added symbol', sy)
 
-    print '-'*20 + 'printing all symbol information'
-    print '\n'.join(map(repr, symboltable))
+    print('-'*20 + 'printing all symbol information')
+    print('\n'.join(map(repr, symboltable)))
 
     def formatrelocation(relo, symboltable):
         symbol = symboltable[ relo['SymbolTableIndex'].int() ]
         return '\n'.join([repr(symbol), repr(relo)]) + '\n'
 
     ### everything from the section's perpsective
-    print '-'*20 + 'printing all relocations'
+    print('-'*20 + 'printing all relocations')
     sections = []
     for section in coff['Sections']:
         relocations, data = section['PointerToRelocations'].d, section.data().l
@@ -217,34 +217,34 @@ if __name__ == 'CoffObject':
     for section, sdr in zip(coff['Sections'], sections):
         data, relocations = sdr
         for r in relocations.load():
-            print r
+            print(r)
             data = r.relocate(data, symboltable)
         continue
 
     ## print out results
-    print '-'*20 + 'printing relocated sections'
+    print('-'*20 + 'printing relocated sections')
     for section in coff['Sections']:
-        print section['Name'].str()
-        print ptypes.utils.indent('\n'.join(map(lambda x: formatrelocation(x, symboltable), section['PointerToRelocations'].d.l)))
-        print ptypes.utils.hexdump(section.data())
+        print(section['Name'].str())
+        print(ptypes.utils.indent('\n'.join(map(lambda x: formatrelocation(x, symboltable), section['PointerToRelocations'].d.l))))
+        print(ptypes.utils.hexdump(section.data()))
 
     if False:
-        print '-'*20 + 'dumping relocated sections'
+        print('-'*20 + 'dumping relocated sections')
         for index in range( len(sections) ):
             section = sections[index]
 
             name = ptypes.utils.strdup( section['Name'].serialize(), terminator='\x00')
-            print name,
+            __import__.six.print_(name, end='')
             if index in sym_static.keys():
                 sym,aux = sym_static[index]
-                print sym['Name'].str(), sym['SectionNumber'].int(), int(sym['Value'])
+                print(sym['Name'].str(), sym['SectionNumber'].int(), int(sym['Value']))
                 data = section.getrelocateddata(symboltable)
             else:
                 data = section.data().serialize()
-                print
+                print()
 
-    #        print ptypes.utils.hexdump( section.getdata().serialize() )
-            print ptypes.utils.hexdump( data )
+    #        print(ptypes.utils.hexdump( section.getdata().serialize() ))
+            print(ptypes.utils.hexdump( data ))
 
             x = file("{:s}.section".format(name[1:]), 'wb')
             x.write(data)

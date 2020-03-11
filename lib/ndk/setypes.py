@@ -364,12 +364,12 @@ if __name__ == '__main__':
 
     for siddata in sids:
         data = siddata.translate(None, ' \n')
-        print "decoding {!s}".format(data)
+        print("decoding {!s}".format(data))
 
         c = SID(__name__='sid').load(source=prov.string(data.decode('hex')))
-        print c
+        print(c)
 
         for i, item in enumerate(c['SubAuthority']):
-            print i, item
+            print(i, item)
 
-        print c.summary()
+        print(c.summary())

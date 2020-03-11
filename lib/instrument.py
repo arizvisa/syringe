@@ -258,9 +258,9 @@ if __name__ == '__main__':
         self[address] = '\xcc\xcc\xcc\xcc\xcc'
         self.commit()
 
-        print self
-        print self.loaded
-        print self.committed
+        print(self)
+        print(self.loaded)
+        print(self.committed)
 
     if False:
         import ia32,struct
@@ -270,7 +270,7 @@ if __name__ == '__main__':
         targetaddress = 0x0000
 
         x = setBranch(sourceaddress, instruction, targetaddress)
-        print repr(x)
+        print(repr(x))
 
     #.text:7C36364F 8B C3                                                        mov     eax, ebx        ; hook point 1
 
@@ -330,7 +330,7 @@ if __name__ == '__main__':
 
         mm = memorymanager.new()
         data = '\x0a\xc0\x74\x0c\x5b\x59\x6a\x00\x51\xe8\xc6\xeb\xff\xff'
-        print repr(data)
+        print(repr(data))
 
         hook = instrument.instruction(mm)
 
@@ -338,7 +338,7 @@ if __name__ == '__main__':
         offset = 0x1010f
         hook[baseaddress+offset] = '\x90'
 
-#        print hex(baseaddress)
+#        print(hex(baseaddress))
 
         hook.commit()
 

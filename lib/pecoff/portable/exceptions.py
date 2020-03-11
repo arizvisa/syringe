@@ -89,18 +89,18 @@ if __name__ == '__main__':
     import ptypes, pecoff
     source = ptypes.provider.file('c:/windows/system32/wow64win.dll', mode='rb')
     a = pecoff.Executable.File(source=source).l
-    print a['Next']['Header']['padding'].hexdump()
-    print a['Next']['Data']['Segments'][0]
+    print(a['Next']['Header']['padding'].hexdump())
+    print(a['Next']['Data']['Segments'][0])
     #b = a.new(dyn.block(0x5b74), offset=0x50e00)
     b = a['Next']['Header']['DataDirectory'][3]['Address'].d
     b=b.l
     #c = RUNTIME_FUNCTION(source=ptypes.prov.proxy(b))
     c = b[2]['UnwindData'].d.l
-    print c['header']
-    print ptypes.bitmap.string(c['header'].bitmap())
-    print c['sizeofprolog']
-    print c['countofcodes']
-    print c['frame']
-    print c['unwindcode']
-    print c['exceptionhandler']
-    print c['chainedunwindinfo']
+    print(c['header'])
+    print(ptypes.bitmap.string(c['header'].bitmap()))
+    print(c['sizeofprolog'])
+    print(c['countofcodes'])
+    print(c['frame'])
+    print(c['unwindcode'])
+    print(c['exceptionhandler'])
+    print(c['chainedunwindinfo'])

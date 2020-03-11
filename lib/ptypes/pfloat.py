@@ -92,8 +92,8 @@ Example usage:
     instance.set(22 / 7.0)
 
     # return the floating-point number of an instance
-    print instance.float()
-    print float(instance)
+    print(instance.float())
+    print(float(instance))
 """
 import six,math
 from six.moves import builtins
@@ -323,12 +323,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn
@@ -490,13 +490,13 @@ if __name__ == '__main__':
         x = sword(byteorder=config.byteorder.bigendian)
         x.source = ptypes.prov.string('\xff\x40')
         if x.l.getf() == -0.75: raise Success
-        print x.getf()
+        print(x.getf())
     @TestCase
     def sfixed_point_dword_get():
         x = sdword(byteorder=config.byteorder.bigendian)
         x.source = ptypes.prov.string('\xff\xff\xc0\x00')
         if x.l.getf() == -0.25: raise Success
-        print x.getf()
+        print(x.getf())
 
     @TestCase
     def sfixed_point_word_integral_set():

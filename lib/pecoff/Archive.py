@@ -277,27 +277,27 @@ if __name__ == '__main__':
     from ptypes import *
     source = ptypes.file('~/python26/libs/python26.lib')
 
-    print 'Reading .lib header'
+    print('Reading .lib header')
 #    Archive.File = ptypes.debugrecurse(Archive.File)
     self = Archive.File()
 #    self.source = provider.file('../../obj/test.lib')
     self.source = ptypes.file('~/python26/libs/python26.lib')
     self.load()
 
-#    print self['SymbolNames']['Header']
-#    print self['SymbolNames']['Member']
-#    print self['MemberNames']['Header']
-#    print self['MemberNames']['Member']
-#    print self['LongNames']['Header']
-#    print self['LongNames']['Member']
-#    print '-'*79
+#    print(self['SymbolNames']['Header'])
+#    print(self['SymbolNames']['Member'])
+#    print(self['MemberNames']['Header'])
+#    print(self['MemberNames']['Member'])
+#    print(self['LongNames']['Header'])
+#    print(self['LongNames']['Member'])
+#    print('-'*79)
 
     ## enumerate all objects that are dll imports
     ## enumerate all objects that are actual object files
 
-    print 'enumerating all members'
+    print('enumerating all members')
     for index in xrange( self.getmembercount() ):
-        print self.getmember(index).load()
-        print ptypes.utils.hexdump(self.getmemberdata(index))
+        print(self.getmember(index).load())
+        print(ptypes.utils.hexdump(self.getmemberdata(index)))
 
 #    a = Archive.File(offset=19912)

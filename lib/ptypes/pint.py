@@ -109,7 +109,7 @@ Example usage:
     instance.set(57005)
 
     # output the value of instance as a numerical value
-    print instance.int()
+    print(instance.int())
 
     # return instance in it's alternative byteorder
     flipped = instance.flip()
@@ -133,7 +133,7 @@ Example usage of pint.enum:
     instance.set('name1')
 
     # return the instance as a name or an integer in string form
-    print instance.str()
+    print(instance.str())
 """
 import six
 import functools, operator, itertools
@@ -484,12 +484,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn
@@ -506,7 +506,7 @@ if __name__ == '__main__':
         a = a.l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_bigendian_uint32_set():
@@ -514,14 +514,14 @@ if __name__ == '__main__':
         a.set(0x0abcdef0)
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_littleendian_load():
         b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print b, b.serialize().encode('hex')
+        print(b, b.serialize().encode('hex'))
 
     @TestCase
     def test_int_littleendian_set():
@@ -529,7 +529,7 @@ if __name__ == '__main__':
         b.set(0x0abcdef0)
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print b, b.serialize().encode('hex')
+        print(b, b.serialize().encode('hex'))
 
     @TestCase
     def test_int_revert_bigendian_uint32_load():
@@ -537,7 +537,7 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string1)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_revert_littleendian_uint32_load():
@@ -545,7 +545,7 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string2)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_littleendian_int32_signed_load():
@@ -555,7 +555,7 @@ if __name__ == '__main__':
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_load():
@@ -565,7 +565,7 @@ if __name__ == '__main__':
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_highedge_load():
@@ -575,7 +575,7 @@ if __name__ == '__main__':
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, a.serialize().encode('hex'))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_lowedge_load():
@@ -585,7 +585,7 @@ if __name__ == '__main__':
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, a.serialize().encode('hex'))
 
     @TestCase
     def test_enum_set_integer():

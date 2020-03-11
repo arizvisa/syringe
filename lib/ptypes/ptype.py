@@ -354,21 +354,21 @@ def debug(ptype, **attributes):
             if 'constructed' in dbg:
                 t, c = dbg['constructed']
                 _, st, bt = dbg['creation']
-                print >>file, u"[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), getattr(self, '__name__', u""))
+                six.print_(u"[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), getattr(self, '__name__', u"")), file=file)
             else:
                 t, st, bt = dbg['creation']
-                print >>file, u"[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), getattr(self, '__name__', u""))
+                six.print_(u"[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), getattr(self, '__name__', u"")), file=file)
 
-            print >>file, u"Created by:"
-            print >>file, format_stack(st)
-            print >>file, u"Located at:"
-            print >>file, '\n'.join(u"{:s} : {:s}".format(x.instance(), x.name()) for x in bt)
-            print >>file, u"Loads from store"
-            print >>file, '\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['load']))
-            print >>file, u"Writes to store"
-            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['commit']))
-            print >>file, u"Serialized to a string:"
-            print >>file, '\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['serialize']))
+            six.print_(u"Created by:", file=file)
+            six.print_(format_stack(st), file=file)
+            six.print_(u"Located at:", file=file)
+            six.print_('\n'.join(u"{:s} : {:s}".format(x.instance(), x.name()) for x in bt), file=file)
+            six.print_(u"Loads from store", file=file)
+            six.print_('\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['load'])), file=file)
+            six.print_(u"Writes to store", file=file)
+            six.print_('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['commit'])), file=file)
+            six.print_(u"Serialized to a string:", file=file)
+            six.print_('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['serialize'])), file=file)
             return
 
         def serialize(self):
@@ -2369,12 +2369,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn
@@ -3094,21 +3094,21 @@ if __name__ == '__main__':
                 return other.parent is None or builtins.isinstance(other, ptype.encoded_t) or issubclass(other.__class__, ptype.encoded_t)
         parentTester = parentTester()
         #c = b.getparent(parentTester())
-        #print builtins.isinstance(b, ptype.encoded_t)
+        #print(builtins.isinstance(b, ptype.encoded_t))
         source = ptypes.provider.file('~/mshtml.dll')
         a = pecoff.Executable.File(source=source).l
 
         global result
         result = list(a.collect())
         for n in result:
-            print n
+            print(n)
         #for n in a.traverse(filter=lambda n: parentTester == n):
         #    if builtins.isinstance(n, ptype.encoded_t):
         #        b = n.d.getparent(parentTester)
-        #        print b.l
+        #        print(b.l)
         #        continue
         #    assert n.parent is None
-        #    print n.l
+        #    print(n.l)
 
     @TestCase
     def test_overcommit_serialize():

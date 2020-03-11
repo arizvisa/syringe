@@ -128,7 +128,7 @@ def assemble(input):
             except KeyError:
                 oparg = evaluate(columns[1])
 
-            print oparg
+            print(oparg)
             pass
 
         # all instructions w/ args
@@ -179,7 +179,7 @@ if __name__ == '__main__':
     '''
 
     bytes = assemble(input)
-    print repr(bytes)
+    print(repr(bytes))
 
-    print input
-    print '\n'.join([ '%d> %s %s'%( x[2], opname[x[0]], x[1]) for x in dis_insns(iter(bytes)) ])
+    print(input)
+    print('\n'.join([ '%d> %s %s'%( x[2], opname[x[0]], x[1]) for x in dis_insns(iter(bytes)) ]))

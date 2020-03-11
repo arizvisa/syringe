@@ -54,13 +54,13 @@ Example usage:
     instance.load()
 
     # fetch a specific character
-    print instance[1]
+    print(instance[1])
 
     # re-assign a new string
     instance.set("new string contents")
 
     # return the length of the type
-    print len(instance)
+    print(len(instance))
 
     # return the type in ascii
     value = instance.str()
@@ -450,12 +450,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn

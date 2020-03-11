@@ -38,14 +38,14 @@ if __name__ == '__main__':
     b = ctypes.cast(ctypes.pointer(ctypes.c_buffer(data,4)), ctypes.c_void_p)
 
     ptypes.setsource(ptypes.prov.memory())
-    print 'ptype-static-memory', type(ptypes.ptype.source) == ptypes.prov.memory
-    print 'ptype-instance-memory', type(ptypes.ptype.type().source) == ptypes.prov.memory
+    print('ptype-static-memory', type(ptypes.ptype.source) == ptypes.prov.memory)
+    print('ptype-instance-memory', type(ptypes.ptype.type().source) == ptypes.prov.memory)
     c = a(offset=b.value).l
-    print 'type-instance-memory', c.serialize() == data
+    print('type-instance-memory', c.serialize() == data)
 
     ptypes.setsource(ptypes.prov.empty())
-    print 'ptype-static-empty', type(ptypes.ptype.source) == ptypes.prov.empty
-    print 'ptype-instance-empty', type(ptypes.ptype.type().source) == ptypes.prov.empty
+    print('ptype-static-empty', type(ptypes.ptype.source) == ptypes.prov.empty)
+    print('ptype-instance-empty', type(ptypes.ptype.type().source) == ptypes.prov.empty)
     c = a(offset=b.value).l
-    print 'type-instance-empty', c.serialize() == '\x00\x00\x00\x00'
+    print('type-instance-empty', c.serialize() == '\x00\x00\x00\x00')
     ptypes.setsource(ptypes.prov.memory())

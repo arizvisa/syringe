@@ -595,12 +595,12 @@ if __name__ == '__main__':
                 res = fn(**kwds)
                 raise Failure
             except Success,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
                 return True
             except Failure,e:
-                print '%s: %r'% (name,e)
+                print('%s: %r'% (name,e))
             except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+                print('%s: %r : %r'% (name,Failure(), e))
             return False
         TestCaseList.append(harness)
         return fn
@@ -623,42 +623,42 @@ if __name__ == '__main__':
     def set_bitmap_unsigned():
         x = bitmap.new(0xf000000000000000,64)
         #x = bitmap.set(x, 60, count=4)
-        print bitmap.string(x)
+        print(bitmap.string(x))
 
         y,res = bitmap.shift(x, 4)
-        print res,bitmap.string(y)
+        print(res,bitmap.string(y))
 
         x = bitmap.new(0,0)
         x = bitmap.push(x, (0x1,4) )
         x = bitmap.push(x, (0x2,4) )
         x = bitmap.push(x, (0x3,4) )
         x = bitmap.push(x, (0x4,4) )
-        print x,bitmap.string(x)
+        print(x,bitmap.string(x))
 
         x = bitmap.new(0,0)
         x = bitmap.insert(x, (0x1,4) )
         x = bitmap.insert(x, (0x2,4) )
         x = bitmap.insert(x, (0x3,4) )
         x = bitmap.insert(x, (0x4,4) )
-        print x,bitmap.string(x)
+        print(x,bitmap.string(x))
 
         x = bitmap.consumer('\x12\x34')
-        print x.consume(4)
-        print x.consume(4)
-        print x.consume(4)
-        print x.consume(4)
+        print(x.consume(4))
+        print(x.consume(4))
+        print(x.consume(4))
+        print(x.consume(4))
 
         x = bitmap.new(0, 4)
         for i in six.moves.range(6):
-            print x
+            print(x)
             x = bitmap.add(x, 3)
 
         for i in six.moves.range(6):
-            print x
+            print(x)
             x = bitmap.sub(x, 6)
 
         x = bitmap.new(4,4)
-        print bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x))))
+        print(bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x)))))
 
     ### add
     @TestCase

@@ -120,32 +120,32 @@ if __name__ == '__main__':
 
     if False:
         insn = decoder.consume('\x6a\xfe')
-        print getDelta(insn)
+        print(getDelta(insn))
 
     if False:
         insn = decoder.consume( [chr(int(x,16)) for x in '68 88 EA 31 02'.split(' ')])
-        print getDelta(insn)
+        print(getDelta(insn))
 
     if False:
         # shouldn't work due to lack of sib
         insn = decoder.consume( [chr(int(x,16)) for x in '64 A1 00 00 00 00'.split(' ')])
-        print getDelta(insn) == 0
+        print(getDelta(insn) == 0)
 
     if False:
         insn = decoder.consume('\x53')
-        print getDelta(insn)
+        print(getDelta(insn))
 
     if False:
         insn = decoder.consume('\x56')
-        print getDelta(insn)
+        print(getDelta(insn))
 
     # FIXME: need to find all instructions that modify esp too
 
     if True:
         # fail due to modrm not being fully tested
         insn = decoder.consume('\x83\xec\x50')      # sub esp,50
-        print getDelta(insn)
+        print(getDelta(insn))
 
     if True:
         insn = decoder.consume('\x83\xc4\x04')      # add esp, 4
-        print getDelta(insn)
+        print(getDelta(insn))
