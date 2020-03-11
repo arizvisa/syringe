@@ -22,10 +22,10 @@ def setbyteorder(endianness):
 
 ## some things people people might find useful
 #from ptype import debug,debugrecurse
-from ptype import istype,iscontainer,isinstance,undefined
+from .ptype import istype,iscontainer,isinstance,undefined
 
-from provider import file,memory
-from utils import hexdump
+from .provider import file,memory
+from .utils import hexdump
 
 if __name__ == '__main__':
     import __init__ as ptypes

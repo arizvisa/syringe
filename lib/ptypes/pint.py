@@ -463,8 +463,8 @@ class enum(type):
         return {k : v for k, v in cls._values_}
 
 # update our current state
-for k, v in globals().items():
-    if v in (type,) or getattr(v,'__base__',type) is type:
+for k, v in builtins.list(six.viewitems(globals())):
+    if v in [type] or getattr(v, '__base__', type) is type:
         continue
     if isinstance(v, builtins.type) and issubclass(v, type):
         __state__.setdefault(Config.integer.order, {})[v] = v
