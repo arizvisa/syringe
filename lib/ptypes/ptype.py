@@ -426,11 +426,11 @@ class _base_generic(object):
     #           XXX meta-related information
     #           instance tree navigation
 
-    __slots__ = ('__source__', 'attributes', 'ignored', 'parent', 'value', 'position')
+    __slots__ = {}  #('__source__', 'attributes', 'ignored', 'parent', 'value', 'position')
 
     # FIXME: it'd probably be a good idea to have this not depend on globals.source,
     #        and instead have globals.source depend on this.
-    __source__ = None      # ptype.prov
+    __slots__['__source__'] = None      # ptype.prov
     @property
     def source(self):
         if self.parent is None:
@@ -441,13 +441,13 @@ class _base_generic(object):
     def source(self, value):
         self.__source__ = value
 
-    attributes = None        # {...}
-    ignored = set(('source', 'parent', 'attributes', 'value', '__name__', 'position', 'offset'))
+    __slots__['attributes'] = None        # {...}
+    __slots__['ignored'] = {'source', 'parent', 'attributes', 'value', '__name__', 'position', 'offset'}
 
-    parent = None       # ptype.base
+    __slots__['parent'] = None       # ptype.base
     p = property(fget=lambda s: s.parent)   # abbr to get to .parent
 
-    value = None        # _
+    __slots__['value'] = None        # _
     v = property(fget=lambda s: s.value)   # abbr to get to .value
 
     def __init__(self, **attrs):
@@ -467,7 +467,13 @@ class _base_generic(object):
         raise error.ImplementationError(self, 'generic.setposition')
     def getposition(self):
         raise error.ImplementationError(self, 'generic.getposition')
-    position = property(fget=lambda s: s.getposition(), fset=lambda s, v: s.setposition(v))
+
+    @property
+    def position(self):
+        return self.getposition()
+    @position.setter
+    def position(self, value):
+        return self.setposition(value)
 
     def __update__(self, attrs={}, **moreattrs):
         """Update the attributes that will be assigned to object.
@@ -990,7 +996,7 @@ class type(base):
         initialized:bool(r)
             if ptype has been initialized yet
     """
-    ignored = generic.ignored.union(('length',))
+    ignored = generic.__slots__['ignored'] | {'length'}
 
     def copy(self, **attrs):
         result = super(type, self).copy(**attrs)

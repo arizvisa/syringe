@@ -185,7 +185,7 @@ class type(_pstruct_generic):
             This contains which elements the structure is composed of
     '''
     _fields_ = None     # list of (type,name) tuples
-    ignored = ptype.container.ignored.union(('_fields_',))
+    ignored = ptype.container.__slots__['ignored'] | {'_fields_'}
 
     def initializedQ(self):
         if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
