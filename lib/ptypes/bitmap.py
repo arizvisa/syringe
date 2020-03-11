@@ -952,6 +952,78 @@ if __name__ == '__main__':
         if data.encode('hex') == '3012':
             raise Success
 
+    @TestCase
+    def bitmap_rol1_size():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.size(bitmap.rol(res, 1)) == 4:
+            raise Success
+
+    @TestCase
+    def bitmap_ror1_size():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.size(bitmap.ror(res, 1)) == 4:
+            raise Success
+
+    @TestCase
+    def bitmap_rol4_size():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.size(bitmap.rol(res, 4)) == 4:
+            raise Success
+
+    @TestCase
+    def bitmap_ror4_size():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.size(bitmap.ror(res, 4)) == 4:
+            raise Success
+
+    # FIXME
+    def bitmap_rolX_size():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.size(bitmap.rol(res, 8)) == 4:
+            raise Success
+
+    # FIXME
+    def bitmap_rorX_size():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.size(bitmap.ror(res, 8)) == 4:
+            raise Success
+
+    @TestCase
+    def bitmap_rol1_value():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.int(bitmap.rol(res, 1)) == 0b1100:
+            raise Success
+
+    @TestCase
+    def bitmap_ror1_value():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.int(bitmap.ror(res, 1)) == 0b0011:
+            raise Success
+
+    @TestCase
+    def bitmap_rol2_value():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.int(bitmap.rol(res, 2)) == 0b1001:
+            raise Success
+
+    @TestCase
+    def bitmap_ror2_value():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.int(bitmap.ror(res, 2)) == 0b1001:
+            raise Success
+
+    @TestCase
+    def bitmap_rol4_value():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.int(bitmap.rol(res, 4)) == 0b0110:
+            raise Success
+
+    @TestCase
+    def bitmap_ror4_value():
+        res = bitmap.new(0b0110, 4)
+        if bitmap.int(bitmap.ror(res, 4)) == 0b0110:
+            raise Success
+
 if __name__ == '__main__':
     import logging
     ptypes.config.defaults.log.setLevel(logging.DEBUG)
