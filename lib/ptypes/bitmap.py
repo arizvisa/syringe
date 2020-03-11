@@ -188,7 +188,7 @@ def shrink(bitmap, count):
         return grow(bitmap, -count)
     integer, size = bitmap
     shift, sign = 2 ** count, -1 if size < 0 else +1
-    return integer / shift, size - count * sign
+    return integer // shift, size - count * sign
 
 ## for treating a bitmap like an integer stream
 def push(bitmap, operand):
@@ -238,11 +238,11 @@ def consume(bitmap, bits):
 
     res = bitmapinteger & integermask
     if bitmapsize < 0:
-        signmask = integershift / 2
-        res = (res & (signmask - 1)) - (integershift / 2 if res & signmask else 0)
-        bitmap = bitmapinteger / integershift, bitmapsize + integersize
+        signmask = integershift // 2
+        res = (res & (signmask - 1)) - (integershift // 2 if res & signmask else 0)
+        bitmap = bitmapinteger // integershift, bitmapsize + integersize
     else:
-        bitmap = bitmapinteger / integershift, bitmapsize - integersize
+        bitmap = bitmapinteger // integershift, bitmapsize - integersize
     return bitmap, res
 
 def shift(bitmap, bits):
@@ -263,12 +263,12 @@ def shift(bitmap, bits):
     resultmask = integermask * resultshift
 
     if bitmapsize < 0:
-        signmask = integershift / 2
-        res = (bitmapinteger & resultmask) / resultshift
-        res = (res & (signmask - 1)) - (integershift / 2 if res & signmask else 0)
+        signmask = integershift // 2
+        res = (bitmapinteger & resultmask) // resultshift
+        res = (res & (signmask - 1)) - (integershift // 2 if res & signmask else 0)
         bitmap = bitmapinteger & ~resultmask, -resultsize
     else:
-        res = (bitmapinteger & resultmask) / resultshift
+        res = (bitmapinteger & resultmask) // resultshift
         bitmap = bitmapinteger & ~resultmask, resultsize
     return bitmap, res
 
@@ -303,7 +303,7 @@ class consumer(object):
         '''Returns some number of bits as an integer'''
         if bits > self.cache[1]:
             count = bits - self.cache[1]
-            bs = (count + 7) / 8
+            bs = (count + 7) // 8
             self.read(bs)
             return self.consume(bits)
         self.cache, result = shift(self.cache, bits)
@@ -334,7 +334,7 @@ def data(bitmap, **kwargs):
         res.append(n)
 
     # convert it to a string
-    return str().join(map(six.int2byte, res))
+    return bytes().join(map(six.int2byte, res))
 
 def size(bitmap):
     '''Return the size of the bitmap, ignoring signedness'''
@@ -406,7 +406,7 @@ def groupby(sequence, count):
     idata = enumerate(sequence)
     def fkey(item):
         (index, value) = item
-        return index / count
+        return index // count
 
     for key, res in itertools.groupby(idata, fkey):
         yield builtins.map(operator.itemgetter(1), res)
@@ -492,7 +492,7 @@ class WBitmap(object):
             # along a byte boundary (multiple of 8).
             offset = bits - leftover
             res = integer & (mask * 2**offset)
-            self.data[-1] |= res / 2**offset
+            self.data[-1] |= res // 2**offset
 
             # Update the bits that we've processed
             self.bits, bits = self.bits + leftover, bits - leftover
@@ -501,9 +501,9 @@ class WBitmap(object):
         # just push the integer to our data and update our size. This
         # same logic should also apply if our data is empty.
         while bits >= 8:
-            shift = 2 ** bits / 0x100
+            shift = 2 ** bits // 0x100
             res = integer & (0xff * shift)
-            self.data.append(res / shift)
+            self.data.append(res // shift)
             self.bits, bits = self.bits + 8, bits - 8
 
         # Add any extra bits that were leftover as the last byte
@@ -553,7 +553,7 @@ class RBitmap(object):
 
         if self.offset and bits < leftover:
             shift, mask = 2 ** (leftover - bits), 2 ** bits - 1
-            result = self.data[0] / shift
+            result = self.data[0] // shift
             self.offset, self.data[0] = self.offset + bits, self.data[0] & (2 * shift - 1)
             return result & mask
 
@@ -576,7 +576,7 @@ class RBitmap(object):
         if bits > 0:
             shift, mask = 2 ** leftover, 2 ** bits - 1
             result *= 2 ** bits
-            result += ((self.data[0] / shift) & mask) if len(self.data) else 0
+            result += ((self.data[0] // shift) & mask) if len(self.data) else 0
             self.offset = bits
         return result
 
@@ -625,6 +625,9 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes
     from ptypes import bitmap
+
+    import sys, operator
+    tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
     ### set
     @TestCase
@@ -959,14 +962,14 @@ if __name__ == '__main__':
     def data_padding():
         res = bitmap.new(0x123, 12)
         data = bitmap.data(res, reversed=0)
-        if data.encode('hex') == '1230':
+        if tohex(data) == '1230':
             raise Success
 
     @TestCase
     def data_padding_reversed():
         res = bitmap.new(0x123, 12)
         data = bitmap.data(res, reversed=1)
-        if data.encode('hex') == '3012':
+        if tohex(data) == '3012':
             raise Success
 
     @TestCase
