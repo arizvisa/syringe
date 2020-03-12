@@ -477,26 +477,6 @@ class fileobj(bounded):
 filebase = fileobj
 
 ## other providers
-class base64(string):
-    '''A provider that accesses data in a Base64 encoded string.'''
-    def __init__(self, base64string, begin='', end=''):
-        result = map(operator.methodcaller('strip'), base64string.split('\n'))
-
-        if begin and begin in base64string:
-            res = [i for i, _ in enumerate(result) if _.startswith(begin)][0]
-            result[:] = result[res + 1:]
-
-        if end and end in base64string:
-            res = [i for i, _ in enumerate(result) if _.startswith(end)][0]
-            result[:] = result[:res]
-
-        result = str().join(result).translate(None, ' \t\n\r\v')
-        super(base64, self).__init__(result.decode('base64'))
-
-    @property
-    def value(self):
-        return self.data.tostring().encode('base64')
-
 class random(base):
     """Provider that returns random data when read from."""
     def __init__(self):
@@ -1579,42 +1559,6 @@ if __name__ == '__main__':
 
     except ImportError:
         Log.warning("{:s} : Skipping the `WindowsProcessId` provider tests.".format(__name__))
-
-    testcert="""
-    -----BEGIN CERTIFICATE-----
-    MIIC+TCCArigAwIBAgIJAOLOwubF5bg3MAkGByqGSM44BAMwNjELMAkGA1UEBhMC
-    VVMxDjAMBgNVBAgMBVRleGFzMRcwFQYDVQQKDA50aHVua2Vyc0RPVG5ldDAeFw0x
-    NDA5MTAxOTUyMDJaFw0xNDEwMTAxOTUyMDJaMDYxCzAJBgNVBAYTAlVTMQ4wDAYD
-    VQQIDAVUZXhhczEXMBUGA1UECgwOdGh1bmtlcnNET1RuZXQwggG3MIIBLAYHKoZI
-    zjgEATCCAR8CgYEA9i7VTIaia1b5UljGzdonzMayj6bKmmbXqrw7XQcxagwOiR/w
-    HpJbD88h81VII4bQFcIKnlJ9jA8pisffLt9fG2L+9yHA8pB6C192INiloIePf1wK
-    lePuWpkAOuZQdA97XIaEwZYXTCvkgozhgp/j9Agcef/IeWaga7CiOCinJw8CFQDp
-    DJ0yhfywMk90ZaJVzpMld4FdHwKBgQCpxKWJbU7NUGWRBQY2TPzVuSwKpa+R1ezn
-    yiggGHQxb9S6kBKkarsHrmUfcgmmHcsI5ntRYD7ZeRKUgTasQsA3I8NlhmetxdaT
-    BKnSdZZAYvRdAxaxRKvMtSwSBGReflSedme0822z+/FNfJG9rMmiBaURNQIpIxb+
-    /ecM9MP8fwOBhAACgYA3O9CNln3zUnW8SyUqFovp0AFBFixrZhxRbFsASjk1dDqr
-    1GEhE9WGt6cRpLICMQZ80vsrWItc7PpV09OuivkL1oHRpwmeGUA43LV8Wp4FA64F
-    EkhbOgBcKlA1aM06bOlJhU26iGuGB4ZTgfyuWtMWFf7LE4bykOa8NOl83yo3FqNQ
-    ME4wHQYDVR0OBBYEFJLWL1FUKaTChKV0EgiYCwWzR3O9MB8GA1UdIwQYMBaAFJLW
-    L1FUKaTChKV0EgiYCwWzR3O9MAwGA1UdEwQFMAMBAf8wCQYHKoZIzjgEAwMwADAt
-    AhUAmftACaObx1+KUcHlzKw+iJI5CE4CFAQLG5nhjAlBzh3nNOMRIs4TDXOb
-    -----END CERTIFICATE-----
-    """
-
-    @TestCase
-    def test_base64_read():
-        a = base64(testcert, '-----BEGIN', '-----END')
-        a.seek(0)
-        if a.consume(4) == '0\x82\x02\xf9':
-            raise Success
-
-    @TestCase
-    def test_base64_write():
-        a = base64(testcert, '-----BEGIN', '-----END')
-        a.seek(0)
-        a.store('XXXXXX')
-        if a.value.startswith('XXXXXX'.encode('base64').strip()):
-            raise Success
 
 if __name__ == '__main__' and 0:
     from ptypes import ptype,parray,pstruct,pint,provider
