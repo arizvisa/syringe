@@ -63,7 +63,7 @@ class padding:
 
         @classmethod
         def zero(cls):
-            return cls.repeat('\x00')
+            return cls.repeat(b'\x00')
 
     @classmethod
     def fill(cls, amount, source):
@@ -126,26 +126,27 @@ def repr_position(pos, hex=True, precision=0):
     return '{:x}.{:x}'.format(ofs,bofs)
 
 ## hexdumping capability
-def printable(s):
+def printable(s, nonprintable='.'):
     """Return a string of only printable characters"""
-    return six.moves.reduce(lambda t,c: t + (c if six.byte2int(c) >= 0x20 and six.byte2int(c) < 0x7f else '.'), iter(s), '')
+    return six.moves.reduce(lambda agg, item: agg + (item if item >= 0x20 and item < 0x7f else nonprintable), bytes(s), '')
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
-    value = str(value)[:width]
+    value = bytearray(value)[:width]
     extra = width - len(value)
 
     ## left
     left = '{:04x}'.format(offset)
 
     ## middle
-    res = [ '{:02x}'.format(six.byte2int(x)) for x in value ]
+    res = [ '{:02x}'.format(item) for item in value ]
     if len(value) < width:
         res += ['  '] * extra
 
-    for x in breaks:
-        if x < len(res):
-            res[x] = ' '+res[x]
+    for item in breaks:
+        if item < len(res):
+            res[item] = ' ' + res[item]
+        continue
     middle = ' '.join(res)
 
     ## right
@@ -167,10 +168,10 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
     getRow = lambda o: hexrow(data, offset=o, **kwds)
 
     res = []
-    (ofs, data) = offset, bytes().join(itertools.islice(value, width))
+    (ofs, data) = offset, bytes().join(map(six.int2byte, itertools.islice(value, width)))
     for i in (itertools.count(1) if rows is None else six.moves.range(1, rows)):
         res.append( getRow(ofs) )
-        ofs, data = (ofs + width, bytes().join(itertools.islice(value, width)))
+        ofs, data = ofs + width, bytes().join(map(six.int2byte, itertools.islice(value, width)))
         if len(data) < width:
             break
         continue
@@ -522,6 +523,13 @@ if __name__ == '__main__':
         y.blah(10)
         res = x.blah( 10)
         if x.counter == 2 and y.counter == 1 and res == 100:
+            raise Success
+
+    @TestCase
+    def test_hexrow():
+        data = b'\0' * 16
+        row = hexrow(data, offset=0, width=16, breaks=[8])
+        if row == '  '.join(['0000', ' '.join(8*['00']), ' '.join(8*['00']), '.'*16]):
             raise Success
 
 if __name__ == '__main__':
