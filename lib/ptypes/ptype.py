@@ -255,10 +255,16 @@ def iscallable(t):
 def isinstance(t):
     return builtins.isinstance(t, generic)
 
-@utils.memoize('t')
-def istype(t):
-    """True if type ``t`` inherits from ptype.type"""
-    return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (builtins.isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
+if sys.version_info.major < 3:
+    @utils.memoize('t')
+    def istype(t):
+        """True if type ``t`` inherits from ptype.type"""
+        return t.__class__ is t.__class__.__class__ and not isresolveable(t) and (builtins.isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, generic)
+else:
+    @utils.memoize('t')
+    def istype(t):
+        """True if type ``t`` inherits from ptype.type"""
+        return t.__class__ is t.__class__.__class__ and not isresolveable(t) and issubclass(t, generic)
 
 @utils.memoize('t')
 def iscontainer(t):

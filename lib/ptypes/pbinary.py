@@ -113,7 +113,7 @@ Example usage:
     instance = pbinary.new(type)
     instance.load()
 """
-import math,types,inspect
+import sys,math,types,inspect
 import itertools,operator,functools
 import six
 
@@ -147,9 +147,14 @@ def setbyteorder(endianness):
     raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
 ## instance tests
-@utils.memoize('t')
-def istype(t):
-    return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
+if sys.version_info.major < 3:
+    @utils.memoize('t')
+    def istype(t):
+        return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and (isinstance(t, types.ClassType) or hasattr(object, '__bases__')) and issubclass(t, type)
+else:
+    @utils.memoize('t')
+    def istype(t):
+        return t.__class__ is t.__class__.__class__ and not ptype.isresolveable(t) and issubclass(t, type)
 
 @utils.memoize('t')
 def iscontainer(t):
