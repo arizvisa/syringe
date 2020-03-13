@@ -230,10 +230,11 @@ class type(ptype.type):
     def __getvalue__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
+        data = bytearray(self.serialize())
         if self.byteorder is config.byteorder.bigendian:
-            return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), self.serialize(), 0)
+            return six.moves.reduce(lambda agg, item: agg << 8 | item, data, 0)
         elif self.byteorder is config.byteorder.littleendian:
-            return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), reversed(self.serialize()), 0)
+            return six.moves.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
         raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
     def __setvalue__(self, *values, **attrs):
@@ -244,7 +245,7 @@ class type(ptype.type):
         if self.byteorder is config.byteorder.bigendian:
             transform = reversed
         elif self.byteorder is config.byteorder.littleendian:
-            transform = lambda x: x
+            transform = iter
         else:
             raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness {!r}'.format(self.byteorder))
         mask = (1<<self.blocksize()*8) - 1
@@ -255,7 +256,7 @@ class type(ptype.type):
             bc,x = bitmap.consume(bc,8)
             res.append(x)
         res = res + [0]*(self.blocksize() - len(res))   # FIXME: use padding
-        return super(type, self).__setvalue__(str().join(transform(map(six.int2byte,res))), **attrs)
+        return super(type, self).__setvalue__(bytes(bytearray(transform(res))), **attrs)
 
     def get(self):
         return self.__getvalue__()
@@ -371,7 +372,7 @@ class enum(type):
         res = {}
         for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
             res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
-        for val, items in res.viewitems():
+        for val, items in six.viewitems(res):
             if len(items) > 1:
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
             continue
@@ -497,8 +498,11 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes,struct
     from ptypes import provider,utils,pint
-    string1 = '\x0a\xbc\xde\xf0'
-    string2 = '\xf0\xde\xbc\x0a'
+    string1 = b'\x0a\xbc\xde\xf0'
+    string2 = b'\xf0\xde\xbc\x0a'
+
+    import sys
+    tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
     @TestCase
     def test_int_bigendian_uint32_load():
@@ -506,7 +510,7 @@ if __name__ == '__main__':
         a = a.l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print(a, a.serialize().encode('hex'))
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_bigendian_uint32_set():
@@ -514,14 +518,14 @@ if __name__ == '__main__':
         a.set(0x0abcdef0)
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print(a, a.serialize().encode('hex'))
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_load():
         b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print(b, b.serialize().encode('hex'))
+        print(b, tohex(b.serialize()))
 
     @TestCase
     def test_int_littleendian_set():
@@ -529,7 +533,7 @@ if __name__ == '__main__':
         b.set(0x0abcdef0)
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print(b, b.serialize().encode('hex'))
+        print(b, tohex(b.serialize()))
 
     @TestCase
     def test_int_revert_bigendian_uint32_load():
@@ -537,7 +541,7 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string1)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print(a, a.serialize().encode('hex'))
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_revert_littleendian_uint32_load():
@@ -545,47 +549,47 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string2)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
-        print(a, a.serialize().encode('hex'))
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_signed_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\xff\xff\xff\xff'
+        s = b'\xff\xff\xff\xff'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print(b, a, a.serialize().encode('hex'))
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\x00\x00\x00\x80'
+        s = b'\x00\x00\x00\x80'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print(b, a, a.serialize().encode('hex'))
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_highedge_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\xff\xff\xff\x7f'
+        s = b'\xff\xff\xff\x7f'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print(b, a, a.serialize().encode('hex'))
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_lowedge_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\x00\x00\x00\x00'
+        s = b'\x00\x00\x00\x00'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print(b, a, a.serialize().encode('hex'))
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_enum_set_integer():
