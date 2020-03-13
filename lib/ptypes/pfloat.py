@@ -173,7 +173,7 @@ class float_t(type):
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
 
-        exponentbias = (2**self.components[1])/2 - 1
+        exponentbias = (2**self.components[1]) // 2 - 1
         number, = values
 
         # convert to integrals
@@ -212,7 +212,7 @@ class float_t(type):
 
     def __getvalue__(self):
         """convert the stored floating-point number into a python native float"""
-        exponentbias = (2**self.components[1])/2 - 1
+        exponentbias = (2**self.components[1]) // 2 - 1
         integer = super(type, self).__getvalue__()
         res = bitmap.new(integer, sum(self.components))
 
@@ -228,11 +228,11 @@ class float_t(type):
             m = 1.0 + (float(mantissa) / 2**self.components[2])
 
             # done
-            return math.ldexp( math.copysign(m,s), e)
+            return math.ldexp(math.copysign(m, s), e)
 
-        if exponent == 2**self.components[1]-1 and mantissa == 0:
+        if exponent == 2**self.components[1] - 1 and mantissa == 0:
             return float('-inf') if sign else float('+inf')
-        elif exponent in (0,2**self.components[1]-1) and mantissa != 0:
+        elif exponent in (0,2**self.components[1] - 1) and mantissa != 0:
             return float('-nan') if sign else float('+nan')
         elif exponent == 0 and mantissa == 0:
             return float('-0') if sign else float('+0')
@@ -400,10 +400,10 @@ if __name__ == '__main__':
     def test_load(cls, integer, expected):
         if cls.length == 4:
             expected, = struct.unpack('f', struct.pack('f', expected))
-            i,_ = bitmap.join(bitmap.new(six.byte2int(x),8) for x in reversed(struct.pack('f',expected)))
+            i,_ = bitmap.join(bitmap.new(x,8) for x in reversed(bytearray(struct.pack('f',expected))))
         elif cls.length == 8:
             expected, = struct.unpack('d', struct.pack('d', expected))
-            i,_ = bitmap.join(bitmap.new(six.byte2int(x),8) for x in reversed(struct.pack('d',expected)))
+            i,_ = bitmap.join(bitmap.new(x,8) for x in reversed(bytearray(struct.pack('d',expected))))
         else:
             i = 0
 
@@ -449,35 +449,35 @@ if __name__ == '__main__':
     @TestCase
     def ufixed_point_word_get():
         x = word(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\x80\x80')
+        x.source = ptypes.prov.string(b'\x80\x80')
         if x.l.getf() == 128.5: raise Success
     @TestCase
     def ufixed_point_dword_get():
         x = dword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\x00\x64\x40\x00')
+        x.source = ptypes.prov.string(b'\x00\x64\x40\x00')
         if x.l.getf() == 100.25: raise Success
 
     @TestCase
     def ufixed_point_word_integral_set():
         x = word(byteorder=config.byteorder.bigendian)
         x.set(30.5)
-        if x.serialize()[0] == '\x1e': raise Success
+        if bytearray(x.serialize()[0:1]) == b'\x1e': raise Success
     @TestCase
     def ufixed_point_word_fractional_set():
         x = word(byteorder=config.byteorder.bigendian)
         x.set(30.5)
-        if x.serialize()[1] == '\x80': raise Success
+        if bytearray(x.serialize()[1:2]) == b'\x80': raise Success
 
     @TestCase
     def ufixed_point_dword_integral_set():
         x = dword(byteorder=config.byteorder.bigendian)
         x.set(1.25)
-        if x.serialize()[:2] == '\x00\x01': raise Success
+        if bytearray(x.serialize()[0:2]) == b'\x00\x01': raise Success
     @TestCase
     def ufixed_point_dword_fractional_set():
         x = dword(byteorder=config.byteorder.bigendian)
         x.set(1.25)
-        if x.serialize()[2:] == '\x40\x00': raise Success
+        if bytearray(x.serialize()[2:]) == b'\x40\x00': raise Success
 
     ## sfixed_t
     class sword(pfloat.sfixed_t):
@@ -488,13 +488,13 @@ if __name__ == '__main__':
     @TestCase
     def sfixed_point_word_get():
         x = sword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\xff\x40')
+        x.source = ptypes.prov.string(b'\xff\x40')
         if x.l.getf() == -0.75: raise Success
         print(x.getf())
     @TestCase
     def sfixed_point_dword_get():
         x = sdword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\xff\xff\xc0\x00')
+        x.source = ptypes.prov.string(b'\xff\xff\xc0\x00')
         if x.l.getf() == -0.25: raise Success
         print(x.getf())
 
@@ -502,24 +502,24 @@ if __name__ == '__main__':
     def sfixed_point_word_integral_set():
         x = sword(byteorder=config.byteorder.bigendian)
         x.set(-0.5)
-        if x.serialize()[0] == '\xff': raise Success
+        if bytearray(x.serialize()[0:1]) == b'\xff': raise Success
     @TestCase
     def sfixed_point_word_fractional_set():
         x = sword(byteorder=config.byteorder.bigendian)
         x.set(-0.75)
-        if x.serialize()[1] == '\x40': raise Success
+        if bytearray(x.serialize()[1:2]) == b'\x40': raise Success
 
     @TestCase
     def sfixed_point_dword_integral_set():
         x = sdword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\xff\xfe\x40\x00')
+        x.source = ptypes.prov.string(b'\xff\xfe\x40\x00')
         x.set(-1.75)
-        if x.serialize()[:2] == '\xff\xfe': raise Success
+        if bytearray(x.serialize()[0:2]) == b'\xff\xfe': raise Success
     @TestCase
     def sfixed_point_dword_fractional_set():
         x = sdword(byteorder=config.byteorder.bigendian)
         x.set(-1.25)
-        if x.serialize()[2:] == '\xc0\x00': raise Success
+        if bytearray(x.serialize()[2:]) == b'\xc0\x00': raise Success
 
 if __name__ == '__main__':
     import logging
