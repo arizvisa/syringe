@@ -461,25 +461,25 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes
+    import six, ptypes
     from ptypes import pint,pstr,parray,pstruct,dyn,provider,utils
 
     @TestCase
     def test_str_char():
-        x = pstr.char_t(source=provider.string('hello')).l
+        x = pstr.char_t(source=provider.string(b'hello')).l
         if x.get() == 'h':
             raise Success
 
     @TestCase
     def test_str_wchar():
-        x = pstr.wchar_t(source=provider.string('\x43\x00')).l
+        x = pstr.wchar_t(source=provider.string(b'\x43\x00')).l
         if x.get() == '\x43':
             raise Success
 
     @TestCase
     def test_str_string():
         x = pstr.string()
-        string = "helllo world ok, i'm hungry for some sushi\x00"
+        string = b"helllo world ok, i'm hungry for some sushi\x00"
         x.length = len(string)/2
         x.source = provider.string(string)
         x.load()
@@ -489,10 +489,10 @@ if __name__ == '__main__':
     @TestCase
     def test_str_wstring():
         x = pstr.wstring()
-        oldstring = "ok, this is unicode"
+        oldstring = b"ok, this is unicode"
         string = oldstring
         x.length = len(string)/2
-        string = ''.join([c+'\x00' for c in string])
+        string = bytes().join(six.int2byte(c) + b'\x00' for c in bytearray(string))
         x.source = provider.string(string)
         x.load()
         if x.str() == oldstring[:len(oldstring)/2]:
@@ -500,14 +500,14 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_szstring():
-        string = 'null-terminated\x00ok'
+        string = b'null-terminated\x00ok'
         x = pstr.szstring(source=provider.string(string)).l
         if x.str() == 'null-terminated':
             raise Success
 
     @TestCase
     def test_str_array_szstring():
-        data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
+        data = b'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
 
         class stringarray(parray.terminated):
             _object_ = pstr.szstring
@@ -529,13 +529,13 @@ if __name__ == '__main__':
                 ( pstr.szstring, 'String' )
             ]
 
-        x = IMAGE_IMPORT_HINT(source=provider.string('AAHello world this is a zero0-terminated string\x00this didnt work')).l
+        x = IMAGE_IMPORT_HINT(source=provider.string(b'AAHello world this is a zero0-terminated string\x00this didnt work')).l
         if x['String'].str() == 'Hello world this is a zero0-terminated string':
             raise Success
 
     @TestCase
     def test_str_szwstring():
-        s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
+        s = b'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
         v = pstr.szwstring(source=provider.string(s)).l
         if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
@@ -545,21 +545,20 @@ if __name__ == '__main__':
         data = ' '.join(map(lambda x:x.strip(),'''
             00 57 00 65 00 6c 00 63 00 6f 00 6d 00 65 00 00
         '''.split('\n'))).strip()
-        data = map(lambda x: six.int2byte(int(x,16)), data.split(' '))
-        data = ''.join(data)
+        data = bytes(bytearray(int(item, 16) for item in data.split(' ')))
 
         class wbechar_t(pstr.wchar_t):
             def set(self, value):
-                self.value = '\x00' + value
+                self.value = b'\x00' + six.ensure_binary(value)
                 return self
 
             def get(self):
-                return unicode(self.value, 'utf-16-be').encode('utf-8')
+                return six.ensure_text(self.value, 'utf-16-be').encode('utf-8')
 
         class unicodestring(pstr.szwstring):
             _object_ = wbechar_t
             def str(self):
-                s = builtins.unicode(self.value, 'utf-16-be').encode('utf-8')
+                s = six.ensure_text(self.value, 'utf-16-be').encode('utf-8')
                 return utils.strdup(s)[:len(self)]
 
         class unicodespeech_packet(pstruct.type):
