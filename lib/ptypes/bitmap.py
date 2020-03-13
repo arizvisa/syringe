@@ -1,5 +1,5 @@
 #bitmap = (integer, bits)
-import six, math
+import six, sys, math
 import functools, operator, itertools, types
 from six.moves import builtins
 
@@ -274,8 +274,21 @@ def shift(bitmap, bits):
 
 class consumer(object):
     '''Given an iterable of an ascii string, provide an interface that supplies bits'''
+
+    if sys.version_info.major < 3:
+        @classmethod
+        def __make_interator__(cls, iterable):
+            # XXX: in python2, byte-iterators always return bytes
+            return (six.byte2int(item) for item in iterable)
+
+    else:
+        @classmethod
+        def __make_interator__(cls, iterable):
+            # XXX: but, in python3 byte-iterators always return ints...
+            return iter(iterable)
+
     def __init__(self, iterable=()):
-        self.source = iter(iterable)
+        self.source = self.__make_interator__(iterable)
         self.cache = new(0, 0)
 
     def insert(self, bitmap):
@@ -294,15 +307,16 @@ class consumer(object):
         result, count = 0, 0
         while bytes > 0:
             result *= 256
-            result += six.byte2int(six.next(self.source))
+            result += six.next(self.source)
             bytes, count = bytes - 1, count + 1
         self.cache = push(self.cache, new(result, count * 8))
         return count
 
     def consume(self, bits):
         '''Returns some number of bits as an integer'''
-        if bits > self.cache[1]:
-            count = bits - self.cache[1]
+        available = size(self.cache)
+        if bits > available:
+            count = bits - available
             bs = (count + 7) // 8
             self.read(bs)
             return self.consume(bits)
@@ -662,7 +676,7 @@ if __name__ == '__main__':
         x = bitmap.insert(x, (0x4,4) )
         print(x,bitmap.string(x))
 
-        x = bitmap.consumer('\x12\x34')
+        x = bitmap.consumer(b'\x12\x34')
         print(x.consume(4))
         print(x.consume(4))
         print(x.consume(4))
@@ -1042,6 +1056,72 @@ if __name__ == '__main__':
     def bitmap_ror4_value():
         res = bitmap.new(0b0110, 4)
         if bitmap.int(bitmap.ror(res, 4)) == 0b0110:
+            raise Success
+
+    @TestCase
+    def consumer_consume1_8():
+        data = b'\x80'
+        valid = [1, 0, 0, 0, 0, 0, 0, 0]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(1))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume4_2():
+        data = b'\xa0'
+        valid = [0xa, 0x0]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(4))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume8_1():
+        data = b'\xa0'
+        valid = [0xa0]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(8))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume16_1():
+        data = b'\xa5\xa5'
+        valid = [0xa5a5]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(16))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume4_4():
+        data = b'\xa5\xa5'
+        valid = [0xa, 0x5, 0xa, 0x5]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            item = bc.consume(4)
+            res.append(item)
+
+        if res == valid:
             raise Success
 
 if __name__ == '__main__':
