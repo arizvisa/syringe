@@ -939,7 +939,7 @@ try:
             if len(result) == size:
                 return result
 
-            half = size / 2
+            half = size // 2
             if half > 0:
                 return bytes().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
             if cls.module.isEnabled(offset):
