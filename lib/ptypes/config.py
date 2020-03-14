@@ -37,9 +37,11 @@ class field:
         set,get = None,None
         def __init__(self): pass
         def __set__(self, instance, value):
-            return self.__getattribute__('set').im_func(value)
+            res = self.__getattribute__('set')
+            return res.im_func(value) if sys.version_info.major < 3 else res.__func__(value)
         def __get__(self, instance, type=None):
-            return self.__getattribute__('get').im_func()
+            res = self.__getattribute__('get')
+            return res.im_func() if sys.version_info.major < 3 else res.__func__()
 
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):
