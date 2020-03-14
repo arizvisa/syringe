@@ -329,6 +329,19 @@ def memoize(*kargs,**kattrs):
         return callee if isinstance(callee,functiontype) else functiontype(callee)
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
 
+# check equivalency of two callables
+def callable_eq2(a, b):
+    a_ = a.im_func if isinstance(a, types.MethodType) else a
+    b_ = b.im_func if isinstance(b, types.MethodType) else b
+    return a_ is b_
+
+def callable_eq3(a, b):
+    a_ = a.__func__ if isinstance(a, types.MethodType) else a
+    b_ = b.__func__ if isinstance(b, types.MethodType) else b
+    return a_ is b_
+
+callable_eq = callable_eq2 if sys.version_info.major < 3 else callable_eq3
+
 if __name__ == '__main__':
     class Result(Exception): pass
     class Success(Result): pass
@@ -530,6 +543,30 @@ if __name__ == '__main__':
         data = b'\0' * 16
         row = hexrow(data, offset=0, width=16, breaks=[8])
         if row == '  '.join(['0000', ' '.join(8*['00']), ' '.join(8*['00']), '.'*16]):
+            raise Success
+
+    @TestCase
+    def test_method_eq():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+
+        x, y = A(), A()
+        if callable_eq(x.method, y.method) and all(item() for item in [x.method, y.method]):
+            raise Success
+
+    @TestCase
+    def test_method_eq_callable():
+        def method(*self):
+            return True
+        class A(object):
+            pass
+        A.method = method
+
+        x = A()
+        if callable_eq(x.method, method) and all(item() for item in [x.method, method]):
             raise Success
 
 if __name__ == '__main__':
