@@ -43,23 +43,22 @@ class padding:
     """Used for providing padding."""
     class source:
         @classmethod
-        def repeat(cls,value):
+        def repeat(cls, value):
             return itertools.cycle(iter(value))
 
         @classmethod
-        def source(cls,iterable):
-            return (x for x in iter(iterable))
+        def iterable(cls, iterable):
+            return (item for item in iter(iterable))
 
         @classmethod
-        def file(cls,file):
-            return six.moves.map(file.read, itertools.repeat(1))
-            #return (file.read(1) for x in itertools.count())
+        def file(cls, file):
+            return itertools.starmap(file.read, itertools.repeat([1]))
 
         @classmethod
-        def prng(cls,seed=None):
+        def prng(cls, seed=None):
             random.seed(seed)
-            return six.moves.map(six.int2byte, itertools.starmap(random.randint, itertools.repeat((0,0xff))))
-            #return (six.int2byte(random.randint(0,0xff)) for x in itertools.count())
+            iterable = itertools.starmap(random.randint, itertools.repeat([0, 0xff]))
+            return (six.int2byte(item) for item in iterable)
 
         @classmethod
         def zero(cls):
@@ -567,6 +566,75 @@ if __name__ == '__main__':
 
         x = A()
         if callable_eq(x.method, method) and all(item() for item in [x.method, method]):
+            raise Success
+
+    @TestCase
+    def test_padding_sourcerepeat():
+        source = padding.source.repeat(iter(b'\0' * 2))
+        if six.next(source) == b'\0' and six.next(source) == b'\0' and six.next(source) == b'\0' and six.next(source) == b'\0':
+            raise Success
+
+    @TestCase
+    def test_padding_sourceiterable():
+        source = padding.source.iterable(iter(b'\0' * 2))
+        if six.next(source) == b'\0' and six.next(source) == b'\0':
+            raise Success
+
+    @TestCase
+    def test_padding_sourcezero():
+        source = padding.source.zero()
+        if six.next(source) == b'\0' and six.next(source) == b'\0':
+            raise Success
+
+    @TestCase
+    def test_padding_sourcefile():
+        class fakefile(object):
+            def __init__(self, data):
+                self.iterable = iter(data)
+            def read(self, count):
+                res = b''
+                while count > 0:
+                    res += six.next(self.iterable)
+                    count -= 1
+                return res
+
+        f = fakefile(b'hola')
+        source = padding.source.file(f)
+        if six.next(source) == b'h' and six.next(source) == b'o' and six.next(source) == b'l' and six.next(source) == b'a':
+            raise Success
+
+    @TestCase
+    def test_padding_sourceprng():
+        seed = id(0)
+        random.seed(seed)
+        res = bytes(bytearray(random.randint(0, 0xff) for i in six.moves.range(0x10)))
+        source = padding.source.prng(seed)
+
+        for a, b in zip(res, source):
+            if a != b:
+                raise Failure
+            continue
+        raise Success
+
+    @TestCase
+    def test_padding_fillzero():
+        source = padding.source.zero()
+        data = padding.fill(0x10, source)
+        if data == b'\0'*0x10:
+            raise Success
+
+    @TestCase
+    def test_padding_fillrepeat():
+        source = padding.source.repeat(b'A')
+        data = padding.fill(0x10, source)
+        if data == b'A'*0x10:
+            raise Success
+
+    @TestCase
+    def test_padding_filliterable():
+        source = padding.source.iterable(b'ABCD')
+        data = padding.fill(4, source)
+        if data == b'ABCD':
             raise Success
 
 if __name__ == '__main__':
