@@ -42,32 +42,43 @@ class assign(object):
 class padding:
     """Used for providing padding."""
     class source:
-        @classmethod
-        def repeat(cls, value):
-            return itertools.cycle(iter(value))
+        def __bytesdecorator__(method):
+            def closure(*args, **kwargs):
+                iterable = method(*args, **kwargs)
+                return (six.int2byte(item) for item in iterable)
+            return closure if sys.version_info.major < 3 else method
 
         @classmethod
+        @__bytesdecorator__
+        def repeat(cls, value):
+            iterable = six.iterbytes(value)
+            return itertools.cycle(iterable)
+
+        @classmethod
+        @__bytesdecorator__
         def iterable(cls, iterable):
-            return (item for item in iter(iterable))
+            return six.iterbytes(iterable)
 
         @classmethod
         def file(cls, file):
             return itertools.starmap(file.read, itertools.repeat([1]))
 
         @classmethod
+        @__bytesdecorator__
         def prng(cls, seed=None):
             random.seed(seed)
-            iterable = itertools.starmap(random.randint, itertools.repeat([0, 0xff]))
-            return (six.int2byte(item) for item in iterable)
+            return itertools.starmap(random.randint, itertools.repeat([0, 0xff]))
 
         @classmethod
+        @__bytesdecorator__
         def zero(cls):
-            return cls.repeat(b'\x00')
+            return six.iterbytes(cls.repeat(b'\x00'))
 
     @classmethod
     def fill(cls, amount, source):
         """Returns a bytearray of ``amount`` elements, from the specified ``source``"""
-        return bytes().join(itertools.islice(source, amount))
+        iterable = itertools.islice(source, amount)
+        return bytes().join(six.int2byte(item) for item in six.iterbytes(iterable))
 
 ## exception remapping
 def mapexception(map={}, any=None, ignored=()):
@@ -571,37 +582,45 @@ if __name__ == '__main__':
     @TestCase
     def test_padding_sourcerepeat():
         source = padding.source.repeat(iter(b'\0' * 2))
-        if six.next(source) == b'\0' and six.next(source) == b'\0' and six.next(source) == b'\0' and six.next(source) == b'\0':
+        zero, iterable = six.byte2int(b'\0'), six.iterbytes(source)
+        if six.next(iterable) == zero and six.next(iterable) == zero and six.next(iterable) == zero and six.next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourceiterable():
         source = padding.source.iterable(iter(b'\0' * 2))
-        if six.next(source) == b'\0' and six.next(source) == b'\0':
+        zero, iterable = six.byte2int(b'\0'), six.iterbytes(source)
+        if six.next(iterable) == zero and six.next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourcezero():
         source = padding.source.zero()
-        if six.next(source) == b'\0' and six.next(source) == b'\0':
+        zero, iterable = six.byte2int(b'\0'), six.iterbytes(source)
+        if six.next(iterable) == zero and six.next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourcefile():
         class fakefile(object):
             def __init__(self, data):
-                self.iterable = iter(data)
+                self.iterable = iter(bytearray(data))
             def read(self, count):
                 res = b''
                 while count > 0:
-                    res += six.next(self.iterable)
+                    res += six.int2byte(six.next(self.iterable))
                     count -= 1
                 return res
 
-        f = fakefile(b'hola')
+        filedata = b'hola'
+        f = fakefile(filedata)
         source = padding.source.file(f)
-        if six.next(source) == b'h' and six.next(source) == b'o' and six.next(source) == b'l' and six.next(source) == b'a':
-            raise Success
+
+        for a, b in zip(source, bytearray(filedata)):
+            if a != six.int2byte(b):
+                raise Failure
+            continue
+        raise Success
 
     @TestCase
     def test_padding_sourceprng():
