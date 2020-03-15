@@ -104,7 +104,7 @@ Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 def setbyteorder(endianness):
     if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        for k,v in globals().iteritems():
+        for k,v in six.iteritems(globals()):
             if v is not type and isinstance(v,builtins.type) and issubclass(v,type) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
                 d = dict(v.__dict__)
                 d['byteorder'] = endianness

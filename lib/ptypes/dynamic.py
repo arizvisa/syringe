@@ -362,7 +362,7 @@ class union(_union_generic):
             return res
 
         # if the blocksize method is not modified, then allocate all fields and choose the largest
-        if getattr(self.blocksize, 'im_func', None) is union.blocksize.im_func:
+        if utils.callable_eq(self.blocksize, union.blocksize):
             iterable = (self.new(t) for t in objects)
             size = max(n.a.blocksize() for n in iterable)
             return clone(ptype.block, length=size)
@@ -436,14 +436,14 @@ class union(_union_generic):
 
         # do the root object first
         inst = utils.repr_instance(self.object.classname(), '{object}')
-        prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().iteritems())
+        prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(self.object.properties()))
         result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
         for fld, value in map(None, self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().iteritems())
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary()))
 
         if len(result) > 0:
@@ -457,7 +457,7 @@ class union(_union_generic):
         # first the object if it's been allocated
         if self.object is not None:
             inst = utils.repr_instance(self.object.classname(), '{object}')
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().iteritems())
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(self.object.properties()))
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
         else:
             result.append("[{:x}] {:s} ???".format(self.getoffset(), gettypename(self._value_)))
@@ -469,7 +469,7 @@ class union(_union_generic):
                 result.append("[{:x}] {:s} {:s} ???".format(self.getoffset(), utils.repr_class(gettypename(t)), name))
                 continue
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().iteritems())
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
 
         if len(result) > 0:
@@ -569,11 +569,11 @@ if __name__ == '__main__':
 
     ptypes.setsource(ptypes.provider.string('A'*50000))
 
-    string1='ABCD'  # bigendian
-    string2='DCBA'  # littleendian
+    string1=b'ABCD'  # bigendian
+    string2=b'DCBA'  # littleendian
 
-    s1 = 'the quick brown fox jumped over the lazy dog'
-    s2 = s1.encode('zlib')
+    s1 = b'the quick brown fox jumped over the lazy dog'
+    s2 = zlib.compress(s1)
 
     @TestCase
     def test_dynamic_union_rootstatic():
@@ -584,7 +584,7 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'int'),
             ]
 
-        a = test(source=ptypes.provider.string('A'*4))
+        a = test(source=ptypes.provider.string(b'A'*4))
         a=a.l
         if a.object[0].int() != 0x41:
             raise Failure
@@ -602,7 +602,7 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'end'),
             ]
 
-        a = test(source=ptypes.provider.string('A'*12))
+        a = test(source=ptypes.provider.string(b'A'*12))
         a=a.l
         if a.size() == 12:
             raise Success
@@ -630,7 +630,7 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_pointer_littleendian_2():
         pint.setbyteorder(config.byteorder.littleendian)
-        string = '\x26\xf8\x1a\x77'
+        string = b'\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
 
         t = dynamic.pointer(dynamic.block(0), pint.uint32_t)
@@ -642,7 +642,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_bigendian_deref():
         pint.setbyteorder(config.byteorder.bigendian)
 
-        s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
+        s = ptype.provider.string(b'\x00\x00\x00\x04\x44\x43\x42\x41')
         t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
@@ -652,7 +652,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_deref():
         pint.setbyteorder(config.byteorder.littleendian)
 
-        s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
+        s = ptype.provider.string(b'\x04\x00\x00\x00\x44\x43\x42\x41')
         t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
@@ -662,7 +662,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_64bit_deref():
         pint.setbyteorder(config.byteorder.littleendian)
         t = dynamic.pointer(dynamic.block(4), pint.uint64_t)
-        x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
+        x = t(source=ptype.provider.string(b'\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
         if x.l.d.getoffset() == 8:
             raise Success
 
@@ -676,7 +676,7 @@ if __name__ == '__main__':
     def test_dynamic_array_2():
         v = dynamic.array(pint.int32_t, 8)
         i = six.moves.range(0x40,0x40+v.length)
-        x = ptype.provider.string(''.join(six.int2byte(x)+'\x00\x00\x00' for x in i))
+        x = ptype.provider.string(bytes().join(six.int2byte(x)+b'\x00\x00\x00' for x in i))
         z = v(source=x).l
         if z[4].int() == 0x44:
             raise Success
