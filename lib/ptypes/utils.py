@@ -136,9 +136,9 @@ def repr_position(pos, hex=True, precision=0):
     return "{:x}.{:x}".format(ofs, bofs)
 
 ## hexdumping capability
-def printable(s, nonprintable='.'):
+def printable(data, nonprintable=u'.'):
     """Return a string of only printable characters"""
-    return six.moves.reduce(lambda agg, item: agg + (item if item >= 0x20 and item < 0x7f else nonprintable), bytes(s), '')
+    return six.moves.reduce(lambda agg, item: agg + (six.int2byte(item).decode(sys.getdefaultencoding()) if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
@@ -178,10 +178,10 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
     getRow = lambda o: hexrow(data, offset=o, **kwds)
 
     res = []
-    (ofs, data) = offset, bytes().join(map(six.int2byte, itertools.islice(value, width)))
+    (ofs, data) = offset, bytearray(itertools.islice(value, width))
     for i in (itertools.count(1) if rows is None else six.moves.range(1, rows)):
         res.append( getRow(ofs) )
-        ofs, data = ofs + width, bytes().join(map(six.int2byte, itertools.islice(value, width)))
+        ofs, data = ofs + width, bytearray(itertools.islice(value, width))
         if len(data) < width:
             break
         continue
@@ -656,6 +656,47 @@ if __name__ == '__main__':
         source = padding.source.iterable(b'ABCD')
         data = padding.fill(4, source)
         if data == b'ABCD':
+            raise Success
+
+    @TestCase
+    def test_printable():
+        data = b'fuckyou\0\0\0\0'
+        if utils.printable(data) == 'fuckyou....':
+            raise Success
+
+    @TestCase
+    def test_hexdump():
+        offset = 57005
+        data = b'fuckyou\0\0\0\0' * 2
+
+        left_items = ["{:04x}".format(offset + i) for i in range(0, len(data), 16)]
+        center_items = [ "{:02x}".format(item) for item in bytearray(data) ]
+        center_items += ['  '] * (16 - len(data) % 16)
+        right_items = utils.printable(data) + ' ' * (16 - len(data) % 16)
+
+        center_chunks = []
+        for i in range(0, len(center_items), 8):
+            res = []
+            for j in range(0, 8):
+                res.append(center_items[i + j])
+            center_chunks.append(res)
+
+        left_iterable = iter(left_items)
+        center_iterable = iter(center_chunks)
+        right_iterable = iter(right_items)
+
+        res = []
+        res.append('  '.join([next(left_iterable), ' '.join(next(center_iterable)), ' '.join(next(center_iterable)), str().join(itertools.islice(right_iterable, 16))]))
+        res.append('  '.join([next(left_iterable), ' '.join(next(center_iterable)), ' '.join(next(center_iterable)), str().join(itertools.islice(right_iterable, 16))]))
+
+        if utils.hexdump(data, offset=offset, width=16) == '\n'.join(res):
+            raise Success
+
+    @TestCase
+    def test_emit_repr():
+        data = b'fuckyou\0\0\0\0' * 2
+        match = str().join(map("\\x{:02x}".format, bytearray(data)))
+        if emit_repr(data) == match:
             raise Success
 
 if __name__ == '__main__':
