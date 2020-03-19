@@ -1,7 +1,7 @@
 import logging,itertools,ptypes
 from ptypes import *
 
-import Object
+from . import Object
 
 class ulong(pint.bigendian(pint.uint32_t)): pass
 
@@ -247,7 +247,7 @@ class File(pstruct.type):
         for o in offsets:
             o = int(o)+memblocksize
             p.setoffset(o)
-            if p.load().serialize() == '\x00\x00\xff\xff':
+            if p.load().serialize() == b'\x00\x00\xff\xff':
                 importheader.setoffset(o)
                 imp.setoffset(o+impblocksize)
                 imp.load()
@@ -265,7 +265,7 @@ class File(pstruct.type):
         for index,o in enumerate(offsets):
             o = int(o)+memblocksize
             p.setoffset(o)
-            if p.load().serialize() == '\x00\x00\xff\xff':
+            if p.load().serialize() == b'\x00\x00\xff\xff':
                 continue
 
 #            yield self.new(Object.File, __name__="Member[{:d}]".format(index), offset=o)
@@ -273,7 +273,7 @@ class File(pstruct.type):
         return
 
 if __name__ == '__main__':
-    import Archive
+    import pecoff.Archive as Archive
     from ptypes import *
     source = ptypes.file('~/python26/libs/python26.lib')
 
