@@ -354,8 +354,8 @@ class proxy(bounded):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
-class string(bounded):
-    '''Basic writeable string provider.'''
+class bytes(bounded):
+    '''Basic writeable bytes provider.'''
     offset = int
     data = str     # this is backed by an array.array type
 
@@ -368,7 +368,8 @@ class string(bounded):
         self.data = value
 
     def __init__(self, string=b''):
-        res = bytearray(string) if isinstance(string, bytes) else bytearray(string, sys.getdefaultencoding())
+        res = bytearray(string) if isinstance(string, builtins.bytes) else bytearray(string, sys.getdefaultencoding())
+        self.offset = 0
         self.data = res
 
     def seek(self, offset):
@@ -392,7 +393,7 @@ class string(bounded):
             raise error.ConsumeError(self, self.offset, amount, len(res))
         if len(res) == amount:
             self.offset += amount
-        return bytes(res)
+        return builtins.bytes(res)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
@@ -410,6 +411,9 @@ class string(bounded):
     @utils.mapexception(any=error.ProviderError)
     def size(self):
         return len(self.data)
+
+class string(bytes):
+    '''This is an alias for the bytes provider.'''
 
 class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
@@ -496,7 +500,7 @@ class random(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         res = map(_random.randint, (0,) * amount, (255,) * amount)
-        return bytes().join(map(six.int2byte, res))
+        return builtins.bytes().join(map(six.int2byte, res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -518,7 +522,7 @@ class stream(base):
 
     def __init__(self, source, offset=0):
         self.source = source
-        self.data = array.array('c')
+        self.data = array.array('B')
         self.data_ofs = self.offset = offset
 
     def seek(self, offset):
@@ -540,7 +544,7 @@ class stream(base):
             raise EOFError
 
         data = self._read(amount)
-        self.data.extend( array.array('c', data) )
+        self.data.extend( array.array('B', bytearray(data)) )
         if len(data) < amount:    # XXX: this really can't be the only way(?) that an instance
                                   #      of something ~fileobj.read (...) can return for a 
             self.eof = True
@@ -588,7 +592,7 @@ class stream(base):
             # FIXME: this logic _apparently_ hasn't been thought out at all..check notes
             o = self.offset - self.data_ofs
             if o >= 0 and o <= len(self.data):
-                self.data[o : o + len(data)] = array.array('c', data)
+                self.data[o : o + len(data)] = array.array('B', bytearray(data))
                 if o + len(data) >= len(self.data):
                     self.eof = False
                 self._write(data)
@@ -618,7 +622,7 @@ class stream(base):
 class iterable(stream):
     '''Provider that caches data read from a generator/iterable in order to provide random-access reading.'''
     def _read(self, amount):
-        return bytes().join(itertools.islice(self.source, amount))
+        return builtins.bytes().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
         Log.info("iter._write : Tried to write {:+x} bytes to an iterator".format(len(data)))
@@ -632,7 +636,7 @@ class posixfile(fileobj):
 
     @utils.mapexception(any=error.ProviderError)
     def open(self, filename, mode='rw', perms=0o644):
-        mode = bytes().join(sorted(set(x.lower() for x in mode)))
+        mode = builtins.bytes().join(sorted(set(x.lower() for x in mode)))
         flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
 
         # this is always assumed
@@ -805,7 +809,7 @@ try:
 
             self.address += amount
             # XXX: test this shit out
-            return bytes(Buffer.raw)
+            return builtins.bytes(Buffer.raw)
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
@@ -890,7 +894,7 @@ try:
 
             if resultAmount.value == amount:
                 self.offset += resultAmount.value
-            return bytes(resultBuffer.raw)
+            return builtins.bytes(resultBuffer.raw)
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
@@ -941,7 +945,7 @@ try:
 
             half = size // 2
             if half > 0:
-                return bytes().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
+                return builtins.bytes().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
             if cls.module.isEnabled(offset):
                 return b'' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
             raise Exception((offset, size))
@@ -1051,7 +1055,7 @@ try:
 
             except RuntimeError as E:
                 raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
-            return bytes(result)
+            return builtins.bytes(result)
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
@@ -1092,7 +1096,7 @@ try:
             except:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
-            return bytes().join(res)
+            return builtins.bytes().join(res)
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
@@ -1232,7 +1236,7 @@ try:
             blockpointer = ctypes.POINTER(ctypes.c_char * length)
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
-            return bytes().join(p.contents)
+            return builtins.bytes().join(p.contents)
 
         @staticmethod
         def _write(address, value):
@@ -1501,7 +1505,7 @@ if __name__ == '__main__':
         res = t2(source=provider.proxy(source)).l
         res[1].set(0x0d0e0a0d)
         res.commit()
-        if bytes().join(n.serialize() for n in source[0:0xc]) == b'AAAA\x0d\x0a\x0e\x0dCCCC':
+        if builtins.bytes().join(n.serialize() for n in source[0 : 0xc]) == b'AAAA\x0d\x0a\x0e\x0dCCCC':
             raise Success
 
     @TestCase
