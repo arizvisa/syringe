@@ -300,8 +300,7 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ttf,ptypes
-    reload(ttf)
+    import ptypes, vector.ttf as ttf
     ptypes.setsource( ptypes.file('./cour.ttf', 'rb') )
 
     #t = dyn.block(ptypes.ptype.type.source.size())

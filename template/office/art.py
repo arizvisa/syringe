@@ -4062,7 +4062,7 @@ class SignatureLineBooleanProperties(pbinary.flags):
 
 if __name__ == '__main__':
     from ptypes import *
-    import art
+    import office.art as art
 
     if False:
         s = '\x00\x00\x00\x00\x0c\x00\x00\x00' + 'A'*30

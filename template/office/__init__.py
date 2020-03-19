@@ -55,7 +55,8 @@ class RecordType(pint.enum, pint.littleendian(pint.uint16_t)):
     _values_ = []
 
     @classmethod
-    def define(cls,(name,value)):
+    def define(cls,pack_namevalue):
+        name, value = pack_namevalue
         res = type(name, (Instance,), {'type':value, 'cache':{}})
         cls._values_.append((res.__name__,res.type))
         return (name, Record.define(res))

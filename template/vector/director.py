@@ -163,7 +163,7 @@ class demx(parray.block):
     _object_ = chunk
 
 if __name__ == '__main__':
-    import ptypes,director; reload(director)
+    import ptypes,vector.director as director
     ptypes.setsource( ptypes.provider.file('./sample.dir', mode='r') )
 
     z = director.File()

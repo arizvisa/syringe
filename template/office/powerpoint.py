@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 from . import *
-import art,graph
+from . import art,graph
 from array import array
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
@@ -827,7 +827,7 @@ class DocInfoListContainer(RecordContainer):
     ]
 
 if __name__ == '__main__':
-    import powerpoint as pp
+    import office.powerpoint as pp
     import ptypes
     from ptypes import *
 
@@ -874,7 +874,7 @@ if __name__ == '__main__':
         print(z[0]['data'][2]['data'])
 
     if False:
-        import ptypes,powerpoint
+        import ptypes,office.powerpoint as powerpoint
         usersource = ptypes.provider.file('user.stream')
         datasource = ptypes.provider.file('data.stream')
 

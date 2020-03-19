@@ -620,7 +620,7 @@ class SOUNDINFO(pstruct.type):
     ]
 
 ## XXX font
-import tags
+from . import tags
 
 if __name__ == '__main__':
     import ptypes

@@ -405,9 +405,7 @@ class section_entry_extension(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,iso9660
-    reload(iso9660)
-    reload(ptypes.provider)
+    import ptypes,fs.iso9660 as iso9660
     ptypes.setsource(ptypes.provider.WindowsFile('~/downloads/6euj41uc.iso', 'r'))
 
     z = iso9660.File()

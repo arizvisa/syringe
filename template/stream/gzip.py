@@ -19,5 +19,5 @@ if __name__ == '__main__':
     import ptypes
     from ptypes import *
 
-    import gzip
+    import stream.gzip as gzip
     raise NotImplementedError

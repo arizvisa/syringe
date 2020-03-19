@@ -68,7 +68,7 @@ if __name__ == '__main__' and False:
 
 if __name__ == '__main__':
     import sys
-    import ptypes,jpeg
+    import ptypes,image.jpeg as jpeg
     ptypes.setsource( ptypes.file(sys.argv[1]) )
 
     z = jpeg.File()

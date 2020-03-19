@@ -272,8 +272,7 @@ class DELTA_FLI(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,flic
-    reload(flic)
+    import ptypes,video.flic as flic
     ptypes.setsource( ptypes.file('./test.fli') )
 #    ptypes.setsource( ptypes.file('./janmar90.flc') )
 

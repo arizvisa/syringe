@@ -499,7 +499,7 @@ class File(parray.terminated):
 
 if __name__ == '__main__':
     import sys
-    import ptypes,rmff
+    import ptypes,video.rmff as rmff
     ptypes.setsource( ptypes.file(sys.argv[1], mode='rb') )
 
     self = rmff.File()

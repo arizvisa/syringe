@@ -294,14 +294,12 @@ class TPKT(pstruct.type):
         return res.set(length=sum(res[fld].size() for fld in ['version','reserved','length','pdu','data']))
 
 if __name__ == '__main__':
-    import user, ptypes, x224
-    from user import *
+    import ptypes, protocol.x224 as x224
 
 ### connection request
     data = "030000221de00000000000" + "Cookie: mstshash=hash\r\n".encode('hex')
     ptypes.setsource(ptypes.prov.string(data.decode('hex')))
 
-    reload(x224)
     a = x224.TPKT()
     a = a.l
     print(a['data'])
@@ -312,7 +310,6 @@ if __name__ == '__main__':
     data = "0300000c02f08038000603eb"
     ptypes.setsource(ptypes.prov.string(data.decode('hex')))
 
-    reload(x224)
     a = x224.TPKT()
     a = a.l
     print(a['data'])

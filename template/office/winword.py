@@ -2947,7 +2947,7 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import user, sys, os
+    import sys, os
     import ptypes, office.storage, office.winword
 
     path, = sys.argv[1:]

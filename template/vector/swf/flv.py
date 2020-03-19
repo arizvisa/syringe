@@ -535,7 +535,6 @@ class File(pstruct.type):
 if __name__ == '__main__':
     import ptypes,swf.flv as flv
     ptypes.setsource(ptypes.prov.file('c:/users/user/Documents/blah.flv',mode='rb'))
-    reload(flv)
     a = flv.File()
     a = a.l
     print(a['Header']['TypeFlags'])

@@ -1,5 +1,5 @@
 from ptypes import *
-import art,graph
+from . import art,graph
 from . import *
 
 import operator,functools,itertools

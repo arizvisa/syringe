@@ -680,7 +680,7 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,tags,stypes
+    import ptypes,vector.swf.tags as tags,vector.swf.stypes as stypes
     from ptypes import *
 
     @TestCase

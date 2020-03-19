@@ -55,7 +55,7 @@ if __name__ == '__main__':
     import ptypes
     from ptypes import *
 
-    import bzip2
+    from . import bzip2
     import bz2
 
     a = bz2.BZ2Compressor(9)

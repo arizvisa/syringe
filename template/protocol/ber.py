@@ -315,27 +315,27 @@ class ProtocolClass(ptype.definition):
 
 @Protocol.define
 class Universal(ProtocolClass):
-    Class, cache = 00, {}
+    Class, cache = 0x00, {}
     # FIXME: These types need to distinguish between constructed and non-constructed
     #        types instead of just generalizing them.
 Protocol.Universal = Universal
 
 @Protocol.define
 class Application(ProtocolClass):
-    Class, cache = 01, {}
+    Class, cache = 0x01, {}
     # FIXME: This needs to be unique to the instance of all ber.Element types
     #        used by the application.
 Protocol.Application = Application
 
 @Protocol.define
 class Context(ProtocolClass):
-    Class, cache = 02, {}
+    Class, cache = 0x02, {}
     # FIXME: This needs to be unique to a specific ber.Element type
 Protocol.Context = Context
 
 @Protocol.define
 class Private(ProtocolClass):
-    Class, cache = 03, {}
+    Class, cache = 0x03, {}
 Protocol.Private = Private
 
 ### Tag definitions (X.208)
@@ -558,9 +558,8 @@ class File(Element):
     byteorder = ptypes.config.byteorder.bigendian
 
 if __name__ == '__main__':
-    import ptypes,ber
+    import ptypes,protocol.ber as ber
     import ptypes.bitmap as bitmap
-    reload(ber)
     ptypes.setsource(ptypes.file('./test.3','rb'))
 
     a = ber.Element

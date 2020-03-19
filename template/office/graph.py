@@ -75,5 +75,5 @@ class DataFormat(pstruct.type):
 
 if __name__ == '__main__':
     from ptypes import *
-    import graph
+    import office.graph as graph
 

@@ -672,7 +672,7 @@ class COM(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes, jp2
+    import ptypes, image.jpeg.jp2 as jp2
     ptypes.setsource(ptypes.prov.file('logo.jp2', mode='r'))
 
     z = jp2.File().l

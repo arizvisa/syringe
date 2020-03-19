@@ -35,7 +35,7 @@ class super(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,cramfs
+    import ptypes, fs.cramfs as cramfs
     ptypes.setsource('re1000.fw')
 
     a = cramfs.super()

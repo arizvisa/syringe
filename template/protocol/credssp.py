@@ -54,7 +54,7 @@ class NegoToken(ber.SEQUENCE):
     ]
 
 if __name__ == '__main__':
-    import ptypes, ber, credssp, nlmp
+    import ptypes, protocol.ber as ber, protocol.credssp as credssp, protocol.nlmp as nlmp
     from ptypes import *
 
     if False:

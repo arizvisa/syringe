@@ -1,5 +1,3 @@
-import ptypes, zlib
-from .tags import *
 from .stypes import *
 pbinary.setbyteorder(pbinary.bigendian)
 
@@ -87,7 +85,7 @@ class File(pstruct.type, ptype.boundary):
 
 if __name__ == '__main__':
     import sys
-    import ptypes,__init__ as swf
+    import ptypes,vector.swf as swf
     ptypes.setsource(ptypes.file('./test.swf', mode='r'))
 
     z = File

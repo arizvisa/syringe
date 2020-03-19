@@ -23,7 +23,7 @@ class common_boot_record(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import disk,ptypes
+    import ptypes, fs.physical as disk
     ptypes.setsource(ptypes.provider.WindowsFile(r'\\.\PhysicalDrive%d'% (0), 'r'))
 
     a = disk.sector()

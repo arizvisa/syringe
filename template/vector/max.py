@@ -583,7 +583,7 @@ class BOGUS(ptype.block): type = 0x0011
 class File(Chunk): pass
 
 if __name__ == '__main__':
-    import ptypes, max
+    import ptypes, vector.max as max
     ptypes.setsource(ptypes.prov.file('./samples/3ds/boletus.3ds', mode='rb'))
     z = max.File()
     z=z.l
@@ -620,7 +620,7 @@ if __name__ == '__main__':
     print(z['data'][2]['data'][3]['data'][5]['data']['rotate'][0])
 
 if __name__ == '__main__':
-    import ptypes, max
+    import ptypes, vector.max as max
     ptypes.setsource(ptypes.prov.file('./results/3ds/crashes/id_000071_00', mode='rb'))
     ptypes.setsource(ptypes.prov.file('./samples/3ds/boletus.3ds', mode='rb'))
     z = max.File()

@@ -639,8 +639,7 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,tiff
-    reload(tiff)
+    import ptypes,image.tiff as tiff
     ptypes.setsource( ptypes.file('sample.tif') )
 
     a = tiff.File()

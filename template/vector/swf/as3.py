@@ -588,7 +588,7 @@ class abcFile(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,as3,stypes
+    import ptypes,vector.swf.as3 as as3,vector.swf.stypes as stypes
     from ptypes import *
     ptypes.setsource(prov.file('./tag-abcfile.bin','r'))
 

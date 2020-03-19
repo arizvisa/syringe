@@ -129,8 +129,7 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import sys,ptypes,cab
-    reload(cab)
+    import sys,ptypes,archive.cab as cab
     ptypes.setsource(ptypes.file('~/shit/test/Windows6.1-KB2705219-x86.cab'))
 
     a = cab.File()
