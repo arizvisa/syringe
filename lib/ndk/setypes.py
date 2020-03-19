@@ -362,11 +362,13 @@ if __name__ == '__main__':
     00 00 00 00
     """)
 
+    fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
+
     for siddata in sids:
         data = siddata.translate(None, ' \n')
         print("decoding {!s}".format(data))
 
-        c = SID(__name__='sid').load(source=prov.string(data.decode('hex')))
+        c = SID(__name__='sid').load(source=prov.bytes(fromhex(data)))
         print(c)
 
         for i, item in enumerate(c['SubAuthority']):
