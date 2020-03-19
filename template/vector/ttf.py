@@ -154,7 +154,7 @@ class glyf(parray.block):
                     if cur >= 0 and cur < count:
                         return x['value']
                     cur -= count
-                raise IndexError, index
+                raise IndexError(index)
             def isTerminator(self, value):
                 p = self.getparent(glyf.singleglyph)
                 count = p['endPtsOfContours'][-1].int() + 1

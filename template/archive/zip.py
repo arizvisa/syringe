@@ -298,7 +298,7 @@ class LocalFileHeader32(LocalFileHeader):
             import lzma
             logging.debug('Decompressing ({:s}) {:d} bytes of content.'.format('Lzma', len(res)))
             return lzma.decompress(res)
-        raise ValueError, method
+        raise ValueError(method)
 
     def listing(self):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
