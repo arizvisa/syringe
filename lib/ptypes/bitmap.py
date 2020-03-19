@@ -279,13 +279,18 @@ class consumer(object):
         @classmethod
         def __make_interator__(cls, iterable):
             # XXX: in python2, byte-iterators always return bytes
-            return (six.byte2int(item) for item in iterable)
+            return six.iterbytes(iterable)
 
     else:
         @classmethod
         def __make_interator__(cls, iterable):
+            # XXX: if we're a generator, we might _actually_ be iterating
+            #      through bytes...
+            if builtins.isinstance(iterable, types.GeneratorType):
+                return map(six.byte2int, iterable)
+
             # XXX: but, in python3 byte-iterators always return ints...
-            return iter(iterable)
+            return six.iterbytes(iterable)
 
     def __init__(self, iterable=()):
         self.source = self.__make_interator__(iterable)
@@ -1113,6 +1118,20 @@ if __name__ == '__main__':
     @TestCase
     def consumer_consume4_4():
         data = b'\xa5\xa5'
+        valid = [0xa, 0x5, 0xa, 0x5]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            item = bc.consume(4)
+            res.append(item)
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consumeiterable():
+        data = (six.int2byte(item) for item in [0xa5, 0xa5])
         valid = [0xa, 0x5, 0xa, 0x5]
 
         bc = bitmap.consumer(data)
