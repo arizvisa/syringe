@@ -3,15 +3,15 @@ import functools,operator,itertools,types
 import six
 
 ## string formatting
-def strdup(string, terminator='\x00'):
+def strdup(string, terminator='\0'):
     """Will return a copy of ``string`` with the provided ``terminated`` characters trimmed"""
-    count = len(list(itertools.takewhile(lambda n: n not in terminator, string)))
+    count = len(list(itertools.takewhile(lambda item: item not in terminator, string)))
     return string[:count]
 
 def indent(string, tabsize=4, char=' ', newline='\n'):
     """Indent each line of ``string`` with the specified tabsize"""
-    indent = char*tabsize
-    strings = [(indent + x) for x in string.split(newline)]
+    indent = char * tabsize
+    strings = [(indent + item) for item in string.split(newline)]
     return newline.join(strings)
 
 ## temporary attribute assignments for a context
@@ -29,13 +29,13 @@ class assign(object):
         self.attributes = { self.magical.get(k, k) : v for k, v in six.iteritems(attrs) }
 
     def __enter__(self):
-        objects,attrs = self.objects,self.attributes
-        self.states = tuple( dict((k,getattr(o,k)) for k in attrs.keys()) for o in objects)
+        objects, attrs = self.objects, self.attributes
+        self.states = tuple( dict((k, getattr(o, k)) for k in attrs.keys()) for o in objects)
         [o.__update__(attrs) for o in objects]
         return objects
 
     def __exit__(self, exc_type, exc_value, traceback):
-        [o.__update__(a) for o,a in zip(self.objects,self.states)]
+        [o.__update__(a) for o, a in zip(self.objects, self.states)]
         return
 
 ## ptype padding types
@@ -124,16 +124,16 @@ def repr_instance(classname, name):
 def repr_position(pos, hex=True, precision=0):
     if len(pos) == 1:
         ofs, = pos
-        return '{:x}'.format(ofs)
-    ofs,bofs = pos
+        return "{:x}".format(ofs)
+    ofs, bofs = pos
     if precision > 0 or hex:
         partial = bofs / 8.0
         if hex:
-            return '{:x}.{:x}'.format(ofs,math.trunc(partial*0x10))
-        fraction = ':0{:d}x'.format(precision)
-        res = '{:x}.{'+fraction+'}'
-        return res.format(ofs,math.trunc(partial * 10**precision))
-    return '{:x}.{:x}'.format(ofs,bofs)
+            return "{:x}.{:x}".format(ofs, math.trunc(partial * 0x10))
+        fraction = ":0{:d}x".format(precision)
+        res = '{:x}.{' + fraction + '}'
+        return res.format(ofs, math.trunc(partial * 10**precision))
+    return "{:x}.{:x}".format(ofs, bofs)
 
 ## hexdumping capability
 def printable(s, nonprintable='.'):
@@ -146,10 +146,10 @@ def hexrow(value, offset=0, width=16, breaks=[8]):
     extra = width - len(value)
 
     ## left
-    left = '{:04x}'.format(offset)
+    left = "{:04x}".format(offset)
 
     ## middle
-    res = [ '{:02x}'.format(item) for item in value ]
+    res = [ "{:02x}".format(item) for item in value ]
     if len(value) < width:
         res += ['  '] * extra
 
@@ -160,7 +160,7 @@ def hexrow(value, offset=0, width=16, breaks=[8]):
     middle = ' '.join(res)
 
     ## right
-    right = printable(value) + ' '*extra
+    right = printable(value) + ' ' * extra
 
     return '  '.join((left, middle, right))
 
@@ -206,7 +206,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     bytewidth = width / charwidth
     leftover = size - bytewidth
 
-    hexify = lambda s: str().join(map(r'\x{:02x}'.format, six.iterbytes(s)))
+    hexify = lambda s: str().join(map(r"\x{:02x}".format, six.iterbytes(s)))
 
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)
@@ -215,11 +215,11 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     msg = message.format(size=size, charwidth=charwidth, width=width, leftover=leftover, **formats)
 
     # figure out how many bytes we can print
-    bytefrac,bytewidth = math.modf((width - len(msg)) * 1.0 / charwidth)
-    padlength = math.trunc(charwidth*bytefrac)
+    bytefrac, bytewidth = math.modf((width - len(msg)) * 1.0 / charwidth)
+    padlength = math.trunc(charwidth * bytefrac)
 
-    msg = padding*math.trunc(padlength/2.0+0.5) + msg + padding*math.trunc(padlength/2)
-    left,right = data[:math.trunc(bytewidth/2 + 0.5)], data[size-math.trunc(bytewidth/2):]
+    msg = padding * math.trunc(padlength / 2.0 + 0.5) + msg + padding * math.trunc(padlength / 2)
+    left, right = data[:math.trunc(bytewidth / 2 + 0.5)], data[size - math.trunc(bytewidth / 2):]
     return hexify(left) + msg + hexify(right)
 
 def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
@@ -233,26 +233,26 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
     size - the total number of bytes
     """
     size = len(data)
-    count = math.trunc(math.ceil(size*1.0/width))
-    half = math.trunc(height/2.0)
-    leftover = (count - half*2)
-    skipped = leftover*width
+    count = math.trunc(math.ceil(size * 1.0 / width))
+    half = math.trunc(height / 2.0)
+    leftover = (count - half * 2)
+    skipped = leftover * width
 
     # display everything
     if height <= 0 or leftover <= 0:
         for o in six.moves.range(0, size, width):
             # offset, width, attrs
-            yield hexrow(data[o:o+width], offset+o, width, **attrs)
+            yield hexrow(data[o : o + width], offset + o, width, **attrs)
         return
 
     # display rows
     o1 = offset
-    for o in six.moves.range(0, half*width, width):
-        yield hexrow(data[o:o+width], o+o1, **attrs)
+    for o in six.moves.range(0, half * width, width):
+        yield hexrow(data[o : o + width], o + o1, **attrs)
     yield message.format(leftover=leftover, height=height, count=count, skipped=skipped, size=size)
-    o2 = width*(count-half)
-    for o in six.moves.range(0, half*width, width):
-        yield hexrow(data[o+o2:o+o2+width], o+o1+o2, **attrs)
+    o2 = width * (count - half)
+    for o in six.moves.range(0, half * width, width):
+        yield hexrow(data[o + o2 : o + o2 + width], o + o1 + o2, **attrs)
     return
 
 def attributes(instance):
@@ -260,11 +260,11 @@ def attributes(instance):
 
     This skips over things that require executing code such as properties.
     """
-    i,t = ( set(dir(_)) for _ in (instance,instance.__class__))
+    i, t = ( set(dir(_)) for _ in (instance, instance.__class__))
     result = {}
     for k in i:
         v = getattr(instance.__class__, k, callable)
-        if not (callable(v) or hasattr(v,'__delete__')):
+        if not (callable(v) or hasattr(v, '__delete__')):
             result[k] = getattr(instance, k)
         continue
     for k in i.difference(t):
@@ -274,7 +274,7 @@ def attributes(instance):
         continue
     return result
 
-def memoize(*kargs,**kattrs):
+def memoize(*kargs, **kattrs):
     '''Converts a function into a memoized callable
     kargs = a list of positional arguments to use as a key
     kattrs = a keyword-value pair describing attributes to use as a key
@@ -288,35 +288,37 @@ def memoize(*kargs,**kattrs):
     F_VARKWD = 0x8
     F_VARGEN = 0x20
     kargs = list(kargs)
-    kattrs = tuple((o,a) for o,a in sorted(kattrs.items()))
+    kattrs = tuple((o, a) for o, a in sorted(kattrs.items()))
     def prepare_callable(fn, kargs=kargs, kattrs=kattrs):
-        if hasattr(fn,'im_func'):
+        if hasattr(fn, 'im_func'):
             fn = fn.im_func
-        assert isinstance(fn,memoize.__class__), 'Callable {!r} is not of a function type'.format(fn)
+        if not isinstance(fn, memoize.__class__):
+            raise AssertionError("Callable {!r} is not of a function type".format(fn))
         functiontype = type(fn)
         cache = {}
         co = fn.__code__
-        flags,varnames = co.co_flags,iter(co.co_varnames)
-        assert (flags & F_VARGEN) == 0, 'Not able to memoize {!r} generator function'.format(fn)
+        flags, varnames = co.co_flags, iter(co.co_varnames)
+        if (flags & F_VARGEN) != 0:
+            raise AssertionEerror("Not able to memoize {!r} generator function".format(fn))
         argnames = itertools.islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs
         c_var = (six.next(varnames) if flags & F_VARARG else None, six.next(varnames) if flags & F_VARKWD else None)
         if not kargs and not kattrs:
-            kargs[:] = itertools.chain(c_positional,filter(None,c_var))
+            kargs[:] = itertools.chain(c_positional, filter(None, c_var))
         def key(*args, **kwds):
             res = iter(args)
-            p = dict(zip(c_positional,res))
+            p = dict(zip(c_positional, res))
             p.update(kwds)
-            a,k = c_var
+            a, k = c_var
             if a is not None: p[a] = tuple(res)
             if k is not None: p[k] = dict(kwds)
             k1 = (p.get(k, None) for k in kargs)
-            k2 = ((n(p[o]) if callable(n) else getattr(p[o],n,None)) for o,n in c_attribute)
-            return tuple(itertools.chain(k1, (None,), k2))
+            k2 = ((n(p[o]) if callable(n) else getattr(p[o], n, None)) for o, n in c_attribute)
+            return tuple(itertools.chain(k1, (None, ), k2))
         def callee(*args, **kwds):
             res = key(*args, **kwds)
-            try: return cache[res] if res in cache else cache.setdefault(res, fn(*args,**kwds))
+            try: return cache[res] if res in cache else cache.setdefault(res, fn(*args, **kwds))
             except TypeError: return fn(*args, **kwds)
         def force(*args, **kwds):
             res = key(*args, **kwds)
@@ -324,19 +326,19 @@ def memoize(*kargs,**kattrs):
             return cache[res]
 
         # set some utilies on the memoized function
-        callee.memoize_key = lambda *args,**kwargs: key(*args, **kwargs)
+        callee.memoize_key = lambda *args, **kwargs: key(*args, **kwargs)
         callee.memoize_key.__doc__ = """Generate a unique key based on the provided arguments."""
         callee.memoize_cache = lambda: cache
         callee.memoize_cache.__doc__ = """Return the current memoize cache."""
         callee.memoize_clear = lambda: cache.clear()
         callee.memoize_clear.__doc__ = """Empty the current memoize cache."""
-        callee.force = lambda *args,**kwargs: force(*args, **kwargs)
+        callee.force = lambda *args, **kwargs: force(*args, **kwargs)
         callee.force.__doc__ = """Force calling the function whilst updating the memoize cache."""
 
         callee.__name__ = fn.__name__
         callee.__doc__ = fn.__doc__
         callee.callable = fn
-        return callee if isinstance(callee,functiontype) else functiontype(callee)
+        return callee if isinstance(callee, functiontype) else functiontype(callee)
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
 
 # check equivalency of two callables
