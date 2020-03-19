@@ -208,7 +208,7 @@ class type(ptype.generic):
     def setposition(self, position, **options):
         (offset, suboffset) = position
         if suboffset >= 8:
-            (offset, suboffset) = (offset + (suboffset / 8), suboffset % 8)
+            (offset, suboffset) = (offset + (suboffset // 8), suboffset % 8)
         (res, self.__position__) = self.__position__, (offset, suboffset)
         return res
 
@@ -223,10 +223,10 @@ class type(ptype.generic):
     bofs = boffset = suboffset
 
     def size(self):
-        return math.trunc(math.ceil(self.bits()/8.0))
+        return math.trunc(math.ceil(self.bits() / 8.0))
 
     def blocksize(self):
-        return math.trunc(math.ceil(self.blockbits()/8.0))
+        return math.trunc(math.ceil(self.blockbits() / 8.0))
 
     def contains(self, offset):
         if isinstance(offset, six.integer_types):
@@ -477,7 +477,7 @@ class enum(integer):
         res = {}
         for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
             res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
-        for val, items in res.viewitems():
+        for val, items in six.viewitems(res):
             if len(items) > 1:
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
             continue
@@ -597,7 +597,7 @@ class container(type):
     def setposition(self, position, recurse=False):
         (offset, suboffset) = position
         if suboffset >= 8:
-            (offset, suboffset) = offset + (suboffset / 8), suboffset % 8
+            (offset, suboffset) = offset + (suboffset // 8), suboffset % 8
         res = super(container, self).setposition((offset, suboffset))
 
         if recurse and self.value is not None:
@@ -728,7 +728,7 @@ class container(type):
             size = item.blockbits()
             offset, suboffset = position
             suboffset += size
-            offset, suboffset = (offset + suboffset/8, suboffset % 8)
+            offset, suboffset = (offset + suboffset // 8, suboffset % 8)
             position = (offset, suboffset)
         return self
 
@@ -745,7 +745,7 @@ class container(type):
     def __append__(self, object):
         size = 0 if self.value is None else self.bits()
         offset, suboffset = self.getposition()
-        offset, suboffset = res = offset + (size / 8), suboffset + (size % 8)
+        offset, suboffset = res = offset + (size // 8), suboffset + (size % 8)
 
         object.parent, object.source = self, None
         if object.getposition() != res:
@@ -850,18 +850,18 @@ class _array_generic(container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(self.properties()))
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _array_generic.details.im_func:
+        if result.count('\n') > 0 or utils.callable_eq(self.repr, _array_generic.details):
             result = result.rstrip('\n') # remove trailing newlines
             if prop:
                 return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
             return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if getattr(self.repr, 'im_func', None) not in (_array_generic.repr.im_func,_array_generic.summary.im_func,_array_generic.details.im_func):
+        if any(utils.callable_eq(self.repr, item) for item in [_array_generic.repr, _array_generic.summary, _array_generic.details]):
             result = ' '.join((element,result))
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
@@ -1011,14 +1011,14 @@ class _struct_generic(container):
         if self.value is None:
             return u"???"
         res = self.bitmap()
-        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in map(None, self._fields_, self.value)]
+        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in zip(self._fields_, self.value)]
         if items:
             return u"({:s},{:d}) :> {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(items))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __details_initialized(self):
         result = []
-        for fld, value in map(None, self._fields_, self.value):
+        for fld, value in zip(self._fields_, self.value):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 if istype(t):
@@ -1037,9 +1037,9 @@ class _struct_generic(container):
 
             b = value.bitmap()
             i = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in value.properties().iteritems())
+            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(value.properties()))
             _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-            result.append(u"[{:s}] {:s}{:s} {:s}".format(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision), i, ' {{{:s}}}'.format(prop) if prop else '', value.summary()))
+            result.append(u"[{:s}] {:s}{:s} {:s}".format(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision), i, u' {{{:s}}}'.format(prop) if prop else u'', value.summary()))
         if result:
             return '\n'.join(result)
         return u"[{:x}] Empty[]".format(self.getoffset())
@@ -1124,7 +1124,7 @@ class _struct_generic(container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(self.properties()))
         result = self.repr().rstrip('\n') # remove trailing newlines
 
         if prop:
@@ -1256,9 +1256,9 @@ class struct(_struct_generic):
             if value:
                 if len(result._fields_) != len(value):
                     raise error.UserError(result, 'struct.set', message='Refusing to assign iterable to instance due to different lengths')
-                map(assign, enumerate(value))
+                [ assign((index, value)) for index, value in enumerate(value) ]
 
-            map(assign, ((self.__getindex__(k), v) for k, v in fields.iteritems()) )
+            [ assign((self.__getindex__(k), v)) for k, v in six.iteritems(fields) ]
             result.setposition(result.getposition(), recurse=True)
             return result
         return result.a.__setvalue__(value, **fields)
@@ -1286,9 +1286,9 @@ class terminatedarray(_array_generic):
 
         def generator():
             for index in forever:
-                n = self.new(obj, __name__=str(index), position=position)
-                yield n
-                if self.isTerminator(n):
+                item = self.new(obj, __name__=str(index), position=position)
+                yield item
+                if self.isTerminator(item):
                     break
                 continue
             return
@@ -1348,7 +1348,7 @@ class blockarray(terminatedarray):
                 #        the positions pretty hard
                 (offset, suboffset) = position
                 suboffset += size
-                offset, suboffset = (offset + suboffset/8, suboffset % 8)
+                offset, suboffset = (offset + suboffset // 8, suboffset % 8)
                 position = (offset, suboffset)
 
             if total < 0:
@@ -1377,7 +1377,7 @@ class partial(ptype.container):
         list(itertools.starmap(res.__setitem__, (('position', (offset, 0)), ('parent', self))))
 
         # if the user added a custom blocksize, then propagate that too
-        if getattr(self.blocksize, 'im_func', partial.blocksize.im_func) is not partial.blocksize.im_func:
+        if not utils.callable_eq(self.blocksize, partial.blocksize):
             res.setdefault('blocksize', self.blocksize)
 
         # if we're named either by a field or explicitly, then propagate this
@@ -1430,7 +1430,7 @@ class partial(ptype.container):
         list(itertools.starmap(res.__setitem__, (('position', (self.getoffset(), 0)), ('parent', self))))
 
         # if the user added a custom blocksize, then propagate that too
-        if getattr(self.blocksize, 'im_func', partial.blocksize.im_func) is not partial.blocksize.im_func:
+        if not utils.callable_eq(self.blocksize, partial.blocksize):
             res.setdefault('blocksize', self.blocksize)
 
         # if we're named either by a field or explicitly, then propagate this
@@ -1452,7 +1452,7 @@ class partial(ptype.container):
             return bitmap.data(res)
         if self.byteorder is not config.byteorder.littleendian:
             raise error.AssertionError(self, 'partial.serialize', message='byteorder {:s} is invalid'.format(self.byteorder))
-        return str().join(reversed(bitmap.data(res)))
+        return bytes(bytearray(reversed(bitmap.data(res))))
 
     def __deserialize_block__(self, block):
         self.value = res = [self.__pb_object()]
@@ -1499,8 +1499,8 @@ class partial(ptype.container):
         with utils.assign(self, **attrs):
             offset, size = self.getoffset(), self.blocksize()
             self.source.seek(offset)
-            data = str().join(reversed(self.source.consume(size)))
-            bc = bitmap.consumer(octet for octet in data)
+            data = bytes(bytearray(reversed(self.source.consume(size))))
+            bc = bitmap.consumer(data)
             self.object.__deserialize_consumer__(bc)
         return self
 
@@ -1534,12 +1534,12 @@ class partial(ptype.container):
         value = self.value[0] if self.initializedQ() else self.__pb_object()
         size = value.bits()
         res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
-        return res / 8
+        return res // 8
     def blocksize(self):
         value = self.value[0] if self.initializedQ() else self.__pb_object()
         size = value.blockbits()
         res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
-        return res / 8
+        return res // 8
 
     def properties(self):
         result = super(partial, self).properties()
@@ -1596,7 +1596,7 @@ class partial(ptype.container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(self.properties()))
         result = self.object.repr() if self.initializedQ() else self.repr()
 
         # multiline
@@ -1756,7 +1756,7 @@ if __name__ == '__main__':
     from ptypes import pbinary,provider,pstruct,pint,bitmap
     prov = provider
 
-    TESTDATA = 'ABCDIEAHFLSDFDLKADSJFLASKDJFALKDSFJ'
+    TESTDATA = b'ABCDIEAHFLSDFDLKADSJFLASKDJFALKDSFJ'
 
     def fn(self):
         return self['size']
@@ -1794,7 +1794,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_struct_load_be_global_1():
         pbinary.setbyteorder(config.byteorder.bigendian)
-        x = pbinary.new(RECT,source=provider.string('\x4a\xbc\xde\xf0'))
+        x = pbinary.new(RECT,source=provider.string(b'\x4a\xbc\xde\xf0'))
         x = x.l
 
         if (x['size'],x['value1'],x['value2'],x['value3']) == (4,0xa,0xb,0xc):
@@ -1811,7 +1811,7 @@ if __name__ == '__main__':
                 (lambda self: self['rectangle']['size'], 'heh')
             ]
 
-        s = '\x44\xab\xcd\xef\x00'
+        s = b'\x44\xab\xcd\xef\x00'
 
         a = pbinary.new(blah,source=provider.string(s)).l
 
@@ -1830,7 +1830,7 @@ if __name__ == '__main__':
             ]
 
         # 0000 0001 1011 1111
-        data = '\x01\xbf'
+        data = b'\x01\xbf'
         res = pbinary.new(blah,source=provider.string(data)).l
 
         if res['type'] == 6 and res['size'] == 0x3f:
@@ -1845,14 +1845,14 @@ if __name__ == '__main__':
             ]
 
         # 1011 1111 0000 0001
-        data = '\xbf\x01'
+        data = b'\xbf\x01'
         a = blah
         res = pbinary.littleendian(blah)
         b = res
         res = res()
 
         data = itertools.islice(data, res.a.size())
-        res.source = provider.string(''.join(data))
+        res.source = provider.string(bytes(bytearray(data)))
         res.l
 
         if res['type'] == 6 and res['size'] == 0x3f:
@@ -1871,7 +1871,7 @@ if __name__ == '__main__':
                 (4, 'blah6')
             ]
 
-        data = '\xaa\xbb\xcc\xdd\x11\x11'
+        data = b'\xaa\xbb\xcc\xdd\x11\x11'
 
         res = pbinary.new(blah,source=provider.string(data)).l
 
@@ -1890,7 +1890,7 @@ if __name__ == '__main__':
                 (8, 'blah5'),
                 (4, 'blah6')
             ]
-        data = '\xdd\xcc\xbb\xaa\x11\x11'
+        data = b'\xdd\xcc\xbb\xaa\x11\x11'
         res = blah
         res = pbinary.littleendian(res)
         res = res(source=provider.string(data))
@@ -1901,8 +1901,8 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_unaligned_7():
-        x = pbinary.new(RECT,source=provider.string('hello world')).l
-        if x['size'] == 6 and x.size() == (4 + 6*3 + 7)/8:
+        x = pbinary.new(RECT, source=provider.string('hello world')).l
+        if x['size'] == 6 and x.size() == (4 + 6*3 + 7)//8:
             raise Success
         return
 
@@ -1912,7 +1912,7 @@ if __name__ == '__main__':
             _object_ = bitmap.new(0, 3)
             length = 3
 
-        s = '\xaa\xbb\xcc'
+        s = b'\xaa\xbb\xcc'
 
         x = pbinary.new(blah,source=provider.string(s)).l
         if list(x.object) == [5, 2, 5]:
@@ -1942,7 +1942,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_load_10():
-        self = pbinary.new(dword,source=provider.string('\xde\xad\xde\xaf')).l
+        self = pbinary.new(dword,source=provider.string(b'\xde\xad\xde\xaf')).l
         if self['high'] == 0xdead and self['low'] == 0xdeaf:
             raise Success
 
@@ -1954,7 +1954,7 @@ if __name__ == '__main__':
                 (word, 'higher'),
                 (word, 'lower'),
             ]
-        self = pbinary.new(blah,source=provider.string('\xde\xad\xde\xaf')).l
+        self = pbinary.new(blah,source=provider.string(b'\xde\xad\xde\xaf')).l
         if self['higher']['high'] == 0xde and self['higher']['low'] == 0xad and self['lower']['high'] == 0xde and self['lower']['low'] == 0xaf:
             raise Success
 
@@ -1967,7 +1967,7 @@ if __name__ == '__main__':
                 (lambda s: 8, 'lower')
             ]
 
-        self = pbinary.new(blah,source=provider.string('\xde\xad\x80')).l
+        self = pbinary.new(blah,source=provider.string(b'\xde\xad\x80')).l
         if self['higher']['high'] == 0xde and self['higher']['low'] == 0xad and self['lower'] == 0x80:
             raise Success
 
@@ -1978,7 +1978,7 @@ if __name__ == '__main__':
             _object_ = 4
             length = 8
 
-        data = '\xab\xcd\xef\x12'
+        data = b'\xab\xcd\xef\x12'
         self = pbinary.new(blah,source=provider.string(data)).l
 
         if list(self.object) == [0xa,0xb,0xc,0xd,0xe,0xf,0x1,0x2]:
@@ -1991,7 +1991,7 @@ if __name__ == '__main__':
             _object_ = byte
             length = 4
 
-        data = '\xab\xcd\xef\x12'
+        data = b'\xab\xcd\xef\x12'
         self = pbinary.new(blah,source=provider.string(data)).l
 
         l = [ x['value'] for x in self.value[0] ]
@@ -2004,7 +2004,7 @@ if __name__ == '__main__':
             _object_ = lambda s: byte
             length = 4
 
-        data = '\xab\xcd\xef\x12'
+        data = b'\xab\xcd\xef\x12'
         self = pbinary.new(blah,source=provider.string(data)).l
 
         l = [ x['value'] for x in self.value[0] ]
@@ -2028,7 +2028,7 @@ if __name__ == '__main__':
 
         l = [ v['value'] for v in self.values() ]
 
-        if l == [ six.byte2int(TESTDATA[i]) for i,x in enumerate(l) ]:
+        if l == list(bytearray(TESTDATA)[:len(l)]):
             raise Success
 
     @TestCase
@@ -2083,8 +2083,8 @@ if __name__ == '__main__':
                     return True
                 return False
 
-        z = pbinary.new(myarray,source=provider.string('\x44\x43\x42\x41\x3f\x0f\xee\xde')).l
-        if z.serialize() == 'DCBA?\x00':
+        z = pbinary.new(myarray,source=provider.string(b'\x44\x43\x42\x41\x3f\x0f\xee\xde')).l
+        if z.serialize() == b'DCBA?\x00':
             raise Success
 
     @TestCase
@@ -2097,7 +2097,7 @@ if __name__ == '__main__':
                 (4, 'hell'),
             ]
 
-        z = pbinary.new(mystruct,source=provider.string('\x41\x40')).l
+        z = pbinary.new(mystruct,source=provider.string(b'\x41\x40')).l
         if z.int() == 0x4140:
             raise Success
 
@@ -2113,7 +2113,7 @@ if __name__ == '__main__':
             _fields_ = [(mychild1, 'a'), (mychild2, 'b')]
 
         z = pbinary.new(myparent)
-        z.source = provider.string('A'*5000)
+        z.source = provider.string(b'A'*5000)
         z.l
 
         a,b = z['a'],z['b']
@@ -2123,7 +2123,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pstruct_partial_load_22():
-        correct='\x44\x11\x08\x00\x00\x00'
+        correct=b'\x44\x11\x08\x00\x00\x00'
         class RECORDHEADER(pbinary.struct):
             _fields_ = [ (10, 't'), (6, 'l') ]
 
@@ -2140,7 +2140,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pstruct_partial_le_set_23():
-        correct='\x44\x11\x08\x00\x00\x00'
+        correct=b'\x44\x11\x08\x00\x00\x00'
         class RECORDHEADER(pbinary.struct):
             _fields_ = [ (10, 't'), (6, 'l') ]
 
@@ -2159,7 +2159,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_partial_load_24():
-        correct = '\x0f\x00'
+        correct = b'\x0f\x00'
         class header(pbinary.struct):
             _fields_ = [
                 (12, 'instance'),
@@ -2183,7 +2183,7 @@ if __name__ == '__main__':
                 (4, 'c')
             ]
 
-        x = pbinary.new(blah,source=provider.string('\xde\xad')).l
+        x = pbinary.new(blah,source=provider.string(b'\xde\xad')).l
         if x['a'] == 13 and x['b'] == 14 and x['c'] == 10:
             raise Success
         raise Failure
@@ -2195,7 +2195,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_signed_load_26():
-        s = '\xff\xff'
+        s = b'\xff\xff'
         a = pbinary.new(blah,source=provider.string(s)).l
         b, = struct.unpack('>h',s)
         if a['a'] == b:
@@ -2203,7 +2203,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_signed_load_27():
-        s = '\x80\x00'
+        s = b'\x80\x00'
         a = pbinary.new(blah,source=provider.string(s)).l
         b, = struct.unpack('>h',s)
         if a['a'] == b:
@@ -2211,7 +2211,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_signed_load_28():
-        s = '\x7f\xff'
+        s = b'\x7f\xff'
         a = pbinary.new(blah,source=provider.string(s)).l
         b, = struct.unpack('>h',s)
         if a['a'] == b:
@@ -2219,7 +2219,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_signed_load_29():
-        s = '\x00\x00'
+        s = b'\x00\x00'
         a = pbinary.new(blah,source=provider.string(s)).l
         b, = struct.unpack('>h',s)
         if a['a'] == b:
@@ -2239,14 +2239,14 @@ if __name__ == '__main__':
                 (8, 'd'),
             ]
 
-        s = '\x00\x00\x00\x04'
+        s = b'\x00\x00\x00\x04'
         a = pbinary.littleendian(blah2)(source=provider.string(s)).l
         if a['a2'] == 1:
             raise Success
 
     @TestCase
     def test_pbinary_struct_load_31():
-        s = '\x04\x00'
+        s = b'\x04\x00'
         class fuq(pbinary.struct):
             _fields_ = [
                 (4, 'zero'),
@@ -2263,7 +2263,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_load_global_le_32():
-        s = '\x00\x04'
+        s = b'\x00\x04'
         pbinary.setbyteorder(config.byteorder.littleendian)
         class fuq(pbinary.struct):
             _fields_ = [
@@ -2285,7 +2285,7 @@ if __name__ == '__main__':
             _object_ = 1
             length = 16
 
-        src = provider.string('\xaa'*2)
+        src = provider.string(b'\xaa'*2)
         x = pbinary.new(test,source=src).l
         if tuple(x.object) == (1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0):
             raise Success
@@ -2296,7 +2296,7 @@ if __name__ == '__main__':
             _object_ = 1
             length = 16
 
-        a = '\xaa'*2
+        a = b'\xaa'*2
         b = pbinary.new(test).a
 
         for i,x in enumerate((1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0)):
@@ -2311,7 +2311,7 @@ if __name__ == '__main__':
             _fields_ = [(8,'i'),(8,'v')]
 
         test = pbinary.bigendian(test)
-        a = '\x00\x0f'
+        a = b'\x00\x0f'
         b = test(source=provider.string(a)).l
         if b.serialize() == a:
             raise Success
@@ -2335,7 +2335,7 @@ if __name__ == '__main__':
                 v = value[0]
                 return v['a'] == v['b'] and v['a'] == 0x0
 
-        string = 'ABCD\xffEFGH\xffIJKL\xffMNOP\xffQRST\xffUVWX\xffYZ..\xff\x00!!!!!!!!\xffuhhh'
+        string = b'ABCD\xffEFGH\xffIJKL\xffMNOP\xffQRST\xffUVWX\xffYZ..\xff\x00!!!!!!!!\xffuhhh'
         a = pbinary.new(complete,source=ptypes.prov.string(string))
         a = a.l
         if len(a) == 8 and a.object[-1][0].bitmap() == (0,8):
@@ -2345,7 +2345,7 @@ if __name__ == '__main__':
     def test_pbinary_array_load_global_be_37():
         pbinary.setbyteorder(config.byteorder.bigendian)
 
-        string = "ABCDEFGHIJKL"
+        string = b'ABCDEFGHIJKL'
         src = provider.string(string)
         class st(pbinary.struct):
             _fields_ = [(4,'nib1'),(4,'nib2'),(4,'nib3')]
@@ -2363,7 +2363,7 @@ if __name__ == '__main__':
     def test_pbinary_array_load_global_be_38():
         pbinary.setbyteorder(config.byteorder.littleendian)
 
-        string = "ABCDEFGHIJKL"
+        string = b'ABCDEFGHIJKL'
         src = provider.string(string)
         class st(pbinary.struct):
             _fields_ = [(4,'nib1'),(4,'nib2'),(4,'nib3')]
@@ -2393,7 +2393,7 @@ if __name__ == '__main__':
             def blockbits(self):
                 return 32*8
 
-        data = ''.join(map(six.int2byte, six.moves.range(48,48+75)))
+        data = bytes().join(map(six.int2byte, six.moves.range(48,48+75)))
         src = provider.string(data)
         a = pbinary.new(argh, source=src)
         a = a.l
@@ -2414,7 +2414,7 @@ if __name__ == '__main__':
             _object_ = argh
             length = 4
 
-        data = ''.join((''.join(six.int2byte(x)*4 for x in six.moves.range(48,48+75)) for _ in six.moves.range(500)))
+        data = bytes().join((bytes().join(six.int2byte(x)*4 for x in six.moves.range(48,48+75)) for _ in six.moves.range(500)))
         src = provider.string(data)
         a = pbinary.new(ack, source=src)
         a = a.l
@@ -2433,7 +2433,7 @@ if __name__ == '__main__':
                 (-8, 'd'),
             ]
 
-        data = '\xff\xff\x7f\x80'
+        data = b'\xff\xff\x7f\x80'
         a = pbinary.new(argh, source=provider.string(data))
         a = a.l
         if a.values() == [-1,255,127,-128]:
@@ -2447,7 +2447,7 @@ if __name__ == '__main__':
             _object_ = -8
             length = 4
 
-        data = '\xff\x01\x7f\x80'
+        data = b'\xff\x01\x7f\x80'
         a = pbinary.new(argh, source=provider.string(data))
         a = a.l
         if list(a.object) == [-1,1,127,-128]:
@@ -2460,7 +2460,7 @@ if __name__ == '__main__':
         class p2(pbinary.struct):
             _fields_ = [(4,'a'),(2,'b'),(2,'c')]
 
-        data = '\x5f'
+        data = b'\x5f'
         a = pbinary.new(p1, source=prov.string(data))
         a = a.l
         b = a.cast(p2)
@@ -2475,7 +2475,7 @@ if __name__ == '__main__':
             _fields_ = [(2,'a'),(2,'b')]
         class p2(pbinary.struct):
             _fields_ = [(4,'a'),(2,'b')]
-        data = '\x5f'
+        data = b'\x5f'
         a = pbinary.new(p1, source=prov.string(data))
         a = a.l
         b = a.object.cast(p2)
@@ -2494,7 +2494,7 @@ if __name__ == '__main__':
                 (1,'set2'),
             ]
 
-        data = '\xa8'
+        data = b'\xa8'
         a = pbinary.new(pbinary.bigendian(p, source=prov.string(data)))
         a = a.l
         if 'notset' not in a.summary() and all(('set{:d}'.format(x)) in a.summary() for x in six.moves.range(3)):
@@ -2519,11 +2519,11 @@ if __name__ == '__main__':
                     return True
                 return False
 
-        source = '\x80\x80\x80\x80\xff'
+        source = b'\x80\x80\x80\x80\xff'
         a = pbinary.new(vle, source=ptypes.provider.string(source))
         a = a.load()
 
-        if a.serialize() == '\x80\x80\x80\x80\xff':
+        if a.serialize() == b'\x80\x80\x80\x80\xff':
             raise Success
 
     @TestCase
@@ -2586,9 +2586,9 @@ if __name__ == '__main__':
     def test_pbinary_parray_getslice_atomic_52():
         class array(pbinary.array):
             _object_ = 8
-        data = 'hola mundo'
-        x = array(length=len(data)).set(map(ord,data))
-        if all(a == six.byte2int(b) for a,b in zip(x[2:8],data[2:8])):
+        data = b'hola mundo'
+        x = array(length=len(data)).set(list(bytearray(data)))
+        if all(a == b for a, b in zip(x[2 : 8], bytearray(data[2 : 8]))):
             raise Success
 
     @TestCase
@@ -2598,10 +2598,10 @@ if __name__ == '__main__':
                 length = 2
                 _object_ = 4
         data = 0x1122334455abcdef
-        result = map(bitmap.value, bitmap.split(bitmap.new(data,64), 4))
-        result = zip(*((iter(result),)*2))
+        result = map(bitmap.value, bitmap.split(bitmap.new(data, 64), 4))
+        result = list(zip(*((iter(result),)*2)))
         x = array().set(result)
-        if all(a[0] == b[0] and a[1] == b[1] for a,b in zip(x[2:8],result[2:8])):
+        if all(a[0] == b[0] and a[1] == b[1] for a, b in zip(x[2 : 8], result[2 : 8])):
             raise Success
 
     @TestCase
@@ -2613,7 +2613,7 @@ if __name__ == '__main__':
 
         data = 0x1122334455abcdef
         result = map(bitmap.value, bitmap.split(bitmap.new(data,64), 4))
-        result = zip(*((iter(result),)*2))
+        result = list(zip(*((iter(result),)*2)))
         x = array().set(result)
         if all(a['a'] == b[0] and a['b'] == b[1] for a,b in zip(x[2:8],result[2:8])):
             raise Success
@@ -2624,7 +2624,7 @@ if __name__ == '__main__':
             _object_ = length = 8
         x = array().a
         x[2:6] = map(ord,'hola')
-        if ''.join(map(six.int2byte,x)) == '\x00\x00hola\x00\x00':
+        if bytes().join(map(six.int2byte,x)) == b'\x00\x00hola\x00\x00':
             raise Success
 
     @TestCase
@@ -2796,7 +2796,7 @@ if __name__ == '__main__':
                 (8, 'second'),
                 (e, 'third'),
             ]
-        x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
+        x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string(b'\xde\xad')).l
         if x.item('third').str() == 'd':
             raise Success
 
@@ -2815,7 +2815,7 @@ if __name__ == '__main__':
         class s(pbinary.array):
             length, _object_ = 4, e
 
-        x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
+        x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string(b'\xde\xad')).l
         if ''.join(map(operator.methodcaller('str'), map(x.item, range(len(x))))) == 'dead':
             raise Success
 
@@ -2830,7 +2830,7 @@ if __name__ == '__main__':
         class argh(pbinary.array):
             length, _object_ = 5, s
 
-        x = pbinary.new(argh).load(source=ptypes.prov.string('\x8f\xff'*5))
+        x = pbinary.new(argh).load(source=ptypes.prov.string(b'\x8f\xff'*5))
         x.set([dict(k=0)]*5)
         if all(item['k'] == 0 and item['n'] == 0xfff for item in x):
             raise Success
@@ -2846,7 +2846,7 @@ if __name__ == '__main__':
                 (4, 'enum'),
             ]
 
-        x = pbinary.new(s, source=ptypes.prov.string('\x77')).l
+        x = pbinary.new(s, source=ptypes.prov.string(b'\x77')).l
         raise Failure
 
     @TestCase
