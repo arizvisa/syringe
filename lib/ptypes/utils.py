@@ -203,7 +203,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     """
     size = len(data)
     charwidth = len(r'\xFF')
-    bytewidth = width / charwidth
+    bytewidth = width // charwidth
     leftover = size - bytewidth
 
     hexify = lambda s: str().join(map(r"\x{:02x}".format, six.iterbytes(s)))
