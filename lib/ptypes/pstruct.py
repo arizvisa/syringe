@@ -45,13 +45,15 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
-import itertools,operator,functools
-import six
+import sys
+import functools,itertools,types,builtins,operator,six
 
 from . import ptype,utils,config,pbinary,error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,make'.split(',')
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 class _pstruct_generic(ptype.container):
     def __init__(self, *args, **kwds):
@@ -188,7 +190,7 @@ class type(_pstruct_generic):
     ignored = ptype.container.__slots__['ignored'] | {'_fields_'}
 
     def initializedQ(self):
-        if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
+        if utils.callable_eq(self.blocksize, ptype.container.blocksize):
             return super(type, self).initializedQ()
 
         res = self.value is not None
@@ -248,7 +250,7 @@ class type(_pstruct_generic):
             # anything
 
             # XXX: it might be safer to call .blocksize() and check for InitializationError
-            current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
+            current = None if utils.callable_eq(self.blocksize, type.blocksize) else 0
             if current is not None and self.blocksize() <= 0:
                 offset = self.getoffset()
 
@@ -306,7 +308,7 @@ class type(_pstruct_generic):
 
         result,o = [],self.getoffset()
         fn = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
-        for fld, value in map(None, self._fields_, self.value):
+        for fld, value in __izip_longest__(self._fields_, self.value):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 i = utils.repr_class(gettypename(t))
@@ -316,7 +318,7 @@ class type(_pstruct_generic):
             ofs = self.getoffset(value.__name__ or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
             val = value.summary(**options) if value.initializedQ() else u'???'
-            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in value.properties().iteritems())
+            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(value.properties()))
             result.append(u"[{:x}] {:s}{:s} {:s}".format(ofs, inst, u" {{{:s}}}".format(prop) if prop else u"", val))
             o += value.size()
 
@@ -337,7 +339,7 @@ class type(_pstruct_generic):
                     raise error.UserError(result, 'type.set', message='Refusing to assign iterable to instance due to differing lengths')
                 result = super(type, result).__setvalue__(*value)
 
-            for k,v in fields.iteritems():
+            for k,v in six.iteritems(fields):
                 idx = self.__getindex__(k)
                 if ptype.isresolveable(v) or ptype.istype(v):
                     result.value[idx] = self.new(v, __name__=k).a
@@ -431,11 +433,10 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        global x
-        source = provider.string('ABCDEFG')
+        source = provider.string(b'ABCDEFG')
         x = st(source=source)
         x = x.l
-        if x.serialize() == 'ABC':
+        if x.serialize() == b'ABC':
             raise Success
 
     @TestCase
@@ -447,10 +448,10 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string('ABCDEFG')
+        source = provider.string(b'ABCDEFG')
         x = st(source=source)
         x = x.l
-        if x['b'].serialize() == 'BC':
+        if x['b'].serialize() == b'BC':
             raise Success
 
     @TestCase
@@ -462,12 +463,12 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string('ABCDEFG')
-        v = uint32().set('XXXX')
+        source = provider.string(b'ABCDEFG')
+        v = uint32().set(b'XXXX')
         x = st(source=source)
         x = x.l
         x['b'] = v
-        if x.serialize() == 'AXXXXF':
+        if x.serialize() == b'AXXXXF':
             raise Success
 
     @TestCase
@@ -479,13 +480,13 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string('ABCDEFG')
-        v = uint16().set('XX')
+        source = provider.string(b'ABCDEFG')
+        v = uint16().set(b'XX')
         x = st(source=source)
         x = x.l
         x['b'] = v
         x.setoffset(x.getoffset(),recurse=True)
-        if x.serialize() == 'AXXF' and x['c'].getoffset() == 3:
+        if x.serialize() == b'AXXF' and x['c'].getoffset() == 3:
             raise Success
 
     @TestCase
@@ -496,10 +497,10 @@ if __name__ == '__main__':
                 (uint32, 'b'),
                 (uint32, 'c'),
             ]
-        source = provider.string('AAAABBBBCCC')
+        source = provider.string(b'AAAABBBBCCC')
         x = st(source=source)
         x = x.l
-        if x.v is not None and not x.initialized and x['b'].serialize() == 'BBBB' and x['c'].size() == 3:
+        if x.v is not None and not x.initialized and x['b'].serialize() == b'BBBB' and x['c'].size() == 3:
             raise Success
 
     @TestCase
@@ -513,7 +514,7 @@ if __name__ == '__main__':
 
         a = st(source=provider.empty())
         a.set(a=5, b=10, c=20)
-        if a.serialize() == '\x05\x00\x00\x00\x0a\x00\x00\x00\x14\x00\x00\x00':
+        if a.serialize() == b'\x05\x00\x00\x00\x0a\x00\x00\x00\x14\x00\x00\x00':
             raise Success
 
     @TestCase
