@@ -1,5 +1,5 @@
 import functools, itertools, types, builtins, operator, six
-import ptypes, exceptions
+import ptypes
 
 from . import sdkddkver
 

@@ -318,7 +318,7 @@ class LIST_ENTRY(pstruct.type):
 
     def forward(self):
         if self[self.flink].int() == self._sentinel_:
-            raise StopIteration, self
+            raise StopIteration(self)
         return self[self.flink].d
 
     def backward(self):

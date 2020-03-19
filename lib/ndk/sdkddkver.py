@@ -84,8 +84,9 @@ def NTDDI_MINOR(dword):
 
 # Calculate size of uintptr_t using a trick to calculate the size of a lock which
 # always has 4 slots for it.
-import sys, thread
-SIZEOF_UINTPTR_T = sys.getsizeof(thread.allocate()) // 4
+import sys
+__allocate__ = __import__('thread').allocate if sys.version_info.major < 3 else __import__('threading')._allocate_lock
+SIZEOF_UINTPTR_T = sys.getsizeof(__allocate__()) // 4
 
 # Try and determine what to set WIN64 to based on the platform. Unfortunately
 # this is supposed to detect the architecture of the platform, but the best we
