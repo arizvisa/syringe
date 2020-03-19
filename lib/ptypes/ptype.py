@@ -65,7 +65,7 @@ Example:
 
 # return an instance where instance.attr1 == value, and instance.method1() returns result.
     def method(self, **attrs): return instance
-    instance = self.method(attr1=value, method1=lambda s: True)
+    instance = self.method(attr1=value, method1=lambda self: True)
     assert instance.attr1 == value and instance.method1() == True
 
 # return an instance where any elements spawned by `self` have their attr1 set to True.
@@ -349,7 +349,7 @@ def debug(ptype, **attributes):
         _debug_ = {}
 
         def __init__(self, *args, **kwds):
-            self._debug_['creation'] = time.time(), traceback.extract_stack(), self.backtrace(lambda s:s)
+            self._debug_['creation'] = time.time(), traceback.extract_stack(), self.backtrace(lambda self: self)
             return super(decorated_ptype, self).__init__(*args, **kwds)
 
         def _dump_(self, file):
@@ -448,10 +448,10 @@ class _base_generic(object):
     __slots__['ignored'] = {'source', 'parent', 'attributes', 'value', '__name__', 'position', 'offset'}
 
     __slots__['parent'] = None       # ptype.base
-    p = property(fget=lambda s: s.parent)   # abbr to get to .parent
+    p = property(fget=lambda self: self.parent)   # abbr to get to .parent
 
     __slots__['value'] = None        # _
-    v = property(fget=lambda s: s.value)   # abbr to get to .value
+    v = property(fget=lambda self: self.value)   # abbr to get to .value
 
     def __init__(self, **attrs):
         """Create a new instance of object. Will assign provided named arguments to self.attributes"""
@@ -460,7 +460,9 @@ class _base_generic(object):
         # walking the __slots__ dictionary, and assigning its values to our
         # instance.
         for attribute, default in six.iteritems(self.__slots__):
-            setattr(self, attribute, default)
+            if not hasattr(self, attribute):
+                setattr(self, attribute, default)
+            continue
 
         # Make a copy of our current attributes for our new instance, and then
         # update ourself with them.
@@ -472,7 +474,7 @@ class _base_generic(object):
         raise error.ImplementationError(self, 'generic.setoffset')
     def getoffset(self, **_):
         raise error.ImplementationError(self, 'generic.setoffset')
-    offset = property(fget=lambda s: s.getoffset(), fset=lambda s, v: s.setoffset(v))
+    offset = property(fget=lambda self: self.getoffset(), fset=lambda self, value: self.setoffset(value))
 
     ## position
     def setposition(self, position, **_):
@@ -683,7 +685,7 @@ class _base_generic(object):
             return self.parent
 
         query = args if len(args) else (kwds['type'],)
-        match = lambda self: lambda query: any(((builtins.isinstance(q, types.TypeType) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
+        match = lambda self: lambda query: any(((builtins.isinstance(q, builtins.type) and builtins.isinstance(self, q)) or self.parent is q) for q in query)
 
         # check to see if user actually queried for self
         if match(self)(query):
@@ -747,10 +749,12 @@ class _base_generic(object):
 
 class generic(_base_generic):
     '''A class shared between both pbinary.*, ptype.*'''
-    initialized = property(fget=lambda s: s.initializedQ())
+    initialized = property(fget=lambda self: self.initializedQ())
 
     def initializedQ(self):
         raise error.ImplementationError(self, 'base.initializedQ')
+    def __hash__(self):
+        return hash(self.__class__) ^ hash(self.value)
     def __eq__(self, other):
         '''x.__eq__(y) <==> x==y'''
         return id(self) == id(other)
@@ -784,10 +788,10 @@ class generic(_base_generic):
         return self.load(**attrs)
 
     # abbreviations
-    a = property(fget=lambda s: s.alloc())  # alloc
-    c = property(fget=lambda s: s.commit()) # commit
-    l = property(fget=lambda s: s.load())   # load
-    li = property(fget=lambda s: s.load() if s.value is None else s) # load if uninitialized
+    a = property(fget=lambda self: self.alloc())  # alloc
+    c = property(fget=lambda self: self.commit()) # commit
+    l = property(fget=lambda self: self.load())   # load
+    li = property(fget=lambda self: self.load() if self.value is None else self) # load if uninitialized
 
     def get(self):
         """Return a representation of a type.
@@ -807,16 +811,15 @@ class generic(_base_generic):
         """Return a new instance of self"""
         raise error.ImplementationError(self, 'generic.copy')
 
-    def __cmp__(self, other):
-        """x.__cmp__(y) <==> cmp(x,y)
-
-        To compare the actual contents, see .compare(other)
-        """
-        if not isinstance(other) or self.initializedQ() != other.initializedQ():
-            return -1
-        if self.initializedQ():
-            return 0 if (self.getposition(), self.serialize()) == (other.getposition(), other.serialize()) else -1
-        return 0 if (self.getposition(), self.blocksize()) == (other.getposition(), other.blocksize()) else +1
+    def same(self, other):
+        """Returns if the other instance occupies the same location of self."""
+        if not isinstance(other):
+            raise TypeError(other.__class__)
+        if self.initializedQ() == other.initializedQ():
+            return (self.getposition(), self.serialize()) == (other.getposition(), other.serialize())
+        elif self.initializedQ() != other.initializedQ():
+            raise error.InitializationError(other if self.initializedQ() else self, 'generic.same')
+        return (self.getposition(), self.blocksize()) == (other.getposition(), other.blocksize())
 
 class base(generic):
     padding = utils.padding.source.zero()
@@ -847,7 +850,7 @@ class base(generic):
         if hasattr(self, '__name__'): attrs.setdefault('__name__', self.__name__)
         attrs.setdefault('parent', self.parent)
         if 'value' not in attrs:
-            if not builtins.isinstance(self.value, (bytes, types.NoneType)):
+            if not builtins.isinstance(self.value, (bytes, builtins.type(None))):
                 raise error.AssertionError(self, 'base.copy', message="Invalid type of .value while trying to duplicate object : {!r}".format(self.value.__class__))
             attrs['value'] = None if self.value is None else self.value[:]
         result.__update__(attrs)
@@ -868,7 +871,7 @@ class base(generic):
         if s == o:
             return
 
-        comparison = (bool(six.byte2int(x)^six.byte2int(y)) for x, y in zip(s, o))
+        comparison = (bool(x^y) for x, y in zip(bytearray(s), bytearray(o)))
         result = [(different, len(list(times))) for different, times in itertools.groupby(comparison)]
         index = 0
         for diff, length in result:
@@ -1062,7 +1065,7 @@ class type(base):
 
             if res > six.MAXSIZE:
                 Log.fatal("type.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, six.MAXSIZE))
-                return ''
+                return b''
 
             # generate padding up to the blocksize
             Log.debug("type.serialize : {:s} : Padding data by {:+#x} bytes due to element being partially uninitialized during serialization.".format(self.instance(), res))
@@ -1307,7 +1310,7 @@ class container(base):
             return bytes().join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         # if there's no blocksize, then this field is empty
-        if res <= 0: return ''
+        if res <= 0: return b''
 
         # serialize all the elements that we currently have
         data = bytes().join(map(operator.methodcaller('serialize'), iter(self.value)))
@@ -1424,7 +1427,7 @@ class container(base):
         res = super(container, self).copy(**attrs)
 
         # now copy the children, with the same parent
-        res.value = map(operator.methodcaller('copy', parent=res), self.value or [])
+        res.value = [ item.copy(parent=res) for item in self.value or [] ]
         return res
 
     def compare(self, other, *args, **kwds):
@@ -1445,7 +1448,7 @@ class container(base):
             (left, right) = bounds
 
             objects = provider.proxy.collect(object, left, right)
-            mapped = six.moves.map(lambda n: n.getparent(*args, **kwds) if kwds else n, objects)
+            mapped = [ item.getparent(*args, **kwds) if kwds else item for item in objects ]
             for n, _ in itertools.groupby(mapped):
                 if left+n.size() <= right:
                     yield n
@@ -1481,7 +1484,7 @@ class container(base):
                 return res
 
             #data = ''.join((x.serialize() if x.initializedQ() else '?'*blocksizeorelse(x)) for x in self.value)
-            data = bytes().join(n.serialize() if n.initializedQ() else '' for n in self.value)
+            data = bytes().join(n.serialize() if n.initializedQ() else b'' for n in self.value)
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
@@ -1573,7 +1576,7 @@ class undefined(type):
         return self.blocksize()
     def load(self, **attrs):
 #        self.value = utils.padding.fill(self.blocksize(), self.padding)
-        self.value = ''
+        self.value = b''
         return self
     def commit(self, **attrs):
         return self
@@ -1589,14 +1592,18 @@ class undefined(type):
 
 class block(type):
     """A ptype that can be accessed as an array"""
-    def __getslice__(self, i, j):
-        '''x.__getslice__(i, j) <==> x[i:j]'''
-        buffer = self.value[:]
-        return buffer[i:j]
     def __getitem__(self, index):
         '''x.__getitem__(y) <==> x[y]'''
-        buffer = self.value[:]
-        return buffer[index]
+        if not builtins.isinstance(index, slice):
+            if index < 0:
+                shift = len(self.value) + index
+                res = slice(shift, shift + 1)
+            else:
+                res = slice(index, index + 1)
+            if res.start >= 0 and res.stop <= len(self.value):
+                return self.__getitem__(res)
+            raise IndexError(index)
+        return self.value[index]
     def repr(self, **options):
         """Display all ptype.block instances as a hexdump"""
         if not self.initializedQ():
@@ -1611,15 +1618,20 @@ class block(type):
         value, = values
         self.length = len(value)
         return super(block, self).__setvalue__(value, **attrs)
+
     def __setitem__(self, index, value):
-        '''x.__setitem__(i, y) <==> x[i]=y'''
-        self.value = self.value[:index] + value + self.value[index+1:]
-    def __setslice__(self, i, j, value):
-        '''x.__setslice__(i, j, y) <==> x[i:j]=y'''
-        v = self.value
-        if len(value) != j-i:
-            raise ValueError("block.__setslice__ : {:s} : Unable to reassign slice outside of bounds of object : ({:d}, {:d}) : {:d}".format(self.instance(), i, j, len(value)))
-        self.value = v[:i] + value + v[j:]
+        if not builtins.isinstance(index, slice):
+            if index < 0:
+                shift = len(self.value) + index
+                res = slice(shift, shift + len(value))
+            else:
+                res = slice(index, index + len(value))
+            if res.start >= 0 and res.stop <= len(self.value):
+                return self.__setitem__(res, value)
+            raise IndexError(index)
+        res = bytearray(self.value)
+        res[index] = value
+        self.value = bytes(res)
 
 #@utils.memoize('cls', newattrs=lambda n:tuple(sorted(six.iteritems(n()))))
 def clone(cls, **newattrs):
@@ -1854,7 +1866,7 @@ class definition(object):
         # Make a copy of the type's namespace
         ns = {}
         for name, attribute in six.iteritems(cls.__dict__):
-            if recurse and builtins.isinstance(attribute, types.TypeType) and issubclass(attribute, definition):
+            if recurse and builtins.isinstance(attribute, builtins.type) and issubclass(attribute, definition):
                 ns[name] = duplicates.setdefault(identity(attribute), attribute.copy(recurse=recurse))
             else:
                 ns[name] = attribute
@@ -1878,7 +1890,7 @@ class definition(object):
         # Copy the cache making sure to recurse into it if necessary
         ns['cache'] = res = {}
         for type, object in six.iteritems(cls.cache):
-            if recurse and builtins.isinstance(object, types.TypeType) and issubclass(object, definition):
+            if recurse and builtins.isinstance(object, builtins.type) and issubclass(object, definition):
                 res[type] = duplicates.setdefault(identity(object), object.copy(recurse=recurse))
             else:
                 res[type] = object
@@ -1904,7 +1916,7 @@ class definition(object):
         def clone(definition):
             res = dict(definition.__dict__)
             res.update(attributes)
-            #res = types.TypeType(res.pop('__name__', definition.__name__), definition.__bases__, res)
+            #res = builtins.type(res.pop('__name__', definition.__name__), definition.__bases__, res)
             res = builtins.type(res.pop('__name__', definition.__name__), (definition,), res)
             cls.add(getattr(res, cls.attribute), res)
             return definition
@@ -2081,8 +2093,7 @@ class encoded_t(wrapper_t):
 
     def decode(self, object, **attrs):
         """Take ``data`` and decode it back to it's original form"""
-        for n in ('offset', 'source', 'parent'):
-            if attrs.has_key(n): attrs.pop(n)
+        [ attrs.pop(name, None) for name in ['offset', 'source', 'parent'] ]
 
         # attach decoded object to encoded_t
         attrs['offset'], attrs['source'], attrs['parent'] = 0, provider.proxy(self, autocommit={}), self
@@ -2092,8 +2103,7 @@ class encoded_t(wrapper_t):
 
     def encode(self, object, **attrs):
         """Take ``data`` and return it in encoded form"""
-        for n in ('offset', 'source', 'parent'):
-            if attrs.has_key(n): attrs.pop(n)
+        [ attrs.pop(name, None) for name in ['offset', 'source', 'parent'] ]
 
         # attach encoded object to encoded_t
         attrs['offset'], attrs['source'], attrs['parent'] = 0, provider.proxy(self, autocommit={}), self
@@ -2242,7 +2252,8 @@ class pointer_t(encoded_t):
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            res = six.moves.reduce(bitmap.push, map(None, map(six.byte2int, value), (8,) * len(self.value)), bitmap.zero)
+            octets = zip(map(six.byte2int, value), [8] * len(self.value))
+            res = six.moves.reduce(bitmap.push, octets, bitmap.zero)
             return bitmap.value(res)
 
     def decode(self, object, **attrs):
@@ -2372,10 +2383,10 @@ if __name__ == '__main__':
         class wrap(ptype.wrapper_t):
             _value_ = ptype.clone(ptype.block, length=0x10)
 
-        s = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        s = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         a = wrap(source=ptypes.prov.string(s))
         a = a.l
-        if a.serialize() == 'ABCDEFGHIJKLMNOP':
+        if a.serialize() == b'ABCDEFGHIJKLMNOP':
             raise Success
 
     @TestCase
@@ -2383,40 +2394,43 @@ if __name__ == '__main__':
         class wrap(ptype.wrapper_t):
             _value_ = ptype.clone(ptype.block, length=0x10)
 
-        s = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        s = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         a = wrap(source=ptypes.prov.string(s))
         a = a.l
         a.object[:0x10] = s[:0x10].lower()
         a.commit()
 
-        if a.l.serialize() == 'abcdefghijklmnop':
+        if a.l.serialize() == b'abcdefghijklmnop':
             raise Success
 
     @TestCase
     def test_encoded_xorenc():
         k = 0x80
-        s = ''.join(six.int2byte(six.byte2int(x)^k) for x in 'hello world')
+        s = bytes().join(six.int2byte(x^k) for x in bytearray(b'hello world'))
         class xor(ptype.encoded_t):
             _value_ = dynamic.block(len(s))
             _object_ = dynamic.block(len(s))
             key = k
             def encode(self, object, **attrs):
-                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                #data = bytes().join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
                 return super(xor, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
-                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                #data = bytes().join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
                 return super(xor, self).decode(ptype.block(length=len(data)).set(data))
 
+        global x
         x = xor(source=ptypes.prov.string(s))
         x = x.l
-        if x.d.l.serialize() == 'hello world':
+        if x.d.l.serialize() == b'hello world':
             raise Success
 
     @TestCase
     def test_decoded_xorenc():
         k = 0x80
-        data = 'hello world'
-        match = ''.join(six.int2byte(six.byte2int(x)^k) for x in data)
+        data = b'hello world'
+        match = bytes().join(six.int2byte(x^k) for x in bytearray(data))
 
         class xor(ptype.encoded_t):
             _value_ = dynamic.block(len(data))
@@ -2425,43 +2439,53 @@ if __name__ == '__main__':
             key = k
 
             def encode(self, object, **attrs):
-                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                #data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
                 return super(xor, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
-                data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                #data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
+                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
                 return super(xor, self).decode(ptype.block(length=len(data)).set(data))
 
         instance = pstr.string(length=len(match)).set(match)
 
-        x = xor(source=ptypes.prov.string('\x00'*0x100)).l
+        x = xor(source=ptypes.prov.string(b'\x00'*0x100)).l
         x.reference(instance)
         if x.serialize() == data:
             raise Success
 
     @TestCase
     def test_encoded_b64():
-        s = 'AAAABBBBCCCCDDDD'.encode('base64').strip() + '\x00' + 'A'*20
+        import base64
+        b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info.major < 3 else (base64.encodebytes, base64.decodebytes)
+
+        s = b64encode(b'AAAABBBBCCCCDDDD').strip() + b'\x00' + b'A'*20
         class b64(ptype.encoded_t):
             _value_ = pstr.szstring
             _object_ = dynamic.array(pint.uint32_t, 4)
 
             def encode(self, object, **attrs):
-                data = object.serialize().encode('base64')
+                res = object.serialize()
+                data = b64encode(res)
                 return super(b64, self).encode(ptype.block(length=len(data)).set(data))
 
             def decode(self, object, **attrs):
-                data = object.serialize().decode('base64')
+                res = object.serialize()
+                data = b64decode(object.serialize())
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
         x = b64(source=ptypes.prov.string(s)).l
         y = x.d.l
-        if x.size() == 25 and y[0].serialize() == 'AAAA' and y[1].serialize() == 'BBBB' and y[2].serialize() == 'CCCC' and y[3].serialize() == 'DDDD':
+        if x.size() == 25 and y[0].serialize() == b'AAAA' and y[1].serialize() == b'BBBB' and y[2].serialize() == b'CCCC' and y[3].serialize() == b'DDDD':
             raise Success
 
     @TestCase
     def test_decoded_b64():
-        input = 'AAAABBBBCCCCDDDD'
-        result = input.encode('base64')
+        import base64
+        b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info.major < 3 else (base64.encodebytes, base64.decodebytes)
+
+        input = b'AAAABBBBCCCCDDDD'
+        result = b64encode(input)
         instance = pstr.string(length=len(input)).set(input)
 
         class b64(ptype.encoded_t):
@@ -2469,14 +2493,16 @@ if __name__ == '__main__':
             _object_ = dynamic.array(pint.uint32_t, 4)
 
             def encode(self, object, **attrs):
-                data = object.serialize().encode('base64')
+                res = object.serialize()
+                data = b64encode(res)
                 return super(b64, self).encode(ptype.block(length=len(data)).set(data))
 
             def decode(self, object, **attrs):
-                data = object.serialize().decode('base64')
+                res = object.serialize()
+                data = b64decode(res)
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
-        x = b64(source=ptypes.prov.string('A'*0x100+'\x00')).l
+        x = b64(source=ptypes.prov.string(b'A'*0x100+b'\x00')).l
         x = x.reference(instance)
         if builtins.isinstance(x.d, pstr.string) and x.serialize() == result:
             raise Success
@@ -2567,10 +2593,10 @@ if __name__ == '__main__':
     @TestCase
     def test_pointer_dereference():
         import math
-        count = math.log(sys.maxint) / math.log(0x100)
-        prefix = chr(math.trunc(math.ceil(count))) + '\x00'*math.trunc(count)
+        count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
+        prefix = six.int2byte(math.trunc(math.ceil(count))) + b'\x00'*math.trunc(count)
 
-        data = prefix + 'AAAA'
+        data = prefix + b'AAAA'
 
         a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
         a = a.l
@@ -2581,14 +2607,14 @@ if __name__ == '__main__':
     @TestCase
     def test_pointer_ref():
         import math
-        count = math.log(sys.maxint) / math.log(0x100)
-        prefix = chr(math.trunc(math.ceil(count))) + '\x00'*math.trunc(count)
+        count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
+        prefix = six.int2byte(math.trunc(math.ceil(count))) + b'\x00'*math.trunc(count)
 
-        src = prov.string(prefix + 'AAAA' + 'AAAA')
+        src = prov.string(prefix + b'AAAA' + b'AAAA')
 
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
-        if b.serialize() != '\x41\x41\x41\x41':
+        if b.serialize() != b'\x41\x41\x41\x41':
             raise Failure
 
         c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
@@ -2598,7 +2624,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_deref_32():
-        data = '\x04\x00\x00\x00AAAA'
+        data = b'\x04\x00\x00\x00AAAA'
 
         a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
         a = a.l
@@ -2608,10 +2634,10 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref_32():
-        src = prov.string('\x04\x00\x00\x00AAAAAAAA')
+        src = prov.string(b'\x04\x00\x00\x00AAAAAAAA')
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
-        if b.serialize() != '\x41\x41\x41\x41':
+        if b.serialize() != b'\x41\x41\x41\x41':
             raise Failure
 
         c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
@@ -2621,7 +2647,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_deref_64():
-        data = '\x08\x00\x00\x00\x00\x00\x00\x00AAAA'
+        data = b'\x08\x00\x00\x00\x00\x00\x00\x00AAAA'
 
         a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint64_t)
         a = a.l
@@ -2631,10 +2657,10 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref_64():
-        src = prov.string('\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA')
+        src = prov.string(b'\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA')
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint64_t).l
         b = a.d.l
-        if b.serialize() != '\x41\x41\x41\x41':
+        if b.serialize() != b'\x41\x41\x41\x41':
             raise Failure
 
         c = pint.uint32_t(offset=8,source=src).set(0x42424242).commit()
@@ -2647,7 +2673,7 @@ if __name__ == '__main__':
         t1 = dynamic.clone(ptype.type, length=4)
         t2 = pint.uint32_t
 
-        data = prov.string('AAAA')
+        data = prov.string(b'AAAA')
         a = t1(source=data).l
         b = a.cast(t2)
         if a.serialize() == b.serialize():
@@ -2658,7 +2684,7 @@ if __name__ == '__main__':
         t1 = dynamic.clone(ptype.type, length=4)
         t2 = dynamic.array(pint.uint8_t, 4)
 
-        data = prov.string('AAAA')
+        data = prov.string(b'AAAA')
         a = t1(source=data).l
         b = a.cast(t2)
         if a.serialize() == b.serialize():
@@ -2668,17 +2694,17 @@ if __name__ == '__main__':
     def test_type_cast_diff_large_to_small():
         t1 = ptype.clone(ptype.type, length=4)
         t2 = ptype.clone(ptype.type, length=2)
-        data = prov.string('ABCD')
+        data = prov.string(b'ABCD')
         a = t1(source=data).l
         b = a.cast(t2)
-        if b.serialize() == 'AB':
+        if b.serialize() == b'AB':
             raise Success
 
     @TestCase
     def test_type_cast_diff_small_to_large():
         t1 = ptype.clone(ptype.type, length=2)
         t2 = ptype.clone(ptype.type, length=4)
-        data = prov.string('ABCD')
+        data = prov.string(b'ABCD')
         a = t1(source=data).l
         b = a.cast(t2)
         if a.size() == b.size() and not b.initialized:
@@ -2688,18 +2714,18 @@ if __name__ == '__main__':
     def test_container_cast_large_to_small():
         t1 = dynamic.array(pint.uint8_t, 8)
         t2 = dynamic.array(pint.uint8_t, 4)
-        data = prov.string('ABCDEFGH')
+        data = prov.string(b'ABCDEFGH')
 
         a = t1(source=data).l
         b = a.cast(t2)
-        if b.size() == 4 and b.serialize() == 'ABCD':
+        if b.size() == 4 and b.serialize() == b'ABCD':
             raise Success
 
     @TestCase
     def test_container_cast_small_to_large():
         t1 = dynamic.array(pint.uint8_t, 4)
         t2 = dynamic.array(pint.uint8_t, 8)
-        data = prov.string('ABCDEFGH')
+        data = prov.string(b'ABCDEFGH')
         a = t1(source=data).l
         b = a.cast(t2)
         if b.size() == 4 and not b.initialized and b.blocksize() == 8:
@@ -2707,7 +2733,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_type_copy():
-        data = prov.string("WIQIWIQIWIQIWIQI")
+        data = prov.string(b'WIQIWIQIWIQIWIQI')
         a = pint.uint32_t(source=data).a
         b = a.copy()
         if b.l.serialize() == a.l.serialize() and a is not b:
@@ -2734,18 +2760,18 @@ if __name__ == '__main__':
     @TestCase
     def test_type_getoffset():
         class bah(ptype.type): length=2
-        data = prov.string(map(six.int2byte,six.moves.range(six.byte2int('a'),six.byte2int('z'))))
+        data = prov.string(bytes().join(map(six.int2byte,six.moves.range(six.byte2int(b'a'),six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
-        if a.getoffset() == 0 and a.l.serialize()=='ab':
+        if a.getoffset() == 0 and a.l.serialize()==b'ab':
             raise Success
 
     @TestCase
     def test_type_setoffset():
         class bah(ptype.type): length=2
-        data = prov.string(map(six.int2byte,six.moves.range(six.byte2int('a'),six.byte2int('z'))))
+        data = prov.string(bytes().join(map(six.int2byte,six.moves.range(six.byte2int(b'a'),six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
         a.setoffset(20)
-        if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == 'uv':
+        if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == b'uv':
             raise Success
 
     @TestCase
@@ -2783,16 +2809,17 @@ if __name__ == '__main__':
 
     @TestCase
     def test_decompression_block():
-        message = 'hi there.'
-        cmessage = message.encode('zlib')
+        import zlib
+        message = b'hi there.'
+        cmessage = zlib.compress(message)
         class cblock(pstruct.type):
             class _zlibblock(ptype.encoded_t):
                 _object_ = ptype.clone(ptype.block, length=len(message))
                 def encode(self, object, **attrs):
-                    data = object.serialize().encode('zlib')
+                    data = zlib.compress(object.serialize())
                     return super(cblock._zlibblock, self).encode(ptype.block(length=len(data)).set(data))
                 def decode(self, object, **attrs):
-                    data = object.serialize().decode('zlib')
+                    data = zlib.decompress(object.serialize())
                     return super(cblock._zlibblock, self).decode(ptype.block(length=len(data)).set(data))
 
             def __zlibblock(self):
@@ -2809,8 +2836,8 @@ if __name__ == '__main__':
 
     @TestCase
     def test_compression_block():
-        global message, data, a
-        message = 'hi there.'
+        import zlib
+        message = b'hi there.'
         class mymessage(ptype.block):
             length = len(message)
         data = mymessage().set(message)
@@ -2818,13 +2845,13 @@ if __name__ == '__main__':
         class zlibblock(ptype.encoded_t):
             _object_ = ptype.clone(ptype.block, length=len(message))
             def encode(self, object, **attrs):
-                data = object.serialize().encode('zlib')
+                data = zlib.compress(object.serialize())
                 return super(zlibblock, self).encode(ptype.block(length=len(data)).set(data))
             def decode(self, object, **attrs):
-                data = object.serialize().decode('zlib')
+                data = zlib.decompress(object.serialize())
                 return super(zlibblock, self).decode(ptype.block(length=len(data)).set(data))
 
-        source = prov.string('\x00'*1000)
+        source = prov.string(b'\x00'*1000)
         a = zlibblock(source=source)
         a.object = pstr.string(length=1000, source=source).l
         a.reference(data)
@@ -2835,21 +2862,21 @@ if __name__ == '__main__':
     def test_equality_type_same():
         class type1(ptype.type): length=4
         class type2(ptype.type): length=4
-        data = 'ABCDEFGHIJKLMNOP'
+        data = b'ABCDEFGHIJKLMNOP'
         a = type1(source=prov.string(data)).l
         b = type2(source=prov.string(data), offset=a.getoffset()).l
-        if cmp(a,b) == 0:
+        if a.same(b):
             raise Success
 
     @TestCase
     def test_equality_type_different():
         class type1(ptype.type): length=4
-        data = 'ABCDEFGHIJKLMNOP'
+        data = b'ABCDEFGHIJKLMNOP'
         a = type1(source=prov.string(data))
         b = a.copy(offset=1)
         c = a.copy().l
         d = c.copy().load(offset=1)
-        if cmp(a,b) != 0 and cmp(c,d) != 0:
+        if not a.same(b) and not c.same(d):
             raise Success
 
     @TestCase
@@ -2858,10 +2885,10 @@ if __name__ == '__main__':
         b = pstr.szstring().set('this sentence is unpunctuaTed')
         def getstr(string, result):
             index, (self, other) = result
-            return self[index : index + len(self)].serialize()
+            return string[index : index + len(self)].serialize()
         result = list(a.compare(b))
         c,d = result
-        if getstr(a, c) == 'over the top!' and getstr(b,c) == 'unpunctuaTed\x00' and d[0] >= b.size() and getstr(a,d) == '\x00':
+        if getstr(a, c) == b'over the top!' and getstr(b,c) == b'unpunctuaTed\x00' and d[0] >= b.size() and getstr(a,d) == b'\x00':
             raise Success
 
     @TestCase
@@ -2882,9 +2909,9 @@ if __name__ == '__main__':
         z.setoffset(z.getoffset(), recurse=True)
 
         result = dict(y.compare(z))
-        if result.keys() == [2]:
+        if list(result.keys()) == [2]:
             s,o = result[2]
-            if c.serialize()+d.serialize() == ''.join(_.serialize() for _ in s) and a.serialize()+a.serialize() == ''.join(_.serialize() for _ in o):
+            if c.serialize()+d.serialize() == bytes().join(_.serialize() for _ in s) and a.serialize()+a.serialize() == bytes().join(_.serialize() for _ in o):
                 raise Success
 
     @TestCase
@@ -2907,9 +2934,9 @@ if __name__ == '__main__':
         z.setoffset(z.getoffset()+0x1000, recurse=True)
 
         result = dict(y.compare(z))
-        if result.keys() == [1]:
-            s,o = tuple(six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),'') for X in result[1])
-            if s == g.serialize() and o == ''.join(map(six.int2byte,(40,60,80,100))):
+        if list(result.keys()) == [1]:
+            s,o = tuple(six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),b'') for X in result[1])
+            if s == g.serialize() and o == bytes().join(map(six.int2byte,(40,60,80,100))):
                 raise Success
 
     @TestCase
@@ -2932,9 +2959,9 @@ if __name__ == '__main__':
         z.setoffset(z.getoffset()-0x1000, recurse=True)
 
         result = dict(y.compare(z))
-        if result.keys() == [3]:
+        if list(result.keys()) == [3]:
             s,o = result[3]
-            if s is None and six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),'') == g.serialize()+'\x40':
+            if s is None and six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),b'') == g.serialize()+b'\x40':
                 raise Success
     @TestCase
     def test_container_set_uninitialized_type():
@@ -3045,9 +3072,9 @@ if __name__ == '__main__':
             def blocksize(self):
                 return 4
         x = block(value=[])
-        for d in 'ABCD':
-            x.value.append( x.new(E).load(source=ptypes.prov.string(d*2)) )
-        if x.serialize() == 'AABBCCDD':
+        for d in bytearray(b'ABCD'):
+            x.value.append( x.new(E).load(source=ptypes.prov.string(six.int2byte(d)*2)) )
+        if x.serialize() == b'AABBCCDD':
             raise Success
 
     @TestCase
@@ -3058,11 +3085,11 @@ if __name__ == '__main__':
             def blocksize(self):
                 return 4
         x = block(value=[])
-        for d in 'ABCD':
-            x.value.append( x.new(E).load(source=ptypes.prov.string(d*2)) )
-        source = ptypes.prov.string('\x00'*16)
+        for d in bytearray(b'ABCD'):
+            x.value.append( x.new(E).load(source=ptypes.prov.string(six.int2byte(d)*2)) )
+        source = ptypes.prov.string(b'\x00'*16)
         x.commit(source=source)
-        if source.value == 'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
+        if source.value == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success
 
     @TestCase
@@ -3073,10 +3100,10 @@ if __name__ == '__main__':
             def blocksize(self):
                 return 4
         x = block(value=[])
-        for d in 'ABCD':
-            x.value.append( x.new(E).load(source=ptypes.prov.string(d*2)) )
-        x.load(source=ptypes.prov.string('E'*16))
-        if x.serialize() == 'EEEECCDD':
+        for d in bytearray(b'ABCD'):
+            x.value.append( x.new(E).load(source=ptypes.prov.string(six.int2byte(d)*2)) )
+        x.load(source=ptypes.prov.string(b'E'*16))
+        if x.serialize() == b'EEEECCDD':
             raise Success
 
     @TestCase
@@ -3085,7 +3112,7 @@ if __name__ == '__main__':
         x = C()
         x.append(pint.uint32_t)
         x.append(pint.uint32_t)
-        if x.serialize() == '\x00\x00\x00\x00\x00\x00\x00\x00':
+        if x.serialize() == b'\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success
 
     @TestCase
@@ -3129,7 +3156,7 @@ if __name__ == '__main__':
         x.reference(a)
         if x.serialize() != a.serialize():
             raise Failure
-        x.d.l.set(b.serialize()).c
+        x.d.l.set(b.serialize().decode('ascii')).c
         if x.serialize() == b.serialize():
             raise Success
 
@@ -3159,9 +3186,9 @@ if __name__ == '__main__':
 
         a = wtf(recurse=dict(WIN64=1)).a
         if a.WIN64 != 1 or a.attributes['WIN64'] != 1:
-            raise Exception
+            raise AssertionError
         if a['what'].size() != 16 or a['what'].o.size() != 16:
-            raise Exception
+            raise AssertionError
 
         x = a['what'].cast(t._value_)
         if x.size() == 16:
@@ -3218,7 +3245,7 @@ if __name__ == '__main__':
             length = 4
 
         x = wt().a
-        x.object = bt().set('DCBA')
+        x.object = bt().set(b'DCBA')
         if hasattr(x.object, 'int') and x.object.int() == 0x41424344:
             raise Success
 
