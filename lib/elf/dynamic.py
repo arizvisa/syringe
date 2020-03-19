@@ -1,4 +1,4 @@
-from base import *
+from .base import *
 
 # This should map d_tag to type, and should point to all the definitions
 class Type(ptype.definition):
