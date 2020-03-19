@@ -212,18 +212,18 @@ class _parray_generic(ptype.container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(self.properties()))
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _parray_generic.details.im_func:
+        if result.count('\n') > 0 or utils.callable_eq(self.repr, _parray_generic.details):
             result = result.rstrip('\n')
             if prop:
                 return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
             return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if getattr(self.repr, 'im_func', None) not in (_parray_generic.repr.im_func,_parray_generic.summary.im_func):
+        if any(utils.callable_eq(self.repr, item) for item in [_parray_generic.repr, _parray_generic.summary]):
             result = ' '.join((element,result))
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
@@ -683,11 +683,11 @@ if __name__ == '__main__':
         x = myarray()
 #        print(x)
 #        print(x.length,len(x), x.value)
-        x.source = provider.string('AAAA'*15)
+        x.source = provider.string(b'AAAA'*15)
         x.l
 #        print(x.length,len(x), x.value)
 #        print("{!r}".format(x))
-        if len(x) == 5 and x[4].serialize() == 'AAAA':
+        if len(x) == 5 and x[4].serialize() == b'AAAA':
             raise Success
 
     @TestCase
@@ -710,11 +710,11 @@ if __name__ == '__main__':
         class myarray(parray.terminated):
             _object_ = pint.uint8_t
             def isTerminator(self, v):
-                if v.serialize() == 'H':
+                if v.serialize() == b'H':
                     return True
                 return False
 
-        block = 'GFEDCBABCDHEFG'
+        block = b'GFEDCBABCDHEFG'
         x = myarray(source=provider.string(block)).l
         if len(x) == 11:
             raise Success
@@ -724,7 +724,7 @@ if __name__ == '__main__':
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        chars = '\xdd\xdd'
+        chars = b'\xdd\xdd'
         string = chars * 8
         string = string[:-1]
 
@@ -737,7 +737,7 @@ if __name__ == '__main__':
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        data = provider.string('AAAAA')
+        data = provider.string(b'AAAAA')
         z = RecordContainer(source=data).l
         s = RecordGeneral().a.blocksize()
 
@@ -750,7 +750,7 @@ if __name__ == '__main__':
             _object_ = pint.uint8_t
             blocksize = lambda s:4
 
-        block = str().join(map(six.int2byte,six.moves.range(0x10)))
+        block = bytes().join(map(six.int2byte,six.moves.range(0x10)))
 
         a = container(source=provider.string(block)).l
         if len(a) == 4:
@@ -767,7 +767,7 @@ if __name__ == '__main__':
             _object_ = child_type
 
         block_length = child_type.length * count
-        block = '\x00'*block_length
+        block = b'\0'*block_length
 
         n = container_type(source=provider.string(block)).l
         if len(n)-1 == count and not n[-1].initialized:
@@ -782,7 +782,7 @@ if __name__ == '__main__':
             _object_ = child_type
 
         block_length = child_type.length * count
-        block = '\x00'*block_length
+        block = b'\0'*block_length
         container_type.blocksize = lambda s: child_type.length * 4
 
         a = container_type(source=provider.string(block)).l
@@ -807,7 +807,7 @@ if __name__ == '__main__':
             def isTerminator(self, v):
                 return v.int() == 0x42424242
 
-        a = extreme(source=provider.string('A'*0x100 + 'B'*0x100 + 'C'*0x100 + 'DDDD'))
+        a = extreme(source=provider.string(b'A'*0x100 + b'B'*0x100 + b'C'*0x100 + b'DDDD'))
         a=a.l
         if len(a) == (0x100 / subarray.length)+1:
             raise Success
@@ -838,7 +838,7 @@ if __name__ == '__main__':
 
             _object_ = randomcontainer
 
-        string = str().join([ six.int2byte(random.randint(six.byte2int('A'),six.byte2int('Z'))) for x in six.moves.range(0x100) ])
+        string = bytes().join([ six.int2byte(random.randint(six.byte2int(b'A'),six.byte2int(b'Z'))) for x in six.moves.range(0x100) ])
         a = arr(source=provider.string(string))
         a=a.l
         if a.blocksize() == 0x108:
@@ -848,7 +848,7 @@ if __name__ == '__main__':
     def test_array_infinite_nested_partial():
         class fakefile(object):
             d = array.array('L', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
-            d = array.array('c', d.tostring() + '\xde\xad\xde\xad')
+            d = array.array('B', bytearray(d.tostring() + b'\xde\xad\xde\xad'))
             o = 0
             def seek(self, ofs):
                 self.o = ofs
@@ -866,7 +866,7 @@ if __name__ == '__main__':
         x = argh(source=strm)
         for a in x.loadstream():
             pass
-        if not a.initialized and x[-2].serialize() == '\xde\xad\xde\xad':
+        if not a.initialized and x[-2].serialize() == b'\xde\xad\xde\xad':
             raise Success
 
     @TestCase
@@ -876,9 +876,9 @@ if __name__ == '__main__':
             def isTerminator(self, value):
                 return value.int() == 0
 
-        data = provider.string("hello world\x00not included\x00")
+        data = provider.string(b'hello world\x00not included\x00')
         a = szstring(source=data).l
-        if len(a) == len('hello world\x00'):
+        if len(a) == len(b'hello world\x00'):
             raise Success
 
     @TestCase
@@ -891,9 +891,9 @@ if __name__ == '__main__':
         class argh(parray.terminated):
             _object_ = szstring
             def isTerminator(self, value):
-                return value.serialize() == 'end\x00'
+                return value.serialize() == b'end\x00'
 
-        data = provider.string("hello world\x00is included\x00end\x00not\x00")
+        data = provider.string(b'hello world\x00is included\x00end\x00not\x00')
         a = argh(source=data).l
         if len(a) == 3:
             raise Success
@@ -909,7 +909,7 @@ if __name__ == '__main__':
             _object_ = szstring
             blocksize = lambda x: 9000
 
-        s = (('A'*498) + '\x00\x00') + (('B'*498)+'\x00\x00')
+        s = ((b'A'*498) + b'\x00\x00') + ((b'B'*498)+b'\x00\x00')
         a = ninethousand(source=provider.string(s*9000)).l
         if len(a) == 18 and a.size() == 9000:
             raise Success
@@ -923,14 +923,14 @@ if __name__ == '__main__':
         class feiverfrei(parray.terminated):
             _object_ = fiver
             def isTerminator(self, value):
-                return value.serialize() == '\x00\x00\x00\x00\x00'
+                return value.serialize() == b'\x00\x00\x00\x00\x00'
 
         class dundundun(parray.block):
             _object_ = feiverfrei
             blocksize = lambda x: 50
 
-        dat = 'A'*5
-        end = '\x00'*5
+        dat = b'A'*5
+        end = b'\x00'*5
         s = (dat*4)+end + (dat*4)+end
         a = dundundun(source=provider.string(s*5)).l
         if len(a) == 2 and len(a[0]) == 5 and len(a[1]) == 5:
@@ -944,8 +944,8 @@ if __name__ == '__main__':
             def blocksize(self):
                 return 16
 
-        data = '\xAA\xAA\xAA\xAA'*4
-        data+= '\xBB'*4
+        data = b'\xAA\xAA\xAA\xAA'*4
+        data+= b'\xBB'*4
 
         x = blocked(source=provider.string(data))
         x = x.l
@@ -996,9 +996,9 @@ if __name__ == '__main__':
         class argh(parray.type):
             _object_ = pint.uint32_t
 
-        x = aigh().alloc(map(ord,'PE\0\0'))
+        x = aigh().alloc(list(bytearray(b'PE\0\0')))
         a = argh(length=4).alloc(((0,x),(-1,0x5a4d)))
-        if a[0].serialize() == 'PE\0\0' and a[-1].serialize() == 'MZ\0\0':
+        if a[0].serialize() == b'PE\0\0' and a[-1].serialize() == b'MZ\0\0':
             raise Success
 
     @TestCase
@@ -1108,7 +1108,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
 
         a = blah().a
-        if a.serialize() == '':
+        if a.serialize() == b'':
             raise Success
 
     #@TestCase
@@ -1131,7 +1131,7 @@ if __name__ == '__main__':
                 def isTerminator(self, value):
                     return value.int() == 1
         a = blah().a
-        if a.initializedQ() and a.serialize() == '':
+        if a.initializedQ() and a.serialize() == b'':
             raise Success
 
     @TestCase
