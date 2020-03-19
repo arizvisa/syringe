@@ -128,12 +128,12 @@ if __name__ == '__main__':
 
 #    x = a.v[1].object
 #    y = x[1]
-#    print x
-#    print list(x.object)[1].keys()
+#    print(x)
+#    print(list(x.object)[1].keys())
 
     x = pbinary.new(rar.vint,offset=0xc)
-    print x
-    print x.l
+    print(x)
+    print(x.l)
 
     for k,v in x[0].iteritems():
-        print k,v
+        print(k,v)

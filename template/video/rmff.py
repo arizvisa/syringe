@@ -209,8 +209,8 @@ class Type_Specific_v4_Audio(pstruct.type):
         (Str8, 'desc2'),
     ]
     def codec(self):
-#        print hex(self.getoffset())
-#        print self['desc1'], self['desc2']
+#        print(hex(self.getoffset()))
+#        print(self['desc1'], self['desc2'])
         return self['desc2'].serialize()
 
 # FIXME
@@ -504,13 +504,13 @@ if __name__ == '__main__':
 
     self = rmff.File()
     z = self.l
-    print len(self.value)
+    print(len(self.value))
 
 #    offset = 0x16f
-#    print self.at(offset)
+#    print(self.at(offset))
 
 #    typespecific = self[3]['object']['type_specific_data']
 
     mdpr = [x for x in self.traverse(filter=lambda x: type(x) == rmff.RealMedia_Header) if x['object_id'].serialize() == 'MDPR']
     for x in mdpr:
-        print x.__name__, x['object']['mime_type']
+        print(x.__name__, x['object']['mime_type'])

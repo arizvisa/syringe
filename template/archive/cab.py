@@ -135,25 +135,25 @@ if __name__ == '__main__':
 
     a = cab.File()
     a = a.l
-    print a['header']['cbCabinet'].int()
-    print a['header']['cbCabinet']
+    print(a['header']['cbCabinet'].int())
+    print(a['header']['cbCabinet'])
 
-    print a['folders'][0]['typeCompress'].summary()
-    print a['folders'][0]['coffCabStart'].d.l
+    print(a['folders'][0]['typeCompress'].summary())
+    print(a['folders'][0]['coffCabStart'].d.l)
     b = a['header']['coffFiles'].d.l
 
     for x in b:
-        print x['uoffFolderStart']
+        print(x['uoffFolderStart'])
 
-    print b[1]
-    print b[1]['uoffFolderStart'].d.l.hexdump()
+    print(b[1])
+    print(b[1]['uoffFolderStart'].d.l.hexdump())
 
 
-    print a['folders'][0]['typeCompress']
+    print(a['folders'][0]['typeCompress'])
 
-    print a['header']
-    print a['header']['flags']
+    print(a['header'])
+    print(a['header']['flags'])
     b = a['header']['coffFiles'].d.l
-    print a['header']
-    print b[-1]['attribs']
-    print a['header']
+    print(a['header'])
+    print(b[-1]['attribs'])
+    print(a['header'])

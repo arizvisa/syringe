@@ -4291,9 +4291,9 @@ if __name__ == '__main__':
     z = excel.File()
     z = z.l
     a = z[0]
-    print a[2]
+    print(a[2])
 
-    print z[1]
+    print(z[1])
 
     streams = z
 
@@ -4305,7 +4305,7 @@ if __name__ == '__main__':
             t = int(bof['dt'])
             if t == 5:
                 if workbook is not None:
-                    print "Workbook has already been assigned. Honoring anyways.."
+                    print("Workbook has already been assigned. Honoring anyways..")
 
                 workbook = st
 
@@ -4317,9 +4317,9 @@ if __name__ == '__main__':
             continue
 
     if z.source.size() == z.size():
-        print 'successfully parsed {:d} streams of {:#x} bytes from {:s}'.format(len(z), z.size(), filename)
-        print 'z: found {:d} records'.format(reduce(lambda x,y:x+len(y),z,0))
+        print('successfully parsed {:d} streams of {:#x} bytes from {:s}'.format(len(z), z.size(), filename))
+        print('z: found {:d} records'.format(reduce(lambda x,y:x+len(y),z,0)))
     else:
-        print 'unsuccessfully parsed {:d} biffsubstreams from {:s} ({:d} != {:d})'.format(len(z), filename, z.size(), z.source.size())
-        print 'z: found {:d} records'(reduce(lambda x,y:x+len(y),z,0))
+        print('unsuccessfully parsed {:d} biffsubstreams from {:s} ({:d} != {:d})'.format(len(z), filename, z.size(), z.source.size()))
+        print('z: found {:d} records'(reduce(lambda x,y:x+len(y),z,0)))
 

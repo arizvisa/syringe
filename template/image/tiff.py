@@ -646,12 +646,12 @@ if __name__ == '__main__':
     a = tiff.File()
     a = a.l
     for n in a['pointer'].d.l.iterate():
-        print n.l
+        print(n.l)
         if not isinstance(n['value'], ptypes.ptype.undefined):
-            print n['value']
+            print(n['value'])
             continue
         assert not isinstance(n['pointer'], ptypes.ptype.undefined)
         for v in n['pointer'].d.l:
-            print v
+            print(v)
         continue
 

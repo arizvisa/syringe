@@ -2960,10 +2960,10 @@ if __name__ == '__main__':
 
     fib = data['fib']
 
-    print "nFib: {:#x}".format(fib.nFib())
-    print fib
-    print fib['base']
-    print fib['fibRgW'].latest()
-    print fib['fibRgLw'].latest()
-    print fib['fibRgFcLcbBlob'].latest()
-    print fib['fibRgCswNew'].latest()
+    print("nFib: {:#x}".format(fib.nFib()))
+    print(fib)
+    print(fib['base'])
+    print(fib['fibRgW'].latest())
+    print(fib['fibRgLw'].latest())
+    print(fib['fibRgFcLcbBlob'].latest())
+    print(fib['fibRgCswNew'].latest())

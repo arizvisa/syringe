@@ -91,4 +91,4 @@ if __name__ == '__main__':
     ptypes.setsource( ptypes.provider.file('./poc.gif') )
 
     z = gif.File()
-    print z.l
+    print(z.l)

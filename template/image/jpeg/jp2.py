@@ -677,7 +677,7 @@ if __name__ == '__main__':
 
     z = jp2.File().l
 
-    print z[3]['data'].decode()
+    print(z[3]['data'].decode())
 
     a = ptype.block(offset=z.getoffset()+z.size(), length=0x100).l
-    print a.hexdump()
+    print(a.hexdump())

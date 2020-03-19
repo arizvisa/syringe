@@ -577,22 +577,22 @@ if __name__ == '__main__':
         res = bitmap.push(res, (0x1, 0))
         res = bitmap.push(res, (0x0, 7))
         x = pbinary.new(ber.Tag,source=ptypes.prov.string(bitmap.data(res)))
-        print x.l
-        print x['TagLong'][0]
-        print x.int()
-        print int(x['TagLong'])
+        print(x.l)
+        print(x['TagLong'][0])
+        print(x.int())
+        print(int(x['TagLong']))
 
     def test_length():
         res = bitmap.zero
         res = bitmap.push(res, (0, 1))
         res = bitmap.push(res, (38, 7))
         x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
-        print x.l
-        print x.int()
+        print(x.l)
+        print(x.int())
 
         res = bitmap.zero
         res = bitmap.push(res, (0x81,8))
         res = bitmap.push(res, (0xc9,8))
         x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
-        print x.l
-        print x.int()
+        print(x.l)
+        print(x.int())

@@ -304,7 +304,7 @@ if __name__ == '__main__':
     reload(x224)
     a = x224.TPKT()
     a = a.l
-    print a['data']
+    print(a['data'])
 
     ### client mcs erect domain request
     data = "0300000c02f0800401000100"
@@ -315,4 +315,4 @@ if __name__ == '__main__':
     reload(x224)
     a = x224.TPKT()
     a = a.l
-    print a['data']
+    print(a['data'])

@@ -538,9 +538,9 @@ if __name__ == '__main__':
     reload(flv)
     a = flv.File()
     a = a.l
-    print a['Header']['TypeFlags']
-    print a['Header']
-    print a['Header']['Padding'].hexdump()
-    print a['Body'][0]['Tag']
-    print a['Body'][0]['Tag']['TagData']
+    print(a['Header']['TypeFlags'])
+    print(a['Header'])
+    print(a['Header']['Padding'].hexdump())
+    print(a['Body'][0]['Tag'])
+    print(a['Body'][0]['Tag']['TagData'])
 

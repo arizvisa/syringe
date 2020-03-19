@@ -415,39 +415,39 @@ if __name__ == '__main__':
     boot_sector = z['desc'][1]['data']['boot_catalog']
     if False:
         a = iso9660.sector(offset=boot_sector*2048).l
-        print a.cast(iso9660.section_validation_entry)
-        #    print z['iso']
-        #    print [x for x in z['unused'] if not x.is_empty()]
+        print(a.cast(iso9660.section_validation_entry))
+        #    print(z['iso'])
+        #    print([x for x in z['unused'] if not x.is_empty()])
         #    date = z['primary']['root_directory_record']['date']
-        #    print date
-        #    print date['year'].summary()
+        #    print(date)
+        #    print(date['year'].summary())
 
         a = z['desc'][1]['data']['boot_catalog']
-        print a.cast(iso9660.sectorpointer)
+        print(a.cast(iso9660.sectorpointer))
 
     if False:
         #    x = iso_volume_descriptor()
         #    x = block(32768)()
-        #    print x.l.hexdump()
+        #    print(x.l.hexdump())
         #    x = iso_volume_descriptor(source=ptypes.file('~/downloads/6euj41uc.iso', 'r'))
         #    x.setoffset(32768)
-        #    print x.l
-        #    print iso_volume_descriptor().a.size()
+        #    print(x.l)
+        #    print(iso_volume_descriptor().a.size())
         #
-        #    print z['desc'][0]
+        #    print(z['desc'][0])
 
         p = z['primary']
-        print p
+        print(p)
         x = p['type_l_path_table']
-        print x
+        print(x)
         x = iso9660.pointer(iso9660.sector)()
         x.set(0x16)
-        print x.d.l.hexdump()
+        print(x.d.l.hexdump())
 
         a = iso9660.sector(offset=p.getoffset()+p.size())
-        print a.l
-        print a.cast(iso9660.iso_volume_descriptor)
+        print(a.l)
+        print(a.cast(iso9660.iso_volume_descriptor))
         x = a
         x = iso9660.sector(offset=x.getoffset()+x.size())
-        print x.l.cast(iso9660.iso_volume_descriptor)
-        print x.l
+        print(x.l.cast(iso9660.iso_volume_descriptor))
+        print(x.l)

@@ -165,7 +165,7 @@ def verify_bitsize(integertype, bitsize):
         def __verify(self):
             n = int(self)
             if bitmap.fit(n) > bitsize:
-                print '|warning| %x is larger than %d bits. using 1 instead.'% (n, bitsize)
+                print('|warning| %x is larger than %d bits. using 1 instead.'% (n, bitsize))
                 self.set(1)
 
     verifiedtype.__name__ = integertype.__name__
@@ -220,7 +220,7 @@ if __name__ == '__main__':
 
     ptypes.setsource( provider.file('./poc.pf') )
     self = ProfileFile()
-#    print self.l
+#    print(self.l)
     self.l
 
     z = ptype.debugrecurse(DevStruct)()

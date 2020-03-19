@@ -310,40 +310,40 @@ if __name__ == '__main__':
 
     b = ttf.File()
     b = b.l
-    print '\n'.join(map(repr,((i,x['tag'].summary()) for i,x in enumerate(b['tables']))))
+    print('\n'.join(map(repr,((i,x['tag'].summary()) for i,x in enumerate(b['tables'])))))
 
     if 'tables' and False:
-        print b['tables'][0]['offset'].d.l.hexdump()
-        print b['tables'][1]['offset'].d.l.hexdump()
-        print b['tables'][8]['offset'].d.l.hexdump()
-        print b['tables'][9]['offset'].d.l.hexdump()
-        print b['tables'][10]['offset'].d.l
-        print b['tables'][14]
-        print b['tables'][15]['offset'].d.l
+        print(b['tables'][0]['offset'].d.l.hexdump())
+        print(b['tables'][1]['offset'].d.l.hexdump())
+        print(b['tables'][8]['offset'].d.l.hexdump())
+        print(b['tables'][9]['offset'].d.l.hexdump())
+        print(b['tables'][10]['offset'].d.l)
+        print(b['tables'][14])
+        print(b['tables'][15]['offset'].d.l)
 
     # 'cmap'
     if 'cmap' and False:
-        print b['tables'][10]
+        print(b['tables'][10])
         x = b['tables'][10]['offset'].d.l
-        print x
-        print x['entry'][0]['offset'].d.l
-        print x['entry'][0]['offset'].d.l['data']
-        print x['entry'][1]['offset'].d.l['data'].hexdump()
-        print x['entry'][2]['offset'].d.l['data']
-        print x.blocksize()
+        print(x)
+        print(x['entry'][0]['offset'].d.l)
+        print(x['entry'][0]['offset'].d.l['data'])
+        print(x['entry'][1]['offset'].d.l['data'].hexdump())
+        print(x['entry'][2]['offset'].d.l['data'])
+        print(x.blocksize())
 
     # 'glyf'
     if 'glyf' and True:
-        print b['tables'][14]
+        print(b['tables'][14])
         c = b['tables'][14]['offset'].d
         c = c.l
 
-        #print c[1]['header']
+        #print(c[1]['header'])
         #d = c[1]
         #fl = d['header']['flags']
         #for i in range(fl.getActualLength()):
         #    f = set((k.lower() for k,v in fl.getActualElement(i).items() if v))
-        #    print i, ','.join(f)
+        #    print(i, ','.join(f))
 
         if 'simple' and False:
             c = c.l
@@ -360,13 +360,13 @@ if __name__ == '__main__':
                 if 'y-short' in fl:
                     dy = dy if 'y-dual' in fl else -dy
                 (X,Y) = (X+dx,Y+dy)
-                print i, (X,Y)
+                print(i, (X,Y))
 
         if False:
             d = ttf.glyf.glyph(offset=c.getoffset()+0x9036)
             d = d.l
             e = d['header']
-            print e[0]['flags']
-            print e[1]['flags']
-            print e[1]['scale'].hexdump()
+            print(e[0]['flags'])
+            print(e[1]['flags'])
+            print(e[1]['scale'].hexdump())
 

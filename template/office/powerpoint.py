@@ -835,13 +835,13 @@ if __name__ == '__main__':
         s = '\x00\x00\x00\x00\x0c\x00\x00\x00' + 'A'*30
         z = pp.RecordGeneral()
         z.source = provider.string(s)
-        print z.l
+        print(z.l)
 
     if False:
         s = '\x00\x00'+'\xc3\x0b'+'\x06\x00\x00\x00'+'\r\n\x0e\r\xcc\x00'
         z = pp.RecordGeneral()
         z.source = provider.string(s)
-        print z.l
+        print(z.l)
 
     if False:
         header = '\x00\x00'+'\xc3\x0b' + '\x06\x00\x00\x00'
@@ -851,7 +851,7 @@ if __name__ == '__main__':
         z = pp.RecordContainer()
         z.source = provider.string(s+'\xff'*8)
         z.size = lambda:(len(header)+len(data))*4
-        print z.l
+        print(z.l)
 
     if False:
         header = '\x00\x00'+'\xc3\x0b' + '\x06\x00\x00\x00'
@@ -865,13 +865,13 @@ if __name__ == '__main__':
         z = pp.RecordGeneral()
         z.source = ptypes.provider.string(container)
         z.size = lambda:len(container)
-        print z.l
+        print(z.l)
 
     if False:
         z = pp.File(source=ptypes.prov.file('./powerpoint.stream',mode='r'))
         z=z.l
-        print z[0].initialized
-        print z[0]['data'][2]['data']
+        print(z[0].initialized)
+        print(z[0]['data'][2]['data'])
 
     if False:
         import ptypes,powerpoint
@@ -884,14 +884,14 @@ if __name__ == '__main__':
         currentuseratom = user[0]['data']
         currentedit = currentuseratom['offsetToCurrentEdit'].d      # points to offset inside a data stream
         currentedit.source = datastream.source
-        print currentedit.l
+        print(currentedit.l)
         usereditatom = currentedit['data']
         persistdirectory = usereditatom['offsetPersistDirectory'].d
 
         # go through persist directory
         for i,entry in enumerate(persistdirectory.li['data']):
-            print '{:s} {:x}'.format('-'*70, i)
+            print('{:s} {:x}'.format('-'*70, i))
             for obj in entry.walk():
-                print obj
+                print(obj)
             continue
 

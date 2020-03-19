@@ -264,7 +264,7 @@ if __name__ == '__main__':
 
     x = Stream(source=ptypes.prov.string(blah.serialize()), blocksize=lambda :blah.size()).l
     y = x.decode()
-    for x in y: print x['type']
-    print y[9]
+    for x in y: print(x['type'])
+    print(y[9])
     for n in y:
-        print n['type']
+        print(n['type'])

@@ -298,7 +298,7 @@ if __name__ == '__main__':
     import ptypes, image.dds
 
     if len(sys.argv) != 2:
-        print "Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__)
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
         sys.exit(0)
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1]))

@@ -32,7 +32,7 @@ if False:
     argh = (chr(x) for x in res)
 
     x = CLSID(source=provider.string(argh))
-    print x
+    print(x)
 
 class HEADER(pstruct.type):
     _fields_ = [
@@ -142,5 +142,5 @@ if __name__ == '__main__':
     self.setoffset(0x1040)
     self.load()
 
-#    print self['subimage']['offset to tile header table']
-#    print hex(self['subimage']['offset to tile header table'].getoffset())
+#    print(self['subimage']['offset to tile header table'])
+#    print(hex(self['subimage']['offset to tile header table'].getoffset()))

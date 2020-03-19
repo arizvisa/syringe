@@ -597,12 +597,12 @@ if __name__ == '__main__':
 
     b = as3.abcFile(offset=5)
     b=b.l
-#    print b['minor_version'].l
-#    print b['major_version'].l
+#    print(b['minor_version'].l)
+#    print(b['major_version'].l)
 
 #    c = b['constant_pool'].l
-#    print c.keys()
+#    print(c.keys())
 #    for k,v in c.items():
-#        print k
-#        print v
-#    print c
+#        print(k)
+#        print(v)
+#    print(c)

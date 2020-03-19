@@ -160,4 +160,4 @@ if __name__ == '__main__':
     reload(mpeg)
 
     a = mpeg.stream(offset=0x3ba, length=20)
-    print a.l
+    print(a.l)

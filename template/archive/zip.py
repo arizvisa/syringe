@@ -585,12 +585,12 @@ if __name__ == '__main__':
     arg_info_gr.add_argument('-j', '--compressed', action='store_true', help='extract data from archive in its compressed form', dest='compress', default=False)
 
     if len(sys.argv) <= 1:
-        print >>sys.stdout, arg_p.format_usage()
+        six.print_(arg_p.format_usage(), file=sys.stdout)
         sys.exit(0)
 
     args = arg_p.parse_args(sys.argv[1:])
     if args.mode == 'help':
-        print >>sys.stdout, arg_p.format_help()
+        six.print_(arg_p.format_help(), file=sys.stdout)
         sys.exit(0)
 
     # fix up arguments
@@ -692,13 +692,13 @@ if __name__ == '__main__':
     if args.mode == 'list':
         z = z.l
         for rec in iterate(z[:-1]):
-            print rec['Record'].listing()
+            print(rec['Record'].listing())
         sys.exit(0)
 
     elif args.mode == 'list-all':
         z = z.l
         for rec in iterate(z[:-1]):
-            print rec['Record'].listing()
+            print(rec['Record'].listing())
         sys.exit(0)
 
     elif args.mode == 'extract':
@@ -709,7 +709,7 @@ if __name__ == '__main__':
 
     # help
     else:
-        print >>sys.stdout, arg_p.format_help()
+        six.print_(arg_p.format_help(), file=sys.stdout)
         sys.exit(1)
 
     # for each record...
@@ -757,12 +757,12 @@ if __name__ == '__main__':
                 logging.info('Creating new file for record({:d}): {:s}'.format(int(rec.name()), res))
 
             logging.debug('{:s}ing {:d} bytes from record({:d}) to file: {:s}'.format(args.mode.title(), len(data), int(rec.name()), res))
-            with file(res, 'wb') as out: print >>out, data
+            with file(res, 'wb') as out: six.print_(data, file=out)
 
         # fall-back to writing to already open target
         else:
             logging.debug('{:s}ing {:d} bytes from record({:d}) to stream: {:s}'.format(args.mode.title(), len(data), int(rec.name()), target.name))
-            print >>target, data
+            six.print_(data, file=target)
         continue
 
     sys.exit(0)

@@ -72,7 +72,7 @@ class File(pstruct.type):
     class _chunks(parray.block):
         _object_ = ChunkGeneral
         def isTerminator(self, value):
-            print "Loading element %s from offset %x with type %x"% (value.__name__, value.getoffset(), value['header']['type'])
+            print("Loading element %s from offset %x with type %x"% (value.__name__, value.getoffset(), value['header']['type']))
             return super(File._chunks, self).isTerminator(value)
 
     _fields_ = [
@@ -279,4 +279,4 @@ if __name__ == '__main__':
 
     z = ptypes.debugrecurse(flic.File)()
     z = z.l
-    print z
+    print(z)

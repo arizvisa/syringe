@@ -678,10 +678,10 @@ if __name__ == '__main__':
 
     a = storage.File()
     a = a.l
-    print a['Header']
-    print a['Fat']['sectDirectory'].d.l
-    print a['MiniFat']['sectMiniFat'].d.l[-1]
-    print a['DiFat']['sectDifat']
+    print(a['Header'])
+    print(a['Fat']['sectDirectory'].d.l)
+    print(a['MiniFat']['sectMiniFat'].d.l[-1])
+    print(a['DiFat']['sectDifat'])
     difat = a.DiFat()
     fat = a.Fat()
     minifat = a.MiniFat()

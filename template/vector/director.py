@@ -169,8 +169,8 @@ if __name__ == '__main__':
     z = director.File()
     z = z.load()
 
-    print z['Data'][1]['ckData']['header']['unknown']
+    print(z['Data'][1]['ckData']['header']['unknown'])
 
-    print 'Number of Records:', len(z['Data'])
+    print('Number of Records:', len(z['Data']))
 
     a = z['Data']
