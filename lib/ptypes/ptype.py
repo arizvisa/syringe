@@ -141,9 +141,6 @@ the methods that it provides are:
 Within this module, some primitive types are provided that a user can include
 within their definition of a complex data structure. These types are:
 
-    constant -- A type that's always a constant value. This constant value comes
-                from it's __doc__ definition.
-
     boundary -- A "marker" that can be applied to a type so that .getparent can
                 be used to fetch it.
 
@@ -2340,49 +2337,6 @@ class opointer_t(pointer_t):
 class boundary(base):
     """Used to mark a boundary in a ptype tree. Can be used to make .getparent() stop."""
 
-class constant(type):
-    """A ptype that uses .__doc__ to describe a string constant
-
-    This will log a warning if the loaded data does not match the expected string.
-    """
-    length = property(fget=lambda self: len(self.__doc__), fset=lambda self, value: None)
-
-    def __init__(self, **attrs):
-        if self.__doc__ is None:
-            Log.warn("constant.__init__ : {:s} : Constant was not initialized".format(self.classname()))
-            self.__doc__ = ''
-        return super(constant, self).__init__(**attrs)
-
-    def __setvalue__(self, *values, **attrs):
-        if not values:
-            return self
-
-        newdata, = values
-        bs, res, data = self.blocksize(), newdata[:], self.__doc__
-
-        if (data != res) or (bs != len(res)):
-            Log.warn("constant.set : {:s} : Data did not match expected value : {!r} != {!r}".format(self.classname(), res, data))
-
-        self.value = res + utils.padding.fill(bs - len(res), self.padding) if len(res) < bs else res
-        return self
-
-    def __deserialize_block__(self, block):
-        data = self.__doc__
-        if data != block:
-            Log.warn("constant.__deserialize_block__ : {:s} : Data loaded from source did not match expected constant value : {!r} != {!r}".format(self.instance(), block, data))
-        return super(constant, self).__deserialize_block__(data)
-
-    def alloc(self, **attrs):
-        """Allocate the ptype instance with requested string"""
-        attrs.setdefault('source', provider.string(self.__doc__))
-        return self.load(**attrs)
-
-    def __getstate__(self):
-        return super(constant, self).__getstate__(), self.__doc__
-    def __setstate__(self, state):
-        state, self.__doc__ = state
-        super(constant, self).__setstate__(state)
-
 from . import pbinary  # XXX: recursive. yay.
 
 if __name__ == '__main__':
@@ -2608,64 +2562,6 @@ if __name__ == '__main__':
         a = pint.uint32_t(recurse={'a1':5}).a
         x = a.new(pint.uint32_t)
         if 'a1' in a.attributes and 'a1' in x.attributes and x.a1 == 5:
-            raise Success
-
-    @TestCase
-    def test_constant_load_correct():
-        data = "MARK"
-        class placeholder(ptype.constant):
-            __doc__ = data
-
-        a = placeholder(source=provider.string(data))
-        if a.l.serialize() == "MARK":
-            raise Success
-
-    @TestCase
-    def test_constant_alloc_ignored():
-        class placeholder(ptype.constant):
-            """MARK"""
-
-        a = placeholder(source=provider.random())
-        if a.a.serialize() == "MARK":
-            raise Success
-
-    @TestCase
-    def test_constant_load_ignored():
-        class placeholder(ptype.constant):
-            """MARK"""
-
-        a = placeholder(source=provider.random())
-        if a.l.serialize() == "MARK":
-            raise Success
-
-    @TestCase
-    def test_constant_set_length():
-        class placeholder(ptype.constant):
-            """MARK"""
-
-        a = placeholder(source=provider.random())
-        a.set("ADFA")
-        if a.serialize() == 'ADFA':
-            raise Success
-
-    @TestCase
-    def test_constant_set_data():
-        class placeholder(ptype.constant):
-            """MARK"""
-
-        a = placeholder(source=provider.random())
-        a.set("ASDFASDF")
-        if a.serialize() == "ASDFASDF":
-            raise Success
-
-    @TestCase
-    def test_constant_set():
-        class placeholder(ptype.constant):
-            """MARK"""
-
-        a = placeholder(source=provider.random())
-        a.set("MARK")
-        if a.serialize() == "MARK":
             raise Success
 
     @TestCase
