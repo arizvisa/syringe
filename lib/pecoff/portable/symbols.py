@@ -103,7 +103,7 @@ class ShortName(pstruct.type):
 
     def set(self, string):
         if len(string) <= 8:
-            return self.load(source=ptypes.provider.string(string + '\x00' * (8 - len(string))), offset=0)
+            return self.load(source=ptypes.provider.bytes(string.encode(sys.getdefaultencoding()) + b'\x00' * (8 - len(string))), offset=0)
 
         table = self.getparent(SymbolTableAndStringTable)
         res = table.AddString(string)
@@ -293,7 +293,7 @@ class StringTable(pstruct.type):
 
     def add(self, string):
         '''appends a string to string table, returns offset'''
-        res = string + '\x00'
+        res = string.encode(sys.getdefaultencoding()) + b'\x00'
         ofs, data = self.size(), self['Data']
         data.length, data.value = data.length + len(res), data.serialize() + res
         self['Size'].set(data.size() + self['Size'].size())
@@ -301,7 +301,7 @@ class StringTable(pstruct.type):
 
     def find(self, string):
         '''returns the offset of the specified string within the string table'''
-        res, data = string + '\x00', self['Data'].serialize()
+        res, data = string.encode(sys.getdefaultencoding()) + b'\x00', self['Data'].serialize()
         index = data.find(res)
         if index == -1:
             raise LookupError("{:s} : Unable to find null-terminated string ({!r}) within string table".format(self.instance(), string))

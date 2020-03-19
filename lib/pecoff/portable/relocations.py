@@ -337,7 +337,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
         imagebase = header['OptionalHeader']['ImageBase'].int()
 
         sectionarray = section.parent
-        sectionvaLookup = dict( ((s['Name'].str(),s['VirtualAddress'].int()) for s in sectionarray) )
+        sectionvaLookup = {s['Name'].str() : s['VirtualAddress'].int() for s in sectionarray}
 
         # relocation type 3
         res = RelocationType.lookup(3)
