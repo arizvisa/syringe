@@ -289,12 +289,16 @@ def memoize(*kargs, **kattrs):
     F_VARGEN = 0x20
     kargs = list(kargs)
     kattrs = tuple((o, a) for o, a in sorted(kattrs.items()))
+
+    # Define some utility functions for interacting with a function object in a portable manner
+    has_function = (lambda F: hasattr(F, 'im_func')) if sys.version_info.major < 3 else (lambda F: hasattr(F, '__func__'))
+    get_function = (lambda F: F.im_func) if sys.version_info.major < 3 else (lambda F: F.__func__)
+
     def prepare_callable(fn, kargs=kargs, kattrs=kattrs):
-        if hasattr(fn, 'im_func'):
-            fn = fn.im_func
+        if has_function(fn):
+            fn = get_function(fn)
         if not isinstance(fn, memoize.__class__):
             raise AssertionError("Callable {!r} is not of a function type".format(fn))
-        functiontype = type(fn)
         cache = {}
         co = fn.__code__
         flags, varnames = co.co_flags, iter(co.co_varnames)
@@ -315,7 +319,7 @@ def memoize(*kargs, **kattrs):
             if k is not None: p[k] = dict(kwds)
             k1 = (p.get(k, None) for k in kargs)
             k2 = ((n(p[o]) if callable(n) else getattr(p[o], n, None)) for o, n in c_attribute)
-            return tuple(itertools.chain(k1, (None, ), k2))
+            return tuple(itertools.chain(k1, [None], k2))
         def callee(*args, **kwds):
             res = key(*args, **kwds)
             try: return cache[res] if res in cache else cache.setdefault(res, fn(*args, **kwds))
@@ -338,7 +342,7 @@ def memoize(*kargs, **kattrs):
         callee.__name__ = fn.__name__
         callee.__doc__ = fn.__doc__
         callee.callable = fn
-        return callee if isinstance(callee, functiontype) else functiontype(callee)
+        return callee if isinstance(callee, types.FunctionType) else types.FunctionType(callee)
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
 
 # check equivalency of two callables
