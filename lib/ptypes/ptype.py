@@ -602,7 +602,7 @@ class _base_generic(object):
         """Return the dynamic classname. Can be overwritten."""
         return self.typename()
     def shortname(self):
-        return getattr(self, '__name__', "unnamed_{:x}".format(id(self)))
+        return getattr(self, '__name__', '') or "unnamed_{:x}".format(id(self))
     def name(self):
         """Return the loaded name of the instance"""
         name = self.shortname()
