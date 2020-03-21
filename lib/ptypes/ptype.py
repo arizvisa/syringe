@@ -1584,7 +1584,7 @@ class undefined(type):
         return False if self.value is None else True
     def serialize(self):
 #        return utils.padding.fill(self.blocksize(), self.padding)
-        return self.value or ''
+        return self.value or b''
     def summary(self, **options):
         return '...'
     def details(self, **options):
