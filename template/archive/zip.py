@@ -7,7 +7,6 @@ from ptypes import *
 import datetime
 
 ## General structures
-@pbinary.littleendian
 class MSTime(pbinary.struct):
     _fields_ = [
         (6, 'Hour'),
@@ -15,16 +14,17 @@ class MSTime(pbinary.struct):
         (5, '2Seconds'),
     ]
     def time(self):
-        return datetime.time(self['Hour'], self['Minute'], 2 * self['2Seconds'])
+        return datetime.time(self['Hour'] % 24, self['Minute'] % 60, (2 * self['2Seconds']) % 60)
 
     def isoformat(self):
         res = self.time()
         return res.isoformat()
 
     def summary(self):
-        return self.isoformat()
+        if self['Hour'] < 24 and self['Minute'] < 60 and 2 * self['2Seconds'] < 60:
+            return self.isoformat()
+        return super(MSTime, self).summary()
 
-@pbinary.littleendian
 class MSDate(pbinary.struct):
     _fields_ = [
         (7, 'Year'),
@@ -246,8 +246,8 @@ class LocalFileHeader32(LocalFileHeader):
         (pint.uint16_t, 'version needed to extract'),
         (BitFlags, 'general purpose bit flag'),
         (CompressionMethod, 'compression method'),
-        (MSTime, 'last mod file time'),
-        (MSDate, 'last mod file date'),
+        (pbinary.littleendian(MSTime), 'last mod file time'),
+        (pbinary.littleendian(MSDate), 'last mod file date'),
         (DataDescriptor, 'data descriptor'),
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
@@ -334,8 +334,8 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         (VersionNeeded, 'version needed to extract'),
         (BitFlags, 'general purpose bit flag'),
         (CompressionMethod, 'compression method'),
-        (MSTime, 'last mod file time'),
-        (MSDate, 'last mod file date'),
+        (pbinary.littleendian(MSTime), 'last mod file time'),
+        (pbinary.littleendian(MSDate), 'last mod file date'),
         (DataDescriptor, 'data descriptor'),
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
