@@ -666,12 +666,12 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
+            except Success as e:
                 print('%s: %r'% (name,e))
                 return True
-            except Failure,e:
+            except Failure as e:
                 print('%s: %r'% (name,e))
-            except Exception,e:
+            except Exception as e:
                 print('%s: %r : %r'% (name,Failure(), e))
             import traceback
             traceback.print_exc()

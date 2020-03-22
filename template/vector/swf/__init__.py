@@ -1,4 +1,6 @@
+import zlib
 from .stypes import *
+from . import tags
 pbinary.setbyteorder(pbinary.bigendian)
 
 class Header(pstruct.type):
@@ -18,7 +20,7 @@ class FrameInfo(pstruct.type):
 class Data(pstruct.type):
     _fields_ = [
         (FrameInfo, 'frameinfo'),
-        (TagList, 'tags')
+        (tags.TagList, 'tags')
     ]
 
 ## Encoded data types
