@@ -900,7 +900,7 @@ class _array_generic(container):
     ## method overloads
     def __len__(self):
         '''x.__len__() <==> len(x)'''
-        if not self.initialized:
+        if not self.initializedQ():
             return self.length
         return len(self.value)
 

@@ -741,7 +741,7 @@ if __name__ == '__main__':
         z = RecordContainer(source=data).l
         s = RecordGeneral().a.blocksize()
 
-        if z.blocksize() == len(z)*s and len(z) == 3 and z.size() == 5 and not z[-1].initialized:
+        if z.blocksize() == len(z)*s and len(z) == 3 and z.size() == 5 and not z[-1].initializedQ():
             raise Success
 
     @TestCase
@@ -770,7 +770,7 @@ if __name__ == '__main__':
         block = b'\0'*block_length
 
         n = container_type(source=provider.string(block)).l
-        if len(n)-1 == count and not n[-1].initialized:
+        if len(n)-1 == count and not n[-1].initializedQ():
             raise Success
 
     @TestCase
@@ -798,7 +798,7 @@ if __name__ == '__main__':
                 return six.moves.reduce(lambda x,y:x*256+int(y), self.v, 0)
 
             def repr(self, **options):
-                if self.initialized:
+                if self.initializedQ():
                     return self.classname() + " {:x}".format(self.int())
                 return self.classname() + ' ???'
 
@@ -866,7 +866,7 @@ if __name__ == '__main__':
         x = argh(source=strm)
         for a in x.loadstream():
             pass
-        if not a.initialized and x[-2].serialize() == b'\xde\xad\xde\xad':
+        if not a.initializedQ() and x[-2].serialize() == b'\xde\xad\xde\xad':
             raise Success
 
     @TestCase

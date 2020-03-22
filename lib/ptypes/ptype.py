@@ -2707,7 +2707,7 @@ if __name__ == '__main__':
         data = prov.string(b'ABCD')
         a = t1(source=data).l
         b = a.cast(t2)
-        if a.size() == b.size() and not b.initialized:
+        if a.size() == b.size() and not b.initializedQ():
             raise Success
 
     @TestCase
@@ -2728,7 +2728,7 @@ if __name__ == '__main__':
         data = prov.string(b'ABCDEFGH')
         a = t1(source=data).l
         b = a.cast(t2)
-        if b.size() == 4 and not b.initialized and b.blocksize() == 8:
+        if b.size() == 4 and not b.initializedQ() and b.blocksize() == 8:
             raise Success
 
     @TestCase
