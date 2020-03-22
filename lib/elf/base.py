@@ -43,14 +43,14 @@ class ULEB128(pbinary.terminatedarray):
         result = []
         while value > 0:
             result.append( self.new(self.septet).set((1, value & (2**7-1))) )
-            value /= 2**7
+            value //= 2**7
         result[-1].set(more=0)
         self.value[:] = result[:]
         return self
 
     def summary(self):
         res = self.int()
-        return '{:s} : {:d} : ({:#x}, {:d})'.format(self.__element__(), res, res, 7*len(self))
+        return "{:s} : {:d} : ({:#x}, {:d})".format(self.__element__(), res, res, 7*len(self))
 
 class ElfXX_File(ptype.boundary): pass
 class ElfXX_Header(ptype.boundary): pass
@@ -120,7 +120,7 @@ class e_ident(pstruct.type):
     ]
 
     def valid(self):
-        return self.initialized and self['EI_MAG'].serialize() == '\x7fELF'
+        return self.initializedQ() and self['EI_MAG'].serialize() == b'\x7fELF'
     def properties(self):
         res = super(e_ident, self).properties()
         if self.initializedQ():

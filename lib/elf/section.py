@@ -8,7 +8,7 @@ class _sh_name(pint.type):
             res = self.str()
         except (ptypes.error.TypeError, ptypes.error.NotFoundError):
             return super(_sh_name, self).summary()
-        return '{:s} : {!r}'.format(super(_sh_name, self).summary(), res)
+        return "{:s} : {!r}".format(super(_sh_name, self).summary(), res)
 
     def str(self):
         table = self.getparent(ElfXX_Ehdr).stringtable()
@@ -112,7 +112,7 @@ class _st_name(pint.type):
             res = self.str()
         except (ptypes.error.TypeError, ptypes.error.NotFoundError):
             return super(_st_name, self).summary()
-        return '{:s} : {!r}'.format(super(_st_name, self).summary(), res)
+        return "{:s} : {!r}".format(super(_st_name, self).summary(), res)
 
     def str(self):
         index = self.getparent(ElfXX_Shdr)['sh_link'].int()
@@ -152,10 +152,10 @@ class st_info(pbinary.struct):
         if self.value is None:
             return '???'
         res = self.bitmap()
-        items = ['{:s}={:s}'.format(name + ('' if value is None else '[{:d}]'.format(value.bits())), '???' if value is None else value.summary()) for (_, name), value in map(None, self._fields_, self.value)]
+        items = ["{:s}={:s}".format(name + ('' if value is None else "[{:d}]".format(value.bits())), '???' if value is None else value.summary()) for (_, name), value in map(None, self._fields_, self.value)]
         if items:
-            return '({:s},{:d}) : {:s}'.format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res), ' '.join(items))
-        return '({:s},{:d})'.format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))
+            return "({:s},{:d}) : {:s}".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res), ' '.join(items))
+        return "({:s},{:d})".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))
 
 class ElfXX_Section(pint.enum):
     SHN_LOPROC, SHN_HIPROC = 0xff00, 0xff1f
@@ -292,10 +292,10 @@ class SHT_STRTAB(parray.block):
         return self.field(offset)
     def summary(self):
         res = (res.str() for res in self)
-        res = map('{!r}'.format, res)
-        return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res))
+        res = map("{!r}".format, res)
+        return "{:s} : [ {:s} ]".format(self.__element__(), ', '.join(res))
     def details(self):
-        return '\n'.join(repr(s) for s in self)
+        return '\n'.join(map("{!r}".format, self))
     repr = details
 
 @Type.define
@@ -447,10 +447,10 @@ class SHT_ARM_ATTRIBUTES(pstruct.type):
             (__value, 'attribute'),
         ]
         def summary(self):
-            return 'tag={:s} length={:d} attribute={:s}'.format(self['tag'].summary(), self['length'].int(), self['attribute'].__element__())
+            return "tag={:s} length={:d} attribute={:s}".format(self['tag'].summary(), self['length'].int(), self['attribute'].__element__())
     class Sections(parray.block):
         def summary(self):
-            return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res.summary() for res in self))
+            return "{:s} : [ {:s} ]".format(self.__element__(), ', '.join(res.summary() for res in self))
     Sections._object_ = Section
     class Attribute(pstruct.type):
         def __value(self):
@@ -462,15 +462,15 @@ class SHT_ARM_ATTRIBUTES(pstruct.type):
             (__value, 'value'),
         ]
         def summary(self):
-            return '{:s}={:s}'.format(self['tag'].summary(), str(self['value'].get()))
+            return "{:s}={:s}".format(self['tag'].summary(), str(self['value'].get()))
     class Attributes(parray.block):
         def details(self):
             res = []
             for i, n in enumerate(self):
-                res.append('[{:x}] {:d} : {:s} = {:s}'.format(n.getoffset(), i, n['tag'].summary(), str(n['value'].get())))
+                res.append("[{:x}] {:d} : {:s} = {:s}".format(n.getoffset(), i, n['tag'].summary(), str(n['value'].get())))
             return '\n'.join(res)
         def summary(self):
-            return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res['tag'].summary() for res in self))
+            return "{:s} : [ {:s} ]".format(self.__element__(), ', '.join(res['tag'].summary() for res in self))
         repr = details
     Attributes._object_ = Attribute
 
@@ -494,10 +494,10 @@ class SHT_ARM_ATTRIBUTES(pstruct.type):
             (__section, 'section'),
         ]
         def summary(self):
-            return 'length={:d} name={!r} section={:s}'.format(self['length'].int(), self['name'].str(), self['section'].__element__())
+            return "length={:d} name={!r} section={:s}".format(self['length'].int(), self['name'].str(), self['section'].__element__())
     class Vendors(parray.block):
         def summary(self):
-            return '{:s} : [ {:s} ]'.format(self.__element__(), ', '.join(res.summary() for res in self))
+            return "{:s} : [ {:s} ]".format(self.__element__(), ', '.join(res.summary() for res in self))
     Vendors._object_ = Vendor
 
     def __vendor(self):

@@ -114,7 +114,7 @@ class PT_NOTE(parray.block):
             (Elf32_Word, 'type'),
             (lambda s: dyn.clone(pstr.string, length=s['namesz'].li.int()), 'name'),
             (dyn.align(4), 'name_pad'),
-            (lambda s: dyn.array(Elf32_Word, s['descsz'].li.int()/4), 'desc'),
+            (lambda s: dyn.array(Elf32_Word, s['descsz'].li.int() // 4), 'desc'),
             (dyn.align(4), 'desc_pad'),
         ]
 

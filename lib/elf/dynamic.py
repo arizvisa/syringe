@@ -384,4 +384,3 @@ class DT_MOVETAB(d_ptr): type = 0x6ffffefe
 
 @Type.define
 class DT_SYMINFO(d_ptr): type = 0x6ffffeff
-
