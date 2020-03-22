@@ -65,7 +65,7 @@ class string_info(as3struct):
         (lambda s: dyn.clone(pstr.string, length=s['size'].li.int()), 'utf8')
     ]
     def details(self):
-        return self.str() if self.initialized else '???'
+        return self.str() if self.initializedQ() else '???'
 
     def str(self):
         return self['utf8'].serialize()

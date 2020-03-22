@@ -870,7 +870,7 @@ if __name__ == '__main__':
     if False:
         z = pp.File(source=ptypes.prov.file('./powerpoint.stream',mode='r'))
         z=z.l
-        print(z[0].initialized)
+        print(z[0].initializedQ())
         print(z[0]['data'][2]['data'])
 
     if False:

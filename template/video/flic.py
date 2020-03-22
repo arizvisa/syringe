@@ -82,7 +82,7 @@ class File(pstruct.type):
     ]
 
     def summary(self):
-        if self.initialized:
+        if self.initializedQ():
             lookup = {}
             for n in self['data']:
                 t = n['header']['type'].int()
