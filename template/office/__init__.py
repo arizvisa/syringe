@@ -171,8 +171,11 @@ class RecordContainer(parray.block):
     def repr(self): return self.details() + '\n'
     def details(self):
         emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
-        f = lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
+        def key(index, item):
+            '''lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
+            f = lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType)
+            return f(item.getparent(RecordGeneral)['header']['type'].int())
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), key))
         return '\n'.join(res)
 
     def search(self, type, recurse=False):
@@ -246,8 +249,11 @@ class File(RecordContainer):
     def repr(self): return self.details() + '\n'
     def details(self):
         emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
-        f = lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), f))
+        def key(index, item):
+            '''lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
+            f = lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType)
+            return f(item.getparent(RecordGeneral)['header']['type'].int())
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), key))
         return '\n'.join(res)
 
     def blocksize(self):
