@@ -44,7 +44,7 @@ usage: %s filename [command] [args]
 
     # list streams
     if len(sys.argv) == 2:
-        print liststreams(b)
+        print(liststreams(b))
 
     else:
         command,args = sys.argv[2],sys.argv[3:]
@@ -52,15 +52,15 @@ usage: %s filename [command] [args]
         if command == '-d':
             index, = args
             index = int(index)
-            print dumpstream(b, index)
+            print(dumpstream(b, index))
         # -o offset
         elif command == '-o':
             offset, = args
             o,s = xlsoffsettostream(b, int(offset))
-            print b._find(s.name),s.name,hex(o+0x10)    # XXX:uh
+            print(b._find(s.name),s.name,hex(o+0x10))   # XXX:uh
         elif command == '-ox':
             offset, = args
             o,s = xlsoffsettostream(b, int(offset,16))
-            print b._find(s.name),s.name,hex(o+0x10)    # XXX:uh
+            print(b._find(s.name),s.name,hex(o+0x10))   # XXX:uh
         else:
             raise Exception(usage)

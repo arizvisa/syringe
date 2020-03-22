@@ -18,7 +18,7 @@ def liststreams(paths):
             continue
         try:
             ole = OleFileIO(filename)
-        except IOError,msg:
+        except IOError as msg:
             log('%s : not an ole file : %s',filename,msg)
             continue
         streams = ['/'.join(x) for x in ole.listdir()]
@@ -31,7 +31,7 @@ def liststreams(paths):
 
     result = result.items()
     result.sort(lambda a,b:cmp(a[1],b[1]))
-    print '\n'.join('%d : %s'%(v,repr(k)) for k,v in result)
+    print('\n'.join('%d : %s'%(v,repr(k)) for k,v in result))
 
 def dumpstreams(stream, paths, out):
     from office.OleFileIO_PL import OleFileIO
@@ -49,7 +49,7 @@ def dumpstreams(stream, paths, out):
 
         try:
             ole = OleFileIO(filename)
-        except IOError,msg:
+        except IOError as msg:
             log('%s : not an ole file : %s',filename,msg)
             continue
 
@@ -62,7 +62,7 @@ def dumpstreams(stream, paths, out):
         log('%s : writing stream "%s"'%(filename, path))
         try:
             stm = ole.openstream(stream)
-        except IOError, msg:
+        except IOError as msg:
             log('%s : stream %s error : %s', filename,stream,msg)
             continue
 

@@ -26,10 +26,10 @@ def processexecutable(filename, address):
     # globals for interpretive use
     global mz,pe,imagebase,sections,datadirectory
 
-    print 'Query: %x\n'% address
+    print('Query: %x\n'% address)
 
-    print 'Module: %s'% os.path.basename(filename)
-    print 'ImageBase: %x'% imagebase
+    print('Module: %s'% os.path.basename(filename))
+    print('ImageBase: %x'% imagebase)
 
     # try exe header first
     mz.setoffset(imagebase, recurse=True)
@@ -37,9 +37,9 @@ def processexecutable(filename, address):
         result = mz
         for item in mz.traverse(traverse_address(address)):
             x = item.__name__
-            print rightjustify('------- %s'%x, 70, '-')
+            print(rightjustify('------- %s'%x, 70, '-'))
             result = result[int(x) if isinstance(result, ptypes.parray.type) else x]
-            print result
+            print(result)
 
     # try sections
     else:
@@ -57,8 +57,8 @@ def processexecutable(filename, address):
         if right > len(data): right = len(data)
 
         sectionname = s['Name'].get()
-        print rightjustify(' section %s'% sectionname, 76, '-')
-        print utils.hexdump(data[left:right], offset=s['VirtualAddress'].int()+offset+imagebase)
+        print(rightjustify(' section %s'% sectionname, 76, '-'))
+        print(utils.hexdump(data[left:right], offset=s['VirtualAddress'].int()+offset+imagebase))
 
     mz.setoffset(0, recurse=True)
     return
@@ -73,9 +73,9 @@ def dumpcontainer(pc, indent=''):
             r = repr(p.serialize())
 
             if not isinstance(p.value, list):
-                print indent, range, sym, ' | ', r
+                print(indent, range, sym, ' | ', r)
                 continue
-            print indent, range, sy
+            print(indent, range, sy)
             dumpcontainer(p, indent+' ')
         pass
     return
@@ -84,26 +84,26 @@ def dumpexecutable(filename):
     # globals for interpretive use
     global mz,pe,imagebase,sections,datadirectory,imports
 
-    print 'Module: %s'% os.path.basename(filename)
-    print 'ImageBase: %x'% imagebase
-    print 'Imports: %s'% ', '.join([x['Name'].d.l.str() for x in imports.l[:-1]])
+    print('Module: %s'% os.path.basename(filename))
+    print('ImageBase: %x'% imagebase)
+    print('Imports: %s'% ', '.join([x['Name'].d.l.str() for x in imports.l[:-1]]))
 
     mz.setoffset(imagebase,recurse=True)
-    print pe
+    print(pe)
     for x in sections:
         name = x['Name'].str()
         address = x['VirtualAddress'].int() + imagebase
-        print x['Name'].str(), hex(address), hex(address + x.getloadedsize())
+        print(x['Name'].str(), hex(address), hex(address + x.getloadedsize()))
     mz.setoffset(0,recurse=True)
     return
 
 def dumpversion(filename):
     global mz,pe,imagebase,sections,datadirectory,imports
     opt = pe['OptionalHeader']
-    print 'OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].int(), opt['MinorOperatingSystemVersion'].int()))
-    print 'ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].int(), opt['MinorImageVersion'].int()))
-    print 'SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].int(), opt['MinorSubsystemVersion'].int()))
-    print opt['Win32VersionValue']
+    print('OperatingSystem', float('%d.%d'%(opt['MajorOperatingSystemVersion'].int(), opt['MinorOperatingSystemVersion'].int())))
+    print('ImageVersion', float('%d.%d'%(opt['MajorImageVersion'].int(), opt['MinorImageVersion'].int())))
+    print('SubsystemVersion', float('%d.%d'%(opt['MajorSubsystemVersion'].int(), opt['MinorSubsystemVersion'].int())))
+    print(opt['Win32VersionValue'])
 
     global root
     rsrc = datadirectory[2]
@@ -123,7 +123,7 @@ if __name__ == '__main__':
         filename = sys.argv[1]
 
     except:
-        print 'Usage: %s [-z] filename [hexaddress]'% sys.argv[0]
+        print('Usage: %s [-z] filename [hexaddress]'% sys.argv[0])
         sys.exit(0)
 
     source = ptypes.provider.file(filename)
@@ -147,5 +147,5 @@ if __name__ == '__main__':
         try:
             processexecutable(filename, address)
         except KeyError:
-            print 'address %x not found in %s'% (address, filename)
+            print('address %x not found in %s'% (address, filename))
         pass

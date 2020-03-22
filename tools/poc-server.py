@@ -122,7 +122,7 @@ if __name__ == '__main__':
     port = int(port)
     httpd = HTTPServer((host,port), fileserver)
 
-    print 'bound to %s:%d'% (host,port)
+    print('bound to %s:%d'% (host,port))
     try:
         httpd.serve_forever()
 

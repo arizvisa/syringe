@@ -1,13 +1,13 @@
 import sys
-import ptypes,swf
+import ptypes,vector.swf
 
 def hr(s):
-    print '-'*7,
-    print s
+    print('-'*7,)
+    print(s)
 
 def help():
-    print 'Usage:'
-    print '%s file.swf'% sys.argv[0]
+    print('Usage:')
+    print('%s file.swf'% sys.argv[0])
     sys.exit(0)
 
 import time
@@ -25,7 +25,7 @@ class clock(object):
         stop = time.time()
         n,start = cls.times.pop()
         t = stop - start
-        print message% (n,t)
+        print(message% (n,t))
         return t
 
 if __name__ == '__main__':
@@ -35,9 +35,9 @@ if __name__ == '__main__':
     except ValueError:
         help()
 
-    print 'loading',filename
+    print('loading',filename)
     clock.start()
-    myfile = swf.File(source=ptypes.file(filename))
+    myfile = vector.swf.File(source=ptypes.file(filename))
     myfile = myfile.l
     clock.stop()
 
@@ -48,7 +48,7 @@ if __name__ == '__main__':
 
     z = myfile
 
-    print 'loaded 0x%x tags'%( len(tags) )
+    print('loaded 0x%x tags'%( len(tags) ))
 
 #    for tag in myfile['data']['tags']:
-#        print repr(tag)
+#        print(repr(tag))

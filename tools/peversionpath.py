@@ -30,7 +30,8 @@ def extractLgCpIds(versionInfo):
     res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in fichildren) ))
     return tuple((cp.int(), lg.int()) for cp, lg in res)
 
-def getStringTable(versionInfo, (Lgid, Cp)):
+def getStringTable(versionInfo, pack_LgidCp):
+    (Lgid, Cp) = pack_LgidCp
     sfi = getChildByKey(versionInfo, u'StringFileInfo')
     LgidCp = '{:04X}{:04X}'.format(Lgid,Cp)
     for st in sfi['Children']:
@@ -38,7 +39,7 @@ def getStringTable(versionInfo, (Lgid, Cp)):
         if st['szKey'].str().upper() == LgidCp:
             return [s['Child'] for s in st['Children']]
         continue
-    raise KeyError, (Lgid, Cp)
+    raise KeyError(Lgid, Cp)
 
 class help(optparse.OptionParser):
     def __init__(self):
@@ -76,7 +77,7 @@ if __name__ == '__main__':
     # parse the executable
     try:
         resource = parseResourceDirectory(filename)
-    except ptypes.error.LoadError, e:
+    except ptypes.error.LoadError as e:
         six.print_('File %s does not appear to be an executable'% filename, file=sys.stderr)
         sys.exit(1)
     if resource.getoffset() == 0:
@@ -152,7 +153,7 @@ if __name__ == '__main__':
         language = opts.language if opts.langid is None else opts.langid
         try:
             codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
-        except ValueError, e:
+        except ValueError as e:
             six.print_('More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename, file=sys.stderr)
             sys.exit(1)
         if (language,codepage) not in lgcpids:

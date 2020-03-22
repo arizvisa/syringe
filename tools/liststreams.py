@@ -6,9 +6,9 @@ if __name__ == '__main__':
         path, = sys.argv[1:]
         source = ptypes.prov.file(path,mode='r')
     else:
-        print 'Usage: {:s} file'.format(sys.argv[0])
+        print('Usage: {:s} file'.format(sys.argv[0]))
         sys.exit(1)
     z = office.storage.File(source=source)
     z = z.l
     directory = z.getDirectory()
-    print repr(directory)
+    print(repr(directory))

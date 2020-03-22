@@ -1,9 +1,9 @@
-import sys, user
+import sys, six
 import ptypes,pecoff
 
 ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='r'))
 z=pecoff.Executable.File()
-print >>sys.stdout, 'Filename: {:s}\n'.format(z.source.file.name)
+six.print_('Filename: {:s}\n'.format(z.source.file.name), file=sys.stdout)
 
 z=z.l
 p = z['next']['header']
@@ -15,9 +15,9 @@ dnm = dn['metadata']['address'].d.li
 
 root = dnm['StreamHeaders'].Get('#~')['Offset'].d
 root = root.l
-print >>sys.stderr, 'Loading strings...'
+six.print_('Loading strings...', file=sys.stderr)
 names = dnm['StreamHeaders'].Get('#Strings')['Offset'].d.l
-print >>sys.stderr, 'Loading blobs...'
+six.print_('Loading blobs...', file=sys.stderr)
 blobs = dnm['StreamHeaders'].Get('#Blob')['Offset'].d.l
 
 class pieces(ptypes.pbinary.struct):
@@ -28,16 +28,16 @@ class pieces(ptypes.pbinary.struct):
 
 e = dn['EntryPoint'].cast(pieces)
 if e['table'] != pecoff.portable.clr.TMethodDef.type:
-    print >>sys.stderr, 'No CLR entrypoint found!'
+    six.print_('No CLR entrypoint found!', file=sys.stderr)
     sys.exit(1)
 
 emethod = root['Tables'][e['table']][e['index']]
-print >>sys.stdout, 'Method:\n{!r}\n'.format(emethod)
+six.print_('Method:\n{!r}\n'.format(emethod), file=sys.stdout)
 
-print >>sys.stdout, 'MethodDef:'
+six.print_('MethodDef:', file=sys.stdout)
 res = names.Get(emethod['Name'].int())
 sig = blobs.Get(emethod['Signature'].int()).cast(ptypes.pint.uint32_t)
-print >>sys.stdout, '{:#x} : {:s} : Signature={:#x}\n'.format(dn['EntryPoint'].int(), res.str(), sig.int())
+six.print_('{:#x} : {:s} : Signature={:#x}\n'.format(dn['EntryPoint'].int(), res.str(), sig.int()), file=sys.stdout)
 
 sys.exit(0)
 
@@ -49,13 +49,13 @@ sys.exit(0)
 #42 GenericParam
 #44 GenericParamConstraint
 
-#print root['tables'][24][0]
+#six.print_(root['tables'][24][0])
 #for msa in root['tables'][24]:
 #    if msa['Method'].int() == 0xda:
-#        print msa
+#        six.print_(msa)
 #
-#print root['tables'][43]
-#print root['tables'][8][0xde]
-#print root['tables'][8][0xdf]
-#print root['tables'][8][0xe0]
-#print root['tables'][8][0xe1]
+#six.print_(root['tables'][43])
+#six.print_(root['tables'][8][0xde])
+#six.print_(root['tables'][8][0xdf])
+#six.print_(root['tables'][8][0xe0])
+#six.print_(root['tables'][8][0xe1])
