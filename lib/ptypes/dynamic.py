@@ -80,12 +80,13 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import six, operator
+import six, sys, operator, itertools
 
 from . import ptype, parray, pstruct, config, error, utils, provider, pint
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 ## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
@@ -440,7 +441,7 @@ class union(_union_generic):
         result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
-        for fld, value in map(None, self._fields_, self.__object__ or []):
+        for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
             prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))

@@ -74,6 +74,8 @@ from . import ptype,parray,pint,utils,error,pstruct,provider,config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+
 class _char_t(pint.type):
     encoding = codecs.lookup('ascii')
 
@@ -246,7 +248,7 @@ class string(ptype.type):
         # handle a slice of glyphs
         if isinstance(index, slice):
             indices = six.moves.range(*index.indices(len(res)))
-            [ res[index].set(glyph) for glyph, index in zip(value, indices) ]
+            [ res[index].set(glyph) for glyph, index in __izip_longest__(value, indices) ]
 
         # handle a single glyph
         else:
@@ -294,9 +296,8 @@ class string(ptype.type):
         t = ptype.clone(parray.type, _object_=self._object_)
         result = t(length=size // esize) if retain.get('retain', True) else t(length=len(glyphs))
 
-        # this should be izip_longest, but there's no py2<->py3 compatible
-        # way to do that. so.. we just left the rest of result uninitialized
-        for element, glyph in zip(result.alloc(), value):
+        # Now we can finally izip_longest here...
+        for element, glyph in __izip_longest__(result.alloc(), value):
             if element is None: break
             element.set(glyph or '\0')
 
@@ -387,7 +388,8 @@ class szstring(string):
         t = ptype.clone(parray.type, _object_=self._object_, length=len(value))
         result = t()
 
-        for element, glyph in zip(result.alloc(), value):
+        # iterate through everything
+        for element, glyph in __izip_longest__(result.alloc(), value):
             if element is None or glyph is None: break
             element.set(glyph)
 

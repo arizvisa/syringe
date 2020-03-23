@@ -238,6 +238,8 @@ Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
 
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+
 ## this is all a horrible and slow way to do this...
 def isiterator(t):
     """True if type ``t`` is iterable"""
@@ -2252,7 +2254,7 @@ class pointer_t(encoded_t):
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            octets = zip(map(six.byte2int, value), [8] * len(self.value))
+            octets = __izip_longest__(map(six.byte2int, value), [8] * len(self.value))
             res = six.moves.reduce(bitmap.push, octets, bitmap.zero)
             return bitmap.value(res)
 

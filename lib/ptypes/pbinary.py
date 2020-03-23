@@ -129,6 +129,7 @@ from . import utils,bitmap,config,error,provider
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 def setbyteorder(endianness):
     '''Sets the _global_ byte order for any pbinary.type.
@@ -1011,14 +1012,16 @@ class _struct_generic(container):
         if self.value is None:
             return u"???"
         res = self.bitmap()
-        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in zip(self._fields_, self.value)]
+
+        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in __izip_longest__(self._fields_, self.value)]
         if items:
             return u"({:s},{:d}) :> {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(items))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __details_initialized(self):
         result = []
-        for fld, value in zip(self._fields_, self.value):
+
+        for fld, value in __izip_longest__(self._fields_, self.value):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 if istype(t):
