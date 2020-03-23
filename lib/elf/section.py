@@ -152,7 +152,8 @@ class st_info(pbinary.struct):
         if self.value is None:
             return '???'
         res = self.bitmap()
-        items = ["{:s}={:s}".format(name + ('' if value is None else "[{:d}]".format(value.bits())), '???' if value is None else value.summary()) for (_, name), value in map(None, self._fields_, self.value)]
+        largest = max(*map(len, [self._fields_, self.value]))
+        items = ["{:s}={:s}".format(name + ('' if value is None else "[{:d}]".format(value.bits())), '???' if value is None else value.summary()) for (_, name), value in zip(self._fields_ + [None] * (largest - len(self._fields_)), self.value + [None] * (largest - len(self.value)))]
         if items:
             return "({:s},{:d}) : {:s}".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res), ' '.join(items))
         return "({:s},{:d})".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))
