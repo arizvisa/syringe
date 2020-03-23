@@ -1,5 +1,8 @@
+import sys, itertools
 import ptypes
 from .base import *
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 ### generic
 class _sh_name(pint.type):
@@ -152,8 +155,7 @@ class st_info(pbinary.struct):
         if self.value is None:
             return '???'
         res = self.bitmap()
-        largest = max(*map(len, [self._fields_, self.value]))
-        items = ["{:s}={:s}".format(name + ('' if value is None else "[{:d}]".format(value.bits())), '???' if value is None else value.summary()) for (_, name), value in zip(self._fields_ + [None] * (largest - len(self._fields_)), self.value + [None] * (largest - len(self.value)))]
+        items = ["{:s}={:s}".format(field[1] + ('' if value is None else "[{:d}]".format(value.bits())), '???' if value is None else value.summary()) for field, value in __izip_longest__(self._fields_, self.value)]
         if items:
             return "({:s},{:d}) : {:s}".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res), ' '.join(items))
         return "({:s},{:d})".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))
