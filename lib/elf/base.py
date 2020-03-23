@@ -77,52 +77,64 @@ class Elf64_Xword(pint.uint64_t): pass
 class Elf64_Sxword(pint.int64_t): pass
 
 ### elf general
-class e_version(pint.enum, Elf32_Word):
+EI_NIDENT = 16
+
+class EV_(pint.enum):
     _values_ = [
         ('EV_NONE', 0),
         ('EV_CURRENT', 1),
     ]
 
+class EI_MAG(ptype.block):
+    length = 4
+
+class EI_CLASS(pint.enum, uchar):
+    _values_ = [
+        ('ELFCLASSNONE', 0),
+        ('ELFCLASS32', 1),
+        ('ELFCLASS64', 2),
+    ]
+
+class EI_DATA(pint.enum, uchar):
+    # FIXME: switch the byteorder of everything based on this value
+    _values_ = [
+        ('ELFDATANONE', 0),
+        ('ELFDATA2LSB', 1),
+        ('ELFDATA2MSB', 2),
+    ]
+    def order(self):
+        if self['ELFDATA2LSB']:
+            return ptypes.config.byteorder.littleendian
+        elif self['ELFDATA2MSB']:
+            return ptypes.config.byteorder.bigendian
+        return ptypes.config.defaults.integer.order
+
+class EI_VERSION(EV_, uchar):
+    pass
+
+class EI_OSABI(pint.enum, uchar):
+    _values_ = [
+        ('ELFOSABI_SYSV', 0),
+        ('ELFOSABI_HPUX', 1),
+        ('ELFOSABI_ARM_EABI', 64),
+        ('ELFOSABI_STANDALONE', 255),
+    ]
+
+class EI_ABIVERSION(uchar):
+    pass
+
+class EI_PAD(ptype.block):
+    length = EI_NIDENT - 9
+
 class e_ident(pstruct.type):
-    EI_NIDENT=16
-
-    class EI_CLASS(pint.enum, uchar):
-        _values_ = [
-            ('ELFCLASSNONE', 0),
-            ('ELFCLASS32', 1),
-            ('ELFCLASS64', 2),
-        ]
-
-    class EI_DATA(pint.enum, uchar):
-        # FIXME: switch the byteorder of everything based on this value
-        _values_ = [
-            ('ELFDATANONE', 0),
-            ('ELFDATA2LSB', 1),
-            ('ELFDATA2MSB', 2),
-        ]
-        def order(self):
-            if self['ELFDATA2LSB']:
-                return ptypes.config.byteorder.littleendian
-            elif self['ELFDATA2MSB']:
-                return ptypes.config.byteorder.bigendian
-            return ptypes.config.defaults.integer.order
-
-    class EI_OSABI(pint.enum, uchar):
-        _values_ = [
-            ('ELFOSABI_SYSV', 0),
-            ('ELFOSABI_HPUX', 1),
-            ('ELFOSABI_ARM_EABI', 64),
-            ('ELFOSABI_STANDALONE', 255),
-        ]
-
     _fields_ = [
-        (dyn.block(4), 'EI_MAG'),
+        (EI_MAG, 'EI_MAG'),
         (EI_CLASS, 'EI_CLASS'),
         (EI_DATA, 'EI_DATA'),
-        (e_version, 'EI_VERSION'),
+        (EI_VERSION, 'EI_VERSION'),
         (EI_OSABI, 'EI_OSABI'),
-        (uchar, 'EI_ABIVERSION'),
-        (dyn.block(EI_NIDENT-9), 'EI_PAD'),
+        (EI_ABIVERSION, 'EI_ABIVERSION'),
+        (EI_PAD, 'EI_PAD'),
     ]
 
     def valid(self):
@@ -338,3 +350,6 @@ class e_machine(pint.enum, Elf32_Half):
 #        ('RESERVED', 225-242),
         ('EM_RISCV', 243),
     ]
+
+class e_version(EV_, Elf32_Word):
+    pass
