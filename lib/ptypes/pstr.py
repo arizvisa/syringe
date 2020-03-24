@@ -76,6 +76,14 @@ Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 __izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
+def __ensure_text__(s, encoding='utf-8', errors='strict'):
+    '''ripped from six v1.12.0'''
+    if isinstance(s, six.binary_type):
+        return s.decode(encoding, errors)
+    elif isinstance(s, six.text_type):
+        return s
+    raise TypeError("not expecting type '%s'"% type(s))
+
 class _char_t(pint.type):
     encoding = codecs.lookup('ascii')
 
@@ -176,7 +184,7 @@ class string(ptype.type):
         _object_ = self._object_
 
         # encode 3 types of strings and ensure that their lengths scale up with their string sizes
-        res,single,double = ( six.ensure_text(item, 'ascii').encode(_object_.encoding.name) for item in ('\0', 'A', 'AA') )
+        res,single,double = ( __ensure_text__(item, 'ascii').encode(_object_.encoding.name) for item in ('\0', 'A', 'AA') )
         if len(res) * 2 == len(single) * 2 == len(double):
             return
         raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(_object_.encoding.name))
@@ -561,13 +569,21 @@ if __name__ == '__main__':
         '''.split('\n'))).strip()
         data = bytes(bytearray(int(item, 16) for item in data.split(' ')))
 
+        def __ensure_binary__(s, encoding='utf-8', errors='strict'):
+            '''ripped from six v1.12.0'''
+            if isinstance(s, six.text_type):
+                return s.encode(encoding, errors)
+            elif isinstance(s, six.binary_type):
+                return s
+            raise TypeError("not expecting type '%s'"% type(s))
+
         class wbechar_t(pstr.wchar_t):
             def set(self, value):
-                self.value = b'\0' + six.ensure_binary(value)
+                self.value = b'\0' + __ensure_binary__(value)
                 return self
 
             def get(self):
-                return six.ensure_text(self.value, 'utf-16-be').encode('utf-8')
+                return __ensure_text__(self.value, 'utf-16-be').encode('utf-8')
 
         class unicodestring(pstr.szwstring):
             _object_ = wbechar_t
