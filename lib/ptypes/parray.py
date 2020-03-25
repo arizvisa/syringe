@@ -223,7 +223,7 @@ class _parray_generic(ptype.container):
             return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if any(utils.callable_eq(self.repr, item) for item in [_parray_generic.repr, _parray_generic.summary]):
+        if all(not utils.callable_eq(self.repr, item) for item in [_parray_generic.repr, _parray_generic.summary]):
             result = ' '.join((element,result))
 
         _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
