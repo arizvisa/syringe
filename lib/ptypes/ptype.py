@@ -1964,7 +1964,7 @@ class wrapper_t(type):
 
         # Check if wrapper_t.__object__ is undefined
         if self.__object__ is None:
-            if not istype(self._value_):
+            if self._value_ and not istype(self._value_):
                 Log.info("wrapper_t.object : {:s} : Using wrapper_t._value_{:s} as a closure for instantiatiation of object.".format(self.instance(), '' if self._value_.__name__ == '_value_' else " ({:s})".format(self._value_.__name__)))
             res = self._value_ or type
             name = "wrapped<{:s}>".format(res.typename() if istype(res) else res.__name__)
