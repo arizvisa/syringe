@@ -1,5 +1,5 @@
 import logging
-import functools,operator,itertools,six
+import functools, itertools, types, builtins, operator, math, six
 
 import ptypes
 from ptypes import *
@@ -58,6 +58,9 @@ MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
 
 class StreamMarker(jpegstream.StreamMarker):
     Type, Table = MarkerType, Marker
+
+class DecodedStream(jpegstream.DecodedStream):
+    _marker_ = StreamMarker
 
 ### enumerations
 class Boxes(ptype.definition): cache = {}
@@ -285,8 +288,7 @@ class ColourSpecification(pstruct.type):
 @Boxes.define
 class ContiguousCodeStream(jpegstream.Stream):
     type = b'\x6a\x70\x32\x63'
-
-    _object_ = dyn.clone(jpegstream.DecodedStream, _marker_=StreamMarker)
+    _object_ = DecodedStream
 
 @Boxes.define
 class IntellectualProperty(ptype.block):
@@ -392,63 +394,100 @@ class SIZ(pstruct.type):
         (lambda s: dyn.array(SIZ.C, s['Csiz'].li.int()), 'C'),
     ]
 
+    def NumberOfTiles(self):
+        width = self['Xsiz'].int() - self['XOsiz'].int()
+        height = self['Ysiz'].int() - self['YOsiz'].int()
+        X, Y = (item / self[fld].int() for fld, item in zip(['XTsiz', 'YTsiz'], [width, height]))
+        return six.moves.reduce(operator.mul, map(math.ceil, [X, Y]))
+
+class Scod(pbinary.flags):
+    _fields_ = [
+        (5, 'Reserved'),
+        (1, 'EPHUsed'),
+        (1, 'SOPUsed'),
+        (1, 'Entropy'),
+    ]
+
+class SGcod(pstruct.type):
+    class _Progression_order(pint.enum, u8):
+        _values_ = [
+            ('Layer-resolution level-component-position', 0),
+            ('Resolution level-layer-component-position', 1),
+            ('Resolution level-position-component-layer', 2),
+            ('Position-component-resolution level-layer', 3),
+            ('Component-position-resolution level-layer', 4),
+        ]
+    _fields_ = [
+        (_Progression_order, 'Progression order'),
+        (u16, 'Number of layers'),
+        (u8, 'Multiple component transformation'),
+    ]
+
+class Precinct(pbinary.struct):
+    _fields_ = [
+        (4, 'PPy'),
+        (4, 'PPx'),
+    ]
+
+class SPcod(pstruct.type):
+    _fields_ = [
+        (u8, 'Number of decomposition levels'),
+        (u8, 'Code-block width'),
+        (u8, 'Code-block height'),
+        (u8, 'Code-block style'),
+        (u8, 'Transformation'),
+    ]
+
 @Marker.define
 class COD(pstruct.type):
-    class Scod(pbinary.struct):
-        _fields_ = [
-            (5, 'Entropy1'),
-            (1, 'EPHUsed'),
-            (1, 'SOPUsed'),
-            (1, 'Entropy2'),
-        ]
-    class SPcod(pstruct.type):
-        class CodeBlock(pstruct.type):
-            _fields_ = [
-                (u8, 'numresolutions'),
-                (u8, 'Code-block size width'),
-                (u8, 'Code-block size height'),
-                (u8, 'Code-block style'),
-                (u8, 'Transform'),
-                (u8, 'Multiple component transform'),
-                #(ptype.block, 'Packet partition size'),
-            ]
-
-        def __Layers(self):
-            count = self['Number of layers'].li
-            return dyn.array(self.CodeBlock, count.int())
-
-        _fields_ = [
-            (u8, 'Progression order'),
-            (u16, 'Number of layers'),
-            (__Layers, 'Layers'),
-        ]
-
     def __missed(self):
-        length, fields = self['Lcod'].li, ['Scod', 'SPcod']
+        length, fields = self['Lcod'].li, ['Lcod', 'Scod', 'SGcod', 'SPcod']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
+
+    def __LL(self):
+        scod, spcod = (self[fld].li for fld in ['Scod', 'SPcod'])
+        count = (1 + spcod['Number of decomposition levels'].int()) if scod['Entropy'] else 0
+        return dyn.array(Precinct, count)
 
     _fields_ = [
         (u16, 'Lcod'),
         (Scod, 'Scod'),
+        (SGcod, 'SGcod'),
         (SPcod, 'SPcod'),
-        (__missed, 'missed'),
+        (__LL, 'LL'),
     ]
+
+class Scoc(pbinary.flags):
+    _fields_ = [
+        (7, 'Reserved'),
+        (1, 'Entropy'),
+    ]
+
+class SPcoc(SPcod): pass
 
 @Marker.define
 class COC(pstruct.type):
     def __Ccoc(self):
-        Csiz = 0
-        return u8 if Csiz < 257 else u16
+        stream = self.getparent(stream.DecodedStream)
+        try:
+            index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
+        except StopIteration:
+            logging.warn("Unable to locate SIZ marker!")
+            return u8
+        Csiz = stream[index]['Value']['Csiz']
+        return u8 if Csiz.int() < 257 else u16
 
-    def __SPcoc(self):
-        length, fields = self['Lcoc'].li, ['Lcoc', 'Ccoc', 'Scoc']
-        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
+    def __LL(self):
+        scod, spcod = (self[fld].li for fld in ['Scoc', 'SPcoc'])
+        count = (1 + spcod['Number of decomposition levels'].int()) if scod['Entropy'] else 0
+        return dyn.array(Precinct, count)
 
     _fields_ = [
         (u16, 'Lcoc'),
         (__Ccoc, 'Ccoc'),
-        (u8, 'Scoc'),
-        (__SPcoc, 'SPcoc'),
+        (Scoc, 'Scoc'),
+        (SPcoc, 'SPcoc'),
+        (__LL, 'LL'),
     ]
 
 @Marker.define
