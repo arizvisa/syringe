@@ -295,7 +295,7 @@ defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipp
 defaults.display.mangle_with_attributes = False
 
 # array types
-defaults.parray.break_on_zero_sized_element = True
+defaults.parray.break_on_zero_sized_element = False
 defaults.parray.break_on_max_count = False
 defaults.parray.max_count = six.MAXSIZE
 
