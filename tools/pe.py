@@ -399,7 +399,7 @@ if __name__ == '__main__':
         _.print_usage()
         sys.exit(1)
 
-    infile = ptypes.prov.filebase(res.infile)
+    infile = ptypes.prov.fileobj(res.infile)
     ptypes.setsource(infile)
     z = pecoff.Executable.File(source=infile)
     z = z.l

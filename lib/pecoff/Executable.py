@@ -313,7 +313,7 @@ class IMAGE_NT_DATA(pstruct.type, Header):
 
         # Warn the user if we're unable to determine whether the source is a
         # file-backed or memory-backed provider.
-        if all(not isinstance(self.source, item) for item in {ptypes.provider.memorybase, ptypes.provider.filebase}):
+        if all(not isinstance(self.source, item) for item in {ptypes.provider.memorybase, ptypes.provider.fileobj}):
             cls = self.__class__
             logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
 
@@ -544,7 +544,7 @@ class File(pstruct.type, ptype.boundary):
         sz+= self['Extra'].blocksize()
         sz+= self['Stub'].blocksize()
         sz+= self['Next'].blocksize()
-        if isinstance(self.source, ptypes.provider.filebase):
+        if isinstance(self.source, ptypes.provider.fileobj):
             return dyn.block(self.source.size() - sz)
         return ptype.undefined
 
