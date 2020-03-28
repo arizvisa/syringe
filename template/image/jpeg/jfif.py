@@ -1,13 +1,13 @@
 import logging
-import functools,operator,itertools
+import functools,operator,itertools,six
 
 import ptypes
 from ptypes import *
 
 from . import stream as jpegstream
 
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
-dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
+dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 

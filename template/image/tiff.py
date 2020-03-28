@@ -76,7 +76,7 @@ class IFD8(pint.uint64_t):
         return '{:+#0{:d}x} ({:+d})'.format(res, 2*self.size() + sum(map(len, ('0x', '+'))), res)
 
 class DirectoryType(pint.enum, pint.uint16_t):
-    _values_ = [(n.__name__, n.type) for _,n in Type.cache.iteritems()]
+    _values_ = [(item.__name__, item.type) for _, item in Type.cache.items()]
 
 ### tags
 class Tags(ptype.definition): attribute, cache = 'tag', {}

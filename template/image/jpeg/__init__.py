@@ -5,7 +5,7 @@ from .stream import Stream
 if __name__ == '__main__' and False:
     #input = getFileContents('Q100-2.JPG')
     input = getFileContents('huff_simple0.jpg')
-    input = str(input.replace('\xff\x00', '\xff'))
+    input = bytes(input.replace(b'\xff\x00', b'\xff'))
     jpegfile = Jpeg()
     jpegfile.deserialize(input)
     lookup = dict([(type(x).__name__, x) for x in jpegfile])

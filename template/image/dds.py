@@ -1,11 +1,12 @@
 import ptypes
 from ptypes import *
+import six
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, reversed(data)), 0)
-_dataofint = lambda integer: ((integer == 0) and '\x00') or (_dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
-dataofint = lambda integer, be=_dataofint: str().join(reversed(be(integer)))
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, reversed(bytearray(data)), 0)
+_dataofint = lambda integer: ((integer == 0) and b'\0') or (_dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
+dataofint = lambda integer, be=_dataofint: bytes(bytearray(reversed(bytearray(be(integer)))))
 
 ## primitive types
 class uint(pint.uint32_t): pass
@@ -13,19 +14,19 @@ class uint(pint.uint32_t): pass
 ## enumerations
 class fourcc(pint.enum, uint):
     _values_ = [
-        ('NVTT', intofdata('NVTT')),
-        ('DDS',  intofdata('DDS ')),
-        ('DXT1', intofdata('DXT1')),
-        ('DXT2', intofdata('DXT2')),
-        ('DXT3', intofdata('DXT3')),
-        ('DXT4', intofdata('DXT4')),
-        ('DXT5', intofdata('DXT5')),
-        ('RXGB', intofdata('RXGB')),
-        ('ATI1', intofdata('ATI1')),
-        ('ATI2', intofdata('ATI2')),
-        ('A2XY', intofdata('A2XY')),
-        ('DX10', intofdata('DX10')),
-        ('UVER', intofdata('UVER')),
+        ('NVTT', intofdata(b'NVTT')),
+        ('DDS',  intofdata(b'DDS ')),
+        ('DXT1', intofdata(b'DXT1')),
+        ('DXT2', intofdata(b'DXT2')),
+        ('DXT3', intofdata(b'DXT3')),
+        ('DXT4', intofdata(b'DXT4')),
+        ('DXT5', intofdata(b'DXT5')),
+        ('RXGB', intofdata(b'RXGB')),
+        ('ATI1', intofdata(b'ATI1')),
+        ('ATI2', intofdata(b'ATI2')),
+        ('A2XY', intofdata(b'A2XY')),
+        ('DX10', intofdata(b'DX10')),
+        ('UVER', intofdata(b'UVER')),
     ]
 
 class DXGI_FORMAT(pint.enum, uint):

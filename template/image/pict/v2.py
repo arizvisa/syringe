@@ -1,4 +1,4 @@
-from base import *
+from .base import *
 
 class header(pstruct.type):
     _fields_ = [

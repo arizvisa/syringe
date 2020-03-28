@@ -1,13 +1,13 @@
 import logging
-import functools,operator,itertools
+import functools,operator,itertools,six
 
 import ptypes
 from ptypes import *
 
 from . import stream as jpegstream
 
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
-dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
+dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -122,11 +122,11 @@ class File(parray.infinite): _object_ = Box
 ### Box types
 @Boxes.define
 class Signature(pstr.string):
-    type = '\x6a\x50\x20\x20'
+    type = b'\x6a\x50\x20\x20'
     length = 4
     @classmethod
     def default(cls):
-        return cls().set('\x0d\x0a\x87\x0a')
+        return cls().set(b'\x0d\x0a\x87\x0a')
     def valid(self):
         return self.serialize() == self.default().serialize()
     def properties(self):
@@ -136,7 +136,7 @@ class Signature(pstr.string):
 
 @Boxes.define
 class FileType(pstruct.type):
-    type = '\x66\x74\x79\x70'
+    type = b'\x66\x74\x79\x70'
     class Identifier(pstr.string): length = 4
     _fields_ = [
         (Identifier, 'BR'),
@@ -146,11 +146,11 @@ class FileType(pstruct.type):
 
 @Boxes.define
 class Jp2Header(SuperBox):
-    type = '\x6a\x70\x32\x68'
+    type = b'\x6a\x70\x32\x68'
 
 @Boxes.define
 class ImageHeader(pstruct.type):
-    type = '\x69\x68\x64\x72'
+    type = b'\x69\x68\x64\x72'
     _fields_ = [
         (u32, 'HEIGHT'),
         (u32, 'WIDTH'),
@@ -163,7 +163,7 @@ class ImageHeader(pstruct.type):
 
 @Boxes.define
 class BitsPerComponent(pbinary.struct):
-    type = '\x62\x70\x63\x63'
+    type = b'\x62\x70\x63\x63'
     _fields_ = [
         (1, 'Signed'),
         (7, 'BitDepth'),
@@ -171,7 +171,7 @@ class BitsPerComponent(pbinary.struct):
 
 @Boxes.define
 class Palette(pstruct.type):
-    type = '\x70\x63\x6c\x72'
+    type = b'\x70\x63\x6c\x72'
     class _B(pbinary.struct):
         _fields_ = [
             (1, 'Signed'),
@@ -191,7 +191,7 @@ class Palette(pstruct.type):
 
 @Boxes.define
 class ComponentMapping(parray.block):
-    type = '\x63\x6d\x61\x70'
+    type = b'\x63\x6d\x61\x70'
     class Component(pstruct.type):
         class MTYP(pint.enum, u8):
             _values_ = [
@@ -207,7 +207,7 @@ class ComponentMapping(parray.block):
 
 @Boxes.define
 class ChannelDefinition(parray.block):
-    type = '\x63\x64\x65\x66'
+    type = b'\x63\x64\x65\x66'
 
     class Definition(pstruct.type):
         class Typ(pint.enum, u16):
@@ -232,11 +232,11 @@ class ChannelDefinition(parray.block):
 
 @Boxes.define
 class Resolution(SuperBox):
-    type = '\x63\x64\x65\x66'
+    type = b'\x63\x64\x65\x66'
 
 @Boxes.define
 class CaptureResolution(pstruct.type):
-    type = '\x72\x65\x73\x63'
+    type = b'\x72\x65\x73\x63'
     _fields_ = [
         (u16, 'VRcN'),
         (u16, 'VRcD'),
@@ -248,7 +248,7 @@ class CaptureResolution(pstruct.type):
 
 @Boxes.define
 class DefauiltDisplayResolution(pstruct.type):
-    type = '\x72\x65\x73\x64'
+    type = b'\x72\x65\x73\x64'
     _fields_ = [
         (u16, 'VRdN'),
         (u16, 'VRdD'),
@@ -260,7 +260,7 @@ class DefauiltDisplayResolution(pstruct.type):
 
 @Boxes.define
 class ColourSpecification(pstruct.type):
-    type = '\x63\x6f\x6c\x72'
+    type = b'\x63\x6f\x6c\x72'
     def __PROFILE(self):
         try:
             hdr = self.getparent(Box)['header'].li
@@ -283,21 +283,21 @@ class ColourSpecification(pstruct.type):
 
 @Boxes.define
 class ContiguousCodeStream(jpegstream.Stream):
-    type = '\x6a\x70\x32\x63'
+    type = b'\x6a\x70\x32\x63'
 
     _object_ = dyn.clone(jpegstream.DecodedStream, _object_=MarkerStream)
 
 @Boxes.define
 class IntellectualProperty(ptype.block):
-    type = '\x6a\x70\x32\x69'
+    type = b'\x6a\x70\x32\x69'
 
 @Boxes.define
 class XML(ptype.block):
-    type = '\x78\x6d\x6c\x20'
+    type = b'\x78\x6d\x6c\x20'
 
 @Boxes.define
 class UUID(pstruct.type):
-    type = '\x75\x75\x69\x64'
+    type = b'\x75\x75\x69\x64'
     def __DATA(self):
         try:
             hdr = self.getparent(Box)['header'].li
@@ -312,16 +312,16 @@ class UUID(pstruct.type):
 
 @Boxes.define
 class UUIDInfo(SuperBox):
-    type = '\x75\x69\x6e\x66'
+    type = b'\x75\x69\x6e\x66'
 
 @Boxes.define
 class UUIDList(pstruct.type):
-    type = '\x75\x63\x73\x74'
+    type = b'\x75\x63\x73\x74'
     _fields_ = []
 
 @Boxes.define
 class URL(pstruct.type):
-    type = '\x75\x72\x6c\x20'
+    type = b'\x75\x72\x6c\x20'
     def __LOC(self):
         try:
             hdr = self.getparent(Box)['header'].li
@@ -341,7 +341,7 @@ class URL(pstruct.type):
     ]
 
 ### Update enumeration with any defined Box types
-BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in Boxes.cache.viewitems()]
+BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in six.viewitems(Boxes.cache)]
 
 ### Marker types
 @Marker.define

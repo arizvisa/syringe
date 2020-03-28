@@ -13,7 +13,7 @@ class Header(pstruct.type):
     class Magic(short):
         @classmethod
         def default(cls):
-            return cls().set(0732)
+            return cls().set(0o732)
         def valid(self):
             return self.int() == self.default().int()
         def properties(self):

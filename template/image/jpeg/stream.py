@@ -1,11 +1,13 @@
-import logging, array
-import functools,operator,itertools,types
+import sys, logging, array
+import six,functools,operator,itertools,types
 
 import ptypes
 from ptypes import *
 
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
-dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
+dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -13,70 +15,70 @@ ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 class Marker(ptype.definition):
     attribute, cache = '__name__', {}
     Table = [
-        ('STUFF', '\xff\x00'),
-        ('SOF0', '\xff\xc0'),
-        ('SOF0', '\xff\xc1'),
-        ('SOF2', '\xff\xc2'),
-        ('SOF3', '\xff\xc3'),
-        ('DHT', '\xff\xc4'),
-        ('SOF5', '\xff\xc5'),
-        ('SOF6', '\xff\xc6'),
-        ('SOF7', '\xff\xc7'),
-        ('JPG', '\xff\xc8'),
-        ('SOF9', '\xff\xc9'),
-        ('SOF10', '\xff\xca'),
-        ('SOF11', '\xff\xcb'),
-        ('DAC', '\xff\xcc'),
-        ('SOF13', '\xff\xcd'),
-        ('SOF14', '\xff\xce'),
-        ('SOF15', '\xff\xcf'),
-        ('RST0', '\xff\xd0'),
-        ('RST1', '\xff\xd1'),
-        ('RST2', '\xff\xd2'),
-        ('RST3', '\xff\xd3'),
-        ('RST4', '\xff\xd4'),
-        ('RST5', '\xff\xd5'),
-        ('RST6', '\xff\xd6'),
-        ('RST7', '\xff\xd7'),
-        ('SOI', '\xff\xd8'),
-        ('EOI', '\xff\xd9'),
-        ('SOS', '\xff\xda'),
-        ('DQT', '\xff\xdb'),
-        ('DNL', '\xff\xdc'),
-        ('DRI', '\xff\xdd'),
-        ('DHP', '\xff\xde'),
-        ('EXP', '\xff\xdf'),
-        ('APP0', '\xff\xe0'),
-        ('APP1', '\xff\xe1'),
-        ('APP2', '\xff\xe2'),
-        ('APP3', '\xff\xe3'),
-        ('APP4', '\xff\xe4'),
-        ('APP5', '\xff\xe5'),
-        ('APP6', '\xff\xe6'),
-        ('APP7', '\xff\xe7'),
-        ('APP8', '\xff\xe8'),
-        ('APP9', '\xff\xe9'),
-        ('APP10', '\xff\xea'),
-        ('APP11', '\xff\xeb'),
-        ('APP12', '\xff\xec'),
-        ('APP13', '\xff\xed'),
-        ('APP14', '\xff\xee'),
-        ('APP15', '\xff\xef'),
-        ('JPG0', '\xff\xf0'),
-        ('JPG1', '\xff\xf1'),
-        ('JPG2', '\xff\xf2'),
-        ('JPG3', '\xff\xf3'),
-        ('JPG4', '\xff\xf4'),
-        ('JPG5', '\xff\xf5'),
-        ('JPG6', '\xff\xf6'),
-        ('SOF48', '\xff\xf7'),
-        ('LSE', '\xff\xf8'),
-        ('JPG9', '\xff\xf9'),
-        ('JPG10', '\xff\xfa'),
-        ('JPG11', '\xff\xfb'),
-        ('JPG12', '\xff\xfc'),
-        ('JPG13', '\xff\xfd'),
-        ('COM', '\xff\xfe'),
+        ('STUFF', b'\xff\x00'),
+        ('SOF0', b'\xff\xc0'),
+        ('SOF0', b'\xff\xc1'),
+        ('SOF2', b'\xff\xc2'),
+        ('SOF3', b'\xff\xc3'),
+        ('DHT', b'\xff\xc4'),
+        ('SOF5', b'\xff\xc5'),
+        ('SOF6', b'\xff\xc6'),
+        ('SOF7', b'\xff\xc7'),
+        ('JPG', b'\xff\xc8'),
+        ('SOF9', b'\xff\xc9'),
+        ('SOF10', b'\xff\xca'),
+        ('SOF11', b'\xff\xcb'),
+        ('DAC', b'\xff\xcc'),
+        ('SOF13', b'\xff\xcd'),
+        ('SOF14', b'\xff\xce'),
+        ('SOF15', b'\xff\xcf'),
+        ('RST0', b'\xff\xd0'),
+        ('RST1', b'\xff\xd1'),
+        ('RST2', b'\xff\xd2'),
+        ('RST3', b'\xff\xd3'),
+        ('RST4', b'\xff\xd4'),
+        ('RST5', b'\xff\xd5'),
+        ('RST6', b'\xff\xd6'),
+        ('RST7', b'\xff\xd7'),
+        ('SOI', b'\xff\xd8'),
+        ('EOI', b'\xff\xd9'),
+        ('SOS', b'\xff\xda'),
+        ('DQT', b'\xff\xdb'),
+        ('DNL', b'\xff\xdc'),
+        ('DRI', b'\xff\xdd'),
+        ('DHP', b'\xff\xde'),
+        ('EXP', b'\xff\xdf'),
+        ('APP0', b'\xff\xe0'),
+        ('APP1', b'\xff\xe1'),
+        ('APP2', b'\xff\xe2'),
+        ('APP3', b'\xff\xe3'),
+        ('APP4', b'\xff\xe4'),
+        ('APP5', b'\xff\xe5'),
+        ('APP6', b'\xff\xe6'),
+        ('APP7', b'\xff\xe7'),
+        ('APP8', b'\xff\xe8'),
+        ('APP9', b'\xff\xe9'),
+        ('APP10', b'\xff\xea'),
+        ('APP11', b'\xff\xeb'),
+        ('APP12', b'\xff\xec'),
+        ('APP13', b'\xff\xed'),
+        ('APP14', b'\xff\xee'),
+        ('APP15', b'\xff\xef'),
+        ('JPG0', b'\xff\xf0'),
+        ('JPG1', b'\xff\xf1'),
+        ('JPG2', b'\xff\xf2'),
+        ('JPG3', b'\xff\xf3'),
+        ('JPG4', b'\xff\xf4'),
+        ('JPG5', b'\xff\xf5'),
+        ('JPG6', b'\xff\xf6'),
+        ('SOF48', b'\xff\xf7'),
+        ('LSE', b'\xff\xf8'),
+        ('JPG9', b'\xff\xf9'),
+        ('JPG10', b'\xff\xfa'),
+        ('JPG11', b'\xff\xfb'),
+        ('JPG12', b'\xff\xfc'),
+        ('JPG13', b'\xff\xfd'),
+        ('COM', b'\xff\xfe'),
     ]
 
 ### Marker types
@@ -106,7 +108,7 @@ class SOF0(pstruct.type):
 
 @Marker.define   # XXX
 class DQT(parray.block):
-    type = '\xff\xdb'
+    type = b'\xff\xdb'
     class Table(pstruct.type):
         class DQTPrecisionAndIndex(pbinary.struct):
             _fields_ = [
@@ -122,7 +124,7 @@ class DQT(parray.block):
 
 @Marker.define
 class DHT(parray.block):
-    type = '\xff\xc4'
+    type = b'\xff\xc4'
 
     class Table(pstruct.type):
         class ClassAndDestination(pbinary.struct):
@@ -134,7 +136,7 @@ class DHT(parray.block):
         def __symbols(self):
             return ptype.block
             # FIXME: this needs to be calculated correctly somehow, but i can't find the docs for it
-            #return dyn.block(reduce(lambda t, c: t + c, map(ord, self['count'].li.serialize())))
+            #return dyn.block(six.moves.reduce(lambda t, c: t + c, map(ord, self['count'].li.serialize())))
 
         _fields_ = [
             (ClassAndDestination, 'table'),
@@ -227,7 +229,7 @@ class Stream(ptype.block):
     def decode(self):
         if not self.initializedQ():
             raise ptypes.error.InitializationError(self, 'decode')
-        data, result = '', []
+        data, result = b'', []
 
         # decode stream into its components
         source = array.array('B', self.serialize())
@@ -238,13 +240,13 @@ class Stream(ptype.block):
                 if m == 0xff:
                     n = next(iterable)
                     if n == 0x00:
-                        data += '\xff'
+                        data += b'\xff'
                         continue
                     result.append(data)
-                    result.append(chr(m)+chr(n))
-                    data = ''
+                    result.append(six.int2byte(m)+six.int2byte(n))
+                    data = b''
                     continue
-                data += chr(m)
+                data += six.int2byte(m)
 
         except StopIteration:
             result.append(data)
@@ -252,8 +254,8 @@ class Stream(ptype.block):
 
         ## build decoded object
         stream = self.new(self._object_, offset=self.getoffset(), source=self.__source__, value=[])
-        for m, data in map(None, *(iter(result),)*2):
-            edata = m + (data or '')
+        for m, data in __izip_longest__(*(iter(result),)*2):
+            edata = m + (data or b'')
             res = stream.new(stream._object_, blocksize=(lambda cb=len(edata): cb))
             stream.append(res.load(offset=0, source=ptypes.prov.string(edata)))
         return stream
