@@ -83,18 +83,18 @@ Example usage:
     print(len(instance))
 """
 import six
-import itertools,operator,functools
+import itertools, operator, functools
 
-from . import ptype,utils,error,config
+from . import ptype, utils, error, config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,terminated,infinite,block'.split(',')
 
 class _parray_generic(ptype.container):
     '''provides the generic features expected out of an array'''
-    def __contains__(self,v):
-        '''D.__contains__(k) -> True if D has a field named k, else False'''
-        return any(x is v for x in self.value)
+    def __contains__(self, instance):
+        '''L.__contains__(x) -> True if L has an item x, else False'''
+        return any(item is instance for item in self.value)
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
@@ -110,7 +110,7 @@ class _parray_generic(ptype.container):
         """
         offset = self.value[index].getoffset()
         object.setoffset(offset, recurse=True)
-        object.parent,object.source = self,None
+        object.parent, object.source = self, None
         self.value.insert(index, object)
 
         for i in six.moves.range(index, len(self.value)):
@@ -150,7 +150,7 @@ class _parray_generic(ptype.container):
         res = self.value.pop(idx)
 
         offset = res.getoffset()
-        for i,n in enumerate(self.value[idx:]):
+        for i, n in enumerate(self.value[idx:]):
             n.setoffset(offset, recurse=True)
             offset += n.blocksize()
         return res
@@ -212,23 +212,23 @@ class _parray_generic(ptype.container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(self.properties()))
+        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
         if result.count('\n') > 0 or utils.callable_eq(self.repr, _parray_generic.details):
             result = result.rstrip('\n')
             if prop:
-                return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
-            return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
+                return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, element, result)
+            return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), element, result)
 
         # if the user chose to not use the default summary, then prefix the element description.
         if all(not utils.callable_eq(self.repr, item) for item in [_parray_generic.repr, _parray_generic.summary]):
-            result = ' '.join((element,result))
+            result = ' '.join((element, result))
 
-        _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
+        _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
-        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(), self.name())
         if prop:
             return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
@@ -287,9 +287,9 @@ class type(_parray_generic):
             for idx, val in enumerate(fields):
                 name = str(idx)
                 if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val,__name__=name).a
+                    result.value[idx] = result.new(val, __name__=name).a
                 elif isinstance(val, ptype.generic):
-                    result.value[idx] = result.new(val,__name__=name)
+                    result.value[idx] = result.new(val, __name__=name)
                 else:
                     result.value[idx].set(val)
                 continue
@@ -387,7 +387,7 @@ class terminated(type):
                 offset, self.value, n = self.getoffset(), [], None
 
                 for index in forever:
-                    n = self.new(self._object_,__name__=str(index),offset=offset)
+                    n = self.new(self._object_, __name__=str(index), offset=offset)
                     self.value.append(n)
                     if self.isTerminator(n.load()):
                         break
@@ -479,7 +479,7 @@ class infinite(uninitialized):
         with utils.assign(self, **attrs):
             offset, self.value = self.getoffset(), []
 
-            current,maximum = 0,None if self.parent is None else self.parent.blocksize()
+            current, maximum = 0, None if self.parent is None else self.parent.blocksize()
             try:
                 while True if maximum is None else current < maximum:
 
@@ -523,7 +523,7 @@ class infinite(uninitialized):
             self.value = []
             offset = self.getoffset()
 
-            current,maximum = 0,None if self.parent is None else self.parent.blocksize()
+            current, maximum = 0, None if self.parent is None else self.parent.blocksize()
             try:
                 while True if maximum is None else current < maximum:
 
@@ -624,7 +624,7 @@ class block(uninitialized):
                 self.value.append(n)
                 if self.isTerminator(n):
                     break
-                offset,current = offset+size,current+size
+                offset, current = offset+size, current+size
 
             pass
         return self

@@ -46,9 +46,9 @@ Example usage:
     instance.unalias('alternative-name')
 """
 import sys
-import functools,itertools,types,builtins,operator,six
+import functools, itertools, types, builtins, operator, six
 
-from . import ptype,utils,config,pbinary,error
+from . import ptype, utils, config, pbinary, error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,make'.split(',')
@@ -66,7 +66,7 @@ class _pstruct_generic(ptype.container):
         self.__fastindex[alias.lower()] = res
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
-        if any(alias.lower() == n.lower() for _,n in self._fields_):
+        if any(alias.lower() == name.lower() for _, name in self._fields_):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
@@ -172,10 +172,10 @@ class _pstruct_generic(ptype.container):
         return result
 
     def __getstate__(self):
-        return super(_pstruct_generic, self).__getstate__(),self.__fastindex,
+        return super(_pstruct_generic, self).__getstate__(), self.__fastindex,
 
     def __setstate__(self, state):
-        state,self.__fastindex, = state
+        state, self.__fastindex, = state
         super(_pstruct_generic, self).__setstate__(state)
 
 class type(_pstruct_generic):
@@ -186,7 +186,7 @@ class type(_pstruct_generic):
         _fields_:array( tuple( ptype, name ), ... )<w>
             This contains which elements the structure is composed of
     '''
-    _fields_ = None     # list of (type,name) tuples
+    _fields_ = None     # list of (type, name) tuples
     ignored = ptype.container.__slots__['ignored'] | {'_fields_'}
 
     def initializedQ(self):
@@ -211,16 +211,16 @@ class type(_pstruct_generic):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
         result = super(type, self).alloc()
         if fields:
-            for idx,(t,n) in enumerate(self._fields_):
-                if n not in fields:
+            for idx, (t, name) in enumerate(self._fields_):
+                if name not in fields:
                     if ptype.isresolveable(t):
-                        result.value[idx] = self.new(t, __name__=n).a
+                        result.value[idx] = self.new(t, __name__=name).a
                     continue
-                v = fields[n]
+                v = fields[name]
                 if ptype.isresolveable(v) or ptype.istype(v):
-                    result.value[idx] = self.new(v, __name__=n).a
+                    result.value[idx] = self.new(v, __name__=name).a
                 elif isinstance(v, ptype.generic):
-                    result.value[idx] = self.new(v, __name__=n)
+                    result.value[idx] = self.new(v, __name__=name)
                 elif isinstance(v, dict):
                     result.value[idx].alloc(**v)
                 else:
@@ -231,7 +231,7 @@ class type(_pstruct_generic):
 
     def __append_type(self, offset, cons, name, **attrs):
         if name in self.__fastindex:
-            _,name = name,u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+            _, name = name, u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
             Log.warn("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
 
         res = self.new(cons, __name__=name, offset=offset, **attrs)
@@ -303,10 +303,10 @@ class type(_pstruct_generic):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
             f = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
-            res = (f(utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
+            res = (f(utils.repr_class(gettypename(t)), name) for t, name in self._fields_)
             return '\n'.join(res)
 
-        result,o = [],self.getoffset()
+        result, o = [], self.getoffset()
         fn = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
         for fld, value in __izip_longest__(self._fields_, self.value):
             t, name = fld or (value.__class__, value.name())
@@ -318,7 +318,7 @@ class type(_pstruct_generic):
             ofs = self.getoffset(value.__name__ or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
             val = value.summary(**options) if value.initializedQ() else u'???'
-            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in six.iteritems(value.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             result.append(u"[{:x}] {:s}{:s} {:s}".format(ofs, inst, u" {{{:s}}}".format(prop) if prop else u"", val))
             o += value.size()
 
@@ -339,7 +339,7 @@ class type(_pstruct_generic):
                     raise error.UserError(result, 'type.set', message='Refusing to assign iterable to instance due to differing lengths')
                 result = super(type, result).__setvalue__(*value)
 
-            for k,v in six.iteritems(fields):
+            for k, v in six.iteritems(fields):
                 idx = self.__getindex__(k)
                 if ptype.isresolveable(v) or ptype.istype(v):
                     result.value[idx] = self.new(v, __name__=k).a
@@ -355,10 +355,10 @@ class type(_pstruct_generic):
         return result.a.__setvalue__(*values, **fields)
 
     def __getstate__(self):
-        return super(type, self).__getstate__(),self._fields_,
+        return super(type, self).__getstate__(), self._fields_,
 
     def __setstate__(self, state):
-        state,self._fields_, = state
+        state, self._fields_, = state
         super(type, self).__setstate__(state)
 
 def make(fields, **attrs):
@@ -373,20 +373,20 @@ def make(fields, **attrs):
     if len(set([x.getoffset() for x in fields])) != len(fields):
         raise ValueError('more than one field is occupying the same location')
 
-    types = sorted(fields, cmp=lambda a,b: cmp(a.getoffset(),b.getoffset()))
+    types = sorted(fields, key=lambda instance: item.getposition())
 
-    ofs,result = 0,[]
+    ofs, result = 0, []
     for object in types:
-        o,n,s = object.getoffset(), object.shortname(), object.blocksize()
+        loc, name, size = object.getoffset(), object.shortname(), object.blocksize()
 
-        delta = o-ofs
+        delta = loc - ofs
         if delta > 0:
-            result.append((ptype.clone(ptype.block,length=delta), u'__padding_{:x}'.format(ofs)))
+            result.append((ptype.clone(ptype.block, length=delta), u'__padding_{:x}'.format(ofs)))
             ofs += delta
 
-        if s > 0:
-            result.append((object.__class__, n))
-            ofs += s
+        if size > 0:
+            result.append((object.__class__, name))
+            ofs += size
         continue
     return ptype.clone(type, _fields_=result, **attrs)
 
