@@ -115,7 +115,7 @@ def blockarray(type, size, **kwds):
 
     if size < 0:
         t = parray.block(_object_=type)
-        Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(),size))
+        Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(), size))
         size = 0
 
     class blockarray(parray.block):
@@ -128,7 +128,7 @@ def blockarray(type, size, **kwds):
             return "dynamic.blockarray({:s}, {:d})".format(t, self.blocksize())
     blockarray.__module__ = __name__
     blockarray.__name__ = 'blockarray'
-    blockarray.__getinitargs__ = lambda s: (type,size)
+    blockarray.__getinitargs__ = lambda s: (type, size)
     return blockarray
 
 def padding(size, **kwds):
@@ -215,16 +215,16 @@ def array(type, count, **kwds):
     returns an array of the specified length containing elements of the specified type
     '''
     if not isinstance(count, six.integer_types):
-        t = parray.type(_object_=type,length=count)
+        t = parray.type(_object_=type, length=count)
         raise error.UserError(t, 'array', message="Argument count must be integral : {:s} -> {!r}".format(count.__class__, count))
 
     if count < 0:
-        t = parray.type(_object_=type,length=count)
+        t = parray.type(_object_=type, length=count)
         Log.error("dynamic.array : {:s} : Invalid argument count={:d} cannot be < 0. Defaulting to 0.".format(t.typename(), count))
         count = 0
 
     if Config.parray.max_count > 0 and count > Config.parray.max_count:
-        t = parray.type(_object_=type,length=count)
+        t = parray.type(_object_=type, length=count)
         if Config.parray.break_on_max_count:
             Log.fatal("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
             raise error.UserError(t, 'array', message="Requested array count={:d} is larger than configuration max_count={:d}".format(count, Config.parray.max_count))
@@ -249,7 +249,7 @@ def clone(cls, **newattrs):
 
 class _union_generic(ptype.container):
     def __init__(self, *args, **kwds):
-        super(_union_generic,self).__init__(*args, **kwds)
+        super(_union_generic, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
     def append(self, object):
@@ -365,7 +365,7 @@ class union(_union_generic):
         # if the blocksize method is not modified, then allocate all fields and choose the largest
         if utils.callable_eq(self.blocksize, union.blocksize):
             iterable = (self.new(t) for t in objects)
-            size = max(n.a.blocksize() for n in iterable)
+            size = max(item.a.blocksize() for item in iterable)
             return clone(ptype.block, length=size)
 
         # otherwise, just use the blocksize to build a ptype.block for the root type
@@ -378,8 +378,8 @@ class union(_union_generic):
 
         source = provider.proxy(res)      # each element will write into the offset occupied by value
         self.__object__ = []
-        for t,n in self._fields_:
-            res = self.new(t, __name__=n, offset=0, source=source)
+        for t, name in self._fields_:
+            res = self.new(t, __name__=name, offset=0, source=source)
             self.__append__(res)
         return self.value[0]
 
@@ -410,15 +410,15 @@ class union(_union_generic):
         return self
 
     def properties(self):
-        result = super(union,self).properties()
+        result = super(union, self).properties()
         if self.initializedQ():
-            result['object'] = ["{:s}<{:s}>".format(v.name(),v.classname()) for v in self.__object__]
+            result['object'] = ["{:s}<{:s}>".format(item.name(), item.classname()) for item in self.__object__]
         else:
-            result['object'] = ["{:s}<{:s}>".format(n,t.typename()) for t,n in self._fields_]
+            result['object'] = ["{:s}<{:s}>".format(name, t.typename()) for t, name in self._fields_]
         return result
 
     def __getitem__(self, key):
-        result = super(union,self).__getitem__(key)
+        result = super(union, self).__getitem__(key)
         try:
             result.li
         except error.UserError as E:

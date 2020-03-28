@@ -671,7 +671,7 @@ class _base_generic(object):
             return u'"' + utils.emit_repr(buf, threshold, message, **options) + u'"'
         return u'"' + utils.emit_repr(buf, **options) + u'"'
 
-    @utils.memoize('self', self='parent', args=lambda n:(n[0],) if len(n) > 0 else (), kwds=lambda n:n.get('type', ()))
+    @utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
     def getparent(self, *args, **kwds):
         """Returns the creator of the current type.
 
@@ -713,7 +713,7 @@ class _base_generic(object):
         By default this returns a string describing the type and location of
         each structure.
         """
-        path = self.traverse(edges=lambda node:(node.parent for _ in (None,) if node.parent is not None))
+        path = self.traverse(edges=lambda node: (node.parent for edge in [None] if node.parent is not None))
         path = [ fn(x) for x in path ]
         return list(reversed(path))
 
@@ -1262,10 +1262,10 @@ class container(base):
     def setposition(self, offset, recurse=False):
         res = super(container, self).setposition(offset, recurse=recurse)
         if recurse and self.value is not None:
-            o = offset[0]
-            for n in self.value:
-                n.setposition((o,), recurse=recurse)
-                o += n.size() if n.initializedQ() else n.blocksize()
+            ofs = offset[0]
+            for item in self.value:
+                item.setposition((ofs,), recurse=recurse)
+                ofs += item.size() if item.initializedQ() else item.blocksize()
             return res
         return res
 
