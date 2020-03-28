@@ -205,7 +205,7 @@ class StreamMarker(pstruct.type):
         return self.Type
 
     def __Value(self):
-        return self.Table.withdefault(self['Type'].li.str()) if getattr(self, 'Table', None) else ptype.block
+        return self.Table.withdefault(self['Type'].li.str())
 
     def __Extra(self):
         fields = ['Type', 'Value']
@@ -223,7 +223,7 @@ class DecodedStream(parray.block):
         super(DecodedStream, self).__init__(**attrs)
 
         # Make a copy of our bounds as we'll use this to bound each element of our array
-        self.__bounds__ = getattr(self, '__bounds__', [])[:]
+        self.__bounds__ = getattr(self, '__bounds__', [])
 
     def _object_(self):
         bounds = self.__bounds__[len(self.value)]
@@ -236,7 +236,7 @@ class DecodedStream(parray.block):
         return dyn.clone(self._marker_, Type=t, blocksize=Fsize)
 
     def blocksize(self):
-        return sum(self.__bounds__)
+        return sum(map(abs, self.__bounds__))
 
 class Stream(ptype.encoded_t):
     _object_ = DecodedStream
@@ -248,31 +248,28 @@ class Stream(ptype.encoded_t):
         attrs.setdefault('_object_', dyn.clone(self._object_, __bounds__=bounds))
         super(Stream, self).__init__(**attrs)
 
-    # Copy from ptype.encoded_t so that it looks like the same interface
-    def decode(self, object, **attrs):
-        if not self.initializedQ():
-            raise ptypes.error.InitializationError(self, 'decode')
-        data, result = b'', []
+    @classmethod
+    def __split_stream(cls, data):
+        result = []
 
         # decode stream into its components
-        source = array.array('B', object.serialize())
-        iterable = iter(source)
+        state, iterable = b'', iter(array.array('B', data))
         try:
             while True:
                 m = next(iterable)
                 if m == 0xff:
                     n = next(iterable)
                     if n == 0x00:
-                        data += b'\xff'
+                        state += b'\xff'
                         continue
-                    result.append(data)
+                    result.append(state)
                     result.append(six.int2byte(m) + six.int2byte(n))
-                    data = b''
+                    state = b''
                     continue
-                data += six.int2byte(m)
+                state += six.int2byte(m)
 
         except StopIteration:
-            result.append(data)
+            result.append(state)
 
         ## if we found extra data before a marker, then prefix our results
         ## with a dummy marker so that we can add it to our list
@@ -281,18 +278,61 @@ class Stream(ptype.encoded_t):
         else:
             result.pop(0)
 
+        return result
+
+    def decode(self, object, **attrs):
+        if not self.initializedQ():
+            raise ptypes.error.InitializationError(self, 'decode')
+
+        result = self.__split_stream(object.serialize())
+
         ## pair up each marker with its data
         iterable = __izip_longest__(*[iter(result)] * 2)
 
         ## figure out the bounds of each element. If the marker is empty, then
         ## this element is just data and we'll use a negative length to mark it
-        bounds = []
+        bounds, delimited = [], []
         for marker, data in iterable:
+            if self.isDelimiter(marker):
+                delimited.append((marker, data))
+                break
             size = len(marker) + len(data)
             bounds.append(+size if marker else -size)
-
         self.__bounds__[:] = bounds
-        return super(Stream, self).decode(object)
+
+        ## if there was no delimiter, then we're done here...
+        if not delimited:
+            data = bytes(bytearray(itertools.chain(*result)))
+            decoded = ptype.block().set(data)
+            return super(Stream, self).decode(decoded)
+
+        ## now we need to keep consuming our iterator while looking for
+        ## delimiter-type markers
+        for marker, data in iterable:
+            if not self.isDelimiter(marker):
+                M, state = delimited[-1]
+                delimited[-1] = M, state + marker + data
+                continue
+            delimited.append((marker, data))
+
+        ## check if our final block of data is a delimiter-type marker
+        ## because if not, then we'll need to adjust the element a bit
+        M, state = delimited[-1]
+        if not self.isDelimiter(M):
+            delimited[-1] = (b'', M + state)
+
+        ## now we can add our bounds, and then store it
+        for marker, data in delimited:
+            bounds.append(len(marker) + len(data))
+        self.__bounds__[:] = bounds
+
+        ## last thing to do is to cast our decoded data into an object
+        data = bytes(bytearray(itertools.chain(*result)))
+        decoded = ptype.block().set(data)
+        return super(Stream, self).decode(decoded)
+
+    def isDelimiter(self, marker):
+        raise NotImplementedError
 
 if __name__ == '__main__':
     blah = z[3]['data'].copy()
