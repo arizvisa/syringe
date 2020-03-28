@@ -751,8 +751,6 @@ class _base_generic(object):
 
 class generic(_base_generic):
     '''A class shared between both pbinary.*, ptype.*'''
-    initialized = property(fget=lambda self: self.initializedQ())
-
     def initializedQ(self):
         raise error.ImplementationError(self, 'base.initializedQ')
     def __hash__(self):
@@ -1396,6 +1394,9 @@ class container(base):
                 Log.warning("container.load : {:s} : Unable to complete read at {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
             else:
                 Log.debug("container.load : {:s} : Cropped to {{{:x}:{:+x}}} : {!r}".format(self.instance(), ofs, s, E))
+
+            # and then re-raise because there's no more data left...
+            raise error.LoadError(self, exception=E)
         return self
 
     def commit(self, **attrs):
