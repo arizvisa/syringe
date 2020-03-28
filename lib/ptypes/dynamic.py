@@ -464,7 +464,7 @@ class union(_union_generic):
             result.append("[{:x}] {:s} ???".format(self.getoffset(), gettypename(self._value_)))
 
         # now the rest of the fields
-        for fld, value in map(None, self._fields_, self.__object__ or []):
+        for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 result.append("[{:x}] {:s} {:s} ???".format(self.getoffset(), utils.repr_class(gettypename(t)), name))
