@@ -665,18 +665,14 @@ class EPH(pstruct.type):
 
 @Marker.define
 class COM(pstruct.type):
-    def __missing(self):
-        length, fields = self['Lcme'].li, ('Rcme','Ccme')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+    def __content(self):
+        length, fields = self['Lcme'].li, ['Lcme', 'Rcme']
+        return dyn.clone(pstr.string, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lcme'),
         (u16, 'Rcme'),
-        (u8, 'Ccme'),
-        (__missing, 'missing'),
+        (__content, 'Ccme'),
     ]
 
 if __name__ == '__main__':
