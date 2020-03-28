@@ -56,7 +56,7 @@ class Marker(jpegstream.Marker):
 class MarkerType(jpegstream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
 
-class MarkerStream(jpegstream.MarkerStream):
+class StreamMarker(jpegstream.StreamMarker):
     Type, Table = MarkerType, Marker
 
 ### enumerations
@@ -101,8 +101,12 @@ class Box(pstruct.type):
     def __data(self):
         hdr = self['header'].li
         cb = hdr.DataLength()
-        res = Boxes.withdefault(hdr.Type(), type=hdr.Type(), length=cb)
-        return dyn.clone(res, blocksize=lambda s, cb=cb: cb) if issubclass(res, (ptype.block, parray.block)) else res
+        res = Boxes.withdefault(hdr.Type(), type=hdr.Type())
+        if issubclass(res, ptype.block):
+            return dyn.clone(res, length=cb)
+        elif issubclass(res, ptype.encoded_t):
+            return dyn.clone(res, _value_=dyn.clone(ptype.block, length=cb))
+        return dyn.clone(res, blocksize=lambda s, length=cb: length)
 
     def __padding(self):
         hdr = self['header'].li
@@ -285,7 +289,7 @@ class ColourSpecification(pstruct.type):
 class ContiguousCodeStream(jpegstream.Stream):
     type = b'\x6a\x70\x32\x63'
 
-    _object_ = dyn.clone(jpegstream.DecodedStream, _object_=MarkerStream)
+    _object_ = dyn.clone(jpegstream.DecodedStream, _marker_=StreamMarker)
 
 @Boxes.define
 class IntellectualProperty(ptype.block):
@@ -415,10 +419,14 @@ class COD(pstruct.type):
                 #(ptype.block, 'Packet partition size'),
             ]
 
+        def __Layers(self):
+            count = self['Number of layers'].li
+            return dyn.array(self.CodeBlock, count.int())
+
         _fields_ = [
             (u8, 'Progression order'),
             (u16, 'Number of layers'),
-            (lambda s: dyn.array(s.CodeBlock, s['Number of layers'].li.int()), 'Layers'),
+            (__Layers, 'Layers'),
         ]
 
     def __missed(self):

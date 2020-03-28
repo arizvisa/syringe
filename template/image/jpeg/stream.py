@@ -144,15 +144,15 @@ class DHT(parray.block):
             (__symbols, 'symbols')
         ]
 
-        def dumpValue(self, indent=''):
+        def dump(self, indent=''):
             # XXX: this code sucks
-            symbols = iter(self['symbols'].value)
             def consume(iterable, count):
-                return [iterable.next() for x in xrange(count)]
+                return [iterable.next() for index in six.moves.range(count)]
             F = functools.partial(consume, symbols)
 
-            counts = map(ord, self['count'].value)
-            codes = map(F, counts)
+            symbols = iter(bytearray(self['symbols'].serialize()))
+            counts = bytearray(self['count'].serialize())
+            codes = [ consume(symbols, count) for count in counts ]
 
             res = [ 'codes of length[{:d}] bits ({:d} total): {:s}'.format(index, len(code), utils.hexdump(''.join(code))) for ((index, code), count) in zip(enumerate(codes), counts) ]
             return '\n'.join(indent + row for row in res)
@@ -198,7 +198,7 @@ class COM(ptype.block): pass
 class EOI(ptype.block): length = 0
 
 ### Stream decoders
-class MarkerStream(pstruct.type):
+class StreamMarker(pstruct.type):
     Type, Table = MarkerType, Marker
 
     def __Value(self):
@@ -215,24 +215,41 @@ class MarkerStream(pstruct.type):
     ]
 
 class DecodedStream(parray.terminated):
-    _object_ = MarkerStream
-    def isTerminator(self, value):
-        return value['Type'].int() == 0xffd9
+    _marker_ = StreamMarker
+    def __init__(self, **attrs):
+        super(DecodedStream, self).__init__(**attrs)
 
-class Stream(ptype.block):
+        # Make a copy of our bounds as we'll use this to bound each element of our array
+        self.__bounds__ = getattr(self, '__bounds__', [])[:]
+
+    def _object_(self):
+        index, bounds = len(self.value), self.__bounds__
+
+        # Using the index and bounds array, construct a new marker using our current
+        # bound as its blocksize.
+        return dyn.clone(self._marker_, blocksize=lambda self, cb=bounds[index]: cb)
+
+    def isTerminator(self, value):
+        return value.size() == 0 or value['Type'].int() == 0xffd9
+
+class Stream(ptype.encoded_t):
     _object_ = DecodedStream
 
-    # Copy from ptype.encoded_t so that it looks like the same interface
-    d = property(fget=lambda self,**attrs: self.decode(**attrs))
-    dereference = lambda self, **attrs: self.decode(**attrs)
+    def __init__(self, **attrs):
+        self.__bounds__ = bounds = []
 
-    def decode(self):
+        # Tie our bounds attribute to the object used for each element
+        attrs.setdefault('_object_', dyn.clone(self._object_, __bounds__=bounds))
+        super(Stream, self).__init__(**attrs)
+
+    # Copy from ptype.encoded_t so that it looks like the same interface
+    def decode(self, object, **attrs):
         if not self.initializedQ():
             raise ptypes.error.InitializationError(self, 'decode')
         data, result = b'', []
 
         # decode stream into its components
-        source = array.array('B', self.serialize())
+        source = array.array('B', object.serialize())
         iterable = iter(source)
         try:
             while True:
@@ -252,13 +269,14 @@ class Stream(ptype.block):
             result.append(data)
         result = result[1:]
 
-        ## build decoded object
-        stream = self.new(self._object_, offset=self.getoffset(), source=self.__source__, value=[])
-        for m, data in __izip_longest__(*(iter(result),)*2):
-            edata = m + (data or b'')
-            res = stream.new(stream._object_, blocksize=(lambda cb=len(edata): cb))
-            stream.append(res.load(offset=0, source=ptypes.prov.string(edata)))
-        return stream
+        ## figure out the bounds of each element
+        items = []
+        for m, data in __izip_longest__(*(iter(result),) * 2):
+            items.append(m + data)
+        self.__bounds__[:] = [len(item) for item in items]
+
+        source = ptypes.prov.bytes(b''.join(items))
+        return super(Stream, self).decode(object)
 
 if __name__ == '__main__':
     blah = z[3]['data'].copy()

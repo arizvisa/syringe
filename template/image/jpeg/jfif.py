@@ -22,7 +22,7 @@ class Marker(jpegstream.Marker):
 class MarkerType(jpegstream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
 
-class MarkerStream(jpegstream.MarkerStream):
+class StreamMarker(jpegstream.StreamMarker):
     Type, Table = MarkerType, Marker
 
 ### JFIF Structures
