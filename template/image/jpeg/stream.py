@@ -201,20 +201,23 @@ class EOI(ptype.block): length = 0
 class StreamMarker(pstruct.type):
     Type, Table = MarkerType, Marker
 
+    def __Type(self):
+        return self.Type
+
     def __Value(self):
-        return self.Table.withdefault(self['Type'].li.str())
+        return self.Table.withdefault(self['Type'].li.str()) if getattr(self, 'Table', None) else ptype.block
 
     def __Extra(self):
-        cb = self['Type'].li.size() + self['Value'].li.size()
-        return dyn.block(self.blocksize() - cb)
+        fields = ['Type', 'Value']
+        return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
-        (lambda self: self.Type, 'Type'),
+        (__Type, 'Type'),
         (__Value, 'Value'),
         (__Extra, 'Extra'),
     ]
 
-class DecodedStream(parray.terminated):
+class DecodedStream(parray.block):
     _marker_ = StreamMarker
     def __init__(self, **attrs):
         super(DecodedStream, self).__init__(**attrs)
@@ -223,14 +226,17 @@ class DecodedStream(parray.terminated):
         self.__bounds__ = getattr(self, '__bounds__', [])[:]
 
     def _object_(self):
-        index, bounds = len(self.value), self.__bounds__
+        bounds = self.__bounds__[len(self.value)]
 
-        # Using the index and bounds array, construct a new marker using our current
-        # bound as its blocksize.
-        return dyn.clone(self._marker_, blocksize=lambda self, cb=bounds[index]: cb)
+        # First figure out if we're a delimited marker
+        t = dyn.clone(self._marker_.Type, length=0) if bounds < 0 else self._marker_.Type
 
-    def isTerminator(self, value):
-        return value.size() == 0 or value['Type'].int() == 0xffd9
+        # Using the bounds, construct a new marker using it as the blocksize
+        Fsize = lambda self, cb=abs(bounds): cb
+        return dyn.clone(self._marker_, Type=t, blocksize=Fsize)
+
+    def blocksize(self):
+        return sum(self.__bounds__)
 
 class Stream(ptype.encoded_t):
     _object_ = DecodedStream
@@ -260,22 +266,32 @@ class Stream(ptype.encoded_t):
                         data += b'\xff'
                         continue
                     result.append(data)
-                    result.append(six.int2byte(m)+six.int2byte(n))
+                    result.append(six.int2byte(m) + six.int2byte(n))
                     data = b''
                     continue
                 data += six.int2byte(m)
 
         except StopIteration:
             result.append(data)
-        result = result[1:]
 
-        ## figure out the bounds of each element
-        items = []
-        for m, data in __izip_longest__(*(iter(result),) * 2):
-            items.append(m + data)
-        self.__bounds__[:] = [len(item) for item in items]
+        ## if we found extra data before a marker, then prefix our results
+        ## with a dummy marker so that we can add it to our list
+        if len(result[0]) > 0:
+            result.insert(0, b'')
+        else:
+            result.pop(0)
 
-        source = ptypes.prov.bytes(b''.join(items))
+        ## pair up each marker with its data
+        iterable = __izip_longest__(*[iter(result)] * 2)
+
+        ## figure out the bounds of each element. If the marker is empty, then
+        ## this element is just data and we'll use a negative length to mark it
+        bounds = []
+        for marker, data in iterable:
+            size = len(marker) + len(data)
+            bounds.append(+size if marker else -size)
+
+        self.__bounds__[:] = bounds
         return super(Stream, self).decode(object)
 
 if __name__ == '__main__':
