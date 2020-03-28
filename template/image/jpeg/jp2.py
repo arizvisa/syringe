@@ -271,11 +271,8 @@ class ColourSpecification(pstruct.type):
         except ptypes.error.NotFoundError:
             return dyn.block(0)
 
-        fields = ('METH','PREC','APPROX','EnumCS')
-
-        res = [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, hdr.DataLength() - cb)))
+        fields = ['METH', 'PREC', 'APPROX', 'EnumCS']
+        return dyn.block(max((0, hdr.DataLength() - sum(self[fld].li.size() for fld in fields))))
 
     _fields_ = [
         (u8, 'METH'),
@@ -332,11 +329,8 @@ class URL(pstruct.type):
         except ptypes.error.NotFoundError:
             return dyn.block(0)
 
-        fields = ('VERS','FLAG')
-
-        res = [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.clone(pstr.string, length=hdr.DataLength() - cb)
+        fields = ['VERS', 'FLAG']
+        return dyn.clone(pstr.string, length=hdr.DataLength() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u8, 'VERS'),
@@ -430,11 +424,8 @@ class COD(pstruct.type):
         ]
 
     def __missed(self):
-        length, fields = self['Lcod'].li, ('Scod','Spcod')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lcod'].li, ['Scod', 'SPcod']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lcod'),
@@ -450,11 +441,8 @@ class COC(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __SPcoc(self):
-        length, fields = self['Lcoc'].li, ('Ccoc','Scoc')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lcoc'].li, ['Lcoc', 'Ccoc', 'Scoc']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lcoc'),
@@ -470,11 +458,8 @@ class RGN(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __SPrgn(self):
-        length, fields = self['Lrgn'].li, ('Crgn','Srgn')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lrgn'].li, ['Lrgn', 'Crgn', 'Srgn']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lrgn'),
@@ -486,11 +471,8 @@ class RGN(pstruct.type):
 @Marker.define
 class QCD(pstruct.type):
     def __SPqcd(self):
-        length, fields = self['Lqcd'].li, ('Sqcd',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lqcd'].li, ['Lqcd', 'Sqcd']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lqcd'),
@@ -505,11 +487,8 @@ class QCC(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __SPqcc(self):
-        length, fields = self['Lqcc'].li, ('Cqcc','Sqcc')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lqcc'),
@@ -529,11 +508,8 @@ class POC(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __missed(self):
-        length, fields = self['Lpod'].li, ('RSpod','CSpod','LYEpod','REpod','CEpod','Ppod')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lpod'].li, ['Lpod', 'RSpod', 'CSpod', 'LYEpod', 'REpod', 'CEpod', 'Ppod']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lpod'),
@@ -567,11 +543,8 @@ class TLM(pstruct.type):
         return u0
 
     def __missed(self):
-        length, fields = self['Ltlm'].li, ('Ztlm','Stlm','Ttlm','Ptlm')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Ltlm'].li, ['Ltlm', 'Ztlm', 'Stlm', 'Ttlm', 'Ptlm']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Ltlm'),
@@ -585,11 +558,8 @@ class TLM(pstruct.type):
 @Marker.define
 class PLM(pstruct.type):
     def __missed(self):
-        length, fields = self['Lplm'].li, ('Zplm','Nplm')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lplm'].li, ['Lplm', 'Zplm', 'Nplm']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lplm'),
@@ -601,11 +571,8 @@ class PLM(pstruct.type):
 @Marker.define
 class PLT(pstruct.type):
     def __Iplt(self):
-        length, fields = self['Lplt'].li, ('Zplt',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lplt'].li, ['Lplt', 'Zplt']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lplt'),
@@ -616,11 +583,8 @@ class PLT(pstruct.type):
 @Marker.define
 class PPM(pstruct.type):
     def __Ippm(self):
-        length, fields = self['Lppm'].li, ('Zppm','Nppm')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lppm'].li, ['Lppm', 'Zppm', 'Nppm']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lppm'),
@@ -632,11 +596,8 @@ class PPM(pstruct.type):
 @Marker.define
 class PPT(pstruct.type):
     def __Ippt(self):
-        length, fields = self['Lppt'].li, ('Zppt',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lppt'].li, ['Lppt', 'Zppt']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lppt'),
@@ -646,17 +607,14 @@ class PPT(pstruct.type):
 
 @Marker.define
 class SOP(pstruct.type):
-    def __missing(self):
-        length, fields = self['Lsop'].li, ('Nsop',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+    def __missed(self):
+        length, fields = self['Lsop'].li, ['Lsop', 'Nsop']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lsop'),
         (u16, 'Nsop'),
-        (__missing, 'missing'),
+        (__missed, 'missed'),
     ]
 
 @Marker.define
