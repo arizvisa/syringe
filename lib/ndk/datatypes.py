@@ -1,10 +1,12 @@
-import six, math, datetime
+import six, sys, math, datetime, itertools
 
 import ptypes
 from ptypes import *
 from ptypes import bitmap
 
 from . import sdkddkver, winerror
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 ### versioned base-class
 class versioned(ptype.base):
@@ -626,7 +628,7 @@ class BitmapBitsBytes(ptype.block):
     def details(self):
         bytes_per_row = 8
         iterable = iter(bitmap.string(self.bitmap()))
-        rows = map(None, *(iterable,) * 8 * bytes_per_row)
+        rows = __izip_longest__(*(iterable,) * 8 * bytes_per_row)
         res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
         items = map(str().join, res)
 

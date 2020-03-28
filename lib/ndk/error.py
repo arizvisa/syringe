@@ -1,7 +1,9 @@
-import functools, itertools, types, builtins, operator, six
+import sys, functools, itertools, types, builtins, operator, six
 import ptypes
 
 from . import sdkddkver
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 class NdkException(ptypes.error.RequestError):
     '''
@@ -9,7 +11,7 @@ class NdkException(ptypes.error.RequestError):
     '''
     def __init__(self, object, method, *args, **kwds):
         super(NdkException, self).__init__(*((object, method) + args))
-        map(None, itertools.starmap(functools.partial(setattr, self), kwds.items()))
+        list(__izip_longest__(itertools.starmap(functools.partial(setattr, self), kwds.items())))
         self.__iterdata__ = tuple(args)
         self.__mapdata__ = dict(kwds)
     def __iter__(self):
