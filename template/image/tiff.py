@@ -628,7 +628,7 @@ class File(pstruct.type):
 
     def __data(self):
         res = self['header'].li.size() + self['pointer'].li.size()
-        if isinstance(self.source, ptypes.prov.filebase):
+        if isinstance(self.source, ptypes.prov.bounded):
             return dyn.block(self.source.size() - res)
         return ptype.undefined
 

@@ -85,7 +85,7 @@ class BoxHeader(pstruct.type):
         res = self['boxLength'].int()
         if res:
             return self['boxLengthExt'].int() if res == 1 else res
-        if isinstance(self.source, ptypes.prov.filebase):
+        if isinstance(self.source, ptypes.prov.bounded):
             return self.source.size() - self.getoffset()
 
         cls = self.__class__

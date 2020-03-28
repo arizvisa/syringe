@@ -62,7 +62,7 @@ class Chunk(pstruct.type):
         if issubclass(result, (ptype.block, parray.block)):
 
             # check if chunk data length seeks outside of file
-            if isinstance(self.source, ptypes.provider.filebase):
+            if isinstance(self.source, ptypes.provider.bounded):
                 chunk = 0xc
                 default = self.source.size() - chunk - self.getoffset() - (type.size() + length.size() + 4)
                 if self.getoffset() + type.size() + 2*length.size() + length.int() < self.source.size():
