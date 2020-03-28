@@ -85,13 +85,13 @@ def __ensure_text__(s, encoding='utf-8', errors='strict'):
     raise TypeError("not expecting type '%s'"% type(s))
 
 class _char_t(pint.type):
-    encoding = codecs.lookup('ascii')
+    encoding = codecs.lookup('latin1')
 
     def __init__(self, **attrs):
         super(_char_t, self).__init__(**attrs)
 
         # calculate the size of .length based on .encoding
-        null = b'\0'.decode('ascii')
+        null = b'\0'.decode('latin1')
         res = null.encode(self.encoding.name)
         self.length = len(res)
 
@@ -327,7 +327,7 @@ class string(ptype.type):
         try:
             res = data.decode(t._object_.encoding.name)
         except UnicodeDecodeError:
-            Log.warn('{:s}.str : {:s} : Unable to decode to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename()))
+            Log.warn('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), t._object_.encoding.name))
             res = data.decode(t._object_.encoding.name, 'ignore')
         return res
 
