@@ -499,7 +499,14 @@ if __name__ == '__main__':
             ]
         source = provider.string(b'AAAABBBBCCC')
         x = st(source=source)
-        x = x.l
+
+        try:
+            x = x.l
+            raise Failure
+
+        except ptypes.error.LoadError:
+            pass
+
         if x.v is not None and not x.initializedQ() and x['b'].serialize() == b'BBBB' and x['c'].size() == 3:
             raise Success
 

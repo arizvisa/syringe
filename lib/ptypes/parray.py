@@ -250,19 +250,19 @@ class type(_parray_generic):
     def __load_block(self, **attrs):
         offset = self.getoffset()
         for index in six.moves.range(self.length):
-            n = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
-            self.value.append(n)
-            offset += n.blocksize()
+            item = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
+            self.value.append(item)
+            offset += item.blocksize()
         return self
 
     # load ourselves incrementally
     def __load_container(self, **attrs):
         offset = self.getoffset()
         for index in six.moves.range(self.length):
-            n = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
-            self.value.append(n)
-            n.load()
-            offset += n.blocksize()
+            item = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
+            self.value.append(item)
+            item.load()
+            offset += item.blocksize()
         return self
 
     def copy(self, **attrs):
@@ -556,7 +556,14 @@ class infinite(uninitialized):
                     Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
                 raise error.LoadError(self, exception=E)
             pass
-        super(type, self).load()
+
+        # Read everything until we have a load error, because that's what this
+        # method does...
+        try:
+            super(type, self).load()
+        except error.LoadError:
+            pass
+        return
 
 class block(uninitialized):
     '''An array that reads elements until their size totals the same amount returned by .blocksize()'''
