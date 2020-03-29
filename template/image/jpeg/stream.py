@@ -205,7 +205,10 @@ class StreamMarker(pstruct.type):
         return self.Type
 
     def __Value(self):
-        return self.Table.withdefault(self['Type'].li.str())
+        t = self.Table.withdefault(self['Type'].li.str())
+        if issubclass(t, ptype.block):
+            return dyn.clone(t, length=self.blocksize() - self['Type'].li.size())
+        return t
 
     def __Extra(self):
         fields = ['Type', 'Value']
