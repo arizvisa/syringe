@@ -122,9 +122,11 @@ class Box(pstruct.type):
         (__padding, 'padding'),
     ]
 
-class SuperBox(parray.block): _object_ = Box
+class SuperBox(parray.block):
+    _object_ = Box
 
-class File(parray.infinite): _object_ = Box
+class File(parray.infinite):
+    _object_ = Box
 
 ### Box types
 @Boxes.define
@@ -320,10 +322,58 @@ class UUID(pstruct.type):
 class UUIDInfo(SuperBox):
     type = b'\x75\x69\x6e\x66'
 
+class UUID(pstruct.type):
+    class _time_hi_and_version(pbinary.struct):
+        _fields_ = [
+            (4, 'version'),
+            (12, 'time_hi'),
+        ]
+        def summary(self):
+            return "{:04x}".format(self.int())
+
+    class _clock_seq_hi_and_res(pbinary.struct):
+        _fields_ = [
+            (3, 'variant'),
+            (13, 'clock_seq'),
+        ]
+        def summary(self):
+            return "{:04x}".format(self.int())
+
+    class _node(parray.type):
+        length, _object_ = 6, u8
+        def summary(self):
+            iterable = (item.int() for item in self)
+            return ''.join(map("{:02x}".format, iterable))
+
+    _fields_ = [
+        (u32, 'time_low'),
+        (u16, 'time_mid'),
+        (_time_hi_and_version, 'time_hi_and_version'),
+        (_clock_seq_hi_and_res, 'clock_seq_hi_and_res'),
+        (_node, 'node'),
+    ]
+
+    def summary(self, **options):
+        fmt = "urn:uuid:{:s}".format
+        res = self.str() if self.initializedQ() else '????????-????-????-????-????????????'
+        return fmt(res)
+
+    def str(self):
+        d1 = '{:08x}'.format(self['time_low'].int())
+        d2 = '{:04x}'.format(self['time_mid'].int())
+        d3 = '{:04x}'.format(self['time_hi_and_version'].int())
+        d4 = '{:04x}'.format(self['clock_seq_hi_and_res'].int())
+        iterable = (item.int() for item in self['node'])
+        d5 = ''.join(map('{:02x}'.format, iterable))
+        return '-'.join([d1, d2, d3, d4, d5])
+
 @Boxes.define
 class UUIDList(pstruct.type):
     type = b'\x75\x63\x73\x74'
-    _fields_ = []
+    _fields_ = [
+        (u16, 'NU'),
+        (lambda self: dyn.array(UUID, self['NU'].li.int()), 'UUID'),
+    ]
 
 @Boxes.define
 class URL(pstruct.type):
@@ -339,7 +389,7 @@ class URL(pstruct.type):
 
     _fields_ = [
         (u8, 'VERS'),
-        (dyn.clone(pint.uint_t, length=3), 'FLAG'),
+        (dyn.clone(u0, length=3), 'FLAG'),
         (__LOC, 'LOC'),
     ]
 
@@ -348,8 +398,8 @@ BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in six.viewitems(Box
 
 ### Marker types
 @Marker.define
-class SOC(pstruct.type):
-    _fields_ = []
+class SOC(ptype.block):
+    pass
 
 @Marker.define
 class SOT(pstruct.type):
@@ -362,12 +412,12 @@ class SOT(pstruct.type):
     ]
 
 @Marker.define
-class SOD(pstruct.type):
-    _fields_ = []
+class SOD(ptype.block):
+    pass
 
 @Marker.define
-class EOC(pstruct.type):
-    _fields_ = []
+class EOC(ptype.block):
+    pass
 
 @Marker.define
 class SIZ(pstruct.type):
@@ -660,8 +710,8 @@ class SOP(pstruct.type):
     ]
 
 @Marker.define
-class EPH(pstruct.type):
-    _fields_ = []
+class EPH(ptype.block):
+    pass
 
 @Marker.define
 class COM(pstruct.type):
