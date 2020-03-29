@@ -89,7 +89,7 @@ class ShortName(pstruct.type):
     def str(self):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
         if self['IsShort'].int() != 0x00000000:
-            return ptypes.utils.strdup( self.serialize(), terminator='\x00')
+            return ptypes.utils.strdup(self.serialize(), terminator=b'\0')
 
         try:
             res = self.getparent(SymbolTableAndStringTable)
@@ -259,7 +259,7 @@ class FileAuxiliaryRecord(pstruct.type):
     ]
 
     def summary(self):
-        return ptypes.utils.strdup(self['File Name'].str(), terminator='\x00')
+        return ptypes.utils.strdup(self['File Name'].str(), terminator='\0')
 
 @AuxiliaryRecord.define
 class WeakExternalAuxiliaryRecord(pstruct.type):
@@ -289,11 +289,11 @@ class StringTable(pstruct.type):
     def extract(self, offset):
         '''return the string associated with a particular offset'''
         string = self.serialize()[offset:]
-        return ptypes.utils.strdup(string, terminator='\x00')
+        return ptypes.utils.strdup(string, terminator=b'\0')
 
     def add(self, string):
         '''appends a string to string table, returns offset'''
-        res = string.encode(sys.getdefaultencoding()) + b'\x00'
+        res = string.encode(sys.getdefaultencoding()) + b'\0'
         ofs, data = self.size(), self['Data']
         data.length, data.value = data.length + len(res), data.serialize() + res
         self['Size'].set(data.size() + self['Size'].size())
@@ -301,7 +301,7 @@ class StringTable(pstruct.type):
 
     def find(self, string):
         '''returns the offset of the specified string within the string table'''
-        res, data = string.encode(sys.getdefaultencoding()) + b'\x00', self['Data'].serialize()
+        res, data = string.encode(sys.getdefaultencoding()) + b'\0', self['Data'].serialize()
         index = data.find(res)
         if index == -1:
             raise LookupError("{:s} : Unable to find null-terminated string ({!r}) within string table".format(self.instance(), string))

@@ -123,7 +123,7 @@ class ResourceString(pstruct.type):
 class ResourceWString(pstruct.type):
     _fields_ = [
         (EncodedInteger, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int() / 2), 'Name'),
+        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int() // 2), 'Name'),
         (lambda s: dyn.block(s['Length'].li.int() % 2), 'Padding'),
     ]
     def str(self):
@@ -484,9 +484,9 @@ class rfc4122(pstruct.type):
             return '{:04x}'.format(self.int())
     class _Data4(pint.bigendian(pint.uint64_t)):
         def summary(self):
-            res = list(self.serialize())
-            d1 = ''.join(map('{:02x}'.format,map(ord,res[:2])) )
-            d2 = ''.join(map('{:02x}'.format,map(ord,res[2:])) )
+            res = bytearray(self.serialize())
+            d1 = ''.join(map('{:02x}'.format,res[:2]))
+            d2 = ''.join(map('{:02x}'.format,res[2:]))
             return '-'.join((d1,d2))
 
     _fields_ = [
@@ -505,9 +505,9 @@ class rfc4122(pstruct.type):
         d1 = '{:08x}'.format(self['Data1'].int())
         d2 = '{:04x}'.format(self['Data2'].int())
         d3 = '{:04x}'.format(self['Data3'].int())
-        _ = list(self['Data4'].serialize())
-        d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
-        d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
+        res = bytearray(self['Data4'].serialize())
+        d4 = ''.join(map('{:02x}'.format,res[:2]))
+        d5 = ''.join(map('{:02x}'.format,res[2:]))
         return '{{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
 
     def repr(self):
@@ -563,7 +563,7 @@ class HUserStrings(parray.block):
     class _object_(pstruct.type):
         def __data(self):
             cb = self['length'].li.Get()
-            return dyn.clone(pstr.wstring, length= cb / 2)
+            return dyn.clone(pstr.wstring, length= cb // 2)
 
         _fields_ = [
             (CInt, 'length'),

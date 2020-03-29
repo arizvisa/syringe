@@ -113,7 +113,7 @@ class Longnames(ptype.block):
     internalname = "//"
 
     def extract(self, index):
-        return utils.strdup(self.serialize()[index:])
+        return utils.strdup(self.serialize()[index:], terminator=b'\0')
 
     def blocksize(self):
         return self.p['Header'].li['Size'].int()
@@ -158,7 +158,7 @@ class Member(pstruct.type):
     def __newline(self):
         ofs = self.getoffset('Member') + self['Header'].li['Size'].int()
         res = self.new(pstr.char_t, __name__='newline', offset=ofs)
-        if res.l.serialize() == '\n':
+        if res.l.serialize() == b'\n':
             return pstr.char_t
         return ptype.undefined
 

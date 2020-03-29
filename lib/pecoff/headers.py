@@ -141,9 +141,9 @@ class rfc4122(pstruct.type):
 
     class _Data4(pint.bigendian(pint.uint64_t)):
         def summary(self):
-            res = list(self.serialize())
-            d1 = ''.join(map('{:02x}'.format,map(ord,res[:2])) )
-            d2 = ''.join(map('{:02x}'.format,map(ord,res[2:])) )
+            res = bytearray(self.serialize())
+            d1 = ''.join(map('{:02x}'.format,res[:2]))
+            d2 = ''.join(map('{:02x}'.format,res[2:]))
             return '-'.join((d1,d2))
 
     _fields_ = [
@@ -162,9 +162,9 @@ class rfc4122(pstruct.type):
         d1 = '{:08x}'.format(self['Data1'].int())
         d2 = '{:04x}'.format(self['Data2'].int())
         d3 = '{:04x}'.format(self['Data3'].int())
-        _ = list(self['Data4'].serialize())
-        d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
-        d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
+        res = bytearray(self['Data4'].serialize())
+        d4 = ''.join(map('{:02x}'.format,res[:2]))
+        d5 = ''.join(map('{:02x}'.format,res[2:]))
         return '{{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
 
 class GUID(rfc4122):

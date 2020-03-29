@@ -180,7 +180,7 @@ if __name__ == 'CoffObject':
     ## build list of static symbols
     ## sanity check that the number of relocations are correct
     sections = coff['Sections']
-    for index,(sym,aux) in sym_static.iteritems():
+    for index, (sym, aux) in sym_static.items():
         section = sections[index]
         sectioncount = section['NumberOfRelocations'].int()
         if len(aux) > 0:
@@ -233,7 +233,7 @@ if __name__ == 'CoffObject':
         for index in range( len(sections) ):
             section = sections[index]
 
-            name = ptypes.utils.strdup( section['Name'].serialize(), terminator='\x00')
+            name = ptypes.utils.strdup(section['Name'].serialize(), terminator=b'\0')
             __import__.six.print_(name, end='')
             if index in sym_static.keys():
                 sym,aux = sym_static[index]

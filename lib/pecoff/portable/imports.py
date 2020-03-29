@@ -180,7 +180,7 @@ class IMAGE_IMPORT_DESCRIPTOR(pstruct.type):
         int, iat = self['INT'], self['IAT']
 
         cache, sections = {}, Header['Sections']
-        for entry, address in itertools.izip(int.d.li[:-1], iat.d.li[:-1]):
+        for entry, address in zip(int.d.li[:-1], iat.d.li[:-1]):
             if entry.OrdinalQ():
                 ordinal = entry['Ordinal']
                 hint = ordinal['Ordinal Number'] & 0xffff

@@ -232,8 +232,8 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         res = sum(array.array('I', bytes(data) + padding))
         checksum = len(data)
         checksum += res & 0xffff
-        checksum += res / 0x10000
-        checksum += checksum / 0x10000
+        checksum += res // 0x10000
+        checksum += checksum // 0x10000
         checksum &= 0xffff
 
         # Clamp the result to 32-bits

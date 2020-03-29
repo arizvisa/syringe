@@ -1,4 +1,4 @@
-import sys,array,importlib,ptypes
+import sys,array,importlib,ptypes,six
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
 from ..headers import *
 
@@ -183,7 +183,7 @@ class RelocationTypeBase(pbinary.integer):
     def read(self, data, offset, length):
         '''Given the specified data, read length bytes from the provided offset and return as a little-endian integer.'''
         res = array.array('B', data[offset : offset + length])
-        return reduce(lambda agg, item: agg * 0x100 + item, reversed(res), 0)
+        return six.moves.reduce(lambda agg, item: agg * 0x100 + item, reversed(res), 0)
 
     def write(self, integer, length):
         '''Given the specified integer and its length, encode it into its little-endian form and return a string.'''
@@ -200,7 +200,7 @@ class RelocationType1(RelocationTypeBase):
         return super(RelocationType1, self).read(data, offset, 2)
 
     def write(self, address, delta):
-        res = address + (delta & 0xffff0000) / 0x10000
+        res = address + (delta & 0xffff0000) // 0x10000
         return super(RelocationType1, self).write(res, 2)
 
 @RelocationType.define(type=2)
@@ -304,7 +304,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
         '''Return a list of tuples containing the relocation type and offset contained within this entry.'''
         block = self['Relocations'].serialize()
         relocations = array.array('H', block)
-        return [((item & 0xf000) / 0x1000, item & 0x0fff) for item in relocations]
+        return [((item & 0xf000) // 0x1000, item & 0x0fff) for item in relocations]
 
     def getrelocations(self, section):
         pageoffset = self['Page RVA'].int() - section['VirtualAddress'].int()
