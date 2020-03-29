@@ -5,7 +5,7 @@ an instance of a memorymanager.
 This module is also pretty stupid and shouldn't really be used without the python stub.
 '''
 
-import struct,ia32
+import six,struct,ia32
 class instruction(object):
     """
     This is only for hooking 32-bit x86. oh and it's not threadsafe...not
@@ -68,7 +68,7 @@ class instruction(object):
 ### calculating sizes
     def __calculateliftedlength(self):
         '''Total the bytes required in order to lift each block of assembly'''
-        br = self.__createbranch(0, '\xe9', 0)
+        br = self.__createbranch(0, b'\xe9', 0)
         size = len(''.join(br))
 
         loaded = self.loaded
@@ -85,14 +85,14 @@ class instruction(object):
         code
         '''
         loaded = self.loaded
-        return reduce(lambda x,y: len(y)+x, loaded.values(), 0)
+        return six.moves.reduce(lambda x,y: len(y)+x, loaded.values(), 0)
 
     def __calculategluelength(self):
         '''
         Total the number of bytes required for all the glue instructions
         that are used for branching back
         '''
-        br = self.__createbranch(0, '\xe9', 0)
+        br = self.__createbranch(0, b'\xe9', 0)
         size = len(''.join(br))
         return size * len(self.loaded.keys())
 
@@ -119,7 +119,7 @@ class instruction(object):
         for address in loaded:
             originalcode = self.lift(address, 5)
             relocatedcode = self.__relocateblock(originalcode, address, baseaddress)
-            finalbranch = ''.join(self.__createbranch(baseaddress+len(relocatedcode), '\xe9', address + len(originalcode)))
+            finalbranch = ''.join(self.__createbranch(baseaddress+len(relocatedcode), b'\xe9', address + len(originalcode)))
 
             mm.write(baseaddress, relocatedcode+finalbranch)
 
@@ -141,7 +141,7 @@ class instruction(object):
         for address in loaded:
             lastaddress = self.committed[address][-1]
             hookcode = loaded[address]
-            finalbranch = ''.join(self.__createbranch(baseaddress+len(hookcode), '\xe9', lastaddress))
+            finalbranch = ''.join(self.__createbranch(baseaddress+len(hookcode), b'\xe9', lastaddress))
 
             mm.write(baseaddress, hookcode+finalbranch)
 
@@ -237,7 +237,7 @@ class instruction(object):
         return ia32.promoteBranch(ia32.setRelativeAddress(address, newinstruction, target), 4)
 
     def __patch(self, sourceaddress, destinationaddress):
-        instruction = ''.join( self.__createbranch(sourceaddress, '\xe9', destinationaddress) )
+        instruction = ''.join( self.__createbranch(sourceaddress, b'\xe9', destinationaddress) )
 
         mm = self.memorymanager
         mm.allocator.setMemoryPermission(sourceaddress, 1, int('110', 2))
@@ -255,7 +255,7 @@ if __name__ == '__main__':
         #address = 0x00402f64
         #address = 0x00401f0d
         address = int(sys.argv[2],16)
-        self[address] = '\xcc\xcc\xcc\xcc\xcc'
+        self[address] = b'\xcc\xcc\xcc\xcc\xcc'
         self.commit()
 
         print(self)
@@ -264,7 +264,7 @@ if __name__ == '__main__':
 
     if False:
         import ia32,struct
-        instruction = ia32.setOpcode(ia32.setImmediate(ia32.new(), '\x00\x00\x00\x00'), '\xe9')
+        instruction = ia32.setOpcode(ia32.setImmediate(ia32.new(), b'\x00\x00\x00\x00'), '\xe9')
         sourceaddress,targetaddress = 0x7c36364f,0x261000d
         sourceaddress = 0x1000
         targetaddress = 0x0000
@@ -329,14 +329,14 @@ if __name__ == '__main__':
         peb=peb.l
 
         mm = memorymanager.new()
-        data = '\x0a\xc0\x74\x0c\x5b\x59\x6a\x00\x51\xe8\xc6\xeb\xff\xff'
+        data = b'\x0a\xc0\x74\x0c\x5b\x59\x6a\x00\x51\xe8\xc6\xeb\xff\xff'
         print(repr(data))
 
         hook = instrument.instruction(mm)
 
         baseaddress = int( peb.getmodulebyname('ntdll.dll')['DllBase'] )
         offset = 0x1010f
-        hook[baseaddress+offset] = '\x90'
+        hook[baseaddress+offset] = b'\x90'
 
 #        print(hex(baseaddress))
 
@@ -376,7 +376,7 @@ if __name__ == '__main__':
     """
     if True:
         currentaddress = 0x840002
-        sourceinstruction = ia32.decode('\x74\x0c')
+        sourceinstruction = ia32.decode(b'\x74\x0c')
         operand = 0x7735011f
         n = ia32.setRelativeAddress(currentaddress, sourceinstruction, operand)
         promoted = ia32.promoteBranch(n, 4)

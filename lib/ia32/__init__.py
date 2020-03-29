@@ -40,7 +40,7 @@ def new():
     return ('','','','','','')
 
 def length(instruction):
-    return len(''.join(instruction))
+    return len(b''.join(instruction))
 
 def stringToNumber(string):
     '''This function name is deprecated in favor of encodeInteger'''
@@ -49,12 +49,12 @@ def numberToString(number, bytes):
     '''This function name is deprecated in favor of encodeInteger'''
     return encodeInteger(number, bytes)
 
-def getPrefix(instruction): return instruction[0]
-def getOpcode(instruction): return instruction[1]
-def getModrm(instruction): return instruction[2]
-def getSIB(instruction): return instruction[3]
-def getDisplacement(instruction): return instruction[4]
-def getImmediate(instruction): return instruction[5]
+def getPrefix(instruction): return instruction[0:1]
+def getOpcode(instruction): return instruction[1:2]
+def getModrm(instruction): return instruction[2:3]
+def getSIB(instruction): return instruction[3:4]
+def getDisplacement(instruction): return instruction[4:5]
+def getImmediate(instruction): return instruction[5:6]
 
 #instruction = (prefix, opcode, modrm, sib, disp, immediate)
 
@@ -88,14 +88,14 @@ def promoteBranch_8(instruction):
     '''Promote(?) instruction to an 8-bit branch'''
     imm = getImmediate(instruction)
     offset = decodeInteger(imm, True)
-    prefix = ''.join([x for x in getPrefix(instruction) if x != '\x66'])
+    prefix = b''.join([x for x in getPrefix(instruction) if x != b'\x66'])
 
     if isConditionalBranch8(instruction) or isUnconditionalBranch8(instruction) or isRelativeCall(instruction):
         result = instruction
         offset += length(result)
 
     elif isUnconditionalBranch(instruction):
-        result = setOpcode(instruction, '\xeb')
+        result = setOpcode(instruction, b'\xeb')
 
     elif isConditionalBranch(instruction):
         column = ord(getOpcode(instruction)[1]) & 0xf
@@ -103,27 +103,27 @@ def promoteBranch_8(instruction):
     else:
         raise NotImplementedError('Unable to promote a non-branch instruction to 8-bits: {!r}'.format(n))
 
-    result = setPrefix(setImmediate(result, '\x00'), prefix)
+    result = setPrefix(setImmediate(result, b'\x00'), prefix)
     return setImmediate(result, encodeInteger(offset-length(result), 1))
 
 def promoteBranch_32(instruction):
     imm = getImmediate(instruction)
     offset = decodeInteger(imm, True) + length(instruction)
-    prefix = ''.join([x for x in getPrefix(instruction) if x != '\x66'])
+    prefix = b''.join([x for x in getPrefix(instruction) if x != b'\x66'])
 
     if isConditionalBranch8(instruction):
         column = ord(getOpcode(instruction)) & 0xf
-        result = setOpcode(instruction, '\x0f'+chr(column | 0x80))
+        result = setOpcode(instruction, b'\x0f'+chr(column | 0x80))
 
     elif isUnconditionalBranch8(instruction):
-        result = setOpcode(instruction, '\xe9')
+        result = setOpcode(instruction, b'\xe9')
 
     elif isRelativeCall(instruction) or isUnconditionalBranch(instruction) or isConditionalBranch(instruction):
         result = instruction
     else:
         raise NotImplementedError('Unable to promote a non-branch instruction to 32-bits: {!r}'.format(n))
 
-    result = setPrefix(setImmediate(result, '\x00\x00\x00\x00'), prefix)
+    result = setPrefix(setImmediate(result, b'\x00\x00\x00\x00'), prefix)
     return setImmediate(result, encodeInteger(offset-length(result), 4))
 
 def promoteBranch_16(instruction):
@@ -135,8 +135,8 @@ def promoteBranch_16(instruction):
 
     # downgrade the opcode
     prefix = getPrefix(result)
-    if '\x66' not in prefix:
-        prefix += '\x66'
+    if b'\x66' not in prefix:
+        prefix += b'\x66'
     result = setPrefix(result, prefix)
 
     offset += length(result)
@@ -205,30 +205,30 @@ def isConditionalBranch(instruction):
 ## regular branches
 def isUnconditionalBranch8(instruction):
     '''jmp Jb'''
-    return getOpcode(instruction) == '\xeb'
+    return getOpcode(instruction) == b'\xeb'
 def isUnconditionalBranch32(instruction):
     '''jmp Jz'''
-    return getOpcode(instruction) == '\xe9'
+    return getOpcode(instruction) == b'\xe9'
 def isUnconditionalBranch(instruction):
     return isUnconditionalBranch8(instruction) or isUnconditionalBranch32(instruction)
 
 def isJmpFF(instruction):
     opcode = getOpcode(instruction)
-    if opcode == '\xff':
+    if opcode == b'\xff':
         modrm = getModrm(instruction)
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
         return reg in [4,5]
     return False
 def isShortJmp(instruction):
     opcode = getOpcode(instruction)
-    if opcode == '\xff':
+    if opcode == b'\xff':
         modrm = getModrm(instruction)
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
         return reg == 4
     return False
 def isFarJmp(instruction):
     opcode = getOpcode(instruction)
-    if opcode == '\xff':
+    if opcode == b'\xff':
         modrm = getModrm(instruction)
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
         return reg == 5
@@ -266,7 +266,7 @@ def isSibBranch(instruction):
 def isAbsoluteBranch(instruction):
     '''jmp Ap'''
     opcode = getOpcode(instruction)
-    return opcode == '\xea'
+    return opcode == b'\xea'
 
 def isRelativeBranch(instruction):
     return isUnconditionalBranch(instruction) or isConditionalBranch(instruction)
@@ -279,15 +279,15 @@ def isBranch(instruction):
 ## calls
 def isAbsoluteCall(instruction):
     '''call Ap'''
-    return getOpcode(instruction) == '\x9a'
+    return getOpcode(instruction) == b'\x9a'
 
 def isRelativeCall(instruction):
     '''call Jz'''
-    return getOpcode(instruction) == '\xe8'
+    return getOpcode(instruction) == b'\xe8'
 
 def isRegisterCall(instruction):
     '''call Ev'''
-    if getOpcode(instruction) == '\xff':
+    if getOpcode(instruction) == b'\xff':
         modrm = getModrm(instruction)
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
         return reg == 2 and mod == 3
@@ -295,7 +295,7 @@ def isRegisterCall(instruction):
 
 def isMemoryCall(instruction):
     '''call Mp'''
-    if getOpcode(instruction) == '\xff':
+    if getOpcode(instruction) == b'\xff':
         modrm = getModrm(instruction)
         mod,reg,rm = decoder.extractmodrm(ord(modrm))
         return reg in [2,3] and mod < 3
@@ -306,7 +306,7 @@ def isCall(instruction):
 
 def isReturn(instruction):
     '''retn and friends'''
-    return getOpcode(instruction) in ['\xc2', '\xc3', '\xca', '\xcb', '\xcf']
+    return getOpcode(instruction) in [b'\xc2', b'\xc3', b'\xca', b'\xcb', b'\xcf']
 
 if __name__ == '__main__':
     import ia32
@@ -337,42 +337,42 @@ if __name__ == '__main__':
 
     # relative
     if False:
-        code = '\xE8\x72\xFB\xFF\xFF'
+        code = b'\xE8\x72\xFB\xFF\xFF'
         insn = decode(code)
         print('rel',isRelativeCall(insn))
 
     # register
     # 11 010 110
     if False:
-        code = '\xff\xd6'
+        code = b'\xff\xd6'
         insn = decode(code)
         print('reg',isRegisterCall(insn))
 
     # memory
     # 00 010 101
     if False:
-        code = '\xFF\x15\xC0\x52\x5C\x00'
+        code = b'\xFF\x15\xC0\x52\x5C\x00'
         insn = decode(code)
         print('mem',isMemoryCall(insn))
 
     # forgot
     # 00 100 101
     if False:
-        code = '\xFF\x25\xB0\x51\x5C\x00'
+        code = b'\xFF\x25\xB0\x51\x5C\x00'
         insn = decode(code)
         print(repr(insn))
         print('mem',isBranch(insn),isMemoryBranch(insn))
 
     if False:
-        code = '\x0f\x0f\xe1\xb4'
+        code = b'\x0f\x0f\xe1\xb4'
         insn = decode(code)
-        print(getOpcode(insn) == '\x0f\x0f')
-        print(getModrm(insn) == '\xe1')
-        print(getImmediate(insn) == '\xb4')
+        print(getOpcode(insn) == b'\x0f\x0f')
+        print(getModrm(insn) == b'\xe1')
+        print(getImmediate(insn) == b'\xb4')
 
     @TestCase
     def relative_0():
-        code = '\x0f\x85\x16\x01\x00\x00'
+        code = b'\x0f\x85\x16\x01\x00\x00'
         n = decode(code)
         address = 0x100ee82a
         target = 0x100ee946
@@ -382,7 +382,7 @@ if __name__ == '__main__':
 
     @TestCase
     def relative_1():
-        code = '\x74\x26'
+        code = b'\x74\x26'
         n = decode(code)
         address = 0x100EE836
         target = 0x100EE85E
@@ -392,7 +392,7 @@ if __name__ == '__main__':
 
     @TestCase
     def relative_2():
-        code = '\x75\xdb'
+        code = b'\x75\xdb'
         n = decode(code)
         address = 0x100EED78
         target = 0x100EED55
@@ -402,7 +402,7 @@ if __name__ == '__main__':
 
     @TestCase
     def relative_3():
-        code = '\x0f\x86\xa2\x05\x00\x00'
+        code = b'\x0f\x86\xa2\x05\x00\x00'
         n = decode(code)
         address = 0x101781a3
         target = 0x1017874B
@@ -412,7 +412,7 @@ if __name__ == '__main__':
 
     @TestCase
     def relative_4():
-        code = '\x0f\x8c\x97\xfa\xff\xff'
+        code = b'\x0f\x8c\x97\xfa\xff\xff'
         n = decode(code)
         address = 0x10178743
         target = 0x101781E0
@@ -423,7 +423,7 @@ if __name__ == '__main__':
     @TestCase
     def promote_0():
         '''8b to 8b'''
-        a = decode('\xeb\xfe')
+        a = decode(b'\xeb\xfe')
         b = promoteBranch_8(a)
         if a == b:
             raise Success
@@ -432,7 +432,7 @@ if __name__ == '__main__':
 #    @TestCase
     def promote_1():
         '''16b to 16b'''
-        a = decode('\x66\xe9\xfe\xff')
+        a = decode(b'\x66\xe9\xfe\xff')
         b = promoteBranch_16(a)
         if a == b:
             raise Success
@@ -443,7 +443,7 @@ if __name__ == '__main__':
     @TestCase
     def promote_2():
         '''32b to 32b'''
-        a = decode('\x0F\x84\x14\x2D\xFC\xFF')
+        a = decode(b'\x0F\x84\x14\x2D\xFC\xFF')
         b = promoteBranch_32(a)
         if a == b:
             raise Success
@@ -452,8 +452,8 @@ if __name__ == '__main__':
     @TestCase
     def promote_3():
         '''8b to 32b forwards'''
-        a = decode('\x7f\x0c')
-        b = decode('\x0f\x8f\x08\x00\x00\x00')
+        a = decode(b'\x7f\x0c')
+        b = decode(b'\x0f\x8f\x08\x00\x00\x00')
         if promoteBranch_32(a) == b:
             raise Success
         return
@@ -462,8 +462,8 @@ if __name__ == '__main__':
     def promote_4():
         '''8b to 16b'''
         # XXX: this doesn't disassemble correctly in windbg
-        a = decode('\xeb\x0b')
-        b = decode('\x66\xe9\x08\x00f')
+        a = decode(b'\xeb\x0b')
+        b = decode(b'\x66\xe9\x08\x00f')
         a = promoteBranch_16(a)
         if a == b:
             raise Success
@@ -474,18 +474,18 @@ if __name__ == '__main__':
     @TestCase
     def promote_5():
         '''8b to 32b backwards'''
-        a = decode('\xeb\xe1')
-        b = decode('\xe9\xde\xff\xff\xff')
+        a = decode(b'\xeb\xe1')
+        b = decode(b'\xe9\xde\xff\xff\xff')
         if promoteBranch_32(a) == b:
             raise Success
         return
 
     @TestCase
     def Test_0():
-        code = '\xeb\xfe'
+        code = b'\xeb\xfe'
 
         n = setRelativeAddress(0x77be0000, decode(code), 0x77be0000)
-        if ''.join(n) == '\xeb\xfe':
+        if b''.join(n) == b'\xeb\xfe':
             raise Success
         return
 
@@ -501,85 +501,85 @@ if __name__ == '__main__':
 
     @TestCase
     def Test_1():
-        code = '\xE9\x9F\x91\xFF\xFF'
+        code = b'\xE9\x9F\x91\xFF\xFF'
         test_set(0x7deb7534, code, 0x7deb06d8)
 
     @TestCase
     def Test_2():
-        code = '\x0F\x85\xEC\x6D\x00\x00'
+        code = b'\x0F\x85\xEC\x6D\x00\x00'
         test_set(0x7deb073f, code, 0x7deb7531)
 
     @TestCase
     def Test_3():
-        code = '\x75\x18'
+        code = b'\x75\x18'
         test_set(0x7deb0927, code, 0x7deb0941)
 
     @TestCase
     def Test_4():
-        code = '\x72\xd3'
+        code = b'\x72\xd3'
         test_set(0x7deafc45, code, 0x7deafc1a)
 
     @TestCase
     def Test_5():
-        code = '\x75\x09'
+        code = b'\x75\x09'
         test_set(0x1000d6ae, code, 0x1000d6b9)
 
     @TestCase
     def Test_6():
-        code = '\x75\xde'
+        code = b'\x75\xde'
         test_set(0x1000d670, code, 0x1000d650)
 
     @TestCase
     def Test_7():
-        code = '\xe8\x47\x4f\x37\x00'
+        code = b'\xe8\x47\x4f\x37\x00'
         test_set(0x1000d6b4, code, 0x10382600)
 
     @TestCase
     def Test_8():
-        code = '\x66\xe9\x42\x03'
+        code = b'\x66\xe9\x42\x03'
         test_set(0x1000e1b5, code, 0x1000e4fb)
 
     @TestCase
     def Test_9():
-        code = '\x66\xe9\x42\xd3'
+        code = b'\x66\xe9\x42\xd3'
         test_set(0x10006418, code, 0x1000375e)
 
     @TestCase
     def Test_a():
-        code = '\x0F\x85\xAE\xF1\xFF\xFF'
+        code = b'\x0F\x85\xAE\xF1\xFF\xFF'
         test_set(0x7deb0aca, code, 0x7deafc7e)
 
     @TestCase
     def Test_b():
-        code = '\xe9\xfa\xfe\x54\x89'
+        code = b'\xe9\xfa\xfe\x54\x89'
         test_set(0x76ec010f, code, 0x41000e)
 
     @TestCase
     def Test_c():
-        code = '\xe9\xec\xff\xff\xff'
+        code = b'\xe9\xec\xff\xff\xff'
         test_set(0x40000f, code, 0x400000)
 
     @TestCase
     def Test_d():
-        code = '\xeb\xf0'
+        code = b'\xeb\xf0'
         n = ia32.promoteBranch_32( ia32.decode(code) )
-        if ''.join(n) == '\xe9\xed\xff\xff\xff':
+        if b''.join(n) == b'\xe9\xed\xff\xff\xff':
             raise Success
         print(repr(decode(code)), repr(n))
         raise Failure
 
     @TestCase
     def Test_e():
-        code = '\xe9\xc1\xfe\xff\xff'
+        code = b'\xe9\xc1\xfe\xff\xff'
         test_set( 0x101d70e9, code, 0x101d6faf )
 
     @TestCase
     def Test_f():
-        code = '\xe9\xa6\x00\x00\x00'
+        code = b'\xe9\xa6\x00\x00\x00'
         test_set( 0x101dc252, code, 0x101dc2fd )
 
     if False:
-        code = '\x0f\x85\x7f\xff\xff\xff'
+        code = b'\x0f\x85\x7f\xff\xff\xff'
         n = setRelativeAddress(0, decode(code), -5)
         print(hex(getRelativeAddress(0, n)))
         n = setRelativeAddress(0, decode(code), 0x2)
@@ -588,8 +588,8 @@ if __name__ == '__main__':
         print(hex(decodeInteger(getImmediate(n)) + length(n)))
 
     if False:
-        code = '\x77\x08'
-        code = '\x0f\x87\x04\x00\x00\x00'
+        code = b'\x77\x08'
+        code = b'\x0f\x87\x04\x00\x00\x00'
         n = decode(code)
         x = promoteBranch_8(n)
         print(repr(x))

@@ -19,7 +19,7 @@ def HasImmediate(lookup):
 def GetImmediateLength(lookup, prefixes):
     res = ord(lookup) & 0x3f
 
-    opsizeindex = not int('\x66' in prefixes)
+    opsizeindex = not int(b'\x66' in prefixes)
 
     if res == 0x3f:    # it sucks because i know python has such a horrible optimizer, and i need to redo this as a dict for that reason
         size = [ 2*typesize.halfword, 2*typesize.word ][opsizeindex]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import struct
+import six, struct
 from opcode import *
 from exceptions import SyntaxError
 
@@ -34,7 +34,7 @@ def assemble_insn(opnum, oparg):
     res = ''
     if oparg > 0xffff:
         res += chr(EXTENDED_ARG)
-        res += struct.pack('H', oparg / 0x10000)
+        res += struct.pack('H', oparg // 0x10000)
         oparg &= 0xffff
 
     res += chr(opnum)
@@ -45,7 +45,7 @@ def assemble_insn(opnum, oparg):
 
 def valid_label(s):
     valid = 'abcdefghijklmnopqrstuvwxyz0123456789.?_'
-    return reduce( lambda x,y: x+y, [int(x in valid) for x in s] ) == len(s)
+    return six.moves.reduce( lambda x,y: x+y, [int(x in valid) for x in s] ) == len(s)
 
 def strip_comment(s):
     comm = s.find('#')
