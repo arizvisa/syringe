@@ -65,12 +65,12 @@ Example usage:
     # return the type in ascii
     value = instance.str()
 """
-import sys,six
-import itertools,operator,functools
+import sys, six
+import itertools, operator, functools
 import codecs
 from six.moves import builtins
 
-from . import ptype,parray,pint,utils,error,pstruct,provider,config
+from . import ptype, parray, pint, utils, error, pstruct, provider, config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
@@ -184,7 +184,7 @@ class string(ptype.type):
         _object_ = self._object_
 
         # encode 3 types of strings and ensure that their lengths scale up with their string sizes
-        res,single,double = ( __ensure_text__(item, 'ascii').encode(_object_.encoding.name) for item in ('\0', 'A', 'AA') )
+        res, single, double = ( __ensure_text__(item, 'ascii').encode(_object_.encoding.name) for item in ('\0', 'A', 'AA') )
         if len(res) * 2 == len(single) * 2 == len(double):
             return
         raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(_object_.encoding.name))
@@ -236,7 +236,7 @@ class string(ptype.type):
             result = [res.value[_] for _ in six.moves.range(*index.indices(len(res)))]
 
             # ..and now turn the slice into an array
-            type = ptype.clone(parray.type,length=len(result), _object_=self._object_)
+            type = ptype.clone(parray.type, length=len(result), _object_=self._object_)
             return self.new(type, offset=result[0].getoffset(), value=result, parent=self)
 
         if index < -len(self) or index >= len(self):
@@ -268,7 +268,7 @@ class string(ptype.type):
     def insert(self, index, object):
         '''Insert the character ``object`` into the string at index ``index`` of the string.'''
         if not isinstance(object, self._object_):
-            raise error.TypeError(self, 'string.insert', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
+            raise error.TypeError(self, 'string.insert', message='expected value of type {!r}. received {!r}'.format(self._object_, object.__class__))
         self.__insert(index, value.serialize())
 
     def append(self, object):
@@ -277,16 +277,15 @@ class string(ptype.type):
 
     def __append__(self, object):
         if not isinstance(object, self._object_):
-            raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
+            raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_, object.__class__))
         offset = self.getoffset() + self.size()
         self.value += object.serialize()
         return offset
 
     def extend(self, iterable):
         '''Extend the string ``self`` with the characters provided by ``iterable``.'''
-        for x in iterable:
-            self.append(x)
-        return
+        [ self.append(item) for item in iterable ]
+        return self
 
     def __setvalue__(self, *values, **retain):
         """Replaces the contents of ``self`` with the string ``value``.
@@ -299,14 +298,15 @@ class string(ptype.type):
         value, = values
 
         size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(self._object_).a.size()
-        glyphs = [res for res in value]
+        glyphs = [ item for item in value ]
 
         t = ptype.clone(parray.type, _object_=self._object_)
         result = t(length=size // esize) if retain.get('retain', True) else t(length=len(glyphs))
 
         # Now we can finally izip_longest here...
         for element, glyph in __izip_longest__(result.alloc(), value):
-            if element is None: break
+            if element is None:
+                break
             element.set(glyph or '\0')
 
         if retain.get('retain', True):
@@ -357,9 +357,11 @@ class string(ptype.type):
     def summary(self, **options):
         try:
             res = self.__getvalue__()
+
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(string, self).summary(**options)
+
         escaped = res.encode('unicode_escape').decode(sys.getdefaultencoding())
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
@@ -437,9 +439,11 @@ class szstring(string):
     def summary(self, **options):
         try:
             res = self.__getvalue__()
+
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(szstring, self).summary(**options)
+
         escaped = utils.strdup(res).encode('unicode_escape').decode(sys.getdefaultencoding())
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
@@ -453,8 +457,8 @@ class szwstring(szstring, wstring):
     _object_ = wchar_t
 
 ## aliases that should probably be improved
-unicode=wstring
-szunicode=szwstring
+unicode = wstring
+szunicode = szwstring
 
 if __name__ == '__main__':
     class Result(Exception): pass

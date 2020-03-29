@@ -139,20 +139,20 @@ import six
 import functools, operator, itertools
 from six.moves import builtins
 
-from . import ptype,bitmap,config,error,utils
+from . import ptype, bitmap, config, error, utils
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 __state__ = {}
 def setbyteorder(endianness):
-    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        transform = {config.byteorder.bigendian:bigendian, config.byteorder.littleendian:littleendian}[endianness]
-        for k,v in globals().items():
-            if v in (type,) or getattr(v,'__base__',type) is type:
+    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+        transform = {config.byteorder.bigendian : bigendian, config.byteorder.littleendian : littleendian}[endianness]
+        for name, definition in globals().items():
+            if definition in [type] or getattr(definition, '__base__', type) is type:
                 continue
-            if isinstance(v, builtins.type) and issubclass(v, type):
-                if getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
-                    globals()[k] = transform(v)
+            if isinstance(definition, builtins.type) and issubclass(definition, type):
+                if getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
+                    globals()[name] = transform(definition)
                 pass
             continue
         return
@@ -170,15 +170,19 @@ def bigendian(integral, **attrs):
         return integral
 
     le, be = __state__.setdefault(config.byteorder.littleendian, {}), __state__.setdefault(config.byteorder.bigendian, {})
-    if any(integral in n for n in (be,le)):
+    if any(integral in state for state in [be, le]):
         integral = be.get(integral, le.get(integral, type))
         class newintegral(integral):
             __doc__ = integral.__doc__
             byteorder = config.byteorder.bigendian
-        if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
+
+        if hasattr(integral, '__module__'):
+            newintegral.__module__ = integral.__module__
+
         newintegral.__name__ = integral.__name__
         be.setdefault(newintegral, integral)
         return ptype.clone(newintegral, **attrs) if attrs else newintegral
+
     attrs.setdefault('byteorder', config.byteorder.bigendian)
     return ptype.clone(integral, **attrs)
 
@@ -190,15 +194,19 @@ def littleendian(integral, **attrs):
         return integral
 
     le, be = __state__.setdefault(config.byteorder.littleendian, {}), __state__.setdefault(config.byteorder.bigendian, {})
-    if any(integral in n for n in (be,le)):
+    if any(integral in state for state in [be, le]):
         integral = le.get(integral, be.get(integral, type))
         class newintegral(integral):
             __doc__ = integral.__doc__
             byteorder = config.byteorder.littleendian
-        if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
+
+        if hasattr(integral, '__module__'):
+            newintegral.__module__ = integral.__module__
+
         newintegral.__name__ = integral.__name__
         be.setdefault(newintegral, integral)
         return ptype.clone(newintegral, **attrs) if attrs else newintegral
+
     attrs.setdefault('byteorder', config.byteorder.littleendian)
     return ptype.clone(integral, **attrs)
 
@@ -248,14 +256,14 @@ class type(ptype.type):
             transform = iter
         else:
             raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness {!r}'.format(self.byteorder))
-        mask = (1<<self.blocksize()*8) - 1
+        mask = (1<<self.blocksize() * 8) - 1
         integer &= mask
         bc = bitmap.new(integer, self.blocksize() * 8)
         res = []
         while bc[1] > 0:
-            bc,x = bitmap.consume(bc,8)
+            bc, x = bitmap.consume(bc, 8)
             res.append(x)
-        res = res + [0]*(self.blocksize() - len(res))   # FIXME: use padding
+        res = res + [0] * (self.blocksize() - len(res))   # FIXME: use padding
         return super(type, self).__setvalue__(bytes(bytearray(transform(res))), **attrs)
 
     def get(self):
@@ -266,39 +274,42 @@ class uinteger_t(type):
     '''Provides unsigned integer support'''
     def summary(self, **options):
         res = self.int()
-        return '{:-#0{:d}x} ({:d})'.format(res, 2+self.blocksize()*2, res)
+        return '{:-#0{:d}x} ({:d})'.format(res, 2 + self.blocksize() * 2, res)
 
 class sinteger_t(type):
     '''Provides signed integer support'''
     def summary(self, **options):
         res = self.int()
-        return u"{:+#0{:d}x} ({:d})".format(res, 3+self.blocksize()*2, res)
+        return u"{:+#0{:d}x} ({:d})".format(res, 3 + self.blocksize() * 2, res)
 
     def __getvalue__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
-        signmask = int(2**(8*self.blocksize()-1))
+        signmask = int(2**(8 * self.blocksize() - 1))
         num = super(sinteger_t, self).__getvalue__()
-        res = num&(signmask-1)
-        if num&signmask:
-            return (signmask-res)*-1
-        return res & (signmask-1)
+        res = num & (signmask - 1)
+        if num & signmask:
+            return (signmask - res) * -1
+        return res & (signmask - 1)
 
     def __setvalue__(self, *values, **attrs):
         if not values:
             return super(sinteger_t, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        signmask = int(2**(8*self.blocksize()))
-        res = integer & (signmask-1)
+        signmask = int(2**(8 * self.blocksize()))
+        res = integer & (signmask - 1)
         if integer < 0:
             res |= signmask
         return super(sinteger_t, self).__setvalue__(res, **attrs)
 
-class uinteger(ptype.definition): attribute,cache = 'length',{}
-class sinteger(ptype.definition): attribute,cache = 'length',{}
-uint,sint = uinteger,sinteger
-integer_t,integer = sinteger_t, sinteger
+class uinteger(ptype.definition):
+    attribute, cache = 'length', {}
+class sinteger(ptype.definition):
+    attribute, cache = 'length', {}
+
+uint, sint = uinteger, sinteger
+integer_t, integer = sinteger_t, sinteger
 
 @uint.define
 class uint_t(uinteger_t): length = 0
@@ -326,7 +337,7 @@ class sint64_t(sinteger_t): length = 8
 @sint.define
 class sint128_t(sinteger_t): length = 16
 
-int_t,int8_t,int16_t,int32_t,int64_t,int128_t = sint_t,sint8_t,sint16_t,sint32_t,sint64_t,sint128_t
+int_t, int8_t, int16_t, int32_t, int64_t, int128_t = sint_t, sint8_t, sint16_t, sint32_t, sint64_t, sint128_t
 
 class enum(type):
     '''
@@ -352,14 +363,14 @@ class enum(type):
 
         # invert ._values_ if they're defined backwards
         if len(cls._values_):
-            name, value = cls._values_[0]
+            _, value = cls._values_[0]
             if isinstance(value, six.string_types):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
-                self._values_ = cls._values_ = [(k, v) for v, k in cls._values_[:]]
+                self._values_ = cls._values_ = [(name, value) for value, name in cls._values_[:]]
             pass
 
         # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k, v in cls._values_):
+        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in cls._values_):
             res = map(operator.attrgetter('__name__'), six.string_types)
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
@@ -370,11 +381,11 @@ class enum(type):
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
-        for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
-            res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
-        for val, items in six.viewitems(res):
+        for value, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
+            res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
+        for value, items in six.viewitems(res):
             if len(items) > 1:
-                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
+                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
             continue
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
@@ -401,9 +412,11 @@ class enum(type):
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(k for k, v in cls._values_ if v == value)
+            return six.next(name for name, item in cls._values_ if item == value)
+
         except StopIteration:
             if default: return six.next(iter(default))
+
         raise KeyError(cls, 'enum.byvalue', value)
 
     @classmethod
@@ -413,9 +426,11 @@ class enum(type):
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(v for k, v in cls._values_ if k == name)
+            return six.next(value for item, value in cls._values_ if item == name)
+
         except StopIteration:
             if default: return six.next(iter(default))
+
         raise KeyError(cls, 'enum.byname', name)
 
     def __getattr__(self, name):
@@ -456,21 +471,21 @@ class enum(type):
     @classmethod
     def enumerations(cls):
         '''Return all values in enumeration as a set.'''
-        return {v for k, v in cls._values_}
+        return {value for name, value in cls._values_}
 
     @classmethod
     def mapping(cls):
         '''Return potential enumeration values as a dictionary.'''
-        return {k : v for k, v in cls._values_}
+        return {name : value for name, value in cls._values_}
 
 # update our current state
-for k, v in builtins.list(six.viewitems(globals())):
-    if v in [type] or getattr(v, '__base__', type) is type:
+for _, definition in builtins.list(six.viewitems(globals())):
+    if definition in [type] or getattr(definition, '__base__', type) is type:
         continue
-    if isinstance(v, builtins.type) and issubclass(v, type):
-        __state__.setdefault(Config.integer.order, {})[v] = v
+    if isinstance(definition, builtins.type) and issubclass(definition, type):
+        __state__.setdefault(Config.integer.order, {})[definition] = definition
     continue
-del(k, v)
+del(definition)
 
 if __name__ == '__main__':
     class Result(Exception): pass

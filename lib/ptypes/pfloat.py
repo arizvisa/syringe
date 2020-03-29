@@ -95,20 +95,20 @@ Example usage:
     print(instance.float())
     print(float(instance))
 """
-import six,math
+import six, math
 from six.moves import builtins
 
-from . import ptype,pint,bitmap,config,error
+from . import ptype, pint, bitmap, config, error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 def setbyteorder(endianness):
-    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        for k,v in six.iteritems(globals()):
-            if v is not type and isinstance(v,builtins.type) and issubclass(v,type) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
-                d = dict(v.__dict__)
-                d['byteorder'] = endianness
-                globals()[k] = builtins.type(v.__name__, v.__bases__, d)     # re-instantiate types
+    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+        for name, definition in six.iteritems(globals()):
+            if definition is not type and isinstance(definition, builtins.type) and issubclass(definition, type) and getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
+                res = dict(definition.__dict__)
+                res['byteorder'] = endianness
+                globals()[name] = builtins.type(definition.__name__, definition.__bases__, res)     # re-instantiate types
             continue
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
@@ -121,17 +121,17 @@ def bigendian(ptype):
     '''Will convert an pfloat_t to bigendian form'''
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'bigendian')
-    d = dict(ptype.__dict__)
-    d['byteorder'] = config.byteorder.bigendian
-    return builtins.type(ptype.__name__, ptype.__bases__, d)
+    res = dict(ptype.__dict__)
+    res['byteorder'] = config.byteorder.bigendian
+    return builtins.type(ptype.__name__, ptype.__bases__, res)
 
 def littleendian(ptype):
     '''Will convert an pfloat_t to littleendian form'''
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'littleendian')
-    d = dict(ptype.__dict__)
-    d['byteorder'] = config.byteorder.littleendian
-    return builtins.type(ptype.__name__, ptype.__bases__, d)
+    res = dict(ptype.__dict__)
+    res['byteorder'] = config.byteorder.littleendian
+    return builtins.type(ptype.__name__, ptype.__bases__, res)
 
 class type(pint.type):
     def summary(self, **options):
@@ -204,11 +204,11 @@ class float_t(type):
 
         # store components
         result = bitmap.zero
-        result = bitmap.push( result, bitmap.new(sf,self.components[0]) )
-        result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
-        result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
+        result = bitmap.push(result, bitmap.new(sf, self.components[0]))
+        result = bitmap.push(result, bitmap.new(exponent, self.components[1]))
+        result = bitmap.push(result, bitmap.new(mantissa, self.components[2]))
 
-        return super(type, self).__setvalue__(result[0], **attrs)
+        return super(type, self).__setvalue__(bitmap.value(result), **attrs)
 
     def __getvalue__(self):
         """convert the stored floating-point number into a python native float"""
@@ -217,11 +217,11 @@ class float_t(type):
         res = bitmap.new(integer, sum(self.components))
 
         # extract components
-        res,sign = bitmap.shift(res, self.components[0])
-        res,exponent = bitmap.shift(res, self.components[1])
-        res,mantissa = bitmap.shift(res, self.components[2])
+        res, sign = bitmap.shift(res, self.components[0])
+        res, exponent = bitmap.shift(res, self.components[1])
+        res, mantissa = bitmap.shift(res, self.components[2])
 
-        if exponent > 0 and exponent < (2**self.components[1]-1):
+        if exponent > 0 and exponent < (2**self.components[1] - 1):
             # convert to float
             s = -1 if sign else +1
             e = exponent - exponentbias
@@ -232,7 +232,7 @@ class float_t(type):
 
         if exponent == 2**self.components[1] - 1 and mantissa == 0:
             return float('-inf') if sign else float('+inf')
-        elif exponent in (0,2**self.components[1] - 1) and mantissa != 0:
+        elif exponent in (0, 2**self.components[1] - 1) and mantissa != 0:
             return float('-nan') if sign else float('+nan')
         elif exponent == 0 and mantissa == 0:
             return float('-0') if sign else float('+0')
@@ -252,13 +252,13 @@ class sfixed_t(type):
     sign = fractional = 0
 
     def __getvalue__(self):
-        mask = 2**(8*self.length) - 1
-        intm = 2**(8*self.length - self.sign) - 1
+        mask = 2**(8 * self.length) - 1
+        intm = 2**(8 * self.length - self.sign) - 1
         shift = 2**self.fractional
         value = super(type, self).__getvalue__()
         #return float(value & intm) / shift * (-1 if value & (mask ^ intm) else +1)
         if value & (mask ^ intm):
-            return float((value & intm) - (mask&intm+1)) / shift
+            return float((value & intm) - (mask & intm + 1)) / shift
         return float(value & intm) / shift
 
     def __setvalue__(self, *values, **attrs):
@@ -267,13 +267,13 @@ class sfixed_t(type):
 
         number, = values
         integral, fraction = math.trunc(number), number - math.trunc(number)
-        magnitude = 2**(8*self.length - self.fractional)
+        magnitude = 2**(8 * self.length - self.fractional)
         shift = 2**self.fractional
 
-        mask = 2 ** (8*self.length) - 1
-        intm = 2 ** (8*self.length - self.sign) - 1
+        mask = 2 ** (8 * self.length) - 1
+        intm = 2 ** (8 * self.length - self.sign) - 1
 
-        integral &= (magnitude-1) # clamp
+        integral &= (magnitude - 1) # clamp
         integral *= magnitude
         #integral |= (mask ^ intm)
 
@@ -293,7 +293,8 @@ class fixed_t(sfixed_t):
         return 0
 
 ###
-class ieee(ptype.definition): attribute,cache = 'length',{}
+class ieee(ptype.definition):
+    attribute, cache = 'length', {}
 
 @ieee.define
 class half(float_t):

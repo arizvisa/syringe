@@ -386,7 +386,7 @@ class union(_union_generic):
     def alloc(self, **attrs):
         res = self.__create__() if self.value is None else self.value[0]
         res.alloc(**attrs)
-        map(operator.methodcaller('load', offset=0), self.__object__)
+        [ item.load(offset=0) for item in self.__object__ ]
         return self
 
     def serialize(self):

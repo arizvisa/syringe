@@ -597,8 +597,8 @@ class _base_generic(object):
         """Return the name of the ptype"""
         if getattr(cls, '__module__', ''):
             if Config.display.show_module_name:
-                return '.'.join((cls.__module__, cls.__name__))
-            return '.'.join((cls.__module__.rsplit('.', 1)[-1], cls.__name__))
+                return '.'.join([cls.__module__, cls.__name__])
+            return '.'.join([cls.__module__.rsplit('.', 1)[-1], cls.__name__])
         return cls.__name__
     def classname(self):
         """Return the dynamic classname. Can be overwritten."""
@@ -609,7 +609,7 @@ class _base_generic(object):
         """Return the loaded name of the instance"""
         name = self.shortname()
         if Config.display.show_parent_name and self.parent is not None:
-            return '.'.join((self.parent.name(), name))
+            return '.'.join([self.parent.name(), name])
         return name
     def instance(self):
         """Returns a minimal string describing the type and it's location"""
@@ -1486,8 +1486,8 @@ class container(base):
                 except: res = 0
                 return res
 
-            #data = ''.join((x.serialize() if x.initializedQ() else '?'*blocksizeorelse(x)) for x in self.value)
-            data = bytes().join(n.serialize() if n.initializedQ() else b'' for n in self.value)
+            #data = ''.join([item.serialize() if item.initializedQ() else '?'*blocksizeorelse(item)] for item in self.value)
+            data = bytes().join(item.serialize() if item.initializedQ() else b'' for item in self.value)
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
@@ -1741,14 +1741,14 @@ class definition(object):
 
         @classmethod
         def typename(cls):
-            return '.'.join((__name__, 'unknown'))
+            return '.'.join([__name__, 'unknown'])
 
     @classmethod
     def __set__(cls, type, object):
         '''Overloadable: Map the specified type to an object'''
         if cls.__has__(type):
             original, new = cls.cache[type], object
-            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for {:s} {!r} with new definition ({:s})".format(cls.__module__, '.'.join((original.__module__, original.__name__)), cls.attribute, type, '.'.join((new.__module__, new.__name__))))
+            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for {:s} {!r} with new definition ({:s})".format(cls.__module__, '.'.join([original.__module__, original.__name__]), cls.attribute, type, '.'.join([new.__module__, new.__name__])))
         return operator.setitem(cls.cache, type, object)
 
     @classmethod

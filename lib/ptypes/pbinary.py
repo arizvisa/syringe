@@ -113,8 +113,8 @@ Example usage:
     instance = pbinary.new(type)
     instance.load()
 """
-import sys,math,types,inspect
-import itertools,operator,functools
+import sys, math, types, inspect
+import itertools, operator, functools
 import six
 
 try:
@@ -137,12 +137,14 @@ def setbyteorder(endianness):
     ``endianness`` can be either pbinary.bigendian or pbinary.littleendian
     '''
     global partial
-    if endianness in (config.byteorder.bigendian, config.byteorder.littleendian):
+    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
         result = partial.byteorder
         partial.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
         return result
+
     elif getattr(endianness, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
+
     elif getattr(endianness, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
     raise ValueError("Unknown integer endianness {!r}".format(endianness))
@@ -461,11 +463,11 @@ class enum(integer):
             name, value = cls._values_[0]
             if isinstance(value, six.string_types):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
-                self._values_ = cls_values_ = [(k, v) for v, k in self._values_]
+                self._values_ = cls_values_ = [(name, value) for value, name in self._values_]
             pass
 
         # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k, v in cls._values_):
+        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in cls._values_):
             res = map(operator.attrgetter('__name__'), six.string_types)
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
@@ -476,11 +478,11 @@ class enum(integer):
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
-        for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
-            res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
-        for val, items in six.viewitems(res):
+        for value, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
+            res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
+        for value, items in six.viewitems(res):
             if len(items) > 1:
-                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
+                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
             continue
 
         # XXX: we could fix all the constants within ._values_ by validating that
@@ -497,11 +499,11 @@ class enum(integer):
     def has(self, *value):
         '''Return True if the provided parameter is contained by the enumeration. If no value is provided, then use the current instance.'''
         if not value:
-            value = (bitmap.int(self.get()),)
+            value = (bitmap.value(self.get()),)
         res, = value
 
         if isinstance(res, six.string_types):
-            return self.byname(res, None) == bitmap.int(self.get())
+            return self.byname(res, None) == bitmap.value(self.get())
         return self.byvalue(res, False) and True or False
 
     @classmethod
@@ -511,9 +513,11 @@ class enum(integer):
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(k for k, v in cls._values_ if v == value)
+            return six.next(name for name, item in cls._values_ if item == value)
+
         except StopIteration:
             if default: return six.next(iter(default))
+
         raise KeyError(cls, 'enum.byvalue', value)
 
     @classmethod
@@ -523,9 +527,11 @@ class enum(integer):
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(v for k, v in cls._values_ if k == name)
+            return six.next(value for item, value in cls._values_ if item == name)
+
         except StopIteration:
             if default: return six.next(iter(default))
+
         raise KeyError(cls, 'enum.byname', name)
 
     def __getattr__(self, name):
@@ -540,18 +546,18 @@ class enum(integer):
 
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
-        res = bitmap.int(self.get())
+        res = bitmap.value(self.get())
         return self.byvalue(res, u"{:x}".format(res))
 
     def summary(self, **options):
         res = self.bitmap()
-        try: return u"{:s}({:s},{:d})".format(self.byvalue(bitmap.int(res)), bitmap.hex(res), bitmap.size(res))
+        try: return u"{:s}({:s},{:d})".format(self.byvalue(bitmap.value(res)), bitmap.hex(res), bitmap.size(res))
         except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
     def details(self, **options):
         res = self.get()
-        try: return u"{:s} : {:s}".format(self.byvalue(bitmap.int(res)), bitmap.string(res))
+        try: return u"{:s} : {:s}".format(self.byvalue(bitmap.value(res)), bitmap.string(res))
         except (ValueError, KeyError): pass
         return super(enum, self).details()
 
@@ -571,12 +577,12 @@ class enum(integer):
     @classmethod
     def enumerations(cls):
         '''Return all values in enumeration as a set.'''
-        return {v for k, v in cls._values_}
+        return {value for name, value in cls._values_}
 
     @classmethod
     def mapping(cls):
         '''Return potential enumeration values as a dictionary.'''
-        return {k : v for k, v in cls._values_}
+        return {name : value for name, value in cls._values_}
 
 class container(type):
     '''contains a list of variable-bit integers'''
@@ -752,7 +758,9 @@ class container(type):
         if object.getposition() != res:
             object.setposition(res, recurse=True)
 
-        if self.value is None: self.value = []
+        if self.value is None:
+            self.value = []
+
         self.value.append(object)
         return res
 
@@ -760,7 +768,10 @@ class container(type):
     def __iter__(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.__iter__')
-        for res in self.value: yield res
+
+        for item in self.value:
+            yield item
+        return
 
     def __setitem__(self, index, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
@@ -801,26 +812,27 @@ class _array_generic(container):
     def alloc(self, fields=(), **attrs):
         result = super(_array_generic, self).alloc(**attrs)
         if len(fields) > 0 and isinstance(fields[0], tuple):
-            for k, val in fields:
-                idx = result.__getindex__(k)
+            for name, val in fields:
+                idx = result.__getindex__(name)
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
                 if istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=k).a
+                    result.value[idx] = result.new(val, __name__=name).a
                 elif isinstance(val, type):
-                    result.value[idx] = result.new(val, __name__=k)
+                    result.value[idx] = result.new(val, __name__=name)
                 elif bitmap.isinstance(val):
-                    result.value[idx] = result.new(integer, __name__=k).__setvalue__(val)
+                    result.value[idx] = result.new(integer, __name__=name).__setvalue__(val)
                 else:
                     result.value[idx].set(val)
                 continue
 
         else:
             for idx, val in enumerate(fields):
+                name = "{:d}".format(idx)
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
                 if istype(val) or ptype.isresolveable(val) or isinstance(val, type):
-                    result.value[idx] = result.new(val, __name__=str(idx))
+                    result.value[idx] = result.new(val, __name__=name)
                 elif bitmap.isinstance(val):
-                    result.value[idx] = result.new(integer, __name__=str(idx)).__setvalue__(val)
+                    result.value[idx] = result.new(integer, __name__=name).__setvalue__(val)
                 else:
                     result.value[idx].set(val)
                 continue
@@ -834,7 +846,7 @@ class _array_generic(container):
         return ' '.join([element, result])
 
     def repr(self, **options):
-        return self.summary(**options) if self.initializedQ() else ' '.join((self.__element__(), '???'))
+        return self.summary(**options) if self.initializedQ() else ' '.join([self.__element__(), '???'])
 
     def details(self, **options):
         return self.__details_initialized() if self.initializedQ() else self.__details_uninitialized()
@@ -842,7 +854,7 @@ class _array_generic(container):
     def __details_initialized(self):
         _hex, _precision, value = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0, self.bitmap()
         # FIXME: instead of emitting just a consolidated bitmap, emit one for each element
-        result = "{:#0{:d}b}".format(bitmap.int(value), 2 + bitmap.size(value))
+        result = "{:#0{:d}b}".format(bitmap.value(value), 2 + bitmap.size(value))
         return u"[{:s}] {:s} ({:s},{:d})".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), self.__element__(), result, bitmap.size(value))
 
     def __details_uninitialized(self):
@@ -953,7 +965,7 @@ class _struct_generic(container):
     def alloc(self, **fields):
         result = super(_struct_generic, self).alloc()
         if fields:
-            for idx, (t, name) in enumerate(self._fields_):
+            for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
                     if ptype.isresolveable(t):
                         result.value[idx] = result.new(t, __name__=name).a
@@ -986,7 +998,7 @@ class _struct_generic(container):
         self.__fastindex[alias.lower()] = res
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
-        if any(alias.lower() == name.lower() for _, name in self._fields_):
+        if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
             raise error.UserError(self, '_struct_generic.__contains__', message='Not allowed to remove {:s} from list of aliases.'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
@@ -996,7 +1008,7 @@ class _struct_generic(container):
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
-            for index, (_, fld) in enumerate(self._fields_):
+            for index, (_, fld) in enumerate(self._fields_ or []):
                 if fld.lower() == name.lower():
                     return self.__fastindex.setdefault(name.lower(), index)
                 continue
@@ -1013,7 +1025,7 @@ class _struct_generic(container):
             return u"???"
         res = self.bitmap()
 
-        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in __izip_longest__(self._fields_, self.value)]
+        items = [u"{:s}={:s}".format(value.name() if fld is None else fld[1], u"???" if value is None else value.summary()) for fld, value in __izip_longest__(self._fields_ or [], self.value)]
         if items:
             return u"({:s},{:d}) :> {:s}".format(bitmap.hex(res), bitmap.size(res), ' '.join(items))
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
@@ -1021,7 +1033,7 @@ class _struct_generic(container):
     def __details_initialized(self):
         result = []
 
-        for fld, value in __izip_longest__(self._fields_, self.value):
+        for fld, value in __izip_longest__(self._fields_ or [], self.value):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 if istype(t):
@@ -1049,19 +1061,19 @@ class _struct_generic(container):
 
     def __details_uninitialized(self):
         result = []
-        for t, name in self._fields_:
+        for t, name in self._fields_ or []:
             if istype(t):
-                s, typename = self.new(t).blockbits(), t.typename()
+                cb, typename = self.new(t).blockbits(), t.typename()
             elif bitmap.isinstance(t):
-                s, typename = bitmap.size(s), 'signed' if bitmap.signed(t) else 'unsigned'
+                cb, typename = bitmap.size(t), 'signed' if bitmap.signed(t) else 'unsigned'
             elif isinstance(t, six.integer_types):
-                s, typename = abs(t), 'signed' if t<0 else 'unsigned'
+                cb, typename = abs(t), 'signed' if t<0 else 'unsigned'
             else:
-                s, typename = 0, 'unknown'
+                cb, typename = 0, 'unknown'
 
             i = utils.repr_class(typename)
             _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-            result.append(u"[{:s}] {:s} {:s}{{{:d}}} ???".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), i, name, s))
+            result.append(u"[{:s}] {:s} {:s}{{{:d}}} ???".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), i, name, cb))
         if result:
             return '\n'.join(result)
         return u"[{:x}] Empty{{}} ???".format(self.getoffset())
@@ -1075,7 +1087,7 @@ class _struct_generic(container):
         return [res for res in self.__values__()]
     def items(self):
         '''D.items() -> list of D's (name, value) fields, as 2-tuples'''
-        return [(k, v) for k, v in self.__items__()]
+        return [(name, item) for name, item in self.__items__()]
 
     ## iterator methods
     def iterkeys(self):
@@ -1090,14 +1102,16 @@ class _struct_generic(container):
 
     ## internal dict methods
     def __keys__(self):
-        for _, name in self._fields_: yield name
+        for _, name in self._fields_ or []:
+            yield name
+        return
     def __values__(self):
-        for res in self.value:
-            yield res if isinstance(res, container) else res.int()
+        for item in self.value:
+            yield item if isinstance(item, container) else item.int()
         return
     def __items__(self):
-        #for (_, name), item in itertools.izip(self._fields_, self.__values__()):
-        for (_, name), item in itertools.izip(self._fields_, self.value):
+        #for (_, name), item in zip(self._fields_ or [], self.__values__()):
+        for (_, name), item in zip(self._fields_ or [], self.value):
             yield name, item
         return
 
@@ -1113,8 +1127,8 @@ class _struct_generic(container):
         if self.value is None:
             raise error.InitializationError(self, '_struct_generic.__iter__')
 
-        for k in six.iterkeys(self):
-            yield k
+        for name in six.iterkeys(self):
+            yield name
         return
 
     def __setitem__(self, name, value):
@@ -1169,12 +1183,13 @@ class array(_array_generic):
 
         self.value = result = []
         for idx, value in enumerate(items):
+            name = "{:d}".format(idx)
             if istype(value) or ptype.isresolveable(value):
-                res = self.new(value, __name__=str(idx)).a
+                res = self.new(value, __name__=name).a
             elif isinstance(value, type):
-                res = self.new(value, __name__=str(idx))
+                res = self.new(value, __name__=name)
             else:
-                res = self.new(self._object_, __name__=str(idx)).a.set(value)
+                res = self.new(self._object_, __name__=name).a.set(value)
             self.value.append(res)
 
         self.length = len(self.value)
@@ -1220,7 +1235,7 @@ class struct(_struct_generic):
     def __deserialize_consumer__(self, consumer):
         self.value = []
         position = self.getposition()
-        generator = (self.new(t, __name__=name, position=position) for t, name in self._fields_)
+        generator = (self.new(t, __name__=name, position=position) for t, name in self._fields_ or [])
         return super(struct, self).__deserialize_consumer__(consumer, generator)
 
     def blockbits(self):
@@ -1228,7 +1243,7 @@ class struct(_struct_generic):
             return super(struct, self).blockbits()
         # FIXME: self.new(t) can potentially execute a function that it shouldn't
         #        when .blockbits() is called by .__load_littleendian
-        return sum((t if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_)
+        return sum((t if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_ or [])
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
@@ -1241,11 +1256,11 @@ class struct(_struct_generic):
         def assign(pack_indexvalue):
             (index, value) = pack_indexvalue
             if istype(value) or ptype.isresolveable(value):
-                k = result.value[index].__name__
-                result.value[index] = result.new(value, __name__=k).a
+                name = result.value[index].__name__
+                result.value[index] = result.new(value, __name__=name).a
             elif isinstance(value, type):
-                k = result.value[index].__name__
-                result.value[index] = result.new(value, __name__=k)
+                name = result.value[index].__name__
+                result.value[index] = result.new(value, __name__=name)
             elif isinstance(value, dict):
                 result.value[index].set(**value)
             else:
@@ -1261,7 +1276,7 @@ class struct(_struct_generic):
                     raise error.UserError(result, 'struct.set', message='Refusing to assign iterable to instance due to different lengths')
                 [ assign((index, value)) for index, value in enumerate(value) ]
 
-            [ assign((self.__getindex__(k), v)) for k, v in six.iteritems(fields) ]
+            [ assign((self.__getindex__(name), item)) for name, item in six.iteritems(fields) ]
             result.setposition(result.getposition(), recurse=True)
             return result
         return result.a.__setvalue__(value, **fields)
@@ -1302,9 +1317,9 @@ class terminatedarray(_array_generic):
 
         # terminated arrays can also stop when out-of-data
         except StopIteration as E:
-            n = self.value[-1]
+            item = self.value[-1]
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.info("terminatedarray : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), n.typename(), n.getoffset(), path))
+            Log.info("terminatedarray : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), item.typename(), item.getoffset(), path))
 
         return self
 
@@ -1336,15 +1351,18 @@ class blockarray(terminatedarray):
 
         try:
             while total > 0:
-                n = six.next(generator)
-                n.setposition(position)
-                value.append(n)
-
-                n.__deserialize_consumer__(consumer)
-                if self.isTerminator(n):
+                item = six.next(generator, None)
+                if item is None:
                     break
 
-                size = n.blockbits()
+                item.setposition(position)
+                value.append(item)
+
+                item.__deserialize_consumer__(consumer)
+                if self.isTerminator(item):
+                    break
+
+                size = item.blockbits()
                 total -= size
 
                 # FIXME: if the byteorder is little-endian, then this fucks up
@@ -1359,7 +1377,7 @@ class blockarray(terminatedarray):
 
         except StopIteration as E:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
-            Log.warn('blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!r} while consuming {:d} bits'.format(self.instance(), position, n.blockbits()))
+            Log.warn('blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!r} while consuming {:d} bits'.format(self.instance(), position, item.blockbits()))
         return self
 
 class partial(ptype.container):
@@ -1374,7 +1392,7 @@ class partial(ptype.container):
         res = {}
 
         # first include the type's attributes, then any user-supplied ones
-        map(res.update, (self.attributes, attrs))
+        [ res.update(item) for item in [self.attributes, attrs] ]
 
         # then we'll add our current position, and our parent for the trie
         list(itertools.starmap(res.__setitem__, (('position', (offset, 0)), ('parent', self))))
@@ -1396,18 +1414,19 @@ class partial(ptype.container):
         res = dict(attrs)
         res.update(moreattrs)
 
-        localk, pbk = set(), set()
-        for k in res.keys():
-            fn = localk.add if hasattr(self, k) else pbk.add
-            fn(k)
+        localkey, pbkey = set(), set()
+        for key in res.keys():
+            F = localkey.add if hasattr(self, key) else pbkey.add
+            F(key)
 
-        locald = {k : res[k] for k in localk}
-        pbd = {k : res[k] for k in pbk}
+        localdata = {key : res[key] for key in localkey}
+        pbdata = {key : res[key] for key in pbkey}
         if 'recurse' in res:
-            locald['recurse'] = pbd['recurse'] = res['recurse']
+            localdata['recurse'] = pbdata['recurse'] = res['recurse']
 
-        super(partial, self).__update__(locald)
-        if self.initializedQ(): self.object.__update__(pbd)
+        super(partial, self).__update__(localdata)
+        if self.initializedQ():
+            self.object.__update__(pbdata)
         return self
 
     def copy(self, **attrs):
@@ -1529,9 +1548,9 @@ class partial(ptype.container):
             raise error.LoadError(self, exception=E)
 
     def bits(self):
-        return self.size() * 8
+        return 8 * self.size()
     def blockbits(self):
-        return self.blocksize() * 8
+        return 8 * self.blocksize()
 
     def size(self):
         value = self.value[0] if self.initializedQ() else self.__pb_object()
@@ -1595,7 +1614,10 @@ class partial(ptype.container):
         '''x.__iter__() <==> iter(x)'''
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.__iter__')
-        for res in self.object: yield res
+
+        for item in self.object:
+            yield item
+        return
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
@@ -1644,7 +1666,7 @@ class partial(ptype.container):
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
         nmin = self.getoffset()
-        nmax = nmin+self.blocksize()
+        nmax = nmin + self.blocksize()
         return (offset >= nmin) and (offset < nmax)
 
     #def __getstate__(self):
@@ -1666,7 +1688,7 @@ class flags(struct):
 
     def __summary_initialized(self):
         flags = []
-        for (t, name), value in zip(self._fields_, self.value):
+        for (t, name), value in zip(self._fields_ or [], self.value):
             flags.append((name, value))
         res, fval = self.bitmap(), lambda item: '?' if item is None else '={:s}'.format(item.str()) if isinstance(item, enum) else '={:d}'.format(item.int()) if item.int() > 1 else ''
         items = [(name, item) for name, item in flags if item is None or isinstance(item, enum) or item.int() > 0]
@@ -1675,7 +1697,7 @@ class flags(struct):
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def __summary_uninitialized(self):
-        return u"(?,{:d}) :> {:s}".format(self.blockbits(), ','.join(u"?{:s}".format(name) for t, name in self._fields_))
+        return u"(?,{:d}) :> {:s}".format(self.blockbits(), ','.join(u"?{:s}".format(name) for t, name in self._fields_ or []))
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''

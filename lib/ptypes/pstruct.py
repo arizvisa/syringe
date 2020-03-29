@@ -66,7 +66,7 @@ class _pstruct_generic(ptype.container):
         self.__fastindex[alias.lower()] = res
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
-        if any(alias.lower() == name.lower() for _, name in self._fields_):
+        if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
@@ -93,7 +93,7 @@ class _pstruct_generic(ptype.container):
         except KeyError:
             pass
 
-        for index, (_, fld) in enumerate(self._fields_):
+        for index, (_, fld) in enumerate(self._fields_ or []):
             if fld.lower() == name.lower():
                 return self.__fastindex.setdefault(name.lower(), index)
             continue
@@ -103,9 +103,9 @@ class _pstruct_generic(ptype.container):
     def properties(self):
         result = super(_pstruct_generic, self).properties()
         if self.initializedQ():
-            if len(self.value) < len(self._fields_):
+            if len(self.value) < len(self._fields_ or []):
                 result['abated'] = True
-            elif len(self.value) > len(self._fields_):
+            elif len(self.value) > len(self._fields_ or []):
                 result['inflated'] = True
             return result
         return result
@@ -119,27 +119,37 @@ class _pstruct_generic(ptype.container):
         return [res for res in self.__values__()]
     def items(self):
         '''D.items() -> list of D's (name, value) fields, as 2-tuples'''
-        return [(k, v) for k, v in self.__items__()]
+        return [(name, item) for name, item in self.__items__()]
 
     ## iterator methods
     def iterkeys(self):
         '''D.iterkeys() -> an iterator over the names of D's fields'''
-        for name in self.__keys__(): yield name
+        for name in self.__keys__():
+            yield name
+        return
     def itervalues(self):
         '''D.itervalues() -> an iterator over the values of D's fields'''
-        for res in self.__values__(): yield res
+        for res in self.__values__():
+            yield res
+        return
     def iteritems(self):
         '''D.iteritems() -> an iterator over the (name, value) fields of D'''
-        for name, value in self.__items__(): yield name, value
+        for name, item in self.__items__():
+            yield name, item
+        return
 
     ## internal dict methods
     def __keys__(self):
-        for _, name in self._fields_: yield name
+        for _, name in self._fields_ or []:
+            yield name
+        return
     def __values__(self):
-        for res in self.value: yield res
+        for item in self.value:
+            yield item
+        return
     def __items__(self):
-        for (_, k), v in itertools.izip(self._fields_, self.value):
-            yield k, v
+        for (_, name), item in zip(self._fields_ or [], self.value):
+            yield name, item
         return
 
     ## method overloads
@@ -154,8 +164,8 @@ class _pstruct_generic(ptype.container):
         if self.value is None:
             raise error.InitializationError(self, '_pstruct_generic.__iter__')
 
-        for k in six.iterkeys(self):
-            yield k
+        for name in six.iterkeys(self):
+            yield name
         return
 
     def __getitem__(self, name):
@@ -211,20 +221,20 @@ class type(_pstruct_generic):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
         result = super(type, self).alloc()
         if fields:
-            for idx, (t, name) in enumerate(self._fields_):
+            for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
                     if ptype.isresolveable(t):
                         result.value[idx] = self.new(t, __name__=name).a
                     continue
-                v = fields[name]
-                if ptype.isresolveable(v) or ptype.istype(v):
-                    result.value[idx] = self.new(v, __name__=name).a
-                elif isinstance(v, ptype.generic):
-                    result.value[idx] = self.new(v, __name__=name)
-                elif isinstance(v, dict):
-                    result.value[idx].alloc(**v)
+                item = fields[name]
+                if ptype.isresolveable(item) or ptype.istype(item):
+                    result.value[idx] = self.new(item, __name__=name).a
+                elif isinstance(item, ptype.generic):
+                    result.value[idx] = self.new(item, __name__=name)
+                elif isinstance(item, dict):
+                    result.value[idx].alloc(**item)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].set(item)
                 continue
             self.setoffset(self.getoffset(), recurse=True)
         return result
@@ -256,28 +266,28 @@ class type(_pstruct_generic):
 
                 # Populate the structure with undefined fields so that things are still
                 # somewhat initialized...
-                for i, (t, name) in enumerate(self._fields_):
+                for i, (t, name) in enumerate(self._fields_ or []):
                     self.__append_type(offset, ptype.undefined, name)
                 return super(type, self).load()
 
             try:
                 offset = self.getoffset()
-                for i, (t, name) in enumerate(self._fields_):
+                for i, (t, name) in enumerate(self._fields_ or []):
                     # create each element
-                    n = self.__append_type(offset, t, name)
+                    item = self.__append_type(offset, t, name)
 
                     # check if we've hit our blocksize
-                    bs = n.blocksize()
+                    bs = item.blocksize()
                     if current is not None:
                         try:
                             res = self.blocksize()
                         except Exception as E:
                             path = str().join(map("<{:s}>".format, self.backtrace()))
-                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
+                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path), exc_info=True)
                         else:
                             if current + bs > res:
                                 path = str().join(map("<{:s}>".format, self.backtrace()))
-                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
+                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path))
                                 break
                         current += bs
                     offset += bs
@@ -286,11 +296,11 @@ class type(_pstruct_generic):
                 raise error.LoadError(self, exception=E)
 
             # add any missing elements with a 0 blocksize
-            count = len(self._fields_) - len(self.value)
+            count = len(self._fields_ or []) - len(self.value)
             if count > 0:
                 for i, (t, name) in enumerate(self._fields_[-count:]):
-                    n = self.__append_type(offset, t, name, blocksize=lambda: 0)
-                    offset += n.blocksize()
+                    item = self.__append_type(offset, t, name, blocksize=lambda: 0)
+                    offset += item.blocksize()
 
             # complete the second pass
             result = super(type, self).load()
@@ -303,17 +313,17 @@ class type(_pstruct_generic):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
             f = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
-            res = (f(utils.repr_class(gettypename(t)), name) for t, name in self._fields_)
+            res = (f(utils.repr_class(gettypename(t)), name) for t, name in self._fields_ or [])
             return '\n'.join(res)
 
         result, o = [], self.getoffset()
-        fn = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
-        for fld, value in __izip_longest__(self._fields_, self.value):
+        fmt = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
+        for fld, value in __izip_longest__(self._fields_ or [], self.value):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 i = utils.repr_class(gettypename(t))
-                v = self.new(ptype.type).a.summary(**options)
-                result.append(fn(i, name, v))
+                item = self.new(ptype.type).a.summary(**options)
+                result.append(fmt(i, name, item))
                 continue
             ofs = self.getoffset(value.__name__ or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
@@ -339,16 +349,16 @@ class type(_pstruct_generic):
                     raise error.UserError(result, 'type.set', message='Refusing to assign iterable to instance due to differing lengths')
                 result = super(type, result).__setvalue__(*value)
 
-            for k, v in six.iteritems(fields):
-                idx = self.__getindex__(k)
-                if ptype.isresolveable(v) or ptype.istype(v):
-                    result.value[idx] = self.new(v, __name__=k).a
-                elif isinstance(v, ptype.generic):
-                    result.value[idx] = self.new(v, __name__=k)
-                elif isinstance(v, dict):
-                    result.value[idx].set(**v)
+            for name, item in six.iteritems(fields):
+                idx = self.__getindex__(name)
+                if ptype.isresolveable(item) or ptype.istype(item):
+                    result.value[idx] = self.new(item, __name__=name).a
+                elif isinstance(item, ptype.generic):
+                    result.value[idx] = self.new(item, __name__=name)
+                elif isinstance(item, dict):
+                    result.value[idx].set(**item)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].set(item)
                 continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
@@ -370,7 +380,7 @@ def make(fields, **attrs):
 
     # FIXME: instead of this explicit check, if more than one structure occupies the
     # same location, then we should promote them all into a union.
-    if len(set([x.getoffset() for x in fields])) != len(fields):
+    if len({fld.getoffset() for fld in fields}) != len(fields):
         raise ValueError('more than one field is occupying the same location')
 
     types = sorted(fields, key=lambda instance: item.getposition())
