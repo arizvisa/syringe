@@ -52,7 +52,7 @@ class UNICODE_STRING(pstruct.type, versioned):
 #        (PWSTR, 'Buffer'),
 #        (lambda s: P(dyn.clone(WSTR, length=s['MaximumLength'].li.int())), 'Buffer')
         (lambda s: ULONG if getattr(s, 'WIN64', False) else pint.uint_t, 'Unknown'),
-        (lambda s: P(dyn.clone(WSTR, length=s['Length'].li.int()/2)), 'Buffer')
+        (lambda s: P(dyn.clone(WSTR, length=s['Length'].li.int()//2)), 'Buffer')
     ]
 
     def get(self):
