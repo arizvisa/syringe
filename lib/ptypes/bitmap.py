@@ -538,9 +538,9 @@ class WBitmap(object):
         used = self.bits & 7
         if used:
             shift, mask = 2 ** used, 2 ** used - 1
-            res = reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
+            res = six.moves.reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
             return (res * shift) | (self.data[-1] & mask)
-        return reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
+        return six.moves.reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
 
     def size(self):
         '''Return the current number of bits that have been stored.'''
