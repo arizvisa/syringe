@@ -24,7 +24,7 @@ class coff(store.base):
 
         diff = section.getloadedsize() - len(data)
         assert diff >= 0, 'Loaded size (%x) < Segment size (%x)'% (section.getloadedsize(), len(data))
-        data += '\x00' * diff
+        data += b'\x00' * diff
         return data
 
     def getsegmentlength(self, name):
@@ -155,7 +155,7 @@ class linktable(dict):
         return result
 
     def size(self):
-        return reduce(lambda x,y: x+y.size(), self.itervalues())
+        return six.moves.reduce(lambda x,y: x+y.size(), self.itervalues())
 
 class table_eat(linktable):
     '''coff export address table'''

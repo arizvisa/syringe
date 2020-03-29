@@ -75,7 +75,7 @@ class MemoryManager(__provider):
         allocator = self.allocator
 
         # allocate size
-        pages = (size / allocator.getPageSize())+1
+        pages = (size // allocator.getPageSize())+1
 
         # get a writeable page, and then write our code to it
         pointer = self.allocator.getWriteable(None, pages)
@@ -160,7 +160,7 @@ class Managed(MemoryManager):
         if size < pagesize>>1:
             res = self.__alloc_dochunks(size)
         else:
-            res = self.__alloc_pages((size+pagesize-1)/pagesize)
+            res = self.__alloc_pages((size+pagesize-1)//pagesize)
 
         # assign to page lookup
         pointer,type = res
@@ -179,14 +179,14 @@ class Managed(MemoryManager):
 
         size = allocator.getPageSize()*pages
         pointer = allocator.getWriteable(None, pages)
-        res = bitmap.new(0, size / elementsize )
+        res = bitmap.new(0, size // elementsize )
         return (pointer, (int(elementsize), res))
 
     # XXX: this modifies /bucket/ directly...just a heads up.
     def __alloc_from_bucket(self, bucket, size):
         for i,n in zip(range(len(bucket)), bucket):
             pointer,(chunksize,layout) = n
-            count = (size / chunksize)+1
+            count = (size // chunksize)+1
 
             try:
                 freeslot = bitmap.runscan(layout, 0, count)
@@ -229,7 +229,7 @@ class Managed(MemoryManager):
 
         # convert pointer into index
         offset = pointer - basepointer
-        index = offset / chunksize
+        index = offset // chunksize
 
         # clear the bit
         layout = bitmap.set(layout, index, False)

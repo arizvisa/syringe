@@ -1,5 +1,5 @@
 import abc,itertools,operator,weakref
-import collections,sets,sparse
+import six,collections,sets,sparse
 
 class OrderedDict(collections.OrderedDict): pass
 
@@ -177,7 +177,7 @@ class MergedMapping(collections.MutableMapping):
         res = set(itertools.chain(*(x.viewkeys() for x in self._data if x() is not None)))
         cur = set(self._cache.viewkeys())
         [self._cache.pop(k) for k in cur.difference(res)]
-        return reduce(operator.add, (self._sync(r()) for r in self._data))
+        return six.moves.reduce(operator.add, (self._sync(r()) for r in self._data))
 
     def __setitem__(self, key, value):
         res = self._cache[key]

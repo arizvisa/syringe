@@ -62,7 +62,7 @@ objects
     the only thing in this module to care about is the base.
 '''
 
-import logging,warnings,array,bisect
+import six,logging,warnings,array,bisect
 class DuplicateSymbol(Warning): pass
 class UninitializedSymbol(Warning): pass
 
@@ -619,7 +619,7 @@ class container(base):
 
     def getsegmentlength(self, name):
         segments = self.storesegments[name]
-        return reduce(lambda a,b:a+b, (st.getsegmentlength(n) for i,n,st in segments))
+        return six.moves.reduce(lambda a,b:a+b, (st.getsegmentlength(n) for i,n,st in segments))
 
     def getsegmentprotection(self, name):
         segments = self.storesegments[name]
@@ -744,7 +744,7 @@ if __name__ == '__main__':
 
     if False:
         codes = '0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f'.split(',')
-        codes = codes[len(codes)/2:]
+        codes = codes[len(codes)//2:]
 
         def updatesymbols(store, name):
             o = store[name]
