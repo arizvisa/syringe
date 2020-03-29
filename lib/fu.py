@@ -62,7 +62,8 @@ class package:
 
             @staticmethod
             def hash(data):
-                return reduce(lambda x,y: (((x<<5)+x)^ord(y)) & 0xffffffff, iter(data), 5381)
+                F = reduce if sys.version_info.major < 3 else itertools.reduce
+                return F(lambda x,y: (((x<<5)+x)^ord(y)) & 0xffffffff, iter(data), 5381)
 
         ## registration of a cls into cache
         @classmethod
@@ -186,8 +187,8 @@ class package:
         def clsbyinstance(n): return package.cache.byinstance(n)
 
         def __repr__(self):
-            cons = [(k,(self.clsbyid(clsid).__name__,v)) for k,(clsid,v) in self.cons_data.iteritems()]
-            inst = [(k,(self.clsbyid(clsid).__name__,v)) for k,(clsid,v) in self.inst_data.iteritems()]
+            cons = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid,v) in self.cons_data.items()]
+            inst = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid,v) in self.inst_data.items()]
             return "<class '%s'> %s"%(self.__class__.__name__, repr(__builtin__.dict(cons)))
 
         ## serializing/deserializing entire state
@@ -748,7 +749,7 @@ if 'core':
             classmethod_descriptor = __builtin__.type(__builtin__.float.__dict__['fromhex'])
 
             result = {}
-            for k,v in state.iteritems():
+            for k, v in state.items():
                 if __builtin__.type(v) in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator_.getclass()):
                     continue
 
@@ -1442,7 +1443,7 @@ def caller(frame=None):
     import sys
     fr = sys._getframe().f_back if frame is None else frame
     source,name = fr.f_code.co_filename,fr.f_code.co_name
-    module = [x for x in sys.modules.itervalues() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
+    module = [x for x in sys.modules.values() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
     module, = (None,) if not module else module
     return module,name
 
@@ -1999,5 +2000,5 @@ if __name__ == 'bootstrap':
 
     consdata = st.cons_data
     instances = {}
-    for _,(t,v) in consdata.iteritems():
+    for _, (t, v) in consdata.items():
         result[t].u_constructor(v, globals=namespace)
