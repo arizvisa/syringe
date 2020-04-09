@@ -12,7 +12,7 @@ class action(ptype.definition):
     class ActionUnknown(ptype.block):
         _fields_=[]
         def details(self):
-            if self.initialized:
+            if self.initializedQ():
                 return self.classname()
             return super(action.default, self).details()
 

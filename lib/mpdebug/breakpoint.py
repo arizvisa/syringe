@@ -1,4 +1,4 @@
-import dispatch
+from . import dispatch
 
 class interrupt(object):
     id = None

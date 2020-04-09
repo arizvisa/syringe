@@ -3,11 +3,11 @@ import modrm,sib
 
 def PushOpsize(withprefix, withoutprefix):
     def Opsize(insn):
-        return [withoutprefix, withprefix]['\x66' in insn[0]]
+        return [withoutprefix, withprefix][0x66 in bytearray(insn[0])]
     return Opsize
 def PopOpsize(withprefix, withoutprefix):
     def Opsize(insn):
-        return -1 * [withoutprefix, withprefix]['\x66' in insn[0]]
+        return -1 * [withoutprefix, withprefix][0x66 in bytearray(insn[0])]
     return Opsize
 
 def constant(value):
@@ -32,7 +32,7 @@ def magicbyte(insn):
     mod,reg,rm = decoder.extractmodrm(m)
 
     if reg == 6:
-        return [4,2]['\x66' in p]
+        return [4,2][b'\x66' in p]
     return 0
 
 # "CALL /Ev/", "FF" # ext="2"             +v-v
@@ -119,33 +119,33 @@ if __name__ == '__main__':
     from stack import getDelta
 
     if False:
-        insn = decoder.consume('\x6a\xfe')
-        print getDelta(insn)
+        insn = decoder.consume(b'\x6a\xfe')
+        print(getDelta(insn))
 
     if False:
-        insn = decoder.consume( [chr(int(x,16)) for x in '68 88 EA 31 02'.split(' ')])
-        print getDelta(insn)
+        insn = decoder.consume( [chr(int(x,16)) for x in b'68 88 EA 31 02'.split(b' ')])
+        print(getDelta(insn))
 
     if False:
         # shouldn't work due to lack of sib
-        insn = decoder.consume( [chr(int(x,16)) for x in '64 A1 00 00 00 00'.split(' ')])
-        print getDelta(insn) == 0
+        insn = decoder.consume( [chr(int(x,16)) for x in b'64 A1 00 00 00 00'.split(b' ')])
+        print(getDelta(insn) == 0)
 
     if False:
-        insn = decoder.consume('\x53')
-        print getDelta(insn)
+        insn = decoder.consume(b'\x53')
+        print(getDelta(insn))
 
     if False:
-        insn = decoder.consume('\x56')
-        print getDelta(insn)
+        insn = decoder.consume(b'\x56')
+        print(getDelta(insn))
 
     # FIXME: need to find all instructions that modify esp too
 
     if True:
         # fail due to modrm not being fully tested
-        insn = decoder.consume('\x83\xec\x50')      # sub esp,50
-        print getDelta(insn)
+        insn = decoder.consume(b'\x83\xec\x50')      # sub esp,50
+        print(getDelta(insn))
 
     if True:
-        insn = decoder.consume('\x83\xc4\x04')      # add esp, 4
-        print getDelta(insn)
+        insn = decoder.consume(b'\x83\xc4\x04')      # add esp, 4
+        print(getDelta(insn))

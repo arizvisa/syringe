@@ -620,14 +620,14 @@ class SOUNDINFO(pstruct.type):
     ]
 
 ## XXX font
-import tags
+from . import tags
 
 if __name__ == '__main__':
     import ptypes
     data = '\x44\x11'
 
     z = RECORDHEADER(source=ptypes.provider.string(data)).l
-    print z
+    print(z)
 
     z.source = ptypes.provider.string(data)
-    print z.l
+    print(z.l)

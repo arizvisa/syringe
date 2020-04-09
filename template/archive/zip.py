@@ -7,7 +7,6 @@ from ptypes import *
 import datetime
 
 ## General structures
-@pbinary.littleendian
 class MSTime(pbinary.struct):
     _fields_ = [
         (6, 'Hour'),
@@ -15,16 +14,17 @@ class MSTime(pbinary.struct):
         (5, '2Seconds'),
     ]
     def time(self):
-        return datetime.time(self['Hour'], self['Minute'], 2 * self['2Seconds'])
+        return datetime.time(self['Hour'] % 24, self['Minute'] % 60, (2 * self['2Seconds']) % 60)
 
     def isoformat(self):
         res = self.time()
         return res.isoformat()
 
     def summary(self):
-        return self.isoformat()
+        if self['Hour'] < 24 and self['Minute'] < 60 and 2 * self['2Seconds'] < 60:
+            return self.isoformat()
+        return super(MSTime, self).summary()
 
-@pbinary.littleendian
 class MSDate(pbinary.struct):
     _fields_ = [
         (7, 'Year'),
@@ -246,8 +246,8 @@ class LocalFileHeader32(LocalFileHeader):
         (pint.uint16_t, 'version needed to extract'),
         (BitFlags, 'general purpose bit flag'),
         (CompressionMethod, 'compression method'),
-        (MSTime, 'last mod file time'),
-        (MSDate, 'last mod file date'),
+        (pbinary.littleendian(MSTime), 'last mod file time'),
+        (pbinary.littleendian(MSDate), 'last mod file date'),
         (DataDescriptor, 'data descriptor'),
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
@@ -298,7 +298,7 @@ class LocalFileHeader32(LocalFileHeader):
             import lzma
             logging.debug('Decompressing ({:s}) {:d} bytes of content.'.format('Lzma', len(res)))
             return lzma.decompress(res)
-        raise ValueError, method
+        raise ValueError(method)
 
     def listing(self):
         cls, index, ofs, bs = self.classname(), int(self.getparent(Record).name()), self.getparent(Record).getoffset(), self.getparent(Record).size()
@@ -334,8 +334,8 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         (VersionNeeded, 'version needed to extract'),
         (BitFlags, 'general purpose bit flag'),
         (CompressionMethod, 'compression method'),
-        (MSTime, 'last mod file time'),
-        (MSDate, 'last mod file date'),
+        (pbinary.littleendian(MSTime), 'last mod file time'),
+        (pbinary.littleendian(MSDate), 'last mod file date'),
         (DataDescriptor, 'data descriptor'),
         (pint.uint16_t, 'file name length'),
         (pint.uint16_t, 'extra field length'),
@@ -585,12 +585,12 @@ if __name__ == '__main__':
     arg_info_gr.add_argument('-j', '--compressed', action='store_true', help='extract data from archive in its compressed form', dest='compress', default=False)
 
     if len(sys.argv) <= 1:
-        print >>sys.stdout, arg_p.format_usage()
+        six.print_(arg_p.format_usage(), file=sys.stdout)
         sys.exit(0)
 
     args = arg_p.parse_args(sys.argv[1:])
     if args.mode == 'help':
-        print >>sys.stdout, arg_p.format_help()
+        six.print_(arg_p.format_help(), file=sys.stdout)
         sys.exit(0)
 
     # fix up arguments
@@ -692,13 +692,13 @@ if __name__ == '__main__':
     if args.mode == 'list':
         z = z.l
         for rec in iterate(z[:-1]):
-            print rec['Record'].listing()
+            print(rec['Record'].listing())
         sys.exit(0)
 
     elif args.mode == 'list-all':
         z = z.l
         for rec in iterate(z[:-1]):
-            print rec['Record'].listing()
+            print(rec['Record'].listing())
         sys.exit(0)
 
     elif args.mode == 'extract':
@@ -709,7 +709,7 @@ if __name__ == '__main__':
 
     # help
     else:
-        print >>sys.stdout, arg_p.format_help()
+        six.print_(arg_p.format_help(), file=sys.stdout)
         sys.exit(1)
 
     # for each record...
@@ -757,12 +757,12 @@ if __name__ == '__main__':
                 logging.info('Creating new file for record({:d}): {:s}'.format(int(rec.name()), res))
 
             logging.debug('{:s}ing {:d} bytes from record({:d}) to file: {:s}'.format(args.mode.title(), len(data), int(rec.name()), res))
-            with file(res, 'wb') as out: print >>out, data
+            with file(res, 'wb') as out: six.print_(data, file=out)
 
         # fall-back to writing to already open target
         else:
             logging.debug('{:s}ing {:d} bytes from record({:d}) to stream: {:s}'.format(args.mode.title(), len(data), int(rec.name()), target.name))
-            print >>target, data
+            six.print_(data, file=target)
         continue
 
     sys.exit(0)

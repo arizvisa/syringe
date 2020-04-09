@@ -83,7 +83,7 @@ class File(pstruct.type):
         return List
 
     def blocksize(self):
-        if isinstance(self.source, ptypes.provider.filebase):
+        if isinstance(self.source, ptypes.provider.bounded):
             return self.source.size()
         return sys.maxint
 

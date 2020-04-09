@@ -34,7 +34,7 @@ Example usage:
     instance.load()
 
     # fetch a particular sub-element
-    print instance['name1']
+    print(instance['name1'])
 
     # assign a sub-element
     instance['name2'] = new-instance
@@ -45,13 +45,15 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
-import itertools,operator,functools
-import six
+import sys
+import functools, itertools, types, builtins, operator, six
 
-from . import ptype,utils,config,pbinary,error
+from . import ptype, utils, config, pbinary, error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,make'.split(',')
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 class _pstruct_generic(ptype.container):
     def __init__(self, *args, **kwds):
@@ -64,7 +66,7 @@ class _pstruct_generic(ptype.container):
         self.__fastindex[alias.lower()] = res
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
-        if any(alias.lower() == n.lower() for _,n in self._fields_):
+        if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
             raise error.UserError(self, '_pstruct_generic.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
@@ -91,7 +93,7 @@ class _pstruct_generic(ptype.container):
         except KeyError:
             pass
 
-        for index, (_, fld) in enumerate(self._fields_):
+        for index, (_, fld) in enumerate(self._fields_ or []):
             if fld.lower() == name.lower():
                 return self.__fastindex.setdefault(name.lower(), index)
             continue
@@ -101,9 +103,9 @@ class _pstruct_generic(ptype.container):
     def properties(self):
         result = super(_pstruct_generic, self).properties()
         if self.initializedQ():
-            if len(self.value) < len(self._fields_):
+            if len(self.value) < len(self._fields_ or []):
                 result['abated'] = True
-            elif len(self.value) > len(self._fields_):
+            elif len(self.value) > len(self._fields_ or []):
                 result['inflated'] = True
             return result
         return result
@@ -117,27 +119,37 @@ class _pstruct_generic(ptype.container):
         return [res for res in self.__values__()]
     def items(self):
         '''D.items() -> list of D's (name, value) fields, as 2-tuples'''
-        return [(k, v) for k, v in self.__items__()]
+        return [(name, item) for name, item in self.__items__()]
 
     ## iterator methods
     def iterkeys(self):
         '''D.iterkeys() -> an iterator over the names of D's fields'''
-        for name in self.__keys__(): yield name
+        for name in self.__keys__():
+            yield name
+        return
     def itervalues(self):
         '''D.itervalues() -> an iterator over the values of D's fields'''
-        for res in self.__values__(): yield res
+        for res in self.__values__():
+            yield res
+        return
     def iteritems(self):
         '''D.iteritems() -> an iterator over the (name, value) fields of D'''
-        for name, value in self.__items__(): yield name, value
+        for name, item in self.__items__():
+            yield name, item
+        return
 
     ## internal dict methods
     def __keys__(self):
-        for _, name in self._fields_: yield name
+        for _, name in self._fields_ or []:
+            yield name
+        return
     def __values__(self):
-        for res in self.value: yield res
+        for item in self.value:
+            yield item
+        return
     def __items__(self):
-        for (_, k), v in itertools.izip(self._fields_, self.value):
-            yield k, v
+        for (_, name), item in zip(self._fields_ or [], self.value):
+            yield name, item
         return
 
     ## method overloads
@@ -152,8 +164,8 @@ class _pstruct_generic(ptype.container):
         if self.value is None:
             raise error.InitializationError(self, '_pstruct_generic.__iter__')
 
-        for k in six.iterkeys(self):
-            yield k
+        for name in six.iterkeys(self):
+            yield name
         return
 
     def __getitem__(self, name):
@@ -170,10 +182,10 @@ class _pstruct_generic(ptype.container):
         return result
 
     def __getstate__(self):
-        return super(_pstruct_generic, self).__getstate__(),self.__fastindex,
+        return super(_pstruct_generic, self).__getstate__(), self.__fastindex,
 
     def __setstate__(self, state):
-        state,self.__fastindex, = state
+        state, self.__fastindex, = state
         super(_pstruct_generic, self).__setstate__(state)
 
 class type(_pstruct_generic):
@@ -184,19 +196,19 @@ class type(_pstruct_generic):
         _fields_:array( tuple( ptype, name ), ... )<w>
             This contains which elements the structure is composed of
     '''
-    _fields_ = None     # list of (type,name) tuples
-    ignored = ptype.container.ignored.union(('_fields_',))
+    _fields_ = None     # list of (type, name) tuples
+    ignored = ptype.container.__slots__['ignored'] | {'_fields_'}
 
     def initializedQ(self):
-        if getattr(self.blocksize, 'im_func', None) is ptype.container.blocksize.im_func:
+        if utils.callable_eq(self.blocksize, ptype.container.blocksize):
             return super(type, self).initializedQ()
 
         res = self.value is not None
         try:
             res = res and self.size() >= self.blocksize()
-        except Exception,e:
+        except Exception as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {:s} : {:s}".format(self.instance(), e, path), exc_info=True)
+            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
         finally:
             return res
 
@@ -209,27 +221,27 @@ class type(_pstruct_generic):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
         result = super(type, self).alloc()
         if fields:
-            for idx,(t,n) in enumerate(self._fields_):
-                if n not in fields:
+            for idx, (t, name) in enumerate(self._fields_ or []):
+                if name not in fields:
                     if ptype.isresolveable(t):
-                        result.value[idx] = self.new(t, __name__=n).a
+                        result.value[idx] = self.new(t, __name__=name).a
                     continue
-                v = fields[n]
-                if ptype.isresolveable(v) or ptype.istype(v):
-                    result.value[idx] = self.new(v, __name__=n).a
-                elif isinstance(v, ptype.generic):
-                    result.value[idx] = self.new(v, __name__=n)
-                elif isinstance(v, dict):
-                    result.value[idx].alloc(**v)
+                item = fields[name]
+                if ptype.isresolveable(item) or ptype.istype(item):
+                    result.value[idx] = self.new(item, __name__=name).a
+                elif isinstance(item, ptype.generic):
+                    result.value[idx] = self.new(item, __name__=name)
+                elif isinstance(item, dict):
+                    result.value[idx].alloc(**item)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].set(item)
                 continue
             self.setoffset(self.getoffset(), recurse=True)
         return result
 
     def __append_type(self, offset, cons, name, **attrs):
         if name in self.__fastindex:
-            _,name = name,u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+            _, name = name, u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
             Log.warn("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
 
         res = self.new(cons, __name__=name, offset=offset, **attrs)
@@ -248,47 +260,47 @@ class type(_pstruct_generic):
             # anything
 
             # XXX: it might be safer to call .blocksize() and check for InitializationError
-            current = None if getattr(self.blocksize, 'im_func', None) is type.blocksize.im_func else 0
+            current = None if utils.callable_eq(self.blocksize, type.blocksize) else 0
             if current is not None and self.blocksize() <= 0:
                 offset = self.getoffset()
 
                 # Populate the structure with undefined fields so that things are still
                 # somewhat initialized...
-                for i, (t, name) in enumerate(self._fields_):
+                for i, (t, name) in enumerate(self._fields_ or []):
                     self.__append_type(offset, ptype.undefined, name)
                 return super(type, self).load()
 
             try:
                 offset = self.getoffset()
-                for i, (t, name) in enumerate(self._fields_):
+                for i, (t, name) in enumerate(self._fields_ or []):
                     # create each element
-                    n = self.__append_type(offset, t, name)
+                    item = self.__append_type(offset, t, name)
 
                     # check if we've hit our blocksize
-                    bs = n.blocksize()
+                    bs = item.blocksize()
                     if current is not None:
                         try:
                             res = self.blocksize()
-                        except Exception, e:
+                        except Exception as E:
                             path = str().join(map("<{:s}>".format, self.backtrace()))
-                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path), exc_info=True)
+                            Log.debug("type.load : {:s} : Custom blocksize raised an exception at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path), exc_info=True)
                         else:
                             if current + bs > res:
                                 path = str().join(map("<{:s}>".format, self.backtrace()))
-                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, n.instance(), path))
+                                Log.info("type.load : {:s} : Custom blocksize caused structure to terminate at offset {:#x}, field {!r} : {:s}".format(self.instance(), current, item.instance(), path))
                                 break
                         current += bs
                     offset += bs
 
-            except error.LoadError, e:
-                raise error.LoadError(self, exception=e)
+            except error.LoadError as E:
+                raise error.LoadError(self, exception=E)
 
             # add any missing elements with a 0 blocksize
-            count = len(self._fields_) - len(self.value)
+            count = len(self._fields_ or []) - len(self.value)
             if count > 0:
                 for i, (t, name) in enumerate(self._fields_[-count:]):
-                    n = self.__append_type(offset, t, name, blocksize=lambda: 0)
-                    offset += n.blocksize()
+                    item = self.__append_type(offset, t, name, blocksize=lambda: 0)
+                    offset += item.blocksize()
 
             # complete the second pass
             result = super(type, self).load()
@@ -301,22 +313,22 @@ class type(_pstruct_generic):
         gettypename = lambda t: t.typename() if ptype.istype(t) else t.__name__
         if self.value is None:
             f = functools.partial(u"[{:x}] {:s} {:s} ???".format, self.getoffset())
-            res = (f(utils.repr_class(gettypename(t)), name) for t,name in self._fields_)
+            res = (f(utils.repr_class(gettypename(t)), name) for t, name in self._fields_ or [])
             return '\n'.join(res)
 
-        result,o = [],self.getoffset()
-        fn = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
-        for fld, value in map(None, self._fields_, self.value):
+        result, o = [], self.getoffset()
+        fmt = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
+        for fld, value in __izip_longest__(self._fields_ or [], self.value):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 i = utils.repr_class(gettypename(t))
-                v = self.new(ptype.type).a.summary(**options)
-                result.append(fn(i, name, v))
+                item = self.new(ptype.type).a.summary(**options)
+                result.append(fmt(i, name, item))
                 continue
             ofs = self.getoffset(value.__name__ or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
             val = value.summary(**options) if value.initializedQ() else u'???'
-            prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in value.properties().iteritems())
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             result.append(u"[{:x}] {:s}{:s} {:s}".format(ofs, inst, u" {{{:s}}}".format(prop) if prop else u"", val))
             o += value.size()
 
@@ -337,26 +349,26 @@ class type(_pstruct_generic):
                     raise error.UserError(result, 'type.set', message='Refusing to assign iterable to instance due to differing lengths')
                 result = super(type, result).__setvalue__(*value)
 
-            for k,v in fields.iteritems():
-                idx = self.__getindex__(k)
-                if ptype.isresolveable(v) or ptype.istype(v):
-                    result.value[idx] = self.new(v, __name__=k).a
-                elif isinstance(v, ptype.generic):
-                    result.value[idx] = self.new(v, __name__=k)
-                elif isinstance(v, dict):
-                    result.value[idx].set(**v)
+            for name, item in six.iteritems(fields):
+                idx = self.__getindex__(name)
+                if ptype.isresolveable(item) or ptype.istype(item):
+                    result.value[idx] = self.new(item, __name__=name).a
+                elif isinstance(item, ptype.generic):
+                    result.value[idx] = self.new(item, __name__=name)
+                elif isinstance(item, dict):
+                    result.value[idx].set(**item)
                 else:
-                    result.value[idx].set(v)
+                    result.value[idx].set(item)
                 continue
             result.setoffset(result.getoffset(), recurse=True)
             return result
         return result.a.__setvalue__(*values, **fields)
 
     def __getstate__(self):
-        return super(type, self).__getstate__(),self._fields_,
+        return super(type, self).__getstate__(), self._fields_,
 
     def __setstate__(self, state):
-        state,self._fields_, = state
+        state, self._fields_, = state
         super(type, self).__setstate__(state)
 
 def make(fields, **attrs):
@@ -368,23 +380,23 @@ def make(fields, **attrs):
 
     # FIXME: instead of this explicit check, if more than one structure occupies the
     # same location, then we should promote them all into a union.
-    if len(set([x.getoffset() for x in fields])) != len(fields):
+    if len({fld.getoffset() for fld in fields}) != len(fields):
         raise ValueError('more than one field is occupying the same location')
 
-    types = sorted(fields, cmp=lambda a,b: cmp(a.getoffset(),b.getoffset()))
+    types = sorted(fields, key=lambda instance: item.getposition())
 
-    ofs,result = 0,[]
+    ofs, result = 0, []
     for object in types:
-        o,n,s = object.getoffset(), object.shortname(), object.blocksize()
+        loc, name, size = object.getoffset(), object.shortname(), object.blocksize()
 
-        delta = o-ofs
+        delta = loc - ofs
         if delta > 0:
-            result.append((ptype.clone(ptype.block,length=delta), u'__padding_{:x}'.format(ofs)))
+            result.append((ptype.clone(ptype.block, length=delta), u'__padding_{:x}'.format(ofs)))
             ofs += delta
 
-        if s > 0:
-            result.append((object.__class__, n))
-            ofs += s
+        if size > 0:
+            result.append((object.__class__, name))
+            ofs += size
         continue
     return ptype.clone(type, _fields_=result, **attrs)
 
@@ -400,13 +412,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -431,11 +443,10 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        global x
-        source = provider.string('ABCDEFG')
+        source = provider.string(b'ABCDEFG')
         x = st(source=source)
         x = x.l
-        if x.serialize() == 'ABC':
+        if x.serialize() == b'ABC':
             raise Success
 
     @TestCase
@@ -447,10 +458,10 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string('ABCDEFG')
+        source = provider.string(b'ABCDEFG')
         x = st(source=source)
         x = x.l
-        if x['b'].serialize() == 'BC':
+        if x['b'].serialize() == b'BC':
             raise Success
 
     @TestCase
@@ -462,12 +473,12 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string('ABCDEFG')
-        v = uint32().set('XXXX')
+        source = provider.string(b'ABCDEFG')
+        v = uint32().set(b'XXXX')
         x = st(source=source)
         x = x.l
         x['b'] = v
-        if x.serialize() == 'AXXXXF':
+        if x.serialize() == b'AXXXXF':
             raise Success
 
     @TestCase
@@ -479,13 +490,13 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string('ABCDEFG')
-        v = uint16().set('XX')
+        source = provider.string(b'ABCDEFG')
+        v = uint16().set(b'XX')
         x = st(source=source)
         x = x.l
         x['b'] = v
         x.setoffset(x.getoffset(),recurse=True)
-        if x.serialize() == 'AXXF' and x['c'].getoffset() == 3:
+        if x.serialize() == b'AXXF' and x['c'].getoffset() == 3:
             raise Success
 
     @TestCase
@@ -496,10 +507,17 @@ if __name__ == '__main__':
                 (uint32, 'b'),
                 (uint32, 'c'),
             ]
-        source = provider.string('AAAABBBBCCC')
+        source = provider.string(b'AAAABBBBCCC')
         x = st(source=source)
-        x = x.l
-        if x.v is not None and not x.initialized and x['b'].serialize() == 'BBBB' and x['c'].size() == 3:
+
+        try:
+            x = x.l
+            raise Failure
+
+        except ptypes.error.LoadError:
+            pass
+
+        if x.v is not None and not x.initializedQ() and x['b'].serialize() == b'BBBB' and x['c'].size() == 3:
             raise Success
 
     @TestCase
@@ -513,7 +531,7 @@ if __name__ == '__main__':
 
         a = st(source=provider.empty())
         a.set(a=5, b=10, c=20)
-        if a.serialize() == '\x05\x00\x00\x00\x0a\x00\x00\x00\x14\x00\x00\x00':
+        if a.serialize() == b'\x05\x00\x00\x00\x0a\x00\x00\x00\x14\x00\x00\x00':
             raise Success
 
     @TestCase

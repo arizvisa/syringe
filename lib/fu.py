@@ -8,7 +8,11 @@
 # TODO: add a decorator that can transform anything into an object that will pass an instance of self
 #          to serialization service
 
-import __builtin__,itertools
+import sys
+if sys.version_info.major < 3:
+    import __builtin__
+else:
+    import builtins as __builtin__
 __all__ = ['caller','pack','unpack','loads','dumps']
 
 VERSION = '0.7'
@@ -62,14 +66,17 @@ class package:
 
             @staticmethod
             def hash(data):
-                return reduce(lambda x,y: (((x<<5)+x)^ord(y)) & 0xffffffff, iter(data), 5381)
+                agg = 5381
+                for item in iter(data):
+                    agg = (((agg<<5) + agg) ^ ord(item)) & 0xffffffff
+                return agg
 
         ## registration of a cls into cache
         @classmethod
         def register(cls, definition):
             id = cls.registration.hash(definition.__name__)
             if id in cls.registration.id:
-                raise KeyError, "Duplicate id %x in cache"% id
+                raise KeyError("Duplicate id %x in cache"% id)
 
             cls.registration.id[id] = definition
             definition.id = id
@@ -80,7 +87,7 @@ class package:
             '''registers the definition with the specified builtin type'''
             type = definition.getclass()
             if type in cls.registration.type:
-                raise KeyError, "Duplicate type %r in cache"% type
+                raise KeyError("Duplicate type %r in cache"% type)
 
             definition = cls.register(definition)
             cls.registration.type[type] = definition
@@ -90,7 +97,7 @@ class package:
         def register_const(cls, definition):
             const = definition.getclass()
             if const in cls.registration.const:
-                raise KeyError, "Duplicate constant %r in cache"% const
+                raise KeyError("Duplicate constant %r in cache"% const)
             definition = cls.register(definition)
             cls.registration.const[const] = definition
             return definition
@@ -111,20 +118,20 @@ class package:
             '''search through registration.const for a definition'''
             result = cls.registration.const[const]
             if result.getclass() is not const:
-                raise KeyError, const
+                raise KeyError(const)
             return result
 
         @classmethod
         def byinstance(cls, instance):
             '''iterate through all registered definitions to determine which one can work for serialization/deserialization'''
             global package,object_,module_
-            type,object,module = __builtin__.type,__builtin__.object,__builtin__.__class__
+            type, object, module = __builtin__.type, __builtin__.object, __builtin__.__class__
             t = type(instance)
 
             # any constant
             try:
                 return package.cache.byconst(instance)
-            except (KeyError,TypeError):
+            except (KeyError, TypeError):
                 pass
 
             # special types
@@ -132,21 +139,21 @@ class package:
                 # XXX: implement binary modules
                 if hasattr(instance, '__file__'):
                     if instance.__file__.endswith('.pyd'):
-                        raise NotImplementedError, 'Binary modules are un-supported'
+                        raise NotImplementedError('Binary modules are un-supported')
                     return module_
                 return module_local
 
             # by type
             try:
                 return package.cache.byclass(t)
-            except (KeyError,TypeError):
+            except (KeyError, TypeError):
                 pass
 
             # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
                     return partial  # XXX
-                    raise KeyError, (instance,'Unable to determine module name from builtin method')
+                    raise KeyError(instance, 'Unable to determine module name from builtin method')
                 return builtin_
 
             # catch-all object
@@ -155,11 +162,11 @@ class package:
 
             # FIXME: if it follows the pickle protocol..
             if hasattr(instance, '__getstate__'):
-                raise NotImplementedError, 'Pickle protocol for type %r is unimplemented'% instance
+                raise NotImplementedError('Pickle protocol for type %r is unimplemented'% instance)
                 pickle.loads(pickle.dumps(instance))
                 return partial
 
-            raise KeyError, instance
+            raise KeyError(instance)
 
     class stash(__builtin__.object):
         '''
@@ -181,13 +188,13 @@ class package:
             self.inst_data = {}
 
         @staticmethod
-        def clsbyid(n): return package.cache.byid(n)
+        def clsbyid(item): return package.cache.byid(item)
         @staticmethod
-        def clsbyinstance(n): return package.cache.byinstance(n)
+        def clsbyinstance(item): return package.cache.byinstance(item)
 
         def __repr__(self):
-            cons = [(k,(self.clsbyid(clsid).__name__,v)) for k,(clsid,v) in self.cons_data.iteritems()]
-            inst = [(k,(self.clsbyid(clsid).__name__,v)) for k,(clsid,v) in self.inst_data.iteritems()]
+            cons = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid,v) in self.cons_data.items()]
+            inst = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid,v) in self.inst_data.items()]
             return "<class '%s'> %s"%(self.__class__.__name__, repr(__builtin__.dict(cons)))
 
         ## serializing/deserializing entire state
@@ -281,8 +288,8 @@ class package:
 
             # unpack constructor
 #            _,(modulename,name),data = self.cons_data[identity]    # XXX: for attributes by name
-            _,data = self.cons_data[identity]
-            cls,data = self.clsbyid(_),self.unpack_references(data,**attributes)
+            _, data = self.cons_data[identity]
+            cls, data = self.clsbyid(_), self.unpack_references(data, **attributes)
 
             if False:   # XXX: attributes
                 # naming info
@@ -301,13 +308,13 @@ class package:
                     cls = module
 
             # create an instance of packed object
-            instance = cls.u_constructor(data,**attributes)
+            instance = cls.u_constructor(data, **attributes)
             self.fetch_cache[identity] = instance
 
             # update instance with packed attributes
             _,data = self.inst_data[identity]
-            cls,data = self.clsbyid(_),self.unpack_references(data,**attributes)
-            _ = cls.u_instance(instance,data,**attributes)
+            cls, data = self.clsbyid(_), self.unpack_references(data, **attributes)
+            _ = cls.u_instance(instance, data, **attributes)
             assert instance is _, '%s.fetch(%d) : constructed instance is different from updated instance'% (__builtin__.object.__repr__(self), identity)
             return instance
 
@@ -325,7 +332,7 @@ class __type__(__builtin__.object):
         This returns the type to search for. The type is snuck from an instance
         by using the __class__ attribute.
         '''
-        raise NotImplementedError, cls
+        raise NotImplementedError(cls)
 
     @classmethod
     def new(cls):
@@ -360,7 +367,7 @@ class __type__(__builtin__.object):
         object's users expect these fields to be set. The necessary attributes
         are then returned as a tuple.
         '''
-        raise NotImplementedError, cls
+        raise NotImplementedError(cls)
 
     @classmethod
     def u_constructor(cls, data, **attributes):
@@ -370,7 +377,7 @@ class __type__(__builtin__.object):
         the same as the tuple returned by the p_constructor() classmethod. The
         method will return the properly instantiated type.
         '''
-        raise NotImplementedError, cls
+        raise NotImplementedError(cls)
 
     @classmethod
     def u_instance(cls, instance, data, **attributes):
@@ -391,10 +398,10 @@ class partial(__type__):
         __name__ = '--incomplete--'
         def __getattr__(self, attribute):
             message = 'unable to access attribute "%s" from partial type "%s"'
-            raise Exception, message% (attribute, self.__name__)
+            raise Exception(message% (attribute, self.__name__))
         def __call__(self, *args, **kwds):
             message = 'unable to call partial type "%s"'
-            raise Exception, message% (self.__name__)
+            raise Exception(message% (self.__name__))
         def __repr__(self):
             return "%s %s"%( self.__class__, self.__name__ )
 
@@ -481,7 +488,7 @@ if 'constants':
     class bool(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.True.__class__
+            return __builtin__.bool
 
     @package.cache.register_const
     class int(__constant):
@@ -495,11 +502,12 @@ if 'constants':
         def getclass(cls):
             return 0.0.__class__
 
-    @package.cache.register_const
-    class long(__constant):
-        @classmethod
-        def getclass(cls):
-            return 0L.__class__
+    if sys.version_info.major < 3:
+        @package.cache.register_const
+        class long(__constant):
+            @classmethod
+            def getclass(cls):
+                return eval('0L').__class__
 
     @package.cache.register_const
     class complex(__constant):
@@ -513,17 +521,25 @@ if 'constants':
         def getclass(cls):
             return ''.__class__
 
-    @package.cache.register_const
-    class unicode(__constant):
-        @classmethod
-        def getclass(cls):
-            return u''.__class__
+    if sys.version_info.major < 3:
+        @package.cache.register_const
+        class unicode(__constant):
+            @classmethod
+            def getclass(cls):
+                return u''.__class__
 
-    @package.cache.register_const
-    class buffer(__constant):
-        @classmethod
-        def getclass(cls):
-            return __builtin__.buffer('').__class__
+        @package.cache.register_const
+        class buffer(__constant):
+            @classmethod
+            def getclass(cls):
+                return __builtin__.buffer('').__class__
+
+    else:
+        @package.cache.register_const
+        class bytes(__constant):
+            @classmethod
+            def getclass(cls):
+                return b''.__class__
 
     @package.cache.register_const
     class tuple(__constant):
@@ -571,17 +587,29 @@ if 'constants':
     class code(__constant):
         @classmethod
         def getclass(cls):
-            return eval('lambda:fake').func_code.__class__
+            res = eval('lambda:fake')
+            return res.func_code.__class__ if sys.version_info.major < 3 else res.__code__.__class__
 
-        @classmethod
-        def new(cls, argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
-            i,s,t = __builtin__.int,__builtin__.str,__builtin__.tuple
-            optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
-            types = [ i, i, i, i, s, t, t, t, s, s, i, s, optional(t), optional(t) ]
-            values = [ argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
-            for i,t in enumerate(types):
-                values[i] = t( values[i] )
-            return cls.getclass()(*values)
+        if sys.version_info.major < 3:
+            @classmethod
+            def new(cls, argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
+                i, s, t, b = __builtin__.int, __builtin__.str, __builtin__.tuple, __builtin__.bytes
+                optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
+                types = [ i, i, i, i, b, t, t, t, s, s, i, b, optional(t), optional(t) ]
+                values = [ argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
+                for idx, cons in enumerate(types):
+                    values[idx] = cons(values[idx])
+                return cls.getclass()(*values)
+        else:
+            @classmethod
+            def new(cls, argcount, kwonlyargcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
+                i, s, t, b = __builtin__.int, __builtin__.str, __builtin__.tuple, __builtin__.bytes
+                optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
+                types = [ i, i, i, i, i, b, t, t, t, s, s, i, b, optional(t), optional(t) ]
+                values = [ argcount, kwonlyargcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
+                for idx, cons in enumerate(types):
+                    values[idx] = cons(values[idx])
+                return cls.getclass()(*values)
 
     @package.cache.register_const
     class function(__constant):
@@ -633,19 +661,19 @@ if 'constants':
     class none(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.None
+            return None
 
     @package.cache.register_const
     class true(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.True
+            return True
 
     @package.cache.register_const
     class false(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.False
+            return False
 
     @package.cache.register_const
     class notImplemented(__constant):
@@ -659,11 +687,12 @@ if 'constants':
         def getclass(cls):
             return __builtin__.Ellipsis
 
-    @package.cache.register_const
-    class file(__constant):
-        @classmethod
-        def getclass(cls):
-            return __builtin__.file
+    if sys.version_info.major < 3:
+        @package.cache.register_const
+        class file(__constant):
+            @classmethod
+            def getclass(cls):
+                return __builtin__.file
 
     import _weakref
     @package.cache.register_const
@@ -678,23 +707,12 @@ if 'constants':
         def getclass(cls):
             return __builtin__.super
 
-    import thread
+    import _thread
     @package.cache.register_const
     class threadlock(__constant):
         @classmethod
         def getclass(cls):
-            return thread.LockType
-
-try:
-    import imp
-    @package.cache.register_const
-    class NullImporter(__constant):
-        @classmethod
-        def getclass(cls):
-            return imp.NullImporter
-
-except ImportError:
-    pass
+            return _thread.LockType
 
 if 'core':
     @package.cache.register_type
@@ -740,22 +758,25 @@ if 'core':
             if hasattr(object,'__slots__'):
                 state.update((k,getattr(object,k)) for k in object.__slots__ if hasattr(object,k))
 
+            f = lambda: wat
+            t = __builtin__.type(f)
+
             # non-serializeable descriptors
             getset_descriptor = cls.__weakref__.__class__
             method_descriptor = cls.__reduce_ex__.__class__
             wrapper_descriptor = cls.__setattr__.__class__
-            member_descriptor = __builtin__.type(lambda:wat).func_globals.__class__
+            member_descriptor = t.func_globals.__class__ if sys.version_info.major < 3 else t.__globals__.__class__
             classmethod_descriptor = __builtin__.type(__builtin__.float.__dict__['fromhex'])
 
             result = {}
-            for k,v in state.iteritems():
+            for k, v in state.items():
                 if __builtin__.type(v) in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator_.getclass()):
                     continue
 
                 try:
                     _ = package.cache.byinstance(v)
 
-                except (KeyError,TypeError):
+                except (KeyError, TypeError):
                     continue
                 result[k] = v
             return result
@@ -765,16 +786,17 @@ if 'core':
             for k,v in data.items():
                 try:
                     setattr(instance, k, v)
-                except (TypeError,AttributeError):
+                except (TypeError, AttributeError):
                     pass
             return instance
 
-    @package.cache.register_type
-    class classobj(type_):
-        '''an old-style python class'''
-        @classmethod
-        def getclass(cls):
-            return __builtin__.type(package)
+    if sys.version_info.major < 3:
+        @package.cache.register_type
+        class classobj(type_):
+            '''an old-style python class'''
+            @classmethod
+            def getclass(cls):
+                return __builtin__.type(package)
 
     @package.cache.register_type
     class Object(__constant):
@@ -805,7 +827,7 @@ if 'core':
             type.__init__ = lambda s: None
             if hasattr(type, '__new__'):
                 # FIXME: abc.ABCMeta
-                raise Exception, 'Unable to support custom-defined .__new__ operators'
+                raise Exception('Unable to support custom-defined .__new__ operators')
             type.__new__ = lambda *a: a
             result = type()
             type.__init__ = _
@@ -856,27 +878,67 @@ if 'core':
         '''a module and it's attributes in memory'''
         @classmethod
         def p_constructor(cls, object, **attributes):
-            return object.__name__,object.__doc__
+            if sys.version_info.major < 3:
+                return '', object.__name__, object.__doc__
+
+            spec = object.__spec__
+            return spec.name if isinstance(spec.loader, __import__('_frozen_importlib').BuiltinImporter) else '', object.__name__, object.__doc__
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            name,doc = data
-            return cls.new(name,doc)
+            spec, name, doc = data
+            if sys.version_info.major < 3 or not spec:
+                return cls.new(name, doc)
+
+            res = __import__('spec')
+            res.__name__, res.__doc__ = name, doc
+            return res
 
         @classmethod
         def p_instance(cls, object, **attributes):
-            ignored = ('__builtins__',)
+            if sys.version_info.major >= 3 and hasattr(object, '__spec__') and isinstance(object.__spec__.loader, __import__('_frozen_importlib').BuiltinImporter):
+                return {}
+            ignored = ('__builtins__', '__loader__')
             return __builtin__.dict((k,v) for k,v in object.__dict__.items() if k not in ignored)
 
         @classmethod
+        def u_instance(cls, instance, data, **attributes):
+            for attribute, value in data.items():
+                setattr(instance, attribute, value)
+            return instance
+
+if sys.version_info.major >= 3:
+    @package.cache.register_const
+    class ModuleSpec(__constant):
+        @classmethod
+        def getclass(cls):
+            return __import__('_frozen_importlib').ModuleSpec
+
+    @package.cache.register_type
+    class ModuleSpec_(__type__):
+        @classmethod
+        def getclass(cls):
+            return __import__('_frozen_importlib').ModuleSpec
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            #return object.name, object.loader, object.origin, object.loader_state, hasattr(object, '__path__')
+            return object.name, None, object.origin, object.loader_state, hasattr(object, '__path__')
+
+        @classmethod
         def u_constructor(cls, data, **attributes):
-            name,doc = data
-            return module.new(name,doc)
+            cons = cls.getclass()
+            name, loader, origin, loader_state, is_package = data
+            #return cons(name, loader, parent=parent, origin=origin, loader_state=loader_state, is_package=is_package)
+            return cons(name, None, origin=origin, loader_state=loader_state, is_package=is_package)
+
+        @classmethod
+        def p_instance(cls, object, **attributes):
+            return object.submodule_search_locations
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
-            for k,v in data.items():
-                setattr(instance, k, v)
+            instance.submodule_search_locations = data
             return instance
 
 if 'builtin':
@@ -915,12 +977,13 @@ if 'builtin':
         def getclass(cls):
             return float.getclass()
 
-    @package.cache.register_type
-    class long_(__builtin):
-        '''long value'''
-        @classmethod
-        def getclass(cls):
-            return long.getclass()
+    if sys.version_info.major < 3:
+        @package.cache.register_type
+        class long_(__builtin):
+            '''long value'''
+            @classmethod
+            def getclass(cls):
+                return long.getclass()
 
     @package.cache.register_type
     class complex_(__builtin):
@@ -937,61 +1000,28 @@ if 'builtin':
         def getclass(cls):
             return str.getclass()
 
-    @package.cache.register_type
-    class unicode_(__builtin):
-        '''unicode string'''
-        @classmethod
-        def getclass(cls):
-            return unicode.getclass()
-
-    @package.cache.register_type
-    class buffer_(__builtin):
-        '''string buffer'''
-        @classmethod
-        def getclass(cls):
-            return buffer.getclass()
-
-if 'custom':
-    @package.cache.register_type
-    class NullImporter_(__builtin):
-        '''string buffer'''
-        @classmethod
-        def getclass(cls):
-            return NullImporter.getclass()
-
-    try:
-        import _sre
+    if sys.version_info.major < 3:
         @package.cache.register_type
-        class SRE_Pattern(__builtin):
+        class unicode_(__builtin):
+            '''unicode string'''
             @classmethod
             def getclass(cls):
-                return _sre.compile('', 0, [1], 0, {}, []).__class__
+                return unicode.getclass()
 
+        @package.cache.register_type
+        class buffer_(__builtin):
+            '''string buffer'''
             @classmethod
-            def p_constructor(cls, object, **attributes):
-                #pattern, flags, code
-                return (object.pattern, object.flags, code, )
+            def getclass(cls):
+                return buffer.getclass()
 
+    else:
+        @package.cache.register_type
+        class bytes_(__builtin):
+            '''unicode string'''
             @classmethod
-            def u_constructor(cls, data, **attributes):
-                pass
-    #            return _sre.compile(
-    #                pattern, flags | p.pattern.flags, code,
-    #                p.pattern.groups-1,
-    #                groupindex, indexgroup
-    #                )
-
-            @classmethod
-            def p_instance(cls, object, **attributes):
-                return ()
-
-            @classmethod
-            def u_instance(cls, instance, data, **attributes):
-                return instance
-        raise ImportError
-
-    except ImportError:
-        print '_sre serialization not really completed yet'
+            def getclass(cls):
+                return bytes.getclass()
 
 if 'immutable':
     @package.cache.register_type
@@ -1094,7 +1124,7 @@ if 'special':
 
         @classmethod
         def getclass(cls):
-            raise NotImplementedError, cls
+            raise NotImplementedError(cls)
 
         @classmethod
         def p_constructor(cls, object, **attributes):
@@ -1125,7 +1155,7 @@ if 'special':
     @package.cache.register_type
     class property_(__special):
         '''a python class property'''
-        attributes=['fdel','fset','fget']
+        attributes = ['fdel', 'fset', 'fget']
         @classmethod
         def getclass(cls):
             return property.getclass()
@@ -1137,11 +1167,20 @@ if 'special':
     @package.cache.register_type
     class code_(__special):
         '''a python code type'''
-        attributes = [
-            'co_argcount', 'co_nlocals', 'co_stacksize', 'co_flags', 'co_code',
-            'co_consts', 'co_names', 'co_varnames', 'co_filename', 'co_name',
-            'co_firstlineno', 'co_lnotab', 'co_freevars', 'co_cellvars'
-        ]
+
+        if sys.version_info.major < 3:
+            attributes = [
+                'co_argcount', 'co_nlocals', 'co_stacksize', 'co_flags', 'co_code',
+                'co_consts', 'co_names', 'co_varnames', 'co_filename', 'co_name',
+                'co_firstlineno', 'co_lnotab', 'co_freevars', 'co_cellvars'
+            ]
+        else:
+            attributes = [
+                'co_argcount', 'co_kwonlyargcount', 'co_nlocals', 'co_stacksize',
+                'co_flags', 'co_code', 'co_consts', 'co_names', 'co_varnames',
+                'co_filename', 'co_name', 'co_firstlineno', 'co_lnotab',
+                'co_freevars', 'co_cellvars'
+            ]
 
         @classmethod
         def getclass(cls):
@@ -1163,10 +1202,11 @@ if 'special':
         @classmethod
         def p_constructor(cls, object, **attributes):
             # so...it turns out that only the closure property is immutable
-            func_closure = object.func_closure if object.func_closure is not None else ()
+            res = object.func_closure if sys.version_info.major < 3 else object.__closure__
+            func_closure = () if res is None else res
+            func_code = object.func_code if sys.version_info.major < 3 else object.__code__
             assert object.__module__ is not None, 'FIXME: Unable to pack an unbound function'
-#            return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure),object.func_globals
-            return object.__module__,object.func_code,__builtin__.tuple(x.cell_contents for x in func_closure)
+            return object.__module__, func_code, __builtin__.tuple(cell.cell_contents for cell in func_closure)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
@@ -1181,7 +1221,9 @@ if 'special':
 
         @classmethod
         def p_instance(cls, object, **attributes):
-            return object.func_code,object.func_name,object.func_defaults
+            if sys.version_info.major < 3:
+                return object.func_code, object.func_name, object.func_defaults
+            return object.__code__, object.__name__, object.__defaults__
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
@@ -1210,50 +1252,51 @@ if 'special':
             m = module.instancelocal(mod)
             return getattr(m,name)
 
-    @package.cache.register
-    class file_(__constant):
-        '''A file..for serializing the contents of the file look at file_contents'''
-        @classmethod
-        def getclass(cls):
-            return file.getclass()
+    if sys.version_info.major < 3:
+        @package.cache.register
+        class file_(__constant):
+            '''A file..for serializing the contents of the file look at file_contents'''
+            @classmethod
+            def getclass(cls):
+                return file.getclass()
 
-        @classmethod
-        def p_constructor(cls, file, **attributes):
-            offset = file.tell()
-            return file.name, file.mode, offset
+            @classmethod
+            def p_constructor(cls, file, **attributes):
+                offset = file.tell()
+                return file.name, file.mode, offset
 
-        @classmethod
-        def u_constructor(cls, data, **attributes):
-            name,mode,offset = data
-            file = open(name, mode)
-            file.seek(offset)
-            return file
+            @classmethod
+            def u_constructor(cls, data, **attributes):
+                name,mode,offset = data
+                file = open(name, mode)
+                file.seek(offset)
+                return file
 
-    @package.cache.register
-    class file_contents(file_):
-        # FIXME: save the whole file.. (should be selected via a hint)
-        @classmethod
-        def getclass(cls):
-            return file.getclass()
+        @package.cache.register
+        class file_contents(file_):
+            # FIXME: save the whole file.. (should be selected via a hint)
+            @classmethod
+            def getclass(cls):
+                return file.getclass()
 
-        @classmethod
-        def p_constructor(cls, file, **attributes):
-            offset = file.tell()
-            file.seek(0)
-            content = file.read()
-            file.seek(offset)
-            return (file.name, file.mode, offset, content)
+            @classmethod
+            def p_constructor(cls, file, **attributes):
+                offset = file.tell()
+                file.seek(0)
+                content = file.read()
+                file.seek(offset)
+                return (file.name, file.mode, offset, content)
 
-        @classmethod
-        def u_constructor(cls, data, **attributes):
-            name,mode,offset,content = data
-            file = open(name, "w")
-            file.write(content)
-            file.close()
+            @classmethod
+            def u_constructor(cls, data, **attributes):
+                name,mode,offset,content = data
+                file = open(name, "w")
+                file.write(content)
+                file.close()
 
-            file = open(name,mode)
-            file.seek(offset)
-            return file
+                file = open(name,mode)
+                file.seek(offset)
+                return file
 
     import _weakref
     @package.cache.register_type
@@ -1293,18 +1336,18 @@ if 'special':
         def p_instance(cls, object, **attributes):
             return ()
 
-    import thread
+    import _thread
     @package.cache.register_type
     class threadlock_(__type__):
         @classmethod
         def getclass(cls):
-            return thread.LockType  # XXX
+            return _thread.LockType  # XXX
         @classmethod
         def p_constructor(cls, object, **attributes):
             return ()
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return thread.allocate_lock()
+            return _thread.allocate_lock()
         @classmethod
         def p_instance(cls, object, **attributes):
             return ()
@@ -1318,14 +1361,14 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            raise NotImplementedError, 'Unable to pack objects of type generator_'  # Due to the gi_frame property
+            raise NotImplementedError('Unable to pack objects of type generator_')  # Due to the gi_frame property
             return object.gi_running,object.gi_code,object.gi_frame
 
         @classmethod
         def u_constructor(cls, data, **attributes):
             co,fr = data
             result = function.new(co, fr.f_globals)
-            raise NotImplementedError, 'Unable to unpack objects of type generator_'
+            raise NotImplementedError('Unable to unpack objects of type generator_')
             return result
 
         @classmethod
@@ -1345,11 +1388,11 @@ if 'special':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            raise NotImplementedError, 'Unable to pack objects of type frame_'
+            raise NotImplementedError('Unable to pack objects of type frame_')
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            raise NotImplementedError, 'Unable to unpack objects of type frame_'
+            raise NotImplementedError('Unable to unpack objects of type frame_')
 
     @package.cache.register_type
     class staticmethod_(__constant):
@@ -1390,11 +1433,6 @@ if 'operator':
         def getclass(cls):
             return operator.attrgetter
 
-    class __attrgetter_helper(object):
-        def __getattribute__(self, name):
-            raise Exception(name)
-    _attrgetter_helper = __attrgetter_helper()
-
     @package.cache.register_type
     class attrgetter_(__constant):
         @classmethod
@@ -1402,12 +1440,44 @@ if 'operator':
             return operator.attrgetter
 
         @classmethod
+        def helper(cls):
+            class attrgetter(object):
+                def __getattribute__(self, name):
+                    raise Exception(name)
+            return attrgetter()
+
+        @classmethod
         def p_constructor(cls, object, **attributes):
+            helper = cls.helper()
             try:
-                object(_attrgetter_helper)
+                object(helper)
             except Exception as E:
                 name, = E
             return (name,)
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            name, = data
+            return cls.new(name)
+
+    class itemgetter(__constant):
+        @classmethod
+        def getclass(cls):
+            return operator.itemgetter
+
+    @package.cache.register_type
+    class itemgetter_(__constant):
+        @classmethod
+        def getclass(cls):
+            return operator.itemgetter
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            # XXX: we can implement a class that implements __getitem__,
+            #      and hook it to a coroutine to figure out how many
+            #      times the itemgetter accesses it, and what indices
+            #      it's trying to access.
+            raise NotImplementedError
 
         @classmethod
         def u_constructor(cls, data, **attributes):
@@ -1442,7 +1512,7 @@ def caller(frame=None):
     import sys
     fr = sys._getframe().f_back if frame is None else frame
     source,name = fr.f_code.co_filename,fr.f_code.co_name
-    module = [x for x in sys.modules.itervalues() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
+    module = [x for x in sys.modules.values() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
     module, = (None,) if not module else module
     return module,name
 
@@ -1460,14 +1530,14 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
-            print traceback.format_exc()
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
+            print(traceback.format_exc())
             return False
         TestCaseList.append(harness)
         return fn
@@ -1601,11 +1671,11 @@ if __name__ == '__main__':
     @TestCase
     def test_dictref_unpack():
         a = {}
-        a[5] = __builtin__.None
+        a[5] = None
         a[6] = a
         data = fu.package.pack(a)
         y = fu.package.unpack(data)
-        if y[6][5] is __builtin__.None:
+        if y[6][5] is None:
             raise Success
 
     @TestCase
@@ -1896,17 +1966,17 @@ if __name__ == '__main__':
             b.blargh = 500
             b.huh = 500
         except AttributeError:
-            raise Failure, "Unable to assign to slots"
+            raise Failure("Unable to assign to slots")
 
         try:
             b.readonly = 20
-            raise Failure, "Successfully assigned to a readonly property"
+            raise Failure("Successfully assigned to a readonly property")
         except AttributeError:
             pass
 
         try:
             b.nope = None
-            raise Failure, "Assigned a property to a __dict__ instead of an allocated slot"
+            raise Failure("Assigned a property to a __dict__ instead of an allocated slot")
         except AttributeError:
             pass
 
@@ -1929,13 +1999,13 @@ if __name__ == 'bootstrap':
     t1 = set()
     t1.update(n for n,_ in st.cons_data.values())
     t1.update(n for n,_ in st.inst_data.values())
-    print len(t1)
+    print(len(t1))
     [st.store(fu.package.cache.byid(n)) for n in t]
     t2 = set()
     t2.update(n for n,_ in st.cons_data.values())
     t2.update(n for n,_ in st.inst_data.values())
-    print len(t2)
-    print sum(map(len,(fu.package.cache.registration.id,fu.package.cache.registration.type,fu.package.cache.registration.const)))
+    print(len(t2))
+    print(sum(map(len,(fu.package.cache.registration.id,fu.package.cache.registration.type,fu.package.cache.registration.const))))
     t = t2
 
     mymethod = type(fu.function.new)
@@ -1988,16 +2058,16 @@ if __name__ == 'bootstrap':
     #for attr in ['func_closure', 'func_code', 'func_defaults', 'func_dict', 'func_doc', 'func_globals', 'func_name']:
     #for n,(new,cons,inst) in methods:
     #    if any(x.func_closure is not None for x in (cons,inst)):
-    #        raise Exception, n
+    #        raise Exception(n)
     #    if any(x.func_defaults is not None for x in (cons,inst)):
-    #        raise Exception, n
+    #        raise Exception(n)
     #    if any(len(x.func_dict) != 0 for x in (cons,inst)):
-    #        raise Exception, n
+    #        raise Exception(n)
     #    for attr in ['func_code', 'func_name']:
-    #        print n, attr, repr(getattr(cons, attr))
-    #        print n, attr, repr(getattr(inst, attr))
+    #        print(n, attr, repr(getattr(cons, attr)))
+    #        print(n, attr, repr(getattr(inst, attr)))
 
     consdata = st.cons_data
     instances = {}
-    for _,(t,v) in consdata.iteritems():
+    for _, (t, v) in consdata.items():
         result[t].u_constructor(v, globals=namespace)

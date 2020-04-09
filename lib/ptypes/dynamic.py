@@ -80,12 +80,13 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import six, operator
+import six, sys, operator, itertools
 
 from . import ptype, parray, pstruct, config, error, utils, provider, pint
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 ## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
@@ -114,7 +115,7 @@ def blockarray(type, size, **kwds):
 
     if size < 0:
         t = parray.block(_object_=type)
-        Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(),size))
+        Log.error("blockarray : {:s} : Invalid argument size={:d} cannot be < 0. Defaulting to 0".format(t.typename(), size))
         size = 0
 
     class blockarray(parray.block):
@@ -127,7 +128,7 @@ def blockarray(type, size, **kwds):
             return "dynamic.blockarray({:s}, {:d})".format(t, self.blocksize())
     blockarray.__module__ = __name__
     blockarray.__name__ = 'blockarray'
-    blockarray.__getinitargs__ = lambda s: (type,size)
+    blockarray.__getinitargs__ = lambda s: (type, size)
     return blockarray
 
 def padding(size, **kwds):
@@ -214,16 +215,16 @@ def array(type, count, **kwds):
     returns an array of the specified length containing elements of the specified type
     '''
     if not isinstance(count, six.integer_types):
-        t = parray.type(_object_=type,length=count)
+        t = parray.type(_object_=type, length=count)
         raise error.UserError(t, 'array', message="Argument count must be integral : {:s} -> {!r}".format(count.__class__, count))
 
     if count < 0:
-        t = parray.type(_object_=type,length=count)
+        t = parray.type(_object_=type, length=count)
         Log.error("dynamic.array : {:s} : Invalid argument count={:d} cannot be < 0. Defaulting to 0.".format(t.typename(), count))
         count = 0
 
     if Config.parray.max_count > 0 and count > Config.parray.max_count:
-        t = parray.type(_object_=type,length=count)
+        t = parray.type(_object_=type, length=count)
         if Config.parray.break_on_max_count:
             Log.fatal("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
             raise error.UserError(t, 'array', message="Requested array count={:d} is larger than configuration max_count={:d}".format(count, Config.parray.max_count))
@@ -248,7 +249,7 @@ def clone(cls, **newattrs):
 
 class _union_generic(ptype.container):
     def __init__(self, *args, **kwds):
-        super(_union_generic,self).__init__(*args, **kwds)
+        super(_union_generic, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
     def append(self, object):
@@ -362,9 +363,9 @@ class union(_union_generic):
             return res
 
         # if the blocksize method is not modified, then allocate all fields and choose the largest
-        if getattr(self.blocksize, 'im_func', None) is union.blocksize.im_func:
+        if utils.callable_eq(self.blocksize, union.blocksize):
             iterable = (self.new(t) for t in objects)
-            size = max(n.a.blocksize() for n in iterable)
+            size = max(item.a.blocksize() for item in iterable)
             return clone(ptype.block, length=size)
 
         # otherwise, just use the blocksize to build a ptype.block for the root type
@@ -377,15 +378,15 @@ class union(_union_generic):
 
         source = provider.proxy(res)      # each element will write into the offset occupied by value
         self.__object__ = []
-        for t,n in self._fields_:
-            res = self.new(t, __name__=n, offset=0, source=source)
+        for t, name in self._fields_:
+            res = self.new(t, __name__=name, offset=0, source=source)
             self.__append__(res)
         return self.value[0]
 
     def alloc(self, **attrs):
         res = self.__create__() if self.value is None else self.value[0]
         res.alloc(**attrs)
-        map(operator.methodcaller('load', offset=0), self.__object__)
+        [ item.load(offset=0) for item in self.__object__ ]
         return self
 
     def serialize(self):
@@ -396,7 +397,7 @@ class union(_union_generic):
         for element in self.__object__:
             try:
                 element.load(offset=0)
-            except error.LoadError, e:
+            except error.LoadError as E:
                 Log.warn("dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}".format(self.instance(), element.instance(), element.name()))
             continue
         return self
@@ -409,19 +410,19 @@ class union(_union_generic):
         return self
 
     def properties(self):
-        result = super(union,self).properties()
+        result = super(union, self).properties()
         if self.initializedQ():
-            result['object'] = ["{:s}<{:s}>".format(v.name(),v.classname()) for v in self.__object__]
+            result['object'] = ["{:s}<{:s}>".format(item.name(), item.classname()) for item in self.__object__]
         else:
-            result['object'] = ["{:s}<{:s}>".format(n,t.typename()) for t,n in self._fields_]
+            result['object'] = ["{:s}<{:s}>".format(name, t.typename()) for t, name in self._fields_]
         return result
 
     def __getitem__(self, key):
-        result = super(union,self).__getitem__(key)
+        result = super(union, self).__getitem__(key)
         try:
             result.li
-        except error.UserError, e:
-            Log.warning("union.__getitem__ : {:s} : Ignoring exception {:s}".format(self.instance(), e))
+        except error.UserError as E:
+            Log.warning("union.__getitem__ : {:s} : Ignoring exception {!s}".format(self.instance(), E))
         return result
 
     def details(self):
@@ -436,14 +437,14 @@ class union(_union_generic):
 
         # do the root object first
         inst = utils.repr_instance(self.object.classname(), '{object}')
-        prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().iteritems())
+        prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(self.object.properties()))
         result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
-        for fld, value in map(None, self._fields_, self.__object__ or []):
+        for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().iteritems())
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary()))
 
         if len(result) > 0:
@@ -457,19 +458,19 @@ class union(_union_generic):
         # first the object if it's been allocated
         if self.object is not None:
             inst = utils.repr_instance(self.object.classname(), '{object}')
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().iteritems())
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(self.object.properties()))
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
         else:
             result.append("[{:x}] {:s} ???".format(self.getoffset(), gettypename(self._value_)))
 
         # now the rest of the fields
-        for fld, value in map(None, self._fields_, self.__object__ or []):
+        for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 result.append("[{:x}] {:s} {:s} ???".format(self.getoffset(), utils.repr_class(gettypename(t)), name))
                 continue
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().iteritems())
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
 
         if len(result) > 0:
@@ -552,13 +553,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -569,11 +570,11 @@ if __name__ == '__main__':
 
     ptypes.setsource(ptypes.provider.string('A'*50000))
 
-    string1='ABCD'  # bigendian
-    string2='DCBA'  # littleendian
+    string1=b'ABCD'  # bigendian
+    string2=b'DCBA'  # littleendian
 
-    s1 = 'the quick brown fox jumped over the lazy dog'
-    s2 = s1.encode('zlib')
+    s1 = b'the quick brown fox jumped over the lazy dog'
+    s2 = zlib.compress(s1)
 
     @TestCase
     def test_dynamic_union_rootstatic():
@@ -584,7 +585,7 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'int'),
             ]
 
-        a = test(source=ptypes.provider.string('A'*4))
+        a = test(source=ptypes.provider.string(b'A'*4))
         a=a.l
         if a.object[0].int() != 0x41:
             raise Failure
@@ -602,7 +603,7 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'end'),
             ]
 
-        a = test(source=ptypes.provider.string('A'*12))
+        a = test(source=ptypes.provider.string(b'A'*12))
         a=a.l
         if a.size() == 12:
             raise Success
@@ -630,7 +631,7 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_pointer_littleendian_2():
         pint.setbyteorder(config.byteorder.littleendian)
-        string = '\x26\xf8\x1a\x77'
+        string = b'\x26\xf8\x1a\x77'
         s = ptype.provider.string(string)
 
         t = dynamic.pointer(dynamic.block(0), pint.uint32_t)
@@ -642,7 +643,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_bigendian_deref():
         pint.setbyteorder(config.byteorder.bigendian)
 
-        s = ptype.provider.string('\x00\x00\x00\x04\x44\x43\x42\x41')
+        s = ptype.provider.string(b'\x00\x00\x00\x04\x44\x43\x42\x41')
         t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
@@ -652,7 +653,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_deref():
         pint.setbyteorder(config.byteorder.littleendian)
 
-        s = ptype.provider.string('\x04\x00\x00\x00\x44\x43\x42\x41')
+        s = ptype.provider.string(b'\x04\x00\x00\x00\x44\x43\x42\x41')
         t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
@@ -662,7 +663,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_64bit_deref():
         pint.setbyteorder(config.byteorder.littleendian)
         t = dynamic.pointer(dynamic.block(4), pint.uint64_t)
-        x = t(source=ptype.provider.string('\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
+        x = t(source=ptype.provider.string(b'\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
         if x.l.d.getoffset() == 8:
             raise Success
 
@@ -676,7 +677,7 @@ if __name__ == '__main__':
     def test_dynamic_array_2():
         v = dynamic.array(pint.int32_t, 8)
         i = six.moves.range(0x40,0x40+v.length)
-        x = ptype.provider.string(''.join(six.int2byte(x)+'\x00\x00\x00' for x in i))
+        x = ptype.provider.string(bytes().join(six.int2byte(x)+b'\x00\x00\x00' for x in i))
         z = v(source=x).l
         if z[4].int() == 0x44:
             raise Success

@@ -1,4 +1,4 @@
-from base import *
+from .base import *
 
 class header(pstruct.type):
     _fields_ = [
@@ -305,20 +305,20 @@ if __name__ == '__main__':
     x = header()
     x.source = input
     x.setoffset(512)
-    print x.load()
-    print x['filesize']
+    print(x.load())
+    print(x['filesize'])
 
     x = x.newelement(header_v2, 'v2', x.getoffset() + x.size())
-    print x.load()
+    print(x.load())
 
     x = x.newelement(header_ext_v2, 'ext_v2', x.getoffset() + x.size())
-    print x.load()
+    print(x.load())
 
     x = x.newelement(picSize, 'picsize', x.getoffset() + x.size())
-    print x.load()
+    print(x.load())
 
     x = x.newelement(picFrame_v2, 'picframe_v2', x.getoffset() + x.size())
-    print x.load()
+    print(x.load())
 
     x = x.newelement(directBitsRect, 'directBitsRect', 0x250+2)
-    print x.load()
+    print(x.load())

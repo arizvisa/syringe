@@ -12,7 +12,7 @@ def searchpath(filename):
         if filename.lower() in files:
             return os.sep.join((p,filename))
         continue
-    raise OSError, "Unable to find {} in PATH".format(filename)
+    raise OSError("Unable to find {} in PATH".format(filename))
 def modulename(filename):
     # convert filename into a windbg style module name
     return filename.rsplit('.',1)[0].upper()
@@ -21,15 +21,15 @@ def iterate_imports(filename):
     z = pecoff.Executable.File(source=ptypes.prov.file(filename, mode='r')).l
     importsDirectory = z['Next']['Header']['DataDirectory'][1]
     if importsDirectory['Address'].num() == 0:
-        raise ValueError, "No imports found in {}".format(filename)
+        raise ValueError("No imports found in {}".format(filename))
     for imp in importsDirectory['Address'].d.l[:-1]:
         yield imp['Name'].d.l.str()
     return
 def iterate_loader(pid):
     try:
         pebaddr = getProcessEnvironmentBlock(pid)
-    except Exception, e:
-        raise OSError, 'Unable to open process id %x (%s)'% (pid, repr(e))
+    except Exception as e:
+        raise OSError('Unable to open process id %x (%s)'% (pid, repr(e)))
     z = ndk.PEB(source=ptypes.prov.WindowsProcessId(pid), offset=pebaddr)
     for module in z.l['Ldr'].d.l.walk():
         yield module
@@ -39,7 +39,7 @@ def getProcessEnvironmentBlock(pid):
     k32 = ctypes.WinDLL('kernel32.dll')
     handle = k32.OpenProcess(0x0400, False, pid)
     if handle == 0:
-        raise OSError, 'Unable to OpenProcess(0x400, 0, %x)'% pid
+        raise OSError('Unable to OpenProcess(0x400, 0, %x)'% pid)
     nt = ctypes.WinDLL('ntdll.dll')
     class ProcessBasicInformation(ctypes.Structure):
         _fields_ = [('Reserved1', ctypes.c_uint32),
@@ -50,21 +50,21 @@ def getProcessEnvironmentBlock(pid):
     pbi = ProcessBasicInformation()
     res = nt.NtQueryInformationProcess(handle, 0, ctypes.byref(pbi), ctypes.sizeof(pbi), None)
     if k32.CloseHandle(handle) == 0:
-        print >>sys.stderr, 'Unable to CloseHandle(%x)'%(handle)
+        six.print_('Unable to CloseHandle(%x)'%(handle), file=sys.stderr)
     if res != 0:
-        raise OSError, "NtQueryInformationProcess failed to get ProcessBasicInformation (%x)"% (0x100000000+res)
+        raise OSError("NtQueryInformationProcess failed to get ProcessBasicInformation (%x)"% (0x100000000+res))
     return pbi.PebBaseAddress
 
 def walk_executable(filename):
     for f in iterate_imports(filename):
         try: p = searchpath(f)
         except OSError:
-            print 'Unable to load %s'% f
+            print('Unable to load %s'% f)
             continue
         try:
             executable = pecoff.Executable.File(source=ptypes.prov.file(p, mode='r')).l
-        except ptypes.error.Base, e:
-            print 'Unable to load %s'% p
+        except ptypes.error.Base as e:
+            print('Unable to load %s'% p)
             continue
         yield f, searchpath(f), executable
     return
@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     # list filenames
     if opts.list:
-        print '\n'.join(filenames)
+        print('\n'.join(filenames))
         sys.exit(0)
 
     # dump module information
@@ -121,12 +121,12 @@ if __name__ == '__main__':
 
     filenamelength = max(map(len,filter(lambda x:'-' not in x,filenames)))
     columns=('imagebase', 'realbase', 'isdll?', 'seh?', 'nx?', 'aslr?', 'safeseh')
-    print 'filename'.ljust(filenamelength), '\t'.join(columns)
+    print('filename'.ljust(filenamelength), '\t'.join(columns))
     for shortname,fullname,module in everything:
         try:
             module.l
-        except ptypes.error.Base, e:
-            print "Unable to parse %s (%s)"% (fullname if opts.full else shortname, type(e).__name__)
+        except ptypes.error.Base as e:
+            print("Unable to parse %s (%s)"% (fullname if opts.full else shortname, type(e).__name__))
             continue
         characteristics = module['Next']['Header']['FileHeader']['Characteristics']
         dllcharacteristics = module['Next']['Header']['OptionalHeader']['DllCharacteristics']
@@ -149,11 +149,11 @@ if __name__ == '__main__':
                 #result.append(l['ProcessHeapFlags'].num())
                 #result.append(l['SecurityCookie'].d.l.num())
                 result.append(l['SEHandlerTable'].num() != 0)
-            except (ptypes.error.InitializationError,ptypes.error.LoadError), e:
+            except (ptypes.error.InitializationError,ptypes.error.LoadError) as e:
                 error = loadconfig
                 result.extend((None,)* (len(columns)-len(result)))
 
         name = fullname if opts.full else shortname
-        print name.ljust(filenamelength), '\t'.join(map(out,result))
+        print(name.ljust(filenamelength), '\t'.join(map(out,result)))
     sys.exit(0)
 

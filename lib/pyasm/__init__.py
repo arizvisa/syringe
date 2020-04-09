@@ -1,7 +1,7 @@
 import marshal,opcode
-import utils
-from assemble import assemble,oplength,assemble_insn
-from disassemble import disassemble,fetch_op,fetch_insn
+from . import utils
+from .assemble import assemble,oplength,assemble_insn
+from .disassemble import disassemble,fetch_op,fetch_insn
 
 # for lazy typists...
 asm = assemble

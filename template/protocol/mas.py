@@ -3,7 +3,7 @@ Multipoint Application Sharing protocol (T.128)
 '''
 import functools, itertools, types, builtins, operator, six
 
-import ptypes, gcc
+import ptypes, protocol.gcc as gcc
 from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)

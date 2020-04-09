@@ -1,16 +1,16 @@
 import ptypes, logging
 from ptypes import *
-import array,functools
+import six,array,functools
 
 # big-endian
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
-dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
+dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### ripped from the png specification
 def make_crc_table():
-    res = array.array('L', (0,)*256)
+    res = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', (0,)*256)
     for n in range(len(res)):
         c = n
         for k in range(8):
@@ -49,7 +49,7 @@ class Signature(dyn.block(8)):
     Valid = property(fget=lambda s: s.serialize() == s.default())
     @classmethod
     def default(cls):
-        return str().join(map(chr, (137,80,78,71,13,10,26,10)))
+        return bytes(bytearray([137,80,78,71,13,10,26,10]))
 
 class Chunk(pstruct.type):
     def __data(self):
@@ -62,7 +62,7 @@ class Chunk(pstruct.type):
         if issubclass(result, (ptype.block, parray.block)):
 
             # check if chunk data length seeks outside of file
-            if isinstance(self.source, ptypes.provider.filebase):
+            if isinstance(self.source, ptypes.provider.bounded):
                 chunk = 0xc
                 default = self.source.size() - chunk - self.getoffset() - (type.size() + length.size() + 4)
                 if self.getoffset() + type.size() + 2*length.size() + length.int() < self.source.size():
@@ -113,7 +113,7 @@ class File(pstruct.type):
 
 @Chunks.define
 class IHDR(pstruct.type):
-    type = 'IHDR'
+    type = b'IHDR'
 
     class ColorType(pint.enum, pint.uint8_t):
         _values_ = [
@@ -152,7 +152,7 @@ class IHDR(pstruct.type):
 
 @Chunks.define
 class pHYs(pstruct.type):
-    type = 'pHYs'
+    type = b'pHYs'
     class _unit(pint.enum, pint.uint8_t):
         _values_ = [
             ('unspecified', 0),
@@ -166,7 +166,7 @@ class pHYs(pstruct.type):
 
 @Chunks.define
 class sCAL(pstruct.type):
-    type = 'sCAL'
+    type = b'sCAL'
     class _unit(pint.enum, pint.uint8_t):
         _values_ = [
             ('meters', 1),
@@ -181,11 +181,11 @@ class sCAL(pstruct.type):
 
 @Chunks.define
 class IDAT(ptype.block):
-    type = 'IDAT'
+    type = b'IDAT'
 
 @Chunks.define
 class tEXt(pstruct.type):
-    type = 'tEXt'
+    type = b'tEXt'
     def __Text(self):
         res = self.getparent(Chunk)
         cb, length = self['Keyword'].li.size(), res['length'].li
@@ -198,7 +198,7 @@ class tEXt(pstruct.type):
 
 @Chunks.define
 class zTXt(pstruct.type):
-    type = 'zTXt'
+    type = b'zTXt'
     def __CompressedText(self):
         res = self.getparent(Chunk)
         cb, length = self['Keyword'].li.size() + self['Compression method'].li.size(), res['length'].li
@@ -212,24 +212,23 @@ class zTXt(pstruct.type):
 
 @Chunks.define
 class PLTE(parray.block):
-    type = 'PLTE'
+    type = b'PLTE'
     class Entry(pstruct.type):
         _fields_ = [(pint.uint8_t,x) for x in 'rgb']
     _object_ = Entry
 
 @Chunks.define
 class IEND(ptype.block):
-    type = 'IEND'
+    type = b'IEND'
 
-ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunks.cache.iteritems()]
-del(t, key)
+ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunks.cache.items()]
 
 if __name__ == '__main__':
     import sys
     import ptypes, image.pngfile
 
     if len(sys.argv) != 2:
-        print "Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__)
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
         sys.exit(0)
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1]))

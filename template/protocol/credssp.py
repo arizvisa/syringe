@@ -54,7 +54,7 @@ class NegoToken(ber.SEQUENCE):
     ]
 
 if __name__ == '__main__':
-    import ptypes, ber, credssp, nlmp
+    import ptypes, protocol.ber as ber, protocol.credssp as credssp, protocol.nlmp as nlmp
     from ptypes import *
 
     if False:
@@ -63,36 +63,36 @@ if __name__ == '__main__':
         data = res.translate(None, ' -\r\n')
         z = credssp.Packet(source=ptypes.prov.string(data.decode('hex')))
         z=z.l
-        print z['value'][1]['value'][0]['value'].hexdump()
+        print(z['value'][1]['value'][0]['value'].hexdump())
 
     if False:
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(2))
-        print z['value'][0]['value'].hexdump()
-        print tsversion.hexdump()
+        print(z['value'][0]['value'].hexdump())
+        print(tsversion.hexdump())
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
         z = credssp.Packet(source=ptypes.prov.string(data.decode('hex')))
         z=z.l
 
-        print z['value'][0]['value']['Version']['value']
+        print(z['value'][0]['value']['Version']['value'])
         a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
 
-        print a['messagefields']
+        print(a['messagefields'])
         if z.size() != z.source.size():
             raise AssertionError
 
         for item in a['messagefields'].Fields():
             if not item['bufferoffset'].int(): continue
-            print item.name()
-            print item['BufferOffset'].d.li
+            print(item.name())
+            print(item['BufferOffset'].d.li)
 
     if True:
         data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
         z = credssp.Packet(source=ptypes.prov.string(data.decode('hex'))).l
         nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
-        print nlmsg['messagefields']
+        print(nlmsg['messagefields'])
 
         negotiate = nlmp.NEGOTIATE_MESSAGE().alloc(NegotiateFlags=dict(
             NEGOTIATE_56=1, NEGOTIATE_KEY_EXCH=1, NEGOTIATE_128=1, NEGOTIATE_VERSION=1,
@@ -102,13 +102,13 @@ if __name__ == '__main__':
         )).set(Version=dict(ProductMajorVersion=10, ProductBuild=18891, NTLMRevisionCurrent='W2K3'))
 
         msg = nlmp.Message().alloc(MessageFields=negotiate)
-        print msg.hexdump()
-        print nlmsg.hexdump()
+        print(msg.hexdump())
+        print(nlmsg.hexdump())
 
     if True:
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print z['value'][0]['value'].hexdump()
-        print tsversion.hexdump()
+        print(z['value'][0]['value'].hexdump())
+        print(tsversion.hexdump())
 
         nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
         negotoken = credssp.NegoToken().alloc(NegoToken=nlmsg)
@@ -160,30 +160,30 @@ if __name__ == '__main__':
         msg['MessageFields']['TargetNameFields']['BufferOffset'].reference(targetname)
         msg['MessageFields']['TargetInfoFields']['BufferOffset'].reference(targetinfo)
 
-        print a.serialize() == msg.serialize()
+        print(a.serialize() == msg.serialize())
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '30820102a003020106a181fa3081f73081f4a081f10481ee4e544c4d53535000020000001e001e003800000035828ae2a326c589b91aacc7000000000000000098009800560000000a0063450000000f4400450053004b0054004f0050002d00550041004700430056004b00430002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50100000000'
         ptypes.setsource(ptypes.prov.string(data.decode('hex')))
         z = credssp.Packet()
         z=z.l
 
-        print z['value'][0]['value']['Version']['value']
+        print(z['value'][0]['value']['Version']['value'])
         a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
 
-        print a['messagefields']
+        print(a['messagefields'])
         if z.size() != z.source.size():
             raise AssertionError
 
         for item in a['messagefields'].Fields():
             if not item['bufferoffset'].int(): continue
-            print item.name(), item['BufferOffset'].d.li.summary()
+            print(item.name(), item['BufferOffset'].d.li.summary())
 
     if True:
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print z['value'][0]['value'].hexdump()
-        print tsversion.hexdump()
+        print(z['value'][0]['value'].hexdump())
+        print(tsversion.hexdump())
 
         nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
         negotoken = credssp.NegoToken().alloc(NegoToken=nlmsg)
@@ -196,31 +196,31 @@ if __name__ == '__main__':
         assert cssp.serialize() == z.serialize()
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '30820287a003020106a1820226308202223082021ea082021a048202164e544c4d535350000300000018001800a40000004a014a01bc0000001e001e005800000010001000760000001e001e00860000001000100006020000358288e20a00cb490000000f1e8f34474eb81d34c93de8ac22879f874400450053004b0054004f0050002d00370031004d003600440045004d0041004e0046004c0041004e004e0045004400450053004b0054004f0050002d00370031004d003600440045004d000000000000000000000000000000000000000000000000009ebe92602c8cf4986a1e18c570600cab0101000000000000908e3d4fb753d501669921e98c449f240000000002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50106000400020000000800300030000000000000000100000000200000f709fbc26afc6b10f259990a0d52b750bdf52ac081e50e05bd8e5b7c2cc4773e0a0010000000000000000000000000000000000009002a005400450052004d005300520056002f00310030002e003100360031002e003100370037002e0038003300000000000000000000000000c45115d42f73fac9522c4f5efeaccaf3a3320430010000003fc0504ff20375d000000000928ea327764e838d7a00dc499898e47f3e18b4e59e38feee09e0f516ea5bd00ca5220420e50faca0b401a6e585727dbc6436231e79d000d113d21809e8ba7e6f7b26543c'
         ptypes.setsource(ptypes.prov.string(data.decode('hex')))
         z = credssp.Packet()
         z=z.l
 
-        print z['value'][0]['value']['Version']['value']
+        print(z['value'][0]['value']['Version']['value'])
         a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
 
-        print a['messagefields']
+        print(a['messagefields'])
         if z.size() != z.source.size():
             raise AssertionError
 
         for item in a['messagefields'].Fields():
             if not item['bufferoffset'].int(): continue
-            print item.name(), item['BufferOffset'].d.li.summary()
+            print(item.name(), item['BufferOffset'].d.li.summary())
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '30820287a003020106a1820226308202223082021ea082021a048202164e544c4d535350000300000018001800a40000004a014a01bc0000001e001e005800000010001000760000001e001e00860000001000100006020000358288e20a00cb490000000f1e8f34474eb81d34c93de8ac22879f874400450053004b0054004f0050002d00370031004d003600440045004d0041004e0046004c0041004e004e0045004400450053004b0054004f0050002d00370031004d003600440045004d000000000000000000000000000000000000000000000000009ebe92602c8cf4986a1e18c570600cab0101000000000000908e3d4fb753d501669921e98c449f240000000002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50106000400020000000800300030000000000000000100000000200000f709fbc26afc6b10f259990a0d52b750bdf52ac081e50e05bd8e5b7c2cc4773e0a0010000000000000000000000000000000000009002a005400450052004d005300520056002f00310030002e003100360031002e003100370037002e0038003300000000000000000000000000c45115d42f73fac9522c4f5efeaccaf3a3320430010000003fc0504ff20375d000000000928ea327764e838d7a00dc499898e47f3e18b4e59e38feee09e0f516ea5bd00ca5220420e50faca0b401a6e585727dbc6436231e79d000d113d21809e8ba7e6f7b26543c'
         ptypes.setsource(ptypes.prov.string(data.decode('hex')))
         z = credssp.Packet()
         z=z.l
 
-        print z['value'][0]['value']['Version']['value']
+        print(z['value'][0]['value']['Version']['value'])
         a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
 
         authenticate = nlmp.AUTHENTICATE_MESSAGE().alloc(NegotiateFlags=dict(
@@ -255,19 +255,19 @@ if __name__ == '__main__':
         ))
         authenticate['NtChallengeResponseFields'].set(Length=nt.size(), MaximumLength=nt.size())
 
-        print a['messagefields']['domainnamefields']['bufferoffset'].d.l
+        print(a['messagefields']['domainnamefields']['bufferoffset'].d.l)
         domainname = nlmp.PayloadString().alloc(string=pstr.wstring().set('DESKTOP-71M6DEM', retain=False))
         authenticate['DomainNameFields'].set(Length=domainname.size(), MaximumLength=domainname.size())
 
-        print a['messagefields']['usernamefields']['bufferoffset'].d.l
+        print(a['messagefields']['usernamefields']['bufferoffset'].d.l)
         username = nlmp.PayloadString().alloc(string=pstr.wstring().set('ANFLANNE', retain=False))
         authenticate['UserNameFields'].set(Length=username.size(), MaximumLength=username.size())
 
-        print a['messagefields']['workstationfields']['bufferoffset'].d.l
+        print(a['messagefields']['workstationfields']['bufferoffset'].d.l)
         workstation = nlmp.PayloadString().alloc(string=pstr.wstring().set('DESKTOP-71M6DEM', retain=False))
         authenticate['WorkstationNameFields'].set(Length=workstation.size(), MaximumLength=workstation.size())
 
-        print a['messagefields']['encryptedrandomsessionkeyfields']['bufferoffset'].d.l
+        print(a['messagefields']['encryptedrandomsessionkeyfields']['bufferoffset'].d.l)
         sessionkey = nlmp.SessionKey().alloc(session_key=pint.uint_t(length=0x10).set(0xf3caacfe5e4f2c52c9fa732fd41551c4))
         authenticate['EncryptedRandomSessionKeyFields'].set(Length=sessionkey.size(), MaximumLength=sessionkey.size())
 
@@ -282,8 +282,8 @@ if __name__ == '__main__':
 
     if True:
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print z['value'][0]['value'].hexdump()
-        print tsversion.hexdump()
+        print(z['value'][0]['value'].hexdump())
+        print(tsversion.hexdump())
 
         nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
         negotoken = credssp.NegoToken().alloc(NegoToken=nlmsg)
@@ -301,22 +301,22 @@ if __name__ == '__main__':
         assert cssp.serialize() == z.serialize()
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '3039a003020106a3320430010000006c21ea64533bfeb3000000005e004ea3b9c8d210230c8d45b147cfe50f86f954456022171371f877e6bfc260'
         ptypes.setsource(ptypes.prov.string(data.decode('hex')))
         z = credssp.Packet()
         z=z.l
 
-        print z['value'][0]['value']['Version']['value']
-        print z['value'][1]['value']['pubKeyAuth']['value']
+        print(z['value'][0]['value']['Version']['value'])
+        print(z['value'][1]['value']['pubKeyAuth']['value'])
 
         if z.size() != z.source.size():
             raise AssertionError
 
     if True:
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print z['value'][0]['value'].hexdump()
-        print tsversion.hexdump()
+        print(z['value'][0]['value'].hexdump())
+        print(tsversion.hexdump())
 
         signature = z['value'][1]['value']['pubKeyAuth']['value'].copy()
         pubkeyauth = credssp.PubKeyAuth().alloc(pubKeyAuth=signature)
@@ -326,19 +326,19 @@ if __name__ == '__main__':
         assert cssp.serialize() == z.serialize()
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '305ea003020106a2570455010000003ba4b813060c896a010000006496f0b88995b70e63ca52bc1fa443fb09d843561a7f90ed37acf851188ebf043add1941e0becf9666628169fb057a573edaee6776c76912a40d09b296ac9595bc92212eac'
         ptypes.setsource(ptypes.prov.string(data.decode('hex')))
         z = credssp.Packet()
         z=z.l
 
-        print z['value'][0]['value']['Version']['value']
-        print z['value'][1]['value']['Credentials']['value']
+        print(z['value'][0]['value']['Version']['value'])
+        print(z['value'][1]['value']['Credentials']['value'])
 
     if True:
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print z['value'][0]['value'].hexdump()
-        print tsversion.hexdump()
+        print(z['value'][0]['value'].hexdump())
+        print(tsversion.hexdump())
 
         credentials = z['value'][1]['value']['Credentials']['value'].copy()
         authinfo = credssp.AuthInfo().alloc(Credentials=credentials)
@@ -348,13 +348,13 @@ if __name__ == '__main__':
         assert cssp.serialize() == z.serialize()
 
     if True:
-        print '-'*72
+        print('-'*72)
         data = '00000000'
         ptypes.setsource(ptypes.prov.string(data.decode('hex')))
         z = credssp.Packet()
         z=z.l
 
-        print z['value'].classname()
+        print(z['value'].classname())
 
     if True:
         cssp = credssp.Packet().alloc(Value=ber.EOC)

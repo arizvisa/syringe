@@ -23,10 +23,10 @@ class common_boot_record(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import disk,ptypes
+    import ptypes, fs.physical as disk
     ptypes.setsource(ptypes.provider.WindowsFile(r'\\.\PhysicalDrive%d'% (0), 'r'))
 
     a = disk.sector()
-    print a.l.cast(disk.common_boot_record)['partitions'][0]['chs_start'].hexdump()
+    print(a.l.cast(disk.common_boot_record)['partitions'][0]['chs_start'].hexdump())
     b = a.l.cast(disk.common_boot_record)
-    print b
+    print(b)

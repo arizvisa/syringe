@@ -42,7 +42,7 @@ class Atom(pstruct.type):
     ]
 
     def summary(self):
-        if not self.initialized and self.v is None:
+        if not self.initializedQ() and self.v is None:
             return "[%x] %s UNINITIALIZED expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), 0, ','.join(self.keys()))
         discrepancy = self.size() != self.blocksize()
         if discrepancy:

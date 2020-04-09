@@ -1,5 +1,6 @@
-import ptypes, mp
+import ptypes
 from ptypes import *
+from . import mp
 
 class greeting(pstruct.type):
     _fields_ = [

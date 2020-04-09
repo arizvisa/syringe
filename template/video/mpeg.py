@@ -154,10 +154,9 @@ class stream(pbinary.array):
     length = 20
 
 if __name__ == '__main__':
-    import ptypes,mpeg
+    import ptypes,video.mpeg as mpeg
 #    ptypes.setsource( ptypes.file('./poc-mpeg.stream') )
     ptypes.setsource( ptypes.file('./poc.mov') )
-    reload(mpeg)
 
     a = mpeg.stream(offset=0x3ba, length=20)
-    print a.l
+    print(a.l)

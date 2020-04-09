@@ -187,8 +187,8 @@ class SCREENVIDEOPACKET(pstruct.type):
         w,h = self['Width'],self['Height']
         blocks_w = math.ceil(w['Image'] / float(w['Block']))
         blocks_h = math.ceil(h['Image'] / float(h['Block']))
-        count = long(blocks_w * blocks_h)
-        return dyn.array(self.IMAGEBLOCK, count)
+        count = blocks_w * blocks_h
+        return dyn.array(self.IMAGEBLOCK, math.trunc(count))
 
     class Dim(pbinary.struct):
         _fields_ = [(4,'Block'),(12,'Image')]
@@ -280,15 +280,15 @@ class SCREENV2VIDEOPACKET(pstruct.type):
         w,h = self['Width'],self['Height']
         blocks_w = math.ceil(w['Image'] / float(w['Block']))
         blocks_h = math.ceil(h['Image'] / float(h['Block']))
-        count = long(blocks_w * blocks_h)
-        return dyn.array(self.IMAGEBLOCKV2, count)
+        count = blocks_w * blocks_h
+        return dyn.array(self.IMAGEBLOCKV2, math.trunc(count))
 
     def __IFrameImage(self):
         w,h = self['Width'],self['Height']
         blocks_w = math.ceil(w['Image'] / float(w['Block']))
         blocks_h = math.ceil(h['Image'] / float(h['Block']))
-        count = long(blocks_w * blocks_h)
-        return dyn.array(self.IMAGEBLOCKV2, count)
+        count = blocks_w * blocks_h
+        return dyn.array(self.IMAGEBLOCKV2, math.trunc(count))
 
     _fields_ = [
         (SCREENVIDEOPACKET.Dim, 'Width'),
@@ -535,12 +535,11 @@ class File(pstruct.type):
 if __name__ == '__main__':
     import ptypes,swf.flv as flv
     ptypes.setsource(ptypes.prov.file('c:/users/user/Documents/blah.flv',mode='rb'))
-    reload(flv)
     a = flv.File()
     a = a.l
-    print a['Header']['TypeFlags']
-    print a['Header']
-    print a['Header']['Padding'].hexdump()
-    print a['Body'][0]['Tag']
-    print a['Body'][0]['Tag']['TagData']
+    print(a['Header']['TypeFlags'])
+    print(a['Header'])
+    print(a['Header']['Padding'].hexdump())
+    print(a['Body'][0]['Tag'])
+    print(a['Body'][0]['Tag']['TagData'])
 

@@ -1,10 +1,12 @@
-import six, math, datetime
+import six, sys, math, datetime, itertools
 
 import ptypes
 from ptypes import *
 from ptypes import bitmap
 
 from . import sdkddkver, winerror
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 ### versioned base-class
 class versioned(ptype.base):
@@ -318,7 +320,7 @@ class LIST_ENTRY(pstruct.type):
 
     def forward(self):
         if self[self.flink].int() == self._sentinel_:
-            raise StopIteration, self
+            raise StopIteration(self)
         return self[self.flink].d
 
     def backward(self):
@@ -454,8 +456,8 @@ class rfc4122(pstruct.type):
     class _Data4(pint.bigendian(pint.uint64_t)):
         def summary(self):
             res = list(self.serialize())
-            d1 = ''.join(map('{:02x}'.format, map(six.byte2int, res[:2])) )
-            d2 = ''.join(map('{:02x}'.format, map(six.byte2int, res[2:])) )
+            d1 = ''.join(map('{:02x}'.format, bytearray(res[:2])))
+            d2 = ''.join(map('{:02x}'.format, bytearray(res[2:])))
             return '-'.join((d1, d2))
     _fields_ = [
         (_Data1, 'Data1'),
@@ -474,8 +476,8 @@ class rfc4122(pstruct.type):
         d2 = '{:04x}'.format(self['Data2'].int())
         d3 = '{:04x}'.format(self['Data3'].int())
         _ = list(self['Data4'].serialize())
-        d4 = ''.join( map('{:02x}'.format, map(six.byte2int, _[:2])) )
-        d5 = ''.join( map('{:02x}'.format, map(six.byte2int, _[2:])) )
+        d4 = ''.join( map('{:02x}'.format, bytearray(_[:2])) )
+        d5 = ''.join( map('{:02x}'.format, bytearray(_[2:])) )
         return '{{{:s}}}'.format('-'.join((d1, d2, d3, d4, d5)))
 
 class GUID(rfc4122):
@@ -573,10 +575,10 @@ class BitmapBitsArray(parray.type):
         return self.size() << 3
     def bitmap(self):
         iterable = (bitmap.new(item.int(), 8 * item.size()) for item in self)
-        return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        return six.moves.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
     def check(self, index):
         bits = 8 * self.new(self._object_).a.size()
-        res, offset = self[index / bits], index % bits
+        res, offset = self[index // bits], index % bits
         return res.int() & (2 ** offset) and 1
     def run(self):
         return self.bitmap()
@@ -611,7 +613,7 @@ class BitmapBitsBytes(ptype.block):
         return self.size() << 3
     def bitmap(self):
         iterable = (bitmap.new(six.byte2int(item), 8) for item in self.serialize())
-        return reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        return six.moves.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
     def check(self, index):
         res, offset = self[index >> 3], index & 7
         return six.byte2int(res) & (2 ** offset) and 1
@@ -626,7 +628,7 @@ class BitmapBitsBytes(ptype.block):
     def details(self):
         bytes_per_row = 8
         iterable = iter(bitmap.string(self.bitmap()))
-        rows = map(None, *(iterable,) * 8 * bytes_per_row)
+        rows = __izip_longest__(*(iterable,) * 8 * bytes_per_row)
         res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
         items = map(str().join, res)
 

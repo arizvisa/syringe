@@ -1,6 +1,6 @@
 import logging
 import _PyDbgEng
-import internalstate
+from . import internalstate
 import ndk
 
 class registers_INT32(object):
@@ -70,7 +70,8 @@ class dbgeng(object):
         logging.fatal("(%d,%d) System Error: Error=%x, Level=%x", self.process.id, self.id, Error, Level)
         return self.event.userbreak
 
-    def __init__(self, process, (tid, handle)):
+    def __init__(self, process, pack_tidhandle):
+        (tid, handle) = pack_tidhandle
         self.event = internalstate.event_thread(task=self)
 
         self.process = process

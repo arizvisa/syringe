@@ -1,6 +1,6 @@
 import sys, os
 import collections, json
-import functools, operator, itertools
+import functools, operator, itertools, six
 import ptypes, pecoff
 import logging
 Log = logging.getLogger()
@@ -23,7 +23,8 @@ def ExtractLgCpIds(versionInfo):
     res = (val.cast(ptypes.parray.type(_object_=ptypes.pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in vfi['Children']) ))
     return tuple((cp.int(), lg.int()) for cp, lg in res)
 
-def GetStringTable(versionInfo, (Lgid, Cp)):
+def GetStringTable(versionInfo, pack_LgidCp):
+    (Lgid, Cp) = pack_LgidCp
     sfi = GetChildByKey(versionInfo, u'StringFileInfo')
     LgidCp = '{:04X}{:04X}'.format(Lgid,Cp)
     for st in sfi['Children']:
@@ -31,13 +32,13 @@ def GetStringTable(versionInfo, (Lgid, Cp)):
         if st['szKey'].str().upper() == LgidCp:
             return [s['Child'] for s in st['Children']]
         continue
-    raise KeyError, (Lgid, Cp)
+    raise KeyError(Lgid, Cp)
 
 def get_resource_version(pe, opts):
     # parse the resource directory
     try:
         resource = parse_resources(pe)
-    except ptypes.error.LoadError, e:
+    except ptypes.error.LoadError as e:
         return ''
     if resource.getoffset() == 0:
         Log.warn("PE {:s} does not seem to have a resource entry. Unable to determine version info.".format(pe.source.file.name))
@@ -101,7 +102,7 @@ def get_resource_version(pe, opts):
         language = opts.language if opts.langid is None else opts.langid
         try:
             codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
-        except ValueError, e:
+        except ValueError as e:
             Log.warn("PE {:s} has more than one (language,codepage). Please specify one via command-line. Use -h for more information.".format(pe.source.file.name))
             return ''
         if (language,codepage) not in lgcpids:
@@ -125,8 +126,8 @@ def dump_exports(pe, jsname, outfile):
     try:
         et = dd['Address'].d.l
     except:
-        print >>outfile, "const {:s} = {{".format(jsname)
-        print >>outfile, "};"
+        six.print_("const {:s} = {{".format(jsname), file=outfile)
+        six.print_("};", file=outfile)
         return jsname
 
     # collect all exports
@@ -136,10 +137,10 @@ def dump_exports(pe, jsname, outfile):
 
     # output it in javascript
     jsname = jsname or 'ExportOffsets'
-    print >>outfile, "const {:s} = {{".format(jsname)
+    six.print_("const {:s} = {{".format(jsname), file=outfile)
     for name, ea in res:
-        print >>outfile, "  '{:s}': {:d},".format(name, ea)
-    print >>outfile, "};"
+        six.print_("  '{:s}': {:d},".format(name, ea), file=outfile)
+    six.print_("};", file=outfile)
     return jsname
 
 def dump_imports(pe, jsname, outfile):
@@ -147,8 +148,8 @@ def dump_imports(pe, jsname, outfile):
     try:
         it = dd['Address'].d.l
     except:
-        print >>outfile, "const {:s} = {{".format(jsname)
-        print >>outfile, "};"
+        six.print_("const {:s} = {{".format(jsname), file=outfile)
+        six.print_("};", file=outfile)
         return jsname
 
     # collect all the imports
@@ -162,13 +163,13 @@ def dump_imports(pe, jsname, outfile):
 
     # output a javascripty version of the dict
     jsname = jsname or 'ImportOffsets'
-    print >>outfile, "const {:s} = {{".format(jsname)
+    six.print_("const {:s} = {{".format(jsname), file=outfile)
     for m in res:
-        print >>outfile, "  '{:s}': [".format(m.lower())
+        six.print_("  '{:s}': [".format(m.lower()), file=outfile)
         for hint, name, address in res[m]:
-            print >>outfile, "    [{:d}, '{:s}', '{:s}'],".format(address, m, name)
-        print >>outfile, "  ],"
-    print >>outfile, "};"
+            six.print_("    [{:d}, '{:s}', '{:s}'],".format(address, m, name), file=outfile)
+        six.print_("  ],", file=outfile)
+    six.print_("};", file=outfile)
     return jsname
 
 Args = argparse.ArgumentParser(description='Dump the imports and exports for binaries into the specified output file (or stdout).')
@@ -183,7 +184,7 @@ if __name__ == '__main__':
     logging.basicConfig(stream=sys.stderr, level=logging.INFO, format='%(filename)s:%(lineno)d <%(levelname)s> %(message)s')
 
     if len(sys.argv) <= 1:
-        print Args.format_usage()
+        print(Args.format_usage())
         sys.exit(1)
     args = Args.parse_args(sys.argv[1:])
 
@@ -214,10 +215,10 @@ if __name__ == '__main__':
         continue
 
     latest = sorted(result.keys())[-1]
-    print >>args.outfile, "module.exports['Name'] = {:s};".format(result[latest]['Name'])
+    six.print_("module.exports['Name'] = {:s};".format(result[latest]['Name']), file=args.outfile)
 
     for version, structs in sorted(result.items(), key=operator.itemgetter(0)):
-        print >>args.outfile, "module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.iteritems())))
+        six.print_("module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.iteritems()))), file=args.outfile)
 
-    print >>args.outfile, "module.exports[null] = module.exports['{:s}'];".format(latest)
+    six.print_("module.exports[null] = module.exports['{:s}'];".format(latest), file=args.outfile)
     sys.exit(0)

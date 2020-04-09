@@ -179,22 +179,22 @@ if __name__ == '__main__':
     import sys
     import ptypes, image.bmpfile
     if len(sys.argv) != 2:
-        print "Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__)
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
         sys.exit(0)
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='rb'))
 
     z = bmpfile.File()
-    print "source: {!r}".format(z.source)
+    print("source: {!r}".format(z.source))
 
     z = z.l
-    print z.size() == z.source.size(), z.size(), z.source.size()
+    print(z.size() == z.source.size(), z.size(), z.source.size())
 
     h = z['bmih']['bmHeader']
-    print "dimensions: {:d}x{:d}x{:d} {:s}".format(h.Width(), h.Height(), h.Bits(), h['biCompression'].str())
+    print("dimensions: {:d}x{:d}x{:d} {:s}".format(h.Width(), h.Height(), h.Bits(), h['biCompression'].str()))
 
-    print z
-    print z['bmih']
-    print z['bmih']['bmHeader']
-    print len(z['bmiColors'])
+    print(z)
+    print(z['bmih'])
+    print(z['bmih']['bmHeader'])
+    print(len(z['bmiColors']))
     sys.exit(0 if z.size() == z.source.size() else 1)

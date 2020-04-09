@@ -1,6 +1,6 @@
 ### Implement the WIN64 version of this.
 import functools, itertools, types, builtins, operator, six
-import math, logging
+import sys, math, logging
 
 import ptypes
 from ptypes import bitmap
@@ -78,7 +78,7 @@ if 'HeapMeta':
             ])
 
         def summary(self):
-            return ' '.join("{:s}={:s}".format(k, v.summary()) for k, v in self.iteritems())
+            return ' '.join("{:s}={:s}".format(k, v.summary()) for k, v in self.items())
 
     class HEAP_PSEUDO_TAG_ENTRY(pstruct.type, versioned):
         def __init__(self, **attrs):
@@ -311,10 +311,10 @@ if 'HeapEntry':
         def summary(self):
             if self.FrontEndQ():
                 res = self.serialize()
-                return res.encode('hex')
+                return res.encode('hex') if sys.version_info.major < 3 else res.hex()
             bs = 0x10 if getattr(self, 'WIN64', False) else 8
             data, res = self.serialize(), self.d.li
-            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex'), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex') if sys.version_info.major < 3 else data.hex(), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
 
         def Flags(self):
             '''Unencoded flags grabbed from the original HEAP_ENTRY'''
@@ -417,7 +417,7 @@ if 'HeapEntry':
             # If HEAP.EncodeFlagMask has been set to something, then we'll just use it
             if self._HEAP_ENTRY_EncodeFlagMask:
                 iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
-                data = object['Unencoded'].serialize() + reduce(operator.add, iterable)
+                data = object['Unencoded'].serialize() + six.moves.reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).encode(res)
             return super(_HEAP_ENTRY, self).encode(object)
@@ -432,7 +432,7 @@ if 'HeapEntry':
             # Now determine if we're encoded, and decode it if so.
             if object['Encoded'][0].int() & self._HEAP_ENTRY_EncodeFlagMask:
                 iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
-                data = object['Unencoded'].serialize() + reduce(operator.add, iterable)
+                data = object['Unencoded'].serialize() + six.moves.reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).decode(res)
 
@@ -442,7 +442,7 @@ if 'HeapEntry':
         def __be_summary(self):
             bs = 0x10 if getattr(self, 'WIN64', False) else 8
             data, res = self.serialize(), self.d.li
-            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex'), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex') if sys.version_info.major < 3 else data.hex(), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
 
         def ChecksumQ(self):
             if not self.BackEndQ():
@@ -453,8 +453,8 @@ if 'HeapEntry':
 
             # Calculate checksum (a^9^8 == b)
             res = self.d.li.cast(self._BE_Encoded)
-            data = map(six.byte2int, res['Encoded'].serialize())
-            chk = reduce(operator.xor, data[:3], 0)
+            data = bytearray(res['Encoded'].serialize())
+            chk = six.moves.reduce(operator.xor, data[:3], 0)
             return chk == data[3]
 
         def Size(self):
@@ -789,7 +789,7 @@ if 'HeapChunk':
         length = 0
         def __Data(self):
             res = self['Header'].li.size()
-            return dyn.clone(HEAP_UNCOMMITTED_DATA, length=max({0, self.length - res}))
+            return dyn.clone(HEAP_UNCOMMITTED_DATA, length=max(0, self.length - res))
 
         _fields_ = [
             (HEAP_ENTRY, 'Header'),
@@ -797,7 +797,7 @@ if 'HeapChunk':
         ]
 
         def summary(self):
-            res = map(r'\x{:02x}'.format, six.iterbytes(self['Header'].serialize()))
+            res = map("\\x{:02x}".format, bytearray(self['Header'].serialize()))
             return "Header=\"{:s}\" Data=...{:d} bytes...".format(str().join(res), self['Data'].length)
 
     class _HEAP_CHUNK(pstruct.type):
@@ -854,7 +854,7 @@ if 'HeapChunk':
                 size = header.Size()
 
             res = sum(self[fld].li.size() for fld in ['Header', 'ListEntry', 'ChunkFreeEntryOffset'])
-            return dyn.block(max({0, size - res}))
+            return dyn.block(max(0, size - res))
 
         _fields_ = [
             (_HEAP_ENTRY, 'Header'),
@@ -1038,7 +1038,7 @@ if 'LookasideList':
         def __Bitmap(self):
             p = self.getparent(HeapCache)
             res = p['NumBuckets'].li
-            return dyn.clone(ListsInUseUlong, length=res.int() / 32)
+            return dyn.clone(ListsInUseUlong, length=res.int() // 32)
 
         def __Buckets(self):
             p = self.getparent(HeapCache)
@@ -1162,7 +1162,7 @@ if 'LFH':
             '''Return a bitmap showing the busy/free chunks that are available'''
             iterable = (int(item['Header'].BusyQ()) for item in self['Blocks'])
             iterable = (bitmap.new(item, 1) for item in iterable)
-            return reduce(bitmap.push, iterable, bitmap.zero)
+            return six.moves.reduce(bitmap.push, iterable, bitmap.zero)
 
         def __Blocks(self):
             pss = self['SubSegment'].li
@@ -1177,7 +1177,7 @@ if 'LFH':
             res = self['BusyBitmap'].li
             bits = 64 if getattr(self, 'WIN64', False) else 32
             fractionQ = 1 if res['SizeOfBitmap'].int() % bits else 0
-            return dyn.clone(res._Buffer, length=fractionQ + res['SizeOfBitmap'].int() / bits)
+            return dyn.clone(res._Buffer, length=fractionQ + res['SizeOfBitmap'].int() // bits)
 
         def __init__(self, **attrs):
             super(HEAP_USERDATA_HEADER, self).__init__(**attrs)
@@ -1293,7 +1293,7 @@ if 'LFH':
 
             # Figure out how many HEAP_SUBSEGMENT elements are in use.
             res = self['FreePointer'].li.int() - base
-            return dyn.array(HEAP_SUBSEGMENT, res / cb)
+            return dyn.array(HEAP_SUBSEGMENT, res // cb)
 
         def __Available(self):
             try:
@@ -1312,7 +1312,7 @@ if 'LFH':
 
             # Calculate the number of elements before we hit the limit
             res = self['Limit'].li.int() - base
-            return dyn.array(HEAP_SUBSEGMENT, res / cb)
+            return dyn.array(HEAP_SUBSEGMENT, res // cb)
 
         def __init__(self, **attrs):
             super(LFH_BLOCK_ZONE, self).__init__(**attrs)
@@ -1360,7 +1360,7 @@ if 'LFH':
             def __Blocks(self):
                 entry = self.getparent(USER_MEMORY_CACHE_ENTRY)
 
-                res = [ n.getoffset() for n in entry.p.value ]
+                res = [ item.getoffset() for item in entry.p.value ]
                 idx = res.index(entry.getoffset()) + 1
 
                 blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
@@ -1422,7 +1422,7 @@ if 'LFH':
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             fo = offset * blocksize
             shift = self.new(HEAP_USERDATA_HEADER).a.size()
-            return (fo - shift) / self.BlockSize()
+            return (fo - shift) // self.BlockSize()
 
         def FreeEntryBlockIndex(self):
             '''Returns the index into UserBlocks of the next block to allocate given the `FreeEntryOffset` of the current HEAP_SUBSEGMENT'''
@@ -1709,8 +1709,8 @@ if 'Heap':
 
         def walk(self):
             yield self
-            for n in self['SegmentListEntry'].walk():
-                yield n
+            for item in self['SegmentListEntry'].walk():
+                yield item
             return
 
     class HEAP_TAG_ENTRY(pstruct.type):
@@ -1773,7 +1773,7 @@ if 'Heap':
         def __BusyBlock(self):
             cb = self['CommitSize'].li
             res = sum(self[fld].li.size() for fld in ['ListEntry', 'ExtraStuff', 'CommitSize', 'ReserveSize'])
-            return dyn.clone(HEAP_CHUNK_LARGE, length=max({0, cb.int() - res}))
+            return dyn.clone(HEAP_CHUNK_LARGE, length=max(0, cb.int() - res))
 
         _fields_ = [
             (__ListEntry, 'ListEntry'),
@@ -1786,14 +1786,14 @@ if 'Heap':
     class HEAP(pstruct.type, versioned):
         def UncommittedRanges(self):
             '''Iterate through the list of UncommittedRanges(UCRList) for the HEAP'''
-            for n in self['UCRList'].walk():
-                yield n
+            for item in self['UCRList'].walk():
+                yield item
             return
 
         def Segments(self):
             '''Iterate through the list of Segments(SegmentList) for the HEAP'''
-            for n in self['SegmentList'].walk():
-                yield n
+            for item in self['SegmentList'].walk():
+                yield item
             return
 
         def __HeapList(self, blockindex):
@@ -1837,7 +1837,7 @@ if 'Heap':
                 raise error.InvalidPlatformException(self, '__PointerKeyEncoding', version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), expected=sdkddkver.NTDDI_WIN7)
             if self['EncodeFlagMask']:
                 self.attributes['_HEAP_ENTRY_EncodeFlagMask'] = self['EncodeFlagMask'].li.int()
-                self.attributes['_HEAP_ENTRY_Encoding'] = tuple(n.int() for n in self['Encoding'].li['Keys'])
+                self.attributes['_HEAP_ENTRY_Encoding'] = tuple(item.int() for item in self['Encoding'].li['Keys'])
             return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
 
         def __init__(self, **attrs):
@@ -2091,11 +2091,11 @@ if __name__ == '__main__':
     # grab process handle
     if len(sys.argv) > 1:
         pid = int(sys.argv[1])
-        print "opening process {:d}".format(pid)
+        print("opening process {:d}".format(pid))
         handle = openprocess(pid)
     else:
         handle = getcurrentprocess()
-        print 'using current process'
+        print('using current process')
     ptypes.setsource(ptypes.provider.WindowsProcessHandle(handle))
 
     # grab peb
@@ -2107,7 +2107,7 @@ if __name__ == '__main__':
     if len(sys.argv) > 2:
         heaphandle = eval(sys.argv[2])
         for x in z['ProcessHeaps'].d.l:
-            print hex(x.int()), hex(heaphandle)
+            print(hex(x.int()), hex(heaphandle))
             if x.int() == heaphandle:
                 b = x
                 break
@@ -2119,29 +2119,29 @@ if __name__ == '__main__':
 
     a = ndk.heaptypes.HEAP(offset=b.getoffset())
     a=a.l
-#    print a.l
+#    print(a.l)
 #    b = a['Segment']
-#    print a['BlocksIndex']
-#    print a['UCRIndex']
-#    print list(b.walk())
+#    print(a['BlocksIndex'])
+#    print(a['UCRIndex'])
+#    print(list(b.walk()))
 
     c = a['FreeLists']
 
 #    list(c.walk())
  #   x = c['Flink'].d.l
 
- #   print x['Value']['a']
+ #   print(x['Value']['a'])
  #   x =  x['Entry']['Flink'].d.l
-#    print [x for x in c.walk()]
-#    print a['BlocksIndex']
+#    print([x for x in c.walk()])
+#    print(a['BlocksIndex'])
 
-#    print a['FrontEndHeap'].d.l
+#    print(a['FrontEndHeap'].d.l)
 #
-#    print a['CommitRoutine']
+#    print(a['CommitRoutine'])
 
-#    print c['Flink'].d.l
+#    print(c['Flink'].d.l)
 
-#    print list(c.walk())
-#    print c['Flink'].d.l['Flink'].d.l['Flink'].d.l
+#    print(list(c.walk()))
+#    print(c['Flink'].d.l['Flink'].d.l['Flink'].d.l)
 #    d = [x for x in c.walk()]
-#    print help(d[1])
+#    print(help(d[1]))

@@ -62,7 +62,7 @@ objects
     the only thing in this module to care about is the base.
 '''
 
-import logging,warnings,array,bisect
+import six,logging,warnings,array,bisect
 class DuplicateSymbol(Warning): pass
 class UninitializedSymbol(Warning): pass
 
@@ -144,11 +144,14 @@ class symboltable(dict):
         del(self.__hooks[id])
         return True
 
-    def __getitem__direct(self, (module,symbolname)):
-        return super(symboltable,self).__getitem__(self.aliases[(module,symbolname)])
+    def __getitem__direct(self, pack_modulesymbol):
+        (module, symbolname) = pack_modulesymbol
+        return super(symboltable,self).__getitem__(self.aliases[(module, symbolname)])
 
-    def __setitem__direct(self, (module,symbolname), value):
-        key = (module,symbolname)
+    def __setitem__direct(self, pack_modulesymbol, value):
+        (module, symbolname) = pack_modulesymbol
+
+        key = (module, symbolname)
         if key not in self.aliases:
             id = self.__new_record()
             self.aliases[key] = id
@@ -157,12 +160,14 @@ class symboltable(dict):
         super(symboltable, self).__setitem__(id, value)
 
         p = self.__hooks[id]
-        self.__hooks[id] = lambda symboltable,symbolname:True
+        self.__hooks[id] = lambda symboltable, symbolname:True
         p(self, key)
         self.__hooks[id] = p
 
-    def __delitem__direct(self, (module,symbolname)):
-        id = self.aliases[(module,symbolname)]
+    def __delitem__direct(self, pack_modulesymbol):
+        (module, symbolname) = pack_modulesymbol
+
+        id = self.aliases[(module, symbolname)]
         aliases = (k for k,v in self.aliases.items() if v == id)
         for name in aliases:
             del(self.aliases[name])
@@ -402,25 +407,27 @@ class base(symboltable):
 
         super(base,self).__setitem__(name, value)
 
-    def add(self, (module,symbolname), value, scope=GlobalScope, segment=None):
+    def add(self, pack_modulesymbol, value, scope=GlobalScope, segment=None):
         '''Store the specified symbol in the symbol store'''
-        if (module,symbolname) in self.keys():
-            raise KeyError('Symbol {!r} is already defined as {!r} in {:s}'.format(symbolname, self[module,symbolname], self.modulename))
+        (module, symbolname) = pack_modulesymbol
+
+        if (module, symbolname) in self.keys():
+            raise KeyError('Symbol {!r} is already defined as {!r} in {:s}'.format(symbolname, self[module, symbolname], self.modulename))
 
         # store our symbol and its value
-        super(base, self).__setitem__((module,symbolname), value)
+        super(base, self).__setitem__((module, symbolname), value)
 
         # store in our segment index
         try:
-            self.scopesegment[segment].add((module,symbolname))
+            self.scopesegment[segment].add((module, symbolname))
         except KeyError:
-            self.scopesegment[segment] = set([(module,symbolname)])
+            self.scopesegment[segment] = set([(module, symbolname)])
 
         # store it in our scope index
         try:
-            self.scope[scope].add((module,symbolname))
+            self.scope[scope].add((module, symbolname))
         except KeyError:
-            self.scope[scope] = set((module,symbolname))
+            self.scope[scope] = set((module, symbolname))
         return
 
     ## general functions
@@ -612,7 +619,7 @@ class container(base):
 
     def getsegmentlength(self, name):
         segments = self.storesegments[name]
-        return reduce(lambda a,b:a+b, (st.getsegmentlength(n) for i,n,st in segments))
+        return six.moves.reduce(lambda a,b:a+b, (st.getsegmentlength(n) for i,n,st in segments))
 
     def getsegmentprotection(self, name):
         segments = self.storesegments[name]
@@ -620,7 +627,7 @@ class container(base):
         for st in index,sectionname,store in segments:
             try:
                 protections.add(st.getsegmentprotection(name))
-            except KeyError, e:
+            except KeyError as E:
                 pass
             continue
 
@@ -649,7 +656,7 @@ class container(base):
             externals = store.getexternals()
 
             # merge in externals
-            print index,store,externals
+            print(index,store,externals)
             store.merge(self, externals)
 
             # grab chunk
@@ -690,18 +697,18 @@ if __name__ == '__main__':
         z = store.symboltable()
         z['test'] = True
         z['blah'] = False
-        print z
-        print z.aliases
+        print(z)
+        print(z.aliases)
 
-        print 'whee -> blah'
+        print('whee -> blah')
         z.alias('whee', 'blah')
-        print 'whoo -> test'
+        print('whoo -> test')
         z.alias('whoo', 'test')
 
-        print 'test',z['test']
-        print 'blah',z['blah']
-        print 'whee',z['whee']
-        print 'whoo',z['whoo']
+        print('test',z['test'])
+        print('blah',z['blah'])
+        print('whee',z['whee'])
+        print('whoo',z['whoo'])
 
     if False:
         import random
@@ -720,8 +727,8 @@ if __name__ == '__main__':
         for x in externals:
             b[x] = address()
 
-        print a.merge(b, a.getglobals()+a.getexternals())
-        print a['GameInit'] == b['GameInit']
+        print(a.merge(b, a.getglobals()+a.getexternals()))
+        print(a['GameInit'] == b['GameInit'])
 
     if False:
         import random
@@ -737,11 +744,11 @@ if __name__ == '__main__':
 
     if False:
         codes = '0,1,2,3,4,5,6,7,8,9,a,b,c,d,e,f'.split(',')
-        codes = codes[len(codes)/2:]
+        codes = codes[len(codes)//2:]
 
         def updatesymbols(store, name):
             o = store[name]
-            print 'hook called with base %s:%x'%(name,o)
+            print('hook called with base %s:%x'%(name,o))
             for i,x in enumerate(codes):
                 store[x] = o + 1000*i
             return
@@ -752,15 +759,15 @@ if __name__ == '__main__':
         a['.rdata'] = 0x4000
         a.hook('.rdata', updatesymbols)
 
-        print a
+        print(a)
         a['.rdata'] = 0
-        print a
+        print(a)
 
     if False:
         a = store.symboltable()
         b = {'_main':100,'_exit':400}
         a.updatesymbols(b)
-        print a
+        print(a)
         c = {'_main':0xdeaddead,'_exit':0}
         a.updatesymbols(c, ['_exit'])
 
@@ -781,15 +788,15 @@ if __name__ == '__main__':
         globally = (a.modulename,'globally')
         externally = (a.modulename,'externally')
 
-        print b[locally] == 0x10101010
-        print b[globally] == 0x02020202
-        print b[externally] == 0x30303030
+        print(b[locally] == 0x10101010)
+        print(b[globally] == 0x02020202)
+        print(b[externally] == 0x30303030)
 
         scopes = [store.LocalScope, store.GlobalScope, store.ExternalScope]
 
-        print locally in b.scope[store.LocalScope] and locally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope])
-        print globally in b.scope[store.GlobalScope] and globally not in (b.scope[store.LocalScope], b.scope[store.ExternalScope])
-        print externally in b.scope[store.ExternalScope] and externally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope])
+        print(locally in b.scope[store.LocalScope] and locally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope]))
+        print(globally in b.scope[store.GlobalScope] and globally not in (b.scope[store.LocalScope], b.scope[store.ExternalScope]))
+        print(externally in b.scope[store.ExternalScope] and externally not in (b.scope[store.GlobalScope], b.scope[store.ExternalScope]))
 
     if False:
         import coff
@@ -797,10 +804,10 @@ if __name__ == '__main__':
         b = coff.object.open('../../obj/test.obj')
         a.addstore(b)
 
-        print a.listsegments() == b.listsegments()
+        print(a.listsegments() == b.listsegments())
 
-#        print a.getglobals()
-#        print b.getglobals()
+#        print(a.getglobals())
+#        print(b.getglobals())
 
     if False:
         import coff

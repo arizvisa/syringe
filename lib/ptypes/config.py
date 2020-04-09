@@ -37,9 +37,11 @@ class field:
         set,get = None,None
         def __init__(self): pass
         def __set__(self, instance, value):
-            return self.__getattribute__('set').im_func(value)
+            res = self.__getattribute__('set')
+            return res.im_func(value) if sys.version_info.major < 3 else res.__func__(value)
         def __get__(self, instance, type=None):
-            return self.__getattribute__('get').im_func()
+            res = self.__getattribute__('get')
+            return res.im_func() if sys.version_info.major < 3 else res.__func__()
 
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):
@@ -90,13 +92,18 @@ class field:
 
 def namespace(cls):
     # turn all instances of things into read-only attributes
-    attrs,properties,subclass = {},{},{}
+    readonly = []
+    if hasattr(property, '__isabstractmethod__'):
+        readonly.append(property.__isabstractmethod__)
+    readonly.append(property.deleter)
+
+    attrs, properties, subclass = {}, {}, {}
     for k,v in cls.__dict__.items():
-        if hasattr(v, '__name__'):
+        if hasattr(v, '__name__') and all(not isinstance(v, t.__class__) for t in readonly):
             v.__name__ = '{}.{}'.format(cls.__name__,k)
         if k.startswith('_') or isinstance(v, property):
             attrs[k] = v
-        elif not six.callable(v) or isinstance(v,type):
+        elif not six.callable(v) or isinstance(v, type):
             properties[k] = v
         elif not hasattr(v, '__class__'):
             subclass[k] = namespace(v)
@@ -255,7 +262,12 @@ class defaults:
         raise ValueError("Invalid source object")
     source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
-import ptype # recursive
+try:
+    from . import ptype
+
+except ImportError:
+    # XXX: recursive
+    import ptype
 
 ### defaults
 # logging
@@ -268,7 +280,7 @@ log.addHandler(res)
 del(res,log)
 
 # general integers
-defaults.integer.size = long(math.log((sys.maxsize+1)*2,2)/8)
+defaults.integer.size = int(math.log((sys.maxsize+1)*2,2)/8)
 defaults.integer.order = byteorder.littleendian if sys.byteorder == 'little' else byteorder.bigendian if sys.byteorder == 'big' else None
 
 # display
@@ -283,7 +295,7 @@ defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipp
 defaults.display.mangle_with_attributes = False
 
 # array types
-defaults.parray.break_on_zero_sized_element = True
+defaults.parray.break_on_zero_sized_element = False
 defaults.parray.break_on_max_count = False
 defaults.parray.max_count = six.MAXSIZE
 
@@ -350,5 +362,5 @@ if __name__ == '__main__':
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
     #ptypes.config.logger = logging.root
-    print '{!r}'.format(consts)
-    print '{!r}'.format(config)
+    print('{!r}'.format(consts))
+    print('{!r}'.format(config))

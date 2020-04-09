@@ -109,7 +109,7 @@ Example usage:
     instance.set(57005)
 
     # output the value of instance as a numerical value
-    print instance.int()
+    print(instance.int())
 
     # return instance in it's alternative byteorder
     flipped = instance.flip()
@@ -133,26 +133,26 @@ Example usage of pint.enum:
     instance.set('name1')
 
     # return the instance as a name or an integer in string form
-    print instance.str()
+    print(instance.str())
 """
 import six
 import functools, operator, itertools
 from six.moves import builtins
 
-from . import ptype,bitmap,config,error,utils
+from . import ptype, bitmap, config, error, utils
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 __state__ = {}
 def setbyteorder(endianness):
-    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        transform = {config.byteorder.bigendian:bigendian, config.byteorder.littleendian:littleendian}[endianness]
-        for k,v in globals().items():
-            if v in (type,) or getattr(v,'__base__',type) is type:
+    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+        transform = {config.byteorder.bigendian : bigendian, config.byteorder.littleendian : littleendian}[endianness]
+        for name, definition in globals().items():
+            if definition in [type] or getattr(definition, '__base__', type) is type:
                 continue
-            if isinstance(v, builtins.type) and issubclass(v, type):
-                if getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
-                    globals()[k] = transform(v)
+            if isinstance(definition, builtins.type) and issubclass(definition, type):
+                if getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
+                    globals()[name] = transform(definition)
                 pass
             continue
         return
@@ -170,15 +170,19 @@ def bigendian(integral, **attrs):
         return integral
 
     le, be = __state__.setdefault(config.byteorder.littleendian, {}), __state__.setdefault(config.byteorder.bigendian, {})
-    if any(integral in n for n in (be,le)):
+    if any(integral in state for state in [be, le]):
         integral = be.get(integral, le.get(integral, type))
         class newintegral(integral):
             __doc__ = integral.__doc__
             byteorder = config.byteorder.bigendian
-        if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
+
+        if hasattr(integral, '__module__'):
+            newintegral.__module__ = integral.__module__
+
         newintegral.__name__ = integral.__name__
         be.setdefault(newintegral, integral)
         return ptype.clone(newintegral, **attrs) if attrs else newintegral
+
     attrs.setdefault('byteorder', config.byteorder.bigendian)
     return ptype.clone(integral, **attrs)
 
@@ -190,15 +194,19 @@ def littleendian(integral, **attrs):
         return integral
 
     le, be = __state__.setdefault(config.byteorder.littleendian, {}), __state__.setdefault(config.byteorder.bigendian, {})
-    if any(integral in n for n in (be,le)):
+    if any(integral in state for state in [be, le]):
         integral = le.get(integral, be.get(integral, type))
         class newintegral(integral):
             __doc__ = integral.__doc__
             byteorder = config.byteorder.littleendian
-        if hasattr(integral, '__module__'): newintegral.__module__ = integral.__module__
+
+        if hasattr(integral, '__module__'):
+            newintegral.__module__ = integral.__module__
+
         newintegral.__name__ = integral.__name__
         be.setdefault(newintegral, integral)
         return ptype.clone(newintegral, **attrs) if attrs else newintegral
+
     attrs.setdefault('byteorder', config.byteorder.littleendian)
     return ptype.clone(integral, **attrs)
 
@@ -230,10 +238,11 @@ class type(ptype.type):
     def __getvalue__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
+        data = bytearray(self.serialize())
         if self.byteorder is config.byteorder.bigendian:
-            return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), self.serialize(), 0)
+            return six.moves.reduce(lambda agg, item: agg << 8 | item, data, 0)
         elif self.byteorder is config.byteorder.littleendian:
-            return six.moves.reduce(lambda x,y: x << 8 | six.byte2int(y), reversed(self.serialize()), 0)
+            return six.moves.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
         raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
     def __setvalue__(self, *values, **attrs):
@@ -244,18 +253,18 @@ class type(ptype.type):
         if self.byteorder is config.byteorder.bigendian:
             transform = reversed
         elif self.byteorder is config.byteorder.littleendian:
-            transform = lambda x: x
+            transform = iter
         else:
             raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness {!r}'.format(self.byteorder))
-        mask = (1<<self.blocksize()*8) - 1
+        mask = (1<<self.blocksize() * 8) - 1
         integer &= mask
         bc = bitmap.new(integer, self.blocksize() * 8)
         res = []
         while bc[1] > 0:
-            bc,x = bitmap.consume(bc,8)
+            bc, x = bitmap.consume(bc, 8)
             res.append(x)
-        res = res + [0]*(self.blocksize() - len(res))   # FIXME: use padding
-        return super(type, self).__setvalue__(str().join(transform(map(six.int2byte,res))), **attrs)
+        res = res + [0] * (self.blocksize() - len(res))   # FIXME: use padding
+        return super(type, self).__setvalue__(bytes(bytearray(transform(res))), **attrs)
 
     def get(self):
         return self.__getvalue__()
@@ -265,39 +274,42 @@ class uinteger_t(type):
     '''Provides unsigned integer support'''
     def summary(self, **options):
         res = self.int()
-        return '{:-#0{:d}x} ({:d})'.format(res, 2+self.blocksize()*2, res)
+        return '{:-#0{:d}x} ({:d})'.format(res, 2 + self.blocksize() * 2, res)
 
 class sinteger_t(type):
     '''Provides signed integer support'''
     def summary(self, **options):
         res = self.int()
-        return u"{:+#0{:d}x} ({:d})".format(res, 3+self.blocksize()*2, res)
+        return u"{:+#0{:d}x} ({:d})".format(res, 3 + self.blocksize() * 2, res)
 
     def __getvalue__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
-        signmask = int(2**(8*self.blocksize()-1))
+        signmask = int(2**(8 * self.blocksize() - 1))
         num = super(sinteger_t, self).__getvalue__()
-        res = num&(signmask-1)
-        if num&signmask:
-            return (signmask-res)*-1
-        return res & (signmask-1)
+        res = num & (signmask - 1)
+        if num & signmask:
+            return (signmask - res) * -1
+        return res & (signmask - 1)
 
     def __setvalue__(self, *values, **attrs):
         if not values:
             return super(sinteger_t, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        signmask = int(2**(8*self.blocksize()))
-        res = integer & (signmask-1)
+        signmask = int(2**(8 * self.blocksize()))
+        res = integer & (signmask - 1)
         if integer < 0:
             res |= signmask
         return super(sinteger_t, self).__setvalue__(res, **attrs)
 
-class uinteger(ptype.definition): attribute,cache = 'length',{}
-class sinteger(ptype.definition): attribute,cache = 'length',{}
-uint,sint = uinteger,sinteger
-integer_t,integer = sinteger_t, sinteger
+class uinteger(ptype.definition):
+    attribute, cache = 'length', {}
+class sinteger(ptype.definition):
+    attribute, cache = 'length', {}
+
+uint, sint = uinteger, sinteger
+integer_t, integer = sinteger_t, sinteger
 
 @uint.define
 class uint_t(uinteger_t): length = 0
@@ -325,7 +337,7 @@ class sint64_t(sinteger_t): length = 8
 @sint.define
 class sint128_t(sinteger_t): length = 16
 
-int_t,int8_t,int16_t,int32_t,int64_t,int128_t = sint_t,sint8_t,sint16_t,sint32_t,sint64_t,sint128_t
+int_t, int8_t, int16_t, int32_t, int64_t, int128_t = sint_t, sint8_t, sint16_t, sint32_t, sint64_t, sint128_t
 
 class enum(type):
     '''
@@ -351,14 +363,14 @@ class enum(type):
 
         # invert ._values_ if they're defined backwards
         if len(cls._values_):
-            name, value = cls._values_[0]
+            _, value = cls._values_[0]
             if isinstance(value, six.string_types):
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
-                self._values_ = cls._values_ = [(k, v) for v, k in cls._values_[:]]
+                self._values_ = cls._values_ = [(name, value) for value, name in cls._values_[:]]
             pass
 
         # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(k, six.string_types) or not isinstance(v, six.integer_types) for k, v in cls._values_):
+        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in cls._values_):
             res = map(operator.attrgetter('__name__'), six.string_types)
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
@@ -369,11 +381,11 @@ class enum(type):
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
-        for val, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
-            res.setdefault(val, set()).update(map(operator.itemgetter(1), items))
-        for val, items in res.viewitems():
+        for value, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
+            res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
+        for value, items in six.viewitems(res):
             if len(items) > 1:
-                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), val, val, ', '.join(res)))
+                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
             continue
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
@@ -400,9 +412,11 @@ class enum(type):
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(k for k, v in cls._values_ if v == value)
+            return six.next(name for name, item in cls._values_ if item == value)
+
         except StopIteration:
             if default: return six.next(iter(default))
+
         raise KeyError(cls, 'enum.byvalue', value)
 
     @classmethod
@@ -412,9 +426,11 @@ class enum(type):
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(v for k, v in cls._values_ if k == name)
+            return six.next(value for item, value in cls._values_ if item == name)
+
         except StopIteration:
             if default: return six.next(iter(default))
+
         raise KeyError(cls, 'enum.byname', name)
 
     def __getattr__(self, name):
@@ -435,7 +451,7 @@ class enum(type):
     def summary(self, **options):
         res = self.get()
         try: return u"{:s}({:#x})".format(self.byvalue(res), res)
-        except (ValueError,KeyError): pass
+        except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
     def __setvalue__(self, *values, **attrs):
@@ -455,21 +471,21 @@ class enum(type):
     @classmethod
     def enumerations(cls):
         '''Return all values in enumeration as a set.'''
-        return {v for k, v in cls._values_}
+        return {value for name, value in cls._values_}
 
     @classmethod
     def mapping(cls):
         '''Return potential enumeration values as a dictionary.'''
-        return {k : v for k, v in cls._values_}
+        return {name : value for name, value in cls._values_}
 
 # update our current state
-for k, v in globals().items():
-    if v in (type,) or getattr(v,'__base__',type) is type:
+for _, definition in builtins.list(six.viewitems(globals())):
+    if definition in [type] or getattr(definition, '__base__', type) is type:
         continue
-    if isinstance(v, builtins.type) and issubclass(v, type):
-        __state__.setdefault(Config.integer.order, {})[v] = v
+    if isinstance(definition, builtins.type) and issubclass(definition, type):
+        __state__.setdefault(Config.integer.order, {})[definition] = definition
     continue
-del(k, v)
+del(definition)
 
 if __name__ == '__main__':
     class Result(Exception): pass
@@ -483,13 +499,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -497,8 +513,11 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes,struct
     from ptypes import provider,utils,pint
-    string1 = '\x0a\xbc\xde\xf0'
-    string2 = '\xf0\xde\xbc\x0a'
+    string1 = b'\x0a\xbc\xde\xf0'
+    string2 = b'\xf0\xde\xbc\x0a'
+
+    import sys
+    tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
     @TestCase
     def test_int_bigendian_uint32_load():
@@ -506,7 +525,7 @@ if __name__ == '__main__':
         a = a.l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_bigendian_uint32_set():
@@ -514,14 +533,14 @@ if __name__ == '__main__':
         a.set(0x0abcdef0)
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_load():
         b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print b, b.serialize().encode('hex')
+        print(b, tohex(b.serialize()))
 
     @TestCase
     def test_int_littleendian_set():
@@ -529,7 +548,7 @@ if __name__ == '__main__':
         b.set(0x0abcdef0)
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
-        print b, b.serialize().encode('hex')
+        print(b, tohex(b.serialize()))
 
     @TestCase
     def test_int_revert_bigendian_uint32_load():
@@ -537,7 +556,7 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string1)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_revert_littleendian_uint32_load():
@@ -545,47 +564,47 @@ if __name__ == '__main__':
         a = pint.uint32_t(source=provider.string(string2)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
-        print a, a.serialize().encode('hex')
+        print(a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_signed_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\xff\xff\xff\xff'
+        s = b'\xff\xff\xff\xff'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\x00\x00\x00\x80'
+        s = b'\x00\x00\x00\x80'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_highedge_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\xff\xff\xff\x7f'
+        s = b'\xff\xff\xff\x7f'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_int_littleendian_int32_unsigned_lowedge_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = '\x00\x00\x00\x00'
+        s = b'\x00\x00\x00\x00'
         a = pint.int32_t(source=provider.string(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
-        print b, a, a.serialize().encode('hex')
+        print(b, a, tohex(a.serialize()))
 
     @TestCase
     def test_enum_set_integer():

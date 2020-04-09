@@ -60,7 +60,7 @@ class module(object):
         for name,(protection,allocator) in segments.items():
             address,length = allocator.next()
             loadedsegments[name] = (address,length)
-            print 'mapping %s:+%x to %x'%(name, length, address)
+            print('mapping %s:+%x to %x'%(name, length, address))
 
         # produce a lookup dict
         sectionbases = dict([(name,address) for name,(address,length) in loadedsegments.items()])
@@ -69,9 +69,9 @@ class module(object):
 
         # fill sections
         for name,(address,length) in loadedsegments.items():
-            print 'allocated %x:+%x bytes for segment %s'%(address,length,name)
+            print('allocated %x:+%x bytes for segment %s'%(address,length,name))
             if length == 0:
-                print '  skipping 0 length segment', name
+                print('  skipping 0 length segment', name)
                 continue
 
             data = ld.getsegment(name)
@@ -85,7 +85,7 @@ class module(object):
 
             segments[name] = (address, length, protection)
 
-            print 'wrote segment %s to %x:%x'%(name,address,address+length)
+            print('wrote segment %s to %x:%x'%(name,address,address+length))
         return segments
 
     def inject(self, mm):
@@ -99,7 +99,7 @@ class module(object):
             self.__deallocatesegment(name, mm)
             name,address,length=self.segments[name]
             del(self.segments[name])
-            print 'Unloaded segment %s at %x:%x'%(name,address,address+length)
+            print('Unloaded segment %s at %x:%x'%(name,address,address+length))
         return
 
 if __name__ == '__main__':
@@ -129,7 +129,7 @@ if __name__ == '__main__':
         ###
         pbi = getProcessBasicInformation(mm.allocator.handle)
         baseaddress = pbi.PebBaseAddress
-        print 'peb',hex(baseaddress)
+        print('peb',hex(baseaddress))
 
         import ndk
         peb = ndk.pstypes.PEB()
@@ -139,7 +139,7 @@ if __name__ == '__main__':
 
     if True:
         import os
-        print 'collecting all modules'
+        print('collecting all modules')
         modulelookup = {}
         for module in peb['Ldr'].d.load()['InLoadOrderModuleList'].walk():
             modulename = os.path.basename( module['FullDllName'].get() ).lower()
@@ -157,10 +157,10 @@ if __name__ == '__main__':
             fullpath = (path + '/' + modulename)
             try:
                 st.open(fullpath)
-                print 'loaded module from %s'% fullpath
+                print('loaded module from %s'% fullpath)
                 failure = False
             except IOError:
-                print 'unable to locate %s, trying next searchpath'% fullpath
+                print('unable to locate %s, trying next searchpath'% fullpath)
                 path = search.pop(0)
                 continue
             continue
@@ -171,7 +171,7 @@ if __name__ == '__main__':
         symlookup = {}
 
         pe = modulelookup[modulename].load()['Pe']
-        print 'using',modulename,'from memory address', '%x'% pe.parent.getoffset()
+        print('using',modulename,'from memory address', '%x'% pe.parent.getoffset())
 
         st.load(pe.parent,modulename)
         symlookup[modulename] = dict( ((k, st[k]) for k in st.getglobals()) )
@@ -187,7 +187,7 @@ if __name__ == '__main__':
             except KeyError:
                 # XXX: shell32.dll tries to import from user32.dll!Ordinal2000...which doesn't exist
                 #      OFT: 800007d0 FT: 77D15AA6 HINT: N/A Name: Ordinal: 000007d0
-                print "Some crazy module wants to import from %s"% fullname
+                print("Some crazy module wants to import from %s"% fullname)
             continue
         return st
 
@@ -198,7 +198,7 @@ if __name__ == '__main__':
             symlookup = {}
             if modulename in lookup:
                 pe = modulelookup[modulename].load()['Pe']
-                print 'using',modulename,'from memory address', '%x'% pe.parent.getoffset()
+                print('using',modulename,'from memory address', '%x'% pe.parent.getoffset())
 
                 st.load(pe.parent,modulename)
                 symlookup[modulename] = dict( ((k, st[k]) for k in st.getglobals()) )
@@ -218,11 +218,11 @@ if __name__ == '__main__':
                     except KeyError:
                         # XXX: shell32.dll tries to import from user32.dll!Ordinal2000...which doesn't exist
                         #      OFT: 800007d0 FT: 77D15AA6 HINT: N/A Name: Ordinal: 000007d0
-                        print "Some crazy module wants to import from %s"% fullname
+                        print("Some crazy module wants to import from %s"% fullname)
 
                 return
 
-            #        print 'reading',modulename,'from disk'
+            #        print('reading',modulename,'from disk')
 
             failure = True
             search = list(searchpath)
@@ -231,10 +231,10 @@ if __name__ == '__main__':
                 fullpath = (path + '/' + modulename)
                 try:
                     st.open(fullpath)
-                    print 'loaded module from %s'% fullpath
+                    print('loaded module from %s'% fullpath)
                     failure = False
                 except IOError:
-                    print 'unable to locate %s, trying next searchpath'% fullpath
+                    print('unable to locate %s, trying next searchpath'% fullpath)
                     path = search.pop(0)
                     continue
                 continue
@@ -252,7 +252,7 @@ if __name__ == '__main__':
     for s,n in stores:
         o = s()
         o.open(n)
-        print 'linking %s'% n
+        print('linking %s'% n)
         link.add(o)
 
     # load everything we can
@@ -269,13 +269,13 @@ if __name__ == '__main__':
                 break
 
             undefinedsymbols = [k for k in link.keys() if '!' in k and link[k] is None]
-#            print '\n'.join(undefinedsymbols)
+#            print('\n'.join(undefinedsymbols))
 
             for m in undefinedmodules:
                 if m in definedmodules:
                     continue
 
-                print 'loading %s'% m
+                print('loading %s'% m)
                 if m in modulelookup:
                     st = loadmodule(m, link)
                 else:
@@ -286,20 +286,20 @@ if __name__ == '__main__':
         pass
 
     if True:
-        print '-'*50, 'shooting up'
+        print('-'*50, 'shooting up process')
         ld = loader.module(link)
         ld.inject(mm)
 
     if 0:
-        print '\n'.join([repr((k,ld[k])) for k in ld.getglobals()])
+        print('\n'.join([repr((k,ld[k])) for k in ld.getglobals()]))
 
     if 1:
         name = '__imp__PySys_SetArgv'
-        print name,hex(ld[name])
+        print(name,hex(ld[name]))
 
         name = 'python26.dll!PySys_SetArgv'
-        print name,hex(ld[name])
+        print(name,hex(ld[name]))
 
     if 1:
         name = '_main'
-        print name,hex(ld[name])
+        print(name,hex(ld[name]))

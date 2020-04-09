@@ -163,14 +163,14 @@ class demx(parray.block):
     _object_ = chunk
 
 if __name__ == '__main__':
-    import ptypes,director; reload(director)
+    import ptypes,vector.director as director
     ptypes.setsource( ptypes.provider.file('./sample.dir', mode='r') )
 
     z = director.File()
     z = z.load()
 
-    print z['Data'][1]['ckData']['header']['unknown']
+    print(z['Data'][1]['ckData']['header']['unknown'])
 
-    print 'Number of Records:', len(z['Data'])
+    print('Number of Records:', len(z['Data']))
 
     a = z['Data']

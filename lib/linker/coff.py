@@ -1,7 +1,7 @@
 import os,array
 import pecoff,ptypes
 import six,logging,warnings
-import store
+from . import store
 
 raise NotImplementedError(".do and .loadsymbol logic needs to be redesigned")
 
@@ -24,7 +24,7 @@ class coff(store.base):
 
         diff = section.getloadedsize() - len(data)
         assert diff >= 0, 'Loaded size (%x) < Segment size (%x)'% (section.getloadedsize(), len(data))
-        data += '\x00' * diff
+        data += b'\x00' * diff
         return data
 
     def getsegmentlength(self, name):
@@ -62,13 +62,14 @@ class linktable(dict):
     def __init__(self, symboltable):
         self.table = symboltable
 
-    def mangle(self, (module,name)):
+    def mangle(self, pack_modulename):
         '''
         converts a symbolname to a mangled version which is used internally
         by just the linktable. this name is used to correlate symbol entries
         with the symboltable and should be assigned locally
         '''
-        return None,'%s!%s'%(module, name)
+        (module, name) = pack_modulename
+        return None, '%s!%s'%(module, name)
 
     def new_entry(self, name, address=0):
         '''allocates space for a new entry, and updates the store's symboltable scope'''
@@ -154,21 +155,23 @@ class linktable(dict):
         return result
 
     def size(self):
-        return reduce(lambda x,y: x+y.size(), self.itervalues())
+        return six.moves.reduce(lambda x,y: x+y.size(), self.itervalues())
 
 class table_eat(linktable):
     '''coff export address table'''
-    def mangle(self, (module,name)):
-        return None,'%s!%s'%(module,name)
+    def mangle(self, pack_modulename):
+        (module, name) = pack_modulename
+        return None, '%s!%s'%(module,name)
 
 class table_iat(linktable):
     '''coff import address table'''
-    def mangle(self, (module,name)):
+    def mangle(self, pack_modulename):
         '''
         convert a name tuple into an internally mangled name, because microsot
         is weird with their __imp_ name prefix, so i'll be weirder
         '''
-        return None,'__imp__<%s!%s>'% (module,name)      # include the full module name
+        (module, name) = pack_modulename
+        return None, '__imp__<%s!%s>'% (module,name)      # include the full module name
 
 class executable(coff):
     relocations = None          # cache of relocations
@@ -584,7 +587,7 @@ class object(coff):
         # do each relocation entry
         for r in relocations.l:
             sym = symboltable[ int(r['SymbolTableIndex']) ]
-            print r, sym
+            print(r, sym)
             data = r.relocate(data, symboltable, self)
         return data
 
@@ -628,7 +631,7 @@ class library(store.container, coff):
                 first = n[:n.rindex('$')]
                 index = int(n[n.rindex('$')+1:])
 
-            except ValueError, e:
+            except ValueError as E:
                 first = n
                 index = 0           # default to 0 to give section first priority
 
@@ -641,7 +644,7 @@ class library(store.container, coff):
     def do_iat(self):
         logging.info('%s : doing iat'% self.name())
         ofs = 0
-#        print self.listsegments()
+#        print(self.listsegments())
         for module,symbol,ordinal,type in self.value.fetchimports():
             assert symbol[0] == '_', 'malformed import library symbol name?'
             name = module,symbol[1:]
@@ -706,8 +709,8 @@ if __name__ == '__main__':
 
     if False:
         a = coff.object.open('~/work/syringe/obj/test.obj')
-        print len(a.globals) == 3
-        print len(a.externals) == 3
+        print(len(a.globals) == 3)
+        print(len(a.externals) == 3)
 
     if False:
         import ptypes,pecoff
@@ -716,11 +719,11 @@ if __name__ == '__main__':
         z = pecoff.Archive.File()
         z=z.l
         for x in z.fetchimports():
-            print x
+            print(x)
 
     if False:
         z = coff.library.open('~/python26/libs/python26.lib')
-        print z.stores[2]
+        print(z.stores[2])
     #    z['.idata']=5
 
     if False:
@@ -737,10 +740,10 @@ if __name__ == '__main__':
 #        z = coff.table_eat(self)
         z = coff.table_iat(self)
 
-#        print type(z)
-#        print z.table
+#        print(type(z))
+#        print(z.table)
 
-#        print z
+#        print(z)
 #        z.add_export( (None,'somesymbol1') )
 #        z.add_forward( ('kernel32.dll', 'Whee'), [(None,'remote1')] )
 #        a=(None,'remote1')
@@ -769,5 +772,5 @@ if __name__ == '__main__':
     if True:
         import coff
         a = coff.object.open('../../obj/python-test.obj')
-        print a.do()
-        print a
+        print(a.do())
+        print(a)

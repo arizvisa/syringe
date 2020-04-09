@@ -1,4 +1,4 @@
-import logging, time
+import logging, time, six
 #logging.root.setLevel(logging.INFO)
 
 import pecoff, ptypes
@@ -24,7 +24,7 @@ def log(stdout):
     while True:
         message = (yield)
         ts = time.time()
-        print >>stdout, "{:.3f} : {:s}".format(ts - start, message)
+        six.print_("{:.3f} : {:s}".format(ts - start, message), file=stdout)
     return
 
 def strify(value):
@@ -39,10 +39,14 @@ if __name__ == '__main__':
     import ptypes, pecoff
 
     if len(sys.argv) != 2:
-        print >>sys.stderr, "Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test')
+        six.print_("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test'), file=sys.stderr)
         sys.exit(1)
+
     filename = sys.argv[1]
     L = log(sys.stderr); next(L)
+
+    if not os.path.exists(filename):
+        raise OSError("The specified file ({:s}) does not exist.".format(filename))
 
     ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 
@@ -83,10 +87,10 @@ if __name__ == '__main__':
         res = strings.field(m['Name'].int())
         if m['Mvid'].int():
             g = guids.Get(m['Mvid'].int())
-            print >>sys.stdout, '{:s} {:s}'.format(res.str(), g.str())
+            six.print_('{:s} {:s}'.format(res.str(), g.str()), file=sys.stdout)
             modules.append((res.str(), g))
         else:
-            print >>sys.stdout, '{:s}'.format(res.str())
+            six.print_('{:s}'.format(res.str()), file=sys.stdout)
 
     # collect assemblies
     L.send("Enumerating {:d} assemblies.".format(len(tables['Assembly'])))
@@ -110,4 +114,4 @@ if __name__ == '__main__':
             attributes.append(res)
         res = {}
         map(res.update, attributes)
-        print >>sys.stdout, '\t{:s} : {:s} : {:s}'.format(assembly[mi], ma, ', '.join('{:s}={:s}'.format(k, strify(v)) for k, v in res.viewitems()))
+        six.print_('\t{:s} : {:s} : {:s}'.format(assembly[mi], ma, ', '.join('{:s}={:s}'.format(k, strify(v)) for k, v in res.viewitems())), file=sys.stdout)

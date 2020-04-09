@@ -1,13 +1,13 @@
 import logging
-import functools,operator,itertools
+import functools, itertools, types, builtins, operator, math, six
 
 import ptypes
 from ptypes import *
 
 from . import stream as jpegstream
 
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, data), 0)
-dataofint = lambda integer: ((integer == 0) and '\x00') or (dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
+dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -56,8 +56,11 @@ class Marker(jpegstream.Marker):
 class MarkerType(jpegstream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
 
-class MarkerStream(jpegstream.MarkerStream):
+class StreamMarker(jpegstream.StreamMarker):
     Type, Table = MarkerType, Marker
+
+class DecodedStream(jpegstream.DecodedStream):
+    _marker_ = StreamMarker
 
 ### enumerations
 class Boxes(ptype.definition): cache = {}
@@ -82,7 +85,7 @@ class BoxHeader(pstruct.type):
         res = self['boxLength'].int()
         if res:
             return self['boxLengthExt'].int() if res == 1 else res
-        if isinstance(self.source, ptypes.prov.filebase):
+        if isinstance(self.source, ptypes.prov.bounded):
             return self.source.size() - self.getoffset()
 
         cls = self.__class__
@@ -101,8 +104,12 @@ class Box(pstruct.type):
     def __data(self):
         hdr = self['header'].li
         cb = hdr.DataLength()
-        res = Boxes.withdefault(hdr.Type(), type=hdr.Type(), length=cb)
-        return dyn.clone(res, blocksize=lambda s, cb=cb: cb) if issubclass(res, (ptype.block, parray.block)) else res
+        res = Boxes.withdefault(hdr.Type(), type=hdr.Type())
+        if issubclass(res, ptype.block):
+            return dyn.clone(res, length=cb)
+        elif issubclass(res, ptype.encoded_t):
+            return dyn.clone(res, _value_=dyn.clone(ptype.block, length=cb))
+        return dyn.clone(res, blocksize=lambda s, length=cb: length)
 
     def __padding(self):
         hdr = self['header'].li
@@ -115,18 +122,20 @@ class Box(pstruct.type):
         (__padding, 'padding'),
     ]
 
-class SuperBox(parray.block): _object_ = Box
+class SuperBox(parray.block):
+    _object_ = Box
 
-class File(parray.infinite): _object_ = Box
+class File(parray.infinite):
+    _object_ = Box
 
 ### Box types
 @Boxes.define
 class Signature(pstr.string):
-    type = '\x6a\x50\x20\x20'
+    type = b'\x6a\x50\x20\x20'
     length = 4
     @classmethod
     def default(cls):
-        return cls().set('\x0d\x0a\x87\x0a')
+        return cls().set(b'\x0d\x0a\x87\x0a')
     def valid(self):
         return self.serialize() == self.default().serialize()
     def properties(self):
@@ -136,7 +145,7 @@ class Signature(pstr.string):
 
 @Boxes.define
 class FileType(pstruct.type):
-    type = '\x66\x74\x79\x70'
+    type = b'\x66\x74\x79\x70'
     class Identifier(pstr.string): length = 4
     _fields_ = [
         (Identifier, 'BR'),
@@ -146,11 +155,11 @@ class FileType(pstruct.type):
 
 @Boxes.define
 class Jp2Header(SuperBox):
-    type = '\x6a\x70\x32\x68'
+    type = b'\x6a\x70\x32\x68'
 
 @Boxes.define
 class ImageHeader(pstruct.type):
-    type = '\x69\x68\x64\x72'
+    type = b'\x69\x68\x64\x72'
     _fields_ = [
         (u32, 'HEIGHT'),
         (u32, 'WIDTH'),
@@ -163,7 +172,7 @@ class ImageHeader(pstruct.type):
 
 @Boxes.define
 class BitsPerComponent(pbinary.struct):
-    type = '\x62\x70\x63\x63'
+    type = b'\x62\x70\x63\x63'
     _fields_ = [
         (1, 'Signed'),
         (7, 'BitDepth'),
@@ -171,7 +180,7 @@ class BitsPerComponent(pbinary.struct):
 
 @Boxes.define
 class Palette(pstruct.type):
-    type = '\x70\x63\x6c\x72'
+    type = b'\x70\x63\x6c\x72'
     class _B(pbinary.struct):
         _fields_ = [
             (1, 'Signed'),
@@ -191,7 +200,7 @@ class Palette(pstruct.type):
 
 @Boxes.define
 class ComponentMapping(parray.block):
-    type = '\x63\x6d\x61\x70'
+    type = b'\x63\x6d\x61\x70'
     class Component(pstruct.type):
         class MTYP(pint.enum, u8):
             _values_ = [
@@ -207,7 +216,7 @@ class ComponentMapping(parray.block):
 
 @Boxes.define
 class ChannelDefinition(parray.block):
-    type = '\x63\x64\x65\x66'
+    type = b'\x63\x64\x65\x66'
 
     class Definition(pstruct.type):
         class Typ(pint.enum, u16):
@@ -232,11 +241,11 @@ class ChannelDefinition(parray.block):
 
 @Boxes.define
 class Resolution(SuperBox):
-    type = '\x63\x64\x65\x66'
+    type = b'\x63\x64\x65\x66'
 
 @Boxes.define
 class CaptureResolution(pstruct.type):
-    type = '\x72\x65\x73\x63'
+    type = b'\x72\x65\x73\x63'
     _fields_ = [
         (u16, 'VRcN'),
         (u16, 'VRcD'),
@@ -248,7 +257,7 @@ class CaptureResolution(pstruct.type):
 
 @Boxes.define
 class DefauiltDisplayResolution(pstruct.type):
-    type = '\x72\x65\x73\x64'
+    type = b'\x72\x65\x73\x64'
     _fields_ = [
         (u16, 'VRdN'),
         (u16, 'VRdD'),
@@ -260,18 +269,15 @@ class DefauiltDisplayResolution(pstruct.type):
 
 @Boxes.define
 class ColourSpecification(pstruct.type):
-    type = '\x63\x6f\x6c\x72'
+    type = b'\x63\x6f\x6c\x72'
     def __PROFILE(self):
         try:
             hdr = self.getparent(Box)['header'].li
         except ptypes.error.NotFoundError:
             return dyn.block(0)
 
-        fields = ('METH','PREC','APPROX','EnumCS')
-
-        res = [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, hdr.DataLength() - cb)))
+        fields = ['METH', 'PREC', 'APPROX', 'EnumCS']
+        return dyn.block(max((0, hdr.DataLength() - sum(self[fld].li.size() for fld in fields))))
 
     _fields_ = [
         (u8, 'METH'),
@@ -283,21 +289,23 @@ class ColourSpecification(pstruct.type):
 
 @Boxes.define
 class ContiguousCodeStream(jpegstream.Stream):
-    type = '\x6a\x70\x32\x63'
+    type = b'\x6a\x70\x32\x63'
+    _object_ = DecodedStream
 
-    _object_ = dyn.clone(jpegstream.DecodedStream, _object_=MarkerStream)
+    def isDelimiter(self, marker):
+        return intofdata(marker) in {0xff93, 0xffd9, 0xff92}
 
 @Boxes.define
 class IntellectualProperty(ptype.block):
-    type = '\x6a\x70\x32\x69'
+    type = b'\x6a\x70\x32\x69'
 
 @Boxes.define
 class XML(ptype.block):
-    type = '\x78\x6d\x6c\x20'
+    type = b'\x78\x6d\x6c\x20'
 
 @Boxes.define
 class UUID(pstruct.type):
-    type = '\x75\x75\x69\x64'
+    type = b'\x75\x75\x69\x64'
     def __DATA(self):
         try:
             hdr = self.getparent(Box)['header'].li
@@ -312,41 +320,86 @@ class UUID(pstruct.type):
 
 @Boxes.define
 class UUIDInfo(SuperBox):
-    type = '\x75\x69\x6e\x66'
+    type = b'\x75\x69\x6e\x66'
+
+class UUID(pstruct.type):
+    class _time_hi_and_version(pbinary.struct):
+        _fields_ = [
+            (4, 'version'),
+            (12, 'time_hi'),
+        ]
+        def summary(self):
+            return "{:04x}".format(self.int())
+
+    class _clock_seq_hi_and_res(pbinary.struct):
+        _fields_ = [
+            (3, 'variant'),
+            (13, 'clock_seq'),
+        ]
+        def summary(self):
+            return "{:04x}".format(self.int())
+
+    class _node(parray.type):
+        length, _object_ = 6, u8
+        def summary(self):
+            iterable = (item.int() for item in self)
+            return ''.join(map("{:02x}".format, iterable))
+
+    _fields_ = [
+        (u32, 'time_low'),
+        (u16, 'time_mid'),
+        (_time_hi_and_version, 'time_hi_and_version'),
+        (_clock_seq_hi_and_res, 'clock_seq_hi_and_res'),
+        (_node, 'node'),
+    ]
+
+    def summary(self, **options):
+        fmt = "urn:uuid:{:s}".format
+        res = self.str() if self.initializedQ() else '????????-????-????-????-????????????'
+        return fmt(res)
+
+    def str(self):
+        d1 = '{:08x}'.format(self['time_low'].int())
+        d2 = '{:04x}'.format(self['time_mid'].int())
+        d3 = '{:04x}'.format(self['time_hi_and_version'].int())
+        d4 = '{:04x}'.format(self['clock_seq_hi_and_res'].int())
+        iterable = (item.int() for item in self['node'])
+        d5 = ''.join(map('{:02x}'.format, iterable))
+        return '-'.join([d1, d2, d3, d4, d5])
 
 @Boxes.define
 class UUIDList(pstruct.type):
-    type = '\x75\x63\x73\x74'
-    _fields_ = []
+    type = b'\x75\x63\x73\x74'
+    _fields_ = [
+        (u16, 'NU'),
+        (lambda self: dyn.array(UUID, self['NU'].li.int()), 'UUID'),
+    ]
 
 @Boxes.define
 class URL(pstruct.type):
-    type = '\x75\x72\x6c\x20'
+    type = b'\x75\x72\x6c\x20'
     def __LOC(self):
         try:
             hdr = self.getparent(Box)['header'].li
         except ptypes.error.NotFoundError:
             return dyn.block(0)
 
-        fields = ('VERS','FLAG')
-
-        res = [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.clone(pstr.string, length=hdr.DataLength() - cb)
+        fields = ['VERS', 'FLAG']
+        return dyn.clone(pstr.string, length=hdr.DataLength() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u8, 'VERS'),
-        (dyn.clone(pint.uint_t, length=3), 'FLAG'),
+        (dyn.clone(u0, length=3), 'FLAG'),
         (__LOC, 'LOC'),
     ]
 
 ### Update enumeration with any defined Box types
-BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in Boxes.cache.viewitems()]
+BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in six.viewitems(Boxes.cache)]
 
 ### Marker types
 @Marker.define
-class SOC(pstruct.type):
-    _fields_ = []
+class SOC(ptype.block):
+    pass
 
 @Marker.define
 class SOT(pstruct.type):
@@ -359,12 +412,12 @@ class SOT(pstruct.type):
     ]
 
 @Marker.define
-class SOD(pstruct.type):
-    _fields_ = []
+class SOD(ptype.block):
+    pass
 
 @Marker.define
-class EOC(pstruct.type):
-    _fields_ = []
+class EOC(ptype.block):
+    pass
 
 @Marker.define
 class SIZ(pstruct.type):
@@ -394,65 +447,100 @@ class SIZ(pstruct.type):
         (lambda s: dyn.array(SIZ.C, s['Csiz'].li.int()), 'C'),
     ]
 
+    def NumberOfTiles(self):
+        width = self['Xsiz'].int() - self['XOsiz'].int()
+        height = self['Ysiz'].int() - self['YOsiz'].int()
+        X, Y = (item / self[fld].int() for fld, item in zip(['XTsiz', 'YTsiz'], [width, height]))
+        return six.moves.reduce(operator.mul, map(math.ceil, [X, Y]))
+
+class Scod(pbinary.flags):
+    _fields_ = [
+        (5, 'Reserved'),
+        (1, 'EPHUsed'),
+        (1, 'SOPUsed'),
+        (1, 'Entropy'),
+    ]
+
+class SGcod(pstruct.type):
+    class _Progression_order(pint.enum, u8):
+        _values_ = [
+            ('Layer-resolution level-component-position', 0),
+            ('Resolution level-layer-component-position', 1),
+            ('Resolution level-position-component-layer', 2),
+            ('Position-component-resolution level-layer', 3),
+            ('Component-position-resolution level-layer', 4),
+        ]
+    _fields_ = [
+        (_Progression_order, 'Progression order'),
+        (u16, 'Number of layers'),
+        (u8, 'Multiple component transformation'),
+    ]
+
+class Precinct(pbinary.struct):
+    _fields_ = [
+        (4, 'PPy'),
+        (4, 'PPx'),
+    ]
+
+class SPcod(pstruct.type):
+    _fields_ = [
+        (u8, 'Number of decomposition levels'),
+        (u8, 'Code-block width'),
+        (u8, 'Code-block height'),
+        (u8, 'Code-block style'),
+        (u8, 'Transformation'),
+    ]
+
 @Marker.define
 class COD(pstruct.type):
-    class Scod(pbinary.struct):
-        _fields_ = [
-            (5, 'Entropy1'),
-            (1, 'EPHUsed'),
-            (1, 'SOPUsed'),
-            (1, 'Entropy2'),
-        ]
-    class SPcod(pstruct.type):
-        class CodeBlock(pstruct.type):
-            _fields_ = [
-                (u8, 'numresolutions'),
-                (u8, 'Code-block size width'),
-                (u8, 'Code-block size height'),
-                (u8, 'Code-block style'),
-                (u8, 'Transform'),
-                (u8, 'Multiple component transform'),
-                #(ptype.block, 'Packet partition size'),
-            ]
-
-        _fields_ = [
-            (u8, 'Progression order'),
-            (u16, 'Number of layers'),
-            (lambda s: dyn.array(s.CodeBlock, s['Number of layers'].li.int()), 'Layers'),
-        ]
-
     def __missed(self):
-        length, fields = self['Lcod'].li, ('Scod','Spcod')
+        length, fields = self['Lcod'].li, ['Lcod', 'Scod', 'SGcod', 'SPcod']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+    def __LL(self):
+        scod, spcod = (self[fld].li for fld in ['Scod', 'SPcod'])
+        count = (1 + spcod['Number of decomposition levels'].int()) if scod['Entropy'] else 0
+        return dyn.array(Precinct, count)
 
     _fields_ = [
         (u16, 'Lcod'),
         (Scod, 'Scod'),
+        (SGcod, 'SGcod'),
         (SPcod, 'SPcod'),
-        (__missed, 'missed'),
+        (__LL, 'LL'),
     ]
+
+class Scoc(pbinary.flags):
+    _fields_ = [
+        (7, 'Reserved'),
+        (1, 'Entropy'),
+    ]
+
+class SPcoc(SPcod): pass
 
 @Marker.define
 class COC(pstruct.type):
     def __Ccoc(self):
-        Csiz = 0
-        return u8 if Csiz < 257 else u16
+        stream = self.getparent(stream.DecodedStream)
+        try:
+            index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
+        except StopIteration:
+            logging.warn("Unable to locate SIZ marker!")
+            return u8
+        Csiz = stream[index]['Value']['Csiz']
+        return u8 if Csiz.int() < 257 else u16
 
-    def __SPcoc(self):
-        length, fields = self['Lcoc'].li, ('Ccoc','Scoc')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+    def __LL(self):
+        scod, spcod = (self[fld].li for fld in ['Scoc', 'SPcoc'])
+        count = (1 + spcod['Number of decomposition levels'].int()) if scod['Entropy'] else 0
+        return dyn.array(Precinct, count)
 
     _fields_ = [
         (u16, 'Lcoc'),
         (__Ccoc, 'Ccoc'),
-        (u8, 'Scoc'),
-        (__SPcoc, 'SPcoc'),
+        (Scoc, 'Scoc'),
+        (SPcoc, 'SPcoc'),
+        (__LL, 'LL'),
     ]
 
 @Marker.define
@@ -462,11 +550,8 @@ class RGN(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __SPrgn(self):
-        length, fields = self['Lrgn'].li, ('Crgn','Srgn')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lrgn'].li, ['Lrgn', 'Crgn', 'Srgn']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lrgn'),
@@ -478,11 +563,8 @@ class RGN(pstruct.type):
 @Marker.define
 class QCD(pstruct.type):
     def __SPqcd(self):
-        length, fields = self['Lqcd'].li, ('Sqcd',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lqcd'].li, ['Lqcd', 'Sqcd']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lqcd'),
@@ -497,11 +579,8 @@ class QCC(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __SPqcc(self):
-        length, fields = self['Lqcc'].li, ('Cqcc','Sqcc')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lqcc'),
@@ -521,11 +600,8 @@ class POC(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __missed(self):
-        length, fields = self['Lpod'].li, ('RSpod','CSpod','LYEpod','REpod','CEpod','Ppod')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lpod'].li, ['Lpod', 'RSpod', 'CSpod', 'LYEpod', 'REpod', 'CEpod', 'Ppod']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lpod'),
@@ -559,11 +635,8 @@ class TLM(pstruct.type):
         return u0
 
     def __missed(self):
-        length, fields = self['Ltlm'].li, ('Ztlm','Stlm','Ttlm','Ptlm')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Ltlm'].li, ['Ltlm', 'Ztlm', 'Stlm', 'Ttlm', 'Ptlm']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Ltlm'),
@@ -577,11 +650,8 @@ class TLM(pstruct.type):
 @Marker.define
 class PLM(pstruct.type):
     def __missed(self):
-        length, fields = self['Lplm'].li, ('Zplm','Nplm')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lplm'].li, ['Lplm', 'Zplm', 'Nplm']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lplm'),
@@ -593,11 +663,8 @@ class PLM(pstruct.type):
 @Marker.define
 class PLT(pstruct.type):
     def __Iplt(self):
-        length, fields = self['Lplt'].li, ('Zplt',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lplt'].li, ['Lplt', 'Zplt']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lplt'),
@@ -608,11 +675,8 @@ class PLT(pstruct.type):
 @Marker.define
 class PPM(pstruct.type):
     def __Ippm(self):
-        length, fields = self['Lppm'].li, ('Zppm','Nppm')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lppm'].li, ['Lppm', 'Zppm', 'Nppm']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lppm'),
@@ -624,11 +688,8 @@ class PPM(pstruct.type):
 @Marker.define
 class PPT(pstruct.type):
     def __Ippt(self):
-        length, fields = self['Lppt'].li, ('Zppt',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+        length, fields = self['Lppt'].li, ['Lppt', 'Zppt']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lppt'),
@@ -638,46 +699,39 @@ class PPT(pstruct.type):
 
 @Marker.define
 class SOP(pstruct.type):
-    def __missing(self):
-        length, fields = self['Lsop'].li, ('Nsop',)
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+    def __missed(self):
+        length, fields = self['Lsop'].li, ['Lsop', 'Nsop']
+        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lsop'),
         (u16, 'Nsop'),
-        (__missing, 'missing'),
+        (__missed, 'missed'),
     ]
 
 @Marker.define
-class EPH(pstruct.type):
-    _fields_ = []
+class EPH(ptype.block):
+    pass
 
 @Marker.define
 class COM(pstruct.type):
-    def __missing(self):
-        length, fields = self['Lcme'].li, ('Rcme','Ccme')
-
-        res = [length] + [self[n].li for n in fields]
-        cb = sum(map(operator.methodcaller('size'), res))
-        return dyn.block(max((0, length.int() - cb)))
+    def __content(self):
+        length, fields = self['Lcme'].li, ['Lcme', 'Rcme']
+        return dyn.clone(pstr.string, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
         (u16, 'Lcme'),
         (u16, 'Rcme'),
-        (u8, 'Ccme'),
-        (__missing, 'missing'),
+        (__content, 'Ccme'),
     ]
 
 if __name__ == '__main__':
-    import ptypes, jp2
+    import ptypes, image.jpeg.jp2 as jp2
     ptypes.setsource(ptypes.prov.file('logo.jp2', mode='r'))
 
     z = jp2.File().l
 
-    print z[3]['data'].decode()
+    print(z[3]['data'].decode())
 
     a = ptype.block(offset=z.getoffset()+z.size(), length=0x100).l
-    print a.hexdump()
+    print(a.hexdump())

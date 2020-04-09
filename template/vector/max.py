@@ -583,47 +583,47 @@ class BOGUS(ptype.block): type = 0x0011
 class File(Chunk): pass
 
 if __name__ == '__main__':
-    import ptypes, max
+    import ptypes, vector.max as max
     ptypes.setsource(ptypes.prov.file('./samples/3ds/boletus.3ds', mode='rb'))
     z = max.File()
     z=z.l
-    print z['data']
+    print(z['data'])
 
-    print z['data'][1]['data'][0]['data']
-    print z['data'][1]['data'][1]
-    print z['data'][1]['data'][2]['data'][0]['data']
-    print z['data'][1]['data'][3]['data']['chunk']['data'][0]['data']   # TRI_VERTEXL
-    print z['data'][1]['data'][3]['data']['chunk']['data'][1]['data']   # TRI_LOCAL
-    print z['data'][1]['data'][3]['data']['chunk']['data'][2]['data']   # TRI_MAPPINGCOORS
-    print z['data'][1]['data'][3]['data']['chunk']['data'][3]
-    print z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']
-    print z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']['face']
-    print z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']['facedata'][0]['data']['face']
-    print z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']['facedata'][1]['data']
-    print max.TriChunk(offset=0x228a).l
-    print max.TriChunk(offset=0x25d6).l
-    print z['data'][2]['data'][0]
-    print z['data'][2]['data'][1]
-    print z['data'][2]['data'][2]
+    print(z['data'][1]['data'][0]['data'])
+    print(z['data'][1]['data'][1])
+    print(z['data'][1]['data'][2]['data'][0]['data'])
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][0]['data'])  # TRI_VERTEXL
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][1]['data'])  # TRI_LOCAL
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][2]['data'])  # TRI_MAPPINGCOORS
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][3])
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][3]['data'])
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']['face'])
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']['facedata'][0]['data']['face'])
+    print(z['data'][1]['data'][3]['data']['chunk']['data'][3]['data']['facedata'][1]['data'])
+    print(max.TriChunk(offset=0x228a).l)
+    print(max.TriChunk(offset=0x25d6).l)
+    print(z['data'][2]['data'][0])
+    print(z['data'][2]['data'][1])
+    print(z['data'][2]['data'][2])
 
-    print z['data'][2]['data'][3]
-    print z['data'][2]['data'][3]['data'][0]    # KEYF_OBJINDEX
-    print z['data'][2]['data'][3]['data'][1]    # KEYF_OBJHIERARCH
-    print z['data'][2]['data'][3]['data'][1]['data']
-    print z['data'][2]['data'][3]['data'][2]    # KEYF_OBJBOUNDBOX
-    print z['data'][2]['data'][3]['data'][2]['data']
-    print z['data'][2]['data'][3]['data'][3]    # KEYF_OBJPIVOT
-    print z['data'][2]['data'][3]['data'][3]['data']['pos'][0]
-    print z['data'][2]['data'][3]['data'][4]    # KEYF_OBJSCALING
-    print z['data'][2]['data'][3]['data'][4]['data']['scale'][0]
-    print z['data'][2]['data'][3]['data'][5]    # KEYF_OBJROTATION
-    print z['data'][2]['data'][3]['data'][5]['data']['rotate'][0]
+    print(z['data'][2]['data'][3])
+    print(z['data'][2]['data'][3]['data'][0])   # KEYF_OBJINDEX
+    print(z['data'][2]['data'][3]['data'][1])   # KEYF_OBJHIERARCH
+    print(z['data'][2]['data'][3]['data'][1]['data'])
+    print(z['data'][2]['data'][3]['data'][2])   # KEYF_OBJBOUNDBOX
+    print(z['data'][2]['data'][3]['data'][2]['data'])
+    print(z['data'][2]['data'][3]['data'][3])   # KEYF_OBJPIVOT
+    print(z['data'][2]['data'][3]['data'][3]['data']['pos'][0])
+    print(z['data'][2]['data'][3]['data'][4])   # KEYF_OBJSCALING
+    print(z['data'][2]['data'][3]['data'][4]['data']['scale'][0])
+    print(z['data'][2]['data'][3]['data'][5])   # KEYF_OBJROTATION
+    print(z['data'][2]['data'][3]['data'][5]['data']['rotate'][0])
 
 if __name__ == '__main__':
-    import ptypes, max
+    import ptypes, vector.max as max
     ptypes.setsource(ptypes.prov.file('./results/3ds/crashes/id_000071_00', mode='rb'))
     ptypes.setsource(ptypes.prov.file('./samples/3ds/boletus.3ds', mode='rb'))
     z = max.File()
     z=z.l
-    print z.at(0x12f).getparent(max.Chunk)
-    print z.at(0x11d).getparent(max.Chunk)
+    print(z.at(0x12f).getparent(max.Chunk))
+    print(z.at(0x11d).getparent(max.Chunk))

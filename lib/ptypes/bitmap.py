@@ -1,5 +1,5 @@
 #bitmap = (integer, bits)
-import six, math
+import six, sys, math
 import functools, operator, itertools, types
 from six.moves import builtins
 
@@ -188,7 +188,7 @@ def shrink(bitmap, count):
         return grow(bitmap, -count)
     integer, size = bitmap
     shift, sign = 2 ** count, -1 if size < 0 else +1
-    return integer / shift, size - count * sign
+    return integer // shift, size - count * sign
 
 ## for treating a bitmap like an integer stream
 def push(bitmap, operand):
@@ -238,11 +238,11 @@ def consume(bitmap, bits):
 
     res = bitmapinteger & integermask
     if bitmapsize < 0:
-        signmask = integershift / 2
-        res = (res & (signmask - 1)) - (integershift / 2 if res & signmask else 0)
-        bitmap = bitmapinteger / integershift, bitmapsize + integersize
+        signmask = integershift // 2
+        res = (res & (signmask - 1)) - (integershift // 2 if res & signmask else 0)
+        bitmap = bitmapinteger // integershift, bitmapsize + integersize
     else:
-        bitmap = bitmapinteger / integershift, bitmapsize - integersize
+        bitmap = bitmapinteger // integershift, bitmapsize - integersize
     return bitmap, res
 
 def shift(bitmap, bits):
@@ -263,19 +263,37 @@ def shift(bitmap, bits):
     resultmask = integermask * resultshift
 
     if bitmapsize < 0:
-        signmask = integershift / 2
-        res = (bitmapinteger & resultmask) / resultshift
-        res = (res & (signmask - 1)) - (integershift / 2 if res & signmask else 0)
+        signmask = integershift // 2
+        res = (bitmapinteger & resultmask) // resultshift
+        res = (res & (signmask - 1)) - (integershift // 2 if res & signmask else 0)
         bitmap = bitmapinteger & ~resultmask, -resultsize
     else:
-        res = (bitmapinteger & resultmask) / resultshift
+        res = (bitmapinteger & resultmask) // resultshift
         bitmap = bitmapinteger & ~resultmask, resultsize
     return bitmap, res
 
 class consumer(object):
     '''Given an iterable of an ascii string, provide an interface that supplies bits'''
+
+    if sys.version_info.major < 3:
+        @classmethod
+        def __make_interator__(cls, iterable):
+            # XXX: in python2, byte-iterators always return bytes
+            return six.iterbytes(iterable)
+
+    else:
+        @classmethod
+        def __make_interator__(cls, iterable):
+            # XXX: if we're a generator, we might _actually_ be iterating
+            #      through bytes...
+            if builtins.isinstance(iterable, types.GeneratorType):
+                return map(six.byte2int, iterable)
+
+            # XXX: but, in python3 byte-iterators always return ints...
+            return six.iterbytes(iterable)
+
     def __init__(self, iterable=()):
-        self.source = iter(iterable)
+        self.source = self.__make_interator__(iterable)
         self.cache = new(0, 0)
 
     def insert(self, bitmap):
@@ -294,16 +312,17 @@ class consumer(object):
         result, count = 0, 0
         while bytes > 0:
             result *= 256
-            result += six.byte2int(six.next(self.source))
+            result += six.next(self.source)
             bytes, count = bytes - 1, count + 1
         self.cache = push(self.cache, new(result, count * 8))
         return count
 
     def consume(self, bits):
         '''Returns some number of bits as an integer'''
-        if bits > self.cache[1]:
-            count = bits - self.cache[1]
-            bs = (count + 7) / 8
+        available = size(self.cache)
+        if bits > available:
+            count = bits - available
+            bs = (count + 7) // 8
             self.read(bs)
             return self.consume(bits)
         self.cache, result = shift(self.cache, bits)
@@ -334,7 +353,7 @@ def data(bitmap, **kwargs):
         res.append(n)
 
     # convert it to a string
-    return str().join(map(six.int2byte, res))
+    return bytes().join(map(six.int2byte, res))
 
 def size(bitmap):
     '''Return the size of the bitmap, ignoring signedness'''
@@ -403,14 +422,31 @@ def join(iterable):
 
 def groupby(sequence, count):
     '''Group sequence by number of elements'''
-    key, data = lambda (index, value): index / count, enumerate(sequence)
-    for key, res in itertools.groupby(data, key):
+    idata = enumerate(sequence)
+    def fkey(item):
+        (index, value) = item
+        return index // count
+
+    for key, res in itertools.groupby(idata, fkey):
         yield builtins.map(operator.itemgetter(1), res)
     return
 
+def ror(bitmap, shift=1):
+    '''
+    jspelman. he's everywhere.
+    ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
+    '''
+    (value, size) = bitmap
+    return new((((value & 2**shift - 1) << size - shift) | (value >> shift)) & 2**size - 1, size)
+
 # jspelman. he's everywhere.
-ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
-rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
+def rol(bitmap, shift=1):
+    '''
+    jspelman. he's everywhere.
+    rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
+    '''
+    (value, size) = bitmap
+    return new(((value << shift) | ((value & ((2**size - 1) ^ (2**(size - shift) - 1))) >> (size - shift))) & 2**size - 1, size)
 
 def reverse(bitmap):
     '''Flip the bit order of the bitmap'''
@@ -475,7 +511,7 @@ class WBitmap(object):
             # along a byte boundary (multiple of 8).
             offset = bits - leftover
             res = integer & (mask * 2**offset)
-            self.data[-1] |= res / 2**offset
+            self.data[-1] |= res // 2**offset
 
             # Update the bits that we've processed
             self.bits, bits = self.bits + leftover, bits - leftover
@@ -484,9 +520,9 @@ class WBitmap(object):
         # just push the integer to our data and update our size. This
         # same logic should also apply if our data is empty.
         while bits >= 8:
-            shift = 2 ** bits / 0x100
+            shift = 2 ** bits // 0x100
             res = integer & (0xff * shift)
-            self.data.append(res / shift)
+            self.data.append(res // shift)
             self.bits, bits = self.bits + 8, bits - 8
 
         # Add any extra bits that were leftover as the last byte
@@ -502,9 +538,9 @@ class WBitmap(object):
         used = self.bits & 7
         if used:
             shift, mask = 2 ** used, 2 ** used - 1
-            res = reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
+            res = six.moves.reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
             return (res * shift) | (self.data[-1] & mask)
-        return reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
+        return six.moves.reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
 
     def size(self):
         '''Return the current number of bits that have been stored.'''
@@ -536,7 +572,7 @@ class RBitmap(object):
 
         if self.offset and bits < leftover:
             shift, mask = 2 ** (leftover - bits), 2 ** bits - 1
-            result = self.data[0] / shift
+            result = self.data[0] // shift
             self.offset, self.data[0] = self.offset + bits, self.data[0] & (2 * shift - 1)
             return result & mask
 
@@ -559,7 +595,7 @@ class RBitmap(object):
         if bits > 0:
             shift, mask = 2 ** leftover, 2 ** bits - 1
             result *= 2 ** bits
-            result += ((self.data[0] / shift) & mask) if len(self.data) else 0
+            result += ((self.data[0] // shift) & mask) if len(self.data) else 0
             self.offset = bits
         return result
 
@@ -594,13 +630,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -608,6 +644,9 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import ptypes
     from ptypes import bitmap
+
+    import sys, operator
+    tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
     ### set
     @TestCase
@@ -623,42 +662,42 @@ if __name__ == '__main__':
     def set_bitmap_unsigned():
         x = bitmap.new(0xf000000000000000,64)
         #x = bitmap.set(x, 60, count=4)
-        print bitmap.string(x)
+        print(bitmap.string(x))
 
         y,res = bitmap.shift(x, 4)
-        print res,bitmap.string(y)
+        print(res,bitmap.string(y))
 
         x = bitmap.new(0,0)
         x = bitmap.push(x, (0x1,4) )
         x = bitmap.push(x, (0x2,4) )
         x = bitmap.push(x, (0x3,4) )
         x = bitmap.push(x, (0x4,4) )
-        print x,bitmap.string(x)
+        print(x,bitmap.string(x))
 
         x = bitmap.new(0,0)
         x = bitmap.insert(x, (0x1,4) )
         x = bitmap.insert(x, (0x2,4) )
         x = bitmap.insert(x, (0x3,4) )
         x = bitmap.insert(x, (0x4,4) )
-        print x,bitmap.string(x)
+        print(x,bitmap.string(x))
 
-        x = bitmap.consumer('\x12\x34')
-        print x.consume(4)
-        print x.consume(4)
-        print x.consume(4)
-        print x.consume(4)
+        x = bitmap.consumer(b'\x12\x34')
+        print(x.consume(4))
+        print(x.consume(4))
+        print(x.consume(4))
+        print(x.consume(4))
 
         x = bitmap.new(0, 4)
         for i in six.moves.range(6):
-            print x
+            print(x)
             x = bitmap.add(x, 3)
 
         for i in six.moves.range(6):
-            print x
+            print(x)
             x = bitmap.sub(x, 6)
 
         x = bitmap.new(4,4)
-        print bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x))))
+        print(bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x)))))
 
     ### add
     @TestCase
@@ -942,14 +981,14 @@ if __name__ == '__main__':
     def data_padding():
         res = bitmap.new(0x123, 12)
         data = bitmap.data(res, reversed=0)
-        if data.encode('hex') == '1230':
+        if tohex(data) == '1230':
             raise Success
 
     @TestCase
     def data_padding_reversed():
         res = bitmap.new(0x123, 12)
         data = bitmap.data(res, reversed=1)
-        if data.encode('hex') == '3012':
+        if tohex(data) == '3012':
             raise Success
 
     @TestCase
@@ -1022,6 +1061,86 @@ if __name__ == '__main__':
     def bitmap_ror4_value():
         res = bitmap.new(0b0110, 4)
         if bitmap.int(bitmap.ror(res, 4)) == 0b0110:
+            raise Success
+
+    @TestCase
+    def consumer_consume1_8():
+        data = b'\x80'
+        valid = [1, 0, 0, 0, 0, 0, 0, 0]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(1))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume4_2():
+        data = b'\xa0'
+        valid = [0xa, 0x0]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(4))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume8_1():
+        data = b'\xa0'
+        valid = [0xa0]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(8))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume16_1():
+        data = b'\xa5\xa5'
+        valid = [0xa5a5]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            res.append(bc.consume(16))
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consume4_4():
+        data = b'\xa5\xa5'
+        valid = [0xa, 0x5, 0xa, 0x5]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            item = bc.consume(4)
+            res.append(item)
+
+        if res == valid:
+            raise Success
+
+    @TestCase
+    def consumer_consumeiterable():
+        data = (six.int2byte(item) for item in [0xa5, 0xa5])
+        valid = [0xa, 0x5, 0xa, 0x5]
+
+        bc = bitmap.consumer(data)
+        res = []
+        while len(res) < len(valid):
+            item = bc.consume(4)
+            res.append(item)
+
+        if res == valid:
             raise Success
 
 if __name__ == '__main__':

@@ -12,12 +12,12 @@ class SHORT(bigendian(pint.int16_t)): pass
 class UINT24(bigendian(pint.uint_t)): length = 3
 class ULONG(bigendian(pint.uint32_t)): pass
 class LONG(bigendian(pint.int32_t)): pass
-class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda x: int(x) / 65536.0)
+class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda x: int(x) // 65536.0)
 
 #class FUNIT(wtf): pass
 class FWORD(SHORT): pass
 class UFWORD(USHORT): pass
-class F2DOT14(SHORT): pass      # float = lambda x: int(x) / 2**14)
+class F2DOT14(SHORT): pass      # float = lambda x: int(x) // 2**14)
 class LONGDATETIME(bigendian(pint.uint64_t)): pass
 
 class Tag(dyn.block(4)): pass
@@ -132,25 +132,25 @@ if __name__ == '__main__':
     ot = OpenTypeFile()
     ot.setoffset(0x133a)
     ot.source = source
-    print ot.load()
-    print '-'*24
+    print(ot.load())
+    print('-'*24)
 
     #for x in ot['tables']:
-    #    print x['identifier']
+    #    print(x['identifier'])
 
-    #print ot['tables'][1].getblock().load()
+    #print(ot['tables'][1].getblock().load())
     cvt = ot['tables'][0]
-    #print cvt
-    print hex(cvt['length'].getoffset()), 'cvt.length', cvt['length']
+    #print(cvt)
+    print(hex(cvt['length'].getoffset()), 'cvt.length', cvt['length'])
 
     fpgm = ot['tables'][1]
-    print hex(fpgm.getoffset()), 'fpgm.length', fpgm['length']
+    print(hex(fpgm.getoffset()), 'fpgm.length', fpgm['length'])
 
     head = ot['tables'][3].getrecord()
-    #print head
+    #print(head)
 
     maxp = ot['tables'][5].getrecord()
-    #print maxp
+    #print(maxp)
     for x in 'maxPoints,maxFunctionDefs,maxStorage,maxStackElements'.split(','):
-        print hex(maxp[x].getoffset()), 'maxp.%s'%x, maxp[x]
+        print(hex(maxp[x].getoffset()), 'maxp.%s'%x, maxp[x])
 

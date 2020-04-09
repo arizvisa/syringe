@@ -91,7 +91,7 @@ def disassemble(object):
 if __name__ == '__main__':
     blah = '''
     def fn():
-        print 'wtf'
+        print('wtf')
     '''
 
     import compiler
@@ -99,4 +99,4 @@ if __name__ == '__main__':
 
     cobj = cobj.co_consts[1]
     res = [repr(x) for x in disassemble(cobj)]
-    print '\n'.join(res)
+    print('\n'.join(res))

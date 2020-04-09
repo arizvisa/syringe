@@ -13,7 +13,7 @@ class Header(pstruct.type):
     class Magic(short):
         @classmethod
         def default(cls):
-            return cls().set(0732)
+            return cls().set(0o732)
         def valid(self):
             return self.int() == self.default().int()
         def properties(self):
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     import ptypes, image.iris
 
     if len(sys.argv) != 2:
-        print "Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__)
+        print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
         sys.exit(0)
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1]))

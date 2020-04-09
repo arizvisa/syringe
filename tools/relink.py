@@ -2,12 +2,19 @@ import functools, itertools, types, builtins, operator, six
 import ptypes, pecoff
 import ptypes.bitmap as bitmap
 
-import collections, logging, array
+import sys, logging, array
+
+if sys.version_info.major < 3:
+    import collections
+    MutableMapping = collections.MutableMapping
+else:
+    import collections.abc
+    MutableMapping = collections.abc.MutableMapping
 
 def get(object, attribute):
     return getattr(object, "_LinkerInternal__{:s}".format(attribute))
 
-class DictionaryBase(collections.MutableMapping):
+class DictionaryBase(MutableMapping):
     def __init__(self, *args, **kwargs):
         self.__mapping__ = {}
         self.update(*args, **kwargs)
@@ -55,11 +62,11 @@ class LinkerInternal(DictionaryBase):
         if type['REL32']:
             res = reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue) - (segmentbase + offset + 4)
-            data = [(res & (0x100 ** octet * 0xff)) / 0x100 ** octet for octet in range(4)]
+            data = [(res & (0x100 ** octet * 0xff)) // 0x100 ** octet for octet in range(4)]
         elif type['ADDR32NB']:
             res = reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue)
-            data = [(res & (0x100 ** octet * 0xff)) / 0x100 ** octet for octet in range(4)]
+            data = [(res & (0x100 ** octet * 0xff)) // 0x100 ** octet for octet in range(4)]
         elif type['ADDR32']:
             raise TypeError(type)   # This would make the code non-relocatable
         elif type['DIR32NB']:
@@ -486,7 +493,7 @@ if __name__ == '__main__':
     if Args.link:
         if len(undefined) > 0:
             logging.warn("The following symbols are currently {:s}...".format('being redefined' if Args.force else 'undefined'))
-            print '\n'.join("[{:d}] {:s}".format(1 + index, symbol) for index, symbol in enumerate(undefined))
+            print('\n'.join("[{:d}] {:s}".format(1 + index, symbol) for index, symbol in enumerate(undefined)))
         else:
             logging.info('No undefined symbols were found!')
 
@@ -517,7 +524,7 @@ if __name__ == '__main__':
         res = sorted(self.items(), key=operator.itemgetter(1)) if Args.dump >= 2 else sorted([(key, value) for key, value in self.iteritems() if key in undefined], key=operator.itemgetter(1))
         if res:
             for index, (key, value) in enumerate(res):
-                print "[{:d}] {:s} {!s}".format(1 + index, key, '<undefined>' if value is None else "{:#x}".format(value))
+                print("[{:d}] {:s} {!s}".format(1 + index, key, '<undefined>' if value is None else "{:#x}".format(value)))
         else:
             logging.fatal('No symbols were found!')
 

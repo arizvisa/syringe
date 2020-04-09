@@ -3,10 +3,10 @@ Multipoint communication service protocol (T.125)
 '''
 import logging
 
-import ptypes, gcc
+import ptypes
 from ptypes import *
 
-from protocol import ber, per
+from protocol import gcc, ber, per
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 

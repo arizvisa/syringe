@@ -91,7 +91,7 @@ class raw_data_block(pbinary.struct):
         try:
             result = Element.lookup(self['id_syn_ele'])
         except KeyError:
-            print 'unable to find', self['id_syn_ele']
+            print('unable to find', self['id_syn_ele'])
             result = 0
         return result
 
@@ -401,7 +401,7 @@ class extension_payload(pbinary.struct):
         ]
 
     def __data(self):
-#        print self.attrs
+#        print(self.attrs)
 #        return dyn.clone(pbinary.array, _object_=8, length=self.cnt)
         return dyn.clone(pbinary.array, _object_=8, length=0)
 

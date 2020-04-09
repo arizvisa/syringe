@@ -1,7 +1,7 @@
 import ptypes,operator,itertools
 import UserDict,collections
-import internal
-from internal import sparse
+from . import internal
+from .internal import sparse
 
 # do we need to implement hooking on symbol assignment?
 
@@ -312,20 +312,20 @@ class container(store):
 if __name__ == '__main__':
     # symbols
     self = a = Symbols()
-    print a.add('_main')
-    print a.add('start')
-    print a.add('localfunction')
-    print a.getundefined()
-    print a.getlocals()
-    print a.getglobals()
-    print a.getexternals()
+    print(a.add('_main'))
+    print(a.add('start'))
+    print(a.add('localfunction'))
+    print(a.getundefined())
+    print(a.getlocals())
+    print(a.getglobals())
+    print(a.getexternals())
     a['_main'] = 0x14
     a['start'] = 0
-    print a.alias('start', 'EntryPoint')
-    print a._scope
-    print a._data
+    print(a.alias('start', 'EntryPoint'))
+    print(a._scope)
+    print(a._data)
     #a.unalias('EntryPoint')
-    print a['EntryPoint']
-    print self.remove('start')
+    print(a['EntryPoint'])
+    print(self.remove('start'))
 
 

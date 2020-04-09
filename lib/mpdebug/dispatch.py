@@ -115,7 +115,7 @@ if __name__ == '__main__':
         @classmethod
         def next(cls):
             cls.numb = chr(ord(cls.numb)+1)
-            print 'just switched to %s'%cls.numb
+            print('just switched to %s'%cls.numb)
             return cls.numb
         @classmethod
         def reset(cls):
@@ -126,13 +126,13 @@ if __name__ == '__main__':
 
     def printid(n):
         def callback(*args, **kwds):
-            print 'dispatched to callback %s'% n
+            print('dispatched to callback %s'% n)
             return dispatch.userignore
         return callback
 
     def printidbreak(n):
         def callback(*args, **kwds):
-            print 'dispatched to callback %s'% n
+            print('dispatched to callback %s'% n)
             return dispatch.userbreak
         return callback
 
@@ -141,5 +141,5 @@ if __name__ == '__main__':
     a.register(('!','C'), printidbreak("# !C"))
 
 #    a.dispatch('!')
-    print number.numb
+    print(number.numb)
 

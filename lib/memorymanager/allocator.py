@@ -276,7 +276,6 @@ if sys.platform == 'win32':
             if res == 0:
                 message = 'Unable to read from handle({:x})[{:08x}:{:08x}].'.format(self.handle, address, address+length)
                 raise OSError(message, "GetLastError() -> {!r}".format(getLastErrorTuple()))
-.format
             assert NumberOfBytesRead.value == length, 'Expected %d bytes, received %d bytes.'% (length, NumberOfBytesRead.value)
             return str(Buffer.raw)
 
@@ -337,12 +336,12 @@ if __name__ == '__main__':
     x = allocator.new()
 
     res = x.getWriteable(0x0, 4)
-    print hex(res)
+    print(hex(res))
     x.write(res, 'ehlo')
 
     v = x.getExecutable(res, 4)
-    print hex(v)
-    print repr(x.read(res, 4))
+    print(hex(v))
+    print(repr(x.read(res, 4)))
 
     x.freeWriteable(res, 4)
     # should fail on windows

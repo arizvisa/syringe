@@ -1,8 +1,8 @@
 import _PyDbgEng
-import debug.dispatch,debug.breakpoint
+from .. import dispatch,breakpoint
 
 # dispatch tables for different granularities
-class event_all(debug.dispatch.system):
+class event_all(dispatch.system):
     defaultfields = []
 
     # types of callback results
@@ -116,14 +116,14 @@ class threadid(processid):
         SystemObjects.SetCurrentThreadId(sid)
         return SystemObjects.GetCurrentThreadSystemId()
 
-class manager(debug.breakpoint.manager):
+class manager(breakpoint.manager):
     def __init__(self, task):
         self.task = task
         self.host = task.host
         self.interface = self.host.interface.Control
 
     def add(self, function, interruption, *args, **kwds):
-        assert issubclass(interruption, debug.breakpoint.interrupt)
+        assert issubclass(interruption, breakpoint.interrupt)
         brk = interruption(self.task, *args, **kwds)
         id = brk.id
         self[id] = brk,function

@@ -86,9 +86,8 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,gif
-    reload(gif)
+    import ptypes,image.gif as gif
     ptypes.setsource( ptypes.provider.file('./poc.gif') )
 
     z = gif.File()
-    print z.l
+    print(z.l)

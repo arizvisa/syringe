@@ -1,6 +1,6 @@
-import ptypes, zlib
-from .tags import *
+import zlib
 from .stypes import *
+from . import tags
 pbinary.setbyteorder(pbinary.bigendian)
 
 class Header(pstruct.type):
@@ -20,7 +20,7 @@ class FrameInfo(pstruct.type):
 class Data(pstruct.type):
     _fields_ = [
         (FrameInfo, 'frameinfo'),
-        (TagList, 'tags')
+        (tags.TagList, 'tags')
     ]
 
 ## Encoded data types
@@ -44,12 +44,12 @@ class CompressedData(ptype.encoded_t):
     def encode(self, object, **attrs):
         block = object.serialize()
         compressed_block = self._compress(block)
-        print '%s: compressed %x to %x bytes'%(self.__class__.__name__,len(block),len(compressed_block))
+        print('%s: compressed %x to %x bytes'%(self.__class__.__name__,len(block),len(compressed_block)))
         return super(CompressedData,self).encode(ptype.block(length=len(compressed_block)).set(compressed_block))
     def decode(self, object, **attrs):
         block = object.serialize()
         decompressed_block = self._decompress(block)
-        print '%s: decompressed %x to %x bytes'%(self.__class__.__name__,len(block),len(decompressed_block))
+        print('%s: decompressed %x to %x bytes'%(self.__class__.__name__,len(block),len(decompressed_block)))
         return super(CompressedData,self).decode(ptype.block(length=len(decompressed_block)).set(decompressed_block))
 
 @EncodedDataType.define
@@ -87,7 +87,7 @@ class File(pstruct.type, ptype.boundary):
 
 if __name__ == '__main__':
     import sys
-    import ptypes,__init__ as swf
+    import ptypes,vector.swf as swf
     ptypes.setsource(ptypes.file('./test.swf', mode='r'))
 
     z = File
@@ -95,15 +95,15 @@ if __name__ == '__main__':
     z = z()
     z = z.l
     for x in z['data']['tags']:
-        print '-'*32
-        print x
+        print('-'*32)
+        print(x)
 
     a = z['data']['tags'][0]
-    print a.hexdump()
-    print a.li.hexdump()
-    print repr(a.l['Header'].serialize())
+    print(a.hexdump())
+    print(a.li.hexdump())
+    print(repr(a.l['Header'].serialize()))
 
     correct='\x44\x11\x08\x00\x00\x00'
-    print ptypes.utils.hexdump(correct)
+    print(ptypes.utils.hexdump(correct))
 
-    print a.serialize() == correct
+    print(a.serialize() == correct)

@@ -1,5 +1,5 @@
 import abc,itertools,operator,weakref
-import collections,sets,sparse
+import six,collections,sets,sparse
 
 class OrderedDict(collections.OrderedDict): pass
 
@@ -177,7 +177,7 @@ class MergedMapping(collections.MutableMapping):
         res = set(itertools.chain(*(x.viewkeys() for x in self._data if x() is not None)))
         cur = set(self._cache.viewkeys())
         [self._cache.pop(k) for k in cur.difference(res)]
-        return reduce(operator.add, (self._sync(r()) for r in self._data))
+        return six.moves.reduce(operator.add, (self._sync(r()) for r in self._data))
 
     def __setitem__(self, key, value):
         res = self._cache[key]
@@ -220,48 +220,48 @@ if __name__ == '__main__':
     a[-3] = None
     a[-2] = None
     a[-1] = None
-    print a.keys() == [0,1,2,3,4,-5,-4,-3,-2,-1]
+    print(a.keys() == [0,1,2,3,4,-5,-4,-3,-2,-1])
 
     a = OrderedSet( ('bla','blah','blahh') )
     a.add('meh')
     a.add('hmm')
     a.add('heh')
-    print a.discard('hmm')
-    print a.remove('meh')
-    print list(a) == ['bla','blah','blahh','heh']
+    print(a.discard('hmm'))
+    print(a.remove('meh'))
+    print(list(a) == ['bla','blah','blahh','heh'])
 
     a = AliasDict()
     a.alias('fuck', 'a','b','c')
     a['blah'] = 10
     a['heh'] = 20
     a['fuck'] = True
-    print a['fuck']
+    print(a['fuck'])
     a.alias('fuck', 'a', 'b', 'c')
-    print a.keys()
-    print a['a']
-    print a['b']
-    print a['c']
+    print(a.keys())
+    print(a['a'])
+    print(a['b'])
+    print(a['c'])
     a['b'] = 'huh'
 
     a.unalias('heh')
     a.unalias('fuck')
-    print a.unalias('a')
-    print a.unalias('b')
-    print a.aliases()
-    print a.items()
+    print(a.unalias('a'))
+    print(a.unalias('b'))
+    print(a.aliases())
+    print(a.items())
 
     def ok(self, key, value):
-        print 'assigned', key, value
+        print('assigned', key, value)
     def ignore(self, key, value):
-        print 'ignored', key, value
+        print('ignored', key, value)
         return False
 
     a = internal.HookedDict()
     a['val1'] = 1
     a.alias('val1', 'alias1')
-    print a['alias1'],a['val1']
+    print(a['alias1'],a['val1'])
     a['alias1'] = 10
-    print a['alias2']
+    print(a['alias2'])
 
     a['val2'] = 0
     res = a.hook('val2', ok)
@@ -283,7 +283,7 @@ if __name__ == '__main__':
     a.add(b)
     a.add(c)
     a.add(d)
-    print a
+    print(a)
     a['bkey1'] = 5
     a['ckey1'] = 10
     a['dkey1'] = 15

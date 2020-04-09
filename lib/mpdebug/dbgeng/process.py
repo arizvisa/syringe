@@ -1,6 +1,6 @@
 import logging,os
 import _PyDbgEng
-import internalstate,task
+from . import internalstate,task
 import pecoff,ndk,match
 
 class addressspace(object):
@@ -56,13 +56,16 @@ class dbgeng(object):
         return ndk.PEB(offset=address, source=self.memory).l
     peb = property(fget=__peb)
 
-    def __init__(self, host, (id, handle), (tid,thandle)):
+    def __init__(self, host, pack_pidhandle, pack_tidhandle):
+        (id, handle) = pack_pidhandle
+        (tid, thandle) = pack_tidhandle
+
         self.event = internalstate.event_process(process=self)
 
         self.host = host
-        self.id,self.handle = id,handle
+        self.id, self.handle = id, handle
         self.task = {}
-        self.task[tid] = task.dbgeng(self, (tid,thandle))
+        self.task[tid] = task.dbgeng(self, (tid, thandle))
         self.memory = addressspace(self)
         self.module = {}
         self.__modulecache = {}

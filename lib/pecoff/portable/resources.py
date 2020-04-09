@@ -224,9 +224,9 @@ if __name__ == '__main__':
 
     a = z['DataDirectory'][2]['Address'].d.l
     b = a['Ids'][0]
-    print b['Name']
-    print b['Entry']
+    print(b['Name'])
+    print(b['Entry'])
 
 #    from pecoff.resources import DataDirectory
 
-#    print DataDirectory(b['RVA']['address'])
+#    print(DataDirectory(b['RVA']['address']))

@@ -65,7 +65,7 @@ class string_info(as3struct):
         (lambda s: dyn.clone(pstr.string, length=s['size'].li.int()), 'utf8')
     ]
     def details(self):
-        return self.str() if self.initialized else '???'
+        return self.str() if self.initializedQ() else '???'
 
     def str(self):
         return self['utf8'].serialize()
@@ -588,7 +588,7 @@ class abcFile(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,as3,stypes
+    import ptypes,vector.swf.as3 as as3,vector.swf.stypes as stypes
     from ptypes import *
     ptypes.setsource(prov.file('./tag-abcfile.bin','r'))
 
@@ -597,12 +597,12 @@ if __name__ == '__main__':
 
     b = as3.abcFile(offset=5)
     b=b.l
-#    print b['minor_version'].l
-#    print b['major_version'].l
+#    print(b['minor_version'].l)
+#    print(b['major_version'].l)
 
 #    c = b['constant_pool'].l
-#    print c.keys()
+#    print(c.keys())
 #    for k,v in c.items():
-#        print k
-#        print v
-#    print c
+#        print(k)
+#        print(v)
+#    print(c)

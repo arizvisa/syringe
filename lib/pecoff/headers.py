@@ -24,7 +24,7 @@ def LocateBase(self):
     """Return the base object of the executable. This is used to find the base address."""
     try:
         nth = self.getparent(ptype.boundary)
-    except ValueError, msg:
+    except ValueError as msg:
         nth = list(self.backtrace(fn=lambda x:x))[-1]
     return nth
 
@@ -32,7 +32,7 @@ def LocateHeader(self):
     """Return the executable sub-header. This will return the executable main header."""
     try:
         nth = self.getparent(Header)
-    except ValueError, msg:
+    except ValueError as msg:
         nth = list(self.backtrace(fn=lambda x:x))[-1]
     return nth
 
@@ -42,7 +42,7 @@ def CalculateRelativeAddress(self, address):
     base = LocateBase(self).getoffset()
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.filebase):
+    if issubclass(self.source.__class__, ptypes.provider.fileobj):
         pe = LocateHeader(self)
         section = pe['Sections'].getsectionbyaddress(address)
         return base + section.getoffsetbyaddress(address)
@@ -55,7 +55,7 @@ def CalculateRelativeOffset(self, offset):
     base = LocateBase(self).getoffset()
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.filebase):
+    if issubclass(self.source.__class__, ptypes.provider.fileobj):
         return base + offset
 
     # memory
@@ -71,7 +71,7 @@ def CalculateRealAddress(self, address):
     base = base.getoffset()
 
     # file
-    if issubclass(self.source.__class__, ptypes.provider.filebase):
+    if issubclass(self.source.__class__, ptypes.provider.fileobj):
         pe = LocateHeader(self)
         section = pe['Sections'].getsectionbyaddress(address)
         return base + section.getoffsetbyaddress(address)
@@ -141,9 +141,9 @@ class rfc4122(pstruct.type):
 
     class _Data4(pint.bigendian(pint.uint64_t)):
         def summary(self):
-            res = list(self.serialize())
-            d1 = ''.join(map('{:02x}'.format,map(ord,res[:2])) )
-            d2 = ''.join(map('{:02x}'.format,map(ord,res[2:])) )
+            res = bytearray(self.serialize())
+            d1 = ''.join(map('{:02x}'.format,res[:2]))
+            d2 = ''.join(map('{:02x}'.format,res[2:]))
             return '-'.join((d1,d2))
 
     _fields_ = [
@@ -162,9 +162,9 @@ class rfc4122(pstruct.type):
         d1 = '{:08x}'.format(self['Data1'].int())
         d2 = '{:04x}'.format(self['Data2'].int())
         d3 = '{:04x}'.format(self['Data3'].int())
-        _ = list(self['Data4'].serialize())
-        d4 = ''.join( map('{:02x}'.format,map(ord,_[:2])) )
-        d5 = ''.join( map('{:02x}'.format,map(ord,_[2:])) )
+        res = bytearray(self['Data4'].serialize())
+        d4 = ''.join(map('{:02x}'.format,res[:2]))
+        d5 = ''.join(map('{:02x}'.format,res[2:]))
         return '{{{:s}}}'.format('-'.join((d1,d2,d3,d4,d5)))
 
 class GUID(rfc4122):

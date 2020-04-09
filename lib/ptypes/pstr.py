@@ -54,34 +54,45 @@ Example usage:
     instance.load()
 
     # fetch a specific character
-    print instance[1]
+    print(instance[1])
 
     # re-assign a new string
     instance.set("new string contents")
 
     # return the length of the type
-    print len(instance)
+    print(len(instance))
 
     # return the type in ascii
     value = instance.str()
 """
-import sys,six
-import itertools,operator,functools
+import sys, six
+import itertools, operator, functools
 import codecs
 from six.moves import builtins
 
-from . import ptype,parray,pint,utils,error,pstruct,provider,config
+from . import ptype, parray, pint, utils, error, pstruct, provider, config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+
+def __ensure_text__(s, encoding='utf-8', errors='strict'):
+    '''ripped from six v1.12.0'''
+    if isinstance(s, six.binary_type):
+        return s.decode(encoding, errors)
+    elif isinstance(s, six.text_type):
+        return s
+    raise TypeError("not expecting type '%s'"% type(s))
+
 class _char_t(pint.type):
-    encoding = codecs.lookup('ascii')
+    encoding = codecs.lookup('latin1')
 
     def __init__(self, **attrs):
         super(_char_t, self).__init__(**attrs)
 
         # calculate the size of .length based on .encoding
-        res = builtins.unicode('\x00', 'ascii').encode(self.encoding.name)
+        null = b'\0'.decode('latin1')
+        res = null.encode(self.encoding.name)
         self.length = len(res)
 
     def __setvalue__(self, *values, **attrs):
@@ -90,23 +101,26 @@ class _char_t(pint.type):
             return super(pint.type, self).__setvalue__(*values, **attrs)
 
         value, = values
-        if isinstance(value, builtins.str):
-            try: value = builtins.unicode(value, 'ascii')
-            except UnicodeDecodeError: return super(pint.type, self).__setvalue__(str(value))
-        elif isinstance(value, builtins.unicode):
-            value = value
-        else:
-            raise ValueError(self, '_char_t.set', 'User tried to set a value of an incorrect type : {:s}'.format(value.__class__))
-        res = value.encode(self.encoding.name)
-        return super(pint.type, self).__setvalue__(res, **attrs)
+
+        if isinstance(value, six.integer_types):
+            return super(_char_t, self).__setvalue__(value)
+
+        elif isinstance(value, bytes):
+            return super(pint.type, self).__setvalue__(value)
+
+        elif isinstance(value, six.string_types):
+            res = value.encode(self.encoding.name)
+            return super(pint.type, self).__setvalue__(res, **attrs)
+
+        raise ValueError(self, '_char_t.set', 'User tried to set a value with an incorrect type : {:s}'.format(value.__class__))
 
     def str(self):
         '''Try to decode the _char_t to a character.'''
         data = self.serialize()
         try:
             res = data.decode(self.encoding.name)
-        except UnicodeDecodeError, e:
-            raise UnicodeDecodeError(e.encoding, e.object, e.start, e.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
+        except UnicodeDecodeError as E:
+            raise UnicodeDecodeError(E.encoding, E.object, E.start, E.end, 'Unable to decode string {!r} to requested encoding : {:s}'.format(data, self.encoding.name))
         return res
 
     def __getvalue__(self):
@@ -124,8 +138,9 @@ class _char_t(pint.type):
 
     def summary(self, **options):
         res = self.__getvalue__()
-        escaped = res.encode('unicode_escape')
-        q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
+        escaped = res.encode('unicode_escape').decode(sys.getdefaultencoding())
+        q, escaped = ('"', escaped) if "'" in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
+        #q, escaped = ('"', res) if "'" in res and '"' not in res else ('\'', res.replace('\'', '\\\''))
         return u"{:#0{:d}x} {:s}".format(ord(res), 2 + 2 * self.size(), q + escaped + q)
 
     @classmethod
@@ -169,14 +184,14 @@ class string(ptype.type):
         _object_ = self._object_
 
         # encode 3 types of strings and ensure that their lengths scale up with their string sizes
-        res,single,double = ( builtins.unicode(n, 'ascii').encode(_object_.encoding.name) for n in ('\x00', 'A', 'AA') )
+        res, single, double = ( __ensure_text__(item, 'ascii').encode(_object_.encoding.name) for item in ('\0', 'A', 'AA') )
         if len(res) * 2 == len(single) * 2 == len(double):
             return
         raise ValueError(self.classname(), 'string.__init__', 'User tried to specify a variable-width character encoding : {:s}'.format(_object_.encoding.name))
 
     def at(self, offset, **kwds):
         ofs = offset - self.getoffset()
-        return self[ ofs / self._object_().blocksize() ]
+        return self[ ofs // self._object_().blocksize() ]
 
     def blocksize(self):
         return self._object_().blocksize() * self.length
@@ -204,7 +219,7 @@ class string(ptype.type):
     def __len__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'string.__len__')
-        return len(self.value) / self._object_().blocksize()
+        return len(self.value) // self._object_().blocksize()
 
     def __delitem__(self, index):
         '''Remove the character at the specified ``index``.'''
@@ -221,7 +236,7 @@ class string(ptype.type):
             result = [res.value[_] for _ in six.moves.range(*index.indices(len(res)))]
 
             # ..and now turn the slice into an array
-            type = ptype.clone(parray.type,length=len(result), _object_=self._object_)
+            type = ptype.clone(parray.type, length=len(result), _object_=self._object_)
             return self.new(type, offset=result[0].getoffset(), value=result, parent=self)
 
         if index < -len(self) or index >= len(self):
@@ -241,7 +256,7 @@ class string(ptype.type):
         # handle a slice of glyphs
         if isinstance(index, slice):
             indices = six.moves.range(*index.indices(len(res)))
-            [ res[index].set(glyph) for glyph, index in map(None,value,indices) ]
+            [ res[index].set(glyph) for glyph, index in __izip_longest__(value, indices) ]
 
         # handle a single glyph
         else:
@@ -253,7 +268,7 @@ class string(ptype.type):
     def insert(self, index, object):
         '''Insert the character ``object`` into the string at index ``index`` of the string.'''
         if not isinstance(object, self._object_):
-            raise error.TypeError(self, 'string.insert', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
+            raise error.TypeError(self, 'string.insert', message='expected value of type {!r}. received {!r}'.format(self._object_, object.__class__))
         self.__insert(index, value.serialize())
 
     def append(self, object):
@@ -262,16 +277,15 @@ class string(ptype.type):
 
     def __append__(self, object):
         if not isinstance(object, self._object_):
-            raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_,object.__class__))
+            raise error.TypeError(self, 'string.append', message='expected value of type {!r}. received {!r}'.format(self._object_, object.__class__))
         offset = self.getoffset() + self.size()
         self.value += object.serialize()
         return offset
 
     def extend(self, iterable):
         '''Extend the string ``self`` with the characters provided by ``iterable``.'''
-        for x in iterable:
-            self.append(x)
-        return
+        [ self.append(item) for item in iterable ]
+        return self
 
     def __setvalue__(self, *values, **retain):
         """Replaces the contents of ``self`` with the string ``value``.
@@ -284,14 +298,16 @@ class string(ptype.type):
         value, = values
 
         size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(self._object_).a.size()
-        glyphs = [res for res in value]
+        glyphs = [ item for item in value ]
 
         t = ptype.clone(parray.type, _object_=self._object_)
-        result = t(length=size / esize) if retain.get('retain', True) else t(length=len(glyphs))
+        result = t(length=size // esize) if retain.get('retain', True) else t(length=len(glyphs))
 
-        for element, glyph in map(None, result.alloc(), value):
-            if element is None: break
-            element.set(glyph or '\x00')
+        # Now we can finally izip_longest here...
+        for element, glyph in __izip_longest__(result.alloc(), value):
+            if element is None:
+                break
+            element.set(glyph or '\0')
 
         if retain.get('retain', True):
             return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
@@ -311,7 +327,7 @@ class string(ptype.type):
         try:
             res = data.decode(t._object_.encoding.name)
         except UnicodeDecodeError:
-            Log.warn('{:s}.str : {:s} : Unable to decode to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename()))
+            Log.warn('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), t._object_.encoding.name))
             res = data.decode(t._object_.encoding.name, 'ignore')
         return res
 
@@ -335,16 +351,18 @@ class string(ptype.type):
 
     def serialize(self):
         if self.initializedQ():
-            return str(self.value)
+            return bytes(self.value)
         raise error.InitializationError(self, 'string.serialize')
 
     def summary(self, **options):
         try:
             res = self.__getvalue__()
+
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(string, self).summary(**options)
-        escaped = res.encode('unicode_escape')
+
+        escaped = res.encode('unicode_escape').decode(sys.getdefaultencoding())
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
@@ -373,20 +391,23 @@ class szstring(string):
         value, = values
 
         # FIXME: if .isTerminator() is altered for any reason, this won't work.
-        if not value.endswith('\x00'.encode(self._object_.encoding.name)):
-            value += '\x00'.encode(self._object_.encoding.name)
+        null = self.new(self._object_).a
+        if not value.endswith(null.str()):
+            value += null.str()
 
         t = ptype.clone(parray.type, _object_=self._object_, length=len(value))
         result = t()
 
-        for element, glyph in map(None, result.alloc(), value):
+        # iterate through everything
+        for element, glyph in __izip_longest__(result.alloc(), value):
             if element is None or glyph is None: break
             element.set(glyph)
 
         return self.load(offset=0, source=provider.proxy(result))
 
     def __deserialize_block__(self, block):
-        return self.__deserialize_stream__(iter(block))
+        iterable = (six.int2byte(item) for item in bytearray(block))
+        return self.__deserialize_stream__(iterable)
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
@@ -400,9 +421,9 @@ class szstring(string):
         obj = self.new(self._object_, offset=ofs)
         size = obj.blocksize()
 
-        getchar = lambda: ''.join(itertools.islice(stream,size))
+        getchar = lambda: bytes().join(itertools.islice(stream, size))
 
-        self.value = ''
+        self.value = b''
         while True:
             obj.setoffset(ofs)
             obj.__deserialize_block__(getchar())
@@ -418,10 +439,12 @@ class szstring(string):
     def summary(self, **options):
         try:
             res = self.__getvalue__()
+
         except UnicodeDecodeError:
             Log.debug('{:s}.summary : {:s} : Unable to decode unicode string. Rendering as hexdump instead.'.format(self.classname(), self.instance()))
             return super(szstring, self).summary(**options)
-        escaped = utils.strdup(res).encode('unicode_escape')
+
+        escaped = utils.strdup(res).encode('unicode_escape').decode(sys.getdefaultencoding())
         q, escaped = ('"', escaped) if '\'' in escaped and '"' not in escaped else ('\'', escaped.replace('\'', '\\\''))
         return u"({:d}) {:s}".format(len(res), q + escaped + q)
 
@@ -434,8 +457,8 @@ class szwstring(szstring, wstring):
     _object_ = wchar_t
 
 ## aliases that should probably be improved
-unicode=wstring
-szunicode=szwstring
+unicode = wstring
+szunicode = szwstring
 
 if __name__ == '__main__':
     class Result(Exception): pass
@@ -449,65 +472,68 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                raise
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
 
 if __name__ == '__main__':
-    import ptypes
+    import six, ptypes
     from ptypes import pint,pstr,parray,pstruct,dyn,provider,utils
+
+    fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
     @TestCase
     def test_str_char():
-        x = pstr.char_t(source=provider.string('hello')).l
+        x = pstr.char_t(source=provider.string(b'hello')).l
         if x.get() == 'h':
             raise Success
 
     @TestCase
     def test_str_wchar():
-        x = pstr.wchar_t(source=provider.string('\x43\x00')).l
+        x = pstr.wchar_t(source=provider.string(b'\x43\x00')).l
         if x.get() == '\x43':
             raise Success
 
     @TestCase
     def test_str_string():
         x = pstr.string()
-        string = "helllo world ok, i'm hungry for some sushi\x00"
-        x.length = len(string)/2
+        string = b'helllo world ok, i\'m hungry for some sushi\0'
+        x.length = len(string) // 2
         x.source = provider.string(string)
         x.load()
-        if x.str() == string[:len(string)/2]:
+        if x.str() == string[:len(string) // 2].decode(x[0].encoding.name):
             raise Success
 
     @TestCase
     def test_str_wstring():
         x = pstr.wstring()
-        oldstring = "ok, this is unicode"
+        oldstring = b'ok, this is unicode'
         string = oldstring
-        x.length = len(string)/2
-        string = ''.join([c+'\x00' for c in string])
+        x.length = len(string) // 2
+        string = bytes().join(six.int2byte(c) + b'\0' for c in bytearray(string))
         x.source = provider.string(string)
         x.load()
-        if x.str() == oldstring[:len(oldstring)/2]:
+        if x.str() == oldstring[:len(oldstring) // 2].decode('ascii'):
             raise Success
 
     @TestCase
     def test_str_szstring():
-        string = 'null-terminated\x00ok'
+        string = b'null-terminated\0ok'
         x = pstr.szstring(source=provider.string(string)).l
         if x.str() == 'null-terminated':
             raise Success
 
     @TestCase
     def test_str_array_szstring():
-        data = 'here\x00is\x00my\x00null-terminated\x00strings\x00eof\x00stop here okay plz'
+        data = b'here\0is\0my\0null-terminated\0strings\0eof\0stop here okay plz'
 
         class stringarray(parray.terminated):
             _object_ = pstr.szstring
@@ -529,37 +555,44 @@ if __name__ == '__main__':
                 ( pstr.szstring, 'String' )
             ]
 
-        x = IMAGE_IMPORT_HINT(source=provider.string('AAHello world this is a zero0-terminated string\x00this didnt work')).l
+        x = IMAGE_IMPORT_HINT(source=provider.string(b'AAHello world this is a zero0-terminated string\0this didnt work')).l
         if x['String'].str() == 'Hello world this is a zero0-terminated string':
             raise Success
 
     @TestCase
     def test_str_szwstring():
-        s = 'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
+        s = b'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
         v = pstr.szwstring(source=provider.string(s)).l
         if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
 
     @TestCase
     def test_str_szwstring_customchar():
-        data = ' '.join(map(lambda x:x.strip(),'''
+        data = ' '.join(map(operator.methodcaller('strip'), '''
             00 57 00 65 00 6c 00 63 00 6f 00 6d 00 65 00 00
         '''.split('\n'))).strip()
-        data = map(lambda x: six.int2byte(int(x,16)), data.split(' '))
-        data = ''.join(data)
+        data = bytes(bytearray(int(item, 16) for item in data.split(' ')))
+
+        def __ensure_binary__(s, encoding='utf-8', errors='strict'):
+            '''ripped from six v1.12.0'''
+            if isinstance(s, six.text_type):
+                return s.encode(encoding, errors)
+            elif isinstance(s, six.binary_type):
+                return s
+            raise TypeError("not expecting type '%s'"% type(s))
 
         class wbechar_t(pstr.wchar_t):
             def set(self, value):
-                self.value = '\x00' + value
+                self.value = b'\0' + __ensure_binary__(value)
                 return self
 
             def get(self):
-                return unicode(self.value, 'utf-16-be').encode('utf-8')
+                return __ensure_text__(self.value, 'utf-16-be').encode('utf-8')
 
         class unicodestring(pstr.szwstring):
             _object_ = wbechar_t
             def str(self):
-                s = builtins.unicode(self.value, 'utf-16-be').encode('utf-8')
+                s = self.value.decode('utf-16-be')
                 return utils.strdup(s)[:len(self)]
 
         class unicodespeech_packet(pstruct.type):
@@ -578,7 +611,7 @@ if __name__ == '__main__':
             def isTerminator(self, value):
                 return value.int() == 0x3f
 
-        s = provider.string('hello world\x3f..................')
+        s = provider.string(b'hello world\x3f..................')
         a = fuq(source=s)
         a = a.l
         if a.size() == 12:
@@ -593,7 +626,7 @@ if __name__ == '__main__':
                 (pint.uint16_t, 'sheetname_length'),
                 (lambda s: dyn.clone(pstr.wstring, length=s['sheetname_length'].li.int()), 'sheetname'),
             ]
-        s = ptypes.prov.string('85001400e511000000000600530068006500650074003100'.decode('hex')[4:])
+        s = ptypes.prov.string(fromhex('85001400e511000000000600530068006500650074003100')[4:])
         a = record0085(source=s)
         a=a.l
         if a['sheetname'].str() == 'Sheet1':
@@ -601,7 +634,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_szwstring_blockarray():
-        data = '3d 00 3a 00 3a 00 3d 00 3a 00 3a 00 5c 00 00 00 65 00 2e 00 6c 00 6f 00 67 00 00 00 00 00 ab ab ab ab ab ab ab ab'.replace(' ','').decode('hex')
+        data = fromhex('3d 00 3a 00 3a 00 3d 00 3a 00 3a 00 5c 00 00 00 65 00 2e 00 6c 00 6f 00 67 00 00 00 00 00 ab ab ab ab ab ab ab ab'.replace(' ', ''))
         source = ptypes.prov.string(data)
         t = dyn.blockarray(pstr.szwstring, 30)
         a = t(source=source).l
@@ -613,8 +646,8 @@ if __name__ == '__main__':
         global x
         x = pstr.string(length=5).a
         data = 'hola mundo'
-        map(x.append, (pstr.char_t().set(by) for by in data))
-        if x[5:].serialize() == data:
+        [ x.append(pstr.char_t().set(by)) for by in data ]
+        if x[5:].serialize() == data.encode('ascii'):
             raise Success
 
     @TestCase
@@ -628,30 +661,30 @@ if __name__ == '__main__':
     def test_str_set_retained():
         data = 'hola'
         x = pstr.string(length=10).a
-        if x.serialize() != '\0\0\0\0\0\0\0\0\0\0':
+        if x.serialize() != b'\0\0\0\0\0\0\0\0\0\0':
             raise Failure
         x.set(data, retain=True)
-        if x.serialize() == 'hola\0\0\0\0\0\0':
+        if x.serialize() == b'hola\0\0\0\0\0\0':
             raise Success
 
     @TestCase
     def test_str_set_resized():
         data = 'hola'
         x = pstr.string(length=10).a
-        if x.serialize() != '\0\0\0\0\0\0\0\0\0\0':
+        if x.serialize() != b'\0\0\0\0\0\0\0\0\0\0':
             raise Failure
         x.set(data, retain=False)
-        if x.serialize() == 'hola':
+        if x.serialize() == b'hola':
             raise Success
 
     @TestCase
     def test_str_set_default():
         data = 'hola'
         x = pstr.string(length=10).a
-        if x.serialize() != '\0\0\0\0\0\0\0\0\0\0':
+        if x.serialize() != b'\0\0\0\0\0\0\0\0\0\0':
             raise Failure
         x.set(data)
-        if x.serialize() == 'hola\0\0\0\0\0\0':
+        if x.serialize() == b'hola\0\0\0\0\0\0':
             raise Success
 
 if __name__ == '__main__':

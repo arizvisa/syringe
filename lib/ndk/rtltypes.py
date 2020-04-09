@@ -21,7 +21,7 @@ class RTL_BITMAP(pstruct.type):
     def __Buffer(self):
         res = self['SizeOfBitMap'].l
         fractionQ = 1 if res.int() % 32 else 0
-        target = dyn.clone(RTL_BITMAP._Buffer, length=fractionQ + res.int() / 32)
+        target = dyn.clone(RTL_BITMAP._Buffer, length=fractionQ + res.int() // 32)
         return P(target)
 
     _fields_ = [
@@ -36,7 +36,7 @@ class RTL_BITMAP_EX(pstruct.type):
     def __Buffer(self):
         res = self['SizeOfBitMap'].l
         fractionQ = 1 if res.int() % 64 else 0
-        target = dyn.clone(RTL_BITMAP_EX._Buffer, length=fractionQ + res.int() / 64)
+        target = dyn.clone(RTL_BITMAP_EX._Buffer, length=fractionQ + res.int() // 64)
         return P(target)
 
     _fields_ = [

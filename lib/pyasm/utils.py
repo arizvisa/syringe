@@ -51,9 +51,9 @@ def hexdump(iterable, address=0):
     return '\n'.join(res)
 
 if __name__ == '__main__':
-    print hexify('hello world')
+    print(hexify('hello world'))
 
-    print header(16,'')
-    print '\n'.join(_hexdump(iter('hello world'), 0xfeeddead, 4))
+    print(header(16,''))
+    print('\n'.join(_hexdump(iter('hello world'), 0xfeeddead, 4)))
 
-    print hexdump('hello world, hehehehehhh...okayyyyy....i suck at writing testss....w.oooot....', address=0x0d0e0a0d)
+    print(hexdump('hello world, hehehehehhh...okayyyyy....i suck at writing testss....w.oooot....', address=0x0d0e0a0d))

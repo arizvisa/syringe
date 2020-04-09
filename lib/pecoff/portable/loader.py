@@ -40,7 +40,7 @@ class IMAGE_EPILOGUE_DYNAMIC_RELOCATION_HEADER(pstruct.type):
         (uint8, 'BranchDescriptorElementSize'),
         (uint16, 'BranchDescriptorCount'),
         (lambda s: dyn.block(s['BranchDescriptorCount'].li.int()), 'BranchDescriptors'),
-        (lambda s: dyn.block(((s['BranchDescriptorCount'].li.int()+7) & -8) / 8), 'BranchDescriptorBitmap'),
+        (lambda s: dyn.block(((s['BranchDescriptorCount'].li.int()+7) & -8) // 8), 'BranchDescriptorBitmap'),
     ]
 
 class IMAGE_DYNAMIC_RELOCATION_TABLE(pstruct.type):

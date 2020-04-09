@@ -92,23 +92,23 @@ Example usage:
     instance.set(22 / 7.0)
 
     # return the floating-point number of an instance
-    print instance.float()
-    print float(instance)
+    print(instance.float())
+    print(float(instance))
 """
-import six,math
+import six, math
 from six.moves import builtins
 
-from . import ptype,pint,bitmap,config,error
+from . import ptype, pint, bitmap, config, error
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 
 def setbyteorder(endianness):
-    if endianness in (config.byteorder.bigendian,config.byteorder.littleendian):
-        for k,v in globals().iteritems():
-            if v is not type and isinstance(v,builtins.type) and issubclass(v,type) and getattr(v, 'byteorder', config.defaults.integer.order) != endianness:
-                d = dict(v.__dict__)
-                d['byteorder'] = endianness
-                globals()[k] = builtins.type(v.__name__, v.__bases__, d)     # re-instantiate types
+    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+        for name, definition in six.iteritems(globals()):
+            if definition is not type and isinstance(definition, builtins.type) and issubclass(definition, type) and getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
+                res = dict(definition.__dict__)
+                res['byteorder'] = endianness
+                globals()[name] = builtins.type(definition.__name__, definition.__bases__, res)     # re-instantiate types
             continue
         return
     elif getattr(endianness, '__name__', '').startswith('big'):
@@ -121,17 +121,17 @@ def bigendian(ptype):
     '''Will convert an pfloat_t to bigendian form'''
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'bigendian')
-    d = dict(ptype.__dict__)
-    d['byteorder'] = config.byteorder.bigendian
-    return builtins.type(ptype.__name__, ptype.__bases__, d)
+    res = dict(ptype.__dict__)
+    res['byteorder'] = config.byteorder.bigendian
+    return builtins.type(ptype.__name__, ptype.__bases__, res)
 
 def littleendian(ptype):
     '''Will convert an pfloat_t to littleendian form'''
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'littleendian')
-    d = dict(ptype.__dict__)
-    d['byteorder'] = config.byteorder.littleendian
-    return builtins.type(ptype.__name__, ptype.__bases__, d)
+    res = dict(ptype.__dict__)
+    res['byteorder'] = config.byteorder.littleendian
+    return builtins.type(ptype.__name__, ptype.__bases__, res)
 
 class type(pint.type):
     def summary(self, **options):
@@ -173,7 +173,7 @@ class float_t(type):
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
 
-        exponentbias = (2**self.components[1])/2 - 1
+        exponentbias = (2**self.components[1]) // 2 - 1
         number, = values
 
         # convert to integrals
@@ -204,35 +204,35 @@ class float_t(type):
 
         # store components
         result = bitmap.zero
-        result = bitmap.push( result, bitmap.new(sf,self.components[0]) )
-        result = bitmap.push( result, bitmap.new(exponent,self.components[1]) )
-        result = bitmap.push( result, bitmap.new(mantissa,self.components[2]) )
+        result = bitmap.push(result, bitmap.new(sf, self.components[0]))
+        result = bitmap.push(result, bitmap.new(exponent, self.components[1]))
+        result = bitmap.push(result, bitmap.new(mantissa, self.components[2]))
 
-        return super(type, self).__setvalue__(result[0], **attrs)
+        return super(type, self).__setvalue__(bitmap.value(result), **attrs)
 
     def __getvalue__(self):
         """convert the stored floating-point number into a python native float"""
-        exponentbias = (2**self.components[1])/2 - 1
+        exponentbias = (2**self.components[1]) // 2 - 1
         integer = super(type, self).__getvalue__()
         res = bitmap.new(integer, sum(self.components))
 
         # extract components
-        res,sign = bitmap.shift(res, self.components[0])
-        res,exponent = bitmap.shift(res, self.components[1])
-        res,mantissa = bitmap.shift(res, self.components[2])
+        res, sign = bitmap.shift(res, self.components[0])
+        res, exponent = bitmap.shift(res, self.components[1])
+        res, mantissa = bitmap.shift(res, self.components[2])
 
-        if exponent > 0 and exponent < (2**self.components[1]-1):
+        if exponent > 0 and exponent < (2**self.components[1] - 1):
             # convert to float
             s = -1 if sign else +1
             e = exponent - exponentbias
             m = 1.0 + (float(mantissa) / 2**self.components[2])
 
             # done
-            return math.ldexp( math.copysign(m,s), e)
+            return math.ldexp(math.copysign(m, s), e)
 
-        if exponent == 2**self.components[1]-1 and mantissa == 0:
+        if exponent == 2**self.components[1] - 1 and mantissa == 0:
             return float('-inf') if sign else float('+inf')
-        elif exponent in (0,2**self.components[1]-1) and mantissa != 0:
+        elif exponent in (0, 2**self.components[1] - 1) and mantissa != 0:
             return float('-nan') if sign else float('+nan')
         elif exponent == 0 and mantissa == 0:
             return float('-0') if sign else float('+0')
@@ -252,13 +252,13 @@ class sfixed_t(type):
     sign = fractional = 0
 
     def __getvalue__(self):
-        mask = 2**(8*self.length) - 1
-        intm = 2**(8*self.length - self.sign) - 1
+        mask = 2**(8 * self.length) - 1
+        intm = 2**(8 * self.length - self.sign) - 1
         shift = 2**self.fractional
         value = super(type, self).__getvalue__()
         #return float(value & intm) / shift * (-1 if value & (mask ^ intm) else +1)
         if value & (mask ^ intm):
-            return float((value & intm) - (mask&intm+1)) / shift
+            return float((value & intm) - (mask & intm + 1)) / shift
         return float(value & intm) / shift
 
     def __setvalue__(self, *values, **attrs):
@@ -267,13 +267,13 @@ class sfixed_t(type):
 
         number, = values
         integral, fraction = math.trunc(number), number - math.trunc(number)
-        magnitude = 2**(8*self.length - self.fractional)
+        magnitude = 2**(8 * self.length - self.fractional)
         shift = 2**self.fractional
 
-        mask = 2 ** (8*self.length) - 1
-        intm = 2 ** (8*self.length - self.sign) - 1
+        mask = 2 ** (8 * self.length) - 1
+        intm = 2 ** (8 * self.length - self.sign) - 1
 
-        integral &= (magnitude-1) # clamp
+        integral &= (magnitude - 1) # clamp
         integral *= magnitude
         #integral |= (mask ^ intm)
 
@@ -293,7 +293,8 @@ class fixed_t(sfixed_t):
         return 0
 
 ###
-class ieee(ptype.definition): attribute,cache = 'length',{}
+class ieee(ptype.definition):
+    attribute, cache = 'length', {}
 
 @ieee.define
 class half(float_t):
@@ -322,13 +323,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -400,10 +401,10 @@ if __name__ == '__main__':
     def test_load(cls, integer, expected):
         if cls.length == 4:
             expected, = struct.unpack('f', struct.pack('f', expected))
-            i,_ = bitmap.join(bitmap.new(six.byte2int(x),8) for x in reversed(struct.pack('f',expected)))
+            i,_ = bitmap.join(bitmap.new(x,8) for x in reversed(bytearray(struct.pack('f',expected))))
         elif cls.length == 8:
             expected, = struct.unpack('d', struct.pack('d', expected))
-            i,_ = bitmap.join(bitmap.new(six.byte2int(x),8) for x in reversed(struct.pack('d',expected)))
+            i,_ = bitmap.join(bitmap.new(x,8) for x in reversed(bytearray(struct.pack('d',expected))))
         else:
             i = 0
 
@@ -449,35 +450,35 @@ if __name__ == '__main__':
     @TestCase
     def ufixed_point_word_get():
         x = word(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\x80\x80')
+        x.source = ptypes.prov.string(b'\x80\x80')
         if x.l.getf() == 128.5: raise Success
     @TestCase
     def ufixed_point_dword_get():
         x = dword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\x00\x64\x40\x00')
+        x.source = ptypes.prov.string(b'\x00\x64\x40\x00')
         if x.l.getf() == 100.25: raise Success
 
     @TestCase
     def ufixed_point_word_integral_set():
         x = word(byteorder=config.byteorder.bigendian)
         x.set(30.5)
-        if x.serialize()[0] == '\x1e': raise Success
+        if bytearray(x.serialize()[0:1]) == b'\x1e': raise Success
     @TestCase
     def ufixed_point_word_fractional_set():
         x = word(byteorder=config.byteorder.bigendian)
         x.set(30.5)
-        if x.serialize()[1] == '\x80': raise Success
+        if bytearray(x.serialize()[1:2]) == b'\x80': raise Success
 
     @TestCase
     def ufixed_point_dword_integral_set():
         x = dword(byteorder=config.byteorder.bigendian)
         x.set(1.25)
-        if x.serialize()[:2] == '\x00\x01': raise Success
+        if bytearray(x.serialize()[0:2]) == b'\x00\x01': raise Success
     @TestCase
     def ufixed_point_dword_fractional_set():
         x = dword(byteorder=config.byteorder.bigendian)
         x.set(1.25)
-        if x.serialize()[2:] == '\x40\x00': raise Success
+        if bytearray(x.serialize()[2:]) == b'\x40\x00': raise Success
 
     ## sfixed_t
     class sword(pfloat.sfixed_t):
@@ -488,38 +489,38 @@ if __name__ == '__main__':
     @TestCase
     def sfixed_point_word_get():
         x = sword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\xff\x40')
+        x.source = ptypes.prov.string(b'\xff\x40')
         if x.l.getf() == -0.75: raise Success
-        print x.getf()
+        print(x.getf())
     @TestCase
     def sfixed_point_dword_get():
         x = sdword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\xff\xff\xc0\x00')
+        x.source = ptypes.prov.string(b'\xff\xff\xc0\x00')
         if x.l.getf() == -0.25: raise Success
-        print x.getf()
+        print(x.getf())
 
     @TestCase
     def sfixed_point_word_integral_set():
         x = sword(byteorder=config.byteorder.bigendian)
         x.set(-0.5)
-        if x.serialize()[0] == '\xff': raise Success
+        if bytearray(x.serialize()[0:1]) == b'\xff': raise Success
     @TestCase
     def sfixed_point_word_fractional_set():
         x = sword(byteorder=config.byteorder.bigendian)
         x.set(-0.75)
-        if x.serialize()[1] == '\x40': raise Success
+        if bytearray(x.serialize()[1:2]) == b'\x40': raise Success
 
     @TestCase
     def sfixed_point_dword_integral_set():
         x = sdword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string('\xff\xfe\x40\x00')
+        x.source = ptypes.prov.string(b'\xff\xfe\x40\x00')
         x.set(-1.75)
-        if x.serialize()[:2] == '\xff\xfe': raise Success
+        if bytearray(x.serialize()[0:2]) == b'\xff\xfe': raise Success
     @TestCase
     def sfixed_point_dword_fractional_set():
         x = sdword(byteorder=config.byteorder.bigendian)
         x.set(-1.25)
-        if x.serialize()[2:] == '\xc0\x00': raise Success
+        if bytearray(x.serialize()[2:]) == b'\xc0\x00': raise Success
 
 if __name__ == '__main__':
     import logging

@@ -1,5 +1,7 @@
-import dbgeng,logging
+import logging
 logging.root=logging.RootLogger(logging.INFO)
+
+from . import dbgeng
 
 if __name__ == '__main__':
     import dbgeng,match
@@ -20,9 +22,9 @@ if __name__ == '__main__':
         address = module.getoffset() + o
 
         def flair(brk, task):
-            print 'brokedown at breakpoint %d'% brk.id
-            print brk
-            print task
+            print('brokedown at breakpoint %d'% brk.id)
+            print(brk)
+            print(task)
             return b.event.userbreak
 
         c.manager.add(flair, dbgeng.breakpoint.execute, address)
@@ -31,9 +33,9 @@ if __name__ == '__main__':
     if False:
         remote = 'tcp:port=57005,server=172.22.22.134'
         z = dbgeng.remoteserver(remote)
-        print z.list()
+        print(z.list())
         for x in z.enum():
-            print x
+            print(x)
 #        b = a.create(r'C:\Program Files\QuickTime\QuickTimePlayer.exe')
 
     if False:
@@ -43,10 +45,10 @@ if __name__ == '__main__':
         remote = 'tcp:port=57005,server=127.0.0.1'
         z = dbgeng.connect(remote)
 
-        print z.list()
+        print(z.list())
         b = z.create("calc.exe")
 
         t = b.task[3300]
-        print help(t)
+        print(help(t))
         help(t.manager)
 

@@ -812,8 +812,8 @@ class DopTypography(pstruct.type):
         (pint.uint16_t, 'cchLeadingPunct'),
         # FIXME: the previous 2 uint16_t should be used for the following
         #        2 arrays, but the specs set them to a static size.
-        (dyn.clone(pstr.wstring, length=202 / 2), 'rgxchFPunct'),
-        (dyn.clone(pstr.wstring, length=102 / 2), 'rgxchLPunct'),
+        (dyn.clone(pstr.wstring, length=202 // 2), 'rgxchFPunct'),
+        (dyn.clone(pstr.wstring, length=102 // 2), 'rgxchLPunct'),
     ]
 
 class Dogrid(pstruct.type):
@@ -1143,7 +1143,7 @@ class FcCompressed(pbinary.struct):
     )
     def fc(self):
         fc = self['fc']
-        return fc / 2 if self.fCompressedQ() else fc
+        return fc // 2 if self.fCompressedQ() else fc
     def fCompressedQ(self):
         return True if self['fCompressed'] else False
     def summary(self):
@@ -1312,7 +1312,7 @@ class PlcPcd(PLC, pstruct.type):
 
     def __aCP(self):
         cp, res = CP().blocksize(), Pcd().a.blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
@@ -1341,7 +1341,7 @@ class Clx(PLC, pstruct.type):
 
 class Plcfhdd(PLC, pstruct.type):
     def __aCP(self):
-        items = self.blocksize() / CP().blocksize()
+        items = self.blocksize() // CP().blocksize()
         return dyn.clone(parray.type, _object_=CP, length=items)
 
     _fields_ = [
@@ -1385,7 +1385,7 @@ class PlcFld(PLC, pstruct.type):
 
     def __aCP(self):
         cp, res = CP().blocksize(), Fld().a.blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
@@ -1412,7 +1412,7 @@ class Sed(pstruct.type):
 class PlcfSed(PLC, pstruct.type):
     def __aCP(self):
         cp, res = CP().blocksize(), Sed().a.blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
@@ -1438,7 +1438,7 @@ class FBKF(pstruct.type):
 class Plcfbkf(PLC, pstruct.type):
     def __aCP(self):
         cp, res = CP().blocksize(), FBKF().a.blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
@@ -1464,7 +1464,7 @@ class PlcfendRef(PLC, pstruct.type):
 
     def __aCP(self):
         cp, res = CP().blocksize(), pint.uint16_t().blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
@@ -1490,7 +1490,7 @@ class PlcffndRef(PLC, pstruct.type):
 
     def __aCP(self):
         cp, res = CP().blocksize(), pint.uint16_t().blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=CP, length=items + 1)
 
     _fields_ = [
@@ -1515,7 +1515,7 @@ class PlcffndTxt(PLC, pstruct.type):
     #    return _aCP
 
     def __aCP(self):
-        items = self.blocksize() / CP().blocksize()
+        items = self.blocksize() // CP().blocksize()
         return dyn.clone(parray.type, _object_=CP, length=items)
 
     _fields_ = [
@@ -1539,7 +1539,7 @@ class PlcfendTxt(PLC, pstruct.type):
     #    return _aCP
 
     def __aCP(self):
-        items = self.blocksize() / CP().blocksize()
+        items = self.blocksize() // CP().blocksize()
         return dyn.clone(parray.type, _object_=CP, length=items)
 
     _fields_ = [
@@ -1573,7 +1573,7 @@ class PlcfBtePapx(PLC, pstruct.type):
     _object_ = PnFkpPapx
     def __aFC(self):
         cp, res = FC().blocksize(), PnFkpPapx().blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=FC, length=items + 1)
 
     _fields_ = [
@@ -1586,7 +1586,7 @@ class PlcfBteChpx(PLC, pstruct.type):
     _object_ = PnFkpChpx
     def __aFC(self):
         cp, res = FC().blocksize(), PnFkpChpx().blocksize()
-        items = (self.blocksize() - cp) / (cp + res)
+        items = (self.blocksize() - cp) // (cp + res)
         return dyn.clone(parray.type, _object_=FC, length=items + 1)
 
     _fields_ = [
@@ -2947,7 +2947,7 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import user, sys, os
+    import sys, os
     import ptypes, office.storage, office.winword
 
     path, = sys.argv[1:]
@@ -2960,10 +2960,10 @@ if __name__ == '__main__':
 
     fib = data['fib']
 
-    print "nFib: {:#x}".format(fib.nFib())
-    print fib
-    print fib['base']
-    print fib['fibRgW'].latest()
-    print fib['fibRgLw'].latest()
-    print fib['fibRgFcLcbBlob'].latest()
-    print fib['fibRgCswNew'].latest()
+    print("nFib: {:#x}".format(fib.nFib()))
+    print(fib)
+    print(fib['base'])
+    print(fib['fibRgW'].latest())
+    print(fib['fibRgLw'].latest())
+    print(fib['fibRgFcLcbBlob'].latest())
+    print(fib['fibRgCswNew'].latest())

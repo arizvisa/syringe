@@ -1,7 +1,7 @@
-import debug.breakpoint
+from .. import breakpoint
 import logging
 
-class cc(debug.breakpoint.interrupt):
+class cc(breakpoint.interrupt):
     id = property(fget=lambda s: s.value.Id)
     offset = property(fget=lambda s: s.value.Offset)
     def __init__(self, task, offset, **kwds):

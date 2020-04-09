@@ -1580,8 +1580,8 @@ class msofbtTimeVariant(pstruct.type):
         if n == 0xff:
             return dyn.block(0)
 
-#        print 'unknown type {:s}'.format(n)
-#        print hex(self.getoffset()),getstringpath(self)
+#        print('unknown type {:s}'.format(n))
+#        print(hex(self.getoffset()),getstringpath(self))
         return pint.uint32_t
 
     _fields_ = [
@@ -4062,7 +4062,7 @@ class SignatureLineBooleanProperties(pbinary.flags):
 
 if __name__ == '__main__':
     from ptypes import *
-    import art
+    import office.art as art
 
     if False:
         s = '\x00\x00\x00\x00\x0c\x00\x00\x00' + 'A'*30
@@ -4086,12 +4086,12 @@ if __name__ == '__main__':
     if True:
         s = '7ACqAA8AAvAWAQAAEAAI8AgAAAADAAAAEgQAAA8AA/D+AAAADwAE8CgAAAABAAnwEAAAAAAAAAAAAAAAAAAAAAAAAAACAArwCAAAAAAEAAAFAAAADwAE8FIAAACSDArwCAAAAAMEAAAACgAAQwAL8BgAAAB/AAQBBAG/AAgACAD/AQAACAC/AwAAAgAAABDwEgAAAAEAAAAAAAEAAAABAJoBAgAAAAAAEfAAAAAA'
         s = s.decode('base64')[4:] + '\x00'*800
-        print repr(s)
+        print(repr(s))
 
     if True:
         z = art.RecordGeneral()
         z.source = provider.string(s)
-        print z.l
+        print(z.l)
 
     if False:
         import ptypes
@@ -4100,7 +4100,7 @@ if __name__ == '__main__':
         x = OfficeArtSpContainer()
     #    x.setoffset(66100)
         x.setoffset(66360)
-        print x.l
+        print(x.l)
 
     if False:
         class header(pbinary.struct):
@@ -4117,4 +4117,4 @@ if __name__ == '__main__':
 
         z = RecordGeneral()
         z.source = provider.string('\x0f\x00\x02\xf0')
-        print z.l
+        print(z.l)

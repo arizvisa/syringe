@@ -209,9 +209,9 @@ def extract_import(t, index, outformat, F=None, output=None):
     global result; result = ite
     if not F and (not outformat or outformat in {'list'}):
         # FIXME: separate these fields somehow
-        summary = lambda (h,n,a,v): "hint:{:d} name:{:s} offset:{:#x} value:{:#x}".format(h,n,a,v)
+        summary = "hint:{:d} name:{:s} offset:{:#x} value:{:#x}".format
         for ie in result.iterate():
-            six.print_(summary(ie), file=output)
+            six.print_(summary(*ie), file=output)
         return
     return Extract(F(result) if F else result, outformat, file=output)
 
@@ -245,7 +245,8 @@ def extract_resource(t, path, outformat, F=None, output=None):
     try:
         global result; result = followresource(rtp, rt)
 
-    except LookupError, (p, rest, res):
+    except LookupError as packed:
+        (p, rest, res) = packed.args
         leftover = (p,) + rest[:]
         cp = rtp[:-len(leftover)]
         raise ValueError("Unable to locate resource item {:s} in resource directory: {:s}".format('/'.join(map(str,leftover)), '/'.join(map(str,cp))))
@@ -398,7 +399,7 @@ if __name__ == '__main__':
         _.print_usage()
         sys.exit(1)
 
-    infile = ptypes.prov.filebase(res.infile)
+    infile = ptypes.prov.fileobj(res.infile)
     ptypes.setsource(infile)
     z = pecoff.Executable.File(source=infile)
     z = z.l

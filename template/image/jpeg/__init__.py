@@ -5,23 +5,23 @@ from .stream import Stream
 if __name__ == '__main__' and False:
     #input = getFileContents('Q100-2.JPG')
     input = getFileContents('huff_simple0.jpg')
-    input = str(input.replace('\xff\x00', '\xff'))
+    input = bytes(input.replace(b'\xff\x00', b'\xff'))
     jpegfile = Jpeg()
     jpegfile.deserialize(input)
     lookup = dict([(type(x).__name__, x) for x in jpegfile])
 
-    print jpegfile[0]
-    print jpegfile[1]
+    print(jpegfile[0])
+    print(jpegfile[1])
 
-#    print '\n'.join([repr(x) for x in jpegfile])
+#    print('\n'.join([repr(x) for x in jpegfile]))
 #    dqt = lookup['DQT']['table']
 #    dht = lookup['DHT']['table']
 #    sosdata = lookup['SCANDATA']
-#    print repr(dqt)
-#    print repr(dht)
-#    print repr(sosdata)
-#    print '\n'.join([repr(x) for x in dht])
-#    print '\n'.join([repr(x) for x in dqt])
+#    print(repr(dqt))
+#    print(repr(dht))
+#    print(repr(sosdata))
+#    print('\n'.join([repr(x) for x in dht]))
+#    print('\n'.join([repr(x) for x in dqt]))
 
     ### load_quant_table
     zigzag = [
@@ -56,19 +56,19 @@ if __name__ == '__main__' and False:
 
     ## process dht table
     self = lookup['DHT']['table'][3]
-    print repr(self)
+    print(repr(self))
 
     ### process scan data
     self = lookup['SOS']
-    print repr(self)
-    print self['component'][0]
+    print(repr(self))
+    print(self['component'][0])
 
     self = lookup['SOF']
     self = lookup['SOS']
 
 if __name__ == '__main__':
     import sys
-    import ptypes,jpeg
+    import ptypes,image.jpeg as jpeg
     ptypes.setsource( ptypes.file(sys.argv[1]) )
 
     z = jpeg.File()

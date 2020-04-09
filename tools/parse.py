@@ -32,7 +32,7 @@ def iterfiles(parser, paths):
             continue
 
         t2 = time.time()
-        if p.initialized:
+        if p.initializedQ():
             log(': %d : %s : %s : completed : %f',i+1,parser_name,filename,t2-t1)
         else:
             log(': %d : %s : %s : completed partially: %f',i+1,parser_name,filename,t2-t1)
@@ -40,21 +40,21 @@ def iterfiles(parser, paths):
     return
 
 def reprfiles(*args):
-    print '--- parsing %d paths'% len(paths)
+    print('--- parsing %d paths'% len(paths))
     for i,(filename,p) in enumerate(iterfiles(*args)):
         w = 79
         a = '-- {} '.format(i+1)
         b = '{:->%ds}'%(w-len(a))
         c = a+b.format(' %s'%(filename))
-        print c
+        print(c)
 
-        print ptypes.utils.indent(p.repr())
+        print(ptypes.utils.indent(p.repr()))
         if isinstance(p, ptypes.parray.type):
-            rows = ('%s %s'%(x.initialized,x.repr()) for x in p)
-            print ptypes.utils.indent('\n'.join(rows),tabsize=8)
-        print '='*79
+            rows = ('%s %s'%(x.initializedQ(),x.repr()) for x in p)
+            print(ptypes.utils.indent('\n'.join(rows),tabsize=8))
+        print('='*79)
         continue
-    print '--- completed parsing of %d files'% i
+    print('--- completed parsing of %d files'% i)
 
 def histogram_parser(parser,state={}):
     result = {}
@@ -84,10 +84,10 @@ def histogram(*args):
 
     result = result.items()
     result.sort(lambda x,y:cmp(x[1],y[1]))
-    print '='*79
-    print '{:=>79s}'.format(' frequency results for %d files'%( len(paths) ))
+    print('='*79)
+    print('{:=>79s}'.format(' frequency results for %d files'%( len(paths) )))
     for x,count in result:
-        print '%s %s'%(x,count)
+        print('%s %s'%(x,count))
     return
 
 if __name__ == '__main__':

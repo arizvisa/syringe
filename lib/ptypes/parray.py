@@ -77,24 +77,24 @@ Example usage:
     instance.load()
 
     # fetch an element from the array
-    print instance[index]
+    print(instance[index])
 
     # print the length of the array
-    print len(instance)
+    print(len(instance))
 """
 import six
-import itertools,operator,functools
+import itertools, operator, functools
 
-from . import ptype,utils,error,config
+from . import ptype, utils, error, config
 Config = config.defaults
 Log = Config.log.getChild(__name__[len(__package__)+1:])
 __all__ = 'type,terminated,infinite,block'.split(',')
 
 class _parray_generic(ptype.container):
     '''provides the generic features expected out of an array'''
-    def __contains__(self,v):
-        '''D.__contains__(k) -> True if D has a field named k, else False'''
-        return any(x is v for x in self.value)
+    def __contains__(self, instance):
+        '''L.__contains__(x) -> True if L has an item x, else False'''
+        return any(item is instance for item in self.value)
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
@@ -110,13 +110,13 @@ class _parray_generic(ptype.container):
         """
         offset = self.value[index].getoffset()
         object.setoffset(offset, recurse=True)
-        object.parent,object.source = self,None
+        object.parent, object.source = self, None
         self.value.insert(index, object)
 
         for i in six.moves.range(index, len(self.value)):
-            v = self.value[i]
-            v.setoffset(offset, recurse=True)
-            offset += v.blocksize()
+            item = self.value[i]
+            item.setoffset(offset, recurse=True)
+            offset += item.blocksize()
         return
 
     def __append__(self, object):
@@ -135,7 +135,7 @@ class _parray_generic(ptype.container):
         return self.__append__(object)
 
     def extend(self, iterable):
-        map(self.append, iterable)
+        [ self.append(item) for item in iterable ]
         return self
 
     def pop(self, index=-1):
@@ -150,9 +150,9 @@ class _parray_generic(ptype.container):
         res = self.value.pop(idx)
 
         offset = res.getoffset()
-        for i,n in enumerate(self.value[idx:]):
-            n.setoffset(offset, recurse=True)
-            offset += n.blocksize()
+        for i, item in enumerate(self.value[idx:]):
+            item.setoffset(offset, recurse=True)
+            offset += item.blocksize()
         return res
 
     def __getindex__(self, index):
@@ -174,8 +174,8 @@ class _parray_generic(ptype.container):
             ivalue = itertools.repeat(value) if isinstance(value, ptype.generic) else iter(value)
             res = self.value[:]
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                idx = self.__getindex__(idx)
-                self.value[idx] = six.next(ivalue)
+                i = self.__getindex__(idx)
+                self.value[i] = six.next(ivalue)
             return res.__getitem__(index)
 
         idx = self.__getindex__(index)
@@ -208,27 +208,27 @@ class _parray_generic(ptype.container):
 
     def summary(self, **options):
         res = super(_parray_generic, self).summary(**options)
-        return ' '.join((self.__element__(), res))
+        return ' '.join([self.__element__(), res])
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k,v) for k,v in self.properties().iteritems())
+        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or getattr(self.repr, 'im_func', None) is _parray_generic.details.im_func:
+        if result.count('\n') > 0 or utils.callable_eq(self.repr, _parray_generic.details):
             result = result.rstrip('\n')
             if prop:
-                return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),prop,element,result)
-            return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()),self.name(),element,result)
+                return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, element, result)
+            return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), element, result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if getattr(self.repr, 'im_func', None) not in (_parray_generic.repr.im_func,_parray_generic.summary.im_func):
-            result = ' '.join((element,result))
+        if all(not utils.callable_eq(self.repr, item) for item in [_parray_generic.repr, _parray_generic.summary]):
+            result = ' '.join([element, result])
 
-        _hex,_precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
+        _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
         # single-line
-        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(),self.name())
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(), self.name())
         if prop:
             return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
@@ -250,19 +250,19 @@ class type(_parray_generic):
     def __load_block(self, **attrs):
         offset = self.getoffset()
         for index in six.moves.range(self.length):
-            n = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
-            self.value.append(n)
-            offset += n.blocksize()
+            item = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
+            self.value.append(item)
+            offset += item.blocksize()
         return self
 
     # load ourselves incrementally
     def __load_container(self, **attrs):
         offset = self.getoffset()
         for index in six.moves.range(self.length):
-            n = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
-            self.value.append(n)
-            n.load()
-            offset += n.blocksize()
+            item = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
+            self.value.append(item)
+            item.load()
+            offset += item.blocksize()
         return self
 
     def copy(self, **attrs):
@@ -274,8 +274,8 @@ class type(_parray_generic):
     def alloc(self, fields=(), **attrs):
         result = super(type, self).alloc(**attrs)
         if len(fields) > 0 and isinstance(fields[0], tuple):
-            for k, val in fields:
-                idx = result.__getindex__(k)
+            for name, val in fields:
+                idx = result.__getindex__(name)
                 if ptype.istype(val) or ptype.isresolveable(val):
                     result.value[idx] = result.new(val).a
                 elif isinstance(val, ptype.generic):
@@ -285,11 +285,11 @@ class type(_parray_generic):
                 continue
         else:
             for idx, val in enumerate(fields):
-                name = str(idx)
+                name = "{:d}".format(idx)
                 if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val,__name__=name).a
+                    result.value[idx] = result.new(val, __name__=name).a
                 elif isinstance(val, ptype.generic):
-                    result.value[idx] = result.new(val,__name__=name)
+                    result.value[idx] = result.new(val, __name__=name)
                 else:
                     result.value[idx].set(val)
                 continue
@@ -317,8 +317,8 @@ class type(_parray_generic):
                 else:
                     Log.info("type.load : {:s} : Unable to load array due to an unknown element type ({!s}).".format(self.instance(), object))
             return super(type, self).load(**attrs)
-        except error.LoadError, e:
-            raise error.LoadError(self, exception=e)
+        except error.LoadError as E:
+            raise error.LoadError(self, exception=E)
         raise error.AssertionError(self, 'type.load')
 
     def __setvalue__(self, *values, **attrs):
@@ -384,24 +384,24 @@ class terminated(type):
         try:
             with utils.assign(self, **attrs):
                 forever = itertools.count() if self.length is None else six.moves.range(self.length)
-                offset, self.value, n = self.getoffset(), [], None
+                offset, self.value = self.getoffset(), []
 
                 for index in forever:
-                    n = self.new(self._object_,__name__=str(index),offset=offset)
-                    self.value.append(n)
-                    if self.isTerminator(n.load()):
+                    item = self.new(self._object_, __name__=str(index), offset=offset)
+                    self.value.append(item)
+                    if self.isTerminator(item.load()):
                         break
 
-                    size = n.blocksize()
+                    size = item.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
+                        Log.warn("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                         break
                     if size < 0:
-                        raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(n.classname()))
+                        raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(item.classname()))
                     offset += size
 
-        except (Exception,error.LoadError), e:
-            raise error.LoadError(self, exception=e)
+        except (Exception, error.LoadError) as E:
+            raise error.LoadError(self, exception=E)
 
         return self
 
@@ -413,7 +413,7 @@ class terminated(type):
             return False
 
         # Check if all elements are initialized.
-        return all(n.initializedQ() for n in self.value)
+        return all(item.initializedQ() for item in self.value)
 
 class uninitialized(terminated):
     """An array that can contain uninitialized or partially initialized elements.
@@ -423,7 +423,7 @@ class uninitialized(terminated):
     """
     def size(self):
         if self.value is not None:
-            return sum(n.size() for n in self.value if n.value is not None)
+            return sum(item.size() for item in self.value if item.value is not None)
         raise error.InitializationError(self, 'uninitialized.size')
 
     def initializedQ(self):
@@ -437,7 +437,7 @@ class uninitialized(terminated):
         res = list(itertools.takewhile(operator.methodcaller('initializedQ'), self.value))
 
         # Return True if the whole thing is initialized or just the tail is uninitialized
-        return len(res) == len(self.value) or all(not n.initializedQ() for n in self.value[len(res):])
+        return len(res) == len(self.value) or all(not item.initializedQ() for item in self.value[len(res):])
 
 class infinite(uninitialized):
     '''An array that reads elements until an exception or interrupt happens'''
@@ -445,13 +445,13 @@ class infinite(uninitialized):
     def __next_element(self, offset, **attrs):
         '''Utility method that returns a new element at a specified offset and loads it. intended to be overloaded.'''
         index = len(self.value)
-        n = self.new(self._object_, __name__=str(index), offset=offset)
+        item = self.new(self._object_, __name__=str(index), offset=offset)
         try:
-            n.load(**attrs)
-        except (error.LoadError,error.InitializationError),e:
+            item.load(**attrs)
+        except (error.LoadError, error.InitializationError) as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), n.instance(), path))
-        return n
+            Log.info("infinite.__next_element : {:s} : Unable to read terminal element {:s} : {:s}".format(self.instance(), item.instance(), path))
+        return item
 
     def isTerminator(self, value):
         return False
@@ -479,42 +479,42 @@ class infinite(uninitialized):
         with utils.assign(self, **attrs):
             offset, self.value = self.getoffset(), []
 
-            current,maximum = 0,None if self.parent is None else self.parent.blocksize()
+            current, maximum = 0, None if self.parent is None else self.parent.blocksize()
             try:
                 while True if maximum is None else current < maximum:
 
                     # read next element at the current offset
-                    n = self.__next_element(offset)
-                    if not n.initializedQ():
-                        Log.debug("infinite.load : {:s} : Element {:d} left partially initialized : {:s}".format(self.instance(), len(self.value), n.instance()))
-                    self.value.append(n)
+                    item = self.__next_element(offset)
+                    if not item.initializedQ():
+                        Log.debug("infinite.load : {:s} : Element {:d} left partially initialized : {:s}".format(self.instance(), len(self.value), item.instance()))
+                    self.value.append(item)
 
-                    if not n.initializedQ():
+                    if not item.initializedQ():
                         break
 
-                    if self.isTerminator(n):
+                    if self.isTerminator(item):
                         break
 
                     # check sanity of element size
-                    size = n.blocksize()
+                    size = item.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
+                        Log.warn("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                         break
                     if size < 0:
-                        raise error.AssertionError(self, 'infinite.load', message="Element size for {:s} is < 0".format(n.classname()))
+                        raise error.AssertionError(self, 'infinite.load', message="Element size for {:s} is < 0".format(item.classname()))
 
                     # next iteration
                     offset += size
                     current += size
 
-            except (Exception,error.LoadError),e:
+            except (Exception, error.LoadError) as E:
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
                     if len(self.value):
                         Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
                     else:
                         Log.warn("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
-                raise error.LoadError(self, exception=e)
+                raise error.LoadError(self, exception=E)
         return self
 
     def loadstream(self, **attr):
@@ -523,40 +523,47 @@ class infinite(uninitialized):
             self.value = []
             offset = self.getoffset()
 
-            current,maximum = 0,None if self.parent is None else self.parent.blocksize()
+            current, maximum = 0, None if self.parent is None else self.parent.blocksize()
             try:
                 while True if maximum is None else current < maximum:
 
                     # yield next element at the current offset
-                    n = self.__next_element(offset)
-                    self.value.append(n)
-                    yield n
+                    item = self.__next_element(offset)
+                    self.value.append(item)
+                    yield item
 
-                    if not n.initializedQ():
+                    if not item.initializedQ():
                         break
 
-                    if self.isTerminator(n):
+                    if self.isTerminator(item):
                         break
 
                     # check sanity of element size
-                    size = n.blocksize()
+                    size = item.blocksize()
                     if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
+                        Log.warn("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                         break
                     if size < 0:
-                        raise error.AssertionError(self, 'infinite.loadstream', message="Element size for {:s} is < 0".format(n.classname()))
+                        raise error.AssertionError(self, 'infinite.loadstream', message="Element size for {:s} is < 0".format(item.classname()))
 
                     # next iteration
                     offset += size
                     current += size
 
-            except error.LoadError, e:
+            except error.LoadError as E:
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
-                    Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), n.instance(), path))
-                raise error.LoadError(self, exception=e)
+                    Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), item.instance(), path))
+                raise error.LoadError(self, exception=E)
             pass
-        super(type, self).load()
+
+        # Read everything until we have a load error, because that's what this
+        # method does...
+        try:
+            super(type, self).load()
+        except error.LoadError:
+            pass
+        return
 
 class block(uninitialized):
     '''An array that reads elements until their size totals the same amount returned by .blocksize()'''
@@ -577,47 +584,47 @@ class block(uninitialized):
 
             current = 0
             for index in forever:
-                n = self.new(self._object_, __name__=str(index), offset=offset)
+                item = self.new(self._object_, __name__=str(index), offset=offset)
 
                 try:
-                    n = n.load()
+                    item = item.load()
 
-                except error.LoadError, e:
-                    #e = error.LoadError(self, exception=e)
-                    o = current + n.blocksize()
+                except error.LoadError as E:
+                    #E = error.LoadError(self, exception=E)
+                    o = current + item.blocksize()
 
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
-                        path = str().join(map("<{:s}>".format, n.backtrace()))
-                        Log.warn("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), n.instance(), path))
-                        self.value.append(n)
+                        path = str().join(map("<{:s}>".format, item.backtrace()))
+                        Log.warn("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), item.instance(), path))
+                        self.value.append(item)
 
                     # otherwise add the incomplete element to the array
                     elif o < self.blocksize():
-                        Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), n.instance(), e))
-                        self.value.append(n)
+                        Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), item.instance(), E))
+                        self.value.append(item)
 
                     break
 
-                size = n.blocksize()
+                size = item.blocksize()
                 if size <= 0 and Config.parray.break_on_zero_sized_element:
-                    Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), n.instance()))
+                    Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                     break
                 if size < 0:
-                    raise error.AssertionError(self, 'block.load', message="Element size for {:s} is < 0".format(n.classname()))
+                    raise error.AssertionError(self, 'block.load', message="Element size for {:s} is < 0".format(item.classname()))
 
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
-                    path = str().join(map("<{:s}>".format, n.backtrace()))
-                    Log.debug("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), n.instance(), path))
-                    self.value.append(n)
+                    path = str().join(map("<{:s}>".format, item.backtrace()))
+                    Log.debug("block.load : {:s} : Terminated at {:s} : {:s}".format(self.instance(), item.instance(), path))
+                    self.value.append(item)
                     break
 
                 # add to list, and check if we're done.
-                self.value.append(n)
-                if self.isTerminator(n):
+                self.value.append(item)
+                if self.isTerminator(item):
                     break
-                offset,current = offset+size,current+size
+                offset, current = offset+size, current+size
 
             pass
         return self
@@ -637,13 +644,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -668,7 +675,7 @@ if __name__ == '__main__':
     def function(self):
 #        if len(self.value) > 0:
 #            self[0].load()
-#            print self[0]
+#            print(self[0])
         return random.sample([byte, word, dword, function2], 1)[0]
 
     def function2(self):
@@ -681,13 +688,13 @@ if __name__ == '__main__':
             _object_ = dword
 
         x = myarray()
-#        print x
-#        print x.length,len(x), x.value
-        x.source = provider.string('AAAA'*15)
+#        print(x)
+#        print(x.length,len(x), x.value)
+        x.source = provider.string(b'AAAA'*15)
         x.l
-#        print x.length,len(x), x.value
-#        print "{!r}".format(x)
-        if len(x) == 5 and x[4].serialize() == 'AAAA':
+#        print(x.length,len(x), x.value)
+#        print("{!r}".format(x))
+        if len(x) == 5 and x[4].serialize() == b'AAAA':
             raise Success
 
     @TestCase
@@ -700,7 +707,7 @@ if __name__ == '__main__':
         x.source = provider.memory()
         x.setoffset(id(x))
         x.load()
-#        print x
+#        print(x)
 
         if len(x) == 16:
             raise Success
@@ -710,11 +717,11 @@ if __name__ == '__main__':
         class myarray(parray.terminated):
             _object_ = pint.uint8_t
             def isTerminator(self, v):
-                if v.serialize() == 'H':
+                if v.serialize() == b'H':
                     return True
                 return False
 
-        block = 'GFEDCBABCDHEFG'
+        block = b'GFEDCBABCDHEFG'
         x = myarray(source=provider.string(block)).l
         if len(x) == 11:
             raise Success
@@ -724,7 +731,7 @@ if __name__ == '__main__':
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        chars = '\xdd\xdd'
+        chars = b'\xdd\xdd'
         string = chars * 8
         string = string[:-1]
 
@@ -737,11 +744,11 @@ if __name__ == '__main__':
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        data = provider.string('AAAAA')
+        data = provider.string(b'AAAAA')
         z = RecordContainer(source=data).l
         s = RecordGeneral().a.blocksize()
 
-        if z.blocksize() == len(z)*s and len(z) == 3 and z.size() == 5 and not z[-1].initialized:
+        if z.blocksize() == len(z)*s and len(z) == 3 and z.size() == 5 and not z[-1].initializedQ():
             raise Success
 
     @TestCase
@@ -750,7 +757,7 @@ if __name__ == '__main__':
             _object_ = pint.uint8_t
             blocksize = lambda s:4
 
-        block = str().join(map(six.int2byte,six.moves.range(0x10)))
+        block = bytes().join(map(six.int2byte,six.moves.range(0x10)))
 
         a = container(source=provider.string(block)).l
         if len(a) == 4:
@@ -767,10 +774,10 @@ if __name__ == '__main__':
             _object_ = child_type
 
         block_length = child_type.length * count
-        block = '\x00'*block_length
+        block = b'\0'*block_length
 
         n = container_type(source=provider.string(block)).l
-        if len(n)-1 == count and not n[-1].initialized:
+        if len(n)-1 == count and not n[-1].initializedQ():
             raise Success
 
     @TestCase
@@ -782,7 +789,7 @@ if __name__ == '__main__':
             _object_ = child_type
 
         block_length = child_type.length * count
-        block = '\x00'*block_length
+        block = b'\0'*block_length
         container_type.blocksize = lambda s: child_type.length * 4
 
         a = container_type(source=provider.string(block)).l
@@ -798,7 +805,7 @@ if __name__ == '__main__':
                 return six.moves.reduce(lambda x,y:x*256+int(y), self.v, 0)
 
             def repr(self, **options):
-                if self.initialized:
+                if self.initializedQ():
                     return self.classname() + " {:x}".format(self.int())
                 return self.classname() + ' ???'
 
@@ -807,7 +814,7 @@ if __name__ == '__main__':
             def isTerminator(self, v):
                 return v.int() == 0x42424242
 
-        a = extreme(source=provider.string('A'*0x100 + 'B'*0x100 + 'C'*0x100 + 'DDDD'))
+        a = extreme(source=provider.string(b'A'*0x100 + b'B'*0x100 + b'C'*0x100 + b'DDDD'))
         a=a.l
         if len(a) == (0x100 / subarray.length)+1:
             raise Success
@@ -838,7 +845,7 @@ if __name__ == '__main__':
 
             _object_ = randomcontainer
 
-        string = str().join([ six.int2byte(random.randint(six.byte2int('A'),six.byte2int('Z'))) for x in six.moves.range(0x100) ])
+        string = bytes().join([ six.int2byte(random.randint(six.byte2int(b'A'),six.byte2int(b'Z'))) for x in six.moves.range(0x100) ])
         a = arr(source=provider.string(string))
         a=a.l
         if a.blocksize() == 0x108:
@@ -847,8 +854,8 @@ if __name__ == '__main__':
     @TestCase
     def test_array_infinite_nested_partial():
         class fakefile(object):
-            d = array.array('L', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
-            d = array.array('c', d.tostring() + '\xde\xad\xde\xad')
+            d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
+            d = array.array('B', bytearray(d.tostring() + b'\xde\xad\xde\xad'))
             o = 0
             def seek(self, ofs):
                 self.o = ofs
@@ -866,7 +873,7 @@ if __name__ == '__main__':
         x = argh(source=strm)
         for a in x.loadstream():
             pass
-        if not a.initialized and x[-2].serialize() == '\xde\xad\xde\xad':
+        if not a.initializedQ() and x[-2].serialize() == b'\xde\xad\xde\xad':
             raise Success
 
     @TestCase
@@ -876,9 +883,9 @@ if __name__ == '__main__':
             def isTerminator(self, value):
                 return value.int() == 0
 
-        data = provider.string("hello world\x00not included\x00")
+        data = provider.string(b'hello world\x00not included\x00')
         a = szstring(source=data).l
-        if len(a) == len('hello world\x00'):
+        if len(a) == len(b'hello world\x00'):
             raise Success
 
     @TestCase
@@ -891,9 +898,9 @@ if __name__ == '__main__':
         class argh(parray.terminated):
             _object_ = szstring
             def isTerminator(self, value):
-                return value.serialize() == 'end\x00'
+                return value.serialize() == b'end\x00'
 
-        data = provider.string("hello world\x00is included\x00end\x00not\x00")
+        data = provider.string(b'hello world\x00is included\x00end\x00not\x00')
         a = argh(source=data).l
         if len(a) == 3:
             raise Success
@@ -909,7 +916,7 @@ if __name__ == '__main__':
             _object_ = szstring
             blocksize = lambda x: 9000
 
-        s = (('A'*498) + '\x00\x00') + (('B'*498)+'\x00\x00')
+        s = ((b'A'*498) + b'\x00\x00') + ((b'B'*498)+b'\x00\x00')
         a = ninethousand(source=provider.string(s*9000)).l
         if len(a) == 18 and a.size() == 9000:
             raise Success
@@ -923,14 +930,14 @@ if __name__ == '__main__':
         class feiverfrei(parray.terminated):
             _object_ = fiver
             def isTerminator(self, value):
-                return value.serialize() == '\x00\x00\x00\x00\x00'
+                return value.serialize() == b'\x00\x00\x00\x00\x00'
 
         class dundundun(parray.block):
             _object_ = feiverfrei
             blocksize = lambda x: 50
 
-        dat = 'A'*5
-        end = '\x00'*5
+        dat = b'A'*5
+        end = b'\x00'*5
         s = (dat*4)+end + (dat*4)+end
         a = dundundun(source=provider.string(s*5)).l
         if len(a) == 2 and len(a[0]) == 5 and len(a[1]) == 5:
@@ -944,8 +951,8 @@ if __name__ == '__main__':
             def blocksize(self):
                 return 16
 
-        data = '\xAA\xAA\xAA\xAA'*4
-        data+= '\xBB'*4
+        data = b'\xAA\xAA\xAA\xAA'*4
+        data+= b'\xBB'*4
 
         x = blocked(source=provider.string(data))
         x = x.l
@@ -996,9 +1003,9 @@ if __name__ == '__main__':
         class argh(parray.type):
             _object_ = pint.uint32_t
 
-        x = aigh().alloc(map(ord,'PE\0\0'))
+        x = aigh().alloc(list(bytearray(b'PE\0\0')))
         a = argh(length=4).alloc(((0,x),(-1,0x5a4d)))
-        if a[0].serialize() == 'PE\0\0' and a[-1].serialize() == 'MZ\0\0':
+        if a[0].serialize() == b'PE\0\0' and a[-1].serialize() == b'MZ\0\0':
             raise Success
 
     @TestCase
@@ -1108,7 +1115,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
 
         a = blah().a
-        if a.serialize() == '':
+        if a.serialize() == b'':
             raise Success
 
     #@TestCase
@@ -1131,7 +1138,7 @@ if __name__ == '__main__':
                 def isTerminator(self, value):
                     return value.int() == 1
         a = blah().a
-        if a.initializedQ() and a.serialize() == '':
+        if a.initializedQ() and a.serialize() == b'':
             raise Success
 
     @TestCase

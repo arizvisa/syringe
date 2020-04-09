@@ -53,7 +53,7 @@ Example usage:
 import six
 import sys, os
 import itertools, operator, functools
-import importlib, array, exceptions, random as _random
+import importlib, array, random as _random
 from six.moves import builtins
 
 from . import config, utils, error
@@ -121,7 +121,7 @@ class remote(base):
             self.__cache__.fromstring(data)
             return self.consume(amount)
 
-        except Exception, e:
+        except Exception as E:
             self.log.warn("Unable to consume {:d} bytes from offset {:#x} while trying to preread {:d} bytes".format(amount, self.offset, right - len(self.__cache__)), exc_info=True)
             raise error.ConsumeError(self, self.offset, amount)
 
@@ -188,7 +188,7 @@ class empty(base):
         return 0
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
-        return '\0' * amount
+        return b'\0' * amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         Log.info("{:s}.store : Tried to write {:d} bytes to a read-only medium.".format(type(self).__name__, len(data)))
@@ -209,9 +209,9 @@ class proxy(bounded):
         self.instance = source
         self.offset = 0
 
-        valid = ('autocommit', 'autoload')
-        res = set(six.iterkeys(kwds)).difference(valid)
-        if res.difference(valid):
+        valid = {'autocommit', 'autoload'}
+        res = six.viewkeys(kwds) - valid
+        if res - valid:
             raise error.UserError(self, '__init__', message="Invalid keyword(s) specified. Expected ({!r}) : {!r}".format(valid, tuple(res)))
 
         self.autoload = kwds.get('autoload', None)
@@ -354,21 +354,23 @@ class proxy(bounded):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
-class string(bounded):
-    '''Basic writeable string provider.'''
+class bytes(bounded):
+    '''Basic writeable bytes provider.'''
     offset = int
     data = str     # this is backed by an array.array type
 
     @property
     def value(self):
-        return self.data.tostring()
+        return self.data
 
     @value.setter
     def value(self, value):
         self.data = value
 
-    def __init__(self, string=''):
-        self.data = array.array('c', string)
+    def __init__(self, string=b''):
+        res = bytearray(string) if isinstance(string, builtins.bytes) else bytearray(string, sys.getdefaultencoding())
+        self.offset = 0
+        self.data = res
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -381,33 +383,37 @@ class string(bounded):
         if amount < 0:
             raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.offset, amount, self))
         if amount == 0:
-            return ''
+            return b''
         if self.offset >= len(self.data):
             raise error.ConsumeError(self, self.offset, amount)
 
         minimum = min((self.offset + amount, len(self.data)))
-        res = self.data[self.offset : minimum].tostring()
-        if res == '' and amount > 0:
+        res = self.data[self.offset : minimum]
+        if res == b'' and amount > 0:
             raise error.ConsumeError(self, self.offset, amount, len(res))
         if len(res) == amount:
             self.offset += amount
-        return str(res)
+        return builtins.bytes(res)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
             left, right = self.offset, self.offset + len(data)
-            self.data[left:right] = array.array('c', data)
+            self.data[left:right] = data
             self.offset = right
             return len(data)
-        except Exception, e:
-            raise error.StoreError(self, self.offset, len(data), exception=e)
+
+        except Exception as E:
+            raise error.StoreError(self, self.offset, len(data), exception=E)
         raise error.ProviderError
 
     @utils.mapexception(any=error.ProviderError)
     def size(self):
         return len(self.data)
+
+class string(bytes):
+    '''This is an alias for the bytes provider.'''
 
 class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
@@ -433,9 +439,9 @@ class fileobj(bounded):
         try:
             result = self.file.read(amount)
 
-        except OverflowError, e:
+        except OverflowError as E:
             self.file.seek(offset)
-            raise error.ConsumeError(self, offset, amount, len(result), exception=e)
+            raise error.ConsumeError(self, offset, amount, len(result), exception=E)
 
         if result == '' and amount > 0:
             raise error.ConsumeError(self, offset, amount, len(result))
@@ -449,11 +455,12 @@ class fileobj(bounded):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         offset = self.file.tell()
         try:
-            return self.file.write(data)
+            result = self.file.write(data)
 
-        except Exception, e:
+        except Exception as E:
             self.file.seek(offset)
-        raise error.StoreError(self, offset, len(data), exception=e)
+            raise error.StoreError(self, offset, len(data), exception=E)
+        return result
 
     @utils.mapexception(any=error.ProviderError)
     def close(self):
@@ -477,26 +484,6 @@ class fileobj(bounded):
 filebase = fileobj
 
 ## other providers
-class base64(string):
-    '''A provider that accesses data in a Base64 encoded string.'''
-    def __init__(self, base64string, begin='', end=''):
-        result = map(operator.methodcaller('strip'), base64string.split('\n'))
-
-        if begin and begin in base64string:
-            res = [i for i, _ in enumerate(result) if _.startswith(begin)][0]
-            result[:] = result[res + 1:]
-
-        if end and end in base64string:
-            res = [i for i, _ in enumerate(result) if _.startswith(end)][0]
-            result[:] = result[:res]
-
-        result = str().join(result).translate(None, ' \t\n\r\v')
-        super(base64, self).__init__(result.decode('base64'))
-
-    @property
-    def value(self):
-        return self.data.tostring().encode('base64')
-
 class random(base):
     """Provider that returns random data when read from."""
     def __init__(self):
@@ -513,7 +500,7 @@ class random(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         res = map(_random.randint, (0,) * amount, (255,) * amount)
-        return str().join(map(six.int2byte, res))
+        return builtins.bytes().join(map(six.int2byte, res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -535,7 +522,7 @@ class stream(base):
 
     def __init__(self, source, offset=0):
         self.source = source
-        self.data = array.array('c')
+        self.data = array.array('B')
         self.data_ofs = self.offset = offset
 
     def seek(self, offset):
@@ -557,7 +544,7 @@ class stream(base):
             raise EOFError
 
         data = self._read(amount)
-        self.data.extend( array.array('c', data) )
+        self.data.extend( array.array('B', bytearray(data)) )
         if len(data) < amount:    # XXX: this really can't be the only way(?) that an instance
                                   #      of something ~fileobj.read (...) can return for a 
             self.eof = True
@@ -605,7 +592,7 @@ class stream(base):
             # FIXME: this logic _apparently_ hasn't been thought out at all..check notes
             o = self.offset - self.data_ofs
             if o >= 0 and o <= len(self.data):
-                self.data[o : o + len(data)] = array.array('c', data)
+                self.data[o : o + len(data)] = array.array('B', bytearray(data))
                 if o + len(data) >= len(self.data):
                     self.eof = False
                 self._write(data)
@@ -635,7 +622,7 @@ class stream(base):
 class iterable(stream):
     '''Provider that caches data read from a generator/iterable in order to provide random-access reading.'''
     def _read(self, amount):
-        return str().join(itertools.islice(self.source, amount))
+        return builtins.bytes().join(itertools.islice(self.source, amount))
 
     def _write(self, data):
         Log.info("iter._write : Tried to write {:+x} bytes to an iterator".format(len(data)))
@@ -648,8 +635,8 @@ class posixfile(fileobj):
         super(posixfile, self).__init__(res)
 
     @utils.mapexception(any=error.ProviderError)
-    def open(self, filename, mode='rw', perms=0644):
-        mode = str().join(sorted(set(x.lower() for x in mode)))
+    def open(self, filename, mode='rw', perms=0o644):
+        mode = builtins.bytes().join(sorted(set(x.lower() for x in mode)))
         flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
 
         # this is always assumed
@@ -763,8 +750,8 @@ try:
     import ctypes
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
-    except Exception, m:
-        raise OSError(m)
+    except Exception as E:
+        raise OSError(E)
 
     class win32error:
         @staticmethod
@@ -822,7 +809,7 @@ try:
 
             self.address += amount
             # XXX: test this shit out
-            return str(Buffer.raw)
+            return builtins.bytes(Buffer.raw)
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
@@ -907,7 +894,7 @@ try:
 
             if resultAmount.value == amount:
                 self.offset += resultAmount.value
-            return str(resultBuffer.raw)
+            return builtins.bytes(resultBuffer.raw)
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
@@ -937,8 +924,8 @@ try:
 except ImportError:
     Log.info("{:s} : Unable to import the 'ctypes' module. Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__))
 
-except OSError, m:
-    Log.info("{:s} : Unable to load 'kernel32.dll' ({:s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, m))
+except OSError as E:
+    Log.info("{:s} : Unable to load 'kernel32.dll' ({!s}). Failed to define the `WindowsProcessHandle`, `WindowsProcessId`, and `WindowsFile` providers.".format(__name__, E))
 
 try:
     _ = 'idaapi' in sys.modules
@@ -951,16 +938,16 @@ try:
             return cls
 
         @classmethod
-        def read(cls, offset, size, padding='\0'):
-            result = cls.module.get_many_bytes(offset, size) or ''
+        def read(cls, offset, size, padding=b'\0'):
+            result = cls.module.get_many_bytes(offset, size) or b''
             if len(result) == size:
                 return result
 
-            half = size / 2
+            half = size // 2
             if half > 0:
-                return str().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
+                return builtins.bytes().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
             if cls.module.isEnabled(offset):
-                return '' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
+                return b'' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
@@ -991,7 +978,7 @@ try:
             try:
                 result = cls.read(cls.offset, amount)
 
-            except Exception, err:
+            except Exception as err:
                 if isinstance(err, tuple) and len(err) == 2:
                     ofs, amount = err
                     raise error.ConsumeError(cls, ofs, amount, ofs - startofs)
@@ -1066,9 +1053,9 @@ try:
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
 
-            except RuntimeError, e:
+            except RuntimeError as E:
                 raise StopIteration("Unable to read {:+d} bytes from address {:x}".format(amount, self.offset))
-            return str(result)
+            return builtins.bytes(result)
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
@@ -1102,14 +1089,14 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount == 0:
-                return ''
+                return b''
             try:
                 data = self.__pykd__.loadBytes(self.addr, amount)
                 res = map(six.int2byte, data)
             except:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
-            return str().join(res)
+            return builtins.bytes().join(res)
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
@@ -1150,7 +1137,7 @@ try:
                     raise error.ConsumeError(self, self.address, amount)
                 self.address += len(data)
                 return six.binary_type(data)
-            return ''
+            return b''
 
         def store(self, data):
             process, err = self.__process, self.module.SBError()
@@ -1192,12 +1179,12 @@ try:
             if data is None or len(data) != amount:
                 raise error.ConsumeError(self, self.address, amount)
             self.address += len(data)
-            return six.binary_type(data)
+            return data
 
         def store(self, data):
             process = self.__process
             try:
-                process.write_memory(self.address, six.binary_type(data))
+                process.write_memory(self.address, data)
             except gdb.MemoryError:
                 raise error.StoreError(self, self.address, len(data))
             self.address += len(data)
@@ -1249,7 +1236,7 @@ try:
             blockpointer = ctypes.POINTER(ctypes.c_char * length)
             v = ctypes.c_void_p(address)
             p = ctypes.cast(v, blockpointer)
-            return str().join(p.contents)
+            return builtins.bytes().join(p.contents)
 
         @staticmethod
         def _write(address, value):
@@ -1279,13 +1266,13 @@ if __name__ == '__main__':
             try:
                 res = fn(**kwds)
                 raise Failure
-            except Success,e:
-                print '%s: %r'% (name,e)
+            except Success as E:
+                print('%s: %r'% (name, E))
                 return True
-            except Failure,e:
-                print '%s: %r'% (name,e)
-            except Exception,e:
-                print '%s: %r : %r'% (name,Failure(), e)
+            except Failure as E:
+                print('%s: %r'% (name, E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -1320,7 +1307,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_file_readonly():
-        data = 'A'*512
+        data = b'A'*512
         with temporaryname() as filename:
             f = open(filename, 'wb')
             f.write(data)
@@ -1341,7 +1328,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_file_writeonly():
-        data = 'A'*512
+        data = b'A'*512
         with temporaryname() as filename:
             f = open(filename, 'wb')
             f.write(data)
@@ -1362,7 +1349,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_file_readwrite():
-        data = 'A'*512
+        data = b'A'*512
         with temporaryname() as filename:
             f = open(filename, 'wb')
             f.write(data)
@@ -1381,7 +1368,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_filecopy_read():
-        data = 'A'*512
+        data = b'A'*512
         with temporaryname() as filename:
             f = open(filename, 'wb')
             f.write(data)
@@ -1395,7 +1382,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_filecopy_write():
-        data = 'A'*512
+        data = b'A'*512
         with temporaryname() as filename:
             f = open(filename, 'wb')
             f.write(data)
@@ -1403,17 +1390,17 @@ if __name__ == '__main__':
             f.close()
 
             z = provider.filecopy(filename)
-            a = z.store('B' * len(data))
+            a = z.store(b'B' * len(data))
 
             z.seek(0)
             a = z.consume(len(data))
-            if a.count('B') == len(data):
+            if a.count(b'B') == len(data):
                 raise Success
         return
 
     @TestCase
     def test_filecopy_readwrite():
-        data = 'A'*512
+        data = b'A'*512
         with temporaryname() as filename:
             f = open(filename, 'wb')
             f.write(data)
@@ -1422,11 +1409,11 @@ if __name__ == '__main__':
 
             z = provider.filecopy(filename)
             z.seek(len(data))
-            a = z.store('B' * len(data))
+            a = z.store(b'B' * len(data))
 
             z.seek(0)
             a = z.consume(len(data)*2)
-            if a.count('A') == len(data) and a.count('B') == len(data):
+            if a.count(b'A') == len(data) and a.count(b'B') == len(data):
                 raise Success
         return
 
@@ -1434,7 +1421,7 @@ if __name__ == '__main__':
         import ctypes
         @TestCase
         def test_memory_read():
-            data = 'A'*0x40
+            data = b'A'*0x40
             buf = ctypes.c_buffer(data)
             ea = ctypes.addressof(buf)
             z = provider.memory()
@@ -1445,26 +1432,26 @@ if __name__ == '__main__':
 
         @TestCase
         def test_memory_write():
-            data = 'A'*0x40
+            data = b'A'*0x40
             buf = ctypes.c_buffer(data)
             ea = ctypes.addressof(buf)
             z = provider.memory()
             z.seek(ea)
-            z.store('B'*len(data))
-            if buf.value == 'B'*len(data):
+            z.store(b'B'*len(data))
+            if buf.value == b'B'*len(data):
                 raise Success
             raise Failure
 
         @TestCase
         def test_memory_readwrite():
-            data = 'A'*0x40
+            data = b'A'*0x40
             buf = ctypes.c_buffer(data)
             ea = ctypes.addressof(buf)
             z = provider.memory()
             z.seek(ea)
-            z.store('B'*len(data))
+            z.store(b'B'*len(data))
             z.seek(ea)
-            if z.consume(len(data)) == 'B'*len(data):
+            if z.consume(len(data)) == b'B'*len(data):
                 raise Success
 
     except ImportError:
@@ -1518,7 +1505,7 @@ if __name__ == '__main__':
         res = t2(source=provider.proxy(source)).l
         res[1].set(0x0d0e0a0d)
         res.commit()
-        if ''.join(n.serialize() for n in source[0:0xc]) == 'AAAA\x0d\x0a\x0e\x0dCCCC':
+        if builtins.bytes().join(n.serialize() for n in source[0 : 0xc]) == b'AAAA\x0d\x0a\x0e\x0dCCCC':
             raise Success
 
     @TestCase
@@ -1533,13 +1520,13 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
             length = 6
 
-        source = t1(source=ptypes.prov.string('abcABCdefDEFghiGHIjlkJLK')).l
+        source = t1(source=ptypes.prov.string(b'abcABCdefDEFghiGHIjlkJLK')).l
         res = t2(source=ptypes.prov.proxy(source)).l
         source[0].set((0x41,0x41,0x41))
         source.commit()
         res[1].set(0x42424242)
         res[1].commit()
-        if source[0].serialize() == 'AAA' and source[1].serialize() == 'ABB' and source[2]['a'] == six.byte2int('B') and source[2]['b'] == six.byte2int('B'):
+        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and source[2]['a'] == six.byte2int(b'B') and source[2]['b'] == six.byte2int(b'B'):
             raise Success
 
     try:
@@ -1564,7 +1551,7 @@ if __name__ == '__main__':
             p = multiprocessing.Process(target=stringspin, args=(q,string,))
             p.start()
             address = q.get()
-            print "{:#x}".format(address)
+            print("{:#x}".format(address))
 
             src = provider.WindowsProcessId(p.pid)
             src.seek(address)
@@ -1580,42 +1567,6 @@ if __name__ == '__main__':
     except ImportError:
         Log.warning("{:s} : Skipping the `WindowsProcessId` provider tests.".format(__name__))
 
-    testcert="""
-    -----BEGIN CERTIFICATE-----
-    MIIC+TCCArigAwIBAgIJAOLOwubF5bg3MAkGByqGSM44BAMwNjELMAkGA1UEBhMC
-    VVMxDjAMBgNVBAgMBVRleGFzMRcwFQYDVQQKDA50aHVua2Vyc0RPVG5ldDAeFw0x
-    NDA5MTAxOTUyMDJaFw0xNDEwMTAxOTUyMDJaMDYxCzAJBgNVBAYTAlVTMQ4wDAYD
-    VQQIDAVUZXhhczEXMBUGA1UECgwOdGh1bmtlcnNET1RuZXQwggG3MIIBLAYHKoZI
-    zjgEATCCAR8CgYEA9i7VTIaia1b5UljGzdonzMayj6bKmmbXqrw7XQcxagwOiR/w
-    HpJbD88h81VII4bQFcIKnlJ9jA8pisffLt9fG2L+9yHA8pB6C192INiloIePf1wK
-    lePuWpkAOuZQdA97XIaEwZYXTCvkgozhgp/j9Agcef/IeWaga7CiOCinJw8CFQDp
-    DJ0yhfywMk90ZaJVzpMld4FdHwKBgQCpxKWJbU7NUGWRBQY2TPzVuSwKpa+R1ezn
-    yiggGHQxb9S6kBKkarsHrmUfcgmmHcsI5ntRYD7ZeRKUgTasQsA3I8NlhmetxdaT
-    BKnSdZZAYvRdAxaxRKvMtSwSBGReflSedme0822z+/FNfJG9rMmiBaURNQIpIxb+
-    /ecM9MP8fwOBhAACgYA3O9CNln3zUnW8SyUqFovp0AFBFixrZhxRbFsASjk1dDqr
-    1GEhE9WGt6cRpLICMQZ80vsrWItc7PpV09OuivkL1oHRpwmeGUA43LV8Wp4FA64F
-    EkhbOgBcKlA1aM06bOlJhU26iGuGB4ZTgfyuWtMWFf7LE4bykOa8NOl83yo3FqNQ
-    ME4wHQYDVR0OBBYEFJLWL1FUKaTChKV0EgiYCwWzR3O9MB8GA1UdIwQYMBaAFJLW
-    L1FUKaTChKV0EgiYCwWzR3O9MAwGA1UdEwQFMAMBAf8wCQYHKoZIzjgEAwMwADAt
-    AhUAmftACaObx1+KUcHlzKw+iJI5CE4CFAQLG5nhjAlBzh3nNOMRIs4TDXOb
-    -----END CERTIFICATE-----
-    """
-
-    @TestCase
-    def test_base64_read():
-        a = base64(testcert, '-----BEGIN', '-----END')
-        a.seek(0)
-        if a.consume(4) == '0\x82\x02\xf9':
-            raise Success
-
-    @TestCase
-    def test_base64_write():
-        a = base64(testcert, '-----BEGIN', '-----END')
-        a.seek(0)
-        a.store('XXXXXX')
-        if a.value.startswith('XXXXXX'.encode('base64').strip()):
-            raise Success
-
 if __name__ == '__main__' and 0:
     from ptypes import ptype,parray,pstruct,pint,provider
     from array import array
@@ -1623,8 +1574,8 @@ if __name__ == '__main__' and 0:
     a = provider.virtual()
     a.available = [0,6]
     a.data = {0:'hello',6:'world'}
-    print a.available
-    print a.data
+    print(a.available)
+    print(a.data)
 
     @TestCase
     def test_first():
@@ -1684,7 +1635,6 @@ if __name__ == '__main__' and 0:
     def test_consume():
         s = lambda x:array.array('c',x)
 
-        global a
         a = provider.virtual()
         a.available = [0, 5, 10, 15, 20]
         a.data = {0:s('hello'),5:s('world'),10:s('55555'),15:s('66666'),20:s('77777')}

@@ -1,7 +1,7 @@
 import logging,itertools,ptypes
 from ptypes import *
 
-import Object
+from . import Object
 
 class ulong(pint.bigendian(pint.uint32_t)): pass
 
@@ -113,7 +113,7 @@ class Longnames(ptype.block):
     internalname = "//"
 
     def extract(self, index):
-        return utils.strdup(self.serialize()[index:])
+        return utils.strdup(self.serialize()[index:], terminator=b'\0')
 
     def blocksize(self):
         return self.p['Header'].li['Size'].int()
@@ -158,7 +158,7 @@ class Member(pstruct.type):
     def __newline(self):
         ofs = self.getoffset('Member') + self['Header'].li['Size'].int()
         res = self.new(pstr.char_t, __name__='newline', offset=ofs)
-        if res.l.serialize() == '\n':
+        if res.l.serialize() == b'\n':
             return pstr.char_t
         return ptype.undefined
 
@@ -247,7 +247,7 @@ class File(pstruct.type):
         for o in offsets:
             o = int(o)+memblocksize
             p.setoffset(o)
-            if p.load().serialize() == '\x00\x00\xff\xff':
+            if p.load().serialize() == b'\x00\x00\xff\xff':
                 importheader.setoffset(o)
                 imp.setoffset(o+impblocksize)
                 imp.load()
@@ -265,7 +265,7 @@ class File(pstruct.type):
         for index,o in enumerate(offsets):
             o = int(o)+memblocksize
             p.setoffset(o)
-            if p.load().serialize() == '\x00\x00\xff\xff':
+            if p.load().serialize() == b'\x00\x00\xff\xff':
                 continue
 
 #            yield self.new(Object.File, __name__="Member[{:d}]".format(index), offset=o)
@@ -273,31 +273,31 @@ class File(pstruct.type):
         return
 
 if __name__ == '__main__':
-    import Archive
+    import pecoff.Archive as Archive
     from ptypes import *
     source = ptypes.file('~/python26/libs/python26.lib')
 
-    print 'Reading .lib header'
+    print('Reading .lib header')
 #    Archive.File = ptypes.debugrecurse(Archive.File)
     self = Archive.File()
 #    self.source = provider.file('../../obj/test.lib')
     self.source = ptypes.file('~/python26/libs/python26.lib')
     self.load()
 
-#    print self['SymbolNames']['Header']
-#    print self['SymbolNames']['Member']
-#    print self['MemberNames']['Header']
-#    print self['MemberNames']['Member']
-#    print self['LongNames']['Header']
-#    print self['LongNames']['Member']
-#    print '-'*79
+#    print(self['SymbolNames']['Header'])
+#    print(self['SymbolNames']['Member'])
+#    print(self['MemberNames']['Header'])
+#    print(self['MemberNames']['Member'])
+#    print(self['LongNames']['Header'])
+#    print(self['LongNames']['Member'])
+#    print('-'*79)
 
     ## enumerate all objects that are dll imports
     ## enumerate all objects that are actual object files
 
-    print 'enumerating all members'
+    print('enumerating all members')
     for index in xrange( self.getmembercount() ):
-        print self.getmember(index).load()
-        print ptypes.utils.hexdump(self.getmemberdata(index))
+        print(self.getmember(index).load())
+        print(ptypes.utils.hexdump(self.getmemberdata(index)))
 
 #    a = Archive.File(offset=19912)

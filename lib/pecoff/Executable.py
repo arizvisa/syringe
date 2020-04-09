@@ -226,14 +226,14 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
 
         # Pad the data so that it's a multiple of a dword
         res = 4 - len(data) % 4
-        padding = '\0' * (res % 4)
+        padding = b'\0' * (res % 4)
 
         # Calculate 16-bit checksum
-        res = sum(array.array('I', str(data) + padding))
+        res = sum(array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', bytes(data) + padding))
         checksum = len(data)
         checksum += res & 0xffff
-        checksum += res / 0x10000
-        checksum += checksum / 0x10000
+        checksum += res // 0x10000
+        checksum += checksum // 0x10000
         checksum &= 0xffff
 
         # Clamp the result to 32-bits
@@ -313,7 +313,7 @@ class IMAGE_NT_DATA(pstruct.type, Header):
 
         # Warn the user if we're unable to determine whether the source is a
         # file-backed or memory-backed provider.
-        if all(not isinstance(self.source, item) for item in {ptypes.provider.memorybase, ptypes.provider.filebase}):
+        if all(not isinstance(self.source, item) for item in {ptypes.provider.memorybase, ptypes.provider.fileobj}):
             cls = self.__class__
             logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
 
@@ -544,7 +544,7 @@ class File(pstruct.type, ptype.boundary):
         sz+= self['Extra'].blocksize()
         sz+= self['Stub'].blocksize()
         sz+= self['Next'].blocksize()
-        if isinstance(self.source, ptypes.provider.filebase):
+        if isinstance(self.source, ptypes.provider.fileobj):
             return dyn.block(self.source.size() - sz)
         return ptype.undefined
 
@@ -565,7 +565,7 @@ if __name__ == '__main__':
     else:
         filename = 'obj/kernel32.dll'
         for x in range(10):
-            print filename
+            print(filename)
             try:
                 v = Executable.open(filename)
                 break
@@ -577,13 +577,13 @@ if __name__ == '__main__':
     exports = v['DataDirectory'][0]
     while exports['Address'].int() != 0:
         exports = exports['Address'].d.l
-        print exports.l
+        print(exports.l)
         break
 
     imports = v['DataDirectory'][1]
     while imports['Address'].int() != 0:
         imports = imports['Address'].d.l
-        print imports.l
+        print(imports.l)
         break
 
     relo = v['DataDirectory'][5]['Address'].d.l
@@ -592,7 +592,7 @@ if __name__ == '__main__':
     data = section.data().serialize()
     for item in relo.filter(section):
         for _, r in item.getrelocations(section):
-            print item
+            print(item)
             data = r.relocate(data, 0, section)
         continue
 

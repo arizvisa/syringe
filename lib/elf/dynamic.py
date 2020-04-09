@@ -1,4 +1,4 @@
-from base import *
+from .base import *
 
 # This should map d_tag to type, and should point to all the definitions
 class Type(ptype.definition):
@@ -44,6 +44,8 @@ class Elf32_Dyn(pstruct.type):
             ('DT_PREINIT_ARRAYSZ', 33),
             ('DT_MAXPOSTAGS', 34),
 
+            ('DT_DEPRECATED_SPARC_REGISTER', 0x7000001),
+
             ('DT_SUNW_AUXILIARY', 0x6000000d),
             ('DT_SUNW_RTLDINF', 0x6000000e),
             ('DT_SUNW_FILTER', 0x6000000f),
@@ -59,7 +61,10 @@ class Elf32_Dyn(pstruct.type):
             ('DT_SUNW_STRPAD', 0x60000019),
             ('DT_SUNW_LDMACH', 0x6000001b),
 
-            ('DT_DEPRECATED_SPARC_REGISTER', 0x7000001),
+            ('DT_GNU_PRELINKED', 0x6ffffdf5),
+            ('DT_GNU_CONFLICTSZ', 0x6ffffdf6),
+            ('DT_GNU_LIBLISTSZ', 0x6ffffdf7),
+
             ('DT_CHECKSUM', 0x6ffffdf8),
             ('DT_PLTPADSZ', 0x6ffffdf9),
             ('DT_MOVEENT', 0x6ffffdfa),
@@ -69,6 +74,12 @@ class Elf32_Dyn(pstruct.type):
             ('DT_SYMINSZ', 0x6ffffdfe),
             ('DT_SYMINENT', 0x6ffffdff),
 
+            ('DT_GNU_HASH', 0x6ffffef5),
+
+            ('DT_TLSDESC_PLT', 0x6ffffef6),
+            ('DT_TLSDESC_GOT', 0x6ffffef7),
+            ('DT_GNU_CONFLICT', 0x6ffffef8),
+            ('DT_GNU_LIBLIST', 0x6ffffef9),
             ('DT_CONFIG', 0x6ffffefa),
             ('DT_DEPAUDIT', 0x6ffffefb),
             ('DT_AUDIT', 0x6ffffefc),
@@ -88,24 +99,6 @@ class Elf32_Dyn(pstruct.type):
             ('DT_AUXILIARY', 0x7ffffffd),
             ('DT_USED', 0x7ffffffe),
             ('DT_FILTER', 0x7fffffff),
-
-            ('DT_GNU_PRELINKED', 0x6ffffdf5),
-            ('DT_GNU_CONFLICTSZ', 0x6ffffdf6),
-            ('DT_GNU_LIBLISTSZ', 0x6ffffdf7),
-
-            ('DT_GNU_HASH', 0x6ffffef5),
-
-            ('DT_TLSDESC_PLT', 0x6ffffef6),
-            ('DT_TLSDESC_GOT', 0x6ffffef7),
-            ('DT_GNU_CONFLICT', 0x6ffffef8),
-            ('DT_GNU_LIBLIST', 0x6ffffef9),
-
-            ('DT_CONFIG', 0x6ffffefa),
-            ('DT_DEPAUDIT', 0x6ffffefb),
-            ('DT_AUDIT', 0x6ffffefc),
-            ('DT_PLTPAD', 0x6ffffefd),
-            ('DT_MOVETAB', 0x6ffffefe),
-            ('DT_SYMINFO', 0x6ffffeff),
         ]
 
     def __d_val(self):
@@ -366,22 +359,3 @@ class DT_GNU_CONFLICT(d_ptr): type = 0x6ffffef8
 
 @Type.define
 class DT_GNU_LIBLIST(d_ptr): type = 0x6ffffef9
-
-@Type.define
-class DT_CONFIG(d_ptr): type = 0x6ffffefa
-
-@Type.define
-class DT_DEPAUDIT(d_ptr): type = 0x6ffffefb
-
-@Type.define
-class DT_AUDIT(d_ptr): type = 0x6ffffefc
-
-@Type.define
-class DT_PLTPAD(d_ptr): type = 0x6ffffefd
-
-@Type.define
-class DT_MOVETAB(d_ptr): type = 0x6ffffefe
-
-@Type.define
-class DT_SYMINFO(d_ptr): type = 0x6ffffeff
-

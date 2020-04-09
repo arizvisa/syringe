@@ -315,27 +315,27 @@ class ProtocolClass(ptype.definition):
 
 @Protocol.define
 class Universal(ProtocolClass):
-    Class, cache = 00, {}
+    Class, cache = 0x00, {}
     # FIXME: These types need to distinguish between constructed and non-constructed
     #        types instead of just generalizing them.
 Protocol.Universal = Universal
 
 @Protocol.define
 class Application(ProtocolClass):
-    Class, cache = 01, {}
+    Class, cache = 0x01, {}
     # FIXME: This needs to be unique to the instance of all ber.Element types
     #        used by the application.
 Protocol.Application = Application
 
 @Protocol.define
 class Context(ProtocolClass):
-    Class, cache = 02, {}
+    Class, cache = 0x02, {}
     # FIXME: This needs to be unique to a specific ber.Element type
 Protocol.Context = Context
 
 @Protocol.define
 class Private(ProtocolClass):
-    Class, cache = 03, {}
+    Class, cache = 0x03, {}
 Protocol.Private = Private
 
 ### Tag definitions (X.208)
@@ -387,7 +387,7 @@ class OBJECT_IDENTIFIER(ptype.type):
             x = bitmap.new(0,0)
             while n > 0:
                 x = bitmap.insert(x, (n&0xf,4))
-                n /= 0x10
+                n //= 0x10
 
             # shuffle bitmap into oid components
             y = []
@@ -401,7 +401,7 @@ class OBJECT_IDENTIFIER(ptype.type):
     def str(self):
         data = map(six.byte2int, self.serialize())
         if len(data) > 0:
-            res = [data[0] / 40, data.pop(0) % 40]
+            res = [data[0] // 40, data.pop(0) % 40]
             data = iter(data)
             for n in data:
                 val = bitmap.new(0,0)
@@ -431,8 +431,8 @@ class OBJECT_IDENTIFIER(ptype.type):
         ('spcLink', '1.3.6.1.4.1.311.2.1.25'),
         ('SPC_TIME_STAMP_REQUEST_OBJID', '1.3.6.1.4.1.311.3.2.1'),
         ('SPC_SIPINFO_OBJID', '1.3.6.1.4.1.311.2.1.30'),
-        ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1 */
-        ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256 */
+        ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1
+        ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256
         ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
         ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
 
@@ -558,9 +558,8 @@ class File(Element):
     byteorder = ptypes.config.byteorder.bigendian
 
 if __name__ == '__main__':
-    import ptypes,ber
+    import ptypes,protocol.ber as ber
     import ptypes.bitmap as bitmap
-    reload(ber)
     ptypes.setsource(ptypes.file('./test.3','rb'))
 
     a = ber.Element
@@ -577,22 +576,22 @@ if __name__ == '__main__':
         res = bitmap.push(res, (0x1, 0))
         res = bitmap.push(res, (0x0, 7))
         x = pbinary.new(ber.Tag,source=ptypes.prov.string(bitmap.data(res)))
-        print x.l
-        print x['TagLong'][0]
-        print x.int()
-        print int(x['TagLong'])
+        print(x.l)
+        print(x['TagLong'][0])
+        print(x.int())
+        print(int(x['TagLong']))
 
     def test_length():
         res = bitmap.zero
         res = bitmap.push(res, (0, 1))
         res = bitmap.push(res, (38, 7))
         x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
-        print x.l
-        print x.int()
+        print(x.l)
+        print(x.int())
 
         res = bitmap.zero
         res = bitmap.push(res, (0x81,8))
         res = bitmap.push(res, (0xc9,8))
         x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
-        print x.l
-        print x.int()
+        print(x.l)
+        print(x.int())

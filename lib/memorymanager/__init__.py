@@ -11,7 +11,7 @@ memorymanager.new(handle=yourhandle)
 ### this module intends to provide an interface for managing address space inside another /context/ (whatever that may be, like a process)
 ### this includes things like allocations, frees, file mappings, code page creation...(using that one module or whatever that i wrote)
 
-import allocator
+from . import allocator
 from ptypes import bitmap
 
 # XXX: it might be cool to add an option to duplicate attributes from
@@ -75,7 +75,7 @@ class MemoryManager(__provider):
         allocator = self.allocator
 
         # allocate size
-        pages = (size / allocator.getPageSize())+1
+        pages = (size // allocator.getPageSize())+1
 
         # get a writeable page, and then write our code to it
         pointer = self.allocator.getWriteable(None, pages)
@@ -160,7 +160,7 @@ class Managed(MemoryManager):
         if size < pagesize>>1:
             res = self.__alloc_dochunks(size)
         else:
-            res = self.__alloc_pages((size+pagesize-1)/pagesize)
+            res = self.__alloc_pages((size+pagesize-1)//pagesize)
 
         # assign to page lookup
         pointer,type = res
@@ -179,14 +179,14 @@ class Managed(MemoryManager):
 
         size = allocator.getPageSize()*pages
         pointer = allocator.getWriteable(None, pages)
-        res = bitmap.new(0, size / elementsize )
+        res = bitmap.new(0, size // elementsize )
         return (pointer, (int(elementsize), res))
 
     # XXX: this modifies /bucket/ directly...just a heads up.
     def __alloc_from_bucket(self, bucket, size):
         for i,n in zip(range(len(bucket)), bucket):
             pointer,(chunksize,layout) = n
-            count = (size / chunksize)+1
+            count = (size // chunksize)+1
 
             try:
                 freeslot = bitmap.runscan(layout, 0, count)
@@ -229,7 +229,7 @@ class Managed(MemoryManager):
 
         # convert pointer into index
         offset = pointer - basepointer
-        index = offset / chunksize
+        index = offset // chunksize
 
         # clear the bit
         layout = bitmap.set(layout, index, False)
@@ -258,18 +258,18 @@ if False and __name__ == '__main__':
         res = v.alloc(0x400)
         list.append(res)
 
-    print '\n'.join(map(hex,list))
+    print('\n'.join(map(hex,list)))
 
-    print '=' * 80
+    print('=' * 80)
     for n in list:
-        print 'free(%x)'% n
+        print('free(%x)'% n)
         v.free(n)
 
-    print '.' * 80
+    print('.' * 80)
     page = v.alloc(0x4000)
-    print 'malloc(0x4000) = %x'% page
+    print('malloc(0x4000) = %x'% page)
     v.free(page)
-    print 'free(%x)'% page
+    print('free(%x)'% page)
 
 #    debugger.detach()
 
@@ -279,4 +279,4 @@ if __name__ == '__main__':
 
     a = mm.alloc(84)
     b = mm.alloc(88)
-    print hex(a),hex(b)
+    print(hex(a),hex(b))

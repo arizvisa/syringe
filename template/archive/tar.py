@@ -339,6 +339,7 @@ class header_gnu_member(pstruct.type):
         return "(header_gnu) atime={:#x} ctime={:#x} offset={:#x} longnames={:s} ...".format(self['atime'].int(), self['ctime'].int(), self['offset'].int(), self['longnames'].summary())
 
 if __name__ == '__main__':
+    import six
     import sys, os, os.path, logging, argparse, fnmatch
     import ptypes, archive.tar
     if sys.platform == 'win32': import msvcrt
@@ -355,12 +356,12 @@ if __name__ == '__main__':
     arg_device_gr.add_argument('-o', '--output', action='store', type=str, metavar="FORMATSPEC", help="extract members by applying attributes to specified FORMATSPEC (or DEVICE)", dest='target', default='-')
 
     if len(sys.argv) <= 1:
-        print >>sys.stdout, arg_p.format_usage()
+        six.print_(arg_p.format_usage(), file=sys.stdout)
         sys.exit(0)
 
     args = arg_p.parse_args(sys.argv[1:])
     if args.mode == 'help':
-        print >>sys.stdout, arg_p.format_help()
+        six.print_(arg_p.format_help(), file=sys.stdout)
         sys.exit(0)
 
     # fix up arguments
@@ -415,7 +416,7 @@ if __name__ == '__main__':
     if args.mode == 'list':
         z = z.l
         for member in iterate(z[:-1]):
-            print member.listing()
+            print(member.listing())
         sys.exit(0)
 
     elif args.mode == 'extract':
@@ -426,7 +427,7 @@ if __name__ == '__main__':
 
     # help
     else:
-        print >>sys.stdout, arg_p.format_help()
+        six.print_(arg_p.format_help(), file=sys.stdout)
         sys.exit(1)
 
     # for each member...
@@ -472,11 +473,11 @@ if __name__ == '__main__':
             else:
                 logging.info("Creating file for member : {:d} : {:s}".format(int(member.name()), res))
 
-            with file(res, 'wb') as out: print >>out, data
+            with file(res, 'wb') as out: six.print_(data, file=out)
 
         # fall-back to writing to already open target
         else:
-            print >>target, data
+            six.print_(data, file=target)
         continue
 
     sys.exit(0)

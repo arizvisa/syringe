@@ -72,7 +72,7 @@ class File(pstruct.type):
     class _chunks(parray.block):
         _object_ = ChunkGeneral
         def isTerminator(self, value):
-            print "Loading element %s from offset %x with type %x"% (value.__name__, value.getoffset(), value['header']['type'])
+            print("Loading element %s from offset %x with type %x"% (value.__name__, value.getoffset(), value['header']['type']))
             return super(File._chunks, self).isTerminator(value)
 
     _fields_ = [
@@ -82,7 +82,7 @@ class File(pstruct.type):
     ]
 
     def summary(self):
-        if self.initialized:
+        if self.initializedQ():
             lookup = {}
             for n in self['data']:
                 t = n['header']['type'].int()
@@ -272,11 +272,10 @@ class DELTA_FLI(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,flic
-    reload(flic)
+    import ptypes,video.flic as flic
     ptypes.setsource( ptypes.file('./test.fli') )
 #    ptypes.setsource( ptypes.file('./janmar90.flc') )
 
     z = ptypes.debugrecurse(flic.File)()
     z = z.l
-    print z
+    print(z)

@@ -76,7 +76,7 @@ class IFD8(pint.uint64_t):
         return '{:+#0{:d}x} ({:+d})'.format(res, 2*self.size() + sum(map(len, ('0x', '+'))), res)
 
 class DirectoryType(pint.enum, pint.uint16_t):
-    _values_ = [(n.__name__, n.type) for _,n in Type.cache.iteritems()]
+    _values_ = [(item.__name__, item.type) for _, item in Type.cache.items()]
 
 ### tags
 class Tags(ptype.definition): attribute, cache = 'tag', {}
@@ -628,7 +628,7 @@ class File(pstruct.type):
 
     def __data(self):
         res = self['header'].li.size() + self['pointer'].li.size()
-        if isinstance(self.source, ptypes.prov.filebase):
+        if isinstance(self.source, ptypes.prov.bounded):
             return dyn.block(self.source.size() - res)
         return ptype.undefined
 
@@ -639,19 +639,18 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,tiff
-    reload(tiff)
+    import ptypes,image.tiff as tiff
     ptypes.setsource( ptypes.file('sample.tif') )
 
     a = tiff.File()
     a = a.l
     for n in a['pointer'].d.l.iterate():
-        print n.l
+        print(n.l)
         if not isinstance(n['value'], ptypes.ptype.undefined):
-            print n['value']
+            print(n['value'])
             continue
         assert not isinstance(n['pointer'], ptypes.ptype.undefined)
         for v in n['pointer'].d.l:
-            print v
+            print(v)
         continue
 

@@ -111,7 +111,7 @@ class PayloadString(pstruct.type):
             return ptype.undefined
 
         if fields.p['NegotiateFlags']['NEGOTIATE_UNICODE']:
-            return dyn.clone(pstr.wstring, length=fields['Length'].int() / 2)
+            return dyn.clone(pstr.wstring, length=fields['Length'].int() // 2)
         return dyn.clone(pstr.string, length=fields['Length'].int())
 
     def __padding(self):
@@ -261,7 +261,7 @@ class AV_PAIR(pstruct.type):
             return dyn.block(cb.int())
 
         if issubclass(t, pstr.wstring):
-            return dyn.clone(t, length=cb.int() / 2)
+            return dyn.clone(t, length=cb.int() // 2)
         return t
 
     _fields_ = [

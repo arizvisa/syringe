@@ -125,17 +125,18 @@ def help(*args):
         first, = args
     except ValueError:
         first = 'bindiff.run'
-    print 'Usage: %s [-generate template.%%s.diff] file1 file2'% first
-    print """
+    print('Usage: %s [-generate template.%%s.diff] file1 file2'% first)
+    print("""
     Will do a byte-for-byte compare between file1 and file2, and then output
     the results. If -generate is specified, the application will generate
     a version of the original file for each independant modification
-    """
+    """)
 
-def do_diff_friendly( (a,inputa), (b,inputb) ):
+def do_diff_friendly(A, B):
+    (a, inputa), (b, inputb) = A, B
     for o,l in getDifferences(a, b):
 
-        print '\nDifference located at %08x:%08x'% (o, o+l)
+        print('\nDifference located at %08x:%08x'% (o, o+l))
         o = (o) & ~0xf
         l = (l+0xf) & ~0xf
 
@@ -151,9 +152,10 @@ def do_diff_friendly( (a,inputa), (b,inputb) ):
         res = [ left, right ]
         res = [ s.split('\n') for s in res ]
         rows = [ ' | '.join(x) for x in zip(*res) ]
-        print '\n'.join(rows)
+        print('\n'.join(rows))
 
-def do_diff_generate((a,inputa),(b,inputb), template='%s.diff'):
+def do_diff_generate(A, B, template='%s.diff'):
+    (a, inputa), (b, inputb) = A, B
     assert '%s' in template, "Filename template `%s' needs a %%s for modification range"% template
 
     inputa.seek(0); inputb.seek(0)
@@ -173,7 +175,7 @@ def do_diff_generate((a,inputa),(b,inputb), template='%s.diff'):
         out.close()
         count += 1
 
-    print 'Outputted %d files'% count
+    print('Outputted %d files'% count)
 
 def run(*args):
     """Run the bindiff.py commandline"""

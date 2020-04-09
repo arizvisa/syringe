@@ -55,24 +55,24 @@ if __name__ == '__main__':
     import ptypes
     from ptypes import *
 
-    import bzip2
+    from . import bzip2
     import bz2
 
     a = bz2.BZ2Compressor(9)
     for x in 'hello world':
         a.compress(x)
     s = a.flush()
-    print repr(s)
-    print s.decode('bz2')
+    print(repr(s))
+    print(s.decode('bz2'))
 
     b = bz2.BZ2Decompressor()
     for x in s:
         c = b.decompress(x)
         if len(c) > 0:
-            print c
+            print(c)
 
     c = bzip2.type(_object_=dyn.clone(pstr.string,length=5))
     c.source = ptypes.provider.string(s)
     c.set(s)
     d = c.d
-    print d.l
+    print(d.l)

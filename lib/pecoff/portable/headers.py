@@ -342,14 +342,14 @@ if __name__ == '__main__':
     x = pecoff.Executable.IMAGE_DOS_HEADER()
     x.source = provider.file('./python.exe')
     offset = x.load()['e_lfanew']
-    print x
+    print(x)
 
 #    x = FileHeader()
 #    x.source = provider.file('./python.exe')
 #    x.setoffset( int(offset) )
-#    print x.load()
+#    print(x.load())
 
     x = pecoff.Executable.Portable()
     x.setoffset( int(offset) )
     x.source = provider.file('./python.exe')
-    print x.load()
+    print(x.load())

@@ -1,8 +1,10 @@
-import logging,itertools,array,ptypes
+import sys,logging,itertools,array,ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils
 from ..headers import *
 
 from . import headers
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
@@ -68,7 +70,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         data = section.data().load().serialize()
 
         block = data[offset: offset + 2*self['NumberOfNames'].int()]
-        return [base+ordinal for ordinal in array.array('H', block)]
+        return [base+ordinal for ordinal in array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', block)]
 
     def GetExportAddressTable(self):
         """Returns (export address table offset,[virtualaddress of each export]) from the export address table"""
@@ -83,7 +85,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         data = section.data().l.serialize()
 
         block = data[offset: offset + 4*self['NumberOfFunctions'].int()]
-        return address, array.array('I', block)
+        return address, array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', block)
 
     def Hint(self, index):
         '''Returns the hint/ordinal of the specified export.'''
@@ -209,14 +211,14 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
             # convert the aof into an array that's wikiwiki
             data = aof.d.l.cast(dyn.array(dword, len(aof.d)))
-            eat = array.array('I', data.serialize())
+            eat = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', data.serialize())
 
             # check that the aof is within the bounds of the section, warn the user despite supporting it anyways
             if any(not section.containsaddress(ea) for ea in (aof.int(), aof.int() + 4*self['NumberOfFunctions'].int())):
                 logging.warn("{:s} : Export Address Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aof.int(), aof.int() + 4*self['NumberOfFunctions'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
         else:
             logging.warn("{:s} : No export addresses found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
-            eat = array.array('I', [])
+            eat = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', [])
 
         ## name ordinal table
         if aono.int() > 0:
@@ -226,14 +228,14 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
             # convert the aono into an array that's also quick
             data = aono.d.l.cast(dyn.array(word, len(aono.d)))
-            no = array.array('H', data.l.serialize())
+            no = array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', data.l.serialize())
 
             # check that the aono is within the bounds of the section, warn the user despite supporting it anyways
             if any(not section.containsaddress(ea) for ea in (aono.int(), aono.int() + 2*self['NumberOfNames'].int())):
                 logging.warn("{:s} : Export Name Ordinal Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aono.int(), aono.int() + 2*self['NumberOfNames'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
         else:
             logging.warn("{:s} : No Export Name Ordinal Table in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aono.summary()))
-            no = array.array('H', [])
+            no = array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', [])
 
         # check the name table
         if aon.int() == 0:
@@ -244,7 +246,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
         # now we can start returning things to the user
         va = CalculateRelativeOffset(self, aof.int())
-        for nameva, ordinal in map(None, nt, no):
+        for nameva, ordinal in __izip_longest__(nt, no):
 
             # grab the name if we can
             if nameva is None:

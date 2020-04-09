@@ -176,13 +176,12 @@ class File(pstruct.type):
 
 if __name__ == '__main__':
     import ptypes, archive.lha
-    reload(archive.lha)
     ptypes.setsource(ptypes.prov.file('c:/users/user/Downloads/fcgb2.lzh', mode='r'))
     z = archive.lha.File()
     z = z.l
 
-    print z.source.size()
-    print z['header']['signature']
-    print z['header']['attributes']
-    print z['header']
-    print z['header']['filename']
+    print(z.source.size())
+    print(z['header']['signature'])
+    print(z['header']['attributes'])
+    print(z['header'])
+    print(z['header']['filename'])

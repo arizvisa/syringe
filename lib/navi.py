@@ -85,7 +85,7 @@ class navcode(navt):
 
             children = child.down()
 
-        raise KeyError, '"%s" not found in %s'%( nodeName, repr(navObj) )
+        raise KeyError('"%s" not found in %s'%( nodeName, repr(navObj) ))
 
 function = type(eval("lambda:True"))
 class navfunc(navt):
@@ -106,25 +106,25 @@ if __name__ == '__main__':
         res.append('object: %s'% repr(nav.object))
         res.append('up: %s'% repr(nav.up()))
         res.append('down: %s'% repr(nav.down()))
-        print '\n'.join(res)
+        print('\n'.join(res))
 
     ######################################
     # tests for closures and variable scope
     def example1():
         scope_1 = True
         def a():
-            print scope_1
+            print(scope_1)
             scope_2 = True
-        print scope_1
+        print(scope_1)
         a()
         return True
 
-    print fu.function.repr(example1)
+    print(fu.function.repr(example1))
     cobj = example1.func_code
 
     ##
-    print fu.code.repr(cobj)
-    print fu.code.repr(cobj.co_consts[1])
+    print(fu.code.repr(cobj))
+    print(fu.code.repr(cobj.co_consts[1]))
 
     ##
     nav = navi(cobj)
@@ -136,25 +136,25 @@ if __name__ == '__main__':
         scope_1 = True
         def a():
             scope_2a = True
-            print scope_1
+            print(scope_1)
 
         scope_1 = False
         def b():
             scope_2b = True
-            print scope_1
+            print(scope_1)
 
         a()
         b()
         return True
 
     ##
-    print fu.function.repr(example2)
+    print(fu.function.repr(example2))
     cobj = example2.func_code
 
     ##
-    print fu.code.repr(cobj)
-    print fu.code.repr(cobj.co_consts[1])
-    print fu.code.repr(cobj.co_consts[2])
+    print(fu.code.repr(cobj))
+    print(fu.code.repr(cobj.co_consts[1]))
+    print(fu.code.repr(cobj.co_consts[2]))
 
     ##
     nav = navi(cobj)
@@ -175,13 +175,13 @@ if __name__ == '__main__':
         pass
 
     ##
-    print fu.function.repr(example3)
+    print(fu.function.repr(example3))
     cobj = example3.func_code
 
     ##
-    print fu.code.repr(cobj)
-    print fu.code.repr(cobj.co_consts[1])
-    print fu.code.repr(cobj.co_consts[1].co_consts[1])
+    print(fu.code.repr(cobj))
+    print(fu.code.repr(cobj.co_consts[1]))
+    print(fu.code.repr(cobj.co_consts[1].co_consts[1]))
 
     ##
     nav = navi(cobj)

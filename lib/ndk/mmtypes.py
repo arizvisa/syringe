@@ -83,7 +83,7 @@ class POOL_DESCRIPTOR(pstruct.type, versioned):
     def __ListHeads(self):
         PAGE_SIZE = 2**12
         POOL_BLOCK_SIZE = 16 if getattr(self, 'WIN64', False) else 8
-        POOL_LISTS_PER_PAGE = PAGE_SIZE / POOL_BLOCK_SIZE
+        POOL_LISTS_PER_PAGE = PAGE_SIZE // POOL_BLOCK_SIZE
         return dyn.array(POOL_FREE_CHUNK_LIST_ENTRY, POOL_LISTS_PER_PAGE)
 
     _fields_ = [

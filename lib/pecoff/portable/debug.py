@@ -161,7 +161,7 @@ class IMAGE_DEBUG_DATA_RESERVED10(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('RESERVED10')
     class _Signature(uint32):
         def summary(self):
-            res = str().join(reversed(self.serialize()))
+            res = bytes(bytearray(reversed(self.serialize())))
             return "{!r} ({:#08x})".format(res, self.int())
     _fields_ = [
         (_Signature, 'Signature')
