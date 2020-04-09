@@ -303,7 +303,7 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
     def extract(self):
         '''Return a list of tuples containing the relocation type and offset contained within this entry.'''
         block = self['Relocations'].serialize()
-        relocations = array.array('H', block)
+        relocations = array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', block)
         return [((item & 0xf000) // 0x1000, item & 0x0fff) for item in relocations]
 
     def getrelocations(self, section):

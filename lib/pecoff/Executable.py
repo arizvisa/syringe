@@ -229,7 +229,7 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         padding = b'\0' * (res % 4)
 
         # Calculate 16-bit checksum
-        res = sum(array.array('I', bytes(data) + padding))
+        res = sum(array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', bytes(data) + padding))
         checksum = len(data)
         checksum += res & 0xffff
         checksum += res // 0x10000

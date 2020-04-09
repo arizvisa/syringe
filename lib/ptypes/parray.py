@@ -854,7 +854,7 @@ if __name__ == '__main__':
     @TestCase
     def test_array_infinite_nested_partial():
         class fakefile(object):
-            d = array.array('L', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
+            d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
             d = array.array('B', bytearray(d.tostring() + b'\xde\xad\xde\xad'))
             o = 0
             def seek(self, ofs):

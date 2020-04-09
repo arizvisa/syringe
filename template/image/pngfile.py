@@ -10,7 +10,7 @@ ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### ripped from the png specification
 def make_crc_table():
-    res = array.array('L', (0,)*256)
+    res = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', (0,)*256)
     for n in range(len(res)):
         c = n
         for k in range(8):
