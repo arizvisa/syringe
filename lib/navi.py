@@ -85,7 +85,7 @@ class navcode(navt):
 
             children = child.down()
 
-        raise KeyError, '"%s" not found in %s'%( nodeName, repr(navObj) )
+        raise KeyError('"%s" not found in %s'%( nodeName, repr(navObj) ))
 
 function = type(eval("lambda:True"))
 class navfunc(navt):

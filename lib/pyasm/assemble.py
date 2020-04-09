@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import six, struct
 from opcode import *
-from exceptions import SyntaxError
 
 class ParseError(SyntaxError): pass
 

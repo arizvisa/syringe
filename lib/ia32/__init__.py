@@ -1,11 +1,11 @@
 ''' lol, i really really wasn't expecting this to turn into a serious disassembler...  '''
 
-import optable,decoder,modrm
+from . import optable,decoder,modrm
 
 # XXX: figure out how to add these explicit imports to the doc output
 #      for this module. (without having to use __all__)
 
-from decoder import isprefix,consume,decodeInteger,encodeInteger
+from .decoder import isprefix,consume,decodeInteger,encodeInteger
 lookup = optable.Lookup
 
 # equivalent to decoder.consume(iter(string)) ->

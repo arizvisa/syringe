@@ -1,4 +1,4 @@
-import decoder
+from . import decoder
 
 def decode(instruction):
     '''Extract the modrm tuple out of the provided instruction'''

@@ -1,6 +1,6 @@
 import logging,os
 import _PyDbgEng
-import internalstate,task
+from . import internalstate,task
 import pecoff,ndk,match
 
 class addressspace(object):

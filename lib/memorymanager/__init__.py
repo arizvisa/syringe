@@ -11,7 +11,7 @@ memorymanager.new(handle=yourhandle)
 ### this module intends to provide an interface for managing address space inside another /context/ (whatever that may be, like a process)
 ### this includes things like allocations, frees, file mappings, code page creation...(using that one module or whatever that i wrote)
 
-import allocator
+from . import allocator
 from ptypes import bitmap
 
 # XXX: it might be cool to add an option to duplicate attributes from

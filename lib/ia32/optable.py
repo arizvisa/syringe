@@ -1,5 +1,5 @@
-from _optable import OperandLookupTable
-import typesize
+from ._optable import OperandLookupTable
+from . import typesize
 
 def Lookup(opcode):
     '''Lookup specified opcode in the lookup table'''

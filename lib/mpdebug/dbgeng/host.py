@@ -1,6 +1,6 @@
 import logging,os
 import _PyDbgEng
-import internalstate,process
+from . import internalstate,process
 import pecoff,ndk
 
 def required(state):

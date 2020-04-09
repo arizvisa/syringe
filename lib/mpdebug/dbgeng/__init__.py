@@ -1,5 +1,5 @@
 import _PyDbgEng
-import host,breakpoint
+from . import host,breakpoint
 
 def local(handle=0):
     intf = _PyDbgEng.Create()

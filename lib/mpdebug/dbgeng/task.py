@@ -1,6 +1,6 @@
 import logging
 import _PyDbgEng
-import internalstate
+from . import internalstate
 import ndk
 
 class registers_INT32(object):

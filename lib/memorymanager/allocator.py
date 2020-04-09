@@ -276,7 +276,6 @@ if sys.platform == 'win32':
             if res == 0:
                 message = 'Unable to read from handle({:x})[{:08x}:{:08x}].'.format(self.handle, address, address+length)
                 raise OSError(message, "GetLastError() -> {!r}".format(getLastErrorTuple()))
-.format
             assert NumberOfBytesRead.value == length, 'Expected %d bytes, received %d bytes.'% (length, NumberOfBytesRead.value)
             return str(Buffer.raw)
 
