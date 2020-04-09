@@ -1,5 +1,5 @@
-import store
-from store import BaseAddress
+from . import store
+from .store import BaseAddress
 
 class linker(store.container):
     def __repr__(self):

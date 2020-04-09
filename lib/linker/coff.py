@@ -1,7 +1,7 @@
 import os,array
 import pecoff,ptypes
 import six,logging,warnings
-import store
+from . import store
 
 raise NotImplementedError(".do and .loadsymbol logic needs to be redesigned")
 

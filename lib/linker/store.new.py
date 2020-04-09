@@ -1,7 +1,7 @@
 import ptypes,operator,itertools
 import UserDict,collections
-import internal
-from internal import sparse
+from . import internal
+from .internal import sparse
 
 # do we need to implement hooking on symbol assignment?
 
