@@ -387,7 +387,7 @@ class OBJECT_IDENTIFIER(ptype.type):
             x = bitmap.new(0,0)
             while n > 0:
                 x = bitmap.insert(x, (n&0xf,4))
-                n /= 0x10
+                n //= 0x10
 
             # shuffle bitmap into oid components
             y = []
@@ -401,7 +401,7 @@ class OBJECT_IDENTIFIER(ptype.type):
     def str(self):
         data = map(six.byte2int, self.serialize())
         if len(data) > 0:
-            res = [data[0] / 40, data.pop(0) % 40]
+            res = [data[0] // 40, data.pop(0) % 40]
             data = iter(data)
             for n in data:
                 val = bitmap.new(0,0)
@@ -431,8 +431,8 @@ class OBJECT_IDENTIFIER(ptype.type):
         ('spcLink', '1.3.6.1.4.1.311.2.1.25'),
         ('SPC_TIME_STAMP_REQUEST_OBJID', '1.3.6.1.4.1.311.3.2.1'),
         ('SPC_SIPINFO_OBJID', '1.3.6.1.4.1.311.2.1.30'),
-        ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1 */
-        ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256 */
+        ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1
+        ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256
         ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
         ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
 

@@ -3414,7 +3414,7 @@ class ExtSST(pstruct.type):
         # Figure out how many ISSTInf records there are
         cu, dsst = previous['cstUnique'].li.int(), self['dsst'].li.int()
         if dsst > 0:
-            count = (cu / dsst) + (1 if cu % dsst else 0)
+            count = (cu // dsst) + (1 if cu % dsst else 0)
             return dyn.array(ISSTInf, count)
 
         # If dsst is 0, then just return 0 to avoid dividing by it
@@ -3874,7 +3874,7 @@ class TxORuns(pstruct.type):
             return dyn.array(Run, 0)
 
         cbRuns = res.d['cbRuns']
-        return dyn.array(Run, cbRuns.int() / 8 - 1)
+        return dyn.array(Run, cbRuns.int() // 8 - 1)
     _fields_ = [
         (__rgTxoRuns, 'rgTxoRuns'),
         (TxOLastRun, 'lastRun'),

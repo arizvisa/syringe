@@ -139,7 +139,7 @@ class DIFAT(AllocationTable):
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
 
 class MINIFAT(AllocationTable):
-    Pointer = lambda self: dyn.clone(parray.type, length=self._uSectorSize / self._uMiniSectorSize, _object_=dyn.block(self._uMiniSectorSize))
+    Pointer = lambda self: dyn.clone(parray.type, length=self._uSectorSize // self._uMiniSectorSize, _object_=dyn.block(self._uMiniSectorSize))
 
     def chain(self, index):
         while self[index].int() <= MAXREGSECT.type:
@@ -324,12 +324,12 @@ class File(pstruct.type):
         info = self['SectorShift'].li
         sectorSize = info.SectorSize()
         self._uSectorSize = self.attributes['_uSectorSize'] = sectorSize
-        self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize / Sector.Pointer().blocksize()
+        self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize // Sector.Pointer().blocksize()
 
         # Store the mini-sector size attributes
         miniSectorSize = info.MiniSectorSize()
         self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
-        self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize / Sector.Pointer().blocksize()
+        self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize // Sector.Pointer().blocksize()
 
         return dyn.block(6)
 

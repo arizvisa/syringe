@@ -82,11 +82,11 @@ class cmap_format_4(pstruct.type):
         (uint16, 'searchRange'),
         (uint16, 'entrySelector'),
         (uint16, 'rangeShift'),
-        (lambda s: dyn.array(uint16,s['segCountX2'].li.int()/2), 'endCount'),
+        (lambda s: dyn.array(uint16,s['segCountX2'].li.int()//2), 'endCount'),
         (uint16, 'reservedPad'),
-        (lambda s: dyn.array(uint16,s['segCountX2'].int()/2), 'startCount'),
-        (lambda s: dyn.array(uint16,s['segCountX2'].int()/2), 'idDelta'),
-        (lambda s: dyn.array(uint16,s['segCountX2'].int()/2), 'idRangeOffset'),
+        (lambda s: dyn.array(uint16,s['segCountX2'].int()//2), 'startCount'),
+        (lambda s: dyn.array(uint16,s['segCountX2'].int()//2), 'idDelta'),
+        (lambda s: dyn.array(uint16,s['segCountX2'].int()//2), 'idRangeOffset'),
         #(lambda s: dyn.block(s.blocksize()-s.size()), 'glyphIdArray'), # FIXME: this might not be correct
     ]
 @cmap.table.define

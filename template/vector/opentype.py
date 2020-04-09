@@ -12,12 +12,12 @@ class SHORT(bigendian(pint.int16_t)): pass
 class UINT24(bigendian(pint.uint_t)): length = 3
 class ULONG(bigendian(pint.uint32_t)): pass
 class LONG(bigendian(pint.int32_t)): pass
-class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda x: int(x) / 65536.0)
+class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda x: int(x) // 65536.0)
 
 #class FUNIT(wtf): pass
 class FWORD(SHORT): pass
 class UFWORD(USHORT): pass
-class F2DOT14(SHORT): pass      # float = lambda x: int(x) / 2**14)
+class F2DOT14(SHORT): pass      # float = lambda x: int(x) // 2**14)
 class LONGDATETIME(bigendian(pint.uint64_t)): pass
 
 class Tag(dyn.block(4)): pass

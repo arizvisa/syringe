@@ -113,9 +113,9 @@ class PixPatNonDithered(pstruct.type):
         height = int(self['pixMap']['bounds']['bottom']) - int(self['pixMap']['bounds']['top'])
 
         if packtype == 1 or rowbytes < 8:
-            result = dyn.block( rowbytes*height )
+            result = dyn.block(rowbytes * height)
         elif packtype == 2:
-            result = dyn.block( rowbytes*height * 3 / 4 + 0.5 )
+            result = dyn.block(math.ceil(rowbytes * height * 3 / 4 + 0.5))
         elif packtype == 3:
             result = dyn.array(self.Pack3, height)
         else:
