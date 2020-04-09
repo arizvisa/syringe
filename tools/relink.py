@@ -2,12 +2,19 @@ import functools, itertools, types, builtins, operator, six
 import ptypes, pecoff
 import ptypes.bitmap as bitmap
 
-import collections, logging, array
+import sys, logging, array
+
+if sys.version_info.major < 3:
+    import collections
+    MutableMapping = collections.MutableMapping
+else:
+    import collections.abc
+    MutableMapping = collections.abc.MutableMapping
 
 def get(object, attribute):
     return getattr(object, "_LinkerInternal__{:s}".format(attribute))
 
-class DictionaryBase(collections.MutableMapping):
+class DictionaryBase(MutableMapping):
     def __init__(self, *args, **kwargs):
         self.__mapping__ = {}
         self.update(*args, **kwargs)

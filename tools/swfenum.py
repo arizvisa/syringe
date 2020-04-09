@@ -1,4 +1,4 @@
-import sys
+import sys, os
 import ptypes,vector.swf
 
 def hr(s):
@@ -34,6 +34,9 @@ if __name__ == '__main__':
 
     except ValueError:
         help()
+
+    if not os.path.exists(filename):
+        raise OSError("The specified file ({:s}) does not exist.".format(filename))
 
     print('loading',filename)
     clock.start()

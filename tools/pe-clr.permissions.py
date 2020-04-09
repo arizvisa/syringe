@@ -41,8 +41,12 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         six.print_("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else 'test'), file=sys.stderr)
         sys.exit(1)
+
     filename = sys.argv[1]
     L = log(sys.stderr); next(L)
+
+    if not os.path.exists(filename):
+        raise OSError("The specified file ({:s}) does not exist.".format(filename))
 
     ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 

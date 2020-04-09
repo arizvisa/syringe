@@ -126,6 +126,9 @@ if __name__ == '__main__':
         print('Usage: %s [-z] filename [hexaddress]'% sys.argv[0])
         sys.exit(0)
 
+    if not os.path.exists(filename):
+        raise OSError("The specified file ({:s}) does not exist.".format(filename))
+
     source = ptypes.provider.file(filename)
     mz = pecoff.Executable.File(source=source).l
     pe = mz['Next']['Header']

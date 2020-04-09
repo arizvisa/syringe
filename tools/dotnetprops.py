@@ -37,6 +37,9 @@ if __name__ == '__main__':
     filename = sys.argv[1]
     L = log(sys.stderr); next(L)
 
+    if not os.path.exists(filename):
+        raise OSError("The specified file ({:s}) does not exist.".format(filename))
+
     ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 
     L.send("Loading executable for {:s}".format(os.path.basename(filename)))
