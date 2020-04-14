@@ -28,9 +28,9 @@ def log(stdout):
     return
 
 def strify(value):
-    if isinstance(value, (int, long)):
+    if isinstance(value, six.integer_types):
         return "{:d}".format(value)
-    elif isinstance(value, basestring):
+    elif isinstance(value, six.string_types):
         return "{:s}".format(value)
     return "{!r}".format(value)
 

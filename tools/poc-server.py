@@ -1,7 +1,7 @@
 import sys,os
 import string,cgi,time
 from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
-import mimetypes
+import six,mimetypes
 
 class config:
     root = [
@@ -38,7 +38,7 @@ def listdirectory(baseuri, path):
     return l
 
 def find(path='.'+os.sep, depth=None, root='.'+os.sep):
-    if type(depth) in (int,long):
+    if isinstance(depth, six.integer_types):
         if depth < 0:
             return
         depth -= 1
