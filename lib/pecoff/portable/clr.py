@@ -1,4 +1,4 @@
-import logging,functools,ptypes
+import six,logging,functools,ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
@@ -657,7 +657,7 @@ class Tables(parray.type):
         return dyn.array(t, count, Get=Get, blocksize=(lambda s, cb=rowsize*count: cb))
 
     def __getindex__(self, index):
-        return TableType.byname(index) if isinstance(index, basestring) else index
+        return TableType.byname(index) if isinstance(index, six.string_types) else index
 
     def iterate(self):
         for res in self:

@@ -1,4 +1,4 @@
-import ptypes
+import six, ptypes
 from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
 from ..headers import *
 
@@ -110,7 +110,7 @@ class DataDirectory(parray.type):
     length = 16
 
     def __getindex__(self, key):
-        if isinstance(key, basestring):
+        if isinstance(key, six.string_types):
             # try and be smart in case user tries to be dumb
             key, res = key.lower(), { k.lower() : v for k, v in DataDirectoryEntry.mapping().iteritems() }
             key = key[:key.rfind('table')] if key.endswith('table') else key[:]
