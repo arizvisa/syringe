@@ -451,8 +451,8 @@ class base(symboltable):
         return list(result.intersection(self.scope[ExternalScope]))
 
     def dump(self):
-        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in (int,long)]()) for k in self.getglobals()]
-        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in (int,long)]()) for k in self.getlocals()]
+        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in six.integer_types]()) for k in self.getglobals()]
+        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in six.integer_types]()) for k in self.getlocals()]
         gs = "globals:{!r}".format(g)
         ls = "locals:{:d}".format(len(l))
         return '\n'.join((gs,ls))

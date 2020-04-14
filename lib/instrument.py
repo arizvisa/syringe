@@ -264,7 +264,7 @@ if __name__ == '__main__':
 
     if False:
         import ia32,struct
-        instruction = ia32.setOpcode(ia32.setImmediate(ia32.new(), b'\x00\x00\x00\x00'), '\xe9')
+        instruction = ia32.setOpcode(ia32.setImmediate(ia32.new(), b'\x00\x00\x00\x00'), b'\xe9')
         sourceaddress,targetaddress = 0x7c36364f,0x261000d
         sourceaddress = 0x1000
         targetaddress = 0x0000

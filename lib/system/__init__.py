@@ -1,3 +1,5 @@
+import six
+
 class attributes:
     attributes = None
     def __init__(self, **attrs):
@@ -9,13 +11,13 @@ class attributes:
     def __repr__(self):
         attrs = []
         for k,v in self.attributes.items():
-            if type(v) in (int,long):
+            if isinstance(v, six.integer_types):
                 result = "%d"% v
-            elif type(v) in (str,unicode):
+            elif isinstance(v, six.string_types):
                 result = "'%s'"% v
             elif isinstance(v, attributes):
                 result = repr(v)
-            elif type(v) in (float,):
+            elif isinstance(v, float):
                 result = '%.3f'% v
             elif type(v) == type(attributes):
                 result = v.__name__
@@ -136,7 +138,7 @@ def identify_system():
 
     # language
     lang = language.map[__platform.python_implementation()]
-    size = long(math.log((sys.maxsize+1)*2,2)/8)
+    size = math.trunc(math.log((1 + sys.maxsize) * 2, 2) // 8)
     order = byteorder.littleendian if sys.byteorder == 'little' else byteorder.bigendian if sys.byteorder == 'big' else None
 
     ver = sys.version_info[0] + (sys.version_info[1]/10.0) + (sys.version_info[2]/100.0)

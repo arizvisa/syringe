@@ -266,8 +266,8 @@ if sys.platform == 'win32':
             return res != 0
 
         def read(self, address, length):
-            assert type(address) in (int,long), "Invalid address type {!r}".format(address)
-            assert type(length) in (int,long)
+            assert type(address) in six.integer_types, "Invalid address type {!r}".format(address)
+            assert type(length) in six.integer_types
             NumberOfBytesRead = ctypes.c_int()
             res = ctypes.c_char*length
             Buffer = res()

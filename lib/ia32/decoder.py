@@ -275,7 +275,7 @@ if __name__ == '__main__':
         checkinsn()
 
     if True:
-        code = b'\xa0\x50\xc0\xa8\x6f' + '\xa8\x08' + '\x75\x18'
+        code = b'\xa0\x50\xc0\xa8\x6f' + b'\xa8\x08' + b'\x75\x18'
         source = iter(code)
         insn = decoder.consume(source)
 #        print(insn)
