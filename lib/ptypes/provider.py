@@ -931,30 +931,70 @@ try:
     _ = 'idaapi' in sys.modules
     class Ida(debuggerbase):
         '''A provider that uses IDA Pro's API for reading/writing to the database.'''
-        module = importlib.import_module('idaapi')
-        offset = module.BADADDR
+
+        class __api__(object):
+            """
+            Static class for abstracting around IDA's API prior to 7.0,
+            and 7.0 or later.
+            """
+            module = importlib.import_module('idaapi')
+            BADADDR = module.BADADDR
+
+            if hasattr(module, 'get_many_bytes'):
+                get_bytes = staticmethod(module.get_many_bytes)
+            elif hasattr(module, 'get_bytes'):
+                get_bytes = staticmethod(module.get_bytes)
+            else:
+                raise ImportError('get_many_bytes')
+
+            get_nlist_ea = staticmethod(module.get_nlist_ea)
+            get_nlist_size = staticmethod(module.get_nlist_size)
+            getseg = staticmethod(module.getseg)
+
+            if hasattr(module, 'patch_many_bytes'):
+                patch_bytes = staticmethod(module.patch_many_bytes)
+            elif hasattr(module, 'patch_bytes'):
+                patch_bytes = staticmethod(module.patch_bytes)
+            else:
+                raise ImportError('patch_many_bytes')
+
+            if hasattr(module, 'put_many_bytes'):
+                put_bytes = staticmethod(module.put_many_bytes)
+            elif hasattr(module, 'put_bytes'):
+                put_bytes = staticmethod(module.put_bytes)
+            else:
+                raise ImportError('put_many_bytes')
+
+            if hasattr(module, 'isEnabled'):
+                is_mapped = staticmethod(module.isEnabled)
+            elif hasattr(module, 'is_mapped'):
+                is_mapped = staticmethod(module.is_mapped)
+            else:
+                raise ImportError('isEnabled')
+
+        offset = __api__.BADADDR
         def __new__(cls):
             Log.info("{:s} : This class is intended to be used statically. Please do not instantiate this. Returning static version of class.".format('.'.join((__name__, cls.__name__))))
             return cls
 
         @classmethod
         def read(cls, offset, size, padding=b'\0'):
-            result = cls.module.get_many_bytes(offset, size) or b''
+            result = cls.__api__.get_bytes(offset, size) or b''
             if len(result) == size:
                 return result
 
             half = size // 2
             if half > 0:
                 return builtins.bytes().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
-            if cls.module.isEnabled(offset):
+            if cls.__api__.is_mapped(offset):
                 return b'' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
             raise Exception((offset, size))
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in six.moves.range(cls.module.get_nlist_size()) if string == cls.module.get_nlist_name(i))
+            index = (i for i in six.moves.range(cls.__api__.get_nlist_size()) if string == cls.module.get_nlist_name(i))
             try:
-                res = cls.module.get_nlist_ea(six.next(index))
+                res = cls.__api__.get_nlist_ea(six.next(index))
 
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
@@ -962,7 +1002,7 @@ try:
 
         @classmethod
         def within_segment(cls, offset):
-            s = cls.module.getseg(offset)
+            s = cls.__api__.getseg(offset)
             return s is not None and s.startEA <= offset < s.endEA
 
         @classmethod
@@ -991,8 +1031,8 @@ try:
         @classmethod
         def store(cls, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            #cls.module.put_many_bytes(cls.offset, data)
-            cls.module.patch_many_bytes(cls.offset, data)
+            #cls.__api__.put_many_bytes(cls.offset, data)
+            cls.__api__.patch_many_bytes(cls.offset, data)
             cls.offset += len(data)
             return len(data)
 
