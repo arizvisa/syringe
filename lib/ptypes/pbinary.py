@@ -1004,7 +1004,7 @@ class _struct_generic(container):
 
     def __getindex__(self, name):
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_struct_generic.__getindex__', message='Element names must inherit from the `basestring` type. : {!r}'.format(name.__class__))
+            raise error.UserError(self, '_struct_generic.__getindex__', message='Element names must be a string type. : {!r}'.format(name.__class__))
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
@@ -2799,7 +2799,7 @@ if __name__ == '__main__':
                 (8, 'second'),
                 (4, 'third'),
             ]
-        x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string('\xde\xad')).l
+        x = pbinary.new(pbinary.bigendian(s), source=ptypes.prov.string(b'\xde\xad')).l
         x['first'] = 0xfff
         if x['first'] == 0xf:
             raise Success

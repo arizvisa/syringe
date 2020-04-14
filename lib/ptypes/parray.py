@@ -1127,7 +1127,7 @@ if __name__ == '__main__':
     #    a = blah().a
     #    a.value.extend(map(a.new, (pint.uint32_t,)*2))
     #    a.a
-    #    if a.serialize() == '\x00\x00\x00\x00\x00\x00\x00\x00':
+    #    if a.serialize() == b'\x00\x00\x00\x00\x00\x00\x00\x00':
     #        raise Success
 
     @TestCase

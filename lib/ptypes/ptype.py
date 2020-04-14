@@ -2255,7 +2255,7 @@ class pointer_t(encoded_t):
                 raise error.InitializationError(self, 'pointer_t._value_.get')
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
-            octets = __izip_longest__(map(six.byte2int, value), [8] * len(self.value))
+            octets = __izip_longest__(bytearray(value), [8] * len(self.value))
             res = six.moves.reduce(bitmap.push, octets, bitmap.zero)
             return bitmap.value(res)
 
