@@ -668,7 +668,7 @@ class Tables(parray.type):
 
 @Stream.define
 class HTables(pstruct.type):
-    type = "#~"
+    type = '#~'
 
     @pbinary.littleendian
     class HeapSizes(pbinary.flags):

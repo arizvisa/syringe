@@ -54,7 +54,7 @@ class CodeViewInfo(ptype.definition):
 
 @CodeViewInfo.define
 class CV_INFO_PDB20(pstruct.type):
-    type = 'NB10'
+    type = b'NB10'
     _fields_ = [
         (uint32, 'Offset'),
         (uint32, 'Signature'),
@@ -64,7 +64,7 @@ class CV_INFO_PDB20(pstruct.type):
 
 @CodeViewInfo.define
 class CV_INFO_PDB70(pstruct.type):
-    type = 'RSDS'
+    type = b'RSDS'
     _fields_ = [
         (GUID, 'Signature'),
         (uint32, 'Age'),

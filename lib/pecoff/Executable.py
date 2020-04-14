@@ -137,7 +137,7 @@ class Next(pstruct.type):
 ## Portable Executable (PE)
 @NextHeader.define
 class IMAGE_NT_HEADERS(pstruct.type, Header):
-    type = 'PE'
+    type = b'PE'
 
     def __Padding(self):
         '''Figure out the PE header size and pad according to SizeOfHeaders'''
@@ -305,7 +305,7 @@ class SegmentTableArray(parray.type):
 
 @NextData.define
 class IMAGE_NT_DATA(pstruct.type, Header):
-    type = 'PE'
+    type = b'PE'
 
     def __Segments(self):
         header = self.p.Header()
@@ -358,7 +358,7 @@ class IMAGE_NT_DATA(pstruct.type, Header):
 
 @NextHeader.define
 class DosExtender(pstruct.type, Header):
-    type = 'DX'
+    type = b'DX'
     _fields_ = [
         (word, 'MinRModeParams'),
         (word, 'MaxRModeParams'),
@@ -376,7 +376,7 @@ class DosExtender(pstruct.type, Header):
 
 @NextHeader.define
 class PharLap(pstruct.type, Header):
-    type = 'MP'
+    type = b'MP'
     _fields_ = [
         (word, 'SizeRemaind'),
         (word, 'ImageSize'),
@@ -409,7 +409,7 @@ class PharLap(pstruct.type, Header):
 
 @NextHeader.define
 class PharLap3(PharLap, Header):
-    type = 'P3'
+    type = b'P3'
 
     class OffsetSize(pstruct.type):
         def __Offset(self):
@@ -461,7 +461,7 @@ class PharLap3(PharLap, Header):
 
 @NextHeader.define
 class NeHeader(pstruct.type):
-    type = 'NE'
+    type = b'NE'
     class NE_Pointer(pstruct.type):
         _fields_ = [
             ( uint16, 'Index' ),

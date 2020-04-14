@@ -172,7 +172,7 @@ class RT_VERSION(pstruct.type):
 
 @RT_VERSION_EntryType.define
 class RT_VERSION_StringFileInfo(RT_VERSION):
-    type = "StringFileInfo"
+    type = 'StringFileInfo'
     def ChildType(self):
         return RT_VERSION_String
 
@@ -186,13 +186,13 @@ class RT_VERSION_String(RT_VERSION):
 
 @RT_VERSION_EntryType.define
 class RT_VERSION_VarFileInfo(RT_VERSION):
-    type = "VarFileInfo"
+    type = 'VarFileInfo'
     def Type(self):
         l = self['wValueLength'].li.int()
         return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
 @RT_VERSION_EntryType.define
 class RT_VERSION_Translation(ptype.undefined):
-    type = "Translation"
+    type = 'Translation'
 @RT_VERSION_ValueType.define
 class VS_FIXEDFILEINFO(pstruct.type):
     type = 'VS_VERSION_INFO'
