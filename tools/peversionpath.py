@@ -180,7 +180,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     res = sys.getfilesystemencoding()
-    encoded = { k.encode(res, 'replace') : v.encode(res, 'replace') for k, v in six.iteritems(strings) }
+    encoded = { k : v for k, v in six.iteritems(strings) }
 
     path = opts.format.format(**encoded)
     six.print_(path, file=sys.stdout)
