@@ -32,7 +32,7 @@ if __name__ == '__main__':
     class a(ptypes.ptype.type):
         length = 4
 
-    data = '\x41\x41\x41\x41'
+    data = b'\x41\x41\x41\x41'
 
     import ctypes
     b = ctypes.cast(ctypes.pointer(ctypes.c_buffer(data,4)), ctypes.c_void_p)
@@ -47,5 +47,5 @@ if __name__ == '__main__':
     print('ptype-static-empty', type(ptypes.ptype.source) == ptypes.prov.empty)
     print('ptype-instance-empty', type(ptypes.ptype.type().source) == ptypes.prov.empty)
     c = a(offset=b.value).l
-    print('type-instance-empty', c.serialize() == '\x00\x00\x00\x00')
+    print('type-instance-empty', c.serialize() == b'\x00\x00\x00\x00')
     ptypes.setsource(ptypes.prov.memory())
