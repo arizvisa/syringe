@@ -360,7 +360,7 @@ class BITSTRING(ptype.block):
 class OCTETSTRING(ptype.block):
     tag = 0x04
     def summary(self):
-        res = str().join(map('{:02X}'.format, map(six.byte2int, self.serialize())))
+        res = str().join(map('{:02X}'.format, bytearray(self.serialize())))
         return "({:d}) {:s}".format(self.size(), res)
 
 @Universal.define
@@ -399,7 +399,7 @@ class OBJECT_IDENTIFIER(ptype.type):
         return super(OBJECT_IDENTIFIER, self).set(str().join(map(six.int2byte, val)))
 
     def str(self):
-        data = map(six.byte2int, self.serialize())
+        data = bytearray(self.serialize())
         if len(data) > 0:
             res = [data[0] // 40, data.pop(0) % 40]
             data = iter(data)

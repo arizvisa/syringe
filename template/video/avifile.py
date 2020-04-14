@@ -3,7 +3,7 @@ from ptypes import *
 
 # little-endian
 intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, reversed(data)), 0)
-_dataofint = lambda integer: ((integer == 0) and '\x00') or (_dataofint(integer // 256).lstrip('\x00') + chr(integer % 256))
+_dataofint = lambda integer: ((integer == 0) and b'\0') or (_dataofint(integer // 256).lstrip(b'\0') + chr(integer % 256))
 dataofint = lambda integer, le=_dataofint: str().join(reversed(le(integer)))
 
 ## primitive types
@@ -67,7 +67,7 @@ class Chunk(pstruct.type):
     ]
 
 class LISTDATA(parray.block):
-    type, _object_ = '\x00\x00\x00\x00', Chunk
+    type, _object_ = b'\x00\x00\x00\x00', Chunk
     def blocksize(self):
         try:
             res = self.getparent(LIST).p
@@ -79,7 +79,7 @@ class LISTDATA(parray.block):
         return super(LISTDATA, self).blocksize()
     def classname(self):
         cls = self.__class__
-        return '{:s}({:s})'.format(cls.__name__, self.type)
+        return '{:s}({!s})'.format(cls.__name__, self.type)
 LISTTYPE.default = LISTDATA
 
 ## FOURCC definitions

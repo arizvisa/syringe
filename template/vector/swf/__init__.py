@@ -103,7 +103,7 @@ if __name__ == '__main__':
     print(a.li.hexdump())
     print(repr(a.l['Header'].serialize()))
 
-    correct='\x44\x11\x08\x00\x00\x00'
+    correct=b'\x44\x11\x08\x00\x00\x00'
     print(ptypes.utils.hexdump(correct))
 
     print(a.serialize() == correct)

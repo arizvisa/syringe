@@ -624,7 +624,7 @@ from . import tags
 
 if __name__ == '__main__':
     import ptypes
-    data = '\x44\x11'
+    data = b'\x44\x11'
 
     z = RECORDHEADER(source=ptypes.provider.string(data)).l
     print(z)

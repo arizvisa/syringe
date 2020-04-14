@@ -481,9 +481,9 @@ class CompressionType(pint.enum):
 #             eptr = dataOffset
 #             cryptBuffer = _7zbuff[eptr:packSize]
 #             tmpkey = "QggGPGqdMtzMmO2RROSCpaSRo1iKEAp8"
-#             realkey = ""
+#             realkey = b""
 #             for c in tmpkey:
-#                 realkey+="\x00"
+#                 realkey+=b"\x00"
 #                 realkey+=c
 #
 #             for i in range(0,1<<NumCyclesPower):

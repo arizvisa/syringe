@@ -832,33 +832,33 @@ if __name__ == '__main__':
     from ptypes import *
 
     if False:
-        s = '\x00\x00\x00\x00\x0c\x00\x00\x00' + 'A'*30
+        s = b'\x00\x00\x00\x00\x0c\x00\x00\x00' + b'A'*30
         z = pp.RecordGeneral()
         z.source = provider.string(s)
         print(z.l)
 
     if False:
-        s = '\x00\x00'+'\xc3\x0b'+'\x06\x00\x00\x00'+'\r\n\x0e\r\xcc\x00'
+        s = b'\x00\x00'+b'\xc3\x0b'+b'\x06\x00\x00\x00'+b'\r\n\x0e\r\xcc\x00'
         z = pp.RecordGeneral()
         z.source = provider.string(s)
         print(z.l)
 
     if False:
-        header = '\x00\x00'+'\xc3\x0b' + '\x06\x00\x00\x00'
-        data = '\x00'*6
+        header = b'\x00\x00'+b'\xc3\x0b' + b'\x06\x00\x00\x00'
+        data = b'\x00'*6
 
         s = (header + data)*4
         z = pp.RecordContainer()
-        z.source = provider.string(s+'\xff'*8)
+        z.source = provider.string(s+b'\xff'*8)
         z.size = lambda:(len(header)+len(data))*4
         print(z.l)
 
     if False:
-        header = '\x00\x00'+'\xc3\x0b' + '\x06\x00\x00\x00'
-        data = '\x00'*6
+        header = b'\x00\x00'+b'\xc3\x0b' + b'\x06\x00\x00\x00'
+        data = b'\x00'*6
         element = header+data
 
-        container = '\x00\x00'+'\xe8\x03' + '\x38\x00\x00\x00'
+        container = b'\x00\x00'+b'\xe8\x03' + b'\x38\x00\x00\x00'
         s = element*4
         container += s
 

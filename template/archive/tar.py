@@ -4,19 +4,20 @@ from ptypes import *
 import sys, operator, six
 
 BLOCKSIZE = 2**9
+largeinteger = long if sys.version_info.major < 3 else int
 
 class stringinteger(pstr.string):
     def int(self):
         try: res = self.str()
         except UnicodeDecodeError: res = self.get()
-        try: res = int(res) if long(res) < sys.maxint else long(res)
+        try: res = largeinteger(res)
         except ValueError: res = 0
         return res
 
     def set(self, integer):
         n = str(integer)
         prefix = '0' * (self.length - 1 - len(n))
-        return super(stringinteger, self).set(prefix + n + '\x00')
+        return super(stringinteger, self).set(prefix + n + '\0')
 
     def summary(self):
         res = super(stringinteger, self).summary()
@@ -26,14 +27,14 @@ class stringoctal(stringinteger):
     def int(self):
         try: res = self.str()
         except UnicodeDecodeError: res = self.get()
-        try: res = int(res, 8) if long(res, 8) < sys.maxint else long(res, 8)
+        try: res = largeinteger(res, 8)
         except ValueError: res = 0
         return res
 
     def set(self, integer):
         n = oct(integer)[1:]
         prefix = '0' * (self.length - 1 - len(n))
-        return super(stringoctal, self).set(prefix + n + '\x00')
+        return super(stringoctal, self).set(prefix + n + '\0')
 
 class padstring(pstr.string):
     def str(self):
@@ -300,7 +301,7 @@ class gnu_sparse_header(pstruct.type):
 class gnu_sparse_array(parray.terminated):
     _object_ = gnu_sparse_header
     def isTerminator(self, value):
-        return value['isextended'].str() == '\x00'
+        return value['isextended'].str() == '\0'
 
 @header.define
 class header_gnu(extended_t):
@@ -314,7 +315,7 @@ class header_gnu(extended_t):
 class header_gnu_member(pstruct.type):
     magic = 'gnu'
     def __extended_data(self):
-        if self['isextended'].li.str() == '\x00':
+        if self['isextended'].li.str() == '\0':
             return dyn.clone(parray.type, _object_=gnu_sparse_header)
         return gnu_sparse_array
 

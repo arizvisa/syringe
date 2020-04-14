@@ -27,7 +27,7 @@ class StreamMarker(jpegstream.StreamMarker):
 
 ### JFIF Structures
 class JFIF(pstruct.type):
-    type = '\xff\xe0'
+    type = b'\xff\xe0'
     _fields_ = [
         (dyn.block(5), 'identiier'),
         (pint.uint16_t, 'version'),

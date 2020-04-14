@@ -108,7 +108,7 @@ class IMsoArray(pstruct.type):
     class trunc(ptype.encoded_t):
         _value_ = dyn.block(4)
         def decode(self, **attrs):
-            block = '\x00\x00\x00\x00' + self.serialize()
+            block = b'\x00\x00\x00\x00' + self.serialize()
             return super(trunc,self).decode(source=ptypes.prov.string(block))
 
     def __data(self):
@@ -4065,18 +4065,18 @@ if __name__ == '__main__':
     import office.art as art
 
     if False:
-        s = '\x00\x00\x00\x00\x0c\x00\x00\x00' + 'A'*30
+        s = b'\x00\x00\x00\x00\x0c\x00\x00\x00' + b'A'*30
         z = art.RecordGeneral()
         z.source = provider.string(s)
 
     if False:
-        s = '\x00\x00'+'\x28\xf1'+'\x10\x00\x00\x00'+'\x00'*16
+        s = b'\x00\x00'+'\x28\xf1'+b'\x10\x00\x00\x00'+b'\x00'*16
         z = art.RecordGeneral()
         z.source = provider.string(s)
 
     if False:
-        header = '\x00\x00'+'\x28\xf1' + '\x10\x00\x00\x00'
-        data = '\x00'*16
+        header = b'\x00\x00'+b'\x28\xf1' + b'\x10\x00\x00\x00'
+        data = b'\x00'*16
 
         s = header + data + header + data + header + data + header + data
         z = art.RecordContainer()
@@ -4085,7 +4085,7 @@ if __name__ == '__main__':
 
     if True:
         s = '7ACqAA8AAvAWAQAAEAAI8AgAAAADAAAAEgQAAA8AA/D+AAAADwAE8CgAAAABAAnwEAAAAAAAAAAAAAAAAAAAAAAAAAACAArwCAAAAAAEAAAFAAAADwAE8FIAAACSDArwCAAAAAMEAAAACgAAQwAL8BgAAAB/AAQBBAG/AAgACAD/AQAACAC/AwAAAgAAABDwEgAAAAEAAAAAAAEAAAABAJoBAgAAAAAAEfAAAAAA'
-        s = s.decode('base64')[4:] + '\x00'*800
+        s = s.decode('base64')[4:] + b'\x00'*800
         print(repr(s))
 
     if True:
@@ -4116,5 +4116,5 @@ if __name__ == '__main__':
             ]
 
         z = RecordGeneral()
-        z.source = provider.string('\x0f\x00\x02\xf0')
+        z.source = provider.string(b'\x0f\x00\x02\xf0')
         print(z.l)

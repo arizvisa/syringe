@@ -35,9 +35,9 @@ class RARFORMAT(pint.enum):
     @classmethod
     def signature(cls, instance):
         data = instance.serialize()
-        if data.startswith('\x52\x45\x7e\x5e'):
+        if data.startswith(b'\x52\x45\x7e\x5e'):
             return cls.byname('RARFMT14'),
-        elif data.startswith('\x52\x61\x72\x21\x1a\x07'):
+        elif data.startswith(b'\x52\x61\x72\x21\x1a\x07'):
             ver = instance[6].int()
             return cls.byname('RARFMT15') + ver
         return cls.byname('RARFMT_NONE')

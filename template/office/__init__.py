@@ -1,6 +1,6 @@
 import ptypes
 from ptypes import *
-import itertools,functools,operator
+import six,itertools,functools,operator
 
 ptypes.Config.ptype.clone_name = '{}'
 ptypes.Config.pbinary.littleendian_name = '{}'
@@ -28,10 +28,10 @@ class RecordUnknown(ptype.block):
         names = self.shortname().split('.')
         if self.type is None:
             res = '?'
-        elif isinstance(self.type, (int,long)):
+        elif isinstance(self.type, six.integer_types):
             res = hex(self.type)
         elif hasattr(self.type, '__iter__'):
-            res = '({:s})'.format(','.join('{:#x}'.format(x) if isinstance(x, (int,long)) else '{!r}'.format(x) for x in self.type))
+            res = '({:s})'.format(','.join('{:#x}'.format(item) if isinstance(item, six.integer_types) else '{!r}'.format(x) for item in self.type))
         else:
             res = repr(self.type)
         names[-1] = '{:s}<{:s}>[size:{:#x}]'.format(names[-1], res, self.blocksize())
@@ -222,7 +222,7 @@ class RecordContainer(parray.block):
         return
 
     def filter(self, type):
-        if isinstance(type, (int,long)):
+        if isinstance(type, six.integer_types):
             for n in self:
                 if n['header']['recType'].int() == type:
                     yield n
@@ -237,7 +237,7 @@ class RecordContainer(parray.block):
 
     def __getitem__(self, index):
         flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
-        if hasattr(self, '_values_') and isinstance(index, basestring):
+        if hasattr(self, '_values_') and isinstance(index, six.string_types):
             lookup = dict(self._values_)
             t = lookup[index]
             res = (i for i,n in enumerate(self) if isinstance(flazy(n), t))
@@ -277,7 +277,7 @@ if __name__ == '__main__':
             (pint.uint32_t, 'a')
         ]
 
-    s = '\x00\x00\x00\x00\x0c\x00\x00\x00' + 'A'*30
+    s = b'\x00\x00\x00\x00\x0c\x00\x00\x00' + b'A'*30
     z = RecordGeneral()
     z.source = provider.string(s)
     print(z.l)

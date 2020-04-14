@@ -14,9 +14,9 @@ class pcap_hdr_t(pstruct.type):
 
     def __version(self):
         magic_number = self['magic_number'].li.serialize()
-        if magic_number == '\xa1\xb2\xc3\xd4':
+        if magic_number == b'\xa1\xb2\xc3\xd4':
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.bigendian
-        elif magic_number == '\xd4\xc3\xb2\xa1':
+        elif magic_number == b'\xd4\xc3\xb2\xa1':
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.littleendian
         else:
             logging.warn("Unable to determine byteorder : {!r}".format(magic_number))

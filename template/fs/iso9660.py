@@ -34,7 +34,7 @@ class wstring(pstr.wstring):
         length = 2
 
         def set(self, value):
-            self.value = '\x00' + value
+            self.value = b'\x00' + value
             return self
 
         def get(self):

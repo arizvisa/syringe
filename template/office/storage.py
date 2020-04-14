@@ -1,7 +1,7 @@
 import ptypes, ndk
 from ptypes import *
 
-import datetime
+import six, datetime
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### Primitive types
@@ -355,7 +355,7 @@ class File(pstruct.type):
 
         # First DiFat entries
         res = self.new(DIFAT, recurse=self.attributes, length=self._uSectorCount)
-        map(res.append, iter(self['Table']))
+        [res.append(item) for item in iter(self['Table'])]
 
         # Check if we need to find more
         next, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
@@ -365,7 +365,7 @@ class File(pstruct.type):
         # Append the contents of the other entries
         next = next.d.l
         for table in next.collect(count):
-            map(res.append, iter(table))
+            [res.append(item) for item in iter(table)]
         return res
     getDiFat = DiFat
 
@@ -383,7 +383,7 @@ class File(pstruct.type):
 
             # Convert the sector into a MINIFAT, and append all its elements to our result
             mf = sector.d.l.cast(MINIFAT, length=self._uSectorCount)
-            map(res.append, mf)
+            [res.append(item) for item in mf]
         return res
     getMiniFat = MiniFat
 
@@ -393,7 +393,7 @@ class File(pstruct.type):
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
         res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount)
         for _, v in zip(xrange(count), difat):
-            map(res.append, iter(v.d.l))
+            [res.append(item) for item in iter(v.d.l)]
         return res
     getFat = Fat
 
@@ -408,7 +408,7 @@ class File(pstruct.type):
     def chain(self, iterable):
         '''Return the sector for each index specified in iterable.'''
         res = self.new(ptype.container)
-        map(res.append, map(self['Data'].__getitem__, iterable))
+        [res.append(item) for item in map(self['Data'].__getitem__, iterable)]
         return res
 
     def minichain(self, iterable):
@@ -416,13 +416,13 @@ class File(pstruct.type):
         mf = self.MiniFat()
         res = self.new(ptype.container)
         for sptr in map(mf.__getitem__, iterable):
-            map(res.append, sptr.d.l)
+            [res.append(item) for item in sptr.d.l]
         return res
 
     def Data(self, iterable, type=None):
         '''Return the sectors for each index in iterable as a block.'''
         # If an integer was specified, then just return the sector by index
-        if isinstance(iterable, (int, long)):
+        if isinstance(iterable, six.integer_types):
             return self['Data'][iterable]
 
         # Now grab the container, and then cast it to a block
@@ -448,12 +448,12 @@ class File(pstruct.type):
         data = self.__MiniData__()
 
         # If an integer was specified, then just return the minisector by index
-        if isinstance(iterable, (int, long)):
+        if isinstance(iterable, six.integer_types):
             return data[iterable]
 
         # Now make a container and then cast it to a block
         res = self.new(ptype.container)
-        map(res.append, map(data.__getitem__, iterable))
+        [res.append(item) for item in map(data.__getitem__, iterable)]
         return res.cast(ptype.block, length=res.size()) if type is None else res.cast(type, blocksize=lambda cb=res.size(): cb)
 
 ### Specific stream types
