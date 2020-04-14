@@ -339,7 +339,7 @@ class LIST_ENTRY(pstruct.type):
         '''Walks through a circular linked list'''
         if self._sentinel_ is None:
             sentinel = {self.getoffset()}
-        elif isinstance(self._sentinel_, basestring):
+        elif isinstance(self._sentinel_, six.string_types):
             sentinel = {self[self._sentinel_].int()}
         elif hasattr(self._sentinel_, '__iter__'):
             sentinel = {item for item in self._sentinel_}
