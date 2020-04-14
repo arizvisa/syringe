@@ -146,8 +146,8 @@ class RT_VERSION(pstruct.type):
         #return RT_VERSION_EntryType.withdefault(szkey, type=szkey, length=bs)
 
     def __Children(self):
-        fields = self._fields_[:-1]
-        length, cb = self['wLength'].li.int(), sum(self[name].li.size() for _, name in fields)
+        fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Alignment', 'Value']
+        length, cb = self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
 
         if cb > length:
             raise AssertionError("Invalid block size returned for child: {:d}".format(bs))
@@ -155,19 +155,24 @@ class RT_VERSION(pstruct.type):
         ct = self.__ChildType()
         class Member(pstruct.type):
             _fields_ = [
-                (dyn.align(4), 'Padding'),
+                (dyn.align(4), 'Alignment'),
                 (ct, 'Child'),
             ]
-        return dyn.clone(parray.block, _object_=Member, blocksize=lambda s, bs=length-cb:bs)
+        return dyn.clone(parray.block, _object_=Member, blocksize=lambda self, bs=length - cb: bs)
+
+    def __Padding(self):
+        cb = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
+        return dyn.block(self.blocksize() - cb)
 
     _fields_ = [
         (word, 'wLength'),
         (word, 'wValueLength'),
         (word, 'wType'),
         (pstr.szwstring, 'szKey'),
-        (dyn.align(4), 'Padding'),
+        (dyn.align(4), 'Alignment'),
         (__Type, 'Value'),
         (__Children, 'Children'),
+        (__Padding, 'Padding'),
     ]
 
 @RT_VERSION_EntryType.define
