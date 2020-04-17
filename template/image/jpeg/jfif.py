@@ -111,47 +111,87 @@ class StreamMarker(jpegstream.StreamMarker):
 class SOI(ptype.block):
     pass
 
-@Marker.define
-class SOF0(pstruct.type):
-    class component(pstruct.type):
+class SOF(pstruct.type):
+    class _Cn(pstruct.type):
+        class _F(pbinary.struct):
+            _fields_ = [
+                (4, 'H'),
+                (4, 'V'),
+            ]
         _fields_ = [
-            (pint.uint8_t, 'id'),
-            (dyn.clone(pbinary.struct, _fields_=[(4,'H'), (4,'V')]), 'sampling factors'),
-            (pint.uint8_t, 'quantization table number')
+            (pint.uint8_t, 'C'),
+            (_F, 'F'),
+            (pint.uint8_t, 'Tq')
         ]
 
     _fields_ = [
-        (pint.uint8_t, 'precision'),
-        (pint.uint16_t, 'height'),
-        (pint.uint16_t, 'width'),
-        (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array( self.component, self['number of components'].li.int()), 'components')
+        (pint.uint8_t, 'P'),
+        (pint.uint16_t, 'Y'),
+        (pint.uint16_t, 'X'),
+        (pint.uint8_t, 'Nf'),
+        (lambda self, Cn=_Cn: dyn.array(Cn, self['Nf'].li.int()), 'Cn')
     ]
+
+@Marker.define
+class SOF0(SOF): pass
+@Marker.define
+class SOF1(SOF): pass
+@Marker.define
+class SOF2(SOF): pass
+@Marker.define
+class SOF3(SOF): pass
+@Marker.define
+class SOF4(SOF): pass
+@Marker.define
+class SOF5(SOF): pass
+@Marker.define
+class SOF6(SOF): pass
+@Marker.define
+class SOF7(SOF): pass
+@Marker.define
+class SOF8(SOF): pass
+@Marker.define
+class SOF9(SOF): pass
+@Marker.define
+class SOF10(SOF): pass
+@Marker.define
+class SOF11(SOF): pass
+@Marker.define
+class SOF12(SOF): pass
+@Marker.define
+class SOF13(SOF): pass
+@Marker.define
+class SOF14(SOF): pass
+@Marker.define
+class SOF15(SOF): pass
 
 @Marker.define   # XXX
 class DQT(parray.block):
-    type = b'\xff\xdb'
     class Table(pstruct.type):
-        class DQTPrecisionAndIndex(pbinary.struct):
+        class _Y(pbinary.struct):
             _fields_ = [
-                (4, 'precision'),
-                (4, 'index')
+                (4, 'Pq'),
+                (4, 'Tq')
             ]
         _fields_ = [
-            (DQTPrecisionAndIndex, 'precision/index'),
-            (dyn.block(64), 'value')
+            (_Y, 'Y'),
+            (dyn.block(64), 'Qk')
         ]
 
     _object_ = Table
 
 @Marker.define   # XXX
 class DHT(parray.block):
-    type = b'\xff\xc4'
-
     class Table(pstruct.type):
         class _Th(pbinary.struct):
+            class _Tc(pbinary.enum):
+                width, _values_ = 1, [
+                    ('DC', 0),
+                    ('AC', 1),
+                ]
             _fields_ = [
-                (4, 'Tc'),
+                (3, 'Reserved'),
+                (_Tc, 'Tc'),
                 (4, 'Td'),
             ]
 
@@ -181,19 +221,25 @@ class DHT(parray.block):
 
 @Marker.define
 class SOS(pstruct.type):
-    class component(pbinary.struct):
+    class _Cs(pbinary.struct):
         _fields_ = [
-            (8, 'id'),
-            (4, 'DC'),
-            (4, 'AC')
+            (8, 'Cs'),
+            (4, 'Td'),
+            (4, 'Ta')
+        ]
+
+    class _A(pbinary.struct):
+        _fields_ = [
+            (4, 'Ah'),
+            (4, 'Al'),
         ]
 
     _fields_ = [
-        (pint.uint8_t, 'number of components'),
-        (lambda self: dyn.array(SOS.component, self['number of components'].li.int()), 'component'),
-        (pint.uint8_t, 'start of spectral selection'),
-        (pint.uint8_t, 'end of spectral selection'),
-        (dyn.clone(pbinary.struct, _fields_=[(4,'high'),(4,'low')]), 'successive approximation')
+        (pint.uint8_t, 'Ns'),
+        (lambda self, Cs=_Cs: dyn.array(Cs, self['Ns'].li.int()), 'Csn'),
+        (pint.uint8_t, 'Ss'),
+        (pint.uint8_t, 'Se'),
+        (_A, 'A')
     ]
 
 #@Marker.define
@@ -214,6 +260,12 @@ class APP0(pstruct.type):
 @Marker.define
 class COM(ptype.block):
     pass
+
+@Marker.define
+class DRI(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'Ri'),
+    ]
 
 @Marker.define
 class EOI(ptype.block):
