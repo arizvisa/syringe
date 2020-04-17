@@ -410,7 +410,9 @@ class SOT(pstruct.type):
 
 @Marker.define
 class SOD(ptype.block):
-    pass
+    @classmethod
+    def EncodedQ(cls):
+        return True
 
 @Marker.define
 class EOC(ptype.block):

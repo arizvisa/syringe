@@ -97,7 +97,10 @@ class StreamMarker(jpegstream.StreamMarker):
 
     def __Extra(self):
         fields = ['Type', 'Lp', 'Value']
-        return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        t = dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        if hasattr(self['Value'], 'EncodedQ') and self['Value'].EncodedQ():
+            return dyn.clone(jpegstream.ByteStuffer, _value_=t)
+        return t
 
     _fields_ = [
         (__Type, 'Type'),
@@ -241,6 +244,10 @@ class SOS(pstruct.type):
         (pint.uint8_t, 'Se'),
         (_A, 'A')
     ]
+
+    @classmethod
+    def EncodedQ(cls):
+        return True
 
 #@Marker.define
 class APP0(pstruct.type):

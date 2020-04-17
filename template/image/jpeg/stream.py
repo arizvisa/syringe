@@ -19,6 +19,38 @@ class Marker(ptype.definition):
 class MarkerType(pint.enum, pint.uint16_t): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
 
+### Encoding types
+class ByteStuffer(ptype.encoded_t):
+    def encode(self, object, **attrs):
+        res, iterable = b'', iter(bytearray(object.serialize()))
+        for by in iterable:
+            if by == 0:
+                res += six.int2byte(0xff)
+            res += six.int2byte(by)
+        return ptype.block().set(res)
+
+    def decode(self, object, **attrs):
+        state, iterable = b'', iter(bytearray(object.serialize()))
+
+        try:
+            while True:
+                m = next(iterable)
+                if m == 0xff:
+                    n = next(iterable)
+                    if n == 0:
+                        state += six.int2byte(0xff)
+                        continue
+                    state += six.int2byte(m) + six.int2byte(n)
+                else:
+                    state += six.int2byte(m)
+                continue
+
+        except StopIteration:
+            pass
+
+        res = ptype.block().set(state)
+        return super(ByteStuffer, self).decode(res, **attrs)
+
 ### Stream decoders
 class StreamMarker(pstruct.type):
     Type, Table = MarkerType, Marker
@@ -27,14 +59,14 @@ class StreamMarker(pstruct.type):
         return self.Type
 
     def __Value(self):
-        t = self.Table.withdefault(self['Type'].li.str())
-        if issubclass(t, ptype.block):
-            return dyn.clone(t, length=self.blocksize() - self['Type'].li.size())
-        return t
+        return self.Table.withdefault(self['Type'].li.str())
 
     def __Extra(self):
         fields = ['Type', 'Value']
-        return dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        t = dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        if hasattr(self['Value'], 'EncodedQ') and self['Value'].EncodedQ():
+            return dyn.clone(ByteStuffer, _value_=t)
+        return t
 
     _fields_ = [
         (__Type, 'Type'),
@@ -84,9 +116,6 @@ class Stream(ptype.encoded_t):
                 m = next(iterable)
                 if m == 0xff:
                     n = next(iterable)
-                    if n == 0x00:
-                        state += b'\xff'
-                        continue
                     result.append(state)
                     result.append(six.int2byte(m) + six.int2byte(n))
                     state = b''
@@ -104,21 +133,6 @@ class Stream(ptype.encoded_t):
             result.pop(0)
 
         return result
-
-    @classmethod
-    def __encode_stream(cls, data):
-        state, iterable = b'', iter(bytearray(data))
-
-        for by in iterable:
-            if by == 0:
-                state += six.int2byte(0xff)
-            state += six.int2byte(by)
-
-        return state
-
-    def encode(self, object, **attrs):
-        encoded = self.__encode_stream(object.serialize())
-        return ptype.block().set(encoded)
 
     def decode(self, object, **attrs):
         if not self.initializedQ():
