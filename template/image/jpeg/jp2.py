@@ -560,17 +560,59 @@ class RGN(pstruct.type):
         (__SPrgn, 'SPrgn'),
     ]
 
+class Sqcd(pbinary.struct):
+    class _style(pbinary.enum):
+        width, _values_ = 5, [
+            ('None', 0),
+            ('Scalar derived', 1),
+            ('Scalar expounded', 2),
+        ]
+
+    _fields_ = [
+        (3, 'guard'),
+        (_style, 'style'),
+    ]
+
+class A29(pbinary.struct):
+    '''
+    Table A.29 - Reversible step size values for the SPqcd and SPqcc parameters (reversible transform only)
+    '''
+
+    _fields_ = [
+        (5, 'Exponent'),
+        (3, 'Reserved'),
+    ]
+
+class A30(pbinary.struct):
+    '''
+    Table A.30 - Quantization values for the SPqcd and SPqcc parameters (irreversible transformation only)
+    '''
+
+    _fields_ = [
+        (5, 'Exponent'),
+        (11, 'Mantissa'),
+    ]
+
 @Marker.define
 class QCD(pstruct.type):
     def __SPqcd(self):
-        length, fields = self['Lqcd'].li, ['Lqcd', 'Sqcd']
-        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
+        p, res, fields = self.parent, self['Sqcd'].li, ['Lqcd', 'Sqcd']
+        style, length = res.item('style'), (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
+        if style['None']:
+            return dyn.array(A29, length)
+        elif style['Scalar derived']:
+            return dyn.array(A30, length // 2)
+        elif style['Scalar expounded']:
+            return dyn.array(A30, length // 2)
+        return dyn.block(length)
 
     _fields_ = [
         (u16, 'Lqcd'),
-        (u8, 'Sqcd'),
+        (Sqcd, 'Sqcd'),
         (__SPqcd, 'SPqcd'),
     ]
+
+class Sqcc(Sqcd): pass
 
 @Marker.define
 class QCC(pstruct.type):
@@ -579,13 +621,20 @@ class QCC(pstruct.type):
         return u8 if Csiz < 257 else u16
 
     def __SPqcc(self):
-        length, fields = self['Lqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
-        return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
+        p, res, fields = self.parent, self['Sqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
+        style, length = res.item('style'), (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
+        if style['None']:
+            return dyn.array(A29, length)
+        elif style['Scalar derived']:
+            return dyn.array(A30, length // 2)
+        elif style['Scalar expounded']:
+            return dyn.array(A30, length // 2)
+        return dyn.block(length)
 
     _fields_ = [
         (u16, 'Lqcc'),
         (__Cqcc, 'Cqcc'),
-        (u8, 'Sqcc'),
+        (Sqcc, 'Sqcc'),
         (__SPqcc, 'SPqcc'),
     ]
 
