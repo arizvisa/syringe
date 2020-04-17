@@ -105,6 +105,21 @@ class Stream(ptype.encoded_t):
 
         return result
 
+    @classmethod
+    def __encode_stream(cls, data):
+        state, iterable = b'', iter(bytearray(data))
+
+        for by in iterable:
+            if by == 0:
+                state += six.int2byte(0xff)
+            state += six.int2byte(by)
+
+        return state
+
+    def encode(self, object, **attrs):
+        encoded = self.__encode_stream(object.serialize())
+        return ptype.block().set(encoded)
+
     def decode(self, object, **attrs):
         if not self.initializedQ():
             raise ptypes.error.InitializationError(self, 'decode')
