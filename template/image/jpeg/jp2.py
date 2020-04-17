@@ -5,9 +5,7 @@ import ptypes
 from ptypes import *
 
 from . import stream as jpegstream
-
-intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
-dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
+from .stream import intofdata, dataofint
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -25,8 +23,7 @@ class s64(pint.sint64_t): pass
 
 ### JPEG2k Markers
 class Marker(jpegstream.Marker):
-    attribute, cache = '__name__', {}
-    Table = [
+    attribute, cache, table = '__name__', {}, [
         ('SOC', dataofint(0xff4f)),
         ('SOT', dataofint(0xff90)),
         ('SOD', dataofint(0xff93)),
@@ -54,7 +51,7 @@ class Marker(jpegstream.Marker):
     ]
 
 class MarkerType(jpegstream.MarkerType): pass
-MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.Table]
+MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
 
 class StreamMarker(jpegstream.StreamMarker):
     Type, Table = MarkerType, Marker
@@ -241,7 +238,7 @@ class ChannelDefinition(parray.block):
 
 @Boxes.define
 class Resolution(SuperBox):
-    type = b'\x63\x64\x65\x66'
+    type = b'\x72\x65\x73\x20'
 
 @Boxes.define
 class CaptureResolution(pstruct.type):
