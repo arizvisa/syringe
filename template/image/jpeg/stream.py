@@ -287,6 +287,12 @@ class Stream(ptype.encoded_t):
         if not self.initializedQ():
             raise ptypes.error.InitializationError(self, 'decode')
 
+        ## enumerate all of the markers that we support
+        _object_ = self._object_
+        marker = _object_._marker_
+        supported = { dataofint(integer) for _, integer in marker.Type._values_ }
+
+        ## chunk out our stream
         result = self.__split_stream(object.serialize())
 
         ## pair up each marker with its data
@@ -300,7 +306,15 @@ class Stream(ptype.encoded_t):
                 delimited.append((marker, data))
                 break
             size = len(marker) + len(data)
-            bounds.append(+size if marker else -size)
+
+            ## check to see if our marker is supporteed
+            if operator.contains(supported, marker):
+                bounds.append(+size if marker else -size)
+
+            ## otherwise, just extend the previous record
+            else:
+                bounds[-1] = (bounds[-1] - size) if bounds[-1] < 0 else (bounds[-1] + size)
+            continue
         self.__bounds__[:] = bounds
 
         ## if there was no delimiter, then we're done here...
