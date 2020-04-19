@@ -344,7 +344,7 @@ class APP0(pstruct.type):
 
 class File(jpegstream.Stream):
     class _object_(jpegstream.DecodedStream):
-        _marker_ = StreamMarker
+        Element = StreamMarker
 
     def _value_(self):
         return dyn.clone(ptype.block, length=self.source.size())

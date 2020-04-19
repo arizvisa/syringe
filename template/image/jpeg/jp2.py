@@ -57,7 +57,7 @@ class StreamMarker(jpegstream.StreamMarker):
     Type, Table = MarkerType, Marker
 
 class DecodedStream(jpegstream.DecodedStream):
-    _marker_ = StreamMarker
+    Element = StreamMarker
 
 ### enumerations
 class Boxes(ptype.definition): cache = {}
@@ -288,9 +288,6 @@ class ColourSpecification(pstruct.type):
 class ContiguousCodeStream(jpegstream.Stream):
     type = b'\x6a\x70\x32\x63'
     _object_ = DecodedStream
-
-    def isDelimiter(self, marker):
-        return intofdata(marker) in {0xff93, 0xffd9, 0xff92}
 
 @Boxes.define
 class IntellectualProperty(ptype.block):

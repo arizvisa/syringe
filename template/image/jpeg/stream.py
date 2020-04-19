@@ -75,7 +75,7 @@ class StreamMarker(pstruct.type):
     ]
 
 class DecodedStream(parray.block):
-    _marker_ = StreamMarker
+    Element = StreamMarker
     def __init__(self, **attrs):
         super(DecodedStream, self).__init__(**attrs)
 
@@ -86,11 +86,11 @@ class DecodedStream(parray.block):
         bounds = self.__bounds__[len(self.value)]
 
         # First figure out if we're a delimited marker
-        t = dyn.clone(self._marker_.Type, length=0) if bounds < 0 else self._marker_.Type
+        t = dyn.clone(self.Element.Type, length=0) if bounds < 0 else self.Element.Type
 
         # Using the bounds, construct a new marker using it as the blocksize
         Fsize = lambda self, cb=abs(bounds): cb
-        return dyn.clone(self._marker_, Type=t, blocksize=Fsize)
+        return dyn.clone(self.Element, Type=t, blocksize=Fsize)
 
     def blocksize(self):
         return sum(map(abs, self.__bounds__))
@@ -139,9 +139,8 @@ class Stream(ptype.encoded_t):
             raise ptypes.error.InitializationError(self, 'decode')
 
         ## enumerate all of the markers that we support
-        _object_ = self._object_
-        marker = _object_._marker_
-        supported = { dataofint(integer) for _, integer in marker.Type._values_ }
+        markerElement = self._object_.Element
+        supported = { dataofint(integer) for integer in markerElement.Type.enumerations() }
 
         ## chunk out our stream
         result = self.__split_stream(object.serialize())
@@ -169,9 +168,6 @@ class Stream(ptype.encoded_t):
         data = bytes(bytearray(itertools.chain(*result)))
         decoded = ptype.block().set(data)
         return super(Stream, self).decode(decoded)
-
-    def isDelimiter(self, marker):
-        raise NotImplementedError
 
 if __name__ == '__main__':
     blah = z[3]['data'].copy()
