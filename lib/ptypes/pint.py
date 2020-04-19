@@ -371,13 +371,14 @@ class enum(type):
 
         # check that enumeration's ._values_ are defined correctly
         if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in cls._values_):
-            res = map(operator.attrgetter('__name__'), six.string_types)
+            Fname = operator.attrgetter('__name__')
+            res = [Fname(item) for item in six.string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            res = map(operator.attrgetter('__name__'), six.integer_types)
+            res = [Fname(item) for item in six.integer_types]
             inttypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            raise TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
+            raise error.TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
