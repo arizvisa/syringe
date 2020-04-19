@@ -62,15 +62,15 @@ class BoxType(pint.enum, u32): pass
 ### JP2 containers
 class BoxHeader(pstruct.type):
     def __boxLengthExtended(self):
-        res = self['boxLength'].li.int()
-        if res == 1:
-            return u64
-        return u0
+        res = self['boxLength'].li
+        return u64 if res.int() == 1 else u0
+
     _fields_ = [
         (u32, 'boxLength'),
         (BoxType, 'boxType'),
         (__boxLengthExtended, 'boxLengthExt'),
     ]
+
     def Type(self):
         return self['boxType'].serialize()
 
@@ -191,6 +191,22 @@ class Palette(pstruct.type):
         (__C, 'C'),
     ]
 
+    def alloc(self, **fields):
+        res = super(Palette, self).alloc(**fields)
+        cb = res['C'].size()
+        if operator.contains(fields, 'NE'):
+            return res.set(NPC=cb // res['NE'].int())
+        elif operator.contains(fields, 'NPC'):
+            return res.set(NE=cb // res['NPC'].int())
+
+        # try and figure out the least number of components
+        # required to store the 'C' field
+        for npc in range(cb):
+            if cb % npc == 0:
+                return res.set(NPC=npc, NE=cb // npc)
+            continue
+        return res
+
 @Boxes.define
 class ComponentMapping(parray.block):
     type = b'\x63\x6d\x61\x70'
@@ -270,7 +286,7 @@ class ColourSpecification(pstruct.type):
             return dyn.block(0)
 
         fields = ['METH', 'PREC', 'APPROX', 'EnumCS']
-        return dyn.block(max((0, hdr.DataLength() - sum(self[fld].li.size() for fld in fields))))
+        return dyn.block(max(0, hdr.DataLength() - sum(self[fld].li.size() for fld in fields)))
 
     _fields_ = [
         (u8, 'METH'),
@@ -279,6 +295,10 @@ class ColourSpecification(pstruct.type):
         (lambda s: u0 if s['METH'].li.int() == 2 else u32, 'EnumCS'),
         (__PROFILE, 'PROFILE'),
     ]
+
+    def alloc(self, **fields):
+        res = super(ColourSpecification, self).alloc(**fields)
+        return res if operator.contains(fields, 'METH') or res['EnumCS'].size() > 0 else res.set(METH=2)
 
 @Boxes.define
 class ContiguousCodeStream(codestream.Stream):
@@ -365,6 +385,10 @@ class UUIDList(pstruct.type):
         (lambda self: dyn.array(UUID, self['NU'].li.int()), 'UUID'),
     ]
 
+    def alloc(self, **fields):
+        res = super(UUIDList, self).alloc(**fields)
+        return res if operator.contains(fields, 'NU') else res.set(NU=len(res['UUID']))
+
 @Boxes.define
 class URL(pstruct.type):
     type = b'\x75\x72\x6c\x20'
@@ -439,6 +463,12 @@ class SIZ(pstruct.type):
         (lambda s: dyn.array(SIZ.C, s['Csiz'].li.int()), 'C'),
     ]
 
+    def alloc(self, **fields):
+        res = super(SIZ, self).alloc(**fields)
+        if not operator.contains(fields, 'Csiz'):
+            res.set(Csiz=len(res['C'))
+        return res if operator.contains(fields, 'Lsiz') else res.set(Lsiz=res.size())
+
     def NumberOfTiles(self):
         width = self['Xsiz'].int() - self['XOsiz'].int()
         height = self['Ysiz'].int() - self['YOsiz'].int()
@@ -502,6 +532,13 @@ class COD(pstruct.type):
         (__LL, 'LL'),
     ]
 
+    def alloc(self, **fields):
+        res = super(COD, self).alloc(**fields)
+        if operator.contains(fields, 'SPcod') or not res['Scod']['Entropy']:
+            return res if operator.contains(fields, 'Lcod') else res.set(Lcod=res.size())
+        res['SPcod'].set(max(0, len(res['LL']) - 1))
+        return res if operator.contains(fields, 'Lcod') else res.set(Lcod=res.size())
+
 class Scoc(pbinary.flags):
     _fields_ = [
         (7, 'Reserved'),
@@ -535,11 +572,24 @@ class COC(pstruct.type):
         (__LL, 'LL'),
     ]
 
+    def alloc(self, **fields):
+        res = super(COC, self).alloc(**fields)
+        if operator.contains(fields, 'SPcoc') or not res['Scoc']['Entropy']:
+            return res if operator.contains(fields, 'Lcoc') else res.set(Lcoc=res.size()
+        res['SPcoc'].set(max(0, len(res['LL']) - 1))
+        return res if operator.contains(fields, 'Lcoc') else res.set(Lcoc=res.size()
+
 @Marker.define
 class RGN(pstruct.type):
     def __Crgn(self):
-        Csiz = 0
-        return u8 if Csiz < 257 else u16
+        stream = self.getparent(stream.DecodedStream)
+        try:
+            index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
+        except StopIteration:
+            logging.warn("Unable to locate SIZ marker!")
+            return u8
+        Csiz = stream[index]['Value']['Csiz']
+        return u8 if Csiz.int() < 257 else u16
 
     def __SPrgn(self):
         length, fields = self['Lrgn'].li, ['Lrgn', 'Crgn', 'Srgn']
@@ -551,6 +601,10 @@ class RGN(pstruct.type):
         (u8, 'Srgn'),
         (__SPrgn, 'SPrgn'),
     ]
+
+    def alloc(self, **fields):
+        res = super(RGN, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lrgn') else res.set(Lrgn=res.size()
 
 class Sqcd(pbinary.struct):
     class _style(pbinary.enum):
@@ -604,13 +658,23 @@ class QCD(pstruct.type):
         (__SPqcd, 'SPqcd'),
     ]
 
+    def alloc(self, **fields):
+        res = super(QCD, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lqcd') else res.set(Lqcd=res.size()
+
 class Sqcc(Sqcd): pass
 
 @Marker.define
 class QCC(pstruct.type):
     def __Cqcc(self):
-        Csiz = 0
-        return u8 if Csiz < 257 else u16
+        stream = self.getparent(stream.DecodedStream)
+        try:
+            index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
+        except StopIteration:
+            logging.warn("Unable to locate SIZ marker!")
+            return u8
+        Csiz = stream[index]['Value']['Csiz']
+        return u8 if Csiz.int() < 257 else u16
 
     def __SPqcc(self):
         p, res, fields = self.parent, self['Sqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
@@ -630,15 +694,24 @@ class QCC(pstruct.type):
         (__SPqcc, 'SPqcc'),
     ]
 
+    def alloc(self, **fields):
+        res = super(QCC, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lqcc') else res.set(Lqcc=res.size()
+
 @Marker.define
 class POC(pstruct.type):
     def __CSpod(self):
-        Csiz = 0
-        return u8 if Csiz < 257 else u16
+        stream = self.getparent(stream.DecodedStream)
+        try:
+            index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
+        except StopIteration:
+            logging.warn("Unable to locate SIZ marker!")
+            return u8
+        Csiz = stream[index]['Value']['Csiz']
+        return u8 if Csiz.int() < 257 else u16
 
     def __CEpod(self):
-        Csiz = 0
-        return u8 if Csiz < 257 else u16
+        return u16 if isinstance(self['CSpod'], u16) else u8
 
     def __missed(self):
         length, fields = self['Lpod'].li, ['Lpod', 'RSpod', 'CSpod', 'LYEpod', 'REpod', 'CEpod', 'Ppod']
@@ -655,6 +728,10 @@ class POC(pstruct.type):
         (__missed, 'missed'),
     ]
 
+    def alloc(self, **fields):
+        res = super(POC, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lpod') else res.set(Lpod=res.size())
+
 @Marker.define
 class TLM(pstruct.type):
     def __Ttlm(self):
@@ -668,10 +745,9 @@ class TLM(pstruct.type):
         return u0
 
     def __Ptlm(self):
-        ST = 0
-        if ST == 0:
+        if isinstance(self['Ttlm'], u0):
             return u16
-        elif ST == 1:
+        elif isinstance(self['Ttlm'], u8):
             return u32
         return u0
 
@@ -688,6 +764,10 @@ class TLM(pstruct.type):
         (__missed, 'missed'),
     ]
 
+    def alloc(self, **fields):
+        res = super(TLM, self).alloc(**fields)
+        return res if operator.contains(fields, 'Ltlm') else res.set(Ltlm=res.size())
+
 @Marker.define
 class PLM(pstruct.type):
     def __missed(self):
@@ -701,6 +781,10 @@ class PLM(pstruct.type):
         (__missed, 'missed'),
     ]
 
+    def alloc(self, **fields):
+        res = super(PLM, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lplm') else res.set(Lplm=res.size())
+
 @Marker.define
 class PLT(pstruct.type):
     def __Iplt(self):
@@ -712,6 +796,10 @@ class PLT(pstruct.type):
         (u8, 'Zplt'),
         (__Iplt, 'Iplt'),
     ]
+
+    def alloc(self, **fields):
+        res = super(PLT, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lplt') else res.set(Lplt=res.size())
 
 @Marker.define
 class PPM(pstruct.type):
@@ -726,6 +814,10 @@ class PPM(pstruct.type):
         (__Ippm, 'Ippm'),
     ]
 
+    def alloc(self, **fields):
+        res = super(PPM, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lppm') else res.set(Lppm=res.size())
+
 @Marker.define
 class PPT(pstruct.type):
     def __Ippt(self):
@@ -738,6 +830,10 @@ class PPT(pstruct.type):
         (__Ippt, 'Ippt'),
     ]
 
+    def alloc(self, **fields):
+        res = super(PPT, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lppt') else res.set(Lppt=res.size())
+
 @Marker.define
 class SOP(pstruct.type):
     def __missed(self):
@@ -749,6 +845,10 @@ class SOP(pstruct.type):
         (u16, 'Nsop'),
         (__missed, 'missed'),
     ]
+
+    def alloc(self, **fields):
+        res = super(SOP, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lsop') else res.set(Lsop=res.size())
 
 @Marker.define
 class EPH(ptype.block):
@@ -765,6 +865,10 @@ class COM(pstruct.type):
         (u16, 'Rcme'),
         (__content, 'Ccme'),
     ]
+
+    def alloc(self, **fields):
+        res = super(COM, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lcme') else res.set(Lcme=res.size())
 
 if __name__ == '__main__':
     import ptypes, image.jpeg.jp2 as jp2

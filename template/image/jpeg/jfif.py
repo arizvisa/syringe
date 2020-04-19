@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, operator
 
 from ptypes import *
 from . import codestream, intofdata, dataofint
@@ -105,6 +105,10 @@ class StreamMarker(codestream.StreamMarker):
         (__Extra, 'Extra'),
     ]
 
+    def alloc(self, **fields):
+        res = super(StreamMarker, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lp') else res.set(Lp=res['Value'].size())
+
 ### Marker definitions
 @Marker.define
 class SOI(ptype.block):
@@ -130,6 +134,10 @@ class SOF(pstruct.type):
         (pint.uint8_t, 'Nf'),
         (lambda self, Cn=_Cn: dyn.array(Cn, self['Nf'].li.int()), 'Cn')
     ]
+
+    def alloc(self, **fields):
+        res = super(SOF, self).alloc(**fields)
+        return res if operator.contains(fields, 'Nf') else res.set(Nf=len(res['Cn']))
 
 @Marker.define
 class SOF0(SOF): pass
@@ -212,6 +220,12 @@ class DHT(parray.block):
             (__Vij, 'Vij')
         ]
 
+        def alloc(self, **fields):
+            res = super(DHT.Table, self).alloc(**fields)
+            if operator.contains(fields, 'Li'):
+                return res
+            res.set(Li=[item.size() for item in res['Vij']]) if isinstance(res['Vij'], parray.type) else res
+
         def dump(self, indent=''):
             res = [ "code-length ({:#x}) bits ({:d}): {:s}".format(index, len(code), ' '.join(map("{:02x}".format, bytearray(code.serialize())))) for ((index, code), count) in zip(enumerate(self['Vij']), self['Li']) ]
             return '\n'.join(indent + row for row in [ "[Table {!s} : Tc={:d} Td={:d}]".format(self.name(), self['Th']['Tc'], self['Th']['Td']) ] + res)
@@ -240,6 +254,10 @@ class SOS(pstruct.type):
         (pint.uint8_t, 'Se'),
         (_A, 'A')
     ]
+
+    def alloc(self, **fields):
+        res = super(SOS, self).alloc(**fields)
+        return res if operator.contains(fields, 'Ns') else res.set(Ns=len(res['Csn']))
 
     @classmethod
     def EncodedQ(cls):

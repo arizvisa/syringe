@@ -93,6 +93,16 @@ class StreamMarker(pstruct.type):
         (__Extra, 'Extra'),
     ]
 
+    def alloc(self, **fields):
+        attribute = self.Table.attribute
+        Fattribute = operator.attrgetter(attribute)
+        res = super(StreamMarker, self).alloc(**fields)
+
+        if operator.contains(fields, 'Type'):
+            return res
+
+        return res.set(Type=intofdata(Fattribute(res['Value']))) if hasattr(res['Value'], attribute) else res
+
 class DecodedStream(parray.block):
     Element = StreamMarker
     def __init__(self, **attrs):
