@@ -1,11 +1,7 @@
-import logging
-import functools,operator,itertools,six
-
 import ptypes
-from ptypes import *
 
-from . import codestream
-from .codestream import intofdata, dataofint
+from ptypes import *
+from . import codestream, intofdata, dataofint
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 

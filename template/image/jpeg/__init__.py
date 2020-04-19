@@ -1,6 +1,13 @@
+import sys, itertools, six
+
+__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+
+intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
+dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
+
 from . import jp2, jfif
 
-if __name__ == '__main__' and False:
+if __name__ == '__main__':
     #input = getFileContents('Q100-2.JPG')
     input = getFileContents('huff_simple0.jpg')
     input = bytes(input.replace(b'\xff\x00', b'\xff'))

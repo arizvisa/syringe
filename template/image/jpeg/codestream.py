@@ -1,13 +1,7 @@
-import sys, logging, array
-import six,functools,operator,itertools,types
+import ptypes, six, operator
 
-import ptypes
 from ptypes import *
-
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
-
-intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, bytearray(data), 0)
-dataofint = lambda integer: ((integer == 0) and b'\0') or (dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
+from . import intofdata, dataofint, __izip_longest__
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -171,7 +165,6 @@ class Stream(ptype.encoded_t):
 
 if __name__ == '__main__':
     blah = z[3]['data'].copy()
-    #source = array.array('B', blah.serialize())
 
     x = Stream(source=ptypes.prov.string(blah.serialize()), blocksize=lambda :blah.size()).l
     y = x.decode()
