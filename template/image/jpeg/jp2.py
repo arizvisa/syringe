@@ -4,8 +4,8 @@ import functools, itertools, types, builtins, operator, math, six
 import ptypes
 from ptypes import *
 
-from . import stream as jpegstream
-from .stream import intofdata, dataofint
+from . import codestream
+from .codestream import intofdata, dataofint
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -22,7 +22,7 @@ class u64(pint.uint64_t): pass
 class s64(pint.sint64_t): pass
 
 ### JPEG2k Markers
-class Marker(jpegstream.Marker):
+class Marker(codestream.Marker):
     attribute, cache, table = '__name__', {}, [
         ('SOC', dataofint(0xff4f)),
         ('SOT', dataofint(0xff90)),
@@ -50,13 +50,13 @@ class Marker(jpegstream.Marker):
         ('MCO', dataofint(0xff77)),
     ]
 
-class MarkerType(jpegstream.MarkerType): pass
+class MarkerType(codestream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
 
-class StreamMarker(jpegstream.StreamMarker):
+class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker
 
-class DecodedStream(jpegstream.DecodedStream):
+class DecodedStream(codestream.DecodedStream):
     Element = StreamMarker
 
 ### enumerations
@@ -285,7 +285,7 @@ class ColourSpecification(pstruct.type):
     ]
 
 @Boxes.define
-class ContiguousCodeStream(jpegstream.Stream):
+class ContiguousCodeStream(codestream.Stream):
     type = b'\x6a\x70\x32\x63'
     _object_ = DecodedStream
 

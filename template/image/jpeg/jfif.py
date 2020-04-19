@@ -4,13 +4,13 @@ import functools,operator,itertools,six
 import ptypes
 from ptypes import *
 
-from . import stream as jpegstream
-from .stream import intofdata, dataofint
+from . import codestream
+from .codestream import intofdata, dataofint
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### JFIF Markers
-class Marker(jpegstream.Marker):
+class Marker(codestream.Marker):
     attribute, cache, table = '__name__', {}, [
         ('SOF0', b'\xff\xc0'),
         ('SOF1', b'\xff\xc1'),
@@ -77,10 +77,10 @@ class Marker(jpegstream.Marker):
         ('COM', b'\xff\xfe'),
     ]
 
-class MarkerType(jpegstream.MarkerType): pass
+class MarkerType(codestream.MarkerType): pass
 MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
 
-class StreamMarker(jpegstream.StreamMarker):
+class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker
 
     def __Type(self):
@@ -99,7 +99,7 @@ class StreamMarker(jpegstream.StreamMarker):
         fields = ['Type', 'Lp', 'Value']
         t = dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
         if hasattr(self['Value'], 'EncodedQ') and self['Value'].EncodedQ():
-            return dyn.clone(jpegstream.ByteStuffer, _value_=t)
+            return dyn.clone(codestream.ByteStuffer, _value_=t)
         return t
 
     _fields_ = [
@@ -342,8 +342,8 @@ class APP0(pstruct.type):
         (lambda self: ptype.undefined if self.blocksize() < 12 else dyn.array(RGB, self['HthumbnailA'].li.int() * self['VthumbnailA'].li.int()), 'k'),
     ]
 
-class File(jpegstream.Stream):
-    class _object_(jpegstream.DecodedStream):
+class File(codestream.Stream):
+    class _object_(codestream.DecodedStream):
         Element = StreamMarker
 
     def _value_(self):
