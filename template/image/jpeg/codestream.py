@@ -42,9 +42,10 @@ class ByteStuffer(ptype.encoded_t):
     def encode(self, object, **attrs):
         res, iterable = b'', iter(bytearray(object.serialize()))
         for by in iterable:
-            if by == 0:
-                res += six.int2byte(0xff)
             res += six.int2byte(by)
+            if by == 0xff:
+                res += six.int2byte(0)
+            continue
         return ptype.block().set(res)
 
     def decode(self, object, **attrs):
