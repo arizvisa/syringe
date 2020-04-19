@@ -60,44 +60,14 @@ class Boxes(ptype.definition): cache = {}
 class BoxType(pint.enum, u32): pass
 
 ### JP2 containers
-class BoxHeader(pstruct.type):
+class Box(pstruct.type):
     def __boxLengthExtended(self):
         res = self['boxLength'].li
         return u64 if res.int() == 1 else u0
 
-    _fields_ = [
-        (u32, 'boxLength'),
-        (BoxType, 'boxType'),
-        (__boxLengthExtended, 'boxLengthExt'),
-    ]
-
-    def Type(self):
-        return self['boxType'].serialize()
-
-    def Length(self):
-        res = self['boxLength'].int()
-        if res:
-            return self['boxLengthExt'].int() if res == 1 else res
-        if isinstance(self.source, ptypes.prov.bounded):
-            return self.source.size() - self.getoffset()
-
-        cls = self.__class__
-        logging.info("{:s}.Length : Field `boxLength` is 0 and source is unbounded for `boxType`. : {!r}".format('.'.join((__name__, cls.__name__)), self.Type()))
-        return 8
-
-    def DataLength(self):
-        return self.Length() - self.size()
-
-    def summary(self):
-        boxType = self['boxType']
-        boxLength = self.Length()
-        return "boxType={boxType:s} : boxLength={boxLength:#x} ({boxLength:d})".format(boxType = boxType.summary(), boxLength = boxLength)
-
-class Box(pstruct.type):
     def __data(self):
-        hdr = self['header'].li
-        cb = hdr.DataLength()
-        res = Boxes.withdefault(hdr.Type(), type=hdr.Type())
+        t, cb = self['boxType'].li.serialize(), self.DataLength()
+        res = Boxes.withdefault(t, type=t)
         if issubclass(res, ptype.block):
             return dyn.clone(res, length=cb)
         elif issubclass(res, ptype.encoded_t):
@@ -105,15 +75,34 @@ class Box(pstruct.type):
         return dyn.clone(res, blocksize=lambda s, length=cb: length)
 
     def __padding(self):
-        hdr = self['header'].li
-        cb = hdr.DataLength()
-        return dyn.block(max((0,cb - self['data'].li.size())))
+        res = self['boxData'].li
+        return dyn.block(max(0, self.DataLength() - res.size()))
 
     _fields_ = [
-        (BoxHeader, 'header'),
-        (__data, 'data'),
-        (__padding, 'padding'),
+        (u32, 'boxLength'),
+        (BoxType, 'boxType'),
+        (__boxLengthExtended, 'boxLengthExt'),
+        (__data, 'boxData'),
+        (__padding, 'boxPadding'),
     ]
+
+    def Length(self):
+        res = self['boxLength'].li
+        if res.int():
+            return self['boxLengthExt'].int() if res.int() == 1 else res.int()
+        if isinstance(self.source, ptypes.prov.bounded):
+            return self.source.size() - self.getoffset()
+
+        cls = self.__class__
+        logging.info("{:s}.Length : Field `boxLength` is 0 and source is unbounded for `boxType`. : {!r}".format('.'.join((__name__, cls.__name__)), self['boxType'].serialize()))
+        return 8
+
+    def DataLength(self):
+        res = self.Length()
+        return res - sum(self[fld].li.size() for fld in ['boxLength', 'boxType', 'boxLengthExt'])
+
+    def summary(self):
+        return "boxType={boxType:s} : boxLength={boxLength:#x} ({boxLength:d}) : {boxData!s}".format(boxType=self['boxType'].summary(), boxLength=self.Length(), boxData=self['boxData'].summary())
 
 class SuperBox(parray.block):
     _object_ = Box
@@ -281,7 +270,7 @@ class ColourSpecification(pstruct.type):
     type = b'\x63\x6f\x6c\x72'
     def __PROFILE(self):
         try:
-            hdr = self.getparent(Box)['header'].li
+            hdr = self.getparent(Box).li
         except ptypes.error.NotFoundError:
             return dyn.block(0)
 
@@ -318,7 +307,7 @@ class UUID(pstruct.type):
     type = b'\x75\x75\x69\x64'
     def __DATA(self):
         try:
-            hdr = self.getparent(Box)['header'].li
+            hdr = self.getparent(Box).li
         except ptypes.error.NotFoundError:
             return dyn.block(0)
         return dyn.block(hdr.DataLength() - self['ID'].li.size())
@@ -394,7 +383,7 @@ class URL(pstruct.type):
     type = b'\x75\x72\x6c\x20'
     def __LOC(self):
         try:
-            hdr = self.getparent(Box)['header'].li
+            hdr = self.getparent(Box).li
         except ptypes.error.NotFoundError:
             return dyn.block(0)
 
@@ -466,7 +455,7 @@ class SIZ(pstruct.type):
     def alloc(self, **fields):
         res = super(SIZ, self).alloc(**fields)
         if not operator.contains(fields, 'Csiz'):
-            res.set(Csiz=len(res['C'))
+            res.set(Csiz=len(res['C']))
         return res if operator.contains(fields, 'Lsiz') else res.set(Lsiz=res.size())
 
     def NumberOfTiles(self):
@@ -575,9 +564,9 @@ class COC(pstruct.type):
     def alloc(self, **fields):
         res = super(COC, self).alloc(**fields)
         if operator.contains(fields, 'SPcoc') or not res['Scoc']['Entropy']:
-            return res if operator.contains(fields, 'Lcoc') else res.set(Lcoc=res.size()
+            return res if operator.contains(fields, 'Lcoc') else res.set(Lcoc=res.size())
         res['SPcoc'].set(max(0, len(res['LL']) - 1))
-        return res if operator.contains(fields, 'Lcoc') else res.set(Lcoc=res.size()
+        return res if operator.contains(fields, 'Lcoc') else res.set(Lcoc=res.size())
 
 @Marker.define
 class RGN(pstruct.type):
@@ -604,7 +593,7 @@ class RGN(pstruct.type):
 
     def alloc(self, **fields):
         res = super(RGN, self).alloc(**fields)
-        return res if operator.contains(fields, 'Lrgn') else res.set(Lrgn=res.size()
+        return res if operator.contains(fields, 'Lrgn') else res.set(Lrgn=res.size())
 
 class Sqcd(pbinary.struct):
     class _style(pbinary.enum):
@@ -660,7 +649,7 @@ class QCD(pstruct.type):
 
     def alloc(self, **fields):
         res = super(QCD, self).alloc(**fields)
-        return res if operator.contains(fields, 'Lqcd') else res.set(Lqcd=res.size()
+        return res if operator.contains(fields, 'Lqcd') else res.set(Lqcd=res.size())
 
 class Sqcc(Sqcd): pass
 
@@ -696,7 +685,7 @@ class QCC(pstruct.type):
 
     def alloc(self, **fields):
         res = super(QCC, self).alloc(**fields)
-        return res if operator.contains(fields, 'Lqcc') else res.set(Lqcc=res.size()
+        return res if operator.contains(fields, 'Lqcc') else res.set(Lqcc=res.size())
 
 @Marker.define
 class POC(pstruct.type):
