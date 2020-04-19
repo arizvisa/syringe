@@ -365,7 +365,7 @@ class enum(type):
             res = [Fname(item) for item in six.integer_types]
             inttypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            raise error.TypeError(self, '{:s}.enum.__init__'.format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
+            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
@@ -389,34 +389,6 @@ class enum(type):
         if isinstance(res, six.string_types):
             return self.byname(res, None) == self.get()
         return self.byvalue(res, False) and True or False
-
-    @classmethod
-    def byvalue(cls, value, *default):
-        '''Lookup the string in an enumeration by it's first-defined value'''
-        if len(default) > 1:
-            raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
-
-        try:
-            return six.next(name for name, item in cls._values_ if item == value)
-
-        except StopIteration:
-            if default: return six.next(iter(default))
-
-        raise KeyError(cls, 'enum.byvalue', value)
-
-    @classmethod
-    def byname(cls, name, *default):
-        '''Lookup the value in an enumeration by it's first-defined name'''
-        if len(default) > 1:
-            raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
-
-        try:
-            return six.next(value for item, value in cls._values_ if item == name)
-
-        except StopIteration:
-            if default: return six.next(iter(default))
-
-        raise KeyError(cls, 'enum.byname', name)
 
     def __getattr__(self, name):
         # if getattr fails, then assume the user wants the value of
@@ -462,6 +434,34 @@ class enum(type):
     def mapping(cls):
         '''Return potential enumeration values as a dictionary.'''
         return {name : value for name, value in cls._values_}
+
+    @classmethod
+    def byvalue(cls, value, *default):
+        '''Lookup the string in an enumeration by it's first-defined value'''
+        if len(default) > 1:
+            raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
+
+        try:
+            return six.next(name for name, item in cls._values_ if item == value)
+
+        except StopIteration:
+            if default: return six.next(iter(default))
+
+        raise KeyError(cls, 'enum.byvalue', value)
+
+    @classmethod
+    def byname(cls, name, *default):
+        '''Lookup the value in an enumeration by it's first-defined name'''
+        if len(default) > 1:
+            raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
+
+        try:
+            return six.next(value for item, value in cls._values_ if item == name)
+
+        except StopIteration:
+            if default: return six.next(iter(default))
+
+        raise KeyError(cls, 'enum.byname', name)
 
 # update our current state
 for _, definition in builtins.list(six.viewitems(globals())):
