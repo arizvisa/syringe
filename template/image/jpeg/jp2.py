@@ -86,20 +86,50 @@ class Box(pstruct.type):
         (__padding, 'boxPadding'),
     ]
 
+    def alloc(self, **fields):
+
+        # If no boxLength was specified, then set a default length so that this
+        # box isn't unbounded.
+        res = super(Box, self).alloc(**fields) if operator.contains(fields, 'boxLength') else super(Box, self).alloc(boxLength=1, **fields)
+
+        # If a boxLength was provided, then that was it and we can just return
+        # what we currently have
+        if any(operator.contains(fields, item) for item in ['boxLength', 'boxLengthExt']):
+
+            # Update the boxType if the user didn't specify one in the fields
+            return res.set(boxType=intofdata(res['boxData'].type)) if not operator.contains(fields, 'boxType') and hasattr(res['boxData'], 'type') else res
+
+        # Here's where we actually grab the length that the user gave us
+        cb = sum(res[fld].size() for fld in ['boxData', 'boxPadding'])
+
+        # If the size fits within 32-bits, then recurse with our boxLength assigned
+        if 1 < cb < 0x100000000:
+            fields['boxLength'] = cb
+            fields['boxLengthExt'] = 0
+            return self.alloc(**fields)
+
+        # Otherwise, this is a 64-bit length, so we need to re-allocate with
+        # the boxLength set to 1 so that boxLengthExt is allocated as a u64.
+        fields['boxLength'] = 1
+        fields['boxLengthExt'] = u64().set(cb)
+        return self.alloc(**fields)
+
     def Length(self):
         res = self['boxLength'].li
         if res.int():
             return self['boxLengthExt'].int() if res.int() == 1 else res.int()
-        if isinstance(self.source, ptypes.prov.bounded):
-            return self.source.size() - self.getoffset()
 
         cls = self.__class__
+        if isinstance(self.source, ptypes.prov.bounded):
+            logging.warn("{:s}.Length : Found a {:s} of type {!r} with an unbounded length at {:s}.".format('.'.join((__name__, cls.__name__)), self.classname(), self['boxType'].serialize(), self.instance()))
+            return self.source.size() - self.getoffset()
+
         logging.info("{:s}.Length : Field `boxLength` is 0 and source is unbounded for `boxType`. : {!r}".format('.'.join((__name__, cls.__name__)), self['boxType'].serialize()))
         return 8
 
     def DataLength(self):
         res = self.Length()
-        return res - sum(self[fld].li.size() for fld in ['boxLength', 'boxType', 'boxLengthExt'])
+        return max(0, res - sum(self[fld].li.size() for fld in ['boxLength', 'boxType', 'boxLengthExt']))
 
     def summary(self):
         return "boxType={boxType:s} : boxLength={boxLength:#x} ({boxLength:d}) : {boxData!s}".format(boxType=self['boxType'].summary(), boxLength=self.Length(), boxData=self['boxData'].summary())
