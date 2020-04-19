@@ -7,7 +7,7 @@ ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### JFIF Markers
 class Marker(codestream.Marker):
-    attribute, cache, table = '__name__', {}, [
+    cache, table = {}, [
         ('SOF0', b'\xff\xc0'),
         ('SOF1', b'\xff\xc1'),
         ('SOF2', b'\xff\xc2'),
@@ -73,8 +73,8 @@ class Marker(codestream.Marker):
         ('COM', b'\xff\xfe'),
     ]
 
-class MarkerType(codestream.MarkerType): pass
-MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
+class MarkerType(codestream.MarkerType):
+    _values_ = Marker.table
 
 class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker
@@ -86,7 +86,7 @@ class StreamMarker(codestream.StreamMarker):
         if self.blocksize() <= sum(self[fld].li.size() for fld in ['Type', 'Lp']):
             return ptype.undefined
 
-        t, res = self.Table.withdefault(self['Type'].li.str()), self['Lp'].li
+        t, res = self.Table.withdefault(self['Type'].li.serialize()), self['Lp'].li
         if issubclass(t, ptype.block):
             return dyn.clone(t, length=res.int() - res.size())
         return dyn.clone(t, blocksize=lambda self, cb=res.int() - res.size(): cb)
@@ -139,24 +139,24 @@ class SOF1(SOF): pass
 class SOF2(SOF): pass
 @Marker.define
 class SOF3(SOF): pass
-@Marker.define
-class SOF4(SOF): pass
+#@Marker.define
+#class SOF4(SOF): pass
 @Marker.define
 class SOF5(SOF): pass
 @Marker.define
 class SOF6(SOF): pass
 @Marker.define
 class SOF7(SOF): pass
-@Marker.define
-class SOF8(SOF): pass
+#@Marker.define
+#class SOF8(SOF): pass
 @Marker.define
 class SOF9(SOF): pass
 @Marker.define
 class SOF10(SOF): pass
 @Marker.define
 class SOF11(SOF): pass
-@Marker.define
-class SOF12(SOF): pass
+#@Marker.define
+#class SOF12(SOF): pass
 @Marker.define
 class SOF13(SOF): pass
 @Marker.define

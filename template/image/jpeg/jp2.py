@@ -18,36 +18,36 @@ class u64(pint.uint64_t): pass
 class s64(pint.sint64_t): pass
 
 ### JPEG2k Markers
-class Marker(codestream.Marker):
-    attribute, cache, table = '__name__', {}, [
-        ('SOC', dataofint(0xff4f)),
-        ('SOT', dataofint(0xff90)),
-        ('SOD', dataofint(0xff93)),
-        ('EOC', dataofint(0xffd9)),
-        ('SIZ', dataofint(0xff51)),
-        ('COD', dataofint(0xff52)),
-        ('COC', dataofint(0xff53)),
-        ('RGN', dataofint(0xff5e)),
-        ('QCD', dataofint(0xff5c)),
-        ('QCC', dataofint(0xff5d)),
-        ('POC', dataofint(0xff5f)),
-        ('TLM', dataofint(0xff55)),
-        ('PLM', dataofint(0xff57)),
-        ('PLT', dataofint(0xff58)),
-        ('PPM', dataofint(0xff60)),
-        ('PPT', dataofint(0xff61)),
-        ('SOP', dataofint(0xff91)),
-        ('EPH', dataofint(0xff92)),
-        ('CRG', dataofint(0xff63)),
-        ('COM', dataofint(0xff64)),
-        ('CBD', dataofint(0xff78)),
-        ('MCC', dataofint(0xff75)),
-        ('MCT', dataofint(0xff74)),
-        ('MCO', dataofint(0xff77)),
+class MarkerType(codestream.MarkerType):
+    _values_ = [
+        ('SOC', 0xff4f),
+        ('SOT', 0xff90),
+        ('SOD', 0xff93),
+        ('EOC', 0xffd9),
+        ('SIZ', 0xff51),
+        ('COD', 0xff52),
+        ('COC', 0xff53),
+        ('RGN', 0xff5e),
+        ('QCD', 0xff5c),
+        ('QCC', 0xff5d),
+        ('POC', 0xff5f),
+        ('TLM', 0xff55),
+        ('PLM', 0xff57),
+        ('PLT', 0xff58),
+        ('PPM', 0xff60),
+        ('PPT', 0xff61),
+        ('SOP', 0xff91),
+        ('EPH', 0xff92),
+        ('CRG', 0xff63),
+        ('COM', 0xff64),
+        ('CBD', 0xff78),
+        ('MCC', 0xff75),
+        ('MCT', 0xff74),
+        ('MCO', 0xff77),
     ]
 
-class MarkerType(codestream.MarkerType): pass
-MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
+class Marker(codestream.Marker):
+    cache, table = {}, MarkerType._values_
 
 class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker

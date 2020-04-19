@@ -1,4 +1,4 @@
-import ptypes, six, operator
+import ptypes, six, operator, itertools
 
 from ptypes import *
 from . import intofdata, dataofint, __izip_longest__
@@ -6,12 +6,36 @@ from . import intofdata, dataofint, __izip_longest__
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### Marker list and table
-class Marker(ptype.definition):
-    attribute, cache, table = '__name__', {}, []
+class MarkerType(pint.enum, pint.uint16_t):
+    _values_ = []
 
-### Marker types
-class MarkerType(pint.enum, pint.uint16_t): pass
-MarkerType._values_ = [(name, intofdata(data)) for name, data in Marker.table]
+    def __init__(self, **attrs):
+        res = [(name, intofdata(integer) if isinstance(integer, bytes) else integer) for name, integer in self._values_]
+        attrs.setdefault('_values_', res)
+        return super(MarkerType, self).__init__(**attrs)
+
+class Marker(ptype.definition):
+    cache, table = {}, MarkerType._values_
+
+    @classmethod
+    def define(cls, definition):
+        try:
+            index = next(index for index, (name, _) in enumerate(cls.table) if name == definition.__name__)
+
+        # If we couldn't find anything, then there's nothing to do. So we can
+        # just leave.
+        except StopIteration:
+            pass
+
+        # Use the index to find the element in our table. This way we can convert
+        # any bytes into integer for the enumeration, and assign the bytes to
+        # the attribute for the definition.
+        else:
+            name, res = cls.table[index]
+            if isinstance(res, bytes):
+                cls.table[index] = name, intofdata(res)
+            setattr(definition, cls.attribute, res if isinstance(res, bytes) else dataofint(res))
+        return super(Marker, cls).define(definition)
 
 ### Encoding types
 class ByteStuffer(ptype.encoded_t):
@@ -53,7 +77,8 @@ class StreamMarker(pstruct.type):
         return self.Type
 
     def __Value(self):
-        return self.Table.withdefault(self['Type'].li.str())
+        res = self['Type'].li
+        return self.Table.withdefault(res.serialize())
 
     def __Extra(self):
         fields = ['Type', 'Value']
@@ -133,8 +158,8 @@ class Stream(ptype.encoded_t):
             raise ptypes.error.InitializationError(self, 'decode')
 
         ## enumerate all of the markers that we support
-        markerElement = self._object_.Element
-        supported = { dataofint(integer) for integer in markerElement.Type.enumerations() }
+        markerElementTable = self._object_.Element.Table
+        supported = { integer if isinstance(integer, bytes) else dataofint(integer) for _, integer in markerElementTable.table }
 
         ## chunk out our stream
         result = self.__split_stream(object.serialize())
