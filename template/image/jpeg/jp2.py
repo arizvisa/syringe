@@ -99,19 +99,17 @@ class Box(pstruct.type):
             # Update the boxType if the user didn't specify one in the fields
             return res.set(boxType=intofdata(res['boxData'].type)) if not operator.contains(fields, 'boxType') and hasattr(res['boxData'], 'type') else res
 
-        # Here's where we actually grab the length that the user gave us
-        cb = sum(res[fld].size() for fld in ['boxData', 'boxPadding'])
-
         # If the size fits within 32-bits, then recurse with our boxLength assigned
-        if 1 < cb < 0x100000000:
-            fields['boxLength'] = cb
+        length = res.size() - res['boxLengthExt'].size()
+        if 1 < length < 0x100000000:
+            fields['boxLength'] = length
             fields['boxLengthExt'] = 0
             return self.alloc(**fields)
 
         # Otherwise, this is a 64-bit length, so we need to re-allocate with
         # the boxLength set to 1 so that boxLengthExt is allocated as a u64.
         fields['boxLength'] = 1
-        fields['boxLengthExt'] = u64().set(cb)
+        fields['boxLengthExt'] = u64().set(length)
         return self.alloc(**fields)
 
     def Length(self):
@@ -444,6 +442,10 @@ class SOT(pstruct.type):
         (u8, 'TNsot'),
     ]
 
+    def alloc(self, **fields):
+        res = super(SOT, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lsot') else res.set(Lsot=res.size())
+
 @Marker.define
 class SOD(ptype.block):
     @classmethod
@@ -662,14 +664,14 @@ class A30(pbinary.struct):
 class QCD(pstruct.type):
     def __SPqcd(self):
         p, res, fields = self.parent, self['Sqcd'].li, ['Lqcd', 'Sqcd']
-        style, length = res.item('style'), (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
+        style, length = res.item('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
         if style['None']:
-            return dyn.array(A29, length)
+            return dyn.clone(pbinary.array, _object_=A29, length=length)
         elif style['Scalar derived']:
-            return dyn.array(A30, length // 2)
+            return dyn.clone(pbinary.array, _object_=A30, length=length // 2)
         elif style['Scalar expounded']:
-            return dyn.array(A30, length // 2)
-        return dyn.block(length)
+            return dyn.clone(pbinary.array, _object_=A30, length=length // 2)
+        return dyn.clone(pbinary.array, _object_=8, length=length)
 
     _fields_ = [
         (u16, 'Lqcd'),
@@ -697,14 +699,14 @@ class QCC(pstruct.type):
 
     def __SPqcc(self):
         p, res, fields = self.parent, self['Sqcc'].li, ['Lqcc', 'Cqcc', 'Sqcc']
-        style, length = res.item('style'), (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
+        style, length = res.item('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
         if style['None']:
-            return dyn.array(A29, length)
+            return dyn.clone(pbinary.array, _object_=A29, length=length)
         elif style['Scalar derived']:
-            return dyn.array(A30, length // 2)
+            return dyn.clone(pbinary.array, _object_=A30, length=length // 2)
         elif style['Scalar expounded']:
-            return dyn.array(A30, length // 2)
-        return dyn.block(length)
+            return dyn.clone(pbinary.array, _object_=A30, length=length // 2)
+        return dyn.clone(pbinary.array, _object_=8, length=length)
 
     _fields_ = [
         (u16, 'Lqcc'),
