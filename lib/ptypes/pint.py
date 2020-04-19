@@ -387,14 +387,40 @@ class enum(type):
         res, = value
 
         if isinstance(res, six.string_types):
-            return self.byname(res, None) == self.get()
-        return self.byvalue(res, False) and True or False
+            return self.__byname__(res, None) == self.get()
+        return self.__byvalue__(res, False) and True or False
+
+    def __byvalue__(self, value, *default):
+        '''Internal method to search the enumeration for the name representing the provided value.'''
+        if len(default) > 1:
+            raise error.TypeError(self, "{:s}.enum.byvalue".format(__name__), "{:s}.byvalue expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+
+        iterable = (name for name, item in self._values_ if item == value)
+        try:
+            res = six.next(iterable, *default)
+
+        except StopIteration:
+            raise KeyError(value)
+        return res
+
+    def __byname__(self, name, *default):
+        '''Internal method to search the enumeration for the value corresponding to the provided name.'''
+        if len(default) > 1:
+            raise error.TypeError(self, "{:s}.enum.byname".format(__name__), "{:s}.byname expected at most 3 arguments, got {:d}".format(self.typename(), 2 + len(default)))
+
+        iterable = (value for item, value in self._values_ if item == name)
+        try:
+            res = six.next(iterable, *default)
+
+        except StopIteration:
+            raise KeyError(name)
+        return res
 
     def __getattr__(self, name):
         # if getattr fails, then assume the user wants the value of
         #     a particular enum value
         try:
-            res = self.byname(name)
+            res = self.__byname__(name)
             Log.warning("{:s}.enum : {:s} : Using {:s}.attribute for fetching the value for `{:s}` is deprecated.".format(__name__, self.classname(), self.typename(), name))
             return res
         except KeyError: pass
@@ -403,11 +429,11 @@ class enum(type):
     def str(self):
         '''Return enumeration as a string or just the integer if unknown.'''
         res = self.get()
-        return self.byvalue(res, u"{:x}".format(res))
+        return self.__byvalue__(res, u"{:x}".format(res))
 
     def summary(self, **options):
         res = self.get()
-        try: return u"{:s}({:#x})".format(self.byvalue(res), res)
+        try: return u"{:s}({:#x})".format(self.__byvalue__(res), res)
         except (ValueError, KeyError): pass
         return super(enum, self).summary()
 
@@ -416,7 +442,7 @@ class enum(type):
             return super(enum, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        res = self.byname(integer) if isinstance(integer, six.string_types) else integer
+        res = self.__byname__(integer) if isinstance(integer, six.string_types) else integer
         return super(enum, self).__setvalue__(res, **attrs)
 
     def __getitem__(self, name):
