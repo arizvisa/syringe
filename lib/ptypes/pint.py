@@ -352,25 +352,12 @@ class enum(type):
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)
 
-        if getattr(self.__class__, '__pint_enum_validated__', False):
-            return
-        cls = self.__class__
-
         # ensure that the enumeration has ._values_ defined
-        if not hasattr(cls, '_values_'):
-            Log.warning("{:s}.enum : {:s} : {:s}._values_ has no enumerations defined. Assigning a default empty list to class.".format(__name__, self.classname(), self.typename()))
-            self._values_ = cls._values_ = []
-
-        # invert ._values_ if they're defined backwards
-        if len(cls._values_):
-            _, value = cls._values_[0]
-            if isinstance(value, six.string_types):
-                Log.warning("{:s}.enum : {:s} : {:s}._values_ is defined backwards. Inverting it's values.".format(__name__, self.classname(), self.typename()))
-                self._values_ = cls._values_ = [(name, value) for value, name in cls._values_[:]]
-            pass
+        if not hasattr(self, '_values_'):
+            self._values_ = []
 
         # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in cls._values_):
+        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in self._values_):
             Fname = operator.attrgetter('__name__')
             res = [Fname(item) for item in six.string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
@@ -382,18 +369,15 @@ class enum(type):
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
-        for value, items in itertools.groupby(cls._values_, operator.itemgetter(0)):
+        for value, items in itertools.groupby(self._values_, operator.itemgetter(0)):
             res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
+
         for value, items in six.viewitems(res):
             if len(items) > 1:
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
             continue
 
         # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
-
-        # cache the validation for the class so we don't need to check anything again
-        if cls is not enum:
-            cls.__pint_enum_validated__ = True
         return
 
     def has(self, *value):
