@@ -322,6 +322,15 @@ class ContiguousCodeStream(codestream.Stream):
     type = b'\x6a\x70\x32\x63'
     _object_ = DecodedStream
 
+    def StartOfDataMarkerQ(self, marker):
+        return intofdata(marker) == 0xff93
+
+    def DataMarkerQ(self, marker):
+        return 0xff90 <= intofdata(marker) < 0xffff
+
+    def EndOfDataMarkerQ(self, marker):
+        return intofdata(marker) == 0xffd9
+
 @Boxes.define
 class IntellectualProperty(ptype.block):
     type = b'\x6a\x70\x32\x69'

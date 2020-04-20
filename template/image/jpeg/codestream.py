@@ -1,4 +1,4 @@
-import ptypes, six, operator, itertools
+import ptypes, six, operator, itertools, functools
 
 from ptypes import *
 from . import intofdata, dataofint, __izip_longest__
@@ -164,102 +164,121 @@ class Stream(ptype.encoded_t):
 
         return result
 
+    def decode_until(self, bounds, FmarkerQ, Fterminate=lambda marker: False):
+
+        # Figure out the bounds of each element. If the marker is empty, then
+        # this element is just data and we'll use a negative length to mark it
+        print('decoding until..')
+        while True:
+            marker, data = (yield)
+
+            # Figure out the total size of this marker along with its data
+            size = len(marker) + len(data)
+            print("{!s} : {:#x}".format(marker.hex(), size))
+
+            # Check to see if we found a terminal marker, as we'll then
+            # just exit this coroutine
+            if Fterminate(marker):
+                bounds.append(+size if marker else -size)
+                break
+
+            # Check to see if the marker is a valid marker that we should add
+            if FmarkerQ(marker):
+                bounds.append(+size if marker else -size)
+
+            # Otherwise, just extend the previous record
+            else:
+                bounds[-1] = (bounds[-1] - size) if bounds[-1] < 0 else (bounds[-1] + size)
+
+            continue
+        return
+
     def decode(self, object, **attrs):
         if not self.initializedQ():
             raise ptypes.error.InitializationError(self, 'decode')
 
-        # Enumerate all of the markers that we support
+        # Enumerate all of the markers that we support, and use it to construct
+        # a closure for validating that the marker is valid.
         markerElementTable = self._object_.Element.Table
         supported = { integer if isinstance(integer, bytes) else dataofint(integer) for _, integer in markerElementTable.table }
+        FmarkerQ = functools.partial(operator.contains, supported)
 
-        # Chunk out our stream
-        result = self.__split_stream(object.serialize())
+        # Chunk out our stream and allocate a list for keeping track of the
+        # boundaries for each marker.
+        bounds, result = [], self.__split_stream(object.serialize())
 
         # Pair up each marker with its data
         iterable = __izip_longest__(*[iter(result)] * 2)
 
-        # Figure out the bounds of each element. If the marker is empty, then
-        # this element is just data and we'll use a negative length to mark it
-        bounds = []
-        for marker, data in iterable:
-            size = len(marker) + len(data)
+        # Now we'll enter a loop that will continue cycling while trying to
+        # decode markers. Our first segment will keep consuming our iterable
+        # until we find a start-of-data marker. If we find this, then we'll
+        # keep consuming iterable until we find our end-of-data marker. If we
+        # end up successfully consuming the iterable, then we've finished
+        # procesesing the codestream and can finalize the decoding by passing
+        # our marker boundaries to the parent's decode method.
+        while True:
+            decoder = self.decode_until(bounds, FmarkerQ, getattr(self, 'StartOfDataMarkerQ', lambda marker: False))
+            next(decoder)
 
-            # If we enter a data-processing marker, then exit this loop and
-            # begin processing the data codestream
-            if hasattr(self, 'StartOfDataMarkerQ') and self.StartOfDataMarkerQ(marker):
-                bounds.append(+size if marker else -size)
+            # Start decoding our markers whilst looking for the start-of-data
+            # marker.
+            try:
+                for item in iterable:
+                    decoder.send(item)
+
+                # If our loop has terminated legitimately, then we found no terminaion
+                # markers, and so there's nothing else to do. So make a copy of our
+                # bounds, so we can pass it to the parent class to finish decoding.
+                else:
+                    self.__bounds__[:] = bounds
+
+            # If our coroutine gave us a StopIteration, then that was because the
+            # StartOfDataMarkerQ function has terminated it. Simply exit this
+            # block, and resume decoding only data-markers.
+            except StopIteration:
+                pass
+
+            # As we've run out of markers in our iterable, we're done calculating
+            # the bounds of each marker. So simply exit our while-loop so that
+            # we can finalize decoding using the parent's decode method.
+            else:
                 break
 
-            # Check to see if our marker is supported
-            if operator.contains(supported, marker):
-                bounds.append(+size if marker else -size)
+            # Now we're at the next stage of our processing, and we keep consuming
+            # markers until we encounter our end-of-data marker.
+            decoder = self.decode_until(bounds, self.DataMarkerQ, getattr(self, 'EndOfDataMarkerQ', lambda marker: False))
+            next(decoder)
 
-            # Otherwise, just extend the previous record
+            # Continue procesesing our iterator whilst only keeping track of
+            # data-only markers
+            try:
+                for item in iterable:
+                    decoder.send(item)
+
+                # If our loop has terminated legitimately, then we didn't find an
+                # end-of-data marker, and we're done processing. Make a copy of
+                # our bounds so that we can hand it off to the parent class to
+                # finish decoding.
+                else:
+                    self.__bounds__[:] = bounds
+
+            # If our coroutine raised a StopIteration, then that was because the
+            # EndOfDataMarkerQ function has terminated it. Simply exit this block,
+            # and resume decoding data the same way as before.
+            except StopIteration:
+                pass
+
+            # Otherwise, we terminated because we ran out of markers. So all we
+            # need to do is exit the while-loop so we can hand-off our bounds
+            # that we decoded to the parent to finish decoding.
             else:
-                bounds[-1] = (bounds[-1] - size) if bounds[-1] < 0 else (bounds[-1] + size)
-            continue
-
-        # If our loop has terminated legitimately, then we found no data and
-        # so there's nothing else to do. So make a copy of our bounds, and
-        # pass it to the parent class to resume decoding.
-        else:
-            self.__bounds__[:] = bounds
-
-            # Cast our decoded data into an object using the parent's decode method
-            data = bytes(bytearray(itertools.chain(*result)))
-            decoded = ptype.block().set(data)
-            return super(Stream, self).decode(decoded)
-
-        # Continue procesesing our iterator whilst only adding data markers
-        for marker, data in iterable:
-            size = len(marker) + len(data)
-
-            # If we find an end-of-data marker, then exit the loop so we can
-            # continue aggregating the rest of the stream.
-            if hasattr(self, 'EndOfDataMarkerQ') and self.EndOfDataMarkerQ(marker):
-                bounds.append(+size if marker else -size)
                 break
 
-            # Check to see if we've found a data marker
-            if self.DataMarkerQ(marker):
-                bounds.append(+size if marker else -size)
-
-            # Otherwise, just extend the previous record
-            else:
-                bounds[-1] = (bounds[-1] - size) if bounds[-1] < 0 else (bounds[-1] + size)
             continue
 
-        # If our loop has terminated legitimately, then we didn't find a
-        # terminator and so we just make a copy of our bounds and leave.
-        else:
-            self.__bounds__[:] = bounds
-
-            # Last thing to do is to cast our decoded data into an object
-            data = bytes(bytearray(itertools.chain(*result)))
-            decoded = ptype.block().set(data)
-            return super(Stream, self).decode(decoded)
-
-        # We now go back to treating this as a regular part of the codestream,
-        # and keep reading markers whilst ignoring their type. The correct
-        # thing to do, however, would be to begin our cycle again, but this
-        # code is already getting very sloppy and is ready to be re-factored.
-        for marker, data in iterable:
-            size = len(marker) + len(data)
-
-            # Check to see if our marker is supported
-            if operator.contains(supported, marker):
-                bounds.append(+size if marker else -size)
-
-            # Otherwise, just extend the previous record
-            else:
-                bounds[-1] = (bounds[-1] - size) if bounds[-1] < 0 else (bounds[-1] + size)
-            continue
-
-        # Make a copy of our bounds here, and then pass it to the parent
-        # class to properly decode it.
-        self.__bounds__[:] = bounds
-
-        # Last thing to do is to cast our decoded data into an object
+        # Cast our decoded data into an object using the parent's decode method,
+        # and we're done.
         data = bytes(bytearray(itertools.chain(*result)))
         decoded = ptype.block().set(data)
         return super(Stream, self).decode(decoded)
