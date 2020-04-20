@@ -535,12 +535,29 @@ class Precinct(pbinary.struct):
     ]
 
 class SPcod(pstruct.type):
+    class _style(pbinary.flags):
+        _fields_ = [
+            (2, 'Reserved'),
+            (1, 'Segmentation symbols'),
+            (1, 'Predictable termination'),
+            (1, 'Vertically causal context'),
+            (1, 'Termination on each coding pass'),
+            (1, 'Reset context probabilities on coding pass boundaries'),
+            (1, 'Selective arithmetic coding bypass'),
+        ]
+
+    class _Transformation(pint.enum, u8):
+        _values_ = [
+            ('9-7 irreversible filter', 0),
+            ('5-3 irreversible filter', 1),
+        ]
+
     _fields_ = [
         (u8, 'Number of decomposition levels'),
         (u8, 'Code-block width'),
         (u8, 'Code-block height'),
-        (u8, 'Code-block style'),
-        (u8, 'Transformation'),
+        (_style, 'Code-block style'),
+        (_Transformation, 'Transformation'),
     ]
 
 @Marker.define
@@ -752,7 +769,7 @@ class QCC(pstruct.type):
 
 @Marker.define
 class POC(pstruct.type):
-    def __CSpod(self):
+    def __CSpoc(self):
         stream = self.getparent(stream.DecodedStream)
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
@@ -762,46 +779,50 @@ class POC(pstruct.type):
         Csiz = stream[index]['Value']['Csiz']
         return u8 if Csiz.int() < 257 else u16
 
-    def __CEpod(self):
-        return u16 if isinstance(self['CSpod'], u16) else u8
+    def __CEpoc(self):
+        return u16 if isinstance(self['CSpoc'], u16) else u8
 
-    def __missed(self):
-        length, fields = self['Lpod'].li, ['Lpod', 'RSpod', 'CSpod', 'LYEpod', 'REpod', 'CEpod', 'Ppod']
+    def __Ppoc(self):
+        length, fields = self['Lpoc'].li, ['Lpoc', 'RSpoc', 'CSpoc', 'LYEpoc', 'REpoc', 'CEpoc', 'Ppoc']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
-        (u16, 'Lpod'),
-        (u8, 'RSpod'),
-        (__CSpod, 'CSpod'),
-        (u16, 'LYEpod'),
-        (u8, 'REpod'),
-        (__CEpod, 'CEpod'),
-        (u8, 'Ppod'),
-        (__missed, 'missed'),
+        (u16, 'Lpoc'),
+        (u8, 'RSpoc'),
+        (__CSpoc, 'CSpoc'),
+        (u16, 'LYEpoc'),
+        (u8, 'REpoc'),
+        (__CEpoc, 'CEpoc'),
+        (__Ppoc, 'Ppoc'),
     ]
 
     def alloc(self, **fields):
         res = super(POC, self).alloc(**fields)
-        return res if operator.contains(fields, 'Lpod') else res.set(Lpod=res.size())
+        return res if operator.contains(fields, 'Lpoc') else res.set(Lpoc=res.size())
 
 @Marker.define
 class TLM(pstruct.type):
+    class _Stlm(pbinary.struct):
+        _fields_ = [
+            (1, 'Unused'),
+            (1, 'SP'),
+            (2, 'ST'),
+            (4, 'Reserved'),
+        ]
+
     def __Ttlm(self):
-        ST = 0
-        if ST == 0:
+        stlm = self['Stlm'].li
+        if stlm['ST'] == 0:
             return u0
-        elif ST == 1:
+        elif stlm['ST'] == 1:
             return u8
-        elif ST == 2:
+        elif stlm['ST'] == 2:
             return u16
         return u0
 
     def __Ptlm(self):
-        if isinstance(self['Ttlm'], u0):
-            return u16
-        elif isinstance(self['Ttlm'], u8):
-            return u32
-        return u0
+        stlm = self['Stlm'].li
+        return u32 if stlm['SP'] == 1 else u16
 
     def __missed(self):
         length, fields = self['Ltlm'].li, ['Ltlm', 'Ztlm', 'Stlm', 'Ttlm', 'Ptlm']
@@ -810,7 +831,7 @@ class TLM(pstruct.type):
     _fields_ = [
         (u16, 'Ltlm'),
         (u8, 'Ztlm'),
-        (u8, 'Stlm'),
+        (_Stlm, 'Stlm'),
         (__Ttlm, 'Ttlm'),
         (__Ptlm, 'Ptlm'),
         (__missed, 'missed'),
@@ -907,20 +928,32 @@ class EPH(ptype.block):
     pass
 
 @Marker.define
+class CRG(pstruct.type):
+    _fields_ = [
+        (u16, 'Lcrg'),
+        (u16, 'Xcrg'),
+        (u16, 'Ycrg'),
+    ]
+
+    def alloc(self, **fields):
+        res = super(CRG, self).alloc(**fields)
+        return res if operator.contains(fields, 'Lcrg') else res.set(Lcrg=res.size())
+
+@Marker.define
 class COM(pstruct.type):
     def __content(self):
-        length, fields = self['Lcme'].li, ['Lcme', 'Rcme']
+        length, fields = self['Lcom'].li, ['Lcom', 'Rcom']
         return dyn.clone(pstr.string, length=length.int() - sum(self[fld].li.size() for fld in fields))
 
     _fields_ = [
-        (u16, 'Lcme'),
-        (u16, 'Rcme'),
-        (__content, 'Ccme'),
+        (u16, 'Lcom'),
+        (u16, 'Rcom'),
+        (__content, 'Ccom'),
     ]
 
     def alloc(self, **fields):
         res = super(COM, self).alloc(**fields)
-        return res if operator.contains(fields, 'Lcme') else res.set(Lcme=res.size())
+        return res if operator.contains(fields, 'Lcom') else res.set(Lcom=res.size())
 
 if __name__ == '__main__':
     import ptypes, image.jpeg.jp2 as jp2
