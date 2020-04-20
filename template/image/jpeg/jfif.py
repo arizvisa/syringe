@@ -172,7 +172,7 @@ class SOF14(SOF): pass
 @Marker.define
 class SOF15(SOF): pass
 
-@Marker.define   # XXX
+@Marker.define
 class DQT(parray.block):
     class Table(pstruct.type):
         class _Y(pbinary.struct):
@@ -180,14 +180,34 @@ class DQT(parray.block):
                 (4, 'Pq'),
                 (4, 'Tq')
             ]
+
+        class _Qk(parray.type):
+            length, _object_ = 64, pint.uint8_t
+
+            def matrix(self):
+                iterable = (item.int() for item in self)
+                rows = 8 * [iter(iterable)]
+                return [ list(item) for item in zip(*rows) ]
+
         _fields_ = [
             (_Y, 'Y'),
-            (dyn.block(64), 'Qk')
+            (_Qk, 'Qk')
         ]
+
+        def repr(self):
+            Fprefix = lambda instance, name: "[{:#x}] {:s}{:s}".format(instance.getoffset(), ptypes.utils.repr_instance(instance.classname(), name), " {{{:s}}}".format(','.join(u"{:s}={!r}".format(k, v) for k, v in instance.properties().items())) if instance.properties() else '')
+
+            res = ["{:s} {:s}".format(Fprefix(self['Y'], self['Y'].name()), self['Y'].summary())]
+            for index, Mk in enumerate(self['Qk'].matrix()):
+                offset = 8 * index
+                item = self['Qk'][offset : len(Mk) + offset]
+                row = ','.join(map("{:>3d}".format, Mk))
+                res.append("{:s} {:s} [{:s}]".format(Fprefix(item, "Qk[{:>2d}:{:<2d}]".format(offset, len(Mk) + offset - 1)), item.__element__(), row))
+            return '\n'.join(res)
 
     _object_ = Table
 
-@Marker.define   # XXX
+@Marker.define
 class DHT(parray.block):
     class Table(pstruct.type):
         class _Th(pbinary.struct):
@@ -205,13 +225,38 @@ class DHT(parray.block):
         class _Li(parray.type):
             length, _object_ = 16, pint.uint8_t
 
+            def summary(self):
+                iterable = map("{:+d}".format, (item.int() for item in self))
+                return "[ {:s} ]".format(', '.join(iterable))
+
         class _Vij(parray.type):
             length = 16
 
+            class V(parray.type):
+                _object_ = pint.uint8_t
+
+                def summary(self):
+                    iterable = map("{:02x}".format, bytearray(self.serialize()))
+                    return "symbols: ({:d}) {:s}".format(self.size(), ' '.join(iterable) or 'none')
+            _object_ = V
+
+            def repr(self):
+                Fprefix = lambda instance, name: "[{:#x}] {:s}{:s}".format(instance.getoffset(), ptypes.utils.repr_instance(instance.classname(), name), " {{{:s}}}".format(','.join(u"{:s}={!r}".format(k, v) for k, v in instance.properties().items())) if instance.properties() else '')
+
+                if len(self) > 1:
+                    offset, res = 0, []
+                    for index, symbols in enumerate(self):
+                        if len(symbols) > 0:
+                            iterable = map("{:02x}".format, bytearray(symbols.serialize()))
+                            res.append("{:s} symbols of size {:+d}: ({:d}) {:s}".format(Fprefix(symbols, symbols.name()), index, len(symbols), ' '.join(iterable)))
+                        offset += len(symbols)
+                    return '\n'.join(res)
+                return super(DHT.Table._Vij, self).repr()
+
         def __Vij(self):
             count = [item.int() for item in self['Li'].li]
-            def _object_(self, count=count):
-                return dyn.array(pint.uint8_t, count[len(self.value)])
+            def _object_(self, _object_=self._Vij._object_, count=count):
+                return dyn.clone(_object_, length=count[len(self.value)])
             return dyn.clone(self._Vij, _object_=_object_)
 
         _fields_ = [
@@ -225,10 +270,6 @@ class DHT(parray.block):
             if operator.contains(fields, 'Li'):
                 return res
             res.set(Li=[item.size() for item in res['Vij']]) if isinstance(res['Vij'], parray.type) else res
-
-        def dump(self, indent=''):
-            res = [ "code-length ({:#x}) bits ({:d}): {:s}".format(index, len(code), ' '.join(map("{:02x}".format, bytearray(code.serialize())))) for ((index, code), count) in zip(enumerate(self['Vij']), self['Li']) ]
-            return '\n'.join(indent + row for row in [ "[Table {!s} : Tc={:d} Td={:d}]".format(self.name(), self['Th']['Tc'], self['Th']['Td']) ] + res)
 
     _object_ = Table
 
