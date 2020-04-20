@@ -1152,11 +1152,22 @@ class _struct_generic(container):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
-        result = self.repr().rstrip('\n') # remove trailing newlines
+        result = self.repr()
 
+        # multline
+        if result.count('\n') > 0:
+            result = result.rstrip('\n') # removing trailing newlines
+
+            if prop:
+                return u"{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, result)
+            return u"{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()), self.name(), result)
+
+        _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
+        # single-line
+        descr = u"{:s} '{:s}'".format(utils.repr_class(self.classname()), self.name()) if self.value is None else utils.repr_instance(self.classname(), self.name())
         if prop:
-            return u"{:s} '{:s}' {{{:s}}}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, result)
-        return u"{:s} '{:s}'\n{:s}".format(utils.repr_class(self.classname()), self.name(), result)
+            return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr,  prop, result)
+        return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
     #def __getstate__(self):
     #    return super(_struct_generic, self).__getstate__(), self.__fastindex
