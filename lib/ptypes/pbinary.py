@@ -1349,8 +1349,19 @@ class terminatedarray(_array_generic):
         raise error.ImplementationError(self, 'terminatedarray.isTerminator')
 
     def blockbits(self):
+
+        # If the user implement a custom .blocksize() method, then use that to
+        # calculate the number of bits.
+        if not utils.callable_eq(self.blocksize, container.blocksize):
+            return 8 * self.blocksize()
+
+        # If we're initialized, we can figure out how many bits we are by
+        # asking our parent class.
         if self.initializedQ():
             return super(terminatedarray, self).blockbits()
+
+        # Otherwise, we need to calculate this ourselves. We do this by taking
+        # the product of our length and our element size.
         return 0 if self.length is None else self.new(self._object_).blockbits() * len(self)
 
 class blockarray(terminatedarray):
@@ -2943,6 +2954,30 @@ if __name__ == '__main__':
         x = pbinary.array(length=2, _object_=8, offset=0x10).a
         position = x.append(bitmap.new(0, 0x200))
         if position == (x.getoffset() + 2, 0):
+            raise Success
+
+    @TestCase
+    def test_pbinary_blockarray_custom_blockbits_77():
+        data = b'ABCDXXXX'
+        class t(pbinary.blockarray):
+            _object_ = 8
+            def blockbits(self):
+                return len(data) // 2 * 8
+
+        x = pbinary.new(t, source=ptypes.prov.bytes(data)).l
+        if x.serialize() == data[0 : len(data) // 2]:
+            raise Success
+
+    @TestCase
+    def test_pbinary_blockarray_custom_blocksize_78():
+        data = b'ABCDXXXX'
+        class t(pbinary.blockarray):
+            _object_ = 8
+            def blocksize(self):
+                return len(data) // 2
+
+        x = pbinary.new(t, source=ptypes.prov.bytes(data)).l
+        if x.serialize() == data[0 : len(data) // 2]:
             raise Success
 
 if __name__ == '__main__':
