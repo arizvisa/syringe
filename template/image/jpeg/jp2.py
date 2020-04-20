@@ -659,6 +659,15 @@ class A29(pbinary.struct):
         (3, 'Reserved'),
     ]
 
+    def float(self):
+        return math.ldexp(1.0, -self['Exponent'])
+
+    def summary(self):
+        res = self.item('Exponent')
+        return "Exponent={:s} : Result={:f}".format(res.summary(), self.float())
+
+    repr = summary
+
 class A30(pbinary.struct):
     '''
     Table A.30 - Quantization values for the SPqcd and SPqcc parameters (irreversible transformation only)
@@ -669,17 +678,30 @@ class A30(pbinary.struct):
         (11, 'Mantissa'),
     ]
 
+    def float(self):
+        fraction = self['Mantissa'] / math.pow(2, 11)
+        return math.ldexp(1.0 + fraction, -self['Exponent'])
+
+    def summary(self):
+        return "Mantissa={:s} Exponent={:s} : Result={:f}".format(self.item('Mantissa').summary(), self.item('Exponent').summary(), self.float())
+    repr = summary
+
+class ScalarArray(pbinary.array):
+    def summary(self):
+        fmt, iterable = "{:f}".format, (item.float() for item in self)
+        return "[{:s}]".format(', '.join(map(fmt, iterable)))
+
 @Marker.define
 class QCD(pstruct.type):
     def __SPqcd(self):
         p, res, fields = self.parent, self['Sqcd'].li, ['Lqcd', 'Sqcd']
         style, length = res.item('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
         if style['None']:
-            return dyn.clone(pbinary.array, _object_=A29, length=length)
+            return dyn.clone(ScalarArray, _object_=A29, length=length)
         elif style['Scalar derived']:
-            return dyn.clone(pbinary.array, _object_=A30, length=length // 2)
+            return dyn.clone(ScalarArray, _object_=A30, length=length // 2)
         elif style['Scalar expounded']:
-            return dyn.clone(pbinary.array, _object_=A30, length=length // 2)
+            return dyn.clone(ScalarArray, _object_=A30, length=length // 2)
         return dyn.clone(pbinary.array, _object_=8, length=length)
 
     _fields_ = [
