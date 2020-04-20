@@ -181,12 +181,15 @@ class ImageHeader(pstruct.type):
     ]
 
 @Boxes.define
-class BitsPerComponent(pbinary.struct):
+class BitsPerComponent(pbinary.blockarray):
     type = b'\x62\x70\x63\x63'
-    _fields_ = [
-        (1, 'Signed'),
-        (7, 'BitDepth'),
-    ]
+
+    class Component(pbinary.struct):
+        _fields_ = [
+            (1, 'Signed'),
+            (7, 'BitDepth'),
+        ]
+    _object_ = Component
 
 @Boxes.define
 class Palette(pstruct.type):
