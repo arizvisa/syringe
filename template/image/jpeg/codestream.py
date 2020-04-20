@@ -165,16 +165,21 @@ class Stream(ptype.encoded_t):
         return result
 
     def decode_until(self, bounds, FmarkerQ, Fterminate=lambda marker: False):
+        '''
+        This coroutine will consume a tuple of a marker and its data in order
+        to calculate the bounds of the markers it receives. Its first callable,
+        FmarkerQ, is used to determine whether a marker is valid. Its second
+        callable, Fterminate, is used to determine whether the coroutine should
+        terminate as a different set of markers will need to be checked.
+        '''
 
         # Figure out the bounds of each element. If the marker is empty, then
         # this element is just data and we'll use a negative length to mark it
-        print('decoding until..')
         while True:
             marker, data = (yield)
 
             # Figure out the total size of this marker along with its data
             size = len(marker) + len(data)
-            print("{!s} : {:#x}".format(marker.hex(), size))
 
             # Check to see if we found a terminal marker, as we'll then
             # just exit this coroutine
@@ -193,6 +198,7 @@ class Stream(ptype.encoded_t):
             continue
         return
 
+    @ptypes.utils.memoize('self', self=lambda item: tuple(item.__bounds__), object=lambda item: item.serialize(), attrs=lambda item: tuple(sorted(item.items())))
     def decode(self, object, **attrs):
         if not self.initializedQ():
             raise ptypes.error.InitializationError(self, 'decode')
