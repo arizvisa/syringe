@@ -296,6 +296,18 @@ class DefauiltDisplayResolution(pstruct.type):
 @Boxes.define
 class ColourSpecification(pstruct.type):
     type = b'\x63\x6f\x6c\x72'
+    class _METH(pint.enum, u8):
+        _values_ = [
+            ('Enumerated Colourspace', 1),
+            ('Restricted ICC profile', 2),
+        ]
+
+    class _EnumCS(pint.enum, u32):
+        _values_ = [
+            ('sRGB', 16),
+            ('greyscale', 17),
+        ]
+
     def __PROFILE(self):
         try:
             hdr = self.getparent(Box).li
@@ -306,10 +318,10 @@ class ColourSpecification(pstruct.type):
         return dyn.block(max(0, hdr.DataLength() - sum(self[fld].li.size() for fld in fields)))
 
     _fields_ = [
-        (u8, 'METH'),
+        (_METH, 'METH'),
         (u8, 'PREC'),
         (u8, 'APPROX'),
-        (lambda s: u0 if s['METH'].li.int() == 2 else u32, 'EnumCS'),
+        (lambda self: u0 if self['METH'].li.int() == 2 else self._EnumCS, 'EnumCS'),
         (__PROFILE, 'PROFILE'),
     ]
 
