@@ -1366,14 +1366,18 @@ class terminatedarray(_array_generic):
 
 class blockarray(terminatedarray):
     length = None
+
+    def alloc(self, fields=(), **attrs):
+        # Make sure we use the regular allocator that doesn't set any
+        # attributes required for the terminated array.
+        return super(terminatedarray, self).alloc(fields, **attrs)
+
     def isTerminator(self, value):
         return False
 
     def __deserialize_consumer__(self, consumer):
         obj, position = getattr(self, '_object_', 0), self.getposition()
-        total = self.blocksize() * 8
-        if total != self.blockbits():
-            total = self.blockbits()
+        total = self.blockbits()
         value = self.value = []
         forever = itertools.count() if self.length is None else six.moves.range(self.length)
         generator = (self.new(obj, __name__=str(index), position=position) for index in forever)
@@ -2978,6 +2982,28 @@ if __name__ == '__main__':
 
         x = pbinary.new(t, source=ptypes.prov.bytes(data)).l
         if x.serialize() == data[0 : len(data) // 2]:
+            raise Success
+
+    @TestCase
+    def test_pbinary_blockarray_custom_blockbits_alloc_78():
+        class t(pbinary.blockarray):
+            _object_ = 8
+            def blockbits(self):
+                return 8 * 32
+
+        x = t().a
+        if len(x) == 32:
+            raise Success
+
+    @TestCase
+    def test_pbinary_blockarray_custom_blocksize_alloc_79():
+        class t(pbinary.blockarray):
+            _object_ = 8
+            def blocksize(self):
+                return 32
+
+        x = t().a
+        if len(x) == 32:
             raise Success
 
 if __name__ == '__main__':
