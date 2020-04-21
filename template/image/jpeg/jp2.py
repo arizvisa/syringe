@@ -170,14 +170,31 @@ class Jp2Header(SuperBox):
 @Boxes.define
 class ImageHeader(pstruct.type):
     type = b'\x69\x68\x64\x72'
+    class _C(pint.enum, u8):
+        _values_ = [
+            ('compressed', 7),
+        ]
+
+    class _UnkC(pint.enum, u8):
+        _values_ = [
+            ('known', 0),
+            ('unknown', 1),
+        ]
+
+    class _IPR(pint.enum, u8):
+        _values_ = [
+            ('no', 0),
+            ('yes', 1),
+        ]
+
     _fields_ = [
         (u32, 'HEIGHT'),
         (u32, 'WIDTH'),
         (u16, 'NC'),
         (u8, 'BPC'),
-        (u8, 'C'),
-        (u8, 'UnkC'),
-        (u8, 'IPR'),
+        (_C, 'C'),
+        (_UnkC, 'UnkC'),
+        (_IPR, 'IPR'),
     ]
 
 @Boxes.define
