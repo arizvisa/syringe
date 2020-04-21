@@ -175,13 +175,7 @@ class ImageHeader(pstruct.type):
             ('compressed', 7),
         ]
 
-    class _UnkC(pint.enum, u8):
-        _values_ = [
-            ('known', 0),
-            ('unknown', 1),
-        ]
-
-    class _IPR(pint.enum, u8):
+    class _Boolean(pint.enum, u8):
         _values_ = [
             ('no', 0),
             ('yes', 1),
@@ -193,8 +187,8 @@ class ImageHeader(pstruct.type):
         (u16, 'NC'),
         (u8, 'BPC'),
         (_C, 'C'),
-        (_UnkC, 'UnkC'),
-        (_IPR, 'IPR'),
+        (_Boolean, 'UnkC'),
+        (_Boolean, 'IPR'),
     ]
 
 @Boxes.define
