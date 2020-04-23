@@ -623,7 +623,7 @@ class SPcoc(SPcod): pass
 @Marker.define
 class COC(pstruct.type):
     def __Ccoc(self):
-        stream = self.getparent(stream.DecodedStream)
+        stream = self.getparent(codestream.DecodedStream)
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
@@ -655,7 +655,7 @@ class COC(pstruct.type):
 @Marker.define
 class RGN(pstruct.type):
     def __Crgn(self):
-        stream = self.getparent(stream.DecodedStream)
+        stream = self.getparent(codestream.DecodedStream)
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
@@ -762,7 +762,7 @@ class Sqcc(Sqcd): pass
 @Marker.define
 class QCC(pstruct.type):
     def __Cqcc(self):
-        stream = self.getparent(stream.DecodedStream)
+        stream = self.getparent(codestream.DecodedStream)
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
@@ -796,7 +796,7 @@ class QCC(pstruct.type):
 @Marker.define
 class POC(pstruct.type):
     def __CSpoc(self):
-        stream = self.getparent(stream.DecodedStream)
+        stream = self.getparent(codestream.DecodedStream)
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
