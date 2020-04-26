@@ -100,7 +100,7 @@ from six.moves import builtins
 
 from . import ptype, pint, bitmap, config, error
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('pfloat')
 
 def setbyteorder(endianness):
     if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:

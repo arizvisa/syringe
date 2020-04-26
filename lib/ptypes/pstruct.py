@@ -50,7 +50,7 @@ import functools, itertools, types, builtins, operator, six
 
 from . import ptype, utils, config, pbinary, error
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('pstruct')
 __all__ = 'type,make'.split(',')
 
 __izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest

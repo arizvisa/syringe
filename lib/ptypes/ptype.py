@@ -234,7 +234,7 @@ from six.moves import builtins
 
 from . import bitmap, provider, utils, config, error
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('ptype')
 
 __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
 

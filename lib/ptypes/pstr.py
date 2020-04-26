@@ -72,7 +72,7 @@ from six.moves import builtins
 
 from . import ptype, parray, pint, utils, error, pstruct, provider, config
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('pstr')
 
 __izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 

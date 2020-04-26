@@ -141,7 +141,7 @@ from six.moves import builtins
 
 from . import ptype, bitmap, config, error, utils
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('pint')
 
 __state__ = {}
 def setbyteorder(endianness):

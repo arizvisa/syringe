@@ -58,7 +58,7 @@ from six.moves import builtins
 
 from . import config, utils, error
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__) + 1:])
+Log = Config.log.getChild('provider')
 
 class base(object):
     '''

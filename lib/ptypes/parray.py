@@ -87,7 +87,7 @@ import itertools, operator, functools
 
 from . import ptype, utils, error, config
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('parray')
 __all__ = 'type,terminated,infinite,block'.split(',')
 
 class _parray_generic(ptype.container):

@@ -84,7 +84,7 @@ import six, sys, operator, itertools
 
 from . import ptype, parray, pstruct, config, error, utils, provider, pint
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('dynamic')
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
 __izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 

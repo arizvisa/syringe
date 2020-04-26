@@ -127,7 +127,7 @@ except ImportError:
 from . import utils, bitmap, config, error, provider
 
 Config = config.defaults
-Log = Config.log.getChild(__name__[len(__package__)+1:])
+Log = Config.log.getChild('pbinary')
 __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
 __izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
