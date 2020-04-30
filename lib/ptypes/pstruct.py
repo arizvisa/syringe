@@ -100,8 +100,8 @@ class _pstruct_generic(ptype.container):
         raise KeyError(name)
 
     ## informational methods
-    def properties(self):
-        result = super(_pstruct_generic, self).properties()
+    def __properties__(self):
+        result = super(_pstruct_generic, self).__properties__()
         if self.initializedQ():
             if len(self.value) < len(self._fields_ or []):
                 result['abated'] = True

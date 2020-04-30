@@ -409,8 +409,8 @@ class union(_union_generic):
         self.value[0].__deserialize_block__(block)
         return self
 
-    def properties(self):
-        result = super(union, self).properties()
+    def __properties__(self):
+        result = super(union, self).__properties__()
         if self.initializedQ():
             result['object'] = ["{:s}<{:s}>".format(item.name(), item.classname()) for item in self.__object__]
         else:

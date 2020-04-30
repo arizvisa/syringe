@@ -376,8 +376,8 @@ class integer(type):
         res = self.bitmap()
         return bitmap.string(res)
 
-    def properties(self):
-        result = super(type, self).properties()
+    def __properties__(self):
+        result = super(type, self).__properties__()
         if self.initializedQ() and bitmap.signed(self.bitmap()):
             result['signed'] = True
         return result
@@ -873,7 +873,15 @@ class _array_generic(container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+        try:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+
+        # If we got an InitializationError while fetching the properties (due to
+        # a bunk user implementation), then we simply fall back to the internal
+        # implementation.
+        except error.InitializationError:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
@@ -1151,7 +1159,15 @@ class _struct_generic(container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+        try:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+
+        # If we got an InitializationError while fetching the properties (due to
+        # a bunk user implementation), then we simply fall back to the internal
+        # implementation.
+        except error.InitializationError:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+
         result = self.repr()
 
         # multline
@@ -1599,8 +1615,8 @@ class partial(ptype.container):
         res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
         return res // 8
 
-    def properties(self):
-        result = super(partial, self).properties()
+    def __properties__(self):
+        result = super(partial, self).__properties__()
         if self.initializedQ():
             res, = self.value
             if res.bits() != self.blockbits():
@@ -1657,7 +1673,15 @@ class partial(ptype.container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+        try:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+
+        # If we got an InitializationError while fetching the properties (due to
+        # a bunk user implementation), then we simply fall back to the internal
+        # implementation.
+        except error.InitializationError:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+
         result = self.object.repr() if self.initializedQ() else self.repr()
 
         # multiline

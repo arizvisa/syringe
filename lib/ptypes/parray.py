@@ -212,7 +212,15 @@ class _parray_generic(ptype.container):
 
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
-        prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+        try:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+
+        # If we got an InitializationError while fetching the properties (due to
+        # a bunk user implementation), then we simply fall back to the internal
+        # implementation.
+        except error.InitializationError:
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
@@ -456,8 +464,8 @@ class infinite(uninitialized):
     def isTerminator(self, value):
         return False
 
-    def properties(self):
-        res = super(infinite, self).properties()
+    def __properties__(self):
+        res = super(infinite, self).__properties__()
 
         # Check if we're really an underloaded parray.infinite
         if res.get('underload', False):
