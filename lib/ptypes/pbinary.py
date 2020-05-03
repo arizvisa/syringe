@@ -694,7 +694,7 @@ class container(type):
         if self.value is None:
             raise error.InitializationError(self, 'container.bitmap')
         res = map(operator.methodcaller('bitmap'), self.value)
-        return six.moves.reduce(bitmap.push, filter(None, res), bitmap.new(0, 0))
+        return functools.reduce(bitmap.push, filter(None, res), bitmap.new(0, 0))
 
     def bits(self):
         return sum(item.bits() for item in self.value or [])
@@ -2053,7 +2053,7 @@ if __name__ == '__main__':
             _object_ = byte
             length = 16
 
-        res = six.moves.reduce(lambda x,y: x<<1 | [0,1][int(y)], ('11001100'), 0)
+        res = functools.reduce(lambda x,y: x<<1 | [0,1][int(y)], ('11001100'), 0)
 
         x = pbinary.new(largearray,source=provider.string(six.int2byte(res)*63)).l
         if x[5].int() == res:

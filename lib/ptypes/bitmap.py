@@ -111,7 +111,7 @@ def set(bitmap, position, value=True, count=1):
     if position + count > abs(size):
         raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask, size = six.moves.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
+    mask, size = functools.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
     if value:
         return integer | mask, size
     return integer & ~mask, size
@@ -125,7 +125,7 @@ def get(bitmap, position, count):
     if position + count > abs(size):
         raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask, size = six.moves.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
+    mask, size = functools.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
     return (integer & mask) >> position, count
 
 def add(bitmap, integer):
@@ -418,7 +418,7 @@ def split(bitmap, maxsize):
 
 def join(iterable):
     '''Join a list of bitmaps into a single one'''
-    return six.moves.reduce(push, iterable, zero)
+    return functools.reduce(push, iterable, zero)
 
 def groupby(sequence, count):
     '''Group sequence by number of elements'''
@@ -538,9 +538,9 @@ class WBitmap(object):
         used = self.bits & 7
         if used:
             shift, mask = 2 ** used, 2 ** used - 1
-            res = six.moves.reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
+            res = functools.reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
             return (res * shift) | (self.data[-1] & mask)
-        return six.moves.reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
+        return functools.reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
 
     def size(self):
         '''Return the current number of bits that have been stored.'''

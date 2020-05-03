@@ -2269,7 +2269,7 @@ class pointer_t(encoded_t):
             bs = self.blocksize()
             value = reversed(self.value) if self.byteorder is config.byteorder.littleendian else self.value
             octets = __izip_longest__(bytearray(value), [8] * len(self.value))
-            res = six.moves.reduce(bitmap.push, octets, bitmap.zero)
+            res = functools.reduce(bitmap.push, octets, bitmap.zero)
             return bitmap.value(res)
 
     def decode(self, object, **attrs):
@@ -2951,7 +2951,7 @@ if __name__ == '__main__':
 
         result = dict(y.compare(z))
         if list(result.keys()) == [1]:
-            s,o = tuple(six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),b'') for X in result[1])
+            s,o = tuple(functools.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),b'') for X in result[1])
             if s == g.serialize() and o == bytes().join(map(six.int2byte,(40,60,80,100))):
                 raise Success
 
@@ -2977,7 +2977,7 @@ if __name__ == '__main__':
         result = dict(y.compare(z))
         if list(result.keys()) == [3]:
             s,o = result[3]
-            if s is None and six.moves.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),b'') == g.serialize()+b'\x40':
+            if s is None and functools.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),o),b'') == g.serialize()+b'\x40':
                 raise Success
     @TestCase
     def test_container_set_uninitialized_type():

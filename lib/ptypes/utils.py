@@ -138,7 +138,7 @@ def repr_position(pos, hex=True, precision=0):
 ## hexdumping capability
 def printable(data, nonprintable=u'.'):
     """Return a string of only printable characters"""
-    return six.moves.reduce(lambda agg, item: agg + (six.int2byte(item).decode(sys.getdefaultencoding()) if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
+    return functools.reduce(lambda agg, item: agg + (six.int2byte(item).decode(sys.getdefaultencoding()) if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""

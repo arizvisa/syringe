@@ -810,7 +810,7 @@ if __name__ == '__main__':
             length = 4
             _object_ = pint.uint8_t
             def int(self):
-                return six.moves.reduce(lambda x,y:x*256+int(y), self.v, 0)
+                return functools.reduce(lambda x,y:x*256+int(y), self.v, 0)
 
             def repr(self, **options):
                 if self.initializedQ():

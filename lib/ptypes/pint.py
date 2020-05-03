@@ -240,9 +240,9 @@ class type(ptype.type):
             raise error.InitializationError(self, 'int')
         data = bytearray(self.serialize())
         if self.byteorder is config.byteorder.bigendian:
-            return six.moves.reduce(lambda agg, item: agg << 8 | item, data, 0)
+            return functools.reduce(lambda agg, item: agg << 8 | item, data, 0)
         elif self.byteorder is config.byteorder.littleendian:
-            return six.moves.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
+            return functools.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
         raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
 
     def __setvalue__(self, *values, **attrs):
