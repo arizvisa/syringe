@@ -247,9 +247,9 @@ def clone(cls, **newattrs):
     '''
     return ptype.clone(cls, **newattrs)
 
-class _union_generic(ptype.container):
+class __union_interface__(ptype.container):
     def __init__(self, *args, **kwds):
-        super(_union_generic, self).__init__(*args, **kwds)
+        super(__union_interface__, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
     def append(self, object):
@@ -310,7 +310,7 @@ class _union_generic(ptype.container):
             yield k
         return
 
-class union(_union_generic):
+class union(__union_interface__):
     """
     Provides a data structure with Union-like characteristics. If the root type
     isn't defined, it is assumed the first type in the union will be the root.

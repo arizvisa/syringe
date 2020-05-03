@@ -278,11 +278,11 @@ def isresolveable(t):
 def isrelated(t, t2):
     """True if type ``t`` is related to ``t2``"""
     def getbases(result, bases):
-        for x in bases:
-            if not istype(x) or x in (type, container):
+        for t in bases:
+            if not istype(t) or t in (type, container):
                 continue
-            result.add(x)
-            getbases(result, x.__bases__)
+            result.add(t)
+            getbases(result, t.__bases__)
         return result
     return getbases(set(), t.__bases__).intersection( getbases(set(), t.__bases__) )
 
@@ -305,7 +305,7 @@ def force(t, self, chain=[]):
     ## Next we'll check instances (for setting and allocating)
 
     # if type is a pbinary instance
-    if builtins.isinstance(t, pbinary.type):
+    if builtins.isinstance(t, pbinary.base):
         return pbinary.new(t)
 
     # if type is just a regular ptype instance
@@ -343,7 +343,7 @@ def debug(ptype, **attributes):
     def logentry(string, *args):
         return (time.time(), traceback.extract_stack(), string.format(*args))
 
-    if any((hasattr(n) for n in ('_debug_', '_dump_'))):
+    if any((hasattr(item) for item in ('_debug_', '_dump_'))):
         raise error.UserError(ptype, 'debug', message="{!r} has a private method name that clashes".format(ptype))
 
     class decorated_ptype(ptype):
@@ -422,7 +422,7 @@ def debugrecurse(ptype):
     return decorated
 
 source = provider.default()
-class _base_generic(object):
+class __interface__(object):
     # XXX: this class should implement
     #           attribute inheritance
     #           addition and removal of elements to trie
@@ -517,7 +517,7 @@ class _base_generic(object):
 
         # update sub-elements with recursive attributes
         if recurse and issubclass(self.__class__, container) and self.value is not None:
-            [n.__update__(recurse, recurse=recurse) for n in self.value]
+            [item.__update__(recurse, recurse=recurse) for item in self.value]
         return self
 
     def properties(self):
@@ -525,7 +525,7 @@ class _base_generic(object):
         return self.__properties__()
 
     def __properties__(self):
-        '''Internal implementation of the _base_generic.properties() method.'''
+        '''Internal implementation of the __interface__.properties() method.'''
         result = {}
 
         # Validate that we weren't constructed with a name per a field assignment,
@@ -726,7 +726,7 @@ class _base_generic(object):
         each structure.
         """
         path = self.traverse(edges=lambda node: (node.parent for edge in [None] if node.parent is not None))
-        path = [ fn(x) for x in path ]
+        path = [ fn(item) for item in path ]
         return list(reversed(path))
 
     def new(self, t, **attrs):
@@ -761,10 +761,10 @@ class _base_generic(object):
             t.__name__ = attrs['__name__']
         return t
 
-class generic(_base_generic):
+class generic(__interface__):
     '''A class shared between both pbinary.*, ptype.*'''
     def initializedQ(self):
-        raise error.ImplementationError(self, 'base.initializedQ')
+        raise error.ImplementationError(self, 'generic.initializedQ')
     def __hash__(self):
         return hash(self.__class__) ^ hash(self.value)
     def __eq__(self, other):
@@ -784,6 +784,7 @@ class generic(_base_generic):
 
     def __deserialize_block__(self, block):
         raise error.ImplementationError(self, 'generic.__deserialize_block__', message="Subclass {:s} must implement deserialize_block".format(self.classname()))
+
     def serialize(self):
         raise error.ImplementationError(self, 'generic.serialize')
 
@@ -982,21 +983,21 @@ class base(generic):
         if parentTester == self:
             yield self
         duplicates.add(self)
-        for n in self.traverse(filter=lambda n: parentTester == n):
-            if n.parent is None:
-                if n not in duplicates:
-                    yield n
-                    duplicates.add(n)
+        for item in self.traverse(filter=lambda n: parentTester == n):
+            if item.parent is None:
+                if item not in duplicates:
+                    yield item
+                    duplicates.add(item)
                 continue
             try:
-                result = n.d.l
+                result = item.d.l
             except Exception:
                 continue
             if result not in duplicates:
                 yield result
                 duplicates.add(result)
-            for o in result.collect():
-                result = o.getparent(parentTester)
+            for item in result.collect():
+                result = item.getparent(parentTester)
                 if result not in duplicates:
                     yield result
                     duplicates.add(result)
@@ -1164,17 +1165,17 @@ class container(base):
         """True if the type is fully initialized"""
         if self.value is None:
             return False
-        return all(x is not None and x.initializedQ() for x in self.value) and self.size() >= self.blocksize()
+        return all(item is not None and item.initializedQ() for item in self.value) and self.size() >= self.blocksize()
 
     def size(self):
         """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
-        return sum(n.size() for n in self.value or [])
+        return sum(item.size() for item in self.value or [])
 
     def blocksize(self):
         """Returns a sum of the bytes that are expected to be read"""
         if self.value is None:
             raise error.InitializationError(self, 'container.blocksize')
-        return sum(n.blocksize() for n in self.value)
+        return sum(item.blocksize() for item in self.value)
 
     def getoffset(self, *field, **options):
         """Returns the current offset.
@@ -1235,9 +1236,9 @@ class container(base):
 
         # if we weren't asked to recurse, then figure out which sub-element contains the offset
         if not recurse:
-            for n in self.value:
-                if n.contains(offset):
-                    return n
+            for item in self.value:
+                if item.contains(offset):
+                    return item
                 continue
             raise error.NotFoundError(self, 'container.at', "offset {:#x} not found in a child element. returning encompassing parent.".format(offset))
 
@@ -1378,7 +1379,7 @@ class container(base):
         try:
             # if any of the sub-elements are undefined, load each element separately
             if Config.ptype.noncontiguous and \
-                    any(builtins.isinstance(n, container) or builtins.isinstance(n, undefined) for n in self.value):
+                    any(builtins.isinstance(item, container) or builtins.isinstance(item, undefined) for item in self.value):
                 # load each element individually up to the blocksize
                 bs, value = 0, self.value[:]
                 left, right = self.getoffset(), self.getoffset()+self.blocksize()
@@ -1414,7 +1415,7 @@ class container(base):
     def commit(self, **attrs):
         """Commit the current state of all children back to the .source attribute"""
         if not Config.ptype.noncontiguous and \
-                all(not (builtins.isinstance(n, container) or builtins.isinstance(n, undefined)) for n in self.value):
+                all(not (builtins.isinstance(item, container) or builtins.isinstance(item, undefined)) for item in self.value):
 
             try:
                 return super(container, self).commit(**attrs)
@@ -1425,9 +1426,9 @@ class container(base):
         with utils.assign(self, **attrs):
             current, ofs, sz = 0, self.getoffset(), self.size()
             try:
-                for n in self.value:
-                    n.commit(source=self.source)
-                    current += n.size()
+                for item in self.value:
+                    item.commit(source=self.source)
+                    current += item.size()
                     if current > sz: break
                 pass
             except error.CommitError as E:
@@ -1464,10 +1465,10 @@ class container(base):
 
             objects = provider.proxy.collect(object, left, right)
             mapped = [ item.getparent(*args, **kwds) if kwds else item for item in objects ]
-            for n, _ in itertools.groupby(mapped):
-                if left+n.size() <= right:
-                    yield n
-                left += n.size()
+            for item, _ in itertools.groupby(mapped):
+                if left + item.size() <= right:
+                    yield item
+                left += item.size()
             return
 
         for ofs, (s, o) in super(container, self).compare(other):

@@ -55,9 +55,9 @@ __all__ = 'type,make'.split(',')
 
 __izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
-class _pstruct_generic(ptype.container):
+class __structure_interface__(ptype.container):
     def __init__(self, *args, **kwds):
-        super(_pstruct_generic, self).__init__(*args, **kwds)
+        super(__structure_interface__, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
     def alias(self, alias, target):
@@ -67,7 +67,7 @@ class _pstruct_generic(ptype.container):
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
         if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
-            raise error.UserError(self, '_pstruct_generic.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
+            raise error.UserError(self, '__structure_interface__.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
     def append(self, object):
@@ -76,14 +76,14 @@ class _pstruct_generic(ptype.container):
 
     def __append__(self, object):
         current, name = len(self.value), object.shortname()
-        offset = super(_pstruct_generic, self).__append__(object)
+        offset = super(__structure_interface__, self).__append__(object)
         self.__fastindex[name.lower()] = current
         return offset
 
     def __getindex__(self, name):
         '''x.__getitem__(y) <==> x[y]'''
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_pstruct_generic.__getindex__', message='Element names must be of a str type.')
+            raise error.UserError(self, '__structure_interface__.__getindex__', message='Element names must be of a str type.')
 
         try:
             index = self.__fastindex[name.lower()]
@@ -101,7 +101,7 @@ class _pstruct_generic(ptype.container):
 
     ## informational methods
     def __properties__(self):
-        result = super(_pstruct_generic, self).__properties__()
+        result = super(__structure_interface__, self).__properties__()
         if self.initializedQ():
             if len(self.value) < len(self._fields_ or []):
                 result['abated'] = True
@@ -156,13 +156,13 @@ class _pstruct_generic(ptype.container):
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
+            raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
         return name in self.__fastindex
 
     def __iter__(self):
         '''D.__iter__() <==> iter(D)'''
         if self.value is None:
-            raise error.InitializationError(self, '_pstruct_generic.__iter__')
+            raise error.InitializationError(self, '__structure_interface__.__iter__')
 
         for name in six.iterkeys(self):
             yield name
@@ -171,24 +171,24 @@ class _pstruct_generic(ptype.container):
     def __getitem__(self, name):
         '''x.__getitem__(y) <==> x[y]'''
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_pstruct_generic.__contains__', message='Element names must be of a str type.')
-        return super(_pstruct_generic, self).__getitem__(name)
+            raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
+        return super(__structure_interface__, self).__getitem__(name)
 
     def __setitem__(self, name, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         index = self.__getindex__(name)
-        result = super(_pstruct_generic, self).__setitem__(index, value)
+        result = super(__structure_interface__, self).__setitem__(index, value)
         result.__name__ = name
         return result
 
     def __getstate__(self):
-        return super(_pstruct_generic, self).__getstate__(), self.__fastindex,
+        return super(__structure_interface__, self).__getstate__(), self.__fastindex,
 
     def __setstate__(self, state):
         state, self.__fastindex, = state
-        super(_pstruct_generic, self).__setstate__(state)
+        super(__structure_interface__, self).__setstate__(state)
 
-class type(_pstruct_generic):
+class type(__structure_interface__):
     '''
     A container for managing structured/named data
 

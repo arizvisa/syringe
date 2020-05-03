@@ -190,11 +190,17 @@ def force(t, self, chain=[]):
     path = str().join(map("<{:s}>".format, self.backtrace()))
     raise error.TypeError(self, 'force<pbinary>', message='chain={!r} : refusing request to resolve {!r} to a type that does not inherit from pbinary.type : {:s}'.format(chain, t, path))
 
-class type(ptype.generic):
-    """The base type that all pbinary types must inherit from.,
+class base(ptype.generic):
+    """A base class that all binary types with position/size must inherit from.
 
-    This type is backed by a bitmap of some kind
+    This class is responsible for keeping track of the position
+    and size of a binary type. Some generic methods are also
+    included.
     """
+
+    def new(self, pbinarytype, **attrs):
+        res = force(pbinarytype, self)
+        return super(base, self).new(res, **attrs)
 
     ## Methods for fetching and altering the position of a binary type
     __position__ = (0, 0)
@@ -226,10 +232,10 @@ class type(ptype.generic):
     bofs = boffset = suboffset
 
     def size(self):
-        return math.trunc(math.ceil(self.bits() / 8.0))
+        raise error.ImplementationError(self, 'base.size')
 
     def blocksize(self):
-        return math.trunc(math.ceil(self.blockbits() / 8.0))
+        raise error.ImplementationError(self, 'base.blocksize')
 
     def contains(self, offset):
         if isinstance(offset, six.integer_types):
@@ -243,13 +249,8 @@ class type(ptype.generic):
         nmax = nmin + self.blockbits()
         return nmin <= res < nmax
 
-    ## Methods for interacting with the value of a binary type
-    value = None
     def initializedQ(self):
-        return self.value is not None
-
-    def __eq__(self, other):
-        return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
+        raise error.ImplementationError(self, 'base.initializedQ')
 
     def copy(self, **attrs):
         result = self.new(self.__class__, position=self.getposition())
@@ -258,25 +259,87 @@ class type(ptype.generic):
         return result.__update__(attrs)
 
     def bitmap(self):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.bitmap')
 
     def update(self, value):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.update')
 
-    def __getvalue__(self):
-        raise NotImplementedError
-
-    def __setvalue__(self, *values, **attrs):
-        raise NotImplementedError
+    def cast(self, type, **attrs):
+        raise error.ImplementationError(self, 'base.cast')
 
     def __deserialize_consumer__(self, consumer):
-        raise NotImplementedError
+        raise error.ImplementationError(self, 'base.__deserialize_consumer__')
 
-    def new(self, pbinarytype, **attrs):
-        res = force(pbinarytype, self)
-        return super(type, self).new(res, **attrs)
+    def alloc(self, **attrs):
+        raise error.ImplementationError(self, 'base.alloc')
 
-    ## default methods
+    def load(self, **attrs):
+        raise error.ImplementationError(self, 'base.load')
+
+    def commit(self, **attrs):
+        raise error.ImplementationError(self, 'base.commit')
+
+    def repr(self, **options):
+        raise error.ImplementationError(self, 'base.repr')
+
+    def __getvalue__(self):
+        raise error.ImplementationError(self, 'base.__getvalue__')
+
+    def __setvalue__(self, *values, **attrs):
+        raise error.ImplementationError(self, 'base.__setvalue__')
+
+    #def __getstate__(self):
+    #    return super(type, self).__getstate__(), self.value, self.position,
+
+    #def __setstate__(self, state):
+    #    state, self.value, self.position, = state
+    #    super(type, self).__setstate__(state)
+
+class type(base):
+    """The base instance that all pbinary types with values must inherit from.
+
+    This class is responsible for keeping track of the value
+    which should be backed by a bitmap of some kind. Some
+    generic methods involving the bitmapped value or the
+    display of the bitmapped value is also included.
+    """
+
+    def size(self):
+        return math.trunc(math.ceil(self.bits() / 8.0))
+
+    def blocksize(self):
+        return math.trunc(math.ceil(self.blockbits() / 8.0))
+
+    value = None
+    def initializedQ(self):
+        return self.value is not None
+
+    def copy(self, **attrs):
+        return super(type, self).copy(**attrs)
+
+    def __eq__(self, other):
+        return isinstance(other, type) and self.initializedQ() and other.initializedQ() and self.__getvalue__() == other.__getvalue__()
+
+    def bitmap(self):
+        raise error.ImplementationError(self, 'type.bitmap')
+
+    def __getvalue__(self):
+        raise error.ImplementationError(self, 'type.__getvalue__')
+
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return self
+
+        value, = values
+        if not bitmap.isinstance(value):
+            raise error.TypeError(self, 'type.set', message='The specified value {!r} is not a bitmap'.format(value.__class__))
+
+        self.value = bitmap.new(*value)
+        return self
+
+    def repr(self, **options):
+        return self.details(**options) if self.initializedQ() else '???'
+
     def cast(self, type, **attrs):
         if not istype(type):
             raise error.UserError(self, 'type.cast', message='Unable to cast binary type to a none-binary type. : {:s}'.format(type.typename()))
@@ -285,7 +348,6 @@ class type(ptype.generic):
         source.push(self.bitmap())
 
         target = self.new(type, __name__=self.name(), position=self.getposition(), **attrs)
-        target.value = []
         try:
             target.__deserialize_consumer__(source)
         except StopIteration:
@@ -315,29 +377,15 @@ class type(ptype.generic):
                 raise error.LoadError(self, exception=E)
         return result
 
-    def repr(self, **options):
-        return self.details(**options) if self.initializedQ() else '???'
+    def load(self, **attrs):
+        raise error.UserError(self, 'type.load', "Unable to load from a binary-type when reading from a byte-stream. Promote to a partial type and then .load().")
 
-    def __getvalue__(self):
-        return self.value[:]
+    def commit(self, **attrs):
+        raise error.UserError(self, 'type.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
 
-    def __setvalue__(self, *values, **attrs):
-        if not values:
-            return self
-
-        value, = values
-        if not bitmap.isinstance(value):
-            raise error.TypeError(self, 'type.set', message='The specified value {!r} is not a bitmap'.format(value.__class__))
-
-        self.value = value[:]
-        return self
-
-    #def __getstate__(self):
-    #    return super(type, self).__getstate__(), self.value, self.position,
-
-    #def __setstate__(self, state):
-    #    state, self.value, self.position, = state
-    #    super(type, self).__setstate__(state)
+    def serialize(self):
+        Log.warn('container.serialize : {:s} : Returning a potentially unaligned binary structure as a string'.format(self.classname()))
+        return bitmap.data(self.bitmap())
 
 class integer(type):
     """An atomic component of any binary array or structure.
@@ -346,7 +394,7 @@ class integer(type):
     """
 
     def int(self):
-        res = self.__getvalue__()
+        res = self.bitmap()
         return bitmap.value(res)
     num = int
 
@@ -354,13 +402,13 @@ class integer(type):
         if self.value is None:
             Log.info("integer.size : {:s} : Refusing to get size of uninitialized type.".format(self.instance()))
             return 0
-        res = self.__getvalue__()
+        res = self.bitmap()
         return bitmap.size(res)
 
     def blockbits(self):
         if self.value is None:
             return 0
-        res = self.__getvalue__()
+        res = self.bitmap()
         return bitmap.size(res)
 
     def __deserialize_consumer__(self, consumer):
@@ -385,7 +433,7 @@ class integer(type):
     def __getvalue__(self):
         if self.value is None:
             raise error.InitializationError(self, '__getvalue__')
-        return self.value[:]
+        return self.bitmap()
 
     def __setvalue__(self, *values, **attrs):
         if not values:
@@ -421,8 +469,7 @@ class integer(type):
     def bitmap(self):
         if self.value is None:
             return None
-        res = self.__getvalue__()
-        return tuple(self.value)
+        return bitmap.new(*self.value)
 
     def update(self, value):
         if bitmap.isinstance(value):
@@ -635,7 +682,7 @@ class container(type):
         return result
 
     def initializedQ(self):
-        return self.value is not None and all(item is not None and isinstance(item, type) and item.initializedQ() for item in self.value)
+        return super(container, self).initializedQ() and all(item is not None and isinstance(item, type) and item.initializedQ() for item in self.value)
 
     ### standard stuff
     def int(self):
@@ -656,10 +703,6 @@ class container(type):
         if self.value is None:
             raise error.InitializationError(self, 'container.blockbits')
         return sum(item.blockbits() for item in self.value)
-
-    def blocksize(self):
-        res = math.ceil(self.blockbits() / 8.0)
-        return math.trunc(res)
 
     def __getindex__(self, key):
         raise error.ImplementationError(self, 'container.__getindex__')
@@ -728,6 +771,7 @@ class container(type):
         '''initialize container object with bitmap /consumer/ using the type produced by /generator/'''
         if self.value is None:
             raise error.SyntaxError(self, 'container.__deserialize_consumer__', message='caller is responsible for pre-allocating the elements in self.value')
+        self.value = []
 
         # FIXME: We should be reading this data at the byte (8bit) boundary and
         #        so we can probably consume objects that have a hardcoded blocksize
@@ -748,16 +792,6 @@ class container(type):
             offset, suboffset = (offset + suboffset // 8, suboffset % 8)
             position = (offset, suboffset)
         return self
-
-    def serialize(self):
-        Log.warn('container.serialize : {:s} : Returning a potentially unaligned binary structure as a string'.format(self.classname()))
-        return bitmap.data(self.bitmap())
-
-    def load(self, **attrs):
-        raise error.UserError(self, 'container.load', "Unable to load from a binary-type when reading from a byte-stream. Promote to a partial type and then .load().")
-
-    def commit(self, **attrs):
-        raise error.UserError(self, 'container.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
 
     def __append__(self, object):
         size = 0 if self.value is None else self.bits()
@@ -816,11 +850,11 @@ class container(type):
         return res.set(value)
 
 ### generics
-class _array_generic(container):
+class __array_interface__(container):
     length = 0
 
     def alloc(self, fields=(), **attrs):
-        result = super(_array_generic, self).alloc(**attrs)
+        result = super(__array_interface__, self).alloc(**attrs)
         if len(fields) > 0 and isinstance(fields[0], tuple):
             for name, val in fields:
                 idx = result.__getindex__(name)
@@ -885,14 +919,14 @@ class _array_generic(container):
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or utils.callable_eq(self.repr, _array_generic.details):
+        if result.count('\n') > 0 or utils.callable_eq(self.repr, __array_interface__.details):
             result = result.rstrip('\n') # remove trailing newlines
             if prop:
                 return "{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, element, result)
             return "{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), element, result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if all(not utils.callable_eq(self.repr, item) for item in [_array_generic.repr, _array_generic.summary, _array_generic.details]):
+        if all(not utils.callable_eq(self.repr, item) for item in [__array_interface__.repr, __array_interface__.summary, __array_interface__.details]):
             result = ' '.join([element, result])
 
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
@@ -920,11 +954,11 @@ class _array_generic(container):
     def __getindex__(self, index):
         # check to see if the user gave us a bad type
         if not isinstance(index, six.integer_types):
-            raise TypeError(self, '_array_generic.__getindex__', "Invalid type {:s} specified for index of {:s}.".format(index.__class__, self.typename()))
+            raise TypeError(self, '__array_interface__.__getindex__', "Invalid type {:s} specified for index of {:s}.".format(index.__class__, self.typename()))
 
         ## validate the index
         #if not(0 <= index < len(self.value)):
-        #    raise IndexError(self, '_array_generic.__getindex__', index)
+        #    raise IndexError(self, '__array_interface__.__getindex__', index)
 
         return index
 
@@ -950,7 +984,7 @@ class _array_generic(container):
 
     def __iter__(self):
         '''x.__iter__() <==> iter(x)'''
-        for res in super(_array_generic, self).__iter__():
+        for res in super(__array_interface__, self).__iter__():
             yield res if isinstance(res, container) else res.int()
         return
 
@@ -960,28 +994,28 @@ class _array_generic(container):
             res = [ self.value[self.__getindex__(idx)] for idx in six.moves.range(*index.indices(len(self))) ]
             t = ptype.clone(array, length=len(res), _object_=self._object_)
             return self.new(t, offset=res[0].getoffset(), value=res)
-        return super(_array_generic, self).__getitem__(index)
+        return super(__array_interface__, self).__getitem__(index)
 
     def __setitem__(self, index, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         if isinstance(index, slice):
             val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isinstance(value)) else iter(value)
             for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                super(_array_generic, self).__setitem__(idx, six.next(val))
+                super(__array_interface__, self).__setitem__(idx, six.next(val))
             return
 
-        value = super(_array_generic, self).__setitem__(index, value)
+        value = super(__array_interface__, self).__setitem__(index, value)
         if isinstance(value, type):
             value.__name__ = str(index)
         return
 
-class _struct_generic(container):
+class __structure_interface__(container):
     def __init__(self, *args, **kwds):
-        super(_struct_generic, self).__init__(*args, **kwds)
+        super(__structure_interface__, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
     def alloc(self, **fields):
-        result = super(_struct_generic, self).alloc()
+        result = super(__structure_interface__, self).alloc()
         if fields:
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
@@ -1006,7 +1040,7 @@ class _struct_generic(container):
 
     def __append__(self, object):
         current = len(self.value)
-        position = super(_struct_generic, self).__append__(object)
+        position = super(__structure_interface__, self).__append__(object)
         self.__fastindex[object.name().lower()] = current
         return position
 
@@ -1017,12 +1051,12 @@ class _struct_generic(container):
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
         if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
-            raise error.UserError(self, '_struct_generic.__contains__', message='Not allowed to remove {:s} from list of aliases.'.format(alias.lower()))
+            raise error.UserError(self, '__structure_interface__.__contains__', message='Not allowed to remove {:s} from list of aliases.'.format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
     def __getindex__(self, name):
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_struct_generic.__getindex__', message='Element names must be a string type. : {!r}'.format(name.__class__))
+            raise error.UserError(self, '__structure_interface__.__getindex__', message='Element names must be a string type. : {!r}'.format(name.__class__))
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
@@ -1137,13 +1171,13 @@ class _struct_generic(container):
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '_struct_generic.__contains__', message='Element names must be of a str type.')
+            raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
         return name in self.__fastindex
 
     def __iter__(self):
         '''D.__iter__() <==> iter(D)'''
         if self.value is None:
-            raise error.InitializationError(self, '_struct_generic.__iter__')
+            raise error.InitializationError(self, '__structure_interface__.__iter__')
 
         for name in six.iterkeys(self):
             yield name
@@ -1152,7 +1186,7 @@ class _struct_generic(container):
     def __setitem__(self, name, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         index = self.__getindex__(name)
-        value = super(_struct_generic, self).__setitem__(index, value)
+        value = super(__structure_interface__, self).__setitem__(index, value)
         if isinstance(value, type):
             value.__name__ = name
         return value
@@ -1186,13 +1220,13 @@ class _struct_generic(container):
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
     #def __getstate__(self):
-    #    return super(_struct_generic, self).__getstate__(), self.__fastindex
+    #    return super(__structure_interface__, self).__getstate__(), self.__fastindex
 
     #def __setstate__(self, state):
     #    state, self.__fastindex, = state
-    #    super(_struct_generic, self).__setstate__(state)
+    #    super(__structure_interface__, self).__setstate__(state)
 
-class array(_array_generic):
+class array(__array_interface__):
     length = 0
 
     def copy(self, **attrs):
@@ -1261,7 +1295,7 @@ class array(_array_generic):
     #    state, self._object_, self.length, = state
     #    super(array, self).__setstate__(state)
 
-class struct(_struct_generic):
+class struct(__structure_interface__):
     _fields_ = None
 
     def copy(self, **attrs):
@@ -1325,7 +1359,7 @@ class struct(_struct_generic):
     #    state, self._fields_, = state
     #    super(struct, self).__setstate__(state)
 
-class terminatedarray(_array_generic):
+class terminatedarray(__array_interface__):
     length = None
 
     def alloc(self, fields=(), **attrs):

@@ -90,7 +90,7 @@ Config = config.defaults
 Log = Config.log.getChild('parray')
 __all__ = 'type,terminated,infinite,block'.split(',')
 
-class _parray_generic(ptype.container):
+class __array_interface__(ptype.container):
     '''provides the generic features expected out of an array'''
     def __contains__(self, instance):
         '''L.__contains__(x) -> True if L has an item x, else False'''
@@ -121,7 +121,7 @@ class _parray_generic(ptype.container):
 
     def __append__(self, object):
         idx = len(self.value)
-        offset = super(_parray_generic, self).__append__(object)
+        offset = super(__array_interface__, self).__append__(object)
         offset = (self.value[idx - 1].getoffset() + self.value[idx - 1].size()) if idx > 0 else self.getoffset()
         self.value[idx].setoffset(offset)
         return offset
@@ -179,7 +179,7 @@ class _parray_generic(ptype.container):
             return res.__getitem__(index)
 
         idx = self.__getindex__(index)
-        result = super(_parray_generic, self).__setitem__(idx, value)
+        result = super(__array_interface__, self).__setitem__(idx, value)
         result.__name__ = str(index)
         return result
 
@@ -192,7 +192,7 @@ class _parray_generic(ptype.container):
 
         idx = self.__getindex__(index)
         ([None]*len(self))[idx]     # make python raise the correct exception if so..
-        return super(_parray_generic, self).__getitem__(idx)
+        return super(__array_interface__, self).__getitem__(idx)
 
     def __element__(self):
         try: length = len(self)
@@ -207,7 +207,7 @@ class _parray_generic(ptype.container):
         return u"{:s}[{:d}]".format(res, length)
 
     def summary(self, **options):
-        res = super(_parray_generic, self).summary(**options)
+        res = super(__array_interface__, self).summary(**options)
         return ' '.join([self.__element__(), res])
 
     def __repr__(self):
@@ -224,14 +224,14 @@ class _parray_generic(ptype.container):
         result, element = self.repr(), self.__element__()
 
         # multiline (includes element description)
-        if result.count('\n') > 0 or utils.callable_eq(self.repr, _parray_generic.details):
+        if result.count('\n') > 0 or utils.callable_eq(self.repr, __array_interface__.details):
             result = result.rstrip('\n')
             if prop:
                 return u"{:s} '{:s}' {{{:s}}} {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), prop, element, result)
             return u"{:s} '{:s}' {:s}\n{:s}".format(utils.repr_class(self.classname()), self.name(), element, result)
 
         # if the user chose to not use the default summary, then prefix the element description.
-        if all(not utils.callable_eq(self.repr, item) for item in [_parray_generic.repr, _parray_generic.summary]):
+        if all(not utils.callable_eq(self.repr, item) for item in [__array_interface__.repr, __array_interface__.summary]):
             result = ' '.join([element, result])
 
         _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
@@ -241,7 +241,7 @@ class _parray_generic(ptype.container):
             return u"[{:s}] {:s} {{{:s}}} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, prop, result)
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
-class type(_parray_generic):
+class type(__array_interface__):
     '''
     A container for managing ranges of a particular object.
 
