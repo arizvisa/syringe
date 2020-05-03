@@ -1,34 +1,47 @@
-import abc,itertools,operator,weakref
-import six,collections,sets,sparse
+import functools, itertools, types, builtins, operator, sys
+import collections, weakref
+
+if sys.version_info.major < 3:
+    import sets
+    Set = sets.Set
+    MutableMapping = collections.MutableMapping
+
+else:
+    import ordered_set as sets
+    Set = sets.OrderedSet
+
+    import collections.abc
+    MutableMapping = collections.abc.MutableMapping
 
 class OrderedDict(collections.OrderedDict): pass
 
-class OrderedSet(sets.Set):
+# Python3 doesn't have ordered sets...so we have to implement this ourselves
+class OrderedSet(Set):
     __slots__ = ['_data']
     def __init__(self, iterable=None):
-        super(OrderedSet,self).__init__(iterable=None)
+        super(OrderedSet, self).__init__(iterable or [])
         self._data = OrderedDict()
         if iterable is not None: self.update(iterable)
 
     def add(self, element):
         if element in self._data:
-            raise TypeError, "Element already exists within set %s: %r"% (object.__repr__(self), element)
-        return super(OrderedSet,self).add(element)
+            raise TypeError("Element already exists within set {!s}: {!r}".format(object.__repr__(self), element))
+        return super(OrderedSet, self).add(element)
 
-class AliasDict(collections.MutableMapping):
+class AliasDict(MutableMapping):
     """A dictionary that allows one to create aliases for keys"""
     __slots__ = ['_data', '_aliases']
     def __init__(self, iterable=None):
-        super(AliasDict,self).__init__()
+        super(AliasDict, self).__init__()
         if iterable is not None:
             self.update(iterable)
-        self._data,self._aliases = dict(),OrderedDict()
+        self._data, self._aliases = {}, OrderedDict()
 
     # tools
     def _getkey(self, key):
         return self._aliases[key] if key in self._aliases else key
     def _getaliases(self, target):
-        return set(k for k,v in self._aliases.items() if v == target)
+        return set(k for k, v in self._aliases.items() if v == target)
     def _listkeys(self):
         return self._data.viewkeys()
     def _listaliases(self):
@@ -47,15 +60,16 @@ class AliasDict(collections.MutableMapping):
         [ self._aliases.pop(n) for n in res ]
         return self._data.__delitem__(target)
     def keys(self):
-        return set(self._listkeys()).union(self._listaliases())
+        res = { item for item in self._listkeys() }
+        return res.union(self._listaliases())
     def __iter__(self):
-        for n in self.keys():
-            yield n
+        for item in self.keys():
+            yield item
         return
     def __len__(self):
         return len(self._listkeys())
     def __contains__(self, key):
-        current,aliases = self._listkeys(),self._listaliases()
+        current, aliases = self._listkeys(), self._listaliases()
         return any(key in ring for ring in (current,aliases))
 
     # overloads
@@ -74,24 +88,24 @@ class AliasDict(collections.MutableMapping):
         if super(AliasDict,self).__contains__(target):
 
             # validate
-            for n in aliases:
-                if n in self._data:
-                    raise KeyError, "Alias %r already exists as a target in AliasDict %s"% (n, object.__repr__(self))
+            for item in aliases:
+                if item in self._data:
+                    raise KeyError("Alias {!r} already exists as a target in AliasDict {!s}".format(item, object.__repr__(self)))
                 continue
 
             create_count = 0
-            for n in aliases:
-                if n not in self._aliases:
+            for item in aliases:
+                if item not in self._aliases:
                     create_count += 1
-                self._aliases[n] = target
+                self._aliases[item] = target
             return create_count
-        raise KeyError, "Target %r does not exist within AliasDict %s"% (target, object.__repr__(self))
+        raise KeyError("Target {!r} does not exist within AliasDict {!s}".format(target, object.__repr__(self)))
     def unalias(self, *aliases):
-        return [self._aliases.pop(n) for n in aliases]
+        return [self._aliases.pop(item) for item in aliases]
 
     # general
     def __repr__(self):
-        return '{:s} {!r}'.format(object.__repr__(self), [(k,self[k]) for k in self.keys()])
+        return '{:s} {!r}'.format(object.__repr__(self), [(key, self[key]) for key in self.keys()])
 
 class HookedDict(AliasDict):
     """A dictionary that allows one to hook assignment of a particular key"""
@@ -100,12 +114,14 @@ class HookedDict(AliasDict):
         super(HookedDict,self).__init__(iterable)
         self.__hooks = {}
 
-    def hook(self, key, fn, args=(), kwds={}):
+    def hook(self, key, F, args=(), kwds={}):
         target = self._getkey(key)
         if target not in self._data:
-            raise KeyError, "Target %r does not exist within HookDict %s"% (key, object.__repr__(self))
+            raise KeyError("Target {!r} does not exist within HookDict {!s}".format(key, object.__repr__(self)))
         res = self.__hooks.pop(target) if target in self.__hooks else None
-        self.__hooks[target] = lambda s,k,v,fn=fn,args=tuple(args),kwds=dict(kwds): fn(s,k,v,*args,**kwds)
+        def closure(self, key, value, F=F, args=tuple(args), kwargs=dict(kwds)):
+            return F(self, key, value, *args, **kwargs)
+        self.__hooks[target] = closure
         return res
 
     def unhook(self, key):
@@ -113,12 +129,16 @@ class HookedDict(AliasDict):
         return self.__hooks.pop(target)
 
     def _execute_hook(self, key, value):
+        Ffalse = lambda *args, **kwargs: False
+
         target = self._getkey(key)
         if target in self.__hooks:
-            p = self.__hooks[target]
-            self.__hooks[target] = lambda *_: False
-            res = p(self, key, value)
-            self.__hooks[target] = p
+            try:
+                F, self.__hooks[target] = self.__hooks[target], Ffalse
+                res = F(self, key, value)
+
+            finally:
+                self.__hooks[target] = F
             return res if isinstance(res, bool) else True
         return True
 
@@ -132,10 +152,10 @@ class HookedDict(AliasDict):
     def __delitem__(self, key):
         target = self._getkey(key)
         if target in self.__hooks:
-            _ = self.unhook(target)
+            F = self.unhook(target)
         return super(HookedDict,self).__delitem__(key)
 
-class MergedMapping(collections.MutableMapping):
+class MergedMapping(MutableMapping):
     """A dictionary composed of other Mapping types"""
 
     def __init__(self):
@@ -148,61 +168,65 @@ class MergedMapping(collections.MutableMapping):
 
         self._data = []
 
-    def add(self, d):
-        if id(d) in map(id,self._data):
-            raise ReferenceError, 'Dictionary %s already exists in MergedDict %s'%(object.__repr__(d), object.__repr__(self))
-        ref = weakref.ref(d)
+    def add(self, D):
+        if id(D) in map(id, self._data):
+            raise ReferenceError("Dictionary {!s} already exists in MergedDict {!s}".format(object.__repr__(D), object.__repr__(self)))
+        ref = weakref.ref(D)
         self._data.append(ref)
-        return self._sync(d)
+        return self._sync(D)
 
-    def remove(self, d):
-        ref = weakref.ref(d)
+    def remove(self, D):
+        ref = weakref.ref(D)
         self._data.remove(ref)
         return self.sync()
 
-    def _sync(self, d):
-        cur = set(self._cache.viewkeys())
-        new = set(list(d))
+    def _sync(self, D):
+        cur = { item for item in self._cache.keys() }
+        new = { item for item in D }
         ref = weakref.ref(d)
 
-        for n in cur.intersection(new):
-            self._cache[n][:] = [x for x in self._cache[n] if x() is not None and x is not ref] + [ref]
+        for key in cur.intersection(new):
+            self._cache[key][:] = [item for item in self._cache[key] if item() is not None and item is not ref] + [ref]
 
-        for n in new.difference(cur):
-            self._cache[n] = [ref]
+        for key in new.difference(cur):
+            self._cache[key] = [ref]
 
         return len(new)
 
     def sync(self):
-        res = set(itertools.chain(*(x.viewkeys() for x in self._data if x() is not None)))
-        cur = set(self._cache.viewkeys())
-        [self._cache.pop(k) for k in cur.difference(res)]
-        return six.moves.reduce(operator.add, (self._sync(r()) for r in self._data))
+        iterable = (item.keys() for item in self._data if item() is not None)
+        res = { item for item in itertools.chain(*iterable) }
+        cur = { item for item in self._cache.keys() }
+        [self._cache.pop(key) for key in cur.difference(res)]
+
+        iterable = (self._sync(M()) for M in self._data)
+        return functools.reduce(operator.add, iterable)
 
     def __setitem__(self, key, value):
         res = self._cache[key]
-        for d in res:
-            d[key] = value
+        for D in res:
+            D[key] = value
         return len(res)
 
     def __getitem__(self, key):
-        results = [d[key] for d in self._cache[key]]
+        results = [D[key] for D in self._cache[key]]
         res = results.pop(0)
-        if not all(x == res for x in results):
-            raise KeyError, 'More than one differnet value was returned'
+        if not all(item == res for item in results):
+            raise KeyError('More than one differnet value was returned')
         return res
 
     def __delitem__(self, key):
         res = self._cache[key]
-        for d in res:
-            del d[key]
+        for D in res:
+            del D[key]
         return len(res)
 
     def __len__(self):
         return len(self._cache)
+
     def __iter__(self):
-        for n in self._cache:
-            yield n
+        for item in self._cache:
+            yield item
         return
 
     def __repr__(self):
