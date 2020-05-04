@@ -1,5 +1,5 @@
 import functools, itertools, types, builtins, operator, sys
-import collections, weakref
+import six, collections, weakref
 
 if sys.version_info.major < 3:
     MutableSet = collections.MutableSet
@@ -47,7 +47,7 @@ class OrderedSet(MutableSet):
     __repr__ = __str__
 
 class OrderedDict(MutableMapping):
-    __slots__ = ['_data', '_order', '_mapping']
+    __slots__ = ['_data', '_order']
 
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
@@ -56,38 +56,41 @@ class OrderedDict(MutableMapping):
         else:
             items += [(key, value) for key, value in iterable or []]
 
-        self._order = [ (key, value) for key, value in items ]
-        self._data = { key : index for index, (key, value) in enumerate(self._order) }
-        self._mapping = { key : value for key, value in self._order }
+        self._data = {key : value for key, value in items}
+        self._order = [key for key, _ in items]
 
     def __len__(self):
-        return len(self._order)
+        return len(self._data)
 
     def __iter__(self):
-        for key, _ in self._order:
-            yield key
+        for index, key in enumerate(self._order[:]):
+            if key in self._data:
+                yield key
+            else:
+                self._order.pop(index)
+            continue
         return
 
     def __getitem__(self, key):
-        index = self._data[key]
-        _, value = self._order[index]
-        return value
+        return self._data[key]
 
     def __setitem__(self, key, value):
         if key in self._data:
-            index = self._data[key]
-        else:
-            index = len(self._order)
-            self._order.append((key, value))
-        self._data[key] = index
-        self._mapping[key] = value
+            # this is in linear time. we can probably optimize this out
+            # with a weakref, but i'm tired right now...
+            index = self._order.index(key)
+            self._order.pop(index)
+
+        self._data[key] = value
+        self._order.append(key)
 
     def __delitem__(self, key):
-        if key in self._data:
-            index = self._data.pop(key)
-            del self._order[index]
-            del self._mapping[key]
-        raise KeyError(key)
+        if key not in self._data:
+            raise KeyError(key)
+
+        # no need to update our _order because it'll be updated the
+        # next time we iterate through it
+        self._data.pop(key)
 
     def __str__(self):
         cls = self.__class__
@@ -97,51 +100,53 @@ class OrderedDict(MutableMapping):
 class AliasDict(MutableMapping):
     """A dictionary that allows one to create aliases for keys"""
     __slots__ = ['_data', '_aliases']
-    def __init__(self, iterable=None):
-        super(AliasDict, self).__init__()
-        if iterable is not None:
-            self.update(iterable)
+    def __init__(self, iterable=None, **pairs):
+        items = [item for item in pairs.items()]
+        if isinstance(iterable, dict):
+            items += iterable.items()
+        else:
+            items += [(key, value) for key, value in iterable or []]
         self._data, self._aliases = {}, OrderedDict()
 
     # tools
     def _getkey(self, key):
         return self._aliases[key] if key in self._aliases else key
+
     def _getaliases(self, target):
-        return set(k for k, v in self._aliases.items() if v == target)
-    def _listkeys(self):
-        return self._data.viewkeys()
-    def _listaliases(self):
-        return self._aliases.viewkeys()
+        items = self._aliases.items()
+        return {key for key, value in items if value == target}
+
+    def __iter__(self):
+        aliases, keys = (six.viewkeys(item) for item in [self._aliases, self._data])
+        for key in keys | aliases:
+            yield key
+        return
+
+    def __len__(self):
+        return len(self._data)
+
+    def __contains__(self, key):
+        aliases, keys = (six.viewkeys(item) for item in [self._aliases, self._data])
+        return key in (keys | aliases)
 
     # abstract methods
     def __setitem__(self, key, value):
         res = self._getkey(key)
-        return self._data.__setitem__(res, value)
+        self._data[res] = value
+
     def __getitem__(self, key):
         res = self._getkey(key)
-        return self._data.__getitem__(res)
+        return self._data[res]
+
     def __delitem__(self, key):
         target = self._getkey(key)
         res = self._getaliases(target)
-        [ self._aliases.pop(n) for n in res ]
-        return self._data.__delitem__(target)
-    def keys(self):
-        res = { item for item in self._listkeys() }
-        return res.union(self._listaliases())
-    def __iter__(self):
-        for item in self.keys():
-            yield item
-        return
-    def __len__(self):
-        return len(self._listkeys())
-    def __contains__(self, key):
-        current, aliases = self._listkeys(), self._listaliases()
-        return any(key in ring for ring in (current,aliases))
+        [ self._aliases.pop(alias) for alias in res ]
+        del self._data[target]
 
     # overloads
     def update(self, *args, **kwds):
-        self = args[0]
-        other = args[1] if len(args) >= 2 else ()
+        self, other = args[0], args[1] if len(args) >= 2 else ()
         res = super(AliasDict,self).update(*args, **kwds)
         if isinstance(other, AliasDict):
             other._aliases.update(self._aliases)
@@ -149,29 +154,28 @@ class AliasDict(MutableMapping):
 
     # aliases
     def aliases(self):
-        return self._listaliases()
+        for key in self._aliases:
+            yield key
+        return
     def alias(self, target, *aliases):
-        if super(AliasDict,self).__contains__(target):
+        if any(alias in self._data for alias in aliases):
+            raise KeyError("Alias {!r} already exists as a target in AliasDict {!s}".format(item, object.__repr__(self)))
 
-            # validate
-            for item in aliases:
-                if item in self._data:
-                    raise KeyError("Alias {!r} already exists as a target in AliasDict {!s}".format(item, object.__repr__(self)))
-                continue
-
-            create_count = 0
-            for item in aliases:
-                if item not in self._aliases:
-                    create_count += 1
-                self._aliases[item] = target
-            return create_count
-        raise KeyError("Target {!r} does not exist within AliasDict {!s}".format(target, object.__repr__(self)))
+        create_count = 0
+        for alias in aliases:
+            if alias not in self._aliases:
+                create_count += 1
+            self._aliases[alias] = target
+        return create_count
     def unalias(self, *aliases):
-        return [self._aliases.pop(item) for item in aliases]
+        return [self._aliases.pop(alias) for alias in aliases]
 
     # general
-    def __repr__(self):
-        return '{:s} {!r}'.format(object.__repr__(self), [(key, self[key]) for key in self.keys()])
+    def __str__(self):
+        cls = self.__class__
+        iterable = ((key, self[key]) for key in self.keys())
+        return '{!r} {!r}'.format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, iterable)))
+    __repr__ = __str__
 
 class HookedDict(AliasDict):
     """A dictionary that allows one to hook assignment of a particular key"""
@@ -328,21 +332,40 @@ if __name__ == '__main__':
     a['blah'] = 10
     a['heh'] = 20
     a['fuck'] = True
-    print(a['fuck'])
+    if not a['fuck']:
+        raise ValueError
     a.alias('fuck', 'a', 'b', 'c')
-    print(a.keys())
-    print(a['a'])
-    print(a['b'])
-    print(a['c'])
+    if set(a.keys()) != {'fuck', 'blah', 'heh'} | {'a', 'b', 'c'}:
+        raise ValueError
+    if any(a[item] != a['fuck'] for item in 'abc'):
+        raise ValueError
     a['b'] = 'huh'
+    if any(a[item] != 'huh' for item in 'abc') or a['fuck'] != 'huh':
+        raise ValueError
 
-    a.unalias('heh')
-    a.unalias('fuck')
-    print(a.unalias('a'))
-    print(a.unalias('b'))
-    print(a.aliases())
-    print(a.items())
+    try:
+        a.unalias('heh')
+    except KeyError:
+        pass
+    else:
+        raise ValueError
 
+    try:
+        a.unalias('fuck')
+    except KeyError:
+        pass
+    else:
+        raise ValueError
+
+    a.unalias('a')
+    a.unalias('b')
+    if set(a.aliases()) != {'c'}:
+        raise ValueError
+
+    if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
+        raise ValueError
+
+if False:
     def ok(self, key, value):
         print('assigned', key, value)
     def ignore(self, key, value):
