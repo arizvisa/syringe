@@ -85,10 +85,16 @@ else:
 ### Core data structure implementations
 
 # Python3 doesn't have ordered sets...so we have to implement this ourselves
-class OrderedSet(MutableSet, Hashable):
+class OrderedSet(MutableSet, Hashable, Copyable):
     def __hash__(self):
         iterable = map(hash, enumerate(self._data))
         return functools.reduce(operator.xor, iterable, 0)
+
+    def __getstate__(self):
+        return self._data, self._order
+
+    def __setstate__(self, state):
+        self._data, self._order = state
 
     def __init__(self, iterable=None):
         items = iterable or []
@@ -123,10 +129,16 @@ class OrderedSet(MutableSet, Hashable):
         return "{!s} {:s}".format(cls, ', '.join(map("{!r}".format, self)))
     __repr__ = __str__
 
-class OrderedDict(MutableMapping, Hashable):
+class OrderedDict(MutableMapping, Hashable, Copyable):
     def __hash__(self):
         iterable = map(hash, enumerate(self.items()))
         return functools.reduce(operator.xor, iterable, 0)
+
+    def __getstate__(self):
+        return self._data, self._order
+
+    def __setstate__(self, state):
+        self._data, self._order = state
 
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
@@ -184,11 +196,17 @@ class OrderedDict(MutableMapping, Hashable):
         return "{!s} {:s}".format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, self.items())))
     __repr__ = __str__
 
-class AliasDict(MutableMapping, Hashable):
+class AliasDict(MutableMapping, Hashable, Copyable):
     """A dictionary that allows one to create aliases for keys"""
     def __hash__(self):
         iterable = map(hash, self.items())
         return functools.reduce(operator.xor, iterable, hash(self._aliases))
+
+    def __getstate__(self):
+        return self._data, self._aliases
+
+    def __setstate__(self, state):
+        self._data, self._aliases = state
 
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
@@ -422,6 +440,8 @@ class MergedMapping(MutableMapping):
         return '{:s} {:s} {!r}'.format(object.__repr__(self), ','.join(map(object.__repr__,self._data)), {k:self[k] for k in self.keys()})
 
 if __name__ == '__main__':
+
+    ### OrderedDict order
     a = OrderedDict()
     a[0] = None
     a[1] = None
@@ -436,6 +456,7 @@ if __name__ == '__main__':
     if list(a.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
         raise ValueError
 
+    ### OrderedSet order
     a = OrderedSet( ('bla','blah','blahh') )
     a.add('meh')
     a.add('hmm')
@@ -446,6 +467,7 @@ if __name__ == '__main__':
     if list(a) != ['bla','blah','blahh','heh']:
         raise ValueError
 
+    ### AliasDict aliases
     a = AliasDict()
     a.alias('fuck', 'a','b','c')
     a['blah'] = 10
@@ -462,6 +484,7 @@ if __name__ == '__main__':
     if any(a[item] != 'huh' for item in 'abc') or a['fuck'] != 'huh':
         raise ValueError
 
+    ## AliasDict unalias a non-alias
     try:
         a.unalias('heh')
     except KeyError:
@@ -469,6 +492,7 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
+    ## AliasDict unalias an alias target (non-alias)
     try:
         a.unalias('fuck')
     except KeyError:
@@ -476,6 +500,7 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
+    ## AliasDict unalias some aliases
     a.unalias('a')
     a.unalias('b')
     if set(a.aliases()) != {'c'}:
@@ -484,6 +509,7 @@ if __name__ == '__main__':
     if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
         raise ValueError
 
+    ### HookedDict signalling
     class Signal(OSError): pass
 
     def ok(self, key, value):
@@ -534,6 +560,27 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
+    ### WeakSet reference of OrderedDict
+    x = OrderedDict(dict(key1=1, key2=3))
+    y = OrderedDict(dict(key1=3, key2=1))
+    state = {item.copy() for item in [x, y]}
+    weak = weakref.WeakSet(state)
+    if set(weak) != state:
+        raise ValueError
+    if set(weak) != {x, y}:
+        raise ValueError
+    state.discard(x)
+    if set(weak) != {y}:
+        raise ValueError
+    if set(weak) != state:
+        raise ValueError
+    state.discard(y)
+    if set(weak) != set():
+        raise ValueError
+    if set(weak) != set():
+        raise ValueError
+
+if False:
     class MockDict(MutableMapping, Hashable):
         def __hash__(self):
             iterable = map(hash, self.items())
@@ -560,30 +607,8 @@ if __name__ == '__main__':
     a.add(b)
     a.add(c)
     a.add(d)
-    print(a)
     a['bkey1'] = 5
     a['ckey1'] = 10
     a['dkey1'] = 15
 
     a.add(e)
-
-if False:
-    import importlib as imp
-    internal = imp.reload(internal)
-
-    x = internal.OrderedDict(dict(key1=1, key2=3))
-    y = internal.OrderedDict(dict(key1=3, key2=1))
-    xc = internal.OrderedDict(dict(key1=1, key2=3))
-    yc = internal.OrderedDict(dict(key1=3, key2=1))
-
-    print(x == xc)
-    print(x.copy())
-
-    xp, yp = (weakref.proxy(item) for item in [x, y])
-
-    a = weakref.WeakSet()
-    b = {xp, yp}
-    a.add(xp); a.add(yp)
-    print(list(a))
-    del(x); del(y)
-    del(b)
