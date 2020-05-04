@@ -3,12 +3,14 @@ import six, collections, weakref
 
 if sys.version_info.major < 3:
     Hashable = collections.Hashable
+    Mapping = collections.Mapping
     MutableSet = collections.MutableSet
     MutableMapping = collections.MutableMapping
 
 else:
     import collections.abc
     Hashable = collections.abc.Hashable
+    Mapping = collections.abc.Mapping
     MutableMapping = collections.abc.MutableMapping
     MutableSet = collections.abc.MutableSet
 
@@ -245,77 +247,106 @@ class HookedDict(AliasDict):
 
 class MergedMapping(MutableMapping):
     """A dictionary composed of other Mapping types"""
+    __slots__ = ['_cache', '_data']
 
     def __init__(self):
         super(MergedDict,self).__init__()
 
+        # This is a dictionary of WeakSet. Each key is the symbol, and inside
+        # each set is each dictionary that could own it.
         self._cache = {}
-        # FIXME: it might be better to use a weakref.WeakValueDictionary so that
-        #        if a value in a sub-dictionary disappears, the cached key will
-        #        disappear
 
-        self._data = []
+        # This OrderedSet contains a reference to all the dictionaries that could
+        # be contained in the cache. We use an ordered set so we can prioritize
+        # the dicts that are updated.
+        self._data = OrderedSet()
 
-    def add(self, D):
-        if id(D) in map(id, self._data):
-            raise ReferenceError("Dictionary {!s} already exists in MergedDict {!s}".format(object.__repr__(D), object.__repr__(self)))
-        ref = weakref.ref(D)
-        self._data.append(ref)
-        return self._sync(D)
+    def _add_cache(self, key, D):
+        if not isinstance(D, Mapping):
+            cls = type(D)
+            raise TypeError(cls)
 
-    def remove(self, D):
-        ref = weakref.ref(D)
-        self._data.remove(ref)
-        return self.sync()
+        # First check if we need to add it to our set
+        if D not in self._data:
+            self._data.add(D)
 
-    def _sync(self, D):
-        cur = { item for item in self._cache.keys() }
-        new = { item for item in D }
-        ref = weakref.ref(d)
+        # Now we can grab our WeakSet for the specified key from the cache
+        cache = self._cache.setdefault(key, weakref.WeakSet())
+        cache.add(D)
 
-        for key in cur.intersection(new):
-            self._cache[key][:] = [item for item in self._cache[key] if item() is not None and item is not ref] + [ref]
+        # And return it to the caller...because why not.
+        return cache
 
-        for key in new.difference(cur):
-            self._cache[key] = [ref]
+    def _sync_cache(self, key, D):
+        if not isinstance(D, Mapping):
+            cls = type(D)
+            raise TypeError(cls)
 
-        return len(new)
+        # First add the mapping to our set if it's necessary
+        self._data.add(D)
 
-    def sync(self):
-        iterable = (item.keys() for item in self._data if item() is not None)
-        res = { item for item in itertools.chain(*iterable) }
-        cur = { item for item in self._cache.keys() }
-        [self._cache.pop(key) for key in cur.difference(res)]
+        # Iterate through all of the keys that we need to update, just
+        # so we can grab its WeakSet
+        for key in D:
+            cache = self._cache.setdefault(key, weakref.WeakSet())
 
-        iterable = (self._sync(M()) for M in self._data)
-        return functools.reduce(operator.add, iterable)
+            # Now that we got the set, we can add our mapping to it
+            cache.add(D)
 
-    def __setitem__(self, key, value):
-        res = self._cache[key]
-        for D in res:
-            D[key] = value
-        return len(res)
-
-    def __getitem__(self, key):
-        results = [D[key] for D in self._cache[key]]
-        res = results.pop(0)
-        if not all(item == res for item in results):
-            raise KeyError('More than one differnet value was returned')
-        return res
-
-    def __delitem__(self, key):
-        res = self._cache[key]
-        for D in res:
-            del D[key]
-        return len(res)
+        # And that was it. We're synchronized, and all we need to do
+        # is return the number of keys that are now updated for the
+        # mapping that we were given
+        return len(D)
 
     def __len__(self):
         return len(self._cache)
 
     def __iter__(self):
-        for item in self._cache:
-            yield item
+        for key in self._cache:
+            yield key
         return
+
+    def __setitem__(self, key, value):
+        items = self._cache[key]
+
+        # Iterate through the WeakSet for the key that we were given,
+        # and assign the value to each mapping contained therein
+        for D in items:
+            D[key] = value
+        return
+
+    def __getitem__(self, key):
+        available = self._cache[key]
+
+        # Grab all of the values from each dictionary in the WeakSet
+        results = [D[key] for D in available]
+
+        # Pop off the first value so we can validate if the dictionaries
+        # are not in sync for some reason.
+        res = results.pop(0)
+        if not all(item == res for item in results):
+            raise KeyError('More than one different value was returned')
+
+        # Everything in all the dicts should be synchronized, so we can
+        # simply return what the user asked for.
+        return res
+
+    def __delitem__(self, key):
+        items = self._cache[key]
+        for D in items:
+            del D[key]
+        return len(items)
+
+    def add(self, D):
+        if D in self._data:
+            raise ReferenceError("Dictionary {!s} already exists in MergedDict {!s}".format(object.__repr__(D), object.__repr__(self)))
+        return self._sync_cache(D)
+
+    def remove(self, D):
+        raise NotImplementedError
+        ref = weakref.ref(D)
+        self._data.remove(ref)
+        return self.sync()
 
     def __repr__(self):
         return '{:s} {:s} {!r}'.format(object.__repr__(self), ','.join(map(object.__repr__,self._data)), {k:self[k] for k in self.keys()})
@@ -448,3 +479,4 @@ if False:
     a['dkey1'] = 15
 
     a.add(e)
+
