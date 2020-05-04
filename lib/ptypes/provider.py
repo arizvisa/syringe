@@ -992,7 +992,7 @@ try:
 
         @classmethod
         def expr(cls, string):
-            index = (i for i in six.moves.range(cls.__api__.get_nlist_size()) if string == cls.module.get_nlist_name(i))
+            index = (i for i in range(cls.__api__.get_nlist_size()) if string == cls.module.get_nlist_name(i))
             try:
                 res = cls.__api__.get_nlist_ea(six.next(index))
 

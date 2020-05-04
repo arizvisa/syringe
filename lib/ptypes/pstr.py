@@ -233,7 +233,7 @@ class string(ptype.type):
 
         # handle a slice of glyphs
         if isinstance(index, slice):
-            result = [res.value[_] for _ in six.moves.range(*index.indices(len(res)))]
+            result = [res.value[i] for i in range(*index.indices(len(res)))]
 
             # ..and now turn the slice into an array
             type = ptype.clone(parray.type, length=len(result), _object_=self._object_)
@@ -255,7 +255,7 @@ class string(ptype.type):
 
         # handle a slice of glyphs
         if isinstance(index, slice):
-            indices = six.moves.range(*index.indices(len(res)))
+            indices = range(*index.indices(len(res)))
             [ res[index].set(glyph) for glyph, index in __izip_longest__(value, indices) ]
 
         # handle a single glyph

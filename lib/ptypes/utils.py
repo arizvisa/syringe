@@ -179,7 +179,7 @@ def hexdump(value, offset=0, width=16, rows=None, **kwds):
 
     res = []
     (ofs, data) = offset, bytearray(itertools.islice(value, width))
-    for i in (itertools.count(1) if rows is None else six.moves.range(1, rows)):
+    for i in (itertools.count(1) if rows is None else range(1, rows)):
         res.append( getRow(ofs) )
         ofs, data = ofs + width, bytearray(itertools.islice(value, width))
         if len(data) < width:
@@ -240,18 +240,18 @@ def emit_hexrows(data, height, message, offset=0, width=16, **attrs):
 
     # display everything
     if height <= 0 or leftover <= 0:
-        for o in six.moves.range(0, size, width):
+        for o in range(0, size, width):
             # offset, width, attrs
             yield hexrow(data[o : o + width], offset + o, width, **attrs)
         return
 
     # display rows
     o1 = offset
-    for o in six.moves.range(0, half * width, width):
+    for o in range(0, half * width, width):
         yield hexrow(data[o : o + width], o + o1, **attrs)
     yield message.format(leftover=leftover, height=height, count=count, skipped=skipped, size=size)
     o2 = width * (count - half)
-    for o in six.moves.range(0, half * width, width):
+    for o in range(0, half * width, width):
         yield hexrow(data[o + o2 : o + o2 + width], o + o1 + o2, **attrs)
     return
 
@@ -632,7 +632,7 @@ if __name__ == '__main__':
     def test_padding_sourceprng():
         seed = id(0)
         random.seed(seed)
-        res = bytes(bytearray(random.randint(0, 0xff) for i in six.moves.range(0x10)))
+        res = bytes(bytearray(random.randint(0, 0xff) for i in range(0x10)))
         source = padding.source.prng(seed)
 
         for a, b in zip(res, source):

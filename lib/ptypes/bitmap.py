@@ -62,7 +62,7 @@ def scan(bitmap, value=True, position=0):
         raise AssertionError("Invalid position : {:d}".format(position))
 
     size, bitmask = abs(size), 2 ** position
-    for i in six.moves.range(size):
+    for i in range(size):
         if bool(integer & bitmask) == value or position >= size:
             return position
         bitmask *= 2
@@ -111,7 +111,7 @@ def set(bitmap, position, value=True, count=1):
     if position + count > abs(size):
         raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask, size = functools.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
+    mask, size = functools.reduce(lambda r, v: 2 ** v | r, range(position, position + count), 0), abs(size)
     if value:
         return integer | mask, size
     return integer & ~mask, size
@@ -125,7 +125,7 @@ def get(bitmap, position, count):
     if position + count > abs(size):
         raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask, size = functools.reduce(lambda r, v: 2 ** v | r, six.moves.range(position, position + count), 0), abs(size)
+    mask, size = functools.reduce(lambda r, v: 2 ** v | r, range(position, position + count), 0), abs(size)
     return (integer & mask) >> position, count
 
 def add(bitmap, integer):
@@ -688,11 +688,11 @@ if __name__ == '__main__':
         print(x.consume(4))
 
         x = bitmap.new(0, 4)
-        for i in six.moves.range(6):
+        for i in range(6):
             print(x)
             x = bitmap.add(x, 3)
 
-        for i in six.moves.range(6):
+        for i in range(6):
             print(x)
             x = bitmap.sub(x, 6)
 

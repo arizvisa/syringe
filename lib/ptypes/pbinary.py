@@ -991,7 +991,7 @@ class __array_interface__(container):
     def __getitem__(self, index):
         '''x.__getitem__(y) <==> x[y]'''
         if isinstance(index, slice):
-            res = [ self.value[self.__getindex__(idx)] for idx in six.moves.range(*index.indices(len(self))) ]
+            res = [ self.value[self.__getindex__(idx)] for idx in range(*index.indices(len(self))) ]
             t = ptype.clone(array, length=len(res), _object_=self._object_)
             return self.new(t, offset=res[0].getoffset(), value=res)
         return super(__array_interface__, self).__getitem__(index)
@@ -1000,7 +1000,7 @@ class __array_interface__(container):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         if isinstance(index, slice):
             val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isinstance(value)) else iter(value)
-            for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
+            for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 super(__array_interface__, self).__setitem__(idx, six.next(val))
             return
 
@@ -1270,7 +1270,7 @@ class array(__array_interface__):
         position = self.getposition()
         obj = getattr(self, '_object_', 0)
         self.value = []
-        generator = (self.new(obj, __name__=str(index), position=position) for index in six.moves.range(self.length))
+        generator = (self.new(obj, __name__=str(index), position=position) for index in range(self.length))
         return super(array, self).__deserialize_consumer__(consumer, generator)
 
     def blockbits(self):
@@ -1370,7 +1370,7 @@ class terminatedarray(__array_interface__):
     def __deserialize_consumer__(self, consumer):
         self.value = []
         obj = self._object_
-        forever = itertools.count() if self.length is None else six.moves.range(self.length)
+        forever = itertools.count() if self.length is None else range(self.length)
         position = self.getposition()
 
         def generator():
@@ -1429,7 +1429,7 @@ class blockarray(terminatedarray):
         obj, position = getattr(self, '_object_', 0), self.getposition()
         total = self.blockbits()
         value = self.value = []
-        forever = itertools.count() if self.length is None else six.moves.range(self.length)
+        forever = itertools.count() if self.length is None else range(self.length)
         generator = (self.new(obj, __name__=str(index), position=position) for index in forever)
 
         # fork the consumer
@@ -2512,7 +2512,7 @@ if __name__ == '__main__':
             def blockbits(self):
                 return 32*8
 
-        data = bytes().join(map(six.int2byte, six.moves.range(48,48+75)))
+        data = bytes().join(map(six.int2byte, range(48, 48 + 75)))
         src = provider.string(data)
         a = pbinary.new(argh, source=src)
         a = a.l
@@ -2533,7 +2533,7 @@ if __name__ == '__main__':
             _object_ = argh
             length = 4
 
-        data = bytes().join((bytes().join(six.int2byte(x)*4 for x in six.moves.range(48,48+75)) for _ in six.moves.range(500)))
+        data = bytes().join((bytes().join(six.int2byte(x)*4 for x in range(48, 48 + 75)) for _ in range(500)))
         src = provider.string(data)
         a = pbinary.new(ack, source=src)
         a = a.l
@@ -2616,7 +2616,7 @@ if __name__ == '__main__':
         data = b'\xa8'
         a = pbinary.new(pbinary.bigendian(p, source=prov.string(data)))
         a = a.l
-        if 'notset' not in a.summary() and all(('set{:d}'.format(x)) in a.summary() for x in six.moves.range(3)):
+        if 'notset' not in a.summary() and all(('set{:d}'.format(x)) in a.summary() for x in range(3)):
             raise Success
 
     @TestCase

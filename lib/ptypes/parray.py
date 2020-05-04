@@ -113,7 +113,7 @@ class __array_interface__(ptype.container):
         object.parent, object.source = self, None
         self.value.insert(index, object)
 
-        for i in six.moves.range(index, len(self.value)):
+        for i in range(index, len(self.value)):
             item = self.value[i]
             item.setoffset(offset, recurse=True)
             offset += item.blocksize()
@@ -162,7 +162,7 @@ class __array_interface__(ptype.container):
         '''x.__delitem__(y) <==> del x[y]'''
         if isinstance(index, slice):
             origvalue = self.value[:]
-            for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
+            for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 realidx = self.__getindex__(idx)
                 self.value.pop( self.value.index(origvalue[realidx]) )
             return origvalue.__getitem__(index)
@@ -173,7 +173,7 @@ class __array_interface__(ptype.container):
         if isinstance(index, slice):
             ivalue = itertools.repeat(value) if isinstance(value, ptype.generic) else iter(value)
             res = self.value[:]
-            for idx in six.moves.range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
+            for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 i = self.__getindex__(idx)
                 self.value[i] = six.next(ivalue)
             return res.__getitem__(index)
@@ -186,7 +186,7 @@ class __array_interface__(ptype.container):
     def __getitem__(self, index):
         '''x.__getitem__(y) <==> x[y]'''
         if isinstance(index, slice):
-            result = [ self.value[ self.__getindex__(idx) ] for idx in six.moves.range(*index.indices(len(self))) ]
+            result = [ self.value[self.__getindex__(idx)] for idx in range(*index.indices(len(self))) ]
             t = ptype.clone(type, length=len(result), _object_=self._object_)
             return self.new(t, offset=result[0].getoffset() if len(result) else self.getoffset(), value=result)
 
@@ -257,7 +257,7 @@ class type(__array_interface__):
     # load ourselves lazily
     def __load_block(self, **attrs):
         offset = self.getoffset()
-        for index in six.moves.range(self.length):
+        for index in range(self.length):
             item = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
             self.value.append(item)
             offset += item.blocksize()
@@ -266,7 +266,7 @@ class type(__array_interface__):
     # load ourselves incrementally
     def __load_container(self, **attrs):
         offset = self.getoffset()
-        for index in six.moves.range(self.length):
+        for index in range(self.length):
             item = self.new(self._object_, __name__=str(index), offset=offset, **attrs)
             self.value.append(item)
             item.load()
@@ -303,7 +303,7 @@ class type(__array_interface__):
                 continue
 
             # re-alloc elements that exist in the rest of the array
-            for idx in six.moves.range(len(fields), len(result.value)):
+            for idx in range(len(fields), len(result.value)):
                 result.value[idx].a
 
         result.setoffset(self.getoffset(), recurse=True)
@@ -391,7 +391,7 @@ class terminated(type):
     def load(self, **attrs):
         try:
             with utils.assign(self, **attrs):
-                forever = itertools.count() if self.length is None else six.moves.range(self.length)
+                forever = itertools.count() if self.length is None else range(self.length)
                 offset, self.value = self.getoffset(), []
 
                 for index in forever:
@@ -584,7 +584,7 @@ class block(uninitialized):
             return super(block, self).load(**attrs)
 
         with utils.assign(self, **attrs):
-            forever = itertools.count() if self.length is None else six.moves.range(len(self))
+            forever = itertools.count() if self.length is None else range(len(self))
             offset, self.value = self.getoffset(), []
 
             if self.blocksize() == 0:   # if array is empty...
@@ -765,7 +765,7 @@ if __name__ == '__main__':
             _object_ = pint.uint8_t
             blocksize = lambda s:4
 
-        block = bytes().join(map(six.int2byte,six.moves.range(0x10)))
+        block = bytes().join(map(six.int2byte, range(0x10)))
 
         a = container(source=provider.string(block)).l
         if len(a) == 4:
@@ -853,7 +853,8 @@ if __name__ == '__main__':
 
             _object_ = randomcontainer
 
-        string = bytes().join([ six.int2byte(random.randint(six.byte2int(b'A'),six.byte2int(b'Z'))) for x in six.moves.range(0x100) ])
+        iterable = (six.int2byte(random.randint(six.byte2int(b'A'), six.byte2int(b'Z'))) for x in range(0x100))
+        string = bytes().join(iterable)
         a = arr(source=provider.string(string))
         a=a.l
         if a.blocksize() == 0x108:
@@ -862,7 +863,7 @@ if __name__ == '__main__':
     @TestCase
     def test_array_infinite_nested_partial():
         class fakefile(object):
-            d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((0xdead*x)&0xffffffff for x in six.moves.range(0x100)))
+            d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((0xdead*x)&0xffffffff for x in range(0x100)))
             d = array.array('B', bytearray(d.tostring() + b'\xde\xad\xde\xad'))
             o = 0
             def seek(self, ofs):
@@ -973,7 +974,7 @@ if __name__ == '__main__':
             _object_ = pint.int32_t
 
         a = argh(source=provider.empty())
-        a.set([x for x in six.moves.range(69)])
+        a.set([x for x in range(69)])
         if len(a) == 69 and sum(x.int() for x in a) == 2346:
             raise Success
 
@@ -983,7 +984,7 @@ if __name__ == '__main__':
             _object_ = pint.int32_t
 
         a = argh(source=provider.empty(), length=69)
-        a.a.set([42 for _ in six.moves.range(69)])
+        a.a.set([42 for _ in range(69)])
         if sum(x.int() for x in a) == 2898:
             raise Success
 
@@ -1042,7 +1043,7 @@ if __name__ == '__main__':
     def test_array_set_initialized_instance():
         b = ptype.clone(parray.type,_object_=pint.uint8_t,length=4)
         a = parray.type(_object_=pint.uint8_t,length=4).a
-        a.set(tuple(pint.uint32_t().set(0x40) for x in six.moves.range(4)))
+        a.set(tuple(pint.uint32_t().set(0x40) for x in range(4)))
         if sum(x.int() for x in a) == 256:
             raise Success
 
@@ -1104,7 +1105,7 @@ if __name__ == '__main__':
         class blah(parray.type):
             _object_ = pint.uint32_t
             length = 4
-        a = blah().alloc([pint.uint8_t().set(i) for i in six.moves.range(4)])
+        a = blah().alloc([pint.uint8_t().set(i) for i in range(4)])
         if all(x.size() == 1 for x in a) and sum(x.int() for x in a) == 6:
             raise Success
 
@@ -1114,7 +1115,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
             length = 4
         a = blah().alloc([pint.uint8_t])
-        if a[0].size() == 1 and all(a[x].size() == 4 for x in six.moves.range(1,4)):
+        if a[0].size() == 1 and all(a[x].size() == 4 for x in range(1,4)):
             raise Success
 
     @TestCase

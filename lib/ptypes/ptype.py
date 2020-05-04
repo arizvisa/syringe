@@ -2776,7 +2776,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_getoffset():
         class bah(ptype.type): length=2
-        data = prov.string(bytes().join(map(six.int2byte,six.moves.range(six.byte2int(b'a'),six.byte2int(b'z')))))
+        data = prov.string(bytes().join(map(six.int2byte, moves.range(six.byte2int(b'a'), six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
         if a.getoffset() == 0 and a.l.serialize()==b'ab':
             raise Success
@@ -2784,7 +2784,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_setoffset():
         class bah(ptype.type): length=2
-        data = prov.string(bytes().join(map(six.int2byte,six.moves.range(six.byte2int(b'a'),six.byte2int(b'z')))))
+        data = prov.string(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
         a.setoffset(20)
         if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == b'uv':
@@ -2807,7 +2807,7 @@ if __name__ == '__main__':
 
         a = cont()
         a.set(bah().a, bah().a, bah().a)
-        if tuple(a.getoffset(i) for i in six.moves.range(len(a.v))) == (0,2,4):
+        if tuple(a.getoffset(i) for i in range(len(a.v))) == (0,2,4):
             raise Success
 
     @TestCase
@@ -2989,7 +2989,7 @@ if __name__ == '__main__':
     @TestCase
     def test_container_set_uninitialized_instance():
         class container(ptype.container): pass
-        a = container().set(*(pint.uint8_t().set(1) for _ in six.moves.range(10)))
+        a = container().set(*(pint.uint8_t().set(1) for _ in range(10)))
         if sum(x.int() for x in a) == 10:
             raise Success
 

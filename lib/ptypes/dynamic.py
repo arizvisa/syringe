@@ -676,7 +676,7 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_array_2():
         v = dynamic.array(pint.int32_t, 8)
-        i = six.moves.range(0x40,0x40+v.length)
+        i = range(0x40,0x40+v.length)
         x = ptype.provider.string(bytes().join(six.int2byte(x)+b'\x00\x00\x00' for x in i))
         z = v(source=x).l
         if z[4].int() == 0x44:
