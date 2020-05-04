@@ -1,5 +1,5 @@
 import functools, itertools, types, builtins, operator, sys
-import six, collections, weakref
+import six, abc, copy, collections, weakref
 
 if sys.version_info.major < 3:
     Hashable = collections.Hashable
@@ -13,6 +13,76 @@ else:
     Mapping = collections.abc.Mapping
     MutableMapping = collections.abc.MutableMapping
     MutableSet = collections.abc.MutableSet
+
+### Some metaclasses to implement
+
+# Ripped out of collections.abc
+def _check_methods(C, *methods):
+    mro = C.__mro__
+    for method in methods:
+        for B in mro:
+            if method in B.__dict__:
+                if B.__dict__[method] is None:
+                    return NotImplemented
+                break
+        else:
+            return NotImplemented
+    return True
+
+# Standard implementation of the Copyable metaclass
+if sys.version_info.major < 3:
+    class Copyable(object):
+        __metaclass__ = abc.ABCMeta
+
+        def copy(self):
+            return copy.copy(self)
+
+        @abc.abstractmethod
+        def __getstate__(self):
+            state = self.__dict__
+            return { name : state[name] for name in state }
+
+        @abc.abstractmethod
+        def __setstate__(self, state):
+            for name in state:
+                attribute = state[name]
+                setattr(self, name, attribute)
+            return
+
+        @classmethod
+        def __subclasshook__(cls, C):
+            if cls is Copyable:
+                return _check_methods(C,  "__len__", "__iter__", "__contains__")
+            return NotImplemented
+
+# Python2 can't parse this syntax, so we embed it in exec() to hide the
+# definition from its parser.
+else:
+    exec("""
+    class Copyable(metaclass=abc.ABCMeta):
+        def copy(self):
+            return copy.copy(self)
+
+        @abc.abstractmethod
+        def __getstate__(self):
+            state = self.__dict__
+            return { name : state[name] for name in state }
+
+        @abc.abstractmethod
+        def __setstate__(self, state):
+            for name in state:
+                attribute = state[name]
+                setattr(self, name, attribute)
+            return
+
+        @classmethod
+        def __subclasshook__(cls, C):
+            if cls is Copyable:
+                return _check_methods(C,  "__len__", "__iter__", "__contains__")
+            return NotImplemented
+    """.strip())
+
+### Core data structure implementations
 
 # Python3 doesn't have ordered sets...so we have to implement this ourselves
 class OrderedSet(MutableSet, Hashable):
@@ -250,7 +320,7 @@ class MergedMapping(MutableMapping):
     __slots__ = ['_cache', '_data']
 
     def __init__(self):
-        super(MergedDict,self).__init__()
+        super(MergedMapping, self).__init__()
 
         # This is a dictionary of WeakSet. Each key is the symbol, and inside
         # each set is each dictionary that could own it.
@@ -277,7 +347,7 @@ class MergedMapping(MutableMapping):
         # And return it to the caller...because why not.
         return cache
 
-    def _sync_cache(self, key, D):
+    def _sync_cache(self, D):
         if not isinstance(D, Mapping):
             cls = type(D)
             raise TypeError(cls)
@@ -339,7 +409,7 @@ class MergedMapping(MutableMapping):
 
     def add(self, D):
         if D in self._data:
-            raise ReferenceError("Dictionary {!s} already exists in MergedDict {!s}".format(object.__repr__(D), object.__repr__(self)))
+            raise ReferenceError("Dictionary {!s} already exists in MergedMapping {!s}".format(object.__repr__(D), object.__repr__(self)))
         return self._sync_cache(D)
 
     def remove(self, D):
@@ -464,12 +534,29 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
-if False:
+    class MockDict(MutableMapping, Hashable):
+        def __hash__(self):
+            iterable = map(hash, self.items())
+            return functools.reduce(operator.xor, iterable, 0)
+        def __init__(self, **items):
+            self._data = items
+        def __setitem__(self, key, value):
+            self._data[key] = value
+        def __getitem__(self, key):
+            return self._data[key]
+        def __delitem__(self, key):
+            del self._data[key]
+        def __iter__(self):
+            for key in self._data:
+                yield key
+        def __len__(self):
+            return len(self._data)
+
     a = MergedMapping()
-    b = {'bkey1':0,'bkey2':1,'bkey3':2}
-    c = {'ckey1':0,'ckey2':1,'ckey3':2}
-    d = {'dkey1':0,'dkey2':1,'dkey3':2}
-    e = {'bkey1':0,'ckey1':0,'dkey1':0}
+    b = MockDict(**{'bkey1':0,'bkey2':1,'bkey3':2})
+    c = MockDict(**{'ckey1':0,'ckey2':1,'ckey3':2})
+    d = MockDict(**{'dkey1':0,'dkey2':1,'dkey3':2})
+    e = MockDict(**{'bkey1':0,'ckey1':0,'dkey1':0})
     a.add(b)
     a.add(c)
     a.add(d)
@@ -480,3 +567,23 @@ if False:
 
     a.add(e)
 
+if False:
+    import importlib as imp
+    internal = imp.reload(internal)
+
+    x = internal.OrderedDict(dict(key1=1, key2=3))
+    y = internal.OrderedDict(dict(key1=3, key2=1))
+    xc = internal.OrderedDict(dict(key1=1, key2=3))
+    yc = internal.OrderedDict(dict(key1=3, key2=1))
+
+    print(x == xc)
+    print(x.copy())
+
+    xp, yp = (weakref.proxy(item) for item in [x, y])
+
+    a = weakref.WeakSet()
+    b = {xp, yp}
+    a.add(xp); a.add(yp)
+    print(list(a))
+    del(x); del(y)
+    del(b)
