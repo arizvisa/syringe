@@ -59,6 +59,14 @@ class OrderedDict(MutableMapping):
         self._data = {key : value for key, value in items}
         self._order = [key for key, _ in items]
 
+    # Python2-compatibility
+    def viewkeys(self):
+        return { key for key, value in self.items() }
+    def viewvalues(self):
+        return { value for key, value in self.items() }
+    def viewitems(self):
+        return { (key, value) for key, value in self.items() }
+
     def __len__(self):
         return len(self._data)
 
@@ -181,13 +189,14 @@ class HookedDict(AliasDict):
     """A dictionary that allows one to hook assignment of a particular key"""
     __slots__ = ['__hooks']
     def __init__(self, iterable=None):
-        super(HookedDict,self).__init__(iterable)
+        super(HookedDict, self).__init__(iterable)
         self.__hooks = {}
 
     def hook(self, key, F, args=(), kwds={}):
         target = self._getkey(key)
         if target not in self._data:
             raise KeyError("Target {!r} does not exist within HookDict {!s}".format(key, object.__repr__(self)))
+
         res = self.__hooks.pop(target) if target in self.__hooks else None
         def closure(self, key, value, F=F, args=tuple(args), kwargs=dict(kwds)):
             return F(self, key, value, *args, **kwargs)
@@ -216,7 +225,7 @@ class HookedDict(AliasDict):
         res = self._execute_hook(key, value)
         if res:
             target = self._getkey(key)
-            return super(HookedDict,self).__setitem__(target, value)
+            return super(HookedDict, self).__setitem__(target, value)
         return
 
     def __delitem__(self, key):
@@ -365,33 +374,58 @@ if __name__ == '__main__':
     if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
         raise ValueError
 
-if False:
-    def ok(self, key, value):
-        print('assigned', key, value)
-    def ignore(self, key, value):
-        print('ignored', key, value)
-        return False
+    class Signal(OSError): pass
 
-    a = internal.HookedDict()
+    def ok(self, key, value):
+        raise Signal(True)
+    def ignore(self, key, value):
+        raise Signal(False)
+
+    a = HookedDict()
     a['val1'] = 1
     a.alias('val1', 'alias1')
-    print(a['alias1'],a['val1'])
     a['alias1'] = 10
-    print(a['alias2'])
 
     a['val2'] = 0
     res = a.hook('val2', ok)
-    a['val2'] = 1
+    try:
+        a['val2'] = 1
+    except Signal as S:
+        pass
+    else:
+        raise ValueError
+
     a.alias('val2', 'alias2')
-    a['alias2'] = 500
+    try:
+        a['alias2'] = 500
+    except Signal as S:
+        pass
+    else:
+        raise ValueError
 
     a['val3'] = 20
     a.hook('val3', ignore)
-    a['val3'] = 50
+    try:
+        a['val3'] = 50
+    except Signal as S:
+        notok, = S.args
+        if notok:
+            raise ValueError
+    else:
+        raise ValueError
     a.alias('val3', 'alias4')
-    a['alias4'] = 40
 
-    a = internal.MergedDict()
+    try:
+        a['alias4'] = 40
+    except Signal as S:
+        notok, = S.args
+        if notok:
+            raise ValueError
+    else:
+        raise ValueError
+
+if False:
+    a = MergedMapping()
     b = {'bkey1':0,'bkey2':1,'bkey3':2}
     c = {'ckey1':0,'ckey2':1,'ckey3':2}
     d = {'dkey1':0,'dkey2':1,'dkey3':2}
@@ -405,5 +439,3 @@ if False:
     a['dkey1'] = 15
 
     a.add(e)
-
-# sys.path.append('c:/users/user/work/ata/lib')
