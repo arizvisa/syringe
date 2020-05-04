@@ -2,17 +2,22 @@ import functools, itertools, types, builtins, operator, sys
 import six, collections, weakref
 
 if sys.version_info.major < 3:
+    Hashable = collections.Hashable
     MutableSet = collections.MutableSet
     MutableMapping = collections.MutableMapping
 
 else:
     import collections.abc
+    Hashable = collections.abc.Hashable
     MutableMapping = collections.abc.MutableMapping
     MutableSet = collections.abc.MutableSet
 
 # Python3 doesn't have ordered sets...so we have to implement this ourselves
-class OrderedSet(MutableSet):
-    __slots__ = ['_data', '_order']
+class OrderedSet(MutableSet, Hashable):
+    def __hash__(self):
+        iterable = map(hash, enumerate(self._data))
+        return functools.reduce(operator.xor, iterable, 0)
+
     def __init__(self, iterable=None):
         items = iterable or []
         self._data = [ item for item in items ]
@@ -46,8 +51,10 @@ class OrderedSet(MutableSet):
         return "{!s} {:s}".format(cls, ', '.join(map("{!r}".format, self)))
     __repr__ = __str__
 
-class OrderedDict(MutableMapping):
-    __slots__ = ['_data', '_order']
+class OrderedDict(MutableMapping, Hashable):
+    def __hash__(self):
+        iterable = map(hash, enumerate(self.items()))
+        return functools.reduce(operator.xor, iterable, 0)
 
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
@@ -105,9 +112,12 @@ class OrderedDict(MutableMapping):
         return "{!s} {:s}".format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, self.items())))
     __repr__ = __str__
 
-class AliasDict(MutableMapping):
+class AliasDict(MutableMapping, Hashable):
     """A dictionary that allows one to create aliases for keys"""
-    __slots__ = ['_data', '_aliases']
+    def __hash__(self):
+        iterable = map(hash, self.items())
+        return functools.reduce(operator.xor, iterable, hash(self._aliases))
+
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
         if isinstance(iterable, dict):
@@ -187,37 +197,36 @@ class AliasDict(MutableMapping):
 
 class HookedDict(AliasDict):
     """A dictionary that allows one to hook assignment of a particular key"""
-    __slots__ = ['__hooks']
     def __init__(self, iterable=None):
         super(HookedDict, self).__init__(iterable)
-        self.__hooks = {}
+        self._hooks = {}
 
     def hook(self, key, F, args=(), kwds={}):
         target = self._getkey(key)
         if target not in self._data:
             raise KeyError("Target {!r} does not exist within HookDict {!s}".format(key, object.__repr__(self)))
 
-        res = self.__hooks.pop(target) if target in self.__hooks else None
+        res = self._hooks.pop(target) if target in self._hooks else None
         def closure(self, key, value, F=F, args=tuple(args), kwargs=dict(kwds)):
             return F(self, key, value, *args, **kwargs)
-        self.__hooks[target] = closure
+        self._hooks[target] = closure
         return res
 
     def unhook(self, key):
         target = self._getkey(key)
-        return self.__hooks.pop(target)
+        return self._hooks.pop(target)
 
     def _execute_hook(self, key, value):
         Ffalse = lambda *args, **kwargs: False
 
         target = self._getkey(key)
-        if target in self.__hooks:
+        if target in self._hooks:
             try:
-                F, self.__hooks[target] = self.__hooks[target], Ffalse
+                F, self._hooks[target] = self._hooks[target], Ffalse
                 res = F(self, key, value)
 
             finally:
-                self.__hooks[target] = F
+                self._hooks[target] = F
             return res if isinstance(res, bool) else True
         return True
 
@@ -230,7 +239,7 @@ class HookedDict(AliasDict):
 
     def __delitem__(self, key):
         target = self._getkey(key)
-        if target in self.__hooks:
+        if target in self._hooks:
             F = self.unhook(target)
         return super(HookedDict,self).__delitem__(key)
 
