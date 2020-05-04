@@ -2,31 +2,97 @@ import functools, itertools, types, builtins, operator, sys
 import collections, weakref
 
 if sys.version_info.major < 3:
-    import sets
-    Set = sets.Set
+    MutableSet = collections.MutableSet
     MutableMapping = collections.MutableMapping
 
 else:
-    import ordered_set as sets
-    Set = sets.OrderedSet
-
     import collections.abc
     MutableMapping = collections.abc.MutableMapping
-
-class OrderedDict(collections.OrderedDict): pass
+    MutableSet = collections.abc.MutableSet
 
 # Python3 doesn't have ordered sets...so we have to implement this ourselves
-class OrderedSet(Set):
-    __slots__ = ['_data']
+class OrderedSet(MutableSet):
+    __slots__ = ['_data', '_order']
     def __init__(self, iterable=None):
-        super(OrderedSet, self).__init__(iterable or [])
-        self._data = OrderedDict()
-        if iterable is not None: self.update(iterable)
+        items = iterable or []
+        self._data = [ item for item in items ]
+        self._order = { item : index for index, item in enumerate(self._data) }
 
-    def add(self, element):
-        if element in self._data:
-            raise TypeError("Element already exists within set {!s}: {!r}".format(object.__repr__(self), element))
-        return super(OrderedSet, self).add(element)
+    def __contains__(self, value):
+        return value in self._order
+
+    def __len__(self):
+        return len(self._data)
+
+    def add(self, value):
+        if value in self._order:
+            raise TypeError("Element already exists within set {!s}: {!r}".format(object.__repr__(self), value))
+        self._order[value] = len(self._data)
+        self._data.append(value)
+
+    def discard(self, item):
+        if item in self._order:
+            index = self._order.pop(item)
+            self._data.pop(index)
+        return
+
+    def __iter__(self):
+        for item in self._data:
+            yield item
+        return
+
+    def __str__(self):
+        cls = self.__class__
+        return "{!s} {:s}".format(cls, ', '.join(map("{!r}".format, self)))
+    __repr__ = __str__
+
+class OrderedDict(MutableMapping):
+    __slots__ = ['_data', '_order', '_mapping']
+
+    def __init__(self, iterable=None, **pairs):
+        items = [item for item in pairs.items()]
+        if isinstance(iterable, dict):
+            items += iterable.items()
+        else:
+            items += [(key, value) for key, value in iterable or []]
+
+        self._order = [ (key, value) for key, value in items ]
+        self._data = { key : index for index, (key, value) in enumerate(self._order) }
+        self._mapping = { key : value for key, value in self._order }
+
+    def __len__(self):
+        return len(self._order)
+
+    def __iter__(self):
+        for key, _ in self._order:
+            yield key
+        return
+
+    def __getitem__(self, key):
+        index = self._data[key]
+        _, value = self._order[index]
+        return value
+
+    def __setitem__(self, key, value):
+        if key in self._data:
+            index = self._data[key]
+        else:
+            index = len(self._order)
+            self._order.append((key, value))
+        self._data[key] = index
+        self._mapping[key] = value
+
+    def __delitem__(self, key):
+        if key in self._data:
+            index = self._data.pop(key)
+            del self._order[index]
+            del self._mapping[key]
+        raise KeyError(key)
+
+    def __str__(self):
+        cls = self.__class__
+        return "{!s} {:s}".format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, self.items())))
+    __repr__ = __str__
 
 class AliasDict(MutableMapping):
     """A dictionary that allows one to create aliases for keys"""
@@ -244,15 +310,18 @@ if __name__ == '__main__':
     a[-3] = None
     a[-2] = None
     a[-1] = None
-    print(a.keys() == [0,1,2,3,4,-5,-4,-3,-2,-1])
+    if list(a.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
+        raise ValueError
 
     a = OrderedSet( ('bla','blah','blahh') )
     a.add('meh')
     a.add('hmm')
     a.add('heh')
-    print(a.discard('hmm'))
-    print(a.remove('meh'))
-    print(list(a) == ['bla','blah','blahh','heh'])
+    a.discard('hmm')
+    a.remove('meh')
+
+    if list(a) != ['bla','blah','blahh','heh']:
+        raise ValueError
 
     a = AliasDict()
     a.alias('fuck', 'a','b','c')
