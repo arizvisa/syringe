@@ -92,7 +92,6 @@ class WeakLink(object):
     __slots__ = ['previous', 'next', 'item', '__weakref__']
 
 class OrderedSet(MutableSet, Hashable, Copyable):
-
     def __hash__(self):
         iterable = map(hash, enumerate(self))
         return functools.reduce(operator.xor, iterable, 0)
@@ -660,7 +659,7 @@ if __name__ == '__main__':
         def __len__(self):
             return len(self._data)
         def __str__(self):
-            return repr(self._data)
+            return "{!r}".format(sorted(self._data.items()))
         __repr__ = __str__
 
     a = MockDict(**{'akey1':1,'akey2':3,'akey3':5})
@@ -716,6 +715,9 @@ if __name__ == '__main__':
         raise ValueError
     M['bkey1'] = 0
 
+    M.remove(e)
+    M.remove(b)
+
     ## MergedMapping non-existent key
     M = MergedMapping()
     M.add(b)
@@ -729,6 +731,14 @@ if __name__ == '__main__':
         pass
     else:
         raise ValueError
+
+    # XXX: for some reason modifying any of the references in the
+    #      dictionaries results in them not being found in any set/dict
+
+    M.remove(b)
+    M.remove(c)
+    M.remove(d)
+    M.remove(e)
 
     ## MergedMapping multiple-dict multiple-fetch
     M = MergedMapping()
@@ -745,6 +755,10 @@ if __name__ == '__main__':
         raise ValueError
     if e not in M._data:
         raise ValueError
+
+    # XXX: for some reason modifying any of the references in the
+    #      dictionaries results in them not being found in any set/dict
+    #      despite their hash and values matching.
 
     M['bkey1'] = 41
     M['ckey1'] = 42
