@@ -85,43 +85,78 @@ else:
 ### Core data structure implementations
 
 # Python3 doesn't have ordered sets...so we have to implement this ourselves
+class WeakLink(object):
+    '''
+    Ripped from http://code.activestate.com/recipes/576696/
+    '''
+    __slots__ = ['previous', 'next', 'item', '__weakref__']
+
 class OrderedSet(MutableSet, Hashable, Copyable):
+
     def __hash__(self):
-        iterable = map(hash, enumerate(self._data))
+        iterable = map(hash, enumerate(self))
         return functools.reduce(operator.xor, iterable, 0)
 
+    def __eq__(self, other):
+        if isinstance(other, OrderedSet):
+            return len(self) == len(other) and list(self) == list(other)
+        return not self.isdisjoint(other)
+
     def __getstate__(self):
-        return self._data, self._order
+        data = [ item for item in self]
+        return data, dict(self._order)
 
     def __setstate__(self, state):
-        self._data, self._order = state
+        data, self._order = state
+
+        self._data = res = WeakLink()
+        res.previous = res.next = res
+        [ self.add(item) for item in data ]
 
     def __init__(self, iterable=None):
         items = iterable or []
-        self._data = [ item for item in items ]
-        self._order = { item : index for index, item in enumerate(self._data) }
+        self._order = {}
 
-    def __contains__(self, value):
-        return value in self._order
+        self._data = res = WeakLink()
+        res.previous = res.next = res
+
+        self |= items
+
+    def __contains__(self, item):
+        return item in self._order
 
     def __len__(self):
-        return len(self._data)
+        return len(self._order)
 
-    def add(self, value):
-        if value in self._order:
+    def add(self, item):
+        if item in self._order:
             raise TypeError("Element already exists within set {!s}: {!r}".format(object.__repr__(self), value))
-        self._order[value] = len(self._data)
-        self._data.append(value)
+        res, root, last = WeakLink(), self._data, self._data.previous
+        self._order[item] = res
+
+        res.previous, res.next, res.item = last, root, item
+        last.next = root.previous = weakref.proxy(res)
 
     def discard(self, item):
         if item in self._order:
-            index = self._order.pop(item)
-            self._data.pop(index)
+            res = self._order.pop(item)
+            res.previous.next, res.next.previous = res.next, res.previous
         return
 
     def __iter__(self):
-        for item in self._data:
-            yield item
+        root = self._data
+        res = root.next
+        while res is not root:
+            yield res.item
+            res = res.next
+        return
+
+    def __reversed__(self):
+        root = self._data
+        res = root.previous
+        while res is not root:
+            yield res.item
+            res = res.previous
         return
 
     def __str__(self):
@@ -723,6 +758,7 @@ if __name__ == '__main__':
         raise ValueError
 
     M.remove(e)
+
     M['bkey1'] = 21
     M['ckey1'] = 22
     M['dkey1'] = 23
