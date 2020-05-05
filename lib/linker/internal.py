@@ -56,7 +56,7 @@ if sys.version_info.major < 3:
             return NotImplemented
 
 # Python2 can't parse this syntax, so we embed it in exec() to hide the
-# definition from its parser.
+# definition from its parser
 else:
     exec("""
     class Copyable(metaclass=abc.ABCMeta):
@@ -341,50 +341,41 @@ class MergedMapping(MutableMapping):
         super(MergedMapping, self).__init__()
 
         # This is a dictionary of WeakSet. Each key is the symbol, and inside
-        # each set is each dictionary that could own it.
+        # each set is each dictionary that could own it
         self._cache = {}
 
         # This OrderedSet contains a reference to all the dictionaries that could
         # be contained in the cache. We use an ordered set so we can prioritize
-        # the dicts that are updated.
+        # the dicts that are updated
         self._data = OrderedSet()
-
-    def _add_cache(self, key, D):
-        if not isinstance(D, Mapping):
-            cls = type(D)
-            raise TypeError(cls)
-
-        # First check if we need to add it to our set
-        if D not in self._data:
-            self._data.add(D)
-
-        # Now we can grab our WeakSet for the specified key from the cache
-        cache = self._cache.setdefault(key, weakref.WeakSet())
-        cache.add(D)
-
-        # And return it to the caller...because why not.
-        return cache
 
     def _sync_cache(self, D):
         if not isinstance(D, Mapping):
             cls = type(D)
             raise TypeError(cls)
 
-        # First add the mapping to our set if it's necessary
-        self._data.add(D)
+        # Check that we haven't already been inserted into our set
+        if D in self._data:
+            raise ValueError
+
+        # Make a copy of the mapping, and add it into our set
+        reference = D.copy()
+        self._data.add(reference)
 
         # Iterate through all of the keys that we need to update, just
-        # so we can grab its WeakSet
-        for key in D:
+        # so we can grab the WeakSet containing all of the mappings for
+        # that particular key
+        res = {item for item in reference} - {item for item in self._cache}
+        for key in reference:
             cache = self._cache.setdefault(key, weakref.WeakSet())
 
             # Now that we got the set, we can add our mapping to it
-            cache.add(D)
+            cache.add(reference)
 
         # And that was it. We're synchronized, and all we need to do
-        # is return the number of keys that are now updated for the
-        # mapping that we were given
-        return len(D)
+        # is return the number of keys that were created for the mapping
+        # that we were given
+        return len(res)
 
     def __len__(self):
         return len(self._cache)
@@ -404,23 +395,31 @@ class MergedMapping(MutableMapping):
         return
 
     def __getitem__(self, key):
-        available = self._cache[key]
+        items = self._cache[key]
 
         # Grab all of the values from each dictionary in the WeakSet
-        results = [D[key] for D in available]
+        results = [D[key] for D in items]
 
         # Pop off the first value so we can validate if the dictionaries
-        # are not in sync for some reason.
+        # are not in sync for some reason
         res = results.pop(0)
         if not all(item == res for item in results):
             raise KeyError('More than one different value was returned')
 
         # Everything in all the dicts should be synchronized, so we can
-        # simply return what the user asked for.
+        # simply return what the user asked for
         return res
 
     def __delitem__(self, key):
         items = self._cache[key]
+
+        # Pre-validate all of our mappings from the set so we don't
+        # lose our synchronization
+        for D in items:
+            D[key]
+
+        # Now we can go through and safely remove each key from the
+        # dictionaries that were cached
         for D in items:
             del D[key]
         return len(items)
@@ -428,13 +427,36 @@ class MergedMapping(MutableMapping):
     def add(self, D):
         if D in self._data:
             raise ReferenceError("Dictionary {!s} already exists in MergedMapping {!s}".format(object.__repr__(D), object.__repr__(self)))
+
+        # Now we can simply update our cache with this new mapping
         return self._sync_cache(D)
 
     def remove(self, D):
-        raise NotImplementedError
-        ref = weakref.ref(D)
-        self._data.remove(ref)
-        return self.sync()
+        if D not in self._data:
+            raise ReferenceError("Dictionary {!s} does not exist in MergedMapping {!s}".format(object.__repr__(D), object.__repr__(self)))
+
+        # All we need to do here is remove the mapping from our
+        # OrderedSet, as that should be the only reference to it. Doing
+        # this should result in the dictionary being removed from all
+        # of the WeakSets in our cache.
+        self._data.remove(D)
+
+        # Now we can go through our cache and remove every set that is
+        # empty. We only should have affected keys within the dictionary,
+        # so that's all we need to check for.
+        res = 0
+        for key in {item for item in D} & {item for item in self._cache}:
+            state = self._cache[key]
+
+            # If the WeakSet is empty, then we can just pop off the key
+            # because there's no reason to keep it. The dict that was
+            # being reference should already be updated by the user's
+            # usage anyways.
+            if not state:
+                del self._cache[key]
+                res += 1
+            continue
+        return res
 
     def __repr__(self):
         return '{:s} {:s} {!r}'.format(object.__repr__(self), ','.join(map(object.__repr__,self._data)), {k:self[k] for k in self.keys()})
@@ -580,10 +602,14 @@ if __name__ == '__main__':
     if set(weak) != set():
         raise ValueError
 
-if False:
-    class MockDict(MutableMapping, Hashable):
+    ### MergedMapping
+    class MockDict(MutableMapping, Hashable, Copyable):
+        def __getstate__(self):
+            return super(MockDict, self).__getstate__()
+        def __setstate__(self, state):
+            return super(MockDict, self).__setstate__(state)
         def __hash__(self):
-            iterable = map(hash, self.items())
+            iterable = map(hash, sorted(self.items()))
             return functools.reduce(operator.xor, iterable, 0)
         def __init__(self, **items):
             self._data = items
@@ -598,17 +624,119 @@ if False:
                 yield key
         def __len__(self):
             return len(self._data)
+        def __str__(self):
+            return repr(self._data)
+        __repr__ = __str__
 
-    a = MergedMapping()
+    a = MockDict(**{'akey1':1,'akey2':3,'akey3':5})
     b = MockDict(**{'bkey1':0,'bkey2':1,'bkey3':2})
     c = MockDict(**{'ckey1':0,'ckey2':1,'ckey3':2})
     d = MockDict(**{'dkey1':0,'dkey2':1,'dkey3':2})
     e = MockDict(**{'bkey1':0,'ckey1':0,'dkey1':0})
-    a.add(b)
-    a.add(c)
-    a.add(d)
-    a['bkey1'] = 5
-    a['ckey1'] = 10
-    a['dkey1'] = 15
 
-    a.add(e)
+    ## MergedMapping single-dict auto-synchronization
+    M = MergedMapping()
+    if M != {}:
+        raise ValueError
+    M.add(a)
+    if sorted(M.keys()) != sorted(a.keys()):
+        raise ValueError
+    M.remove(a)
+    if M != {}:
+        raise ValueError
+
+    ## MergedMapping multiple-dict auto-synchronization
+    M = MergedMapping()
+    M.add(b)
+    M.add(e)
+    if set(M.keys()) != {item for item in itertools.chain(b.keys(), e.keys())}:
+        raise ValueError
+    M.remove(b)
+    if set(M.keys()) != set(e.keys()):
+        raise ValueError
+    if any(set(M._cache[item]) != {e} for item in M._cache):
+        raise ValueError
+
+    ## MergedMapping single-dict fetch and update
+    M = MergedMapping()
+    M.add(b)
+    if M['bkey2'] != b['bkey2']:
+        raise ValueError
+    M['bkey1'] = -1
+    if b['bkey1'] != -1:
+        raise ValueError
+    b['bkey1'] = 0
+
+    ## MergedMapping multiple-dict fetch and update
+    M = MergedMapping()
+    M.add(b)
+    M.add(e)
+    if set(M._cache['bkey1']) != {b, e}:
+        raise ValueError
+
+    M['bkey1'] = -1
+    if b['bkey1'] != -1:
+        raise ValueError
+    if e['bkey1'] != -1:
+        raise ValueError
+    M['bkey1'] = 0
+
+    ## MergedMapping non-existent key
+    M = MergedMapping()
+    M.add(b)
+    M.add(c)
+    M.add(d)
+    M.add(e)
+
+    try:
+        M['nonexist'] = -1
+    except KeyError:
+        pass
+    else:
+        raise ValueError
+
+    ## MergedMapping multiple-dict multiple-fetch
+    M = MergedMapping()
+    M.add(b)
+    M.add(c)
+    M.add(d)
+    M.add(e)
+
+    if b not in M._data:
+        raise ValueError
+    if c not in M._data:
+        raise ValueError
+    if d not in M._data:
+        raise ValueError
+    if e not in M._data:
+        raise ValueError
+
+    M['bkey1'] = 41
+    M['ckey1'] = 42
+    M['dkey1'] = 43
+
+    if b['bkey1'] != 41:
+        raise ValueError
+    if c['ckey1'] != 42:
+        raise ValueError
+    if d['dkey1'] != 43:
+        raise ValueError
+
+    M.remove(e)
+    M['bkey1'] = 21
+    M['ckey1'] = 22
+    M['dkey1'] = 23
+
+    if e['bkey1'] != 41:
+        raise ValueError
+    if e['ckey1'] != 42:
+        raise ValueError
+    if e['dkey1'] != 43:
+        raise ValueError
+
+    if b['bkey1'] != 21:
+        raise ValueError
+    if c['ckey1'] != 22:
+        raise ValueError
+    if d['dkey1'] != 23:
+        raise ValueError
