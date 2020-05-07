@@ -105,9 +105,44 @@ class e_flags_mips(pbinary.flags):
         (1, 'EF_MIPS_NOREORDER'),
     ]
 
-class XhdrEntries(parray.type): pass
-class ShdrEntries(XhdrEntries): pass
-class PhdrEntries(XhdrEntries): pass
+class XhdrEntries(parray.type):
+    def bounds(self, fld_offset, fld_size, fld_align):
+        for item in self:
+            offset, size, align = (item[fld].int() for fld in [fld_offset, fld_size, fld_align])
+            yield offset, offset + size, align
+        return
+
+    def iterate(self):
+        for index, item in self.iterate():
+            yield item
+        return
+
+    def enumerate(self):
+        raise NotImplementedError
+
+class ShdrEntries(XhdrEntries):
+    def bounds(self):
+        if isinstance(self.source, ptypes.provider.memorybase):
+            return super(ShdrEntries, self).bounds('sh_addr', 'sh_size', 'sh_addralign')
+        return super(ShdrEntries, self).bounds('sh_offset', 'sh_size', 'sh_addralign')
+
+    def enumerate(self):
+        for index, item in enumerate(self):
+            # FIXME: distinguish between a memorybase or filebase source
+            yield index, item
+        return
+
+class PhdrEntries(XhdrEntries):
+    def bounds(self):
+        if isinstance(self.source, ptypes.provider.memorybase):
+            return super(PhdrEntries, self).bounds('p_vaddr', 'p_memsz', 'p_align')
+        return super(PhdrEntries, self).bounds('p_offset', 'p_filesz', 'p_align')
+
+    def enumerate(self):
+        for index, item in enumerate(self):
+            # FIXME: distinguish between a memorybase or filebase source
+            yield index, item
+        return
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
