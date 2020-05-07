@@ -88,6 +88,19 @@ class EV_(pint.enum):
 class EI_MAG(ptype.block):
     length = 4
 
+    def default(self):
+        return self.set(b'\x7fELF')
+
+    def valid(self):
+        res = self.copy().default()
+        return res.serialize() == self.serialize()
+
+    def properties(self):
+        res = super(EI_MAG, self).properties()
+        if self.initializedQ():
+            res['valid'] = self.valid()
+        return res
+
 class EI_CLASS(pint.enum, uchar):
     _values_ = [
         ('ELFCLASSNONE', 0),
@@ -138,7 +151,7 @@ class e_ident(pstruct.type):
     ]
 
     def valid(self):
-        return self.initializedQ() and self['EI_MAG'].serialize() == b'\x7fELF'
+        return self.initializedQ() and self['EI_MAG'].valid()
     def properties(self):
         res = super(e_ident, self).properties()
         if self.initializedQ():
