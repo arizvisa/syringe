@@ -333,8 +333,9 @@ class PhdrEntries(XhdrEntries):
     def enumerate(self):
         for index, item in enumerate(self):
             if isinstance(self.source, ptypes.provider.memorybase):
-                if all(not item['p_type'][pt] for pt in {'PT_LOAD', 'PT_DYNAMIC', 'PT_NOTE', 'PT_PHDR', 'PT_TLS', 'PT_GNU_STACK', 'PT_GNU_RELRO'}):
-                    continue
+                if any(item['p_type'][pt] for pt in {'PT_LOAD', 'PT_DYNAMIC', 'PT_PHDR', 'PT_TLS', 'PT_GNU_RELRO'}):
+                    yield index, item
+                continue
             yield index, item
         return
 
