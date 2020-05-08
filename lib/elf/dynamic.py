@@ -102,6 +102,67 @@ class DT_(pint.enum):
         ('DT_SUNW_LDMACH', 0x6000001b),
     ]
 
+### generic definitions
+class DF_(pbinary.flags):
+    _fields_ = [
+        (27, 'RESERVED'),
+        (1, 'STATIC_TLS'),
+        (1, 'BIND_NOW'),
+        (1, 'TEXTREL'),
+        (1, 'SYMBOLIc'),
+        (1, 'ORIGIN'),
+    ]
+
+class DF_1_(pbinary.flags):
+    _fields_ = [
+        (1, 'RESERVED'),
+        (1, 'NOCOMMON'),
+        (1, 'WEAKFILTER'),
+        (1, 'KMOD'),
+        (1, 'PIE'),
+        (1, 'STUB'),
+        (1, 'SINGLETON'),
+        (1, 'GLOBAUDIT'),
+        (1, 'SYMINTPOSE'),
+        (1, 'NORELOC'),
+        (1, 'EDITED'),
+        (1, 'NOHDR'),
+        (1, 'NOKSYMS'),
+        (1, 'IGNMULDEF'),
+        (1, 'NODIRECT'),
+        (1, 'DISPRELPND'),
+        (1, 'DISPRELDNE'),
+        (1, 'ENDFILTEE'),
+        (1, 'CONFALT'),
+        (1, 'NODUMP'),
+        (1, 'NODEFLIB'),
+        (1, 'INTERPOSE'),
+        (1, 'TRANS'),
+        (1, 'DIRECT'),
+        (1, 'ORIGIN'),
+        (1, 'NOOPEN'),
+        (1, 'INITFIRST'),
+        (1, 'LOADFLTR'),
+        (1, 'NODELETE'),
+        (1, 'GROUP'),
+        (1, 'GLOBAL'),
+        (1, 'NOW'),
+    ]
+
+class DTF_1_(pbinary.flags):
+    _fields_ = [
+        (30, 'RESERVED'),
+        (1, 'CONFEXP'),
+        (1, 'PARINIT'),
+    ]
+
+class DF_P1_(pbinary.flags):
+    _fields_ = [
+        (30, 'RESERVED'),
+        (1, 'GROUPPERM'),
+        (1, 'LAZYLOAD'),
+    ]
+
 ### 32-bit definitions
 class ELFCLASS32(object):
 
@@ -176,7 +237,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_RUNPATH(d_ptr): type = 29
     @DT_.define
-    class DT_FLAGS(d_val): type = 30
+    class DT_FLAGS(DF_): type = 30
     @DT_.define
     class DT_PREINIT_ARRAY(d_ptr): type = 32
     @DT_.define
@@ -202,9 +263,9 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_MOVESZ(d_val): type = 0x6ffffdfb
     @DT_.define
-    class DT_FEATURE_1(d_val): type = 0x6ffffdfc
+    class DT_FEATURE_1(DTF_1_): type = 0x6ffffdfc
     @DT_.define
-    class DT_POSFLAG_1(d_val): type = 0x6ffffdfd
+    class DT_POSFLAG_1(DF_P1_): type = 0x6ffffdfd
     @DT_.define
     class DT_SYMINSZ(d_val): type = 0x6ffffdfe
     @DT_.define
@@ -242,7 +303,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_RELCOUNT(d_val): type = 0x6ffffffa
     @DT_.define
-    class DT_FLAGS_1(d_val): type = 0x6ffffffb
+    class DT_FLAGS_1(DF_1_): type = 0x6ffffffb
     @DT_.define
     class DT_VERDEF(d_val): type = 0x6ffffffc
     @DT_.define
@@ -364,7 +425,8 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_RUNPATH(d_ptr): type = 29
     @DT_.define
-    class DT_FLAGS(d_val): type = 30
+    class DT_FLAGS(DF_):
+        type, _fields_ = 30, [(32, 'alignment')] + DF_._fields_
     @DT_.define
     class DT_PREINIT_ARRAY(d_ptr): type = 32
     @DT_.define
@@ -390,9 +452,11 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_MOVESZ(d_val): type = 0x6ffffdfb
     @DT_.define
-    class DT_FEATURE_1(d_val): type = 0x6ffffdfc
+    class DT_FEATURE_1(DTF_1_):
+        type, _fields_ = 0x6ffffdfc, [(32, 'alignment')] + DTF_1_._fields_
     @DT_.define
-    class DT_POSFLAG_1(d_val): type = 0x6ffffdfd
+    class DT_POSFLAG_1(DF_P1_):
+        type, _fields_ = 0x6ffffdfd, [(32, 'alignment')] + DF_P1_._fields_
     @DT_.define
     class DT_SYMINSZ(d_val): type = 0x6ffffdfe
     @DT_.define
@@ -430,7 +494,8 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_RELCOUNT(d_val): type = 0x6ffffffa
     @DT_.define
-    class DT_FLAGS_1(d_val): type = 0x6ffffffb
+    class DT_FLAGS_1(DF_1_):
+        type, _fields_ = 0x6ffffffb, [(32, 'alignment')] + DF_1_._fields_
     @DT_.define
     class DT_VERDEF(d_val): type = 0x6ffffffc
     @DT_.define
