@@ -2,7 +2,7 @@ import ptypes
 from . import EV_, section, segment
 from .base import *
 
-class e_type(pint.enum, Elf32_Half):
+class E_TYPE(pint.enum, Elf32_Half):
     ET_LOOS, ET_HIOS = 0xfe00, 0xfeff
     ET_LOPROC, ET_HIPROC = 0xff00, 0xffff
     _values_ = [
@@ -13,7 +13,7 @@ class e_type(pint.enum, Elf32_Half):
         ('ET_CORE', 4),
     ]
 
-class e_machine(pint.enum, Elf32_Half):
+class E_MACHINE(pint.enum, Elf32_Half):
     _values_ = [
         ('ET_NONE', 0),
         ('EM_M32', 1),
@@ -208,17 +208,17 @@ class e_machine(pint.enum, Elf32_Half):
         ('EM_RISCV', 243),
     ]
 
-class e_version(EV_, Elf32_Word):
+class E_VERSION(EV_, Elf32_Word):
     pass
 
-class e_flags(ptype.definition):
+class E_FLAGS(ptype.definition):
     cache = {}
     default = Elf32_Word
 
-@e_flags.define(type=e_machine.byname('EM_SPARC'))
-@e_flags.define(type=e_machine.byname('EM_SPARC32PLUS'))
-@e_flags.define(type=e_machine.byname('EM_SPARCV9'))
-class e_flags_sparc(pbinary.flags):
+@E_FLAGS.define(type=E_MACHINE.byname('EM_SPARC'))
+@E_FLAGS.define(type=E_MACHINE.byname('EM_SPARC32PLUS'))
+@E_FLAGS.define(type=E_MACHINE.byname('EM_SPARCV9'))
+class E_FLAGS_SPARC(pbinary.flags):
     VENDOR_MASK = 0x00ffff00
     class EF_SPARCV9_MM(pbinary.enum):
         width = 2
@@ -243,9 +243,9 @@ class e_flags_sparc(pbinary.flags):
         (EF_SPARCV9_MM, 'EF_SPARCV9_MM'),
     ]
 
-@e_flags.define
-class e_flags_arm(pbinary.flags):
-    type = e_machine.byname('EM_ARM')
+@E_FLAGS.define
+class E_FLAGS_ARM(pbinary.flags):
+    type = E_MACHINE.byname('EM_ARM')
     ABI_MASK = 0xff000000
     GCC_MASK = 0x00400FFF
     class EF_ARM_GCC_MASK(pbinary.struct):
@@ -264,9 +264,9 @@ class e_flags_arm(pbinary.flags):
         (EF_ARM_GCC_MASK, 'EF_ARM_GCC_MASK'),
     ]
 
-@e_flags.define
-class e_flags_mips(pbinary.flags):
-    type = e_machine.byname('EM_MIPS')
+@E_FLAGS.define
+class E_FLAGS_MIPS(pbinary.flags):
+    type = E_MACHINE.byname('EM_MIPS')
     class EF_MIPS_ARCH_(pbinary.enum):
         width = 4
         _values_ = [
@@ -365,7 +365,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
 
     def __e_flags(self):
         res = self['e_machine'].li.int()
-        return e_flags.withdefault(res, type=res)
+        return E_FLAGS.withdefault(res, type=res)
 
     def __padding(self):
         res = self['e_ehsize'].li
@@ -373,9 +373,9 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         return dyn.block(res.int() - cb)
 
     _fields_ = [
-        (e_type, 'e_type'),
-        (e_machine, 'e_machine'),
-        (e_version, 'e_version'),
+        (E_TYPE, 'e_type'),
+        (E_MACHINE, 'e_machine'),
+        (E_VERSION, 'e_version'),
         (Elf32_Addr, 'e_entry'),
         (lambda self: dyn.clone(Elf32_Off, _object_=lambda s: self._phent_array(segment.Elf32_Phdr, self['e_phentsize'].li, self['e_phnum'].li)), 'e_phoff'),
         (lambda self: dyn.clone(Elf32_Off, _object_=lambda s: self._shent_array(section.Elf32_Shdr, self['e_shentsize'].li, self['e_shnum'].li)), 'e_shoff'),
@@ -407,7 +407,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
 
     def __e_flags(self):
         res = self['e_machine'].li.int()
-        return e_flags.withdefault(res, type=res)
+        return E_FLAGS.withdefault(res, type=res)
 
     def __padding(self):
         res = self['e_ehsize'].li
@@ -415,9 +415,9 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         return dyn.block(res.int() - cb)
 
     _fields_ = [
-        (e_type, 'e_type'),
-        (e_machine, 'e_machine'),
-        (e_version, 'e_version'),
+        (E_TYPE, 'e_type'),
+        (E_MACHINE, 'e_machine'),
+        (E_VERSION, 'e_version'),
         (Elf64_Addr, 'e_entry'),
         (lambda self: dyn.clone(Elf64_Off, _object_=lambda s: self._phent_array(segment.Elf64_Phdr, self['e_phentsize'].li, self['e_phnum'].li)), 'e_phoff'),
         (lambda self: dyn.clone(Elf64_Off, _object_=lambda s: self._shent_array(section.Elf64_Shdr, self['e_shentsize'].li, self['e_shnum'].li)), 'e_shoff'),
