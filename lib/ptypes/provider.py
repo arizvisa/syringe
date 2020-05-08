@@ -747,6 +747,41 @@ except ImportError:
 ## platform-specific providers
 DEFAULT = []
 try:
+    if not sys.platform.startswith('linux'):
+        raise OSError
+
+    class LinuxProcessId(memorybase):
+        @staticmethod
+        def _open(pid, path="/proc/{:d}/mem"):
+            return open(path.format(pid), 'rb')
+
+        def __init__(self, pid):
+            self._pid = pid
+            res = self._open(pid)
+            self._fileobj = fileobj(res)
+
+        def seek(self, offset):
+            return self._fileobj.seek(offset)
+        def consume(self, amount):
+            return self._fileobj.consume(amount)
+        def store(self, data):
+            return self._fileobj.store(data)
+
+        def close(self):
+            return self._fileobj.close()
+
+        def __del__(self):
+            try: self.close()
+            except: pass
+
+        def __repr__(self):
+            '''x.__repr__() <=> repr(x)'''
+            return "{:s} -> pid:{:#x} ({:d})".format(super(memorybase, self).__repr__(), self._pid, self._pid)
+
+except OSError as E:
+    Log.info("{:s} : Skipping defining any linux-based providers (`LinuxProcessId`) due to being on a non-linux platform ({:s}).".format(__name__, sys.platform))
+
+try:
     import ctypes
     try:
         k32 = ctypes.WinDLL('kernel32.dll')
