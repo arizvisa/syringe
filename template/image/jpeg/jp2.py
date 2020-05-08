@@ -459,6 +459,244 @@ class URL(pstruct.type):
         (__LOC, 'LOC'),
     ]
 
+@Boxes.define
+class ReaderRequirements(pstruct.type):
+    type = b'\x72\x72\x65\x71'
+    class _V(pstruct.type):
+        def __VM(self):
+            try:
+                p = self.getparent(ReaderRequirements)
+
+            except ptypes.error.NotFoundError:
+                return u0
+            return dyn.clone(u0, length=p['ML'].li.int())
+        _fields_ = [
+            (UUID, 'VF'),
+            (__VM, 'VM'),
+        ]
+
+    class _SF(pint.enum, u16):
+        _values_ = [
+            (1, 'Codestream contains no extensions'),
+            (2, 'Contains multiple composition layers'),
+            (3, 'Codestream is compressed using JPEG 2000 and requires at least a Profile 0 decoder'),
+            (4, 'Codestream is compressed using JPEG 2000 and requires at least a Profile 1 decoder'),
+            (5, 'Codestream is compressed using JPEG 2000'),
+            (6, 'Codestream is compressed using JPEG 2000 Extensions'),
+            (7, 'Codestream is compressed using DCT'),
+            (8, 'Does not contain opacity'),
+            (9, 'Compositing layer includes opacity channel (non-premultiplied)'),
+            (10, 'Compositing layer includes premultiplied channel opacity'),
+            (11, 'Compositing layer specifies opacity using a chroma-key value'),
+            (12, 'Codestream is contiguous'),
+            (13, 'Codestream is fragmented such that fragments are all in file and in order'),
+            (14, 'Codestream is fragmented such that fragments are all in file but out of order'),
+            (15, 'Codestream is fragmented such that fragments are in multiple local files'),
+            (16, 'Codestream is fragmented such that fragments are across the internet'),
+            (17, 'Rendered result created using compositing'),
+            (18, 'Support for compositing layers is not required (reader can load a single, discrete compositing layer)'),
+            (19, 'Contains multiple, discrete layers that should not be combined through either animation or compositing'),
+            (20, 'Compositing layers each contain only a single codestream'),
+            (21, 'Compositing layers contain multiple codestreams'),
+            (22, 'All compositing layers are in the same colourspace'),
+            (23, 'Compositing layers are in multiple colourspaces'),
+            (24, 'Rendered result created without using animation'),
+            (25, 'Animated, but first layer covers entire area and is opaque'),
+            (26, 'Animated, but first layer does not cover the entire rendered result area'),
+            (27, 'Animated, and no layer is reused'),
+            (28, 'Animated, but layers are reused'),
+            (29, 'Animated with persistent frames only'),
+            (30, 'Animated with non-persistent frames'),
+            (31, 'Rendered result created without using scaling'),
+            (32, 'Rendered result involves scaling within a layer'),
+            (33, 'Rendered result involves scaling between layers'),
+            (34, 'Contains ROI metadata'),
+            (35, 'Contains IPR metadata'),
+            (36, 'Contains Content metadata'),
+            (37, 'Contains History metadata'),
+            (38, 'Contains Creation metadata'),
+            (39, 'Portion of file is digitally signed in a secure method'),
+            (40, 'Portion of file is checksummed'),
+            (41, 'Desired Graphic Arts reproduction specified'),
+            (42, 'Compositing layer uses palettized colour'),
+            (43, 'Compositing layer uses Restricted ICC profile'),
+            (44, 'Compositing layer uses Any ICC profile'),
+            (45, 'Compositing layer uses sRGB enumerated colourspace'),
+            (46, 'Compositing layer uses sRGB-grey enumerated colourspace'),
+            (47, 'Compositing layer uses BiLevel 1 enumerated colourspace'),
+            (48, 'Compositing layer uses BiLevel 2 enumerated colourspace'),
+            (49, 'Compositing layer uses YCbCr 1 enumerated colourspace'),
+            (50, 'Compositing layer uses YCbCr 2 enumerated colourspace'),
+            (51, 'Compositing layer uses YCbCr 3 enumerated colourspace'),
+            (52, 'Compositing layer uses PhotoYCC enumerated colourspace'),
+            (53, 'Compositing layer uses YCCK enumerated colourspace'),
+            (54, 'Compositing layer uses CMY enumerated colourspace'),
+            (55, 'Compositing layer uses CMYK enumerated colourspace'),
+            (56, 'Compositing layer uses CIELab enumerated colourspace with default parameters'),
+            (57, 'Compositing layer uses CIELab enumerated colourspace with parameters'),
+            (58, 'Compositing layer uses CIEJab enumerated colourspace with default parameters'),
+            (59, 'Compositing layer uses CIEJab enumerated colourspace with parameters'),
+            (60, 'Compositing layer uses e-sRGB enumerated colourspace'),
+            (61, 'Compositing layer uses ROMM–RGB enumerated colourspace'),
+            (62, 'Compositing layers have non-square samples'),
+            (63, 'Compositing layers have labels'),
+            (64, 'Codestreams have labels'),
+            (65, 'Compositing layers have different colour spaces'),
+            (66, 'Compositing layers have different metadata'),
+        ]
+
+    _fields_ = [
+        (u8, 'ML'),
+        (lambda self: dyn.clone(u0, length=self['ML'].li.int()), 'FUAM'),
+        (lambda self: dyn.clone(u0, length=self['ML'].li.int()), 'DCM'),
+
+        (u16, 'NSF'),
+        (lambda self: dyn.array(_SF, self['NSF'].li.int()), 'SF'),
+
+        (lambda self: dyn.clone(u0, length=self['ML'].li.int()), 'SM'),
+
+        (u16, 'NVF'),
+        (lambda self: dyn.array(_V, self['NVF'].li.int()), 'V'),
+    ]
+
+@Boxes.define
+class DataReference(pstruct.type):
+    type = b'\x64\x74\x62\x6c'
+    _fields_ = [
+        (u16, 'NDR'),
+        (lambda self: dyn.array(Box, self['NDR'].li.int()), 'DR'),
+    ]
+
+@Boxes.define
+class FragmentTable(SuperBox):
+    type = b'\x66\x74\x62\x6c'
+
+@Boxes.define
+class FragmentList(pstruct.type):
+    type = b'\x66\x6c\x73\x74'
+    class _Fragment(pstruct.type):
+        _fields_ = [
+            (u64, 'OFF'),
+            (u32, 'LEN'),
+            (u16, 'DR'),
+        ]
+    _fields_ = [
+        (u16, 'NF'),
+        (lambda self: dyn.array(_Fragment, self['NF'].li.int()), 'Fragment'),
+    ]
+
+@Boxes.define
+class CompositingLayer(SuperBox):
+    type = b'\x6a\x70\x6c\x68'
+
+@Boxes.define
+class ColourGroup(SuperBox):
+    type = b'\x63\x67\x72\x70'
+
+@Boxes.define
+class CodestreamRegistration(pstruct.type):
+    type = b'\x63\x72\x65\x67'
+    _fields_ = [
+        (u16, 'XS'),
+        (u16, 'YS'),
+        (u16, 'CDN'),
+        (u8, 'XR'),
+        (u8, 'YR'),
+        (u8, 'XO'),
+        (u8, 'YO'),
+    ]
+
+@Boxes.define
+class Composition(SuperBox):
+    type = b'\x63\x6f\x6d\x70'
+
+@Boxes.define
+class CompositionOptions(pstruct.type):
+    type = b'\x63\x6f\x70\x74'
+    _fields_ = [
+        (u32, 'HEIGHT'),
+        (u32, 'WIDTH'),
+        (u8, 'LOOP'),
+    ]
+
+@Boxes.define
+class InstructionSet(pstruct.type):
+    type = b'\x69\x6e\x73\x74'
+    class _Ityp(pbinary.flags):
+        _fields_ = [
+            (11, 'Reserved'),
+            (1, 'Crop'),
+            (1, 'Animation'),
+            (1, 'Dimensions'),
+            (1, 'Offset')
+        ]
+    class _INST(pstruct.type):
+        class _PERSISTLIFE(pbinary.flags):
+            _fields_ = [
+                (1, 'PERSIST'),
+                (31, 'LIFE'),
+            ]
+
+        # FIXME: pretty certain these fields are conditional
+        _fields_ = [
+            (u32, 'XO'),                    # Offset
+            (u32, 'YO'),
+            (u32, 'WIDTH'),                 # Dimensions
+            (u32, 'HEIGHT'),
+            (_PERSISTLIFE, 'PERSISTLIFE'),  # Animation
+            (u32, 'NEXT-USE'),
+            (u32, 'XC'),                    # Crop
+            (u32, 'YC'),
+            (u32, 'WC'),
+            (u32, 'HC'),
+        ]
+
+    _fields_ = [
+        (_Ityp, 'Ityp'),
+        (u16, 'REPT'),
+        (u16, 'TICK'),
+    ]
+
+@Boxes.define
+class Association(SuperBox):
+    type = b'\x61\x73\x6f\x63'
+
+@Boxes.define
+class NumberList(parray.block):
+    type = b'\x6e\x6c\x73\x74'
+    _object_ = u32
+
+@Boxes.define
+class Label(ptype.block):
+    type = b'\x6c\x62\x6c\x20'
+
+@Boxes.define
+class BinaryFilter(pstruct.type):
+    type = b'\x62\x66\x69\x6c'
+    # FIXME: this is incomplete
+    _fields_ = [
+        (UUID, 'F'),
+        (ptype.undefined, 'DATA'),
+    ]
+
+@Boxes.define
+class DesiredReproductions(SuperBox):
+    type = b'\x64\x72\x65\x70'
+
+@Boxes.define
+class GraphicsTechnologyStandardOutput(ptype.block):
+    type = b'\x67\x74\x73\x6f'
+
+@Boxes.define
+class ROIDescription(ptype.block):
+    type = b'\x72\x6f\x69\x64'
+    # FIXME
+
+@Boxes.define
+class DigitalSignature(ptype.block):
+    type = b'\x63\x68\x63\x6b'
+    # FIXME
+
 ### Update enumeration with any defined Box types
 BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in six.viewitems(Boxes.cache)]
 
