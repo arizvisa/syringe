@@ -55,8 +55,6 @@ class ULEB128(pbinary.terminatedarray):
 class ElfXX_File(ptype.boundary): pass
 class ElfXX_Header(ptype.boundary): pass
 class ElfXX_Ehdr(ElfXX_Header): pass
-class ElfXX_Phdr(ElfXX_Header): pass
-class ElfXX_Shdr(ElfXX_Header): pass
 
 ### elf32
 class Elf32_Addr(pint.uint32_t): pass

@@ -169,6 +169,15 @@ class ElfXX_Section(pint.enum):
         ('SHN_COMMON', 0xfff2),
     ]
 
+class ElfXX_Shdr(ElfXX_Header):
+    def bounds(self):
+        if isinstance(self.source, ptypes.provider.memorybase):
+            fields = 'sh_addr', 'sh_size', 'sh_addralign'
+        else:
+            fields = 'sh_offset', 'sh_size', 'sh_addralign'
+        iterable = (self[fld].li for fld in fields)
+        return tuple(item.int() for item in iterable)
+
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf32_Word): pass

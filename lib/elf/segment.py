@@ -41,6 +41,15 @@ def _p_offset(ptr):
         return dyn.clone(ptr, _object_=target)
     return p_offset
 
+class ElfXX_Phdr(ElfXX_Header):
+    def bounds(self):
+        if isinstance(self.source, ptypes.provider.memorybase):
+            fields = 'p_vaddr', 'p_memsz', 'p_align'
+        else:
+            fields = 'p_offset', 'p_filesz', 'p_align'
+        iterable = (self[fld].li for fld in fields)
+        return tuple(item.int() for item in iterable)
+
 ### Program Headers
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(_p_type, Elf32_Word): pass
