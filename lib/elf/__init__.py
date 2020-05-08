@@ -82,7 +82,7 @@ class E_IDENT(pstruct.type):
         return self.initializedQ() and self['EI_MAG'].valid()
 
     def properties(self):
-        res = super(e_ident, self).properties()
+        res = super(E_IDENT, self).properties()
         if self.initializedQ():
             res['valid'] = self.valid()
         return res

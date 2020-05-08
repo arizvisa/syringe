@@ -1,5 +1,5 @@
 import ptypes
-from . import EV_, section, segment
+from . import EV_, E_IDENT, section, segment
 from .base import *
 
 class E_TYPE(pint.enum, Elf32_Half):
@@ -353,7 +353,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
 
     def __padding(self):
         res = self['e_ehsize'].li
-        cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + e_ident().a.blocksize()
+        cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + E_IDENT().a.blocksize()
         return dyn.block(res.int() - cb)
 
     _fields_ = [
@@ -395,7 +395,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
 
     def __padding(self):
         res = self['e_ehsize'].li
-        cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + e_ident().a.blocksize()
+        cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + E_IDENT().a.blocksize()
         return dyn.block(res.int() - cb)
 
     _fields_ = [
