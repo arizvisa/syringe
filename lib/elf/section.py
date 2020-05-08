@@ -19,7 +19,7 @@ class _sh_name(pint.type):
             return table.read(self.int()).str()
         raise ptypes.error.TypeError(self, 'str')
 
-class _sh_type(pint.enum):
+class SHT_(pint.enum):
     _values_ = [
         ('SHT_NULL', 0),
         ('SHT_PROGBITS', 1),
@@ -64,24 +64,24 @@ class _sh_type(pint.enum):
         # SHT_LOUSER(0x80000000) - SHT_HIUSER(0xffffffff)
     ]
 
-class _sh_flags(pbinary.flags):
+class SHF_(pbinary.flags):
     # Elf32_Word
     _fields_ = [
-        (4, 'SHF_MASKPROC'),        # FIXME: lookup based on processor
-        (8, 'SHF_MASKOS'),          # FIXME: lookup based on platform
-        (8, 'SHF_UNKNOWN'),
-        (1, 'SHF_COMPRESSED'),
-        (1, 'SHF_TLS'),
-        (1, 'SHF_GROUP'),
-        (1, 'SHF_OS_NONCONFORMING'),
-        (1, 'SHF_LINK_ORDER'),
-        (1, 'SHF_INFO_LINK'),
-        (1, 'SHF_STRINGS'),
-        (1, 'SHF_MERGE'),
-        (1, 'SHF_UNUSED'),
-        (1, 'SHF_EXECINSTR'),
-        (1, 'SHF_ALLOC'),
-        (1, 'SHF_WRITE'),
+        (4, 'MASKPROC'),        # FIXME: lookup based on processor
+        (8, 'MASKOS'),          # FIXME: lookup based on platform
+        (8, 'UNKNOWN'),
+        (1, 'COMPRESSED'),
+        (1, 'TLS'),
+        (1, 'GROUP'),
+        (1, 'OS_NONCONFORMING'),
+        (1, 'LINK_ORDER'),
+        (1, 'INFO_LINK'),
+        (1, 'STRINGS'),
+        (1, 'MERGE'),
+        (1, 'UNUSED'),
+        (1, 'EXECINSTR'),
+        (1, 'ALLOC'),
+        (1, 'WRITE'),
     ]
 
 def _sh_offset(ptr, CLASS):
@@ -126,28 +126,39 @@ class _st_name(pint.type):
             return table.read(self.int()).str()
         raise ptypes.error.TypeError(self, 'str')
 
+class STT_(pbinary.enum):
+    width = 4
+    _values_ = [
+        ('STT_NOTYPE', 0),
+        ('STT_OBJECT', 1),
+        ('STT_FUNC', 2),
+        ('STT_SECTION', 3),
+        ('STT_FILE', 4),
+        ('STT_COMMON', 5),
+        ('STT_TLS', 6),
+
+        # STT_LOOS(10) - STT_HIOS(12)
+        ('STT_GNU_IFUNC', 10),
+
+        # STT_LOPROC(13) - STT_HIPROC(15)
+    ]
+
+class STB_(pbinary.enum):
+    width = 4
+    _values_ = [
+        ('STB_LOCAL', 0),
+        ('STB_GLOBAL', 1),
+        ('STB_WEAK', 2),
+
+        # STB_LOOS(10) - STB_HIOS(12)
+        ('STB_GNU_UNIQUE', 10),
+        # STB_LOPROC(13) - STB_HIPROC(15)
+    ]
+
 class st_info(pbinary.struct):
-    class st_bind(pbinary.enum):
-        width = 4
-        STB_LOPROC, STB_HIPROC = 13, 15
-        _values_ = [
-            ('STB_LOCAL', 0),
-            ('STB_GLOBAL', 1),
-            ('STB_WEAK', 2),
-        ]
-    class st_type(pbinary.enum):
-        width = 4
-        STT_LOPROC, STT_HIPROC = 13, 15
-        _values_ = [
-            ('STT_NOTYPE', 0),
-            ('STT_OBJECT', 1),
-            ('STT_FUNC', 2),
-            ('STT_SECTION', 3),
-            ('STT_FILE', 4),
-        ]
     _fields_ = [
-        (st_bind, 'ST_BIND'),
-        (st_type, 'ST_TYPE'),
+        (STT_, 'ST_BIND'),
+        (STB_, 'ST_TYPE'),
     ]
 
     def summary(self, **options):
@@ -159,11 +170,19 @@ class st_info(pbinary.struct):
             return "({:s},{:d}) : {:s}".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res), ' '.join(items))
         return "({:s},{:d})".format(ptypes.bitmap.hex(res), ptypes.bitmap.size(res))
 
+class STV_(pint.enum, uchar):
+    _values_ = [
+        ('STV_DEFAULT', 0),
+        ('STV_INTERNAL', 1),
+        ('STV_HIDDEN', 2),
+        ('STV_PROTECTED', 3),
+    ]
+
 class ElfXX_Section(pint.enum):
-    SHN_LOPROC, SHN_HIPROC = 0xff00, 0xff1f
-    SHN_LORESERVE, SHN_HIRESERVE = 0xff00, 0xffff
     _values_ = [
         ('SHN_UNDEF', 0),
+        # SHN_LORESERVE(0xff00) - SHN_HIRESERVE(0xffff)
+        # SHN_LOPROC(0xff00) - SHN_HIPROC(0xff1f)
         ('SHN_ABS', 0xfff1),
         ('SHN_COMMON', 0xfff2),
     ]
@@ -177,14 +196,18 @@ class ElfXX_Shdr(ElfXX_Header):
         iterable = (self[fld].li for fld in fields)
         return tuple(item.int() for item in iterable)
 
+class ELFCOMPRESS_(pint.enum):
+    _values_ = [
+        ('ELFCOMPRESS_ZLIB', 1),
+    ]
 class ElfXX_Chdr(ElfXX_Header):
     pass
 
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf32_Word): pass
-    class sh_type(_sh_type, Elf32_Word): pass
-    class sh_flags(_sh_flags): pass
+    class sh_type(SHT_, Elf32_Word): pass
+    class sh_flags(SHF_): pass
     def __sh_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
         return dyn.block(max(0, self.blocksize() - res))
@@ -203,17 +226,18 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     ]
 
 class Elf32_Chdr(pstruct.type, ElfXX_Chdr):
+    class ch_type(ELFCOMPRESS_, Elf32_Word): pass
     _fields_ = [
-        (Elf32_Word, 'ch_type'),
+        (ch_type, 'ch_type'),
         (Elf32_Word, 'ch_size'),
         (Elf32_Word, 'ch_addralign'),
     ]
 
 class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf64_Word): pass
-    class sh_type(_sh_type, Elf64_Word): pass
-    class sh_flags(_sh_flags):
-        _fields_ = [(32,'SHF_RESERVED2')] + _sh_flags._fields_
+    class sh_type(SHT_, Elf64_Word): pass
+    class sh_flags(SHF_):
+        _fields_ = [(32, 'SHF_RESERVED2')] + SHF_._fields_
     def __sh_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
         return dyn.block(max(0, self.blocksize() - res))
@@ -232,8 +256,9 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     ]
 
 class Elf64_Chdr(pstruct.type, ElfXX_Chdr):
+    class ch_type(ELFCOMPRESS_, Elf64_Word): pass
     _fields_ = [
-        (Elf64_Word, 'ch_type'),
+        (ch_type, 'ch_type'),
         (Elf64_Word, 'ch_size'),
         (Elf64_Word, 'ch_addralign'),
     ]
@@ -247,7 +272,7 @@ class Elf32_Sym(pstruct.type):
         (Elf32_Addr, 'st_value'),
         (Elf32_Word, 'st_size'),
         (st_info, 'st_info'),
-        (pint.uint8_t, 'st_other'),
+        (STV_, 'st_other'),
         (Elf32_Section, 'st_shndx'),
     ]
 class Elf64_Section(ElfXX_Section, pint.uint16_t): pass
@@ -256,45 +281,187 @@ class Elf64_Sym(pstruct.type):
     _fields_ = [
         (st_name, 'st_name'),
         (st_info, 'st_info'),
-        (pint.uint8_t, 'st_other'),
+        (STV_, 'st_other'),
         (Elf64_Section, 'st_shndx'),
         (Elf64_Addr, 'st_value'),
         (Elf64_Xword, 'st_size'),
     ]
 
+class ELF32_R_INFO(pbinary.struct):
+    # Elf32_Word
+    _fields_ = [
+        (8, 'SYM'),
+        (8, 'TYPE'),
+    ]
 class Elf32_Rel(pstruct.type):
     _fields_ = [
         (Elf32_Addr, 'r_offset'),
-        (Elf32_Word , 'r_info'),
+        (ELF32_R_INFO , 'r_info'),
+    ]
+class Elf32_Rela(pstruct.type):
+    _fields_ = [
+        (Elf32_Addr, 'r_offset'),
+        (ELF32_R_INFO, 'r_info'),
+        (Elf32_Sword, 'r_addend'),
+    ]
+
+class ELF64_R_INFO(pbinary.flags):
+    # Elf64_Xword
+    _fields_ = [
+        (32, 'SYM'),
+        (32, 'TYPE'),
     ]
 class Elf64_Rel(pstruct.type):
     _fields_ = [
         (Elf64_Addr, 'r_offset'),
-        (Elf64_Word , 'r_info'),
-        (pint.uint8_t, 'r_type'),
-        (pint.uint8_t, 'r_type2'),
-        (pint.uint8_t, 'r_type3'),
-        (pint.uint8_t, 'r_ssym'),
-        (Elf64_Word, 'r_sym'),
-    ]
-
-class Elf32_Rela(pstruct.type):
-    _fields_ = [
-        (Elf32_Addr, 'r_offset'),
-        (Elf32_Word, 'r_info'),
-        (Elf32_Sword, 'r_addend'),
+        (ELF64_R_INFO, 'r_info'),
     ]
 class Elf64_Rela(pstruct.type):
     _fields_ = [
-        (Elf32_Addr, 'r_offset'),
-        (Elf32_Word, 'r_info'),
-        (Elf32_Sword, 'r_addend'),
-        (pint.uint8_t, 'r_type'),
-        (pint.uint8_t, 'r_type2'),
-        (pint.uint8_t, 'r_type3'),
-        (pint.uint8_t, 'r_ssym'),
-        (Elf64_Word, 'r_sym'),
+        (Elf64_Addr, 'r_offset'),
+        (ELF64_R_INFO, 'r_info'),
         (Elf64_Sxword, 'r_addend'),
+    ]
+
+class SYMINFO_FLG_(pbinary.flags):
+    # Elf32_Half/Elf64_Half
+    _fields_ = [
+        (10, 'UNUSED'),
+        (1, 'NOEXTDIRECT'),
+        (1, 'DIRECTBIND'),
+        (1, 'LAZYLOAD'),
+        (1, 'COPY'),
+        (1, 'RESERVED'),
+        (1, 'DIRECT'),
+    ]
+
+class Elf32_Syminfo(pstruct.type):
+    class SYMINFO_BT_(pint.enum, Elf32_Half):
+        _values_ = [
+            ('SYMINFO_BT_SELF', 0xffff),
+            ('SYMINFO_BT_PARENT', 0xfffe),
+            ('SYMINFO_BT_NONE', 0xfffd),
+        ]
+    _fields_ = [
+        (SYMINFO_BT_, 'si_boundto'),
+        (SYMINFO_FLG_, 'si_flags'),
+    ]
+
+class Elf64_Syminfo(pstruct.type):
+    class SYMINFO_BT_(pint.enum, Elf64_Half):
+        _values_ = [
+            ('SYMINFO_BT_SELF', 0xffff),
+            ('SYMINFO_BT_PARENT', 0xfffe),
+            ('SYMINFO_BT_NONE', 0xfffd),
+        ]
+    _fields_ = [
+        (SYMINFO_BT_, 'si_boundto'),
+        (SYMINFO_FLG_, 'si_flags'),
+    ]
+
+class VER_DEF_(pint.enum):
+    _values_ = [
+        ('VER_DEF_NON', 0),
+        ('VER_DEF_CURRENT', 1),
+        ('VER_DEF_NUM', 2),
+    ]
+
+class VER_FLG_(pbinary.flags):
+    # Elf32_Half/Elf64_Half
+    _fields_ = [
+        (14, 'UNUSED'),
+        (1, 'WEAK'),
+        (1, 'BASE'),
+    ]
+
+class VER_NDX_(pint.enum):
+    _values_ = [
+        ('VER_NDX_LOCAL', 0),
+        ('VER_NDX_GLOBAL', 1),
+        ('VER_NDX_ELIMINATE', 0xff01),
+    ]
+
+class VER_NEED_(pint.enum):
+    _values_ = [
+        ('VER_NEED_NONE', 0),
+        ('VER_NEED_CURRENT', 1),
+        ('VER_NEED_NUM', 2),
+    ]
+
+class Elf32_Verdef(pstruct.type):
+    class vd_version(VER_DEF_, Elf32_Half): pass
+    class vd_ndx(VER_NDX_, Elf32_Half): pass
+    _fields_ = [
+        (vd_version, 'vd_version'),
+        (VER_FLG_, 'vd_flags'),
+        (vd_ndx, 'vd_ndx'),
+        (Elf32_Half, 'vd_cnt'),     # Number of associated aux entries
+        (Elf32_Word, 'vd_hash'),
+        (Elf32_Word, 'vd_aux'),     # Offset in bytes to verdaux array
+        (Elf32_Word, 'vd_next'),    # Offset in bytes to next verdef entry
+    ]
+
+class Elf32_Verdaux(pstruct.type):
+    _fields_ = [
+        (Elf32_Word, 'vda_name'),
+        (Elf32_Word, 'vda_next'),   # Offset to an array
+    ]
+
+class Elf32_Verneed(pstruct.type):
+    class vn_version(VER_NEED_, Elf32_Half): pass
+    _fields_ = [
+        (vn_version, 'vn_version'),
+        (Elf32_Half, 'vn_cnt'),     # Number of elements in vernaux array
+        (Elf32_Word, 'vn_file'),    # Offset to filename
+        (Elf32_Word, 'vn_aux'),     # Offset in bytes to vernaux array
+        (Elf32_Word, 'vn_next'),    # Offset in bytes to next verneed structure
+    ]
+
+class Elf32_Vernaux(pstruct.type):
+    _fields_ = [
+        (Elf32_Word, 'vna_hash'),
+        (Elf32_Half, 'vna_flags'),
+        (Elf32_Half, 'vna_other'),
+        (Elf32_Word, 'vna_name'),   # Dependency name string offset
+        (Elf32_Word, 'vna_next'),   # Offset in bytes to next vernaux
+    ]
+
+class Elf64_Verdef(pstruct.type):
+    class vd_version(VER_DEF_, Elf64_Half): pass
+    class vd_ndx(VER_NDX_, Elf64_Half): pass
+    _fields_ = [
+        (vd_version, 'vd_version'),
+        (VER_FLG_, 'vd_flags'),
+        (vd_ndx, 'vd_ndx'),
+        (Elf64_Half, 'vd_cnt'),     # Number of associated aux entries
+        (Elf64_Word, 'vd_hash'),
+        (Elf64_Word, 'vd_aux'),     # Offset in bytes to verdaux array
+        (Elf64_Word, 'vd_next'),    # Offset in bytes to next verdef entry
+    ]
+
+class Elf64_Verdaux(pstruct.type):
+    _fields_ = [
+        (Elf64_Word, 'vda_name'),
+        (Elf64_Word, 'vda_next'),   # Offset to an array
+    ]
+
+class Elf64_Verneed(pstruct.type):
+    class vn_version(VER_NEED_, Elf64_Half): pass
+    _fields_ = [
+        (vn_version, 'vn_version'),
+        (Elf64_Half, 'vn_cnt'),     # Number of elements in vernaux array
+        (Elf64_Word, 'vn_file'),    # Offset to filename
+        (Elf64_Word, 'vn_aux'),     # Offset in bytes to vernaux array
+        (Elf64_Word, 'vn_next'),    # Offset in bytes to next verneed structure
+    ]
+
+class Elf64_Vernaux(pstruct.type):
+    _fields_ = [
+        (Elf64_Word, 'vna_hash'),
+        (Elf64_Half, 'vna_flags'),
+        (Elf64_Half, 'vna_other'),
+        (Elf64_Word, 'vna_name'),   # Dependency name string offset
+        (Elf64_Word, 'vna_next'),   # Offset in bytes to next vernaux
     ]
 
 ### generic section type definitions
