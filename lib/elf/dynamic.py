@@ -511,17 +511,46 @@ class Elf64_Dyn(ElfXX_Dyn):
 class link_map32(pstruct.type):
     _fields_ = [
         (Elf32_Addr, 'l_addr'),
-        (dyn.pointer(pstr.szstring), 'l_name'),
-        (dyn.pointer(Elf32_Dyn), 'l_ld'),
-        (lambda self: dyn.pointer(link_map32), 'l_next'),
-        (lambda self: dyn.pointer(link_map32), 'l_prev'),
+        (dyn.pointer(pstr.szstring, Elf32_Addr), 'l_name'),
+        (dyn.pointer(Elf32_Dyn, Elf32_Addr), 'l_ld'),
+        (lambda self: dyn.pointer(link_map32, Elf32_Addr), 'l_next'),
+        (lambda self: dyn.pointer(link_map32, Elf32_Addr), 'l_prev'),
     ]
 
 class link_map64(pstruct.type):
     _fields_ = [
         (Elf64_Addr, 'l_addr'),
-        (dyn.pointer(pstr.szstring), 'l_name'),
-        (dyn.pointer(Elf64_Dyn), 'l_ld'),
-        (lambda self: dyn.pointer(link_map64), 'l_next'),
-        (lambda self: dyn.pointer(link_map64), 'l_prev'),
+        (dyn.pointer(pstr.szstring, Elf64_Addr), 'l_name'),
+        (dyn.pointer(Elf64_Dyn, Elf64_Addr), 'l_ld'),
+        (lambda self: dyn.pointer(link_map64, Elf64_Addr), 'l_next'),
+        (lambda self: dyn.pointer(link_map64, Elf64_Addr), 'l_prev'),
+    ]
+
+class RT_(pint.enum):
+    _values_ = [
+        ('RT_CONSISTENT', 0),
+        ('RT_ADD', 1),
+        ('RT_DELETE', 2),
+    ]
+
+class r_debug32(pstruct.type):
+    class r_state(RT_, Elf32_Word): pass
+    _fields_ = [
+        (pint.int32_t, 'version'),
+        (dyn.pointer(link_map32, Elf32_Addr), 'r_map'),
+        (dyn.pointer(ptype.undefined, Elf32_Addr), 'r_brk'),
+        (r_state, 'r_state'),
+        (dyn.pointer(ptype.undefined, Elf32_Addr), 'r_ldbase'), # elf.File
+    ]
+
+class r_debug64(pstruct.type):
+    class r_state(RT_, Elf64_Word): pass
+    _fields_ = [
+        (pint.int32_t, 'version'),
+        (dyn.align(8), 'align(version)'),
+        (dyn.pointer(link_map64, Elf64_Addr), 'r_map'),
+        (dyn.pointer(ptype.undefined, Elf64_Addr), 'r_brk'),
+        (r_state, 'r_state'),
+        (dyn.align(8), 'align(r_state)'),
+        (dyn.pointer(ptype.undefined, Elf64_Addr), 'r_ldbase'), # elf.File
     ]

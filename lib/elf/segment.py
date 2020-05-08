@@ -1,7 +1,7 @@
 from .base import *
 from . import dynamic
 
-class _p_type(pint.enum):
+class PT_(pint.enum):
     _values_ = [
         ('PT_NULL', 0),
         ('PT_LOAD', 1),
@@ -24,15 +24,15 @@ class _p_type(pint.enum):
         ('PT_ARM_UNWIND', 0x70000001),  # Exception unwind tables
     ]
 
-class _p_flags(pbinary.flags):
+class PF_(pbinary.flags):
     # Elf32_Word
     _fields_ = [
-        (4, 'PF_MASKPROC'),
-        (8, 'PF_MASKOS'),
-        (1+16, 'SHF_RESERVED'),
-        (1, 'PF_R'),
-        (1, 'PF_W'),
-        (1, 'PF_X'),
+        (4, 'MASKPROC'),
+        (8, 'MASKOS'),
+        (1+16, 'RESERVED'),
+        (1, 'R'),
+        (1, 'W'),
+        (1, 'X'),
     ]
 
 def _p_offset(ptr, CLASS):
@@ -57,8 +57,7 @@ class ElfXX_Phdr(ElfXX_Header):
 
 ### Program Headers
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
-    class p_type(_p_type, Elf32_Word): pass
-    class p_flags(_p_flags): pass   # XXX
+    class p_type(PT_, Elf32_Word): pass
 
     def __p_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
@@ -71,14 +70,14 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
         (Elf32_Addr, 'p_paddr'),
         (Elf32_Word, 'p_filesz'),
         (Elf32_Word, 'p_memsz'),
-        (p_flags, 'p_flags'),
+        (PF_, 'p_flags'),
         (Elf32_Word, 'p_align'),
         (__p_unknown, 'p_unknown'),
     ]
 
 class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
-    class p_type(_p_type, Elf64_Word): pass
-    class p_flags(_p_flags): pass   # XXX
+    class p_type(PT_, Elf64_Word): pass
+    class p_flags(PF_): pass   # XXX
 
     def __p_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
@@ -86,7 +85,7 @@ class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
 
     _fields_ = [
         (p_type, 'p_type'),
-        (p_flags, 'p_flags'),
+        (PF_, 'p_flags'),
         (lambda self: _p_offset(Elf64_Off, CLASS=ELFCLASS64), 'p_offset'),
         (Elf64_Addr, 'p_vaddr'),
         (Elf64_Addr, 'p_paddr'),

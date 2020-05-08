@@ -2,20 +2,20 @@ import ptypes
 from . import EV_, E_IDENT, section, segment
 from .base import *
 
-class E_TYPE(pint.enum, Elf32_Half):
-    ET_LOOS, ET_HIOS = 0xfe00, 0xfeff
-    ET_LOPROC, ET_HIPROC = 0xff00, 0xffff
+class ET_(pint.enum, Elf32_Half):
     _values_ = [
         ('ET_NONE', 0),
         ('ET_REL', 1),
         ('ET_EXEC', 2),
         ('ET_DYN', 3),
         ('ET_CORE', 4),
+        #ET_LOOS(0xfe00) - ET_HIOS(0xfeff)
+        #ET_LOPROC(0xff00) - ET_HIPROC(0xffff)
     ]
 
-class E_MACHINE(pint.enum, Elf32_Half):
+class EM_(pint.enum, Elf32_Half):
     _values_ = [
-        ('ET_NONE', 0),
+        ('EM_NONE', 0),
         ('EM_M32', 1),
         ('EM_SPARC', 2),
         ('EM_386', 3),
@@ -215,9 +215,9 @@ class E_FLAGS(ptype.definition):
     cache = {}
     default = Elf32_Word
 
-@E_FLAGS.define(type=E_MACHINE.byname('EM_SPARC'))
-@E_FLAGS.define(type=E_MACHINE.byname('EM_SPARC32PLUS'))
-@E_FLAGS.define(type=E_MACHINE.byname('EM_SPARCV9'))
+@E_FLAGS.define(type=EM_.byname('EM_SPARC'))
+@E_FLAGS.define(type=EM_.byname('EM_SPARC32PLUS'))
+@E_FLAGS.define(type=EM_.byname('EM_SPARCV9'))
 class E_FLAGS_SPARC(pbinary.flags):
     VENDOR_MASK = 0x00ffff00
     class EF_SPARCV9_MM(pbinary.enum):
@@ -245,7 +245,7 @@ class E_FLAGS_SPARC(pbinary.flags):
 
 @E_FLAGS.define
 class E_FLAGS_ARM(pbinary.flags):
-    type = E_MACHINE.byname('EM_ARM')
+    type = EM_.byname('EM_ARM')
     ABI_MASK = 0xff000000
     GCC_MASK = 0x00400FFF
     class EF_ARM_GCC_MASK(pbinary.struct):
@@ -266,7 +266,7 @@ class E_FLAGS_ARM(pbinary.flags):
 
 @E_FLAGS.define
 class E_FLAGS_MIPS(pbinary.flags):
-    type = E_MACHINE.byname('EM_MIPS')
+    type = EM_.byname('EM_MIPS')
     class EF_MIPS_ARCH_(pbinary.enum):
         width = 4
         _values_ = [
@@ -326,14 +326,15 @@ class XhdrEntries(parray.type):
 class ShdrEntries(XhdrEntries):
     def enumerate(self):
         for index, item in enumerate(self):
-            # FIXME: distinguish between a memorybase or filebase source
             yield index, item
         return
 
 class PhdrEntries(XhdrEntries):
     def enumerate(self):
         for index, item in enumerate(self):
-            # FIXME: distinguish between a memorybase or filebase source
+            if isinstance(self.source, ptypes.provider.memorybase):
+                if all(not item['p_type'][pt] for pt in {'PT_LOAD', 'PT_DYNAMIC', 'PT_NOTE', 'PT_PHDR', 'PT_TLS', 'PT_GNU_STACK', 'PT_GNU_RELRO'}):
+                    continue
             yield index, item
         return
 
@@ -357,8 +358,8 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         return dyn.block(res.int() - cb)
 
     _fields_ = [
-        (E_TYPE, 'e_type'),
-        (E_MACHINE, 'e_machine'),
+        (ET_, 'e_type'),
+        (EM_, 'e_machine'),
         (E_VERSION, 'e_version'),
         (Elf32_Addr, 'e_entry'),
         (lambda self: dyn.clone(Elf32_Off, _object_=lambda s: self._phent_array(segment.Elf32_Phdr, self['e_phentsize'].li, self['e_phnum'].li)), 'e_phoff'),
@@ -399,8 +400,8 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         return dyn.block(res.int() - cb)
 
     _fields_ = [
-        (E_TYPE, 'e_type'),
-        (E_MACHINE, 'e_machine'),
+        (ET_, 'e_type'),
+        (EM_, 'e_machine'),
         (E_VERSION, 'e_version'),
         (Elf64_Addr, 'e_entry'),
         (lambda self: dyn.clone(Elf64_Off, _object_=lambda s: self._phent_array(segment.Elf64_Phdr, self['e_phentsize'].li, self['e_phnum'].li)), 'e_phoff'),
