@@ -15,7 +15,7 @@ class _sh_name(pint.type):
 
     def str(self):
         table = self.getparent(ElfXX_Ehdr).stringtable()
-        if isinstance(table, SHT_STRTAB):
+        if isinstance(table, ELFCLASSXX.SHT_STRTAB):
             return table.read(self.int()).str()
         raise ptypes.error.TypeError(self, 'str')
 
@@ -122,7 +122,7 @@ class _st_name(pint.type):
         if index >= len(res):
             raise ptypes.error.NotFoundError(self, 'str')
         table = res[index]['sh_offset'].d.li
-        if isinstance(table, SHT_STRTAB):
+        if isinstance(table, ELFCLASSXX.SHT_STRTAB):
             return table.read(self.int()).str()
         raise ptypes.error.TypeError(self, 'str')
 
@@ -248,18 +248,18 @@ class Elf32_Sym(pstruct.type):
         (Elf32_Word, 'st_size'),
         (st_info, 'st_info'),
         (pint.uint8_t, 'st_other'),
-        (Elf32_Section, 'st_shndx')
+        (Elf32_Section, 'st_shndx'),
     ]
 class Elf64_Section(ElfXX_Section, pint.uint16_t): pass
 class Elf64_Sym(pstruct.type):
     class st_name(_st_name, Elf64_Word): pass
     _fields_ = [
         (st_name, 'st_name'),
-        (Elf64_Addr, 'st_value'),
-        (Elf64_Xword, 'st_size'),
         (st_info, 'st_info'),
         (pint.uint8_t, 'st_other'),
-        (Elf64_Section, 'st_shndx')
+        (Elf64_Section, 'st_shndx'),
+        (Elf64_Addr, 'st_value'),
+        (Elf64_Xword, 'st_size'),
     ]
 
 class Elf32_Rel(pstruct.type):

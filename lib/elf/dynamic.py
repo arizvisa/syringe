@@ -298,7 +298,7 @@ class ELFCLASS64(object):
         cache = {}
 
     ## types available for d_un
-    class d_val(Elf64_Word): pass
+    class d_val(Elf64_Xword): pass
     class d_ptr(Elf64_Addr): pass
     class d_ign(dyn.block(8)): pass
 
