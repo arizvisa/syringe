@@ -559,6 +559,13 @@ class ReaderRequirements(pstruct.type):
         (lambda self: dyn.array(_V, self['NVF'].li.int()), 'V'),
     ]
 
+    def alloc(self, **fields):
+        res = super(ReaderRequirements, self).alloc(**fields)
+        # FIXME: we could probably figure out ML by looking at integer sizes
+        if not operator.contains(fields, 'NVF'):
+            res.set(NSF=len(res['V']))
+        return res if operator.contains(fields, 'NSF') else res.set(NSF=len(res['SF']))
+
 @Boxes.define
 class DataReference(pstruct.type):
     type = b'\x64\x74\x62\x6c'
@@ -566,6 +573,10 @@ class DataReference(pstruct.type):
         (u16, 'NDR'),
         (lambda self: dyn.array(Box, self['NDR'].li.int()), 'DR'),
     ]
+
+    def alloc(self, **fields):
+        res = super(DataReference, self).alloc(**fields)
+        return res if operator.contains(fields, 'NDR') else res.set(NDR=len(res['DR']))
 
 @Boxes.define
 class FragmentTable(SuperBox):
@@ -584,6 +595,10 @@ class FragmentList(pstruct.type):
         (u16, 'NF'),
         (lambda self: dyn.array(_Fragment, self['NF'].li.int()), 'Fragment'),
     ]
+
+    def alloc(self, **fields):
+        res = super(FragmentList, self).alloc(**fields)
+        return res if operator.contains(fields, 'NF') else res.set(NDR=len(res['Fragment']))
 
 @Boxes.define
 class CompositingLayer(SuperBox):
