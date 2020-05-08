@@ -20,11 +20,6 @@ class _sh_name(pint.type):
         raise ptypes.error.TypeError(self, 'str')
 
 class _sh_type(pint.enum):
-    SHT_LOSUNW, SHT_HISUNW = 0x6ffffffa, 0x6fffffff
-    SHT_LOOS, SHT_HIOS = 0x60000000, 0x6fffffff
-    SHT_LOPROC, SHT_HIPROC = 0x70000000, 0x7fffffff
-    SHT_LOUSER, SHT_HIUSER = 0x80000000, 0xffffffff
-
     _values_ = [
         ('SHT_NULL', 0),
         ('SHT_PROGBITS', 1),
@@ -45,26 +40,28 @@ class _sh_type(pint.enum):
         ('SHT_PREINIT_ARRAY', 16),
         ('SHT_GROUP', 17),
         ('SHT_SYMTAB_SHNDX', 18),
-        ('SHT_NUM', 19),
 
-        ('SHT_CHECKSUM', 0x6ffffff8),
-
-        ('SHT_SUNW_move', 0x6ffffffa),
-        ('SHT_SUNW_COMDAT', 0x6ffffffb),
-        ('SHT_SUNW_syminfo', 0x6ffffffc),
-
+        # SHT_LOOS(0x60000000) - SHT_HIOS(0x6fffffff)
         ('SHT_GNU_ATTRIBUTES', 0x6ffffff5),
         ('SHT_GNU_HASH', 0x6ffffff6),
         ('SHT_GNU_LIBLIST', 0x6ffffff7),
+        ('SHT_CHECKSUM', 0x6ffffff8),
+
+        # SHT_LOSUNW(0x6ffffffa) - SHT_HISUNW(0x6fffffff)
+        ('SHT_SUNW_move', 0x6ffffffa),
+        ('SHT_SUNW_COMDAT', 0x6ffffffb),
+        ('SHT_SUNW_syminfo', 0x6ffffffc),
         ('SHT_GNU_verdef', 0x6ffffffd),
         ('SHT_GNU_verneed', 0x6ffffffe),
         ('SHT_GNU_versym', 0x6fffffff),
 
+        # SHT_LOPROC(0x70000000) - SHT_HIPROC(0x7fffffff)
         ('SHT_ARM_EXIDX', 0x70000001),
         ('SHT_ARM_PREEMPTMAP', 0x70000002),
         ('SHT_ARM_ATTRIBUTES', 0x70000003),
         ('SHT_ARM_DEBUGOVERLAY', 0x70000004),
         ('SHT_ARM_OVERLAYSECTION', 0x70000005),
+        # SHT_LOUSER(0x80000000) - SHT_HIUSER(0xffffffff)
     ]
 
 class _sh_flags(pbinary.flags):
@@ -72,7 +69,9 @@ class _sh_flags(pbinary.flags):
     _fields_ = [
         (4, 'SHF_MASKPROC'),        # FIXME: lookup based on processor
         (8, 'SHF_MASKOS'),          # FIXME: lookup based on platform
-        (10, 'SHF_UNKNOWN'),
+        (8, 'SHF_UNKNOWN'),
+        (1, 'SHF_COMPRESSED'),
+        (1, 'SHF_TLS'),
         (1, 'SHF_GROUP'),
         (1, 'SHF_OS_NONCONFORMING'),
         (1, 'SHF_LINK_ORDER'),
@@ -85,14 +84,14 @@ class _sh_flags(pbinary.flags):
         (1, 'SHF_WRITE'),
     ]
 
-def _sh_offset(ptr):
+def _sh_offset(ptr, CLASS):
     def sh_size(self):
         p = self.getparent(ElfXX_Shdr)
         return p['sh_size'].li.int()
 
     def sh_offset(self):
         res = self['sh_type'].li
-        target = Type.get(res.int(), type=res.int(), blocksize=sh_size)
+        target = CLASS.SHT_.get(res.int(), type=res.int(), blocksize=sh_size)
         return dyn.clone(ptr, _object_=target)
     return sh_offset
 
@@ -178,6 +177,9 @@ class ElfXX_Shdr(ElfXX_Header):
         iterable = (self[fld].li for fld in fields)
         return tuple(item.int() for item in iterable)
 
+class ElfXX_Chdr(ElfXX_Header):
+    pass
+
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf32_Word): pass
@@ -191,13 +193,20 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
         (Elf32_Addr, 'sh_addr'),
-        (_sh_offset(Elf32_Off), 'sh_offset'),
+        (lambda self: _sh_offset(Elf32_Off, CLASS=ELFCLASS32), 'sh_offset'),
         (Elf32_Word, 'sh_size'),
         (Elf32_Word, 'sh_link'),
         (Elf32_Word, 'sh_info'),
         (Elf32_Word, 'sh_addralign'),
         (Elf32_Word, 'sh_entsize'),
         (__sh_unknown, 'sh_unknown'),
+    ]
+
+class Elf32_Chdr(pstruct.type, ElfXX_Chdr):
+    _fields_ = [
+        (Elf32_Word, 'ch_type'),
+        (Elf32_Word, 'ch_size'),
+        (Elf32_Word, 'ch_addralign'),
     ]
 
 class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
@@ -213,7 +222,7 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
         (Elf64_Addr, 'sh_addr'),
-        (_sh_offset(Elf64_Off), 'sh_offset'),
+        (lambda self: _sh_offset(Elf64_Off, CLASS=ELFCLASS64), 'sh_offset'),
         (Elf64_Xword, 'sh_size'),
         (Elf64_Word, 'sh_link'),
         (Elf64_Word, 'sh_info'),
@@ -222,9 +231,15 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
         (__sh_unknown, 'sh_unknown'),
     ]
 
-## some types
+class Elf64_Chdr(pstruct.type, ElfXX_Chdr):
+    _fields_ = [
+        (Elf64_Word, 'ch_type'),
+        (Elf64_Word, 'ch_size'),
+        (Elf64_Word, 'ch_addralign'),
+    ]
+
+### section types
 class Elf32_Section(ElfXX_Section, pint.uint16_t): pass
-class Elf64_Section(ElfXX_Section, pint.uint16_t): pass
 class Elf32_Sym(pstruct.type):
     class st_name(_st_name, Elf32_Word): pass
     _fields_ = [
@@ -235,6 +250,7 @@ class Elf32_Sym(pstruct.type):
         (pint.uint8_t, 'st_other'),
         (Elf32_Section, 'st_shndx')
     ]
+class Elf64_Section(ElfXX_Section, pint.uint16_t): pass
 class Elf64_Sym(pstruct.type):
     class st_name(_st_name, Elf64_Word): pass
     _fields_ = [
@@ -281,88 +297,244 @@ class Elf64_Rela(pstruct.type):
         (Elf64_Sxword, 'r_addend'),
     ]
 
-### each section type
-class Type(ptype.definition):
-    cache = {}
+### generic section type definitions
+class ELFCLASSXX(object):
+    class SHT_PROGBITS(ptype.block):
+        type = 1
 
-# data defined by the section header table
-@Type.define
-class SHT_PROGBITS(ptype.block):
-    type = 1
+    class SHT_SYMTAB(parray.block):
+        type = 2
+        _object_ = None
 
-@Type.define
-class SHT_SYMTAB(parray.block):
-    type = 2
-    _object_ = Elf32_Sym
+    class SHT_STRTAB(parray.block):
+        type = 3
+        _object_ = pstr.szstring
 
-@Type.define
-class SHT_STRTAB(parray.block):
-    type = 3
-    _object_ = pstr.szstring
+        def read(self, offset):
+            return self.field(offset)
+        def summary(self):
+            res = (res.str() for res in self)
+            res = map("{!r}".format, res)
+            return "{:s} : [ {:s} ]".format(self.__element__(), ', '.join(res))
+        def details(self):
+            return '\n'.join(map("{!r}".format, self))
+        repr = details
 
-    def read(self, offset):
-        return self.field(offset)
-    def summary(self):
-        res = (res.str() for res in self)
-        res = map("{!r}".format, res)
-        return "{:s} : [ {:s} ]".format(self.__element__(), ', '.join(res))
-    def details(self):
-        return '\n'.join(map("{!r}".format, self))
-    repr = details
+    class SHT_RELA(parray.block):
+        type = 4
+        _object_ = None
 
-@Type.define
-class SHT_RELA(parray.block):
-    type = 4
-    _object_ = Elf32_Rela
+    class SHT_HASH(pstruct.type):
+        type = 5
 
-@Type.define
-class SHT_HASH(pstruct.type):
-    type = 5
-    _fields_ = [
-        (Elf32_Word, 'nbucket'),
-        (Elf32_Word, 'nchain'),
-        (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.int()), 'bucket'),
-        (lambda s: dyn.array(Elf32_Word, s['nchain'].li.int()), 'chain'),
-    ]
+        @classmethod
+        def hash_of_bytes(cls, bytes):
+            h = g = 0
+            for item in bytearray(bytes):
+                h = (h << 4) + item
+                g = h & 0xf0000000
+                if g:
+                    h ^= g >> 24
+                h &= 0xffffffff
+            return h
 
-from . import segment
-@Type.define
-class SHT_DYNAMIC(segment.PT_DYNAMIC):
-    type = 6
+    from .segment import ELFCLASSXX
+    class SHT_DYNAMIC(ELFCLASSXX.PT_DYNAMIC):
+        '''This is a placeholder and needs to be manually defined.'''
+        type = 6
 
-@Type.define
-class SHT_NOTE(segment.PT_NOTE):
-    type = 7
+    class SHT_NOTE(ELFCLASSXX.PT_NOTE):
+        '''This is a placeholder and needs to be manually defined.'''
+        type = 7
 
-@Type.define
-class SHT_NOBITS(ptype.block):
-    type = 8
+    class SHT_NOBITS(ptype.block):
+        type = 8
 
-@Type.define
-class SHT_REL(parray.block):
-    type = 9
-    _object_ = Elf32_Rel
+    class SHT_REL(parray.block):
+        type = 9
+        _object_ = None
 
-@Type.define
-class SHT_SHLIB(segment.PT_SHLIB):
-    type = 10
+    class SHT_SHLIB(ELFCLASSXX.PT_SHLIB):
+        '''This is a placeholder and needs to be manually defined.'''
+        type = 10
 
-@Type.define
-class SHT_DYNSYM(parray.block):
-    type = 11
-    _object_ = Elf32_Sym
+    class SHT_DYNSYM(parray.block):
+        type = 11
+        _object_ = Elf32_Sym
 
-# FIXME
-@Type.define
-class SHT_GROUP(parray.block):
-    type = 17
-    class GRP_COMDAT(Elf32_Word): pass
-    def _object_(self):
-        return Elf32_Word if self.value is None or len(self.value) > 0 else Elf32_Word
+    class SHT_INIT_ARRAY(parray.block):
+        type = 14
+        _object_ = None
 
-    _object_ = Elf32_Word
+    class SHT_FINI_ARRAY(parray.block):
+        type = 15
+        _object_ = None
 
-@Type.define
+    class SHT_PREINIT_ARRAY(parray.block):
+        type = 16
+        _object_ = None
+
+    # FIXME
+    class SHT_GROUP(parray.block):
+        type = 17
+        class GRP_COMDAT(Elf32_Word): pass
+        _object_ = None
+
+    class SHT_SYMTAB_SHNDX(parray.block):
+        type = 18
+        _object_ = None
+
+### 32-bit section type definitions
+class ELFCLASS32(object):
+    class SHT_(ptype.definition):
+        cache = {}
+
+    @SHT_.define
+    class SHT_PROGBITS(ELFCLASSXX.SHT_PROGBITS):
+        pass
+
+    @SHT_.define
+    class SHT_SYMTAB(ELFCLASSXX.SHT_SYMTAB):
+        _object_ = Elf32_Sym
+
+    @SHT_.define
+    class SHT_STRTAB(ELFCLASSXX.SHT_STRTAB):
+        pass
+
+    @SHT_.define
+    class SHT_RELA(ELFCLASSXX.SHT_RELA):
+        _object_ = Elf32_Rela
+
+    @SHT_.define
+    class SHT_HASH(ELFCLASSXX.SHT_HASH):
+        _fields_ = [
+            (Elf32_Word, 'nbucket'),
+            (Elf32_Word, 'nchain'),
+            (lambda s: dyn.array(Elf32_Word, s['nbucket'].li.int()), 'bucket'),
+            (lambda s: dyn.array(Elf32_Word, s['nchain'].li.int()), 'chain'),
+        ]
+
+    from .segment import ELFCLASS32
+    @SHT_.define
+    class SHT_DYNAMIC(ELFCLASS32.PT_DYNAMIC):
+        type = ELFCLASSXX.SHT_DYNAMIC.type
+
+    @SHT_.define
+    class SHT_NOTE(ELFCLASS32.PT_NOTE):
+        type = ELFCLASSXX.SHT_NOTE.type
+
+    @SHT_.define
+    class SHT_NOBITS(ELFCLASSXX.SHT_NOBITS):
+        pass
+
+    @SHT_.define
+    class SHT_REL(ELFCLASSXX.SHT_REL):
+        _object_ = Elf32_Rel
+
+    @SHT_.define
+    class SHT_SHLIB(ELFCLASS32.PT_SHLIB):
+        type = ELFCLASSXX.SHT_SHLIB.type
+
+    @SHT_.define
+    class SHT_DYNSYM(ELFCLASSXX.SHT_DYNSYM):
+        _object_ = Elf32_Sym
+
+    @SHT_.define
+    class SHT_INIT_ARRAY(ELFCLASSXX.SHT_INIT_ARRAY):
+        _object_ = Elf32_Addr
+
+    @SHT_.define
+    class SHT_FINI_ARRAY(ELFCLASSXX.SHT_FINI_ARRAY):
+        _object_ = Elf32_Addr
+
+    @SHT_.define
+    class SHT_PREINIT_ARRAY(ELFCLASSXX.SHT_PREINIT_ARRAY):
+        _object_ = Elf32_Addr
+
+    @SHT_.define
+    class SHT_GROUP(ELFCLASSXX.SHT_GROUP):
+        _object_ = Elf32_Word
+
+    @SHT_.define
+    class SHT_SYMTAB_SHNDX(ELFCLASSXX.SHT_SYMTAB_SHNDX):
+        _object_ = Elf32_Word
+
+### 64-bit section type definitions
+class ELFCLASS64(object):
+    class SHT_(ptype.definition):
+        cache = {}
+
+    @SHT_.define
+    class SHT_PROGBITS(ELFCLASSXX.SHT_PROGBITS):
+        pass
+
+    @SHT_.define
+    class SHT_SYMTAB(ELFCLASSXX.SHT_SYMTAB):
+        _object_ = Elf64_Sym
+
+    @SHT_.define
+    class SHT_STRTAB(ELFCLASSXX.SHT_STRTAB):
+        pass
+
+    @SHT_.define
+    class SHT_RELA(ELFCLASSXX.SHT_RELA):
+        _object_ = Elf64_Rela
+
+    @SHT_.define
+    class SHT_HASH(ELFCLASSXX.SHT_HASH):
+        _fields_ = [
+            (Elf64_Word, 'nbucket'),
+            (Elf64_Word, 'nchain'),
+            (lambda s: dyn.array(Elf64_Word, s['nbucket'].li.int()), 'bucket'),
+            (lambda s: dyn.array(Elf64_Word, s['nchain'].li.int()), 'chain'),
+        ]
+
+    from .segment import ELFCLASS64
+    @SHT_.define
+    class SHT_DYNAMIC(ELFCLASS64.PT_DYNAMIC):
+        type = ELFCLASSXX.SHT_DYNAMIC.type
+
+    @SHT_.define
+    class SHT_NOTE(ELFCLASS64.PT_NOTE):
+        type = ELFCLASSXX.SHT_NOTE.type
+
+    @SHT_.define
+    class SHT_NOBITS(ELFCLASSXX.SHT_NOBITS):
+        pass
+
+    @SHT_.define
+    class SHT_REL(ELFCLASSXX.SHT_REL):
+        _object_ = Elf64_Rel
+
+    @SHT_.define
+    class SHT_SHLIB(ELFCLASS64.PT_SHLIB):
+        type = ELFCLASSXX.SHT_SHLIB.type
+
+    @SHT_.define
+    class SHT_DYNSYM(ELFCLASSXX.SHT_DYNSYM):
+        _object_ = Elf64_Sym
+
+    @SHT_.define
+    class SHT_INIT_ARRAY(ELFCLASSXX.SHT_INIT_ARRAY):
+        _object_ = Elf64_Addr
+
+    @SHT_.define
+    class SHT_FINI_ARRAY(ELFCLASSXX.SHT_FINI_ARRAY):
+        _object_ = Elf64_Addr
+
+    @SHT_.define
+    class SHT_PREINIT_ARRAY(ELFCLASSXX.SHT_PREINIT_ARRAY):
+        _object_ = Elf64_Addr
+
+    @SHT_.define
+    class SHT_GROUP(ELFCLASSXX.SHT_GROUP):
+        _object_ = Elf64_Word
+
+    @SHT_.define
+    class SHT_SYMTAB_SHNDX(ELFCLASSXX.SHT_SYMTAB_SHNDX):
+        _object_ = Elf64_Word
+
+### ARM attributes (FIXME: integrate/assign this into the correct class type)
 class SHT_ARM_ATTRIBUTES(pstruct.type):
     type = 0x70000003
 
