@@ -544,7 +544,7 @@ class File(pstruct.type, ptype.boundary):
         sz+= self['Extra'].blocksize()
         sz+= self['Stub'].blocksize()
         sz+= self['Next'].blocksize()
-        if isinstance(self.source, ptypes.provider.fileobj):
+        if isinstance(self.source, ptypes.provider.bounded):
             return dyn.block(self.source.size() - sz)
         return ptype.undefined
 
