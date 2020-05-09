@@ -2331,12 +2331,11 @@ class rpointer_t(pointer_t):
         objectname = force(res, self).typename() if istype(res) else res.__name__
         return "{:s}({:s}, ...)".format(self.typename(), objectname)
 
-    def decode(self, object, **attrs):
-        res = super(rpointer_t, self).decode(object, **attrs)
+    def dereference(self, **attrs):
         root = force(self._baseobject_, self)
         base = root.getoffset() if isinstance(root) else root().getoffset()
-        res.set(base + object.get())
-        return res
+        res = self.decode(self.object)
+        return super(rpointer_t, self).dereference(offset=base + res.get())
 
     def __getstate__(self):
         return super(rpointer_t, self).__getstate__(), self._baseobject_
@@ -2356,10 +2355,9 @@ class opointer_t(pointer_t):
         objectname = force(res, self).typename() if istype(res) else res.__name__
         return "{:s}({:s}, {:s})".format(self.typename(), objectname, calcname)
 
-    def decode(self, object, **attrs):
-        res = super(opointer_t, self).decode(object, **attrs)
-        res.set(self._calculate_(object.get()))
-        return res
+    def dereference(self, **attrs):
+        res = self.decode(self.object)
+        return super(opointer_t, self).dereference(offset=self._calculate_(res.get()))
 
 class boundary(base):
     """Used to mark a boundary in a ptype tree. Can be used to make .getparent() stop."""
@@ -2776,7 +2774,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_getoffset():
         class bah(ptype.type): length=2
-        data = prov.string(bytes().join(map(six.int2byte, moves.range(six.byte2int(b'a'), six.byte2int(b'z')))))
+        data = prov.string(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
         if a.getoffset() == 0 and a.l.serialize()==b'ab':
             raise Success
