@@ -9,10 +9,11 @@ class ElfXX_Ehdr(ElfXX_Header): pass
 
 ### base
 class uchar(pint.uint8_t): pass
-class ElfXX_Off(ptype.rpointer_t):
+class ElfXX_Off(ptype.opointer_t):
     _object_ = ptype.undefined
-    def _baseobject_(self):
-        return self.getparent(ElfXX_File)
+    def _calculate_(self, offset):
+        p = self.getparent(ElfXX_File)
+        return p.getoffset() + offset
 
     @classmethod
     def typename(cls):
@@ -30,10 +31,11 @@ class ElfXX_Off(ptype.rpointer_t):
         type = self._object_.__name__
         return "{:s}<{:s}>".format(self.typename(), type)
 
-class ElfXX_VAddr(ptype.rpointer_t):
+class ElfXX_VAddr(ptype.opointer_t):
     _object_ = ptype.undefined
-    def _baseobject_(self):
-        return self.getparent(ElfXX_File)
+    def _calculate_(self, offset):
+        p = self.getparent(ElfXX_File)
+        return p.getoffset() + offset
 
     @classmethod
     def typename(cls):
