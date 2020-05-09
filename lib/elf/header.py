@@ -333,20 +333,43 @@ class XhdrEntries(parray.type):
 class ShdrEntries(XhdrEntries):
     def byoffset(self, ofs):
         iterable = (item for item in self if item.containsoffset(ofs))
-        return next(iterable)
+        try:
+            result = next(iterable)
+        except StopIteration:
+            raise ptypes.error.NotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified offset ({:#x})".format(ofs))
+        return result
 
     def byaddress(self, va):
         iterable = (item for item in self if item.containsaddress(va))
-        return next(iterable)
+        try:
+            result = next(iterable)
+        except StopIteration:
+            raise ptypes.error.NotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified virtual address ({:#x})".format(va))
+        return result
 
 class PhdrEntries(XhdrEntries):
     def byoffset(self, ofs):
-        iterable = (item for item in self if item.containsoffset(ofs))
-        return next(iterable)
+        if isinstance(self.source, ptypes.provider.memorybase):
+            iterable = (item for item in self if item.loadableQ() and item.containsoffset(ofs))
+        else:
+            iterable = (item for item in self if item.containsoffset(ofs))
+
+        # Now that we have an iterable, return the first result we find
+        try:
+            result = next(iterable)
+        except StopIteration:
+            raise ptypes.error.NotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified offset ({:#x})".format(ofs))
+        return result
 
     def byaddress(self, va):
         iterable = (item for item in self if item.loadableQ() and item.containsaddress(va))
-        return next(iterable)
+
+        # Now that we have an iterable, return the first result we find
+        try:
+            result = next(iterable)
+        except StopIteration:
+            raise ptypes.error.NotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
+        return result
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
