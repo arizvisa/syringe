@@ -9,12 +9,14 @@ class ElfXX_Ehdr(ElfXX_Header): pass
 
 ### base
 class uchar(pint.uint8_t): pass
-class ElfXX_Off(ptype.opointer_t):
+class ElfXX_BaseOff(ptype.rpointer_t):
+    '''Always an offset relative to base of file.'''
     _object_ = ptype.undefined
-    def _calculate_(self, offset):
-        p = self.getparent(ElfXX_File)
-        return p.getoffset() + offset
+    def _baseobject_(self):
+        return self.getparent(ElfXX_File)
 
+class ElfXX_BaseAddr(ptype.opointer_t):
+    '''Always a virtual address relative to base of file.'''
     @classmethod
     def typename(cls):
         return cls.__name__
@@ -31,29 +33,46 @@ class ElfXX_Off(ptype.opointer_t):
         type = self._object_.__name__
         return "{:s}<{:s}>".format(self.typename(), type)
 
-class ElfXX_VAddr(ptype.opointer_t):
+    def _calculate_(self, offset):
+        base = self.getparent(ElfXX_File)
+        return base.getoffset() + offset
+
+class ElfXX_Off(ElfXX_BaseAddr):
+    '''Always an offset that will be converted to an address when its in memory.'''
     _object_ = ptype.undefined
     def _calculate_(self, offset):
-        p = self.getparent(ElfXX_File)
-        return p.getoffset() + offset
+        base = self.getparent(ElfXX_File)
+        try:
+            if isinstance(self.source, ptypes.provider.memorybase):
+                p = self.getparent(ElfXX_Ehdr)
+                phentries = p['e_phoff'].d.li
+                ph = phentries.byoffset(offset)
+                return base.getoffset() + ph.getaddressbyoffset(offset)
 
-    @classmethod
-    def typename(cls):
-        return cls.__name__
+        except ptypes.error.NotFoundError:
+            pass
 
-    def classname(self):
-        try: type = self.d.classname() if self.initializedQ() else self._object_().classname()
-        except: pass
-        else: return "{:s}<{:s}>".format(self.typename(), type)
+        return base.getoffset() + offset
 
-        try: type = self._object_.typename() if ptype.istype(self._object_) else self._object_().classname()
-        except: pass
-        else: return "{:s}<{:s}>".format(self.typename(), type)
+class ElfXX_VAddr(ElfXX_BaseAddr):
+    '''Always a virtual address that will be converted to an offset when its a file.'''
+    _object_ = ptype.undefined
+    def _calculate_(self, address):
+        base = self.getparent(ElfXX_File)
+        try:
+            if isinstance(self.source, ptypes.provider.fileobj):
+                p = self.getparent(ElfXX_Ehdr)
+                phentries = p['e_phoff'].d.li
+                ph = phentries.byaddress(address)
+                return base.getoffset() + ph.getoffsetbyaddress(address)
 
-        type = self._object_.__name__
-        return "{:s}<{:s}>".format(self.typename(), type)
+        except ptypes.error.NotFoundError:
+            pass
+
+        return base.getoffset() + address
 
 class ElfXX_Addr(ptype.pointer_t):
+    '''Just a regular address.'''
     _object_ = ptype.undefined
 
 class ULEB128(pbinary.terminatedarray):
@@ -86,6 +105,10 @@ class ULEB128(pbinary.terminatedarray):
         return "{:s} : {:d} : ({:#x}, {:d})".format(self.__element__(), res, res, 7*len(self))
 
 ### elf32
+class Elf32_BaseOff(ElfXX_BaseOff):
+    _value_ = pint.uint32_t
+class Elf32_BaseAddr(ElfXX_BaseAddr):
+    _value_ = pint.uint32_t
 class Elf32_Off(ElfXX_Off):
     _value_ = pint.uint32_t
 class Elf32_Addr(ElfXX_Addr):
@@ -98,6 +121,10 @@ class Elf32_Sword(pint.int32_t): pass
 class Elf32_Word(pint.uint32_t): pass
 
 ### elf64
+class Elf64_BaseOff(ElfXX_BaseOff):
+    _value_ = pint.uint64_t
+class Elf64_BaseAddr(ElfXX_BaseAddr):
+    _value_ = pint.uint64_t
 class Elf64_Off(ElfXX_Off):
     _value_ = pint.uint64_t
 class Elf64_Addr(ElfXX_Addr):
