@@ -2325,7 +2325,7 @@ class rpointer_t(pointer_t):
     def classname(self):
         if self.initializedQ():
             baseobject = self._baseobject_
-            basename = baseobject.classname() if builtins.isinstance(self._baseobject_, base) else baseobject.__name__
+            basename = baseobject.classname() if builtins.isinstance(self._baseobject_, base) else baseobject.__name__ if baseobject else 'None'
             return "{:s}({:s}, {:s})".format(self.typename(), self.object.classname(), basename)
         res = getattr(self, '_object_', undefined) or undefined
         objectname = force(res, self).typename() if istype(res) else res.__name__
