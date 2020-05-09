@@ -9,8 +9,8 @@ class ET_(pint.enum, Elf32_Half):
         ('ET_EXEC', 2),
         ('ET_DYN', 3),
         ('ET_CORE', 4),
-        #ET_LOOS(0xfe00) - ET_HIOS(0xfeff)
-        #ET_LOPROC(0xff00) - ET_HIPROC(0xffff)
+        # ET_LOOS(0xfe00) - ET_HIOS(0xfeff)
+        # ET_LOPROC(0xff00) - ET_HIPROC(0xffff)
     ]
 
 class EM_(pint.enum, Elf32_Half):
@@ -314,6 +314,11 @@ class E_FLAGS_MIPS(pbinary.flags):
         (1, 'EF_MIPS_NOREORDER'),
     ]
 
+class PN_(pint.enum):
+    _values_ = [
+        ('PN_XNUM', 0xffff),
+    ]
+
 class XhdrEntries(parray.type):
     def iterate(self):
         for index, item in self.enumerate():
@@ -325,8 +330,23 @@ class XhdrEntries(parray.type):
             yield index, item
         return
 
-class ShdrEntries(XhdrEntries): pass
-class PhdrEntries(XhdrEntries): pass
+class ShdrEntries(XhdrEntries):
+    def byoffset(self, ofs):
+        iterable = (item for item in self if item.containsoffset(ofs))
+        return next(iterable)
+
+    def byaddress(self, va):
+        iterable = (item for item in self if item.containsaddress(va))
+        return next(iterable)
+
+class PhdrEntries(XhdrEntries):
+    def byoffset(self, ofs):
+        iterable = (item for item in self if item.containsoffset(ofs))
+        return next(iterable)
+
+    def byaddress(self, va):
+        iterable = (item for item in self if item.loadableQ() and item.containsaddress(va))
+        return next(iterable)
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
@@ -341,6 +361,8 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
     def __e_flags(self):
         res = self['e_machine'].li.int()
         return E_FLAGS.withdefault(res, type=res)
+
+    class e_phnum(PN_, Elf32_Half): pass
 
     def __padding(self):
         res = self['e_ehsize'].li
@@ -357,7 +379,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         (__e_flags, 'e_flags'),
         (Elf32_Half, 'e_ehsize'),
         (Elf32_Half, 'e_phentsize'),
-        (Elf32_Half, 'e_phnum'),
+        (e_phnum, 'e_phnum'),
         (Elf32_Half, 'e_shentsize'),
         (Elf32_Half, 'e_shnum'),
         (Elf32_Half, 'e_shstrndx'),
@@ -384,6 +406,8 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         res = self['e_machine'].li.int()
         return E_FLAGS.withdefault(res, type=res)
 
+    class e_phnum(PN_, Elf64_Half): pass
+
     def __padding(self):
         res = self['e_ehsize'].li
         cb = sum(self[fld].li.size() for fld in self.keys()[:-1]) + E_IDENT().a.blocksize()
@@ -399,7 +423,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         (__e_flags, 'e_flags'),
         (Elf64_Half, 'e_ehsize'),
         (Elf64_Half, 'e_phentsize'),
-        (Elf64_Half, 'e_phnum'),
+        (e_phnum, 'e_phnum'),
         (Elf64_Half, 'e_shentsize'),
         (Elf64_Half, 'e_shnum'),
         (Elf64_Half, 'e_shstrndx'),

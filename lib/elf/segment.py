@@ -1,3 +1,4 @@
+import six
 from .base import *
 from . import dynamic
 
@@ -15,6 +16,7 @@ class PT_(pint.enum):
         ('PT_GNU_EH_FRAME', 0x6474e550),
         ('PT_GNU_STACK', 0x6474e551),
         ('PT_GNU_RELRO', 0x6474e552),
+        ('PT_GNU_PROPERTY', 0x6474e553),
 
         ('PT_SUNWBSS', 0x6ffffffa),     # Sun-specific segment
         ('PT_SUNWSTACK', 0x6ffffffb),   # Stack segment
@@ -64,6 +66,12 @@ class ElfXX_Phdr(ElfXX_Header):
         loadable = {'PT_LOAD', 'PT_DYNAMIC', 'PT_PHDR', 'PT_TLS', 'PT_GNU_RELRO'}
         return any(self['p_type'][item] for item in loadable)
 
+    def properties(self):
+        res = super(ElfXX_Phdr, self).properties()
+        if self.initializedQ():
+            res['loadable'] = self.loadableQ()
+        return res
+
     def getreadsize(self):
         res = self['p_filesz'].li
         return res.int()
@@ -73,13 +81,19 @@ class ElfXX_Phdr(ElfXX_Header):
         count = (res.int() + alignment.int() - 1) // alignment.int()
         return count * alignment.int()
 
-    def containsvirtualaddress(self, va):
+    def containsaddress(self, va):
         res = self['p_vaddr']
         return res.int() <= va < res.int() + self.getloadedsize()
 
     def containsoffset(self, ofs):
         res = self['p_offset']
         return res.int() <= ofs < res.int() + self.getreadsize()
+
+    def getoffsetbyaddress(self, va):
+        return va - self['p_vaddr'].int() + self['p_offset'].int()
+
+    def getaddressbyoffset(self, va):
+        return va - self['p_offset'].int() + self['p_vaddr'].int()
 
 ### Program Headers
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
@@ -129,10 +143,23 @@ class ELFCLASSXX(object):
         type = 2
         _object_ = dynamic.ElfXX_Dyn
 
-        def search(self, entry):
-            if ptype.istype(entry):
-                entry = entry.type
-            return [x['d_val'] for x in self if x['d_tag'].int() == entry]
+        def filter_tag(self, entry):
+            if isinstance(entry, six.string_types):
+                iterable = (item['d_un'] for item in self if item['d_tag'][entry])
+            elif isinstance(entry, six.integer_types):
+                iterable = (item['d_un'] for item in self if item['d_tag'].int() == entry)
+            elif hasattr(entry, '__iter__'):
+                fmatch = lambda tag, m: (tag.int() == m) if isinstance(m, six.integer_types) else tag[m] if isinstance(m, six.string_types) else (tag.int() == m.type) if ptype.istype(m) else False
+                iterable = (item['d_un'] for item in self if any(fmatch(item['d_tag'], m) for m in entry))
+            elif ptype.istype(item) or isinstance(entry, ptype.type):
+                return self.by_tag(item.type)
+            else:
+                raise TypeError(entry)
+            return iterable
+
+        def by_tag(self, entry):
+            iterable = self.filter_tag(entry)
+            return next(iterable)
 
     class PT_INTERP(pstr.szstring):
         type = 3
@@ -175,6 +202,18 @@ class ELFCLASSXX(object):
 
     class PT_GNU_RELRO(ptype.block):
         type = 0x6474e552
+
+    class PT_GNU_PROPERTY(pstruct.type):
+        type = 0x6474e553
+
+        class elf_property_kind(pint.enum):
+            _values_ = [
+                ('property_unknown', 0),
+                ('property_ignored', 1),
+                ('property_corrupt', 2),
+                ('property_remove', 3),
+                ('property_number', 4),
+            ]
 
 ### 32-bit segment type definitions
 class ELFCLASS32(object):
@@ -226,6 +265,17 @@ class ELFCLASS32(object):
     class PT_GNU_RELRO(ELFCLASSXX.PT_GNU_RELRO):
         pass
 
+    @PT_.define
+    class PT_GNU_PROPERTY(ELFCLASSXX.PT_GNU_PROPERTY):
+        class bfd_vma(pint.uint32_t): pass
+        class _pr_kind(ELFCLASSXX.PT_GNU_PROPERTY.elf_property_kind, pint.uint32_t): pass
+        _fields_ = [
+            (pint.uint32_t, 'pr_type'),
+            (pint.uint32_t, 'pr_datasz'),
+            (bfd_vma, 'u'),
+            (_pr_kind, 'pr_kind'),
+        ]
+
 ### 64-bit segment type definitions
 class ELFCLASS64(object):
     class PT_(ptype.definition):
@@ -275,3 +325,14 @@ class ELFCLASS64(object):
     @PT_.define
     class PT_GNU_RELRO(ELFCLASSXX.PT_GNU_RELRO):
         pass
+
+    @PT_.define
+    class PT_GNU_PROPERTY(ELFCLASSXX.PT_GNU_PROPERTY):
+        class bfd_vma(pint.uint64_t): pass
+        class _pr_kind(ELFCLASSXX.PT_GNU_PROPERTY.elf_property_kind, pint.uint64_t): pass
+        _fields_ = [
+            (pint.uint64_t, 'pr_type'),
+            (pint.uint64_t, 'pr_datasz'),
+            (bfd_vma, 'u'),
+            (_pr_kind, 'pr_kind'),
+        ]

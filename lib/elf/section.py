@@ -42,6 +42,7 @@ class SHT_(pint.enum):
         ('SHT_SYMTAB_SHNDX', 18),
 
         # SHT_LOOS(0x60000000) - SHT_HIOS(0x6fffffff)
+        ('SHT_GNU_INCREMENTAL_INPUTS', 0x6fff4700),
         ('SHT_GNU_ATTRIBUTES', 0x6ffffff5),
         ('SHT_GNU_HASH', 0x6ffffff6),
         ('SHT_GNU_LIBLIST', 0x6ffffff7),
@@ -66,9 +67,21 @@ class SHT_(pint.enum):
 
 class SHF_(pbinary.flags):
     # Elf32_Word
+    class SHF_MASKPROC(pbinary.flags):
+        _fields_ = [
+            (1, 'EXCLUDE'),
+            (3, 'RESERVED'),
+        ]
+    class SHF_MASKOS(pbinary.flags):
+        _fields_ = [
+            (3, 'RESERVED2'),
+            (1, 'GNU_MBIND'),
+            (3, 'RESERVED1'),
+            (1, 'GNU_BUILD_NOTE'),
+        ]
     _fields_ = [
-        (4, 'MASKPROC'),        # FIXME: lookup based on processor
-        (8, 'MASKOS'),          # FIXME: lookup based on platform
+        (SHF_MASKPROC, 'MASKPROC'), # FIXME: lookup based on processor
+        (SHF_MASKOS, 'MASKOS'),     # FIXME: lookup based on platform
         (8, 'UNKNOWN'),
         (1, 'COMPRESSED'),
         (1, 'TLS'),
@@ -210,7 +223,7 @@ class ElfXX_Shdr(ElfXX_Header):
         count = (res.int() + alignment.int() - 1) // alignment.int()
         return count * alignment.int()
 
-    def containsvirtualaddress(self, va):
+    def containsaddress(self, va):
         res = self['sh_addr']
         return res.int() <= va < res.int() + self.getloadedsize()
 
@@ -326,12 +339,12 @@ class ELF32_R_INFO(pbinary.struct):
     ]
 class Elf32_Rel(pstruct.type):
     _fields_ = [
-        (Elf32_VAddr, 'r_offset'),
+        (Elf32_Off, 'r_offset'),
         (ELF32_R_INFO , 'r_info'),
     ]
 class Elf32_Rela(pstruct.type):
     _fields_ = [
-        (Elf32_VAddr, 'r_offset'),
+        (Elf32_Off, 'r_offset'),
         (ELF32_R_INFO, 'r_info'),
         (Elf32_Sword, 'r_addend'),
     ]
@@ -344,12 +357,12 @@ class ELF64_R_INFO(pbinary.flags):
     ]
 class Elf64_Rel(pstruct.type):
     _fields_ = [
-        (Elf64_VAddr, 'r_offset'),
+        (Elf64_Off, 'r_offset'),
         (ELF64_R_INFO, 'r_info'),
     ]
 class Elf64_Rela(pstruct.type):
     _fields_ = [
-        (Elf64_VAddr, 'r_offset'),
+        (Elf64_Off, 'r_offset'),
         (ELF64_R_INFO, 'r_info'),
         (Elf64_Sxword, 'r_addend'),
     ]

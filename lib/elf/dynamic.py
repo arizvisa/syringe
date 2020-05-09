@@ -19,7 +19,7 @@ class DT_(pint.enum):
         ('DT_SYMENT', 11),
         ('DT_INIT', 12),
         ('DT_FINI', 13),
-        ('DT_SONAME', 14),
+        ('DT_SONAME', 14),      # offset into string table
         ('DT_RPATH', 15),
         ('DT_SYMBOLIC', 16),
         ('DT_REL', 17),
@@ -183,15 +183,54 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
-    class DT_PLTGOT(d_ptr): type = 3
+    class DT_PLTGOT(d_ptr):
+        type = 3
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_symtab = p.by_tag('DT_SYMTAB')
+            return dyn.array(Elf32_Addr, len(dt_symtab.d.li))
     @DT_.define
     class DT_HASH(d_ptr): type = 4
     @DT_.define
-    class DT_STRTAB(d_ptr): type = 5
+    class DT_STRTAB(d_ptr):
+        type = 5
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_strsz = p.by_tag('DT_STRSZ')
+
+            from .section import ELFCLASS32
+            return dyn.clone(ELFCLASS32.SHT_STRTAB, blocksize=dt_strsz.int)
     @DT_.define
-    class DT_SYMTAB(d_ptr): type = 6
+    class DT_SYMTAB(d_ptr):
+        type = 6
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            # XXX: apparently the glibc folks are determining the symtab size
+            #      by assuming the strtab immediately follows it. Heh.
+            from .section import ELFCLASS32
+            dt_strtab = p.by_tag('DT_STRTAB')
+            dt_syment = p.by_tag('DT_SYMENT')
+            return dyn.clone(ELFCLASS32.SHT_SYMTAB, blocksize=lambda self, cb=dt_strtab.int() - self.int(): cb)
     @DT_.define
-    class DT_RELA(d_ptr): type = 7
+    class DT_RELA(d_ptr):
+        type = 7
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            from .section import Elf32_Rela
+            dt_relaent = p.by_tag('DT_RELAENT')
+            res = p.by_tag(['DT_RELASZ', 'DT_RELACOUNT'])
+            if isinstance(res, ELFCLASS32.DT_RELASZ):
+                return dyn.blockarray(Elf32_Rela, res.int())
+            elif isinstance(res, ELFCLASS32.DT_RELACOUNT):
+                return dyn.array(Elf32_Rela, res.int())
+            raise NotImplementedError
     @DT_.define
     class DT_RELASZ(d_val): type = 8
     @DT_.define
@@ -205,7 +244,18 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_FINI(d_ptr): type = 13
     @DT_.define
-    class DT_SONAME(d_val): type = 14
+    class DT_SONAME(d_val):
+        type = 14
+        def dereference(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_strtab = p.by_tag('DT_STRTAB')
+            res = dt_strtab.d.li
+            return res.field(self.get())
+        d = property(fget=dereference)
+        def str(self):
+            res = self.dereference()
+            return res.str()
     @DT_.define
     class DT_RPATH(d_val): type = 15
     @DT_.define
@@ -217,13 +267,33 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_RELENT(d_val): type = 19
     @DT_.define
-    class DT_PLTREL(d_val): type = 20
+    class DT_PLTREL(pint.enum, d_val):
+        type = 20
+        _values_ = [
+            ('DT_RELA', 7),
+            ('DT_REL', 17),
+        ]
     @DT_.define
     class DT_DEBUG(d_ptr): type = 21
     @DT_.define
     class DT_TEXTREL(d_ign): type = 22
     @DT_.define
-    class DT_JMPREL(d_ptr): type = 23
+    class DT_JMPREL(d_ptr):
+        type = 23
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            from .section import Elf64_Rel, Elf64_Rela
+            dt_pltrelsz = p.by_tag('DT_PLTRELSZ')
+            dt_pltrel = p.by_tag('DT_PLTREL')
+            if dt_pltrel['DT_REL']:
+                t = Elf64_Rel
+            elif dt_pltrel['DT_RELA']:
+                t = Elf64_Rela
+            else:
+                raise NotImplementedError(dt_pltrel)
+            return dyn.blockarray(t, dt_pltrelsz.int())
     @DT_.define
     class DT_BIND_NOW(d_ign): type = 24
     @DT_.define
@@ -305,7 +375,14 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_FLAGS_1(DF_1_): type = 0x6ffffffb
     @DT_.define
-    class DT_VERDEF(d_val): type = 0x6ffffffc
+    class DT_VERDEF(d_val):
+        type = 0x6ffffffc
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_verdefnum = p.by_tag('DT_VERDEFNUM')
+            from .section import Elf32_Verdef
+            return dyn.array(Elf32_Verdef, dt_verdefnum.int())
     @DT_.define
     class DT_VERDEFNUM(d_val): type = 0x6ffffffd
     @DT_.define
@@ -371,15 +448,54 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
-    class DT_PLTGOT(d_ptr): type = 3
+    class DT_PLTGOT(d_ptr):
+        type = 3
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_symtab = p.by_tag('DT_SYMTAB')
+            return dyn.array(Elf64_Addr, len(dt_symtab.d.li))
     @DT_.define
     class DT_HASH(d_ptr): type = 4
     @DT_.define
-    class DT_STRTAB(d_ptr): type = 5
+    class DT_STRTAB(d_ptr):
+        type = 5
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_strsz = p.by_tag('DT_STRSZ')
+
+            from .section import ELFCLASS64
+            return dyn.clone(ELFCLASS64.SHT_STRTAB, blocksize=dt_strsz.int)
     @DT_.define
-    class DT_SYMTAB(d_ptr): type = 6
+    class DT_SYMTAB(d_ptr):
+        type = 6
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            # XXX: apparently the glibc folks are determining the symtab size
+            #      by assuming the strtab immediately follows it. Heh.
+            from .section import ELFCLASS64
+            dt_strtab = p.by_tag('DT_STRTAB')
+            dt_syment = p.by_tag('DT_SYMENT')
+            return dyn.clone(ELFCLASS64.SHT_SYMTAB, blocksize=lambda self, cb=dt_strtab.int() - self.int(): cb)
     @DT_.define
-    class DT_RELA(d_ptr): type = 7
+    class DT_RELA(d_ptr):
+        type = 7
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            from .section import Elf64_Rela
+            dt_relaent = p.by_tag('DT_RELAENT')
+            res = p.by_tag(['DT_RELASZ', 'DT_RELACOUNT'])
+            if isinstance(res, ELFCLASS64.DT_RELASZ):
+                return dyn.blockarray(Elf64_Rela, res.int())
+            elif isinstance(res, ELFCLASS64.DT_RELACOUNT):
+                return dyn.array(Elf64_Rela, res.int())
+            raise NotImplementedError
     @DT_.define
     class DT_RELASZ(d_val): type = 8
     @DT_.define
@@ -393,7 +509,18 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_FINI(d_ptr): type = 13
     @DT_.define
-    class DT_SONAME(d_val): type = 14
+    class DT_SONAME(d_val):
+        type = 14
+        def dereference(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_strtab = p.by_tag('DT_STRTAB')
+            res = dt_strtab.d.li
+            return res.field(self.get())
+        d = property(fget=dereference)
+        def str(self):
+            res = self.dereference()
+            return res.str()
     @DT_.define
     class DT_RPATH(d_val): type = 15
     @DT_.define
@@ -405,13 +532,33 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_RELENT(d_val): type = 19
     @DT_.define
-    class DT_PLTREL(d_val): type = 20
+    class DT_PLTREL(pint.enum, d_val):
+        type = 20
+        _values_ = [
+            ('DT_RELA', 7),
+            ('DT_REL', 17),
+        ]
     @DT_.define
     class DT_DEBUG(d_ptr): type = 21
     @DT_.define
     class DT_TEXTREL(d_ign): type = 22
     @DT_.define
-    class DT_JMPREL(d_ptr): type = 23
+    class DT_JMPREL(d_ptr):
+        type = 23
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            from .section import Elf64_Rel, Elf64_Rela
+            dt_pltrelsz = p.by_tag('DT_PLTRELSZ')
+            dt_pltrel = p.by_tag('DT_PLTREL')
+            if dt_pltrel['DT_REL']:
+                t = Elf64_Rel
+            elif dt_pltrel['DT_RELA']:
+                t = Elf64_Rela
+            else:
+                raise NotImplementedError(dt_pltrel)
+            return dyn.blockarray(t, dt_pltrelsz.int())
     @DT_.define
     class DT_BIND_NOW(d_ign): type = 24
     @DT_.define
@@ -497,7 +644,14 @@ class ELFCLASS64(object):
     class DT_FLAGS_1(DF_1_):
         type, _fields_ = 0x6ffffffb, [(32, 'alignment')] + DF_1_._fields_
     @DT_.define
-    class DT_VERDEF(d_val): type = 0x6ffffffc
+    class DT_VERDEF(d_val):
+        type = 0x6ffffffc
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_verdefnum = p.by_tag('DT_VERDEFNUM')
+            from .section import Elf64_Verdef
+            return dyn.array(Elf64_Verdef, dt_verdefnum.int())
     @DT_.define
     class DT_VERDEFNUM(d_val): type = 0x6ffffffd
     @DT_.define
