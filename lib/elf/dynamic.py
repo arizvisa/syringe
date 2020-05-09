@@ -576,19 +576,20 @@ class Elf64_Dyn(ElfXX_Dyn):
 class link_map32(pstruct.type):
     _fields_ = [
         (Elf32_Addr, 'l_addr'),
-        (dyn.pointer(pstr.szstring, Elf32_Addr), 'l_name'),
-        (dyn.pointer(Elf32_Dyn, Elf32_Addr), 'l_ld'),
-        (lambda self: dyn.pointer(link_map32, Elf32_Addr), 'l_next'),
-        (lambda self: dyn.pointer(link_map32, Elf32_Addr), 'l_prev'),
+        (dyn.clone(Elf32_Addr, _object_=pstr.szstring), 'l_name'),
+        (dyn.clone(Elf32_Addr, _object_=Elf32_Dyn), 'l_ld'),
+        (lambda self: dyn.clone(Elf32_Addr, _object_=link_map32), 'l_next'),
+        (lambda self: dyn.clone(Elf32_Addr, _object_=link_map32), 'l_prev'),
     ]
 
 class link_map64(pstruct.type):
     _fields_ = [
         (Elf64_Addr, 'l_addr'),
+        (dyn.clone(Elf64_Addr, _object_=pstr.szstring), 'l_name'),
         (dyn.pointer(pstr.szstring, Elf64_Addr), 'l_name'),
-        (dyn.pointer(Elf64_Dyn, Elf64_Addr), 'l_ld'),
-        (lambda self: dyn.pointer(link_map64, Elf64_Addr), 'l_next'),
-        (lambda self: dyn.pointer(link_map64, Elf64_Addr), 'l_prev'),
+        (dyn.clone(Elf64_Addr, _object_=Elf64_Dyn), 'l_ld'),
+        (lambda self: dyn.clone(Elf64_Addr, _object_=link_map64), 'l_next'),
+        (lambda self: dyn.clone(Elf64_Addr, _object_=link_map64), 'l_prev'),
     ]
 
 class RT_(pint.enum):
@@ -602,10 +603,10 @@ class r_debug32(pstruct.type):
     class r_state(RT_, Elf32_Word): pass
     _fields_ = [
         (pint.int32_t, 'version'),
-        (dyn.pointer(link_map32, Elf32_Addr), 'r_map'),
-        (dyn.pointer(ptype.undefined, Elf32_Addr), 'r_brk'),
+        (dyn.clone(Elf32_Addr, _object_=link_map32), 'r_map'),
+        (Elf32_Addr, 'r_brk'),
         (r_state, 'r_state'),
-        (dyn.pointer(ptype.undefined, Elf32_Addr), 'r_ldbase'), # elf.File
+        (Elf32_Addr, 'r_ldbase'), # elf.File
     ]
 
 class r_debug64(pstruct.type):
@@ -613,9 +614,9 @@ class r_debug64(pstruct.type):
     _fields_ = [
         (pint.int32_t, 'version'),
         (dyn.align(8), 'align(version)'),
-        (dyn.pointer(link_map64, Elf64_Addr), 'r_map'),
-        (dyn.pointer(ptype.undefined, Elf64_Addr), 'r_brk'),
+        (dyn.clone(Elf64_Addr, _object_=link_map64), 'r_map'),
+        (Elf64_Addr, 'r_brk'),
         (r_state, 'r_state'),
         (dyn.align(8), 'align(r_state)'),
-        (dyn.pointer(ptype.undefined, Elf64_Addr), 'r_ldbase'), # elf.File
+        (Elf64_Addr, 'r_ldbase'), # elf.File
     ]

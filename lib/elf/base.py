@@ -13,9 +13,11 @@ class ElfXX_Off(ptype.rpointer_t):
     _object_ = ptype.undefined
     def _baseobject_(self):
         return self.getparent(ElfXX_File)
+
     @classmethod
     def typename(cls):
         return cls.__name__
+
     def classname(self):
         try: type = self.d.classname() if self.initializedQ() else self._object_().classname()
         except: pass
@@ -27,6 +29,30 @@ class ElfXX_Off(ptype.rpointer_t):
 
         type = self._object_.__name__
         return "{:s}<{:s}>".format(self.typename(), type)
+
+class ElfXX_VAddr(ptype.rpointer_t):
+    _object_ = ptype.undefined
+    def _baseobject_(self):
+        return self.getparent(ElfXX_File)
+
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
+    def classname(self):
+        try: type = self.d.classname() if self.initializedQ() else self._object_().classname()
+        except: pass
+        else: return "{:s}<{:s}>".format(self.typename(), type)
+
+        try: type = self._object_.typename() if ptype.istype(self._object_) else self._object_().classname()
+        except: pass
+        else: return "{:s}<{:s}>".format(self.typename(), type)
+
+        type = self._object_.__name__
+        return "{:s}<{:s}>".format(self.typename(), type)
+
+class ElfXX_Addr(ptype.pointer_t):
+    _object_ = ptype.undefined
 
 class ULEB128(pbinary.terminatedarray):
     class septet(pbinary.struct):
@@ -58,17 +84,25 @@ class ULEB128(pbinary.terminatedarray):
         return "{:s} : {:d} : ({:#x}, {:d})".format(self.__element__(), res, res, 7*len(self))
 
 ### elf32
-class Elf32_Addr(pint.uint32_t): pass
-class Elf32_Half(pint.uint16_t): pass
 class Elf32_Off(ElfXX_Off):
-    _value_ = Elf32_Addr
+    _value_ = pint.uint32_t
+class Elf32_Addr(ElfXX_Addr):
+    _value_ = pint.uint32_t
+class Elf32_VAddr(ElfXX_VAddr):
+    _value_ = pint.uint32_t
+
+class Elf32_Half(pint.uint16_t): pass
 class Elf32_Sword(pint.int32_t): pass
 class Elf32_Word(pint.uint32_t): pass
 
 ### elf64
-class Elf64_Addr(pint.uint64_t): pass
 class Elf64_Off(ElfXX_Off):
-    _value_ = Elf64_Addr
+    _value_ = pint.uint64_t
+class Elf64_Addr(ElfXX_Addr):
+    _value_ = pint.uint64_t
+class Elf64_VAddr(ElfXX_VAddr):
+    _value_ = pint.uint64_t
+
 class Elf64_Half(Elf32_Half): pass
 class Elf64_Word(Elf32_Word): pass
 class Elf64_Sword(Elf32_Sword): pass

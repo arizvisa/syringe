@@ -608,5 +608,3 @@ DW_TAG_hi_user = 0xffff
 
 if __name__ == '__main__':
     import ptypes,dwarf
-
-

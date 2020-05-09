@@ -316,28 +316,17 @@ class E_FLAGS_MIPS(pbinary.flags):
 
 class XhdrEntries(parray.type):
     def iterate(self):
-        for index, item in self.iterate():
+        for index, item in self.enumerate():
             yield item
         return
 
     def enumerate(self):
-        raise NotImplementedError
-
-class ShdrEntries(XhdrEntries):
-    def enumerate(self):
         for index, item in enumerate(self):
             yield index, item
         return
 
-class PhdrEntries(XhdrEntries):
-    def enumerate(self):
-        for index, item in enumerate(self):
-            if isinstance(self.source, ptypes.provider.memorybase):
-                if any(item['p_type'][pt] for pt in {'PT_LOAD', 'PT_DYNAMIC', 'PT_PHDR', 'PT_TLS', 'PT_GNU_RELRO'}):
-                    yield index, item
-                continue
-            yield index, item
-        return
+class ShdrEntries(XhdrEntries): pass
+class PhdrEntries(XhdrEntries): pass
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
@@ -362,7 +351,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         (ET_, 'e_type'),
         (EM_, 'e_machine'),
         (E_VERSION, 'e_version'),
-        (Elf32_Addr, 'e_entry'),
+        (Elf32_VAddr, 'e_entry'),
         (lambda self: dyn.clone(Elf32_Off, _object_=lambda s: self._phent_array(segment.Elf32_Phdr, self['e_phentsize'].li, self['e_phnum'].li)), 'e_phoff'),
         (lambda self: dyn.clone(Elf32_Off, _object_=lambda s: self._shent_array(section.Elf32_Shdr, self['e_shentsize'].li, self['e_shnum'].li)), 'e_shoff'),
         (__e_flags, 'e_flags'),
@@ -404,7 +393,7 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         (ET_, 'e_type'),
         (EM_, 'e_machine'),
         (E_VERSION, 'e_version'),
-        (Elf64_Addr, 'e_entry'),
+        (Elf64_VAddr, 'e_entry'),
         (lambda self: dyn.clone(Elf64_Off, _object_=lambda s: self._phent_array(segment.Elf64_Phdr, self['e_phentsize'].li, self['e_phnum'].li)), 'e_phoff'),
         (lambda self: dyn.clone(Elf64_Off, _object_=lambda s: self._shent_array(section.Elf64_Shdr, self['e_shentsize'].li, self['e_shnum'].li)), 'e_shoff'),
         (__e_flags, 'e_flags'),

@@ -95,14 +95,27 @@ def _sh_offset(ptr, CLASS):
         return dyn.clone(ptr, _object_=target)
     return sh_offset
 
+def _sh_vaddress(ptr, CLASS):
+    def sh_size(self):
+        p = self.getparent(ElfXX_Shdr)
+        size, alignment = (p[fld].li for fld in ['sh_size', 'sh_addralign'])
+        count = (size.int() + alignment.int() - 1) // alignment.int()
+        return count * alignment.int()
+
+    def sh_vaddress(self):
+        res = self['sh_type'].li
+        target = CLASS.SHT_.get(res.int(), type=res.int(), blocksize=sh_size)
+        return dyn.clone(ptr, _object_=target)
+    return sh_vaddress
+
 class _sh_index(pint.enum):
-    SHN_LOPROC, SHN_HIPROC = 0xff00, 0xff1f
-    SHN_LOOS, SHN_HIOS = 0xff20, 0xff3f
-    SHN_LORESERVE, SHN_HIRESERVE = 0xff00, 0xffff
     _values_ = [
         ('SHN_UNDEF', 0),
+        # SHN_LOPROC(0xff00) - SHN_HIPROC(0xff1f)
         ('SHN_BEFORE', 0xff00),
         ('SHN_AFTER', 0xff01),
+        # SHN_LOOS(0xff20) - SHN_HIOS(0xff3f)
+        # SHN_LORESERVE(0xff00) - SHN_HIRESERVE(0xffff)
         ('SHN_ABS', 0xfff1),
         ('SHN_COMMON', 0xfff2),
         ('SHN_XINDEX', 0xffff),
@@ -188,13 +201,22 @@ class ElfXX_Section(pint.enum):
     ]
 
 class ElfXX_Shdr(ElfXX_Header):
-    def bounds(self):
-        if isinstance(self.source, ptypes.provider.memorybase):
-            fields = 'sh_addr', 'sh_size', 'sh_addralign'
-        else:
-            fields = 'sh_offset', 'sh_size', 'sh_addralign'
-        iterable = (self[fld].li for fld in fields)
-        return tuple(item.int() for item in iterable)
+    def getreadsize(self):
+        res = self['sh_size'].li
+        return res.int()
+
+    def getloadedsize(self):
+        res, alignment = (self[fld].li for fld in ['sh_size', 'sh_addralign'])
+        count = (res.int() + alignment.int() - 1) // alignment.int()
+        return count * alignment.int()
+
+    def containsvirtualaddress(self, va):
+        res = self['sh_addr']
+        return res.int() <= va < res.int() + self.getloadedsize()
+
+    def containsoffset(self, ofs):
+        res = self['sh_offset']
+        return res.int() <= ofs < res.int() + self.getreadsize()
 
 class ELFCOMPRESS_(pint.enum):
     _values_ = [
@@ -215,7 +237,7 @@ class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
-        (Elf32_Addr, 'sh_addr'),
+        (lambda self: _sh_vaddress(Elf32_VAddr, CLASS=ELFCLASS32), 'sh_addr'),
         (lambda self: _sh_offset(Elf32_Off, CLASS=ELFCLASS32), 'sh_offset'),
         (Elf32_Word, 'sh_size'),
         (Elf32_Word, 'sh_link'),
@@ -233,6 +255,15 @@ class Elf32_Chdr(pstruct.type, ElfXX_Chdr):
         (Elf32_Word, 'ch_addralign'),
     ]
 
+    def getreadsize(self):
+        res = self['ch_size'].li
+        return res.int()
+
+    def getloadedsize(self):
+        res, alignment = (self[fld].li for fld in ['ch_size', 'ch_addralign'])
+        count = (res.int() + alignment.int() - 1) // alignment.int()
+        return count * alignment.int()
+
 class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf64_Word): pass
     class sh_type(SHT_, Elf64_Word): pass
@@ -245,7 +276,7 @@ class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
         (sh_name, 'sh_name'),
         (sh_type, 'sh_type'),
         (sh_flags, 'sh_flags'),
-        (Elf64_Addr, 'sh_addr'),
+        (lambda self: _sh_vaddress(Elf64_VAddr, CLASS=ELFCLASS64), 'sh_addr'),
         (lambda self: _sh_offset(Elf64_Off, CLASS=ELFCLASS64), 'sh_offset'),
         (Elf64_Xword, 'sh_size'),
         (Elf64_Word, 'sh_link'),
@@ -269,7 +300,7 @@ class Elf32_Sym(pstruct.type):
     class st_name(_st_name, Elf32_Word): pass
     _fields_ = [
         (st_name, 'st_name'),
-        (Elf32_Addr, 'st_value'),
+        (Elf32_VAddr, 'st_value'),
         (Elf32_Word, 'st_size'),
         (st_info, 'st_info'),
         (STV_, 'st_other'),
@@ -283,7 +314,7 @@ class Elf64_Sym(pstruct.type):
         (st_info, 'st_info'),
         (STV_, 'st_other'),
         (Elf64_Section, 'st_shndx'),
-        (Elf64_Addr, 'st_value'),
+        (Elf64_VAddr, 'st_value'),
         (Elf64_Xword, 'st_size'),
     ]
 
@@ -295,12 +326,12 @@ class ELF32_R_INFO(pbinary.struct):
     ]
 class Elf32_Rel(pstruct.type):
     _fields_ = [
-        (Elf32_Addr, 'r_offset'),
+        (Elf32_VAddr, 'r_offset'),
         (ELF32_R_INFO , 'r_info'),
     ]
 class Elf32_Rela(pstruct.type):
     _fields_ = [
-        (Elf32_Addr, 'r_offset'),
+        (Elf32_VAddr, 'r_offset'),
         (ELF32_R_INFO, 'r_info'),
         (Elf32_Sword, 'r_addend'),
     ]
@@ -313,12 +344,12 @@ class ELF64_R_INFO(pbinary.flags):
     ]
 class Elf64_Rel(pstruct.type):
     _fields_ = [
-        (Elf64_Addr, 'r_offset'),
+        (Elf64_VAddr, 'r_offset'),
         (ELF64_R_INFO, 'r_info'),
     ]
 class Elf64_Rela(pstruct.type):
     _fields_ = [
-        (Elf64_Addr, 'r_offset'),
+        (Elf64_VAddr, 'r_offset'),
         (ELF64_R_INFO, 'r_info'),
         (Elf64_Sxword, 'r_addend'),
     ]
@@ -608,15 +639,15 @@ class ELFCLASS32(object):
 
     @SHT_.define
     class SHT_INIT_ARRAY(ELFCLASSXX.SHT_INIT_ARRAY):
-        _object_ = Elf32_Addr
+        _object_ = Elf32_VAddr
 
     @SHT_.define
     class SHT_FINI_ARRAY(ELFCLASSXX.SHT_FINI_ARRAY):
-        _object_ = Elf32_Addr
+        _object_ = Elf32_VAddr
 
     @SHT_.define
     class SHT_PREINIT_ARRAY(ELFCLASSXX.SHT_PREINIT_ARRAY):
-        _object_ = Elf32_Addr
+        _object_ = Elf32_VAddr
 
     @SHT_.define
     class SHT_GROUP(ELFCLASSXX.SHT_GROUP):
@@ -683,15 +714,15 @@ class ELFCLASS64(object):
 
     @SHT_.define
     class SHT_INIT_ARRAY(ELFCLASSXX.SHT_INIT_ARRAY):
-        _object_ = Elf64_Addr
+        _object_ = Elf64_VAddr
 
     @SHT_.define
     class SHT_FINI_ARRAY(ELFCLASSXX.SHT_FINI_ARRAY):
-        _object_ = Elf64_Addr
+        _object_ = Elf64_VAddr
 
     @SHT_.define
     class SHT_PREINIT_ARRAY(ELFCLASSXX.SHT_PREINIT_ARRAY):
-        _object_ = Elf64_Addr
+        _object_ = Elf64_VAddr
 
     @SHT_.define
     class SHT_GROUP(ELFCLASSXX.SHT_GROUP):

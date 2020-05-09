@@ -46,14 +46,40 @@ def _p_offset(ptr, CLASS):
         return dyn.clone(ptr, _object_=target)
     return p_offset
 
+def _p_vaddress(ptr, CLASS):
+    def p_size(self):
+        p = self.getparent(ElfXX_Phdr)
+        size, alignment = (p[fld].li for fld in ['p_memsz', 'p_align'])
+        count = (size.int() + alignment.int() - 1) // alignment.int()
+        return count * alignment.int()
+
+    def p_vaddress(self):
+        res = self['p_type'].li
+        target = CLASS.PT_.get(res.int(), type=res.int(), blocksize=p_size)
+        return dyn.clone(ptr, _object_=target)
+    return p_vaddress
+
 class ElfXX_Phdr(ElfXX_Header):
-    def bounds(self):
-        if isinstance(self.source, ptypes.provider.memorybase):
-            fields = 'p_vaddr', 'p_memsz', 'p_align'
-        else:
-            fields = 'p_offset', 'p_filesz', 'p_align'
-        iterable = (self[fld].li for fld in fields)
-        return tuple(item.int() for item in iterable)
+    def loadableQ(self):
+        loadable = {'PT_LOAD', 'PT_DYNAMIC', 'PT_PHDR', 'PT_TLS', 'PT_GNU_RELRO'}
+        return any(self['p_type'][item] for item in loadable)
+
+    def getreadsize(self):
+        res = self['p_filesz'].li
+        return res.int()
+
+    def getloadedsize(self):
+        res, alignment = (self[fld].li for fld in ['p_memsz', 'p_align'])
+        count = (res.int() + alignment.int() - 1) // alignment.int()
+        return count * alignment.int()
+
+    def containsvirtualaddress(self, va):
+        res = self['p_vaddr']
+        return res.int() <= va < res.int() + self.getloadedsize()
+
+    def containsoffset(self, ofs):
+        res = self['p_offset']
+        return res.int() <= ofs < res.int() + self.getreadsize()
 
 ### Program Headers
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
@@ -66,8 +92,8 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
     _fields_ = [
         (p_type, 'p_type'),
         (lambda self: _p_offset(Elf32_Off, CLASS=ELFCLASS32), 'p_offset'),
-        (Elf32_Addr, 'p_vaddr'),
-        (Elf32_Addr, 'p_paddr'),
+        (lambda self: _p_vaddress(Elf32_VAddr, CLASS=ELFCLASS32), 'p_vaddr'),
+        (lambda self: _p_vaddress(Elf32_VAddr, CLASS=ELFCLASS32), 'p_paddr'),
         (Elf32_Word, 'p_filesz'),
         (Elf32_Word, 'p_memsz'),
         (PF_, 'p_flags'),
@@ -77,7 +103,6 @@ class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
 
 class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(PT_, Elf64_Word): pass
-    class p_flags(PF_): pass   # XXX
 
     def __p_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
@@ -87,8 +112,8 @@ class Elf64_Phdr(pstruct.type, ElfXX_Phdr):
         (p_type, 'p_type'),
         (PF_, 'p_flags'),
         (lambda self: _p_offset(Elf64_Off, CLASS=ELFCLASS64), 'p_offset'),
-        (Elf64_Addr, 'p_vaddr'),
-        (Elf64_Addr, 'p_paddr'),
+        (lambda self: _p_vaddress(Elf64_VAddr, CLASS=ELFCLASS64), 'p_vaddr'),
+        (lambda self: _p_vaddress(Elf64_VAddr, CLASS=ELFCLASS64), 'p_paddr'),
         (Elf64_Xword, 'p_filesz'),
         (Elf64_Xword, 'p_memsz'),
         (Elf64_Xword, 'p_align'),
