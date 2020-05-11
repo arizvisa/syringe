@@ -537,7 +537,7 @@ class ReaderRequirements(pstruct.type):
             (58, 'Compositing layer uses CIEJab enumerated colourspace with default parameters'),
             (59, 'Compositing layer uses CIEJab enumerated colourspace with parameters'),
             (60, 'Compositing layer uses e-sRGB enumerated colourspace'),
-            (61, 'Compositing layer uses ROMM–RGB enumerated colourspace'),
+            (61, 'Compositing layer uses ROMM-RGB enumerated colourspace'),
             (62, 'Compositing layers have non-square samples'),
             (63, 'Compositing layers have labels'),
             (64, 'Codestreams have labels'),
