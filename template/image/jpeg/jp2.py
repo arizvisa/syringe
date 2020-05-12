@@ -172,7 +172,16 @@ class ImageHeader(pstruct.type):
     type = b'\x69\x68\x64\x72'
     class _C(pint.enum, u8):
         _values_ = [
-            ('compressed', 7),
+            ('Uncompressed', 0),
+            ('MH', 1),
+            ('MR', 2),
+            ('MMR', 3),
+            ('JBIG', 4),
+            ('JPEG', 5),
+            ('JPEG-LS', 6),
+            ('JPEG-2000', 7),
+            ('JBIG2', 8),
+            ('ANY', 9),
         ]
 
     class _Boolean(pint.enum, u8):
@@ -312,14 +321,33 @@ class ColourSpecification(pstruct.type):
     type = b'\x63\x6f\x6c\x72'
     class _METH(pint.enum, u8):
         _values_ = [
-            ('Enumerated Colourspace', 1),
-            ('Restricted ICC profile', 2),
+            ('Enumerated', 1),
+            ('Restricted ICC', 2),
+            ('Any ICC', 3),
+            ('Vendor Colour', 4),
         ]
 
     class _EnumCS(pint.enum, u32):
         _values_ = [
+            ('Bi-level', 0),
+            ('YCbCr(1)', 1),
+            ('YCbCr(2)', 3),
+            ('YCbCr(3)', 4),
+            ('PhotoYCC', 9),
+            ('CMY', 11),
+            ('CMYK', 12),
+            ('YCCK', 13),
+            ('CIELab', 14),
+            ('Bi-level(2)', 15),
             ('sRGB', 16),
             ('greyscale', 17),
+            ('sYCC', 18),
+            ('CIEJab', 19),
+            ('e-sRGB', 20),
+            ('ROMM-RGB', 21),
+            ('YPbPr(1125/60)', 22),
+            ('YPbPr(1150/50)', 23),
+            ('e-sYCC', 24),
         ]
 
     def __PROFILE(self):
@@ -333,7 +361,7 @@ class ColourSpecification(pstruct.type):
 
     _fields_ = [
         (_METH, 'METH'),
-        (u8, 'PREC'),
+        (s8, 'PREC'),
         (u8, 'APPROX'),
         (lambda self: u0 if self['METH'].li.int() == 2 else self._EnumCS, 'EnumCS'),
         (__PROFILE, 'PROFILE'),
