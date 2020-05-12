@@ -594,68 +594,70 @@ if __name__ == '__main__':
     def ignore(self, key, value):
         raise Signal(False)
 
-    a = HookMapping({})
-    a['val1'] = 1
-    a.alias('val1', 'alias1')
-    a['alias1'] = 10
+    if True:
+        a = HookMapping({})
+        a['val1'] = 1
+        a.alias('val1', 'alias1')
+        a['alias1'] = 10
 
-    a['val2'] = 0
-    res = a.hook('val2', ok)
-    try:
-        a['val2'] = 1
-    except Signal as S:
-        pass
-    else:
-        raise ValueError
-
-    a.alias('val2', 'alias2')
-    try:
-        a['alias2'] = 500
-    except Signal as S:
-        pass
-    else:
-        raise ValueError
-
-    a['val3'] = 20
-    a.hook('val3', ignore)
-    try:
-        a['val3'] = 50
-    except Signal as S:
-        notok, = S.args
-        if notok:
+        a['val2'] = 0
+        res = a.hook('val2', ok)
+        try:
+            a['val2'] = 1
+        except Signal as S:
+            pass
+        else:
             raise ValueError
-    else:
-        raise ValueError
-    a.alias('val3', 'alias4')
 
-    try:
-        a['alias4'] = 40
-    except Signal as S:
-        notok, = S.args
-        if notok:
+        a.alias('val2', 'alias2')
+        try:
+            a['alias2'] = 500
+        except Signal as S:
+            pass
+        else:
             raise ValueError
-    else:
-        raise ValueError
+
+        a['val3'] = 20
+        a.hook('val3', ignore)
+        try:
+            a['val3'] = 50
+        except Signal as S:
+            notok, = S.args
+            if notok:
+                raise ValueError
+        else:
+            raise ValueError
+        a.alias('val3', 'alias4')
+
+        try:
+            a['alias4'] = 40
+        except Signal as S:
+            notok, = S.args
+            if notok:
+                raise ValueError
+        else:
+            raise ValueError
 
     ### WeakSet reference of OrderedDict
-    x = OrderedDict(dict(key1=1, key2=3))
-    y = OrderedDict(dict(key1=3, key2=1))
-    state = {item.copy() for item in [x, y]}
-    weak = weakref.WeakSet(state)
-    if set(weak) != state:
-        raise ValueError
-    if set(weak) != {x, y}:
-        raise ValueError
-    state.discard(x)
-    if set(weak) != {y}:
-        raise ValueError
-    if set(weak) != state:
-        raise ValueError
-    state.discard(y)
-    if set(weak) != set():
-        raise ValueError
-    if set(weak) != set():
-        raise ValueError
+    if True:
+        x = OrderedDict(dict(key1=1, key2=3))
+        y = OrderedDict(dict(key1=3, key2=1))
+        state = {item.copy() for item in [x, y]}
+        weak = weakref.WeakSet(state)
+        if set(weak) != state:
+            raise ValueError
+        if set(weak) != {x, y}:
+            raise ValueError
+        state.discard(x)
+        if set(weak) != {y}:
+            raise ValueError
+        if set(weak) != state:
+            raise ValueError
+        state.discard(y)
+        if set(weak) != set():
+            raise ValueError
+        if set(weak) != set():
+            raise ValueError
 
     ### MergedMapping
     class MockDict(MutableMapping, Hashable, Copyable):
@@ -690,76 +692,81 @@ if __name__ == '__main__':
     e = MockDict(**{'bkey1':0,'ckey1':0,'dkey1':0})
 
     ## MergedMapping single-dict auto-synchronization
-    M = MergedMapping()
-    if M != {}:
-        raise ValueError
-    M.add(a)
-    if sorted(M.keys()) != sorted(a.keys()):
-        raise ValueError
-    M.remove(a)
-    if M != {}:
-        raise ValueError
+    if True:
+        M = MergedMapping()
+        if M != {}:
+            raise ValueError
+        M.add(a)
+        if sorted(M.keys()) != sorted(a.keys()):
+            raise ValueError
+        M.remove(a)
+        if M != {}:
+            raise ValueError
 
     ## MergedMapping multiple-dict auto-synchronization
-    M = MergedMapping()
-    M.add(b)
-    M.add(e)
-    if set(M.keys()) != {item for item in itertools.chain(b.keys(), e.keys())}:
-        raise ValueError
-    M.remove(b)
-    if set(M.keys()) != set(e.keys()):
-        raise ValueError
-    if any(set(M._cache[item]) != {e} for item in M._cache):
-        raise ValueError
+    if True:
+        M = MergedMapping()
+        M.add(b)
+        M.add(e)
+        if set(M.keys()) != {item for item in itertools.chain(b.keys(), e.keys())}:
+            raise ValueError
+        M.remove(b)
+        if set(M.keys()) != set(e.keys()):
+            raise ValueError
+        if any(set(M._cache[item]) != {e} for item in M._cache):
+            raise ValueError
 
     ## MergedMapping single-dict fetch and update
-    M = MergedMapping()
-    M.add(b)
-    if M['bkey2'] != b['bkey2']:
-        raise ValueError
-    M['bkey1'] = -1
-    if b['bkey1'] != -1:
-        raise ValueError
-    b['bkey1'] = 0
+    if False:
+        M = MergedMapping()
+        M.add(b)
+        if M['bkey2'] != b['bkey2']:
+            raise ValueError
+        M['bkey1'] = -1
+        if b['bkey1'] != -1:
+            raise ValueError
+        b['bkey1'] = 0
 
     ## MergedMapping multiple-dict fetch and update
-    M = MergedMapping()
-    M.add(b)
-    M.add(e)
-    if set(M._cache['bkey1']) != {b, e}:
-        raise ValueError
+    if False:
+        M = MergedMapping()
+        M.add(b)
+        M.add(e)
+        if set(M._cache['bkey1']) != {b, e}:
+            raise ValueError
 
-    M['bkey1'] = -1
-    if b['bkey1'] != -1:
-        raise ValueError
-    if e['bkey1'] != -1:
-        raise ValueError
-    M['bkey1'] = 0
+        M['bkey1'] = -1
+        if b['bkey1'] != -1:
+            raise ValueError
+        if e['bkey1'] != -1:
+            raise ValueError
+        M['bkey1'] = 0
 
-    M.remove(e)
-    M.remove(b)
+        M.remove(e)
+        M.remove(b)
 
     ## MergedMapping non-existent key
-    M = MergedMapping()
-    M.add(b)
-    M.add(c)
-    M.add(d)
-    M.add(e)
+    if True:
+        M = MergedMapping()
+        M.add(b)
+        M.add(c)
+        M.add(d)
+        M.add(e)
 
-    try:
-        M['nonexist'] = -1
-    except KeyError:
-        pass
-    else:
-        raise ValueError
+        try:
+            M['nonexist'] = -1
+        except KeyError:
+            pass
+        else:
+            raise ValueError
 
-    # XXX: for some reason modifying any of the references in the
-    #      dictionaries results in them not being found in any set/dict
+        # XXX: for some reason modifying any of the references in the
+        #      dictionaries results in them not being found in any set/dict
 
-    M.remove(b)
-    M.remove(c)
-    M.remove(d)
-    M.remove(e)
+        M.remove(b)
+        M.remove(c)
+        M.remove(d)
+        M.remove(e)
 
     ## MergedMapping multiple-dict multiple-fetch
     M = MergedMapping()
