@@ -176,7 +176,7 @@ class OrderedDict(MutableMapping, Hashable, Copyable):
 
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
-        if isinstance(iterable, dict):
+        if isinstance(iterable, (dict, Mapping)):
             items += iterable.items()
         else:
             items += [(key, value) for key, value in iterable or []]
@@ -230,8 +230,8 @@ class OrderedDict(MutableMapping, Hashable, Copyable):
         return "{!s} {:s}".format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, self.items())))
     __repr__ = __str__
 
-class AliasDict(MutableMapping, Hashable, Copyable):
-    """A dictionary that allows one to create aliases for keys"""
+class AliasMapping(MutableMapping, Hashable, Copyable):
+    """A wrapper for a dictionary that allows one to create aliases for keys"""
     def __hash__(self):
         iterable = map(hash, self.items())
         return functools.reduce(operator.xor, iterable, hash(self._aliases))
@@ -242,13 +242,11 @@ class AliasDict(MutableMapping, Hashable, Copyable):
     def __setstate__(self, state):
         self._data, self._aliases = state
 
-    def __init__(self, iterable=None, **pairs):
-        items = [item for item in pairs.items()]
-        if isinstance(iterable, dict):
-            items += iterable.items()
-        else:
-            items += [(key, value) for key, value in iterable or []]
-        self._data, self._aliases = {}, OrderedDict()
+    def __init__(self, backing=None):
+        res = backing or {}
+        if not isinstance(res, (dict, Mapping)):
+            raise TypeError(res)
+        self._data, self._aliases = res, OrderedDict()
 
     # tools
     def _getkey(self, key):
@@ -289,8 +287,8 @@ class AliasDict(MutableMapping, Hashable, Copyable):
     # overloads
     def update(self, *args, **kwds):
         self, other = args[0], args[1] if len(args) >= 2 else ()
-        res = super(AliasDict,self).update(*args, **kwds)
-        if isinstance(other, AliasDict):
+        res = super(AliasMapping,self).update(*args, **kwds)
+        if isinstance(other, AliasMapping):
             other._aliases.update(self._aliases)
         return res
 
@@ -301,7 +299,7 @@ class AliasDict(MutableMapping, Hashable, Copyable):
         return
     def alias(self, target, *aliases):
         if any(alias in self._data for alias in aliases):
-            raise KeyError("Alias {!r} already exists as a target in AliasDict {!s}".format(item, object.__repr__(self)))
+            raise KeyError("Alias {!r} already exists as a target in AliasMapping {!s}".format(item, object.__repr__(self)))
 
         create_count = 0
         for alias in aliases:
@@ -319,10 +317,13 @@ class AliasDict(MutableMapping, Hashable, Copyable):
         return '{!r} {!r}'.format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, iterable)))
     __repr__ = __str__
 
-class HookedDict(AliasDict):
+    def __getattr__(self, attribute):
+        return getattr(self._data, attribute)
+
+class HookMapping(AliasMapping):
     """A dictionary that allows one to hook assignment of a particular key"""
-    def __init__(self, iterable=None):
-        super(HookedDict, self).__init__(iterable)
+    def __init__(self, backing=None):
+        super(HookMapping, self).__init__(backing)
         self._hooks = {}
 
     def hook(self, key, F, args=(), kwds={}):
@@ -354,18 +355,38 @@ class HookedDict(AliasDict):
             return res if isinstance(res, bool) else True
         return True
 
+    def __iter__(self):
+        return super(HookMapping, self).__iter__()
+
+    def __len__(self):
+        return super(HookMapping, self).__len__()
+
+    def __contains__(self, key):
+        return super(HookMapping, self).__contains__(key)
+
     def __setitem__(self, key, value):
         res = self._execute_hook(key, value)
         if res:
             target = self._getkey(key)
-            return super(HookedDict, self).__setitem__(target, value)
+            return super(HookMapping, self).__setitem__(target, value)
         return
 
+    def __getitem__(self, key):
+        return super(HookMapping, self).__getitem__(key)
+
     def __delitem__(self, key):
-        target = self._getkey(key)
+        target = super(HookMapping, self)._getkey(key)
         if target in self._hooks:
             F = self.unhook(target)
-        return super(HookedDict,self).__delitem__(key)
+        return super(HookMapping, self).__delitem__(key)
+
+    def __getstate__(self):
+        res = super(HookMapping, self).__getstate__()
+        return res, self._hooks
+
+    def __setstate__(self, state):
+        res, self._hooks = state
+        super(HookMapping, self).__setstate__(res)
 
 class MergedMapping(MutableMapping):
     """A dictionary composed of other Mapping types"""
@@ -523,8 +544,8 @@ if __name__ == '__main__':
     if list(a) != ['bla','blah','blahh','heh']:
         raise ValueError
 
-    ### AliasDict aliases
-    a = AliasDict()
+    ### AliasMapping aliases
+    a = AliasMapping({})
     a.alias('fuck', 'a','b','c')
     a['blah'] = 10
     a['heh'] = 20
@@ -565,7 +586,7 @@ if __name__ == '__main__':
     if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
         raise ValueError
 
-    ### HookedDict signalling
+    ### HookMapping signalling
     class Signal(OSError): pass
 
     def ok(self, key, value):
@@ -573,7 +594,7 @@ if __name__ == '__main__':
     def ignore(self, key, value):
         raise Signal(False)
 
-    a = HookedDict()
+    a = HookMapping({})
     a['val1'] = 1
     a.alias('val1', 'alias1')
     a['alias1'] = 10
