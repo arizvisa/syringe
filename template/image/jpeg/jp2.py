@@ -579,12 +579,12 @@ class ReaderRequirements(pstruct.type):
         (lambda self: dyn.clone(u0, length=self['ML'].li.int()), 'DCM'),
 
         (u16, 'NSF'),
-        (lambda self: dyn.array(_SF, self['NSF'].li.int()), 'SF'),
+        (lambda self: dyn.array(self._SF, self['NSF'].li.int()), 'SF'),
 
         (lambda self: dyn.clone(u0, length=self['ML'].li.int()), 'SM'),
 
         (u16, 'NVF'),
-        (lambda self: dyn.array(_V, self['NVF'].li.int()), 'V'),
+        (lambda self: dyn.array(self._V, self['NVF'].li.int()), 'V'),
     ]
 
     def alloc(self, **fields):
