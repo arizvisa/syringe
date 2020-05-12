@@ -115,6 +115,12 @@ class OrderedSet(MutableSet, Hashable, Copyable):
     def __init__(self, iterable=None):
         items = iterable or []
         self._order = {}
+        # FIXME: so it turns out that the lookdict() implementation only
+        #        checks the cached version of a hash when looking for a
+        #        key. if you implement your own object.__hash__ method,
+        #        depending on how you insert into the dict, the cached
+        #        hash for the key will not get updated resulting in all
+        #        membership checks failing.
 
         self._data = res = WeakLink()
         res.previous = res.next = res
@@ -163,9 +169,11 @@ class OrderedSet(MutableSet, Hashable, Copyable):
         return "{!s} {:s}".format(cls, ', '.join(map("{!r}".format, self)))
     __repr__ = __str__
 
-class OrderedDict(MutableMapping, Hashable, Copyable):
+class OrderedMapping(MutableMapping, Hashable, Copyable):
     def __hash__(self):
-        iterable = map(hash, enumerate(self.items()))
+        # FIXME: raise an exception if our keys have been modified which would
+        #        make this object non-hashable.
+        iterable = map(hash, enumerate(self.keys()))
         return functools.reduce(operator.xor, iterable, 0)
 
     def __getstate__(self):
@@ -230,10 +238,10 @@ class OrderedDict(MutableMapping, Hashable, Copyable):
         return "{!s} {:s}".format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, self.items())))
     __repr__ = __str__
 
-class AliasMapping(MutableMapping, Hashable, Copyable):
+class AliasMapping(Mapping, Hashable, Copyable):
     """A wrapper for a dictionary that allows one to create aliases for keys"""
     def __hash__(self):
-        iterable = map(hash, self.items())
+        iterable = map(hash, self.keys())
         return functools.reduce(operator.xor, iterable, hash(self._aliases))
 
     def __getstate__(self):
@@ -246,7 +254,7 @@ class AliasMapping(MutableMapping, Hashable, Copyable):
         res = backing or {}
         if not isinstance(res, (dict, Mapping)):
             raise TypeError(res)
-        self._data, self._aliases = res, OrderedDict()
+        self._data, self._aliases = res, OrderedMapping()
 
     # tools
     def _getkey(self, key):
@@ -272,6 +280,8 @@ class AliasMapping(MutableMapping, Hashable, Copyable):
     # abstract methods
     def __setitem__(self, key, value):
         res = self._getkey(key)
+        # FIXME: raise an exception if a key is being added as we're not allowed
+        #        to modify the keys of the backend dictionary.
         self._data[res] = value
 
     def __getitem__(self, key):
@@ -281,6 +291,8 @@ class AliasMapping(MutableMapping, Hashable, Copyable):
     def __delitem__(self, key):
         target = self._getkey(key)
         res = self._getaliases(target)
+        # FIXME: raise an exception when trying to remove a key, as we're not
+        #        allowed to modify the keys of the backend dictionary
         [ self._aliases.pop(alias) for alias in res ]
         del self._data[target]
 
@@ -391,6 +403,11 @@ class HookMapping(AliasMapping):
 class MergedMapping(MutableMapping):
     """A dictionary composed of other Mapping types"""
     __slots__ = ['_cache', '_data']
+
+    # FIXME: the correct way to implement this will actually be to keep
+    #        track of the location of each mapping so that we can manually
+    #        update it as the lookdict() implementation does not support
+    #        objects where the hash can change.
 
     def __init__(self):
         super(MergedMapping, self).__init__()
@@ -518,31 +535,33 @@ class MergedMapping(MutableMapping):
 
 if __name__ == '__main__':
 
-    ### OrderedDict order
-    a = OrderedDict()
-    a[0] = None
-    a[1] = None
-    a[2] = None
-    a[3] = None
-    a[4] = None
-    a[-5] = None
-    a[-4] = None
-    a[-3] = None
-    a[-2] = None
-    a[-1] = None
-    if list(a.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
-        raise ValueError
+    ### OrderedMapping order
+    if True:
+        a = OrderedMapping()
+        a[0] = None
+        a[1] = None
+        a[2] = None
+        a[3] = None
+        a[4] = None
+        a[-5] = None
+        a[-4] = None
+        a[-3] = None
+        a[-2] = None
+        a[-1] = None
+        if list(a.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
+            raise ValueError
 
     ### OrderedSet order
-    a = OrderedSet( ('bla','blah','blahh') )
-    a.add('meh')
-    a.add('hmm')
-    a.add('heh')
-    a.discard('hmm')
-    a.remove('meh')
+    if True:
+        a = OrderedSet( ('bla','blah','blahh') )
+        a.add('meh')
+        a.add('hmm')
+        a.add('heh')
+        a.discard('hmm')
+        a.remove('meh')
 
-    if list(a) != ['bla','blah','blahh','heh']:
-        raise ValueError
+        if list(a) != ['bla','blah','blahh','heh']:
+            raise ValueError
 
     ### AliasMapping aliases
     a = AliasMapping({})
@@ -550,41 +569,46 @@ if __name__ == '__main__':
     a['blah'] = 10
     a['heh'] = 20
     a['fuck'] = True
-    if not a['fuck']:
-        raise ValueError
-    a.alias('fuck', 'a', 'b', 'c')
-    if set(a.keys()) != {'fuck', 'blah', 'heh'} | {'a', 'b', 'c'}:
-        raise ValueError
-    if any(a[item] != a['fuck'] for item in 'abc'):
-        raise ValueError
-    a['b'] = 'huh'
-    if any(a[item] != 'huh' for item in 'abc') or a['fuck'] != 'huh':
-        raise ValueError
+
+    if True:
+        if not a['fuck']:
+            raise ValueError
+        a.alias('fuck', 'a', 'b', 'c')
+        if set(a.keys()) != {'fuck', 'blah', 'heh'} | {'a', 'b', 'c'}:
+            raise ValueError
+        if any(a[item] != a['fuck'] for item in 'abc'):
+            raise ValueError
+        a['b'] = 'huh'
+        if any(a[item] != 'huh' for item in 'abc') or a['fuck'] != 'huh':
+            raise ValueError
 
     ## AliasDict unalias a non-alias
-    try:
-        a.unalias('heh')
-    except KeyError:
-        pass
-    else:
-        raise ValueError
+    if True:
+        try:
+            a.unalias('heh')
+        except KeyError:
+            pass
+        else:
+            raise ValueError
 
     ## AliasDict unalias an alias target (non-alias)
-    try:
-        a.unalias('fuck')
-    except KeyError:
-        pass
-    else:
-        raise ValueError
+    if True:
+        try:
+            a.unalias('fuck')
+        except KeyError:
+            pass
+        else:
+            raise ValueError
 
     ## AliasDict unalias some aliases
-    a.unalias('a')
-    a.unalias('b')
-    if set(a.aliases()) != {'c'}:
-        raise ValueError
+    if True:
+        a.unalias('a')
+        a.unalias('b')
+        if set(a.aliases()) != {'c'}:
+            raise ValueError
 
-    if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
-        raise ValueError
+        if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
+            raise ValueError
 
     ### HookMapping signalling
     class Signal(OSError): pass
@@ -594,12 +618,12 @@ if __name__ == '__main__':
     def ignore(self, key, value):
         raise Signal(False)
 
-    if True:
-        a = HookMapping({})
-        a['val1'] = 1
-        a.alias('val1', 'alias1')
-        a['alias1'] = 10
+    a = HookMapping({})
+    a['val1'] = 1
+    a.alias('val1', 'alias1')
+    a['alias1'] = 10
 
+    if True:
         a['val2'] = 0
         res = a.hook('val2', ok)
         try:
@@ -609,6 +633,7 @@ if __name__ == '__main__':
         else:
             raise ValueError
 
+    if True:
         a.alias('val2', 'alias2')
         try:
             a['alias2'] = 500
@@ -617,6 +642,7 @@ if __name__ == '__main__':
         else:
             raise ValueError
 
+    if True:
         a['val3'] = 20
         a.hook('val3', ignore)
         try:
@@ -638,10 +664,10 @@ if __name__ == '__main__':
         else:
             raise ValueError
 
-    ### WeakSet reference of OrderedDict
+    ### WeakSet reference of OrderedMapping
     if True:
-        x = OrderedDict(dict(key1=1, key2=3))
-        y = OrderedDict(dict(key1=3, key2=1))
+        x = OrderedMapping(dict(key1=1, key2=3))
+        y = OrderedMapping(dict(key1=3, key2=1))
         state = {item.copy() for item in [x, y]}
         weak = weakref.WeakSet(state)
         if set(weak) != state:
@@ -666,7 +692,7 @@ if __name__ == '__main__':
         def __setstate__(self, state):
             return super(MockDict, self).__setstate__(state)
         def __hash__(self):
-            iterable = map(hash, sorted(self.items()))
+            iterable = map(hash, sorted(self.keys()))
             return functools.reduce(operator.xor, iterable, 0)
         def __init__(self, **items):
             self._data = items
@@ -717,7 +743,7 @@ if __name__ == '__main__':
             raise ValueError
 
     ## MergedMapping single-dict fetch and update
-    if False:
+    if True:
         M = MergedMapping()
         M.add(b)
         if M['bkey2'] != b['bkey2']:
@@ -728,7 +754,7 @@ if __name__ == '__main__':
         b['bkey1'] = 0
 
     ## MergedMapping multiple-dict fetch and update
-    if False:
+    if True:
         M = MergedMapping()
         M.add(b)
         M.add(e)
@@ -769,52 +795,53 @@ if __name__ == '__main__':
         M.remove(e)
 
     ## MergedMapping multiple-dict multiple-fetch
-    M = MergedMapping()
-    M.add(b)
-    M.add(c)
-    M.add(d)
-    M.add(e)
+    if True:
+        M = MergedMapping()
+        M.add(b)
+        M.add(c)
+        M.add(d)
+        M.add(e)
 
-    if b not in M._data:
-        raise ValueError
-    if c not in M._data:
-        raise ValueError
-    if d not in M._data:
-        raise ValueError
-    if e not in M._data:
-        raise ValueError
+        if b not in M._data:
+            raise ValueError
+        if c not in M._data:
+            raise ValueError
+        if d not in M._data:
+            raise ValueError
+        if e not in M._data:
+            raise ValueError
 
-    # XXX: for some reason modifying any of the references in the
-    #      dictionaries results in them not being found in any set/dict
-    #      despite their hash and values matching.
+        # XXX: for some reason modifying any of the references in the
+        #      dictionaries results in them not being found in any set/dict
+        #      despite their hash and values matching.
 
-    M['bkey1'] = 41
-    M['ckey1'] = 42
-    M['dkey1'] = 43
+        M['bkey1'] = 41
+        M['ckey1'] = 42
+        M['dkey1'] = 43
 
-    if b['bkey1'] != 41:
-        raise ValueError
-    if c['ckey1'] != 42:
-        raise ValueError
-    if d['dkey1'] != 43:
-        raise ValueError
+        if b['bkey1'] != 41:
+            raise ValueError
+        if c['ckey1'] != 42:
+            raise ValueError
+        if d['dkey1'] != 43:
+            raise ValueError
 
-    M.remove(e)
+        M.remove(e)
 
-    M['bkey1'] = 21
-    M['ckey1'] = 22
-    M['dkey1'] = 23
+        M['bkey1'] = 21
+        M['ckey1'] = 22
+        M['dkey1'] = 23
 
-    if e['bkey1'] != 41:
-        raise ValueError
-    if e['ckey1'] != 42:
-        raise ValueError
-    if e['dkey1'] != 43:
-        raise ValueError
+        if e['bkey1'] != 41:
+            raise ValueError
+        if e['ckey1'] != 42:
+            raise ValueError
+        if e['dkey1'] != 43:
+            raise ValueError
 
-    if b['bkey1'] != 21:
-        raise ValueError
-    if c['ckey1'] != 22:
-        raise ValueError
-    if d['dkey1'] != 23:
-        raise ValueError
+        if b['bkey1'] != 21:
+            raise ValueError
+        if c['ckey1'] != 22:
+            raise ValueError
+        if d['dkey1'] != 23:
+            raise ValueError
