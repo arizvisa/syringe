@@ -200,53 +200,54 @@ class ImageHeader(pstruct.type):
         (_Boolean, 'IPR'),
     ]
 
+class Component(pbinary.struct):
+    _fields_ = [
+        (1, 'Signed'),
+        (7, 'BitDepth'),
+    ]
+
+    def BytesPerComponent(self):
+        res = self['BitDepth']
+        return (7 + res) // 8 * 8
+
 @Boxes.define
 class BitsPerComponent(pbinary.blockarray):
     type = b'\x62\x70\x63\x63'
-
-    class Component(pbinary.struct):
-        _fields_ = [
-            (1, 'Signed'),
-            (7, 'BitDepth'),
-        ]
     _object_ = Component
 
 @Boxes.define
 class Palette(pstruct.type):
     type = b'\x70\x63\x6c\x72'
 
-    class _BC(pstruct.type):
-        class _B(pbinary.struct):
-            _fields_ = [
-                (1, 'Signed'),
-                (7, 'BitDepth'),
-            ]
+    class ComponentEntry(pbinary.array):
+        pass
 
-        def __C(self):
-            try:
-                p = self.getparent(Palette)
-                components = p['NPC'].li.int()
+    def __C(self):
+        B = self['B'].li
+        def _object_(self, Components=B):
+            res = Components[len(self.value)]
+            if res['Signed']:
+                return -(1 + res['BitDepth'])
 
-            except ptypes.error.NotFoundError:
-                components = 0
-
-            res = self['B'].li
-            return dyn.block((res['BitDepth'] + 7) // 8 * components)
-
-        _fields_ = [
-            (_B, 'B'),
-            (__C, 'C'),
-        ]
+            # Bit-depth is actually based by +1
+            return 1 + res['BitDepth']
+        t = dyn.clone(Palette.ComponentEntry, length=len(B), _object_=_object_)
+        return dyn.clone(parray.type, length=self['NE'].li.int(), _object_=t)
 
     _fields_ = [
         (u16, 'NE'),
         (u8, 'NPC'),
-        (lambda self: dyn.array(self._BC, 1 + self['NE'].li.int()), 'BC'),
+        (lambda self: dyn.clone(pbinary.array, _object_=Component, length=self['NPC'].li.int()), 'B'),
+        (__C, 'C'),
     ]
 
     def alloc(self, **fields):
         res = super(Palette, self).alloc(**fields)
-        return res if operator.contains(fields, 'NE') else res.set(NE=len(res['BC']))
+        if not operator.contains(fields, 'NPC'):
+            res.set(NPC=len(res['B']))
+        if not operator.contains(fields, 'NE'):
+            res.set(NE=len(res['C']))
+        return res
 
 @Boxes.define
 class ComponentMapping(parray.block):
