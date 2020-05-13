@@ -214,38 +214,39 @@ class BitsPerComponent(pbinary.blockarray):
 @Boxes.define
 class Palette(pstruct.type):
     type = b'\x70\x63\x6c\x72'
-    class _B(pbinary.struct):
-        _fields_ = [
-            (1, 'Signed'),
-            (7, 'BitDepth'),
-        ]
 
-    def __C(self):
-        res = self['NPC'].li.int()
-        return dyn.block(res * self['NE'].li.int())
+    class _BC(pstruct.type):
+        class _B(pbinary.struct):
+            _fields_ = [
+                (1, 'Signed'),
+                (7, 'BitDepth'),
+            ]
+
+        def __C(self):
+            try:
+                p = self.getparent(Palette)
+                components = p['NPC'].li.int()
+
+            except ptypes.error.NotFoundError:
+                components = 0
+
+            res = self['B'].li
+            return dyn.block((res['BitDepth'] + 7) // 8 * components)
+
+        _fields_ = [
+            (_B, 'B'),
+            (__C, 'C'),
+        ]
 
     _fields_ = [
         (u16, 'NE'),
         (u8, 'NPC'),
-        (_B, 'B'),
-        (__C, 'C'),
+        (lambda self: dyn.array(self._BC, 1 + self['NE'].li.int()), 'BC'),
     ]
 
     def alloc(self, **fields):
         res = super(Palette, self).alloc(**fields)
-        cb = res['C'].size()
-        if operator.contains(fields, 'NE'):
-            return res.set(NPC=cb // res['NE'].int())
-        elif operator.contains(fields, 'NPC'):
-            return res.set(NE=cb // res['NPC'].int())
-
-        # try and figure out the least number of components
-        # required to store the 'C' field
-        for npc in range(cb):
-            if cb % npc == 0:
-                return res.set(NPC=npc, NE=cb // npc)
-            continue
-        return res
+        return res if operator.contains(fields, 'NE') else res.set(NE=len(res['BC']))
 
 @Boxes.define
 class ComponentMapping(parray.block):
