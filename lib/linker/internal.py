@@ -169,8 +169,7 @@ class OrderedSet(MutableSet, Hashable, Copyable):
         return
 
     def __str__(self):
-        cls = self.__class__
-        return "{!s} {:s}".format(cls, ', '.join(map("{!r}".format, self)))
+        return "{!s} {:s}".format(object.__repr__(self), ', '.join(map("{!r}".format, self)))
     __repr__ = __str__
 
 class OrderedMappingItemsView(ItemsView):
@@ -362,7 +361,7 @@ class AliasMapping(Mapping, Hashable, Copyable):
     def __str__(self):
         cls = self.__class__
         iterable = ((key, self[key]) for key in self.keys())
-        return '{!r} {!r}'.format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, iterable)))
+        return '{!s} {!r}'.format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, iterable)))
     __repr__ = __str__
 
     def __getattr__(self, attribute):
@@ -439,11 +438,6 @@ class HookMapping(AliasMapping):
 class MergedMapping(MutableMapping, Copyable):
     """A dictionary composed of other Mapping types"""
     __slots__ = '_cache', '_data'
-
-    # FIXME: the correct way to implement this will actually be to keep
-    #        track of the location of each mapping so that we can manually
-    #        update it as the lookdict() implementation does not support
-    #        objects where the hash can change.
 
     def __init__(self):
         super(MergedMapping, self).__init__()
@@ -583,7 +577,7 @@ class MergedMapping(MutableMapping, Copyable):
         return res
 
     def __repr__(self):
-        return '{:s} {:s} {!r}'.format(object.__repr__(self), ','.join(map(object.__repr__,self._data)), {k:self[k] for k in self.keys()})
+        return '{!s} ({:d})[{:s}] {!r}'.format(object.__repr__(self), len(self._data), ','.join(map(object.__repr__, self._data)), {k:self[k] for k in self.keys()})
 
 if __name__ == '__main__':
 
@@ -888,9 +882,6 @@ if __name__ == '__main__':
         else:
             raise ValueError
 
-        # XXX: for some reason modifying any of the references in the
-        #      dictionaries results in them not being found in any set/dict
-
         M.remove(b)
         M.remove(c)
         M.remove(d)
@@ -912,10 +903,6 @@ if __name__ == '__main__':
             raise ValueError
         if e not in M._data:
             raise ValueError
-
-        # XXX: for some reason modifying any of the references in the
-        #      dictionaries results in them not being found in any set/dict
-        #      despite their hash and values matching.
 
         M['bkey1'] = 41
         M['ckey1'] = 42
