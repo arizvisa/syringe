@@ -1,5 +1,4 @@
 from . import store
-from .store import BaseAddress
 
 class linker(store.container):
     def __repr__(self):
@@ -10,13 +9,13 @@ class linker(store.container):
     def getexternals(self):
         return []
     def getglobals(self):
-        return super(linker,self).getglobals() + super(linker,self).getexternals()
+        return super(linker, self).getglobals() + super(linker, self).getexternals()
 
     def prepare(self, store):
         '''Imports symbol/segment info from the provided store'''
         # segments
-        for n in store.listsegments():
-            self.addsegment(n, -1, n, store)
+        for item in store.listsegments():
+            self.addsegment(item, -1, item, store)
 
         # import externals from the store, but without name translation
         externals = store.getexternals()

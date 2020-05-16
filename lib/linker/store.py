@@ -1,7 +1,6 @@
-import ptypes,operator,itertools
-import UserDict,collections
+import functools, itertools, types, builtins, operator, six
+import collections
 from . import internal
-from .internal import sparse
 
 # do we need to implement hooking on symbol assignment?
 
@@ -15,19 +14,26 @@ class Scope:
 
 class Permissions(set):
     """Segment permissions"""
-    S,R,W,X = 8,4,2,1
-    Unmapped = 0
-    __map = {Unmapped:'Unmapped',R:'R',W:'W',X:'X',S:'S'}
-    __unmap = dict((v,k) for k,v in __map.items())
+    S, R, W, X, Unmapped = 8, 4, 2, 1, 0
+
+    __map = {Unmapped: 'Unmapped', R: 'R', W: 'W', X: 'X', S: 'S'}
+    __unmap = {value : key for key, value in __map.items()}
+
     def add(self, value):
         if value in self.__unmap.keys():
             return self.add(self.__unmap[value])
-        assert value in (self.R,self.W,self.X,self.S,self.Unmapped)
+
+        if value not in {self.R, self.W, self.X, self.S, self.Unmapped}:
+            raise AssertionError
+
         if value == self.Unmapped:
             return self.clear()
-        return super(Segments.Permissions,self).add(value)
+
+        return super(Segments.Permissions, self).add(value)
+
     def __repr__(self):
-        return '{:s}({!r})'.format(type(self).__name__,map(self.__map.get, self))
+        cls = self.__class__
+        return '{:s}({!r})'.format(cls.__name__, map(self.__map.get, self))
 
 class Relocations(internal.OrderedSet): # ordered-set?
     """This represents relocations that are in a store.
@@ -54,7 +60,7 @@ class Relocations(internal.OrderedSet): # ordered-set?
 #    getbysegment    # gets the relocations for a specific segment
 #
 
-class Symbols(object, UserDict.DictMixin):
+class Symbols(internal.MutableMapping):
     """This object contains a symboltable.
 
     Symbols here can be modified to different addresses. This values here will be used
@@ -74,9 +80,10 @@ class Symbols(object, UserDict.DictMixin):
     All symbol assignments are done by offset from base of parent.
     """
 
-    __slots__ = ['_data', '_scope', '_store']
+    __slots__ = '_data', '_scope', '_store'
+
     def __init__(self, store):
-        self._data = internal.AliasDict()
+        self._data = internal.AliasMapping()
         self._scope = {
             Scope.Global : internal.OrderedSet(),
             Scope.Local : internal.OrderedSet(),
@@ -84,46 +91,58 @@ class Symbols(object, UserDict.DictMixin):
         }
         self._store = store
 
-    # overloads
+    # implementations
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        for item in self._data:
+            yield item
+        return
+
     def __getitem__(self, name):
         return self._data[name]
+
     def __setitem__(self, name, value):
         if name in self._data:
             self._data[name] = value
             return
-        raise KeyError, "Symbol %r does not exist in %s"% (name, object.__repr__(self))
-    def keys(self):
-        return self._data.keys()
+        raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
+
+    def __delitem__(self, name):
+        raise KeyError("Refusing to remove symbol {!r} from {!s}".format(name, object.__repr__(self)))
 
     # properties
-    data = property(fget=lambda s: s._data)
-    scope = property(fget=lambda s: s._scope)
-    store = property(fget=lambda s: s._store)
+    data = property(fget=lambda self: self._data)
+    scope = property(fget=lambda self: self._scope)
+    store = property(fget=lambda self: self._store)
 
     # tools
     def _findscope(self, name):
-        for sc,set in self._scope.iteritems():
+        for sc, set in self._scope.items():
             if name in set:
                 return sc
             continue
-        raise KeyError, "Symbol %r does not exist in %s"% (name, object.__repr__(self))
+        raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
 
     # single symbols
     def add(self, name, scope=Scope.Local):
-        """Reserve a slot in /scope/ for the symbol /name/"""
+        """Reserve a slot in `scope` for the symbol `name`"""
 
         try:
             sc = self._findscope(name)
+
         except KeyError:
             pass
+
         else:
-            raise KeyError, "Symbol %r already exists in %r : %s"% (name, sc, object.__repr__(self._scope[scope]))
+            raise KeyError("Symbol {!r} already exists in {!r}: {!s}".format(name, sc, object.__repr__(self._scope[scope])))
 
         self._scope[scope].add(name)
         self._data[name] = None
 
     def remove(self, name):
-        """Remove the slot allocated for symbol /name/. This will also remove it from it's scope"""
+        """Remove the slot allocated for symbol `name`. This will also remove it from its scope."""
         sc = self._findscope(name)
         self._scope[sc].remove(name)
         return self._data.pop(name)
@@ -131,30 +150,31 @@ class Symbols(object, UserDict.DictMixin):
     # multiple symbols
     def apply(self, fn, scope=None):
         if scope is None:
-            for n in self._data.keys():
-                self._data[n] = fn(self._data[n])
+            for item in self._data.keys():
+                self._data[item] = fn(self._data[item])
             return
 
-        for n in self._scope[scope]:
-            self._data[n] = fn(self._data[n])
+        for item in self._scope[scope]:
+            self._data[item] = fn(self._data[item])
         return
 
     def update(self, iterable):
-        """Update the table with the specified /iterable/."""
+        """Update the table with the specified `iterable`."""
         res = {}
-        for name,value in iterable:
+        for name, value in iterable:
             if name not in self._data:
-                raise KeyError, "Symbol %r does not exist in %s"% (name, object.__repr__(self))
+                raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
             res[name] = self._data[name]
             self._data[name] = value
         return res
 
     def merge(self, other):
-        assert isinstance(other, internal.AliasDict)
+        if not isinstance(other, internal.AliasDict):
+            raise AssertionError
 
-        count = self._data.viewkeys().difference(other._data.viewkeys())
+        count = set(self._data) - set(other._data)
         self._data.update(other)
-        [self._scope[sc].update(data) for sc,data in other._scope]
+        [self._scope[sc].update(data) for sc, data in other._scope]
         return count
 
     # aliases
@@ -170,9 +190,9 @@ class Symbols(object, UserDict.DictMixin):
     def getlocals(self): return set(self._scope[Scope.Local])
     def getexternals(self): return set(self._scope[Scope.External])
     def getaliases(self): return set(self._data.aliases())
-    def getundefined(self): return set(k for k,v in self._data.items() if v is None)
+    def getundefined(self): return set(key for key, value in self._data.items() if value is None)
 
-class Segments(collections.MutableMapping):
+class Segments(internal.Mapping):
     """This object contains the segments for a store.
 
     It is responsible for fetching and modifying segment data. If a segment is rebased,
@@ -186,9 +206,12 @@ class Segments(collections.MutableMapping):
     # getsegmentdata(index) = buffer(...)
 
     @property
-    def symbols(self): return self._symbols
+    def symbols(self):
+        return self._symbols
+
     @property
-    def store(self): return self._store
+    def store(self):
+        return self._store
 
     def __init__(self, *symbols):
         # current symbols and their values
@@ -203,11 +226,14 @@ class Segments(collections.MutableMapping):
         # backing file
         self._store = symbols.store
 
-    # overloads
+    # implementations
+    def __iter__(self):
+        for item in self._info:
+            yield item
+        return
+
     def __getitem__(self, name):
         return self._info[name]
-    def keys(self):
-        return self._info.keys()
 
     # single segment creation and enumeration
     def allocate(self, identifier):
@@ -228,15 +254,16 @@ class Segments(collections.MutableMapping):
 
     def list(self):
         return self._segments.keys()
+
     def copy(self, identifier):
         return self._segments[identifier]
+
     def drop(self, identifier):
         return self._segments.pop(identifier)
 
     # FIXME
     def findsegmentbyoffset(self, ofs):
-        ranges = [(ofs,self.getsegmentlength(n)) for n in self.listsegments()]
-
+        ranges = [(ofs, self.getsegmentlength(item)) for item in self.listsegments()]
 
     #owner = store
     #listsegments
@@ -311,7 +338,8 @@ class container(store):
 
 if __name__ == '__main__':
     # symbols
-    self = a = Symbols()
+    self = a = Symbols(None)
+    b = a._data
     print(a.add('_main'))
     print(a.add('start'))
     print(a.add('localfunction'))
@@ -327,5 +355,3 @@ if __name__ == '__main__':
     #a.unalias('EntryPoint')
     print(a['EntryPoint'])
     print(self.remove('start'))
-
-
