@@ -1,5 +1,5 @@
 import functools, itertools, types, builtins, operator, six
-import abc, collections
+import abc, collections, copy
 from . import base
 
 # do we need to implement hooking on symbol assignment?
@@ -197,150 +197,213 @@ class Symbols(base.MutableMapping):
     def getundefined(self):
         return {key for key in self._data if self._data[key] is None}
 
-class Segments(base.Mapping):
-    """This object contains the segments for a store.
+#class Segments(base.Mapping):
+#    """This object contains the segments for a store.
+#
+#    It is responsible for fetching and modifying segment data. If a segment is rebased,
+#    then this will update all the relative symbols to the new base address.
+#
+#    This is responsible for populating the symbol table with the section addresses too.
+#
+#    Searching for an address is defined here.
+#    """
+#    # getsegmentinfo(identifier) = (symbolname, offset, length, permissions)
+#    # getsegmentdata(index) = buffer(...)
+#
+#    @property
+#    def symbols(self):
+#        return self._symbols
+#
+#    @property
+#    def store(self):
+#        return self._store
+#
+#    def __init__(self, *symbols):
+#        # current symbols and their values
+#        self._data = base.HookedDict()
+#
+#        # list of segments and their segmentinfo
+#        self._info = base.OrderedDict()
+#
+#        # list of original symbols for the segment
+#        self._symbols = Symbols()
+#
+#        # backing file
+#        self._store = symbols.store
+#
+#    # implementations
+#    def __iter__(self):
+#        for item in self._info:
+#            yield item
+#        return
+#
+#    def __getitem__(self, name):
+#        return self._info[name]
+#
+#    # single segment creation and enumeration
+#    def allocate(self, identifier):
+#        # store the properties for the segment
+#        name, perms, ofs, length = self.store.getsegmentinfo(identifier)
+#        self._info[name] = identifier, perms, length
+#
+#        # add a symbol for identifier
+#        self.symbols.add(name, scope=Scope.Local)
+#        self.symbols[name] = ofs
+#
+#        self.hook(name, updatesymbols)
+#        return name
+#
+#    def addsymbol(self, name, offset):
+#        # FIXME: fetch symbols from store related to segment
+#        raise NotImplementedError
+#
+#    def list(self):
+#        return self._segments.keys()
+#
+#    def copy(self, identifier):
+#        return self._segments[identifier]
+#
+#    def drop(self, identifier):
+#        return self._segments.pop(identifier)
+#
+#    # FIXME
+#    def findsegmentbyoffset(self, ofs):
+#        ranges = [(ofs, self.getsegmentlength(item)) for item in self.listsegments()]
+#
+#    #owner = store
+#    #listsegments
+#    #getsegmentlength
+#    #getsegmentprotection
+#    #getsegment
+#    #findsegmentbyoffset
+#    #getsymbols
+#    #__getitem__[index or name] = offset or baseaddress
 
-    It is responsible for fetching and modifying segment data. If a segment is rebased,
-    then this will update all the relative symbols to the new base address.
+class Segment(base.AbstractBaseClass):
+    @abc.abstractmethod
+    def name(self):
+        '''Return the name of the segment.'''
+        raise NotImplementedError
 
-    This is responsible for populating the symbol table with the section addresses too.
+    @abc.abstractmethod
+    def data(self):
+        '''Return the bytes of the segment.'''
+        raise NotImplementedError
 
-    Searching for an address is defined here.
-    """
-    # getsegmentinfo(identifier) = (symbolname, offset, length, permissions)
-    # getsegmentdata(index) = buffer(...)
+    @abc.abstractmethod
+    def offset(self):
+        '''Return the offset of the segment.'''
+        raise NotImplementedError
 
-    @property
+    @abc.abstractmethod
+    def length(self):
+        '''Return the size of the segment.'''
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def protection(self):
+        '''Return the permissions of the segment as a set.'''
+        raise NotImplementedError
+
+    @abc.abstractmethod
     def symbols(self):
-        return self._symbols
+        """Yield the identifer, offset or value, size, relocation of each symbol within the segment.
 
-    @property
-    def store(self):
-        return self._store
-
-    def __init__(self, *symbols):
-        # current symbols and their values
-        self._data = base.HookedDict()
-
-        # list of segments and their segmentinfo
-        self._info = base.OrderedDict()
-
-        # list of original symbols for the segment
-        self._symbols = Symbols()
-
-        # backing file
-        self._store = symbols.store
-
-    # implementations
-    def __iter__(self):
-        for item in self._info:
-            yield item
-        return
-
-    def __getitem__(self, name):
-        return self._info[name]
-
-    # single segment creation and enumeration
-    def allocate(self, identifier):
-        # store the properties for the segment
-        name, perms, ofs, length = self.store.getsegmentinfo(identifier)
-        self._info[name] = identifier, perms, length
-
-        # add a symbol for identifier
-        self.symbols.add(name, scope=Scope.Local)
-        self.symbols[name] = ofs
-
-        self.hook(name, updatesymbols)
-        return name
-
-    def addsymbol(self, name, offset):
-        # FIXME: fetch symbols from store related to segment
+        The `relocation` that is yielded is specific to the implementation and is up to the implementor.
+        """
         raise NotImplementedError
 
-    def list(self):
-        return self._segments.keys()
-
-    def copy(self, identifier):
-        return self._segments[identifier]
-
-    def drop(self, identifier):
-        return self._segments.pop(identifier)
-
-    # FIXME
-    def findsegmentbyoffset(self, ofs):
-        ranges = [(ofs, self.getsegmentlength(item)) for item in self.listsegments()]
-
-    #owner = store
-    #listsegments
-    #getsegmentlength
-    #getsegmentprotection
-    #getsegment
-    #findsegmentbyoffset
-    #getsymbols
-    #__getitem__[index or name] = offset or baseaddress
-
-class Segment(object):
-    def name(self):
-        raise NotImplementedError
-
-class Store(base.OrderedMapping):
-    """This is the base class that a user must implement to perform the work of a store.
-
-    This object will be used to generate segments, and apply relocations using the symbols
-    parsed out of the user's implementation.
-    """
-    #symbol = object
-    #relocations = object
-    #segments = object
-
-    #baseaddress = int   # assigning here will update all symbols (?)
-    #name = str
-
-    ## properties
-    __baseaddress = None
-    @property
-    def baseaddress(self):
-        return self.__baseaddress
-    @baseaddress.setter
-    def baseaddress(self, address):
-        (res, self.__baseaddress) = (self.__baseaddress, address)
-        return res
-
-    __name = None
-    @property
-    def name(self):
-        return self.__name or '<unnamed>'
-
-    ## methods
+class Store(base.OrderedMapping, base.ReferenceFrom):
+    @abc.abstractmethod
     def __init__(self):
-        self.relocations = Relocations()
-        self.segments = Segments()
-        self.symbol = Symbols()
+        self._segments = base.OrderedSet()
+        return super(Store, self).__init__()
 
-    def load(self, data):
-        self._data = data
-
-        for i in range(self.getsegments()):
-            symbol, ofs, length, perms = self.getsegmentinfo(i)
-            self.segments.new(symbol)
-        return self
-
-    ## abstract methods an implementor must implement
     @abc.abstractmethod
-    def getsegment(self, name):
-        '''Return the bytes associated with the segment of the specified `name`.'''
+    def segments(self):
+        '''Yields each Segment contained within the store (non-cacheable).'''
         raise NotImplementedError
 
     @abc.abstractmethod
-    def getsegmentlength(self, name):
-        '''Return the size of the segment with the specified `name`.'''
-        return 0
+    def load_segment(self, seg):
+        '''Load the symbols for the given segment into store.'''
+        if seg in self._segments:
+            raise KeyError("Refusing to load already existing segment {!s} into store.".format(seg))
+
+        # Add our segment and return it so that an implementor can add its symbols
+        self._segments.add(seg)
+        return seg
 
     @abc.abstractmethod
-    def getsegmentprotection(self, name):
-        '''Return the permissions of the segment with the specified `name` as a set.'''
-        empty = []
-        return {item for item in empty}
+    def load(self, *args):
+        '''Load any symbols specific to the store.'''
+        for seg in self.segments():
+            seg = self.load_segment(seg)
+            self[seg.name()] = seg.offset()
+
+        # After loading the symbols for each segment, we need to lock our hash in
+        # place. We do this by make a copy of ourselves and then referencing that
+        # new copy since the keys shouldn't change anymore.
+        return self.of(copy.copy(self))
+
+#class Store(base.OrderedMapping):
+#    """This is the base class that a user must implement to perform the work of a store.
+#
+#    This object will be used to generate segments, and apply relocations using the symbols
+#    parsed out of the user's implementation.
+#    """
+#    #symbol = object
+#    #relocations = object
+#    #segments = object
+#
+#    #baseaddress = int   # assigning here will update all symbols (?)
+#    #name = str
+#
+#    ## properties
+#    __baseaddress = None
+#    @property
+#    def baseaddress(self):
+#        return self.__baseaddress
+#    @baseaddress.setter
+#    def baseaddress(self, address):
+#        (res, self.__baseaddress) = (self.__baseaddress, address)
+#        return res
+#
+#    __name = None
+#    @property
+#    def name(self):
+#        return self.__name or '<unnamed>'
+#
+#    ## methods
+#    def __init__(self):
+#        self.relocations = Relocations()
+#        self.segments = Segments()
+#        self.symbol = Symbols()
+#
+#    def load(self, data):
+#        self._data = data
+#
+#        for i in range(self.getsegments()):
+#            symbol, ofs, length, perms = self.getsegmentinfo(i)
+#            self.segments.new(symbol)
+#        return self
+#
+#    ## abstract methods an implementor must implement
+#    @abc.abstractmethod
+#    def getsegment(self, name):
+#        '''Return the bytes associated with the segment of the specified `name`.'''
+#        raise NotImplementedError
+#
+#    @abc.abstractmethod
+#    def getsegmentlength(self, name):
+#        '''Return the size of the segment with the specified `name`.'''
+#        return 0
+#
+#    @abc.abstractmethod
+#    def getsegmentprotection(self, name):
+#        '''Return the permissions of the segment with the specified `name` as a set.'''
+#        empty = []
+#        return {item for item in empty}
 
 class container(Store):
     """This object contains multiple stores.
