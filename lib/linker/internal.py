@@ -6,6 +6,7 @@ if sys.version_info.major < 3:
     Mapping = collections.Mapping
     MutableSet = collections.MutableSet
     MutableMapping = collections.MutableMapping
+    ItemsView = collections.ItemsView
 
 else:
     import collections.abc
@@ -13,6 +14,7 @@ else:
     Mapping = collections.abc.Mapping
     MutableMapping = collections.abc.MutableMapping
     MutableSet = collections.abc.MutableSet
+    ItemsView = collections.abc.ItemsView
 
 ### Some metaclasses to implement
 
@@ -89,10 +91,10 @@ class WeakLink(object):
     '''
     Ripped from http://code.activestate.com/recipes/576696/
     '''
-    __slots__ = ['__weakref__', 'previous', 'next', 'item']
+    __slots__ = '__weakref__', 'previous', 'next', 'item'
 
 class OrderedSet(MutableSet, Hashable, Copyable):
-    __slots__ = ['_data', '_order']
+    __slots__ = '_data', '_order'
 
     def __hash__(self):
         iterable = map(hash, enumerate(self))
@@ -137,7 +139,7 @@ class OrderedSet(MutableSet, Hashable, Copyable):
 
     def add(self, item):
         if item in self._order:
-            raise TypeError("Element already exists within set {!s}: {!r}".format(object.__repr__(self), value))
+            raise TypeError("Element already exists within set {!s}: {!r}".format(object.__repr__(self), item))
         res, root, last = WeakLink(), self._data, self._data.previous
         self._order[item] = res
 
@@ -171,19 +173,30 @@ class OrderedSet(MutableSet, Hashable, Copyable):
         return "{!s} {:s}".format(cls, ', '.join(map("{!r}".format, self)))
     __repr__ = __str__
 
+class OrderedMappingItemsView(ItemsView):
+    @classmethod
+    def _from_iterable(self, it):
+        return OrderedSet(it)
+
 class OrderedMapping(MutableMapping, Hashable, Copyable):
-    __slots__ = ['_data', '_order']
+    __slots__ = '_data', '_order', '_removed', '_update'
     def __hash__(self):
         # FIXME: raise an exception if our keys have been modified which would
         #        make this object non-hashable.
-        iterable = map(hash, enumerate(self.keys()))
+        iterable = map(hash, enumerate(self._order))
         return functools.reduce(operator.xor, iterable, 0)
 
     def __getstate__(self):
-        return self._data, self._order
+        available = (self._order | self._update) - self._removed
+        res = { key : self._data[key] for key in available }
+        return available, res
 
     def __setstate__(self, state):
-        self._data, self._order = state
+        res, self._data = state
+        self._order = OrderedSet(res)
+
+        empty = OrderedSet()
+        self._update, self._removed = empty, {item for item in empty}
 
     def __init__(self, iterable=None, **pairs):
         items = [item for item in pairs.items()]
@@ -193,48 +206,66 @@ class OrderedMapping(MutableMapping, Hashable, Copyable):
             items += [(key, value) for key, value in iterable or []]
 
         self._data = {key : value for key, value in items}
-        self._order = [key for key, _ in items]
+        self._order = OrderedSet(key for key, _ in items)
+        self._removed = {None for emptyset in []}
+        self._update = OrderedSet()
 
     # Python2-compatibility
     def viewkeys(self):
-        return { key for key, value in self.items() }
+        return { key for key in self.keys() }
     def viewvalues(self):
-        return { value for key, value in self.items() }
+        return [ value for value in self.values() ]
     def viewitems(self):
-        return { (key, value) for key, value in self.items() }
+        return OrderedSet((key, value) for key, value in self.items())
 
     def __len__(self):
-        return len(self._data)
+        return len(self._order - self._removed)
 
     def __iter__(self):
-        for index, key in enumerate(self._order[:]):
-            if key in self._data:
-                yield key
-            else:
-                self._order.pop(index)
-            continue
+        for index, key in enumerate((self._order | self._update) - self._removed):
+            yield key
         return
 
+    def items(self):
+        return OrderedMappingItemsView(self)
+
     def __getitem__(self, key):
+        available = self._order | self._update
+        if key not in available - self._removed:
+            raise KeyError(key)
         return self._data[key]
 
     def __setitem__(self, key, value):
-        if key in self._data:
-            # this is in linear time. we can probably optimize this out
-            # with a weakref, but i'm tired right now...
-            index = self._order.index(key)
-            self._order.pop(index)
 
+        # If our key is already missing, then we can re-enable it by removing
+        # the key from our removed set.
+        self._removed.discard(key)
+
+        # Check if our key doesn't exist. If it doesn't, then we need to create
+        # it. We don't want to tamper with our hash, so we simply add the key
+        # to our update set.
+        if all(key not in set for set in [self._order, self._update]):
+            self._update.add(key)
+
+        # Our key is either in our actual ordered set, or its in our update
+        # set. So it should now be safe to update its value.
         self._data[key] = value
-        self._order.append(key)
 
     def __delitem__(self, key):
-        if key not in self._data:
+        available = self._order | self._update
+        if key not in available - self._removed:
             raise KeyError(key)
 
-        # no need to update our _order because it'll be updated the
-        # next time we iterate through it
-        self._data.pop(key)
+        # If it's in our update set, then we can remove it without concern.
+        if key in self._update:
+            self._update.discard(key)
+            del(self._data[key])
+
+        # Otherwise to avoid tampering with the actual dictionary, we can just
+        # add it to our removed set so that the key appears to not exist.
+        else:
+            self._removed.add(key)
+        return
 
     def __str__(self):
         cls = self.__class__
@@ -243,7 +274,7 @@ class OrderedMapping(MutableMapping, Hashable, Copyable):
 
 class AliasMapping(Mapping, Hashable, Copyable):
     """A wrapper for a dictionary that allows one to create aliases for keys"""
-    __slots__ = ['_data', '_aliases']
+    __slots__ = '_data', '_aliases'
 
     def __hash__(self):
         iterable = map(hash, self.keys())
@@ -407,7 +438,7 @@ class HookMapping(AliasMapping):
 
 class MergedMapping(MutableMapping, Copyable):
     """A dictionary composed of other Mapping types"""
-    __slots__ = ['_cache', '_data']
+    __slots__ = '_cache', '_data'
 
     # FIXME: the correct way to implement this will actually be to keep
     #        track of the location of each mapping so that we can manually
@@ -558,7 +589,25 @@ if __name__ == '__main__':
 
     ### OrderedMapping order
     if True:
+        a = OrderedMapping((item, None) for item in itertools.chain(range(5), range(-5, 0)))
+
+        if list(a.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
+            raise ValueError
+
+    if True:
+        a = OrderedMapping((item, None) for item in itertools.chain(range(5), range(-5, 0)))
+
+        h = hash(a)
+        del(a[0])
+        if h != hash(a):
+            raise ValueError
+
+        if list(a.keys()) != [1,2,3,4,-5,-4,-3,-2,-1]:
+            raise ValueError
+
+    if True:
         a = OrderedMapping()
+        h = hash(a)
         a[0] = None
         a[1] = None
         a[2] = None
@@ -569,7 +618,39 @@ if __name__ == '__main__':
         a[-3] = None
         a[-2] = None
         a[-1] = None
+        if h != hash(a):
+            raise ValueError
         if list(a.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
+            raise ValueError
+
+    if True:
+        a = OrderedMapping()
+        h = hash(a)
+        a[0] = None
+        a[1] = None
+        a[2] = None
+        a[3] = None
+        a[4] = None
+        a[-5] = None
+        a[-4] = None
+        a[-3] = None
+        a[-2] = None
+        a[-1] = None
+        if h != hash(a):
+            raise ValueError
+
+        b = a.copy()
+        if hash(b) == hash(a):
+            raise ValueError
+
+        if list(b.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
+            raise ValueError
+
+        c = b.copy()
+        if hash(b) != hash(c):
+            raise ValueError
+
+        if list(c.keys()) != [0,1,2,3,4,-5,-4,-3,-2,-1]:
             raise ValueError
 
     ### OrderedSet order
@@ -628,7 +709,7 @@ if __name__ == '__main__':
         if set(a.aliases()) != {'c'}:
             raise ValueError
 
-        if dict(a.items()) != dict(blah=10, heh=20, fuck='huh'):
+        if dict(a.items()) != dict(blah=10, heh=20, fuck='huh', c='huh'):
             raise ValueError
 
     ### HookMapping signalling
