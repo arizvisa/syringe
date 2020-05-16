@@ -89,6 +89,39 @@ class Copyable(AbstractBaseClass):
             setattr(self, name, attribute)
         return
 
+class ReferenceFrom(AbstractBaseClass):
+    @staticmethod
+    def __subclass__():
+        return Resettable, {'of'}
+
+    def of(self, other):
+        cls = self.__class__
+        if not isinstance(other, cls):
+            raise TypeError(other)
+
+        # Try copying using the __slots__ attribute first
+        if all(hasattr(item, '__slots__') for item in [self, other]):
+            slots_s = {item for item in self.__slots__}
+            slots_o = {item for item in other.__slots__}
+            attributes = slots_s | slots_o
+
+        # Otherwise we'll try using the __dict__ attribute
+        elif all(hasattr(item, '__dict__') for item in [self, other]):
+            dict_s = {item for item in self.__dict__}
+            dict_o = {item for item in other.__dict__}
+            attributes = dict_s | dict_o
+
+        # If we found nothing, then we need to raise an error as there's
+        # no way for us to copy attributes from the other one.
+        else:
+            raise AttributeError
+
+        # Iterate through all of our attributes and copy them into ourselves
+        for attribute in attributes:
+            value = getattr(other, attribute)
+            setattr(self, attribute, value)
+        return self
+
 ### Core data structure implementations
 
 # Python3 doesn't have ordered sets...so we have to implement this ourselves
