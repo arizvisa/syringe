@@ -89,9 +89,11 @@ class WeakLink(object):
     '''
     Ripped from http://code.activestate.com/recipes/576696/
     '''
-    __slots__ = ['previous', 'next', 'item', '__weakref__']
+    __slots__ = ['__weakref__', 'previous', 'next', 'item']
 
 class OrderedSet(MutableSet, Hashable, Copyable):
+    __slots__ = ['_data', '_order']
+
     def __hash__(self):
         iterable = map(hash, enumerate(self))
         return functools.reduce(operator.xor, iterable, 0)
@@ -170,6 +172,7 @@ class OrderedSet(MutableSet, Hashable, Copyable):
     __repr__ = __str__
 
 class OrderedMapping(MutableMapping, Hashable, Copyable):
+    __slots__ = ['_data', '_order']
     def __hash__(self):
         # FIXME: raise an exception if our keys have been modified which would
         #        make this object non-hashable.
@@ -240,6 +243,8 @@ class OrderedMapping(MutableMapping, Hashable, Copyable):
 
 class AliasMapping(Mapping, Hashable, Copyable):
     """A wrapper for a dictionary that allows one to create aliases for keys"""
+    __slots__ = ['_data', '_aliases']
+
     def __hash__(self):
         iterable = map(hash, self.keys())
         return functools.reduce(operator.xor, iterable, hash(self._aliases))
@@ -400,7 +405,7 @@ class HookMapping(AliasMapping):
         res, self._hooks = state
         super(HookMapping, self).__setstate__(res)
 
-class MergedMapping(MutableMapping):
+class MergedMapping(MutableMapping, Copyable):
     """A dictionary composed of other Mapping types"""
     __slots__ = ['_cache', '_data']
 
@@ -420,6 +425,22 @@ class MergedMapping(MutableMapping):
         # be contained in the cache. We use an ordered set so we can prioritize
         # the dicts that are updated
         self._data = OrderedSet()
+
+    def __getstate__(self):
+        Findex = functools.partial(operator.getitem, { item : index for index, item in enumerate(self._data) })
+
+        # Pack a list of our backend mappings, and a lookup table that maps the tables in each symbol into the list.
+        return [ item for item in self._data ], { symbol : tuple(map(Findex, item)) for symbol, item in self._cache.items() }
+
+    def __setstate__(self, state):
+        data, symbols = state
+
+        # Create a closure that is responsible for converting an index into the mapping reference
+        Freference = functools.partial(operator.getitem, { index : item for index, item in enumerate(data) })
+
+        # Convert our backend mappings back into an OrderedSet, and recreate the symbol table
+        # so that each symbol contains a WeakSet that references the mappings from our backend set.
+        self._data, self._cache = OrderedSet(data), { symbol : weakref.WeakSet(map(Freference, items)) for symbol, items in symbols.items() }
 
     def _sync_cache(self, D):
         if not isinstance(D, Mapping):
