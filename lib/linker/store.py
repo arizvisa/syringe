@@ -1,6 +1,6 @@
 import functools, itertools, types, builtins, operator, six
-import collections
-from . import internal
+import abc, collections
+from . import base
 
 # do we need to implement hooking on symbol assignment?
 
@@ -35,7 +35,7 @@ class Permissions(set):
         cls = self.__class__
         return '{:s}({!r})'.format(cls.__name__, map(self.__map.get, self))
 
-class Relocations(internal.OrderedSet): # ordered-set?
+class Relocations(base.OrderedSet): # ordered-set?
     """This represents relocations that are in a store.
 
     There should be multiple relocation types that a store implementor must add to
@@ -46,10 +46,10 @@ class Relocations(internal.OrderedSet): # ordered-set?
         spot. The addresses of each allocated entry will need to be flattened to
         determine what is contiguous in order to allocate for it.
 
-    relocation = name,size,relo_type,base_type,target(?)
+    relocation = name, size, relo_type, base_type, target(?)
     name = symbolic identity
     size = number of bytes (16/32/64)
-    relo_type = virtual address,absolute address,offset,exact,specifc instruction
+    relo_type = virtual address, absolute address, offset, exact, specifc instruction
     base_type = relative to segment, relative to image, relative to target, relative to import table(?), relative to export table(?), relative to thunk table(?)
     target = some symbol, address, or index
     """
@@ -60,13 +60,13 @@ class Relocations(internal.OrderedSet): # ordered-set?
 #    getbysegment    # gets the relocations for a specific segment
 #
 
-class Symbols(internal.MutableMapping):
+class Symbols(base.MutableMapping):
     """This object contains a symboltable.
 
     Symbols here can be modified to different addresses. This values here will be used
     by the relocations object.
 
-    (?) Each symbol is represented by (module,name,scope).
+    (?) Each symbol is represented by (module, name, scope).
     If there is no module, then None will be used.
 
     There's 3 scopes available. Global,Local,External,Alias
@@ -83,11 +83,11 @@ class Symbols(internal.MutableMapping):
     __slots__ = '_data', '_scope', '_store'
 
     def __init__(self, store):
-        self._data = internal.AliasMapping()
+        self._data = base.AliasMapping()
         self._scope = {
-            Scope.Global : internal.OrderedSet(),
-            Scope.Local : internal.OrderedSet(),
-            Scope.External : internal.OrderedSet(),
+            Scope.Global : base.OrderedSet(),
+            Scope.Local : base.OrderedSet(),
+            Scope.External : base.OrderedSet(),
         }
         self._store = store
 
@@ -169,7 +169,7 @@ class Symbols(internal.MutableMapping):
         return res
 
     def merge(self, other):
-        if not isinstance(other, internal.AliasDict):
+        if not isinstance(other, base.AliasDict):
             raise AssertionError
 
         count = set(self._data) - set(other._data)
@@ -186,13 +186,18 @@ class Symbols(internal.MutableMapping):
         return self._data.unalias(name)[0]
 
     # general
-    def getglobals(self): return set(self._scope[Scope.Global])
-    def getlocals(self): return set(self._scope[Scope.Local])
-    def getexternals(self): return set(self._scope[Scope.External])
-    def getaliases(self): return set(self._data.aliases())
-    def getundefined(self): return set(key for key, value in self._data.items() if value is None)
+    def getglobals(self):
+        return self._scope[Scope.Global]
+    def getlocals(self):
+        return self._scope[Scope.Local]
+    def getexternals(self):
+        return self._scope[Scope.External]
+    def getaliases(self):
+        return self._data.aliases()
+    def getundefined(self):
+        return {key for key in self._data if self._data[key] is None}
 
-class Segments(internal.Mapping):
+class Segments(base.Mapping):
     """This object contains the segments for a store.
 
     It is responsible for fetching and modifying segment data. If a segment is rebased,
@@ -215,10 +220,10 @@ class Segments(internal.Mapping):
 
     def __init__(self, *symbols):
         # current symbols and their values
-        self._data = internal.HookedDict()
+        self._data = base.HookedDict()
 
         # list of segments and their segmentinfo
-        self._info = internal.OrderedDict()
+        self._info = base.OrderedDict()
 
         # list of original symbols for the segment
         self._symbols = Symbols()
@@ -238,8 +243,8 @@ class Segments(internal.Mapping):
     # single segment creation and enumeration
     def allocate(self, identifier):
         # store the properties for the segment
-        (name,perms,ofs,length) = self.store.getsegmentinfo(identifier)
-        self._info[name] = (identifier,perms,length)
+        name, perms, ofs, length = self.store.getsegmentinfo(identifier)
+        self._info[name] = identifier, perms, length
 
         # add a symbol for identifier
         self.symbols.add(name, scope=Scope.Local)
@@ -274,8 +279,12 @@ class Segments(internal.Mapping):
     #getsymbols
     #__getitem__[index or name] = offset or baseaddress
 
-class store(object):
-    """This is the core object that performs the work of a store.
+class Segment(object):
+    def name(self):
+        raise NotImplementedError
+
+class Store(base.OrderedMapping):
+    """This is the base class that a user must implement to perform the work of a store.
 
     This object will be used to generate segments, and apply relocations using the symbols
     parsed out of the user's implementation.
@@ -294,7 +303,7 @@ class store(object):
         return self.__baseaddress
     @baseaddress.setter
     def baseaddress(self, address):
-        (res,self.__baseaddress) = (self.__baseaddress,address)
+        (res, self.__baseaddress) = (self.__baseaddress, address)
         return res
 
     __name = None
@@ -311,18 +320,34 @@ class store(object):
     def load(self, data):
         self._data = data
 
-        #
         for i in range(self.getsegments()):
-            symbol,ofs,length,perms = self.getsegmentinfo(i)
+            symbol, ofs, length, perms = self.getsegmentinfo(i)
             self.segments.new(symbol)
         return self
 
-class container(store):
+    ## abstract methods an implementor must implement
+    @abc.abstractmethod
+    def getsegment(self, name):
+        '''Return the bytes associated with the segment of the specified `name`.'''
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def getsegmentlength(self, name):
+        '''Return the size of the segment with the specified `name`.'''
+        return 0
+
+    @abc.abstractmethod
+    def getsegmentprotection(self, name):
+        '''Return the permissions of the segment with the specified `name` as a set.'''
+        empty = []
+        return {item for item in empty}
+
+class container(Store):
     """This object contains multiple stores.
 
     This should wrap a number of stores. Fetching segments and things will return the contents
     contiguously. Adding another store will be merged into the container's symbol table. Each
-    symbol will a (module,name) that points to the actual symbol located in the store.
+    symbol will a (module, name) that points to the actual symbol located in the store.
     This way updating a symbol will update the correct store, and relocating any store contained
     within will update the correct symbols.
 

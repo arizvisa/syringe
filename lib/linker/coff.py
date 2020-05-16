@@ -1,9 +1,7 @@
-import os,array
-import pecoff,ptypes
-import six,logging,warnings
-from . import store
-
-raise NotImplementedError(".do and .loadsymbol logic needs to be redesigned")
+import functools, itertools, types, builtins, operator, six
+import ptypes, pecoff
+import six, logging
+from . import internal, store
 
 #logging.root=logging.RootLogger(logging.ERROR)
 logging.root=logging.RootLogger(logging.DEBUG)
@@ -399,7 +397,7 @@ class executable(coff):
 
         # sanity
         if len(data) != self.getsegmentlength(segmentname):
-            warnings.warn('argument data length is different than expected (%d != %d)'%(len(data), self.getsegmentlength(segmentname)),UserWarning)
+            logging.warn('argument data length is different than expected (%d != %d)'%(len(data), self.getsegmentlength(segmentname)),UserWarning)
 
         # XXX: update the segment data with whatever is in the import or export table
         # if we're in the import section
