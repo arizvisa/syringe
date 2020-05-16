@@ -180,8 +180,6 @@ class OrderedMappingItemsView(ItemsView):
 class OrderedMapping(MutableMapping, Hashable, Copyable):
     __slots__ = '_data', '_order', '_removed', '_update'
     def __hash__(self):
-        # FIXME: raise an exception if our keys have been modified which would
-        #        make this object non-hashable.
         iterable = map(hash, enumerate(self._order))
         return functools.reduce(operator.xor, iterable, 0)
 
@@ -206,8 +204,10 @@ class OrderedMapping(MutableMapping, Hashable, Copyable):
 
         self._data = {key : value for key, value in items}
         self._order = OrderedSet(key for key, _ in items)
-        self._removed = {None for emptyset in []}
+
+        # Fields needed to implement soft-updates
         self._update = OrderedSet()
+        self._removed = {None for item in self._update}
 
     # Python2-compatibility
     def viewkeys(self):
@@ -271,19 +271,26 @@ class OrderedMapping(MutableMapping, Hashable, Copyable):
         return "{!s} {:s}".format(cls, ', '.join(itertools.starmap("{!s}={!r}".format, self.items())))
     __repr__ = __str__
 
-class AliasMapping(Mapping, Hashable, Copyable):
+class AliasMapping(MutableMapping, Hashable, Copyable):
     """A wrapper for a dictionary that allows one to create aliases for keys"""
-    __slots__ = '_data', '_aliases'
+    __slots__ = '_data', '_aliases', '_update', '_missing'
 
     def __hash__(self):
-        iterable = map(hash, self.keys())
-        return functools.reduce(operator.xor, iterable, hash(self._aliases))
+        iterable = map(hash, self._aliases.keys())
+        return functools.reduce(operator.xor, iterable, hash(self._data))
 
     def __getstate__(self):
-        return self._data, self._aliases
+        used = six.viewkeys(self._aliases) | self._update
+        return self._data, [(alias, self._alias[alias]) for alias in used - self._missing]
 
     def __setstate__(self, state):
-        self._data, self._aliases = state
+        self._data, res = state
+        self._aliases = OrderedMapping(res)
+
+        # Reset our soft-update state
+        empty = OrderedSet()
+        self._update = empty
+        self._missing = {item for item in empty}
 
     def __init__(self, backing=None):
         res = backing or {}
@@ -291,71 +298,100 @@ class AliasMapping(Mapping, Hashable, Copyable):
             raise TypeError(res)
         self._data, self._aliases = res, OrderedMapping()
 
+        # Fields needed to implement soft-updates
+        self._update = OrderedSet()
+        self._missing = {None for item in self._update}
+
     # tools
     def _getkey(self, key):
-        return self._aliases[key] if key in self._aliases else key
+        used = six.viewkeys(self._aliases) | self._update
+        if key in used - self._missing:
+            key = self._aliases[key]
+        return key
 
     def _getaliases(self, target):
-        items = self._aliases.items()
-        return {key for key, value in items if value == target}
+        used = six.viewkeys(self._aliases) | self._update
+        return {key for key in used - self._missing if self._aliases[key] == target}
 
+    # implementation
     def __iter__(self):
-        aliases, keys = (six.viewkeys(item) for item in [self._aliases, self._data])
-        for key in keys | aliases:
+        available = six.viewkeys(self._data)
+        used = six.viewkeys(self._aliases) | self._update
+        for key in available | (used - self._missing):
             yield key
         return
 
     def __len__(self):
-        return len(self._data)
+        items = [ item for item in self ]
+        return len(items)
 
     def __contains__(self, key):
-        aliases, keys = (six.viewkeys(item) for item in [self._aliases, self._data])
-        return key in (keys | aliases)
-
-    # abstract methods
-    def __setitem__(self, key, value):
-        res = self._getkey(key)
-        # FIXME: raise an exception if a key is being added as we're not allowed
-        #        to modify the keys of the backend dictionary.
-        self._data[res] = value
+        available = six.viewkeys(self._data)
+        used = six.viewkeys(self._aliases) | self._update
+        return key in available | (used - self._missing)
 
     def __getitem__(self, key):
-        res = self._getkey(key)
+        if key not in self:
+            raise KeyError(key)
+
+        # Get our actual target key in case it's an alias
+        res = self._aliases.get(key, key)
         return self._data[res]
 
+    def __setitem__(self, key, value):
+        res = self._aliases.get(key, key)
+
+        # No need to do anything special.. Just need to update our
+        # backing dictionary with the new value.
+        self._data[res] = value
+
     def __delitem__(self, key):
-        target = self._getkey(key)
-        res = self._getaliases(target)
-        # FIXME: raise an exception when trying to remove a key, as we're not
-        #        allowed to modify the keys of the backend dictionary
-        [ self._aliases.pop(alias) for alias in res ]
-        del self._data[target]
+        res = self._aliases.get(key, key)
+        del(self._data[res])
+
+        # Go through and soft-remove our aliases since the field is gone.
+        aliases = self._getaliases(key)
+        self._missing |= aliases
 
     # overloads
     def update(self, *args, **kwds):
+        raise NotImplementedError
         self, other = args[0], args[1] if len(args) >= 2 else ()
-        res = super(AliasMapping,self).update(*args, **kwds)
+        res = super(AliasMapping, self).update(*args, **kwds)
         if isinstance(other, AliasMapping):
-            other._aliases.update(self._aliases)
+            self._aliases.update(other._aliases)
         return res
 
     # aliases
     def aliases(self):
-        for key in self._aliases:
+        for key in six.viewkeys(self._aliases) - self._missing:
             yield key
         return
+
     def alias(self, target, *aliases):
-        if any(alias in self._data for alias in aliases):
-            raise KeyError("Alias {!r} already exists as a target in AliasMapping {!s}".format(item, object.__repr__(self)))
+        used = six.viewkeys(self._data) | self._update
+        if any(alias in used for alias in aliases):
+            raise KeyError("Alias {!r} already exists in AliasMapping {!s}".format(item, object.__repr__(self)))
 
         create_count = 0
         for alias in aliases:
+            self._missing.discard(alias)
             if alias not in self._aliases:
                 create_count += 1
             self._aliases[alias] = target
         return create_count
+
     def unalias(self, *aliases):
-        return [self._aliases.pop(alias) for alias in aliases]
+        used = six.viewkeys(self._aliases) - self._missing
+
+        # Make sure all the aliases we're removing are actually valid
+        for alias in aliases:
+            if alias not in used:
+                raise KeyError(alias)
+            continue
+
+        # If so, then we can safely add them to our missing set
+        [self._missing.add(alias) for alias in aliases]
 
     # general
     def __str__(self):
