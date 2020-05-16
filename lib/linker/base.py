@@ -33,56 +33,61 @@ def _check_methods(C, *methods):
 
 # Standard implementation of the Copyable metaclass
 if sys.version_info.major < 3:
-    class Copyable(object):
+    class AbstractBaseClass(object):
         __metaclass__ = abc.ABCMeta
 
-        def copy(self):
-            return copy.copy(self)
-
-        @abc.abstractmethod
-        def __getstate__(self):
-            state = self.__dict__
-            return { name : state[name] for name in state }
-
-        @abc.abstractmethod
-        def __setstate__(self, state):
-            for name in state:
-                attribute = state[name]
-                setattr(self, name, attribute)
-            return
+        @staticmethod
+        def __subclass__():
+            '''Return a tuple containing the subclass and an iterable of its required methods.'''
+            raise NotImplementedError
 
         @classmethod
         def __subclasshook__(cls, C):
-            if cls is Copyable:
-                return _check_methods(C,  "__len__", "__iter__", "__contains__")
+            packed = cls.__subclass__()
+            if packed:
+                implementation, methods = packed if isinstance(packed, (tuple, list)) else (packed, ())
+                return _check_methods(C, *methods) if cls is implementation else NotImplemented
             return NotImplemented
 
 # Python2 can't parse this syntax, so we embed it in exec() to hide the
 # definition from its parser
 else:
     exec("""
-    class Copyable(metaclass=abc.ABCMeta):
-        def copy(self):
-            return copy.copy(self)
-
-        @abc.abstractmethod
-        def __getstate__(self):
-            state = self.__dict__
-            return { name : state[name] for name in state }
-
-        @abc.abstractmethod
-        def __setstate__(self, state):
-            for name in state:
-                attribute = state[name]
-                setattr(self, name, attribute)
-            return
+    class AbstractBaseClass(metaclass=abc.ABCMeta):
+        @staticmethod
+        def __subclass__():
+            '''Return a tuple containing the subclass and an iterable of its required methods.'''
+            raise NotImplementedError
 
         @classmethod
         def __subclasshook__(cls, C):
-            if cls is Copyable:
-                return _check_methods(C,  "__len__", "__iter__", "__contains__")
+            packed = cls.__subclass__()
+            if packed:
+                implementation, methods = packed if isinstance(packed, (tuple, list)) else (packed, ())
+                return _check_methods(C, *methods) if cls is implementation else NotImplemented
             return NotImplemented
     """.strip())
+
+### Abstract base classes
+class Copyable(AbstractBaseClass):
+    @staticmethod
+    def __subclass__():
+        return Copyable, ('copy', '__getstate__', '__setstate__')
+
+    def copy(self):
+        return copy.copy(self)
+
+    @abc.abstractmethod
+    def __getstate__(self):
+        state = self.__dict__
+        return { name : state[name] for name in state }
+
+    @abc.abstractmethod
+    def __setstate__(self, state):
+        for name in state:
+            attribute = state[name]
+            setattr(self, name, attribute)
+        return
 
 ### Core data structure implementations
 
