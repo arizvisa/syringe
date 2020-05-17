@@ -1,6 +1,26 @@
-from . import store
+from . import base, store
+from . import elfstore
 
-class linker(store.container):
+class Container(base.MergedMapping):
+    """This object contains multiple stores.
+
+    This should wrap a number of stores. Fetching segments and things will return the contents
+    contiguously. Adding another store will be merged into the container's symbol table. Each
+    symbol will a (module, name) that points to the actual symbol located in the store.
+    This way updating a symbol will update the correct store, and relocating any store contained
+    within will update the correct symbols.
+
+    Symbols
+    """
+#    symbol = object # updating anything here will locate the correct store, and update it there
+#    stores = list   #, or ordered-set
+#    segments = proxy
+#    relocations = proxy
+#
+#    add     # add a store
+#    get     # get a store by some identity
+
+class Linker(Container):
     def __repr__(self):
         return '{:s} modules {!r}'.format(super(linker,self).__repr__(), [st.modulename for st in self.stores])
 

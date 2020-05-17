@@ -405,28 +405,12 @@ class Store(base.OrderedMapping, base.ReferenceFrom):
 #        empty = []
 #        return {item for item in empty}
 
-class container(Store):
-    """This object contains multiple stores.
-
-    This should wrap a number of stores. Fetching segments and things will return the contents
-    contiguously. Adding another store will be merged into the container's symbol table. Each
-    symbol will a (module, name) that points to the actual symbol located in the store.
-    This way updating a symbol will update the correct store, and relocating any store contained
-    within will update the correct symbols.
-
-    Symbols
-    """
-#    symbol = object # updating anything here will locate the correct store, and update it there
-#    stores = list   #, or ordered-set
-#    segments = proxy
-#    relocations = proxy
-#
-#    add     # add a store
-#    get     # get a store by some identity
-
 if __name__ == '__main__':
+    import ptypes, elf
+    from linker import store
+
     # symbols
-    self = a = Symbols(None)
+    self = a = store.Symbols(None)
     b = a._data
     print(a.add('_main'))
     print(a.add('start'))
