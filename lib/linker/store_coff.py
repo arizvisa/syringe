@@ -1,12 +1,12 @@
 import functools, itertools, types, builtins, operator, six
 import ptypes, pecoff
 import six, logging
-from . import internal, store
+from . import store
 
 #logging.root=logging.RootLogger(logging.ERROR)
 logging.root=logging.RootLogger(logging.DEBUG)
 
-class coff(store.base):
+class coff(store.Store):
     '''Provides functionality common to most(heh) coff derived formats'''
 
     @classmethod
@@ -54,7 +54,7 @@ class linktable(dict):
     and is intended for implementation of the export and import address tables
     '''
 
-    type = ptypes.dyn.addr_t(ptypes.pint.uint32_t)
+    type = ptypes.dyn.pointer(ptypes.pint.uint32_t)
     table = store.base
 
     def __init__(self, symboltable):
@@ -589,7 +589,7 @@ class object(coff):
             data = r.relocate(data, symboltable, self)
         return data
 
-class library(store.container, coff):
+class library(coff):
     '''
     FIXME: this should only allocate iat entries on demand with whatever object
             it's linked with

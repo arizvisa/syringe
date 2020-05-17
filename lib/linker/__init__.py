@@ -1,5 +1,5 @@
 from . import base, store
-from . import elfstore
+from . import store_elf, store_coff
 
 class Container(base.MergedMapping):
     """This object contains multiple stores.
