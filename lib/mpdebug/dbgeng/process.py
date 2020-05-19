@@ -148,7 +148,8 @@ class dbgeng(object):
         self.module[name] = pecoff.Executable.File(source=self.memory, offset=address)
 
     def getmodulebyaddress(self, address):
-        for name,pos in self.__modulecache.iteritems():
+        cache = self.__modulecache
+        for name, pos in cache.items():
             if match.block(pos) == address:
                 return name
             continue

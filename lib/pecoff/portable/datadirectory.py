@@ -112,7 +112,8 @@ class DataDirectory(parray.type):
     def __getindex__(self, key):
         if isinstance(key, six.string_types):
             # try and be smart in case user tries to be dumb
-            key, res = key.lower(), { k.lower() : v for k, v in DataDirectoryEntry.mapping().iteritems() }
+            mapping = DataDirectoryEntry.mapping()
+            key, res = key.lower(), { k.lower() : v for k, v in mapping.items() }
             key = key[:key.rfind('table')] if key.endswith('table') else key[:]
             return res[key]
         return key
