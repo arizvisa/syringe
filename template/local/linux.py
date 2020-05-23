@@ -7,9 +7,22 @@ class long(pint.int32_t): pass
 class unsigned_short(pint.uint16_t): pass
 class unsigned_int(pint.uint32_t): pass
 class unsigned_long(pint.uint32_t): pass
+class void_p(ptype.pointer_t):
+    _object_ = ptype.undefined
 
 # base types
 class list_head(pstruct.type): pass
+class atomic_t(pstruct.type):
+    _fields_ = [
+        (int, 'counter'),
+    ]
+
+class slobidx_t(pint.sint16_t): pass
+class slob_block(pstruct.type):
+    _fields_ = [
+        (slobidx_t, 'units'),
+    ]
+class slob_t(slob_block): pass
 
 # structures
 class slab(pstruct.type):
