@@ -6,40 +6,45 @@ import ptypes
 from ptypes import *
 
 class Heading(pstruct.type):
+    def __Next_section_offset(self):
+        return dyn.pointer(Section, pint.uint16_t)
+
+    def __Section_data_offset(self):
+        def _object_(_, self=self):
+            length = self['Length'].li
+            return SectionData.withdefault(length.int(), length=length.int())
+        return dyn.pointer(_object_, pint.uint16_t)
+
     _fields_ = [
-        (dyn.clone(pstr.string, length=0x10), 'Name of the section'),
-        (dyn.pointer(ptype.undefined, pint.uint16_t), 'Next section offset'),
-        (dyn.pointer(ptype.undefined, pint.uint16_t), 'Section data offset'),
-        (pint.uint16_t, 'Section data length'),
+        (dyn.clone(pstr.string, length=0x10), 'Name'),
+        (__Next_section_offset, 'NextOffset'),
+        (__Section_data_offset, 'Offset'),
+        (pint.uint16_t, 'Length'),
     ]
 
+class SectionData(ptype.definition):
+    cache = {}
+
+    class default(pstr.string):
+        pass
+
 class Section(pstruct.type):
-    def __padding_heading(self):
+    def __data(self):
         res = self['heading'].li
-        return dyn.block(max(0, res['Section data offset'].int() - self.getoffset()))
-
-    def __Section(self):
-        res = self['heading'].li
-        t, length = getattr(self, '_object_', ptype.undefined) or ptype.undefined, res['Section data length']
-        if issubclass(t, pstr.string):
-            return dyn.clone(t, length=length.int())
-        return t
-
-    def __missing_section(self):
-        res = self['heading'].li
-        return dyn.block(max(0, res['Section data length'].int() - self['section'].li.size()))
+        length = res['Length']
+        return SectionData.withdefault(length.int(), length=length.int())
 
     def __padding_section(self):
         res = self['heading'].li
-        length, fields = res['Next section offset'].int() - self.getoffset(), ['heading', 'padding(heading)', 'section', 'missing(section)']
-        return dyn.block(max(0, length - sum(self[fld].li.size() for fld in fields)))
+        if res['NextOffset'].int() < 0xffff:
+            length, fields = res['NextOffset'].int() - self.getoffset(), ['heading', 'data']
+            return dyn.block(max(0, length - sum(self[fld].li.size() for fld in fields)))
+        return dyn.block(0)
 
     _fields_ = [
         (Heading, 'heading'),
-        (__padding_heading, 'padding(heading)'),
-        (__Section, 'section'),
-        (__missing_section, 'missing(section)'),
-        (__padding_section, 'padding(section)'),
+        (__data, 'data'),
+        (__padding_section, 'padding(data)'),
     ]
 
 class MaximumRequired(pstruct.type):
@@ -48,7 +53,13 @@ class MaximumRequired(pstruct.type):
         (pint.uint16_t, 'required'),
     ]
 
+    def summary(self):
+        return "required={:#x} maximum={:#x}".format(self['required'].int(), self['maximum'].int())
+
+@SectionData.define
 class BasicSection(pstruct.type):
+    type = 0x171
+
     @pbinary.littleendian
     class _Flags(pbinary.flags):
         _fields_ = [
@@ -98,7 +109,10 @@ class BasicSection(pstruct.type):
         (_Program_flags, 'Program flags'),
     ]
 
+@SectionData.define
 class Windows386Section(pstruct.type):
+    type = 0x68
+
     @pbinary.littleendian
     class _Bit_mask1(pbinary.flags):
         _fields_ = [
@@ -180,7 +194,10 @@ class Windows386Section(pstruct.type):
         (dyn.clone(pstr.string, length=64), 'Parameters'),
     ]
 
+@SectionData.define
 class Windows286Section(pstruct.type):
+    type = 0x6
+
     @pbinary.littleendian
     class _Flags(pbinary.flags):
         _fields_ = [
@@ -201,7 +218,10 @@ class Windows286Section(pstruct.type):
         (_Flags, 'Flags'),
     ]
 
+@SectionData.define
 class WindowsVMM40Section(pstruct.type):
+    type = 0x1ac
+
     class _Dimensions(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'horizontal size'),
@@ -334,22 +354,20 @@ class WindowsVMM40Section(pstruct.type):
         (pint.uint16_t, 'Unknown_1aa'),
     ]
 
-class CONFIGSYSSection(pstr.string):
-    pass
-
-class AUTOEXECBATSection(pstr.string):
-    pass
-
+@SectionData.define
 class WindowsNT31Section(pstruct.type):
+    type = 0x8c
     _fields_ = [
         (pint.uint16_t, 'Hardware timer emulation'),
         (dyn.block(10), 'Unknown_2'),
         (dyn.clone(pstr.string, length=64), 'CONFIG.NT filename'),
         (dyn.clone(pstr.string, length=64), 'AUTOEXEC.NT filename'),
-        (pint.uint16_t, 'Unknown_8c'),
     ]
 
+@SectionData.define
 class WindowsNT40Section(pstruct.type):
+    type = 0x68c
+
     _fields_ = [
         (pint.uint32_t, 'Unknown_0'),
         (dyn.clone(pstr.wstring, length=128), 'Unicode parameters'),
@@ -366,25 +384,44 @@ class WindowsNT40Section(pstruct.type):
         (dyn.block(286), 'Unknown_56e'),
     ]
 
-class File(parray.block):
-    __sections__ = [
-        BasicSection,
-        Windows286Section,
-        Windows386Section,
-        WindowsNT31Section,
-        WindowsNT40Section,
-        WindowsVMM40Section,
-        CONFIGSYSSection,
-        AUTOEXECBATSection,
+class Sections(parray.terminated):
+    _object_ = Section
+
+    def isTerminator(self, item):
+        res = item['heading']
+        return res['NextOffset'].int() == 0xffff
+
+class File(pstruct.type):
+    _fields_ = [
+        (BasicSection, 'basicSection'),
+        (Heading, 'basicHeading'),
+        (Sections, 'sections'),
     ]
 
-    def _object_(self):
-        index, order = len(self.value), self.__sections__
-        if index < len(order):
-            return dyn.clone(Section, _object_=order[index])
-        return Section
+    def enumerate(self):
+        item = self['basicHeading']
+        yield item['Name'].str(), item['Offset'].d.li
+        while item['NextOffset'].int() < 0xffff:
+            res = item['NextOffset'].d.li
+            item = res['heading']
+            yield item['Name'].str(), item['Offset'].d.li
+        return
+
+    def iterate(self):
+        for _, item in self.enumerate():
+            yield item
+        return
 
 if __name__ == '__main__':
-    import local.pif as PIF
-    for item in PIF.File.__sections__:
-        print("{!s}: {:#x}".format(item.__name__, item().a.size()))
+    import ptypes, local.pif as PIF
+    ptypes.setsource(ptypes.prov.file('/home/user/work/syringe/template/samples/_default.pif','rb'))
+
+    z = PIF.File()
+    z=z.l
+
+    for name, item in z.enumerate():
+        print(name)
+        print(item)
+
+    for item in z.iterate():
+        print(item)
