@@ -42,57 +42,64 @@ class Section(pstruct.type):
         (__padding_section, 'padding(section)'),
     ]
 
+class MaximumRequired(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'maximum'),
+        (pint.uint16_t, 'required'),
+    ]
+
 class BasicSection(pstruct.type):
-    class _Bit_mask1(pbinary.flags):
+    @pbinary.littleendian
+    class _Flags(pbinary.flags):
         _fields_ = [
-            (16, 'Unused'),
             (1, 'COM2'),
             (1, 'COM1'),
             (1, 'Reserved'),
-            (1, 'Close window on exit'),
+            (1, 'Close on exit'),
             (1, 'No screen exchange'),
-            (1, 'Prevent program switch'),
+            (1, 'Prevent switch'),
             (1, 'Graphics mode'),
-            (1, 'Directly modify memory'),
+            (1, 'Direct memory'),
         ]
-    class _Bit_mask2(pbinary.flags):
+    @pbinary.littleendian
+    class _Program_flags(pbinary.flags):
         _fields_ = [
             (1, 'Unused'),
-            (1, 'Parameters in command line'),
+            (1, 'Has parameters'),
             (1, 'Exchange interrupt vectors'),
             (5, 'Reserved'),
-            (1, 'Directly modify screen'),
+            (1, 'Direct screen'),
             (1, 'Stop in background mode'),
             (1, 'Use coprocessor'),
-            (1, 'Direct '),
-            (1, 'Graphics mode'),
-            (1, 'Directly modify'),
+            (1, 'Direct keyboard'),
             (4, 'Unknown'),
         ]
     _fields_ = [
-        (pint.uint8_t, 'Not used'),
+        (pint.uint8_t, 'Reserved'),
         (pint.uint8_t, 'Checksum'),
         (dyn.clone(pstr.string, length=30), 'Window title'),
-        (pint.uint16_t, 'Maximal amount of conventional memory'),
-        (pint.uint16_t, 'Minimal amount of conventional memory'),
-        (dyn.clone(pstr.string, length=63), 'Program filename'),
-        (_Bit_mask1, 'Bit mask 1'),
-        (dyn.clone(pstr.string, length=64), 'Working directory'),
+        (MaximumRequired, 'Reserved memory'),
+        (dyn.clone(pstr.string, length=63), 'Path'),
+        (_Flags, 'Flags'),
+        (pint.uint8_t, 'Drive index'),
+        (dyn.clone(pstr.string, length=64), 'Directory'),
         (dyn.clone(pstr.string, length=64), 'Parameters'),
         (pint.uint8_t, 'Video mode'),
         (pint.uint8_t, 'Text video pages quantity'),
         (pint.uint8_t, 'First used interrupt'),
         (pint.uint8_t, 'Last used interrupt'),
-        (pint.uint8_t, 'Height of screen'),
-        (pint.uint8_t, 'Width of screen'),
-        (pint.uint8_t, 'Horizontal window position'),
-        (pint.uint8_t, 'Vertical window position'),
+        (pint.uint8_t, 'Rows'),
+        (pint.uint8_t, 'Columns'),
+        (pint.uint8_t, 'X position'),
+        (pint.uint8_t, 'Y position'),
         (pint.uint16_t, 'Number of last video page'),
-        (dyn.block(128), 'Not used'),
-        (_Bit_mask2, 'Bit mask 2'),
+        (dyn.clone(pstr.string, length=64), 'Shared program path'),
+        (dyn.clone(pstr.string, length=64), 'Shared program data'),
+        (_Program_flags, 'Program flags'),
     ]
 
 class Windows386Section(pstruct.type):
+    @pbinary.littleendian
     class _Bit_mask1(pbinary.flags):
         _fields_ = [
             (3, 'Unused'),
@@ -133,6 +140,7 @@ class Windows386Section(pstruct.type):
             (1, 'Background continuation'),
             (1, 'Permit exit'),
         ]
+    @pbinary.littleendian
     class _Bit_mask2(pbinary.flags):
         _fields_ = [
             (8, 'Unused'),
@@ -145,6 +153,7 @@ class Windows386Section(pstruct.type):
             (1, 'Ports: Text graphics'),
             (1, 'Video ROM emulation'),
         ]
+    @pbinary.littleendian
     class _Shortcut_modifier(pbinary.flags):
         _fields_ = [
             (12, 'Unused'),
@@ -153,14 +162,11 @@ class Windows386Section(pstruct.type):
             (2, 'Shift'),
         ]
     _fields_ = [
-        (pint.uint16_t, 'Maximal amount of conventional memory'),
-        (pint.uint16_t, 'Required amount of conventional memory'),
+        (MaximumRequired, 'Conventional memory'),
         (pint.uint16_t, 'Active priority'),
         (pint.uint16_t, 'Background priority'),
-        (pint.uint16_t, 'Maximal amount of EMS memory'),
-        (pint.uint16_t, 'Required amount of EMS memory'),
-        (pint.uint16_t, 'Maximal amount of XMS memory'),
-        (pint.uint16_t, 'Required amount of XMS memory'),
+        (MaximumRequired, 'EMS memory'),
+        (MaximumRequired, 'XMS memory'),
         (_Bit_mask1, 'Bit mask 1'),
         (_Bit_mask2, 'Bit mask 2'),
         (pint.uint16_t, 'Unknown_16'),
@@ -170,12 +176,13 @@ class Windows386Section(pstruct.type):
         (pint.uint16_t, 'Extended shortcut key'),
         (pint.uint16_t, 'Unknown_20'),
         (pint.uint16_t, 'Unknown_22'),
-        (pint.uint16_t, 'Unknown_24'),
+        (pint.uint32_t, 'Unknown_24'),
         (dyn.clone(pstr.string, length=64), 'Parameters'),
     ]
 
 class Windows286Section(pstruct.type):
-    class _Bit_mask(pbinary.flags):
+    @pbinary.littleendian
+    class _Flags(pbinary.flags):
         _fields_ = [
             (1, 'COM4'),
             (1, 'COM3'),
@@ -190,9 +197,8 @@ class Windows286Section(pstruct.type):
             (1, 'No Alt+Tab'),
         ]
     _fields_ = [
-        (pint.uint16_t, 'Maximal amount of XMS memory'),
-        (pint.uint16_t, 'Required amount of XMS memory'),
-        (_Bit_mask, 'Bit mask'),
+        (MaximumRequired, 'XMS memory'),
+        (_Flags, 'Flags'),
     ]
 
 class WindowsVMM40Section(pstruct.type):
@@ -201,6 +207,7 @@ class WindowsVMM40Section(pstruct.type):
             (pint.uint16_t, 'horizontal size'),
             (pint.uint16_t, 'vertical size'),
         ]
+    @pbinary.littleendian
     class _Bit_mask1(pbinary.flags):
         _fields_ = [
             (10, 'Unknown'),
@@ -210,6 +217,7 @@ class WindowsVMM40Section(pstruct.type):
             (1, 'Continue in background'),
             (1, 'Reserved'),
         ]
+    @pbinary.littleendian
     class _Bit_mask2(pbinary.flags):
         _fields_ = [
             (7, 'Unknown'),
@@ -218,6 +226,7 @@ class WindowsVMM40Section(pstruct.type):
             (6, 'Unused'),
             (1, 'Video-ROM emulation'),
         ]
+    @pbinary.littleendian
     class _Bit_mask3(pbinary.flags):
         _fields_ = [
             (4, 'Unknown'),
@@ -232,12 +241,14 @@ class WindowsVMM40Section(pstruct.type):
             (4, 'Unused'),
             (1, 'Fast paste'),
         ]
+    @pbinary.littleendian
     class _Mouse_flags(pbinary.flags):
         _fields_ = [
             (14, 'Unused'),
             (1, 'Exclusive'),
             (1, 'No selection'),
         ]
+    @pbinary.littleendian
     class _Font_flags(pbinary.flags):
         _fields_ = [
             (4, 'Unused'),
@@ -251,12 +262,14 @@ class WindowsVMM40Section(pstruct.type):
             (1, 'Use Raster'),
             (2, 'Reserved'),
         ]
+    @pbinary.littleendian
     class _Bit_mask4(pbinary.flags):
         _fields_ = [
             (14, 'Unused'),
             (1, 'Show toolbar'),
             (1, 'Unknown'),
         ]
+    @pbinary.littleendian
     class _Last_maximized_flags(pbinary.flags):
         _fields_ = [
             (14, 'Unknown'),
@@ -305,6 +318,7 @@ class WindowsVMM40Section(pstruct.type):
         (dyn.clone(pstr.string, length=32), 'TrueType font name'),
         (pint.uint16_t, 'Unknown_12a'),
         (_Bit_mask4, 'Bit mask 4'),
+        (pint.uint16_t, 'No restore settings'),
         (_Dimensions, 'Screen symbol size'),
         (_Dimensions, 'Client area size'),
         (_Dimensions, 'Window size'),
@@ -329,7 +343,7 @@ class AUTOEXECBATSection(pstr.string):
 class WindowsNT31Section(pstruct.type):
     _fields_ = [
         (pint.uint16_t, 'Hardware timer emulation'),
-        (dyn.block(0x10), 'Unknown_2'),
+        (dyn.block(10), 'Unknown_2'),
         (dyn.clone(pstr.string, length=64), 'CONFIG.NT filename'),
         (dyn.clone(pstr.string, length=64), 'AUTOEXEC.NT filename'),
         (pint.uint16_t, 'Unknown_8c'),
@@ -371,4 +385,6 @@ class File(parray.block):
         return Section
 
 if __name__ == '__main__':
-    pass
+    import local.pif as PIF
+    for item in PIF.File.__sections__:
+        print("{!s}: {:#x}".format(item.__name__, item().a.size()))
