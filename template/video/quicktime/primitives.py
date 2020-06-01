@@ -1,4 +1,4 @@
-import six, ptypes
+import six, functools, ptypes
 from ptypes import *
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -15,7 +15,7 @@ class pQTType(pQTInt):
         return cmp(int(self), x)
 
     def set(self, value):
-        return super(pQTType,self).set( reduce(lambda x,y:x*0x100+ord(y), value, 0) )
+        return super(pQTType,self).set( functools.reduce(lambda x,y:x*0x100+ord(y), value, 0) )
 
 class Fixed(pfloat.fixed_t):
     fractional,length = 16,4

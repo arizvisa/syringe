@@ -1,8 +1,8 @@
-import ptypes
+import functools, ptypes
 from ptypes import *
 
 # little-endian
-intofdata = lambda data: reduce(lambda t, c: t * 256 | c, map(ord, reversed(data)), 0)
+intofdata = lambda data: functools.reduce(lambda t, c: t * 256 | c, map(ord, reversed(data)), 0)
 _dataofint = lambda integer: ((integer == 0) and b'\0') or (_dataofint(integer // 256).lstrip(b'\0') + chr(integer % 256))
 dataofint = lambda integer, le=_dataofint: str().join(reversed(le(integer)))
 
@@ -278,8 +278,8 @@ class strl(LISTDATA): type = 'strl'
 class movi(LISTDATA): type = 'movi'
 
 ## FOURCC file
-FOURCCID._values_ = [(v.__name__, intofdata(k)) for k, v in FOURCC.cache.iteritems()]
-LISTID._values_ = [(v.type, intofdata(k)) for k, v in LISTTYPE.cache.iteritems()]
+FOURCCID._values_ = [(v.__name__, intofdata(k)) for k, v in FOURCC.cache.items()]
+LISTID._values_ = [(v.type, intofdata(k)) for k, v in LISTTYPE.cache.items()]
 class File(pstruct.type):
     class _fileData(parray.block):
         _object_ = Chunk

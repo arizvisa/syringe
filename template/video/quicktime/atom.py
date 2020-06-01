@@ -5,8 +5,8 @@ class AtomType(ptype.definition):
 
 class Atom(pstruct.type):
     def __data(self):
-        type = self['type'].li.serialize()
-        name, size = 'Unknown<{!r}>'.format(type), self.blocksize() - self.getheadersize()
+        type = self['type'].li.serialize().decode('latin1')
+        name, size = 'Unknown<{!s}>'.format(type), self.getsize() - self.getheadersize()
         t = AtomType.withdefault(type, type=type, __name__=name, length=size)
         return dyn.clone(t, blocksize=lambda s:size)
 
@@ -29,10 +29,7 @@ class Atom(pstruct.type):
             position = self.getoffset() - container.getoffset()
             return container.getsize() - position
 
-        raise NotImplementedError(repr(self['type']),repr(s))
-
-    def blocksize(self):
-        return self.getsize()
+        raise NotImplementedError("{!r}".format(self['type']), "{!r}".format(s))
 
     _fields_ = [
         (pQTInt, 'size'),
@@ -46,8 +43,8 @@ class Atom(pstruct.type):
             return "[%x] %s UNINITIALIZED expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), 0, ','.join(self.keys()))
         discrepancy = self.size() != self.blocksize()
         if discrepancy:
-            return "%r ERR size:0x%x expected:0x%x keys:(%s)"%( self['type'].serialize(), self.size(), self.getsize(), ','.join(self.keys()))
-        return "%r size:0x%x (%s)"%( self['type'].serialize(), self.getsize(), ','.join(self.keys()))
+            return "%s ERR size:0x%x expected:0x%x keys:(%s)"%( self['type'].serialize().decode('latin1'), self.size(), self.getsize(), ','.join(self.keys()))
+        return "%s size:0x%x (%s)"%( self['type'].serialize().decode('latin1'), self.getsize(), ','.join(self.keys()))
 
 class AtomList(parray.block):
     _object_ = Atom
@@ -65,7 +62,7 @@ class AtomList(parray.block):
         return res[0]
 
     def summary(self):
-        types = ','.join([x['type'].serialize() for x in self])
+        types = ','.join([x['type'].serialize().decode('latin1') for x in self])
         return ' '.join(['atoms[%d] ->'% len(self), types])
 
 ## atom templates

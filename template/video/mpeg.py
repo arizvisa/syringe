@@ -37,7 +37,7 @@ class end_code(sequence_end_code):
 
 @layer.define
 class group_of_pictures(pbinary.struct):
-    type = 0x1b8
+    type = 0x1b9
     _fields_ = [
         (25, 'time_code'),
         (1, 'closed_gop'),
@@ -74,7 +74,10 @@ class slice(pbinary.struct):
         (5, 'quantizer_scale'),
         (dyn.clone(pbinary.terminatedarray, _object_=extra_bit, isTerminator=lambda s,v: v['extra_bit_slice'] == 0), 'extra_bit'),
     ]
-map(layer.define, (dyn.clone(slice,type=_,__name__='{:s}<{:d}>'.format(slice.__name__,_)) for _ in xrange(*slice.type)))
+
+# Define a dumber of backup (or alternative) slice types
+iterable = (dyn.clone(slice, type=item, __name__='{:s}<{:d}>'.format(slice.__name__, item)) for item in range(*slice.type))
+[layer.define(item) for item in iterable if item.type not in layer.cache]
 
 @layer.define
 class pack(pbinary.struct):
@@ -149,14 +152,10 @@ class stream(pbinary.terminatedarray):
     def isTerminator(self, value):
         return type(value) == end_code
 
-class stream(pbinary.array):
-    _object_ = packet
-    length = 20
-
 if __name__ == '__main__':
     import ptypes,video.mpeg as mpeg
 #    ptypes.setsource( ptypes.file('./poc-mpeg.stream') )
-    ptypes.setsource( ptypes.file('./poc.mov') )
+    ptypes.setsource( ptypes.provider.file('./poc.mov', 'rb') )
 
     a = mpeg.stream(offset=0x3ba, length=20)
     print(a.l)
