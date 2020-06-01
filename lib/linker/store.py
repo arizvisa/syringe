@@ -12,28 +12,47 @@ class Scope:
     class Global(object): pass
     class External(object): pass
 
-class Permissions(set):
+class Permissions(base.Set):
     """Segment permissions"""
-    S, R, W, X, Unmapped = 8, 4, 2, 1, 0
+    __slots__ = '_object',
 
-    __map = {Unmapped: 'Unmapped', R: 'R', W: 'W', X: 'X', S: 'S'}
-    __unmap = {value : key for key, value in __map.items()}
+    # XXX: should probably include other attributes like for a guard page,
+    #      mapped (to a file), reserved, or pages that grow downwards.
+    _valid = {item for item in 'rwx'}
 
-    def add(self, value):
-        if value in self.__unmap.keys():
-            return self.add(self.__unmap[value])
+    def __init__(self, *flags):
+        if len(flags) == 1 and hasattr(flags[0], '__iter__'):
+            flags = {item for item in flags[0]}
+        if any(item.lower() not in self._valid for item in flags if item not in '-'):
+            raise ValueError("Invalid or unknown permissions were specified: {!s}".format(', '.join(item.upper() for item in flags if item.lower() not in self._valid)))
+        self._object = { item.lower() for item in flags if item not in '-'}
 
-        if value not in {self.R, self.W, self.X, self.S, self.Unmapped}:
-            raise AssertionError
+    def __getitem__(self, flag):
+        return flag.lower() in self._object
 
-        if value == self.Unmapped:
-            return self.clear()
+    def emptyQ(self):
+        return len(self._object) == 0
 
-        return super(Segments.Permissions, self).add(value)
+    def __contains__(self, flag):
+        return flag.lower() in self._object
+
+    def __len__(self):
+        return len(self._object)
+
+    def __iter__(self):
+        for flag in self._object:
+            yield flag.lower()
+        return
+
+    def __str__(self):
+        iterable = (flag if flag.lower() in self._object else '-' for flag in sorted(self._valid))
+        return str().join(iterable)
 
     def __repr__(self):
         cls = self.__class__
-        return '{:s}({!r})'.format(cls.__name__, map(self.__map.get, self))
+        if self.emptyQ():
+            return '{:s}({!s})'.format(cls.__name__, 'Unmapped')
+        return '{:s}({!s})'.format(cls.__name__, ', '.join(item for item in sorted(self._object)))
 
 class Relocations(base.OrderedSet): # ordered-set?
     """This represents relocations that are in a store.
@@ -266,6 +285,14 @@ class Symbols(base.MutableMapping):
 #    def drop(self, identifier):
 #        return self._segments.pop(identifier)
 #
+#    @abc.abstractmethod
+#    def symbols(self):
+#        """Yield the identifer, offset or value, size, relocation of each symbol within the section.
+#
+#        The `relocation` that is yielded is specific to the implementation and is up to the implementor.
+#        """
+#        raise NotImplementedError
+#
 #    # FIXME
 #    def findsegmentbyoffset(self, ofs):
 #        ranges = [(ofs, self.getsegmentlength(item)) for item in self.listsegments()]
@@ -279,15 +306,33 @@ class Symbols(base.MutableMapping):
 #    #getsymbols
 #    #__getitem__[index or name] = offset or baseaddress
 
-class Segment(base.AbstractBaseClass):
+class Section(base.Transitive):
+    '''
+    This base class is responsible for a logical section which describes
+    a partition of a loadable segment. This needs to be hashable as it's
+    used to keep track of symbolic information that will be applied to
+    a segment.
+    '''
+
     @abc.abstractmethod
     def name(self):
-        '''Return the name of the segment.'''
+        '''Return the name of the section.'''
         raise NotImplementedError
 
     @abc.abstractmethod
+    def bounds(self):
+        '''Returns a tuple containing the left and right of a section within its segment.'''
+        raise NotImplementedError
+
+class Segment(base.Transitive):
+    '''
+    This base class is responsible for managing an actual loadable segment
+    which contains the data that should be mapped into memory.
+    '''
+
+    @abc.abstractmethod
     def data(self):
-        '''Return the bytes of the segment.'''
+        '''Return the bytes of the segment as a bytearray.'''
         raise NotImplementedError
 
     @abc.abstractmethod
@@ -305,18 +350,16 @@ class Segment(base.AbstractBaseClass):
         '''Return the permissions of the segment as a set.'''
         raise NotImplementedError
 
-    @abc.abstractmethod
-    def symbols(self):
-        """Yield the identifer, offset or value, size, relocation of each symbol within the segment.
-
-        The `relocation` that is yielded is specific to the implementation and is up to the implementor.
-        """
-        raise NotImplementedError
+    def contains(self, address):
+        '''Returns whether the specified address is within the segment.'''
+        offset, length = self.offset(), self.length()
+        return offset <= address < offset + length
 
 class Store(base.OrderedMapping, base.ReferenceFrom):
     @abc.abstractmethod
     def __init__(self):
-        self._segments = base.OrderedSet()
+        self._sections = base.OrderedSet()
+        self._segments = base.OrderedMapping()
         return super(Store, self).__init__()
 
     @abc.abstractmethod
@@ -325,26 +368,34 @@ class Store(base.OrderedMapping, base.ReferenceFrom):
         raise NotImplementedError
 
     @abc.abstractmethod
-    def load_segment(self, seg):
-        '''Load the symbols for the given segment into store.'''
-        if seg in self._segments:
-            raise KeyError("Refusing to load already existing segment {!s} into store.".format(seg))
+    def sections(self):
+        '''Yields each Section contained within the store that has symbols to process.'''
+        raise NotImplementedError
 
-        # Add our segment and return it so that an implementor can add its symbols
-        self._segments.add(seg)
-        return seg
+    def add_symbol(self, section, symbol):
+        raise NotImplementedError
 
-    @abc.abstractmethod
-    def load(self, *args):
-        '''Load any symbols specific to the store.'''
-        for seg in self.segments():
-            seg = self.load_segment(seg)
-            self[seg.name()] = seg.offset()
-
-        # After loading the symbols for each segment, we need to lock our hash in
-        # place. We do this by make a copy of ourselves and then referencing that
-        # new copy since the keys shouldn't change anymore.
-        return self.of(copy.copy(self))
+#    @abc.abstractmethod
+#    def load_section(self, sec):
+#        '''Load the symbols for the given segment into store.'''
+#        if sec in self._sections:
+#            raise KeyError("Refusing to load already existing segment {!s} into store.".format(seg))
+#
+#        # Add our segment and return it so that an implementor can add its symbols
+#        self._sections.add(sec)
+#        return sec
+#
+#    @abc.abstractmethod
+#    def load(self, *args):
+#        '''Load any symbols specific to the store.'''
+#        for seg in self.segments():
+#            seg = self.load_segment(seg)
+#            self[seg.name()] = seg.offset()
+#
+#        # After loading the symbols for each segment, we need to lock our hash in
+#        # place. We do this by make a copy of ourselves and then referencing that
+#        # new copy since the keys shouldn't change anymore.
+#        return self.of(copy.copy(self))
 
 #class Store(base.OrderedMapping):
 #    """This is the base class that a user must implement to perform the work of a store.
