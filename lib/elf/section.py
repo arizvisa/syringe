@@ -383,27 +383,24 @@ class SYMINFO_FLG_(pbinary.flags):
         (1, 'DIRECT'),
     ]
 
+class SYMINFO_BT_(pint.enum):
+    _values_ = [
+        ('SELF', 0xffff),
+        ('PARENT', 0xfffe),
+        ('NONE', 0xfffd),
+    ]
+
 class Elf32_Syminfo(pstruct.type):
-    class SYMINFO_BT_(pint.enum, Elf32_Half):
-        _values_ = [
-            ('SYMINFO_BT_SELF', 0xffff),
-            ('SYMINFO_BT_PARENT', 0xfffe),
-            ('SYMINFO_BT_NONE', 0xfffd),
-        ]
+    class si_boundto(SYMINFO_BT_, Elf32_Half): pass
     _fields_ = [
-        (SYMINFO_BT_, 'si_boundto'),
+        (si_boundto, 'si_boundto'),
         (SYMINFO_FLG_, 'si_flags'),
     ]
 
 class Elf64_Syminfo(pstruct.type):
-    class SYMINFO_BT_(pint.enum, Elf64_Half):
-        _values_ = [
-            ('SYMINFO_BT_SELF', 0xffff),
-            ('SYMINFO_BT_PARENT', 0xfffe),
-            ('SYMINFO_BT_NONE', 0xfffd),
-        ]
+    class si_boundto(SYMINFO_BT_, Elf64_Half): pass
     _fields_ = [
-        (SYMINFO_BT_, 'si_boundto'),
+        (si_boundto, 'si_boundto'),
         (SYMINFO_FLG_, 'si_flags'),
     ]
 
