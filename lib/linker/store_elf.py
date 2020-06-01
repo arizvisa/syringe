@@ -5,7 +5,7 @@ from . import store
 class Shdr(store.Section):
     def __hash__(self):
         hdr = self._shdr
-        items = (self.name, self.bounds, shdr['sh_type'].int, shdr['sh_flags'].int)
+        items = (self.__section_name, self.bounds, shdr['sh_type'].int, shdr['sh_flags'].int)
         iterable = (item() for item in items)
         return functools.reduce(operator.xor, map(hash, iterable))
 
@@ -26,6 +26,9 @@ class Shdr(store.Section):
         sheaders = header['e_shoff'].d
         pheaders = header['e_phoff'].d
 
+        # Grab our segment index for symbols to look us up
+        idx = sheaders.index(sh)
+
         # Get the Phdr that our section is contained in
         try:
             phdr = pheaders.byaddress(sh['sh_addr'].int())
@@ -40,20 +43,27 @@ class Shdr(store.Section):
             raise LookupError("Section {:d} is of an incorrect type: {!s} <> {!s}".format(res, "{:s}({:#x})".format(t, elf.section.SHT_.byname('SHT_STRTAB')), shdr_strtab['sh_type'].summary()))
 
         # Assign all of our properties
+        self._index = idx
         self._shdr = sh
         self._sections = sheaders
         self._phdr = phdr
         self._shstrtab = shdr_strtab['sh_offset'].d
 
     def name(self):
-        shdr, strtab = self._shdr, self._shstrtab
-        res = strtab.field(shdr['sh_name'].int())
-        return res.str()
+        return self._index
 
     def bounds(self):
         shdr, phdr = self._shdr, self._phdr
         res = shdr['sh_addr'].int() - phdr['p_vaddr'].int()
         return res, res + shdr.getloadedsize()
+
+    def __section_name(self):
+        shdr, strtab = self._shdr, self._shstrtab
+        res = strtab.field(shdr['sh_name'].int())
+        return res.str()
+
+    def __repr__(self):
+        return "{!s} {:s} ({:d}) {:#x}{:+x}".format(cls, self.__section_name(), self.name(), *self.bounds())
 
 class Phdr(store.Segment):
     def __hash__(self):
@@ -107,7 +117,7 @@ class Object(store.Store):
         # grab the symbol tables and combine them into a single list
         types = ['SHT_SYMTAB', 'SHT_DYNSYM']
         symtabs = (item for item in self._sheaders if any(item['sh_type'][t] for t in types))
-        symbols = itertools.chain(*(symtab['sh_addr'].d.li for symtab in symtabs))
+        symbols = itertools.chain(*(symtab['sh_offset'].d.li for symtab in symtabs))
         self._symbols = [symbol for symbol in symbols]
 
         # let the base class continue its initialization
@@ -129,15 +139,32 @@ class Object(store.Store):
             continue
         return
 
+    def load_section(self, section):
+        for sym in self._symbols:
+            index = sym['st_shndx'].SectionIndex()
+            if index != section.name():
+                continue
+
+            # Figure out information about the symbol such as its scope, and
+            # then its type just so we include some metadata with our symbol
+            # that gets added.
+
+            sti, stv = (sym[fld] for fld in ['st_info', 'st_other'])
+            sti_bind, sti_type = (stv.item(fld) for fld in ['ST_BIND', 'ST_TYPE'])
+            self.add_symbol(sym, store.Scope.Local, section)
+        return super(Object, self).load_section(section)
+
 if __name__ == '__main__':
     import sys, os.path
     import ptypes, elf, linker
     from linker import store_elf
     import importlib
+    store = importlib.reload(linker.store)
+    t= store.ScopeType('local')
     store_elf = importlib.reload(linker.store_elf)
 
     library_dir = os.path.dirname(__file__)
-    #library_dir = os.path.join(os.getcwd(), 'lib', 'linker')
+    #library_dir = os.path.join(os.getcwd(), 'linker')
     samples_dir = os.path.join(library_dir, 'samples')
     ptypes.setsource(ptypes.prov.file(os.path.join(samples_dir, 'write.out'), 'rb'))
     #ptypes.setsource(ptypes.prov.file('/usr/lib64/libpython3.7m.so.1.0', 'rb'))
@@ -147,12 +174,13 @@ if __name__ == '__main__':
 
     phl = z['e_phoff'].d.l
     self = store_elf.Phdr(phl[1])
+    print(self.data())
 
     shl = z['e_shoff'].d.l
     self = store_elf.Shdr(shl[1])
-    print(self.data())
 
     st = store_elf.Object(z)
-    for item in st._symbols:
-        print(item)
 
+    for i, item in enumerate(st._symbols):
+        print(item['st_shndx'].SectionIndex())
+        print(item)
