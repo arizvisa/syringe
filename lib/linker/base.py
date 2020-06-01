@@ -2,6 +2,7 @@ import functools, itertools, types, builtins, operator, sys
 import six, abc, copy, collections, weakref
 
 if sys.version_info.major < 3:
+    Set = collections.Set
     Hashable = collections.Hashable
     Mapping = collections.Mapping
     MutableSet = collections.MutableSet
@@ -10,6 +11,7 @@ if sys.version_info.major < 3:
 
 else:
     import collections.abc
+    Set = collections.abc.Set
     Hashable = collections.abc.Hashable
     Mapping = collections.abc.Mapping
     MutableMapping = collections.abc.MutableMapping
@@ -88,6 +90,19 @@ class Copyable(AbstractBaseClass):
             attribute = state[name]
             setattr(self, name, attribute)
         return
+
+class Transitive(Hashable):
+    @staticmethod
+    def __subclass__():
+        return Transitive, ('__eq__', '__ne__')
+
+    @abc.abstractmethod
+    def __eq__(self, other):
+        return not (self != other)
+
+    @abc.abstractmethod
+    def __ne__(self, other):
+        return not (self == other)
 
 class ReferenceFrom(AbstractBaseClass):
     @staticmethod
