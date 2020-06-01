@@ -112,8 +112,10 @@ def _sh_vaddress(ptr, CLASS):
     def sh_size(self):
         p = self.getparent(ElfXX_Shdr)
         size, alignment = (p[fld].li for fld in ['sh_size', 'sh_addralign'])
-        count = (size.int() + alignment.int() - 1) // alignment.int()
-        return count * alignment.int()
+        if alignment.int() > 0:
+            count = (size.int() + alignment.int() - 1) // alignment.int()
+            return count * alignment.int()
+        return size.int()
 
     def sh_vaddress(self):
         res = self['sh_type'].li
@@ -219,9 +221,11 @@ class ElfXX_Shdr(ElfXX_Header):
         return res.int()
 
     def getloadedsize(self):
-        res, alignment = (self[fld].li for fld in ['sh_size', 'sh_addralign'])
-        count = (res.int() + alignment.int() - 1) // alignment.int()
-        return count * alignment.int()
+        size, alignment = (self[fld].li for fld in ['sh_size', 'sh_addralign'])
+        if alignment.int() > 0:
+            count = (size.int() + alignment.int() - 1) // alignment.int()
+            return count * alignment.int()
+        return size.int()
 
     def containsaddress(self, va):
         res = self['sh_addr']
@@ -236,7 +240,16 @@ class ELFCOMPRESS_(pint.enum):
         ('ELFCOMPRESS_ZLIB', 1),
     ]
 class ElfXX_Chdr(ElfXX_Header):
-    pass
+    def getreadsize(self):
+        res = self['ch_size'].li
+        return res.int()
+
+    def getloadedsize(self):
+        size, alignment = (self[fld].li for fld in ['ch_size', 'ch_addralign'])
+        if alignment.int() > 0:
+            count = (size.int() + alignment.int() - 1) // alignment.int()
+            return count * alignment.int()
+        return size.int()
 
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
@@ -268,20 +281,11 @@ class Elf32_Chdr(pstruct.type, ElfXX_Chdr):
         (Elf32_Word, 'ch_addralign'),
     ]
 
-    def getreadsize(self):
-        res = self['ch_size'].li
-        return res.int()
-
-    def getloadedsize(self):
-        res, alignment = (self[fld].li for fld in ['ch_size', 'ch_addralign'])
-        count = (res.int() + alignment.int() - 1) // alignment.int()
-        return count * alignment.int()
-
 class Elf64_Shdr(pstruct.type, ElfXX_Shdr):
     class sh_name(_sh_name, Elf64_Word): pass
     class sh_type(SHT_, Elf64_Word): pass
     class sh_flags(SHF_):
-        _fields_ = [(32, 'SHF_RESERVED2')] + SHF_._fields_
+        _fields_ = [(32, 'RESERVED')] + SHF_._fields_
     def __sh_unknown(self):
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
         return dyn.block(max(0, self.blocksize() - res))

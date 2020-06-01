@@ -52,8 +52,10 @@ def _p_vaddress(ptr, CLASS):
     def p_size(self):
         p = self.getparent(ElfXX_Phdr)
         size, alignment = (p[fld].li for fld in ['p_memsz', 'p_align'])
-        count = (size.int() + alignment.int() - 1) // alignment.int()
-        return count * alignment.int()
+        if alignment.int() > 0:
+            count = (size.int() + alignment.int() - 1) // alignment.int()
+            return count * alignment.int()
+        return size.int()
 
     def p_vaddress(self):
         res = self['p_type'].li
@@ -77,9 +79,11 @@ class ElfXX_Phdr(ElfXX_Header):
         return res.int()
 
     def getloadedsize(self):
-        res, alignment = (self[fld].li for fld in ['p_memsz', 'p_align'])
-        count = (res.int() + alignment.int() - 1) // alignment.int()
-        return count * alignment.int()
+        size, alignment = (self[fld].li for fld in ['p_memsz', 'p_align'])
+        if alignment.int() > 0:
+            count = (size.int() + alignment.int() - 1) // alignment.int()
+            return count * alignment.int()
+        return size.int()
 
     def containsaddress(self, va):
         res = self['p_vaddr']
