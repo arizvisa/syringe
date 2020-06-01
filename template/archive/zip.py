@@ -520,7 +520,7 @@ class Record(pstruct.type):
         bits, sig = 32, self['Signature'].li.int()
         try:
             p = self.getparent(Directory)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ZipRecord.lookup((bits, sig))
 
         t = ZipRecord.lookup((bits, sig))

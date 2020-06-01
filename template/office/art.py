@@ -1606,7 +1606,7 @@ class OfficeArtRGFOPTE(pstruct.type):
         try:
             p = self.getparent(type=RecordGeneral)
             _,count = p['header'].Instance()
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             count = 0
         return dyn.array(OfficeArtFOPTE, count)
 

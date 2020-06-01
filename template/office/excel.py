@@ -3870,7 +3870,7 @@ class TxORuns(pstruct.type):
         try:
             rg = self.getparent(RecordGeneral)
             res = rg.previousRecord(TxO, **count)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return dyn.array(Run, 0)
 
         cbRuns = res.d['cbRuns']

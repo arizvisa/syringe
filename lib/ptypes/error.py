@@ -135,7 +135,7 @@ class TypeError(RequestError, exceptions.TypeError):
     """Error while generating type or casting to type"""
 class InputError(RequestError, exceptions.ValueError):
     """Source has reported termination of input"""
-class NotFoundError(RequestError, exceptions.ValueError):
+class ItemNotFoundError(RequestError, exceptions.ValueError):
     """Traversal or search was unable to locate requested type or value"""
 class InitializationError(RequestError, exceptions.ValueError):
     """Object is uninitialized"""

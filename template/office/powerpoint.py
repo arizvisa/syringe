@@ -772,7 +772,7 @@ class TextMasterStyleLevel(pstruct.type):
             p = self.getparent(type=RecordGeneral)
             _,instance = p['header'].Instance()
             res = uint2 if instance >= 5 else pint.uint_t
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             res = pint.uint_t
         return res
 

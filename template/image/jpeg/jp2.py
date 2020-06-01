@@ -355,7 +355,7 @@ class ColourSpecification(pstruct.type):
     def __PROFILE(self):
         try:
             hdr = self.getparent(Box).li
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return dyn.block(0)
 
         fields = ['METH', 'PREC', 'APPROX', 'EnumCS']
@@ -401,7 +401,7 @@ class UUID(pstruct.type):
     def __DATA(self):
         try:
             hdr = self.getparent(Box).li
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return dyn.block(0)
         return dyn.block(hdr.DataLength() - self['ID'].li.size())
 
@@ -477,7 +477,7 @@ class URL(pstruct.type):
     def __LOC(self):
         try:
             hdr = self.getparent(Box).li
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return dyn.block(0)
 
         fields = ['VERS', 'FLAG']
@@ -497,7 +497,7 @@ class ReaderRequirements(pstruct.type):
             try:
                 p = self.getparent(ReaderRequirements)
 
-            except ptypes.error.NotFoundError:
+            except ptypes.error.ItemNotFoundError:
                 return u0
             return dyn.clone(u0, length=p['ML'].li.int())
         _fields_ = [

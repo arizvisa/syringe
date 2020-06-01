@@ -75,7 +75,7 @@ class LISTDATA(parray.block):
                 if isinstance(res, File):
                     return res['fileSize'].li.int() - self.p['listType'].li.size()
                 return res['ckSize'].li.int() - self.p['listType'].li.size()
-        except ptypes.error.NotFoundError: pass
+        except ptypes.error.ItemNotFoundError: pass
         return super(LISTDATA, self).blocksize()
     def classname(self):
         cls = self.__class__
@@ -232,7 +232,7 @@ class AVIMETAINDEX(pstruct.type):
     def __adwIndex(self):
         try:
             res = self.getparent(Chunk)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return super(idx1, self).blocksize()
         cb = sum(self[n].size() for n in ('wLongsPerEntry', 'bIndexSubType', 'bIndexType', 'nEntriesInUse', 'dwChunkId', 'dwReserved'))
         return dyn.clone(AVIMETAINDEX._adwIndex, blocksize=lambda s, cb=res['ckSize'].li.int() - cb: cb)
@@ -264,7 +264,7 @@ class idx1(parray.block):
         try:
             res = self.getparent(Chunk)
             return res['fileSize'].li.int() if isinstance(res, File) else res['ckSize'].li.int()
-        except ptypes.error.NotFoundError: pass
+        except ptypes.error.ItemNotFoundError: pass
         return super(idx1, self).blocksize()
 
 ## FOURCC LISTDATA types

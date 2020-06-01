@@ -9,7 +9,7 @@ class _sh_name(pint.type):
     def summary(self):
         try:
             res = self.str()
-        except (ptypes.error.TypeError, ptypes.error.NotFoundError):
+        except (ptypes.error.TypeError, ptypes.error.ItemNotFoundError):
             return super(_sh_name, self).summary()
         return "{:s} : {!r}".format(super(_sh_name, self).summary(), res)
 
@@ -138,7 +138,7 @@ class _st_name(pint.type):
     def summary(self):
         try:
             res = self.str()
-        except (ptypes.error.TypeError, ptypes.error.NotFoundError):
+        except (ptypes.error.TypeError, ptypes.error.ItemNotFoundError):
             return super(_st_name, self).summary()
         return "{:s} : {!r}".format(super(_st_name, self).summary(), res)
 
@@ -146,7 +146,7 @@ class _st_name(pint.type):
         index = self.getparent(ElfXX_Shdr)['sh_link'].int()
         res = self.getparent(ElfXX_Ehdr)['e_shoff'].d.li
         if index >= len(res):
-            raise ptypes.error.NotFoundError(self, 'str')
+            raise ptypes.error.ItemNotFoundError(self, 'str')
         table = res[index]['sh_offset'].d.li
         if isinstance(table, ELFCLASSXX.SHT_STRTAB):
             return table.read(self.int()).str()

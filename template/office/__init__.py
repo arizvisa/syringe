@@ -161,7 +161,7 @@ class RecordGeneral(pstruct.type):
                 i += 1
 
         if not isinstance(container[idx - i].d, type):
-            raise ptypes.error.NotFoundError(self, 'previousRecord', message='Unable to locate previous record : {!r}'.format(type))
+            raise ptypes.error.ItemNotFoundError(self, 'previousRecord', message='Unable to locate previous record : {!r}'.format(type))
         return container[idx - i]
 
 

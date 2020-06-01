@@ -581,7 +581,7 @@ if 'HeapEntry':
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
                 try:
                     self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=HEAP), self.__RtlpLFHKey()
-                except (ptypes.error.NotFoundError, AttributeError):
+                except (ptypes.error.ItemNotFoundError, AttributeError):
                     # FIXME: Log that this heap-entry is non-encoded due to inability to determine required keys
                     pass
 
@@ -1284,7 +1284,7 @@ if 'LFH':
 
             # If we couldn't find the subsegment size in the LFH_HEAP, then just
             # fake-allocate it in order to grab its size
-            except ptypes.error.NotFoundError:
+            except ptypes.error.ItemNotFoundError:
                 cb = self.new(HEAP_SUBSEGMENT).a.size()
 
             # Calculate the offset to our current field so that we can determine
@@ -1302,7 +1302,7 @@ if 'LFH':
 
             # If we couldn't find the subsegment size in the LFH_HEAP, then just
             # fake-allocate it in order to grab its size
-            except ptypes.error.NotFoundError:
+            except ptypes.error.ItemNotFoundError:
                 cb = self.new(HEAP_SUBSEGMENT).a.size()
 
             # Take the free pointer (points to a chunk), and subtract a HEAP_ENTRY

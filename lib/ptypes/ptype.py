@@ -717,7 +717,7 @@ class __interface__(object):
         # otherwise, we can bail since it wasn't found.
         chain = str().join("<{:s}>".format(node.instance()) for node in self.traverse(edges=parents))
         res = (q.typename() if istype(q) else str(q) for q in query)
-        raise error.NotFoundError(self, 'base.getparent', message="The requested match ({:s}) was not found while traversing from {:s} : {:s}".format(', '.join(res), self.instance(), chain))
+        raise error.ItemNotFoundError(self, 'base.getparent', message="The requested match ({:s}) was not found while traversing from {:s} : {:s}".format(', '.join(res), self.instance(), chain))
     def backtrace(self, fn=operator.methodcaller('instance')):
         """
         Return a backtrace to the root element applying ``fn`` to each parent
@@ -1056,7 +1056,7 @@ class type(base):
 
             try:
                 parent = self.getparent(encoded_t)
-            except error.NotFoundError:
+            except error.ItemNotFoundError:
                 parent = self.getparent(None)
 
             # check if child element is child of encoded_t or we're a proxy since neither needs to get checked since the types aren't guaranteed to be related
@@ -1232,7 +1232,7 @@ class container(base):
         until an atomic type (such as ptype.type, or pbinary.partial) is encountered.
         """
         if not self.contains(offset):
-            raise error.NotFoundError(self, 'container.at', "offset {:#x} can not be located within container.".format(offset))
+            raise error.ItemNotFoundError(self, 'container.at', "offset {:#x} can not be located within container.".format(offset))
 
         # if we weren't asked to recurse, then figure out which sub-element contains the offset
         if not recurse:
@@ -1240,7 +1240,7 @@ class container(base):
                 if item.contains(offset):
                     return item
                 continue
-            raise error.NotFoundError(self, 'container.at', "offset {:#x} not found in a child element. returning encompassing parent.".format(offset))
+            raise error.ItemNotFoundError(self, 'container.at', "offset {:#x} not found in a child element. returning encompassing parent.".format(offset))
 
         # descend into the trie a single level
         try:
@@ -1330,7 +1330,7 @@ class container(base):
 
         try:
             parent = self.getparent(encoded_t)
-        except error.NotFoundError:
+        except error.ItemNotFoundError:
             parent = self.getparent(None)
 
             # check to see if we should validate ourselves according to parent's boundaries

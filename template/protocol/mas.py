@@ -479,7 +479,7 @@ class ShareControlHeader(pstruct.type):
             res = self.getparent(SharePDU)
             return pint.uint_t if res['totalLength'].li.int() == 4 else ShareId.UserId
 
-        except ptypes.error.NotFoundError: pass
+        except ptypes.error.ItemNotFoundError: pass
         return ShareId.UserId
 
     _fields_ = [
@@ -501,7 +501,7 @@ class ShareControlPDU(pstruct.type):
 
         # If we don't have a parent, we can't determine the totalLength and
         # so we don't need to abate this field
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             res = self['shareControlHeader'].li
             return PDUType.withdefault(res['pduType']['type'], ptype.undefined)
 
@@ -699,7 +699,7 @@ class DataPDU(pstruct.type):
 
         # Nothing was found, so don't bother trying to adjust the ShareDataPacket
         # since this might be being constructed by the user.
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ShareDataPacket
 
         # Now that we've figured out the total size and our parent that the size

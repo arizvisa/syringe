@@ -49,7 +49,7 @@ class ElfXX_Off(ElfXX_BaseAddr):
                 ph = phentries.byoffset(offset)
                 return base.getoffset() + ph.getaddressbyoffset(offset)
 
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             pass
 
         return base.getoffset() + offset
@@ -66,7 +66,7 @@ class ElfXX_VAddr(ElfXX_BaseAddr):
                 ph = phentries.byaddress(address)
                 return base.getoffset() + ph.getoffsetbyaddress(address)
 
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             pass
 
         return base.getoffset() + address

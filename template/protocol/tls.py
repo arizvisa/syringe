@@ -554,7 +554,7 @@ class ClientHello(pstruct.type):
         try:
             p = self.getparent(Handshake)
             cb = p['length'].li.int()
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         res = sum(self[fld].li.size() for fld in ['client_version','random','session_id','cipher_suites','compression_methods'])
         if cb >= res + 2:
@@ -565,7 +565,7 @@ class ClientHello(pstruct.type):
         try:
             p = self.getparent(Handshake)
             cb = p['length'].li.int()
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         res = sum(self[fld].li.size() for fld in ['client_version','random','session_id','cipher_suites','compression_methods','extensions'])
         return dyn.block(cb - res)
@@ -587,7 +587,7 @@ class ServerHello(pstruct.type):
         try:
             p = self.getparent(Handshake)
             cb = p['length'].li.int()
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         res = sum(self[fld].li.size() for fld in ['server_version','random','session_id','cipher_suite','compression_method'])
         if cb >= res + 2:
@@ -598,7 +598,7 @@ class ServerHello(pstruct.type):
         try:
             p = self.getparent(Handshake)
             cb = p['length'].li.int()
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         res = sum(self[fld].li.size() for fld in ['server_version','random','session_id','cipher_suite','compression_method','extensions'])
         return dyn.block(cb - res)

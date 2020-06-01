@@ -822,7 +822,7 @@ class API_SET_VALUE_ENTRY(pstruct.type):
                 try:
                     parent = self.getparent(API_SET_VALUE_ENTRY)
                     result = parent['Size'].li.int()
-                except (error.NotFoundError, error.InitializationError):
+                except (error.ItemNotFoundError, error.InitializationError):
                     result = 0
                 return result
 
@@ -861,7 +861,7 @@ class API_SET_ENTRY(pstruct.type):
                 try:
                     parent = self.getparent(API_SET_ENTRY)
                     result = parent['NameLength'].li.int()
-                except (error.NotFoundError, error.InitializationError):
+                except (error.ItemNotFoundError, error.InitializationError):
                     result = 0
                 return result
 

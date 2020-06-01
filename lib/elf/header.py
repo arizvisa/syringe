@@ -336,7 +336,7 @@ class ShdrEntries(XhdrEntries):
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.NotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified offset ({:#x})".format(ofs))
+            raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified offset ({:#x})".format(ofs))
         return result
 
     def byaddress(self, va):
@@ -344,7 +344,7 @@ class ShdrEntries(XhdrEntries):
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.NotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified virtual address ({:#x})".format(va))
+            raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified virtual address ({:#x})".format(va))
         return result
 
 class PhdrEntries(XhdrEntries):
@@ -358,7 +358,7 @@ class PhdrEntries(XhdrEntries):
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.NotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified offset ({:#x})".format(ofs))
+            raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified offset ({:#x})".format(ofs))
         return result
 
     def byaddress(self, va):
@@ -368,7 +368,7 @@ class PhdrEntries(XhdrEntries):
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.NotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
+            raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
         return result
 
 ### 32-bit
@@ -413,7 +413,7 @@ class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
         res, index = self['e_shoff'].d.li, self['e_shstrndx'].int()
         if index < len(res):
             return res[index]['sh_offset'].d.li
-        raise ptypes.error.NotFoundError(self, 'stringtable')
+        raise ptypes.error.ItemNotFoundError(self, 'stringtable')
 
 ### 64-bit
 class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
@@ -457,4 +457,4 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         res, index = self['e_shoff'].d.li, self['e_shstrndx'].int()
         if index < len(res):
             return res[index]['sh_offset'].d.li
-        raise ptypes.error.NotFoundError(self, 'stringtable')
+        raise ptypes.error.ItemNotFoundError(self, 'stringtable')

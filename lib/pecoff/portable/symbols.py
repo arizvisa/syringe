@@ -94,7 +94,7 @@ class ShortName(pstruct.type):
         try:
             res = self.getparent(SymbolTableAndStringTable)
 
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             logging.warn("{:s} : unable to return symbol name at offset {:#x} due to missing {:s}".format(self.instance(), self['Offset'].int(), SymbolTableAndStringTable.typename()))
             return '<MissingStringTable>'
 

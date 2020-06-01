@@ -107,7 +107,7 @@ class PayloadString(pstruct.type):
     def __string(self):
         try:
             fields = self.getparent(MessageDependentFields)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
 
         if fields.p['NegotiateFlags']['NEGOTIATE_UNICODE']:
@@ -117,7 +117,7 @@ class PayloadString(pstruct.type):
     def __padding(self):
         try:
             fields = self.getparent(MessageDependentFields)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
 
         length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
@@ -141,7 +141,7 @@ class MessageDependentFields(pstruct.type):
         # If we didn't find a parent, then we haven't been attached yet. In this
         # case, we'll just make it a regular pointer so the user can just reference
         # it to whatever they want.
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return dyn.pointer(self._object_, pint.uint32_t)
         return dyn.rpointer(self._object_, p, pint.uint32_t)
 
@@ -296,7 +296,7 @@ class PayloadPairs(pstruct.type):
     def __padding(self):
         try:
             fields = self.getparent(MessageDependentFields)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptypes.undefined
         length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
         return dyn.block(max((0, cb - length)))
@@ -394,14 +394,14 @@ class SessionKey(pstruct.type):
     def __session_key(self):
         try:
             fields = self.getparent(MessageDependentFields)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         return dyn.clone(pint.uint_t, length=fields['Length'].int())
 
     def __padding(self):
         try:
             fields = self.getparent(MessageDependentFields)
-        except ptypes.error.NotFoundError:
+        except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
         return dyn.block(max((0, cb - length)))
