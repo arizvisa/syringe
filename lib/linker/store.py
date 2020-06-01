@@ -6,11 +6,40 @@ from . import base
 
 # do we need 2 types of addreses to assign a symbol or section or store? relative, absolute
 
-class Scope:
-    """Symbol scope"""
-    class Local(object): pass
-    class Global(object): pass
-    class External(object): pass
+class TypeEnumeration(object):
+    class Get(object): pass
+    def __new__(cls, name):
+        return type(name, (object,), {})
+
+    @staticmethod
+    def Is(ns, t):
+        return isinstance(t, type) and issubclass(t, ns)
+
+    @staticmethod
+    def Add(ns, name):
+        if hasattr(ns, name):
+            raise AttributeError(name)
+        value = type(name, (ns,), {})
+        value.__module__ = '.'.join((ns.__module__, ns.__name__))
+        class get(TypeEnumeration.Get):
+            def __get__(self, instance, owner=None):
+                return value
+        get.__name__ = name
+        setattr(ns, name, get())
+
+    @staticmethod
+    def Iterate(ns):
+        for item in ns.__dict__.values():
+            if isinstance(item, TypeEnumeration.Get):
+                yield item.__get__(None)
+            continue
+        return
+
+# This is just a namespace to contain the available scope types.
+Scope = TypeEnumeration('Scope')
+TypeEnumeration.Add(Scope, 'Local')
+TypeEnumeration.Add(Scope, 'Global')
+TypeEnumeration.Add(Scope, 'External')
 
 class Permissions(base.Set):
     """Segment permissions"""
@@ -79,142 +108,142 @@ class Relocations(base.OrderedSet): # ordered-set?
 #    getbysegment    # gets the relocations for a specific segment
 #
 
-class Symbols(base.MutableMapping):
-    """This object contains a symboltable.
-
-    Symbols here can be modified to different addresses. This values here will be used
-    by the relocations object.
-
-    (?) Each symbol is represented by (module, name, scope).
-    If there is no module, then None will be used.
-
-    There's 3 scopes available. Global,Local,External,Alias
-
-    (?) External symbols might require some way to determine the "glue" symbol that is
-        used to contain the plt code to branch correctly out of a function.
-
-    (?) It should be possible to assign an alias symbol to any symbol. This way if a
-        symbol is updated, all it's aliases will contain the same value.
-
-    All symbol assignments are done by offset from base of parent.
-    """
-
-    __slots__ = '_data', '_scope', '_store'
-
-    def __init__(self, store):
-        self._data = base.AliasMapping()
-        self._scope = {
-            Scope.Global : base.OrderedSet(),
-            Scope.Local : base.OrderedSet(),
-            Scope.External : base.OrderedSet(),
-        }
-        self._store = store
-
-    # implementations
-    def __len__(self):
-        return len(self._data)
-
-    def __iter__(self):
-        for item in self._data:
-            yield item
-        return
-
-    def __getitem__(self, name):
-        return self._data[name]
-
-    def __setitem__(self, name, value):
-        if name in self._data:
-            self._data[name] = value
-            return
-        raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
-
-    def __delitem__(self, name):
-        raise KeyError("Refusing to remove symbol {!r} from {!s}".format(name, object.__repr__(self)))
-
-    # properties
-    data = property(fget=lambda self: self._data)
-    scope = property(fget=lambda self: self._scope)
-    store = property(fget=lambda self: self._store)
-
-    # tools
-    def _findscope(self, name):
-        for sc, set in self._scope.items():
-            if name in set:
-                return sc
-            continue
-        raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
-
-    # single symbols
-    def add(self, name, scope=Scope.Local):
-        """Reserve a slot in `scope` for the symbol `name`"""
-
-        try:
-            sc = self._findscope(name)
-
-        except KeyError:
-            pass
-
-        else:
-            raise KeyError("Symbol {!r} already exists in {!r}: {!s}".format(name, sc, object.__repr__(self._scope[scope])))
-
-        self._scope[scope].add(name)
-        self._data[name] = None
-
-    def remove(self, name):
-        """Remove the slot allocated for symbol `name`. This will also remove it from its scope."""
-        sc = self._findscope(name)
-        self._scope[sc].remove(name)
-        return self._data.pop(name)
-
-    # multiple symbols
-    def apply(self, fn, scope=None):
-        if scope is None:
-            for item in self._data.keys():
-                self._data[item] = fn(self._data[item])
-            return
-
-        for item in self._scope[scope]:
-            self._data[item] = fn(self._data[item])
-        return
-
-    def update(self, iterable):
-        """Update the table with the specified `iterable`."""
-        res = {}
-        for name, value in iterable:
-            if name not in self._data:
-                raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
-            res[name] = self._data[name]
-            self._data[name] = value
-        return res
-
-    def merge(self, other):
-        if not isinstance(other, base.AliasDict):
-            raise AssertionError
-
-        count = set(self._data) - set(other._data)
-        self._data.update(other)
-        [self._scope[sc].update(data) for sc, data in other._scope]
-        return count
-
-    # aliases
-    def alias(self, target, name):
-        self._data.alias(target, name)
-        return self._data[target]
-
-    def unalias(self, name):
-        return self._data.unalias(name)[0]
-
-    # general
-    def getglobals(self):
-        return self._scope[Scope.Global]
-    def getlocals(self):
-        return self._scope[Scope.Local]
-    def getexternals(self):
-        return self._scope[Scope.External]
-    def getaliases(self):
-        return self._data.aliases()
-    def getundefined(self):
-        return {key for key in self._data if self._data[key] is None}
+#class Symbols(base.MutableMapping):
+#    """This object contains a symboltable.
+#
+#    Symbols here can be modified to different addresses. This values here will be used
+#    by the relocations object.
+#
+#    (?) Each symbol is represented by (module, name, scope).
+#    If there is no module, then None will be used.
+#
+#    There's 3 scopes available. Global,Local,External,Alias
+#
+#    (?) External symbols might require some way to determine the "glue" symbol that is
+#        used to contain the plt code to branch correctly out of a function.
+#
+#    (?) It should be possible to assign an alias symbol to any symbol. This way if a
+#        symbol is updated, all it's aliases will contain the same value.
+#
+#    All symbol assignments are done by offset from base of parent.
+#    """
+#
+#    __slots__ = '_data', '_scope', '_store'
+#
+#    def __init__(self, store):
+#        self._data = base.AliasMapping()
+#        self._scope = {
+#            Scope.Global : base.OrderedSet(),
+#            Scope.Local : base.OrderedSet(),
+#            Scope.External : base.OrderedSet(),
+#        }
+#        self._store = store
+#
+#    # implementations
+#    def __len__(self):
+#        return len(self._data)
+#
+#    def __iter__(self):
+#        for item in self._data:
+#            yield item
+#        return
+#
+#    def __getitem__(self, name):
+#        return self._data[name]
+#
+#    def __setitem__(self, name, value):
+#        if name in self._data:
+#            self._data[name] = value
+#            return
+#        raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
+#
+#    def __delitem__(self, name):
+#        raise KeyError("Refusing to remove symbol {!r} from {!s}".format(name, object.__repr__(self)))
+#
+#    # properties
+#    data = property(fget=lambda self: self._data)
+#    scope = property(fget=lambda self: self._scope)
+#    store = property(fget=lambda self: self._store)
+#
+#    # tools
+#    def _findscope(self, name):
+#        for sc, set in self._scope.items():
+#            if name in set:
+#                return sc
+#            continue
+#        raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
+#
+#    # single symbols
+#    def add(self, name, scope=Scope.Local):
+#        """Reserve a slot in `scope` for the symbol `name`"""
+#
+#        try:
+#            sc = self._findscope(name)
+#
+#        except KeyError:
+#            pass
+#
+#        else:
+#            raise KeyError("Symbol {!r} already exists in {!r}: {!s}".format(name, sc, object.__repr__(self._scope[scope])))
+#
+#        self._scope[scope].add(name)
+#        self._data[name] = None
+#
+#    def remove(self, name):
+#        """Remove the slot allocated for symbol `name`. This will also remove it from its scope."""
+#        sc = self._findscope(name)
+#        self._scope[sc].remove(name)
+#        return self._data.pop(name)
+#
+#    # multiple symbols
+#    def apply(self, fn, scope=None):
+#        if scope is None:
+#            for item in self._data.keys():
+#                self._data[item] = fn(self._data[item])
+#            return
+#
+#        for item in self._scope[scope]:
+#            self._data[item] = fn(self._data[item])
+#        return
+#
+#    def update(self, iterable):
+#        """Update the table with the specified `iterable`."""
+#        res = {}
+#        for name, value in iterable:
+#            if name not in self._data:
+#                raise KeyError("Symbol {!r} does not exist in {!s}".format(name, object.__repr__(self)))
+#            res[name] = self._data[name]
+#            self._data[name] = value
+#        return res
+#
+#    def merge(self, other):
+#        if not isinstance(other, base.AliasDict):
+#            raise AssertionError
+#
+#        count = set(self._data) - set(other._data)
+#        self._data.update(other)
+#        [self._scope[sc].update(data) for sc, data in other._scope]
+#        return count
+#
+#    # aliases
+#    def alias(self, target, name):
+#        self._data.alias(target, name)
+#        return self._data[target]
+#
+#    def unalias(self, name):
+#        return self._data.unalias(name)[0]
+#
+#    # general
+#    def getglobals(self):
+#        return self._scope[Scope.Global]
+#    def getlocals(self):
+#        return self._scope[Scope.Local]
+#    def getexternals(self):
+#        return self._scope[Scope.External]
+#    def getaliases(self):
+#        return self._data.aliases()
+#    def getundefined(self):
+#        return {key for key in self._data if self._data[key] is None}
 
 #class Segments(base.Mapping):
 #    """This object contains the segments for a store.
@@ -316,12 +345,12 @@ class Section(base.Transitive):
 
     @abc.abstractmethod
     def name(self):
-        '''Return the name of the section.'''
+        '''Return the unique identifier that is referenced by symbols.'''
         raise NotImplementedError
 
     @abc.abstractmethod
     def bounds(self):
-        '''Returns a tuple containing the left and right of a section within its segment.'''
+        '''Returns a tuple containing the left and right bounds within its segment.'''
         raise NotImplementedError
 
 class Segment(base.Transitive):
@@ -355,12 +384,26 @@ class Segment(base.Transitive):
         offset, length = self.offset(), self.length()
         return offset <= address < offset + length
 
-class Store(base.OrderedMapping, base.ReferenceFrom):
+class Symbols(base.MutableMapping):
+    def __init__(self):
+        # This maps a symbol name directly to a scope+section+symbol pair
+        self._slotmap = {}
+
+        # This maps a section+symbol pair to a slot (containing an integral value)
+        self._slots = {}
+
+        # This is a lookup table for all the scopes
+        self._scope = { scope : base.OrderedSet() for scope in TypeEnumeration.Iterate(Scope)}
+
+class Store(base.HookMapping):
     @abc.abstractmethod
     def __init__(self):
         self._sections = base.OrderedSet()
         self._segments = base.OrderedMapping()
-        return super(Store, self).__init__()
+
+        # Create our symbols backing that we're actually assigning into
+        res = Symbols()
+        return super(Store, self).__init__(slots)
 
     @abc.abstractmethod
     def segments(self):
@@ -372,19 +415,57 @@ class Store(base.OrderedMapping, base.ReferenceFrom):
         '''Yields each Section contained within the store that has symbols to process.'''
         raise NotImplementedError
 
-    def add_symbol(self, section, symbol):
+    def add_section(self, section):
+        '''This adds a Section instance to the store.'''
+        if not isinstance(section, Section):
+            raise TypeError("Type for {!s} is not a {!s}".format(section.__clss__, Section))
+        if section in self._sections:
+            raise ValueError("Section {!s} has already been added to store")
+        self._sections.add(section)
+
+    def add_symbol(self, name, scope, section, symbol):
+        """Add the specified symbol to the store.
+
+        The `name` is used as an identifier for the symbol within the
+        specified `scope`. The `section` describes the section that is
+        referencing the symbol, and `symbol` is arbitrary but must be
+        hashable.
+        """
         raise NotImplementedError
 
-#    @abc.abstractmethod
-#    def load_section(self, sec):
-#        '''Load the symbols for the given segment into store.'''
-#        if sec in self._sections:
-#            raise KeyError("Refusing to load already existing segment {!s} into store.".format(seg))
-#
-#        # Add our segment and return it so that an implementor can add its symbols
-#        self._sections.add(sec)
-#        return sec
-#
+    def add_relocation(self, relocation, section, symbol):
+        """Add the specified relocation to the store.
+
+        The `section` and `symbol` is used to reference the symbol that
+        the relocation is tied to. The `relocation` parameter that is
+        provided is arbitrary and only used to inform the implementor
+        what kind of relocation to apply to the section's data.
+        """
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    def load_section(self, section):
+        '''Load the symbols for the given Section into store.'''
+        if section not in self._sections:
+            raise KeyError("Unable to load unrelated section {!s} into store".format(seg))
+
+        # Figure out which segment this section belongs to
+        left, right = section.bounds()
+        try:
+            segment = next(seg for seg in self._segments if seg.contains(left))
+        except StopIteration:
+            raise LookupError("Unable to find segment containing section address {:#x}".format(left))
+        if not segment.contains(right) and segment.offset() + segment.length() != right:
+            raise LookupError("Segment {!s} does not contain entire section {:#x}<>{:#x}".format(segment, left, right))
+
+        # Now that we've figured out the segment, we can add our section that
+        # has just been loaded to its section list.
+        processed = self._segments.setdefault(segment, [])
+        processed.append(section)
+
+        # FIXME: Return the number of symbols from the loaded section
+        return len(processed)
+
 #    @abc.abstractmethod
 #    def load(self, *args):
 #        '''Load any symbols specific to the store.'''
