@@ -188,7 +188,8 @@ def force(t, self, chain=[]):
         return force(six.next(t), self, chain)
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
-    raise error.TypeError(self, 'force<pbinary>', message='chain={!r} : refusing request to resolve {!r} to a type that does not inherit from pbinary.type : {:s}'.format(chain, t, path))
+    chain_s = "{!s}".format(chain)
+    raise error.TypeError(self, 'force<pbinary>', message='chain={!s} : refusing request to resolve {!s} to a type that does not inherit from pbinary.type : {:s}'.format(chain_s, t, path))
 
 class base(ptype.generic):
     """A base class that all binary types with position/size must inherit from.
@@ -656,7 +657,19 @@ class container(type):
             return self.__field__(field).getposition(res) if len(res) > 0 else self.getposition(field)
 
         index = self.__getindex__(field)
-        return self.value[index].getposition()
+        if 0 <= index < len(self.value):
+            return self.value[index].getposition()
+
+        # If no fields exist, then just return our current position.
+        if not len(self.value):
+            return super(container, self).getposition()
+
+        # If our field does not exist, then we must be being asked for the end
+        # of the container. So use the last member to calculate the position.
+        res = self.value[-1]
+        offset, suboffset = res.getposition()
+        offset, suboffset = offset, suboffset + res.blockbits()
+        return offset + (suboffset // 8), suboffset % 8
 
     def setposition(self, position, recurse=False):
         (offset, suboffset) = position
@@ -954,7 +967,7 @@ class __array_interface__(container):
     def __getindex__(self, index):
         # check to see if the user gave us a bad type
         if not isinstance(index, six.integer_types):
-            raise TypeError(self, '__array_interface__.__getindex__', "Invalid type {:s} specified for index of {:s}.".format(index.__class__, self.typename()))
+            raise TypeError(self, '__array_interface__.__getindex__', "Invalid type {!s} specified for index of {:s}.".format(index.__class__, self.typename()))
 
         ## validate the index
         #if not(0 <= index < len(self.value)):
@@ -1097,16 +1110,16 @@ class __structure_interface__(container):
                 else:
                     typename = 'unknown<{!r}>'.format(t)
 
-                i = utils.repr_class(typename)
+                i, position = utils.repr_class(typename), self.getposition(name)
                 _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-                result.append(u"[{:s}] {:s} {:s} ???".format(utils.repr_position(self.getposition(name), hex=_hex, precision=_precision), i, name))
+                result.append(u"[{:s}] {:s} {:s} ???".format(utils.repr_position(position, hex=_hex, precision=_precision), i, name))
                 continue
 
             b = value.bitmap()
-            i = utils.repr_instance(value.classname(), value.name() or name)
+            i, position = utils.repr_instance(value.classname(), value.name() or name), self.getposition(value.__name__ or name)
             prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
             _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
-            result.append(u"[{:s}] {:s}{:s} {:s}".format(utils.repr_position(self.getposition(value.__name__ or name), hex=_hex, precision=_precision), i, u' {{{:s}}}'.format(prop) if prop else u'', value.summary()))
+            result.append(u"[{:s}] {:s}{:s} {:s}".format(utils.repr_position(position, hex=_hex, precision=_precision), i, u' {{{:s}}}'.format(prop) if prop else u'', value.summary()))
         if result:
             return '\n'.join(result)
         return u"[{:x}] Empty[]".format(self.getoffset())
@@ -3062,6 +3075,18 @@ if __name__ == '__main__':
 
         x = t().a
         if len(x) == 32:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_uninitialized_field_position_80():
+        class t(pbinary.struct):
+            _fields_ = [
+                (32, 'initialized'),
+                (4, 'uninitialized'),
+            ]
+        a = t().a
+        del(a.v[1])
+        if len(a.v) == 1 and a.getposition('uninitialized') == (4, 0):
             raise Success
 
 if __name__ == '__main__':
