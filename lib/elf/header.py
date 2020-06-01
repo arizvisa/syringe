@@ -371,6 +371,18 @@ class PhdrEntries(XhdrEntries):
             raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
         return result
 
+    def enumerate(self):
+        for item in super(PhdrEntries, self).enumerate():
+            if not isinstance(self.source, ptypes.provider.memorybase):
+                yield item
+                continue
+
+            flags = item['p_flags']
+            if any(flags[fl] for fl in ['PT_LOAD', 'PT_DYNAMIC']):
+                yield item
+            continue
+        return
+
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):
     def _ent_array(self, entries, type, size, length):

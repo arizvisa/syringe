@@ -374,12 +374,23 @@ class ELFCLASS32(object):
     class d_rtptr(Elf32_VAddr):
         def _calculate_(self, address):
             return address if isinstance(self.source, ptypes.provider.memorybase) else super(ELFCLASS32.d_rtptr, self)._calculate_(address)
+    class d_stroffset(d_val):
+        def dereference(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_strtab = p.by_tag('DT_STRTAB')
+            res = dt_strtab.d.li
+            return res.field(self.get())
+        d = property(fget=dereference)
+        def str(self):
+            res = self.dereference()
+            return res.str()
 
     ## dynamic entry type for d_un
     @DT_.define
     class DT_NULL(d_ign): type = 0
     @DT_.define
-    class DT_NEEDED(d_val): type = 1 # FIXME
+    class DT_NEEDED(d_stroffset): type = 1
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
@@ -445,20 +456,9 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_FINI(d_ptr): type = 13
     @DT_.define
-    class DT_SONAME(d_val):
-        type = 14
-        def dereference(self):
-            from .segment import ELFCLASSXX
-            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
-            dt_strtab = p.by_tag('DT_STRTAB')
-            res = dt_strtab.d.li
-            return res.field(self.get())
-        d = property(fget=dereference)
-        def str(self):
-            res = self.dereference()
-            return res.str()
+    class DT_SONAME(d_stroffset): type = 14
     @DT_.define
-    class DT_RPATH(d_val): type = 15
+    class DT_RPATH(d_stroffset): type = 15
     @DT_.define
     class DT_SYMBOLIC(d_ign): type = 16
     @DT_.define
@@ -506,7 +506,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_FINI_ARRAYSZ(d_val): type = 28
     @DT_.define
-    class DT_RUNPATH(d_ptr): type = 29
+    class DT_RUNPATH(d_stroffset): type = 29
     @DT_.define
     class DT_FLAGS(DF_): type = 30
     @DT_.define
@@ -554,11 +554,11 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_GNU_LIBLIST(d_ptr): type = 0x6ffffef9
     @DT_.define
-    class DT_CONFIG(d_ptr): type = 0x6ffffefa
+    class DT_CONFIG(d_stroffset): type = 0x6ffffefa
     @DT_.define
-    class DT_DEPAUDIT(d_ptr): type = 0x6ffffefb
+    class DT_DEPAUDIT(d_stroffset): type = 0x6ffffefb
     @DT_.define
-    class DT_AUDIT(d_ptr): type = 0x6ffffefc
+    class DT_AUDIT(d_stroffset): type = 0x6ffffefc
     @DT_.define
     class DT_PLTPAD(d_ptr): type = 0x6ffffefd
     @DT_.define
@@ -568,7 +568,7 @@ class ELFCLASS32(object):
 
     # GNU extensions (versioning entry types)
     @DT_.define
-    class DT_VERSYM(d_val): type = 0x6ffffff0
+    class DT_VERSYM(d_ptr): type = 0x6ffffff0
     @DT_.define
     class DT_RELACOUNT(d_val): type = 0x6ffffff9
     @DT_.define
@@ -598,11 +598,11 @@ class ELFCLASS32(object):
 
     # Sun machine-independant extensions
     @DT_.define
-    class DT_AUXILIARY(d_val): type = 0x7ffffffd
+    class DT_AUXILIARY(d_stroffset): type = 0x7ffffffd
     @DT_.define
     class DT_USED(d_val): type = 0x7ffffffe
     @DT_.define
-    class DT_FILTER(d_val): type = 0x7fffffff
+    class DT_FILTER(d_stroffset): type = 0x7fffffff
 
     # SUN machine-dependant extensions
     @DT_.define
@@ -650,12 +650,23 @@ class ELFCLASS64(object):
     class d_rtptr(Elf64_VAddr):
         def _calculate_(self, address):
             return address if isinstance(self.source, ptypes.provider.memorybase) else super(ELFCLASS64.d_rtptr, self)._calculate_(address)
+    class d_stroffset(d_val):
+        def dereference(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+            dt_strtab = p.by_tag('DT_STRTAB')
+            res = dt_strtab.d.li
+            return res.field(self.get())
+        d = property(fget=dereference)
+        def str(self):
+            res = self.dereference()
+            return res.str()
 
     ## dynamic entry type for d_un
     @DT_.define
     class DT_NULL(d_ign): type = 0
     @DT_.define
-    class DT_NEEDED(d_val): type = 1 # FIXME
+    class DT_NEEDED(d_stroffset): type = 1
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
@@ -721,20 +732,9 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_FINI(d_ptr): type = 13
     @DT_.define
-    class DT_SONAME(d_val):
-        type = 14
-        def dereference(self):
-            from .segment import ELFCLASSXX
-            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
-            dt_strtab = p.by_tag('DT_STRTAB')
-            res = dt_strtab.d.li
-            return res.field(self.get())
-        d = property(fget=dereference)
-        def str(self):
-            res = self.dereference()
-            return res.str()
+    class DT_SONAME(d_stroffset): type = 14
     @DT_.define
-    class DT_RPATH(d_val): type = 15
+    class DT_RPATH(d_stroffset): type = 15
     @DT_.define
     class DT_SYMBOLIC(d_ign): type = 16
     @DT_.define
@@ -782,7 +782,7 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_FINI_ARRAYSZ(d_val): type = 28
     @DT_.define
-    class DT_RUNPATH(d_ptr): type = 29
+    class DT_RUNPATH(d_stroffset): type = 29
     @DT_.define
     class DT_FLAGS(DF_):
         type, _fields_ = 30, [(32, 'alignment')] + DF_._fields_
@@ -833,11 +833,11 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_GNU_LIBLIST(d_ptr): type = 0x6ffffef9
     @DT_.define
-    class DT_CONFIG(d_ptr): type = 0x6ffffefa
+    class DT_CONFIG(d_stroffset): type = 0x6ffffefa
     @DT_.define
-    class DT_DEPAUDIT(d_ptr): type = 0x6ffffefb
+    class DT_DEPAUDIT(d_stroffset): type = 0x6ffffefb
     @DT_.define
-    class DT_AUDIT(d_ptr): type = 0x6ffffefc
+    class DT_AUDIT(d_stroffset): type = 0x6ffffefc
     @DT_.define
     class DT_PLTPAD(d_ptr): type = 0x6ffffefd
     @DT_.define
@@ -847,7 +847,7 @@ class ELFCLASS64(object):
 
     # GNU extensions (versioning entry types)
     @DT_.define
-    class DT_VERSYM(d_val): type = 0x6ffffff0
+    class DT_VERSYM(d_ptr): type = 0x6ffffff0
     @DT_.define
     class DT_RELACOUNT(d_val): type = 0x6ffffff9
     @DT_.define
@@ -878,11 +878,11 @@ class ELFCLASS64(object):
 
     # Sun machine-independant extensions
     @DT_.define
-    class DT_AUXILIARY(d_val): type = 0x7ffffffd
+    class DT_AUXILIARY(d_stroffset): type = 0x7ffffffd
     @DT_.define
     class DT_USED(d_val): type = 0x7ffffffe
     @DT_.define
-    class DT_FILTER(d_val): type = 0x7fffffff
+    class DT_FILTER(d_stroffset): type = 0x7fffffff
 
     # SUN machine-dependant extensions
     @DT_.define
