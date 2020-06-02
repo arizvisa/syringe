@@ -418,7 +418,8 @@ class ELFCLASSXX(object):
         _object_ = pstr.szstring
 
         def read(self, offset):
-            return self.field(offset)
+            source = ptypes.provider.proxy(self)
+            return self.new(self._object_, source=source, offset=offset).l
         def summary(self):
             res = (res.str() for res in self)
             res = map("{!r}".format, res)
