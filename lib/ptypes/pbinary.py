@@ -199,6 +199,9 @@ class base(ptype.generic):
     included.
     """
 
+    def __hash__(self):
+        return hash(self.__class__)
+
     def new(self, pbinarytype, **attrs):
         res = force(pbinarytype, self)
         return super(base, self).new(res, **attrs)
@@ -304,6 +307,9 @@ class type(base):
     generic methods involving the bitmapped value or the
     display of the bitmapped value is also included.
     """
+
+    def __hash__(self):
+        return super(type, self).__hash__() ^ hash(tuple(self.value))
 
     def size(self):
         return math.trunc(math.ceil(self.bits() / 8.0))

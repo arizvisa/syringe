@@ -763,10 +763,10 @@ class __interface__(object):
 
 class generic(__interface__):
     '''A class shared between both pbinary.*, ptype.*'''
+    def __hash__(self):
+        raise error.ImplementationError(self, 'generic.__hash__')
     def initializedQ(self):
         raise error.ImplementationError(self, 'generic.initializedQ')
-    def __hash__(self):
-        return hash(self.__class__) ^ hash(self.value)
     def __eq__(self, other):
         '''x.__eq__(y) <==> x==y'''
         return id(self) == id(other)
@@ -836,6 +836,9 @@ class generic(__interface__):
 
 class base(generic):
     padding = utils.padding.source.zero()
+
+    def __hash__(self):
+        return hash(self.__class__)
 
     def setoffset(self, offset, **options):
         """Changes the current offset to ``offset``"""
@@ -1026,6 +1029,9 @@ class type(base):
     """
     ignored = generic.__slots__['ignored'] | {'length'}
 
+    def __hash__(self):
+        return super(type, self).__hash__() ^ hash(self.value)
+
     def copy(self, **attrs):
         result = super(type, self).copy(**attrs)
         if hasattr(self, 'length'):
@@ -1160,6 +1166,9 @@ class container(base):
         value:str<r>
             list of all elements that are being contained
     '''
+
+    def __hash__(self):
+        return super(container, self).__hash__() ^ hash(tuple(self.value))
 
     def initializedQ(self):
         """True if the type is fully initialized"""
