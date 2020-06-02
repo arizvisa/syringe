@@ -502,10 +502,8 @@ class HookMapping(AliasMapping):
 
     def __setitem__(self, key, value):
         res = self._execute_hook(key, value)
-        if res:
-            target = self._getkey(key)
-            return super(HookMapping, self).__setitem__(target, value)
-        return
+        target = self._getkey(key)
+        return super(HookMapping, self).__setitem__(target, res)
 
     def __getitem__(self, key):
         return super(HookMapping, self).__getitem__(key)
