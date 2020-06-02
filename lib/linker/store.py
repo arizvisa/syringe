@@ -353,6 +353,14 @@ class Section(base.Transitive):
         '''Returns a tuple containing the left and right bounds within its segment.'''
         raise NotImplementedError
 
+    def __repr__(self):
+        cls = self.__class__
+        return "{!s} {!s} {:#x}-{:#x}".format(cls, self.name(), *self.bounds())
+
+    def __str__(self):
+        cls = self.__class__
+        return "<object {:s} {!s} {:#x}-{:#x}>".format('.'.join([cls.__module__, cls.__name__]), self.name(), *self.bounds())
+
 class Segment(base.Transitive):
     '''
     This base class is responsible for managing an actual loadable segment
@@ -384,26 +392,114 @@ class Segment(base.Transitive):
         offset, length = self.offset(), self.length()
         return offset <= address < offset + length
 
+    def __str__(self):
+        cls = self.__class__
+        return "<object {:s} {!s} {:#x}{:+x}>".format('.'.join([cls.__module__, cls.__name__]), self.protection(), self.offset(), self.length())
+
+    def __repr__(self):
+        cls = self.__class__
+        return "{!s} {!s} {:#x}{:+x}".format(cls, self.protection(), self.offset(), self.length())
+
 class Symbols(base.MutableMapping):
     def __init__(self):
-        # This maps a symbol name directly to a scope+section+symbol pair
+        # This maps a symbol name directly to a section+symbol pair
         self._slotmap = {}
 
         # This maps a section+symbol pair to a slot (containing an integral value)
         self._slots = {}
 
-        # This is a lookup table for all the scopes
-        self._scope = { scope : base.OrderedSet() for scope in TypeEnumeration.Iterate(Scope)}
+    def __iter__(self):
+        for name in self._slotmap:
+            yield name
+        return
 
-class Store(base.HookMapping):
+    def get(self, section, symbol):
+        item = section, symbol
+        return self._slots[item]
+
+    def set(self, section, symbol, value):
+        item = section, symbol
+        self._slots[item] = value
+
+    def add_symbol(self, name, section, symbol):
+        item = section, symbol
+        if name in self._slotmap:
+            raise KeyError(item)
+        if item in self._slots:
+            raise ValueError(item)
+
+        # Add the symbol to our mapping
+        self._slots[item] = None
+        self._slotmap[name] = item
+
+    def __len__(self):
+        return len(self._slotmap)
+
+    def __getitem__(self, name):
+        '''Return the value from the slot identified by the symbol name.'''
+        if name not in self._slotmap:
+            raise KeyError(name)
+        item = self._slotmap[name]
+        return self._slots[item]
+
+    def __setitem__(self, name, value):
+        '''Assign the value to the slot identified by the symbol name.'''
+        if name not in self._slotmap:
+            raise KeyError(name)
+        item = self._slotmap[name]
+        self._slots[item] = value
+
+    def __delitem__(self, name, value):
+        '''Empty the slot identified by the symbol name.'''
+        if name not in self._slotmap:
+            raise KeyError(name)
+        item = self._slotmap[name]
+        self._slots[item] = None
+
+    def __str__(self):
+        cls = self.__class__
+        fslot = lambda item: "{:#x}".format(item) if isinstance(item, six.integer_types) else "{!s}".format(item)
+        iterable = ((name, fslot(value)) for name, value in self.items())
+        return "{!s} {{{:s}}}".format(cls, ', '.join("{!s}: {:s}".format(name, value) for name, value in iterable))
+
+    def __repr__(self):
+        cls = self.__class__
+        fslot = lambda item: "{:#x}".format(item) if isinstance(item, six.integer_types) else "{!s}".format(item)
+        res = ["{!s}".format(cls)]
+        for name, item in self._slotmap.items():
+            value = self._slots[item]
+            section, symbol = item
+            res.append("{!s} : {:s} =: {!s}".format(section, fslot(value), name))
+        return '\n'.join(res)
+
+class Store(base.MutableMapping):
     @abc.abstractmethod
     def __init__(self):
-        self._sections = base.OrderedSet()
+        self._sections = base.OrderedMapping()
         self._segments = base.OrderedMapping()
 
+        # This is a lookup table for all the scopes for each symbol.
+        self._scope = { scope : base.OrderedSet() for scope in TypeEnumeration.Iterate(Scope)}
+
         # Create our symbols backing that we're actually assigning into
-        res = Symbols()
-        return super(Store, self).__init__(slots)
+        self._symbols = Symbols()
+
+    def __iter__(self):
+        for name in self._symbols:
+            yield name
+        return
+
+    def __len__(self):
+        return len(self._symbols)
+
+    def __getitem__(self, name):
+        return self._symbols[name]
+
+    def __setitem__(self, name, value):
+        self._symbols[name] = value
+
+    def __delitem__(self, name):
+        del(self._symbols[name])
 
     @abc.abstractmethod
     def segments(self):
@@ -415,13 +511,34 @@ class Store(base.HookMapping):
         '''Yields each Section contained within the store that has symbols to process.'''
         raise NotImplementedError
 
-    def add_section(self, section):
-        '''This adds a Section instance to the store.'''
+    def load(self):
+        for segment in self.segments():
+            if not isinstance(segment, Segment):
+                raise TypeError("Type for {!s} is not a {!s}".format(segment.__clss__, Segment))
+            if segment in self._segments:
+                raise ValueError("Segment {!s} has already been added to store")
+            self._segments[segment] = base.OrderedSet()
+
+        # Now we can start loading each individual section into the segment mapping
+        count = 0
+        for section in self.sections():
+            if not isinstance(section, Section):
+                raise TypeError("Type for {!s} is not a {!s}".format(section.__clss__, Section))
+            if section in self._sections:
+                raise ValueError("Section {!s} has already been added to store")
+            self._sections[section] = base.OrderedSet()
+            count += self.load_section(section)
+        return count
+
+    def add_section(self, section, scope, symbol):
+        '''This adds a symbol for a section to the store.'''
         if not isinstance(section, Section):
             raise TypeError("Type for {!s} is not a {!s}".format(section.__clss__, Section))
-        if section in self._sections:
-            raise ValueError("Section {!s} has already been added to store")
-        self._sections.add(section)
+        # FIXME: sections won't always have a name, so we probably shouldn't be
+        #        using it here. Maybe we should key with the section type, and
+        #        use an alias if there's an actual name.
+        self._sections[section].add((section.name(), symbol))
+        return self._symbols.add_symbol(section.name(), section, symbol)
 
     def add_symbol(self, name, scope, section, symbol):
         """Add the specified symbol to the store.
@@ -431,7 +548,8 @@ class Store(base.HookMapping):
         referencing the symbol, and `symbol` is arbitrary but must be
         hashable.
         """
-        raise NotImplementedError
+        self._sections[section].add((name, symbol))
+        return self._symbols.add_symbol(name, section, symbol)
 
     def add_relocation(self, relocation, section, symbol):
         """Add the specified relocation to the store.
@@ -454,17 +572,30 @@ class Store(base.HookMapping):
         try:
             segment = next(seg for seg in self._segments if seg.contains(left))
         except StopIteration:
-            raise LookupError("Unable to find segment containing section address {:#x}".format(left))
+            raise LookupError("Unable to find loaded segment containing section address {:#x}".format(left))
         if not segment.contains(right) and segment.offset() + segment.length() != right:
-            raise LookupError("Segment {!s} does not contain entire section {:#x}<>{:#x}".format(segment, left, right))
+            raise LookupError("Segment {!s} does not contain entire section {:#x}-{:#x}".format(segment, left, right))
 
         # Now that we've figured out the segment, we can add our section that
         # has just been loaded to its section list.
         processed = self._segments.setdefault(segment, [])
-        processed.append(section)
+        processed.add(section)
 
-        # FIXME: Return the number of symbols from the loaded section
+        # FIXME: Return the number of symbols from the loaded section(?)
         return len(processed)
+
+    def __repr__(self):
+        cls = self.__class__
+        fslot = lambda item: "{:#x}".format(item) if isinstance(item, six.integer_types) else "{!s}".format(item)
+
+        # FIXME: Preliminary implementation that dumps all the symbols in the
+        #        store sorted by their section
+        res = ["{!s}".format(cls)]
+        for sec, items in self._sections.items():
+            for name, item in items:
+                res.append("{!s} {:s} =: {!s}".format(sec, fslot(self._symbols.get(sec, item)), name))
+            continue
+        return '\n'.join(res)
 
 #    @abc.abstractmethod
 #    def load(self, *args):

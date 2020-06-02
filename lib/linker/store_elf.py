@@ -5,7 +5,7 @@ from . import store
 class Shdr(store.Section):
     def __hash__(self):
         hdr = self._shdr
-        items = (self.__section_name, self.bounds, shdr['sh_type'].int, shdr['sh_flags'].int)
+        items = (self.__section_name, self.bounds, hdr['sh_type'].int, hdr['sh_flags'].int)
         iterable = (item() for item in items)
         return functools.reduce(operator.xor, map(hash, iterable))
 
@@ -27,7 +27,7 @@ class Shdr(store.Section):
         pheaders = header['e_phoff'].d
 
         # Grab our segment index for symbols to look us up
-        idx = sheaders.index(sh)
+        idx = sheaders.value.index(sh)
 
         # Get the Phdr that our section is contained in
         try:
@@ -47,14 +47,14 @@ class Shdr(store.Section):
         self._shdr = sh
         self._sections = sheaders
         self._phdr = phdr
-        self._shstrtab = shdr_strtab['sh_offset'].d
+        self._shstrtab = shdr_strtab['sh_offset'].d.li
 
     def name(self):
         return self._index
 
     def bounds(self):
-        shdr, phdr = self._shdr, self._phdr
-        res = shdr['sh_addr'].int() - phdr['p_vaddr'].int()
+        shdr = self._shdr
+        res = shdr['sh_addr'].int()
         return res, res + shdr.getloadedsize()
 
     def __section_name(self):
@@ -63,6 +63,7 @@ class Shdr(store.Section):
         return res.str()
 
     def __repr__(self):
+        cls = self.__class__
         return "{!s} {:s} ({:d}) {:#x}{:+x}".format(cls, self.__section_name(), self.name(), *self.bounds())
 
 class Phdr(store.Segment):
@@ -84,14 +85,11 @@ class Phdr(store.Segment):
         return isinstance(other, Phdr) and super(Phdr, self).__ne__(other)
 
     def __init__(self, ph):
-        header = ph.getparent(elf.base.ElfXX_Ehdr)
-        pheaders = header['e_phoff'].d
-
         self._phdr = ph
 
     def offset(self):
         phdr = self._phdr
-        return phdr['p_vaddr']
+        return phdr['p_vaddr'].int()
 
     def length(self):
         phdr = self._phdr
@@ -114,11 +112,11 @@ class Object(store.Store):
         # grab the program headers and sections
         self._pheaders, self._sheaders = (ehdr[fld].d.li for fld in ['e_phoff', 'e_shoff'])
 
-        # grab the symbol tables and combine them into a single list
+        # grab the symbol tables and pair them up with their sh_link and sh_info indices
         types = ['SHT_SYMTAB', 'SHT_DYNSYM']
-        symtabs = (item for item in self._sheaders if any(item['sh_type'][t] for t in types))
-        symbols = itertools.chain(*(symtab['sh_offset'].d.li for symtab in symtabs))
-        self._symbols = [symbol for symbol in symbols]
+        headers = (item for item in self._sheaders if any(item['sh_type'][t] for t in types))
+        tables = ((item['sh_link'], item['sh_info'], item['sh_offset'].d.li) for item in headers)
+        self._symtabs = [item for item in tables]
 
         # let the base class continue its initialization
         return super(Object, self).__init__()
@@ -126,8 +124,8 @@ class Object(store.Store):
     def segments(self):
         loadable = {'PT_LOAD', 'PT_DYNAMIC'}
         for item in self._pheaders:
-            flags = item['p_flags']
-            if any(flags[f] for f in loadable):
+            type = item['p_type']
+            if any(type[f] for f in loadable):
                 yield Phdr(item)
             continue
         return
@@ -139,9 +137,25 @@ class Object(store.Store):
             continue
         return
 
+    def __iterate_symtabs__(self):
+        for index, count, table in self._symtabs:
+            shstrtab = self._sheaders[index.int()]
+            strtab = shstrtab['sh_offset'].d.li
+            for symbol in table:
+                name = strtab.read(symbol['st_name'].int())
+                yield name, symbol
+            continue
+        return
+
     def load_section(self, section):
-        for sym in self._symbols:
-            index = sym['st_shndx'].SectionIndex()
+        for name, sym in self.__iterate_symtabs__():
+            if sym['st_shndx']['SHN_UNDEF']:
+                continue
+
+            if sym['st_shndx']['SHN_COMMON']:
+                raise NotImplementedError
+
+            index = sym['st_shndx'].int()
             if index != section.name():
                 continue
 
@@ -150,21 +164,41 @@ class Object(store.Store):
             # that gets added.
 
             sti, stv = (sym[fld] for fld in ['st_info', 'st_other'])
-            sti_bind, sti_type = (stv.item(fld) for fld in ['ST_BIND', 'ST_TYPE'])
-            self.add_symbol(sym, store.Scope.Local, section)
+            sti_bind, sti_type = (sti.item(fld) for fld in ['ST_BIND', 'ST_TYPE'])
+
+            if sti_bind['STB_LOCAL']:
+                scope = store.Scope.Local
+            elif sti_bind['STB_GLOBAL']:
+                scope = store.Scope.Global
+            elif sti_bind['STB_WEAK']:
+                scope = store.Scope.External
+            else:
+                raise ValueError(sti_bind)
+
+            # If we got a section symbol, then explicitly add that.
+            if sti_type['STT_SECTION']:
+                self.add_section(section, scope, sym)
+                self._symbols.set(section, sym, sym['st_value'].int())
+                continue
+
+            # Otherwise, it's just a regular symbol and we can treat it normally
+            self.add_symbol(name.str(), scope, section, sym)
+            self._symbols.set(section, sym, sym['st_value'].int())
         return super(Object, self).load_section(section)
 
 if __name__ == '__main__':
     import sys, os.path
     import ptypes, elf, linker
-    from linker import store_elf
+    from linker import store_elf, store
     import importlib
     store = importlib.reload(linker.store)
-    t= store.ScopeType('local')
+    #t = store.ScopeType('local')
     store_elf = importlib.reload(linker.store_elf)
 
     library_dir = os.path.dirname(__file__)
+    #library_dir = os.path.join(os.getcwd())
     #library_dir = os.path.join(os.getcwd(), 'linker')
+    #library_dir = os.path.join(os.getcwd(), 'lib', 'linker')
     samples_dir = os.path.join(library_dir, 'samples')
     ptypes.setsource(ptypes.prov.file(os.path.join(samples_dir, 'write.out'), 'rb'))
     #ptypes.setsource(ptypes.prov.file('/usr/lib64/libpython3.7m.so.1.0', 'rb'))
@@ -172,15 +206,40 @@ if __name__ == '__main__':
     z = elf.File().l
     z = z['e_data']
 
-    phl = z['e_phoff'].d.l
-    self = store_elf.Phdr(phl[1])
-    print(self.data())
+    if False:
+        phl = z['e_phoff'].d.l
+        self = store_elf.Phdr(phl[1])
+        print(self.data())
 
-    shl = z['e_shoff'].d.l
-    self = store_elf.Shdr(shl[1])
+    if False:
+        shl = z['e_shoff'].d.l
+        self = store_elf.Shdr(shl[1])
 
-    st = store_elf.Object(z)
+    if False:
+        iterable = self.segments()
+        seg = next(iterable)
+        seg
+        print(seg)
+        iterable = self.sections()
+        section = next(iterable)
+        section
+        print(section)
 
-    for i, item in enumerate(st._symbols):
-        print(item['st_shndx'].SectionIndex())
+    self = store_elf.Object(z)
+    res = self.load()
+
+    if False:
+        items = [item for _, item in self.__iterate_symtabs__()]
+        for name, item in self.__iterate_symtabs__():
+            if not len(name.str()):
+                print(item)
+    print(self._symbols['greeting'])
+    print(self._symbols)
+    self._symbols
+    for item in self._sections:
+        print(item.name())
+
+    for item, sections in self._segments.items():
         print(item)
+        for sec in sections:
+            print(sec)
