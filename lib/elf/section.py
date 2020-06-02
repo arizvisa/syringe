@@ -185,8 +185,8 @@ class STB_(pbinary.enum):
 
 class st_info(pbinary.struct):
     _fields_ = [
-        (STT_, 'ST_BIND'),
-        (STB_, 'ST_TYPE'),
+        (STB_, 'ST_BIND'),
+        (STT_, 'ST_TYPE'),
     ]
 
     def summary(self, **options):
