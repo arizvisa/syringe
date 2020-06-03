@@ -316,7 +316,7 @@ class E_FLAGS_MIPS(pbinary.flags):
 
 class PN_(pint.enum):
     _values_ = [
-        ('PN_XNUM', 0xffff),
+        ('XNUM', 0xffff),
     ]
 
 class XhdrEntries(parray.type):

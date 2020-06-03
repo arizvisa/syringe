@@ -404,6 +404,200 @@ class Elf64_Syminfo(pstruct.type):
         (SYMINFO_FLG_, 'si_flags'),
     ]
 
+### version definitions
+class VER_DEF_(pint.enum):
+    _values_ = [
+        ('VER_DEF_NON', 0),
+        ('VER_DEF_CURRENT', 1),
+        ('VER_DEF_NUM', 2),
+    ]
+
+class VER_FLG_(pbinary.flags):
+    # Elf32_Half/Elf64_Half
+    _fields_ = [
+        (14, 'UNUSED'),
+        (1, 'WEAK'),
+        (1, 'BASE'),
+    ]
+
+class VER_NDX_(pint.enum):
+    _values_ = [
+        ('VER_NDX_LOCAL', 0),
+        ('VER_NDX_GLOBAL', 1),
+        ('VER_NDX_ELIMINATE', 0xff01),
+    ]
+
+class VER_NEED_(pint.enum):
+    _values_ = [
+        ('VER_NEED_NONE', 0),
+        ('VER_NEED_CURRENT', 1),
+        ('VER_NEED_NUM', 2),
+    ]
+
+class ElfXX_VerXauxName(ptype.opointer_t):
+    _object_ = pstr.szstring
+    def _calculate_(self, offset):
+        from .segment import ELFCLASSXX
+        p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+        dt_strtab = p.by_tag('DT_STRTAB')
+        return dt_strtab.int() + offset
+
+    def str(self):
+        return self.d.li.str()
+
+    def summary(self):
+        res = super(ElfXX_VerXauxName, self).summary()
+        return "{:s} {!r}".format(res, self.str())
+
+class Elf32_Verdef(pstruct.type):
+    class vd_version(VER_DEF_, Elf32_Half): pass
+    class vd_ndx(VER_NDX_, Elf32_Half): pass
+    def __padding_vd_aux(self):
+        res, fields = self['vd_aux'].li, ['vd_version', 'vd_flags', 'vd_ndx', 'vd_cnt', 'vd_hash', 'vd_aux', 'vd_next']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    def __vd_verdaux(self):
+        res = self['vd_cnt'].li
+        return dyn.array(Elf32_Verdaux, res.int())
+    def __padding_vd_next(self):
+        res, fields = self['vd_next'].li, ['vd_version', 'vd_flags', 'vd_ndx', 'vd_cnt', 'vd_hash', 'vd_aux', 'vd_next', 'padding(vd_aux)', 'vd_verdaux']
+        if res.int() > 0:
+            return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+        return dyn.block(0)
+    _fields_ = [
+        (vd_version, 'vd_version'),
+        (VER_FLG_, 'vd_flags'),
+        (vd_ndx, 'vd_ndx'),
+        (Elf32_Half, 'vd_cnt'),     # Number of associated aux entries
+        (Elf32_Word, 'vd_hash'),
+        (Elf32_Word, 'vd_aux'),     # Offset in bytes to verdaux array
+        (Elf32_Word, 'vd_next'),    # Offset in bytes to next verdef entry
+        (__padding_vd_aux, 'padding(vd_aux)'),
+        (__vd_verdaux, 'vd_verdaux'),
+        (__padding_vd_next, 'padding(vd_next)'),
+    ]
+
+class Elf32_Verdaux(pstruct.type):
+    def __padding_vda_next(self):
+        res, fields = self['vda_next'].li, ['vda_name', 'vda_next']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    _fields_ = [
+        (dyn.clone(ElfXX_VerXauxName, _value_=Elf32_Word), 'vda_name'),
+        (Elf32_Word, 'vda_next'),   # Offset to an array
+        (__padding_vda_next, 'padding(vda_next)'),
+    ]
+
+class Elf32_Verneed(pstruct.type):
+    class vn_version(VER_NEED_, Elf32_Half): pass
+    def __padding_vn_aux(self):
+        res, fields = self['vn_aux'].li, ['vn_version', 'vn_cnt', 'vn_file', 'vn_aux', 'vn_next']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    def __vn_vernaux(self):
+        res = self['vn_cnt'].li
+        return dyn.array(Elf32_Vernaux, res.int())
+    def __padding_vn_next(self):
+        res, fields = self['vn_next'].li, ['vn_version', 'vn_cnt', 'vn_file', 'vn_aux', 'vn_next', 'padding(vn_aux)', 'vn_vernaux']
+        if res.int() > 0:
+            return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+        return dyn.block(0)
+    _fields_ = [
+        (vn_version, 'vn_version'),
+        (Elf32_Half, 'vn_cnt'),     # Number of elements in vernaux array
+        (Elf32_Word, 'vn_file'),    # Offset to filename
+        (Elf32_Word, 'vn_aux'),     # Offset in bytes to vernaux array
+        (Elf32_Word, 'vn_next'),    # Offset in bytes to next verneed structure
+        (__padding_vn_aux, 'padding(vn_aux)'),
+        (__vn_vernaux, 'vn_vernaux'),
+        (__padding_vn_next, 'padding(vn_next)'),
+    ]
+
+class Elf32_Vernaux(pstruct.type):
+    def __padding_vna_next(self):
+        res, fields = self['vna_next'].li, ['vna_hash', 'vna_flags', 'vna_other', 'vna_name']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    _fields_ = [
+        (Elf32_Word, 'vna_hash'),
+        (Elf32_Half, 'vna_flags'),
+        (Elf32_Half, 'vna_other'),
+        (dyn.clone(ElfXX_VerXauxName, _value_=Elf32_Word), 'vna_name'),
+        (Elf32_Word, 'vna_next'),   # Offset in bytes to next vernaux
+        (__padding_vna_next, 'padding(vna_next)'),
+    ]
+
+class Elf64_Verdef(pstruct.type):
+    class vd_version(VER_DEF_, Elf64_Half): pass
+    class vd_ndx(VER_NDX_, Elf64_Half): pass
+    def __padding_vd_aux(self):
+        res, fields = self['vd_aux'].li, ['vd_version', 'vd_flags', 'vd_ndx', 'vd_cnt', 'vd_hash', 'vd_aux', 'vd_next']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    def __vd_verdaux(self):
+        res = self['vd_cnt'].li
+        return dyn.array(Elf64_Verdaux, res.int())
+    def __padding_vd_next(self):
+        res, fields = self['vd_next'].li, ['vd_version', 'vd_flags', 'vd_ndx', 'vd_cnt', 'vd_hash', 'vd_aux', 'vd_next', 'padding(vd_aux)', 'vd_verdaux']
+        if res.int() > 0:
+            return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+        return dyn.block(0)
+    _fields_ = [
+        (vd_version, 'vd_version'),
+        (VER_FLG_, 'vd_flags'),
+        (vd_ndx, 'vd_ndx'),
+        (Elf64_Half, 'vd_cnt'),     # Number of associated aux entries
+        (Elf64_Word, 'vd_hash'),
+        (Elf64_Word, 'vd_aux'),     # Offset in bytes to verdaux array
+        (Elf64_Word, 'vd_next'),    # Offset in bytes to next verdef entry
+        (__padding_vd_aux, 'padding(vd_aux)'),
+        (__vd_verdaux, 'vd_verdaux'),
+        (__padding_vd_next, 'padding(vd_next)'),
+    ]
+
+class Elf64_Verdaux(pstruct.type):
+    def __padding_vda_next(self):
+        res, fields = self['vda_next'].li, ['vda_name', 'vda_next']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    _fields_ = [
+        (dyn.clone(ElfXX_VerXauxName, _value_=Elf64_Word), 'vda_name'),
+        (Elf64_Word, 'vda_next'),   # Offset to an array
+        (__padding_vda_next, 'padding(vda_next)'),
+    ]
+
+class Elf64_Verneed(pstruct.type):
+    class vn_version(VER_NEED_, Elf64_Half): pass
+    def __padding_vn_aux(self):
+        res, fields = self['vn_aux'].li, ['vn_version', 'vn_cnt', 'vn_file', 'vn_aux', 'vn_next']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    def __vn_vernaux(self):
+        res = self['vn_cnt'].li
+        return dyn.array(Elf64_Vernaux, res.int())
+    def __padding_vn_next(self):
+        res, fields = self['vn_next'].li, ['vn_version', 'vn_cnt', 'vn_file', 'vn_aux', 'vn_next', 'padding(vn_aux)', 'vn_vernaux']
+        if res.int() > 0:
+            return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+        return dyn.block(0)
+    _fields_ = [
+        (vn_version, 'vn_version'),
+        (Elf64_Half, 'vn_cnt'),     # Number of elements in vernaux array
+        (Elf64_Word, 'vn_file'),    # Offset to filename
+        (Elf64_Word, 'vn_aux'),     # Offset in bytes to vernaux array
+        (Elf64_Word, 'vn_next'),    # Offset in bytes to next verneed structure
+        (__padding_vn_aux, 'padding(vn_aux)'),
+        (__vn_vernaux, 'vn_vernaux'),
+        (__padding_vn_next, 'padding(vn_next)'),
+    ]
+
+class Elf64_Vernaux(pstruct.type):
+    def __padding_vna_next(self):
+        res, fields = self['vna_next'].li, ['vna_hash', 'vna_flags', 'vna_other', 'vna_name']
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
+    _fields_ = [
+        (Elf64_Word, 'vna_hash'),
+        (Elf64_Half, 'vna_flags'),
+        (Elf64_Half, 'vna_other'),
+        (dyn.clone(ElfXX_VerXauxName, _value_=Elf64_Word), 'vna_name'),
+        (Elf64_Word, 'vna_next'),   # Offset in bytes to next vernaux
+        (__padding_vna_next, 'padding(vna_next)'),
+    ]
+
 ### generic section type definitions
 class ELFCLASSXX(object):
     class SHT_PROGBITS(ptype.block):
@@ -492,6 +686,25 @@ class ELFCLASSXX(object):
         type = 18
         _object_ = None
 
+    class SHT_GNU_HASH(pstruct.type):
+        type = 0x6ffffff6
+        def GetHashCount(self):
+            sections = self.getparent(ElfXX_Shdr).p
+            sht_dynamic = next(item for item in sections if item['sh_type']['SHT_DYNSYM'])
+            return sht_dynamic['sh_size'].li.int() // sht_dynamic['sh_entsize'].li.int()
+
+    class SHT_GNU_verdef(parray.block):
+        type = 0x6ffffffd
+        _object_ = None
+
+    class SHT_GNU_verneed(parray.block):
+        type = 0x6ffffffe
+        _object_ = None
+
+    class SHT_GNU_versym(parray.block):
+        type = 0x6fffffff
+        _object_ = None
+
 ### 32-bit section type definitions
 class ELFCLASS32(object):
     class SHT_(ptype.definition):
@@ -567,6 +780,30 @@ class ELFCLASS32(object):
     class SHT_SYMTAB_SHNDX(ELFCLASSXX.SHT_SYMTAB_SHNDX):
         _object_ = Elf32_Word
 
+    @SHT_.define
+    class SHT_GNU_HASH(ELFCLASSXX.SHT_GNU_HASH):
+        _fields_ = [
+            (Elf32_Word, 'bucketcount'),
+            (Elf32_Word, 'symindx'),
+            (Elf32_Word, 'maskwords'),
+            (Elf32_Word, 'shift2'),
+            (lambda self: dyn.array(Elf32_Word, self['maskwords'].li.int()), 'mask'),
+            (lambda self: dyn.array(Elf32_Word, self['bucketcount'].li.int()), 'buckets'),
+            (lambda self: dyn.array(Elf32_Word, self.GetHashCount() - self['symindx'].li.int()), 'phash'),
+        ]
+
+    @SHT_.define
+    class SHT_GNU_verdef(ELFCLASSXX.SHT_GNU_verdef):
+        _object_ = Elf32_Verdef
+
+    @SHT_.define
+    class SHT_GNU_verneed(ELFCLASSXX.SHT_GNU_verneed):
+        _object_ = Elf32_Verneed
+
+    @SHT_.define
+    class SHT_GNU_versym(ELFCLASSXX.SHT_GNU_versym):
+        _object_ = Elf32_Half
+
 ### 64-bit section type definitions
 class ELFCLASS64(object):
     class SHT_(ptype.definition):
@@ -641,6 +878,30 @@ class ELFCLASS64(object):
     @SHT_.define
     class SHT_SYMTAB_SHNDX(ELFCLASSXX.SHT_SYMTAB_SHNDX):
         _object_ = Elf64_Word
+
+    @SHT_.define
+    class SHT_GNU_HASH(ELFCLASSXX.SHT_GNU_HASH):
+        _fields_ = [
+            (Elf64_Word, 'bucketcount'),
+            (Elf64_Word, 'symindx'),
+            (Elf64_Word, 'maskwords'),
+            (Elf64_Word, 'shift2'),
+            (lambda self: dyn.array(Elf64_Xword, self['maskwords'].li.int()), 'mask'),
+            (lambda self: dyn.array(Elf64_Word, self['bucketcount'].li.int()), 'buckets'),
+            (lambda self: dyn.array(Elf64_Word, self.GetHashCount() - self['symindx'].li.int()), 'phash'),
+        ]
+
+    @SHT_.define
+    class SHT_GNU_verdef(ELFCLASSXX.SHT_GNU_verdef):
+        _object_ = Elf64_Verdef
+
+    @SHT_.define
+    class SHT_GNU_verneed(ELFCLASSXX.SHT_GNU_verneed):
+        _object_ = Elf64_Verneed
+
+    @SHT_.define
+    class SHT_GNU_versym(ELFCLASSXX.SHT_GNU_versym):
+        _object_ = Elf64_Half
 
 ### ARM attributes (FIXME: integrate/assign this into the correct class type)
 class SHT_ARM_ATTRIBUTES(pstruct.type):
