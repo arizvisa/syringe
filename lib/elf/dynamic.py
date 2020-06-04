@@ -357,12 +357,8 @@ class ELFCLASS32(object):
     class DT_GNU_HASH(d_ptr):
         type = 0x6ffffef5
         def _object_(self):
-            from .segment import ELFCLASSXX
-            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
-            dt_symtab = p.by_tag('DT_SYMTAB')
-
             from .section import ELFCLASS32
-            return dyn.clone(ELFCLASS32.SHT_GNU_HASH, GetHashCount=lambda self, count=len(dt_symtab.d.li): count)
+            return ELFCLASS32.SHT_GNU_HASH
     @DT_.define
     class DT_TLSDESC_PLT(d_ptr): type = 0x6ffffef6
     @DT_.define
@@ -658,12 +654,8 @@ class ELFCLASS64(object):
     class DT_GNU_HASH(d_ptr):
         type = 0x6ffffef5
         def _object_(self):
-            from .segment import ELFCLASSXX
-            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
-            dt_symtab = p.by_tag('DT_SYMTAB')
-
             from .section import ELFCLASS64
-            return dyn.clone(ELFCLASS64.SHT_GNU_HASH, GetHashCount=lambda self, count=len(dt_symtab.d.li): count)
+            return ELFCLASS64.SHT_GNU_HASH
     @DT_.define
     class DT_TLSDESC_PLT(d_ptr): type = 0x6ffffef6
     @DT_.define

@@ -691,10 +691,22 @@ class ELFCLASSXX(object):
 
     class SHT_GNU_HASH(pstruct.type):
         type = 0x6ffffff6
-        def GetHashCount(self):
-            sections = self.getparent(ElfXX_Shdr).p
-            sht_dynamic = next(item for item in sections if item['sh_type']['SHT_DYNSYM'])
-            return sht_dynamic['sh_size'].li.int() // sht_dynamic['sh_entsize'].li.int()
+
+        class _gnuBucketChain(parray.terminated):
+            _object_ = None
+            def isTerminator(self, item):
+                return item.int() & 1
+
+        class _gnuHashBuckets(parray.type):
+            def getBucket(self, index):
+                p = self.getparent(ELFCLASSXX.SHT_GNU_HASH)
+                symindx = p['symindx'].int()
+
+                for chain in self:
+                    if symindx <= index < symindx + len(chain):
+                        return chain
+                    symindx += len(chain)
+                raise ptypes.error.ItemNotFoundError(self, 'getBucket', "Unable to get bucket for symbol index {:#x} ({:d}).".format(index, index))
 
         @classmethod
         def hash_of_bytes(cls, name):
@@ -794,6 +806,18 @@ class ELFCLASS32(object):
 
     @SHT_.define
     class SHT_GNU_HASH(ELFCLASSXX.SHT_GNU_HASH):
+        class _gnuBucketChain(ELFCLASSXX.SHT_GNU_HASH._gnuBucketChain):
+            _object_ = Elf32_Word
+
+        def __hashbuckets(self):
+            chain_t, buckets = self._gnuBucketChain, self['buckets'].li
+            def _object_(self, chain_t=chain_t, buckets=buckets):
+                index = len(self.value)
+                if buckets[index].int():
+                    return chain_t
+                return dyn.clone(chain_t, length=0)
+            return dyn.clone(self._gnuHashBuckets, _object_=_object_, length=self['bucketcount'].li.int())
+
         _fields_ = [
             (Elf32_Word, 'bucketcount'),
             (Elf32_Word, 'symindx'),
@@ -801,7 +825,7 @@ class ELFCLASS32(object):
             (Elf32_Word, 'shift2'),
             (lambda self: dyn.array(Elf32_Word, self['maskwords'].li.int()), 'mask'),
             (lambda self: dyn.array(Elf32_Word, self['bucketcount'].li.int()), 'buckets'),
-            (lambda self: dyn.array(Elf32_Word, self.GetHashCount() - self['symindx'].li.int()), 'phash'),
+            (__hashbuckets, 'hashbuckets'),
         ]
 
     @SHT_.define
@@ -893,6 +917,18 @@ class ELFCLASS64(object):
 
     @SHT_.define
     class SHT_GNU_HASH(ELFCLASSXX.SHT_GNU_HASH):
+        class _gnuBucketChain(ELFCLASSXX.SHT_GNU_HASH._gnuBucketChain):
+            _object_ = Elf64_Word
+
+        def __hashbuckets(self):
+            chain_t, buckets = self._gnuBucketChain, self['buckets'].li
+            def _object_(self, chain_t=chain_t, buckets=buckets):
+                index = len(self.value)
+                if buckets[index].int():
+                    return chain_t
+                return dyn.clone(chain_t, length=0)
+            return dyn.clone(self._gnuHashBuckets, _object_=_object_, length=self['bucketcount'].li.int())
+
         _fields_ = [
             (Elf64_Word, 'bucketcount'),
             (Elf64_Word, 'symindx'),
@@ -900,7 +936,7 @@ class ELFCLASS64(object):
             (Elf64_Word, 'shift2'),
             (lambda self: dyn.array(Elf64_Xword, self['maskwords'].li.int()), 'mask'),
             (lambda self: dyn.array(Elf64_Word, self['bucketcount'].li.int()), 'buckets'),
-            (lambda self: dyn.array(Elf64_Word, self.GetHashCount() - self['symindx'].li.int()), 'phash'),
+            (__hashbuckets, 'hashbuckets'),
         ]
 
     @SHT_.define
