@@ -630,15 +630,18 @@ class ELFCLASSXX(object):
         type = 5
 
         @classmethod
-        def hash_of_bytes(cls, bytes):
-            h = g = 0
-            for item in bytearray(bytes):
-                h = (h << 4) + item
+        def hash_of_bytes(cls, name):
+            '''unsigned long elf_hash(const unsigned char* name)'''
+            nameu = bytearray(name)
+            h = 0
+            for c in nameu:
+                h = (h << 4) + c
                 g = h & 0xf0000000
-                if g:
+                if g != 0:
                     h ^= g >> 24
-                h &= 0xffffffff
-            return h
+                    h ^= g
+                continue
+            return h & 0xffffffff
 
     from .segment import ELFCLASSXX
     class SHT_DYNAMIC(ELFCLASSXX.PT_DYNAMIC):
@@ -692,6 +695,15 @@ class ELFCLASSXX(object):
             sections = self.getparent(ElfXX_Shdr).p
             sht_dynamic = next(item for item in sections if item['sh_type']['SHT_DYNSYM'])
             return sht_dynamic['sh_size'].li.int() // sht_dynamic['sh_entsize'].li.int()
+
+        @classmethod
+        def hash_of_bytes(cls, name):
+            '''uint32_t Dynobj::gnu_hash(const char* name)'''
+            nameu = bytearray(name)
+            h = 5381
+            for c in nameu:
+                h = (h << 5) + h + c
+            return h & 0xffffffff
 
     class SHT_GNU_verdef(parray.block):
         type = 0x6ffffffd
