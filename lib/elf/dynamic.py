@@ -208,7 +208,7 @@ class ELFCLASS32(object):
 
             # first entry is a Elf32_VAddr to the dynamic segment
             dt_jmprel = p.by_tag('DT_JMPREL')
-            return dyn.array(Elf32_Addr, 3 + len(dt_jmprel.d.li))
+            return dyn.array(Elf32_VAddr, 3 + len(dt_jmprel.d.li))
     @DT_.define
     class DT_HASH(d_ptr):
         type = 4
@@ -216,7 +216,7 @@ class ELFCLASS32(object):
             from .section import ELFCLASS32
             return ELFCLASS32.SHT_HASH
     @DT_.define
-    class DT_STRTAB(d_ptr):
+    class DT_STRTAB(d_vaptr):
         type = 5
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -226,7 +226,7 @@ class ELFCLASS32(object):
             from .section import ELFCLASS32
             return dyn.clone(ELFCLASS32.SHT_STRTAB, blocksize=dt_strsz.int)
     @DT_.define
-    class DT_SYMTAB(d_ptr):
+    class DT_SYMTAB(d_vaptr):
         type = 6
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -239,7 +239,7 @@ class ELFCLASS32(object):
             dt_syment = p.by_tag('DT_SYMENT')
             return dyn.clone(ELFCLASS32.SHT_SYMTAB, blocksize=lambda self, cb=dt_strtab.int() - self.int(): cb)
     @DT_.define
-    class DT_RELA(d_ptr):
+    class DT_RELA(d_vaptr):
         type = 7
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -262,9 +262,9 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_SYMENT(d_val): type = 11
     @DT_.define
-    class DT_INIT(d_ptr): type = 12
+    class DT_INIT(d_vaptr): type = 12
     @DT_.define
-    class DT_FINI(d_ptr): type = 13
+    class DT_FINI(d_vaptr): type = 13
     @DT_.define
     class DT_SONAME(d_stroffset): type = 14
     @DT_.define
@@ -289,7 +289,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_TEXTREL(d_ign): type = 22
     @DT_.define
-    class DT_JMPREL(d_ptr):
+    class DT_JMPREL(d_vaptr):
         type = 23
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -308,9 +308,9 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_BIND_NOW(d_ign): type = 24
     @DT_.define
-    class DT_INIT_ARRAY(d_ptr): type = 25
+    class DT_INIT_ARRAY(d_vaptr): type = 25
     @DT_.define
-    class DT_FINI_ARRAY(d_ptr): type = 26
+    class DT_FINI_ARRAY(d_vaptr): type = 26
     @DT_.define
     class DT_INIT_ARRAYSZ(d_val): type = 27
     @DT_.define
@@ -320,7 +320,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_FLAGS(DF_): type = 30
     @DT_.define
-    class DT_PREINIT_ARRAY(d_ptr): type = 32
+    class DT_PREINIT_ARRAY(d_vaptr): type = 32
     @DT_.define
     class DT_PREINIT_ARRAYSZ(d_val): type = 33
     @DT_.define
@@ -354,7 +354,7 @@ class ELFCLASS32(object):
 
     # DT_ADDRRNGLO(0x6ffffe00) - DT_ADDRRNGHI(0x6ffffeff)
     @DT_.define
-    class DT_GNU_HASH(d_ptr):
+    class DT_GNU_HASH(d_vaptr):
         type = 0x6ffffef5
         def _object_(self):
             from .section import ELFCLASS32
@@ -382,7 +382,7 @@ class ELFCLASS32(object):
 
     # GNU extensions (versioning entry types)
     @DT_.define
-    class DT_VERSYM(d_ptr):
+    class DT_VERSYM(d_vaptr):
         type = 0x6ffffff0
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -494,7 +494,7 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
-    class DT_PLTGOT(d_rtptr):
+    class DT_PLTGOT(d_vaptr):
         type = 3
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -502,7 +502,7 @@ class ELFCLASS64(object):
 
             # first entry is a Elf64_VAddr to the dynamic segment
             dt_jmprel = p.by_tag('DT_JMPREL')
-            return dyn.array(Elf64_Addr, 3 + len(dt_jmprel.d.li))
+            return dyn.array(Elf64_VAddr, 3 + len(dt_jmprel.d.li))
     @DT_.define
     class DT_HASH(d_ptr):
         type = 4
@@ -510,7 +510,7 @@ class ELFCLASS64(object):
             from .section import ELFCLASS64
             return ELFCLASS64.SHT_HASH
     @DT_.define
-    class DT_STRTAB(d_ptr):
+    class DT_STRTAB(d_vaptr):
         type = 5
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -520,7 +520,7 @@ class ELFCLASS64(object):
             from .section import ELFCLASS64
             return dyn.clone(ELFCLASS64.SHT_STRTAB, blocksize=dt_strsz.int)
     @DT_.define
-    class DT_SYMTAB(d_ptr):
+    class DT_SYMTAB(d_vaptr):
         type = 6
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -533,7 +533,7 @@ class ELFCLASS64(object):
             dt_syment = p.by_tag('DT_SYMENT')
             return dyn.clone(ELFCLASS64.SHT_SYMTAB, blocksize=lambda self, cb=dt_strtab.int() - self.int(): cb)
     @DT_.define
-    class DT_RELA(d_ptr):
+    class DT_RELA(d_vaptr):
         type = 7
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -556,9 +556,9 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_SYMENT(d_val): type = 11
     @DT_.define
-    class DT_INIT(d_ptr): type = 12
+    class DT_INIT(d_vaptr): type = 12
     @DT_.define
-    class DT_FINI(d_ptr): type = 13
+    class DT_FINI(d_vaptr): type = 13
     @DT_.define
     class DT_SONAME(d_stroffset): type = 14
     @DT_.define
@@ -583,7 +583,7 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_TEXTREL(d_ign): type = 22
     @DT_.define
-    class DT_JMPREL(d_ptr):
+    class DT_JMPREL(d_vaptr):
         type = 23
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -602,9 +602,9 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_BIND_NOW(d_ign): type = 24
     @DT_.define
-    class DT_INIT_ARRAY(d_ptr): type = 25
+    class DT_INIT_ARRAY(d_vaptr): type = 25
     @DT_.define
-    class DT_FINI_ARRAY(d_ptr): type = 26
+    class DT_FINI_ARRAY(d_vaptr): type = 26
     @DT_.define
     class DT_INIT_ARRAYSZ(d_val): type = 27
     @DT_.define
@@ -615,7 +615,7 @@ class ELFCLASS64(object):
     class DT_FLAGS(DF_):
         type, _fields_ = 30, [(32, 'alignment')] + DF_._fields_
     @DT_.define
-    class DT_PREINIT_ARRAY(d_ptr): type = 32
+    class DT_PREINIT_ARRAY(d_vaptr): type = 32
     @DT_.define
     class DT_PREINIT_ARRAYSZ(d_val): type = 33
     @DT_.define
@@ -651,7 +651,7 @@ class ELFCLASS64(object):
 
     # DT_ADDRRNGLO(0x6ffffe00) - DT_ADDRRNGHI(0x6ffffeff)
     @DT_.define
-    class DT_GNU_HASH(d_ptr):
+    class DT_GNU_HASH(d_vaptr):
         type = 0x6ffffef5
         def _object_(self):
             from .section import ELFCLASS64
@@ -679,7 +679,7 @@ class ELFCLASS64(object):
 
     # GNU extensions (versioning entry types)
     @DT_.define
-    class DT_VERSYM(d_ptr):
+    class DT_VERSYM(d_vaptr):
         type = 0x6ffffff0
         def _object_(self):
             from .segment import ELFCLASSXX
