@@ -691,11 +691,15 @@ class ELFCLASSXX(object):
 
     class SHT_GNU_HASH(pstruct.type):
         type = 0x6ffffff6
-
         class _gnuBucketChain(parray.terminated):
             _object_ = None
             def isTerminator(self, item):
                 return item.int() & 1
+
+            def iterate(self):
+                for item in self:
+                    yield item.int() & ~1
+                return
 
         class _gnuHashBuckets(parray.type):
             def getBucket(self, index):
@@ -707,6 +711,13 @@ class ELFCLASSXX(object):
                         return chain
                     symindx += len(chain)
                 raise ptypes.error.ItemNotFoundError(self, 'getBucket', "Unable to get bucket for symbol index {:#x} ({:d}).".format(index, index))
+
+            def iterate(self):
+                for chain in self:
+                    for h in chain:
+                        yield h
+                    continue
+                return
 
         @classmethod
         def hash_of_bytes(cls, name):
