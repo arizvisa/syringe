@@ -297,10 +297,32 @@ class SID_AND_ATTRIBUTES(pstruct.type):
         (ULONG, 'Attributes'),
     ]
 
+class SE_PRIVILEGE_(pbinary.flags):
+    _fields_ = [
+        (1, 'USED_FOR_ACCESS'),
+        (28, 'RESERVED'),
+        (1, 'REMOVED'),
+        (1, 'ENABLED'),
+        (1, 'ENABLED_BY_DEFAULT'),
+    ]
+
 class LUID_AND_ATTRIBUTES(pstruct.type):
     _fields_ = [
         (LUID, 'Luid'),
-        (ULONG, 'Attributes'),
+        (SE_PRIVILEGE_, 'Attributes'),
+    ]
+
+class PRIVILEGE_SET_(pbinary.flags):
+    _fields_ = [
+        (31, 'RESERVED'),
+        (1, 'ALL_NECESSARY'),
+    ]
+
+class PRIVILEGE_SET(pstruct.type):
+    _fields_ = [
+        (DWORD, 'PrivilegeCount'),
+        (PRIVILEGE_SET_, 'Control'),
+        (lambda self: dyn.array(LUID_AND_ATTRIBUTES, self['PrivilegeCount'].li.int()), 'Privilege'),
     ]
 
 class TOKEN_PRIVILEGES(pstruct.type):
