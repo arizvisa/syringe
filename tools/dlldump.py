@@ -13,6 +13,7 @@ def searchpath(filename):
             return os.sep.join((p,filename))
         continue
     raise OSError("Unable to find {} in PATH".format(filename))
+
 def modulename(filename):
     # convert filename into a windbg style module name
     return filename.rsplit('.',1)[0].upper()
@@ -20,11 +21,12 @@ def modulename(filename):
 def iterate_imports(filename):
     z = pecoff.Executable.File(source=ptypes.prov.file(filename, mode='r')).l
     importsDirectory = z['Next']['Header']['DataDirectory'][1]
-    if importsDirectory['Address'].num() == 0:
+    if importsDirectory['Address'].int() == 0:
         raise ValueError("No imports found in {}".format(filename))
     for imp in importsDirectory['Address'].d.l[:-1]:
         yield imp['Name'].d.l.str()
     return
+
 def iterate_loader(pid):
     try:
         pebaddr = getProcessEnvironmentBlock(pid)
@@ -116,12 +118,12 @@ if __name__ == '__main__':
     def out(v):
         if v is None: return '?'
         if isinstance(v, bool): return 'Y' if v else 'N'
-        if isinstance(v, six.integer_types): return '%08x'% v
-        return str(v)
+        if isinstance(v, tuple): return "{:0{:d}x}".format(*v)
+        return "{!s}".format(v)
 
     filenamelength = max(map(len,filter(lambda x:'-' not in x,filenames)))
-    columns=('imagebase', 'realbase', 'isdll?', 'seh?', 'nx?', 'aslr?', 'safeseh')
-    print('filename'.ljust(filenamelength), '\t'.join(columns))
+    columns=['imagebase', 'realbase', 'isdll?', 'seh?', 'nx?', 'aslr?', 'safeseh']
+    rows = [['filename'] +  columns]
     for shortname,fullname,module in everything:
         try:
             module.l
@@ -132,28 +134,41 @@ if __name__ == '__main__':
         dllcharacteristics = module['Next']['Header']['OptionalHeader']['DllCharacteristics']
         loadconfig = module['Next']['Header']['DataDirectory'][0xa]
 
+        nibbles = 2 * module['Next']['Header']['OptionalHeader']['ImageBase'].size()
         result = []
-        result.append(module['Next']['Header']['OptionalHeader']['ImageBase'].num())
-        result.append(module.getoffset())
+        result.append((module['Next']['Header']['OptionalHeader']['ImageBase'].int(), nibbles))
+        result.append((module.getoffset(), nibbles))
         result.append(bool(characteristics['DLL']))
         result.append(not bool(dllcharacteristics['NO_SEH']))
         result.append(bool(dllcharacteristics['NX_COMPAT']))
         result.append(bool(dllcharacteristics['DYNAMIC_BASE']))
-        if loadconfig['Address'].num() == 0:
+        if loadconfig['Address'].int() == 0:
             result.extend((None,)* (len(columns)-len(result)))
         else:
             try:
                 l = loadconfig['Address'].d.l
-                #result.append(l['GlobalFlagsClear'].num())
-                #result.append(l['GlobalFlagsSet'].num())
-                #result.append(l['ProcessHeapFlags'].num())
-                #result.append(l['SecurityCookie'].d.l.num())
-                result.append(l['SEHandlerTable'].num() != 0)
+                #result.append(l['GlobalFlagsClear'].int())
+                #result.append(l['GlobalFlagsSet'].int())
+                #result.append(l['ProcessHeapFlags'].int())
+                #result.append(l['SecurityCookie'].d.l.int())
+                result.append(l['SEHandlerTable'].int() != 0)
             except (ptypes.error.InitializationError,ptypes.error.LoadError) as e:
                 error = loadconfig
                 result.extend((None,)* (len(columns)-len(result)))
 
         name = fullname if opts.full else shortname
-        print(name.ljust(filenamelength), '\t'.join(map(out,result)))
+        rows.append([name] + result)
+        six.print_('.', end='')
+
+    six.print_('loaded {:d} modules!'.format(len(rows) - 1))
+    unpack = lambda name, base, address, *flags: (name, base, address, flags)
+    header = rows.pop(0)
+    nibbles = max(item[1][1] for item in rows)
+    name, base, address, flags = unpack(*header)
+    print("{:<{:d}s} {:>{:d}s}\t{:>{:d}s}\t{:s}".format(name, filenamelength, base, nibbles, address, nibbles, '\t'.join(flags)))
+    for item in rows:
+        name, cols = (lambda name, *items: (name, items))(*item)
+        aligned = [out(c) if i < 3 else "{:{:d}s}".format(out(c), len(header[i])) for i, c in enumerate(cols)]
+        print("{:<{:d}s} {:s}".format(name, filenamelength, '\t'.join(aligned)))
     sys.exit(0)
 
