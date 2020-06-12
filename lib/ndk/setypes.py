@@ -303,6 +303,12 @@ class LUID_AND_ATTRIBUTES(pstruct.type):
         (ULONG, 'Attributes'),
     ]
 
+class TOKEN_PRIVILEGES(pstruct.type):
+    _fields_ = [
+        (DWORD, 'PrivilegeCount'),
+        (lambda self: dyn.array(LUID_AND_ATTRIBUTES, self['PrivilegeCount'].li.int()), 'Privileges'),
+    ]
+
 class SECURITY_IMPERSONATION_LEVEL(pint.enum, ULONG):
     _fields_ = [
         ('SecurityAnonymous', 0),

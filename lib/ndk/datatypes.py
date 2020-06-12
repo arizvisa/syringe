@@ -366,7 +366,7 @@ class LCID(DWORD): pass
 class LUID(pstruct.type):
     _fields_ = [
         (DWORD, 'LowPart'),
-        (DWORD, 'HighPart'),
+        (LONG, 'HighPart'),
     ]
 class PLUID(pointer(LUID)): pass
 
