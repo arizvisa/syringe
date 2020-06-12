@@ -22,17 +22,17 @@ class GENERIC_(pbinary.flags):
     ]
 
 class ACCESS_MASK(pbinary.flags):
-    def _SPECIFIC_RIGHTS_ALL(self):
+    def _SPECIFIC_RIGHTS(self):
         return 16
 
     _fields_ = [
-        (GENERIC_, 'GENERIC_RIGHTS_ALL'),
+        (GENERIC_, 'GENERIC_RIGHTS'),
         (2, 'RESERVED1'),
         (1, 'MAXIMUM_ALLOWED'),
         (1, 'ACCESS_SYSTEM_SECURITY'),
         (3, 'RESERVED2'),
-        (STANDARD_RIGHTS_, 'STANDARD_RIGHTS_ALL'),
-        (_SPECIFIC_RIGHTS_ALL, 'SPECIFIC_RIGHTS_ALL'),
+        (STANDARD_RIGHTS_, 'STANDARD_RIGHTS'),
+        (lambda self: self._SPECIFIC_RIGHTS(), 'SPECIFIC_RIGHTS'),
     ]
 
 ### Security Descriptor Related Things
