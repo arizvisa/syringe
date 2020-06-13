@@ -756,7 +756,10 @@ class PROCESS_INFORMATION_CLASS(pint.enum):
         (99, 'ProcessFreeFiberShadowStackAllocation'),
     )]
 
-class PROCESS_BASIC_INFORMATION(pstruct.type):
+class PROCESS_BASIC_INFORMATION(pstruct.type, versioned):
+    # XXX: there's 2 versions of this structure on server 2016
+    #    32-bit -> 24, 32
+    #    64-bit -> 48, 64
     _fields_ = [
         (umtypes.NTSTATUS, 'ExitStatus'),
         (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(ExitStatus)'),
