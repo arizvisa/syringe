@@ -227,39 +227,39 @@ class byteorder:
 
 @namespace
 class partial:
-    fractional = field.option('fractional', 'Display the offset as a fraction of the full bit (0.0, 0.125, 0.25, ..., 0.875)')
-    hex = field.option('hexadecimal', 'Display the partial-offset in hexadecimal (0.0, 0.2, 0.4, ..., 0.c, 0.e)')
-    bit = field.option('bit', 'Display just the bit number (0.0, 0.1, 0.2, ..., 0.7)')
+    fractional = field.option('fractional', 'Display the sub-offset as a fraction of a bit (0.0, 0.125, 0.25, ..., 0.875)')
+    hex = field.option('hex', 'Display the sub-offset in hexadecimal (0.0, 0.2, 0.4, ..., 0.c, 0.e)')
+    bit = field.option('bit', 'Display the sub-offset as just the bit number (0.0, 0.1, 0.2, ..., 0.7)')
 
 ### new-config
 @configuration
 class defaults:
-    log = field.type('default-logger', logging.Filterer, 'Default place to log progress')
+    log = field.type('default-logger', logging.Filterer, 'Default logging facility and level.')
 
     class integer:
-        size = field.type('integersize', six.integer_types, 'The word-size of the architecture')
-        order = field.enum('byteorder', (byteorder.bigendian, byteorder.littleendian), 'The endianness of integers/pointers')
+        size = field.type('integersize', six.integer_types, 'The word-size of the architecture.')
+        order = field.enum('byteorder', (byteorder.bigendian, byteorder.littleendian), 'The current endianness of integers and pointers.')
 
     class ptype:
-        clone_name = field.type('clone_name', six.string_types, 'This will only affect newly cloned types')
-        noncontiguous = field.bool('noncontiguous', 'Disable optimization for loading ptype.container elements contiguously. Enabling this allows there to be \'holes\' within a list of elements in a container and disables an important optimization.')
+        clone_name = field.type('clone_name', six.string_types, 'The formatspec to use when mangling the name during the cloning a type (will only affect newly cloned).')
+        noncontiguous = field.bool('noncontiguous', 'Disable optimization for loading ptype.container elements contiguously. Enabling this allows there to be \'holes\' within a container and will disable a significant performance optimization.')
 
     class pint:
-        bigendian_name = field.type('bigendian_name', six.string_types, 'Modifies the name of any integers that are big-endian')
-        littleendian_name = field.type('littleendian_name', six.string_types, 'Modifies the name of any integers that are little-endian')
+        bigendian_name = field.type('bigendian_name', six.string_types, 'The formatspec to use when mangling the names for integers that are big-endian.')
+        littleendian_name = field.type('littleendian_name', six.string_types, 'The formatspec to use when mangling the names for integers that are little-endian.')
 
     class parray:
-        break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if the size of one of it\'s elements is invalid instead of possibly looping indefinitely.')
-        break_on_max_count = field.bool('break_on_max_count', 'If a dynamically created array is larger than max_count, then fail it\'s creation. If not, then issue a warning.')
-        max_count = field.type('max_count', six.integer_types, 'If max_count is larger than 0, then notify via a warning or an exception based on the value of \'break_on_max_count\'')
+        break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if the size of one of it\'s elements is invalid instead of looping indefinitely.')
+        break_on_max_count = field.bool('break_on_max_count', 'If a dynamically created array is larger than max_count, then fail it\'s creation. Otherwise issue a warning.')
+        max_count = field.type('max_count', six.integer_types, 'If max_count is larger than 0, then notify via a warning (or an exception if \'break_on_max_count\' is set).')
 
     class pstruct:
-        use_offset_on_duplicate = field.bool('use_offset_on_duplicate', 'If more than one field has the same name, then suffix the field by it\'s offset. Otherwise use the field\'s index.')
+        use_offset_on_duplicate = field.bool('use_offset_on_duplicate', 'If a duplicate name has been used, then suffix the name by the field offset. Otherwise use the index of the field.')
 
     class display:
-        show_module_name = field.bool('show_module_name', 'include the full module name in the summary')
-        show_parent_name = field.bool('show_parent_name', 'include the parent name in the summary')
-        mangle_with_attributes = field.bool('mangle_with_attributes', 'when doing name-mangling, include all atomic attributes of a ptype as a formatstring keyword')
+        show_module_name = field.bool('show_module_name', 'Include the full module name when displaying a summary.')
+        show_parent_name = field.bool('show_parent_name', 'Include the parent name when displaying a summary.')
+        mangle_with_attributes = field.bool('mangle_with_attributes', 'When performing name-mangling (such as when cloning or displaying the byteorder), include the attributes of the instance in the formatspec.')
 
         class hexdump:
             '''Formatting for a hexdump'''
@@ -268,17 +268,17 @@ class defaults:
 
         class threshold:
             '''Width and Row thresholds for displaying summaries'''
-            summary = field.type('summary_threshold', six.integer_types)
-            summary_message = field.type('summary_threshold_message', six.string_types)
-            details = field.type('details_threshold', six.integer_types)
-            details_message = field.type('details_threshold_message', six.string_types)
+            summary = field.type('summary_threshold', six.integer_types, 'Specify the maximum number of bytes when displaying a summary before replacing it with the string set as \'summary_message\'.')
+            summary_message = field.type('summary_threshold_message', six.string_types, 'The formatspec to use when displaying an instance\'s summary has reached its threshold.')
+            details = field.type('details_threshold', six.integer_types, 'Specify the maximum number of bytes when displaying details before replacing it with the string set as \'details_message\'.')
+            details_message = field.type('details_threshold_message', six.string_types, 'The formatspec to use when displaying of an instance\'s details has reached its threshold.')
 
     class pbinary:
         '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
-        offset = field.enum('offset', (partial.bit, partial.fractional, partial.hex), 'which format to display the sub-offset for binary types')
+        offset = field.enum('offset', (partial.bit, partial.fractional, partial.hex), 'Which format to use when displaying the sub-offset for binary types')
 
-        bigendian_name = field.type('bigendian_name', six.string_types, 'format specifier defining an element that is read most-significant to least-significant')
-        littleendian_name = field.type('littleendian_name', six.string_types, 'format specifier defining an element that is read least-significant to most-significant')
+        bigendian_name = field.type('bigendian_name', six.string_types, 'The formatspec to use when mangling the name for elements which are read most-significant to least-significant')
+        littleendian_name = field.type('littleendian_name', six.string_types, 'The formatspec to use when mangling the name for elements which are read least-significant to most-significant')
 
     def __getsource():
         global ptype
@@ -289,7 +289,7 @@ class defaults:
             ptype.source = value
             return
         raise ValueError("Invalid source object")
-    source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
+    source = field.set('default-source', __getsource, __setsource, 'Default source used for newly created instances that data will be load from or committed to.')
 
 try:
     from . import ptype
