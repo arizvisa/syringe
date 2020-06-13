@@ -788,6 +788,13 @@ try:
     except Exception as E:
         raise OSError(E)
 
+    # Define the ctypes parameters for the windows api used by win32error
+    k32.GetLastError.restype = ctypes.c_uint32
+    k32.FormatMessageA.argtypes = [ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_uint32]
+    k32.FormatMessageA.restype = ctypes.c_uint32
+    k32.LocalFree.argtypes = [ctypes.c_void_p]
+    k32.LocalFree.restype = ctypes.c_void_p
+
     class win32error:
         @staticmethod
         def getLastErrorTuple():
@@ -814,6 +821,12 @@ try:
             code, string = getLastErrorTuple()
             return string
 
+    # Define the ctypes parameters for the windows api used by WindowsProcessHandle
+    k32.ReadProcessMemory.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+    k32.ReadProcessMemory.restype = ctypes.c_bool
+    k32.WriteProcessMemory.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t)]
+    k32.WriteProcessMemory.restype = ctypes.c_bool
+
     class WindowsProcessHandle(memorybase):
         '''Windows memory provider that will use a process handle in order to access memory.'''
         address = 0
@@ -832,30 +845,29 @@ try:
             if amount < 0:
                 raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.address, amount, self))
 
-            NumberOfBytesRead = ctypes.c_int()
-            res = ctypes.c_char * amount
-            Buffer = res()
+            NumberOfBytesRead = ctypes.c_size_t()
+            buffer_t = ctypes.c_char * amount
+            buffer = buffer_t()
 
             # FIXME: instead of failing on an incomplete read, perform a partial read
-            res = k32.ReadProcessMemory(self.handle, self.address, Buffer, amount, ctypes.byref(NumberOfBytesRead))
+            res = k32.ReadProcessMemory(self.handle, self.address, buffer, amount, ctypes.pointer(NumberOfBytesRead))
             if (res == 0) or (NumberOfBytesRead.value != amount):
                 e = ValueError("Unable to read pid({:x})[{:08x}:{:08x}].".format(self.handle, self.address, self.address + amount))
                 raise error.ConsumeError(self, self.address, amount, NumberOfBytesRead.value)
 
             self.address += amount
-            # XXX: test this shit out
-            return builtins.bytes(Buffer.raw)
+            return memoryview(buffer).tobytes()
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            NumberOfBytesWritten = ctypes.c_int()
+            NumberOfBytesWritten = ctypes.c_size_t()
 
-            res = ctypes.c_char * len(value)
-            Buffer = res()
-            Buffer.value = value
+            buffer_t = ctypes.c_char * len(value)
+            buffer = buffer_t()
+            buffer.value = value
 
-            res = k32.WriteProcessMemory(self.handle, self.address, Buffer, len(value), ctypes.byref(NumberOfBytesWritten))
+            res = k32.WriteProcessMemory(self.handle, self.address, buffer, len(value), ctypes.pointer(NumberOfBytesWritten))
             if (res == 0) or (NumberOfBytesWritten.value != len(value)):
                 e = OSError("Unable to write to pid({:x})[{:08x}:{:08x}].".format(self.id, self.address, self.address + len(value)))
                 raise error.StoreError(self, self.address, len(value), written=NumberOfBytesWritten.value, exception=e)
@@ -863,10 +875,26 @@ try:
             self.address += len(value)
             return NumberOfBytesWritten.value
 
+    # Define the ctypes parameters for the windows api used by WindowsProcessId
+    k32.OpenProcess.argtypes = [ctypes.c_uint32, ctypes.c_bool, ctypes.c_uint32]
+    k32.OpenProcess.restype = ctypes.c_size_t
+
     def WindowsProcessId(pid, **attributes):
         '''Return a provider that allows one to read/write from memory owned by the specified windows process ``pid``.'''
         handle = k32.OpenProcess(0x30, False, pid)
         return WindowsProcessHandle(handle)
+
+    # Define the ctypes parameters for the windows api used by WindowsFile
+    k32.CreateFileA.argtypes = [ctypes.c_char_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_size_t]
+    k32.CreateFileA.restype = ctypes.c_size_t
+    k32.SetFilePointerEx.argtypes = [ctypes.c_size_t, ctypes.c_longlong, ctypes.c_longlong, ctypes.c_uint32]
+    k32.SetFilePointerEx.restype = ctypes.c_bool
+    k32.ReadFile.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
+    k32.ReadFile.restype = ctypes.c_bool
+    k32.WriteFile.argtypes = [ctypes.c_size_t, ctypes.c_void_p, ctypes.c_uint32, ctypes.POINTER(ctypes.c_uint32), ctypes.c_void_p]
+    k32.WriteFile.restype = ctypes.c_bool
+    k32.CloseHandle.argtypes = [ctypes.c_size_t]
+    k32.CloseHandle.restype = ctypes.c_bool
 
     class WindowsFile(base):
         '''A provider that uses the Windows File API.'''
@@ -916,11 +944,13 @@ try:
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
-            resultBuffer = (ctypes.c_char * amount)()
+            buffer_t = ctypes.c_char * amount
+            resultBuffer = buffer_t()
+
             amount, resultAmount = ctypes.c_ulong(amount), ctypes.c_ulong(amount)
             result = k32.ReadFile(
-                self.handle, ctypes.byref(resultBuffer),
-                amount, ctypes.byref(resultAmount),
+                self.handle, ctypes.pointer(resultBuffer),
+                amount, ctypes.pointer(resultAmount),
                 None
             )
             if (result == 0) or (resultAmount.value == 0 and amount > 0):
@@ -929,23 +959,25 @@ try:
 
             if resultAmount.value == amount:
                 self.offset += resultAmount.value
-            return builtins.bytes(resultBuffer.raw)
+            return memoryview(resultBuffer).tobytes()
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-            buffer = (c_char * len(value))(value)
+            buffer_t = c-char * len(value)
+            buffer = buffer_t(value)
             resultWritten = ctypes.c_ulong()
+
             result = k32.WriteFile(
                 self.handle, buffer,
-                len(value), ctypes.byref(resultWritten),
+                len(value), ctypes.pointer(resultWritten),
                 None
             )
             if (result == 0) or (resultWritten.value != len(value)):
                 e = OSError(win32error.getLastErrorTuple())
                 raise error.StoreError(self, self.offset, len(value), resultWritten.value, exception=e)
             self.offset += resultWritten.value
-            return resultWritten
+            return resultWritten.value
 
         @utils.mapexception(any=error.ProviderError)
         def close(self):
@@ -1308,18 +1340,20 @@ try:
 
         @staticmethod
         def _read(address, length):
-            blockpointer = ctypes.POINTER(ctypes.c_char * length)
-            v = ctypes.c_void_p(address)
-            p = ctypes.cast(v, blockpointer)
-            return builtins.bytes().join(p.contents)
+            block_t = ctypes.c_char * length
+            pointer_t = ctypes.POINTER(block_t)
+            voidpointer = ctypes.c_void_p(address)
+            blockpointer = ctypes.cast(voidpointer, pointer_t)
+            return memoryview(blockpointer.contents).tobytes()
 
         @staticmethod
         def _write(address, value):
-            blockpointer = ctypes.POINTER(ctypes.c_char * len(value))
-            v = ctypes.c_void_p(address)
-            p = ctypes.cast(v, blockpointer)
+            block_t = ctypes.c_char * len(value)
+            pointer_t = ctypes.POINTER(block_t)
+            voidpointer = ctypes.c_void_p(address)
+            blockpointer = ctypes.cast(voidpointer, pointer_t)
             for i, item in enumerate(value):
-                p.contents[i] = item
+                blockpointer.contents[i] = item
             return 1 + i
 
     DEFAULT.append(memory)
