@@ -24,14 +24,14 @@ class field:
         def __set__(self, instance, value):
             if value in self.__option__:
                 return field.descriptor.__set__(self, instance, value)
-            raise ValueError('{!r} is not a member of {!r}'.format(value, self.__option__))
+            raise ValueError("{!r} is not a member of {!r}".format(value, self.__option__))
 
     class __type_descriptor(descriptor):
         __type__ = type
         def __set__(self, instance, value):
             if (hasattr(self.__type__, '__iter__') and type(value) in self.__type__) or isinstance(value, self.__type__):
                 return field.descriptor.__set__(self, instance, value)
-            raise ValueError('{!r} is not an instance of {!r}'.format(value, self.__type__))
+            raise ValueError("{!r} is not an instance of {!r}".format(value, self.__type__))
 
     class __set_descriptor(descriptor):
         set, get = None, None
@@ -123,7 +123,7 @@ def namespace(cls):
             if isinstance(value, type):
                 fmt = '<>'
             elif hasattr(value, '__class__'):
-                fmt = '{!r}'.format(value)
+                fmt = "{!r}".format(value)
             else:
                 raise ValueError(name)
             doc = value.__doc__.split('\n')[0] if value.__doc__ else None
@@ -133,13 +133,13 @@ def namespace(cls):
     def formatproperties(items):
         namewidth = max(len(name) for name, _, _ in items)
         formatwidth = max(len(fmt) for _, fmt, _ in items)
-        return [('{name:{}} : {format:{}} # {doc}' if documentation else '{name:{}} : {format:{}}').format(namewidth, formatwidth, name=name, format=value, doc=documentation) for name, value, documentation in items]
+        return [("{name:{}} : {format:{}} # {doc}" if documentation else "{name:{}} : {format:{}}").format(namewidth, formatwidth, name=name, format=value, doc=documentation) for name, value, documentation in items]
 
     def __repr__(self):
         props = collectproperties(properties)
         formatted = formatproperties(props)
-        descr = ('{{{!s}}} # {}\n' if cls.__doc__ else '{{{!s}}}\n')
-        subs = ['{{{}.{}}}\n...'.format(cls.__name__, name) for name in subclass.keys()]
+        descr = ("{{{!s}}} # {}\n" if cls.__doc__ else "{{{!s}}}\n")
+        subs = ["{{{}.{}}}\n...".format(cls.__name__, name) for name in subclass.keys()]
         res = descr.format(cls.__name__, cls.__doc__) + '\n'.join(formatted)
         if subs:
             return res + '\n' + '\n'.join(subs) + '\n'
@@ -149,7 +149,7 @@ def namespace(cls):
         if name in attributes:
             object.__setattr__(self, name, value)
             return
-        raise AttributeError('Configuration \'{:s}\' does not have field named \'{:s}\''.format(cls.__name__, name))
+        raise AttributeError("Configuration '{:s}' does not have field named '{:s}'".format(cls.__name__, name))
 
     attributes['__repr__'] = __repr__
     attributes['__setattr__'] = __setattr__
@@ -177,14 +177,14 @@ def configuration(cls):
     def formatproperties(items):
         namewidth = max(len(name) for name, _, _ in items)
         formatwidth = max(len("{!r}".format(format)) for _, format, _ in items)
-        return [(('{{name:{:d}}} = {{values:<{:d}}} # {{doc}}' if documentation else '{{name:{:d}}} = {{values:<{:d}}}').format(namewidth, formatwidth)).format(name=name, values=values, doc=documentation) for name, values, documentation in items]
+        return [(("{{name:{:d}}} = {{values:<{:d}}} # {{doc}}" if documentation else "{{name:{:d}}} = {{values:<{:d}}}").format(namewidth, formatwidth)).format(name=name, values=values, doc=documentation) for name, values, documentation in items]
 
     def __repr__(self):
         descr = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n')
         values = {name : getattr(self, name, None) for name in properties}
         items = collectproperties(properties, values)
         res = descr.format(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(formatproperties(items))
-        subs = ['[{}.{}]\n...'.format(cls.__name__, name) for name in subclass.keys()]
+        subs = ["[{:s}]\n...".format('.'.join([cls.__name__, name])) for name in subclass.keys()]
         if subs:
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
@@ -193,7 +193,7 @@ def configuration(cls):
         if name in attributes:
             object.__setattr__(self, name, value)
             return
-        raise AttributeError('Namespace \'{:s}\' does not have a field named \'{:s}\''.format(cls.__name__, name))
+        raise AttributeError("Namespace '{:s}' does not have a field named '{:s}'".format(cls.__name__, name))
 
     attributes['__repr__'] = __repr__
     attributes['__setattr__'] = __setattr__
@@ -374,5 +374,5 @@ if __name__ == '__main__':
         source = field.set('default-source', __getsource, __setsource, 'Default source to load/commit data from/to')
 
     #ptypes.config.logger = logging.root
-    print('{!r}'.format(consts))
-    print('{!r}'.format(config))
+    print("{!r}".format(consts))
+    print("{!r}".format(config))
