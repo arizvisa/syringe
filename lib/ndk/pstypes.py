@@ -730,6 +730,18 @@ class PROCESS_INFORMATION_CLASS(pint.enum):
         (70, 'ProcessJobMemoryInformation'),
     )]
 
+class PROCESS_BASIC_INFORMATION(pstruct.type):
+    _fields_ = [
+        (umtypes.NTSTATUS, 'ExitStatus'),
+        (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(ExitStatus)'),
+        (P(PEB), 'PebBaseAddress'),
+        (ULONG_PTR, 'AffinityMask'),
+        (umtypes.KPRIORITY, 'BasePriority'),
+        (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(BasePriority)'),
+        (HANDLE, 'UniqueProcessId'),
+        (HANDLE, 'InheritedFromUniqueProcessId'),
+    ]
+
 class PROCESS_MEMORY_EXHAUSTION_TYPE(pint.enum, ULONG):
     _values_ = [(n, v) for v, n in (
         (0, 'PMETypeFaultFastOnCommitFailure'),
