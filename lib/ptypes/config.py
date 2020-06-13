@@ -16,9 +16,9 @@ class field:
 
     class __enum_descriptor(descriptor):
         __option = set
-        def option(self, name, doc=''):
+        def option(self, name, documentation=''):
             cls = type(self)
-            res = type(name, cls, {'__doc__':doc})
+            res = type(name, cls, {'__doc__': documentation})
             self.__option__.add(res)
             return res
         def __set__(self, instance, value):
@@ -34,8 +34,9 @@ class field:
             raise ValueError('{!r} is not an instance of {!r}'.format(value, self.__type__))
 
     class __set_descriptor(descriptor):
-        set,get = None,None
-        def __init__(self): pass
+        set, get = None, None
+        def __init__(self):
+            return
         def __set__(self, instance, value):
             res = self.__getattribute__('set')
             return res.im_func(value) if sys.version_info.major < 3 else res.__func__(value)
@@ -50,45 +51,49 @@ class field:
             return field.descriptor.__set__(self, instance, bool(value))
 
     @classmethod
-    def enum(cls, name, options=(), doc=''):
+    def enum(cls, name, options=(), documentation=''):
         base = cls.__enum_descriptor
         attrs = dict(base.__dict__)
         attrs['__option__'] = set(options)
-        attrs['__doc__'] = doc
+        attrs['__doc__'] = documentation
         return type(name, (base,), attrs)()
     @classmethod
-    def option(cls, name, doc='', base=object):
-        return type(name, (base,), {'__doc__':doc})
+    def option(cls, name, documentation='', base=object):
+        return type(name, (base,), {'__doc__': documentation})
     @classmethod
-    def type(cls, name, subtype, doc=''):
+    def type(cls, name, subtype, documentation=''):
         base = cls.__type_descriptor
         attrs = dict(base.__dict__)
         attrs['__type__'] = subtype
-        attrs['__doc__'] = doc
-        return type(name, (base,), attrs)()
+        attrs['__doc__'] = documentation
+        cons = type(name, (base,), attrs)
+        return cons()
     @classmethod
-    def set(cls, name, fetch, store, doc=''):
+    def set(cls, name, fetch, store, documentation=''):
         base = cls.__set_descriptor
         attrs = dict(base.__dict__)
-        attrs['__doc__'] = doc
+        attrs['__doc__'] = documentation
         attrs['set'] = store
         attrs['get'] = fetch
-        return type(name, (base,), attrs)()
+        cons = type(name, (base,), attrs)
+        return cons()
     @classmethod
-    def constant(cls, name, value, doc=''):
+    def constant(cls, name, value, documentation=''):
         base = cls.descriptor
         attrs = dict(base.__dict__)
         def raiseAttributeError(self, instance, value):
             raise AttributeError
         attrs['__set__'] = raiseAttributeError
-        attrs['__doc__'] = doc
-        return type(name, (base,), attrs)()
+        attrs['__doc__'] = documentation
+        cons = type(name, (base,), attrs)
+        return cons()
     @classmethod
-    def bool(cls, name, doc=''):
+    def bool(cls, name, documentation=''):
         base = cls.__bool_descriptor
         attrs = dict(base.__dict__)
-        attrs['__doc__'] = doc
-        return type(name, (base,), attrs)()
+        attrs['__doc__'] = documentation
+        cons = type(name, (base,), attrs)
+        return cons()
 
 def namespace(cls):
     # turn all instances of things into read-only attributes
@@ -97,96 +102,96 @@ def namespace(cls):
         readonly.append(property.__isabstractmethod__)
     readonly.append(property.deleter)
 
-    attrs, properties, subclass = {}, {}, {}
-    for k,v in cls.__dict__.items():
-        if hasattr(v, '__name__') and all(not isinstance(v, t.__class__) for t in readonly):
-            v.__name__ = '{}.{}'.format(cls.__name__,k)
-        if k.startswith('_') or isinstance(v, property):
-            attrs[k] = v
-        elif not six.callable(v) or isinstance(v, type):
-            properties[k] = v
-        elif not hasattr(v, '__class__'):
-            subclass[k] = namespace(v)
+    attributes, properties, subclass = {}, {}, {}
+    for name, value in cls.__dict__.items():
+        if hasattr(value, '__name__') and all(not isinstance(value, item.__class__) for item in readonly):
+            value.__name__ = '.'.join([cls.__name__, name])
+        if name.startswith('_') or isinstance(value, property):
+            attributes[name] = value
+        elif not six.callable(value) or isinstance(value, type):
+            properties[name] = value
+        elif not hasattr(value, '__class__'):
+            subclass[name] = namespace(value)
         else:
-            attrs[k] = v
+            attributes[name] = value
         continue
 
-    def getprops(obj):
+    def getproperties(object):
         result = []
-        col1,col2 = 0,0
-        for k,v in obj.items():
-            col1 = max((col1,len(k)))
-            if isinstance(v, type):
-                val = '<>'
-            elif hasattr(v, '__class__'):
-                val = '{!r}'.format(v)
+        col1, col2 = 0,0
+        for name, value in object.items():
+            col1 = max(col1, len(name))
+            if isinstance(value, type):
+                fmt = '<>'
+            elif hasattr(value, '__class__'):
+                fmt = '{!r}'.format(value)
             else:
-                raise ValueError(k)
-            doc = v.__doc__.split('\n')[0] if v.__doc__ else None
-            col2 = max((col2,len(val)))
-            result.append((k, val, doc))
-        return [('{name:{}} : {val:{}} # {doc}' if d else '{name:{}} : {val:{}}').format(col1,col2,name=k,val=v,doc=d) for k,v,d in result]
+                raise ValueError(name)
+            doc = value.__doc__.split('\n')[0] if value.__doc__ else None
+            col2 = max(col2, len(fmt))
+            result.append((name, fmt, doc))
+        return [('{name:{}} : {format:{}} # {doc}' if documentation else '{name:{}} : {format:{}}').format(col1, col2, name=name, format=value, doc=documentation) for name, value, documentation in result]
 
     def __repr__(self):
-        props = getprops(properties)
+        props = getproperties(properties)
         descr = ('{{{!s}}} # {}\n' if cls.__doc__ else '{{{!s}}}\n')
-        subs = ['{{{}.{}}}\n...'.format(cls.__name__,k) for k in subclass.keys()]
-        res = descr.format(cls.__name__,cls.__doc__) + '\n'.join(props)
+        subs = ['{{{}.{}}}\n...'.format(cls.__name__, name) for name in subclass.keys()]
+        res = descr.format(cls.__name__, cls.__doc__) + '\n'.join(props)
         if subs:
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
 
     def __setattr__(self, name, value):
-        if name in six.viewkeys(attrs):
+        if name in six.viewkeys(attributes):
             object.__setattr__(self, name, value)
             return
-        raise AttributeError('Configuration \'{:s}\' does not have field named \'{:s}\''.format(cls.__name__,name))
+        raise AttributeError('Configuration \'{:s}\' does not have field named \'{:s}\''.format(cls.__name__, name))
 
-    attrs['__repr__'] = __repr__
-    attrs['__setattr__'] = __setattr__
-    attrs.update((k,property(fget=lambda s,k=k:properties[k])) for k in six.viewkeys(properties))
-    attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in six.viewkeys(subclass))
-    result = type(cls.__name__, cls.__bases__, attrs)
-    return result()
+    attributes['__repr__'] = __repr__
+    attributes['__setattr__'] = __setattr__
+    attributes.update((name, property(fget=lambda _, name=name: properties[name])) for name in properties)
+    attributes.update((name, property(fget=lambda _, name=name: subclass[name])) for name in subclass)
+    cons = type(cls.__name__, cls.__bases__, attributes)
+    return cons()
 
 def configuration(cls):
-    attrs,properties,subclass = dict(cls.__dict__),{},{}
-    for k,v in attrs.items():
-        if isinstance(v, field.descriptor):
-            properties[k] = v
-        elif not hasattr(v, '__class__'):
-            subclass[k] = configuration(v)
+    attributes, properties, subclass = dict(cls.__dict__), {}, {}
+    for name, value in attributes.items():
+        if isinstance(value, field.descriptor):
+            properties[name] = value
+        elif not hasattr(value, '__class__'):
+            subclass[name] = configuration(value)
         continue
 
-    def getprops(obj,val):
+    def getproperties(object, values):
         result = []
-        col1,col2 = 0,0
-        for k,v in obj.items():
-            col1 = max((col1,len(k)))
-            doc = v.__doc__.split('\n')[0] if v.__doc__ else None
-            col2 = max((col2,len('{!r}'.format(val[k]))))
-            result.append((k, val[k], doc))
-        return [(('{{name:{:d}}} = {{val:<{:d}}} # {{doc}}' if d else '{{name:{:d}}} = {{val:<{:d}}}').format(col1,col2)).format(name=k,val=v,doc=d) for k,v,d in result]
+        col1, col2 = 0, 0
+        for name, value in object.items():
+            col1 = max(col1, len(name))
+            doc = value.__doc__.split('\n')[0] if value.__doc__ else None
+            col2 = max(col2, len('{!r}'.format(values[name])))
+            result.append((name, values[name], doc))
+        return [(('{{name:{:d}}} = {{values:<{:d}}} # {{doc}}' if documentation else '{{name:{:d}}} = {{values:<{:d}}}').format(col1, col2)).format(name=name, values=values, doc=documentation) for name, values, documentation in result]
 
     def __repr__(self):
         descr = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n')
-        values = dict((k,getattr(self,k,None)) for k in six.viewkeys(properties))
-        res = descr.format(cls.__name__,cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(getprops(properties,values))
-        subs = ['[{}.{}]\n...'.format(cls.__name__,k) for k in subclass.keys()]
+        values = {name : getattr(self, name, None) for name in properties}
+        res = descr.format(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(getproperties(properties, values))
+        subs = ['[{}.{}]\n...'.format(cls.__name__, name) for name in subclass.keys()]
         if subs:
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
 
     def __setattr__(self, name, value):
-        if name in six.viewkeys(attrs):
+        if name in six.viewkeys(attributes):
             object.__setattr__(self, name, value)
             return
-        raise AttributeError('Namespace \'{:s}\' does not have a field named \'{:s}\''.format(cls.__name__,name))
+        raise AttributeError('Namespace \'{:s}\' does not have a field named \'{:s}\''.format(cls.__name__, name))
 
-    attrs['__repr__'] = __repr__
-    attrs['__setattr__'] = __setattr__
-    attrs.update((k,property(fget=lambda s,k=k:subclass[k])) for k in six.viewkeys(subclass))
-    result = type(cls.__name__, cls.__bases__, attrs)
+    attributes['__repr__'] = __repr__
+    attributes['__setattr__'] = __setattr__
+    attributes.update({name : property(fget=lambda _, name=name: subclass[name]) for name in subclass})
+    result = type(cls.__name__, cls.__bases__, attributes)
     return result()
 
 ### constants that can be used as options
