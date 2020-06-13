@@ -56,7 +56,8 @@ class field:
         attrs = dict(base.__dict__)
         attrs['__option__'] = set(options)
         attrs['__doc__'] = documentation
-        return type(name, (base,), attrs)()
+        cons = type(name, (base,), attrs)
+        return cons()
     @classmethod
     def option(cls, name, documentation='', base=object):
         return type(name, (base,), {'__doc__': documentation})
@@ -116,11 +117,9 @@ def namespace(cls):
             attributes[name] = value
         continue
 
-    def getproperties(object):
+    def collectproperties(object):
         result = []
-        col1, col2 = 0,0
         for name, value in object.items():
-            col1 = max(col1, len(name))
             if isinstance(value, type):
                 fmt = '<>'
             elif hasattr(value, '__class__'):
@@ -128,21 +127,26 @@ def namespace(cls):
             else:
                 raise ValueError(name)
             doc = value.__doc__.split('\n')[0] if value.__doc__ else None
-            col2 = max(col2, len(fmt))
             result.append((name, fmt, doc))
-        return [('{name:{}} : {format:{}} # {doc}' if documentation else '{name:{}} : {format:{}}').format(col1, col2, name=name, format=value, doc=documentation) for name, value, documentation in result]
+        return result
+
+    def formatproperties(items):
+        namewidth = max(len(name) for name, _, _ in items)
+        formatwidth = max(len(fmt) for _, fmt, _ in items)
+        return [('{name:{}} : {format:{}} # {doc}' if documentation else '{name:{}} : {format:{}}').format(namewidth, formatwidth, name=name, format=value, doc=documentation) for name, value, documentation in items]
 
     def __repr__(self):
-        props = getproperties(properties)
+        props = collectproperties(properties)
+        formatted = formatproperties(props)
         descr = ('{{{!s}}} # {}\n' if cls.__doc__ else '{{{!s}}}\n')
         subs = ['{{{}.{}}}\n...'.format(cls.__name__, name) for name in subclass.keys()]
-        res = descr.format(cls.__name__, cls.__doc__) + '\n'.join(props)
+        res = descr.format(cls.__name__, cls.__doc__) + '\n'.join(formatted)
         if subs:
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
 
     def __setattr__(self, name, value):
-        if name in six.viewkeys(attributes):
+        if name in attributes:
             object.__setattr__(self, name, value)
             return
         raise AttributeError('Configuration \'{:s}\' does not have field named \'{:s}\''.format(cls.__name__, name))
@@ -163,27 +167,30 @@ def configuration(cls):
             subclass[name] = configuration(value)
         continue
 
-    def getproperties(object, values):
+    def collectproperties(object, values):
         result = []
-        col1, col2 = 0, 0
         for name, value in object.items():
-            col1 = max(col1, len(name))
-            doc = value.__doc__.split('\n')[0] if value.__doc__ else None
-            col2 = max(col2, len('{!r}'.format(values[name])))
-            result.append((name, values[name], doc))
-        return [(('{{name:{:d}}} = {{values:<{:d}}} # {{doc}}' if documentation else '{{name:{:d}}} = {{values:<{:d}}}').format(col1, col2)).format(name=name, values=values, doc=documentation) for name, values, documentation in result]
+            documentation = value.__doc__.split('\n')[0] if value.__doc__ else None
+            result.append((name, values[name], documentation))
+        return result
+
+    def formatproperties(items):
+        namewidth = max(len(name) for name, _, _ in items)
+        formatwidth = max(len("{!r}".format(format)) for _, format, _ in items)
+        return [(('{{name:{:d}}} = {{values:<{:d}}} # {{doc}}' if documentation else '{{name:{:d}}} = {{values:<{:d}}}').format(namewidth, formatwidth)).format(name=name, values=values, doc=documentation) for name, values, documentation in items]
 
     def __repr__(self):
         descr = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n')
         values = {name : getattr(self, name, None) for name in properties}
-        res = descr.format(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(getproperties(properties, values))
+        items = collectproperties(properties, values)
+        res = descr.format(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(formatproperties(items))
         subs = ['[{}.{}]\n...'.format(cls.__name__, name) for name in subclass.keys()]
         if subs:
             return res + '\n' + '\n'.join(subs) + '\n'
         return res + '\n'
 
     def __setattr__(self, name, value):
-        if name in six.viewkeys(attributes):
+        if name in attributes:
             object.__setattr__(self, name, value)
             return
         raise AttributeError('Namespace \'{:s}\' does not have a field named \'{:s}\''.format(cls.__name__, name))
@@ -282,10 +289,10 @@ log.propagate = 1
 res = logging.StreamHandler(None)
 res.setFormatter(logging.Formatter("[%(created).3f] <%(process)x.%(thread)x> [%(levelname)s:%(name)s] %(message)s", None))
 log.addHandler(res)
-del(res,log)
+del(res, log)
 
 # general integers
-defaults.integer.size = int(math.log((sys.maxsize+1)*2,2)/8)
+defaults.integer.size = math.trunc(math.log(2 * (sys.maxsize + 1), 2) // 8)
 defaults.integer.order = byteorder.littleendian if sys.byteorder == 'little' else byteorder.bigendian if sys.byteorder == 'big' else None
 
 # display
