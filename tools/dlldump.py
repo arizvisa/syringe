@@ -1,4 +1,4 @@
-import itertools, logging, argparse, os
+import itertools, logging, argparse, os, platform
 import ptypes, pecoff, ndk
 import six, ctypes
 
@@ -50,7 +50,8 @@ def kernel32_OpenProcess(dwDesiredAccess, bInheritHandle, dwProcessId):
     k32.OpenProcess.restype = ctypes.c_size_t
     res = k32.OpenProcess(dwDesiredAccess.int(), bInheritHandle, dwProcessId or os.getpid())
     if not res:
-        raise RuntimeError(k32.GetLastError())
+        error = k32.GetLastError()
+        raise RuntimeError("Unable to open up process {:d} ({:#x}) with desired access ({:#x}): error {:d}".format(dwProcessId, dwProcessId, dwDesiredAccess.int(), error))
     return ndk.HANDLE().a.set(res)
 
 def kernel32_GetCurrentProcess():
@@ -65,7 +66,8 @@ def kernel32_CloseHandle(hObject):
     k32.CloseHandle.restype = ctypes.c_bool
     res = k32.CloseHandle(hObject if isinstance(hObject, six.integer_types) else hObject.int())
     if not res:
-        raise RuntimeError(k32.GetLastError())
+        error = k32.GetLastError()
+        raise RuntimeError("Unable to close handle ({:#x}): error {:#x}".format(hObject.int(), error))
     return res
 
 def kernel32_OpenProcessToken(ProcessHandle, DesiredAccess, TokenHandle):
@@ -83,7 +85,8 @@ def kernel32_OpenProcessToken(ProcessHandle, DesiredAccess, TokenHandle):
     k32.OpenProcessToken.restype = ctypes.c_bool
     res = k32.OpenProcessToken(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), DesiredAccess.int(), tokenHandle)
     if not res:
-        raise RuntimeError(k32.GetLastError())
+        error = k32.GetLastError()
+        raise RuntimeError("Unable to open up process token for handle ({:#x}) with desired access ({:#x}): error {:d}".format(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), DesiredAccess.int(), error))
 
     view = memoryview(tokenHandle.contents)
     return TokenHandle.load(source=ptypes.prov.bytes(view.tobytes()))
@@ -105,7 +108,7 @@ def advapi32_LookupPrivilegeValue(lpSystemName, lpName, lpLuid):
     a32.LookupPrivilegeValueA.restype = ctypes.c_bool
     res = a32.LookupPrivilegeValueA(lpSystemName, lpName, ctypes.pointer(luid))
     if not res:
-        raise RuntimeError(k32.GetLastError())
+        raise RuntimeError("Unable to lookup value for privilege ({!s}, {!s}): error {:d}".format(lpSystemName, lpName, k32.GetLastError()))
     view = memoryview(luid)
     return lpLuid.load(source=ptypes.prov.bytes(view.tobytes()))
 
@@ -154,7 +157,7 @@ def advapi32_AdjustTokenPrivileges(TokenHandle, DisableAllPrivileges, NewState, 
     a32.AdjustTokenPrivileges.restype = ctypes.c_bool
     res = a32.AdjustTokenPrivileges(TokenHandle if isinstance(TokenHandle, six.integer_types) else TokenHandle.int(), DisableAllPrivileges, newState, bufferLength, previousState, returnLength)
     if not res:
-        raise RuntimeError(k32.GetLastError())
+        raise RuntimeError("Unable to adjust token privileges for handle ({:#x}): error {:d}".format(TokenHandle if isinstance(TokenHandle, six.integer_types) else TokenHandle.int(), k32.GetLastError()))
 
     if previousState:
         view = memoryview(previousState)
@@ -174,25 +177,33 @@ def ntdll_NtQueryInformationProcess(ProcessHandle, ProcessInformationClass, Proc
     if not isinstance(ReturnLength, (ndk.ULONG, type(None))):
         raise TypeError(ReturnLength)
 
-    fake_processinformation_t = ctypes.c_ubyte * ProcessInformation.size()
-    fake_processinformation = fake_processinformation_t(*bytearray(ProcessInformation.serialize()))
+    if ProcessInformation:
+        fake_processinformation_t = ctypes.c_ubyte * ProcessInformation.size()
+        fake_processinformation = fake_processinformation_t(*memoryview(ProcessInformation.serialize()).tolist())
+        processinformation = ctypes.pointer(fake_processinformation)
+        pointer_processinformation_t = ctypes.POINTER(fake_processinformation_t)
+    else:
+        fake_processinformation_t = ctypes.c_ubyte * 0
+        fake_processinformation = fake_processinformation_t()
+        processinformation = None
+        pointer_processinformation_t = ctypes.c_void_p
 
     returnLength_t = ctypes.POINTER(ctypes.c_ulong)
     if ReturnLength:
-        data = (ctypes.c_ubyte * ReturnLength.size())(*bytearray(ReturnLength.serialize()))
+        data = (ctypes.c_ubyte * ReturnLength.size())(*memoryview(ReturnLength.serialize()).tolist())
         returnLength = ctypes.cast(data, ctypes.POINTER(ctypes.c_ulong))
     else:
         returnLength = None
 
-    nt.NtQueryInformationProcess.argtypes = [ctypes.c_size_t, ctypes.c_uint32, ctypes.POINTER(fake_processinformation_t), ctypes.c_ulong, returnLength_t]
+    nt.NtQueryInformationProcess.argtypes = [ctypes.c_size_t, ctypes.c_uint32, pointer_processinformation_t, ctypes.c_ulong, returnLength_t]
     nt.NtQueryInformationProcess.restype = ctypes.c_uint32
-    res = nt.NtQueryInformationProcess(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), ProcessInformationClass, ctypes.pointer(fake_processinformation), ctypes.sizeof(fake_processinformation), returnLength)
-    if res:
-        raise RuntimeError(res)
-
+    res = nt.NtQueryInformationProcess(ProcessHandle if isinstance(ProcessHandle, six.integer_types) else ProcessHandle.int(), ProcessInformationClass, processinformation, ctypes.sizeof(fake_processinformation), returnLength)
     if returnLength:
         view = memoryview(returnLength)
         ReturnLength.load(source=ptypes.prov.bytes(view.tobytes()))
+
+    if res:
+        raise RuntimeError(res)
 
     view = memoryview(fake_processinformation)
     return ProcessInformation.load(source=ptypes.prov.bytes(view.tobytes()))
@@ -226,18 +237,17 @@ def iterate_loader(pid):
     pax = ProcessAccessMask().a.set(SPECIFIC_RIGHTS=dict(QUERY_INFORMATION=1, VM_READ=1))
     handle = kernel32_OpenProcess(pax, False, pid)
     wow64 = ntdll_NtQueryInformationProcess(handle, ndk.pstypes.PROCESS_INFORMATION_CLASS.byname('ProcessWow64Information'), ndk.ULONG_PTR().a, None)
-    try:
-        pebaddr = getProcessEnvironmentBlock(handle, wow64.int())
-    except Exception as e:
-        raise OSError('Unable to open process id %d (%s)'% (pid, repr(e)))
-    z = ndk.pstypes.PEB(source=ptypes.prov.WindowsProcessHandle(handle.int()), offset=pebaddr, WIN64=0 if wow64.int() else 1)
+    if not wow64.int() and platform.architecture()[0] in {'32bit'}:
+        raise RuntimeError("Unable to scan a 64-bit process from a 32-bit python interpreter")
+
+    length = ndk.ULONG().a
+    pbi = ntdll_NtQueryInformationProcess(handle, ndk.pstypes.PROCESS_INFORMATION_CLASS.byname('ProcessBasicInformation'), ndk.pstypes.PROCESS_BASIC_INFORMATION(WIN64=1 if platform.architecture()[0] in {'64bit'} else 0).a, None)
+    pebaddr = pbi['PebBaseAddress'].int()
+
+    z = ndk.pstypes.PEB(source=ptypes.prov.WindowsProcessHandle(handle.int()), offset=pebaddr, WIN64=1 if platform.architecture()[0] in {'64bit'} else 0)
     for module in z.l['Ldr'].d.l.walk():
         yield module
     return
-
-def getProcessEnvironmentBlock(handle, wow64Q):
-    pbi = ntdll_NtQueryInformationProcess(handle, ndk.pstypes.PROCESS_INFORMATION_CLASS.byname('ProcessBasicInformation'), ndk.pstypes.PROCESS_BASIC_INFORMATION(WIN64=0 if wow64Q else 1).a, None)
-    return pbi['PebBaseAddress'].int()
 
 def walk_executable(filename):
     for f in iterate_imports(filename):
@@ -353,11 +363,3 @@ if __name__ == '__main__':
         aligned = [out(c) if i < 3 else "{:{:d}s}".format(out(c), len(header[i])) for i, c in enumerate(cols)]
         print("{:<{:d}s} {:s}".format(name, filenamelength, '\t'.join(aligned)))
     sys.exit(0)
-
-    pax = ProcessAccessMask().a
-    pax.set(SPECIFIC_RIGHTS=dict(QUERY_INFORMATION=1))
-    pax.set(STANDARD_RIGHTS=dict(WRITE_OWNER=1, WRITE_DAC=1, READ_CONTROL=1, DELETE=1))
-    print(pax['STANDARD_RIGHTS'])
-    print(pax['SPECIFIC_RIGHTS'])
-    pid = 5892
-    handle = kernel32_OpenProcess(pax, False, 2172)
