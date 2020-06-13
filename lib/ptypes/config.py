@@ -50,6 +50,8 @@ class field:
                 logging.warn("rvalue {!r} is not of boolean type. Coercing it into one : ({:s} != {:s})".format(value, type(value).__name__, bool.__name__))
             return field.descriptor.__set__(self, instance, bool(value))
 
+    class option_t(object): pass
+
     @classmethod
     def enum(cls, name, options=(), documentation=''):
         base = cls.__enum_descriptor
@@ -59,7 +61,8 @@ class field:
         cons = type(name, (base,), attrs)
         return cons()
     @classmethod
-    def option(cls, name, documentation='', base=object):
+    def option(cls, name, documentation=''):
+        base = field.option_t
         return type(name, (base,), {'__doc__': documentation})
     @classmethod
     def type(cls, name, subtype, documentation=''):
@@ -109,19 +112,17 @@ def namespace(cls):
             value.__name__ = '.'.join([cls.__name__, name])
         if name.startswith('_') or isinstance(value, property):
             attributes[name] = value
-        elif not six.callable(value) or isinstance(value, type):
+        elif not six.callable(value) or issubclass(value, field.option_t):
             properties[name] = value
-        elif not hasattr(value, '__class__'):
-            subclass[name] = namespace(value)
         else:
-            attributes[name] = value
+            subclass[name] = namespace(value)
         continue
 
     def collectproperties(object):
         result = []
         for name, value in object.items():
             if isinstance(value, type):
-                fmt = '<>'
+                fmt = '<iota>'
             elif hasattr(value, '__class__'):
                 fmt = "{!r}".format(value)
             else:
@@ -131,18 +132,25 @@ def namespace(cls):
         return result
 
     def formatproperties(items):
-        namewidth = max(len(name) for name, _, _ in items)
-        formatwidth = max(len(fmt) for _, fmt, _ in items)
-        return [("{name:{}} : {format:{}} # {doc}" if documentation else "{name:{}} : {format:{}}").format(namewidth, formatwidth, name=name, format=value, doc=documentation) for name, value, documentation in items]
+        namewidth = max(len(name) for name, _, _ in items) if items else 0
+        formatwidth = max(len(fmt) for _, fmt, _ in items) if items else 0
+
+        result = []
+        for name, value, documentation in items:
+            fmt = ("{name:{:d}s} : {value:{:d}s} # {documentation:s}" if documentation else "{name:{:d}s} : {value:{:d}s}").format
+            result.append(fmt(namewidth, formatwidth, name=name, value=value, documentation=documentation))
+        return result
 
     def __repr__(self):
-        props = collectproperties(properties)
-        formatted = formatproperties(props)
-        descr = ("{{{!s}}} # {}\n" if cls.__doc__ else "{{{!s}}}\n")
-        subs = ["{{{}.{}}}\n...".format(cls.__name__, name) for name in subclass.keys()]
-        res = descr.format(cls.__name__, cls.__doc__) + '\n'.join(formatted)
-        if subs:
-            return res + '\n' + '\n'.join(subs) + '\n'
+        formatdescription = ("{{{!s}}} # {}\n" if cls.__doc__ else "{{{!s}}}\n").format
+
+        items = collectproperties(properties)
+        props = formatproperties(items)
+
+        subclasses = ["{{{:s}}}\n...".format('.'.join([cls.__name__, name])) for name in subclass.keys()]
+        res = formatdescription(cls.__name__, cls.__doc__) + '\n'.join(props)
+        if subclasses:
+            return res + '\n' + '\n'.join(subclasses) + '\n'
         return res + '\n'
 
     def __setattr__(self, name, value):
@@ -161,9 +169,11 @@ def namespace(cls):
 def configuration(cls):
     attributes, properties, subclass = dict(cls.__dict__), {}, {}
     for name, value in attributes.items():
-        if isinstance(value, field.descriptor):
+        if name.startswith('_'):
+            continue
+        elif isinstance(value, field.descriptor):
             properties[name] = value
-        elif not hasattr(value, '__class__'):
+        elif not hasattr(value, '__class__') or (object.__sizeof__(value) == object.__sizeof__(type)):
             subclass[name] = configuration(value)
         continue
 
@@ -177,16 +187,23 @@ def configuration(cls):
     def formatproperties(items):
         namewidth = max(len(name) for name, _, _ in items)
         formatwidth = max(len("{!r}".format(format)) for _, format, _ in items)
-        return [(("{{name:{:d}}} = {{values:<{:d}}} # {{doc}}" if documentation else "{{name:{:d}}} = {{values:<{:d}}}").format(namewidth, formatwidth)).format(name=name, values=values, doc=documentation) for name, values, documentation in items]
+
+        result = []
+        for name, value, documentation in items:
+            fmt = ("{name:{:d}s} = {value:<{:d}s} # {doc:s}" if documentation else "{name:{:d}s} = {value:<{:d}s}").format
+            result.append(fmt(namewidth, formatwidth, name=name, value="{!r}".format(value), doc=documentation))
+        return result
 
     def __repr__(self):
-        descr = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n')
+        formatdescription = ('[{!s}] # {}\n' if cls.__doc__ else '[{!s}]\n').format
+
         values = {name : getattr(self, name, None) for name in properties}
         items = collectproperties(properties, values)
-        res = descr.format(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(formatproperties(items))
-        subs = ["[{:s}]\n...".format('.'.join([cls.__name__, name])) for name in subclass.keys()]
-        if subs:
-            return res + '\n' + '\n'.join(subs) + '\n'
+
+        res = formatdescription(cls.__name__, cls.__doc__.split('\n')[0] if cls.__doc__ else None) + '\n'.join(formatproperties(items))
+        subclasses = ["[{:s}]\n...".format('.'.join([cls.__name__, name])) for name in subclass.keys()]
+        if subclasses:
+            return res + '\n' + '\n'.join(subclasses) + '\n'
         return res + '\n'
 
     def __setattr__(self, name, value):
@@ -221,7 +238,7 @@ class defaults:
 
     class integer:
         size = field.type('integersize', six.integer_types, 'The word-size of the architecture')
-        order = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
+        order = field.enum('byteorder', (byteorder.bigendian, byteorder.littleendian), 'The endianness of integers/pointers')
 
     class ptype:
         clone_name = field.type('clone_name', six.string_types, 'This will only affect newly cloned types')
@@ -258,7 +275,7 @@ class defaults:
 
     class pbinary:
         '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
-        offset = field.enum('offset', (partial.bit,partial.fractional,partial.hex), 'which format to display the sub-offset for binary types')
+        offset = field.enum('offset', (partial.bit, partial.fractional, partial.hex), 'which format to display the sub-offset for binary types')
 
         bigendian_name = field.type('bigendian_name', six.string_types, 'format specifier defining an element that is read most-significant to least-significant')
         littleendian_name = field.type('littleendian_name', six.string_types, 'format specifier defining an element that is read least-significant to most-significant')
@@ -350,7 +367,7 @@ if __name__ == '__main__':
     import logging
     @configuration
     class config(object):
-        byteorder = field.enum('byteorder', (byteorder.bigendian,byteorder.littleendian), 'The endianness of integers/pointers')
+        byteorder = field.enum('byteorder', (consts.bigendian, consts.littleendian), 'The endianness of integers/pointers')
         integersize = field.type('integersize', six.integer_types, 'The word-size of the architecture')
 
         class display:
