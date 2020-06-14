@@ -1,5 +1,5 @@
-import ptypes
-from ptypes import ptype, pint, pstruct
+import logging, ptypes
+from ptypes import ptype, pint, pstruct, parray
 
 from . import base, segment, section, dynamic
 
@@ -87,7 +87,7 @@ class E_IDENT(pstruct.type):
             res['valid'] = self.valid()
         return res
 
-### file type
+### File types
 class File(pstruct.type, base.ElfXX_File):
     def __e_data(self):
         e_ident = self['e_ident'].li
@@ -112,3 +112,22 @@ class File(pstruct.type, base.ElfXX_File):
 
 ### recursion for python2
 from . import header
+
+class Archive(pstruct.type):
+    class _members(parray.block):
+        _object_ = header.Elf_Armember
+
+    def __members(self):
+        res, t = self['armag'].li, self._members
+        if isinstance(self.source, ptypes.prov.bounded):
+            expected = self.source.size() - res.size()
+            return ptype.clone(t, blocksize=lambda _, cb=max(0, expected): cb)
+
+        cls = self.__class__
+        logging.warn("{:s} : Unable to determine number of members for {!s} when reading from an unbounded source.".format(self.instance(), t))
+        return t
+
+    _fields_ = [
+        (header.Elf_Armag, 'armag'),
+        (__members, 'members'),
+    ]

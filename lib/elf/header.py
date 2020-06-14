@@ -1,4 +1,4 @@
-import ptypes
+import time, datetime, ptypes
 from . import EV_, E_IDENT, section, segment
 from .base import *
 
@@ -470,3 +470,121 @@ class Elf64_Ehdr(pstruct.type, ElfXX_Ehdr):
         if index < len(res):
             return res[index]['sh_offset'].d.li
         raise ptypes.error.ItemNotFoundError(self, 'stringtable')
+
+### Archives
+class Elf_Armag(pstr.string):
+    length = 8
+    def default(self, **kwargs):
+        archiveQ = next((kwargs.get(item) for item in kwargs if item in {'thin', 'archive'}), True)
+        if archiveQ:
+            return self.set('!<arch>\012')
+        return self.set('!<thin>\012')
+    def valid(self):
+        res = self.str()
+        if res == self.copy().default(archive=True).str():
+            return True
+        elif res == self.copy().default(thin=True).str():
+            return True
+        return False
+    def properties(self):
+        res = super(Elf_Armag, self).properties()
+        if self.initializedQ():
+            res['valid'] = self.valid()
+        return res
+
+class Elf_Arhdr(pstruct.type):
+    class time_t(stringinteger):
+        length = 12
+        epoch = datetime.datetime(1970, 1, 1)
+        def datetime(self):
+            res = time.localtime(self.int())
+            return datetime.datetime(*res[:7])
+        def gmtime(self):
+            res = self.int()
+            return time.gmtime(res)
+        def details(self):
+            try:
+                res = self.datetime()
+            except ValueError:
+                return super(Elf_Arhdr.time_t, self).details()
+            else:
+                return "{!s} ({:d})".format(res.ctime(), self.int())
+        repr = details
+        def summary(self):
+            try:
+                res = self.datetime()
+            except ValueError:
+                return super(Elf_Arhdr.time_t, self).summary()
+            else:
+                return "{!s} ({:d})".format(res.isoformat(), self.int())
+
+    class uid_t(stringinteger): length = 6
+    class gid_t(stringinteger): length = 6
+    class mode_t(octalinteger): length = 8
+    class size_t(stringinteger): length = 10
+
+    class _fmag(pstr.string):
+        length = 2
+        def default(self):
+            return self.set('`\012')
+
+    _fields_ = [
+        (dyn.clone(padstring, length=0x10), 'ar_name'),
+        (time_t, 'ar_date'),
+        (uid_t, 'ar_uid'),
+        (gid_t, 'ar_gid'),
+        (mode_t, 'ar_mode'),
+        (size_t, 'ar_size'),
+        (_fmag, 'ar_fmag'),
+    ]
+
+    def summary(self):
+        try:
+            name, ts = self['ar_name'], self['ar_date'].datetime()
+            mode, size, uid, gid = (self[fld].int() for fld in ['ar_mode', 'ar_size', 'ar_uid', 'ar_gid'])
+            return "ar_name=\"{!s}\" ar_mode={:o} ar_size={:+d} ar_date={:s} ar_uid/ar_gid={:d}/{:d}".format(name.str(), mode, size, ts.isoformat(), uid, gid)
+        except ValueError:
+            pass
+        return super(Elf_Arhdr, self).summary()
+
+class Elf_Arnames(pstruct.type):
+    class _an_pointer(parray.type):
+        _object_ = pint.bigendian(pint.uint32_t)
+
+        def summary(self):
+            iterable = (item.int() for item in self)
+            return "[{:s}]".format(', '.join(map("{:#x}".format, iterable)))
+
+    def __an_pointer(self):
+        res = self['an_count'].li
+        return dyn.clone(self._an_pointer, length=res.int())
+
+    class _an_table(parray.type):
+        _object_ = pstr.szstring
+        def summary(self):
+            iterable = (item.str() for item in self)
+            return "[{:s}]".format(', '.join(iterable))
+
+    def __an_table(self):
+        res = self['an_count'].li
+        return dyn.clone(self._an_table, length=res.int())
+
+    _fields_ = [
+        (pint.bigendian(pint.uint32_t), 'an_count'),
+        (__an_pointer, 'an_pointer'),
+        (__an_table, 'an_table'),
+    ]
+
+class Elf_Armember(pstruct.type):
+    def __am_data(self):
+        res = self['am_hdr'].li
+        if res['ar_name'].str() == '//':
+            return dyn.clone(pstr.string, length=res['ar_size'].int())
+        elif res['ar_name'].str() == '/':
+            return Elf_Arnames
+        return dyn.block(res['ar_size'].int())
+
+    _fields_ = [
+        (Elf_Arhdr, 'am_hdr'),
+        (__am_data, 'am_data'),
+    ]

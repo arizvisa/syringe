@@ -137,3 +137,30 @@ class Elf64_Word(Elf32_Word): pass
 class Elf64_Sword(Elf32_Sword): pass
 class Elf64_Xword(pint.uint64_t): pass
 class Elf64_Sxword(pint.int64_t): pass
+
+class padstring(pstr.string):
+    def set(self, string):
+        res, bs = "{!s}".format(string), self.blocksize()
+        return super(Elf_Arhdr.padstring, self).set("{:{:d}s}".format(padding, bs))
+
+    def str(self):
+        res = super(padstring, self).str()
+        return res.rstrip()
+
+class stringinteger(padstring):
+    def set(self, integer):
+        res, bs = "{!s}".format(integer), self.blocksize()
+        return super(padstring, self).set("{: {:d}s}".format(res, bs))
+
+    def int(self):
+        res = super(padstring, self).str()
+        return int(res.rstrip())
+
+class octalinteger(padstring):
+    def set(self, integer):
+        res, bs = "{!s}".format(integer), self.blocksize()
+        return super(padstring, self).set("{: {:d}s}".format(res, bs))
+
+    def int(self):
+        res = super(padstring, self).str()
+        return int(res.rstrip(), 8)
