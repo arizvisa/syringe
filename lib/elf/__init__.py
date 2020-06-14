@@ -1,4 +1,4 @@
-import logging, ptypes
+import logging, bisect, itertools, ptypes
 from ptypes import ptype, pint, pstruct, parray
 
 from . import base, segment, section, dynamic
@@ -105,9 +105,82 @@ class File(pstruct.type, base.ElfXX_File):
         ei_data = e_ident['EI_DATA']
         return ptype.clone(t, recurse=dict(byteorder=ei_data.order()))
 
+    def __e_segmentdataentries(self):
+        data = self['e_data'].li
+
+        if not isinstance(self.source, ptypes.provider.memorybase):
+            return ptype.clone(parray.type, _object_=segment.FileSegmentData, length=0)
+
+        # If we're processing a memory source, then we only need to worry
+        # about the segments. So sort them and then use them to construct
+        # our array.
+        segments = data['e_phoff'].d
+        sorted = [phdr for _, phdr in segments.li.sorted()]
+        def _object_(self, items=sorted):
+            index = len(self.value)
+            item = items[index]
+            return ptype.clone(segment.MemorySegmentData, __segment__=item)
+        return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
+
+    def __e_dataentries(self):
+        data = self['e_data'].li
+        if isinstance(self.source, ptypes.provider.memorybase):
+            return ptype.clone(parray.type, _object_=segment.MemorySegmentData, length=0)
+
+        # If we're using a file source, then we'll need to include both sections
+        # _and_ segments. We'll also create some lookup dicts so that we can
+        # identify which type is at a particular offset. This way we can give
+        # the sections priority since we're dealing with files.
+        sections, segments = data['e_shoff'].d, data['e_phoff'].d
+        segmentlist = [phdr for _, phdr in segments.li.sorted()]
+        sectionlist = [shdr for _, shdr in sections.li.sorted()]
+
+        segmentlookup = {phdr['p_offset'].int() : phdr for phdr in segmentlist}
+        segmentlookup.update({phdr['p_offset'].int() + phdr.getreadsize() : phdr for phdr in segmentlist})
+        sectionlookup = {shdr['sh_offset'].int() : shdr for shdr in sectionlist}
+        sectionlookup.update({shdr['sh_offset'].int() + shdr.getreadsize() : shdr for shdr in sectionlist})
+
+        # Now we need to sort both of them into a single list so we can figure
+        # out the layout of this executable. To do this, we're just going to
+        # create a list of the offset of each boundary. This way we can use
+        # our lookup tables to figure out which type is the right one.
+        layout = []
+        for phdr in segmentlist:
+            offset = phdr['p_offset'].int()
+            bisect.insort(layout, offset)
+            bisect.insort(layout, offset + phdr.getreadsize())
+
+        for shdr in sectionlist:
+            offset = shdr['sh_offset'].int()
+            bisect.insort(layout, offset)
+            bisect.insort(layout, offset + shdr.getreadsize())
+
+        # Our layout contains the boundaries of all of our sections, so now
+        # wesneed to walk our layout and determine whether there's a section
+        # or a segment at that particular address.
+        sorted, used = [], {item for item in []}
+        for boundary, _ in itertools.groupby(layout):
+            item = sectionlookup.get(boundary, segmentlookup.get(boundary, None))
+            if item is None or item in used:
+                continue
+            sorted.append(item)
+            used.add(item)
+
+        # Everything has been sorted, so now we can construct our array and
+        # align it properly to load as many contiguous pieces as possible.
+        def _object_(self, items=sorted):
+            index = len(self.value)
+            item = items[index]
+            if isinstance(item, segment.ElfXX_Phdr):
+                return ptype.clone(segment.FileSegmentData, __segment__=item)
+            return ptype.clone(section.SectionData, __section__=item)
+        return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
+
     _fields_ = [
         (E_IDENT, 'e_ident'),
         (__e_data, 'e_data'),
+        (__e_segmentdataentries, 'e_segmentdataentries'),
+        (__e_dataentries, 'e_dataentries'),
     ]
 
 ### recursion for python2

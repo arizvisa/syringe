@@ -330,6 +330,19 @@ class XhdrEntries(parray.type):
             yield index, item
         return
 
+    def sorted(self, fld):
+        items = {}
+        for index, item in enumerate(self):
+            offset = item[fld].int()
+            items[offset] = (index, item)
+
+        # Now that we've aggregated all of the entries, sort everything
+        # and yield them back to the user.
+        for offset in sorted(items):
+            index, item = items[offset]
+            yield index, item
+        return
+
 class ShdrEntries(XhdrEntries):
     def byoffset(self, ofs):
         iterable = (item for item in self if item.containsoffset(ofs))
@@ -346,6 +359,11 @@ class ShdrEntries(XhdrEntries):
         except StopIteration:
             raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified virtual address ({:#x})".format(va))
         return result
+
+    def sorted(self):
+        for item in super(ShdrEntries, self).sorted('sh_offset'):
+            yield item
+        return
 
 class PhdrEntries(XhdrEntries):
     def byoffset(self, ofs):
@@ -380,6 +398,20 @@ class PhdrEntries(XhdrEntries):
             flags = item['p_flags']
             if any(flags[fl] for fl in ['PT_LOAD', 'PT_DYNAMIC']):
                 yield item
+            continue
+        return
+
+    def sorted(self):
+        fld = 'p_offset' if not isinstance(self.source, ptypes.provider.memorybase) else 'p_vaddr'
+        for index, item in super(PhdrEntries, self).sorted(fld):
+            if not isinstance(item.source, ptypes.provider.memory):
+                yield index, item
+                continue
+
+            # If we are actually mapped into memory, then only yield the
+            # segments that are actually loaded.
+            if item.loadableQ():
+                yield index, item
             continue
         return
 

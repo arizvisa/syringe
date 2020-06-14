@@ -340,3 +340,39 @@ class ELFCLASS64(object):
             (bfd_vma, 'u'),
             (_pr_kind, 'pr_kind'),
         ]
+
+class SegmentData(pstruct.type):
+    pass
+
+class FileSegmentData(SegmentData):
+    def __padding(self):
+        item = self.__segment__
+        delta = item['p_offset'].int() - self.getoffset()
+        return dyn.padding(max(0, delta))
+
+    def __data(self):
+        item = self.__segment__
+        delta = item['p_offset'].int() - self.getoffset()
+        res = item.getreadsize()
+        return dyn.block(res)
+
+    _fields_ = [
+        (__padding, 'padding'),
+        (__data, 'data'),
+    ]
+
+class MemorySegmentData(SegmentData):
+    def __alignment(self):
+        item = self.__segment__
+        res = item['p_align']
+        return dyn.align(res.int(), undefined=True)
+
+    def __data(self):
+        item = self.__segment__
+        res = item.getreadsize()
+        return dyn.block(res)
+
+    _fields_ = [
+        (__alignment, 'alignment'),
+        (__data, 'data'),
+    ]
