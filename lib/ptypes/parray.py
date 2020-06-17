@@ -447,6 +447,11 @@ class uninitialized(terminated):
         # Return True if the whole thing is initialized or just the tail is uninitialized
         return len(res) == len(self.value) or all(not item.initializedQ() for item in self.value[len(res):])
 
+    def serialize(self):
+        '''Serialize all currently available content of the array.'''
+        iterable = itertools.takewhile(lambda item: item.initializedQ() or item.size() > 0, self.value)
+        return bytes().join(item.serialize() for item in iterable)
+
 class infinite(uninitialized):
     '''An array that reads elements until an exception or interrupt happens'''
 
