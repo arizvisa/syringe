@@ -34,8 +34,8 @@ class Name(pstruct.type):
 
     def int(self):
         if self.CompressedQ():
-            offset = self['string'].cast(u8)
-            return offset.int()
+            offset = self.cast(u16)
+            return offset.int() & 0x3fff
         raise TypeError("{:s} : Name is not compressed".format(self.instance()))
 
     def summary(self):
@@ -85,7 +85,7 @@ class Label(parray.terminated):
     _object_ = Name
 
     def isTerminator(self, item):
-        return item['length'].int() & 0x3f == 0
+        return item.CompressedQ() or item['length'].int() == 0
 
     def str(self):
         items = ["{:+#x}".format(item.int()) if item.CompressedQ() else item.str() for item in self]
@@ -835,7 +835,5 @@ if __name__ == '__main__':
     print(x)
 
     print(x['question'][0])
-    print(x['answer'][6])
-    print(x['answer'][0]['name'].hexdump())
-    print(x['answer'][13])
+    print(x['answer'][20])
 
