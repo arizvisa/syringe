@@ -63,6 +63,7 @@ class Label(parray.terminated):
     #      this doesn't support message-compression at the moment even
     #      though the `Name` object does.
     _object_ = Name
+
     def isTerminator(self, item):
         return item['length'].int() & 0x3f == 0
 
@@ -125,114 +126,64 @@ class RDATA(ptype.definition):
     cache = {}
 
 @RDATA.define
-class CNAME(pstruct.type):
-    type = TYPE.byname('CNAME'), CLASS.byname('IN')
+class A(pstruct.type):
+    type = TYPE.byname('A'), CLASS.byname('IN')
+
     _fields_ = [
-        (Label, 'CNAME'),
+        (osi.network.inet4.in_addr, 'ADDRESS'),
     ]
+
     def summary(self):
-        return self['CNAME'].str()
+        return self['ADDRESS'].summary()
 
 @RDATA.define
-class HINFO(pstruct.type):
-    type = TYPE.byname('HINFO'), CLASS.byname('IN')
-    _fields_ = [
-        (Label, 'CPU'),
-        (Label, 'OS'),
-    ]
-    def summary(self):
-        return "CPU={:s} OS={:s}".format(self['CPU'].str(), self['OS'].str())
+class NS(pstruct.type):
+    type = TYPE.byname('NS'), CLASS.byname('IN')
 
-@RDATA.define
-class MB(pstruct.type):
-    type = TYPE.byname('MB'), CLASS.byname('IN')
     _fields_ = [
-        (Label, 'MADNAME'),
+        (Label, 'NSDNAME'),
     ]
+
     def summary(self):
-        return self['MADNAME'].str()
+        return self['NSDNAME'].str()
 
 @RDATA.define
 class MD(pstruct.type):
     type = TYPE.byname('MD'), CLASS.byname('IN')
+
     _fields_ = [
         (Label, 'MADNAME'),
     ]
+
     def summary(self):
         return self['MADNAME'].str()
 
 @RDATA.define
 class MF(pstruct.type):
     type = TYPE.byname('MF'), CLASS.byname('IN')
+
     _fields_ = [
         (Label, 'MADNAME'),
     ]
+
     def summary(self):
         return self['MADNAME'].str()
 
 @RDATA.define
-class MG(pstruct.type):
-    type = TYPE.byname('MG'), CLASS.byname('IN')
-    _fields_ = [
-        (Label, 'MGMNAME'),
-    ]
-    def summary(self):
-        return self['MGMNAME'].str()
+class CNAME(pstruct.type):
+    type = TYPE.byname('CNAME'), CLASS.byname('IN')
 
-@RDATA.define
-class MINFO(pstruct.type):
-    type = TYPE.byname('MINFO'), CLASS.byname('IN')
     _fields_ = [
-        (Label, 'RMAILBX'),
-        (Label, 'EMAILBX'),
+        (Label, 'CNAME'),
     ]
-    def summary(self):
-        return ' '.join([self['RMAILBX'].str(), self['EMAILBX'].str()])
 
-@RDATA.define
-class MR(pstruct.type):
-    type = TYPE.byname('MR'), CLASS.byname('IN')
-    _fields_ = [
-        (Label, 'NEWNAME'),
-    ]
     def summary(self):
-        return self['NEWNAME'].str()
-
-@RDATA.define
-class MX(pstruct.type):
-    type = TYPE.byname('MX'), CLASS.byname('IN')
-    _fields_ = [
-        (Label, 'PREFERENCE'),
-        (Label, 'EXCHANGE'),
-    ]
-    def summary(self):
-        return ' '.join([self['PREFERENCE'].str(), self['EXCHANGE'].str()])
-
-@RDATA.define
-class NULL(ptype.block):
-    type = TYPE.byname('NULL'), CLASS.byname('IN')
-
-@RDATA.define
-class NS(pstruct.type):
-    type = TYPE.byname('NS'), CLASS.byname('IN')
-    _fields_ = [
-        (Label, 'NSDNAME'),
-    ]
-    def summary(self):
-        return self['NSDNAME'].str()
-
-@RDATA.define
-class PTR(pstruct.type):
-    type = TYPE.byname('PTR'), CLASS.byname('IN')
-    _fields_ = [
-        (Label, 'PTRDNAME'),
-    ]
-    def summary(self):
-        return self['PTRDNAME'].str()
+        return self['CNAME'].str()
 
 @RDATA.define
 class SOA(pstruct.type):
     type = TYPE.byname('SOA'), CLASS.byname('IN')
+
     _fields_ = [
         (Label, 'MNAME'),
         (Label, 'RNAME'),
@@ -249,13 +200,41 @@ class SOA(pstruct.type):
         return ' '.join([self['MNAME'].str(), self['RNAME'].str()] + items)
 
 @RDATA.define
-class A(pstruct.type):
-    type = TYPE.byname('A'), CLASS.byname('IN')
+class MB(pstruct.type):
+    type = TYPE.byname('MB'), CLASS.byname('IN')
+
     _fields_ = [
-        (osi.network.inet4.in_addr, 'ADDRESS'),
+        (Label, 'MADNAME'),
     ]
+
     def summary(self):
-        return self['ADDRESS'].summary()
+        return self['MADNAME'].str()
+
+@RDATA.define
+class MG(pstruct.type):
+    type = TYPE.byname('MG'), CLASS.byname('IN')
+
+    _fields_ = [
+        (Label, 'MGMNAME'),
+    ]
+
+    def summary(self):
+        return self['MGMNAME'].str()
+
+@RDATA.define
+class MR(pstruct.type):
+    type = TYPE.byname('MR'), CLASS.byname('IN')
+
+    _fields_ = [
+        (Label, 'NEWNAME'),
+    ]
+
+    def summary(self):
+        return self['NEWNAME'].str()
+
+@RDATA.define
+class NULL(ptype.block):
+    type = TYPE.byname('NULL'), CLASS.byname('IN')
 
 @RDATA.define
 class WKS(pstruct.type):
@@ -268,6 +247,57 @@ class WKS(pstruct.type):
         (u8, 'PROTOCOL'),
         (__BITMAP, 'BITMAP'),
     ]
+
+@RDATA.define
+class PTR(pstruct.type):
+    type = TYPE.byname('PTR'), CLASS.byname('IN')
+
+    _fields_ = [
+        (Label, 'PTRDNAME'),
+    ]
+
+    def summary(self):
+        return self['PTRDNAME'].str()
+
+@RDATA.define
+class HINFO(pstruct.type):
+    type = TYPE.byname('HINFO'), CLASS.byname('IN')
+
+    _fields_ = [
+        (Label, 'CPU'),
+        (Label, 'OS'),
+    ]
+
+    def summary(self):
+        return "CPU={:s} OS={:s}".format(self['CPU'].str(), self['OS'].str())
+
+@RDATA.define
+class MINFO(pstruct.type):
+    type = TYPE.byname('MINFO'), CLASS.byname('IN')
+
+    _fields_ = [
+        (Label, 'RMAILBX'),
+        (Label, 'EMAILBX'),
+    ]
+
+    def summary(self):
+        return ' '.join([self['RMAILBX'].str(), self['EMAILBX'].str()])
+
+@RDATA.define
+class MX(pstruct.type):
+    type = TYPE.byname('MX'), CLASS.byname('IN')
+
+    _fields_ = [
+        (u16, 'PREFERENCE'),
+        (Label, 'EXCHANGE'),
+    ]
+
+    def summary(self):
+        return "{:d} {:s}".format(self['PREFERENCE'].int(), self['EXCHANGE'].str())
+
+@RDATA.define
+class TXT(pstr.string):
+    type = TYPE.byname('TXT'), CLASS.byname('IN')
 
 class QR(pbinary.enum):
     width, _values_ = 1, [
@@ -323,7 +353,7 @@ class RR(pstruct.type):
             res = self['RDLENGTH'].li
             return dyn.block(res.int())
 
-        if issubclass(t, ptype.block):
+        if issubclass(t, (ptype.block, pstr.string)):
             return dyn.clone(t, length=self['RDLENGTH'].li.int())
         return t
 
@@ -354,12 +384,14 @@ class Message(pstruct.type):
             (u16, 'NSCOUNT'),
             (u16, 'ARCOUNT'),
         ]
+
         def summary(self):
             fields = ['qd', 'an', 'ns', 'ar']
             return ', '.join("{:s}={:d}".format(name, self[fld].int()) for name, fld in zip(fields, self))
 
     class _Question(parray.type):
         _object_ = Q
+
         def summary(self):
             iterable = (item.summary() for item in self)
             return "({:d}) {:s}".format(len(self), ', '.join(iterable))
