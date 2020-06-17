@@ -5,7 +5,9 @@
 
 import ptypes
 from ptypes import *
+from ptypes import bitmap
 
+import functools
 from .__base__ import layer, datalink, stackable
 
 pint.setbyteorder(ptypes.config.byteorder.bigendian)
@@ -13,23 +15,25 @@ pint.setbyteorder(ptypes.config.byteorder.bigendian)
 class in_addr(parray.type):
     length, _object_ = 4, pint.uint32_t
     def summary(self):
-        num = bitmap.new(super(in_addr,self).int(), 128)
-        components = bitmap.split(num, 16)[::-1]
+        iterable = (item.int() for item in self)
+        res = functools.reduce(lambda agg, item: agg * 0x100000000 + item, iterable, 0)
+        num = bitmap.new(res, 128)
+        components = bitmap.split(num, 16)
 
         # FIXME: there's got to be a more elegant way than a hacky state machine
-        result,counter = [],0
-        for n in map(bitmap.number,components):
+        result, counter = [], 0
+        for item in map(bitmap.number, components):
             if counter < 2:
-                if n == 0:
+                if item == 0:
                     counter = 1
                     if len(result) == 0:
                         result.append('')
                     continue
                 elif counter > 0:
-                    result.extend(('','%x'%n))
+                    result.extend(['', "{:x}".format(item)])
                     counter = 2
                     continue
-            result.append('%x'%n)
+            result.append("{:x}".format(item))
         return ':'.join(result)
 in6_addr = in_addr
 

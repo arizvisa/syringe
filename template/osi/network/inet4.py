@@ -12,9 +12,10 @@ class u_long(pint.uint32_t): pass
 
 class in_addr(u_long):
     def summary(self):
-        num = bitmap.new(super(in_addr,self).int(), 32)
-        octets = bitmap.split(num, 8)[::-1]
-        return '0x{:x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.number,[num]+octets))
+        res = self.int()
+        integer = bitmap.new(res, 32)
+        octets = bitmap.split(integer, 8)
+        return '{:#x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.int, [integer] + octets))
 
 @layer.define
 class ip4_hdr(pstruct.type, stackable):
