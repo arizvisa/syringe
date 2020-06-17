@@ -6,3 +6,4 @@ from . import aspie, mp, tara
 from . import ber, per
 from . import nlmp, credssp
 from . import gcc, mcs, mas
+from . import dns
