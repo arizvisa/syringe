@@ -22,9 +22,31 @@ class Name(pstruct.type):
         (__string, 'string'),
     ]
 
+    def CompressedQ(self):
+        length = self['length'].int()
+        return True if length & 0xc0 else False
+
     def str(self):
+        if self.CompressedQ():
+            raise TypeError("{:s} : Name is compressed".format(self.instance()))
         res = self['string'].serialize()
         return res.decode('ascii')
+
+    def int(self):
+        if self.CompressedQ():
+            offset = self['string'].cast(u8)
+            return offset.int()
+        raise TypeError("{:s} : Name is not compressed".format(self.instance()))
+
+    def summary(self):
+        if self.CompressedQ():
+            offset = self.int()
+            return "OFFSET: {:+#x}".format(offset)
+        res = self['length'].int()
+        return "({:d}) {:s}".format(res, self.str())
+
+    def repr(self):
+        return self.summary()
 
     def set(self, value):
         if isinstance(value, six.integer_types):
@@ -36,25 +58,16 @@ class Name(pstruct.type):
             raise ValueError(value)
         raise ValueError(value)
 
-    def summary(self):
-        res = self['length'].int()
-        if res & 0xc0:
-            return "OFFSET: {:d}".format(res & 0x3f)
-        return "({:d}) {:s}".format(res, self.str())
-
-    def repr(self):
-        return self.summary()
-
 class Label(parray.terminated):
     # XXX: Feeling kind of lazy now that all this data-entry is done, and
     #      this doesn't support message-compression at the moment even
     #      though the `Name` object does.
     _object_ = Name
     def isTerminator(self, item):
-        return item['length'].int() == 0
+        return item['length'].int() & 0x3f == 0
 
     def str(self):
-        items = [item.str() for item in self]
+        items = ["{:+#x}".format(item.int()) if item.CompressedQ() else item.str() for item in self]
         return '.'.join(items)
 
     def alloc(self, items):
