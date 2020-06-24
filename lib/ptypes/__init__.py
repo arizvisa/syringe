@@ -1,9 +1,9 @@
-from . import ptype,parray,pstruct,pbinary,pint,pfloat,pstr
+from . import ptype,parray,pstruct,pbinary,pint,pfloat,pstr,pcode
 from . import config,utils,dynamic,provider
 dyn, prov = dynamic, provider
 Config = config.defaults
 
-__all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','dynamic','dyn','prov'
+__all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','pcode','dynamic','dyn','prov'
 
 ## globally changing the ptype provider
 def setsource(provider):
