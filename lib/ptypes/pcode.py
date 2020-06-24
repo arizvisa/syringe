@@ -264,7 +264,10 @@ class block_t(ptype.block):
         return "\"{:s}\"".format(str().join(bytes))
 
 class pointer_t(ptype.pointer_t):
-    pass
+    def dispatch(self, **parameters):
+        instance = self.new(self._parameters_)
+        instance.set(**parameters)
+        raise NotImplementedError
 
 if __name__ == '__main__':
     class Result(Exception): pass
