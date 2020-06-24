@@ -1,8 +1,8 @@
-from . import ptype, parray, pstruct, pbinary, pint, pfloat, pstr
+from . import ptype, parray, pstruct, pbinary, pint, pfloat, pstr, pcode
 from . import utils, dynamic, provider
 dyn, prov = dynamic, provider
 
-__all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','dynamic','dyn','prov'
+__all__ = 'ptype','parray','pstruct','pbinary','pint','pfloat','pstr','pcode','dynamic','dyn','prov'
 
 from . import config
 Config = config.defaults
