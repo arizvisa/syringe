@@ -45,25 +45,41 @@ class IMAGE_DOS_HEADER(pstruct.type):
             ( dyn.array(uint16, 10), 'e_reserved2' ),
         ]
 
-    # FIXME: this padding implementation should be properly tested as there's a
-    #           chance it could be fucked with
-    def __e_padding(self):
-        sz = self.blocksize()
-        # add Oem structure if within the relocation size (if defined), or
-        ofs = self['e_lfarlc'].li.int()
-        if ofs > 0:
-            leftover = ofs - sz
-            return self.Oem if sz + self.Oem().a.blocksize() <= ofs else dyn.clone(self.Oem, blocksize=lambda s: leftover)
-        # otherwise insert it if we're still within the total header size
-        return self.Oem if sz+self.Oem().a.blocksize() <= self.headersize() else dyn.block(0)
+    # FIXME: this implementation should be properly tested as there's a chance it could be fucked with
+    def __e_oem(self):
+        res = self['e_lfarlc'].li
+        fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno']
+
+        # if our calculated size for the field directly matches the Oem
+        # structure, then this for sure is going to be a PECOFF executable.
+        t = IMAGE_DOS_HEADER.Oem
+        if res.int() == sum(self[fld].li.size() for fld in fields) + t().a.size() + 4:
+            return t
+
+        # otherwise we need to pad it with whatever the input claims it should be
+        return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
 
     def __e_lfanew(self):
-        # if we're satisfying the specification's req for an extra header, then
-        #   include our pointer to it
-        #if dos['e_ss'].int() == 0:      # my tests...
-        if self['e_lfarlc'].li.int() >= 0x40:
+        paragraphs, relocations = self['e_cparhdr'].li, self['e_lfarlc'].li
+        fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno', 'e_oem']
+
+        # if everything matches, then there's a pointer here for PECOFF executables
+        if 0x10 * paragraphs.int() == relocations.int() == sum(self[fld].li.size() for fld in fields) + 4:
             return dyn.rpointer(Next, self, pint.uint32_t)
+
+        # otherwise, there isn't anything here.
         return pint.uint_t
+
+    def __e_rlc(self):
+        res = self['e_crlc'].li
+        return dyn.array(IMAGE_DOS_HEADER.Relocation, res.int())
+
+    def __e_parhdr(self):
+        res = 0x10 * self['e_cparhdr'].li.int()
+
+        fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno']
+        fields+= ['e_oem', 'e_rlc', 'e_lfanew']
+        return dyn.block(res - sum(self[fld].li.size() for fld in fields))
 
     def filesize(self):
         res = self['e_cp'].li.int()
@@ -73,36 +89,44 @@ class IMAGE_DOS_HEADER(pstruct.type):
         return 0
 
     def headersize(self):
-        res = self['e_cparhdr'].li.int()
-        return res * 0x10
+        res = self['e_cparhdr'].li
+        return res.int() * 0x10
 
     def datasize(self):
         res = self.headersize()
         return (self.filesize() - res) if res > 0 else 0
 
+    def __e_lfarlc(self):
+        res = self['e_crlc'].li
+        t = dyn.array(IMAGE_DOS_HEADER.Relocation, res.int())
+        return dyn.rpointer(t, self, uint16)
+
     #e_cparhdr << 4
     #e_cp << 9
     _fields_ = [
         ( e_magic, 'e_magic' ),
-        ( uint16, 'e_cblp' ),        # bytes in last page / len mod 512 / UsedBytesInLastPage
-        ( uint16, 'e_cp' ),          # pages / 512b pagees / FileSizeInPages
-        ( uint16, 'e_crlc' ),        # relocation count / reloc entries count / NumberOfRelocationItems
-        ( uint16, 'e_cparhdr' ),     # header size in paragraphs (paragraph=0x10) / number of paragraphs before image / HeaderSizeInParagraphs
-        ( uint16, 'e_minalloc' ),    # required paragraphs / minimum number of bss paragraphs / MinimumExtraParagraphs
-        ( uint16, 'e_maxalloc' ),    # requested paragraphs / maximum number of bss paragraphs / MaximumExtraParagraphs
-        ( uint16, 'e_ss' ),          # ss / stack of image / InitialRelativeSS
-        ( uint16, 'e_sp' ),          # sp / sp of image / InitialSP
-        ( uint16, 'e_csum' ),        # checksum / checksum (ignored) / Checksum
-        ( uint16, 'e_ip' ),          # ip / ip of entry / InitialIP
-        ( uint16, 'e_cs' ),          # cs / cs of entry / InitialrmwwelativeIp
-        ( lambda self: dyn.rpointer(dyn.array(IMAGE_DOS_HEADER.Relocation, self['e_crlc'].li.int()), self, uint16), 'e_lfarlc' ), # relocation table
-        ( uint16, 'e_ovno'),         # overlay number
-        #( uint32, 'EXE_SYM_TAB'),   # from inc/exe.inc
+        ( uint16, 'e_cblp' ),       # bytes in last page / len mod 512 / UsedBytesInLastPage
+        ( uint16, 'e_cp' ),         # pages / 512b pagees / FileSizeInPages
+        ( uint16, 'e_crlc' ),       # relocation count / reloc entries count / NumberOfRelocationItems
+        ( uint16, 'e_cparhdr' ),    # header size in paragraphs (paragraph=0x10) / number of paragraphs before image / HeaderSizeInParagraphs
+        ( uint16, 'e_minalloc' ),   # required paragraphs / minimum number of bss paragraphs / MinimumExtraParagraphs
+        ( uint16, 'e_maxalloc' ),   # requested paragraphs / maximum number of bss paragraphs / MaximumExtraParagraphs
+        ( uint16, 'e_ss' ),         # ss / stack of image / InitialRelativeSS
+        ( uint16, 'e_sp' ),         # sp / sp of image / InitialSP
+        ( uint16, 'e_csum' ),       # checksum / checksum (ignored) / Checksum
+        ( uint16, 'e_ip' ),         # ip / ip of entry / InitialIP
+        ( uint16, 'e_cs' ),         # cs / cs of entry / InitialrmwwelativeIp
+        ( __e_lfarlc, 'e_lfarlc' ), # relocation table
+
+        ( uint16, 'e_ovno'),        # overlay number
+        #( uint32, 'EXE_SYM_TAB'),  # from inc/exe.inc
 
         # all the data below here changes based on the linker:
         #    Borland, ARJ, LZEXE, PKLITE, LHARC, LHA, CRUNCH, BSA, LARC, etc..
-        ( __e_padding, 'e_oem'),       # oem and reserved data
+        ( __e_oem, 'e_oem'),        # oem and reserved data
         ( __e_lfanew, 'e_lfanew'),
+        ( __e_rlc, 'e_rlc' ),       # relocations?
+        ( __e_parhdr, 'e_parhdr'),
     ]
 
 ### What file format the next header is
