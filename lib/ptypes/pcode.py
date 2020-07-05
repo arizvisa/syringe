@@ -305,7 +305,7 @@ class pointer_t(ptype.pointer_t):
     def __blocks__(self, instance):
         """Yield a tuple of every (pointer, target) from the specified instance.
 
-        This will to return all potential non-contiguous blocks that can be
+        This will return all potential non-contiguous blocks that can be
         discovered by traversing the specified instance. Duplicate pointers to
         the same target are not detected.
         """
@@ -695,6 +695,58 @@ if __name__ == '__main__':
 
         c = b['ptr(block2)'].d.l
         if c['goal'].int() == 57005:
+            raise Success
+
+    @TestCase
+    def test_pointer_parameters_noncontiguous_3():
+        ptr = dyn.clone(ptype.pointer_t, _value_=pint.uint32_t, _object_=pint.uint64_t)
+
+        class argh(parray.type):
+            length, _object_ = 4, ptr
+
+        class params(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dyn.clone(ptr, _object_=argh), 'ptr(array)'),
+            ]
+
+        P = params().set(a=0x27)
+        refarray = P['ptr(array)'].reference(argh().a)
+        for i, item in enumerate(refarray):
+            item.d.a.set(0x11 + i * 0x11)
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__blocks__(P)]
+
+        if len(items) != 1 + 4:
+            raise Failure
+
+        # Figure out our data layout..the same as before.
+        blocks, offset = [P], P.size()
+        for ptr, block in items:
+            ptr.set(offset)
+            blocks.append(block)
+            offset += block.size()
+
+        # Glue them together so we can make a source to load from
+        data = bytes().join(item.serialize() for item in blocks)
+
+        # ...and here we go!
+        a = params(source=ptypes.prov.bytes(data)).l
+
+        if a['a'].int() != 0x27:
+            raise Failure
+
+        b = a['ptr(array)'].d.l
+        if len(b) != 4:
+            raise Success
+
+        res = []
+        for i, p in enumerate(b):
+            val = p.d.li
+            res.append(val)
+
+        if all(item.int() == 0x11 + i * 0x11 for i, item in enumerate(res)):
             raise Success
 
 if __name__ == '__main__':
