@@ -2289,6 +2289,7 @@ class pointer_t(encoded_t):
 
     @utils.memoize('self', self=lambda n:(n.source, n._object_, n.object.__getvalue__()), attrs=lambda n:tuple(sorted(n.items())))
     def dereference(self, **attrs):
+        '''Dereferences the pointer and returns the instance that it references.'''
         res = self.decode(self.object)
         attrs.setdefault('__name__', '*'+self.name())
         attrs.setdefault('source', self.__source__)
@@ -2296,6 +2297,7 @@ class pointer_t(encoded_t):
         return self.new(self._object_, **attrs)
 
     def reference(self, object, **attrs):
+        '''Changes the pointer to reference the specified instance and its type, and then returns it.'''
         attrs.setdefault('__name__', getattr(object, '__name__', None) or "*{!s}".format(self.name()))
         attrs.setdefault('source', self.__source__)
 
@@ -2318,10 +2320,10 @@ class pointer_t(encoded_t):
             # already been updated, so we just need to copy the source
             # and any other relevant attributes.
             fstore( self.new(object, **attrs) )
-        return self
+        return self.d
 
     def int(self):
-        """Return the value of pointer as an integral"""
+        """Return the value of pointer as an integer."""
         return self.object.get()
     num = number = int
 
@@ -2333,7 +2335,7 @@ class pointer_t(encoded_t):
         return u"*{:#x}".format(self.int())
 
     def repr(self, **options):
-        """Display all pointer_t instances as an integer"""
+        """Return a summary of the pointer_t instance as a string."""
         return self.summary(**options) if self.initializedQ() else u"*???"
 
     def __getstate__(self):
@@ -2541,7 +2543,7 @@ if __name__ == '__main__':
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
         x = b64(source=ptypes.prov.string(b'A'*0x100+b'\x00')).l
-        x = x.reference(instance)
+        x.reference(instance)
         if builtins.isinstance(x.d, pstr.string) and x.serialize() == result:
             raise Success
 
@@ -3351,6 +3353,20 @@ if __name__ == '__main__':
 
         a.reference(pint.uint64_t().set(-1))
         if (a.d.int(), a.d.size()) == (0xffffffffffffffff, 8):
+            raise Success
+
+    @TestCase
+    def test_pointer_reference_dereference_5():
+        class t(ptype.pointer_t):
+            _object_ = pint.uint32_t
+        a = t().a
+        a.d.a   # hi mom
+        if (a.d.int(), a.d.size()) != (0, 4):
+            raise Failure
+
+        x = a.reference(pint.uint64_t().set(-1))
+        x.set(17)
+        if x.int() == 17 and (a.d.int(), a.d.size()) == (x.int(), 8):
             raise Success
 
 if __name__ == '__main__':
