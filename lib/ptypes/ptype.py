@@ -2460,7 +2460,6 @@ if __name__ == '__main__':
                 data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
                 return super(xor, self).decode(ptype.block(length=len(data)).set(data))
 
-        global x
         x = xor(source=ptypes.prov.string(s))
         x = x.l
         if x.d.l.serialize() == b'hello world':
@@ -3092,7 +3091,6 @@ if __name__ == '__main__':
         source = ptypes.provider.file('~/mshtml.dll')
         a = pecoff.Executable.File(source=source).l
 
-        global result
         result = list(a.collect())
         for n in result:
             print(n)
@@ -3329,7 +3327,6 @@ if __name__ == '__main__':
     def test_pointer_reference_dereference_3():
         class t(ptype.pointer_t):
             _object_ = pint.uint32_t
-        global a
         a = t().a
         a.d.a   # hi mom
         if (a.d.int(), a.d.size()) != (0, 4):
@@ -3345,7 +3342,6 @@ if __name__ == '__main__':
     def test_pointer_reference_dereference_4():
         class t(ptype.pointer_t):
             _object_ = pint.uint32_t
-        global a
         a = t().a
         a.d.a   # hi mom
         if (a.d.int(), a.d.size()) != (0, 4):
