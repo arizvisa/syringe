@@ -335,15 +335,21 @@ def memoize(*kargs, **kattrs):
             cache[res] = fn(*args, **kwds)
             return cache[res]
 
-        # set some utilies on the memoized function
+        # set some state utilities on the memoized function
         callee.memoize_key = lambda *args, **kwargs: key(*args, **kwargs)
         callee.memoize_key.__doc__ = """Generate a unique key based on the provided arguments."""
         callee.memoize_cache = lambda: cache
         callee.memoize_cache.__doc__ = """Return the current memoize cache."""
         callee.memoize_clear = lambda: cache.clear()
         callee.memoize_clear.__doc__ = """Empty the current memoize cache."""
+
+        # add some wrappers to interact with the cache
         callee.force = lambda *args, **kwargs: force(*args, **kwargs)
         callee.force.__doc__ = """Force calling the function whilst updating the memoize cache."""
+        callee.fetch = lambda *args, **kwargs: operator.getitem(cache, key(*args, **kwargs))
+        callee.fetch.__doc__ = """Return the item in the cache for the specified key."""
+        callee.store = lambda *args, **kwargs: lambda result: operator.setitem(cache, key(*args, **kwargs), result) or result
+        callee.store.__doc__ = """Return a closure that stores the result to the specified key."""
 
         callee.__name__ = fn.__name__
         callee.__doc__ = fn.__doc__
@@ -707,6 +713,105 @@ if __name__ == '__main__':
         data = b'fuckyou\0\0\0\0' * 2
         match = str().join(map("\\x{:02x}".format, bytearray(data)))
         if emit_repr(data) == match:
+            raise Success
+
+    @TestCase
+    def test_memoize_force_1():
+        @utils.memoize('arg')
+        def f(arg, manipulate=2):
+            return manipulate * arg
+
+        [f(item) for item in [20, 30, 20, 30]]
+
+        if f(20, manipulate=3) != 2 * 20:
+            raise Failure
+
+        if f.force(20, manipulate=1) == 1 * 20:
+            raise Success
+
+    @TestCase
+    def test_memoize_force_2():
+        @utils.memoize('arg')
+        def f(arg, manipulate=2):
+            return manipulate * arg
+
+        [f(item) for item in [20, 30, 20, 30]]
+        if f(20, manipulate=3) != 2 * 20:
+            raise Failure
+
+        f.force(20, manipulate=1)
+
+        if f(20, manipulate=20) == 1 * 20:
+            raise Success
+
+    @TestCase
+    def test_memoize_fetch_1():
+        args = []
+        @utils.memoize('arg')
+        def f(arg, args=args):
+            args.append(arg)
+            return 2 * arg
+
+        [f(item) for item in [20, 30, 20, 30]]
+        if args != [20, 30]:
+            raise Failure
+
+        if f.fetch(30) == 2 * 30:
+            raise Success
+
+    @TestCase
+    def test_memoize_fetch_2():
+        args = []
+        @utils.memoize('arg')
+        def f(arg, args=args):
+            args.append(arg)
+            return 2 * arg
+
+        [f(item) for item in [20, 30, 20, 30]]
+        if args != [20, 30]:
+            raise Failure
+
+        try:
+            f.fetch(40)
+        except KeyError:
+            raise Success
+
+        raise Failure
+
+    @TestCase
+    def test_memoize_store_1():
+        args = []
+        @utils.memoize('arg')
+        def f(arg, args=args):
+            args.append(arg)
+            return 2 * arg
+
+        [f(item) for item in [20, 30, 20, 30]]
+        if args != [20, 30]:
+            raise Failure
+
+        if f.store(30)(15) == 15:
+            raise Success
+
+    @TestCase
+    def test_memoize_store_2():
+        args = []
+        @utils.memoize('arg')
+        def f(arg, args=args):
+            args.append(arg)
+            return 2 * arg
+
+        [f(item) for item in [20, 30, 20, 30]]
+        if args != [20, 30]:
+            raise Failure
+
+        if f.fetch(30) != 2 * 30:
+            raise Failure
+
+        if f.store(30)(15) != 15:
+            raise Failure
+
+        if f(30) == 15:
             raise Success
 
 if __name__ == '__main__':
