@@ -302,6 +302,95 @@ class pointer_t(ptype.pointer_t):
         instance = self.new(self._parameters_)
         return instance.set(*args, **parameters)
 
+    # XXX: this method will change in order to support non-contiguous pointers
+    def __frame_result__(self, cinstance, type):
+        view_t = ctypes.sizeof(cinstance) * ctypes.c_ubyte
+        viewptr_t = ctypes.POINTER(view_t)
+
+        cptr = ctypes.pointer(cinstance)
+        ptr = cptr.cast(viewptr_t)
+
+        view = memoryview(ptr.contents)
+        return self.new(type, offset=ctypes.addressof(cinstance), source=ptypes.prov.bytes(view.tobytes()))
+
+    def __cblocks__(self, cinstance):
+        """Yield a tuple of every (pointer, data) from the specified ctypes instance.
+
+        This will return all non-contiguous blocks that can be discovered by
+        traversing the specified instance. The specified instance will also be
+        traversed. Duplicate pointers to the same target are not detected and
+        will need to be handled by the caller.
+        """
+        yield None, cinstance
+
+        def iterate_structure(cstruct):
+            for name, type in cstruct._fields_:
+                value = getattr(cstruct, name)
+                yield type, name, value
+            return
+
+        def iterate_array(carray):
+            type, length = carray._type_, carray._length_
+            for index, value in enumerate(carray):
+                yield type, index, value
+            return
+
+        def recurse(current):
+
+            # First thing is to check if it has a _type_ attribute, if it doesn't
+            # then it simply has to be a structure with a _fields_ attribute.
+            if not hasattr(current, '_type_'):
+                for type, name, value in iterate_structure(current):
+                    if not isinstance(type, six.string_types):
+                        continue
+
+                    # Found a non-atomic type that we need to recurse through in
+                    # order to find all the pointers.
+                    for item in recurse(value):
+                        yield item
+                    continue
+                return
+
+            # Otherwise, this is an array or atomic type and so we need to
+            # determine which one it is.
+            ctype = current._type_
+
+            # If we're an atomic type, then we aren't important and can leave
+            if isinstance(ctype, six.string_types):
+                return
+
+            # If we're at a pointer, then yield it and its contents.
+            if hasattr(current, 'contents'):
+                yield current
+                return
+
+            # If we're an array type, then we need to check the type to see if
+            # we're an array of atomic types in order to determine whether we
+            # need to traverse it or not.
+            if hasattr(current, '_length_'):
+                if not isinstance(ctype._type_, six.string_types):
+                    return
+
+                for type, name, value in iterate_array(current):
+                    if not isinstance(type, six.string_types):
+                        continue
+
+                    # We just double-checked the type, so recurse to find all
+                    # pointers so we can let the caller know.
+                    for item in recurse(value):
+                        yield item
+                    continue
+                return
+
+            # We have no idea what this is...
+            raise TypeError(current)
+
+        # All the hard work was done, so just recurse and return every pointer
+        # along with its target contents.
+        for item in recurse(cinstance):
+            yield item, item.contents
+        return
+
     def __blocks__(self, instance):
         """Yield a tuple of every (pointer, target) from the specified instance.
 
@@ -747,6 +836,41 @@ if __name__ == '__main__':
             res.append(val)
 
         if all(item.int() == 0x11 + i * 0x11 for i, item in enumerate(res)):
+            raise Success
+
+    @TestCase
+    def test_pointer_ctypes_contiguous_1():
+        t = ctypes.c_uint16
+        val = t(57005)
+
+        res = pcode.pointer_t()
+        items = [ item for item in res.__cblocks__(val) ]
+        if len(items) == 1 and memoryview(items[0][1]).tobytes() == b'\xad\xde':
+            raise Success
+
+    @TestCase
+    def test_pointer_ctypes_contiguous_2():
+        t = ctypes.c_uint16 * 4
+        val = t(*[57005] * 4)
+
+        res = pcode.pointer_t()
+        items = [ item for item in res.__cblocks__(val) ]
+        if len(items) == 1 and memoryview(items[0][1]).tobytes() == b'\xad\xde' * 4:
+            raise Success
+
+    @TestCase
+    def test_pointer_ctypes_contiguous_3():
+        class t(ctypes.Structure):
+            _fields_ = [
+                ('LowPart', ctypes.c_uint32),
+                ('HighPart', ctypes.c_uint32),
+            ]
+
+        val = t(0xa5a5a5a5, 0x5a5a5a5a)
+
+        res = pcode.pointer_t()
+        items = [ item for item in res.__cblocks__(val) ]
+        if len(items) == 1 and memoryview(items[0][1]).tobytes() == 4 * b'\xa5' + b'ZZZZ':
             raise Success
 
 if __name__ == '__main__':
