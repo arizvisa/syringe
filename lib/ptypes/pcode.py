@@ -264,10 +264,85 @@ class block_t(ptype.block):
         return "\"{:s}\"".format(str().join(bytes))
 
 class pointer_t(ptype.pointer_t):
+    #_parameters_ = []
+    #_result_ = ptype.type
+
+    # XXX: this method is likely to change in order to support resuming
     def dispatch(self, **parameters):
-        instance = self.new(self._parameters_)
+        data = self.__frame_arguments(**parameters)
+        frame_t = (ctypes.c_ubyte * frame.size())
+        frame = frame_t(*bytearray(data))
+
+        frameptr_t = ctypes.POINTER(frame_t)
+
         instance.set(**parameters)
         raise NotImplementedError
+
+    # XXX: this method might not get used
+    @classmethod
+    def __pointer_of_instance(cls, instance):
+        view = memoryview(instance.serialize())
+
+        buffer_t = len(view) * ctypes.c_ubyte
+        buffer = buffer_t(*view.tolist())
+
+        return ctypes.pointer(buffer)
+
+    # XXX: this method might not get used
+    @classmethod
+    def __instance_of_pointer(cls, type, pointer, **kwds):
+        view = memoryview(pointer.contents)
+
+        kwds.setdefault('source', ptypes.provider.bytes(view.tobytes()))
+        return self.new(type, **kwds)
+
+    # XXX: this method will likely change as there's currently no need for it
+    def __frame__(self, *args, **parameters):
+        '''Create a new instance of `pointer_t._parameters_` with the specified values.'''
+        instance = self.new(self._parameters_)
+        return instance.set(*args, **parameters)
+
+    def __blocks__(self, instance):
+        """Yield a tuple of every (pointer, target) from the specified instance.
+
+        This will to return all potential non-contiguous blocks that can be
+        discovered by traversing the specified instance. Duplicate pointers to
+        the same target are not detected.
+        """
+
+        # This function will help us traverse an instance and grab all
+        # contiguous blocks (by their pointers) that it references.
+        def edges(node, pointers={item for item in []}):
+
+            ## If we're processing a pointer, we need to dereference it
+            if isinstance(node, ptype.pointer_t):
+
+                # So first we need to make sure we haven't processed it
+                if operator.contains(pointers, node):
+                    return []
+
+                # If we haven't processed it.. then add it to our list,
+                # and yield it back to traverse so we can grab its
+                # contiguous block too.
+                pointers |= {node}
+                return [node.d]
+
+            # Anything that's not a container, we can simply skip.
+            if not isinstance(node, ptype.container):
+                return []
+
+            # Yield any and all children contained by this node.
+            return node.value
+
+        # We only care about pointers
+        fpointerQ = lambda node: isinstance(node, ptype.pointer_t)
+
+        # Traverse the entire trie starting from the instance and yield
+        # only pointers that we've found along with their data.
+        result = {item for item in []}
+        for node in instance.traverse(edges, fpointerQ, pointers=result):
+            yield node, node.d
+        return
 
 if __name__ == '__main__':
     class Result(Exception): pass
@@ -295,6 +370,8 @@ if __name__ == '__main__':
 if __name__ == '__main__':
     import six, ptypes
     from ptypes import *
+
+    ptypes.setsource(ptypes.prov.random())
 
     @TestCase
     def test_construct_block():
@@ -523,6 +600,101 @@ if __name__ == '__main__':
         res[::-3] = range(5)
         compare = bytes().join(map(six.int2byte, functools.reduce(operator.add, (zip([0]*5, [0]*5, reversed(range(5)))))))
         if res.serialize() == compare:
+            raise Success
+
+    @TestCase
+    def test_pointer_parameters_contiguous():
+        class params(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        P = params().set(a=0x21, b=0x22, c=0x33)
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__blocks__(P)]
+        if len(items):
+            raise Failure
+        raise Success
+
+    @TestCase
+    def test_pointer_parameters_noncontiguous_1():
+        class params(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dyn.pointer(pint.uint32_t), 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        P = params().set(a=0x21, b=0x22, c=0x33)
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__blocks__(P)]
+        if len(items) != 1:
+            raise Failure
+
+        ptr, data = items[0]
+        if P['b'] is ptr and ptr.int() == data.getoffset() and not data.initializedQ():
+            raise Success
+
+    @TestCase
+    def test_pointer_parameters_noncontiguous_2():
+        ptr = dyn.clone(ptype.pointer_t, _value_=pint.uint32_t, _object_=ptype.undefined)
+
+        class block_2(pstruct.type):
+            _fields_ = [
+                (dyn.block(8), 'padding'),
+                (pint.uint64_t, 'goal'),
+            ]
+
+        class block_1(pstruct.type):
+            _fields_ = [
+                (dyn.block(4), 'padding'),
+                (dyn.clone(ptr, _object_=block_2), 'ptr(block2)'),
+            ]
+
+        class params(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dyn.clone(ptr, _object_=block_1), 'ptr(block1)'),
+                (pint.uint32_t, 'b'),
+            ]
+
+        P = params().set(a=0x21, b=0x22)
+        refblock1 = P['ptr(block1)'].reference(block_1().a)
+        refblock2 = refblock1['ptr(block2)'].reference(block_2().a.set(goal=57005))
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__blocks__(P)]
+
+        if len(items) != 2:
+            raise Failure
+
+        # Calculate where all our data is at so that we can assign pointers to
+        # point to the next block.
+        blocks, offset = [P], P.size()
+        for ptr, block in items:
+            ptr.set(offset)
+            blocks.append(block)
+            offset += block.size()
+
+        # Now we can combine them together into a single source
+        data = bytes().join(item.serialize() for item in blocks)
+
+        # Okay, we should now have a source that we can load from and check
+        # everything with.
+        a = params(source=ptypes.prov.bytes(data)).l
+        if (a['a'].int(), a['b'].int()) != (0x21, 0x22):
+            raise Failure
+
+        b = a['ptr(block1)'].d.l
+        if b['padding'].serialize() != b'\0\0\0\0':
+            raise Failure
+
+        c = b['ptr(block2)'].d.l
+        if c['goal'].int() == 57005:
             raise Success
 
 if __name__ == '__main__':
