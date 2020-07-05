@@ -2391,13 +2391,28 @@ class pointer_t(encoded_t):
         return self.new(self._object_, **attrs)
 
     def reference(self, object, **attrs):
-        attrs.setdefault('__name__', '*'+self.name())
+        attrs.setdefault('__name__', getattr(object, '__name__', None) or "*{!s}".format(self.name()))
         attrs.setdefault('source', self.__source__)
+
+        # Make a copy of ourselves (the pointer), so that we can "encode"
+        # it. Encoding it doesn't do anything really since the offset
+        # is simply metadata. However, this has the side-effect of
+        # exposing the ability for users to encode/decode pointers.
         res = self.object.copy().set(object.getoffset())
         enc = self.encode(res)
         enc.commit(offset=0, source=provider.proxy(self.object))
         self._object_ = object.__class__
         self.object.commit(offset=0, source=provider.proxy(self))
+
+        # Check to see if we're using memoization (we should be), so that we
+        # can force-assign our object into a particular key.
+        if hasattr(self.dereference, 'store'):
+            fstore = self.dereference.store(self)
+
+            # Now we just need to re-parent the target. Our offset has
+            # already been updated, so we just need to copy the source
+            # and any other relevant attributes.
+            fstore( self.new(object, **attrs) )
         return self
 
     def int(self):
@@ -3520,6 +3535,72 @@ if __name__ == '__main__':
 
         rec = records.get(49, ptype.undefined, myattrib=42)
         if rec is not ptype.undefined and builtins.issubclass(rec, ptype.undefined) and rec.myattrib == 42:
+            raise Success
+
+    @TestCase
+    def test_pointer_reference_dereference_1():
+        class t(ptype.pointer_t):
+            _object_ = pint.uint32_t
+
+        a = t().a
+        a.d.a   # hi mom
+        if (a.d.int(), a.d.size()) != (0, 4):
+            raise Failure
+
+        # refplay
+        x, y = a.d, a.d
+        if x is not y:
+            raise Failure
+
+        y.set(57005)
+
+        a.reference(x)
+        if x.int() == y.int():
+            raise Success
+
+    @TestCase
+    def test_pointer_reference_dereference_2():
+        class t(ptype.pointer_t):
+            _object_ = pint.uint32_t
+
+        b = t().a
+        b.d.a
+        if (b.d.int(), b.d.size()) != (0, 4):
+            raise Failure
+        x = b.d
+
+        b.reference(x)
+        if b.d is x:
+            raise Success
+
+    @TestCase
+    def test_pointer_reference_dereference_3():
+        class t(ptype.pointer_t):
+            _object_ = pint.uint32_t
+        global a
+        a = t().a
+        a.d.a   # hi mom
+        if (a.d.int(), a.d.size()) != (0, 4):
+            raise Failure
+
+        x = pint.uint32_t().set(57005)
+
+        a.reference(x)
+        if a.d.int() == 57005:
+            raise Success
+
+    @TestCase
+    def test_pointer_reference_dereference_4():
+        class t(ptype.pointer_t):
+            _object_ = pint.uint32_t
+        global a
+        a = t().a
+        a.d.a   # hi mom
+        if (a.d.int(), a.d.size()) != (0, 4):
+            raise Failure
+
+        a.reference(pint.uint64_t().set(-1))
+        if (a.d.int(), a.d.size()) == (0xffffffffffffffff, 8):
             raise Success
 
 if __name__ == '__main__':
