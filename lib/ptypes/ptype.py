@@ -3579,7 +3579,6 @@ if __name__ == '__main__':
     def test_pointer_reference_dereference_3():
         class t(ptype.pointer_t):
             _object_ = pint.uint32_t
-        global a
         a = t().a
         a.d.a   # hi mom
         if (a.d.int(), a.d.size()) != (0, 4):
@@ -3595,7 +3594,6 @@ if __name__ == '__main__':
     def test_pointer_reference_dereference_4():
         class t(ptype.pointer_t):
             _object_ = pint.uint32_t
-        global a
         a = t().a
         a.d.a   # hi mom
         if (a.d.int(), a.d.size()) != (0, 4):
