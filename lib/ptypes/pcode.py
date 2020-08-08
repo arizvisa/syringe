@@ -263,6 +263,125 @@ class block_t(ptype.block):
         bytes = map("\\x{:02x}".format, listable)
         return "\"{:s}\"".format(str().join(bytes))
 
+class __ctools__(object):
+    @staticmethod
+    def is_structure(cinstance):
+        return not hasattr(cinstance, '_type_') and hasattr(cinstance, '_fields_')
+
+    @staticmethod
+    def iterate_structure(cstruct):
+        for name, type in cstruct._fields_:
+            value = getattr(cstruct, name)
+            yield type, name, value
+        return
+
+    @staticmethod
+    def is_array(cinstance):
+        return hasattr(cinstance, '_type_') and hasattr(cinstance, '_length_')
+
+    @staticmethod
+    def iterate_array(carray):
+        type, length = carray._type_, carray._length_
+        for index, value in enumerate(carray):
+            yield type, index, value
+        return
+
+    @staticmethod
+    def is_pointer(cinstance):
+        return hasattr(cinstance, '_type_') and hasattr(cinstance, 'contents')
+
+    @staticmethod
+    def is_atomic_t(cinstance):
+        return hasattr(cinstance, '_type_') and isinstance(cinstance._type_, six.string_types)
+
+    @staticmethod
+    def resolve(cinstance, path):
+        '''Traverse the specified `cinstance` using the list specified in `path`.'''
+        path = path[:]
+
+        if __ctools__.is_array(cinstance):
+            type, current = cinstance._type_ = cinstance[path.pop(0)]
+
+        elif __ctools__.is_structure(cinstance):
+            item = path.pop(0)
+            type, current = next((type, getattr(cinstance, item)) for field, type in cinstance._fields_ if field == item)
+
+        # If we're a pointer, then our path needs to be of the None
+        # type in order for us to traverse it.
+        elif __ctools__.is_pointer(cinstance) and len(path):
+            if not isinstance(path.pop(0), None.__class__):
+                raise TypeError([None] + path, cinstance.__class__, cinstance)
+
+            # Now we can dereference the pointer as requested
+            type, current = cinstance._type_, cinstance.contents
+
+        # Otherwise, we're being asked to stop at the pointer which
+        # we can return by sneaking our type from it.
+        elif __ctools__.is_pointer(cinstance):
+            return cinstance
+
+        else:
+            raise TypeError(path, cinstance.__class__, cinstance)
+        return __ctools__.resolve(current, path) if len(path) else current
+
+    @staticmethod
+    def collect_array(path, cinstance):
+        type = cinstance._type_
+
+        # If this is an array of pointers, then yield everything
+        if __ctools__.is_pointer(type):
+            for type, index, value in __ctools__.iterate_array(cinstance):
+                for item in __ctools__.collect(type, value, path + [index]):
+                    yield item
+                continue
+
+        # If's a structure, then yield those too with our new path
+        elif __ctools__.is_structure(type):
+            for type, field, value in __ctools__.iterate_structure(cinstance):
+                for item in __ctools__.collect(type, value, path + [field]):
+                    yield item
+                continue
+        return
+
+    @staticmethod
+    def collect_structure(path, cinstance):
+        for type, field, value in __ctools__.iterate_structure(cinstance):
+            for item in __ctools__.collect(type, value, path + [field]):
+                yield item
+            continue
+        return
+
+    @staticmethod
+    def collect(type, value, path=[]):
+        '''Start at `type` and `value` collecting all pointers.'''
+
+        # We're straight-up looking for pointers, so yield those
+        if __ctools__.is_pointer(value):
+            yield path + [None]
+
+            for item in __ctools__.collect(value._type_, value.contents, path + [None]):
+                yield item
+
+        # If it's atomic, then we can just drop it
+        elif __ctools__.is_atomic_t(type):
+            return
+
+        # If it's a structure, then we need to traverse it
+        elif __ctools__.is_structure(value):
+            for item in __ctools__.collect_structure(path, value):
+                yield item
+
+        # If it's an array, then we also need to traverse it
+        elif __ctools__.is_array(value):
+            for item in __ctools__.collect_array(path, value):
+                yield item
+
+        # We really have no idea what type this is and we need to
+        # bitch and complain about it.
+        else:
+            raise TypeError
+        return
+
 class pointer_t(ptype.pointer_t):
     #_parameters_ = []
     #_result_ = ptype.type
@@ -323,149 +442,34 @@ class pointer_t(ptype.pointer_t):
         of a given pointer. This will be fixed in a future refactor of this implementation.
         """
 
-        def is_structure(cinstance):
-            return not hasattr(cinstance, '_type_') and hasattr(cinstance, '_fields_')
-
-        def iterate_structure(cstruct):
-            for name, type in cstruct._fields_:
-                value = getattr(cstruct, name)
-                yield type, name, value
-            return
-
-        def is_array(cinstance):
-            return hasattr(cinstance, '_type_') and hasattr(cinstance, '_length_')
-
-        def iterate_array(carray):
-            type, length = carray._type_, carray._length_
-            for index, value in enumerate(carray):
-                yield type, index, value
-            return
-
-        def is_pointer(cinstance):
-            return hasattr(cinstance, '_type_') and hasattr(cinstance, 'contents')
-
-        def is_atomic_t(cinstance):
-            return hasattr(cinstance, '_type_') and isinstance(cinstance._type_, six.string_types)
-
-        def resolve(cinstance, path):
-            '''Traverse the specified `cinstance` using the list specified in `path`.'''
-            if is_array(cinstance):
-                type, current = cinstance._type_ = cinstance[path.pop(0)]
-
-            elif is_structure(cinstance):
-                item = path.pop(0)
-                type, current = next((type, getattr(cinstance, item)) for field, type in cinstance._fields_ if field == item)
-
-            # If we're a pointer, then our path needs to be of the None
-            # type in order for us to traverse it.
-            elif is_pointer(cinstance) and len(path):
-                if not isinstance(path.pop(0), None.__class__):
-                    raise TypeError([None] + path, cinstance.__class__, cinstance)
-
-                # Now we can dereference the pointer as requested
-                type, current = cinstance._type_, cinstance.contents
-
-            # Otherwise, we're being asked to stop at the pointer which
-            # we can return by sneaking our type from it.
-            elif is_pointer(cinstance):
-                return cinstance.__class__, cinstance
-
-            else:
-                raise TypeError(path, cinstance.__class__, cinstance)
-            return resolve(current, path) if len(path) else (type, current)
-
-        def collect_array(path, cinstance):
-            type = cinstance._type_
-
-            # If this is an array of pointers, then yield everything
-            if is_pointer(type):
-                for type, index, value in iterate_array(cinstance):
-                    for item in collect(type, value, path + [index]):
-                        yield item
-                    continue
-
-            # If's a structure, then yield those too with our new path
-            elif is_structure(type):
-                for type, field, value in iterate_structure(cinstance):
-                    for item in collect(type, value, path + [field]):
-                        yield item
-                    continue
-            return
-
-        def collect_structure(path, cinstance):
-            for type, field, value in iterate_structure(cinstance):
-                for item in collect(type, value, path + [field]):
-                    yield item
-                continue
-            return
-
-        def collect(type, value, path=[]):
-            '''Start at `type` and `value` collecting all pointers.'''
-
-            # We're straight-up looking for pointers, so yield those
-            if is_pointer(value):
-                yield path
-
-                for item in collect(value._type_, value.contents, path + [None]):
-                    yield item
-
-            # If it's atomic, then we can just drop it
-            elif is_atomic_t(type):
-                return
-
-            # If it's a structure, then we need to traverse it
-            elif is_structure(value):
-                for item in collect_structure(path, value):
-                    yield item
-
-            # If it's an array, then we also need to traverse it
-            elif is_array(value):
-                for item in collect_array(path, value):
-                    yield item
-
-            # We really have no idea what type this is and we need to
-            # bitch and complain about it.
-            else:
-                raise TypeError
-
-            return
-
-
         # First figure out our type and if we're an atomic. If so, then we
         # only need to yield that and then leave.
-        if is_atomic_t(type(cinstance)):
-            yield type(cinstance), cinstance
+        if __ctools__.is_atomic_t(type(cinstance)):
+            yield [], cinstance
             return
 
         # If we're an array, then also check that it's an array of atomics,
         # because we don't have to do anything for that situation too.
-        elif is_array(cinstance) and is_atomic_t(cinstance._type_):
-            yield type(cinstance), cinstance
+        elif __ctools__.is_array(cinstance) and __ctools__.is_atomic_t(cinstance._type_):
+            yield [], cinstance
             return
 
-        # If it's an array, then we need to check that all its fields are
+        # If it's a structure, then we need to check that all its fields are
         # atomic. If so, then we can terminate ahead of time.
-        elif is_structure(cinstance) and all(is_atomic_t(t) for t, _, _ in iterate_structure(cinstance)):
-            yield type(cinstance), cinstance
+        elif __ctools__.is_structure(cinstance) and all(__ctools__.is_atomic_t(t) for t, _, _ in __ctools__.iterate_structure(cinstance)):
+            yield [], cinstance
             return
 
-        # If we're actually starting with a pointer, then we need to
-        # yield that before we descend into it and start collecting.
-        elif is_pointer(cinstance):
-            yield (None, cinstance)
+        # Otherwise, then we need to yield our root object before
+        # we actually desend into it and start collecting.
+        else:
+            yield [], cinstance
 
-        # Otherwise, we can simply start at our instance and proceed to
+        # Now we can simply start at our instance and proceed to
         # iterate through all of the paths to pointers from it.
-        for path in collect(type(cinstance), cinstance):
-
-            # If we got a path, then we can proceed to walk it
-            if path:
-                yield resolve(cinstance, path)
-
-            # Otherwise, it's empty and we need to yield our instance
-            else:
-                yield (cinstance, cinstance.contents)
-            continue
+        for path in __ctools__.collect(type(cinstance), cinstance):
+            item = __ctools__.resolve(cinstance, path)
+            yield path, item
         return
 
     def __blocks__(self, instance):
@@ -967,7 +971,8 @@ if __name__ == '__main__':
 
         # Now we can check the pointer against the path, and that its contents
         # correspond to our expected value
-        ptr, contents = item
+        path, contents = item
+        ptr = __ctools__.resolve(p, path)
         if block1ptr == ptr and memoryview(contents).tobytes() == b'\xad\xde':
             raise Success
 
@@ -987,8 +992,8 @@ if __name__ == '__main__':
         _, block1ptr = start
 
         # Check that our block1ptr corresponds to the path that we've found
-        ptr, contents = item
-
+        path, contents = item
+        ptr = __ctools__.resolve(p, path)
         if block1ptr == ptr and memoryview(contents).tobytes() == b'\xad\xde' * 4:
             raise Success
 
@@ -1013,8 +1018,8 @@ if __name__ == '__main__':
         _, block1ptr = start
 
         # Check that our block1ptr corresponds to the path that we've found
-        ptr, contents = item
-
+        path, contents = item
+        ptr = __ctools__.resolve(p, path)
         if block1ptr == ptr and memoryview(contents).tobytes() == 4 * b'\xa5' + b'ZZZZ':
             raise Success
 
