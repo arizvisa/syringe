@@ -299,30 +299,34 @@ class __ctools__(object):
         '''Traverse the specified `cinstance` using the list specified in `path`.'''
         path = path[:]
 
-        if __ctools__.is_array(cinstance):
-            type, current = cinstance._type_ = cinstance[path.pop(0)]
+        # If we're processing an empty path, then we simply can return
+        # our instance since we don't need to traverse anything.
+        if not len(path):
+            return cinstance
 
+        # If it's a array, then figuring its type is easy. Our next
+        # path should be an index, so use it to fetch an array element.
+        elif __ctools__.is_array(cinstance):
+            type, current = cinstance._type_, cinstance[path.pop(0)]
+
+        # If it's a structure, then we'll need to parse its fields and
+        # get the type and member from whatever field matches it.
         elif __ctools__.is_structure(cinstance):
             item = path.pop(0)
             type, current = next((type, getattr(cinstance, item)) for field, type in cinstance._fields_ if field == item)
 
         # If we're a pointer, then our path needs to be of the None
         # type in order for us to traverse it.
-        elif __ctools__.is_pointer(cinstance) and len(path):
+        elif __ctools__.is_pointer(cinstance):
             if not isinstance(path.pop(0), None.__class__):
                 raise TypeError([None] + path, cinstance.__class__, cinstance)
 
             # Now we can dereference the pointer as requested
             type, current = cinstance._type_, cinstance.contents
 
-        # Otherwise, we're being asked to stop at the pointer which
-        # we can return by sneaking our type from it.
-        elif __ctools__.is_pointer(cinstance):
-            return cinstance
-
         else:
             raise TypeError(path, cinstance.__class__, cinstance)
-        return __ctools__.resolve(current, path) if len(path) else current
+        return __ctools__.resolve(current, path)
 
     @staticmethod
     def collect_array(path, cinstance):
@@ -357,7 +361,7 @@ class __ctools__(object):
 
         # We're straight-up looking for pointers, so yield those
         if __ctools__.is_pointer(value):
-            yield path + [None]
+            yield path
 
             for item in __ctools__.collect(value._type_, value.contents, path + [None]):
                 yield item
@@ -460,8 +464,8 @@ class pointer_t(ptype.pointer_t):
             yield [], cinstance
             return
 
-        # Otherwise, then we need to yield our root object before
-        # we actually desend into it and start collecting.
+        # We always need to yield the base element because it's a guaranteed
+        # block of memory.
         else:
             yield [], cinstance
 
@@ -469,7 +473,16 @@ class pointer_t(ptype.pointer_t):
         # iterate through all of the paths to pointers from it.
         for path in __ctools__.collect(type(cinstance), cinstance):
             item = __ctools__.resolve(cinstance, path)
-            yield path, item
+
+            # If we ended up resolving a pointer, then we need to derference
+            # it and yield its dereferenced path too
+            if __ctools__.is_pointer(item):
+                yield path + [None], item.contents
+
+            # Otherwise it's a regular path that we can just use
+            else:
+                yield path, item
+            continue
         return
 
     def __blocks__(self, instance):
@@ -972,7 +985,7 @@ if __name__ == '__main__':
         # Now we can check the pointer against the path, and that its contents
         # correspond to our expected value
         path, contents = item
-        ptr = __ctools__.resolve(p, path)
+        ptr = __ctools__.resolve(p, path[:-1])
         if block1ptr == ptr and memoryview(contents).tobytes() == b'\xad\xde':
             raise Success
 
@@ -993,7 +1006,7 @@ if __name__ == '__main__':
 
         # Check that our block1ptr corresponds to the path that we've found
         path, contents = item
-        ptr = __ctools__.resolve(p, path)
+        ptr = __ctools__.resolve(p, path[:-1])
         if block1ptr == ptr and memoryview(contents).tobytes() == b'\xad\xde' * 4:
             raise Success
 
@@ -1019,7 +1032,7 @@ if __name__ == '__main__':
 
         # Check that our block1ptr corresponds to the path that we've found
         path, contents = item
-        ptr = __ctools__.resolve(p, path)
+        ptr = __ctools__.resolve(p, path[:-1])
         if block1ptr == ptr and memoryview(contents).tobytes() == 4 * b'\xa5' + b'ZZZZ':
             raise Success
 
@@ -1030,62 +1043,59 @@ if __name__ == '__main__':
                 ('fuck', ctypes.POINTER(ctypes.c_uint16)),
             ]
 
-        x = t(ctypes.pointer(ctypes.c_uint16(57005)))
+        root = t(ctypes.pointer(ctypes.c_uint16(57005)))
 
         res = pcode.pointer_t()
-        items = [ item for item in res.__cblocks__(x) ]
+        items = [ item for item in res.__cblocks__(root) ]
 
         if len(items) != 2:
             raise Failure
 
-        global ptrlookup, blocklookup, blah
-        blah = items
-
-        # Now we'll need to re-use our items to recreate some tables. None of
-        # our types are hashable...because ctypes, so we start out by creating
-        # a lookup table for a hashable type that can be used to lookup each
-        # pointer.
+        # Now we'll need to re-use our items to recreate a pointer lookup table.
+        # None of our types are hashable...because ctypes, so we resolve each
+        # pointer to an integer that we use as our key. We'll also create a
+        # table for each block keyed by its address since we've already stored
+        # a reference to it in our items list.
         ptrlookup = {}
-        for item, contents in items:
-            parent, name, ptr = item
-            if ptr is None:
-                continue
-            key = memoryview(ptr).tobytes()
-            ptrlookup[key] = parent, name
+        for index, (path, contents) in enumerate(items):
+            if len(path) and path[-1] is None:
+                ptr = __ctools__.resolve(root, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptrlookup[key] = index
+            continue
 
-        # Now we can create blocks for everything using our pointers the key.
-        blocklookup = {}
-        for item, contents in items:
-            parent, name, ptr = item
-            blocklookup[ptr and memoryview(ptr).tobytes()] = contents
+        # Now we'll copy our types into this buffer, and re-create an array of
+        # the contents so that we can update the buffer with our new pointer values.
+        result = []
+        for index, (path, contents) in enumerate(items):
+            t, block = type(contents), contents
+            data = memoryview(block).tobytes()
+            value = (len(data) * ctypes.c_ubyte)(*data)
+            result.append(ctypes.cast(ctypes.pointer(value), ctypes.POINTER(t)).contents)
 
-        # Total up our contents so we know how large to make our buffer. Allocate
-        # our buffer, and then figure out its base address so we can adjust our
-        # pointers to point directly into it.
-        count = sum(ctypes.sizeof(item) for _, item in blocklookup.items())
-        buffer_t = count * ctypes.c_ubyte
-        buffer = buffer_t()
-        base = ctypes.addressof(buffer)
+        # Now we will iterate through our pointers, find their target (index) using the
+        # ptrlookup dict, and then update its contents to point at the correct result.
+        base = result[0]
+        for index, (path, contents) in enumerate(items):
+            if len(path):
+                ptr = __ctools__.resolve(base, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptr.contents = result[ptrlookup[key]]
 
-        # Finally we can assign each pointer to point to the right block
-        # and update the pointer that's inside each contents
-        offset, blocks = 0, []
-        for item, contents in items:
-            _, ptr = item
-            if ptr is None:
-                blocks.append(contents)
-                continue
+            # If we received an empty path for the non-first element, then something is busted.
+            elif index > 0:
+                raise AssertionError("Received an empty path that is not the root object")
+            continue
 
-            parent, name = ptrlookup[memoryview(ptr).tobytes()]
-            blocks.append(contents)
-
-            offset += ctypes.sizeof(contents)
-
-        path, contents = items[0]
-        if memoryview(contents).tobytes() == 4 * b'\xa5' + b'ZZZZ':
+        # Ensure our root elements are different, our pointers are different, and our values are the same
+        if memoryview(base).tobytes() == memoryview(root).tobytes():
+            raise Failure
+        if memoryview(base.fuck).tobytes() == memoryview(root.fuck).tobytes():
+            raise Failure
+        if base.fuck.contents is not root.fuck.contents and memoryview(base.fuck.contents).tobytes() == memoryview(root.fuck.contents).tobytes():
             raise Success
 
-    #@TestCase
+    @TestCase
     def test_pointer_ctypes_noncontiguous_1():
         class t(ctypes.Structure):
             _fields_ = [
@@ -1103,23 +1113,41 @@ if __name__ == '__main__':
         if len(items) != 2:
             raise Failure
 
-        print(memoryview(val).hex())
-        print(hex(ctypes.addressof(val.contents)))
-        print(hex(ctypes.addressof(target)))
-        for item in items:
-            print(item)
+        # Everything here is copied from test_pointer_ctypes_noncontiguous_0
+        root, ptrlookup = val, {}
+        for index, (path, contents) in enumerate(items):
+            if len(path) and path[-1] is None:
+                ptr = __ctools__.resolve(root, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptrlookup[key] = index
+            continue
 
-        a = t(21, 22)
-        val._objects['1'] = a
-        #print(val._objects['1'].LowPart)
-        #print(val)
-        #print(val.contents.HighPart)
+        result = []
+        for index, (path, contents) in enumerate(items):
+            t, block = type(contents), contents
+            data = memoryview(block).tobytes()
+            value = (len(data) * ctypes.c_ubyte)(*data)
+            result.append(ctypes.cast(ctypes.pointer(value), ctypes.POINTER(t)).contents)
 
-        #print(dir(val))
-        #print(val._objects)
-        #print(target)
+        base = result[0]
+        for index, (path, contents) in enumerate(items):
+            if len(path):
+                ptr = __ctools__.resolve(base, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptr.contents = result[ptrlookup[key]]
 
-    #@TestCase
+            # If we received an empty path for the non-first element, then something is busted.
+            elif index > 0:
+                raise AssertionError("Received an empty path that is not the root object")
+            continue
+
+        # Ensure everything is different but all the values match
+        if memoryview(base).tobytes() == memoryview(root).tobytes():
+            raise Failure
+        if base.contents is not root.contents and memoryview(base.contents).tobytes() == memoryview(root.contents).tobytes():
+            raise Success
+
+    @TestCase
     def test_pointer_ctypes_noncontiguous_2():
         class LUID(ctypes.Structure):
             _fields_ = [
@@ -1127,6 +1155,52 @@ if __name__ == '__main__':
                 ('HighPart', ctypes.c_long),
                 ('Ptr', ctypes.POINTER(ctypes.c_uint32)),
             ]
+
+        val = LUID(1024, 2048, ctypes.pointer(ctypes.c_uint32(57005)))
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__cblocks__(val)]
+
+        if len(items) != 2:
+            raise Failure
+
+        # Everything here is copied from test_pointer_ctypes_noncontiguous_0
+        root, ptrlookup = val, {}
+        for index, (path, contents) in enumerate(items):
+            if len(path) and path[-1] is None:
+                ptr = __ctools__.resolve(root, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptrlookup[key] = index
+            continue
+
+        result = []
+        for index, (path, contents) in enumerate(items):
+            t, block = type(contents), contents
+            data = memoryview(block).tobytes()
+            value = (len(data) * ctypes.c_ubyte)(*data)
+            result.append(ctypes.cast(ctypes.pointer(value), ctypes.POINTER(t)).contents)
+
+        base = result[0]
+        for index, (path, contents) in enumerate(items):
+            if len(path):
+                ptr = __ctools__.resolve(base, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptr.contents = result[ptrlookup[key]]
+
+            # If we received an empty path for the non-first element, then something is busted.
+            elif index > 0:
+                raise AssertionError("Received an empty path that is not the root object")
+            continue
+
+        # Ensure that we made an exact copy of the entire type.
+        if any(getattr(root, fld) != getattr(base, fld) for fld in ['LowPart', 'HighPart']):
+            raise Failure
+        if memoryview(base).tobytes() == memoryview(root).tobytes():
+            raise Failure
+        if memoryview(base.Ptr).tobytes() == memoryview(root.Ptr).tobytes():
+            raise Failure
+        if memoryview(base.Ptr.contents).tobytes() == memoryview(root.Ptr.contents).tobytes():
+            raise Success
 
 if __name__ == '__main__':
     import logging
