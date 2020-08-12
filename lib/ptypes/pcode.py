@@ -382,6 +382,10 @@ class __ctools__(object):
         elif __ctools__.is_pointer(value):
             res = ctypes.cast(value, ctypes.c_void_p).value
 
+            # We got a valid pointer that we haven't seen yet, so we're ok
+            # just yielding, and recursing straight from it.
+            yield path
+
             # If our pointer exists in our state that we've tracked, then
             # there's no need to recurse here because we have it already
             if operator.contains(state, res):
@@ -389,10 +393,6 @@ class __ctools__(object):
 
             # Update our current state with the pointer we've identified
             state |= {res}
-
-            # We got a valid pointer that we haven't seen yet, so we're ok
-            # just yielding, and recursing straight from it.
-            yield path
 
             for item in __ctools__.collect(value._type_, value.contents, path + [None], **kwargs):
                 yield item
@@ -1327,10 +1327,52 @@ if __name__ == '__main__':
         if len(items) != len(items):
             raise Failure
 
-        if any(path and {'right', None} != {p for p in path} for path, item in items):
-            raise Failure
+        # Everything here is copied from test_pointer_ctypes_noncontiguous_0
+        root, ptrlookup = val, {}
+        for index, (path, contents) in enumerate(items):
+            if len(path) and path[-1] is None:
+                ptr = __ctools__.resolve(root, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptrlookup[key] = index
+            continue
 
-        # FIXME: continue to validate this recursive structure
+        result = []
+        for index, (path, contents) in enumerate(items):
+            t, block = type(contents), contents
+            data = memoryview(block).tobytes()
+            value = (len(data) * ctypes.c_ubyte)(*data)
+            result.append(ctypes.cast(ctypes.pointer(value), ctypes.POINTER(t)).contents)
+
+        base = result[0]
+        for index, (path, contents) in enumerate(items):
+            if len(path):
+                ptr = __ctools__.resolve(base, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptr.contents = result[ptrlookup[key]]
+
+            # If we received an empty path for the non-first element, then something is busted.
+            elif index > 0:
+                raise AssertionError("Received an empty path that is not the root object")
+            continue
+
+        # Ensure that we made an exact copy of the entire type.
+        def compare(a, b):
+            if ctypes.addressof(a) == ctypes.addressof(b):
+                raise Failure
+            if a.value != b.value:
+                raise Failure
+            if __ctools__.is_nullpointer(a.left) != __ctools__.is_nullpointer(b.left):
+                raise Failure
+            if __ctools__.is_nullpointer(a.right) != __ctools__.is_nullpointer(b.right):
+                raise Failure
+            if not __ctools__.is_nullpointer(a.left):
+                compare(a.left.contents, b.left.contents)
+            if not __ctools__.is_nullpointer(a.right):
+                compare(a.right.contents, b.right.contents)
+            return
+
+        # XXX: this fails due to us really needing to implement as a graph
+        compare(root, base)
         raise Success
 
 if __name__ == '__main__':
