@@ -265,9 +265,11 @@ class block_t(ptype.block):
 
 class __ctools__(object):
     @staticmethod
-    def is_structure(cinstance):
+    def is_structure_t(cinstance):
         return not hasattr(cinstance, '_type_') and hasattr(cinstance, '_fields_')
-
+    @staticmethod
+    def is_structure(cinstance):
+        return isinstance(cinstance, ctypes.Structure)
     @staticmethod
     def iterate_structure(cstruct):
         for name, type in cstruct._fields_:
@@ -276,9 +278,11 @@ class __ctools__(object):
         return
 
     @staticmethod
-    def is_array(cinstance):
+    def is_array_t(cinstance):
         return hasattr(cinstance, '_type_') and hasattr(cinstance, '_length_')
-
+    @staticmethod
+    def is_array(cinstance):
+        return isinstance(cinstance, ctypes.Array)
     @staticmethod
     def iterate_array(carray):
         type, length = carray._type_, carray._length_
@@ -287,12 +291,21 @@ class __ctools__(object):
         return
 
     @staticmethod
-    def is_pointer(cinstance):
+    def is_pointer_t(cinstance):
         return hasattr(cinstance, '_type_') and hasattr(cinstance, 'contents')
+    @staticmethod
+    def is_pointer(cinstance):
+        return isinstance(cinstance, ctypes._Pointer)
+    @staticmethod
+    def is_nullpointer(cinstance):
+        return isinstance(cinstance, ctypes._Pointer) and ctypes.cast(cinstance, ctypes.c_void_p).value is None
 
     @staticmethod
     def is_atomic_t(cinstance):
         return hasattr(cinstance, '_type_') and isinstance(cinstance._type_, six.string_types)
+    @staticmethod
+    def is_atomic(cinstance):
+        return isinstance(cinstance, ctypes._SimpleCData)
 
     @staticmethod
     def resolve(cinstance, path):
@@ -329,18 +342,18 @@ class __ctools__(object):
         return __ctools__.resolve(current, path)
 
     @staticmethod
-    def collect_array(path, cinstance):
+    def collect_array(path, cinstance, **kwargs):
         type = cinstance._type_
 
         # If this is an array of pointers, then yield everything
-        if __ctools__.is_pointer(type):
+        if __ctools__.is_pointer_t(type):
             for type, index, value in __ctools__.iterate_array(cinstance):
-                for item in __ctools__.collect(type, value, path + [index]):
+                for item in __ctools__.collect(type, value, path + [index], **kwargs):
                     yield item
                 continue
 
         # If's a structure, then yield those too with our new path
-        elif __ctools__.is_structure(type):
+        elif __ctools__.is_structure_t(type):
             for type, field, value in __ctools__.iterate_structure(cinstance):
                 for item in __ctools__.collect(type, value, path + [field]):
                     yield item
@@ -348,36 +361,54 @@ class __ctools__(object):
         return
 
     @staticmethod
-    def collect_structure(path, cinstance):
+    def collect_structure(path, cinstance, **kwargs):
         for type, field, value in __ctools__.iterate_structure(cinstance):
-            for item in __ctools__.collect(type, value, path + [field]):
+            for item in __ctools__.collect(type, value, path + [field], **kwargs):
                 yield item
             continue
         return
 
     @staticmethod
-    def collect(type, value, path=[]):
+    def collect(type, value, path=[], **kwargs):
         '''Start at `type` and `value` collecting all pointers.'''
+        state = kwargs.setdefault('state', { item for item in [] })
+
+        # If we have a null-pointer, then there's nothing to do here,
+        # so we can just simply drop it.
+        if __ctools__.is_nullpointer(value):
+            pass
 
         # We're straight-up looking for pointers, so yield those
-        if __ctools__.is_pointer(value):
+        elif __ctools__.is_pointer(value):
+            res = ctypes.cast(value, ctypes.c_void_p).value
+
+            # If our pointer exists in our state that we've tracked, then
+            # there's no need to recurse here because we have it already
+            if operator.contains(state, res):
+                return
+
+            # Update our current state with the pointer we've identified
+            state |= {res}
+
+            # We got a valid pointer that we haven't seen yet, so we're ok
+            # just yielding, and recursing straight from it.
             yield path
 
-            for item in __ctools__.collect(value._type_, value.contents, path + [None]):
+            for item in __ctools__.collect(value._type_, value.contents, path + [None], **kwargs):
                 yield item
 
         # If it's atomic, then we can just drop it
-        elif __ctools__.is_atomic_t(type):
+        elif __ctools__.is_atomic(value) or __ctools__.is_atomic_t(type):
             return
 
         # If it's a structure, then we need to traverse it
         elif __ctools__.is_structure(value):
-            for item in __ctools__.collect_structure(path, value):
+            for item in __ctools__.collect_structure(path, value, **kwargs):
                 yield item
 
         # If it's an array, then we also need to traverse it
         elif __ctools__.is_array(value):
-            for item in __ctools__.collect_array(path, value):
+            for item in __ctools__.collect_array(path, value, **kwargs):
                 yield item
 
         # We really have no idea what type this is and we need to
@@ -448,13 +479,13 @@ class pointer_t(ptype.pointer_t):
 
         # First figure out our type and if we're an atomic. If so, then we
         # only need to yield that and then leave.
-        if __ctools__.is_atomic_t(type(cinstance)):
+        if __ctools__.is_atomic(cinstance):
             yield [], cinstance
             return
 
         # If we're an array, then also check that it's an array of atomics,
         # because we don't have to do anything for that situation too.
-        elif __ctools__.is_array(cinstance) and __ctools__.is_atomic_t(cinstance._type_):
+        elif __ctools__.is_array(cinstance) and __ctools__.is_atomic(cinstance):
             yield [], cinstance
             return
 
@@ -469,14 +500,23 @@ class pointer_t(ptype.pointer_t):
         else:
             yield [], cinstance
 
+        # Since we've yielded our root object here, ensure its address is part
+        # of our state so that we don't double-collect it.
+        state = {ctypes.addressof(cinstance)}
+
         # Now we can simply start at our instance and proceed to
         # iterate through all of the paths to pointers from it.
-        for path in __ctools__.collect(type(cinstance), cinstance):
+        for path in __ctools__.collect(type(cinstance), cinstance, state=state):
             item = __ctools__.resolve(cinstance, path)
 
-            # If we ended up resolving a pointer, then we need to derference
+            # If we found a null-pointer, then we can't dereference it and
+            # so we need to simply move on...
+            if __ctools__.is_nullpointer(item):
+                pass
+
+            # If we ended up resolving a pointer, then we need to dereference
             # it and yield its dereferenced path too
-            if __ctools__.is_pointer(item):
+            elif __ctools__.is_pointer(item):
                 yield path + [None], item.contents
 
             # Otherwise it's a regular path that we can just use
@@ -1255,6 +1295,43 @@ if __name__ == '__main__':
 
         if all(original.contents.value == item.contents.value for original, item in zip(root, base)):
             raise Success
+
+    @TestCase
+    def test_pointer_ctypes_noncontiguous_4():
+        class link(ctypes.Structure): pass
+        link._fields_ = [
+            ('left', ctypes.POINTER(link)),
+            ('right', ctypes.POINTER(link)),
+            ('value', ctypes.c_uint32),
+        ]
+
+        # Build our list
+        items = []
+        for index in range(0x10):
+            item = link(value=ctypes.c_uint32(index))
+            items.append(item)
+
+        # Link them together
+        for index, item in enumerate(items):
+            if index > 0:
+                item.left.contents = items[index - 1]
+            if index < len(items) - 1:
+                item.right.contents = items[index + 1]
+            continue
+
+        val = items[0]
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__cblocks__(val)]
+
+        if len(items) != len(items):
+            raise Failure
+
+        if any(path and {'right', None} != {p for p in path} for path, item in items):
+            raise Failure
+
+        # FIXME: continue to validate this recursive structure
+        raise Success
 
 if __name__ == '__main__':
     import logging
