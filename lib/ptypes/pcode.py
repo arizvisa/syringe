@@ -1122,6 +1122,8 @@ if __name__ == '__main__':
                 ptrlookup[key] = index
             continue
 
+        # FIXME: lift this into its own ctypes tool, and allow the user
+        #        to specify their own result list to populate.
         result = []
         for index, (path, contents) in enumerate(items):
             t, block = type(contents), contents
@@ -1200,6 +1202,58 @@ if __name__ == '__main__':
         if memoryview(base.Ptr).tobytes() == memoryview(root.Ptr).tobytes():
             raise Failure
         if memoryview(base.Ptr.contents).tobytes() == memoryview(root.Ptr.contents).tobytes():
+            raise Success
+
+    @TestCase
+    def test_pointer_ctypes_noncontiguous_3():
+        element = ctypes.POINTER(ctypes.c_uint32)
+        t = element * 0x10
+
+        values = [ ctypes.pointer(ctypes.c_uint32(57005)) for _ in range(t._length_) ]
+        val = t(*values)
+
+        res = pcode.pointer_t()
+        items = [item for item in res.__cblocks__(val)]
+
+        if len(items) != 1 + len(val):
+            raise Failure
+
+        # Everything here is copied from test_pointer_ctypes_noncontiguous_0
+        root, ptrlookup = val, {}
+        for index, (path, contents) in enumerate(items):
+            if len(path) and path[-1] is None:
+                ptr = __ctools__.resolve(root, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptrlookup[key] = index
+            continue
+
+        result = []
+        for index, (path, contents) in enumerate(items):
+            t, block = type(contents), contents
+            data = memoryview(block).tobytes()
+            value = (len(data) * ctypes.c_ubyte)(*data)
+            result.append(ctypes.cast(ctypes.pointer(value), ctypes.POINTER(t)).contents)
+
+        base = result[0]
+        for index, (path, contents) in enumerate(items):
+            if len(path):
+                ptr = __ctools__.resolve(base, path[:-1])
+                key = memoryview(ptr).tobytes()
+                ptr.contents = result[ptrlookup[key]]
+
+            # If we received an empty path for the non-first element, then something is busted.
+            elif index > 0:
+                raise AssertionError("Received an empty path that is not the root object")
+            continue
+
+        # Ensure that we made an exact copy of the entire type.
+        if memoryview(root).tobytes() == memoryview(base).tobytes():
+            raise Failure
+
+        if any(memoryview(original).tobytes() == memoryview(item).tobytes() for original, item in zip(root, base)):
+            raise Failure
+
+        if all(original.contents.value == item.contents.value for original, item in zip(root, base)):
             raise Success
 
 if __name__ == '__main__':
