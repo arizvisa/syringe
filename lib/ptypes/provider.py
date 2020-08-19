@@ -151,8 +151,8 @@ class remote(base):
 
         # We make an empty copy of .__buffer__ here to avoid reconstructing
         # the buffer instance.
-        res, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
-        return buffer(res)
+        buffer, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
+        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
 
     def read(self, amount):
         """Read some number of bytes from the provider and return it.
