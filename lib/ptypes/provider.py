@@ -135,7 +135,7 @@ class remote(base):
         self.offset, self.__buffer__[self.offset:] = self.offset + len(data), data
         return len(data)
 
-    def reset(self, *args):
+    def reset(self):
         '''Reset the reader for the remote provider.'''
         self.offset = 0
 
