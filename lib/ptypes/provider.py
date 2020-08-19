@@ -82,8 +82,7 @@ class remote(base):
 
     Intended to be inherited from when defining a remote provider that needs to
     cache any data that is being read or written. To use this, simply inherit
-    from this class and implement the remote.read(), remote.reset(), and the
-    remote.send() methods.
+    from this class and implement the remote.read(), and the remote.send() methods.
 
     Once the provider is instantiated, the user may call the .send() method to
     submit any committed data, or the .reset() method when it is necessary to
@@ -94,7 +93,8 @@ class remote(base):
     def __init__(self):
         """This initializes any attributes required by a remote provider.
 
-        This is required to be called by any child implementation.
+        Supermethod initializes the default buffer and other required attributes.
+        This is required to be implemented and called by a child implementation.
         """
         self.offset = 0
 
@@ -114,7 +114,8 @@ class remote(base):
         '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
         left, right = self.offset, self.offset + amount
         if len(self.__cache__) >= right:
-            return buffer(self.__cache__)[left : right]
+            buffer = self.__cache__[left : right]
+            return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
 
         try:
             data = self.read(right - len(self.__cache__))
@@ -122,7 +123,7 @@ class remote(base):
             return self.consume(amount)
 
         except Exception as E:
-            self.log.warn("Unable to consume {:d} bytes from offset {:#x} while trying to preread {:d} bytes".format(amount, self.offset, right - len(self.__cache__)), exc_info=True)
+            Log.warn("Unable to consume {:d} bytes from offset {:#x} while trying to preread {:d} bytes".format(amount, self.offset, right - len(self.__cache__)), exc_info=True)
             raise error.ConsumeError(self, self.offset, amount)
 
     def store(self, data):
@@ -134,21 +135,17 @@ class remote(base):
         return len(data)
 
     def reset(self, *args):
-        """Reset the reader for the remote provider.
-
-        Parent implementation resets the current cache state and is required
-        to be called by the child implementation.
-        """
+        '''Reset the reader for the remote provider.'''
         self.offset = 0
 
         # Delete all elements in the cache to avoid re-construction
         del(self.__cache__[:])
 
-    def send(self, *args):
+    def send(self):
         """Submit the currently committed data to the remote provider.
 
-        Parent implementation returns a buffer containing the data to be sent
-        by the child implementation.
+        Supermethod returns a buffer containing the data that is to be sent.
+        This is required to be implemented and called by a child implementation.
         """
 
         # We make an empty copy of .__buffer__ here to avoid reconstructing
@@ -159,7 +156,7 @@ class remote(base):
     def read(self, amount):
         """Read some number of bytes from the provider and return it.
 
-        User must implement this in order for remote data to be cached properly.
+        This is required to be implemented and called by a child implementation.
         """
         raise error.ImplementationError(self, 'read', message='User forgot to implement this method')
 
