@@ -114,12 +114,12 @@ class remote(base):
         '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
         left, right = self.offset, self.offset + amount
         if len(self.__cache__) >= right:
-            buffer = self.__cache__[left : right]
+            self.offset, buffer = right, self.__cache__[left : right]
             return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
 
         try:
             data = self.read(right - len(self.__cache__))
-            self.__cache__.fromstring(data)
+            self.__cache__.fromstring(data) if sys.version_info.major < 3 else self.__cache__.frombytes(data)
             return self.consume(amount)
 
         except Exception as E:
@@ -130,8 +130,9 @@ class remote(base):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
         data = self.__cons__(data)
         if self.offset > len(self.__buffer__):
-            self.__buffer__.fromstring('\0' * (self.offset - len(self.__buffer__)))
-        self.__buffer__[self.offset:] = data
+            padding = b'\0' * (self.offset - len(self.__buffer__))
+            self.__buffer__.fromstring(padding) if sys.version_info.major < 3 else self.__buffer__.frombytes(padding)
+        self.offset, self.__buffer__[self.offset:] = self.offset + len(data), data
         return len(data)
 
     def reset(self, *args):
@@ -397,8 +398,7 @@ class bytes(bounded):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
             left, right = self.offset, self.offset + len(data)
-            self.data[left:right] = data
-            self.offset = right
+            self.offset, self.data[left : right] = right, data
             return len(data)
 
         except Exception as E:
