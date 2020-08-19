@@ -112,27 +112,36 @@ class remote(base):
 
     def consume(self, amount):
         '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
-        left, right = self.offset, self.offset + amount
-        if len(self.__cache__) >= right:
-            self.offset, buffer = right, self.__cache__[left : right]
+        cache, left, right = self.__cache__, self.offset, self.offset + amount
+
+        # If we have enough data in our cache, then we can simply return it.
+        if len(cache) >= right:
+            self.offset, buffer = right, cache[left : right]
             return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+        # Otherwise, we need to read some more data from our class.
+        data = self.read(right - len(cache))
+        cache.fromstring(data) if sys.version_info.major < 3 else cache.frombytes(data)
 
-        try:
-            data = self.read(right - len(self.__cache__))
-            self.__cache__.fromstring(data) if sys.version_info.major < 3 else self.__cache__.frombytes(data)
-            return self.consume(amount)
-
-        except Exception as E:
-            Log.warn("Unable to consume {:d} bytes from offset {:#x} while trying to preread {:d} bytes".format(amount, self.offset, right - len(self.__cache__)), exc_info=True)
+        # If we still don't have enough data, then raise an exception.
+        if len(cache) < right:
             raise error.ConsumeError(self, self.offset, amount)
+
+        # Now we can return the data from our cache that we just populated.
+        self.offset, buffer = right, cache[left : right]
+        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
 
     def store(self, data):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
-        data = self.__cons__(data)
-        if self.offset > len(self.__buffer__):
+        buffer, data = self.__buffer__, self.__cons__(data)
+
+        # If our current offset is past the length of our buffer, then pad it
+        # to the size that we'll need.
+        if self.offset > len(buffer):
             padding = b'\0' * (self.offset - len(self.__buffer__))
-            self.__buffer__.fromstring(padding) if sys.version_info.major < 3 else self.__buffer__.frombytes(padding)
-        self.offset, self.__buffer__[self.offset:] = self.offset + len(data), data
+            buffer.fromstring(padding) if sys.version_info.major < 3 else buffer.frombytes(padding)
+
+        # Update the offset and the buffer with the data the caller provided.
+        self.offset, buffer[self.offset:] = self.offset + len(data), data
         return len(data)
 
     def reset(self):
