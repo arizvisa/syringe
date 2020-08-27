@@ -141,13 +141,14 @@ def padding(size, **kwds):
     def repr(self, **options):
         return self.summary(**options)
 
-    def blocksize(self):
+    def blocksize(self, mask=size - 1 if size > 0 else 0):
         parent = self.parent
         if parent is None or not isinstance(parent, ptype.container) or not operator.contains(parent.value, self):
             return 0
         idx = parent.value.index(self)
         res = sum(item.blocksize() for item in parent.value[:idx])
-        return (-res) & (size - 1)
+        position = (res + mask) & ~mask
+        return position - res
     getinitargs = lambda self: (type, kwds)
 
     # if padding is undefined and represents empty space
@@ -182,9 +183,8 @@ def align(size, **kwds):
     def repr(self, **options):
         return self.summary(**options)
 
-    def blocksize(self):
+    def blocksize(self, mask=size - 1 if size > 1 else 1):
         res = self.getoffset()
-        mask = size - 1 if size > 1 else 1
         position = (res + mask) & ~mask
         return position - res
     getinitargs = lambda self: (type, kwds)
@@ -775,24 +775,60 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_dynamic_negative_offset():
+    def test_dynamic_alignment_negative_offset():
         t = dynamic.align(8)
         a = t(offset=-0x41).a
         if a.size() == 1:
             raise Success
 
     @TestCase
-    def test_dynamic_negative_alignment():
+    def test_dynamic_alignment_negative_size():
         t = dynamic.align(-8)
         a = t(offset=0x100).a
         if a.size() == 0:
             raise Success
 
     @TestCase
-    def test_dynamic_double_negative():
+    def test_dynamic_alignment_double_negative():
         t = dynamic.align(-8)
         a = t(offset=-0x100).a
         if a.size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_negative_offset():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.padding(8), 'b'),
+            ]
+
+        a = test(offset=-200).a
+        if a['b'].size() == 7:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_negative_size():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.padding(-8), 'b'),
+            ]
+
+        a = test(offset=0).a
+        if a['b'].size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_double_negative():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint8_t, 'a'),
+                (dynamic.padding(-8), 'b'),
+            ]
+
+        a = test(offset=-200).a
+        if a['b'].size() == 0:
             raise Success
 
 if __name__ == '__main__':
