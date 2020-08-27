@@ -136,9 +136,10 @@ class File(pstruct.type, base.ElfXX_File):
         sectionlist = [shdr for _, shdr in sections.li.sorted()]
 
         segmentlookup = {phdr['p_offset'].int() : phdr for phdr in segmentlist}
-        segmentlookup.update({phdr['p_offset'].int() + phdr.getreadsize() : phdr for phdr in segmentlist})
+        segmentlookup.update({phdr['p_offset'].int() + phdr.getreadsize() : phdr for phdr in segmentlist if phdr.getreadsize() > 0})
+
         sectionlookup = {shdr['sh_offset'].int() : shdr for shdr in sectionlist}
-        sectionlookup.update({shdr['sh_offset'].int() + shdr.getreadsize() : shdr for shdr in sectionlist})
+        sectionlookup.update({shdr['sh_offset'].int() + shdr.getreadsize() : shdr for shdr in sectionlist if shdr.getreadsize() > 0})
 
         # Now we need to sort both of them into a single list so we can figure
         # out the layout of this executable. To do this, we're just going to
@@ -156,7 +157,7 @@ class File(pstruct.type, base.ElfXX_File):
             bisect.insort(layout, offset + shdr.getreadsize())
 
         # Our layout contains the boundaries of all of our sections, so now
-        # wesneed to walk our layout and determine whether there's a section
+        # we need to walk our layout and determine whether there's a section
         # or a segment at that particular address.
         sorted, used = [], {item for item in []}
         for boundary, _ in itertools.groupby(layout):
@@ -176,11 +177,65 @@ class File(pstruct.type, base.ElfXX_File):
             return ptype.clone(section.SectionData, __section__=item)
         return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
 
+    def __padding(self):
+        data = self['e_data'].li
+        sections, segments = data['e_shoff'], data['e_phoff']
+
+        position = sum(self[fld].li.size() for fld in ['e_ident', 'e_data', 'e_segmentdataentries', 'e_dataentries'])
+
+        entry = min([item for item in [sections.int(), sections.int()] if item > position])
+        return ptype.clone(ptype.block, length=max(0, entry - position))
+
+    def __e_programhdrentries(self):
+        data = self['e_data'].li
+        sections, segments = data['e_shoff'], data['e_phoff']
+
+        if isinstance(self.source, ptypes.provider.memorybase):
+            return ptype.undefined
+
+        e_ident = self['e_ident'].li
+        ei_class = e_ident['EI_CLASS']
+        if ei_class['ELFCLASS32']:
+            t = segment.Elf32_Phdr
+        elif ei_class['ELFCLASS64']:
+            t = segment.Elf64_Phdr
+        else:
+            raise NotImplementedError(ei_class)
+
+        # FIXME: this needs to be properly calculated to ensure it's actually next
+        count = data['e_phnum'].int() if segments.int() < sections.int() else 0
+
+        return ptype.clone(header.PhdrEntries, _object_=t, length=count)
+
+    def __e_sectionhdrentries(self):
+        data = self['e_data'].li
+        sections, segments = data['e_shoff'], data['e_phoff']
+
+        if isinstance(self.source, ptypes.provider.memorybase):
+            return ptype.undefined
+
+        e_ident = self['e_ident'].li
+        ei_class = e_ident['EI_CLASS']
+        if ei_class['ELFCLASS32']:
+            t = section.Elf32_Shdr
+        elif ei_class['ELFCLASS64']:
+            t = section.Elf64_Shdr
+        else:
+            raise NotImplementedError(ei_class)
+
+        # FIXME: this needs to be properly calculated to ensure it's actually next
+        count = data['e_shnum'].int() if segments.int() < sections.int() else 0
+
+        return ptype.clone(header.ShdrEntries, _object_=t, length=count)
+
     _fields_ = [
         (E_IDENT, 'e_ident'),
         (__e_data, 'e_data'),
         (__e_segmentdataentries, 'e_segmentdataentries'),
         (__e_dataentries, 'e_dataentries'),
+        (__padding, 'padding(headers)'),
+        (__e_programhdrentries, 'e_programhdrentries'),
+        (__e_sectionhdrentries, 'e_sectionhdrentries'),
     ]
 
 ### recursion for python2
