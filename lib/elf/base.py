@@ -22,15 +22,14 @@ class ElfXX_BaseAddr(ptype.opointer_t):
         return cls.__name__
 
     def classname(self):
-        try: type = self.d.classname() if self.initializedQ() else self._object_().classname()
+        try: object = self._object_() if callable(self._object_) else self._object_
+        except: object = self._object_
+
+        try: type = object.classname() if ptypes.isinstance(object) else object.typename()
         except: pass
         else: return "{:s}<{:s}>".format(self.typename(), type)
 
-        try: type = self._object_.typename() if ptype.istype(self._object_) else self._object_().classname()
-        except: pass
-        else: return "{:s}<{:s}>".format(self.typename(), type)
-
-        type = self._object_.__name__
+        type = object.__name__
         return "{:s}<{:s}>".format(self.typename(), type)
 
     def _calculate_(self, offset):
