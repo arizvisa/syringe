@@ -14,7 +14,14 @@ class _sh_name(pint.type):
         return "{:s} : {!r}".format(super(_sh_name, self).summary(), res)
 
     def str(self):
-        table = self.getparent(ElfXX_Ehdr).stringtable()
+        try:
+            header = self.getparent(ElfXX_Ehdr)
+
+        except ptypes.error.ItemNotFoundError:
+            base = self.getparent(ElfXX_File)
+            header = base['e_data']
+
+        table = header.stringtable()
         if isinstance(table, ELFCLASSXX.SHT_STRTAB):
             return table.read(self.int()).str()
         raise ptypes.error.TypeError(self, 'str')
