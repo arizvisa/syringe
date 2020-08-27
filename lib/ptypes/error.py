@@ -5,9 +5,8 @@ class Base(exceptions.Exception):
         return super(Base, self).__init__(*args)
 
     def name(self):
-        module = self.__module__
-        name = type(self).__name__
-        return '.'.join((module, name))
+        cls, module = self.__class__, self.__module__
+        return '.'.join([module, cls.__name__])
 
     def __repr__(self):
         return self.__str__()
@@ -26,13 +25,15 @@ class ObjectBase(Base):
         return False if isinstance(self.__object, type) else True
 
     def instance(self):
-        return self.__object.instance()
+        item = self.__object
+        return "{!s}".format(item.instance() if hasattr(item, 'instance') else item.__class__)
 
     def objectname(self):
-        res = self.__object
-        if self.instanceQ():
-            return res.shortname()
-        return '.'.join((res.__module__, res.__name__))
+        item = self.__object
+        if self.instanceQ() and hasattr(item, 'shortname'):
+            return item.shortname()
+        cls = item.__class__
+        return '.'.join([item.__module__, item.__name__ if hasattr(item, '__name__') else cls.__name__])
 
     def __str__(self):
         if self.instanceQ():
@@ -50,8 +51,8 @@ class MethodBase(ObjectBase):
 
     def __str__(self):
         if self.instanceQ():
-            return ' : '.join(("{:s} ({:s})".format(self.instance(), self.objectname()), self.methodname()))
-        return ' : '.join((self.objectname(), self.methodname()))
+            return ' : '.join(["{:s} ({:s})".format(self.instance(), self.objectname()), self.methodname()])
+        return ' : '.join([self.objectname(), self.methodname()])
 
 class MethodBaseWithMessage(MethodBase):
     '''Exception type that wraps the method of a particular ptype instance with some message'''

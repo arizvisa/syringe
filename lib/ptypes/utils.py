@@ -107,7 +107,8 @@ def mapexception(map={}, any=None, ignored=()):
 
             for src, dst in six.iteritems(map):
                 if type is src or (hasattr(src, '__contains__') and type in src):
-                    raise with_traceback(dst(type, value))
+                    E = dst(type, value)
+                    raise with_traceback(E)
                 continue
             raise value if type in ignored or any is None else with_traceback(any(type, value))
 

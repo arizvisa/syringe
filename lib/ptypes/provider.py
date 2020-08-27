@@ -388,7 +388,7 @@ class bytes(bounded):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         if amount < 0:
-            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.offset, amount, self))
+            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.offset, amount, self))
         if amount == 0:
             return b''
         if self.offset >= len(self.data):
@@ -439,7 +439,7 @@ class fileobj(bounded):
         '''Consume ``amount`` bytes from the given provider.'''
         offset = self.file.tell()
         if amount < 0:
-            raise error.UserError(self, 'consume', message="Tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(offset, amount, self))
+            raise error.UserError(self, 'consume', message="Tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(offset, amount, self))
 
         result = ''
         try:
@@ -482,7 +482,7 @@ class fileobj(bounded):
 
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
-        return "{:s} -> {!r}".format(super(filebase, self).__repr__(), self.file)
+        return "{:s} -> {!r}".format(super(fileobj, self).__repr__(), self.file)
 
     def __del__(self):
         try: self.close()
@@ -849,7 +849,7 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.address, amount, self))
+                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.address, amount, self))
 
             NumberOfBytesRead = ctypes.c_size_t()
             buffer_t = ctypes.c_char * amount
@@ -1327,7 +1327,7 @@ try:
         def consume(self, amount):
             '''Consume ``amount`` bytes from the given provider.'''
             if amount < 0:
-                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {:s}".format(self.address, amount, self))
+                raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.address, amount, self))
             res = memory._read(self.address, amount)
             if len(res) == 0 and amount > 0:
                 raise error.ConsumeError(self, offset, amount, len(res))
