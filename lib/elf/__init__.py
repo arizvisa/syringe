@@ -105,23 +105,6 @@ class File(pstruct.type, base.ElfXX_File):
         ei_data = e_ident['EI_DATA']
         return ptype.clone(t, recurse=dict(byteorder=ei_data.order()))
 
-    def __e_segmentdataentries(self):
-        data = self['e_data'].li
-
-        if not isinstance(self.source, ptypes.provider.memorybase):
-            return ptype.clone(parray.type, _object_=segment.FileSegmentData, length=0)
-
-        # If we're processing a memory source, then we only need to worry
-        # about the segments. So sort them and then use them to construct
-        # our array.
-        segments = data['e_phoff'].d
-        sorted = [phdr for _, phdr in segments.li.sorted()]
-        def _object_(self, items=sorted):
-            index = len(self.value)
-            item = items[index]
-            return ptype.clone(segment.MemorySegmentData, __segment__=item)
-        return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
-
     def __e_dataentries(self):
         data = self['e_data'].li
         if isinstance(self.source, ptypes.provider.memorybase):
@@ -159,6 +142,9 @@ class File(pstruct.type, base.ElfXX_File):
         # Our layout contains the boundaries of all of our sections, so now
         # we need to walk our layout and determine whether there's a section
         # or a segment at that particular address.
+
+        # FIXME: we need to filter out segments here if we found a section that
+        #        is contained within it.
         sorted, used = [], {item for item in []}
         for boundary, _ in itertools.groupby(layout):
             item = sectionlookup.get(boundary, segmentlookup.get(boundary, None))
@@ -167,23 +153,30 @@ class File(pstruct.type, base.ElfXX_File):
             sorted.append(item)
             used.add(item)
 
+        # Figure out which types we need to use depending on the source
+        if isinstance(self.source, ptypes.provider.memorybase):
+            section_t, segment_t = section.SectionData, segment.MemorySegmentData
+        else:
+            section_t, segment_t = section.SectionData, segment.FileSegmentData
+
         # Everything has been sorted, so now we can construct our array and
         # align it properly to load as many contiguous pieces as possible.
         def _object_(self, items=sorted):
-            index = len(self.value)
-            item = items[index]
+            item = items[len(self.value)]
             if isinstance(item, segment.ElfXX_Phdr):
-                return ptype.clone(segment.FileSegmentData, __segment__=item)
-            return ptype.clone(section.SectionData, __section__=item)
+                return ptype.clone(segment_t, __segment__=item)
+            return ptype.clone(section_t, __section__=item)
+
+        # Finally we can construct our array composed of the proper types
         return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
 
     def __padding(self):
         data = self['e_data'].li
         sections, segments = data['e_shoff'], data['e_phoff']
 
-        position = sum(self[fld].li.size() for fld in ['e_ident', 'e_data', 'e_segmentdataentries', 'e_dataentries'])
-
+        position = sum(self[fld].li.size() for fld in ['e_ident', 'e_data', 'e_dataentries'])
         entry = min([item for item in [sections.int(), sections.int()] if item > position])
+
         return ptype.clone(ptype.block, length=max(0, entry - position))
 
     def __e_programhdrentries(self):
@@ -231,11 +224,10 @@ class File(pstruct.type, base.ElfXX_File):
     _fields_ = [
         (E_IDENT, 'e_ident'),
         (__e_data, 'e_data'),
-        (__e_segmentdataentries, 'e_segmentdataentries'),
         (__e_dataentries, 'e_dataentries'),
-        (__padding, 'padding(headers)'),
-        (__e_programhdrentries, 'e_programhdrentries'),
-        (__e_sectionhdrentries, 'e_sectionhdrentries'),
+        #(__padding, 'padding'),
+        #(__e_programhdrentries, 'e_programhdrentries'),
+        #(__e_sectionhdrentries, 'e_sectionhdrentries'),
     ]
 
 ### recursion for python2
