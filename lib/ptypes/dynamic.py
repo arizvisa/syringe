@@ -184,7 +184,9 @@ def align(size, **kwds):
 
     def blocksize(self):
         res = self.getoffset()
-        return (-res) & (size - 1)
+        mask = size - 1 if size > 1 else 1
+        position = (res + mask) & ~mask
+        return position - res
     getinitargs = lambda self: (type, kwds)
 
     # if alignment is undefined and represents empty space
@@ -769,6 +771,27 @@ if __name__ == '__main__':
     def test_dynamic_padding_noparent_nonzero():
         t = dynamic.padding(0x10)
         a = t(offset=8).a
+        if a.size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_negative_offset():
+        t = dynamic.align(8)
+        a = t(offset=-0x41).a
+        if a.size() == 1:
+            raise Success
+
+    @TestCase
+    def test_dynamic_negative_alignment():
+        t = dynamic.align(-8)
+        a = t(offset=0x100).a
+        if a.size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_double_negative():
+        t = dynamic.align(-8)
+        a = t(offset=-0x100).a
         if a.size() == 0:
             raise Success
 
