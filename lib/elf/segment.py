@@ -345,10 +345,10 @@ class SegmentData(pstruct.type):
     pass
 
 class FileSegmentData(SegmentData):
-    def __padding(self):
+    def __alignment(self):
         item = self.__segment__
-        delta = item['p_offset'].int() - self.getoffset()
-        return dyn.padding(max(0, delta))
+        res = item['p_align']
+        return dyn.align(res.int())
 
     def __data(self):
         item = self.__segment__
@@ -357,7 +357,7 @@ class FileSegmentData(SegmentData):
         return dyn.block(res)
 
     _fields_ = [
-        (__padding, 'padding'),
+        (__alignment, 'alignment'),
         (__data, 'data'),
     ]
 

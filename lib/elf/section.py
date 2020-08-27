@@ -1122,17 +1122,16 @@ class SHT_ARM_ATTRIBUTES(pstruct.type):
     ]
 
 class SectionData(pstruct.type):
-    def __padding(self):
-        item = self.__section__
-        delta = item['sh_offset'].int() - self.getoffset()
-        return dyn.padding(max(0, delta))
-
     def __data(self):
         item = self.__section__
         res = item.getreadsize()
         return dyn.block(res)
 
+    def __alignment(self):
+        item = self.__section__
+        return dyn.align(item['sh_addralign'].int())
+
     _fields_ = [
-        (__padding, 'padding'),
+        (__alignment, 'alignment'),
         (__data, 'data'),
     ]
