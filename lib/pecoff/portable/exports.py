@@ -53,9 +53,10 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         res = []
         for va in self['AddressOfNames'].d.l:
             section = sections.getsectionbyaddress(va.int())
-            sectionva, data = cache[section.getoffset()] if section.getoffset() in cache else cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
-            nameofs = va.int() - sectionva
-            res.append(utils.strdup(data[nameofs:].tostring()))
+            sectionva, data = cache[section.getoffset()] if section.getoffset() in cache else cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), bytearray(section.data().l.serialize())))
+            name_offset = va.int() - sectionva
+            name = bytearray(itertools.takewhile(lambda by: by > 0, data[name_offset:]))
+            res.append(bytes(name).decode('utf-8', 'replace'))
         return res
 
     def GetNameOrdinals(self):
@@ -69,8 +70,8 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
         data = section.data().load().serialize()
 
-        block = data[offset: offset + 2*self['NumberOfNames'].int()]
-        return [base+ordinal for ordinal in array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', block)]
+        block = data[offset : offset + 2 * self['NumberOfNames'].int()]
+        return [base + ordinal for ordinal in array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', block)]
 
     def GetExportAddressTable(self):
         """Returns (export address table offset,[virtualaddress of each export]) from the export address table"""
@@ -207,7 +208,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         if aof.int() > 0:
             # cache the section the eat is contained in since we need it anyways
             section = sections.getsectionbyaddress(aof.int())
-            cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
+            cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), bytearray(section.data().l.serialize())))
 
             # convert the aof into an array that's wikiwiki
             data = aof.d.l.cast(dyn.array(dword, len(aof.d)))
@@ -224,7 +225,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
         if aono.int() > 0:
             # cache the section the aono is contained in since we need it anyways
             section = sections.getsectionbyaddress(aono.int())
-            cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
+            cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), bytearray(section.data().l.serialize())))
 
             # convert the aono into an array that's also quick
             data = aono.d.l.cast(dyn.array(word, len(aono.d)))
@@ -253,9 +254,9 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
                 name = None
             else:
                 section = sections.getsectionbyaddress(nameva.int())
-                sectionva, data = cache[section.getoffset()] if section.getoffset() in cache else cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
-                nameofs = nameva.int() - sectionva
-                name = utils.strdup(data[nameofs:].tostring())
+                sectionva, data = cache[section.getoffset()] if section.getoffset() in cache else cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), bytearray(section.data().l.serialize())))
+                name_offset = nameva.int() - sectionva
+                name = bytes(bytearray(itertools.takewhile(lambda by: by > 0, data[name_offset:]))).decode('utf-8', 'replace')
 
             # grab the ordinal if we can
             if ordinal is None:
@@ -265,12 +266,12 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
                 # this is inside the export directory, so it's a forwardedrva
                 if ExportDirectory.containsaddress(eat[ordinal]):
                     section = sections.getsectionbyaddress(eat[ordinal])
-                    sectionva, data = cache[section.getoffset()] if section.getoffset() in cache else cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), array.array('B', section.data().l.serialize())))
-                    forwarded, value = utils.strdup(data[eat[ordinal] - sectionva:].tostring()), None
+                    sectionva, data = cache[section.getoffset()] if section.getoffset() in cache else cache.setdefault(section.getoffset(), (section['VirtualAddress'].int(), bytearray(section.data().l.serialize())))
+                    value, forwarded = None, bytes(bytearray(itertools.takewhile(lambda by: by > 0, data[eat[ordinal] - sectionva:]))).decode('utf-8', 'replace')
 
-                # otherwise, it's a valid address
+                # otherwise its value is a valid address, and has no string to resolve as a forward
                 else:
-                    forwarded, value = None, eat[ordinal]
+                    value, forwarded = eat[ordinal], None
 
             # this ordinal is outside the export address table, although
             # we can read from the file to deal with these sort of fuxed
