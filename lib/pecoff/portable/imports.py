@@ -1,4 +1,4 @@
-import itertools,array,ptypes
+import functools,itertools,ptypes
 from ptypes import pstruct,parray,pbinary,pstr,ptype,dyn,utils
 from ..headers import *
 
@@ -118,8 +118,7 @@ class IMAGE_IMPORT_ADDRESS_TABLE64(_IMAGE_IMPORT_ADDRESS_TABLE):
 class _IMAGE_IMPORT_NAME_TABLE(parray.terminated):
     _object_ = uint32
     def isTerminator(self, value):
-        data = array.array('B', value.serialize())
-        return True if sum(data) == 0 else False
+        return sum(bytearray(value.serialize())) == 0
 
 class IMAGE_IMPORT_NAME_TABLE(_IMAGE_IMPORT_NAME_TABLE):
     _object_ = IMAGE_IMPORT_NAME_TABLE_ENTRY
@@ -186,25 +185,25 @@ class IMAGE_IMPORT_DESCRIPTOR(pstruct.type):
                 hint = ordinal['Ordinal Number'] & 0xffff
                 yield hint, "Ordinal{:d}".format(hint), address.getoffset(), address.int()
                 continue
-            name = entry['Name']
-            va = name['Name']
-            section = sections.getsectionbyaddress(va)
-            sectionofs = section.getoffset()
-            if sectionofs in cache:
-                sectionva, data = cache[sectionofs]
+            entryname = entry['Name']
+            entryname_va = entryname['Name']
+            section = sections.getsectionbyaddress(entryname_va)
+            section_offset = section.getoffset()
+            if section_offset in cache:
+                sectionva, data = cache[section_offset]
             else:
-                sectionva, data = cache.setdefault(sectionofs, (section['VirtualAddress'].int(), array.array('B', section.data().li.serialize())))
-            hintofs = va - sectionva
-            hint = data[hintofs] | data[hintofs+1]*0x100
-            yield hint, utils.strdup(data[hintofs+2:].tostring()), address.getoffset(), address.int()
+                sectionva, data = cache.setdefault(section_offset, (section['VirtualAddress'].int(), bytearray(section.data().li.serialize())))
+            hint_offset = entryname_va - sectionva
+            hint = functools.reduce(lambda agg, by: agg * 0x100 + by, data[hint_offset : 2 + hint_offset][::-1])
+            name = bytearray(itertools.takewhile(lambda by: by > 0, data[2 + hint_offset:]))
+            yield hint, bytes(name).decode('utf-8', 'replace'), address.getoffset(), address.int()
         return
 
 class IMAGE_IMPORT_DIRECTORY(parray.terminated):
     _object_ = IMAGE_IMPORT_DESCRIPTOR
 
     def isTerminator(self, value):
-        data = array.array('B', value.serialize())
-        return False if sum(data) > 0 else True
+        return sum(bytearray(value.serialize())) == 0
 
     def iterate(self):
         for entry in self[:-1]:
@@ -245,8 +244,7 @@ class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
     _object_ = IMAGE_DELAYLOAD_DIRECTORY_ENTRY
 
     def isTerminator(self, value):
-        data = array.array('B', value.serialize())
-        return True if sum(data) == 0 else False
+        return sum(bytearray(value.serialize())) == 0
 
     def iterate(self):
         for entry in self[:-1]:
@@ -286,6 +284,5 @@ class IMAGE_BOUND_IMPORT_DESCRIPTOR(pstruct.type):
 class IMAGE_BOUND_IMPORT_DIRECTORY(parray.terminated):
     _object_ = IMAGE_BOUND_IMPORT_DESCRIPTOR
     def isTerminator(self, value):
-        data = array.array('B', value.serialize())
-        return False if sum(data) > 0 else True
+        return sum(bytearray(value.serialize())) == 0
 
