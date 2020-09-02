@@ -364,7 +364,7 @@ class proxy(bounded):
 class bytes(bounded):
     '''Basic writeable bytes provider.'''
     offset = int
-    data = str     # this is backed by an array.array type
+    data = bytes     # this is backed by an bytearray type
 
     @property
     def value(self):
@@ -1685,6 +1685,10 @@ if __name__ == '__main__':
 if __name__ == '__main__' and 0:
     from ptypes import ptype,parray,pstruct,pint,provider
     from array import array
+
+    # FIXME: the virtual provider is essentially an implementation of an interval tree. there's a
+    #        great bioinformatics library for this named cgranges which exposes a rope-like interface
+    #        for managing intervals within a single-dimensional array.
 
     a = provider.virtual()
     a.available = [0,6]
