@@ -200,7 +200,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
-    class DT_PLTGOT(d_vaptr):
+    class DT_PLTGOT(d_rtptr):
         type = 3
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -216,7 +216,7 @@ class ELFCLASS32(object):
             from .section import ELFCLASS32
             return ELFCLASS32.SHT_HASH
     @DT_.define
-    class DT_STRTAB(d_vaptr):
+    class DT_STRTAB(d_rtptr):
         type = 5
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -226,7 +226,7 @@ class ELFCLASS32(object):
             from .section import ELFCLASS32
             return dyn.clone(ELFCLASS32.SHT_STRTAB, blocksize=dt_strsz.int)
     @DT_.define
-    class DT_SYMTAB(d_vaptr):
+    class DT_SYMTAB(d_rtptr):
         type = 6
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -239,7 +239,7 @@ class ELFCLASS32(object):
             dt_syment = p.by_tag('DT_SYMENT')
             return dyn.clone(ELFCLASS32.SHT_SYMTAB, blocksize=lambda self, cb=dt_strtab.int() - self.int(): cb)
     @DT_.define
-    class DT_RELA(d_vaptr):
+    class DT_RELA(d_rtptr):
         type = 7
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -289,7 +289,7 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_TEXTREL(d_ign): type = 22
     @DT_.define
-    class DT_JMPREL(d_vaptr):
+    class DT_JMPREL(d_rtptr):
         type = 23
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -354,7 +354,7 @@ class ELFCLASS32(object):
 
     # DT_ADDRRNGLO(0x6ffffe00) - DT_ADDRRNGHI(0x6ffffeff)
     @DT_.define
-    class DT_GNU_HASH(d_vaptr):
+    class DT_GNU_HASH(d_rtptr):
         type = 0x6ffffef5
         def _object_(self):
             from .section import ELFCLASS32
@@ -382,7 +382,7 @@ class ELFCLASS32(object):
 
     # GNU extensions (versioning entry types)
     @DT_.define
-    class DT_VERSYM(d_vaptr):
+    class DT_VERSYM(d_rtptr):
         type = 0x6ffffff0
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -494,7 +494,7 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_PLTRELSZ(d_val): type = 2
     @DT_.define
-    class DT_PLTGOT(d_vaptr):
+    class DT_PLTGOT(d_rtptr):
         type = 3
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -510,7 +510,7 @@ class ELFCLASS64(object):
             from .section import ELFCLASS64
             return ELFCLASS64.SHT_HASH
     @DT_.define
-    class DT_STRTAB(d_vaptr):
+    class DT_STRTAB(d_rtptr):
         type = 5
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -520,7 +520,7 @@ class ELFCLASS64(object):
             from .section import ELFCLASS64
             return dyn.clone(ELFCLASS64.SHT_STRTAB, blocksize=dt_strsz.int)
     @DT_.define
-    class DT_SYMTAB(d_vaptr):
+    class DT_SYMTAB(d_rtptr):
         type = 6
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -533,7 +533,7 @@ class ELFCLASS64(object):
             dt_syment = p.by_tag('DT_SYMENT')
             return dyn.clone(ELFCLASS64.SHT_SYMTAB, blocksize=lambda self, cb=dt_strtab.int() - self.int(): cb)
     @DT_.define
-    class DT_RELA(d_vaptr):
+    class DT_RELA(d_rtptr):
         type = 7
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -583,7 +583,7 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_TEXTREL(d_ign): type = 22
     @DT_.define
-    class DT_JMPREL(d_vaptr):
+    class DT_JMPREL(d_rtptr):
         type = 23
         def _object_(self):
             from .segment import ELFCLASSXX
@@ -651,7 +651,7 @@ class ELFCLASS64(object):
 
     # DT_ADDRRNGLO(0x6ffffe00) - DT_ADDRRNGHI(0x6ffffeff)
     @DT_.define
-    class DT_GNU_HASH(d_vaptr):
+    class DT_GNU_HASH(d_rtptr):
         type = 0x6ffffef5
         def _object_(self):
             from .section import ELFCLASS64
@@ -679,7 +679,7 @@ class ELFCLASS64(object):
 
     # GNU extensions (versioning entry types)
     @DT_.define
-    class DT_VERSYM(d_vaptr):
+    class DT_VERSYM(d_rtptr):
         type = 0x6ffffff0
         def _object_(self):
             from .segment import ELFCLASSXX
