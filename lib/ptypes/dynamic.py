@@ -93,7 +93,7 @@ def block(size, **kwds):
     """Returns a ptype.block type with the specified ``size``"""
     if not isinstance(size, six.integer_types):
         t = ptype.block(length=size)
-        raise error.UserError(t, 'block', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
+        raise error.UserError(t, 'block', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
     if size < 0:
         t = ptype.block(length=size)
@@ -111,7 +111,7 @@ def blockarray(type, size, **kwds):
     """Returns a parray.block with the specified ``size`` and ``type``"""
     if not isinstance(size, six.integer_types):
         t = parray.block(_object_=type)
-        raise error.UserError(t, 'blockarray', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
+        raise error.UserError(t, 'blockarray', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
     if size < 0:
         t = parray.block(_object_=type)
@@ -135,7 +135,7 @@ def padding(size, **kwds):
     '''Return a block that will pad a container to a multiple of the specified number of bytes.'''
     if not isinstance(size, six.integer_types):
         res = ptype.type(length=0)
-        raise error.UserError(res, 'padding', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
+        raise error.UserError(res, 'padding', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
     # methods to get assigned
     def repr(self, **options):
@@ -177,7 +177,7 @@ def align(size, **kwds):
     '''Return a block that will align a structure to a multiple of the specified number of bytes for its address.'''
     if not isinstance(size, six.integer_types):
         res = ptype.type(length=0)
-        raise error.UserError(res, 'align', message="Argument size must be integral : {:s} -> {!r}".format(size.__class__, size))
+        raise error.UserError(res, 'align', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
     # methods to get assigned
     def repr(self, **options):
@@ -218,7 +218,7 @@ def array(type, count, **kwds):
     '''
     if not isinstance(count, six.integer_types):
         t = parray.type(_object_=type, length=count)
-        raise error.UserError(t, 'array', message="Argument count must be integral : {:s} -> {!r}".format(count.__class__, count))
+        raise error.UserError(t, 'array', message="Argument count must be an integral : {!s} -> {!r}".format(count.__class__, count))
 
     if count < 0:
         t = parray.type(_object_=type, length=count)
