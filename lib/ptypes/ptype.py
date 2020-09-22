@@ -1766,6 +1766,14 @@ class definition(object):
             return '.'.join([__name__, 'unknown'])
 
     @classmethod
+    def __key__(cls, type):
+        """Overloadable: Return a unique key for the specified type.
+
+        By default, the attribute key in the implementation is used to fetch a unique attribute from the type.
+        """
+        return getattr(type, cls.attribute)
+
+    @classmethod
     def __set__(cls, type, object):
         '''Overloadable: Map the specified type to an object'''
         if cls.__has__(type):
@@ -1834,6 +1842,7 @@ class definition(object):
         # search in the cache for the specified type
         try:
             res = cls.__get__(type)
+
         except KeyError:
             res = default
 
@@ -1943,7 +1952,7 @@ class definition(object):
             res.update(attributes)
             #res = builtins.type(res.pop('__name__', definition.__name__), definition.__bases__, res)
             res = builtins.type(res.pop('__name__', definition.__name__), (definition,), res)
-            cls.add(getattr(res, cls.attribute), res)
+            cls.add(cls.__key__(res), res)
             return definition
 
         if attributes:
@@ -1951,7 +1960,7 @@ class definition(object):
                 raise error.AssertionError(cls, 'definition.define', message="Unexpected number of positional arguments. : {:d}".format(len(definition)))
             return clone
         res, = definition
-        cls.add(getattr(res, cls.attribute), res)
+        cls.add(cls.__key__(res), res)
         return res
 
 class wrapper_t(type):
