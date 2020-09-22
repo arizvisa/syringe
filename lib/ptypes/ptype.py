@@ -1812,7 +1812,7 @@ class definition(object):
         DictType = types.DictType if sys.version_info.major < 3 else builtins.dict
         if not builtins.isinstance(cls.cache, DictType):
             raise error.TypeError(cls, 'definition.add', message="{:s} has an invalid type for the .cache attribute ({!r})".format(cls.__name__, cls.cache.__class__))
-        return cls.__set__(type, object, **kwargs)
+        return cls.__set__(type, object, **kwargs) or object
 
     @classmethod
     def define(cls, *args, **attributes):
