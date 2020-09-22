@@ -1853,12 +1853,17 @@ class definition(object):
         if len(args) not in {1, 2}:
             raise error.UserError(cls, 'definition.lookup', message="Expected only 1 or 2 parameters ({:d} given)".format(len(args)))
 
-        # if we didn't get a default value, then we need to handle the case specially.
+        # if we didn't get a default value, then we need to handle the
+        # case specially so that we can raise an exception.
         if len(args) < 2:
             type, = args
-            return cls.__get__(type, cls.__default__(**kwargs), **kwargs)
+            res = cls.__get__(type, None, **kwargs)
+            if not res:
+                raise KeyError(type)
+            return res
 
-        # otherwise, we can simply just use it.
+        # otherwise, we can simply just use it since we don't have to
+        # raise an exception.
         return cls.__get__(*args, **kwargs)
 
     @classmethod
@@ -3311,6 +3316,21 @@ if __name__ == '__main__':
         rec = records.lookup(50)
         if rec is t:
             raise Success
+
+    @TestCase
+    def test_definition_lookup_missing():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        try:
+            rec = records.lookup(49)
+
+        except KeyError:
+            raise Success
+        raise Failure(rec)
 
     @TestCase
     def test_definition_lookup_default():
