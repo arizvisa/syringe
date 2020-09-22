@@ -1785,14 +1785,14 @@ class definition(object):
     @classmethod
     def __set__(cls, key, object, **kwargs):
         '''Overloadable: Update the current state of the definition to map the specified ``key`` to the specified ``object``.'''
-        if cls.has(key):
+        if cls.has(key, **kwargs):
             original, new = cls.cache[key], object
-            Log.warn("{:s}.__set__ : {:s} : Overwriting definition ({:s}) for key {!r} with new definition ({:s})".format('.'.join([cls.__module__, cls.__name__]), '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
+            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for key {!r} with new definition ({:s})".format('.'.join([cls.__module__, cls.__name__]), '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
         return operator.setitem(cls.cache, key, object)
 
     @classmethod
     def __get__(cls, key, default, **kwargs):
-        '''Overloadable: Return the object for a specified ``type``. If not found, then return ``default``.'''
+        '''Overloadable: Return the object for a specified ``key``. If not found, then return ``default``.'''
         try:
             result = operator.getitem(cls.cache, key)
 
@@ -1801,18 +1801,18 @@ class definition(object):
         return result
 
     @classmethod
-    def __del__(cls, type, **kwargs):
-        '''Overloadable: Remove the object for the specified ``type``, and return it.'''
-        res, _ = operator.getitem(cls.cache, type), operator.delitem(cls.cache, type)
+    def __del__(cls, key, **kwargs):
+        '''Overloadable: Remove the object for the specified ``key``, and return it.'''
+        res, _ = operator.getitem(cls.cache, key), operator.delitem(cls.cache, key)
         return res
 
     @classmethod
-    def add(cls, type, object, **kwargs):
-        """Add ``object`` to cache using the key that is specified by ``type``."""
+    def add(cls, key, object, **kwargs):
+        """Add ``object`` to cache using the key that is specified by ``key``."""
         DictType = types.DictType if sys.version_info.major < 3 else builtins.dict
         if not builtins.isinstance(cls.cache, DictType):
             raise error.TypeError(cls, 'definition.add', message="{:s} has an invalid type for the .cache attribute ({!r})".format(cls.__name__, cls.cache.__class__))
-        return cls.__set__(type, object, **kwargs) or object
+        return cls.__set__(key, object, **kwargs) or object
 
     @classmethod
     def define(cls, *args, **attributes):
@@ -1832,9 +1832,9 @@ class definition(object):
             newattributes = {key : definition.__dict__[key] for key in definition.__dict__}
             newattributes.update(attributes)
 
-            name = res.pop('__name__', definition.__name__)
+            name = newattributes.pop('__name__', definition.__name__)
             object = builtins.type(name, (definition,), newattributes)
-            return add(object, newattributes)
+            return add(object, **newattributes)
 
         # if we received only 1 argument, then this is all we need to define.
         if len(args) == 1:
@@ -1867,29 +1867,29 @@ class definition(object):
         return cls.__get__(*args, **kwargs)
 
     @classmethod
-    def has(cls, type, **kwargs):
-        '''Return True if the specified ``type`` is within the definition.'''
-        return True if cls.__get__(type, False, **kwargs) else False
+    def has(cls, key, **kwargs):
+        '''Return True if the specified ``key`` is within the definition.'''
+        return True if cls.__get__(key, False, **kwargs) else False
     contains = has
 
     @classmethod
-    def pop(cls, type, **kwargs):
-        '''Removes the definition associated with the specified ``type`` from the cache.'''
-        return cls.__del__(type, **kwargs)
+    def pop(cls, key, **kwargs):
+        '''Removes the definition associated with the specified ``key`` from the cache.'''
+        return cls.__del__(key, **kwargs)
 
     @classmethod
     def get(cls, *args, **attributes):
-        """D.get(type[, default], **attributes) -> Lookup a ptype in the definition D by ``type`` and return a clone of it with ``attributes`` applied.
+        """D.get(key[, default], **attributes) -> Lookup a ptype in the definition D by ``key`` and return a clone of it with ``attributes`` applied.
 
-        If ``type`` was not found, then return ``default`` or D.default if it's undefined.
+        If ``key`` was not found, then return ``default`` or D.default if it's undefined.
         """
         if len(args) not in {1, 2}:
             raise error.TypeError(cls, 'definition.get', message="Expected only 1 or 2 parameters ({:d} given)".format(len(args)))
 
         # if we weren't given a default value, then we'll simply return None.
         if len(args) < 2:
-            type, = args
-            res = cls.lookup(type, None, **attributes)
+            key, = args
+            res = cls.lookup(key, None, **attributes)
 
         # otherwise use it to get a type back.
         else:
@@ -1900,21 +1900,21 @@ class definition(object):
 
     @classmethod
     def withdefault(cls, *args, **missingattributes):
-        """D.withdefault(type[, default], **missingattributes) -> Lookup a ptype in the definition D by ``type``.
+        """D.withdefault(key[, default], **missingattributes) -> Lookup a ptype in the definition D by ``key``.
 
-        If ``type`` was not found, then return ``default`` or D.default with ``missingattributes`` applied to it.
+        If ``key`` was not found, then return ``default`` or D.default with ``missingattributes`` applied to it.
         """
         if len(args) not in {1, 2}:
             raise error.TypeError(cls, 'definition.withdefault', message="Expected only 1 or 2 parameters ({:d} given)".format(len(args)))
 
         # if we weren't given a default value, then we need to figure that out ourselves.
         if len(args) < 2:
-            type, = args
-            return cls.lookup(type, None, **missingattributes) or (clone(cls.__default__(**missingattributes), **missingattributes) if missingattributes else cls.__default__(**missingattributes))
+            key, = args
+            return cls.lookup(key, None, **missingattributes) or (clone(cls.__default__(**missingattributes), **missingattributes) if missingattributes else cls.__default__(**missingattributes))
 
-        # otherwise, we can just extract it and use it if the type wasn't found
-        type, default = args
-        return cls.lookup(type, None, **missingattributes) or (clone(default, **missingattributes) if missingattributes else default)
+        # otherwise, we can just extract it and use it if the key wasn't found
+        key, default = args
+        return cls.lookup(key, None, **missingattributes) or (clone(default, **missingattributes) if missingattributes else default)
 
     @classmethod
     def update(cls, other):
@@ -1927,8 +1927,8 @@ class definition(object):
             return False
 
         # merge record caches into a single one
-        for type, object in six.viewitems(other.cache):
-            cls.__set__(type, object)
+        for key, object in six.viewitems(other.cache):
+            cls.__set__(key, object)
         return True
 
     @classmethod
@@ -1969,11 +1969,11 @@ class definition(object):
 
         # Copy the cache making sure to recurse into it if necessary
         ns['cache'] = res = {}
-        for type, object in six.iteritems(cls.cache):
+        for key, object in six.iteritems(cls.cache):
             if recurse and builtins.isinstance(object, builtins.type) and issubclass(object, definition):
-                res[type] = duplicates.setdefault(identity(object), object.copy(recurse=recurse))
+                res[key] = duplicates.setdefault(identity(object), object.copy(recurse=recurse))
             else:
-                res[type] = object
+                res[key] = object
             continue
 
         # Finally re-construct the type using the original name, base-classes, and new namespace
