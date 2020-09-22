@@ -1808,7 +1808,8 @@ class definition(object):
     @classmethod
     def add(cls, type, object):
         """Add ``object`` to cache and key it by ``type``"""
-        if not builtins.isinstance(cls.cache, dict):
+        DictType = types.DictType if sys.version_info.major < 3 else builtins.dict
+        if not builtins.isinstance(cls.cache, DictType):
             raise error.AssertionError(cls, 'definition.add', message="{:s} has an invalid .cache attribute : {!r}".format(cls.__name__, cls.cache.__class__))
         return cls.__set__(type, object)
 
@@ -1956,9 +1957,8 @@ class definition(object):
         If any ``attributes`` are defined, the definition is duplicated with the specified attributes before being added to the cache.
         """
         def clone(definition):
-            res = dict(definition.__dict__)
+            res = {key : definition.__dict__[key] for key in definition.__dict__}
             res.update(attributes)
-            #res = builtins.type(res.pop('__name__', definition.__name__), definition.__bases__, res)
             res = builtins.type(res.pop('__name__', definition.__name__), (definition,), res)
             cls.add(cls.__key__(res), res)
             return definition
@@ -1967,6 +1967,7 @@ class definition(object):
             if len(definition):
                 raise error.AssertionError(cls, 'definition.define', message="Unexpected number of positional arguments. : {:d}".format(len(definition)))
             return clone
+
         res, = definition
         cls.add(cls.__key__(res), res)
         return res
