@@ -1815,6 +1815,32 @@ class definition(object):
         return cls.__set__(type, object)
 
     @classmethod
+    def define(cls, *args, **attributes):
+        """Add a definition to the cache keyed by the .type attribute of the definition. Return the original definition.
+
+        If any ``attributes`` are defined, the definition is duplicated with the specified attributes before being added to the cache.
+        """
+        def clone(definition, attributes=attributes):
+            res = {key : definition.__dict__[key] for key in definition.__dict__}
+            res.update(attributes)
+
+            name = res.pop('__name__', definition.__name__)
+            res = builtins.type(name, (definition,), res)
+            key = cls.__key__(res)
+            cls.__set__(key, res)
+            return definition
+
+        if attributes:
+            if len(definition):
+                raise error.AssertionError(cls, 'definition.define', message="Unexpected number of positional arguments. : {:d}".format(len(definition)))
+            return clone
+
+        definition, = args
+        key = cls.__key__(definition)
+        cls.__set__(key, definition)
+        return definition
+
+    @classmethod
     def lookup(cls, *args):
         """D.lookup(type[, default]) -> Lookup a ptype in the defintion D by ``type`` and return it.
 
@@ -1970,32 +1996,6 @@ class definition(object):
             other.cache = cls.cache
             return True
         return False
-
-    @classmethod
-    def define(cls, *args, **attributes):
-        """Add a definition to the cache keyed by the .type attribute of the definition. Return the original definition.
-
-        If any ``attributes`` are defined, the definition is duplicated with the specified attributes before being added to the cache.
-        """
-        def clone(definition, attributes=attributes):
-            res = {key : definition.__dict__[key] for key in definition.__dict__}
-            res.update(attributes)
-
-            name = res.pop('__name__', definition.__name__)
-            res = builtins.type(name, (definition,), res)
-            key = cls.__key__(res)
-            cls.__set__(key, res)
-            return definition
-
-        if attributes:
-            if len(definition):
-                raise error.AssertionError(cls, 'definition.define', message="Unexpected number of positional arguments. : {:d}".format(len(definition)))
-            return clone
-
-        definition, = args
-        key = cls.__key__(definition)
-        cls.__set__(key, definition)
-        return definition
 
 class wrapper_t(type):
     '''This type represents a type that is backed and sized by another ptype.
