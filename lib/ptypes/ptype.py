@@ -1766,12 +1766,13 @@ class definition(object):
             return '.'.join([__name__, 'unknown'])
 
     @classmethod
-    def __default__(cls):
+    def __default__(cls, **attributes):
         """Overloadable: Return the default type to use when a matching instance could not be found.
 
         By default, the implementation's `default` attribute is returned.
         """
-        return cls.default
+        res = cls.default
+        return clone(res, **attributes) if attributes else res
 
     @classmethod
     def __key__(cls, type):
@@ -1782,18 +1783,18 @@ class definition(object):
         return getattr(type, cls.attribute)
 
     @classmethod
-    def __set__(cls, type, object):
-        '''Overloadable: Map the specified type to an object'''
-        if cls.__has__(type):
-            original, new = cls.cache[type], object
-            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for {:s} {!r} with new definition ({:s})".format(cls.__module__, '.'.join([original.__module__, original.__name__]), cls.attribute, type, '.'.join([new.__module__, new.__name__])))
-        return operator.setitem(cls.cache, type, object)
+    def __set__(cls, key, object):
+        '''Overloadable: Map the specified key to an object'''
+        if cls.__has__(key):
+            original, new = cls.cache[key], object
+            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for {!r} with new definition ({:s})".format(cls.__module__, '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
+        return operator.setitem(cls.cache, key, object)
 
     @classmethod
-    def __has__(cls, type):
-        '''Overloadable: Check if the specified type has been mapped to an object'''
+    def __has__(cls, key):
+        '''Overloadable: Check if the specified key has been mapped to an object'''
         res = six.viewkeys(cls.cache)
-        return operator.contains(res, type)
+        return operator.contains(res, key)
 
     @classmethod
     def __get__(cls, type):
@@ -1814,14 +1815,21 @@ class definition(object):
         return cls.__set__(type, object)
 
     @classmethod
-    def lookup(cls, *type):
+    def lookup(cls, *args):
         """D.lookup(type[, default]) -> Lookup a ptype in the defintion D by ``type`` and return it.
 
         If it's not found return ``default`` or raise a KeyError if not specified.
         """
-        if len(type) not in {1, 2}:
-            raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(type)))
-        return cls.__get__(type[0]) if len(type) == 1 else (cls.__get__(type[0]) if cls.__has__(type[0]) else type[1])
+        if len(args) not in {1, 2}:
+            raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(args)))
+
+        if len(args) == 1:
+            return cls.__get__(*args)
+
+        key, default = args
+        if cls.__has__(key):
+            return cls.__get__(key)
+        return default
 
     @classmethod
     def has(cls, type):
@@ -1835,18 +1843,54 @@ class definition(object):
         return cls.__pop__(type)
 
     @classmethod
-    def get(cls, *type, **attrs):
-        """D.get(type[, default], **attrs) -> Lookup a ptype in the definition D by ``type`` and return a clone of it with ``attrs`` applied.
+    def get(cls, *args, **attributes):
+        """D.get(type[, default], **attributes) -> Lookup a ptype in the definition D by ``type`` and return a clone of it with ``attributes`` applied.
 
         If ``type`` was not found, then return ``default`` or D.default if it's undefined.
         """
 
         # check the arguments
-        if len(type) not in {1, 2}:
-            raise TypeError("get() takes 1 or 2 arguments ({:d} given)".format(len(type)))
+        if len(args) not in {1, 2}:
+            raise TypeError("get() takes 1 or 2 arguments ({:d} given)".format(len(args)))
 
         # extract the information from the arguments
-        type, default = (type) if len(type) > 1 else (type[0], cls.__default__())
+        if len(args) > 1:
+            type, res = args
+            default = clone(res, **attributes) if attributes else res
+
+        else:
+            type, default = args + (cls.__default__(**attributes),)
+
+        # search in the cache for the specified type, so we can clone the
+        # specified attributes into it
+        try:
+            res = cls.__get__(type)
+
+        # if the type (key) wasn't found, then just return the default value
+        except KeyError:
+            return default
+
+        # now we can return the cloned type
+        return clone(res, **attributes)
+
+    @classmethod
+    def withdefault(cls, *args, **missingattributes):
+        """D.withdefault(type[, default], **attrs) -> Lookup a ptype in the definition D by ``type``.
+
+        If ``type`` was not found, then return ``default`` or D.default with ``missingattributes`` applied to it.
+        """
+
+        # check the arguments
+        if len(args) not in {1, 2}:
+            raise TypeError("withdefault() takes 1 or 2 arguments ({:d} given)".format(len(args)))
+
+        # extract the information from the arguments
+        if len(args) > 1:
+            type, res = args
+            default = clone(res, **missingattributes) if missingattributes else res
+
+        else:
+            type, default = args + (cls.__default__(**missingattributes),)
 
         # search in the cache for the specified type
         try:
@@ -1855,35 +1899,12 @@ class definition(object):
         except KeyError:
             res = default
 
-        # now we can finally clone it
-        attrs.setdefault(cls.attribute, type)
-        return clone(res, **attrs)
-
-    @classmethod
-    def withdefault(cls, *type, **missingattrs):
-        """D.withdefault(type[, default], **attrs) -> Lookup a ptype in the definition D by ``type``.
-
-        If ``type`` was not found, then return ``default`` or D.default with ``missingattrs`` applied to it.
-        """
-
-        # check the arguments
-        if len(type) not in {1, 2}:
-            raise TypeError("withdefault() takes 1 or 2 arguments ({:d} given)".format(len(type)))
-
-        # extract the information from the arguments
-        type, default = (type) if len(type) > 1 else (type[0], cls.__default__())
-
-        # search in the cache for the specified type
-        try:
-            res = cls.__get__(type)
-        except KeyError:
-            res = clone(default, **missingattrs)
         return res
 
     @classmethod
     def update(cls, other):
         """Import the definition cache from ``other``, effectively merging the contents into the current definition"""
-        a, b = map(six.viewkeys, (cls.cache, other.cache))
+        a, b = map(six.viewkeys, [cls.cache, other.cache])
         if a & b:
             Log.warn("definition.update : {:s} : Unable to import module {!r} due to multiple definitions of the same record".format(cls.__module__, other))
             Log.warn("definition.update : {:s} : Duplicate records : {!r}".format(cls.__module__, a & b))
@@ -1951,16 +1972,19 @@ class definition(object):
         return False
 
     @classmethod
-    def define(cls, *definition, **attributes):
+    def define(cls, *args, **attributes):
         """Add a definition to the cache keyed by the .type attribute of the definition. Return the original definition.
 
         If any ``attributes`` are defined, the definition is duplicated with the specified attributes before being added to the cache.
         """
-        def clone(definition):
+        def clone(definition, attributes=attributes):
             res = {key : definition.__dict__[key] for key in definition.__dict__}
             res.update(attributes)
-            res = builtins.type(res.pop('__name__', definition.__name__), (definition,), res)
-            cls.add(cls.__key__(res), res)
+
+            name = res.pop('__name__', definition.__name__)
+            res = builtins.type(name, (definition,), res)
+            key = cls.__key__(res)
+            cls.__set__(key, res)
             return definition
 
         if attributes:
@@ -1968,9 +1992,10 @@ class definition(object):
                 raise error.AssertionError(cls, 'definition.define', message="Unexpected number of positional arguments. : {:d}".format(len(definition)))
             return clone
 
-        res, = definition
-        cls.add(cls.__key__(res), res)
-        return res
+        definition, = args
+        key = cls.__key__(definition)
+        cls.__set__(key, definition)
+        return definition
 
 class wrapper_t(type):
     '''This type represents a type that is backed and sized by another ptype.
@@ -3288,6 +3313,150 @@ if __name__ == '__main__':
         x = wt().a
         x.object = bt().set(b'DCBA')
         if hasattr(x.object, 'int') and x.object.int() == 0x41424344:
+            raise Success
+
+    @TestCase
+    def test_definition_lookup():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.lookup(50)
+        if rec is t:
+            raise Success
+
+    @TestCase
+    def test_definition_lookup_default():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.lookup(49, ptype.undefined)
+        if rec is ptype.undefined:
+            raise Success
+
+    @TestCase
+    def test_definition_withdefault():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.withdefault(50)
+        if rec is t:
+            raise Success
+
+    @TestCase
+    def test_definition_withdefault_default():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.withdefault(49)
+        if rec is not t and builtins.issubclass(rec, records.default):
+            raise Success
+
+    @TestCase
+    def test_definition_withdefault_default_attrib():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.withdefault(49, myattrib=42)
+        if rec is not t and builtins.issubclass(rec, records.default) and rec.myattrib == 42:
+            raise Success
+
+    @TestCase
+    def test_definition_withdefault_custom():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.withdefault(49, ptype.undefined)
+        if rec is ptype.undefined and builtins.issubclass(rec, ptype.undefined):
+            raise Success
+
+    @TestCase
+    def test_definition_withdefault_custom_attrib():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.withdefault(49, ptype.undefined, myattrib=42)
+        if rec is not ptype.undefined and builtins.issubclass(rec, ptype.undefined) and rec.myattrib == 42:
+            raise Success
+
+    @TestCase
+    def test_definition_get():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.get(49)
+        if rec is records.default:
+            raise Success
+
+    @TestCase
+    def test_definition_get_default():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.get(50, myattrib=42)
+        if rec is not t and builtins.issubclass(rec, t) and rec.myattrib == 42:
+            raise Success
+
+    @TestCase
+    def test_definition_get_default_attrib():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.get(49, myattrib=42)
+        if rec is not records.default and builtins.issubclass(rec, records.default) and rec.myattrib == 42:
+            raise Success
+
+    @TestCase
+    def test_definition_get_custom():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.get(49, ptype.undefined)
+        if rec is ptype.undefined and builtins.issubclass(rec, ptype.undefined):
+            raise Success
+
+    @TestCase
+    def test_definition_get_custom_attrib():
+        class records(ptype.definition): cache = {}
+
+        @records.define
+        class t(ptype.type):
+            type = 50
+
+        rec = records.get(49, ptype.undefined, myattrib=42)
+        if rec is not ptype.undefined and builtins.issubclass(rec, ptype.undefined) and rec.myattrib == 42:
             raise Success
 
 if __name__ == '__main__':
