@@ -307,7 +307,7 @@ class ProtocolClass(ptype.definition):
     attribute = 'tag'
 
     @classmethod
-    def __set__(cls, type, object):
+    def __set__(cls, type, object, **kwargs):
         if isinstance(type, six.integer_types):
             object.type = cls.Class, type
             return super(ProtocolClass, cls).__set__(type, object)
