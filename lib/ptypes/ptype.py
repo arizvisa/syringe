@@ -1766,10 +1766,18 @@ class definition(object):
             return '.'.join([__name__, 'unknown'])
 
     @classmethod
+    def __default__(cls):
+        """Overloadable: Return the default type to use when a matching instance could not be found.
+
+        By default, the implementation's `default` attribute is returned.
+        """
+        return cls.default
+
+    @classmethod
     def __key__(cls, type):
         """Overloadable: Return a unique key for the specified type.
 
-        By default, the attribute key in the implementation is used to fetch a unique attribute from the type.
+        By default, the `attribute` key of the implementation is used to fetch a unique attribute from the type.
         """
         return getattr(type, cls.attribute)
 
@@ -1837,7 +1845,7 @@ class definition(object):
             raise TypeError("get() takes 1 or 2 arguments ({:d} given)".format(len(type)))
 
         # extract the information from the arguments
-        type, default = (type) if len(type) > 1 else (type[0], cls.default)
+        type, default = (type) if len(type) > 1 else (type[0], cls.__default__())
 
         # search in the cache for the specified type
         try:
@@ -1862,7 +1870,7 @@ class definition(object):
             raise TypeError("withdefault() takes 1 or 2 arguments ({:d} given)".format(len(type)))
 
         # extract the information from the arguments
-        type, default = (type) if len(type) > 1 else (type[0], cls.default)
+        type, default = (type) if len(type) > 1 else (type[0], cls.__default__())
 
         # search in the cache for the specified type
         try:
