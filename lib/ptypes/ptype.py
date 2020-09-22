@@ -1766,16 +1766,16 @@ class definition(object):
             return '.'.join([__name__, 'unknown'])
 
     @classmethod
-    def __default__(cls, **attributes):
+    def __default__(cls, **kwargs):
         """Overloadable: Return the default type to use when a matching instance could not be found.
 
         By default, the implementation's `default` attribute is returned.
         """
         res = cls.default
-        return clone(res, **attributes) if attributes else res
+        return clone(res, **kwargs) if kwargs else res
 
     @classmethod
-    def __key__(cls, type):
+    def __key__(cls, type, **kwargs):
         """Overloadable: Return a unique key for the specified type.
 
         By default, the `attribute` key of the implementation is used to fetch a unique attribute from the type.
@@ -1783,36 +1783,30 @@ class definition(object):
         return getattr(type, cls.attribute)
 
     @classmethod
-    def __set__(cls, key, object):
+    def __set__(cls, key, object, **kwargs):
         '''Overloadable: Map the specified key to an object'''
-        if cls.__has__(key):
+        if cls.has(key):
             original, new = cls.cache[key], object
             Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for {!r} with new definition ({:s})".format(cls.__module__, '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
         return operator.setitem(cls.cache, key, object)
 
     @classmethod
-    def __has__(cls, key):
-        '''Overloadable: Check if the specified key has been mapped to an object'''
-        res = six.viewkeys(cls.cache)
-        return operator.contains(res, key)
-
-    @classmethod
-    def __get__(cls, type):
+    def __get__(cls, key, **kwargs):
         '''Overloadable: Return the object for a specified type'''
-        return operator.getitem(cls.cache, type)
+        return operator.getitem(cls.cache, key)
 
     @classmethod
-    def __pop__(cls, type):
+    def __pop__(cls, type, **kwargs):
         res, _ = operator.getitem(cls.cache, type), operator.delitem(cls.cache, type)
         return res
 
     @classmethod
-    def add(cls, type, object):
+    def add(cls, type, object, **kwargs):
         """Add ``object`` to cache and key it by ``type``"""
         DictType = types.DictType if sys.version_info.major < 3 else builtins.dict
         if not builtins.isinstance(cls.cache, DictType):
             raise error.AssertionError(cls, 'definition.add', message="{:s} has an invalid .cache attribute : {!r}".format(cls.__name__, cls.cache.__class__))
-        return cls.__set__(type, object)
+        return cls.__set__(type, object, **kwargs)
 
     @classmethod
     def define(cls, *args, **attributes):
@@ -1827,7 +1821,7 @@ class definition(object):
             name = res.pop('__name__', definition.__name__)
             res = builtins.type(name, (definition,), res)
             key = cls.__key__(res)
-            cls.__set__(key, res)
+            cls.__set__(key, res, **attributes)
             return definition
 
         if attributes:
@@ -1841,7 +1835,7 @@ class definition(object):
         return definition
 
     @classmethod
-    def lookup(cls, *args):
+    def lookup(cls, *args, **kwargs):
         """D.lookup(type[, default]) -> Lookup a ptype in the defintion D by ``type`` and return it.
 
         If it's not found return ``default`` or raise a KeyError if not specified.
@@ -1849,24 +1843,35 @@ class definition(object):
         if len(args) not in {1, 2}:
             raise TypeError("lookup() takes 1 or 2 arguments ({:d} given)".format(len(args)))
 
+        # if no default type was provided, then figure it out and fix up args
         if len(args) == 1:
-            return cls.__get__(*args)
+            type, = args
+            default = cls.__default__(**attributes)
+            args = type, default
 
+        # now we can first check the type, and return it if it was found.
         key, default = args
-        if cls.__has__(key):
-            return cls.__get__(key)
-        return default
+
+        try:
+            res = cls.__get__(key, **kwargs)
+        except KeyError:
+            res = default
+        return res
 
     @classmethod
-    def has(cls, type):
+    def has(cls, type, **kwargs):
         '''Return True if the specified ``type`` is defined to a ptype.'''
-        return cls.__has__(type)
+        try:
+            cls.__get__(type, **kwargs)
+        except KeyError:
+            return False
+        return True
     contains = has
 
     @classmethod
-    def pop(cls, type):
+    def pop(cls, type, **kwargs):
         '''Removes the definition associated with the specified ``type`` from the cache.'''
-        return cls.__pop__(type)
+        return cls.__pop__(type, **kwargs)
 
     @classmethod
     def get(cls, *args, **attributes):
@@ -1879,29 +1884,24 @@ class definition(object):
         if len(args) not in {1, 2}:
             raise TypeError("get() takes 1 or 2 arguments ({:d} given)".format(len(args)))
 
+        def get(key, default, **attributes):
+            try:
+                res = cls.__get__(key, **attributes)
+            except KeyError:
+                res = default
+            return clone(res, **attributes) if attributes else res
+
         # extract the information from the arguments
-        if len(args) > 1:
-            type, res = args
-            default = clone(res, **attributes) if attributes else res
+        if len(args) == 1:
+            type, = args
+            default = cls.__default__(**attributes)
+            args = type, default
 
-        else:
-            type, default = args + (cls.__default__(**attributes),)
-
-        # search in the cache for the specified type, so we can clone the
-        # specified attributes into it
-        try:
-            res = cls.__get__(type)
-
-        # if the type (key) wasn't found, then just return the default value
-        except KeyError:
-            return default
-
-        # now we can return the cloned type
-        return clone(res, **attributes)
+        return get(*args, **attributes)
 
     @classmethod
     def withdefault(cls, *args, **missingattributes):
-        """D.withdefault(type[, default], **attrs) -> Lookup a ptype in the definition D by ``type``.
+        """D.withdefault(type[, default], **missingattributes) -> Lookup a ptype in the definition D by ``type``.
 
         If ``type`` was not found, then return ``default`` or D.default with ``missingattributes`` applied to it.
         """
@@ -1910,22 +1910,23 @@ class definition(object):
         if len(args) not in {1, 2}:
             raise TypeError("withdefault() takes 1 or 2 arguments ({:d} given)".format(len(args)))
 
-        # extract the information from the arguments
+        def withdefault(key, default, **missingattributes):
+            try:
+                res = cls.__get__(key, **missingattributes)
+            except KeyError:
+                res = clone(default, **missingattributes) if missingattributes else default
+            return res
+
+        # figure out where the default value is at.
         if len(args) > 1:
-            type, res = args
+            _, res = args
             default = clone(res, **missingattributes) if missingattributes else res
-
         else:
-            type, default = args + (cls.__default__(**missingattributes),)
+            type, = args
+            default = cls.__default__(**missingattributes)
+            args = type, default
 
-        # search in the cache for the specified type
-        try:
-            res = cls.__get__(type)
-
-        except KeyError:
-            res = default
-
-        return res
+        return withdefault(*args, **missingattributes)
 
     @classmethod
     def update(cls, other):
