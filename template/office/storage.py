@@ -354,7 +354,7 @@ class File(pstruct.type):
         count = self['DiFat']['csectDifat'].int()
 
         # First DiFat entries
-        res = self.new(DIFAT, recurse=self.attributes, length=self._uSectorCount)
+        res = self.new(DIFAT, recurse=self.attributes, length=self._uSectorCount).alloc(length=0)
         [res.append(item) for item in iter(self['Table'])]
 
         # Check if we need to find more
@@ -376,7 +376,7 @@ class File(pstruct.type):
         start, count = res['sectMiniFat'].int(), res['csectMiniFat'].int()
 
         # Walk through the chain of FAT sectors that contain the MiniFat
-        fat, res = self.Fat(), self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount)
+        fat, res = self.Fat(), self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount).alloc(length=0)
         for index in fat.chain(start):
             sector = fat[index]
             if sector.o['ENDOFCHAIN']: break
@@ -391,8 +391,8 @@ class File(pstruct.type):
     def Fat(self):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
-        res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount)
-        for _, v in zip(xrange(count), difat):
+        res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount).alloc(length=0)
+        for _, v in zip(range(count), difat):
             [res.append(item) for item in iter(v.d.l)]
         return res
     getFat = Fat
@@ -407,14 +407,14 @@ class File(pstruct.type):
 
     def chain(self, iterable):
         '''Return the sector for each index specified in iterable.'''
-        res = self.new(ptype.container)
+        res = self.new(ptype.container, value=[])
         [res.append(item) for item in map(self['Data'].__getitem__, iterable)]
         return res
 
     def minichain(self, iterable):
         '''Return the minisector for each index specified in iterable.'''
         mf = self.MiniFat()
-        res = self.new(ptype.container)
+        res = self.new(ptype.container, value=[])
         for sptr in map(mf.__getitem__, iterable):
             [res.append(item) for item in sptr.d.l]
         return res
@@ -452,7 +452,7 @@ class File(pstruct.type):
             return data[iterable]
 
         # Now make a container and then cast it to a block
-        res = self.new(ptype.container)
+        res = self.new(ptype.container, value=[])
         [res.append(item) for item in map(data.__getitem__, iterable)]
         return res.cast(ptype.block, length=res.size()) if type is None else res.cast(type, blocksize=lambda cb=res.size(): cb)
 
