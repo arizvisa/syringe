@@ -57,26 +57,17 @@ class LengthPrefixedUnicodeString(pstruct.type):
 ### Sector types
 class Sector(ptype.definition):
     cache = {}
-    class Pointer(ptype.opointer_t):
-        def _calculate_(self, index):
-            return self._uSectorSize + index * self._uSectorSize
-        class _value_(pint.enum, DWORD):
-            _values_ = [
-                ('MAXREGSECT', 0xfffffffa),
-                ('NotApplicable', 0xfffffffb),
-                ('DIFSECT', 0xfffffffc),
-                ('FATSECT', 0xfffffffd),
-                ('ENDOFCHAIN', 0xfffffffe),
-                ('FREESECT', 0xffffffff),
-            ]
-        def _object_(self):
-            return dyn.block(self._uSectorSize)
-        def summary(self, **options):
-            return self.object.summary(**options)
+
+class Pointer(ptype.opointer_t):
+    def _calculate_(self, index):
+        raise NotImplementedError
+    def _object_(self):
+        return dyn.block(self._uSectorSize)
+    def summary(self, **options):
+        return self.object.summary(**options)
 
 @Sector.define
-class REGSECT(Sector.Pointer): symbol, type = '+', None
-Sector.default = REGSECT
+class REGSECT(Pointer): symbol, type = '+', None
 @Sector.define
 class MAXREGSECT(REGSECT): symbol, type = '+', 0xfffffffa
 @Sector.define
@@ -90,17 +81,31 @@ class ENDOFCHAIN(DWORD): symbol, type = '$', 0xfffffffe
 @Sector.define
 class FREESECT(DWORD): symbol, type = '.', 0xffffffff
 
-class SECT(Sector.Pointer): pass
+Sector.default = Sector.lookup(None)
+
+class SectorType(pint.enum, DWORD): pass
+SectorType._values_ = [(item.__name__, type) for type, item in Sector.cache.items() if type is not None]
+Pointer._value_ = SectorType
+
+class SECT(Pointer): pass
 
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
     def summary(self, **options):
         return str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
     def _object_(self):
-        return dyn.clone(Sector.Pointer, _object_=self.Pointer)
+        raise NotImplementedError
 
 class FAT(AllocationTable):
-    Pointer = lambda self: dyn.block(self._uSectorSize)
+    class Pointer(Pointer):
+        def _calculate_(self, nextindex):
+            realindex = self.__index__
+            return self._uSectorSize + realindex * self._uSectorSize
+
+    def _object_(self):
+        '''return a custom pointer that can be used to dereference entries in the FAT.'''
+        t = dyn.block(self._uSectorSize)
+        return dyn.clone(self.Pointer, _object_=t, __index__=len(self.value))
 
     # Walk the linked-list of fat sectors
     def chain(self, index):
@@ -111,7 +116,19 @@ class FAT(AllocationTable):
         return
 
 class DIFAT(AllocationTable):
-    Pointer = lambda self: dyn.clone(FAT, length=self._uSectorCount)
+    class IndirectPointer(Pointer):
+        '''
+        the value for an indirect pointer points directly to the sector
+        containing its contents, so we can use it to calculate the index
+        to the correct position of the file.
+        '''
+        def _calculate_(self, index):
+            return self._uSectorSize + index * self._uSectorSize
+
+    def _object_(self):
+        '''return a custom pointer that can be used to dereference the FAT.'''
+        t = dyn.clone(FAT, length=self._uSectorCount)
+        return dyn.clone(DIFAT.IndirectPointer, _object_=t)
 
     # Walk
     def chain(self, index):
@@ -139,7 +156,14 @@ class DIFAT(AllocationTable):
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
 
 class MINIFAT(AllocationTable):
-    Pointer = lambda self: dyn.clone(parray.type, length=self._uSectorSize // self._uMiniSectorSize, _object_=dyn.block(self._uMiniSectorSize))
+    class Pointer(Pointer):
+        pass
+
+    def _object_(self):
+        p = self.getparent(File)
+        data = dyn.block(self._uMiniSectorSize)
+        t = dyn.clone(parray.type, length=self._uSectorSize // self._uMiniSectorSize, _object_=data)
+        return dyn.clone(self.Pointer, _object_=t, __index__=len(self.value))
 
     def chain(self, index):
         while self[index].int() <= MAXREGSECT.type:
@@ -324,12 +348,12 @@ class File(pstruct.type):
         info = self['SectorShift'].li
         sectorSize = info.SectorSize()
         self._uSectorSize = self.attributes['_uSectorSize'] = sectorSize
-        self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize // Sector.Pointer().blocksize()
+        self._uSectorCount = self.attributes['_uSectorCount'] = sectorSize // Pointer().blocksize()
 
         # Store the mini-sector size attributes
         miniSectorSize = info.MiniSectorSize()
         self._uMiniSectorSize = self.attributes['_uMiniSectorSize'] = miniSectorSize
-        self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize // Sector.Pointer().blocksize()
+        self._uMiniSectorCount = self.attributes['_uMiniSectorCount'] = miniSectorSize // Pointer().blocksize()
 
         return dyn.block(6)
 
@@ -379,7 +403,6 @@ class File(pstruct.type):
         fat, res = self.Fat(), self.new(MINIFAT, recurse=self.attributes, length=self._uSectorCount).alloc(length=0)
         for index in fat.chain(start):
             sector = fat[index]
-            if sector.o['ENDOFCHAIN']: break
 
             # Convert the sector into a MINIFAT, and append all its elements to our result
             mf = sector.d.l.cast(MINIFAT, length=self._uSectorCount)
@@ -391,7 +414,7 @@ class File(pstruct.type):
     def Fat(self):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
-        res = self.new(FAT, recurse=self.attributes, Pointer=FAT.Pointer, length=self._uSectorCount).alloc(length=0)
+        res = self.new(FAT, recurse=self.attributes, length=self._uSectorCount).alloc(length=0)
         for _, v in zip(range(count), difat):
             [res.append(item) for item in iter(v.d.l)]
         return res
