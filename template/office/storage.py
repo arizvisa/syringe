@@ -39,7 +39,7 @@ TIME_T = FILETIME
 class LengthPrefixedAnsiString(pstruct.type):
     _fields_ = [
         (DWORD, 'Length'),
-        (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'String')
+        (lambda self: dyn.clone(pstr.string, length=self['Length'].li.int()), 'String')
     ]
     def summary(self):
         res = self['String'].str()
@@ -48,7 +48,7 @@ class LengthPrefixedAnsiString(pstruct.type):
 class LengthPrefixedUnicodeString(pstruct.type):
     _fields_ = [
         (DWORD, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int()), 'String')
+        (lambda self: dyn.clone(pstr.wstring, length=self['Length'].li.int()), 'String')
     ]
     def summary(self):
         res = self['String'].str()
@@ -100,7 +100,7 @@ class AllocationTable(parray.type):
         return dyn.clone(Sector.Pointer, _object_=self.Pointer)
 
 class FAT(AllocationTable):
-    Pointer = lambda s: dyn.block(s._uSectorSize)
+    Pointer = lambda self: dyn.block(self._uSectorSize)
 
     # Walk the linked-list of fat sectors
     def chain(self, index):
@@ -111,7 +111,7 @@ class FAT(AllocationTable):
         return
 
 class DIFAT(AllocationTable):
-    Pointer = lambda s: dyn.clone(FAT, length=s._uSectorCount)
+    Pointer = lambda self: dyn.clone(FAT, length=self._uSectorCount)
 
     # Walk
     def chain(self, index):
@@ -348,7 +348,7 @@ class File(pstruct.type):
         (__Data, 'Data'),
     ]
 
-    @ptypes.utils.memoize(self=lambda s: s)
+    @ptypes.utils.memoize(self=lambda self: self)
     def DiFat(self):
         '''Return an array containing the DiFat'''
         count = self['DiFat']['csectDifat'].int()
@@ -369,7 +369,7 @@ class File(pstruct.type):
         return res
     getDiFat = DiFat
 
-    @ptypes.utils.memoize(self=lambda s: s)
+    @ptypes.utils.memoize(self=lambda self: self)
     def MiniFat(self):
         '''Return an array containing the MiniFat'''
         res = self['MiniFat']
@@ -387,7 +387,7 @@ class File(pstruct.type):
         return res
     getMiniFat = MiniFat
 
-    @ptypes.utils.memoize(self=lambda s: s)
+    @ptypes.utils.memoize(self=lambda self: self)
     def Fat(self):
         '''Return an array containing the FAT'''
         count, difat = self['Fat']['csectFat'].int(), self.DiFat()
@@ -494,11 +494,11 @@ class MONIKERSTREAM(pstruct.type):
     class Stream(pstruct.type):
         _fields_ = [
             (CLSID, 'Clsid'),
-            (lambda s: dyn.block(s.blocksize() - s['Clsid'].li.size()), 'Data'),
+            (lambda self: dyn.block(self.blocksize() - self['Clsid'].li.size()), 'Data'),
         ]
     _fields_ = [
         (DWORD, 'Size'),
-        (lambda s: ptype.undefined if s['Size'].li.int() == 0 else dyn.clone(MONIKERSTREAM.Stream, blocksize=lambda _:s['Size'].li.int()), 'Stream'),
+        (lambda self: ptype.undefined if self['Size'].li.int() == 0 else dyn.clone(MONIKERSTREAM.Stream, blocksize=lambda _: self['Size'].li.int()), 'Stream'),
     ]
 
 class OLEStream(pstruct.type):
@@ -536,7 +536,7 @@ if False:
                 _fields_+= [(1, _) for _ in ('DM_COPIES', 'DM_DEFAULTSOURCE', 'DM_PRINTQUALITY', 'DM_COLOR', 'DM_DUPLEX', 'DM_YRESOLUTION', 'DM_TTOPTION', 'DM_COLLATE', 'DM_NUP')]
                 _fields_+= [(1, _) for _ in ('DM_ICMMETHOD', 'DM_ICMINTENT', 'DM_MEDIATYPE', 'DM_DITHERTYPE')]
 
-            __cond = lambda n, t: lambda s: t if s['dmFields'][n] else pint.uint_t
+            __cond = lambda n, t: lambda self: t if self['dmFields'][n] else pint.uint_t
 
             _fields_ = [
                 (dmFields, 'dmFields'),
@@ -584,7 +584,7 @@ if False:
             (WORD, 'dmDriverExtra'),
             (Fields, 'Fields'),
             (__Padding, 'Padding'),
-            (lambda s: dyn.block(s['dmDriverExtra'].li.int()), 'PrinterData'),
+            (lambda self: dyn.block(self['dmDriverExtra'].li.int()), 'PrinterData'),
         ]
 
 class DVTARGETDEVICE(pstruct.type):
@@ -612,7 +612,7 @@ class TOCENTRY(pstruct.type):
         (dyn.block(12), 'Reserved1'),
         (DWORD, 'Advf'),
         (DWORD, 'Reserved2'),
-        (lambda s: dyn.clone(DVTARGETDEVICE, blocksize=lambda _:s['TargetDeviceSize'].li.int()), 'TargetDevice'),
+        (lambda self: dyn.clone(DVTARGETDEVICE, blocksize=lambda _: self['TargetDeviceSize'].li.int()), 'TargetDevice'),
     ]
 
 class OLEPresentationStream(pstruct.type):
@@ -623,7 +623,7 @@ class OLEPresentationStream(pstruct.type):
         _fields_ = [
             (DWORD, 'Signature'),
             (DWORD, 'Count'),
-            (lambda s: dyn.array(TOCENTRY, s['Count'].li.int()), 'Entry'),
+            (lambda self: dyn.array(TOCENTRY, self['Count'].li.int()), 'Entry'),
         ]
 
     _fields_ = [
@@ -636,7 +636,7 @@ class OLEPresentationStream(pstruct.type):
         (DWORD, 'Reserved1'),
         (Dimensions, 'Dimensions'),
         (DWORD, 'Size'),
-        (lambda s: dyn.block(s['Size'].int()), 'Data'),
+        (lambda self: dyn.block(self['Size'].int()), 'Data'),
         (dyn.block(18), 'Reserved2'),
         (TOC, 'Toc'),
     ]
@@ -644,7 +644,7 @@ class OLEPresentationStream(pstruct.type):
 class OLENativeStream(pstruct.type):
     _fields_ = [
         (DWORD, 'NativeDataSize'),
-        (lambda s: dyn.block(s['NativeDataSize'].li.int()), 'NativeData'),
+        (lambda self: dyn.block(self['NativeDataSize'].li.int()), 'NativeData'),
     ]
 
 class CompObjHeader(pstruct.type):
