@@ -157,13 +157,17 @@ class DIFAT(AllocationTable):
 
 class MINIFAT(AllocationTable):
     class Pointer(Pointer):
-        pass
+        def _calculate_(self, nextindex):
+            if self.__sector__:
+                sector, index = self.__sector__.d, self.__index__
+                return sector.getoffset() + self._uMiniSectorSize * index
+            raise NotImplementedError
 
     def _object_(self):
-        p = self.getparent(File)
-        data = dyn.block(self._uMiniSectorSize)
-        t = dyn.clone(parray.type, length=self._uSectorSize // self._uMiniSectorSize, _object_=data)
-        return dyn.clone(self.Pointer, _object_=t, __index__=len(self.value))
+        p, index = self.getparent(File), len(self.value)
+        count, table = self._uSectorSize // self._uMiniSectorSize, p.minisectors()
+        sector = table[index // count] if index // count < len(table) else None
+        return dyn.clone(self.Pointer, _object_=dyn.block(self._uMiniSectorSize), __index__=index % count, __sector__=sector)
 
     def chain(self, index):
         while self[index].int() <= MAXREGSECT.type:
@@ -219,23 +223,13 @@ class HeaderFat(pstruct.type):
     ]
 
 class HeaderMiniFat(pstruct.type):
-    class _sectMiniFat(SECT):
-        def _object_(self):
-            mf = self.getparent(HeaderMiniFat)
-            return dyn.clone(MINIFAT, length=self._uSectorCount) # FIXME: not sure if this works
     _fields_ = [
         (ULONG, 'ulMiniSectorCutoff'), # Mini stream cutoff size
-        (_sectMiniFat, 'sectMiniFat'), # First mini fat sector location
+        (SECT, 'sectMiniFat'), # First mini fat sector location
         (DWORD, 'csectMiniFat'),       # Number of mini fat sectors
     ]
 
 class HeaderDiFat(pstruct.type):
-    # FIXME: _sectDifat should be used instead of just a generic pointer to a SECT
-    class _sectDifat(SECT):
-        def _object_(self):
-            difat = self.getparent(HeaderDiFat)
-            res = difat['sectDifat'].li.int()
-            return dyn.array(DIFAT.Sector, length=res)
     _fields_ = [
         (dyn.clone(SECT, _object_=DIFAT), 'sectDifat'), # First difat sector location
         (DWORD, 'csectDifat'),                          # Number of difat sectors
@@ -391,7 +385,6 @@ class File(pstruct.type):
         for table in next.collect(count):
             [res.append(item) for item in iter(table)]
         return res
-    getDiFat = DiFat
 
     @ptypes.utils.memoize(self=lambda self: self)
     def MiniFat(self):
@@ -408,7 +401,6 @@ class File(pstruct.type):
             mf = sector.d.l.cast(MINIFAT, length=self._uSectorCount)
             [res.append(item) for item in mf]
         return res
-    getMiniFat = MiniFat
 
     @ptypes.utils.memoize(self=lambda self: self)
     def Fat(self):
@@ -418,7 +410,6 @@ class File(pstruct.type):
         for _, v in zip(range(count), difat):
             [res.append(item) for item in iter(v.d.l)]
         return res
-    getFat = Fat
 
     def Directory(self):
         '''Return the whole Directory'''
@@ -426,16 +417,23 @@ class File(pstruct.type):
         dsect = self['Fat']['sectDirectory'].int()
         res = self.chain(fat.chain(dsect))
         return res.cast(Directory, __name__='Directory', blocksize=lambda: res.size())
-    getDirectory = Directory
+
+    @ptypes.utils.memoize(self=lambda self: self)
+    def minisectors(self):
+        '''Return the sectors associated with the ministream as a list.'''
+        fat, directory = self.Fat(), self.Directory()
+        root = directory.RootEntry()
+        start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
+        return [fat[index] for index in fat.chain(start)]
 
     def chain(self, iterable):
-        '''Return the sector for each index specified in iterable.'''
+        '''Return the stream for each sector index specified in iterable.'''
         res = self.new(ptype.container, value=[])
         [res.append(item) for item in map(self['Data'].__getitem__, iterable)]
         return res
 
     def minichain(self, iterable):
-        '''Return the minisector for each index specified in iterable.'''
+        '''Return the ministream for each minisector index specified in iterable.'''
         mf = self.MiniFat()
         res = self.new(ptype.container, value=[])
         for sptr in map(mf.__getitem__, iterable):
