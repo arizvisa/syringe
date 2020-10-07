@@ -1151,7 +1151,8 @@ try:
         if _: DEFAULT.append(lambda bv=frame.f_globals['bv']: Binja(bv))
     except (AttributeError, KeyError):
         raise ImportError
-    del(frame)
+    finally:
+        del(frame)
 
 except ImportError:
     Log.info("{:s} : Unable to import the 'binaryninja' module (not running Binja?). Failed to define the `Binja` provider.".format(__name__))
