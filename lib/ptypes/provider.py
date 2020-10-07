@@ -1116,6 +1116,42 @@ except ImportError:
     Log.info("{:s} : Unable to import the 'idaapi' module (not running IDA?). Failed to define the `Ida` provider.".format(__name__))
 
 try:
+    _ = 'binaryninja' in sys.modules
+    class Binja(debuggerbase):
+        '''A provider that uses Binary Ninja's BinaryViewType API for reading/writing from an address space.'''
+        import binaryninja
+
+        def __init__(self, bv):
+            self._view = bv
+            self._address = 0
+
+        def seek(self, address):
+            res, self._address = self._address, address
+            return res
+
+        def consume(self, amount):
+            res = self._view.read(self._address, amount)
+            self._address += len(res)
+            return res
+
+        def store(self, data):
+            res = self._view.write(self._address, data)
+            self._address += res
+            return res
+
+        def expr(self, string):
+            return self._view.eval(string)
+
+    Log.info("{:s} : Successfully loaded the `Binja` provider.".format(__name__))
+    try:
+        if _: DEFAULT.append(Binja(sys.modules['__main__'].bv))
+    except (AttributeError, KeyError):
+        raise ImportError
+
+except ImportError:
+    Log.info("{:s} : Unable to import the 'binaryninja' module (not running Binja?). Failed to define the `Binja` provider.".format(__name__))
+
+try:
     _ = '_PyDbgEng' in sys.modules
     class PyDbgEng(debuggerbase):
         '''A provider that uses the PyDbgEng.pyd module to interact with the memory of the current debugged process.'''
