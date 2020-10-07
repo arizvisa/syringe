@@ -58,8 +58,8 @@ def reprfiles(*args):
 
 def histogram_parser(parser,state={}):
     result = {}
-    for n in parser.traverse(edges=lambda s:() if s.v is None else s.v, filter=lambda s: hasattr(s,'type')):
-        name = n.shortname()
+    for n in parser.traverse(edges=lambda node:() if node.value is None else node.value):
+        name = n.typename()
         if name not in result:
             result[name] = 0
         result[name] += 1
@@ -74,16 +74,17 @@ def histogram(*args):
     result = {}
     state = {}
     for i,(filename,p) in enumerate(iterfiles(*args)):
-        _ = histogram_parser(p,state)
-        for k,v in _.iteritems():
+        hist = histogram_parser(p,state)
+        for k, v in hist.items():
             if k in result:
-                result[k] += _[k]
-                continue
-            result[k] = _[k]
+                result[k] += hist[k]
+            else:
+                result[k] = hist[k]
+            continue
         continue
 
-    result = result.items()
-    result.sort(lambda x,y:cmp(x[1],y[1]))
+    result = [item for item in result.items()]
+    result.sort(key=lambda item: item[1])
     print('='*79)
     print('{:=>79s}'.format(' frequency results for %d files'%( len(paths) )))
     for x,count in result:

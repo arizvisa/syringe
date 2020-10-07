@@ -218,7 +218,7 @@ if __name__ == '__main__':
     six.print_("module.exports['Name'] = {:s};".format(result[latest]['Name']), file=args.outfile)
 
     for version, structs in sorted(result.items(), key=operator.itemgetter(0)):
-        six.print_("module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.iteritems()))), file=args.outfile)
+        six.print_("module.exports['{:s}'] = {{ {:s} }};".format(version, ', '.join(("{:s}: {:s}".format(k, v) for k, v in structs.items()))), file=args.outfile)
 
     six.print_("module.exports[null] = module.exports['{:s}'];".format(latest), file=args.outfile)
     sys.exit(0)

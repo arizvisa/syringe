@@ -521,7 +521,7 @@ if __name__ == '__main__':
         data = command(Args.address)
 
     if Args.dump:
-        res = sorted(self.items(), key=operator.itemgetter(1)) if Args.dump >= 2 else sorted([(key, value) for key, value in self.iteritems() if key in undefined], key=operator.itemgetter(1))
+        res = sorted(self.items(), key=operator.itemgetter(1)) if Args.dump >= 2 else sorted([(key, value) for key, value in self.items() if key in undefined], key=operator.itemgetter(1))
         if res:
             for index, (key, value) in enumerate(res):
                 print("[{:d}] {:s} {!s}".format(1 + index, key, '<undefined>' if value is None else "{:#x}".format(value)))
