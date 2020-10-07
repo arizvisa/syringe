@@ -109,9 +109,11 @@ class FAT(AllocationTable):
 
     # Walk the linked-list of fat sectors
     def chain(self, index):
-        yield index
         while self[index].int() <= MAXREGSECT.type:
-            index = self[index].int()
+            yield index
+            index += 1
+
+        if self[index].o['ENDOFCHAIN']:
             yield index
         return
 
@@ -173,6 +175,9 @@ class MINIFAT(AllocationTable):
         while self[index].int() <= MAXREGSECT.type:
             yield index
             index += 1
+
+        if self[index].o['ENDOFCHAIN']:
+            yield index
         return
 
 ### Header types
@@ -278,19 +283,14 @@ class DirectoryEntry(pstruct.type):
 
         # If the entry is a root type, then the data uses the fat and represents the mini-sector data.
         if self['Type']['Root']:
-            fat = F.Fat()
-            iterable = fat.chain(self['sectLocation'].int())
             minisector = dyn.block(self._uMiniSectorSize, __name__='MiniSector')
             datatype = dyn.blockarray(minisector, self['qwSize'].int())
-            return F.chain(iterable).cast(datatype)
+            return F.Stream(self['sectLocation'].int()).cast(datatype)
 
-        # Determine whether the data is stored in the minifat or the regular fat
-        fat = F.MiniFat() if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Fat()
-        fData = F.MiniData if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Data
-
-        # Now we can look up our sectors in the fat
-        iterable = fat.chain(self['sectLocation'].int())
-        data = fData(iterable, type=DirectoryEntryData)
+        # Determine whether the data is stored in the minifat or the regular fat, and
+        # then use it to fetch the data using the correct reference.
+        fstream = F.MiniStream if self['qwSize'].int() < F['MiniFat']['ulMiniSectorCutoff'].int() else F.Stream
+        data = fstream(self['sectLocation'].int())
 
         # Crop the block if specified, or use the regular one if not
         res = data.cast(DirectoryEntryData, length=self['qwSize'].int()) if clamp else data
@@ -427,55 +427,29 @@ class File(pstruct.type):
         return [fat[index] for index in fat.chain(start)]
 
     def chain(self, iterable):
-        '''Return the stream for each sector index specified in iterable.'''
+        '''Return a stream for each sector index in iterable.'''
         res = self.new(ptype.container, value=[])
         [res.append(item) for item in map(self['Data'].__getitem__, iterable)]
         return res
 
     def minichain(self, iterable):
-        '''Return the ministream for each minisector index specified in iterable.'''
+        '''Return a ministream for each minisector index in iterable.'''
         mf = self.MiniFat()
         res = self.new(ptype.container, value=[])
-        for sptr in map(mf.__getitem__, iterable):
-            [res.append(item) for item in sptr.d.l]
+        [res.append(item.d.l) for item in map(mf.__getitem__, iterable)]
         return res
 
-    def Data(self, iterable, type=None):
-        '''Return the sectors for each index in iterable as a block.'''
-        # If an integer was specified, then just return the sector by index
-        if isinstance(iterable, six.integer_types):
-            return self['Data'][iterable]
+    def Stream(self, sector):
+        '''Return the stream starting at a specified sector in the fat.'''
+        fat = self.Fat()
+        iterable = fat.chain(sector)
+        return self.chain(iterable)
 
-        # Now grab the container, and then cast it to a block
-        res = self.chain(iterable)
-        return res.cast(ptype.block, length=res.size()) if type is None else res.cast(type, blocksize=lambda cb=res.size(): cb)
-
-    def __MiniData__(self):
-        '''Return the mini-sector table.'''
-        # First grab the directory
-        D = self.Directory()
-
-        # Find the first Root entry
-        R = D.RootEntry()
-        if R is None:
-            cls = self.__class__
-            raise ValueError("{:s}: Unable to locate a directory entry of type Root(5).".format('.'.join((cls.__module__, cls.__name__))))
-
-        # Now we can return the whole table
-        return R.Data()
-
-    def MiniData(self, iterable, type=None):
-        '''Return the minisectors for each index in iterable as a block.'''
-        data = self.__MiniData__()
-
-        # If an integer was specified, then just return the minisector by index
-        if isinstance(iterable, six.integer_types):
-            return data[iterable]
-
-        # Now make a container and then cast it to a block
-        res = self.new(ptype.container, value=[])
-        [res.append(item) for item in map(data.__getitem__, iterable)]
-        return res.cast(ptype.block, length=res.size()) if type is None else res.cast(type, blocksize=lambda cb=res.size(): cb)
+    def MiniStream(self, sector):
+        '''Return the ministream starting at a specified minisector in the minifat.'''
+        minifat = self.MiniFat()
+        iterable = minifat.chain(sector)
+        return self.minichain(iterable)
 
 ### Specific stream types
 class Stream(ptype.definition): cache = {}
