@@ -13,5 +13,6 @@ if __name__ == '__main__':
     source = ptypes.prov.file(path, mode='r')
     z = office.storage.File(source=source)
     z = z.l
-    directory = z.getDirectory()
-    print(repr(directory))
+    D = z.Directory()
+    df, f, mf = z.DiFat(), z.Fat(), z.MiniFat()
+    print(repr(D))
