@@ -1143,10 +1143,15 @@ try:
             return self._view.eval(string)
 
     Log.info("{:s} : Successfully loaded the `Binja` provider.".format(__name__))
+
+    frame = sys._getframe()
+    while frame.f_back:
+        frame = frame.f_back
     try:
-        if _: DEFAULT.append(Binja(sys.modules['__main__'].bv))
+        if _: DEFAULT.append(lambda bv=frame.f_globals['bv']: Binja(bv))
     except (AttributeError, KeyError):
         raise ImportError
+    del(frame)
 
 except ImportError:
     Log.info("{:s} : Unable to import the 'binaryninja' module (not running Binja?). Failed to define the `Binja` provider.".format(__name__))
