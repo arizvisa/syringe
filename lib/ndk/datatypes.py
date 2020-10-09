@@ -531,7 +531,10 @@ class FILETIME(pstruct.type):
         ts_s, ts_hns = ts // 1e7, ts % 1e7
         ts_ns = ts_hns * 1e-7
 
-        res = epoch + datetime.timedelta(seconds=ts_s)
+        try:
+            res = epoch + datetime.timedelta(seconds=ts_s)
+        except OverflowError:
+            return super(FILETIME, self).summary()
         return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.9f}".format(res.second + ts_ns).zfill(12), ts)
 
 class EVENT_DESCRIPTOR(pstruct.type):
