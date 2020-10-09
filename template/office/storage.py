@@ -16,25 +16,8 @@ class QWORD(pint.uint64_t): pass
 
 class CLSID(ndk.rfc4122): pass
 
-class FILETIME(pstruct.type):
-    _fields_ = [
-        (DWORD, 'dwLowDateTime'),
-        (DWORD, 'dwHighDateTime')
-    ]
-    def timestamp(self):
-        low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
-        return high * 0x100000000 | + low
-    def datetime(self):
-        epoch = datetime.datetime(1601, 1, 1)
-        return epoch + datetime.timedelta(microseconds=self.timestamp() / 10.0)
-    def summary(self):
-        epoch, ts = datetime.datetime(1601, 1, 1), self.timestamp()
-        ts_s, ts_hns = ts // 1e7, ts % 1e7
-        ts_ns = ts_hns * 1e-7
-
-        res = epoch + datetime.timedelta(seconds=ts_s)
-        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.9f}".format(res.second + ts_ns).zfill(12), ts)
-TIME_T = FILETIME
+class FILETIME(ndk.FILETIME): pass
+class TIME_T(ndk.FILETIME): pass
 
 class LengthPrefixedAnsiString(pstruct.type):
     _fields_ = [
@@ -516,9 +499,9 @@ class OLEStream(pstruct.type):
         (CLSID, 'Clsid'),
         (LengthPrefixedUnicodeString, 'ReservedDisplayName'),
         (DWORD, 'Reserved2'),
-        (FILETIME, 'LocalUpdateTime'),
-        (FILETIME, 'LocalCheckUpdateTime'),
-        (FILETIME, 'RemoteUpdateTime'),
+        (TIME_T, 'LocalUpdateTime'),
+        (TIME_T, 'LocalCheckUpdateTime'),
+        (TIME_T, 'RemoteUpdateTime'),
     ]
 
 if False:
