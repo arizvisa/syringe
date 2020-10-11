@@ -3,6 +3,7 @@ from ptypes import *
 from . import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 
 recordType = [
     ('FT_OfficeArtClientAnchorChart', 0xf010),

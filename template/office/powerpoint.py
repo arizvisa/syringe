@@ -5,6 +5,7 @@ from . import art,graph
 from array import array
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ## Ripped from PowerPoint97-2007BinaryFileFormat(ppt)Specification.pdf
 recordType = [

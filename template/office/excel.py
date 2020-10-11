@@ -6,6 +6,7 @@ import operator,functools,itertools
 import logging
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 
 @Record.define
 class RT_Excel(ptype.definition):

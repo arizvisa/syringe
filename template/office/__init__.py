@@ -67,6 +67,8 @@ class RecordGeneral(pstruct.type):
 
     class Header(pstruct.type):
         RecordType = RecordType
+
+        @pbinary.littleendian
         class VersionInstance(pbinary.struct):
             _fields_ = R([(4,'version'), (12,'instance')])
             def summary(self):
