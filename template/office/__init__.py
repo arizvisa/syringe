@@ -168,95 +168,120 @@ class RecordGeneral(pstruct.type):
 class RecordContainer(parray.block):
     _object_ = RecordGeneral
 
-    def repr(self): return self.details() + '\n'
+    def repr(self):
+        return self.details() + '\n'
+
     def details(self):
-        def emit(data):
-            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
-        def key(object):
+        def Fkey(object):
             '''lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
             index, item = object
-            f = lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType)
-            return f(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=[item[1] for item in records]).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), key))
-        return '\n'.join(res)
+            record, Fclassname = item.getparent(RecordGeneral), functools.partial('{:s}[{:04x}]'.format, item.classname())
+            return Fclassname(record['header']['type'].int())
+        def emit_prefix(_, records):
+            index, record = records[0]
+            return "[{:x}] {:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), self.classname(), index)
+        def emit_classname(classname, records):
+            if len(records) > 1:
+                return "{length:d} * {:s}".format(classname, length=len(records))
+            return classname
+        def emit_hexdump(_, records):
+            value = [item[1] for item in records]
+            data = ptype.container(value=value).serialize()
+            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
+
+        groups = [(typename, list(items)) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
+        iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
+        return '\n'.join(map(' : '.join, iterable))
 
     def search(self, type, recurse=False):
         '''Search through a list of records for a particular type'''
         if not recurse:
-            for n in self.filter(type):
-                yield n
+            for item in self.filter(type):
+                yield item
             return
 
         # ourselves first
         for d in self.search(type, False):
             yield d
 
-        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
+        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
 
         # now our chidren
-        for n in self:
-            if not hasattr(flazy(n), 'search'):
+        for item in self:
+            if not hasattr(flazy(item), 'search'):
                 continue
-            for d in flazy(n).search(type, True):
+            for d in flazy(item).search(type, True):
                 yield d
             continue
         return
 
     def lookup(self, type):
         '''Return the first instance of specified record type'''
-        res = [x for x in self if x['header']['recType'].int() == type]
-        if not res:
+        items = [item for item in self if item['header']['recType'].int() == type]
+        if not items:
             raise KeyError(type)
-        assert len(res) == 1, repr(res)
-        return res[0]
+        if len(items) != 1:
+            raise AssertionError("Unexpected number of items ({:d}) of the specified type ({:#x}) was returned".format(len(items), type))
+        return items[0]
 
     def walk(self):
-        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
-        for n in self:
-            yield flazy(n)
+        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
+        for item in self:
+            yield flazy(item)
         return
 
     def errors(self):
-        for n in self:
-            if n.initializedQ() and n.size() == n.blocksize():
+        for item in self:
+            if item.initializedQ() and item.size() == item.blocksize():
                 continue
-            yield n
+            yield item
         return
 
     def filter(self, type):
         if isinstance(type, six.integer_types):
-            for n in self:
-                if n['header']['recType'].int() == type:
-                    yield n
+            for item in self:
+                if item['header']['recType'].int() == type:
+                    yield item
                 continue
             return
-        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
-        for n in self:
-            if isinstance(flazy(n), type):
-                yield n
+        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
+        for item in self:
+            if isinstance(flazy(item), type):
+                yield item
             continue
         return
 
     def __getitem__(self, index):
-        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
+        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
         if hasattr(self, '_values_') and isinstance(index, six.string_types):
             lookup = dict(self._values_)
             t = lookup[index]
-            res = (i for i,n in enumerate(self) if isinstance(flazy(n), t))
-            index = next(res)
+            iterable = (i for i, item in enumerate(self) if isinstance(flazy(item), t))
+            index = next(iterable)
         return super(RecordContainer, self).__getitem__(index)
 
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
-    def repr(self): return self.details() + '\n'
+    def repr(self):
+        return self.details() + '\n'
+
     def details(self):
         emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
-        def key(index, item):
+        def Fkey(object):
             '''lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
-            f = lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType)
-            return f(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), key))
-        return '\n'.join(res)
+            index, item = object
+            record, Fclassname = item.getparent(RecordGeneral), functools.partial('{:s}[{:x}]'.format, item.classname())
+            return Fclassname(record['header']['type'].int())
+        def emit_prefix(_, records):
+            index, record = records[0]
+            return "[{:x}] {:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), self.classname(), index)
+        def emit_classname(classname, records):
+            if len(records) > 1:
+                return "{length:d} * {:s}".format(classname, length=len(records))
+            return classname
+        groups = [(typename, list(items)) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
+        iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
+        return '\n'.join(map(' : '.join, iterable))
 
     def blocksize(self):
         return self.source.size() if hasattr(self.source, 'size') else super(File, self).blocksize()
