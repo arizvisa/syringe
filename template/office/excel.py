@@ -21,11 +21,11 @@ class RT_Excel(ptype.definition):
     default = unknown
 
     @classmethod
-    def __get__(cls, type, default):
-        type, none = type
+    def __get__(cls, key, default, **kwargs):
+        type, none = key if isinstance(key, (tuple, list)) else (key, None)
         if none is not None:
             return default
-        return super(RT_Excel, cls).__get__(type, default)
+        return super(RT_Excel, cls).__get__(type, default, **kwargs)
 
 class RecordGeneral(RecordGeneral):
     class Header(pstruct.type):

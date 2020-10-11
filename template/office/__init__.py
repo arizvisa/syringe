@@ -29,9 +29,9 @@ class RecordUnknown(ptype.block):
         if self.type is None:
             res = '?'
         elif isinstance(self.type, six.integer_types):
-            res = hex(self.type)
+            res = "{:#x}".format(self.type)
         elif hasattr(self.type, '__iter__'):
-            res = '({:s})'.format(','.join('{:#x}'.format(item) if isinstance(item, six.integer_types) else '{!r}'.format(x) for item in self.type))
+            res = '({:s})'.format(','.join('{:#x}'.format(item) if isinstance(item, six.integer_types) else '{!r}'.format(item) for item in self.type))
         else:
             res = repr(self.type)
         names[-1] = '{:s}<{:s}>[size:{:#x}]'.format(names[-1], res, self.blocksize())
@@ -79,7 +79,7 @@ class RecordGeneral(pstruct.type):
                 return super(RecordGeneral.Header.VersionInstance, self).set(iterable, **fields)
         _fields_ = [
             (VersionInstance, 'Version/Instance'),
-            (lambda s: s.RecordType, 'Type'),
+            (lambda self: self.RecordType, 'Type'),
             (pint.uint32_t, 'Length')
         ]
 
@@ -94,7 +94,7 @@ class RecordGeneral(pstruct.type):
         def summary(self):
             v = self['Version/Instance'].int()
             t,l = self['Type'].int(),self['Length'].int()
-            return 'version={:d} instance={:#05x} type={:#06x} length={length:#x}({length:x})'.format(v & 0xf, (v&0xfff0) / 0x10, t, length=l)
+            return 'version={:d} instance={:#05x} type={:#06x} length={length:#x}({length:x})'.format(v & 0xf, (v&0xfff0) // 0x10, t, length=l)
 
     def __data(self):
         res = self['header'].li
@@ -123,26 +123,26 @@ class RecordGeneral(pstruct.type):
 
     def __extra(self):
         bs = self['header'].li.Length()
-        s = self['header'].size() + self['data'].li.size()
-        if bs > s:
-            return dyn.block(bs - s)
+        size = self['header'].size() + self['data'].li.size()
+        if bs > size:
+            return dyn.block(bs - size)
         return ptype.undefined
 
     _fields_ = [
-        (lambda s: s.Header, 'header'),
+        (lambda self: self.Header, 'header'),
         (__data, 'data'),
         (__extra, 'extra'),
     ]
 
-    h = property(fget=lambda s: s['header'])
+    h = property(fget=lambda self: self['header'])
 
     def Data(self):
         return self['data'].d if getattr(self, 'lazy', False) else self['data']
     d = property(fget=Data)
 
-    def blocksize(self):
-        res = self['header'].li
-        return res.size() + res.Length()
+    #def blocksize(self):
+    #    res = self['header'].li
+    #    return res.size() + res.Length()
 
     def previousRecord(self, type, **count):
         container = self.p
