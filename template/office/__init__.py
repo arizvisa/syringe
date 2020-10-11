@@ -67,8 +67,6 @@ class RecordGeneral(pstruct.type):
 
     class Header(pstruct.type):
         RecordType = RecordType
-
-        @pbinary.littleendian
         class VersionInstance(pbinary.struct):
             _fields_ = R([(4,'version'), (12,'instance')])
             def summary(self):
@@ -172,12 +170,14 @@ class RecordContainer(parray.block):
 
     def repr(self): return self.details() + '\n'
     def details(self):
-        emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
-        def key(index, item):
+        def emit(data):
+            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
+        def key(object):
             '''lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
+            index, item = object
             f = lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType)
             return f(item.getparent(RecordGeneral)['header']['type'].int())
-        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=map(operator.itemgetter(1), records)).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), key))
+        res = ((lambda records:'[{:x}] {:s}[{:d}] : {:s} : \'{:s}\''.format(records[0][1].getparent(RecordGeneral).getoffset(), self.classname(), records[0][0], ('{:s} * {length:d}' if len(records) > 1 else '{:s}').format(ty, length=len(records)), emit(ptype.container(value=[item[1] for item in records]).serialize())))(list(records)) for ty, records in itertools.groupby(enumerate(self.walk()), key))
         return '\n'.join(res)
 
     def search(self, type, recurse=False):
