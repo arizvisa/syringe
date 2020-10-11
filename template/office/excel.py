@@ -3519,61 +3519,8 @@ class FtReserved(ptype.undefined):
     featureType = 0x0000
 
 @Ft.define
-class FtCmo(pstruct.type):
-    featureType = 0x0015
-    class _ot(pint.enum, uint2):
-        _values_ = [
-            ('Group', 0x0000),
-            ('Line', 0x0001),
-            ('Rectangle', 0x0002),
-            ('Oval', 0x0003),
-            ('Arc', 0x0004),
-            ('Chart', 0x0005),
-            ('Text', 0x0006),
-            ('Button', 0x0007),
-            ('Picture', 0x0008),
-            ('Polygon', 0x0009),
-            ('Checkbox', 0x000B),
-            ('Radio button', 0x000C),
-            ('Edit box', 0x000D),
-            ('Label', 0x000E),
-            ('Dialog box', 0x000F),
-            ('Spin control', 0x0010),
-            ('Scrollbar', 0x0011),
-            ('List', 0x0012),
-            ('Group box', 0x0013),
-            ('Dropdown list', 0x0014),
-            ('Note', 0x0019),
-            ('OfficeArt object', 0x001E),
-        ]
-    class _flags(pbinary.flags):
-        _fields_ = R([
-            (1, 'fLocked'),
-            (1, 'reserved'),
-            (1, 'fDefaultSize'),
-            (1, 'fPublished'),
-            (1, 'fPrint'),
-            (1, 'unused1'),
-            (1, 'unused2'),
-            (1, 'fDisabled'),
-            (1, 'fUIObj'),
-            (1, 'fRecalcObj'),
-            (1, 'unused3'),
-            (1, 'unused4'),
-            (1, 'fRecalcObjAlways'),
-            (1, 'unused5'),
-            (1, 'unused6'),
-            (1, 'unused7'),
-        ])
-
-    _fields_ = [
-        (_ot, 'ot'),
-        (uint2, 'id'),
-        (_flags, 'flags'),
-        (uint4, 'unused8'),
-        (uint4, 'unused9'),
-        (uint4, 'unused10'),
-    ]
+class FtMacro(ObjFmlaNoSize):
+    featureType = 0x0004
 
 @Ft.define
 class FtGmo(pstruct.type):
@@ -3607,10 +3554,6 @@ class FtPioGrbit(pbinary.flags):
         (1, 'fAutoload'),
         (6, 'unused1'),
     ])
-
-@Ft.define
-class FtMacro(ObjFmlaNoSize):
-    featureType = 0x0004
 
 class PictFmlaKey(pstruct.type):
     _fields_ = [
@@ -3682,27 +3625,22 @@ class FtNts(pstruct.type):
         (uint4, 'unused'),
     ]
 
-@Ft.define(featureType=0x0014)
-@Ft.define(featureType=0x000e)
 class ObjLinkFmla(ObjFmlaNoSize):
-    featureType = 0x0014
+    pass
 
 @Ft.define
-class FtCblsData(pstruct.type):
-    featureType = 0x0012
-    class _fChecked(pint.enum, uint2):
-        _values_ = [
-            ('unchecked', 0),
-            ('checked', 1),
-            ('mixed', 2),
-        ]
+class ObjLinkFmla_000e(ObjLinkFmla):
+    featureType = 0x000e
+
+@Ft.define
+class FtGboData(pstruct.type):
+    featureType = 0x000f
     class _flags(pbinary.flags):
         _fields_ = R([
             (1, 'fNo3d'),
-            (15, 'unused'),
+            (15, 'unused2'),
         ])
     _fields_ = [
-        (uint2, 'fChecked'),
         (uint2, 'accel'),
         (uint2, 'reserved'),
         (_flags, 'flags'),
@@ -3744,6 +3682,27 @@ class FtRboData(pstruct.type):
     _fields_ = [
         (ObjId, 'idRadNext'),
         (_fFirstBtn, 'fFirstBtn'),
+    ]
+
+@Ft.define
+class FtCblsData(pstruct.type):
+    featureType = 0x0012
+    class _fChecked(pint.enum, uint2):
+        _values_ = [
+            ('unchecked', 0),
+            ('checked', 1),
+            ('mixed', 2),
+        ]
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fNo3d'),
+            (15, 'unused'),
+        ])
+    _fields_ = [
+        (uint2, 'fChecked'),
+        (uint2, 'accel'),
+        (uint2, 'reserved'),
+        (_flags, 'flags'),
     ]
 
 class LbsDropData(pstruct.type):
@@ -3810,17 +3769,64 @@ class FtLbsData(pstruct.type):
     ]
 
 @Ft.define
-class FtGboData(pstruct.type):
-    featureType = 0x000f
+class ObjLinkFmla_0014(ObjLinkFmla):
+    featureType = 0x0014
+
+@Ft.define
+class FtCmo(pstruct.type):
+    featureType = 0x0015
+    class _ot(pint.enum, uint2):
+        _values_ = [
+            ('Group', 0x0000),
+            ('Line', 0x0001),
+            ('Rectangle', 0x0002),
+            ('Oval', 0x0003),
+            ('Arc', 0x0004),
+            ('Chart', 0x0005),
+            ('Text', 0x0006),
+            ('Button', 0x0007),
+            ('Picture', 0x0008),
+            ('Polygon', 0x0009),
+            ('Checkbox', 0x000B),
+            ('Radio button', 0x000C),
+            ('Edit box', 0x000D),
+            ('Label', 0x000E),
+            ('Dialog box', 0x000F),
+            ('Spin control', 0x0010),
+            ('Scrollbar', 0x0011),
+            ('List', 0x0012),
+            ('Group box', 0x0013),
+            ('Dropdown list', 0x0014),
+            ('Note', 0x0019),
+            ('OfficeArt object', 0x001E),
+        ]
     class _flags(pbinary.flags):
         _fields_ = R([
-            (1, 'fNo3d'),
-            (15, 'unused2'),
+            (1, 'fLocked'),
+            (1, 'reserved'),
+            (1, 'fDefaultSize'),
+            (1, 'fPublished'),
+            (1, 'fPrint'),
+            (1, 'unused1'),
+            (1, 'unused2'),
+            (1, 'fDisabled'),
+            (1, 'fUIObj'),
+            (1, 'fRecalcObj'),
+            (1, 'unused3'),
+            (1, 'unused4'),
+            (1, 'fRecalcObjAlways'),
+            (1, 'unused5'),
+            (1, 'unused6'),
+            (1, 'unused7'),
         ])
+
     _fields_ = [
-        (uint2, 'accel'),
-        (uint2, 'reserved'),
+        (_ot, 'ot'),
+        (uint2, 'id'),
         (_flags, 'flags'),
+        (uint4, 'unused8'),
+        (uint4, 'unused9'),
+        (uint4, 'unused10'),
     ]
 
 @RT_Excel.define
