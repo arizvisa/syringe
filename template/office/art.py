@@ -31,7 +31,7 @@ recordType = [
     ('FT_OfficeArtBlipDIB', 0xf01f),
     ('FT_OfficeArtBlipTIFF', 0xf020),
     ('FT_OfficeArtBlipTIFF2', 0xf029),
-    ('FT_OfficeArtBlipJPEG', 0xf02a),
+    ('FT_OfficeArtBlipJPEG2', 0xf02a),
     ('FT_OfficeArtFRIT', 0xf118),
     ('FT_OfficeArtFDGSL', 0xf119),
     ('FT_OfficeArtColorMRU', 0xf11a),
@@ -44,10 +44,10 @@ recordType = [
 ## Missing ripped from OfficeDrawing97-2007BinaryFormatSpecification.pdf
 recordType.extend([
     ('FT_msofbtTextBox', 0xf00c),
-    ('FT_msofbtClientTextBox', 0xf00d),
+    #('FT_msofbtClientTextBox', 0xf00d),    # office.graph.FT_OfficeArtClientTextBox
     ('FT_msofbtAnchor', 0xf00e),
-    ('FT_msofbtChildAnchor', 0xf010),
-    ('FT_msofbtClientData', 0xf011),
+    #('FT_msofbtChildAnchor', 0xf010),      # office.graph.FT_OfficeArtClientAnchorChart
+    #('FT_msofbtClientData', 0xf011),       # office.graph.FT_OfficeArtClientData
     ('FT_msofbtAlignRule', 0xf013),
     ('FT_msofbtClientRule', 0xf015),
     ('FT_msofbtCLSID', 0xf016), # clipboard data
@@ -61,37 +61,68 @@ recordType.extend([
     ('FT_msofbtTimeConditionList', 0xf124),
     ('FT_msofbtTimeConditionContainer', 0xf125),
     ('FT_msofbtTimeModifierList', 0xf126),
-    ('FT_msofbtTimeNode', 0xf127),
-    ('FT_msofbtTimeCondition', 0xf128),
-    ('FT_msofbtTimeModifier', 0xf129),
-    ('FT_msofbtTimeBehaviorContainer', 0xf12a),
-    ('FT_msofbtTimeAnimateBehaviorContainer', 0xf12b),
-    ('FT_msofbtTimeColorBehaviorContainer', 0xf12c),
-    ('FT_msofbtTimeEffectBehaviorContainer', 0xf12d),
-    ('FT_msofbtTimeMotionBehaviorContainer', 0xf12e),
-    ('FT_msofbtTimeRotationBehaviorContainer', 0xf12f),
-    ('FT_msofbtTimeScaleBehaviorContainer', 0xf130),
-    ('FT_msofbtTimeSetBehaviorContainer', 0xf131),
-    ('FT_msofbtTimeCommandBehaviorContainer', 0xf132),
-    ('FT_msofbtTimeBehavior', 0xf133),
-    ('FT_msofbtTimeAnimateBehavior', 0xf134),
-    ('FT_msofbtTimeColorBehavior', 0xf135),
-    ('FT_msofbtTimeEffectBehavior', 0xf136),
-    ('FT_msofbtTimeMotionBehavior', 0xf137),
-    ('FT_msofbtTimeRotationBehavior', 0xf138),
-    ('FT_msofbtTimeScaleBehavior', 0xf139),
-    ('FT_msofbtTimeSetBehavior', 0xf13a),
-    ('FT_msofbtTimeCommandBehavior', 0xf13b),
-    ('FT_msofbtClientVisualElement', 0xf13c),
-    ('FT_msofbtTimePropertyList', 0xf13d),
-    ('FT_msofbtTimeVariantList', 0xf13e),
-    ('FT_msofbtTimeAnimationValueList', 0xf13f),
-    ('FT_msofbtTimeIterateData', 0xf140),
-    ('FT_msofbtTimeSequenceData', 0xf141),
-    ('FT_msofbtTimeVariant', 0xf142),
-    ('FT_msofbtTimeAnimationValue', 0xf143),
-    ('FT_msofbtExtTimeNodeContainer', 0xf144),
-    ('FT_msofbtSubNodeContainer', 0xf145),
+    #('FT_msofbtTimeNode', 0xf127),
+    #('FT_msofbtTimeCondition', 0xf128),
+    #('FT_msofbtTimeModifier', 0xf129),
+    #('FT_msofbtTimeBehaviorContainer', 0xf12a),
+    #('FT_msofbtTimeAnimateBehaviorContainer', 0xf12b),
+    #('FT_msofbtTimeColorBehaviorContainer', 0xf12c),
+    #('FT_msofbtTimeEffectBehaviorContainer', 0xf12d),
+    #('FT_msofbtTimeMotionBehaviorContainer', 0xf12e),
+    #('FT_msofbtTimeRotationBehaviorContainer', 0xf12f),
+    #('FT_msofbtTimeScaleBehaviorContainer', 0xf130),
+    #('FT_msofbtTimeSetBehaviorContainer', 0xf131),
+    #('FT_msofbtTimeCommandBehaviorContainer', 0xf132),
+    #('FT_msofbtTimeBehavior', 0xf133),
+    #('FT_msofbtTimeAnimateBehavior', 0xf134),
+    #('FT_msofbtTimeColorBehavior', 0xf135),
+    #('FT_msofbtTimeEffectBehavior', 0xf136),
+    #('FT_msofbtTimeMotionBehavior', 0xf137),
+    #('FT_msofbtTimeRotationBehavior', 0xf138),
+    #('FT_msofbtTimeScaleBehavior', 0xf139),
+    #('FT_msofbtTimeSetBehavior', 0xf13a),
+    #('FT_msofbtTimeCommandBehavior', 0xf13b),
+    #('FT_msofbtClientVisualElement', 0xf13c),
+    #('FT_msofbtTimePropertyList', 0xf13d),
+    #('FT_msofbtTimeVariantList', 0xf13e),
+    #('FT_msofbtTimeAnimationValueList', 0xf13f),
+    #('FT_msofbtTimeIterateData', 0xf140),
+    #('FT_msofbtTimeSequenceData', 0xf141),
+    #('FT_msofbtTimeVariant', 0xf142),
+    #('FT_msofbtTimeAnimationValue', 0xf143),
+    #('FT_msofbtExtTimeNodeContainer', 0xf144),
+    #('FT_msofbtSubNodeContainer', 0xf145),
+    ('RT_TimeNode', 0xf127),
+    ('RT_TimeCondition', 0xf128),
+    ('RT_TimeModifier', 0xf129),
+    ('RT_TimeBehaviorContainer', 0xf12a),
+    ('RT_TimeAnimateBehaviorContainer', 0xf12b),
+    ('RT_TimeColorBehaviorContainer', 0xf12c),
+    ('RT_TimeEffectBehaviorContainer', 0xf12d),
+    ('RT_TimeMotionBehaviorContainer', 0xf12e),
+    ('RT_TimeRotationBehaviorContainer', 0xf12f),
+    ('RT_TimeScaleBehaviorContainer', 0xf130),
+    ('RT_TimeSetBehaviorContainer', 0xf131),
+    ('RT_TimeCommandBehaviorContainer', 0xf132),
+    ('RT_TimeBehavior', 0xf133),
+    ('RT_TimeAnimateBehavior', 0xf134),
+    ('RT_TimeColorBehavior', 0xf135),
+    ('RT_TimeEffectBehavior', 0xf136),
+    ('RT_TimeMotionBehavior', 0xf137),
+    ('RT_TimeRotationBehavior', 0xf138),
+    ('RT_TimeScaleBehavior', 0xf139),
+    ('RT_TimeSetBehavior', 0xf13a),
+    ('RT_TimeCommandBehavior', 0xf13b),
+    ('RT_TimeClientVisualElement', 0xf13c),
+    ('RT_TimePropertyList', 0xf13d),
+    ('RT_TimeVariantList', 0xf13e),
+    ('RT_TimeAnimationValueList', 0xf13f),
+    ('RT_TimeIterateData', 0xf140),
+    ('RT_TimeSequenceData', 0xf141),
+    ('RT_TimeVariant', 0xf142),
+    ('RT_TimeAnimationValue', 0xf143),
+    ('RT_TimeExtTimeNodeContainer', 0xf144),
+    ('RT_TimeSubEffectContainer', 0xf145),
 ])
 
 # create a ptype.definition for each record type
@@ -1358,14 +1389,14 @@ class OfficeArtSpContainer(RecordContainer):
     # PST_ShapeContainer
     type = 15,0x000
 
-@FT_msofbtChildAnchor.define
-class OfficeArtClientAnchor(RecordContainer):
-    type = 0,0x000
+#@FT_msofbtChildAnchor.define
+#class OfficeArtClientAnchorChart(RecordContainer):
+#    type = 0,0x000
 
-@FT_msofbtClientData.define
-class OfficeArtClientData(RecordContainer):
-    # PST_ShapeClientContainer
-    type = 15,0x000
+#@FT_msofbtClientData.define
+#class OfficeArtClientData(RecordContainer):
+#    # PST_ShapeClientContainer
+#    type = 15,0x000
 
 @FT_OfficeArtSolver.define
 class OfficeArtSolverContainer(RecordContainer):
@@ -1445,7 +1476,7 @@ class OfficeArtFSPGR(pstruct.type):
     ]
 
 ## ripped from OfficeDrawing97-2007BinaryFormatSpecification.pdf
-@FT_msofbtExtTimeNodeContainer.define  # FIXME
+@RT_TimeExtTimeNodeContainer.define  # FIXME
 class msofbtExtTimeNodeContainer(RecordContainer):
     type = 15,None
 
@@ -1453,11 +1484,11 @@ class msofbtExtTimeNodeContainer(RecordContainer):
 class msofbtTimeConditionContainer(RecordContainer):
     type = 15,None
 
-@FT_msofbtTimeAnimateBehaviorContainer.define  # FIXME
+@RT_TimeAnimateBehaviorContainer.define     # FIXME
 class msofbtTimeAnimateBehaviorContainer(RecordContainer):
     type = 15,None
 
-@FT_msofbtTimeColorBehaviorContainer.define  # FIXME
+@RT_TimeColorBehaviorContainer.define   # FIXME
 class msofbtTimeColorBehaviorContainer(RecordContainer):
     type = 15,None
 
@@ -1489,12 +1520,12 @@ class msofbtTimeAnimationValue(pstruct.type):
         (pstr.szwstring, 'Formula'),
     ]
 
-@FT_msofbtTimeVariantList.define  # FIXME
+@RT_TimeVariantList.define  # FIXME
 class msofbtTimeVariantList(parray.block):
     type = 0,None
     _object_ = msofbtTimeAnimationValue
 
-@FT_msofbtTimeCondition.define  # FIXME
+@RT_TimeCondition.define    # FIXME
 class msofbtTimeCondition(pstruct.type):
     type = 0,None   # ConditionType
 
@@ -1531,31 +1562,31 @@ class msofbtTimeCondition(pstruct.type):
         (pint.int32_t, 'delay'),
     ]
 
-@FT_msofbtTimeSetBehaviorContainer.define  # FIXME
+@RT_TimeSetBehaviorContainer.define     # FIXME
 class msofbtTimeSetBehaviorContainer(RecordContainer):
     type = 15,None
 
-@FT_msofbtTimePropertyList.define  # FIXME
+@RT_TimePropertyList.define # FIXME
 class msofbtTimePropertyList(RecordContainer):
     type = 15,None
 
-@FT_msofbtTimeSetBehaviorContainer.define  # FIXME
-class msofbtTimeSetBehaviorContainer(RecordContainer):
-    type = 15,None
+#@FT_msofbtTimeSetBehaviorContainer.define  # FIXME
+#class msofbtTimeSetBehaviorContainer(RecordContainer):
+#    type = 15,None
 
-@FT_msofbtTimeEffectBehaviorContainer.define  # FIXME
+@RT_TimeEffectBehaviorContainer.define  # FIXME
 class msofbtTimeEffectBehaviorContainer(RecordContainer):
     type = 15,None
 
-@FT_msofbtTimeBehaviorContainer.define  # FIXME
+@RT_TimeBehaviorContainer.define    # FIXME
 class msofbtTimeBehaviorContainer(RecordContainer):
     type = 15,None
 
-@FT_msofbtClientVisualElement.define  # FIXME
+@RT_TimeClientVisualElement.define  # FIXME
 class msofbtClientVisualElement(RecordContainer):
     type = 15,None   # list of msofbtTimeVariantRecords
 
-@FT_msofbtTimeEffectBehavior.define  # FIXME
+@RT_TimeEffectBehavior.define   # FIXME
 class msofbtTimeEffectBehavior(pstruct.type):
     type = 0,None
     _fields_ = [
@@ -1563,7 +1594,7 @@ class msofbtTimeEffectBehavior(pstruct.type):
         (pint.uint32_t, 'taetTransition'),
     ]
 
-@FT_msofbtTimeVariant.define  # FIXME
+@RT_TimeVariant.define  # FIXME
 class msofbtTimeVariant(pstruct.type):
     type = 0,None
 
@@ -1589,7 +1620,7 @@ class msofbtTimeVariant(pstruct.type):
         (__Value, 'Value'),
     ]
 
-@FT_msofbtTimeBehavior.define  # FIXME
+@RT_TimeBehavior.define # FIXME
 class msofbtTimeBehavior(pstruct.type):
     type = 0,None
 
@@ -3182,7 +3213,7 @@ class lineBottomFillWidth(sint4):
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillHeight(sint4):
-    type = 0x0608
+    type = 0x0609
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillDztype(MSODZTYPE):
@@ -3445,7 +3476,7 @@ class perspectivePerspectiveX(FixedPoint):
 
 @OfficeArtFOPTEOP.define
 class perspectivePerspectiveY(FixedPoint):
-    type = 0x0247
+    type = 0x0248
 
 @OfficeArtFOPTEOP.define
 class perspectiveWeight(uint4):
@@ -3843,7 +3874,7 @@ class reserved284(uint4):
 
 @OfficeArtFOPTEOP.define
 class pictureRecolorExtModl(MSOTINTSHADE):
-    type = 0x011b
+    type = 0x011d
 
 @OfficeArtFOPTEOP.define
 class reserved286(uint4):
@@ -4059,6 +4090,19 @@ class SignatureLineBooleanProperties(pbinary.flags):
         (1, 'fUsefSigSetupShowSignDate'),
         (12, 'unused2'),
     ])
+
+@RT_TimeNode.define
+class TimeNodeAtom(pstruct.type):
+    type = 0,0x000
+    _fields_ = [
+        (pint.uint32_t, 'masterID'),    # FIXME: doesn't match up
+        (pint.uint32_t, 'restart'),
+        (pint.uint32_t, 'type'),
+        (pint.uint32_t, 'fill'),
+        (pint.uint32_t, 'syncBehavior'),
+        (pint.uint8_t, 'fSyncMaster'),
+        (pint.uint32_t, 'propertiesSet'),
+    ]
 
 if __name__ == '__main__':
     from ptypes import *

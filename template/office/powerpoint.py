@@ -246,38 +246,38 @@ recordType += [
     ('RT_SmartTagStore11Container', 0x36b3),
     ('RT_RoundTripSlideSyncInfo12', 0x3714),
     ('RT_RoundTripSlideSyncInfoAtom12', 0x3715),
-    ('RT_TimeConditionContainer', 0xf125),
-    ('RT_TimeNode', 0xf127),
-    ('RT_TimeCondition', 0xf128),
-    ('RT_TimeModifier', 0xf129),
-    ('RT_TimeBehaviorContainer', 0xf12a),
-    ('RT_TimeAnimateBehaviorContainer', 0xf12b),
-    ('RT_TimeColorBehaviorContainer', 0xf12c),
-    ('RT_TimeEffectBehaviorContainer', 0xf12d),
-    ('RT_TimeMotionBehaviorContainer', 0xf12e),
-    ('RT_TimeRotationBehaviorContainer', 0xf12f),
-    ('RT_TimeScaleBehaviorContainer', 0xf130),
-    ('RT_TimeSetBehaviorContainer', 0xf131),
-    ('RT_TimeCommandBehaviorContainer', 0xf132),
-    ('RT_TimeBehavior', 0xf133),
-    ('RT_TimeAnimateBehavior', 0xf134),
-    ('RT_TimeColorBehavior', 0xf135),
-    ('RT_TimeEffectBehavior', 0xf136),
-    ('RT_TimeMotionBehavior', 0xf137),
-    ('RT_TimeRotationBehavior', 0xf138),
-    ('RT_TimeScaleBehavior', 0xf139),
-    ('RT_TimeSetBehavior', 0xf13a),
-    ('RT_TimeCommandBehavior', 0xf13b),
-    ('RT_TimeClientVisualElement', 0xf13c),
-    ('RT_TimePropertyList', 0xf13d),
-    ('RT_TimeVariantList', 0xf13e),
-    ('RT_TimeAnimationValueList', 0xf13f),
-    ('RT_TimeIterateData', 0xf140),
-    ('RT_TimeSequenceData', 0xf141),
-    ('RT_TimeVariant', 0xf142),
-    ('RT_TimeAnimationValue', 0xf143),
-    ('RT_TimeExtTimeNodeContainer', 0xf144),
-    ('RT_TimeSubEffectContainer', 0xf145),
+    #('RT_TimeConditionContainer', 0xf125),         # office.art
+    #('RT_TimeNode', 0xf127),                       # office.art
+    #('RT_TimeCondition', 0xf128),                  # office.art
+    #('RT_TimeModifier', 0xf129),                   # office.art
+    #('RT_TimeBehaviorContainer', 0xf12a),          # office.art
+    #('RT_TimeAnimateBehaviorContainer', 0xf12b),   # office.art
+    #('RT_TimeColorBehaviorContainer', 0xf12c),     # office.art
+    #('RT_TimeEffectBehaviorContainer', 0xf12d),    # office.art
+    #('RT_TimeMotionBehaviorContainer', 0xf12e),    # office.art
+    #('RT_TimeRotationBehaviorContainer', 0xf12f),  # office.art
+    #('RT_TimeScaleBehaviorContainer', 0xf130),     # office.art
+    #('RT_TimeSetBehaviorContainer', 0xf131),       # office.art
+    #('RT_TimeCommandBehaviorContainer', 0xf132),   # office.art
+    #('RT_TimeBehavior', 0xf133),                   # office.art
+    #('RT_TimeAnimateBehavior', 0xf134),            # office.art
+    #('RT_TimeColorBehavior', 0xf135),              # office.art
+    #('RT_TimeEffectBehavior', 0xf136),             # office.art
+    #('RT_TimeMotionBehavior', 0xf137),             # office.art
+    #('RT_TimeRotationBehavior', 0xf138),           # office.art
+    #('RT_TimeScaleBehavior', 0xf139),              # office.art
+    #('RT_TimeSetBehavior', 0xf13a),                # office.art
+    #('RT_TimeCommandBehavior', 0xf13b),            # office.art
+    #('RT_TimeClientVisualElement', 0xf13c),        # office.art
+    #('RT_TimePropertyList', 0xf13d),               # office.art
+    #('RT_TimeVariantList', 0xf13e),                # office.art
+    #('RT_TimeAnimationValueList', 0xf13f),         # office.art
+    #('RT_TimeIterateData', 0xf140),                # office.art
+    #('RT_TimeSequenceData', 0xf141),               # office.art
+    #('RT_TimeVariant', 0xf142),                    # office.art
+    #('RT_TimeAnimationValue', 0xf143),             # office.art
+    #('RT_TimeExtTimeNodeContainer', 0xf144),       # office.art
+    #('RT_TimeSubEffectContainer', 0xf145),         # office.art
 ]
 
 # create a ptype.definition for each record type
@@ -476,19 +476,6 @@ class FILETIME(pstruct.type):
 @RT_SlideTime10Atom.define
 class SlideTime10Atom(FILETIME):
     type = 0,0x000
-
-@RT_TimeNode.define
-class TimeNodeAtom(pstruct.type):
-    type = 0,0x000
-    _fields_ = [
-        (pint.uint32_t, 'masterID'),    # FIXME: doesn't match up
-        (pint.uint32_t, 'restart'),
-        (pint.uint32_t, 'type'),
-        (pint.uint32_t, 'fill'),
-        (pint.uint32_t, 'syncBehavior'),
-        (pint.uint8_t, 'fSyncMaster'),
-        (pint.uint32_t, 'propertiesSet'),
-    ]
 
 @RT_ParaBuild.define
 class ParaBuildContainer(RecordContainer):
