@@ -1714,8 +1714,6 @@ class PtgDiv(ptype.undefined): parseType = 0x06, None
 @Ptg.define
 class PtgPower(ptype.undefined): parseType = 0x07, None
 @Ptg.define
-class PtgPower(ptype.undefined): parseType = 0x07, None
-@Ptg.define
 class PtgConcat(ptype.undefined): parseType = 0x08, None
 @Ptg.define
 class PtgLt(ptype.undefined): parseType = 0x09, None
@@ -3611,6 +3609,27 @@ class FtPioGrbit(pbinary.flags):
     ])
 
 @Ft.define
+class FtMacro(ObjFmlaNoSize):
+    featureType = 0x0004
+
+class PictFmlaKey(pstruct.type):
+    _fields_ = [
+        (uint4, 'cbKey'),
+        (lambda s: dyn.block(s['cbKey'].li.int()), 'keyBuf'),
+        (ObjFmla, 'fmlaLinkedCell'),    # FIXME
+        (ObjFmla, 'fmlaListFillRange'),
+    ]
+
+@Ft.define
+class FtPictFmla(pstruct.type):
+    featureType = 0x0009
+    _fields_ = [
+        (ObjFmlaNoSize, 'fmla'),
+        (uint4, 'IPosInCtlStm'),
+        (PictFmlaKey, 'key'),
+    ]
+
+@Ft.define
 class FtCbls(pstruct.type):
     featureType = 0x000a
     _fields_ = [
@@ -3663,27 +3682,6 @@ class FtNts(pstruct.type):
         (uint4, 'unused'),
     ]
 
-@Ft.define
-class FtMacro(ObjFmlaNoSize):
-    featureType = 0x0004
-
-class PictFmlaKey(pstruct.type):
-    _fields_ = [
-        (uint4, 'cbKey'),
-        (lambda s: dyn.block(s['cbKey'].li.int()), 'keyBuf'),
-        (ObjFmla, 'fmlaLinkedCell'),    # FIXME
-        (ObjFmla, 'fmlaListFillRange'),
-    ]
-
-@Ft.define
-class FtPictFmla(pstruct.type):
-    featureType = 0x0009
-    _fields_ = [
-        (ObjFmlaNoSize, 'fmla'),
-        (uint4, 'IPosInCtlStm'),
-        (PictFmlaKey, 'key'),
-    ]
-
 @Ft.define(featureType=0x0014)
 @Ft.define(featureType=0x000e)
 class ObjLinkFmla(ObjFmlaNoSize):
@@ -3708,16 +3706,6 @@ class FtCblsData(pstruct.type):
         (uint2, 'accel'),
         (uint2, 'reserved'),
         (_flags, 'flags'),
-    ]
-
-@Ft.define
-class FtRboData(pstruct.type):
-    featureType = 0x000b
-    class _fFirstBtn(pint.enum, uint2):
-        _values_ = [('first', 1),('other',0)]
-    _fields_ = [
-        (ObjId, 'idRadNext'),
-        (_fFirstBtn, 'fFirstBtn'),
     ]
 
 @Ft.define
@@ -3746,6 +3734,16 @@ class FtEdoData(pstruct.type):
         (_fMultiLine, 'fMultiLine'),
         (_fVScroll, 'fVScroll'),
         (ObjId, 'id'),
+    ]
+
+@Ft.define
+class FtRboData(pstruct.type):
+    featureType = 0x0011
+    class _fFirstBtn(pint.enum, uint2):
+        _values_ = [('first', 1),('other',0)]
+    _fields_ = [
+        (ObjId, 'idRadNext'),
+        (_fFirstBtn, 'fFirstBtn'),
     ]
 
 class LbsDropData(pstruct.type):
@@ -4321,5 +4319,5 @@ if __name__ == '__main__':
         print('z: found {:d} records'.format(reduce(lambda x,y:x+len(y),z,0)))
     else:
         print('unsuccessfully parsed {:d} biffsubstreams from {:s} ({:d} != {:d})'.format(len(z), filename, z.size(), z.source.size()))
-        print('z: found {:d} records'(reduce(lambda x,y:x+len(y),z,0)))
+        print('z: found {:d} records'.format(reduce(lambda x,y:x+len(y),z,0)))
 
