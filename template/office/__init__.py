@@ -137,6 +137,9 @@ class RecordGeneral(pstruct.type):
         return self['data'].d if getattr(self, 'lazy', False) else self['data']
     d = property(fget=Data)
 
+    def Extra(self):
+        return self['extra']
+
     def previousRecord(self, type, **count):
         container = self.p
         idx = container.value.index(self)
@@ -175,7 +178,8 @@ class RecordContainer(parray.block):
             return Fclassname(record['header']['type'].int())
         def emit_prefix(_, records):
             index, record = records[0]
-            return "[{:x}] {:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), self.classname(), index)
+            ok = not any(item.p.Extra().size() for _, item in records)
+            return "[{:x}] {:s}{:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), '' if ok else '*', self.classname(), index)
         def emit_classname(classname, records):
             if len(records) > 1:
                 return "{length:d} * {:s}".format(classname, length=len(records))
@@ -273,7 +277,8 @@ class File(RecordContainer):
             return Fclassname(record['header']['type'].int())
         def emit_prefix(_, records):
             index, record = records[0]
-            return "[{:x}] {:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), self.classname(), index)
+            ok = not any(item.p.Extra().size() for _, item in records)
+            return "[{:x}] {:s}{:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), '' if ok else '*', self.classname(), index)
         def emit_classname(classname, records):
             if len(records) > 1:
                 return "{length:d} * {:s}".format(classname, length=len(records))
