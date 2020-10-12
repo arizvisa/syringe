@@ -119,7 +119,7 @@ class RecordGeneral(pstruct.type):
             RecordData._value_ = dyn.block(length)
             RecordData._object_ = res
             return RecordData
-        return dyn.clone(res, blocksize=lambda _, bs=length: bs) if length == 0 else res
+        return dyn.clone(res, blocksize=lambda _, bs=length: bs) if length < res().a.size() else res
 
     def __extra(self):
         header, size = self['header'].li, self['data'].li.size()
