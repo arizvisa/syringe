@@ -122,8 +122,7 @@ class RecordGeneral(pstruct.type):
         return dyn.clone(res, blocksize=lambda _, bs=length: bs) if length == 0 else res
 
     def __extra(self):
-        header = self['header'].li
-        size = sum(self[item].li.size() for item in ['header', 'data'])
+        header, size = self['header'].li, self['data'].li.size()
         return dyn.block(max(0, header.Length() - size))
 
     _fields_ = [
