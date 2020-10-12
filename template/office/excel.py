@@ -352,10 +352,10 @@ class BiffSubStream(RecordContainer):
         return True if rec == EOF.type or value.getoffset() + value.size() >= self.parent.getoffset() + self.parent.blocksize() else False
 
     def properties(self):
-        flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
-        rec = flazy(self[0])
+        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
+        record = flazy(self[0])
 
-        dt, vers, year, build = map(rec.__getitem__, ('dt','vers','rupYear','rupBuild'))
+        dt, vers, year, build = (record[fld] for fld in ['dt', 'vers', 'rupYear', 'rupBuild'])
 
         res = super(BiffSubStream, self).properties()
         res['document-type'] = dt.summary()
@@ -381,6 +381,159 @@ class File(File):
         return '\n'.join(res) + '\n'
 
 ###
+@RT_Excel.define
+class CALCCOUNT(pstruct.type):
+    type = 0x000c
+    type = 12
+    _fields_ = [
+        (uint2, 'cIter'),
+    ]
+
+@RT_Excel.define
+class CALCMODE(pint.enum, uint2):
+    type = 0xd
+    type = 13
+    _values_ = [
+        ('Manual', 0),
+        ('Automatic', 1),
+        ('No Tables', 2),
+    ]
+
+@RT_Excel.define
+class REFMODE(pstruct.type):
+    type = 0x000f
+    type = 15
+    class _fRefA1(pint.enum, uint2):
+        _values_ = [
+            ('R1C1', 0),
+            ('A1', 1),
+        ]
+    _fields_ = [
+        (_fRefA1, 'fRefA1'),
+    ]
+
+@RT_Excel.define
+class DELTA(pstruct.type):
+    type = 0x0010
+    type = 16
+    _fields_ = [
+        (Xnum, 'numDelta'),
+    ]
+
+@RT_Excel.define
+class ITERATION(pstruct.type):
+    type = 0x0011
+    type = 17
+    class _fIter(pint.enum, uint2):
+        _values_ = [
+            ('off', 0),
+            ('on', 1),
+        ]
+    _fields_ = [
+        (_fIter, 'fIter'),
+    ]
+
+@RT_Excel.define
+class SAVERECALC(pstruct.type):
+    type = 0x005f
+    type = 95
+    class _fSaveRecalc(pint.enum, uint2):
+        _values_ = [
+            ('no', 0),
+            ('yes', 1),
+        ]
+    _fields_ = [
+        (_fSaveRecalc, 'fSaveRecalc'),
+    ]
+
+@RT_Excel.define
+class PRINTHEADERS(pstruct.type):
+    type = 0x002a
+    type = 42
+    class _fPrintRwCol(pint.enum, uint2):
+        _values_ = [
+            ('no', 0),
+            ('yes', 1),
+        ]
+    _fields_ = [
+        (_fPrintRwCol, 'fPrintRwCol'),
+    ]
+
+@RT_Excel.define
+class PRINTGRIDLINES(pstruct.type):
+    type = 0x002b
+    type = 43
+    class _fPrintGrid(pint.enum, uint2):
+        _values_ = [
+            ('no', 0),
+            ('yes', 1),
+        ]
+    _fields_ = [
+        (_fPrintGrid, 'fPrintGrid'),
+    ]
+
+@RT_Excel.define
+class GUTS(pstruct.type):
+    type = 0x0080
+    type = 128
+    _fields_ = [
+        (uint2, 'dxRwGut'),
+        (uint2, 'dyColGut'),
+        (uint2, 'iLevelRwMac'),
+        (uint2, 'iLevelColMac'),
+    ]
+
+@RT_Excel.define
+class WSBOOL(pbinary.flags):
+    type = 0x0081
+    type = 129
+    _fields_ = R([
+        (1, 'fShowAutoBreaks'),
+        (3, 'unused'),
+        (1, 'fDialog'),
+        (1, 'fApplyStyles'),
+        (1, 'fRwSumsBelow'),
+        (1, 'fColSumsRight'),
+        (1, 'fFitToPage'),
+        (1, 'reserved1'),
+        (2, 'fDspGuts'),
+        (2, 'reserved2'),
+        (1, 'fAee'),
+        (1, 'fAfe'),
+    ])
+
+@RT_Excel.define
+class GRIDSET(pstruct.type):
+    type = 0x0082
+    type = 130
+    class _fGridSet(pint.enum, uint2):
+        _values_ = [
+            ('no', 0),
+            ('yes', 1),
+        ]
+    _fields_ = [
+        (_fGridSet, 'fGridSet'),
+    ]
+
+@RT_Excel.define
+class GRIDSET(pstruct.type):
+    type = 0x0225
+    type = 549
+
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fUnsynced'),
+            (1, 'fDyZero'),
+            (1, 'fExAsc'),
+            (1, 'fExDsc'),
+            (12, 'unused'),
+        ])
+
+    _fields_ = [
+        (_flags, 'grbit'),
+        (uint2, 'miyRw'),
+    ]
+
 @RT_Excel.define
 class CatSerRange(pstruct.type):
     type = 0x1020
@@ -865,6 +1018,30 @@ class BookExt_Conditional12(pbinary.flags):
     ])
 
 @RT_Excel.define
+class ExtString(pstruct.type):
+    type = 2052
+    type = 0x804
+
+    _fields_ = [
+        (uint2, 'rt'),
+        (FrtFlags, 'grbitFrt'),
+        (XLUnicodeString, 'rgb'),
+    ]
+
+@RT_Excel.define
+class INDEX(pstruct.type):
+    type = 523
+    type = 0x20b
+
+    _fields_ = [
+        (uint4, 'reserved'),
+        (uint4, 'rwMic'),          # FIXME: version 7 and earlier sets these at uint4
+        (uint4, 'rwMac'),
+        (uint4, 'reserved2'),
+        (dyn.array(uint4, 0), 'rgibRw'),    # FIXME
+    ]
+
+@RT_Excel.define
 class BookExt(pstruct.type):
     type = 2147
     type = 0x863
@@ -1119,14 +1296,6 @@ class RecalcId(pstruct.type):
         (uint2, 'rt'),
         (uint2, 'reserved'),
         (uint4, 'dwBuild'),
-    ]
-
-@RT_Excel.define
-class CalcMode(pint.enum, uint2):
-    type = 0xd
-    type = 13
-    _values_ = [
-        ('Manual', 0),('Automatic', 1),('No Tables', 2),
     ]
 
 @RT_Excel.define
@@ -4067,9 +4236,180 @@ class Palette(pstruct.type):
     ]
 
 @RT_Excel.define
-class Header(XLUnicodeString):
+class HEADER(XLUnicodeString):
     type = 0x14
     type = 20
+
+@RT_Excel.define
+class FOOTER(XLUnicodeString):
+    type = 0x15
+    type = 21
+
+@RT_Excel.define
+class SELECTION(pstruct.type):
+    type = 0x1d
+    type = 29
+
+    class _ref(pstruct.type):
+        _fields_ = [
+            (RwU, 'rwFirst'),
+            (RwU, 'rwLast'),
+            (ColByteU, 'colFirst'),
+            (ColByteU, 'colLast'),
+        ]
+        def summary(self):
+            return "rwFirst={:d} rwLast={:d} colFirst={:D} colLast={:d}".format(*(self[fld].int() for fld in ['rwFirst', 'rwLast', 'colFirst', 'colLast']))
+
+    _fields_ = [
+        (ubyte1, 'pnn'),
+        (Rw, 'rwAct'),
+        (Col, 'colAct'),
+        (uint2, 'irefAct'),
+        (uint2, 'cref'),
+        (lambda self: dyn.array(self._ref, self['cref'].li.int()), 'rgref'),
+    ]
+
+@RT_Excel.define
+class LEFTMARGIN(pstruct.type):
+    type = 0x26
+    type = 38
+    _fields_ = [
+        (Xnum, 'num'),
+    ]
+
+@RT_Excel.define
+class RIGHTMARGIN(pstruct.type):
+    type = 0x27
+    type = 39
+    _fields_ = [
+        (Xnum, 'num'),
+    ]
+
+@RT_Excel.define
+class TOPMARGIN(pstruct.type):
+    type = 0x28
+    type = 40
+    _fields_ = [
+        (Xnum, 'num'),
+    ]
+
+@RT_Excel.define
+class BOTTOMMARGIN(pstruct.type):
+    type = 0x29
+    type = 41
+    _fields_ = [
+        (Xnum, 'num'),
+    ]
+
+@RT_Excel.define
+class DCON(pstruct.type):
+    type = 0x50
+    type = 80
+    _fields_ = [
+        (uint2, 'iiftab'),
+        (uint2, 'fLeftCat'),
+        (uint2, 'fTopCat'),
+        (uint2, 'fLinkConsol'),
+    ]
+
+@RT_Excel.define
+class HCENTER(pstruct.type):
+    type = 0x83
+    type = 131
+    _fields_ = [
+        (uint2, 'fHCenter'),
+    ]
+
+@RT_Excel.define
+class VCENTER(pstruct.type):
+    type = 0x84
+    type = 132
+    _fields_ = [
+        (uint2, 'fVCenter'),
+    ]
+
+@RT_Excel.define
+class STANDARDWIDTH(pstruct.type):
+    type = 0x99
+    type = 153
+    _fields_ = [
+        (uint2, 'DxGCol'),
+    ]
+
+@RT_Excel.define
+class SETUP(pstruct.type):
+    type = 0xa1
+    type = 161
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fLeftToRight'),
+            (1, 'fLandscape'),
+            (1, 'fNoPls'),
+            (1, 'fNoColor'),
+            (1, 'fDraft'),
+            (1, 'fNotes'),
+            (1, 'fNoOrient'),
+            (1, 'fUsePage'),
+            (1, 'Reserved'),
+            (1, 'fEndNotes'),
+            (2, 'iErrors'),
+            (4, 'unused'),
+        ])
+    _fields_ = [
+        (uint2, 'iPaperSize'),
+        (uint2, 'iScale'),
+        (uint2, 'iPageStart'),
+        (uint2, 'iFitWidth'),
+        (uint2, 'iFitHeight'),
+        (_flags, 'grbit'),
+        (uint2, 'iRes'),
+        (uint2, 'iVRes'),
+        (Xnum, 'numHdr'),
+        (Xnum, 'numFtr'),
+        (uint2, 'iCopies'),
+    ]
+
+@RT_Excel.define
+class DIMENSIONS(pstruct.type):
+    type = 0x200
+    type = 512
+    _fields_ = [
+        (uint4, 'rwMic'),
+        (uint4, 'rwMac'),
+        (Col, 'colMic'),
+        (Col, 'colMac'),
+        (uint2, 'reserved'),
+    ]
+
+@RT_Excel.define
+class WINDOW2(pstruct.type):
+    type = 0x23e
+    type = 574
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fDspFmla'),
+            (1, 'fDspGrid'),
+            (1, 'fDspRwCol'),
+            (1, 'fFrozen'),
+            (1, 'fDspZeroes'),
+            (1, 'fDefaultHdr'),
+            (1, 'fRightToLeft'),
+            (1, 'fDspGuts'),
+            (1, 'fFrozenNoSplit'),
+            (1, 'fSelected'),
+            (1, 'fPaged'),
+            (1, 'fSLV'),
+            (4, 'reserved'),
+        ])
+    _fields_ = [
+        (_flags, 'grbit'),
+        (Rw, 'rwTop'),
+        (Col, 'colLeft'),
+        (uint4, 'icvHdr'),
+        (uint2, 'wScaleSLV'),
+        (uint2, 'wScaleNormal'),
+        (uint4, 'reserved'),
+    ]
 
 @RT_Excel.define
 class CF(pstruct.type):
