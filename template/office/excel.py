@@ -942,7 +942,7 @@ class BOF(pstruct.type):
         (_flags, 'flags')
     ]
 
-@RT_Excel.define
+#@RT_Excel.define
 class BoundSheet8(pstruct.type):
     type = 0x85
     type = 133
@@ -973,6 +973,11 @@ class BoundSheet8(pstruct.type):
 class Font(pstruct.type):
     type = 0x0031
     type = 49
+    class _fontName(pstruct.type):
+        _fields_ = [
+            (ubyte1, 'cch'),
+            (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgcch'),
+        ]
     _fields_ = [
         (uint2, 'dyHeight'),
         (uint2, 'flags'),
@@ -983,7 +988,7 @@ class Font(pstruct.type):
         (ubyte1, 'vFamily'),
         (ubyte1, 'bCharSet'),
         (ubyte1, 'unused3'),
-        (ShortXLUnicodeString, 'fontName'),
+        (_fontName, 'fontName'),
     ]
 
 @RT_Excel.define
@@ -1137,7 +1142,7 @@ class Password(uint2):
     type = 19
 
 @RT_Excel.define
-class Protect(Boolean, uint2):
+class PROTECT(Boolean, uint2):
     type = 0x12
     type = 18
 
@@ -1152,12 +1157,21 @@ class UsesELFs(Boolean, uint2):
     type = 352
 
 @RT_Excel.define
-class WriteAccess(pstruct.type):
+class WRITEACCESS(pstruct.type):
     type = 0x5c
     type = 92
+    def __stName(self):
+        res = self['cch'].li
+        return dyn.clone(pstr.string, length=res.int())
+
+    def __padding(self):
+        res = self['cch'].li
+        return dyn.clone(pstr.string, length=max(0, 31 - res.int()))
+
     _fields_ = [
-        (XLUnicodeString, 'userName'),
-        (lambda s: dyn.block(112-s['userName'].li.size()), 'unused')
+        (ubyte1, 'cch'),
+        (__stName, 'stName'),
+        (__padding, 'padding(stName)'),
     ]
 
 @RT_Excel.define
@@ -1480,12 +1494,23 @@ class XTI(pstruct.type):
     ]
 
 @RT_Excel.define
-class ExternSheet(pstruct.type):
+class EXTERNSHEET(pstruct.type):
     type = 0x17
     type = 23
+    # FIXME: BIFF8
+    #_fields_ = [
+    #    (uint2, 'cXTI'),
+    #    (lambda s: dyn.array(XTI, s['cXTI'].li.int()), 'rgXTI'),
+    #]
+
+    def __rgch(self):
+        length = self['cch'].li.int()
+        return dyn.clone(pstr.string, length=length)
+
     _fields_ = [
-        (uint2, 'cXTI'),
-        (lambda s: dyn.array(XTI, s['cXTI'].li.int()), 'rgXTI'),
+        (ubyte1, 'cch'),
+        (ubyte1, 'fHighByte'),
+        (__rgch, 'rgch'),
     ]
 
 @RT_Excel.define
@@ -1766,7 +1791,7 @@ class FontIndex(pint.enum, uint2):
         ('default-both', 3),
     ]
 
-@RT_Excel.define
+#@RT_Excel.define
 class XF(pstruct.type):
     type = 0xe0
     type = 224
@@ -2540,7 +2565,8 @@ class XFExt(pstruct.type):
         (lambda s: dyn.array(ExtProp, s['cexts'].li.int()), 'rgExt'),
     ]
 
-@RT_Excel.define
+#FIXME
+#@RT_Excel.define
 class Format(pstruct.type):
     type = 0x41e
     type = 1054
@@ -4236,14 +4262,30 @@ class Palette(pstruct.type):
     ]
 
 @RT_Excel.define
-class HEADER(XLUnicodeString):
+class HEADER(pstruct.type):
     type = 0x14
     type = 20
+    _fields_ = [
+        (ubyte1, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
+    ]
 
 @RT_Excel.define
-class FOOTER(XLUnicodeString):
+class FOOTER(pstruct.type):
     type = 0x15
     type = 21
+    _fields_ = [
+        (ubyte1, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
+    ]
+
+@RT_Excel.define
+class EXTERNCOUNT(pstruct.type):
+    type = 0x16
+    type = 22
+    _fields_ = [
+        (uint2, 'cxals'),
+    ]
 
 @RT_Excel.define
 class SELECTION(pstruct.type):
@@ -4310,6 +4352,14 @@ class DCON(pstruct.type):
         (uint2, 'fLeftCat'),
         (uint2, 'fTopCat'),
         (uint2, 'fLinkConsol'),
+    ]
+
+@RT_Excel.define
+class DEFCOLWIDTH(pstruct.type):
+    type = 0x55
+    type = 85
+    _fields_ = [
+        (uint2, 'cchdefColWidth'),
     ]
 
 @RT_Excel.define
