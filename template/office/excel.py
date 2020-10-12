@@ -28,7 +28,8 @@ class RT_Excel(ptype.definition):
             return default
         return super(RT_Excel, cls).__get__(type, default, **kwargs)
 
-class RecordGeneral(RecordGeneral):
+RecordGeneralBase = RecordGeneral
+class RecordGeneral(RecordGeneralBase):
     class Header(pstruct.type):
         _fields_ = [
             (uint2, 'type'),
@@ -196,7 +197,8 @@ class CFColor(pstruct.type):
 class CFVOParsedFormula(pstruct.type):
     def __rgce(self):
         cce = self['cce'].li.int()
-        return dyn.clone(Rgce, blocksize=lambda s,cce=cce:cce)
+        # FIXME
+        return dyn.clone(Rgce, blocksize=lambda _, size=cce: size)
 
     _fields_ = [
         (uint2, 'cce'),
@@ -347,7 +349,7 @@ class BiffSubStream(RecordContainer):
 
     def isTerminator(self, value):
         rec,_ = value['header'].Instance()
-        return True if rec == EOF.type or value.getoffset()+value.size() >= self.parent.getoffset()+self.parent.blocksize() else False
+        return True if rec == EOF.type or value.getoffset() + value.size() >= self.parent.getoffset() + self.parent.blocksize() else False
 
     def properties(self):
         flazy = (lambda n: n['data'].d.l) if getattr(self, 'lazy', False) else (lambda n: n['data'])
@@ -366,13 +368,16 @@ class File(File):
     _object_ = BiffSubStream
 
     def details(self):
-        res = list(self)
-        master = res.pop(0)
-        worksheets = res[:]
+        try:
+            items = list(self)
+        except ptypes.error.InitializationError:
+            return super(File, self).details()
 
-        res = []
-        res.append('[{:x}] master : 0 : {:s}'.format(master.getoffset(), master.summary()))
-        res.extend('[{:x}] worksheet : {:d} : {:s}'.format(ws.getoffset(), idx+1, ws.summary()) for idx,ws in enumerate(worksheets))
+        master = items.pop(0) if items else None
+        worksheets = items[:]
+
+        res = [] if master is None else ['[{:x}] master : 0 : {:s}'.format(master.getoffset(), master.summary())]
+        res.extend('[{:x}] worksheet : {:d} : {:s}'.format(ws.getoffset(), idx + 1, ws.summary()) for idx, ws in enumerate(worksheets))
         return '\n'.join(res) + '\n'
 
 ###
@@ -403,7 +408,11 @@ class RRTabId(parray.block):
     type = 0x13d
     type = 317
     def blocksize(self):
-        return self.parent['length'].int()
+        try:
+            rec = self.getparent(RecordGeneralBase)
+        except ptypes.error.ItemNotFoundError:
+            return 0
+        return rec['header'].li.Length()
 
 ###
 class FrtFlags(pbinary.flags):
@@ -475,9 +484,10 @@ class MulBlank(pstruct.type):
 
     def __rgixfe(self):
         try:
-            cb = self.blocksize()
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
 
-        except ptypes.error.InitializationError:
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             # XXX: unable to calculate number of elements without the blocksize
             return dyn.array(IXFCell, 0)
 
@@ -586,8 +596,10 @@ class XLUnicodeStringNoCch(pstruct.type):
 
         # Otherwise, we need to calculate it from the blocksize
         try:
-            cb = self.blocksize()
-        except ptypes.error.InitializationError:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             # XXX: unable to calculate length without the blocksize
             return dyn.clone(res, length=0)
         return dyn.clone(res, blocksize=lambda s, size=cb - 1: size)
@@ -628,7 +640,8 @@ class ShortXLUnicodeString(pstruct.type):
         elif high == 1:
             return dyn.clone(pstr.wstring, length=length)
         elif high == 7:
-            length = self.parent.blocksize()-2
+            raise NotImplementedError("FIXME")
+            length = self.parent.blocksize() - 2
             return dyn.block(length)
         # FIXME: test this out
         raise NotImplementedError
@@ -1141,8 +1154,11 @@ class MsoDrawingGroup(art.OfficeArtDggContainer):
     type = 0xeb
     type = 235
     def blocksize(self):
-        res = self.getparent(RecordGeneral)
-        return res['header'].li.Length()
+        try:
+            rec = self.getparent(RecordGeneralBase)
+        except ptypes.error.ItemNotFoundError:
+            return 0
+        return rec['header'].li.Length()
 
 @RT_Excel.define
 class HFPicture(pstruct.type):
@@ -1160,21 +1176,21 @@ class HFPicture(pstruct.type):
         fd, fg = res['fIsDrawing'], res['fIsDrawingGroup']
 
         try:
-            cb = self.blocksize()
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
 
-        except ptypes.error.InitializationError:
-            res = self.getparent(RecordGeneral)
-            cb = res['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.clone(art.RecordContainer, blocksize=lambda _, size=max(0, cb - res): size)
 
         res = self['FrtHeader'].li.size() + self['flags'].li.size() + self['reserved'].li.size()
         if fd and not fg:
-            return dyn.clone(art.OfficeArtDgContainer, blocksize=lambda s,size=cb-res: size)
+            return dyn.clone(art.OfficeArtDgContainer, blocksize=lambda _, size=max(0, cb - res): size)
         elif not fd and fg:
-            return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda s,size=cb-res: size)
+            return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda _, size=max(0, cb - res): size)
         elif not fd and not fg:
             return ptype.undefined
         logging.warn('{:s}.__rgDrawing : Mutually exclusive fIsDrawing and fIsDrawing is set. Using a generic RecordContainer.'.format(self.classname()))
-        return dyn.clone(art.RecordContainer, blocksize=lambda s,size=cb-res: size)
+        return dyn.clone(art.RecordContainer, blocksize=lambda _, size=cb - res: size)
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -1189,8 +1205,11 @@ class MsoDrawing(art.OfficeArtDgContainer):
     type = 236
 
     def blocksize(self):
-        res = self.getparent(RecordGeneral)
-        return res['header'].li.Length()
+        try:
+            rec = self.getparent(RecordGeneralBase)
+        except ptypes.error.ItemNotFoundError:
+            return 0
+        return rec['header'].li.Length()
 
 @RT_Excel.define
 class EOF(ptype.type):
@@ -1224,9 +1243,9 @@ class Lbl(pstruct.type):
 
     def __rgce(self):
         cb = self['cce'].li.int()
-        #res = NameParsedFormula
+        #res = NameParsedFormula    # FIXME
         res = ptype.block
-        return dyn.clone(res, blocksize=lambda s, size=cb: size)
+        return dyn.clone(res, blocksize=lambda _, size=cb: size)
 
     def __NameIndex(self):
         res = self['flags'].li
@@ -1254,13 +1273,14 @@ class Theme(pstruct.type):
     type = 0x896
     def __rgb(self):
         try:
-            cb = self.blocksize()
-        except ptypes.error.InitializationError:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             # XXX: unable to calculate length without the blocksize
-            return dyn.block(0)
+            return ptype.undefined
 
-        res = self['frtHeader'].li.size() + self['dwThemeVersion'].li.size()
-        return dyn.block(cb - res)
+        total = sum(self[fld].li.size() for fld in ['frtHeader', 'dwThemeVersion'])
+        return dyn.block(max(0, cb - total))
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -1324,11 +1344,11 @@ class ExternName(pstruct.type):
         #}
         # FIXME: this is pretty poorly documented
         try:
-            cb = self.blocksize()
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
 
-        except ptypes.error.InitializationError:
-            res = self.getparent(RecordGeneral)
-            cb = res['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.block(0)
 
         return dyn.block(cb - self['flags'].li.size())
 
@@ -1385,7 +1405,7 @@ class XFProp(pstruct.type):
         t, cb = self['xfPropType'].li.int(), self['cb'].li.int()
         length = cb - (2+2)
         res = XFProperty.withdefault(t, propertyType=t, length=length)
-        return dyn.clone(res, blocksize=(lambda s, cb=length: cb))
+        return dyn.clone(res, blocksize=lambda _, cb=length: cb)
 
     _fields_ = [
         (uint2, 'xfPropType'),      # XXX: make this a pint.enum
@@ -1602,14 +1622,15 @@ class MulRk(pstruct.type):
     type = 189
     def __rgrkrec(self):
         try:
-            cb = self.blocksize()
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
 
-        except ptypes.error.InitializationError:
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             # XXX: unable to calculate number of elements without the blocksize
             return dyn.array(RkRec, 0)
 
-        res = cb - sum(self[fld].li.size() for fld in ['rw', 'colFirst', 'colFirst'])
-        return dyn.blockarray(RkRec, res)
+        res = sum(self[fld].li.size() for fld in ['rw', 'colFirst', 'colFirst'])
+        return dyn.blockarray(RkRec, max(0, cb - res))
 
     _fields_ = [
         (Rw, 'rw'),
@@ -1621,12 +1642,17 @@ class MulRk(pstruct.type):
 class CellParsedFormula(pstruct.type):
     def __rgce(self):
         cb = self['cce'].li.int()
-        return dyn.clone(Rgce, blocksize=lambda s,cb=cb: cb)
+        return dyn.clone(Rgce, blocksize=lambda _, size=cb: size)
 
     def __rgcb(self):
-        bs = self.blocksize()
+        try:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.block(0)
+
         sz = self['cce'].li.size() + self['cce'].int()
-        return dyn.block(bs-sz)
+        return dyn.block(bs - sz)
 #        return RgbExtra        # FIXME
 
     _fields_ = [
@@ -2032,7 +2058,9 @@ class CFMultistate(pstruct.type):
 class CFParsedFormula(pstruct.type):
     def __rgce(self):
         cce = self['cce'].li.int()
-        return dyn.clone(Rgce, blocksize=lambda s,cce=cce: cce)
+        # FIXME
+        return dyn.clone(Rgce, blocksize=lambda _, size=cce: size)
+
     _fields_ = [
         (uint2, 'cce'),
         (__rgce, 'rgce'),
@@ -2310,7 +2338,8 @@ class ExtProp(pstruct.type):
     def __extPropData(self):
         res = self['extType'].li.int()
         cb = self['cb'].li.int() - (2 + 2)
-        return ExtPropType.get(res, blocksize=(lambda s, cb=cb: cb))
+        # FIXME
+        return ExtPropType.get(res, blocksize=lambda _, size=cb: size)
 
     _fields_ = [
         (_extType, 'extType'),
@@ -2347,7 +2376,7 @@ class Format(pstruct.type):
     type = 0x41e
     type = 1054
     def __stFormat(self):
-        p = self.getparent(type=RecordGeneral)
+        p = self.getparent(type=RecordGeneralBase)
         length = p['header']['length'].int() - 2
         return dyn.block(length)
     _fields_ = [
@@ -2562,7 +2591,12 @@ class ContinueFrt(pstruct.type):
     type = 2066
 
     def __rgb(self):
-        return dyn.block(self.blocksize() - self.blocksize())
+        try:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.block(0)
+        return dyn.block(cb - self['frtHeaderOld'].li.size())
 
     _fields_ = [
         (FrtHeaderOld, 'frtHeaderOld'),
@@ -2631,7 +2665,8 @@ class DXFNumUsr(pstruct.type):
 class DXFFntD(pstruct.type):
     def __stFontName(self):
         cch = self['cchFont'].li.int()
-        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda s,cch=cch: cch)
+        # FIXME
+        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cch: size)
     _fields_ = [
         (ubyte1, 'cchFont'),
         (__stFontName, 'stFontName'),
@@ -2799,11 +2834,12 @@ class AutoFilter(pstruct.type):
     def __str1(self):
         do = self['doper1'].li
         cb = do['vtValue']['cch'].int()
-        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda s,cb:cb) if do['vtValue'].int() == 6 else ptype.undefined
+        # FIXME
+        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size) if do['vtValue'].int() == 6 else ptype.undefined
     def __str2(self):
         do = self['doper1'].li
         cb = do['vtValue']['cch'].int()
-        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda s,cb:cb) if do['vtValue'].int() == 6 else ptype.undefined
+        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size) if do['vtValue'].int() == 6 else ptype.undefined
 
     _fields_ = [
         (uint2, 'iEntry'),
@@ -2844,12 +2880,17 @@ class Feat11XMap(pstruct.type):
 class ListParsedArrayFormula(pstruct.type):
     def __rgce(self):
         cb = self['cce'].li.int()
-        return dyn.clone(Rgce, blocksize=lambda s,cb=cb: cb)
+        # FIXME
+        return dyn.clone(Rgce, blocksize=lambda _, size=cb: size)
 
     def __RgbExtra(self):
-        bs = self.blocksize()
+        try:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.block(0)
         sz = self['cce'].li.size() + self['cce'].int()
-        return dyn.block(bs-sz)
+        return dyn.block(bs - sz)
 
     _fields_ = [
         (uint2, 'cce'),
@@ -3008,11 +3049,13 @@ class Feat11FieldDataItem(pstruct.type):
 
     def __dxfFmtAgg(self):
         sz = self['cbFmtAgg'].li.int()
-        return dyn.clone(DXFN12List, blocksize=lambda s:sz)
+        # FIXME
+        return dyn.clone(DXFN12List, blocksize=lambda _, size=sz: size)
 
     def __dxfFmtInsertRow(self):
         sz = self['cbFmtInsertRow'].li.int()
-        return dyn.clone(DXFN12List, blocksize=lambda s:sz)
+        # FIXME
+        return dyn.clone(DXFN12List, blocksize=lambda _, size=sz: size)
 
     def __AutoFilter(self):
         tft = self['flag'].l
@@ -3145,9 +3188,15 @@ class Feature11(pstruct.type):
     type = 0x872
 
     def __rgbFeat(self):
+        try:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.block(0)
+
         sz = self['cbFeatData'].li.int()
         if sz == 0:
-            sz = self.blocksize() - (self['refs2'].li.size()+27)
+            sz = cb - (self['refs2'].li.size()+27)
         return dyn.block(sz)
 
     _fields_ = [
@@ -3293,8 +3342,9 @@ class SST(pstruct.type):
 
     def __rgb(self):
         try:
-            cb = self.blocksize()
-        except ptypes.error.InitializationError:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             res = self['cstUnique'].li
             return dyn.array(XLUnicodeRichExtendedString, abs(res.int()))
         return dyn.blockarray(XLUnicodeRichExtendedString, cb - sum(self[fld].li.size() for fld in ['cstTotal', 'cstUnique']))
@@ -3399,7 +3449,7 @@ class ExtSST(pstruct.type):
     type = 255
     type = 0xff
     def __rgISSTInf(self):
-        rg = self.getparent(RecordGeneral)
+        rg = self.getparent(RecordGeneralBase)
         container = rg.p
         index = container.value.index(rg)
         while index > 0 and isinstance(container.value[index - 1].d, Continue):
@@ -3448,7 +3498,8 @@ class ObjectParsedFormula(pstruct.type):
 
     def __rgce(self):
         cce = self['flags'].li['cce']
-        return dyn.clone(Rgce, blocksize=lambda s,cce=cce: cce)
+        # FIXME
+        return dyn.clone(Rgce, blocksize=lambda _, size=cce: size)
 
     _fields_ = [
         (_flags, 'flags'),
@@ -3459,8 +3510,9 @@ class ObjectParsedFormula(pstruct.type):
 class PictFmlaEmbedInfo(pstruct.type):
     def __strClass(self):
         cb = self['cbClass'].li.int()
+        # FIXME
         if cb:
-            return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda s,cb=cb: cb)
+            return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size)
         return ptype.undefined
 
     _fields_ = [
@@ -3473,8 +3525,12 @@ class PictFmlaEmbedInfo(pstruct.type):
 class ObjFmla(pstruct.type):
     #class _formula(pstruct.type):
     #    def __formula(self):
-    #        cb = self.blocksize()
-    #        return dyn.clone(ObjectParsedFormula, blocksize=lambda s,cb=cb: cb - s.p['embedInfo'].blocksize())
+    #        try:
+    #            p = self.getparent(RecordGeneralBase)
+    #            cb = p['header'].li.Length()
+    #        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+    #            return dyn.clone(ObjectParsedFormula, blocksize=lambda _: 0)
+    #        return dyn.clone(ObjectParsedFormula, blocksize=lambda _, size=cb: size - s.p['embedInfo'].blocksize())
 
     #    _fields_ = [
     #        (__formula, 'formula'),
@@ -3483,7 +3539,7 @@ class ObjFmla(pstruct.type):
 
     #def __fmla(self):
     #    cb = self['cbFmla'].li.int()
-    #    return dyn.clone(ObjectParsedFormula, blocksize=lambda s,cb=cb: cb)
+    #    return dyn.clone(ObjectParsedFormula, blocksize=lambda _, size=cb: size)
 
     _fields_ = [
         (uint2, 'cbFmla'),
@@ -3507,7 +3563,8 @@ class Ft(ptype.definition):
 class FtGeneral(pstruct.type):
     def __data(self):
         res, cb = self['ft'].li.int(), self['cb'].li.int()
-        return Ft.withdefault(res, featureType=res, blocksize=(lambda s, cb=cb: cb))
+        # FIXME
+        return Ft.withdefault(res, featureType=res, blocksize=lambda _, size=cb: size)
 
     _fields_ = [
         (uint2, 'ft'),          # XXX: Make this a pint.enum
@@ -3835,13 +3892,12 @@ class Obj(pstruct.type):
     type = 0x05d
     type = 93
     def __props(self):
-
         try:
-            cb = self.blocksize()
-
-        except ptypes.error.InitializationError:
-            res = self.getparent(RecordGeneral)
+            res = self.getparent(RecordGeneralBase)
             cb = res['header'].li.Length()
+
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.array(FtGeneral, 0)
 
         return dyn.blockarray(FtGeneral, cb - self['cmo'].li.size())
 
@@ -3873,7 +3929,7 @@ class TxOLastRun(pstruct.type):
 class TxORuns(pstruct.type):
     def __rgTxoRuns(self):
         try:
-            rg = self.getparent(RecordGeneral)
+            rg = self.getparent(RecordGeneralBase)
             res = rg.previousRecord(TxO, **count)
         except ptypes.error.ItemNotFoundError:
             return dyn.array(Run, 0)
@@ -3930,13 +3986,15 @@ class TxO(pstruct.type):
         ]
 
     def __previousObjRecord(self, **count):
-        rg = self.getparent(RecordGeneral)
+        rg = self.getparent(RecordGeneralBase)
         return rg.previousRecord(Obj, **count)
 
     def __fmla(self):
         try:
-            cb = self.blocksize()
-        except types.error.InitializationError:
+            res = self.getparent(RecordGeneralBase)
+            cb = res['header'].li.Length()
+
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             # XXX: unable to calculate size of element without the blocksize
             return dyn.block(0)
 
@@ -4059,7 +4117,8 @@ class CF(pstruct.type):
     def __rgce(field):
         def rgce(self, field=field):
             cce = self[field].li.int()
-            return dyn.clone(CFParsedFormulaNoCCE, blocksize=lambda s,cce=cce: cce)
+            # FIXME
+            return dyn.clone(CFParsedFormulaNoCCE, blocksize=lambda _, size=cce: size)
         return rgce
 
     def __rgbCT(self):
