@@ -1656,13 +1656,19 @@ class OfficeArtRGFOPTE(pstruct.type):
             return dyn.clone(t, Property=property(lambda s:prop))
 
     def __complexData(self):
+        try:
+            p = self.getparent(RecordGeneral)
+            bs = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.clone(self.complexData, length=0)
+
         rgfopte = self['rgfopte'].li
-        calculatedSize = sum(x['op'].li.int() for x in rgfopte if x['opid'].li['fComplex'])
-        realSize = self.blocksize() - self['rgfopte'].li.size()
+        calculatedSize = sum(item['op'].li.int() for item in rgfopte if item['opid'].li['fComplex'])
+        realSize = bs - self['rgfopte'].li.size()
         if calculatedSize > realSize:
             ptypes.Config.log.warn("OfficeArtRGFOPTE.complexData : calculated size of complexData is larger than available : {:x} > {:x}".format(calculatedSize,realSize))
             return dyn.block(realSize)
-        return dyn.clone(self.complexData, length=sum(x['opid']['fComplex'] for x in rgfopte))
+        return dyn.clone(self.complexData, length=sum(item['opid']['fComplex'] for item in rgfopte))
 
     _fields_ = [
         (__rgfopt, 'rgfopte'),

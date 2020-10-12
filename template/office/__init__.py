@@ -97,8 +97,8 @@ class RecordGeneral(pstruct.type):
             return 'version={:d} instance={:#05x} type={:#06x} length={length:#x}({length:x})'.format(v & 0xf, (v&0xfff0) // 0x10, t, length=l)
 
     def __data(self):
-        res = self['header'].li
-        t, vi, length = res.Type(), res.Instance(), res.Length()
+        header = self['header'].li
+        t, vi, length = header.Type(), header.Instance(), header.Length()
         Type = self.Record.withdefault(t, type=t)
 
         # look for an explicit instance
@@ -119,14 +119,12 @@ class RecordGeneral(pstruct.type):
             RecordData._value_ = dyn.block(length)
             RecordData._object_ = res
             return RecordData
-        return dyn.clone(res, blocksize=lambda s, length=length: length)
+        return dyn.clone(res, blocksize=lambda _, bs=length: bs) if length == 0 else res
 
     def __extra(self):
-        bs = self['header'].li.Length()
-        size = self['header'].size() + self['data'].li.size()
-        if bs > size:
-            return dyn.block(bs - size)
-        return ptype.undefined
+        header = self['header'].li
+        size = sum(self[item].li.size() for item in ['header', 'data'])
+        return dyn.block(max(0, header.Length() - size))
 
     _fields_ = [
         (lambda self: self.Header, 'header'),
@@ -139,10 +137,6 @@ class RecordGeneral(pstruct.type):
     def Data(self):
         return self['data'].d if getattr(self, 'lazy', False) else self['data']
     d = property(fget=Data)
-
-    #def blocksize(self):
-    #    res = self['header'].li
-    #    return res.size() + res.Length()
 
     def previousRecord(self, type, **count):
         container = self.p
@@ -164,12 +158,15 @@ class RecordGeneral(pstruct.type):
             raise ptypes.error.ItemNotFoundError(self, 'previousRecord', message='Unable to locate previous record : {!r}'.format(type))
         return container[idx - i]
 
-
 class RecordContainer(parray.block):
     _object_ = RecordGeneral
 
     def repr(self):
-        return self.details() + '\n'
+        try:
+            res = self.details()
+        except ptypes.error.InitializationError:
+            return super(RecordContainer, self).repr()
+        return res + ('\n' if res else '')
 
     def details(self):
         def Fkey(object):
@@ -187,7 +184,7 @@ class RecordContainer(parray.block):
         def emit_hexdump(_, records):
             value = [item[1] for item in records]
             data = ptype.container(value=value).serialize()
-            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
+            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary) or '...'
 
         groups = [(typename, list(items)) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
         iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
@@ -263,10 +260,13 @@ class RecordContainer(parray.block):
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
     def repr(self):
-        return self.details() + '\n'
+        try:
+            res = self.details()
+        except ptypes.error.InitializationError:
+            return super(File, self).repr()
+        return res + ('\n' if res else '')
 
     def details(self):
-        emit = lambda data: ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary)
         def Fkey(object):
             '''lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
             index, item = object
@@ -279,6 +279,10 @@ class File(RecordContainer):
             if len(records) > 1:
                 return "{length:d} * {:s}".format(classname, length=len(records))
             return classname
+        def emit_hexdump(_, records):
+            value = [item[1] for item in records]
+            data = ptype.container(value=value).serialize()
+            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary) or '...'
         groups = [(typename, list(items)) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
         iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
         return '\n'.join(map(' : '.join, iterable))

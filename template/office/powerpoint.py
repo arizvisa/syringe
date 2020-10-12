@@ -381,11 +381,19 @@ class PlaceholderAtom(pstruct.type):
             ('Graph', 21), ('Table', 22), ('ClipArt', 23), ('OrganizationChart', 24), ('MediaClip', 25),
         ]
 
+    def __unused(self):
+        try:
+            p = self.getparent(RecordGeneral)
+            sz = p['header'].li.Length()
+        except ptypes.error.ItemNotFoundError:
+            return dyn.block(0)
+        return dyn.block(sz - 6)
+
     _fields_ = [
         (uint4, 'placementId'),
         (__placeholderid, 'placeholderId'),
         (ubyte1, 'size'),
-        (lambda s: dyn.block(s.blocksize() - 6), 'unused'),
+        (__unused, 'unused'),
     ]
 
 @RT_ExternalObjectRefAtom.define

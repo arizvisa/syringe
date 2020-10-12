@@ -42,7 +42,7 @@ class OfficeArtClientAnchorChart(pstruct.type):
         (pint.uint16_t, 'DY2'),
     ]
 
-    class __short(pstruct.type):
+    class _short(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'Flag'),
             (pint.uint16_t, 'Col1'),
@@ -50,7 +50,7 @@ class OfficeArtClientAnchorChart(pstruct.type):
             (pint.uint16_t, 'Row1'),
         ]
 
-    class __long(pstruct.type):
+    class _long(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'DY1'),
             (pint.uint16_t, 'Col2'),
@@ -59,10 +59,34 @@ class OfficeArtClientAnchorChart(pstruct.type):
             (pint.uint16_t, 'DY2'),
         ]
 
+    def __short(self):
+        try:
+            p = self.getparent(RecordGeneral)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return self._short
+        return pint.uint64_t if cb == 8 else self._short
+
+    def __long(self):
+        try:
+            p = self.getparent(RecordGeneral)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return self._short
+        return self._long if cb >= 18 else ptype.type
+
+    def __extra(self):
+        try:
+            p = self.getparent(RecordGeneral)
+            cb = p['header'].li.Length()
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return self._short
+        return dyn.clone(ptype.block, length=cb - (self['short'].li.size() + self['long'].li.size()))
+
     _fields_ = [
-        (lambda s: pint.uint64_t if s.blocksize() == 8 else s.__short, 'short'),
-        (lambda s: s.__long if s.blocksize() >= 18 else ptype.type, 'long'),
-        (lambda s: dyn.clone(ptype.block, length=s.blocksize()-(s['short'].li.size()+s['long'].li.size())), 'extra'),
+        (__short, 'short'),
+        (__long, 'long'),
+        (__extra, 'extra'),
     ]
 
 # FIXME
