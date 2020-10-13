@@ -331,7 +331,7 @@ class Directory(parray.block):
         res = []
         for i, item in enumerate(self):
             offset = "[{:x}]".format(item.getoffset())
-            res.append("{:<{offsetwidth}s} {:s}[{:d}] {!s:>{filenamewidth}} {:<{typewidth}s} SECT:{:<{startwidth}x} SIZE:{:<{sizewidth}x} {:s}".format(offset, item.classname(), i, Fescape(item.Name()), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength, typewidth=maxtypelength, startwidth=maxstartlength, sizewidth=maxsizelength))
+            res.append("{:<{offsetwidth}s} {:s}[{:d}] {!s:>{filenamewidth}} {:<{typewidth}s} SECT:{:<{startwidth}x} SIZE:{:<{sizewidth}x} CLSID:{:s}".format(offset, item.classname(), i, Fescape(item.Name()), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength, typewidth=maxtypelength, startwidth=maxstartlength, sizewidth=maxsizelength))
         return '\n'.join(res)
 
     def byname(self, name, index=0):
