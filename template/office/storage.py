@@ -1,7 +1,7 @@
 import ptypes, ndk
 from ptypes import *
 
-import six, datetime
+import operator, math
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### Primitive types
@@ -168,6 +168,20 @@ class Header(pstruct.type):
         (USHORT, 'uMajorVersion'),      # Major version (3 or 4)
         (uByteOrder, 'uByteOrder'),    # 0xfffe -- little-endian
     ]
+    def summary(self):
+        Fhex = bytes.hex if hasattr(bytes, 'hex') else operator.methodcaller('encode', 'hex')
+        res = []
+        res.append("({:s})".format(self['uByteOrder'].str()))
+        res.append("0x{:s}".format(Fhex(self['abSig'].serialize())))
+        res.append("version={:g}".format(self.Version()))
+        res.append("clsid={:s}".format(self['clsid'].str()))
+        return ' '.join(res)
+
+    def Version(self):
+        major, minor = (self[fld].int() for fld in ['uMajorVersion', 'uMinorVersion'])
+        mantissa = 10 ** math.floor(1. + math.log10(minor))
+        return major + minor / mantissa
+
     def ByteOrder(self):
         return self['uByteOrder'].ByteOrder()
 
@@ -176,6 +190,9 @@ class HeaderSectorShift(pstruct.type):
         (USHORT, 'uSectorShift'),       # Major version | 3 -> 0x9 | 4 -> 0xc
         (USHORT, 'uMiniSectorShift'),   # 6
     ]
+    def summary(self):
+        fields = ['uSectorShift', 'uMiniSectorShift']
+        return ' '.join("{:s}={:d} ({:#x})".format(fld, self[fld].int(), 2 ** self[fld].int()) for fld in fields)
     def SectorSize(self):
         res = self['uSectorShift'].int()
         return 2 ** res
@@ -190,19 +207,40 @@ class HeaderFat(pstruct.type):
         (SECT, 'sectDirectory'),        # First directory sector location
         (DWORD, 'dwTransaction'),
     ]
+    def summary(self):
+        fields = [
+            ('sectDirectory', "{:#010x}"),
+            ('csectDirectory', "{:d}"),
+            ('csectFat', "{:d}"),
+            ('dwTransaction', "{:#010x}")
+        ]
+        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int())) for fld, fmtstring in fields)
 
 class HeaderMiniFat(pstruct.type):
     _fields_ = [
-        (ULONG, 'ulMiniSectorCutoff'), # Mini stream cutoff size
-        (SECT, 'sectMiniFat'), # First mini fat sector location
-        (DWORD, 'csectMiniFat'),       # Number of mini fat sectors
+        (ULONG, 'ulMiniSectorCutoff'),  # Mini stream cutoff size
+        (SECT, 'sectMiniFat'),          # First mini fat sector location
+        (DWORD, 'csectMiniFat'),        # Number of mini fat sectors
     ]
+    def summary(self):
+        fields = [
+            ('ulMiniSectorCutoff', "{:d}"),
+            ('sectMiniFat', "{:#010x}"),
+            ('csectMiniFat', "{:d}")
+        ]
+        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int())) for fld, fmtstring in fields)
 
 class HeaderDiFat(pstruct.type):
     _fields_ = [
         (dyn.clone(SECT, _object_=DIFAT), 'sectDifat'), # First difat sector location
         (DWORD, 'csectDifat'),                          # Number of difat sectors
     ]
+    def summary(self):
+        fields = [
+            ('sectDifat', "{:#010x}"),
+            ('csectDifat', "{:d}")
+        ]
+        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int())) for fld, fmtstring in fields)
 
 ### Directory types
 class DirectoryEntryData(ptype.block):
@@ -237,7 +275,7 @@ class DirectoryEntry(pstruct.type):
     ]
 
     def summary(self):
-        return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
+        return "Name:{!r} {:s} SECT:{:x} SIZE:{:x} {:s}".format(self.Name(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
 
     def Name(self):
         res = (1 + self['uName'].int()) // 2
@@ -280,12 +318,18 @@ class Directory(parray.block):
         return self._uSectorSize
 
     def details(self):
+        Fescape = lambda s: eval("{!r}".format(s).replace('\\', '\\\\'))
+
+        maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self)
+        maxnamelength = max(len(Fescape(item.Name())) for item in self)
+        maxtypelength = max(len(item['Type'].summary()) for item in self)
+        maxstartlength = max(len("{:x}".format(item['sectLocation'].int())) for item in self)
+        maxsizelength = max(len("{:x}".format(item['qwSize'].int())) for item in self)
+
         res = []
-        maxoffsetlength = max(len('[{:x}]'.format(item.getoffset())) for item in self)
-        maxnamelength = max(len('{!r}'.format(item['Name'].str())) for item in self)
         for i, item in enumerate(self):
-            offset = '[{:x}]'.format(item.getoffset())
-            res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, item.classname(), i, item['Name'].str(), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
+            offset = "[{:x}]".format(item.getoffset())
+            res.append("{:<{offsetwidth}s} {:s}[{:d}] {!s:>{filenamewidth}} {:<{typewidth}s} SECT:{:<{startwidth}x} SIZE:{:<{sizewidth}x} {:s}".format(offset, item.classname(), i, Fescape(item.Name()), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength, typewidth=maxtypelength, startwidth=maxstartlength, sizewidth=maxsizelength))
         return '\n'.join(res)
 
     def byname(self, name, index=0):
