@@ -66,7 +66,9 @@ class FREESECT(DWORD): symbol, type = '.', 0xffffffff
 
 Sector.default = Sector.lookup(None)
 
-class SectorType(pint.enum, DWORD): pass
+class SectorType(pint.enum, DWORD):
+    def summary(self):
+        return super(SectorType, self).summary() if self.has() else "{:#010x}".format(self.int())
 SectorType._values_ = [(item.__name__, type) for type, item in Sector.cache.items() if type is not None]
 Pointer._value_ = SectorType
 
@@ -209,12 +211,12 @@ class HeaderFat(pstruct.type):
     ]
     def summary(self):
         fields = [
-            ('sectDirectory', "{:#010x}"),
+            ('sectDirectory', None),
             ('csectDirectory', "{:d}"),
             ('csectFat', "{:d}"),
             ('dwTransaction', "{:#010x}")
         ]
-        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int())) for fld, fmtstring in fields)
+        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
 
 class HeaderMiniFat(pstruct.type):
     _fields_ = [
@@ -225,10 +227,10 @@ class HeaderMiniFat(pstruct.type):
     def summary(self):
         fields = [
             ('ulMiniSectorCutoff', "{:d}"),
-            ('sectMiniFat', "{:#010x}"),
+            ('sectMiniFat', None),
             ('csectMiniFat', "{:d}")
         ]
-        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int())) for fld, fmtstring in fields)
+        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
 
 class HeaderDiFat(pstruct.type):
     _fields_ = [
@@ -237,10 +239,10 @@ class HeaderDiFat(pstruct.type):
     ]
     def summary(self):
         fields = [
-            ('sectDifat', "{:#010x}"),
+            ('sectDifat', None),
             ('csectDifat', "{:d}")
         ]
-        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int())) for fld, fmtstring in fields)
+        return ' '.join("{:s}={!s}".format(fld, fmtstring.format(self[fld].int()) if fmtstring else self[fld].summary()) for fld, fmtstring in fields)
 
 ### Directory types
 class DirectoryEntryData(ptype.block):
