@@ -237,7 +237,7 @@ class string(ptype.type):
 
             # ..and now turn the slice into an array
             type = ptype.clone(parray.type, length=len(result), _object_=self._object_)
-            return self.new(type, offset=result[0].getoffset(), value=result, parent=self)
+            return self.new(type, offset=result[0].getoffset() if result else self.getoffset(), value=result, parent=self)
 
         if index < -len(self) or index >= len(self):
             raise error.UserError(self, 'string.__getitem__', message='list index {:d} out of range'.format(index))
