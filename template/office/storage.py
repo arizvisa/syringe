@@ -288,12 +288,17 @@ class Directory(parray.block):
             res.append('{:<{offsetwidth}s} {:s}[{:d}] {!r:>{filenamewidth}} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(offset, item.classname(), i, item['Name'].str(), item['Type'].summary(), item['sectLocation'].int(), item['qwSize'].int(), item['clsid'].summary(), offsetwidth=maxoffsetlength, filenamewidth=maxnamelength))
         return '\n'.join(res)
 
-    def byname(self, name):
+    def byname(self, name, index=0):
         for item in self:
-            if any(dname == name for dname in [item.Name(), item['Name'].str()]):
+            available = {item.Name(), item['Name'].str()}
+
+            if name in available and index > 0:
+                index -= 1
+
+            elif name in available:
                 return item
             continue
-        raise KeyError("{:s}.byname({!r}): Unable to find directory entry matching the specified name!".format(self.classname(), name))
+        raise KeyError("{:s}.byname({!r}): Unable to find directory entry matching the specified name.".format(self.classname(), name))
 
     def repr(self):
         return self.details()
