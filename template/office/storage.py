@@ -239,6 +239,17 @@ class DirectoryEntry(pstruct.type):
     def summary(self):
         return '{!r} {:s} SECT:{:x} SIZE:{:x} {:s}'.format(self['Name'].str(), self['Type'].summary(), self['sectLocation'].int(), self['qwSize'].int(), self['clsid'].summary())
 
+    def Name(self):
+        res = (1 + self['uName'].int()) // 2
+        return u''.join(item.str() for item in self['Name'][0 : res]).rstrip(u'\0')
+
+    def Id(self):
+        return self['clsid']
+
+    def Size(self):
+        res = self['qwSize']
+        return res.int()
+
     def Data(self, type=None, clamp=True):
         """Return the contents of the directory entry.
         If clamp is True, then resize the returned sectors according to the size specified in the directory entry.
@@ -279,7 +290,7 @@ class Directory(parray.block):
 
     def byname(self, name):
         for item in self:
-            if item['Name'].str() == name:
+            if any(dname == name for dname in [item.Name(), item['Name'].str()]):
                 return item
             continue
         raise KeyError("{:s}.byname({!r}): Unable to find directory entry matching the specified name!".format(self.classname(), name))
