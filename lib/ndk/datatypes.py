@@ -514,6 +514,9 @@ class FILETIME(pstruct.type):
         epoch = datetime.datetime(1601, 1, 1)
         return epoch + datetime.timedelta(microseconds=self.timestamp() / 1e1)
 
+    def get(self):
+        return self.datetime()
+
     def set(self, *dt, **fields):
         if not fields:
             dt, = dt or (datetime.datetime.now(),)
