@@ -192,8 +192,16 @@ class DIFAT(AllocationTable):
         t = dyn.clone(FAT, length=self._uSectorCount)
         return dyn.clone(DIFAT.IndirectPointer, _object_=t)
 
-    # Collect all DIFAT components (linked-list) until we hit ENDOFCHAIN
+    def iterate(self):
+        '''Yield all allocation tables dereferenced from the DiFat.'''
+        for table in self.li:
+            if table.object.int() >= MAXREGSECT.type:
+                break
+            yield table
+        return
+
     def collect(self, count):
+        '''Yield each entry from the DIFAT table.'''
         yield self
 
         while count > 0:
@@ -203,8 +211,9 @@ class DIFAT(AllocationTable):
         return
 
     def next(self):
+        '''Return the next DIFAT table.'''
         last = self.value[-1]
-        if last.o['ENDOFCHAIN']:
+        if last.object['ENDOFCHAIN']:
             cls = self.__class__
             raise AssertionError("{:s}: Encountered {:s} while trying to traverse to next DIFAT table. {:s}".format('.'.join((cls.__module__, cls.__name__)), ENDOFCHAIN.typename(), last.summary()))
         return last.dereference(_object_=DIFAT, length=self._uSectorCount)
@@ -524,12 +533,29 @@ class File(pstruct.type):
             [res.append(item) for item in items.d.l]
         return res
 
-    def Directory(self):
-        '''Return the whole Directory'''
-        fat = self.Fat()
-        dsect = self['Fat']['sectDirectory'].int()
-        res = self.Stream(dsect)
-        return res.cast(Directory, __name__='Directory', blocksize=lambda: res.size())
+    def difatsectors(self):
+        '''Return all the tables in the document that contains DiFat.'''
+        items = [self['Table']]
+
+        # If there's nothing to continue with, then we're done.
+        next, count = self['DiFat']['sectDifat'], self['DiFat']['csectDifat'].int()
+        if next.int() >= MAXREGSECT.type:
+            return items
+
+        # Yield any other table entries containing the difat
+        next = next.d.l
+        for table in next.collect(count):
+            items.append(table)
+        return items
+
+    def fatsectors(self):
+        '''Return all sectors in the document which contains the Fat.'''
+        count, difat = self['Fat']['csectFat'].int(), self.DiFat()
+
+        result = []
+        for _, items in zip(range(count), difat.iterate()):
+            result.append(items.d)
+        return result
 
     @ptypes.utils.memoize(self=lambda self: self)
     def minisectors(self):
@@ -538,17 +564,16 @@ class File(pstruct.type):
         root = directory.RootEntry()
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
         iterable = fat.chain(start)
-        table = [item for item in self.chain(iterable)]
-        return table
+        return [item for item in self.chain(iterable)]
 
     def chain(self, iterable):
-        '''Return the sector for each index in iterable.'''
+        '''Yield the sector for each index specified in iterable.'''
         for index in iterable:
             yield self['Data'][index]
         return
 
     def minichain(self, iterable):
-        '''Return the minisector for each minisector index in iterable.'''
+        '''Yield the minisector for each minisector index specified in iterable.'''
         sectors, shift = self.minisectors(), self['SectorShift']['uMiniSectorShift'].int()
         res = self.new(ptype.container, value=sectors)
         minisectors = res.cast(parray.type, _object_=dyn.block(2 ** shift), length=res.size() // 2 ** shift)
@@ -569,6 +594,13 @@ class File(pstruct.type):
         iterable = minifat.chain(sector)
         items = [minisector for minisector in self.minichain(iterable)]
         return self.new(ptype.container, value=items)
+
+    def Directory(self):
+        '''Return the whole Directory for the document.'''
+        fat = self.Fat()
+        dsect = self['Fat']['sectDirectory'].int()
+        res = self.Stream(dsect)
+        return res.cast(Directory, __name__='Directory', blocksize=lambda: res.size())
 
 ### Specific stream types
 class Stream(ptype.definition): cache = {}
