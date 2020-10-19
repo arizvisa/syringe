@@ -316,7 +316,7 @@ class LIST_ENTRY(pstruct.type):
             raise AssertionError('{:s}._object_ is not a valid pointer'.format( '.'.join((self.__module__, cls.__name__)) ))
 
     def summary(self):
-        return "F:{:#x}<->B:{:#x}".format(self['Flink'].int(), self['Blink'].int())
+        return "F:{:#x}<->B:{:#x}".format(self[self.flink].int(), self[self.blink].int())
 
     def forward(self):
         if self[self.flink].int() == self._sentinel_:
