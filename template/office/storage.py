@@ -77,7 +77,13 @@ class SECT(Pointer): pass
 ### File-allocation tables that populate a single sector
 class AllocationTable(parray.type):
     def summary(self, **options):
-        return str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
+        try:
+            member = self[0] if len(self) else self._object_()
+            membername = member.typename() if ptype.isinstance(member) else member.__name__
+        except NotImplementedError:
+            membername = '(untyped)'
+        items = str().join(Sector.withdefault(entry.int(), type=entry.int()).symbol for entry in self)
+        return ' '.join(["{:s}[{:s}]".format(membername, "{:d}".format(len(self)) if self.initializedQ() else '...'), items])
     def _object_(self):
         raise NotImplementedError
 
@@ -425,6 +431,11 @@ class Directory(parray.block):
         return next(iterable, None)
 
 ### File type
+class FileSectors(parray.block):
+    def _object_(self):
+        res = self.getparent(File)
+        return getattr(res, 'Sector', dyn.block(self._uSectorSize, __name__='Sector'))
+
 class File(pstruct.type):
     def __reserved(self):
         '''Hook decoding of the "reserved" field in order to keep track of the sector and mini-sector dimensions.'''
@@ -448,7 +459,18 @@ class File(pstruct.type):
 
     def __Data(self):
         self.Sector = dyn.block(self._uSectorSize, __name__='Sector')
-        return dyn.blockarray(self.Sector, self.source.size() - self._uSectorSize)
+        return dyn.clone(FileSectors, blocksize=lambda _, cb=self.source.size() - self._uSectorSize: cb)
+
+    def __Table(self):
+        total, size = self._uSectorSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat'])
+
+        # Figure out how many pointers can fit into whatever number of bytes are left
+        leftover = (total - size) // Pointer().blocksize()
+        return dyn.clone(DIFAT, length=leftover)
+
+    def __padding(self):
+        total, size = self._uSectorSize, sum(self[fld].li.size() for fld in ['Header', 'SectorShift', 'reserved', 'Fat', 'MiniFat', 'DiFat', 'Table'])
+        return dyn.block(max(0, total - size))
 
     _fields_ = [
         (Header, 'Header'),
@@ -457,7 +479,8 @@ class File(pstruct.type):
         (HeaderFat, 'Fat'),
         (HeaderMiniFat, 'MiniFat'),
         (HeaderDiFat, 'DiFat'),
-        (dyn.clone(DIFAT, length=109), 'Table'),    # FIXME: This hardcoded 109 is wrong if the Sector size is not 512
+        (__Table, 'Table'),
+        (__padding, 'padding(Table)'),
         (__Data, 'Data'),
     ]
 
