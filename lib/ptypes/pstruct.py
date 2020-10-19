@@ -77,6 +77,7 @@ class __structure_interface__(ptype.container):
     def __append__(self, object):
         current, name = len(self.value), object.shortname()
         offset = super(__structure_interface__, self).__append__(object)
+        self.value[current].setoffset(offset, recurse=True)
         self.__fastindex[name.lower()] = current
         return offset
 
@@ -325,7 +326,7 @@ class type(__structure_interface__):
                 item = self.new(ptype.type).a.summary(**options)
                 result.append(fmt(i, name, item))
                 continue
-            ofs = self.getoffset(value.__name__ or name)
+            ofs = self.getoffset(getattr(value, '__name__', None) or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
             val = value.summary(**options) if value.initializedQ() else u'???'
             prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
