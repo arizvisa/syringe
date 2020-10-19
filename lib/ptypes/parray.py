@@ -123,7 +123,7 @@ class __array_interface__(ptype.container):
         idx = len(self.value)
         offset = super(__array_interface__, self).__append__(object)
         offset = (self.value[idx - 1].getoffset() + self.value[idx - 1].size()) if idx > 0 else self.getoffset()
-        self.value[idx].setoffset(offset)
+        self.value[idx].setoffset(offset, recurse=True)
         return offset
 
     def append(self, object):
