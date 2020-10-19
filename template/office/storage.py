@@ -1,7 +1,7 @@
 import ptypes, ndk
 from ptypes import *
 
-import operator, math
+import functools, operator, itertools, types, math
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ### Primitive types
@@ -88,6 +88,77 @@ class AllocationTable(parray.type):
             index = self[index].int()
             yield index
         return
+
+    # Yields the index of all objects in the table that matches 'type'
+    def filter(self, type):
+        for index, item in enumerate(self):
+            if item.object[type]:
+                yield index
+            continue
+        return
+
+    def allocate(self, count):
+        '''Find space within the allocation table to allocate the specified number of sectors, and then return the new chain.'''
+        available = (idx for idx, item in enumerate(self) if item.object['FREESECT'])
+        chain = [sidx for _, sidx in zip(range(count), available)]
+
+        # Create a second chain that contains the values that we need
+        # to write to the table.
+        sectors = chain[:] + ['ENDOFCHAIN']
+        sectors.pop(0)
+
+        # Now iterate through our chain assigning the sectors that compose it
+        for nextidx, sidx in zip(sectors, chain):
+            self[sidx].object.set(nextidx)
+        return chain
+
+    def __resize_increase(self, chain, count):
+        '''Allocate the number of sectors to chain by appending more sectors to it, and then return all of its sectors.'''
+        items = chain[:]
+        if count < len(items):
+            raise ValueError(count, len(items))
+
+        # Ensure the last element marks the end of a chain.
+        sidx = items[-1]
+        if not self[sidx].object['ENDOFCHAIN']:
+            raise ValueError(sidx, self[sidx].object)
+
+        # Figure out how many more sectors we need to add,
+        # and then allocate them. After they've been allocate,
+        # then we just need to point the end of the chain to
+        # the beginning of our allocation.
+        allocation = self.allocate(count - len(items))
+        if len(allocation):
+            self[sidx].object.set(allocation[0])
+        return items + allocation
+
+    def __resize_decrease(self, chain, count):
+        '''Decrease the number of sectors for chain by terminating it, and then return all of the sectors that were used to contain it.'''
+        items = chain[:]
+        if len(items) < count:
+            raise ValueError(count, len(items))
+
+        # consume count elements from the iterator
+        iterable = (sidx for sidx in items)
+        for _, sidx in zip(range(count), iterable):
+            pass
+
+        # Terminate the element, and any other indices that follow
+        self[sidx].object.set('ENDOFCHAIN')
+        for _, sidx in enumerate(iterable):
+            self[sidx].object.set('FREESECT')
+        return items
+
+    def resize(self, chain, count):
+        '''Modify the number of sectors used for chain.'''
+        items = [sidx for sidx in self.chain(chain)]
+        if count < len(items):
+            result = self.__resize_decreate(items, count)
+        elif count > len(items):
+            result = self.__resize_increase(items, count)
+        else:
+            result = items[:]
+        return result
 
 class FAT(AllocationTable):
     class Pointer(Pointer):
