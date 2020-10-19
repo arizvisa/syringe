@@ -554,7 +554,7 @@ class File(pstruct.type):
 
         result = []
         for _, items in zip(range(count), difat.iterate()):
-            result.append(items.d)
+            result.append(items.d.l)
         return result
 
     @ptypes.utils.memoize(self=lambda self: self)
@@ -565,6 +565,11 @@ class File(pstruct.type):
         start, _ = (root[item].int() for item in ['sectLocation', 'qwSize'])
         iterable = fat.chain(start)
         return [item for item in self.chain(iterable)]
+
+    def directorysectors(self):
+        fat, directory = self.Fat(), self['Fat']['sectDirectory'].int()
+        iterable = fat.chain(directory)
+        return [sector.cast(Directory) for sector in self.chain(iterable)]
 
     def chain(self, iterable):
         '''Yield the sector for each index specified in iterable.'''
