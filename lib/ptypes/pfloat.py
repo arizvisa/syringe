@@ -168,10 +168,10 @@ class float_t(type):
         """round the floating-point number to the specified number of bits"""
         raise error.ImplementationError(self, 'float_t.round')
 
-    def __setvalue__(self, *values, **attrs):
-        """store ``value`` into a binary format"""
+    def set(self, *values, **attrs):
+        '''Assign the python float number to the floating-point instance.'''
         if not values:
-            return super(type, self).__setvalue__(*values, **attrs)
+            return self.__setvalue__(*values, **attrs)
 
         exponentbias = (2**self.components[1]) // 2 - 1
         number, = values
@@ -202,6 +202,16 @@ class float_t(type):
             # convert the fractional mantissa into a binary number
             mantissa = math.trunc(m * (2**self.components[2]))
 
+        return self.__setvalue__((mantissa, exponent, sf), **attrs)
+
+    def __setvalue__(self, *values, **attrs):
+        '''Assign the provided integral components to the floating-point instance.'''
+        if not values:
+            return super(type, self).__setvalue__(*values, **attrs)
+
+        components, = values
+        mantissa, exponent, sf = components
+
         # store components
         result = bitmap.zero
         result = bitmap.push(result, bitmap.new(sf, self.components[0]))
@@ -211,15 +221,20 @@ class float_t(type):
         return super(type, self).__setvalue__(bitmap.value(result), **attrs)
 
     def __getvalue__(self):
-        """convert the stored floating-point number into a python native float"""
-        exponentbias = (2**self.components[1]) // 2 - 1
+        '''Return the components of the floating-point instance.'''
         integer = super(type, self).__getvalue__()
         res = bitmap.new(integer, sum(self.components))
 
-        # extract components
+        # extract components and return them
         res, sign = bitmap.shift(res, self.components[0])
         res, exponent = bitmap.shift(res, self.components[1])
         res, mantissa = bitmap.shift(res, self.components[2])
+        return mantissa, exponent, sign
+
+    def get(self):
+        '''Return the value of the instance as a native python float.'''
+        exponentbias = (2**self.components[1]) // 2 - 1
+        mantissa, exponent, sign = self.__getvalue__()
 
         if exponent > 0 and exponent < (2**self.components[1] - 1):
             # convert to float
@@ -252,32 +267,50 @@ class sfixed_t(type):
     sign = fractional = 0
 
     def __getvalue__(self):
-        mask = 2**(8 * self.length) - 1
-        intm = 2**(8 * self.length - self.sign) - 1
-        shift = 2**self.fractional
-        value = super(type, self).__getvalue__()
-        #return float(value & intm) / shift * (-1 if value & (mask ^ intm) else +1)
-        if value & (mask ^ intm):
-            return float((value & intm) - (mask & intm + 1)) / shift
-        return float(value & intm) / shift
+        '''Return the components of the fixed-point type.'''
+        bits = 8 * self.length
+        unsigned_mask = 2 ** bits - 1
+        signed_mask = 2 ** (bits - self.sign) - 1
+        shift = 2 ** self.fractional
+
+        res = super(type, self).__getvalue__() & unsigned_mask
+
+        sign = ((unsigned_mask ^ signed_mask) & res) // signed_mask
+        integral = (res & signed_mask) - (res & signed_mask + 1)
+        fraction = (res & signed_mask & (shift - 1)) - (res & signed_mask & signed_mask + 1)
+
+        integer = math.floor(integral / shift)
+        return math.copysign(integer, integral), fraction
+
+    def get(self):
+        '''Return the value of the fixed-point type as a floating-point number.'''
+        shift = 2 ** self.fractional
+        integer, fraction = self.__getvalue__()
+        return integer + fraction / shift
+
+    def set(self, *values, **attrs):
+        '''Assign the floating-point parameter to the fixed-point type.'''
+        if not values:
+            return self.__setvalue__(*values, **attrs)
+
+        number, = values
+        integer, fraction = math.floor(number), number - math.floor(number)
+        magnitude = 2 ** self.fractional
+
+        parameter = math.trunc(integer), math.trunc(fraction * magnitude)
+        return self.__setvalue__(parameter, **attrs)
 
     def __setvalue__(self, *values, **attrs):
+        '''Assign the provided components to the fixed-point type.'''
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
 
-        number, = values
-        integral, fraction = math.trunc(number), number - math.trunc(number)
-        magnitude = 2**(8 * self.length - self.fractional)
-        shift = 2**self.fractional
+        parts, = values
+        integer, fraction = parts
+        shift = 2 ** (8 * self.length - self.fractional)
 
-        mask = 2 ** (8 * self.length) - 1
-        intm = 2 ** (8 * self.length - self.sign) - 1
-
-        integral &= (magnitude - 1) # clamp
-        integral *= magnitude
-        #integral |= (mask ^ intm)
-
-        return super(type, self).__setvalue__(integral + math.trunc(fraction * shift), **attrs)
+        parameter = math.trunc(integer * shift) + fraction
+        return super(type, self).__setvalue__(parameter, **attrs)
 
 class fixed_t(sfixed_t):
     """Represents an unsigned fixed-point number.
@@ -390,13 +423,13 @@ if __name__ == '__main__':
 
         if n == expected:
             raise Success
-        elif math.isnan(float) and math.isnan(res.getf()):
+        elif math.isnan(float) and math.isnan(res.get()):
             raise Success
-        elif math.isinf(float) and math.isinf(res.getf()) and float < 0 and res.getf() < 0:
+        elif math.isinf(float) and math.isinf(res.get()) and float < 0 and res.get() < 0:
             raise Success
-        elif math.isinf(float) and math.isinf(res.getf()) and float >= 0 and res.getf() >= 0:
+        elif math.isinf(float) and math.isinf(res.get()) and float >= 0 and res.get() >= 0:
             raise Success
-        raise Failure('setf: {:f} == {:#x}? {:d} ({:#x}) {:f}'.format(float, expected, res.int(), n, f))
+        raise Failure('get: {:f} == {:#x}? {:d} ({:#x}) {:f}'.format(float, expected, res.int(), n, f))
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -420,7 +453,7 @@ if __name__ == '__main__':
             raise Success
         elif math.isinf(n) and math.isinf(expected) and n >= 0 and expected >= 0:
             raise Success
-        raise Failure('getf: {:#x} == {:f}? pfloat-int:{:#x} pfloat-get:{:f} python-expected:{:#x}'.format(integer, expected, res.int(), n, i))
+        raise Failure('get: {:#x} == {:f}? pfloat-int:{:#x} pfloat-get:{:f} python-expected:{:#x}'.format(integer, expected, res.int(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):
@@ -451,12 +484,12 @@ if __name__ == '__main__':
     def ufixed_point_word_get():
         x = word(byteorder=config.byteorder.bigendian)
         x.source = ptypes.prov.string(b'\x80\x80')
-        if x.l.getf() == 128.5: raise Success
+        if x.l.get() == 128.5: raise Success
     @TestCase
     def ufixed_point_dword_get():
         x = dword(byteorder=config.byteorder.bigendian)
         x.source = ptypes.prov.string(b'\x00\x64\x40\x00')
-        if x.l.getf() == 100.25: raise Success
+        if x.l.get() == 100.25: raise Success
 
     @TestCase
     def ufixed_point_word_integral_set():
@@ -490,14 +523,14 @@ if __name__ == '__main__':
     def sfixed_point_word_get():
         x = sword(byteorder=config.byteorder.bigendian)
         x.source = ptypes.prov.string(b'\xff\x40')
-        if x.l.getf() == -0.75: raise Success
-        print(x.getf())
+        if x.l.get() == -0.75: raise Success
+        print(x.get())
     @TestCase
     def sfixed_point_dword_get():
         x = sdword(byteorder=config.byteorder.bigendian)
         x.source = ptypes.prov.string(b'\xff\xff\xc0\x00')
-        if x.l.getf() == -0.25: raise Success
-        print(x.getf())
+        if x.l.get() == -0.25: raise Success
+        print(x.get())
 
     @TestCase
     def sfixed_point_word_integral_set():
