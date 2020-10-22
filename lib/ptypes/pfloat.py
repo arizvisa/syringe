@@ -136,7 +136,7 @@ def littleendian(ptype):
 class type(pint.type):
     def summary(self, **options):
         res = super(type, self).__getvalue__()
-        return '{:f} ({:#x})'.format(self.float(), res)
+        return '{:g} ({:#x})'.format(self.float(), res)
 
     def __setvalue__(self, *values, **attrs):
         raise error.ImplementationError(self, 'type.__setvalue__')
@@ -153,8 +153,7 @@ class float_t(type):
     components = (signflag, exponent, fraction)
     """
 
-    # FIXME: include support for NaN, and {+,-}infinity (special exponents)
-    #        include support for unsignedness (binary32)
+    # FIXME: include support for unsignedness (binary32)
     #        round up as per ieee-754
     #        handle errors (clamp numbers that are out of range as per spec)
 
@@ -169,89 +168,96 @@ class float_t(type):
         if not values:
             return self.__setvalue__(*values, **attrs)
 
-        exponentbias = 2 ** self.components[1] // 2 - 1
         number, = values
-
-        # convert to integrals
-        if math.isnan(number):
-            sf, exponent, mantissa = 0, 2 ** self.components[1] - 1, ~0
-        elif math.isinf(number):
-            sf, exponent, mantissa = 1 if number < 0 else 0, 2 ** self.components[1] - 1, 0
-        elif number == 0.0 and math.atan2(number, number) < 0.0:
-            sf, exponent, mantissa = 1, 0, 0
-        elif number == 0.0 and math.atan2(number, number) == 0.0:
-            sf, exponent, mantissa = 0, 0, 0
-        else:
-            # extract the exponent and mantissa
-            m, e = math.frexp(number)
-
-            # grab the sign flag
-            sign = math.copysign(1.0, m)
-            sf = 1 if sign < 0 else 0
-
-            # adjust the exponent and remove the implicit bit
-            m = math.fabs(m)
-            exponent = e + exponentbias - 1
-            if exponent != 0:
-                m = m * 2.0 - 1.0
-
-            # convert the fractional mantissa into a binary number
-            mantissa = math.trunc(m * 2 ** self.components[2])
-
-        parameter = mantissa, exponent, sf
-        return self.__setvalue__(parameter, **attrs)
+        return self.__setvalue__(math.frexp(number), **attrs)
 
     def __setvalue__(self, *values, **attrs):
         '''Assign the provided integral components to the floating-point instance.'''
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
+        exponentbias = 2 ** self.components[1] // 2 - 1
 
         components, = values
-        mantissa, exponent, sf = components
+        mantissa, exponent = components
+
+        # if the number is infinite, then the mantissa is set to 0
+        # with the exponent set to its maximum possible value.
+        if math.isinf(mantissa):
+            m, e = 0., 2 ** self.components[1] - 1
+
+        # if the number is explicitly NaN, then we set the 2 highest
+        # bits in the mantissa, and the exponent to its max.
+        elif math.isnan(mantissa):
+            m, e = 0.5, 2 ** self.components[1] - 1
+
+        # if the number is zero, then we need to clear the mantissa and exponent
+        elif math.fabs(mantissa) == 0.0:
+            m, e = 0, 0
+
+        # if the number is denormalized due to the exponent being larger than
+        # the precision we support, then shift its precision a bit.
+        elif exponent <= 1 - exponentbias:
+            m, e = math.fabs(mantissa) * 2 ** (exponent + exponentbias - 1), 0
+
+        # otherwise it's just a normalized number and we just need to
+        # remove the explicit bit if there's a non-zero exponent.
+        else:
+            m, e = math.fabs(mantissa) * 2.0 - 1.0, exponentbias - 1 + exponent
 
         # store components
         result = bitmap.zero
-        result = bitmap.push(result, bitmap.new(sf, self.components[0]))
-        result = bitmap.push(result, bitmap.new(exponent, self.components[1]))
-        result = bitmap.push(result, bitmap.new(mantissa, self.components[2]))
+        result = bitmap.push(result, bitmap.new(1 if math.copysign(1., mantissa) < 0 else 0, self.components[0]))
+        result = bitmap.push(result, bitmap.new(e, self.components[1]))
+        result = bitmap.push(result, bitmap.new(math.trunc(m * 2 ** self.components[2]), self.components[2]))
 
-        return super(type, self).__setvalue__(bitmap.value(result), **attrs)
+        return super(type, self).__setvalue__(bitmap.int(result), **attrs)
 
     def __getvalue__(self):
         '''Return the components of the floating-point instance.'''
         integer = super(type, self).__getvalue__()
-        res = bitmap.new(integer, sum(self.components))
 
         # extract components and return them
-        res, sign = bitmap.shift(res, self.components[0])
-        res, exponent = bitmap.shift(res, self.components[1])
-        res, mantissa = bitmap.shift(res, self.components[2])
-        return mantissa, exponent, sign
+        res = bitmap.new(integer, sum(self.components))
+        res, sf = bitmap.shift(res, self.components[0])
+        res, e = bitmap.shift(res, self.components[1])
+        res, m = bitmap.shift(res, self.components[2])
+
+        # set some constants that we'll need
+        exponentbias = 2 ** self.components[1] // 2 - 1
+        infinite, NaN = (float(item) for item in ['inf', 'nan'])
+
+        # adjust the exponent if its non-zero, and assign the sign flag.
+        exponent = e - exponentbias if e else 1 - exponentbias
+        sign = -1 if sf else +1
+
+        # if the mantissa and exponent are zero, then this is a zero
+        if not (m or e):
+            mantissa = 0.
+
+        # if the exponent is in a valid boundary, then we simply need
+        # to add the implicit bit back to the mantissa.
+        elif -exponentbias < exponent < exponentbias + 1:
+            if e:
+                mantissa = 1.0 + float(m) / 2. ** self.components[2]
+            else:
+                mantissa = float(m) / 2. ** self.components[2]
+                exponent = 1 - exponentbias
+
+        # if the mantissa is empty, and our exponent is at its max
+        # then this number is representing infinite.
+        elif not m and exponent > exponentbias:
+            mantissa, exponent = infinite, 0
+
+        # anything else is likely some weird form of NaN.
+        else:
+            mantissa = NaN
+
+        # copy the sign flag back into the mantissa, and return.
+        return math.copysign(mantissa, sign), exponent
 
     def get(self):
-        '''Return the value of the instance as a native python float.'''
-        exponentbias = 2 ** self.components[1] // 2 - 1
-        mantissa, exponent, sign = self.__getvalue__()
-
-        if exponent > 0 and exponent < 2 ** self.components[1] - 1:
-            # convert to float
-            s = -1 if sign else +1
-            e = exponent - exponentbias
-            m = 1.0 + float(mantissa) / 2 ** self.components[2]
-
-            # done
-            return math.ldexp(math.copysign(m, s), e)
-
-        if exponent == 2**self.components[1] - 1 and mantissa == 0:
-            return float('-inf') if sign else float('+inf')
-        elif exponent in (0, 2**self.components[1] - 1) and mantissa != 0:
-            return float('-nan') if sign else float('+nan')
-        elif exponent == 0 and mantissa == 0:
-            return float('-0') if sign else float('+0')
-
-        # FIXME: this should return NaN or something
-        Log.warn('float_t.__getvalue__ : {:s} : invalid components value : {:d} : {:d} : {:d}'.format(self.instance(), sign, exponent, mantissa))
-        raise NotImplementedError
+        mantissa, exponent = self.__getvalue__()
+        return math.ldexp(mantissa, exponent)
 
 class fixed_t(type):
     """Represents a fixed-point number.
@@ -388,13 +394,23 @@ if __name__ == '__main__':
     single_precision = [
         (0x3f800000, 1.0),
         (0xc0000000, -2.0),
-        (0x7f7fffff, 3.4028234663852886e+38),
         (0x3eaaaaab, 1.0/3),
         (0x41c80000, 25.0),
         (0xc0b80aa6, -5.7513),
+        (0x16779688, 2e-25),
+        (0x96779688, -2e-25),
+        (0x736049f7, 1.777e31),
+        (0x00000001, 1.401298464324817e-45),
+        (0x007fffff, 1.1754942106924411e-38),
+        (0x00800000, 1.1754943508222875e-38),
+        (0x7f7fffff, 3.4028234663852886e+38),
+        (0x80000001, -1.401298464324817e-45),
+        (0x807fffff, -1.1754942106924411e-38),
+        (0x80800000, -1.1754943508222875e-38),
+        (0xff7fffff, -3.4028234663852886e+38,),
 
-        (0xffc00000, +float('NaN')),
-        (0x7fc00000, -float('NaN')),
+        (0x7fc00000, +float('NaN')),
+        (0xffc00000, -float('NaN')),
         (0x7f800000, +float('inf')),
         (0xff800000, -float('inf')),
         (0x00000000, float('+0')),
@@ -441,7 +457,7 @@ if __name__ == '__main__':
             raise Success
         elif math.isinf(float) and math.isinf(res.get()) and float >= 0 and res.get() >= 0:
             raise Success
-        raise Failure('get: {:f} == {:#x}? {:d} ({:#x}) {:f}'.format(float, expected, res.int(), n, f))
+        raise Failure('get: {:g} == {:#x}? {:#x} {:g}'.format(float, expected, n, f))
 
     def test_load(cls, integer, expected):
         if cls.length == 4:
@@ -465,7 +481,7 @@ if __name__ == '__main__':
             raise Success
         elif math.isinf(n) and math.isinf(expected) and n >= 0 and expected >= 0:
             raise Success
-        raise Failure('get: {:#x} == {:f}? pfloat-int:{:#x} pfloat-get:{:f} python-expected:{:#x}'.format(integer, expected, res.int(), n, i))
+        raise Failure('get: {:#x} == {:g}? pfloat-int:{:#x} pfloat-get:{:g} python-expected:{:#x}'.format(integer, expected, res.int(), n, i))
 
     ## tests for floating-point
     for i,(n,f) in enumerate(single_precision):
