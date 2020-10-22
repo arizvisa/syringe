@@ -25,8 +25,8 @@ class UI64(pint.int64_t): pass
 ## fixed-point types
 class SI8_8(pfloat.sfixed_t): length,fractional = 2,8
 class SI16_16(pfloat.sfixed_t): length,fractional = 4,16
-class UI8_8(pfloat.fixed_t): length,fractional = 2,8
-class UI16_16(pfloat.fixed_t): length,fractional = 4,16
+class UI8_8(pfloat.ufixed_t): length,fractional = 2,8
+class UI16_16(pfloat.ufixed_t): length,fractional = 4,16
 
 class FIXED(UI16_16): pass
 class FIXED8(SI8_8): pass

@@ -21,10 +21,10 @@ Another type, pfloat.fixed_t, is also included that can be used to describe real
 numbers encoded using fixed-point arithmetic. This type allows a user to specify
 the number of bits that represent the fractional part of a fixed-point number. A
 similar type, pfloat.sfixed_t, lets one specify whether the fixed-point number
-has a bit dedicated to it's signedness. Both the fixed_t and sfixed_t have the
+has a bit dedicated to it's signedness. Both the ufixed_t and sfixed_t have the
 following interfaces:
 
-    class interface(pfloat.fixed_t):
+    class interface(pfloat.ufixed_t):
         fraction = number-of-bits-for-decimal
         length = size-in-bytes
 
@@ -71,7 +71,7 @@ Example usage:
         components = (1, 8, 23)
 
     # define a fixed-point 16.16 type
-    class type(pfloat.fixed_t):
+    class type(pfloat.ufixed_t):
         length = 4
         fraction = 16
 
@@ -147,10 +147,6 @@ class type(pint.type):
     float = __float__ = lambda self: self.get()
     int = __int__ = lambda self: super(type, self).__getvalue__()
 
-    # wrappers for backwards compatibility
-    setf = lambda self, value: self.__setvalue__(value)
-    getf = lambda self: self.__getvalue__()
-
 class float_t(type):
     """Represents a packed floating-point number.
 
@@ -190,8 +186,8 @@ class float_t(type):
             m, e = math.frexp(number)
 
             # grab the sign flag
-            s = math.copysign(1.0, m)
-            sf = 1 if s < 0 else 0
+            sign = math.copysign(1.0, m)
+            sf = 1 if sign < 0 else 0
 
             # adjust the exponent and remove the implicit bit
             m = abs(m)
@@ -257,12 +253,12 @@ class float_t(type):
         Log.warn('float_t.__getvalue__ : {:s} : invalid components value : {:d} : {:d} : {:d}'.format(self.instance(), sign, exponent, mantissa))
         raise NotImplementedError
 
-class sfixed_t(type):
-    """Represents a signed fixed-point number.
+class fixed_t(type):
+    """Represents a fixed-point number.
 
-    sign = number of bits containing sign flag
+    sign = number of bits for the sign flag
     fractional = number of bits for fractional component
-    length = size in bytes of type
+    length = size in bytes of the entire type
     """
     length = 0
     sign = fractional = 0
@@ -289,6 +285,19 @@ class sfixed_t(type):
         integer, fraction = self.__getvalue__()
         return integer + float(fraction) / shift
 
+    def __setvalue__(self, *values, **attrs):
+        '''Assign the provided components to the fixed-point type.'''
+        if not values:
+            return super(type, self).__setvalue__(*values, **attrs)
+        bits = 8 * self.length
+
+        parts, = values
+        integer, fraction = parts
+        magnitude = 2 ** (bits - self.fractional)
+
+        parameter = math.trunc(integer * magnitude) + fraction
+        return super(type, self).__setvalue__(parameter, **attrs)
+
     def set(self, *values, **attrs):
         '''Assign the floating-point parameter to the fixed-point type.'''
         if not values:
@@ -301,19 +310,20 @@ class sfixed_t(type):
         parameter = math.trunc(integer), math.trunc(fraction * magnitude)
         return self.__setvalue__(parameter, **attrs)
 
-    def __setvalue__(self, *values, **attrs):
-        '''Assign the provided components to the fixed-point type.'''
-        if not values:
-            return super(type, self).__setvalue__(*values, **attrs)
+class sfixed_t(fixed_t):
+    """Represents a signed fixed-point number.
 
-        parts, = values
-        integer, fraction = parts
-        shift = 2 ** (8 * self.length - self.fractional)
+    fractional = number of bits for fractional component
+    length = size in bytes of type
+    """
+    length = 0          # size in bytes of integer
+    fractional = 0      # number of bits to represent fractional part
 
-        parameter = math.trunc(integer * shift) + fraction
-        return super(type, self).__setvalue__(parameter, **attrs)
+    @property
+    def sign(self):
+        return 1
 
-class fixed_t(sfixed_t):
+class ufixed_t(fixed_t):
     """Represents an unsigned fixed-point number.
 
     fractional = number of bits for fractional component
@@ -476,9 +486,9 @@ if __name__ == '__main__':
         TestCase(testcase)
 
     ## fixed
-    class word(fixed_t):
+    class word(ufixed_t):
         length,fractional = 2,8
-    class dword(fixed_t):
+    class dword(ufixed_t):
         length,fractional = 4,16
 
     @TestCase

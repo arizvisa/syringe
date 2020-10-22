@@ -17,7 +17,7 @@ class pQTType(pQTInt):
     def set(self, value):
         return super(pQTType,self).set( functools.reduce(lambda x,y:x*0x100+ord(y), value, 0) )
 
-class Fixed(pfloat.fixed_t):
+class Fixed(pfloat.ufixed_t):
     fractional,length = 16,4
 
 class Matrix(pstruct.type):
