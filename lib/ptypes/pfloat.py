@@ -173,14 +173,14 @@ class float_t(type):
         if not values:
             return self.__setvalue__(*values, **attrs)
 
-        exponentbias = (2**self.components[1]) // 2 - 1
+        exponentbias = 2 ** self.components[1] // 2 - 1
         number, = values
 
         # convert to integrals
         if math.isnan(number):
-            sf, exponent, mantissa = 0, 2**self.components[1] - 1, ~0
+            sf, exponent, mantissa = 0, 2 ** self.components[1] - 1, ~0
         elif math.isinf(number):
-            sf, exponent, mantissa = 1 if number < 0 else 0, 2**self.components[1] - 1, 0
+            sf, exponent, mantissa = 1 if number < 0 else 0, 2 ** self.components[1] - 1, 0
         elif number == 0.0 and math.atan2(number, number) < 0.0:
             sf, exponent, mantissa = 1, 0, 0
         elif number == 0.0 and math.atan2(number, number) == 0.0:
@@ -200,9 +200,10 @@ class float_t(type):
                 m = m * 2.0 - 1.0
 
             # convert the fractional mantissa into a binary number
-            mantissa = math.trunc(m * (2**self.components[2]))
+            mantissa = math.trunc(m * 2 ** self.components[2])
 
-        return self.__setvalue__((mantissa, exponent, sf), **attrs)
+        parameter = mantissa, exponent, sf
+        return self.__setvalue__(parameter, **attrs)
 
     def __setvalue__(self, *values, **attrs):
         '''Assign the provided integral components to the floating-point instance.'''
@@ -233,14 +234,14 @@ class float_t(type):
 
     def get(self):
         '''Return the value of the instance as a native python float.'''
-        exponentbias = (2**self.components[1]) // 2 - 1
+        exponentbias = 2 ** self.components[1] // 2 - 1
         mantissa, exponent, sign = self.__getvalue__()
 
-        if exponent > 0 and exponent < (2**self.components[1] - 1):
+        if exponent > 0 and exponent < 2 ** self.components[1] - 1:
             # convert to float
             s = -1 if sign else +1
             e = exponent - exponentbias
-            m = 1.0 + (float(mantissa) / 2**self.components[2])
+            m = 1.0 + float(mantissa) / 2 ** self.components[2]
 
             # done
             return math.ldexp(math.copysign(m, s), e)
@@ -279,14 +280,14 @@ class sfixed_t(type):
         integral = (res & signed_mask) - (res & signed_mask + 1)
         fraction = (res & signed_mask & (shift - 1)) - (res & signed_mask & signed_mask + 1)
 
-        integer = math.floor(integral / shift)
+        integer = math.floor(float(integral) / shift)
         return math.copysign(integer, integral), fraction
 
     def get(self):
         '''Return the value of the fixed-point type as a floating-point number.'''
         shift = 2 ** self.fractional
         integer, fraction = self.__getvalue__()
-        return integer + fraction / shift
+        return integer + float(fraction) / shift
 
     def set(self, *values, **attrs):
         '''Assign the floating-point parameter to the fixed-point type.'''
