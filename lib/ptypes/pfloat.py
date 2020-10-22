@@ -190,7 +190,7 @@ class float_t(type):
             sf = 1 if sign < 0 else 0
 
             # adjust the exponent and remove the implicit bit
-            m = abs(m)
+            m = math.fabs(m)
             exponent = e + exponentbias - 1
             if exponent != 0:
                 m = m * 2.0 - 1.0
@@ -266,24 +266,25 @@ class fixed_t(type):
     def __getvalue__(self):
         '''Return the components of the fixed-point type.'''
         bits = 8 * self.length
+        magnitude = 2 ** self.fractional
+
         unsigned_mask = 2 ** bits - 1
         signed_mask = 2 ** (bits - self.sign) - 1
-        shift = 2 ** self.fractional
 
         res = super(type, self).__getvalue__() & unsigned_mask
 
         sign = ((unsigned_mask ^ signed_mask) & res) // signed_mask
         integral = (res & signed_mask) - (res & signed_mask + 1)
-        fraction = (res & signed_mask & (shift - 1)) - (res & signed_mask & signed_mask + 1)
+        fraction = (res & signed_mask & (magnitude - 1)) - (res & signed_mask & signed_mask + 1)
 
-        integer = math.floor(float(integral) / shift)
-        return math.copysign(integer, integral), fraction
+        integer = math.floor(float(integral) / magnitude)
+        return integer if math.fabs(integer) == 0.0 else math.trunc(integer), fraction
 
     def get(self):
         '''Return the value of the fixed-point type as a floating-point number.'''
-        shift = 2 ** self.fractional
+        magnitude = 2 ** self.fractional
         integer, fraction = self.__getvalue__()
-        return integer + float(fraction) / shift
+        return math.copysign(integer + float(fraction) / magnitude, integer)
 
     def __setvalue__(self, *values, **attrs):
         '''Assign the provided components to the fixed-point type.'''
@@ -493,14 +494,14 @@ if __name__ == '__main__':
 
     @TestCase
     def ufixed_point_word_get():
-        x = word(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string(b'\x80\x80')
-        if x.l.get() == 128.5: raise Success
+        x = word(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\x80\x80')).l
+        if x.get() == 128.5: raise Success
+        print(x.get(), '!=', 128.25)
     @TestCase
     def ufixed_point_dword_get():
-        x = dword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string(b'\x00\x64\x40\x00')
-        if x.l.get() == 100.25: raise Success
+        x = dword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\x00\x64\x40\x00')).l
+        if x.get() == 100.25: raise Success
+        print(x.get(), '!=', 100.25)
 
     @TestCase
     def ufixed_point_word_integral_set():
@@ -532,16 +533,14 @@ if __name__ == '__main__':
 
     @TestCase
     def sfixed_point_word_get():
-        x = sword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string(b'\xff\x40')
-        if x.l.get() == -0.75: raise Success
-        print(x.get())
+        x = sword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\x40')).l
+        if x.get() == -0.75: raise Success
+        print(x.get(), '!=', -0.75)
     @TestCase
     def sfixed_point_dword_get():
-        x = sdword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string(b'\xff\xff\xc0\x00')
-        if x.l.get() == -0.25: raise Success
-        print(x.get())
+        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\xff\xc0\x00')).l
+        if x.get() == -0.25: raise Success
+        print(x.get(), '!=', -0.25)
 
     @TestCase
     def sfixed_point_word_integral_set():
@@ -556,13 +555,12 @@ if __name__ == '__main__':
 
     @TestCase
     def sfixed_point_dword_integral_set():
-        x = sdword(byteorder=config.byteorder.bigendian)
-        x.source = ptypes.prov.string(b'\xff\xfe\x40\x00')
+        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\xfe\x40\x00'))
         x.set(-1.75)
         if bytearray(x.serialize()[0:2]) == b'\xff\xfe': raise Success
     @TestCase
     def sfixed_point_dword_fractional_set():
-        x = sdword(byteorder=config.byteorder.bigendian)
+        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\xfe\xc0\x00'))
         x.set(-1.25)
         if bytearray(x.serialize()[2:]) == b'\xc0\x00': raise Success
 
