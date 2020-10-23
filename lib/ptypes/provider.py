@@ -1313,11 +1313,13 @@ try:
     class gdb(debuggerbase):
         module = importlib.import_module('gdb')
         def __init__(self, inferior=None):
-            self.__process = inferior or self.module.selected_inferior()
+            gdb = self.module
+            self.__process = inferior or gdb.selected_inferior()
             self.address = 0
 
         @classmethod
         def expr(cls, string):
+            gdb = cls.module
             res = gdb.parse_and_eval(string)
             return res.cast( gdb.lookup_type("long") )
 
