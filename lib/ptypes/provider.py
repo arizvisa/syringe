@@ -1346,7 +1346,7 @@ try:
             return len(data)
 
     Log.info("{:s} : Successfully loaded the `gdb` provider.".format(__name__))
-    if _: DEFAULT.append(lldb)
+    if _: DEFAULT.append(gdb)
 
 except ImportError:
     Log.info("{:s} : Unable to import the 'gdb' module. Failed to define the `gdb` provider.".format(__name__))
