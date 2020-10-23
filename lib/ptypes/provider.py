@@ -1314,7 +1314,7 @@ try:
         module = importlib.import_module('gdb')
         def __init__(self, inferior=None):
             gdb = self.module
-            self.__process = inferior or gdb.selected_inferior()
+            self.inferior = inferior or gdb.selected_inferior()
             self.address = 0
 
         @classmethod
@@ -1336,18 +1336,18 @@ try:
             return res
 
         def consume(self, amount):
-            gdb, process = self.module, self.__process
+            gdb, process = self.module, self.inferior
             try:
-                data = process.read_memory(self.address, amount)
+                mem = process.read_memory(self.address, amount)
             except gdb.MemoryError:
-                data = None
-            if data is None or len(data) != amount:
+                mem = None
+            if mem is None or mem.nbytes != amount:
                 raise error.ConsumeError(self, self.address, amount)
-            self.address += len(data)
-            return data
+            self.address += mem.nbytes
+            return mem.tobytes()
 
         def store(self, data):
-            gdb, process = self.module, self.__process
+            gdb, process = self.module, self.inferior
             try:
                 process.write_memory(self.address, data)
             except gdb.MemoryError:
