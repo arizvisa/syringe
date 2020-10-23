@@ -1318,17 +1318,24 @@ try:
             self.address = 0
 
         @classmethod
-        def expr(cls, string):
+        def expr(cls, expression):
             gdb = cls.module
-            res = gdb.parse_and_eval(string)
-            return res.cast( gdb.lookup_type("long") )
+
+            try:
+                type = gdb.lookup_type('intptr_t')
+            except gdb.error as E:
+                message, = E.args
+                raise error.TypeError(cls, 'expr', message=message)
+
+            res = gdb.parse_and_eval(expression)
+            return res.cast(type)
 
         def seek(self, offset):
             res, self.address = self.address, offset
             return res
 
         def consume(self, amount):
-            process = self.__process
+            gdb, process = self.module, self.__process
             try:
                 data = process.read_memory(self.address, amount)
             except gdb.MemoryError:
@@ -1339,7 +1346,7 @@ try:
             return data
 
         def store(self, data):
-            process = self.__process
+            gdb, process = self.module, self.__process
             try:
                 process.write_memory(self.address, data)
             except gdb.MemoryError:
