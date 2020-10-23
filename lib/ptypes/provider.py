@@ -1327,8 +1327,9 @@ try:
                 message, = E.args
                 raise error.TypeError(cls, 'expr', message=message)
 
-            res = gdb.parse_and_eval(expression)
-            return res.cast(type)
+            value = gdb.parse_and_eval(expression)
+            res = value.cast(type)
+            return int(res)
 
         def seek(self, offset):
             res, self.address = self.address, offset
