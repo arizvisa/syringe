@@ -14,8 +14,6 @@ of a floating-point number. This type has the following interface:
             '''Assign the decimal ``number`` to the value of ``self``.'''
         def float(self):
             '''Return ``self`` as a 'float' type in python.'''
-        def __float__(self):
-            '''Method overload for the 'float' keyword.'''
 
 Another type, pfloat.fixed_t, is also included that can be used to describe real
 numbers encoded using fixed-point arithmetic. This type allows a user to specify
@@ -144,8 +142,11 @@ class type(pint.type):
     def __getvalue__(self):
         raise error.ImplementationError(self, 'type.__getvalue__')
 
-    float = __float__ = lambda self: self.get()
-    int = __int__ = lambda self: super(type, self).__getvalue__()
+    def float(self):
+        return self.get()
+
+    def int(self):
+        return super(type, self).__getvalue__()
 
 class float_t(type):
     """Represents a packed floating-point number.

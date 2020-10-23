@@ -403,7 +403,6 @@ class integer(type):
     def int(self):
         res = self.bitmap()
         return bitmap.value(res)
-    num = int
 
     def bits(self):
         if self.value is None:
@@ -707,7 +706,6 @@ class container(type):
     def int(self):
         res = self.bitmap()
         return bitmap.value(res)
-    num = int
 
     def bitmap(self):
         if self.value is None:
