@@ -729,19 +729,20 @@ class __interface__(object):
         path = [ fn(item) for item in path ]
         return list(reversed(path))
 
-    def new(self, t, **attrs):
-        """Create a new instance of ``ptype`` with the provided ``attrs``
+    def new(self, t, **attributes):
+        """Create a new instance of ``ptype`` with the provided ``attributes``
 
-        If any ``attrs`` are provided, this will assign them to the new instance.
+        If any ``attributes`` are provided, this will assign them to the new instance.
         The newly created instance will inherit the current object's .source and
         any .attributes designated by the current instance.
         """
 
-        if 'recurse' in attrs:
-            attrs['recurse'].update(self.attributes)
-        else:
-            attrs['recurse'] = self.attributes
+        recursive = self.attributes.copy()
+        recursive.update(attributes.pop('recurse', {}))
 
+        attrs = recursive.copy() if recursive else {}
+        attrs.update(attributes)
+        attrs.setdefault('recurse', recursive) if recursive else None
         attrs.setdefault('parent', self)
 
         # instantiate an instance if we're given a type
