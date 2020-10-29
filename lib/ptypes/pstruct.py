@@ -323,8 +323,8 @@ class type(__structure_interface__):
             t, name = fld or (value.__class__, value.name())
             if value is None:
                 i = utils.repr_class(gettypename(t))
-                item = self.new(ptype.type).a.summary(**options)
-                result.append(fmt(i, name, item))
+                item = ptype.undefined().a
+                result.append(fmt(i, name, item.summary(**options)))
                 continue
             ofs = self.getoffset(getattr(value, '__name__', None) or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
