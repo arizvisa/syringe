@@ -4530,9 +4530,16 @@ class FtCmo(pstruct.type):
     ]
 
 @BIFF5.define
+class OBJ(pstruct.type):
+    type = 0x005d
+    type = 93
+    _fields_ = [
+        # FIXME
+    ]
+
 @BIFF8.define
 class Obj(pstruct.type):
-    type = 0x05d
+    type = 0x005d
     type = 93
     def __props(self):
         try:
