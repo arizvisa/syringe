@@ -408,11 +408,11 @@ class Directory(parray.block):
     def details(self):
         Fescape = lambda s: eval("{!r}".format(s).replace('\\', '\\\\'))
 
-        maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self)
-        maxnamelength = max(len(Fescape(item.Name())) for item in self)
-        maxtypelength = max(len(item['Type'].summary()) for item in self)
-        maxstartlength = max(len("{:x}".format(item['sectLocation'].int())) for item in self)
-        maxsizelength = max(len("{:x}".format(item['qwSize'].int())) for item in self)
+        maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self) if len(self) else 0
+        maxnamelength = max(len(Fescape(item.Name())) for item in self) if len(self) else 0
+        maxtypelength = max(len(item['Type'].summary()) for item in self) if len(self) else 0
+        maxstartlength = max(len("{:x}".format(item['sectLocation'].int())) for item in self) if len(self) else 0
+        maxsizelength = max(len("{:x}".format(item['qwSize'].int())) for item in self) if len(self) else 0
 
         res = []
         for i, item in enumerate(self):
