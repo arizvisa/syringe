@@ -1086,7 +1086,7 @@ class BOF4(BOF3):
     type = 0x0409
     def Version(self):
         return 4
-    
+
 @BIFF5.define
 @BIFF8.define
 class BOF5(BOF4):
