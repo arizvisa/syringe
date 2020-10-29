@@ -9,12 +9,12 @@ ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 
 @Record.define
-class BIFF7(ptype.definition):
-    type, cache = '.'.join([__name__, 'BIFF7']), {}
+class BIFF5(ptype.definition):
+    type, cache = '.'.join([__name__, 'BIFF5']), {}
 
     class unknown(ptype.block):
         def classname(self):
-            res = getattr(self, BIFF7.attribute, None)
+            res = getattr(self, BIFF5.attribute, None)
             if res is None:
                 return self.typename()
             type, none = res
@@ -26,7 +26,7 @@ class BIFF7(ptype.definition):
         type, none = key if isinstance(key, (tuple, list)) else (key, None)
         if none is not None:
             return default
-        return super(BIFF7, cls).__get__(type, default, **kwargs)
+        return super(BIFF5, cls).__get__(type, default, **kwargs)
 
 @Record.define
 class BIFF8(ptype.definition):
@@ -62,7 +62,7 @@ class RecordGeneral(RecordGeneralBase):
             return super(RecordGeneral.Header, self).summary()
         def Type(self):
             version = self.attributes.get('_biffver', 8)
-            return BIFF7.type if version < 8 else BIFF8.type
+            return BIFF5.type if version <= 5 else BIFF8.type
         def Instance(self):
             return self['type'].int(), None
         def Length(self):
@@ -76,7 +76,7 @@ class RecordContainer(RecordContainer):
 
         # grab the version if it's defined
         try:
-            version = next(attributes[item] for item in version_attributes if item in attributes)
+            version = getattr(self, '_biffver') if hasattr(self, '_biffver') else next(attributes[item] for item in version_attributes if item in attributes)
 
         # if we couldn't find one, then set a default one.
         except StopIteration:
@@ -417,7 +417,7 @@ class File(File):
 
         # grab the version if it's defined
         try:
-            version = next(attributes[item] for item in version_attributes if item in attributes)
+            version = getattr(self, '_biffver') if hasattr(self, '_biffver') else next(attributes[item] for item in version_attributes if item in attributes)
 
         # if we couldn't find one, then set a default one.
         except StopIteration:
@@ -449,7 +449,7 @@ class File(File):
         return '\n'.join(res) + '\n'
 
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CALCCOUNT(pstruct.type):
     type = 0x000c
@@ -458,7 +458,7 @@ class CALCCOUNT(pstruct.type):
         (uint2, 'cIter'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CALCMODE(pint.enum, uint2):
     type = 0xd
@@ -469,7 +469,7 @@ class CALCMODE(pint.enum, uint2):
         ('No Tables', 2),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class REFMODE(pstruct.type):
     type = 0x000f
@@ -483,7 +483,7 @@ class REFMODE(pstruct.type):
         (_fRefA1, 'fRefA1'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DELTA(pstruct.type):
     type = 0x0010
@@ -492,7 +492,7 @@ class DELTA(pstruct.type):
         (Xnum, 'numDelta'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class ITERATION(pstruct.type):
     type = 0x0011
@@ -506,7 +506,7 @@ class ITERATION(pstruct.type):
         (_fIter, 'fIter'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SAVERECALC(pstruct.type):
     type = 0x005f
@@ -520,7 +520,7 @@ class SAVERECALC(pstruct.type):
         (_fSaveRecalc, 'fSaveRecalc'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class PRINTHEADERS(pstruct.type):
     type = 0x002a
@@ -534,7 +534,7 @@ class PRINTHEADERS(pstruct.type):
         (_fPrintRwCol, 'fPrintRwCol'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class PRINTGRIDLINES(pstruct.type):
     type = 0x002b
@@ -548,7 +548,7 @@ class PRINTGRIDLINES(pstruct.type):
         (_fPrintGrid, 'fPrintGrid'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class GUTS(pstruct.type):
     type = 0x0080
@@ -560,7 +560,7 @@ class GUTS(pstruct.type):
         (uint2, 'iLevelColMac'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class WSBOOL(pbinary.flags):
     type = 0x0081
@@ -580,7 +580,7 @@ class WSBOOL(pbinary.flags):
         (1, 'fAfe'),
     ])
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class GRIDSET(pstruct.type):
     type = 0x0082
@@ -594,7 +594,7 @@ class GRIDSET(pstruct.type):
         (_fGridSet, 'fGridSet'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class GRIDSET(pstruct.type):
     type = 0x0225
@@ -614,7 +614,7 @@ class GRIDSET(pstruct.type):
         (uint2, 'miyRw'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CatSerRange(pstruct.type):
     type = 0x1020
@@ -636,7 +636,7 @@ class CatSerRange(pstruct.type):
     ]
 
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class RRTabId(parray.block):
     _object_ = USHORT
@@ -670,7 +670,7 @@ class FrtHeaderOld(pstruct.type):
         (FrtFlags, 'grbitFrt'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class MTRSettings(pstruct.type):
     type = 2202
@@ -681,7 +681,7 @@ class MTRSettings(pstruct.type):
         (uint4, 'cUserThreadCount')
     ]
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Compat12(pstruct.type):
     type = 2188
@@ -696,7 +696,7 @@ class Cell(pstruct.type):
         (uint2, 'col'),
         (uint2, 'ixfe')
     ]
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class LabelSst(pstruct.type):
     type = 253
@@ -705,7 +705,7 @@ class LabelSst(pstruct.type):
         (uint4, 'isst')
     ]
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class RK(pstruct.type):
     type = 638
@@ -716,7 +716,7 @@ class RK(pstruct.type):
         (RkRec, 'rkrec')
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class MulBlank(pstruct.type):
     type = 190
@@ -742,7 +742,7 @@ class MulBlank(pstruct.type):
     ]
 
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Number(pstruct.type):
     type = 515
@@ -760,7 +760,7 @@ class Ref8(pstruct.type):
         (uint2, 'colLast'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class MergeCells(pstruct.type):
     type = 229
@@ -769,7 +769,7 @@ class MergeCells(pstruct.type):
         (lambda s: dyn.array(Ref8, int(s['cmcs'].li)), 'rgref')
     ]
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CrtLayout12(pstruct.type):
     class CrtLayout12Auto(pbinary.struct):
@@ -796,7 +796,7 @@ class CrtLayout12(pstruct.type):
     ]
 
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Frame(pstruct.type):
     class _flags(pbinary.flags):
@@ -813,7 +813,7 @@ class Frame(pstruct.type):
     ]
 
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Pos(pstruct.type):
     type = 4175
@@ -831,38 +831,110 @@ class Pos(pstruct.type):
     ]
 
 ###
-class XLUnicodeStringNoCch(pstruct.type):
-    def __rgb(self):
-        res = pstr.wstring if self['fHighByte'].li.int() else pstr.string
+class FontIndex(pint.enum, uint2):
+    _values_ = [
+        ('Default',             0),
+        ('Default,Bold',        1),
+        ('Default,Italic',      2),
+        ('Default,Bold,Italic', 3),
+    ]
 
-        # If there was a length that was specified, then use that
-        if hasattr(self, 'length'):
-            return dyn.clone(res, length=getattr(self, 'length', 0))
-
-        # Otherwise, we need to calculate it from the blocksize
-        try:
-            p = self.getparent(RecordGeneralBase)
-            cb = p['header'].li.Length()
-
-        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
-            # XXX: unable to calculate length without the blocksize
-            return dyn.clone(res, length=0)
-        return dyn.clone(res, blocksize=lambda s, size=cb - 1: size)
-
+class FormatRun(pstruct.type):
     _fields_ = [
-        (ubyte1, 'fHighByte'),
-        (__rgb, 'rgb')
+        (uint2, 'ich'),
+        (FontIndex, 'ifnt'),
     ]
 
 class XLUnicodeString(pstruct.type):
+    class _grbit(pbinary.flags):
+        _fields_ = [
+            (4, '(Reserved)'),
+            (1, 'fRichSt'),
+            (1, 'fExtSt'),
+            (1, 'Reserved'),
+            (1, 'fHighByte'),
+        ]
+
+    def __crun(self):
+        flags = self['grbit'].li
+        return uint2 if flags['fRichSt'] else pint.uint_t
+
+    def __cchExtRst(self):
+        flags = self['grbit'].li
+        return uint4 if flags['fExtSt'] else pint.uint_t
+
     def __rgb(self):
-        res = pstr.wstring if self['fHighByte'].li.int() else pstr.string
-        return dyn.clone(res, length=self['cch'].li.int())
+        length, flags = (self[fld].li for fld in ['cch', 'grbit'])
+        return dyn.clone(pstr.wstring if flags['fHighByte'] else pstr.string, length=length.int())
 
     _fields_ = [
         (uint2, 'cch'),
-        (ubyte1, 'fHighByte'),
+        (_grbit, 'grbit'),
+        (__crun, 'crun'),
+        (__cchExtRst, 'cchExtRst'),
         (__rgb, 'rgb'),
+        (lambda self: dyn.array(FormatRun, self['crun'].li.int()), 'rgSTRUN'),
+        (lambda self: dyn.block(self['cchExtRst'].li.int()), 'ExtRst'),
+    ]
+
+class XLUnicodeStringNoCch(pstruct.type):
+    def __crun(self):
+        flags = self['grbit'].li
+        return uint2 if flags['fRichSt'] else pint.uint_t
+
+    def __cchExtRst(self):
+        flags = self['grbit'].li
+        return uint4 if flags['fExtSt'] else pint.uint_t
+
+    def __rgb(self):
+        flags = self['grbit'].li
+
+        try:
+            # If there was a length that was specified, then use that
+            if hasattr(self, 'length'):
+                length = getattr(self, 'length')
+
+            # Otherwise, we need to calculate it from the blocksize
+            else:
+                p = self.getparent(RecordGeneralBase)
+                cb = p['header'].li.Length()
+                length = cb // 2 if flags['fHighByte'] else cb
+
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            # XXX: unable to calculate length without the blocksize
+            length = 0
+        return dyn.clone(pstr.wstring if flags['fHighByte'] else pstr.string, length=length)
+
+    _fields_ = [
+        (XLUnicodeString._grbit, 'grbit'),
+        (__crun, 'crun'),
+        (__cchExtRst, 'cchExtRst'),
+        (__rgb, 'rgb'),
+        (lambda self: dyn.array(FormatRun, self['crun'].li.int()), 'rgSTRUN'),
+        (lambda self: dyn.block(self['cchExtRst'].li.int()), 'ExtRst'),
+    ]
+
+class ShortXLUnicodeString(pstruct.type):
+    def __crun(self):
+        flags = self['grbit'].li
+        return uint2 if flags['fRichSt'] else pint.uint_t
+
+    def __cchExtRst(self):
+        flags = self['grbit'].li
+        return uint4 if flags['fExtSt'] else pint.uint_t
+
+    def __rgb(self):
+        length, flags = (self[fld].li for fld in ['cch', 'grbit'])
+        return dyn.clone(pstr.wstring if flags['fHighByte'] else pstr.string, length=length.int())
+
+    _fields_ = [
+        (ubyte1, 'cch'),
+        (XLUnicodeString._grbit, 'grbit'),
+        (__crun, 'crun'),
+        (__cchExtRst, 'cchExtRst'),
+        (__rgb, 'rgb'),
+        (lambda self: dyn.array(FormatRun, self['crun'].li.int()), 'rgSTRUN'),
+        (lambda self: dyn.block(self['cchExtRst'].li.int()), 'ExtRst'),
     ]
 
 # FIXME: http://msdn.microsoft.com/en-us/library/dd924700(v=office.12).aspx
@@ -876,28 +948,7 @@ class LPWideString(pstruct.type):
 class VirtualPath(XLUnicodeString): pass
 class XLNameUnicodeString(XLUnicodeString): pass
 
-class ShortXLUnicodeString(pstruct.type):
-    def __rgb(self):
-        length = self['cch'].li.int()
-        high = self['fHighByte'].li.int()
-        if high == 0:
-            return dyn.clone(pstr.string, length=length)
-        elif high == 1:
-            return dyn.clone(pstr.wstring, length=length)
-        elif high == 7:
-            raise NotImplementedError("FIXME")
-            length = self.parent.blocksize() - 2
-            return dyn.block(length)
-        # FIXME: test this out
-        raise NotImplementedError
-
-    _fields_ = [
-        (ubyte1, 'cch'),
-        (ubyte1, 'fHighByte'),
-        (__rgb, 'rgb'),
-    ]
-
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SupBook(pstruct.type):
     type = 430
@@ -908,7 +959,7 @@ class SupBook(pstruct.type):
     ]
 
 #DataValidationCriteria
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DVAL(pstruct.type):
     type = 434
@@ -943,7 +994,7 @@ class CellRange(pstruct.type):
         (lambda s: dyn.array(s.Address, int(s['number'].li)), 'addresses'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DV(pstruct.type):
     type = 0x1be
@@ -996,9 +1047,52 @@ class DV(pstruct.type):
     ]
 
 ###
-@BIFF7.define
+class DocType(pint.enum, uint2):
+    _values_ = [
+        ('workbook', 0x0005),
+        ('visualbasic', 0x0006),
+        ('worksheet', 0x0010),
+        ('charsheet', 0x0020),
+        ('macrosheet', 0x0040),
+        ('workspace', 0x0100)
+    ]
+
+@BIFF5.define
 @BIFF8.define
-class BOF(pstruct.type):
+class BOF2(pstruct.type):
+    type = 9
+    type = 0x0009
+    _fields_ = [
+        (uint2, 'vers'),
+        (DocType, 'dt'),
+        (uint2, 'rupBuild'),
+        (uint2, 'rupYear'),
+    ]
+    def Version(self):
+        return 2
+
+@BIFF5.define
+@BIFF8.define
+class BOF3(BOF2):
+    type = 521
+    type = 0x0209
+    def Version(self):
+        return 3
+
+@BIFF5.define
+@BIFF8.define
+class BOF4(BOF3):
+    type = 1033
+    type = 0x0409
+    def Version(self):
+        return 4
+    
+@BIFF5.define
+@BIFF8.define
+class BOF5(BOF4):
+    type = 2057
+    type = 0x0809
+
     class _flags(pbinary.flags):
         _fields_ = R([
             (1, 'fWin'),
@@ -1021,52 +1115,84 @@ class BOF(pstruct.type):
             (20, 'reserved2')
         ])
 
-    class DocType(pint.enum, uint2):
-        _values_ = [
-            ('workbook', 0x0005),
-            ('worksheet', 0x0010),
-            ('charsheet', 0x0020),
-            ('macrosheet', 0x0040)
-        ]
+    def __flags(self):
+        return ptype.undefined if self.Version() < 8 else self._flags
 
-    type = 2057
     _fields_ = [
         (uint2, 'vers'),
         (DocType, 'dt'),
         (uint2, 'rupBuild'),
         (uint2, 'rupYear'),
-        (_flags, 'flags')
+        (__flags, 'flags')
     ]
 
-#@BIFF7.define
+    def Version(self):
+        version, lookup = self['vers'].li, {6:8, 5:7}
+        if not hasattr(self, '_biffver'):
+            try:
+                self._biffver
+            except:
+                import traceback
+                traceback.print_stack()
+        return lookup.get(version.int(), self._biffver)
+
+@BIFF5.define
+class BOUNDSHEET(pstruct.type):
+    type = 0x85
+    type = 133
+
+    class _grbit(pbinary.struct):
+        class _hsState(pbinary.enum):
+            width, _values_ = 2, [
+                ('visible', 0),
+                ('hidden', 1),
+                ('very-hidden', 2),
+            ]
+        class _docType(pbinary.enum):
+            width, _values_ = 8, [
+                ('worksheet', 0x00),
+                ('macro', 0x01),
+                ('chart', 0x02),
+                ('vba-module', 0x06),
+            ]
+        _fields_ = R([
+            (_hsState, 'hsState'),
+            (6, 'unused'),
+            (_docType, 'dt'),
+        ])
+
+    _fields_ = [
+        (uint4, 'lbPlyPos'),
+        (_grbit, 'grbit'),
+        (ubyte1, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
+    ]
+
 @BIFF8.define
 class BoundSheet8(pstruct.type):
     type = 0x85
     type = 133
 
-    class _flags(pbinary.flags):
-        _fields_ = R([
-            (2, 'hsState'),
-            (6, 'unused'),
-        ])
-
-    class _docType(pint.enum, ubyte1):
-        _values_ = [
-            ('worksheet', 0x00),
-            ('macro', 0x01),
-            ('chart', 0x02),
-            ('vba-module', 0x06),
-        ]
-
     _fields_ = [
         (uint4, 'lbPlyPos'),
-        (_docType, 'dt'),
-        (_flags, 'flags'),
+        (BOUNDSHEET._grbit, 'grbit'),
         (ShortXLUnicodeString, 'stName'),
     ]
 
+@BIFF5.define
+class LABEL(pstruct.type):
+    type = 0x0204
+    type = 516
+    _fields_ = [
+        (Rw, 'rw'),
+        (Col, 'col'),
+        (uint2, 'ixfe'),
+        (uint2, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgb'),
+    ]
+
 ###
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Font(pstruct.type):
     type = 0x0031
@@ -1089,7 +1215,7 @@ class Font(pstruct.type):
         (_fontName, 'fontName'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class BookBool(pbinary.flags):
     type = 0xda
@@ -1121,7 +1247,7 @@ class BookExt_Conditional12(pbinary.flags):
         (5, 'reserved2'),
     ])
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class ExtString(pstruct.type):
     type = 2052
@@ -1133,7 +1259,7 @@ class ExtString(pstruct.type):
         (XLUnicodeString, 'rgb'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class INDEX(pstruct.type):
     type = 523
@@ -1147,7 +1273,7 @@ class INDEX(pstruct.type):
         (dyn.array(uint4, 0), 'rgibRw'),    # FIXME
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class BookExt(pstruct.type):
     type = 2147
@@ -1180,7 +1306,7 @@ class BookExt(pstruct.type):
         (__unknown, 'unknown'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class RefreshAll(pint.enum, uint2):
     type = 0x1b7
@@ -1194,13 +1320,13 @@ class Boolean(pint.enum):
         ('False', 0),('True', 1),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CalcPrecision(Boolean, uint2):
     type = 0xe
     type = 14
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Date1904(pint.enum,uint2):
     type = 0x22
@@ -1218,19 +1344,19 @@ class HideObjEnum(pint.enum):
         ('HIDEALL',         2),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class HideObj(HideObjEnum, uint2):
     type = 0x8d
     type = 141
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Backup(Boolean, uint2):
     type = 0x40
     type = 64
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CompressPictures(pstruct.type):
     type = 0x89b
@@ -1244,32 +1370,31 @@ class CompressPictures(pstruct.type):
 
 class TabIndex(uint2): pass
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Password(uint2):
     type = 0x13
     type = 19
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class PROTECT(Boolean, uint2):
     type = 0x12
     type = 18
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class WinProtect(Boolean, uint2):
     type = 0x19
     type = 25
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class UsesELFs(Boolean, uint2):
     type = 0x1ae
     type = 352
 
-@BIFF7.define
-@BIFF8.define
+@BIFF5.define
 class WRITEACCESS(pstruct.type):
     type = 0x5c
     type = 92
@@ -1287,19 +1412,34 @@ class WRITEACCESS(pstruct.type):
         (__padding, 'padding(stName)'),
     ]
 
-@BIFF7.define
+@BIFF8.define
+class WriteAccess8(pstruct.type):
+    type = 0x5c
+    type = 92
+
+    def __padding(self):
+        fields = ['cch', 'stName']
+        return dyn.clone(pstr.string, length=max(0, 112 - sum(self[fld].li.size() for fld in fields)))
+
+    _fields_ = [
+        (ubyte1, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'stName'),
+        (__padding, 'padding(stName)'),
+    ]
+
+@BIFF5.define
 @BIFF8.define
 class InterfaceHdr(uint2):
     type = 0xe1
     type = 225
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class InterfaceEnd(uint2):
     type = 0xe2
     type = 226
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Mms(pstruct.type):
     type = 0xc1
@@ -1309,19 +1449,19 @@ class Mms(pstruct.type):
         (ubyte1, 'reserved2'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CodePage(uint2):
     type = 0x42
     type = 66
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Excel9File(ptype.type):
     type = 0x1c0
     type = 448
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Window1(pstruct.type):
     type = 61
@@ -1338,7 +1478,7 @@ class Window1(pstruct.type):
         (uint2, 'wTabRatio'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Country(pstruct.type):
     type = 0x8c
@@ -1400,7 +1540,7 @@ class Country(pstruct.type):
         (_iCountryWinIni, 'iCountryWinIni'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class ObProj(ptype.type):
     '''
@@ -1413,7 +1553,7 @@ class ObProj(ptype.type):
     type = 0xd3
     type = 211
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CodeName(XLUnicodeString):
     '''
@@ -1424,7 +1564,7 @@ class CodeName(XLUnicodeString):
     type = 0x1ba
     type = 442
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class RecalcId(pstruct.type):
     type = 449
@@ -1435,31 +1575,31 @@ class RecalcId(pstruct.type):
         (uint4, 'dwBuild'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class BuiltInFnGroupCount(uint2):
     type = 156
     type = 0x9c
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Prot4Rev(Boolean, uint2):
     type = 431
     type = 0x1af
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Prot4RevPass(uint2):
     type = 444
     type = 0x1bc
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DSF(uint2):
     type = 353
     type = 0x161
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class MsoDrawingGroup(art.OfficeArtDggContainer):
     type = 0xeb
@@ -1471,7 +1611,7 @@ class MsoDrawingGroup(art.OfficeArtDggContainer):
             return 0
         return rec['header'].li.Length()
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class HFPicture(pstruct.type):
     type = 2150
@@ -1511,7 +1651,7 @@ class HFPicture(pstruct.type):
         (__rgDrawing, 'rgDrawing'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class MsoDrawing(art.OfficeArtDgContainer):
     type = 0xec
@@ -1524,14 +1664,14 @@ class MsoDrawing(art.OfficeArtDgContainer):
             return 0
         return rec['header'].li.Length()
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class EOF(ptype.type):
     type = 10
     type = 0xa
 
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Lbl(pstruct.type):
     type = 24
@@ -1582,7 +1722,7 @@ class Lbl(pstruct.type):
         (__rgce, 'rgce'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Theme(pstruct.type):
     type = 2198
@@ -1604,13 +1744,13 @@ class Theme(pstruct.type):
         (__rgb, 'rgb'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Blank(Cell):
     type = 513
     type = 0x201
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class ForceFullCalculation(pstruct.type):
     type = 0x8a3
@@ -1621,23 +1761,10 @@ class ForceFullCalculation(pstruct.type):
         (_fNoDeps, 'fNoDeps'),
     ]
 
-class XTI(pstruct.type):
-    _fields_ = [
-        (uint2, 'iSupBook'),
-        (sint2, 'iTabFirst'),
-        (sint2, 'iTabLast'),
-    ]
-
-@BIFF7.define
-@BIFF8.define
+@BIFF5.define
 class EXTERNSHEET(pstruct.type):
     type = 0x17
     type = 23
-    # FIXME: BIFF8
-    #_fields_ = [
-    #    (uint2, 'cXTI'),
-    #    (lambda s: dyn.array(XTI, s['cXTI'].li.int()), 'rgXTI'),
-    #]
 
     def __rgch(self):
         length = self['cch'].li.int()
@@ -1645,11 +1772,66 @@ class EXTERNSHEET(pstruct.type):
 
     _fields_ = [
         (ubyte1, 'cch'),
-        (ubyte1, 'fHighByte'),
         (__rgch, 'rgch'),
     ]
 
-@BIFF7.define
+class XTI(pstruct.type):
+    _fields_ = [
+        (uint2, 'iSupBook'),
+        (sint2, 'iTabFirst'),
+        (sint2, 'iTabLast'),
+    ]
+
+@BIFF8.define
+class ExternSheet(pstruct.type):
+    type = 0x17
+    type = 23
+
+    _fields_ = [
+        (uint2, 'cXTI'),
+        (lambda s: dyn.array(XTI, s['cXTI'].li.int()), 'rgXTI'),
+    ]
+
+@BIFF5.define
+class EXTERNNAME(pstruct.type):
+    type = 0x23
+    type = 35
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fBuiltIn'),
+            (1, 'fWantAdvise'),
+            (1, 'fWantPict'),
+            (1, 'fOle'),
+            (1, 'fOleLink'),
+            (10, 'cf'),
+            (1, 'fIcon'),
+        ])
+    def __body(self):
+        res = self['flags'].li
+        f1, f2 = res['fOle'], res['fOleLink']
+        #lookup = {
+        #    #(0, 0) : ExternOleDdeLink,
+        #    (0, 0) : ExternDocName,
+        #    (0, 1) : ptype.undefined,   # ???
+        #    (1, 0) : ExternDdeLinkNoOper,
+        #}
+        # FIXME: this is pretty poorly documented
+        try:
+            p = self.getparent(RecordGeneralBase)
+            cb = p['header'].li.Length()
+
+        except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
+            return dyn.block(0)
+
+        return dyn.block(cb - self['flags'].li.size())
+
+    _fields_ = [
+        (_flags, 'flags'),
+        (uint4, 'reserved'),
+        (ubyte1, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
+    ]
+
 @BIFF8.define
 class ExternName(pstruct.type):
     type = 0x23
@@ -1688,7 +1870,7 @@ class ExternName(pstruct.type):
         (__body, 'body'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Row(pstruct.type):
     type = 520
@@ -1830,7 +2012,7 @@ if True:
             (XLUnicodeString,'string'),
         ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CRN(pstruct.type):
     type = 90
@@ -1843,7 +2025,44 @@ class CRN(pstruct.type):
         (lambda s: dyn.array(SerAr, s['colLast'].li.int()-s['colFirst'].li.int() + 1), 'crnOper'),
     ]
 
-class CellXF(pbinary.struct):
+class CellXF7(pbinary.flags):
+    _fields_ = R([
+        (3, 'alc'),
+        (1, 'fWrap'),
+        (3, 'alcV'),
+        (1, 'fJustLast'),
+
+        (2, 'ori'),
+        (1, 'fAtrNum'),
+        (1, 'fAtrFnt'),
+        (1, 'fAtrAlc'),
+        (1, 'fAtrBdr'),
+        (1, 'fAtrPat'),
+        (1, 'fAtrProt'),
+
+        (4, 'dgLeft'),
+        (4, 'dgRight'),
+        (4, 'dgTop'),
+        (4, 'dgBottom'),
+
+        (7, 'icvLeft'),
+        (7, 'icvRight'),
+        (2, 'grbitDiag'),
+
+        (7, 'icvTop'),
+        (7, 'icvBottom'),
+        (7, 'icvDiag'),
+        (4, 'dgDiag'),
+        (1, 'fHasXFExt'),
+        (6, 'fls'),
+
+        (7, 'icvFore'),
+        (7, 'icvBack'),
+        (1, 'fsxButton'),
+        (1, 'reserved3'),
+    ])
+
+class CellXF8(pbinary.flags):
     _fields_ = R([
         (3, 'alc'),
         (1, 'fWrap'),
@@ -1886,7 +2105,18 @@ class CellXF(pbinary.struct):
         (1, 'reserved3'),
     ])
 
-class StyleXF(pbinary.struct):
+class StyleXF7(pbinary.flags):
+    _fields_ = R([
+        (1, 'fAtrNum'),
+        (1, 'fAtrFnt'),
+        (1, 'fAtrAlc'),
+        (1, 'fAtrBdr'),
+        (1, 'fAtrPat'),
+        (1, 'fAtrProt'),
+        (1, 'fsxButton'),
+    ])
+
+class StyleXF8(pbinary.flags):
     _fields_ = R([
         (3, 'alc'),
         (1, 'fWrap'),
@@ -1930,7 +2160,25 @@ class FontIndex(pint.enum, uint2):
         ('default-both', 3),
     ]
 
-#@BIFF7.define
+@BIFF5.define
+class XF(pstruct.type):
+    type = 0xe0
+    type = 224
+    class _flags(pbinary.flags):
+        _fields_ = R([
+            (1, 'fLocked'),
+            (1, 'fHidden'),
+            (1, 'fStyle'),
+            (1, 'f123Prefix'),
+            (12, 'ixfParent'),
+        ])
+    _fields_ = [
+        (FontIndex, 'ifnt'),
+        (IFmt, 'ifmt'),
+        (_flags, 'flags'),
+        (dyn.array(uint2, 5), 'style'),
+    ]
+
 @BIFF8.define
 class XF(pstruct.type):
     type = 0xe0
@@ -1947,10 +2195,10 @@ class XF(pstruct.type):
         (FontIndex, 'ifnt'),
         (IFmt, 'ifmt'),
         (_flags, 'flags'),
-        (lambda s: CellXF if s['flags'].li['fStyle'] == 0 else StyleXF, 'data'),
+        (lambda s: CellXF8 if s['flags'].li['fStyle'] == 0 else StyleXF8, 'data'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class MulRk(pstruct.type):
     type = 0xbd
@@ -2435,7 +2683,21 @@ class FormulaValue(pstruct.type):
         (uint4, 'fExprO'),
     ]
 
-@BIFF7.define
+@BIFF5.define
+class FORMULA(pstruct.type):
+    type = 0x6
+    type = 6
+    _fields_ = [
+        (Rw, 'rw'),
+        (Col, 'col'),
+        (uint2, 'ixfe'),
+        (Xnum, 'num'),
+        (uint2, 'grbit'),
+        (uint4, 'chn'),
+        (uint2, 'cce'),
+        #(lambda self: dyn.block(self['cce'].li.int()), 'rgce'),
+    ]
+
 @BIFF8.define
 class Formula(pstruct.type):
     type = 0x6
@@ -2460,7 +2722,7 @@ class Formula(pstruct.type):
         (CellParsedFormula, 'formula'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class XCT(pstruct.type):
     type = 89
@@ -2476,7 +2738,13 @@ class BuiltInStyle(pstruct.type):
         (ubyte1, 'iLevel'),
     ]
 
-@BIFF7.define
+class UserDefinedStyle(pstruct.type):
+    _fields_ = [
+        (ubyte1, 'cch'),
+        (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
+    ]
+
+@BIFF5.define
 @BIFF8.define
 class TableStyles(pstruct.type):
     type = 2190
@@ -2490,26 +2758,42 @@ class TableStyles(pstruct.type):
         (lambda s: dyn.clone(pstr.wstring, length=s['cchDefPivotStyle'].li.int()), 'rgchDefPivotStyle'),
     ]
 
-@BIFF7.define
-@BIFF8.define
-class Style(pstruct.type):
+@BIFF5.define
+class STYLE(pstruct.type):
     type = 659
     type = 0x293
 
-    class _flags(pbinary.flags):
+    class _ixfe(pbinary.flags):
         _fields_ = R([
-            (12,'ixfe'),
+            (12, 'ixfe'),
             (3, 'unused'),
             (1, 'fBuiltIn'),
         ])
 
     _fields_ = [
-        (_flags, 'flags'),
-        (lambda s: BuiltInStyle if s['flags'].li['fBuiltIn'] else ptype.undefined, 'builtInData'),
-        (lambda s: XLUnicodeString if not s['flags'].li['fBuiltIn'] else ptype.undefined, 'user')
+        (_ixfe, 'ixfe'),
+        (lambda self: BuiltInStyle if self['ixfe'].li['fBuiltIn'] else UserDefinedStyle, 'styleData'),
     ]
 
-@BIFF7.define
+@BIFF8.define
+class Style(pstruct.type):
+    type = 659
+    type = 0x293
+
+    class _ixfe(pbinary.flags):
+        _fields_ = R([
+            (12, 'ixfe'),
+            (3, 'unused'),
+            (1, 'fBuiltIn'),
+        ])
+
+    _fields_ = [
+        (_ixfe, 'ixfe'),
+        (lambda s: BuiltInStyle if s['ixfe'].li['fBuiltIn'] else ptype.undefined, 'builtInData'),
+        (lambda s: XLUnicodeString if not s['ixfe'].li['fBuiltIn'] else ptype.undefined, 'user')
+    ]
+
+@BIFF5.define
 @BIFF8.define
 class StyleExt(pstruct.type):
     type = 2194
@@ -2686,7 +2970,7 @@ class ExtProp(pstruct.type):
         (__extPropData, 'extPropData'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class XFCFC(pstruct.type):
     type = 0x87c
@@ -2698,7 +2982,7 @@ class XFCFC(pstruct.type):
         (uint4, 'crc'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class XFExt(pstruct.type):
     type = 0x87d
@@ -2712,8 +2996,19 @@ class XFExt(pstruct.type):
         (lambda s: dyn.array(ExtProp, s['cexts'].li.int()), 'rgExt'),
     ]
 
-#FIXME
-#@BIFF7.define
+@BIFF5.define
+class Format(pstruct.type):
+    type = 0x41e
+    type = 1054
+    def __stFormat(self):
+        res = self['cch'].li
+        return dyn.clone(pstr.string, length=res.int())
+    _fields_ = [
+        (uint2, 'ifmt'),
+        (ubyte1, 'cch'),
+        (__stFormat, 'stFormat'),
+    ]
+
 @BIFF8.define
 class Format(pstruct.type):
     type = 0x41e
@@ -2728,7 +3023,7 @@ class Format(pstruct.type):
         (__stFormat, 'stFormat'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SerAuxErrBar(pstruct.type):
     type = 4187
@@ -2840,7 +3135,7 @@ class FeatSmartTag(pstruct.type):
         (lambda s: dyn.array(FactoidData,s['cSmartTags'].li.int()), 'rgFactoid'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Feat(pstruct.type):
     type = 0x868
@@ -2887,7 +3182,7 @@ class EnhancedProtection(pbinary.flags):
         (17, 'reserved'),
     ])
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class FeatHdr(pstruct.type):
     type = 2151
@@ -2910,7 +3205,7 @@ class FeatHdr(pstruct.type):
         (__rgbHdrData, 'rgbHdrData'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class FeatHdr11(pstruct.type):
     type = 2161
@@ -2932,7 +3227,7 @@ class FrtRefHeaderU(pstruct.type):
         (Ref8U, 'ref8'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class ContinueFrt(pstruct.type):
     type = 0x812
@@ -2984,7 +3279,7 @@ class XFExtNoFRT(pstruct.type):
         (lambda s: dyn.array(ExtProp,s['cexts'].li.int()), 'rgExt'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DXF(pstruct.type):
     type = 2189
@@ -3531,7 +3826,7 @@ class TableFeatureType(pstruct.type):
         (__cellInvalid, 'cellInvalid'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Feature11(pstruct.type):
     type = 2162
@@ -3561,7 +3856,7 @@ class Feature11(pstruct.type):
         (__rgbFeat, 'rgbFeat'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Feature12(Feature11):
     type = 2168
@@ -3614,7 +3909,7 @@ class List12DisplayName(pstruct.type):
         (XLUnicodeString, 'stListComment'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class List12(pstruct.type):
     type = 2167
@@ -3637,7 +3932,7 @@ class List12(pstruct.type):
         (__rgb, 'rgb'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class GUIDTypeLib(pstruct.type):
     type = 2199
@@ -3647,37 +3942,37 @@ class GUIDTypeLib(pstruct.type):
         (dyn.block(16), 'guid'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SerParent(uint2):
     type = 4170
     type = 0x104a
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Begin(ptype.type):
     type = 4147
     type = 0x1033
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class End(ptype.type):
     type = 4148
     type = 0x1034
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class StartBlock(ptype.type):
     type = 2130
     type = 0x852
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class EndBlock(ptype.type):
     type = 2131
     type = 0x853
 
-#@BIFF7.define
+#@BIFF5.define
 @BIFF8.define
 class PublisherRecord(pstruct.type):
     # XXX: undocumented
@@ -3694,7 +3989,7 @@ class PublisherRecord(pstruct.type):
         (SectionRecord, 'sec'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SST(pstruct.type):
     type = 252
@@ -3713,20 +4008,6 @@ class SST(pstruct.type):
         (sint4, 'cstTotal'),     # GUARD: >=0
         (sint4, 'cstUnique'),    # GUARD: >=0
         (__rgb, 'rgb'),
-    ]
-
-class FontIndex(pint.enum, uint2):
-    _values_ = [
-        ('Default',             0),
-        ('Default,Bold',        1),
-        ('Default,Italic',      2),
-        ('Default,Bold,Italic', 3),
-    ]
-
-class FormatRun(pstruct.type):
-    _fields_ = [
-        (uint2, 'ich'),
-        (FontIndex, 'ifnt'),
     ]
 
 class Phs(pstruct.type):
@@ -3804,7 +4085,7 @@ class ISSTInf(pstruct.type):
         (uint2, 'reserved'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class ExtSST(pstruct.type):
     type = 255
@@ -4248,7 +4529,7 @@ class FtCmo(pstruct.type):
         (uint4, 'unused10'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Obj(pstruct.type):
     type = 0x05d
@@ -4303,7 +4584,7 @@ class TxORuns(pstruct.type):
         (TxOLastRun, 'lastRun'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class TxO(pstruct.type):
     type = 0x1b6
@@ -4399,13 +4680,13 @@ class TxO(pstruct.type):
         (__fmla, 'fmla'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Continue(ptype.block):
     type = 0x3c
     type = 60
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CondFmt(pstruct.type):
     type = 0x1b0
@@ -4422,7 +4703,7 @@ class CondFmt(pstruct.type):
         (SqRefU, 'sqref'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Palette(pstruct.type):
     type = 0x92
@@ -4432,7 +4713,7 @@ class Palette(pstruct.type):
         (lambda s: dyn.array(LongRGB, s['ccv'].li.int()), 'rgColor'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class HEADER(pstruct.type):
     type = 0x14
@@ -4442,7 +4723,7 @@ class HEADER(pstruct.type):
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class FOOTER(pstruct.type):
     type = 0x15
@@ -4452,7 +4733,7 @@ class FOOTER(pstruct.type):
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class EXTERNCOUNT(pstruct.type):
     type = 0x16
@@ -4461,7 +4742,7 @@ class EXTERNCOUNT(pstruct.type):
         (uint2, 'cxals'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SELECTION(pstruct.type):
     type = 0x1d
@@ -4486,7 +4767,7 @@ class SELECTION(pstruct.type):
         (lambda self: dyn.array(self._ref, self['cref'].li.int()), 'rgref'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class LEFTMARGIN(pstruct.type):
     type = 0x26
@@ -4495,7 +4776,7 @@ class LEFTMARGIN(pstruct.type):
         (Xnum, 'num'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class RIGHTMARGIN(pstruct.type):
     type = 0x27
@@ -4504,7 +4785,7 @@ class RIGHTMARGIN(pstruct.type):
         (Xnum, 'num'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class TOPMARGIN(pstruct.type):
     type = 0x28
@@ -4513,7 +4794,7 @@ class TOPMARGIN(pstruct.type):
         (Xnum, 'num'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class BOTTOMMARGIN(pstruct.type):
     type = 0x29
@@ -4522,7 +4803,7 @@ class BOTTOMMARGIN(pstruct.type):
         (Xnum, 'num'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DCON(pstruct.type):
     type = 0x50
@@ -4534,7 +4815,7 @@ class DCON(pstruct.type):
         (uint2, 'fLinkConsol'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DEFCOLWIDTH(pstruct.type):
     type = 0x55
@@ -4543,7 +4824,7 @@ class DEFCOLWIDTH(pstruct.type):
         (uint2, 'cchdefColWidth'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class HCENTER(pstruct.type):
     type = 0x83
@@ -4552,7 +4833,7 @@ class HCENTER(pstruct.type):
         (uint2, 'fHCenter'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class VCENTER(pstruct.type):
     type = 0x84
@@ -4561,7 +4842,7 @@ class VCENTER(pstruct.type):
         (uint2, 'fVCenter'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class STANDARDWIDTH(pstruct.type):
     type = 0x99
@@ -4570,7 +4851,7 @@ class STANDARDWIDTH(pstruct.type):
         (uint2, 'DxGCol'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class SETUP(pstruct.type):
     type = 0xa1
@@ -4604,7 +4885,7 @@ class SETUP(pstruct.type):
         (uint2, 'iCopies'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class DIMENSIONS(pstruct.type):
     type = 0x200
@@ -4617,7 +4898,7 @@ class DIMENSIONS(pstruct.type):
         (uint2, 'reserved'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class WINDOW2(pstruct.type):
     type = 0x23e
@@ -4648,7 +4929,7 @@ class WINDOW2(pstruct.type):
         (uint4, 'reserved'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class CF(pstruct.type):
     type = 0x1b1
@@ -4801,7 +5082,7 @@ class NoteSh(pstruct.type):
         (ubyte1, 'unused2'),
     ]
 
-@BIFF7.define
+@BIFF5.define
 @BIFF8.define
 class Note(pstruct.type):
     type = 0x1c
