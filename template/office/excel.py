@@ -437,15 +437,18 @@ class File(File):
 
     def details(self):
         try:
-            items = list(self)
+            items = [item for item in self]
         except ptypes.error.InitializationError:
             return super(File, self).details()
 
-        master = items.pop(0) if items else None
-        worksheets = items[:]
+        res = []
+        for idx, item in enumerate(items):
+            if len(item) and isinstance(item[0].d, BOF):
+                summary = ' : '.join(["{:s}(version={:d})".format(item[0].d.DocumentType().str(), item[0].d.Version()), item.summary()])
+            else:
+                summary = item.summary()
+            res.append("[{:x}] {:s}[{:d}] : {:s}".format(item.getoffset(), item.classname(), idx, summary))
 
-        res = [] if master is None else ['[{:x}] master : 0 : {:s}'.format(master.getoffset(), master.summary())]
-        res.extend('[{:x}] worksheet : {:d} : {:s}'.format(ws.getoffset(), idx + 1, ws.summary()) for idx, ws in enumerate(worksheets))
         return '\n'.join(res) + '\n'
 
 ###
@@ -944,6 +947,8 @@ class LPWideString(pstruct.type):
         (uint2, 'cchCharacters'),
         (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].li.int()), 'rgchData'),
     ]
+    def summary(self):
+        return self['rgchData'].summary()
 
 class VirtualPath(XLUnicodeString): pass
 class XLNameUnicodeString(XLUnicodeString): pass
@@ -1025,6 +1030,8 @@ class DV(pstruct.type):
             (ubyte1, 'unicode_flag'),
             (__unicode, 'string'),
         ]
+        def summary(self):
+            return "unicode_flag={:#0{:d}x} string={:s}".format(self['unicode_flag'].int(), 2 + 2 * self['unicode_flag'].size(), self['string'].summary())
 
     class formula(pstruct.type):
         _fields_ = [
@@ -1057,9 +1064,15 @@ class DocType(pint.enum, uint2):
         ('workspace', 0x0100)
     ]
 
+class BOF(pstruct.type):
+    def Version(self):
+        raise NotImplementedError
+    def DocumentType(self):
+        raise NotImplementedError
+
 @BIFF5.define
 @BIFF8.define
-class BOF2(pstruct.type):
+class BOF2(BOF):
     type = 9
     type = 0x0009
     _fields_ = [
@@ -1070,6 +1083,8 @@ class BOF2(pstruct.type):
     ]
     def Version(self):
         return 2
+    def DocumentType(self):
+        return self['dt']
 
 @BIFF5.define
 @BIFF8.define
@@ -1136,6 +1151,9 @@ class BOF5(BOF4):
                 traceback.print_stack()
         return lookup.get(version.int(), self._biffver)
 
+    def DocumentType(self):
+        return self['dt']
+
 @BIFF5.define
 class BOUNDSHEET(pstruct.type):
     type = 0x85
@@ -1190,6 +1208,8 @@ class LABEL(pstruct.type):
         (uint2, 'cch'),
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgb'),
     ]
+    def summary(self):
+        return "rw={:d} col={:d} ixfe={:d} rgb={:s}".format(self['rw'].int(), self['col'].int(), self['ixfe'].int(), self['rgb'].summary())
 
 ###
 @BIFF5.define
@@ -1202,6 +1222,9 @@ class Font(pstruct.type):
             (ubyte1, 'cch'),
             (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgcch'),
         ]
+        def summary(self):
+            return self['rgcch'].summary()
+
     _fields_ = [
         (uint2, 'dyHeight'),
         (uint2, 'flags'),
@@ -1331,10 +1354,9 @@ class CalcPrecision(Boolean, uint2):
 class Date1904(pint.enum,uint2):
     type = 0x22
     type = 34
-
     _values_ = [
-        ('1900 date system', 0),
-        ('1904 date system', 1),
+        ('datesystem(1900)', 0),
+        ('datesystem(1904)', 1),
     ]
 
 class HideObjEnum(pint.enum):
@@ -1409,8 +1431,10 @@ class WRITEACCESS(pstruct.type):
     _fields_ = [
         (ubyte1, 'cch'),
         (__stName, 'stName'),
-        (__padding, 'padding(stName)'),
+        (__padding, 'pad(stName)'),
     ]
+    def summary(self):
+        return "(pad={:+#x}) stName={:s}".format(self['pad(stName)'].size(), self['stName'].summary())
 
 @BIFF8.define
 class WriteAccess8(pstruct.type):
@@ -1424,8 +1448,10 @@ class WriteAccess8(pstruct.type):
     _fields_ = [
         (ubyte1, 'cch'),
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'stName'),
-        (__padding, 'padding(stName)'),
+        (__padding, 'pad(stName)'),
     ]
+    def summary(self):
+        return "(pad={:+#x}) stName={:s}".format(self['pad(stName)'].size(), self['stName'].summary())
 
 @BIFF5.define
 @BIFF8.define
@@ -1774,6 +1800,8 @@ class EXTERNSHEET(pstruct.type):
         (ubyte1, 'cch'),
         (__rgch, 'rgch'),
     ]
+    def summary(self):
+        return self['rgch'].summary()
 
 class XTI(pstruct.type):
     _fields_ = [
@@ -2743,6 +2771,8 @@ class UserDefinedStyle(pstruct.type):
         (ubyte1, 'cch'),
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
     ]
+    def summary(self):
+        return self['rgch'].summary()
 
 @BIFF5.define
 @BIFF8.define
@@ -3008,6 +3038,8 @@ class Format(pstruct.type):
         (ubyte1, 'cch'),
         (__stFormat, 'stFormat'),
     ]
+    def summary(self):
+        return "ifmt={:#0{:d}x} stFormat={:s}".format(self['ifmt'].int(), 2 + 2 * self['ifmt'].size(), self['stFormat'].summary())
 
 @BIFF8.define
 class Format(pstruct.type):
@@ -4026,6 +4058,8 @@ class RPHSSub(pstruct.type):
         (uint2, 'cch'),
         (lambda s: dyn.clone(pstr.wstring, length=s['cch'].li.int()), 'st'),
     ]
+    def summary(self):
+        return "crun={:#0{:d}x} st={:s}".format(self['crun'].int(), 2 + 2 * self['crun'].size(), self['st'].summary())
 
 class PhRuns(pstruct.type):
     _fields_ = [
@@ -4729,6 +4763,8 @@ class HEADER(pstruct.type):
         (ubyte1, 'cch'),
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
     ]
+    def summary(self):
+        return self['rgch'].summary()
 
 @BIFF5.define
 @BIFF8.define
@@ -4739,6 +4775,8 @@ class FOOTER(pstruct.type):
         (ubyte1, 'cch'),
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
     ]
+    def summary(self):
+        return self['rgch'].summary()
 
 @BIFF5.define
 @BIFF8.define
