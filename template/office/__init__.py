@@ -31,10 +31,10 @@ class RecordUnknown(ptype.block):
         elif isinstance(self.type, six.integer_types):
             res = "{:#x}".format(self.type)
         elif hasattr(self.type, '__iter__'):
-            res = '({:s})'.format(','.join('{:#x}'.format(item) if isinstance(item, six.integer_types) else '{!r}'.format(item) for item in self.type))
+            res = "({:s})".format(','.join("{:#x}".format(item) if isinstance(item, six.integer_types) else "{!r}".format(item) for item in self.type))
         else:
             res = repr(self.type)
-        names[-1] = '{:s}<{:s}>[size:{:#x}]'.format(names[-1], res, self.blocksize())
+        names[-1] = "{:s}<{:s}>[size:{:#x}]".format(names[-1], res, self.blocksize())
         return '.'.join(names)
 
 # record type lookup
@@ -67,16 +67,20 @@ class RecordGeneral(pstruct.type):
 
     class Header(pstruct.type):
         RecordType = RecordType
+
         class VersionInstance(pbinary.struct):
             _fields_ = R([(4,'version'), (12,'instance')])
+
             def summary(self):
-                return '{:d} / 0x{:03x}'.format(self['version'], self['instance'])
-            def set(self, *_, **fields):
-                iterable, = _ if _ else ((),)
+                return "{:d} / {:#0{:d}x}".format(self['version'], self['instance'], 2 + 3)
+
+            def set(self, *versioninstance, **fields):
+                iterable, = versioninstance if versioninstance else ((),)
                 if not isinstance(iterable, dict):
                     version, instance = iterable
-                    return self.set(dict(instance=instance, version=version))
+                    return self.set({'instance': instance, 'version': version})
                 return super(RecordGeneral.Header.VersionInstance, self).set(iterable, **fields)
+
         _fields_ = [
             (VersionInstance, 'Version/Instance'),
             (lambda self: self.RecordType, 'Type'),
@@ -94,7 +98,7 @@ class RecordGeneral(pstruct.type):
         def summary(self):
             v = self['Version/Instance'].int()
             t,l = self['Type'].int(),self['Length'].int()
-            return 'version={:d} instance={:#05x} type={:#06x} length={length:#x}({length:x})'.format(v & 0xf, (v&0xfff0) // 0x10, t, length=l)
+            return "version={:d} instance={:#05x} type={:#06x} length={length:#x}({length:x})".format(v & 0xf, (v&0xfff0) // 0x10, t, length=l)
 
     def __data(self):
         header = self['header'].li
@@ -140,24 +144,24 @@ class RecordGeneral(pstruct.type):
     def Extra(self):
         return self['extra']
 
-    def previousRecord(self, type, **count):
-        container = self.p
+    def previousRecord(self, record_t, **count):
+        container = self.parent
         idx = container.value.index(self)
 
         # Seek backwards from index to find record
         count = count.get('count', -1)
         if count > 0:
             for i in range(count):
-                if isinstance(container[idx - i].d, type):
+                if isinstance(container[idx - i].d, record_t):
                     break
                 continue
         else:
             i = 0
-            while idx >= i and not isinstance(container[idx - i].d, type):
+            while idx >= i and not isinstance(container[idx - i].d, record_t):
                 i += 1
 
-        if not isinstance(container[idx - i].d, type):
-            raise ptypes.error.ItemNotFoundError(self, 'previousRecord', message='Unable to locate previous record : {!r}'.format(type))
+        if not isinstance(container[idx - i].d, record_t):
+            raise ptypes.error.ItemNotFoundError(self, 'previousRecord', message="Unable to locate previous record type : {!r}".format(record_t))
         return container[idx - i]
 
 class RecordContainer(parray.block):
@@ -170,26 +174,41 @@ class RecordContainer(parray.block):
             return super(RecordContainer, self).repr()
         return res + ('\n' if res else '')
 
+    def summary(self):
+        if len(self) > 1:
+            first, last = items = [self[idx] for idx in [0, -1]]
+            instances = ("{:s}[{:x}:{:+x}]".format(item.Data().classname(), item.getoffset(), item.size()) for item in items)
+            instancedata = zip(instances, items)
+
+        elif len(self):
+            item = self[0]
+            instance = "{:s}[{:x}:{:+x}]".format(item.Data().classname(), item.getoffset(), item.size())
+            instancedata = [(instance, item)]
+
+        else:
+            return super(RecordContainer, self).summary()
+
+        return ' : '.join(["{:d} record{:s}".format(len(self), '' if len(self) == 1 else 's'), ' ... '.join("{!s} {:s}".format(instance, data.summary()) for instance, data in instancedata)])
+
     def details(self):
         def Fkey(object):
-            '''lambda (_,item): (lambda recordType:'{:s}[{:04x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
+            '''lambda (_,item): (lambda recordType:"{:s}[{:04x}]".format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
             index, item = object
-            record, Fclassname = item.getparent(RecordGeneral), functools.partial('{:s}[{:04x}]'.format, item.classname())
+            record, Fclassname = item.parent, functools.partial("{:s}[{:04x}]".format, item.classname())
             return Fclassname(record['header']['type'].int())
         def emit_prefix(_, records):
             index, record = records[0]
-            ok = not any(item.p.Extra().size() for _, item in records)
+            ok = not any(item.parent.Extra().size() for _, item in records)
             return "[{:x}] {:s}{:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), '' if ok else '*', self.classname(), index)
         def emit_classname(classname, records):
             if len(records) > 1:
                 return "{length:d} * {:s}".format(classname, length=len(records))
             return classname
         def emit_hexdump(_, records):
-            value = [item[1] for item in records]
-            data = ptype.container(value=value).serialize()
-            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary) or '...'
+            res = bytes().join(item.serialize() for index, item in records)
+            return ptypes.utils.emit_repr(res, ptypes.Config.display.threshold.summary) or '...'
 
-        groups = [(typename, list(items)) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
+        groups = [(typename, [item for item in items]) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
         iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
         return '\n'.join(map(' : '.join, iterable))
 
@@ -244,7 +263,7 @@ class RecordContainer(parray.block):
                     yield item
                 continue
             return
-        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
+        flazy = (lambda item: item['data'].d.li) if getattr(self, 'lazy', False) else (lambda item: item['data'])
         for item in self:
             if isinstance(flazy(item), type):
                 yield item
@@ -252,54 +271,29 @@ class RecordContainer(parray.block):
         return
 
     def __getitem__(self, index):
-        flazy = (lambda item: item['data'].d.l) if getattr(self, 'lazy', False) else (lambda item: item['data'])
+        flazy = (lambda item: item['data'].d.li) if getattr(self, 'lazy', False) else (lambda item: item['data'])
         if hasattr(self, '_values_') and isinstance(index, six.string_types):
-            lookup = dict(self._values_)
+            lookup = { name : value for name, value in self._values_ }
             t = lookup[index]
-            iterable = (i for i, item in enumerate(self) if isinstance(flazy(item), t))
+            iterable = (index for index, item in enumerate(self) if isinstance(flazy(item), t))
             index = next(iterable)
         return super(RecordContainer, self).__getitem__(index)
 
 # yea, a file really is usually just a gigantic list of records...
 class File(RecordContainer):
-    def repr(self):
-        try:
-            res = self.details()
-        except ptypes.error.InitializationError:
-            return super(File, self).repr()
-        return res + ('\n' if res else '')
-
-    def details(self):
-        def Fkey(object):
-            '''lambda (_,item): (lambda recordType:'{:s}[{:x}]'.format(item.classname(), recordType))(item.getparent(RecordGeneral)['header']['type'].int())'''
-            index, item = object
-            record, Fclassname = item.getparent(RecordGeneral), functools.partial('{:s}[{:x}]'.format, item.classname())
-            return Fclassname(record['header']['type'].int())
-        def emit_prefix(_, records):
-            index, record = records[0]
-            ok = not any(item.p.Extra().size() for _, item in records)
-            return "[{:x}] {:s}{:s}[{:d}]".format(record.getparent(RecordGeneral).getoffset(), '' if ok else '*', self.classname(), index)
-        def emit_classname(classname, records):
-            if len(records) > 1:
-                return "{length:d} * {:s}".format(classname, length=len(records))
-            return classname
-        def emit_hexdump(_, records):
-            value = [item[1] for item in records]
-            data = ptype.container(value=value).serialize()
-            return ptypes.utils.emit_repr(data, ptypes.Config.display.threshold.summary) or '...'
-        groups = [(typename, list(items)) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
-        iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
-        return '\n'.join(map(' : '.join, iterable))
-
     def blocksize(self):
-        return self.source.size() if hasattr(self.source, 'size') else super(File, self).blocksize()
+        return self.source.size() if isinstance(self.source, ptypes.provider.bounded) else super(File, self).blocksize()
 
     def properties(self):
         res = super(File, self).properties()
         try: res['size'] = self.size()
         except ptypes.error.InitializationError: pass
-        try: res['blocksize'] = self.blocksize()
-        except ptypes.error.InitializationError: pass
+
+        try:
+            if not operator.contains(res, 'size'):
+                res['blocksize'] = self.blocksize()
+        except ptypes.error.InitializationError:
+            pass
         return res
 
 if __name__ == '__main__':
