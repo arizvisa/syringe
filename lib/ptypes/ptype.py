@@ -838,8 +838,9 @@ class generic(__interface__):
 class base(generic):
     padding = utils.padding.source.zero()
 
-    def __hash__(self):
-        return hash(self.__class__)
+    @classmethod
+    def __hash__(cls):
+        return hash(cls)
 
     def setoffset(self, offset, **options):
         """Changes the current offset to ``offset``"""

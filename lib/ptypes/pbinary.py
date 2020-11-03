@@ -199,8 +199,9 @@ class base(ptype.generic):
     included.
     """
 
-    def __hash__(self):
-        return hash(self.__class__)
+    @classmethod
+    def __hash__(cls):
+        return hash(cls)
 
     def new(self, pbinarytype, **attrs):
         res = force(pbinarytype, self)
@@ -1136,7 +1137,7 @@ class __structure_interface__(container):
             elif bitmap.isinstance(t):
                 cb, typename = bitmap.size(t), 'signed' if bitmap.signed(t) else 'unsigned'
             elif isinstance(t, six.integer_types):
-                cb, typename = abs(t), 'signed' if t<0 else 'unsigned'
+                cb, typename = abs(t), 'signed' if t < 0 else 'unsigned'
             else:
                 cb, typename = 0, 'unknown'
 
@@ -1296,7 +1297,7 @@ class array(__array_interface__):
 
         res = self._object_
         if isinstance(res, six.integer_types):
-            size = res
+            size = abs(res)
         elif bitmap.isinstance(res):
             size = bitmap.size(res)
         elif istype(res):
@@ -1331,7 +1332,7 @@ class struct(__structure_interface__):
             return super(struct, self).blockbits()
         # FIXME: self.new(t) can potentially execute a function that it shouldn't
         #        when .blockbits() is called by .__load_littleendian
-        return sum((t if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_ or [])
+        return sum((abs(t) if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_ or [])
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
