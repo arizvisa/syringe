@@ -46,6 +46,16 @@ class Record(ptype.definition):
     class RT_Unknown(ptype.definition): cache, default = {}, RecordUnknown
     default = RT_Unknown
 
+    @classmethod
+    def get_recordtype(cls, instance):
+        '''Search through all definitions for whichever one contains the class for the specified instance.'''
+        klass = type(instance) if ptype.isinstance(instance) else instance
+        for rt, definition in cls.cache.items():
+            if klass in definition.cache.values():
+                return rt
+            continue
+        raise KeyError(klass)
+
 class Instance(ptype.definition):
     @classmethod
     def define(cls, *definition, **attributes):
@@ -79,7 +89,7 @@ class RecordGeneral(pstruct.type):
 
             def set(self, *versioninstance, **fields):
                 iterable, = versioninstance if versioninstance else ((),)
-                if not isinstance(iterable, dict):
+                if iterable and not isinstance(iterable, dict):
                     version, instance = iterable
                     return self.set({'instance': instance, 'version': version})
                 return super(RecordGeneral.Header.VersionInstance, self).set(iterable, **fields)
@@ -137,6 +147,27 @@ class RecordGeneral(pstruct.type):
         (__data, 'data'),
         (__extra, 'extra'),
     ]
+
+    def alloc(self, **fields):
+        res = super(RecordGeneral, self).alloc(**fields)
+        if operator.contains(fields, 'header'):
+            return res
+        if hasattr(res.d, 'type'):
+            version, instance = res.d.type
+            versioninstance = dict(version=version) if instance is None else dict(version=version, instance=instance)
+
+            header = {'Version/Instance': versioninstance}
+            try:
+                rt = self.Record.get_recordtype(res.d)
+            except KeyError:
+                pass
+            else:
+                header['Type'] = rt
+
+            print(header)
+        header['Length'] = sum(item.size() for item in [res.d, res['extra']])
+        res.h.set(**header)
+        return res
 
     h = property(fget=lambda self: self['header'])
 
