@@ -12,7 +12,7 @@ pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 class BIFF5(ptype.definition):
     type, cache = '.'.join([__name__, 'BIFF5']), {}
 
-    class unknown(ptype.block):
+    class unknown(undefined):
         def classname(self):
             res = getattr(self, BIFF5.attribute, None)
             if res is None:
@@ -32,7 +32,7 @@ class BIFF5(ptype.definition):
 class BIFF8(ptype.definition):
     type, cache = '.'.join([__name__, 'BIFF8']), {}
 
-    class unknown(ptype.block):
+    class unknown(undefined):
         def classname(self):
             res = getattr(self, BIFF8.attribute, None)
             if res is None:
@@ -223,7 +223,7 @@ class CFColor(pstruct.type):
     def __xclrValue(self):
         res = self['xclrType'].li
         if res == 'XCLRAUTO':
-            return ptype.undefined
+            return undefined
         elif res == 'XCLRINDEXED':
             return ColorICV
         elif res == 'XCLRRGB':
@@ -231,7 +231,7 @@ class CFColor(pstruct.type):
         elif res == 'XCLRTHEMED':
             return ColorTheme
         logging.warn('{:s}.__xclrValue : Unknown xclrType value. : {:04x}'.format(self.instance(), res.int()))
-        return ptype.undefined
+        return undefined
 
     _fields_ = [
         (XColorType, 'xclrType'),
@@ -769,7 +769,7 @@ class MergeCells(pstruct.type):
     type = 229
     _fields_ = [
         (uint2, 'cmcs'),
-        (lambda s: dyn.array(Ref8, int(s['cmcs'].li)), 'rgref')
+        (lambda self: dyn.array(Ref8, self['cmcs'].li.int()), 'rgref')
     ]
 ###
 @BIFF5.define
@@ -945,7 +945,7 @@ class ShortXLUnicodeString(pstruct.type):
 class LPWideString(pstruct.type):
     _fields_ = [
         (uint2, 'cchCharacters'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['cchCharacters'].li.int()), 'rgchData'),
+        (lambda self: dyn.clone(pstr.wstring, length=self['cchCharacters'].li.int()), 'rgchData'),
     ]
     def summary(self):
         return self['rgchData'].summary()
@@ -996,7 +996,7 @@ class CellRange(pstruct.type):
 
     _fields_ = [
         (uint2, 'number'),
-        (lambda s: dyn.array(s.Address, int(s['number'].li)), 'addresses'),
+        (lambda self: dyn.array(self.Address, self['number'].li.int()), 'addresses'),
     ]
 
 @BIFF5.define
@@ -1021,7 +1021,7 @@ class DV(pstruct.type):
 
     class string(pstruct.type):
         def __unicode(self):
-            if int(self['unicode_flag'].li):
+            if self['unicode_flag'].li.int():
                 return dyn.clone(pstr.wstring, length=self['length'].li.int())
             return dyn.clone(pstr.string, length=self['length'].li.int())
 
@@ -1037,7 +1037,7 @@ class DV(pstruct.type):
         _fields_ = [
             (uint2, 'size'),
             (uint2, 'reserved'),
-            (lambda s: dyn.block(int(s['size'].li)), 'data'),
+            (lambda self: dyn.block(self['size'].li.int()), 'data'),
         ]
 
     _fields_ = [
@@ -1131,7 +1131,7 @@ class BOF5(BOF4):
         ])
 
     def __flags(self):
-        return ptype.undefined if self.Version() < 8 else self._flags
+        return undefined if self.Version() < 8 else self._flags
 
     _fields_ = [
         (uint2, 'vers'),
@@ -1455,13 +1455,16 @@ class WriteAccess8(pstruct.type):
 
 @BIFF5.define
 @BIFF8.define
-class InterfaceHdr(uint2):
+class InterfaceHdr(pstruct.type):
     type = 0xe1
     type = 225
+    _fields_ = [
+        (uint2, 'Cv'),
+    ]
 
 @BIFF5.define
 @BIFF8.define
-class InterfaceEnd(uint2):
+class InterfaceEnd(undefined):
     type = 0xe2
     type = 226
 
@@ -1483,7 +1486,7 @@ class CodePage(uint2):
 
 @BIFF5.define
 @BIFF8.define
-class Excel9File(ptype.type):
+class Excel9File(undefined):
     type = 0x1c0
     type = 448
 
@@ -1568,7 +1571,7 @@ class Country(pstruct.type):
 
 @BIFF5.define
 @BIFF8.define
-class ObProj(ptype.type):
+class ObProj(undefined):
     '''
     The existence of the ObProj record specifies that there is a VBA
     project in the file.
@@ -1666,7 +1669,7 @@ class HFPicture(pstruct.type):
         elif not fd and fg:
             return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda _, size=max(0, cb - res): size)
         elif not fd and not fg:
-            return ptype.undefined
+            return undefined
         logging.warn('{:s}.__rgDrawing : Mutually exclusive fIsDrawing and fIsDrawing is set. Using a generic RecordContainer.'.format(self.classname()))
         return dyn.clone(art.RecordContainer, blocksize=lambda _, size=cb - res: size)
 
@@ -1692,7 +1695,7 @@ class MsoDrawing(art.OfficeArtDgContainer):
 
 @BIFF5.define
 @BIFF8.define
-class EOF(ptype.type):
+class EOF(undefined):
     type = 10
     type = 0xa
 
@@ -1759,7 +1762,7 @@ class Theme(pstruct.type):
             cb = p['header'].li.Length()
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             # XXX: unable to calculate length without the blocksize
-            return ptype.undefined
+            return undefined
 
         total = sum(self[fld].li.size() for fld in ['frtHeader', 'dwThemeVersion'])
         return dyn.block(max(0, cb - total))
@@ -1817,7 +1820,7 @@ class ExternSheet(pstruct.type):
 
     _fields_ = [
         (uint2, 'cXTI'),
-        (lambda s: dyn.array(XTI, s['cXTI'].li.int()), 'rgXTI'),
+        (lambda self: dyn.array(XTI, self['cXTI'].li.int()), 'rgXTI'),
     ]
 
 @BIFF5.define
@@ -1840,7 +1843,7 @@ class EXTERNNAME(pstruct.type):
         #lookup = {
         #    #(0, 0) : ExternOleDdeLink,
         #    (0, 0) : ExternDocName,
-        #    (0, 1) : ptype.undefined,   # ???
+        #    (0, 1) : undefined,   # ???
         #    (1, 0) : ExternDdeLinkNoOper,
         #}
         # FIXME: this is pretty poorly documented
@@ -1880,7 +1883,7 @@ class ExternName(pstruct.type):
         #lookup = {
         #    #(0, 0) : ExternOleDdeLink,
         #    (0, 0) : ExternDocName,
-        #    (0, 1) : ptype.undefined,   # ???
+        #    (0, 1) : undefined,   # ???
         #    (1, 0) : ExternDdeLinkNoOper,
         #}
         # FIXME: this is pretty poorly documented
@@ -1959,7 +1962,7 @@ class XFProps(pstruct.type):
     _fields_ = [
         (uint2, 'reserved'),
         (uint2, 'cprops'),
-        (lambda s: dyn.array(XFProp, s['cprops'].li.int()), 'xfPropArray'),
+        (lambda self: dyn.array(XFProp, self['cprops'].li.int()), 'xfPropArray'),
     ]
 
 ###
@@ -2050,7 +2053,7 @@ class CRN(pstruct.type):
         (ColByteU, 'colLast'),
         (ColByteU, 'colFirst'),
         (RwU, 'colLast'),
-        (lambda s: dyn.array(SerAr, s['colLast'].li.int()-s['colFirst'].li.int() + 1), 'crnOper'),
+        (lambda self: dyn.array(SerAr, self['colLast'].li.int() - self['colFirst'].li.int() + 1), 'crnOper'),
     ]
 
 class CellXF7(pbinary.flags):
@@ -2223,7 +2226,7 @@ class XF(pstruct.type):
         (FontIndex, 'ifnt'),
         (IFmt, 'ifmt'),
         (_flags, 'flags'),
-        (lambda s: CellXF8 if s['flags'].li['fStyle'] == 0 else StyleXF8, 'data'),
+        (lambda self: CellXF8 if self['flags'].li['fStyle'] == 0 else StyleXF8, 'data'),
     ]
 
 @BIFF5.define
@@ -2296,7 +2299,7 @@ class PtgDataType(pbinary.enum):
 class PtgHeader(pstruct.type):
     def __eptg(self):
         res = self['ptg'].li
-        return ubyte1 if res['ptg'] in (0x18,0x19) else 0
+        return ubyte1 if res['ptg'] in {0x18, 0x19} else 0
 
     def Type(self):
         first, second = map(self.__field__, ('ptg', 'eptg'))
@@ -2342,45 +2345,45 @@ class PtgTbl(pstruct.type):
     ]
 
 @Ptg.define
-class PtgAdd(ptype.undefined): parseType = 0x03, None
+class PtgAdd(undefined): parseType = 0x03, None
 @Ptg.define
-class PtgSub(ptype.undefined): parseType = 0x04, None
+class PtgSub(undefined): parseType = 0x04, None
 @Ptg.define
-class PtgMul(ptype.undefined): parseType = 0x05, None
+class PtgMul(undefined): parseType = 0x05, None
 @Ptg.define
-class PtgDiv(ptype.undefined): parseType = 0x06, None
+class PtgDiv(undefined): parseType = 0x06, None
 @Ptg.define
-class PtgPower(ptype.undefined): parseType = 0x07, None
+class PtgPower(undefined): parseType = 0x07, None
 @Ptg.define
-class PtgConcat(ptype.undefined): parseType = 0x08, None
+class PtgConcat(undefined): parseType = 0x08, None
 @Ptg.define
-class PtgLt(ptype.undefined): parseType = 0x09, None
+class PtgLt(undefined): parseType = 0x09, None
 @Ptg.define
-class PtgLe(ptype.undefined): parseType = 0x0a, None
+class PtgLe(undefined): parseType = 0x0a, None
 @Ptg.define
-class PtgEq(ptype.undefined): parseType = 0x0b, None
+class PtgEq(undefined): parseType = 0x0b, None
 @Ptg.define
-class PtgGe(ptype.undefined): parseType = 0x0c, None
+class PtgGe(undefined): parseType = 0x0c, None
 @Ptg.define
-class PtgGt(ptype.undefined): parseType = 0x0d, None
+class PtgGt(undefined): parseType = 0x0d, None
 @Ptg.define
-class PtgNe(ptype.undefined): parseType = 0x0e, None
+class PtgNe(undefined): parseType = 0x0e, None
 @Ptg.define
-class PtgIsect(ptype.undefined): parseType = 0x0f, None
+class PtgIsect(undefined): parseType = 0x0f, None
 @Ptg.define
-class PtgUnion(ptype.undefined): parseType = 0x10, None
+class PtgUnion(undefined): parseType = 0x10, None
 @Ptg.define
-class PtgRange(ptype.undefined): parseType = 0x11, None
+class PtgRange(undefined): parseType = 0x11, None
 @Ptg.define
-class PtgUplus(ptype.undefined): parseType = 0x12, None
+class PtgUplus(undefined): parseType = 0x12, None
 @Ptg.define
-class PtgUminus(ptype.undefined): parseType = 0x13, None
+class PtgUminus(undefined): parseType = 0x13, None
 @Ptg.define
-class PtgPercent(ptype.undefined): parseType = 0x14, None
+class PtgPercent(undefined): parseType = 0x14, None
 @Ptg.define
-class PtgParen(ptype.undefined): parseType = 0x15, None
+class PtgParen(undefined): parseType = 0x15, None
 @Ptg.define
-class PtgMissArg(ptype.undefined): parseType = 0x16, None
+class PtgMissArg(undefined): parseType = 0x16, None
 @Ptg.define
 class PtgStr(ShortXLUnicodeString): parseType = 0x17, None
 @Ptg.define
@@ -2415,7 +2418,7 @@ class PtgAttrChoose(pstruct.type):
     parseType = 0x19, 0x04
     _fields_ = [
         (uint2, 'cOffset'),
-        (lambda s: dyn.array(uint2, s['cOffset'].int()+1), 'rgOffset'),
+        (lambda self: dyn.array(uint2, 1 + self['cOffset'].int()), 'rgOffset'),
     ]
 @Ptg.define
 class PtgAttrGoto(uint2): parseType = 0x19, 0x08
@@ -2613,8 +2616,8 @@ class CFGradient(pstruct.type):
         (ubyte1, 'cInterpCurve'),
         (ubyte1, 'cGradientCurve'),
         (_flags, 'flags'),
-        (lambda s: dyn.array(CFGradientInterpItem, s['cInterpCurve'].li.int()), 'rgInterp'),
-        (lambda s: dyn.array(CFGradientItem, s['cGradientCurve'].li.int()), 'rgCurve'),
+        (lambda self: dyn.array(CFGradientInterpItem, self['cInterpCurve'].li.int()), 'rgInterp'),
+        (lambda self: dyn.array(CFGradientItem, self['cGradientCurve'].li.int()), 'rgCurve'),
     ]
 
 class CFDatabar(pstruct.type):
@@ -2663,7 +2666,7 @@ class CFMultistate(pstruct.type):
         (ubyte1, 'cStates'),
         (ubyte1, 'iIconSet'),
         (_flags, 'flags'),
-        (lambda s: dyn.array(CFMStateItem, s['cStates'].li.int()), 'rgStates'),
+        (lambda self: dyn.array(CFMStateItem, self['cStates'].li.int()), 'rgStates'),
     ]
 
 class CFParsedFormula(pstruct.type):
@@ -2784,8 +2787,8 @@ class TableStyles(pstruct.type):
         (uint4, 'cts'),
         (uint2, 'cchDefTableStyle'),
         (uint2, 'cchDefPivotStyle'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['cchDefTableStyle'].li.int()), 'rgchDefTableStyle'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['cchDefPivotStyle'].li.int()), 'rgchDefPivotStyle'),
+        (lambda self: dyn.clone(pstr.wstring, length=self['cchDefTableStyle'].li.int()), 'rgchDefTableStyle'),
+        (lambda self: dyn.clone(pstr.wstring, length=self['cchDefPivotStyle'].li.int()), 'rgchDefPivotStyle'),
     ]
 
 @BIFF5.define
@@ -2819,8 +2822,8 @@ class Style(pstruct.type):
 
     _fields_ = [
         (_ixfe, 'ixfe'),
-        (lambda s: BuiltInStyle if s['ixfe'].li['fBuiltIn'] else ptype.undefined, 'builtInData'),
-        (lambda s: XLUnicodeString if not s['ixfe'].li['fBuiltIn'] else ptype.undefined, 'user')
+        (lambda self: BuiltInStyle if self['ixfe'].li['fBuiltIn'] else undefined, 'builtInData'),
+        (lambda self: XLUnicodeString if not self['ixfe'].li['fBuiltIn'] else undefined, 'user')
     ]
 
 @BIFF5.define
@@ -2926,7 +2929,7 @@ class XFExtGradient(pstruct.type):
     _fields_ = [
         (XFPropGradient, 'gradient'),
         (uint4, 'cGradSTops'),
-        (lambda s: dyn.array(GradStop, s['cGradStops'].li.int()), 'rgGradStops'),
+        (lambda self: dyn.array(GradStop, self['cGradStops'].li.int()), 'rgGradStops'),
     ]
 
 class ExtPropType(ptype.definition):
@@ -3023,7 +3026,7 @@ class XFExt(pstruct.type):
         (XFIndex, 'ixfe'),
         (uint2, 'reserved2'),
         (uint2, 'cexts'),
-        (lambda s: dyn.array(ExtProp, s['cexts'].li.int()), 'rgExt'),
+        (lambda self: dyn.array(ExtProp, self['cexts'].li.int()), 'rgExt'),
     ]
 
 @BIFF5.define
@@ -3108,13 +3111,13 @@ class Ref8U(pstruct.type):
 class SqRefU(pstruct.type):
     _fields_ = [
         (uint2, 'cref'),
-        (lambda s: dyn.array(Ref8U, s['cref'].li.int()), 'rgrefs'),
+        (lambda self: dyn.array(Ref8U, self['cref'].li.int()), 'rgrefs'),
     ]
 
 class SDContainer(pstruct.type):
     _fields_ = [
         (uint4, 'cbSD'),    # GUARD: >20
-        (lambda s: dyn.block(s['cbSD'].li.int()), 'sd'),
+        (lambda self: dyn.block(self['cbSD'].li.int()), 'sd'),
     ]
 
 class FeatProtection(pstruct.type):
@@ -3148,7 +3151,7 @@ class PropertyBag(pstruct.type):
         (uint2, 'id'),
         (uint2, 'cProp'),
         (uint2, 'cbUnknown'),
-        (lambda s: dyn.array(Property, s['cProp'].li.int()), 'properties'),
+        (lambda self: dyn.array(Property, self['cProp'].li.int()), 'properties'),
     ]
 
 class FactoidData(pstruct.type):
@@ -3164,7 +3167,7 @@ class FeatSmartTag(pstruct.type):
     _fields_ = [
         (uint4, 'hashValue'),
         (ubyte1, 'cSmartTags'),
-        (lambda s: dyn.array(FactoidData,s['cSmartTags'].li.int()), 'rgFactoid'),
+        (lambda self: dyn.array(FactoidData, self['cSmartTags'].li.int()), 'rgFactoid'),
     ]
 
 @BIFF5.define
@@ -3180,7 +3183,7 @@ class Feat(pstruct.type):
             return FeatFormulaErr2
         elif isf['ISFFACTOID']:
             return FeatSmartTag
-        return ptype.undefined
+        return undefined
 
     _fields_ =[
         (FrtHeader, 'frtHeader'),
@@ -3190,7 +3193,7 @@ class Feat(pstruct.type):
         (uint2, 'cref'),
         (uint4, 'cbFeatData'),
         (uint2, 'reserved3'),
-        (lambda s: dyn.array(Reg8U, s['cref'].li.int()), 'refs'),
+        (lambda self: dyn.array(Reg8U, self['cref'].li.int()), 'refs'),
         (__rgbFeat, 'rgbFeat'),
     ]
 
@@ -3222,11 +3225,11 @@ class FeatHdr(pstruct.type):
     def __rgbHdrData(self):
         isf = self['isf'].l
         if self['cbHdrData'].li.int() == 0:
-            return ptype.undefined
+            return undefined
         if isf['ISFPROTECTION']:
             return EnhancedProtection
         elif isf['ISFFEC2']:
-            return ptype.undefined
+            return undefined
         raise NotImplementedError(isf)
 
     _fields_ = [
@@ -3308,7 +3311,7 @@ class XFExtNoFRT(pstruct.type):
         (uint2, 'reserved2'),
         (uint2, 'reserved3'),
         (uint2, 'cexts'),
-        (lambda s: dyn.array(ExtProp,s['cexts'].li.int()), 'rgExt'),
+        (lambda self: dyn.array(ExtProp, self['cexts'].li.int()), 'rgExt'),
     ]
 
 @BIFF5.define
@@ -3346,7 +3349,7 @@ class DXFFntD(pstruct.type):
     _fields_ = [
         (ubyte1, 'cchFont'),
         (__stFontName, 'stFontName'),
-        (lambda s: dyn.block(max((0, 63-s['cchFont'].li.int()))), 'unused1'),
+        (lambda self: dyn.block(max(0, 63 - self['cchFont'].li.int())), 'unused1'),
         (Stxp, 'stxp'),
         (uint4, 'icvFore'),
         (uint4, 'reserved'),
@@ -3432,9 +3435,9 @@ class DXFN(pstruct.type):
         f = self['flags'].li
         if f['ibitAtrNum']:
             return DXFNumUsr if f['fIfmtUser'] else DXFNumIfmt
-        return ptype.undefined
+        return undefined
 
-    hasFlag = lambda t, fld: lambda s: fld if s['flags'].li[fld] else ptype.undefined
+    hasFlag = lambda t, field: lambda self: field if self['flags'].li[field] else undefined
     _fields_ = [
         (_flags, 'flags'),
         (__dxfnum,  'dxfnum'),
@@ -3511,11 +3514,11 @@ class AutoFilter(pstruct.type):
         do = self['doper1'].li
         cb = do['vtValue']['cch'].int()
         # FIXME
-        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size) if do['vtValue'].int() == 6 else ptype.undefined
+        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size) if do['vtValue'].int() == 6 else undefined
     def __str2(self):
         do = self['doper1'].li
         cb = do['vtValue']['cch'].int()
-        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size) if do['vtValue'].int() == 6 else ptype.undefined
+        return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size) if do['vtValue'].int() == 6 else undefined
 
     _fields_ = [
         (uint2, 'iEntry'),
@@ -3530,7 +3533,7 @@ class Feat11FdaAutoFilter(pstruct.type):
     _fields_ = [
         (uint4, 'cbAutoFilter'), #GUARD : <= 2080 bytes
         (uint2, 'unused'),
-        (lambda s: AutoFilter, 'recAutoFilter'),
+        (lambda self: AutoFilter, 'recAutoFilter'),
     ]
 
 class Feat11XMapEntry2(pstruct.type):
@@ -3550,7 +3553,7 @@ class Feat11XMapEntry(pstruct.type):
 class Feat11XMap(pstruct.type):
     _fields_ = [
         (uint2, 'iXmapMac'),
-        (lambda s: dyn.array(Feat11XMapEntry,s['iXmapMac'].li.int()), 'rgXmap'),
+        (lambda self: dyn.array(Feat11XMapEntry, self['iXmapMac'].li.int()), 'rgXmap'),
     ]
 
 class ListParsedArrayFormula(pstruct.type):
@@ -3587,13 +3590,13 @@ class Feat11Fmla(pstruct.type):
         (ListParsedFormula, 'rgbFmla'),
     ]
 
-#class Feat11WSSListInfo(ptype.undefined):       # FIXME
+#class Feat11WSSListInfo(undefined):       # FIXME
 #    pass
 
 class CachedDiskHeader(pstruct.type):
     def __strStyleName(self):
         p = self.getparent(type=Feat11FieldDataItem)
-        return XLUnicodeString if p['flags']['fSaveStyleName'].int() == 1 else ptype.undefined
+        return XLUnicodeString if p['flags']['fSaveStyleName'].int() == 1 else undefined
 
     _fields_ = [
         (uint4, 'cbdxfHdrDisk'),
@@ -3735,15 +3738,15 @@ class Feat11FieldDataItem(pstruct.type):
 
     def __AutoFilter(self):
         tft = self['flag'].l
-        return Feat11FdaAutoFilter if tft['fAutoFilter'] else ptype.undefined
+        return Feat11FdaAutoFilter if tft['fAutoFilter'] else undefined
 
     def __rgXmap(self):
         tft = self['flags'].l
-        return Feat11XMap if tft['fLoadXmapi'] else ptype.undefined
+        return Feat11XMap if tft['fLoadXmapi'] else undefined
 
     def __fmla(self):
         tft = self['flags'].l
-        return Feat11FdaAutoFilter if tft['fLoadFmla'] else ptype.undefined
+        return Feat11FdaAutoFilter if tft['fLoadFmla'] else undefined
 
     def __totalFmla(self):
         tft = self['flags'].l
@@ -3751,19 +3754,19 @@ class Feat11FieldDataItem(pstruct.type):
 
     def __strTotal(self):
         tft = self['flags'].l
-        return XLUnicodeString if tft['fLoadTotalStr'] else ptype.undefined
+        return XLUnicodeString if tft['fLoadTotalStr'] else undefined
 
     def __wssInfo(self):
         lt = self.getparent(type=TableFeatureType)['lt'].l
-        return Feat11WSSListInfo if lt.int() == 1 else ptype.undefined
+        return Feat11WSSListInfo if lt.int() == 1 else undefined
 
     def __qsif(self):
         lt = self.getparent(type=TableFeatureType)['lt'].l
-        return uint4 if lt.int() == 3 else ptype.undefined
+        return uint4 if lt.int() == 3 else undefined
 
     def __dskHdrCache(self):
         tft = self.getparent(type=TableFeatureType).l
-        return CachedDiskHeader if tft['crwHeader'].int() == 0 and tft['flags']['fSingleCell'].int() == 0 else ptype.undefined
+        return CachedDiskHeader if tft['crwHeader'].int() == 0 and tft['flags']['fSingleCell'].int() == 0 else undefined
 
     _fields_ = [
         (uint4, 'idField'),
@@ -3791,7 +3794,7 @@ class Feat11FieldDataItem(pstruct.type):
 class Feat11RgSharepointId(pstruct.type):
     _fields_ = [
         (uint2, 'cId'),
-        (lambda s: dyn.array(uint4, s['cId'].li.int()), 'rgId'),
+        (lambda self: dyn.array(uint4, self['cId'].li.int()), 'rgId'),
     ]
 class Feat11RgSharepointIdDel(Feat11RgSharepointId): pass
 class Feat11RgSharepointIdChange(Feat11RgSharepointId): pass
@@ -3802,7 +3805,7 @@ class Feat11CellStruct(pstruct.type):
 class Feat11RgInvalidCells(pstruct.type):
     _fields_ = [
         (uint2, 'cCellInvalid'),
-        (lambda s: dyn.array(Feat11CellStruct, s['cCellInvalid'].li.int()), 'rgCellInvalid'),
+        (lambda self: dyn.array(Feat11CellStruct, self['cCellInvalid'].li.int()), 'rgCellInvalid'),
     ]
 
 class TableFeatureType(pstruct.type):
@@ -3822,15 +3825,15 @@ class TableFeatureType(pstruct.type):
         ])
 
     def __cSPName(self):
-        return XLUnicodeString if self['flags'].li['fLoadCSPName'] else ptype.undefined
+        return XLUnicodeString if self['flags'].li['fLoadCSPName'] else undefined
     def __entryId(self):
-        return XLUnicodeString if self['flags'].li['fLoadEntryId'] else ptype.undefined
+        return XLUnicodeString if self['flags'].li['fLoadEntryId'] else undefined
     def __idDeleted(self):
-        return Feat11RgSharepointIdDel if self['flags'].li['fLoadPldwIdDeleted'] else ptype.undefined
+        return Feat11RgSharepointIdDel if self['flags'].li['fLoadPldwIdDeleted'] else undefined
     def __idChanged(self):
-        return Feat11RgSharepointIdChange if self['flags'].li['fLoadPldwIdChanged'] else ptype.undefined
+        return Feat11RgSharepointIdChange if self['flags'].li['fLoadPldwIdChanged'] else undefined
     def __cellInvalid(self):
-        return Feat11RgInvalidCells if self['flags'].li['fLoadPllstclInvalid'] else ptype.undefined
+        return Feat11RgInvalidCells if self['flags'].li['fLoadPllstclInvalid'] else undefined
 
     _fields_ = [
         (SourceType, 'lt'),
@@ -3852,7 +3855,7 @@ class TableFeatureType(pstruct.type):
         (uint2, 'cFieldData'),
         (__cSPName, 'cSPName'),
         (__entryId, 'entryId'),
-        (lambda s: dyn.array(Feat11FieldDataItem, s['cFieldData'].li.int()), 'fieldData'),
+        (lambda self: dyn.array(Feat11FieldDataItem, self['cFieldData'].li.int()), 'fieldData'),
         (__idDeleted, 'idDeleted'),
         (__idChanged, 'idChanged'),
         (__cellInvalid, 'cellInvalid'),
@@ -3884,7 +3887,7 @@ class Feature11(pstruct.type):
         (uint2, 'cref2'),
         (uint4, 'cbFeatData'),
         (uint2, 'reserved3'),
-        (lambda s: dyn.array(Ref8U, s['cref2'].li.int()), 'refs2'),
+        (lambda self: dyn.array(Ref8U, self['cref2'].li.int()), 'refs2'),
         (__rgbFeat, 'rgbFeat'),
     ]
 
@@ -3906,16 +3909,16 @@ class List12BlockLevel(pstruct.type):
         (sint4, 'cbdxfHeaderBorder'),
         (sint4, 'cbdxfAggBorder'),
 
-        (lambda s: (DXFN12List if s['cbdxfHeader'].li.int() > 0 else ptype.undefined), 'dxfHeader'),
-        (lambda s: (DXFN12List if s['cbdxfData'].li.int() > 0 else ptype.undefined), 'dxfData'),
-        (lambda s: (DXFN12List if s['cbdxfAgg'].li.int() > 0 else ptype.undefined), 'dxfAgg'),
-        (lambda s: (DXFN12List if s['cbdxfBorder'].li.int() > 0 else ptype.undefined), 'dxfBorder'),
-        (lambda s: (DXFN12List if s['cbdxfHeaderBorder'].li.int() > 0 else ptype.undefined), 'dxfHeaderBorder'),
-        (lambda s: (DXFN12List if s['cbdxfAggBorder'].li.int() > 0 else ptype.undefined), 'dxfAggBorder'),
+        (lambda self: (DXFN12List if self['cbdxfHeader'].li.int() > 0 else undefined), 'dxfHeader'),
+        (lambda self: (DXFN12List if self['cbdxfData'].li.int() > 0 else undefined), 'dxfData'),
+        (lambda self: (DXFN12List if self['cbdxfAgg'].li.int() > 0 else undefined), 'dxfAgg'),
+        (lambda self: (DXFN12List if self['cbdxfBorder'].li.int() > 0 else undefined), 'dxfBorder'),
+        (lambda self: (DXFN12List if self['cbdxfHeaderBorder'].li.int() > 0 else undefined), 'dxfHeaderBorder'),
+        (lambda self: (DXFN12List if self['cbdxfAggBorder'].li.int() > 0 else undefined), 'dxfAggBorder'),
 
-        (lambda s: (XLUnicodeString if s['istnHeader'].li.int() != -1 else ptype.undefined), 'stHeader'),
-        (lambda s: (XLUnicodeString if s['istnData'].li.int() != -1 else ptype.undefined), 'stData'),
-        (lambda s: (XLUnicodeString if s['istnAgg'].li.int() != -1 else ptype.undefined), 'stAgg'),
+        (lambda self: (XLUnicodeString if self['istnHeader'].li.int() != -1 else undefined), 'stHeader'),
+        (lambda self: (XLUnicodeString if self['istnData'].li.int() != -1 else undefined), 'stData'),
+        (lambda self: (XLUnicodeString if self['istnAgg'].li.int() != -1 else undefined), 'stAgg'),
     ]
 
 class List12TableStyleClientInfo(pstruct.type):
@@ -3955,7 +3958,7 @@ class List12(pstruct.type):
             return List12TableStyleClientInfo
         elif v == 2:
             return List12DisplayName
-        return ptype.undefined
+        return undefined
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -3982,25 +3985,25 @@ class SerParent(uint2):
 
 @BIFF5.define
 @BIFF8.define
-class Begin(ptype.type):
+class Begin(undefined):
     type = 4147
     type = 0x1033
 
 @BIFF5.define
 @BIFF8.define
-class End(ptype.type):
+class End(undefined):
     type = 4148
     type = 0x1034
 
 @BIFF5.define
 @BIFF8.define
-class StartBlock(ptype.type):
+class StartBlock(undefined):
     type = 2130
     type = 0x852
 
 @BIFF5.define
 @BIFF8.define
-class EndBlock(ptype.type):
+class EndBlock(undefined):
     type = 2131
     type = 0x853
 
@@ -4056,7 +4059,7 @@ class RPHSSub(pstruct.type):
     _fields_ = [
         (uint2, 'crun'),
         (uint2, 'cch'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['cch'].li.int()), 'st'),
+        (lambda self: dyn.clone(pstr.wstring, length=self['cch'].li.int()), 'st'),
     ]
     def summary(self):
         return "crun={:#0{:d}x} st={:s}".format(self['crun'].int(), 2 + 2 * self['crun'].size(), self['st'].summary())
@@ -4074,7 +4077,7 @@ class ExtRst(pstruct.type):
         (uint2, 'cb'),
         (Phs, 'phs'),
         (RPHSSub, 'rphssub'),
-        (lambda s: dyn.array(PhRuns, s['rphssub'].li['crun'].int()), 'rgphruns')
+        (lambda self: dyn.array(PhRuns, self['rphssub'].li['crun'].int()), 'rgphruns')
     ]
 
 class XLUnicodeRichExtendedString(pstruct.type):
@@ -4099,7 +4102,7 @@ class XLUnicodeRichExtendedString(pstruct.type):
         return dyn.clone(type, length=self['cch'].li.int())
     def __ExtRst(self):
         f = self['flags'].l
-        return ExtRst if f['fExtSt'] else ptype.undefined
+        return ExtRst if f['fExtSt'] else undefined
 
     _fields_ = [
         (uint2, 'cch'),
@@ -4107,7 +4110,7 @@ class XLUnicodeRichExtendedString(pstruct.type):
         (__cRun, 'cRun'),
         (__cbExtRst, 'cbExtRst'),
         (__rgb, 'rgb'),
-        (lambda s: dyn.array(FormatRun, s['cRun'].li.int()), 'rgRun'),
+        (lambda self: dyn.array(FormatRun, self['cRun'].li.int()), 'rgRun'),
         (__ExtRst, 'ExtRst'),
     ]
 
@@ -4189,7 +4192,7 @@ class PictFmlaEmbedInfo(pstruct.type):
         # FIXME
         if cb:
             return dyn.clone(XLUnicodeStringNoCch, blocksize=lambda _, size=cb: size)
-        return ptype.undefined
+        return undefined
 
     _fields_ = [
         (ubyte1, 'ttb'),
@@ -4221,7 +4224,7 @@ class ObjFmla(pstruct.type):
         (uint2, 'cbFmla'),
         (ObjectParsedFormula, 'fmla'),
         (PictFmlaEmbedInfo, 'embedInfo'),
-        (lambda s: dyn.block(s['cbFmla'].li.int() - s['fmla'].li.int() - s['embedInfo'].li.int()), 'padding'),
+        (lambda self: dyn.block(self['cbFmla'].li.int() - self['fmla'].li.int() - self['embedInfo'].li.int()), 'padding'),
     ]
 
 class ObjFmlaNoSize(ObjectParsedFormula):
@@ -4249,7 +4252,7 @@ class FtGeneral(pstruct.type):
     ]
 
 @Ft.define
-class FtReserved(ptype.undefined):
+class FtReserved(undefined):
     featureType = 0x0000
 
 @Ft.define
@@ -4292,7 +4295,7 @@ class FtPioGrbit(pbinary.flags):
 class PictFmlaKey(pstruct.type):
     _fields_ = [
         (uint4, 'cbKey'),
-        (lambda s: dyn.block(s['cbKey'].li.int()), 'keyBuf'),
+        (lambda self: dyn.block(self['cbKey'].li.int()), 'keyBuf'),
         (ObjFmla, 'fmlaLinkedCell'),    # FIXME
         (ObjFmla, 'fmlaListFillRange'),
     ]
@@ -4498,8 +4501,8 @@ class FtLbsData(pstruct.type):
         (_flags, 'flags'),
         (ObjId, 'idEdit'),
         (LbsDropData, 'dropData'),
-        (lambda s: dyn.array(XLUnicodeString, s['cLines'].li.int()), 'dropData'),
-        (lambda s: dyn.array(s._bsels, s['cLines'].li.int()), 'bsels'),
+        (lambda self: dyn.array(XLUnicodeString, self['cLines'].li.int()), 'dropData'),
+        (lambda self: dyn.array(s._bsels, self['cLines'].li.int()), 'bsels'),
     ]
 
 @Ft.define
@@ -4691,8 +4694,8 @@ class TxO(pstruct.type):
             try:
                 res = self.__previousObjRecord()
             except:
-                return ptype.undefined
-            if res.d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14):
+                return undefined
+            if res.d['cmo'].li['data']['ot'].int() not in {0,5,7,11,12,14}:
                 return type
             return pint.uint_t
         return reserved
@@ -4700,7 +4703,7 @@ class TxO(pstruct.type):
     def __controlInfo(self):
         try:
             res = self.__previousObjRecord()
-            if res.d['cmo'].li['data']['ot'].int() in (0,5,7,11,12,14):
+            if res.d['cmo'].li['data']['ot'].int() in {0,5,7,11,12,14}:
                 return ControlInfo
         except: pass
         return ControlInfo
@@ -4708,11 +4711,11 @@ class TxO(pstruct.type):
     _fields_ = [
         (_flags, 'flags'),
         (_rot, 'rot'),
-        #(lambda s: uint2 if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14) else pint.uint_t, 'reserved4'),
-        #(lambda s: uint4 if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in (0,5,7,11,12,14) else pint.uint_t, 'reserved5'),
+        #(lambda self: uint2 if self.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in {0,5,7,11,12,14} else pint.uint_t, 'reserved4'),
+        #(lambda self: uint4 if self.__previousObjRecord().d['cmo'].li['data']['ot'].int() not in {0,5,7,11,12,14} else pint.uint_t, 'reserved5'),
         (__reserved(uint2), 'reserved4'),
         (__reserved(uint4), 'reserved5'),
-        #(lambda s: ControlInfo if s.__previousObjRecord().d['cmo'].li['data']['ot'].int() in (0,5,7,11,12,14) else ptype.undefined, 'controlInfo'),
+        #(lambda self: ControlInfo if self.__previousObjRecord().d['cmo'].li['data']['ot'].int() in {0,5,7,11,12,14} else undefined, 'controlInfo'),
         (__controlInfo, 'controlInfo'),
         (uint2, 'cchText'),
         (uint2, 'cbRuns'),
@@ -4751,7 +4754,7 @@ class Palette(pstruct.type):
     type = 146
     _fields_ = [
         (sint2, 'ccv'),
-        (lambda s: dyn.array(LongRGB, s['ccv'].li.int()), 'rgColor'),
+        (lambda self: dyn.array(LongRGB, self['ccv'].li.int()), 'rgColor'),
     ]
 
 @BIFF5.define
@@ -5027,18 +5030,18 @@ class CF(pstruct.type):
 
     def __rgbCT(self):
         ct = self['ct'].li.int()
-        if ct in (0x01, 0x02):
-            return ptype.undefined
-        elif ct in (0x03,):
+        if ct in {0x01, 0x02}:
+            return undefined
+        elif ct in {0x03}:
             return CFGradient
-        elif ct in (0x04,):
+        elif ct in {0x04}:
             return CFDatabar
-        elif ct in (0x05,):
+        elif ct in {0x05}:
             return CFFilter
-        elif ct in (0x06,):
+        elif ct in {0x06}:
             return CFMultistate
         logging.warn('{:s}.__rgbCT : Unknown ct value. : {:02x}'.format(self.instance(), ct))
-        return ptype.undefined
+        return undefined
 
     _fields_ = [
         (ubyte1, 'ct'),
@@ -5053,7 +5056,7 @@ class CF(pstruct.type):
         (_icfTemplate, 'icfTemplate'),
         (ubyte1, 'cbTemplateParm'),
         #(CFExTemplateParams, 'rgbTemplateParms'),  # FIXME
-        (lambda s: dyn.block(s['cbTemplateParm'].li.int()), 'rgbTemplateParms'),
+        (lambda self: dyn.block(self['cbTemplateParm'].li.int()), 'rgbTemplateParms'),
         (__rgbCT, 'rgbCT'),
     ]
 
@@ -5139,7 +5142,7 @@ class Note(pstruct.type):
 
         # FIXME: is this the right way to determine which stream we're in?
         dt = record['dt']
-        return NoteSh if dt in ('workbook', 'worksheet', 'macrosheet') else NoteRR
+        return NoteSh if dt in {'workbook', 'worksheet', 'macrosheet'} else NoteRR
 
     _fields_ = [
         (__body, 'body'),
@@ -5271,14 +5274,14 @@ if __name__ == '__main__':
         worksheets = []
         for st in streams:
             bof = st[0]['data']
-            t = int(bof['dt'])
-            if t == 5:
+            t = bof['dt']
+            if t['workbook']:
                 if workbook is not None:
                     print("Workbook has already been assigned. Honoring anyways..")
 
                 workbook = st
 
-            elif t == 0x10:
+            elif t['worksheet']:
                 worksheets.append(st)
 
             else:

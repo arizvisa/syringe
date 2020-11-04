@@ -163,7 +163,7 @@ class IMsoInkData(pstruct.type):
     _fields_ = [
         (dyn.block(16), 'CLSID_InkDisp'),
         (uint4, 'cbBlob'),
-        (lambda s: dyn.block(s['cbBlob'].li.int()), 'data'),
+        (lambda self: dyn.block(self['cbBlob'].li.int()), 'data'),
     ]
 
 class POINT(pstruct.type):
@@ -238,7 +238,7 @@ class SG(pbinary.struct):
 class IHlink(pstruct.type):
     _fields_ = [
         (dyn.block(16), 'CLSID_StdHlink'),
-        (ptype.undefined, 'hyperlink'), # FIXME: [MS-OSHARED] Hyperlink
+        (undefined, 'hyperlink'), # FIXME: [MS-OSHARED] Hyperlink
     ]
 
 class OfficeArtFOPTEOPID(pbinary.struct):
@@ -1495,7 +1495,7 @@ class msofbtTimeColorBehaviorContainer(RecordContainer):
 
 class msofbtTimeVariant(pstruct.type):
     def __Value(self):
-        t = int(self['Type'].li)
+        t = self['Type'].li.int()
         if t == -1:
             return dyn.block(0)
         elif t == 0:
@@ -1600,7 +1600,7 @@ class msofbtTimeVariant(pstruct.type):
     type = 0,None
 
     def __Value(self):
-        n = int(self['Type'].li)
+        n = self['Type'].li.int()
         if n == 0:
             return pint.uint32_t
         if n == 1:
@@ -1653,7 +1653,7 @@ class OfficeArtRGFOPTE(pstruct.type):
             index,prop = self.__state.next()
             #t = prop['op'].complex() if hasattr(prop['op'],'complex') else dyn.block(prop['op'].int())
             t = dyn.block(prop['op'].int())
-            return dyn.clone(t, Property=property(lambda s:prop))
+            return dyn.clone(t, Property=property(lambda self: prop))
 
     def __complexData(self):
         try:
@@ -1856,7 +1856,7 @@ class dgmLayoutMRU(MSODGMLO):
 @OfficeArtFOPTEOP.define
 class equationXML(uint4):
     type = 0x030c
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda elfs: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class shapeBooleanProperties(pbinary.flags):
@@ -1955,22 +1955,22 @@ class CalloutBooleanProperties(pbinary.flags):
 @OfficeArtFOPTEOP.define
 class wzName(uint4):
     type = 0x0380
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzDescription(uint4):
     type = 0x0381
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class pihlShape(uint4):
     type = 0x0382
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class pWrapPolygonVertices(uint4):
     type = 0x0383
-    complex = lambda s: dyn.clone(IMsoArray, _object_=POINT, blocksize=lambda _: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=POINT, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class dxWrapDistLeft(uint4):
@@ -1999,12 +1999,12 @@ class unused906(sint4):
 @OfficeArtFOPTEOP.define
 class wzTooltip(uint4):
     type = 0x038d
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzScript(uint4):
     type = 0x038e
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class posh(uint4):
@@ -2074,7 +2074,7 @@ class dxWidthHR(uint4):
 @OfficeArtFOPTEOP.define
 class wzScriptExtAttr(uint4):
     type = 0x0397
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class alignHR(pint.enum, uint4):
@@ -2109,17 +2109,17 @@ class tableProperties(uint4):
 @OfficeArtFOPTEOP.define
 class tableRowProperties(uint4):
     type = 0x03a0
-    complex = lambda s: dyn.clone(IMsoArray, _object_=sint4, blocksize=lambda _: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=sint4, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class wzWebBot(uint4):
     type = 0x03a5
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class metroBlob(uint4):
     type = 0x03a9
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class dhgt(uint4):
@@ -2228,12 +2228,12 @@ class shapePath(MSOSHAPEPATH):
 @OfficeArtFOPTEOP.define
 class pVertices(uint4):
     type = 0x0145
-    complex = lambda s: dyn.clone(IMsoArray, _object_=POINT, blocksize=lambda _: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=POINT, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class pSegmentInfo(uint4):
     type = 0x0146
-    complex = lambda s: dyn.clone(IMsoArray, _object_=MSOPATHINFO, blocksize=lambda _: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=MSOPATHINFO, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class adjustValue(uint4):
@@ -2270,12 +2270,12 @@ class adjust8Value(uint4):
 @OfficeArtFOPTEOP.define
 class pConnectionSites(uint4):
     type = 0x0151
-    complex = lambda s: dyn.clone(IMsoArray, _object_=MSOPATHINFO, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=MSOPATHINFO, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class pConnectionSitesDir(uint4):
     type = 0x0152
-    complex = lambda s: dyn.clone(IMsoArray, _object_=FixedPoint, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=FixedPoint, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class xLimo(uint4):
@@ -2288,17 +2288,17 @@ class yLimo(uint4):
 @OfficeArtFOPTEOP.define
 class pAdjustHandles(uint4):
     type = 0x0155
-    complex = lambda s: dyn.clone(IMsoArray, _object_=ADJH, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=ADJH, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class pGuides(uint4):
     type = 0x0156
-    complex = lambda s: dyn.clone(IMsoArray, _object_=SG, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=SG, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class pInscribe(uint4):
     type = 0x0157
-    complex = lambda s: dyn.clone(IMsoArray, _object_=RECT, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=RECT, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class cxk(MSOCXK):
@@ -2354,12 +2354,12 @@ class fillCrMod(COLORREF):
 @OfficeArtFOPTEOP.define
 class fillBlip(uint4):
     type = 0x0186
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class fillBlipName(uint4):
     type = 0x0187
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class fillBlipFlags(MSOBLIPFLAGS):
@@ -2424,7 +2424,7 @@ class fillShadePreset(uint4):
 @OfficeArtFOPTEOP.define
 class fillShadeColors(uint4):
     type = 0x0197
-    complex = lambda s: dyn.clone(IMsoArray, _object_=MSOSHADECOLOR, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=MSOSHADECOLOR, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class fillOriginX(FixedPoint):
@@ -2532,12 +2532,12 @@ class lineType(MSOLINETYPE):
 @OfficeArtFOPTEOP.define
 class lineFillBlip(uint4):
     type = 0x01c5
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class lineFillBlipName(uint4):
     type = 0x01c6
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class lineFillBlipFlags(MSOBLIPFLAGS):
@@ -2574,7 +2574,7 @@ class lineDashing(MSOLINEDASHING):
 @OfficeArtFOPTEOP.define
 class lineDashStyle(uint4):
     type = 0x01cf
-    complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class lineStartArrowhead(MSOLINEEND):
@@ -2700,7 +2700,7 @@ class lineLeftType(MSOLINETYPE):
 @OfficeArtFOPTEOP.define
 class lineLeftFillBlip(uint4):
     type = 0x0545
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class lineLeftFillBlipName(uint4):
@@ -2741,7 +2741,7 @@ class lineLeftDashing(MSOLINEDASHING):
 @OfficeArtFOPTEOP.define
 class lineLeftDashStyle(uint4):
     type = 0x054f
-    complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class lineLeftStartArrowhead(MSOLINEEND):
@@ -2867,12 +2867,12 @@ class lineTopType(MSOLINETYPE):
 @OfficeArtFOPTEOP.define
 class lineTopFillBlip(uint4):
     type = 0x0585
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class lineTopFillBlipName(uint4):
     type = 0x0586
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class lineTopFillBlipFlags(MSOBLIPFLAGS):
@@ -2909,7 +2909,7 @@ class lineTopDashing(MSOLINEDASHING):
 @OfficeArtFOPTEOP.define
 class lineTopDashStyle(uint4):
     type = 0x058f
-    complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class lineTopStartArrowhead(MSOLINEEND):
@@ -3035,12 +3035,12 @@ class lineRightType(MSOLINETYPE):
 @OfficeArtFOPTEOP.define
 class lineRightFillBlip(uint4):
     type = 0x05c5
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class lineRightFillBlipName(uint4):
     type = 0x05c6
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class lineRightFillBlipFlags(MSOBLIPFLAGS):
@@ -3077,7 +3077,7 @@ class lineRightDashing(MSOLINEDASHING):
 @OfficeArtFOPTEOP.define
 class lineRightDashStyle(uint4):
     type = 0x05cf
-    complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class lineRightStartArrowhead(MSOLINEEND):
@@ -3203,12 +3203,12 @@ class lineBottomType(MSOLINETYPE):
 @OfficeArtFOPTEOP.define
 class lineBottomFillBlip(uint4):
     type = 0x0605
-    complex = lambda s: dyn.block(s.int())
+    complex = lambda self: dyn.block(self.int())
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillBlipName(uint4):
     type = 0x0606
-    complex = lambda s: dyn.clone(pstr.string, length=s.int())
+    complex = lambda self: dyn.clone(pstr.string, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class lineBottomFillBlipFlags(MSOBLIPFLAGS):
@@ -3245,7 +3245,7 @@ class lineBottomDashing(MSOLINEDASHING):
 @OfficeArtFOPTEOP.define
 class lineBottomDashStyle(uint4):
     type = 0x060f
-    complex = lambda s: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda n: s.int())
+    complex = lambda self: dyn.clone(IMsoArray, _object_=uint4, blocksize=lambda _: self.int())
 
 @OfficeArtFOPTEOP.define
 class lineBottomStartArrowhead(MSOLINEEND):
@@ -3699,7 +3699,7 @@ class TextBooleanProperties(pbinary.flags):
 @OfficeArtFOPTEOP.define
 class gtextUNICODE(uint4):
     type = 0x00c0
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class gtextAlign(pint.enum, uint4):
@@ -3724,12 +3724,12 @@ class gtextSpacing(FixedPoint):
 @OfficeArtFOPTEOP.define
 class gtextFont(uint4):
     type = 0x00c5
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class gtextCSSFont(uint4):
     type = 0x00c6
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class GeometryTextBooleanProperties(pbinary.flags):
@@ -3789,12 +3789,12 @@ class cropFromRight(FixedPoint):
 @OfficeArtFOPTEOP.define
 class pib(FixedPoint):
     type = 0x0104
-    complex = lambda s: RecordGeneral
+    complex = lambda self: RecordGeneral
 
 @OfficeArtFOPTEOP.define
 class pibName(uint4):
     type = 0x0105
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class pibFlags(MSOBLIPFLAGS):
@@ -3831,12 +3831,12 @@ class pictureLineCrMod(COLORREF):
 @OfficeArtFOPTEOP.define
 class pibPrint(uint4):
     type = 0x010f
-    complex = lambda s: RecordGeneral
+    complex = lambda self: RecordGeneral
 
 @OfficeArtFOPTEOP.define
 class pibPrintName(COLORREF):
     type = 0x0110
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class pibPrintFlags(MSOBLIPFLAGS):
@@ -3845,7 +3845,7 @@ class pibPrintFlags(MSOBLIPFLAGS):
 @OfficeArtFOPTEOP.define
 class movie(uint4):
     type = 0x0112
-    complex = lambda s: ptype.undefined
+    complex = lambda self: undefined
 
 @OfficeArtFOPTEOP.define
 class pictureTransparentEx(COLORREF):
@@ -3917,67 +3917,67 @@ class BlipBooleanProperties(pbinary.flags):
 @OfficeArtFOPTEOP.define
 class wzLineId(uint4):
     type = 0x0402
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzFillId(uint4):
     type = 0x0403
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzPictureId(uint4):
     type = 0x0404
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzPathId(uint4):
     type = 0x0405
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzShadowId(uint4):
     type = 0x0406
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzPerspectiveId(uint4):
     type = 0x0407
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzGtextId(uint4):
     type = 0x0408
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzFormulaeId(uint4):
     type = 0x0409
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzHandlesId(uint4):
     type = 0x040a
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzCalloutId(uint4):
     type = 0x040b
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzLockId(uint4):
     type = 0x040c
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzTextId(uint4):
     type = 0x040d
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzThreeDId(uint4):
     type = 0x040e
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class UnknownHTMLBooleanProperties(pbinary.flags):
@@ -3997,17 +3997,17 @@ class UnknownHTMLBooleanProperties(pbinary.flags):
 @OfficeArtFOPTEOP.define
 class webComponentWzHtml(uint4):
     type = 0x0680
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class webComponentWzName(uint4):
     type = 0x0681
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class webComponentWzUrl(uint4):
     type = 0x0682
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class WebComponentBooleanProperties(pbinary.flags):
@@ -4023,7 +4023,7 @@ class WebComponentBooleanProperties(pbinary.flags):
 @OfficeArtFOPTEOP.define
 class pInkData(uint4):
     type = 0x0700
-    #complex = lambda s: dyn.clone(pstr.wstring, length=s.int()) #FIXME
+    #complex = lambda self: dyn.clone(pstr.wstring, length=self.int()) #FIXME
 
 @OfficeArtFOPTEOP.define
 class InkBooleanProperties(pbinary.flags):
@@ -4045,42 +4045,42 @@ class InkBooleanProperties(pbinary.flags):
 @OfficeArtFOPTEOP.define
 class wzSigSetupId(uint4):
     type = 0x0781
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupProvId(uint4):
     type = 0x0782
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupSuggSigner(uint4):
     type = 0x0783
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupSuggSigner2(uint4):
     type = 0x0784
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupSuggSignerEmail(uint4):
     type = 0x0785
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupSignInst(uint4):
     type = 0x0786
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupAddlXml(uint4):
     type = 0x0787
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class wzSigSetupProvUrl(uint4):
     type = 0x0788
-    complex = lambda s: dyn.clone(pstr.wstring, length=s.int())
+    complex = lambda self: dyn.clone(pstr.wstring, length=self.int())
 
 @OfficeArtFOPTEOP.define
 class SignatureLineBooleanProperties(pbinary.flags):

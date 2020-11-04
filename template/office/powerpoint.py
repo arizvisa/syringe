@@ -295,7 +295,7 @@ class UserEditAtom(pstruct.type):
         (uint2, 'version'),
         (ubyte1, 'minorVersion'),
         (ubyte1, 'majorVersion'),
-        (dyn.pointer(lambda s: UserEditAtom), 'offsetLastEdit'),
+        (dyn.pointer(lambda self: UserEditAtom), 'offsetLastEdit'),
         (dyn.pointer(RecordGeneral), 'offsetPersistDirectory'),
         (uint4, 'docPersistIdRef'),
         (uint4, 'persistIdSeed'),
@@ -315,9 +315,9 @@ class CurrentUserAtom(pstruct.type):
         (ubyte1, 'majorVersion'),
         (ubyte1, 'minorVersion'),
         (dyn.block(2), 'unused'),
-        (lambda s: dyn.clone(pstr.string,length=s['lenUserName'].li.int()), 'ansiUserName'),
+        (lambda self: dyn.clone(pstr.string, length=self['lenUserName'].li.int()), 'ansiUserName'),
         (uint4, 'relVersion'),
-#        (lambda s: dyn.clone(pstr.wstring,length=s['lenUserName'].li.int()*2), 'unicodeUserName'),
+#        (lambda self: dyn.clone(pstr.wstring,length=2 * self['lenUserName'].li.int()), 'unicodeUserName'),
     ]
 
 # PowerPoint Document stream
@@ -327,7 +327,7 @@ class PersistDirectoryEntry(pstruct.type):
 
     _fields_ = [
         (_info, 'info'),
-        (lambda s: dyn.array( dyn.pointer(RecordGeneral), s['info'].li['cPersist'] ), 'offsets')
+        (lambda self: dyn.array( dyn.pointer(RecordGeneral), self['info'].li['cPersist'] ), 'offsets')
     ]
 
     def summary(self):
@@ -620,7 +620,7 @@ class TabSize(sint2): pass
 class TabStops(pstruct.type):
     _fields_ = [
         (uint2, 'count'),
-        (lambda s: dyn.array(TabStop, s['count'].li.int()), 'rgTabStop'),
+        (lambda self: dyn.array(TabStop, self['count'].li.int()), 'rgTabStop'),
     ]
 
 class TextTabTypeEnum(pint.enum, uint2):
@@ -683,14 +683,14 @@ class ColorIndexStruct(pstruct.type):
     ]
 
 class TextPFException(pstruct.type):
-    fmask = lambda T,F: lambda *flds: lambda s: T if any(s['masks'].li[f] for f in flds) else F
+    fmask = lambda T,F: lambda *fields: lambda self: T if any(self['masks'].li[f] for f in fields) else F
     _fields_ = [
         (PFMasks, 'masks'),
-        (fmask(BulletFlags,ptype.undefined)('hasBullet', 'bulletHasFont', 'bulletHasColor', 'bulletHasSize'), 'bulletFlags'),
+        (fmask(BulletFlags,undefined)('hasBullet', 'bulletHasFont', 'bulletHasColor', 'bulletHasSize'), 'bulletFlags'),
         (fmask(sint2,pint.sint_t)('bulletChar'), 'bulletChar'),
         (fmask(FontIndexRef,pint.uint_t)('bulletFont'), 'bulletFontRef'),
         (fmask(BulletSize,pint.sint_t)('bulletSize'), 'bulletSize'),
-        (fmask(ColorIndexStruct,ptype.undefined)('bulletColor'), 'bulletColor'),
+        (fmask(ColorIndexStruct,undefined)('bulletColor'), 'bulletColor'),
         (fmask(TextAlignmentEnum,pint.uint_t)('align'), 'textAlignment'),
         (fmask(ParaSpacing,pint.sint_t)('lineSpacing'), 'lineSpacing'),
         (fmask(ParaSpacing,pint.sint_t)('spaceBefore'), 'spaceBefore'),
@@ -698,9 +698,9 @@ class TextPFException(pstruct.type):
         (fmask(MarginOrIndent,pint.sint_t)('leftMargin'), 'leftMargin'),
         (fmask(MarginOrIndent,pint.sint_t)('indent'), 'indent'),
         (fmask(TabSize,pint.sint_t)('defaultTabSize'), 'defaultTabSize'),
-        (fmask(TabStops,ptype.undefined)('tabStops'), 'tabStops'),
+        (fmask(TabStops,undefined)('tabStops'), 'tabStops'),
         (fmask(TextFontAlignmentEnum,pint.uint_t)('fontAlign'), 'fontAlign'),
-        (fmask(PFWrapFlags,ptype.undefined)('charWrap','wordWrap','overflow'), 'wrapFlags'),
+        (fmask(PFWrapFlags,undefined)('charWrap','wordWrap','overflow'), 'wrapFlags'),
         (fmask(TextDirectionEnum,pint.uint_t)('textDirection'), 'textDirection'),
     ]
 
@@ -749,16 +749,16 @@ class CFStyle(pbinary.flags):
     ])
 
 class TextCFException(pstruct.type):
-    fmask = lambda T,F: lambda *flds: lambda s: T if any(s['masks'].li[f] for f in flds) else F
+    fmask = lambda T,F: lambda *fields: lambda self: T if any(self['masks'].li[f] for f in fields) else F
     _fields_ = [
         (CFMasks, 'masks'),
-        (fmask(CFStyle,ptype.undefined)('bold','italic','underline','shadow','fehint','kumi','emboss','fHasStyle'), 'fontStyle'),
+        (fmask(CFStyle,undefined)('bold','italic','underline','shadow','fehint','kumi','emboss','fHasStyle'), 'fontStyle'),
         (fmask(FontIndexRef,pint.uint_t)('typeface'), 'fontRef'),
         (fmask(FontIndexRef,pint.uint_t)('oldEATypeface'), 'oldEAFontRef'),
         (fmask(FontIndexRef,pint.uint_t)('ansiTypeface'), 'ansiFontRef'),
         (fmask(FontIndexRef,pint.uint_t)('symbolTypeface'), 'symbolFontRef'),
         (fmask(sint2,pint.sint_t)('size'), 'fontSize'),
-        (fmask(ColorIndexStruct,ptype.undefined)('color'), 'color'),
+        (fmask(ColorIndexStruct,undefined)('color'), 'color'),
         (fmask(sint2,pint.sint_t)('position'), 'position'),
     ]
 
@@ -783,7 +783,7 @@ class TextMasterStyleAtom(pstruct.type):
     type = 0, None
     _fields_ = [
         (uint2, 'cLevels'),
-        (lambda s: dyn.array(TextMasterStyleLevel, min((5,s['cLevels'].li.int()))), 'lstLvl'),
+        (lambda self: dyn.array(TextMasterStyleLevel, min(5, self['cLevels'].li.int())), 'lstLvl'),
     ]
 
 @RT_Environment.define

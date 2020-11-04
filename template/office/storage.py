@@ -406,7 +406,7 @@ class Directory(parray.block):
         return self._uSectorSize
 
     def details(self):
-        Fescape = lambda s: eval("{!r}".format(s).replace('\\', '\\\\'))
+        Fescape = lambda self: eval("{!r}".format(self).replace('\\', '\\\\'))
 
         maxoffsetlength = max(len("[{:x}]".format(item.getoffset())) for item in self) if len(self) else 0
         maxnamelength = max(len(Fescape(item.Name())) for item in self) if len(self) else 0
@@ -613,9 +613,9 @@ class Stream(ptype.definition): cache = {}
 class ClipboardFormatOrAnsiString(pstruct.type):
     def __FormatOrAnsiString(self):
         marker = self['MarkerOrLength'].li.int()
-        if marker in (0x00000000, ):
+        if marker in {0x00000000}:
             return ptype.undefined
-        elif marker in (0xfffffffe, 0xffffffff):
+        elif marker in {0xfffffffe, 0xffffffff}:
             return DWORD
         return dyn.clone(pstr.string, length=marker)
 
@@ -630,9 +630,9 @@ class ClipboardFormatOrAnsiString(pstruct.type):
 class ClipboardFormatOrUnicodeString(pstruct.type):
     def __FormatOrUnicodeString(self):
         marker = self['MarkerOrLength'].li.int()
-        if marker in (0x00000000, ):
+        if marker in {0x00000000}:
             return ptype.undefined
-        elif marker in (0xfffffffe, 0xffffffff):
+        elif marker in {0xfffffffe, 0xffffffff}:
             return DWORD
         return dyn.clone(pstr.wstring, length=marker)
 
@@ -683,9 +683,9 @@ if False:
             # FIXME: this can't be right, it doesn't even align
             class dmFields(pbinary.flags):
                 _fields_ = []
-                _fields_+= [(1, _) for _ in ('DM_ORIENTATION', 'DM_PAPERSIZE', 'DM_PAPERLENGTH', 'DM_PAPERWIDTH', 'DM_SCALE')]
-                _fields_+= [(1, _) for _ in ('DM_COPIES', 'DM_DEFAULTSOURCE', 'DM_PRINTQUALITY', 'DM_COLOR', 'DM_DUPLEX', 'DM_YRESOLUTION', 'DM_TTOPTION', 'DM_COLLATE', 'DM_NUP')]
-                _fields_+= [(1, _) for _ in ('DM_ICMMETHOD', 'DM_ICMINTENT', 'DM_MEDIATYPE', 'DM_DITHERTYPE')]
+                _fields_+= [(1, _) for _ in ['DM_ORIENTATION', 'DM_PAPERSIZE', 'DM_PAPERLENGTH', 'DM_PAPERWIDTH', 'DM_SCALE']]
+                _fields_+= [(1, _) for _ in ['DM_COPIES', 'DM_DEFAULTSOURCE', 'DM_PRINTQUALITY', 'DM_COLOR', 'DM_DUPLEX', 'DM_YRESOLUTION', 'DM_TTOPTION', 'DM_COLLATE', 'DM_NUP']]
+                _fields_+= [(1, _) for _ in ['DM_ICMMETHOD', 'DM_ICMINTENT', 'DM_MEDIATYPE', 'DM_DITHERTYPE']]
 
             __cond = lambda n, t: lambda self: t if self['dmFields'][n] else pint.uint_t
 

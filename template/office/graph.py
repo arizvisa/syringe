@@ -16,11 +16,11 @@ locals().update(map(RecordType.define,recordType))
 
 # record types from [MS-OGRAPH]
 @FT_OfficeArtClientData.define
-class OfficeArtClientData(ptype.type):
+class OfficeArtClientData(undefined):
     type = 0,0x000
 
 @FT_OfficeArtClientTextBox.define
-class OfficeArtClientTextBox(ptype.type):
+class OfficeArtClientTextBox(undefined):
     type = 0,0x000
 
 @FT_OfficeArtClientAnchorChart.define

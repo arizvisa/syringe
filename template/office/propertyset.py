@@ -91,7 +91,7 @@ class DATE(dyn.block(8)): pass
 class CodePageString(pstruct.type):
     _fields_ = [
         (pint.uint32, 'Size'),
-        (lambda s: dyn.block(s['Size'].li.int()), 'Characters'),
+        (lambda self: dyn.block(self['Size'].li.int()), 'Characters'),
         (dyn.align(4), 'Alignment'),
     ]
 
@@ -107,7 +107,7 @@ class DECIMAL(pstruct.type):
 class UnicodeString(pstruct.type):
     _fields_ = [
         (pint.uint32, 'Size'),
-        (lambda s: dyn.block(s['Size'].li.int()), 'Characters'),
+        (lambda self: dyn.block(self['Size'].li.int()), 'Characters'),
         (dyn.align(4), 'Alignment'),
     ]
 
@@ -120,7 +120,7 @@ class FILETIME(pstruct.type):
 class BLOB(pstruct.type):
     _fields_ = [
         (pint.uint32, 'Size'),
-        (lambda s: dyn.block(s['Size'].li.int()), 'Bytes'),
+        (lambda self: dyn.block(self['Size'].li.int()), 'Bytes'),
         (dyn.align(4), 'Alignment'),
     ]
 
@@ -130,7 +130,7 @@ class ClipboardData(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'Size'),
         (pint.uint32_t, 'Format'),
-        (lambda s: dyn.block(s['Size'].li.int()), 'Bytes'),
+        (lambda self: dyn.block(self['Size'].li.int()), 'Bytes'),
         (dyn.align(4), 'Alignment'),
     ]
 
@@ -162,7 +162,7 @@ class ArrayHeader(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'Type'),
         (pint.uint32_t, 'NumDimensions'),
-        (lambda s: dyn.array(ArrayDimension, s['NumDimensions'].li.int()), 'Dimension'),
+        (lambda self: dyn.array(ArrayDimension, self['NumDimensions'].li.int()), 'Dimension'),
     ]
 
 class TypedValue(ptype.definition):
@@ -188,7 +188,7 @@ class DictionaryEntry(pstruct.type):
 class Dictionary(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'NumEntries'),
-        (lambda s: dyn.array(DictionaryEntry,s['NumEntries'].li.int()), 'Entry'),
+        (lambda self: dyn.array(DictionaryEntry, self['NumEntries'].li.int()), 'Entry'),
     ]
 
 class PropertyIdentifierAndOffset(pstruct.type):
@@ -201,8 +201,8 @@ class PropertySet(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'Size'),
         (pint.uint32_t, 'NumProperties'),
-        (lambda s: dyn.array(PropertyIdentifierAndOffset, s['NumProperties'].li.int()), 'PropertyIdentifierAndOffset'),
-        (lambda s: dyn.array(Property, s['NumProperties'].li.int()), 'Property'),
+        (lambda self: dyn.array(PropertyIdentifierAndOffset, self['NumProperties'].li.int()), 'PropertyIdentifierAndOffset'),
+        (lambda self: dyn.array(Property, self['NumProperties'].li.int()), 'Property'),
     ]
 
 class PropertySetStream(pstruct.type):
@@ -214,6 +214,6 @@ class PropertySetStream(pstruct.type):
         (pint.uint32_t, 'SystemIdentifier'),
         (GUID, 'CLSID'),
         (pint.uint32_t, 'NumPropertySets'),
-        (lambda s: dyn.array(FMTOFFSET, s['NumPropertySets'].li.int()), 'FormatOffset'),
-        (lambda s: dyn.array(PropertySet, s['NumPropertySets'].li.int()), 'PropertySet'),
+        (lambda self: dyn.array(FMTOFFSET, self['NumPropertySets'].li.int()), 'FormatOffset'),
+        (lambda self: dyn.array(PropertySet, self['NumPropertySets'].li.int()), 'PropertySet'),
     ]

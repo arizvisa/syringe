@@ -17,6 +17,9 @@ class uint2(pint.uint16_t): pass
 class uint4(pint.uint32_t): pass
 class sint2(pint.int16_t): pass
 class sint4(pint.int32_t): pass
+class undefined(ptype.block):
+    def summary(self):
+        return super(undefined, self).summary() if self.size() else '...'
 
 ### general types
 class MD4(dyn.block(16)): pass
@@ -204,12 +207,15 @@ class RecordContainer(parray.block):
             if len(records) > 1:
                 return "{length:d} * {:s}".format(classname, length=len(records))
             return classname
-        def emit_hexdump(_, records):
-            res = bytes().join(item.serialize() for index, item in records)
-            return ptypes.utils.emit_repr(res, ptypes.Config.display.threshold.summary) or '...'
+        def emit_summary(_, records):
+            if len(records) > 1:
+                res = bytes().join(item.serialize() for index, item in records)
+                return ptypes.utils.emit_repr(res, ptypes.Config.display.threshold.summary) or '...'
+            (_, record), = records
+            return record.summary()
 
         groups = [(typename, [item for item in items]) for typename, items in itertools.groupby(enumerate(self.walk()), key=Fkey)]
-        iterable = ([emit_prefix(*item), emit_classname(*item), emit_hexdump(*item)] for item in groups)
+        iterable = ([emit_prefix(*item), emit_classname(*item), emit_summary(*item)] for item in groups)
         return '\n'.join(map(' : '.join, iterable))
 
     def search(self, type, recurse=False):
