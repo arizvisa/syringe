@@ -242,7 +242,7 @@ class RecordContainer(parray.block):
 
     def lookup(self, type):
         '''Return the first instance of specified record type'''
-        items = [item for item in self if item['header']['recType'].int() == type]
+        items = [item for item in self if item['header'].Instance() == type]
         if not items:
             raise KeyError(type)
         if len(items) != 1:
@@ -265,7 +265,7 @@ class RecordContainer(parray.block):
     def filter(self, type):
         if isinstance(type, six.integer_types):
             for item in self:
-                if item['header']['recType'].int() == type:
+                if item['header'].Instance() == type:
                     yield item
                 continue
             return

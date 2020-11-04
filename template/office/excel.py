@@ -148,24 +148,32 @@ class RkRec(pstruct.type):
         (IXFCell, 'ixfe'),
         (RkNumber, 'RK'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class RgceLoc(pstruct.type):
     _fields_ = [
         (RwU, 'row'),
         (ColRelU, 'column'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class RgceLocRel(pstruct.type):
     _fields_ = [
         (RwU, 'row'),
         (ColRelNegU, 'column'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class RgceElfLoc(pstruct.type):
     _fields_ = [
         (RwU, 'row'),
         (ColElfU, 'column'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class RgceArea(pstruct.type):
     _fields_ = [
@@ -174,6 +182,8 @@ class RgceArea(pstruct.type):
         (ColRelU, 'columnFirst'),
         (ColRelU, 'columnLast'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class RgceAreaRel(pstruct.type):
     _fields_ = [
@@ -182,6 +192,8 @@ class RgceAreaRel(pstruct.type):
         (ColRelNegU, 'columnFirst'),
         (ColRelNegU, 'columnLast'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class Ts(pbinary.flags):
     _fields_ = R([
@@ -460,6 +472,8 @@ class CALCCOUNT(pstruct.type):
     _fields_ = [
         (uint2, 'cIter'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -485,6 +499,8 @@ class REFMODE(pstruct.type):
     _fields_ = [
         (_fRefA1, 'fRefA1'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -494,6 +510,8 @@ class DELTA(pstruct.type):
     _fields_ = [
         (Xnum, 'numDelta'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -508,6 +526,8 @@ class ITERATION(pstruct.type):
     _fields_ = [
         (_fIter, 'fIter'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -522,6 +542,8 @@ class SAVERECALC(pstruct.type):
     _fields_ = [
         (_fSaveRecalc, 'fSaveRecalc'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -536,6 +558,8 @@ class PRINTHEADERS(pstruct.type):
     _fields_ = [
         (_fPrintRwCol, 'fPrintRwCol'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -550,6 +574,8 @@ class PRINTGRIDLINES(pstruct.type):
     _fields_ = [
         (_fPrintGrid, 'fPrintGrid'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -562,6 +588,8 @@ class GUTS(pstruct.type):
         (uint2, 'iLevelRwMac'),
         (uint2, 'iLevelColMac'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -596,6 +624,8 @@ class GRIDSET(pstruct.type):
     _fields_ = [
         (_fGridSet, 'fGridSet'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -616,6 +646,8 @@ class GRIDSET(pstruct.type):
         (_flags, 'grbit'),
         (uint2, 'miyRw'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in reversed(self._fields_))
 
 @BIFF5.define
 @BIFF8.define
@@ -637,6 +669,8 @@ class CatSerRange(pstruct.type):
         (sint2, 'catMark'),
         (_flags, 'catFlags')
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 ###
 @BIFF5.define
@@ -666,12 +700,16 @@ class FrtHeader(pstruct.type):
         (FrtFlags, 'grbitFrt'),
         (dyn.block(8), 'reserved')
     ]
+    def summary(self):
+        return "rt={:0{:d}x} grbitFrt={!s}".format(self['rt'].int(), 2 + 2 * self['rt'].size(), self['grbitFrt'].summary())
 
 class FrtHeaderOld(pstruct.type):
     _fields_ = [
         (uint2, 'rt'),
         (FrtFlags, 'grbitFrt'),
     ]
+    def summary(self):
+        return "rt={:0{:d}x} grbitFrt={!s}".format(self['rt'].int(), 2 + 2 * self['rt'].size(), self['grbitFrt'].summary())
 
 @BIFF5.define
 @BIFF8.define
@@ -699,6 +737,9 @@ class Cell(pstruct.type):
         (uint2, 'col'),
         (uint2, 'ixfe')
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
+
 @BIFF5.define
 @BIFF8.define
 class LabelSst(pstruct.type):
@@ -707,6 +748,8 @@ class LabelSst(pstruct.type):
         (Cell, 'cell'),
         (uint4, 'isst')
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in reversed(self._fields_))
 ###
 @BIFF5.define
 @BIFF8.define
@@ -762,6 +805,8 @@ class Ref8(pstruct.type):
         (uint2, 'colFirst'),
         (uint2, 'colLast'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -847,6 +892,8 @@ class FormatRun(pstruct.type):
         (uint2, 'ich'),
         (FontIndex, 'ifnt'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 class XLUnicodeString(pstruct.type):
     class _grbit(pbinary.flags):
@@ -949,6 +996,8 @@ class LPWideString(pstruct.type):
     ]
     def summary(self):
         return self['rgchData'].summary()
+    def str(self):
+        return self['rgchData'].str()
 
 class VirtualPath(XLUnicodeString): pass
 class XLNameUnicodeString(XLUnicodeString): pass
@@ -962,6 +1011,8 @@ class SupBook(pstruct.type):
         (uint2, 'ctab'),
         (uint2, 'cch'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 #DataValidationCriteria
 @BIFF5.define
@@ -1085,10 +1136,14 @@ class BOF2(BOF):
         return 2
     def DocumentType(self):
         return self['dt']
+    def summary(self):
+        if self.size():
+            return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for fld in ['vers', 'rupBuild', 'rupYear', 'dt'])
+        return '...'
 
 @BIFF5.define
 @BIFF8.define
-class BOF3(BOF2):
+class BOF3(BOF):
     type = 521
     type = 0x0209
     def Version(self):
@@ -1096,7 +1151,7 @@ class BOF3(BOF2):
 
 @BIFF5.define
 @BIFF8.define
-class BOF4(BOF3):
+class BOF4(BOF):
     type = 1033
     type = 0x0409
     def Version(self):
@@ -1104,7 +1159,7 @@ class BOF4(BOF3):
 
 @BIFF5.define
 @BIFF8.define
-class BOF5(BOF4):
+class BOF5(BOF):
     type = 2057
     type = 0x0809
 
@@ -1153,6 +1208,11 @@ class BOF5(BOF4):
 
     def DocumentType(self):
         return self['dt']
+
+    def summary(self):
+        if self.size():
+            return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for fld in ['vers', 'rupBuild', 'rupYear', 'dt', 'flags'])
+        return '...'
 
 @BIFF5.define
 class BOUNDSHEET(pstruct.type):
@@ -1224,6 +1284,8 @@ class Font(pstruct.type):
         ]
         def summary(self):
             return self['rgcch'].summary()
+        def str(self):
+            return self['rgcch'].str()
 
     _fields_ = [
         (uint2, 'dyHeight'),
@@ -1477,6 +1539,8 @@ class Mms(pstruct.type):
         (ubyte1, 'reserved1'),
         (ubyte1, 'reserved2'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -1603,6 +1667,8 @@ class RecalcId(pstruct.type):
         (uint2, 'reserved'),
         (uint4, 'dwBuild'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -1805,6 +1871,8 @@ class EXTERNSHEET(pstruct.type):
     ]
     def summary(self):
         return self['rgch'].summary()
+    def str(self):
+        return self['rgch'].str()
 
 class XTI(pstruct.type):
     _fields_ = [
@@ -1812,6 +1880,8 @@ class XTI(pstruct.type):
         (sint2, 'iTabFirst'),
         (sint2, 'iTabLast'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF8.define
 class ExternSheet(pstruct.type):
@@ -1862,6 +1932,8 @@ class EXTERNNAME(pstruct.type):
         (ubyte1, 'cch'),
         (lambda self: dyn.clone(pstr.string, length=self['cch'].li.int()), 'rgch'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for fld in ['reserved', 'rgch', 'flags'])
 
 @BIFF8.define
 class ExternName(pstruct.type):
@@ -2026,6 +2098,8 @@ if True:
             (uint4,'unused1'),
             (uint4,'unused2'),
         ]
+        def summary(self):
+            return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
     @SerArType.define
     class SerNum(pstruct.type):
@@ -2034,6 +2108,8 @@ if True:
         _fields_ = [
             (Xnum,'xnum'),
         ]
+        def summary(self):
+            return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
     @SerArType.define
     class SerStr(pstruct.type):
@@ -2042,6 +2118,8 @@ if True:
         _fields_ = [
             (XLUnicodeString,'string'),
         ]
+        def summary(self):
+            return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @BIFF5.define
 @BIFF8.define
@@ -2499,6 +2577,8 @@ class PtgMemArea(pstruct.type):
         (uint4, 'unused'),
         (uint2, 'cce'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @Ptg.define
 class PtgMemErr(pstruct.type):
@@ -2517,6 +2597,8 @@ class PtgMemNoMem(pstruct.type):
         (uint4, 'unused'),
         (uint2, 'cce'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @Ptg.define
 class PtgMemFunc(uint2): parseType = 0x29, None
@@ -2528,6 +2610,8 @@ class PtgRefErr(pstruct.type):
         (uint2, 'unused1'),
         (uint2, 'unused2'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @Ptg.define
 class PtgAreaErr(pstruct.type):
@@ -2538,6 +2622,8 @@ class PtgAreaErr(pstruct.type):
         (uint2, 'unused3'),
         (uint2, 'unused4'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @Ptg.define
 class PtgRefN(RgceLocRel): parseType = 0x2c, None
@@ -2551,6 +2637,8 @@ class PtgNameX(pstruct.type):
         (XtiIndex, 'ixti'),
         (uint4, 'nameindex'),
     ]
+    def summary(self):
+        return ' '.join("{:s}={:s}".format(fld, self[fld].summary()) for _, fld in self._fields_)
 
 @Ptg.define
 class PtgRef3d(pstruct.type):
@@ -2768,6 +2856,8 @@ class BuiltInStyle(pstruct.type):
         (ubyte1, 'istyBuiltIn'),    # FIXME: this can be a pint.enum
         (ubyte1, 'iLevel'),
     ]
+    def summary(self):
+        return "iLevel={:d} istyBuiltIn={:#04x}".format(self['iLevel'].int(), self['istyBuiltIn'].int())
 
 class UserDefinedStyle(pstruct.type):
     _fields_ = [
@@ -2776,6 +2866,8 @@ class UserDefinedStyle(pstruct.type):
     ]
     def summary(self):
         return self['rgch'].summary()
+    def str(self):
+        return self['rgch'].str()
 
 @BIFF5.define
 @BIFF8.define
@@ -2807,6 +2899,12 @@ class STYLE(pstruct.type):
         (_ixfe, 'ixfe'),
         (lambda self: BuiltInStyle if self['ixfe'].li['fBuiltIn'] else UserDefinedStyle, 'styleData'),
     ]
+
+    def summary(self):
+        flags, res = self['ixfe'], self['styleData']
+        if flags['fBuiltIn']:
+            return "styleData.iLevel={:d} styleData.istyBuiltIn={:#0{:d}x} ixfe={!s}".format(res['iLevel'].int(), res['istyBuiltIn'].int(), 2 + 2 * res['istyBuiltIn'].size(), flags.summary())
+        return "styleData={!r} ixfe={!s}".format(res.str(), flags.summary())
 
 @BIFF8.define
 class Style(pstruct.type):
@@ -4768,6 +4866,8 @@ class HEADER(pstruct.type):
     ]
     def summary(self):
         return self['rgch'].summary()
+    def str(self):
+        return self['rgch'].str()
 
 @BIFF5.define
 @BIFF8.define
@@ -4780,6 +4880,8 @@ class FOOTER(pstruct.type):
     ]
     def summary(self):
         return self['rgch'].summary()
+    def str(self):
+        return self['rgch'].str()
 
 @BIFF5.define
 @BIFF8.define
@@ -4789,6 +4891,8 @@ class EXTERNCOUNT(pstruct.type):
     _fields_ = [
         (uint2, 'cxals'),
     ]
+    def summary(self):
+        return "cxals={:s}".format(self['cxals'].summary())
 
 @BIFF5.define
 @BIFF8.define
@@ -4804,7 +4908,7 @@ class SELECTION(pstruct.type):
             (ColByteU, 'colLast'),
         ]
         def summary(self):
-            return "rwFirst={:d} rwLast={:d} colFirst={:D} colLast={:d}".format(*(self[fld].int() for fld in ['rwFirst', 'rwLast', 'colFirst', 'colLast']))
+            return "rwFirst={:d} rwLast={:d} colFirst={:d} colLast={:d}".format(*(self[fld].int() for fld in ['rwFirst', 'rwLast', 'colFirst', 'colLast']))
 
     _fields_ = [
         (ubyte1, 'pnn'),
