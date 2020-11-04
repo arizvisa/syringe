@@ -786,7 +786,7 @@ class MulBlank(pstruct.type):
             return dyn.array(IXFCell, 0)
 
         res = cb - sum(self[fld].li.size() for fld in ['rw', 'colFirst', 'colFirst'])
-        return dyn.blockarray(IXFCell, res)
+        return dyn.blockarray(IXFCell, max(0, res))
 
     _fields_ = [
         (Rw, 'rw'),
@@ -1388,7 +1388,7 @@ class BookExt(pstruct.type):
     def __unknown(self):
         cb = self['cb'].li.int()
         total = 12 + 4 + 4 + 1 + 1
-        return dyn.block(cb - total)
+        return dyn.block(max(0, cb - total))
 
     _fields_ = [
         (FrtHeader, 'frtHeader'),
@@ -1932,7 +1932,7 @@ class EXTERNNAME(pstruct.type):
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             return dyn.block(0)
 
-        return dyn.block(cb - self['flags'].li.size())
+        return dyn.block(max(0, cb - self['flags'].li.size()))
 
     _fields_ = [
         (_flags, 'flags'),
@@ -1974,7 +1974,7 @@ class ExternName(pstruct.type):
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             return dyn.block(0)
 
-        return dyn.block(cb - self['flags'].li.size())
+        return dyn.block(max(0, cb - self['flags'].li.size()))
 
     _fields_ = [
         (_flags, 'flags'),
@@ -2352,7 +2352,7 @@ class CellParsedFormula(pstruct.type):
             return dyn.block(0)
 
         sz = self['cce'].li.size() + self['cce'].int()
-        return dyn.block(bs - sz)
+        return dyn.block(max(0, bs - sz))
 #        return RgbExtra        # FIXME
 
     _fields_ = [
@@ -3380,7 +3380,7 @@ class ContinueFrt(pstruct.type):
             cb = p['header'].li.Length()
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             return dyn.block(0)
-        return dyn.block(cb - self['frtHeaderOld'].li.size())
+        return dyn.block(max(0, cb - self['frtHeaderOld'].li.size()))
 
     _fields_ = [
         (FrtHeaderOld, 'frtHeaderOld'),
@@ -3675,7 +3675,7 @@ class ListParsedArrayFormula(pstruct.type):
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             return dyn.block(0)
         sz = self['cce'].li.size() + self['cce'].int()
-        return dyn.block(bs - sz)
+        return dyn.block(max(0, bs - sz))
 
     _fields_ = [
         (uint2, 'cce'),
@@ -3983,7 +3983,7 @@ class Feature11(pstruct.type):
         sz = self['cbFeatData'].li.int()
         if sz == 0:
             sz = cb - (self['refs2'].li.size()+27)
-        return dyn.block(sz)
+        return dyn.block(max(0, sz))
 
     _fields_ = [
         (FrtRefHeaderU, 'frtRefHeaderU'),
@@ -4143,7 +4143,7 @@ class SST(pstruct.type):
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             res = self['cstUnique'].li
             return dyn.array(XLUnicodeRichExtendedString, abs(res.int()))
-        return dyn.blockarray(XLUnicodeRichExtendedString, cb - sum(self[fld].li.size() for fld in ['cstTotal', 'cstUnique']))
+        return dyn.blockarray(XLUnicodeRichExtendedString, max(0, cb - sum(self[fld].li.size() for fld in ['cstTotal', 'cstUnique'])))
 
     _fields_ = [
         (sint4, 'cstTotal'),     # GUARD: >=0
@@ -4330,7 +4330,7 @@ class ObjFmla(pstruct.type):
         (uint2, 'cbFmla'),
         (ObjectParsedFormula, 'fmla'),
         (PictFmlaEmbedInfo, 'embedInfo'),
-        (lambda self: dyn.block(self['cbFmla'].li.int() - self['fmla'].li.int() - self['embedInfo'].li.int()), 'padding'),
+        (lambda self: dyn.block(max(0, self['cbFmla'].li.int() - self['fmla'].li.int() - self['embedInfo'].li.int())), 'padding'),
     ]
 
 class ObjFmlaNoSize(ObjectParsedFormula):
@@ -4692,7 +4692,7 @@ class Obj(pstruct.type):
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             return dyn.array(FtGeneral, 0)
 
-        return dyn.blockarray(FtGeneral, cb - self['cmo'].li.size())
+        return dyn.blockarray(FtGeneral, max(0, cb - self['cmo'].li.size()))
 
     _fields_ = [
         (FtGeneral, 'cmo'),
@@ -4793,7 +4793,7 @@ class TxO(pstruct.type):
             return dyn.block(0)
 
         res = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
-        return dyn.block(cb - res)
+        return dyn.block(max(0, cb - res))
 
     def __reserved(type):
         def reserved(self, type=type):
