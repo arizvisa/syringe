@@ -164,7 +164,6 @@ class RecordGeneral(pstruct.type):
             else:
                 header['Type'] = rt
 
-            print(header)
         header['Length'] = sum(item.size() for item in [res.d, res['extra']])
         res.h.set(**header)
         return res
