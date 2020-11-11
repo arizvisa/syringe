@@ -2352,7 +2352,7 @@ class CellParsedFormula(pstruct.type):
             return dyn.block(0)
 
         sz = self['cce'].li.size() + self['cce'].int()
-        return dyn.block(max(0, bs - sz))
+        return dyn.block(max(0, cb - sz))
 #        return RgbExtra        # FIXME
 
     _fields_ = [
@@ -3675,7 +3675,7 @@ class ListParsedArrayFormula(pstruct.type):
         except (ptypes.error.ItemNotFoundError, ptypes.error.InitializationError):
             return dyn.block(0)
         sz = self['cce'].li.size() + self['cce'].int()
-        return dyn.block(max(0, bs - sz))
+        return dyn.block(max(0, cb - sz))
 
     _fields_ = [
         (uint2, 'cce'),
