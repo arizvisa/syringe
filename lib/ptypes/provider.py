@@ -361,7 +361,7 @@ class proxy(bounded):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
-class bytes(bounded):
+class memoryview(bounded):
     '''Basic writeable bytes provider.'''
     offset = int
     data = memoryview     # this is backed by a memoryview type
@@ -372,10 +372,10 @@ class bytes(bounded):
 
     @value.setter
     def value(self, value):
-        self.data[:] = memoryview(value)
+        self.data[:] = builtins.memoryview(value)
 
     def __init__(self, reference=b''):
-        self.offset, self.data = 0, memoryview(reference)
+        self.offset, self.data = 0, builtins.memoryview(reference)
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -405,7 +405,7 @@ class bytes(bounded):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
             left, right = self.offset, self.offset + len(data)
-            self.offset, self.data[left : right] = right, memoryview(data)
+            self.offset, self.data[left : right] = right, builtins.memoryview(data)
             return len(data)
 
         except Exception as E:
@@ -416,8 +416,11 @@ class bytes(bounded):
     def size(self):
         return len(self.data)
 
-class string(bytes):
-    '''This is an alias for the bytes provider.'''
+class bytes(memoryview):
+    '''This is an alias for the memoryview provider.'''
+
+class string(memoryview):
+    '''This is an alias for the memoryview provider.'''
 
 class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
@@ -860,7 +863,7 @@ try:
                 raise error.ConsumeError(self, self.address, amount, NumberOfBytesRead.value)
 
             self.address += amount
-            return memoryview(buffer).tobytes()
+            return builtins.memoryview(buffer).tobytes()
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
@@ -963,7 +966,7 @@ try:
 
             if resultAmount.value == amount:
                 self.offset += resultAmount.value
-            return memoryview(resultBuffer).tobytes()
+            return builtins.memoryview(resultBuffer).tobytes()
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError,))
         def store(self, value):
@@ -1400,7 +1403,7 @@ try:
             pointer_t = ctypes.POINTER(block_t)
             voidpointer = ctypes.c_void_p(address)
             blockpointer = ctypes.cast(voidpointer, pointer_t)
-            return memoryview(blockpointer.contents).tobytes()
+            return builtins.memoryview(blockpointer.contents).tobytes()
 
         @staticmethod
         def _write(address, value):
