@@ -364,7 +364,7 @@ class proxy(bounded):
 class bytes(bounded):
     '''Basic writeable bytes provider.'''
     offset = int
-    data = bytes     # this is backed by an bytearray type
+    data = bytearray     # this is backed by an bytearray type
 
     @property
     def value(self):
@@ -372,76 +372,15 @@ class bytes(bounded):
 
     @value.setter
     def value(self, value):
-        self.data = value
+        self.data[:] = value if isinstance(value, bytearray) else bytearray(value)
 
-    def __init__(self, string=b''):
-        res = builtins.bytearray(string) if isinstance(string, builtins.bytes) else builtins.bytearray(string, sys.getdefaultencoding())
-        self.offset = 0
-        self.data = res
+    def __init__(self, reference=b''):
+        self.offset, self.data = 0, reference if isinstance(reference, bytearray) else bytearray(reference, sys.getdefaultencoding()) if isinstance(reference, unicode if sys.version_info.major < 3 else str) else bytearray(reference)
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
         res, self.offset = self.offset, offset
         return res
-
-    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
-    def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
-        if amount < 0:
-            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.offset, amount, self))
-        if amount == 0:
-            return b''
-        if self.offset >= len(self.data):
-            raise error.ConsumeError(self, self.offset, amount)
-
-        minimum = min(self.offset + amount, len(self.data))
-        res = self.data[self.offset : minimum]
-        if res == b'' and amount > 0:
-            raise error.ConsumeError(self, self.offset, amount, len(res))
-        if len(res) == amount:
-            self.offset += amount
-        return builtins.bytes(res)
-
-    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
-    def store(self, data):
-        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        try:
-            left, right = self.offset, self.offset + len(data)
-            self.offset, self.data[left : right] = right, data
-            return len(data)
-
-        except Exception as E:
-            raise error.StoreError(self, self.offset, len(data), exception=E)
-        raise error.ProviderError
-
-    @utils.mapexception(any=error.ProviderError)
-    def size(self):
-        return len(self.data)
-
-class string(bytes):
-    '''This is an alias for the bytes provider.'''
-
-class bytearray(bounded):
-    '''Provider for reading and writing to a bytearray reference.'''
-    @property
-    def value(self):
-        return self.data
-
-    @value.setter
-    def value(self, value):
-        self.data[:] = value
-
-    def __init__(self, reference):
-        self.offset, self.data = 0, reference
-
-    def seek(self, offset):
-        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res, self.offset = self.offset, offset
-        return res
-
-    @utils.mapexception(any=error.ProviderError)
-    def size(self):
-        return len(self.data)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
     def consume(self, amount):
@@ -466,12 +405,19 @@ class bytearray(bounded):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
             left, right = self.offset, self.offset + len(data)
-            self.offset, self.data[left : right] = right, builtins.bytearray(data)
+            self.offset, self.data[left : right] = right, bytearray(data)
             return len(data)
 
         except Exception as E:
             raise error.StoreError(self, self.offset, len(data), exception=E)
         raise error.ProviderError
+
+    @utils.mapexception(any=error.ProviderError)
+    def size(self):
+        return len(self.data)
+
+class string(bytes):
+    '''This is an alias for the bytes provider.'''
 
 class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
@@ -558,7 +504,7 @@ class random(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         res = map(_random.randint, (0,) * amount, (255,) * amount)
-        return builtins.bytes(builtins.bytearray(res))
+        return builtins.bytes(bytearray(res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -602,7 +548,7 @@ class stream(base):
             raise EOFError
 
         data = self._read(amount)
-        self.data.extend( array.array('B', builtins.bytearray(data)) )
+        self.data.extend( array.array('B', bytearray(data)) )
         if len(data) < amount:    # XXX: this really can't be the only way(?) that an instance
                                   #      of something ~fileobj.read (...) can return for a 
             self.eof = True
@@ -650,7 +596,7 @@ class stream(base):
             # FIXME: this logic _apparently_ hasn't been thought out at all..check notes
             o = self.offset - self.data_ofs
             if o >= 0 and o <= len(self.data):
-                self.data[o : o + len(data)] = array.array('B', builtins.bytearray(data))
+                self.data[o : o + len(data)] = array.array('B', bytearray(data))
                 if o + len(data) >= len(self.data):
                     self.eof = False
                 self._write(data)
@@ -1299,7 +1245,7 @@ try:
                 return b''
             try:
                 data = self.__pykd__.loadBytes(self.addr, amount)
-                res = bytes(builtins.bytearray(data))
+                res = bytes(bytearray(data))
             except:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
@@ -1712,16 +1658,16 @@ if __name__ == '__main__':
 
     @TestCase
     def test_bytearray_read():
-        data = builtins.bytearray(b'ABCD')
-        z = provider.bytearray(data)
+        data = bytearray(b'ABCD')
+        z = provider.bytes(data)
         z.seek(2)
         if bytes(z.consume(2)) == b'CD' and z.offset == 4:
             raise Success
 
     @TestCase
     def test_bytearray_write():
-        data = builtins.bytearray(b'ABCDEF')
-        z = provider.bytearray(data)
+        data = bytearray(b'ABCDEF')
+        z = provider.bytes(data)
         z.seek(2)
         z.store(b'FF')
         if z.offset == 4 and bytes(z.consume(2)) == b'EF' and bytes(data) == b'ABFFEF':
@@ -1762,7 +1708,7 @@ if __name__ == '__main__':
         source.commit()
         res[1].set(0x42424242)
         res[1].commit()
-        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and [source[2]['a']] == [item for item in builtins.bytearray(b'B')] and [source[2]['b']] == [item for item in builtins.bytearray(b'B')]:
+        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and [source[2]['a']] == [item for item in bytearray(b'B')] and [source[2]['b']] == [item for item in bytearray(b'B')]:
             raise Success
 
     try:
