@@ -926,13 +926,13 @@ class __array_interface__(container):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         try:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
 
         # If we got an InitializationError while fetching the properties (due to
         # a bunk user implementation), then we simply fall back to the internal
         # implementation.
         except error.InitializationError:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.__properties__().items())
 
         result, element = self.repr(), self.__element__()
 
@@ -1122,7 +1122,7 @@ class __structure_interface__(container):
 
             b = value.bitmap()
             i, position = utils.repr_instance(value.classname(), value.name() or name), self.getposition(value.__name__ or name)
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in value.properties().items())
             _hex, _precision = Config.pbinary.offset == config.partial.hex, 3 if Config.pbinary.offset == config.partial.fractional else 0
             result.append(u"[{:s}] {:s}{:s} {:s}".format(utils.repr_position(position, hex=_hex, precision=_precision), i, u' {{{:s}}}'.format(prop) if prop else u'', value.summary()))
         if result:
@@ -1212,13 +1212,13 @@ class __structure_interface__(container):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         try:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
 
         # If we got an InitializationError while fetching the properties (due to
         # a bunk user implementation), then we simply fall back to the internal
         # implementation.
         except error.InitializationError:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.__properties__().items())
 
         result = self.repr()
 
@@ -1365,7 +1365,7 @@ class struct(__structure_interface__):
                     raise error.UserError(result, 'struct.set', message='Refusing to assign iterable to instance due to different lengths')
                 [ assign((index, value)) for index, value in enumerate(value) ]
 
-            [ assign((self.__getindex__(name), item)) for name, item in six.iteritems(fields) ]
+            [ assign((self.__getindex__(name), item)) for name, item in fields.items() ]
             result.setposition(result.getposition(), recurse=True)
             return result
         return result.a.__setvalue__(value, **fields)
@@ -1726,13 +1726,13 @@ class partial(ptype.container):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         try:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
 
         # If we got an InitializationError while fetching the properties (due to
         # a bunk user implementation), then we simply fall back to the internal
         # implementation.
         except error.InitializationError:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.__properties__().items())
 
         result = self.object.repr() if self.initializedQ() else self.repr()
 
@@ -2072,8 +2072,9 @@ if __name__ == '__main__':
             length = 16
 
         res = functools.reduce(lambda x,y: x<<1 | [0,1][int(y)], ('11001100'), 0)
+        items = bytearray([res] * 63)
 
-        x = pbinary.new(largearray,source=provider.bytes(six.int2byte(res)*63)).l
+        x = pbinary.new(largearray, source=provider.bytes(bytes(items))).l
         if x[5].int() == res:
             raise Success
 
@@ -2530,7 +2531,7 @@ if __name__ == '__main__':
             def blockbits(self):
                 return 32*8
 
-        data = bytes().join(map(six.int2byte, range(48, 48 + 75)))
+        data = bytes(bytearray(range(48, 48 + 75)))
         src = provider.bytes(data)
         a = pbinary.new(argh, source=src)
         a = a.l
@@ -2551,8 +2552,8 @@ if __name__ == '__main__':
             _object_ = argh
             length = 4
 
-        data = bytes().join((bytes().join(six.int2byte(x)*4 for x in range(48, 48 + 75)) for _ in range(500)))
-        src = provider.bytes(data)
+        data = bytearray(itertools.chain(*[4 * [x] for x in range(48, 48 + 75)] * 500))
+        src = provider.bytes(bytes(data))
         a = pbinary.new(ack, source=src)
         a = a.l
         if a[0].bits() == 128 and len(a[0]) == 4 and a.blockbits() == 4*32*4 and a[0][-1] == 0x33333333:
@@ -2760,8 +2761,8 @@ if __name__ == '__main__':
         class array(pbinary.array):
             _object_ = length = 8
         x = array().a
-        x[2:6] = map(ord,'hola')
-        if bytes().join(map(six.int2byte,x)) == b'\x00\x00hola\x00\x00':
+        x[2:6] = [item for item in bytearray(b'hola')]
+        if bytes(bytearray(x)) == b'\x00\x00hola\x00\x00':
             raise Success
 
     @TestCase

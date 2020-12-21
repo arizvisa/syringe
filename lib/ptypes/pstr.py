@@ -406,7 +406,7 @@ class szstring(string):
         return self.load(offset=0, source=provider.proxy(result))
 
     def __deserialize_block__(self, block):
-        iterable = (six.int2byte(item) for item in bytearray(block))
+        iterable = (bytes(bytearray([item])) for item in bytearray(block))
         return self.__deserialize_stream__(iterable)
 
     def load(self, **attrs):
@@ -518,7 +518,7 @@ if __name__ == '__main__':
         oldstring = b'ok, this is unicode'
         string = oldstring
         x.length = len(string) // 2
-        string = bytes().join(six.int2byte(c) + b'\0' for c in bytearray(string))
+        string = bytes(bytearray(functools.reduce(operator.add, ([c, 0] for c in bytearray(string)))))
         x.source = provider.bytes(string)
         x.load()
         if x.str() == oldstring[:len(oldstring) // 2].decode('ascii'):

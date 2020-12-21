@@ -329,7 +329,7 @@ class type(__structure_interface__):
             ofs = self.getoffset(getattr(value, '__name__', None) or name)
             inst = utils.repr_instance(value.classname(), value.name() or name)
             val = value.summary(**options) if value.initializedQ() else u'???'
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in value.properties().items())
             result.append(u"[{:x}] {:s}{:s} {:s}".format(ofs, inst, u" {{{:s}}}".format(prop) if prop else u"", val))
             o += value.size()
 
@@ -350,7 +350,7 @@ class type(__structure_interface__):
                     raise error.UserError(result, 'type.set', message='Refusing to assign iterable to instance due to differing lengths')
                 result = super(type, result).__setvalue__(*value)
 
-            for name, item in six.iteritems(fields):
+            for name, item in fields.items():
                 idx = self.__getindex__(name)
                 if ptype.isresolveable(item) or ptype.istype(item):
                     result.value[idx] = self.new(item, __name__=name).a

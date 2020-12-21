@@ -506,7 +506,7 @@ class random(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         res = map(_random.randint, (0,) * amount, (255,) * amount)
-        return builtins.bytes().join(map(six.int2byte, res))
+        return builtins.bytes(bytearray(res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -1247,7 +1247,7 @@ try:
                 return b''
             try:
                 data = self.__pykd__.loadBytes(self.addr, amount)
-                res = map(six.int2byte, data)
+                res = bytes(bytearray(data))
             except:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
@@ -1693,7 +1693,7 @@ if __name__ == '__main__':
         source.commit()
         res[1].set(0x42424242)
         res[1].commit()
-        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and source[2]['a'] == six.byte2int(b'B') and source[2]['b'] == six.byte2int(b'B'):
+        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and [source[2]['a']] == [item for item in bytearray(b'B')] and [source[2]['b']] == [item for item in bytearray(b'B')]:
             raise Success
 
     try:

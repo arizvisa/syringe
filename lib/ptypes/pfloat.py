@@ -102,7 +102,7 @@ Log = Config.log.getChild('pfloat')
 
 def setbyteorder(endianness):
     if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
-        for name, definition in six.iteritems(globals()):
+        for name, definition in globals().items():
             if definition is not type and isinstance(definition, builtins.type) and issubclass(definition, type) and getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
                 res = dict(definition.__dict__)
                 res['byteorder'] = endianness

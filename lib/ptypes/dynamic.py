@@ -439,14 +439,14 @@ class union(__union_interface__):
 
         # do the root object first
         inst = utils.repr_instance(self.object.classname(), '{object}')
-        prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(self.object.properties()))
+        prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().items())
         result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
 
         # now try to do the rest of the fields
         for fld, value in __izip_longest__(self._fields_, self.__object__ or []):
             t, name = fld or (value.__class__, value.name())
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().items())
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary()))
 
         if len(result) > 0:
@@ -460,7 +460,7 @@ class union(__union_interface__):
         # first the object if it's been allocated
         if self.object is not None:
             inst = utils.repr_instance(self.object.classname(), '{object}')
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(self.object.properties()))
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in self.object.properties().items())
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', self.object.summary()))
         else:
             result.append("[{:x}] {:s} ???".format(self.getoffset(), gettypename(self._value_)))
@@ -472,7 +472,7 @@ class union(__union_interface__):
                 result.append("[{:x}] {:s} {:s} ???".format(self.getoffset(), utils.repr_class(gettypename(t)), name))
                 continue
             inst = utils.repr_instance(value.classname(), value.name() or name)
-            prop = ','.join("{:s}={!r}".format(k, v) for k, v in six.iteritems(value.properties()))
+            prop = ','.join("{:s}={!r}".format(k, v) for k, v in value.properties().items())
             result.append("[{:x}] {:s}{:s} {:s}".format(self.getoffset(), inst, " {{{:s}}}".format(prop) if prop else '', value.summary() if value.initializedQ() else '???'))
 
         if len(result) > 0:

@@ -213,13 +213,13 @@ class __array_interface__(ptype.container):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         try:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
 
         # If we got an InitializationError while fetching the properties (due to
         # a bunk user implementation), then we simply fall back to the internal
         # implementation.
         except error.InitializationError:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.__properties__().items())
 
         result, element = self.repr(), self.__element__()
 
@@ -770,7 +770,7 @@ if __name__ == '__main__':
             _object_ = pint.uint8_t
             blocksize = lambda s:4
 
-        block = bytes().join(map(six.int2byte, range(0x10)))
+        block = bytes(bytearray(range(0x10)))
 
         a = container(source=provider.bytes(block)).l
         if len(a) == 4:
@@ -857,8 +857,8 @@ if __name__ == '__main__':
 
             _object_ = randomcontainer
 
-        iterable = (six.int2byte(random.randint(six.byte2int(b'A'), six.byte2int(b'Z'))) for x in range(0x100))
-        string = bytes().join(iterable)
+        iterable = (random.randint(*params) for params in [tuple(boundary for boundary in bytearray(b'AZ'))] * 0x100)
+        string = bytes(bytearray(iterable))
         a = arr(source=provider.bytes(string))
         a=a.l
         if a.blocksize() == 0x108:

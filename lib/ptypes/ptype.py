@@ -461,7 +461,7 @@ class __interface__(object):
         # the assignment of the default values for each slot attribute by
         # walking the __slots__ dictionary, and assigning its values to our
         # instance.
-        for attribute, default in six.iteritems(self.__slots__):
+        for attribute, default in self.__slots__.items():
             if not hasattr(self, attribute):
                 setattr(self, attribute, default)
             continue
@@ -506,11 +506,11 @@ class __interface__(object):
         res = {}
         res.update(recurse)
         res.update(attrs)
-        for k, v in six.iteritems(res):
+        for k, v in res.items():
             setattr(self, k, v)
 
         # filter out ignored attributes from the recurse dictionary
-        recurse = dict((k, v) for k, v in six.iteritems(recurse) if k not in ignored)
+        recurse = {k : v for k, v in recurse.items() if k not in ignored}
 
         # update self (for instantiated elements)
         self.attributes.update(recurse)
@@ -579,13 +579,13 @@ class __interface__(object):
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         try:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.properties()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.properties().items())
 
         # If we got an InitializationError while fetching the properties (due to
         # a bunk user implementation), then we simply fall back to the internal
         # implementation.
         except error.InitializationError:
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in six.iteritems(self.__properties__()))
+            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in self.__properties__().items())
 
         result = self.repr()
 
@@ -1660,7 +1660,7 @@ class block(type):
         res[index] = value
         self.value = bytes(res)
 
-#@utils.memoize('cls', newattrs=lambda n:tuple(sorted(six.iteritems(n()))))
+#@utils.memoize('cls', newattrs=lambda n:tuple(sorted(n().items())))
 def clone(cls, **newattrs):
     '''
     will clone a class, and set its attributes to **newattrs
@@ -1689,7 +1689,7 @@ def clone(cls, **newattrs):
         setattr(_clone, k, v)
 
     # filter out ignored attributes from recurse dictionary
-    recurse = dict((k, v) for k, v in six.iteritems(recurse) if k not in ignored)
+    recurse = {k : v for k, v in recurse.items() if k not in ignored}
 
     def slot_getter(t, name, *default):
         res = getattr(t, name, *default)
@@ -1947,7 +1947,7 @@ class definition(object):
 
         # Make a copy of the type's namespace
         ns = {}
-        for name, attribute in six.iteritems(cls.__dict__):
+        for name, attribute in cls.__dict__.items():
             if recurse and builtins.isinstance(attribute, builtins.type) and issubclass(attribute, definition):
                 ns[name] = duplicates.setdefault(identity(attribute), attribute.copy(recurse=recurse))
             else:
@@ -1971,7 +1971,7 @@ class definition(object):
 
         # Copy the cache making sure to recurse into it if necessary
         ns['cache'] = res = {}
-        for key, object in six.iteritems(cls.cache):
+        for key, object in cls.cache.items():
             if recurse and builtins.isinstance(object, builtins.type) and issubclass(object, definition):
                 res[key] = duplicates.setdefault(identity(object), object.copy(recurse=recurse))
             else:
@@ -2464,19 +2464,17 @@ if __name__ == '__main__':
     @TestCase
     def test_encoded_xorenc():
         k = 0x80
-        s = bytes().join(six.int2byte(x^k) for x in bytearray(b'hello world'))
+        s = bytes(bytearray(x ^ k for x in bytearray(b'hello world')))
         class xor(ptype.encoded_t):
             _value_ = dynamic.block(len(s))
             _object_ = dynamic.block(len(s))
             key = k
             def encode(self, object, **attrs):
-                #data = bytes().join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
-                return super(xor, self).encode(ptype.block(length=len(data)).set(data))
+                data = bytearray(x ^ k for x in bytearray(object.serialize()))
+                return super(xor, self).encode(ptype.block(length=len(data)).set(bytes(data)))
             def decode(self, object, **attrs):
-                #data = bytes().join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
-                return super(xor, self).decode(ptype.block(length=len(data)).set(data))
+                data = bytearray(x ^ k for x in bytearray(object.serialize()))
+                return super(xor, self).decode(ptype.block(length=len(data)).set(bytes(data)))
 
         global x
         x = xor(source=ptypes.prov.bytes(s))
@@ -2488,7 +2486,7 @@ if __name__ == '__main__':
     def test_decoded_xorenc():
         k = 0x80
         data = b'hello world'
-        match = bytes().join(six.int2byte(x^k) for x in bytearray(data))
+        match = bytes(bytearray(x ^ k for x in bytearray(data)))
 
         class xor(ptype.encoded_t):
             _value_ = dynamic.block(len(data))
@@ -2497,13 +2495,11 @@ if __name__ == '__main__':
             key = k
 
             def encode(self, object, **attrs):
-                #data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
-                return super(xor, self).encode(ptype.block(length=len(data)).set(data))
+                data = bytearray(x ^ k for x in bytearray(object.serialize()))
+                return super(xor, self).encode(ptype.block(length=len(data)).set(bytes(data)))
             def decode(self, object, **attrs):
-                #data = ''.join(six.int2byte(six.byte2int(x)^k) for x in object.serialize())
-                data = bytes().join(six.int2byte(x^k) for x in bytearray(object.serialize()))
-                return super(xor, self).decode(ptype.block(length=len(data)).set(data))
+                data = bytearray(x ^ k for x in bytearray(object.serialize()))
+                return super(xor, self).decode(ptype.block(length=len(data)).set(bytes(data)))
 
         instance = pstr.string(length=len(match)).set(match)
 
@@ -2652,7 +2648,7 @@ if __name__ == '__main__':
     def test_pointer_dereference():
         import math
         count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
-        prefix = six.int2byte(math.trunc(math.ceil(count))) + b'\x00'*math.trunc(count)
+        prefix = bytes(bytearray([math.trunc(math.ceil(count))] + [0] * math.trunc(count)))
 
         data = prefix + b'AAAA'
 
@@ -2666,7 +2662,7 @@ if __name__ == '__main__':
     def test_pointer_ref():
         import math
         count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
-        prefix = six.int2byte(math.trunc(math.ceil(count))) + b'\x00'*math.trunc(count)
+        prefix = bytes(bytearray([math.trunc(math.ceil(count))] + [0] * math.trunc(count)))
 
         src = prov.bytes(prefix + b'AAAA' + b'AAAA')
 
@@ -2818,7 +2814,8 @@ if __name__ == '__main__':
     @TestCase
     def test_type_getoffset():
         class bah(ptype.type): length=2
-        data = prov.bytes(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
+        bounds = (item for item in bytearray(b'az'))
+        data = prov.bytes(bytes(bytearray(item for item in range(*bounds))))
         a = bah(offset=0,source=data)
         if a.getoffset() == 0 and a.l.serialize()==b'ab':
             raise Success
@@ -2826,7 +2823,8 @@ if __name__ == '__main__':
     @TestCase
     def test_type_setoffset():
         class bah(ptype.type): length=2
-        data = prov.bytes(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
+        bounds = (item for item in bytearray(b'az'))
+        data = prov.bytes(bytes(bytearray(item for item in range(*bounds))))
         a = bah(offset=0,source=data)
         a.setoffset(20)
         if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == b'uv':
@@ -2994,7 +2992,7 @@ if __name__ == '__main__':
         result = dict(y.compare(z))
         if list(result.keys()) == [1]:
             s,o = tuple(functools.reduce(lambda a,b:a+b,map(lambda x:x.serialize(),X),b'') for X in result[1])
-            if s == g.serialize() and o == bytes().join(map(six.int2byte,(40,60,80,100))):
+            if s == g.serialize() and o == bytes(bytearray([40, 60, 80, 100])):
                 raise Success
 
     @TestCase
@@ -3131,7 +3129,7 @@ if __name__ == '__main__':
                 return 4
         x = block(value=[])
         for d in bytearray(b'ABCD'):
-            x.value.append( x.new(E).load(source=ptypes.prov.bytes(six.int2byte(d)*2)) )
+            x.value.append( x.new(E).load(source=ptypes.prov.bytes(bytes(bytearray([d, d])))) )
         if x.serialize() == b'AABBCCDD':
             raise Success
 
@@ -3144,7 +3142,7 @@ if __name__ == '__main__':
                 return 4
         x = block(value=[])
         for d in bytearray(b'ABCD'):
-            x.value.append( x.new(E).load(source=ptypes.prov.bytes(six.int2byte(d)*2)) )
+            x.value.append( x.new(E).load(source=ptypes.prov.bytes(bytes(bytearray([d, d])))) )
         source = ptypes.prov.bytes(b'\x00'*16)
         x.commit(source=source)
         if source.value == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
@@ -3159,7 +3157,7 @@ if __name__ == '__main__':
                 return 4
         x = block(value=[])
         for d in bytearray(b'ABCD'):
-            x.value.append( x.new(E).load(source=ptypes.prov.bytes(six.int2byte(d)*2)) )
+            x.value.append( x.new(E).load(source=ptypes.prov.bytes(bytes(bytearray([d, d])))) )
         x.load(source=ptypes.prov.bytes(b'E'*16))
         if x.serialize() == b'EEEECCDD':
             raise Success

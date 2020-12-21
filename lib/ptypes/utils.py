@@ -26,7 +26,7 @@ class assign(object):
 
     def __init__(self, *objects, **attrs):
         self.objects = objects
-        self.attributes = { self.magical.get(k, k) : v for k, v in six.iteritems(attrs) }
+        self.attributes = { self.magical.get(k, k) : v for k, v in attrs.items() }
 
     def __enter__(self):
         objects, attrs = self.objects, self.attributes
@@ -45,7 +45,7 @@ class padding:
         def __bytesdecorator__(method):
             def closure(*args, **kwargs):
                 iterable = method(*args, **kwargs)
-                return (six.int2byte(item) for item in iterable)
+                return (bytes(bytearray([item])) for item in iterable)
             return closure if sys.version_info.major < 3 else method
 
         @classmethod
@@ -78,7 +78,7 @@ class padding:
     def fill(cls, amount, source):
         """Returns a bytearray of ``amount`` elements, from the specified ``source``"""
         iterable = itertools.islice(source, amount)
-        return bytes().join(six.int2byte(item) for item in six.iterbytes(iterable))
+        return bytes(bytearray(iterable))
 
 ## exception remapping
 def mapexception(map={}, any=None, ignored=()):
@@ -105,7 +105,7 @@ def mapexception(map={}, any=None, ignored=()):
 
             with_traceback = (lambda item: item) if sys.version_info.major < 3 else operator.methodcaller('with_traceback', traceback)
 
-            for src, dst in six.iteritems(map):
+            for src, dst in map.items():
                 if type is src or (hasattr(src, '__contains__') and type in src):
                     E = dst(type, value)
                     raise with_traceback(E)
@@ -139,7 +139,7 @@ def repr_position(pos, hex=True, precision=0):
 ## hexdumping capability
 def printable(data, nonprintable=u'.'):
     """Return a string of only printable characters"""
-    return functools.reduce(lambda agg, item: agg + (six.int2byte(item).decode(sys.getdefaultencoding()) if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
+    return functools.reduce(lambda agg, item: agg + (bytearray([item]).decode(sys.getdefaultencoding()) if item >= 0x20 and item < 0x7f else nonprintable), bytearray(data), u'')
 
 def hexrow(value, offset=0, width=16, breaks=[8]):
     """Returns ``value as a formatted hexadecimal str"""
@@ -589,21 +589,21 @@ if __name__ == '__main__':
     @TestCase
     def test_padding_sourcerepeat():
         source = padding.source.repeat(iter(b'\0' * 2))
-        zero, iterable = six.byte2int(b'\0'), six.iterbytes(source)
+        zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
         if six.next(iterable) == zero and six.next(iterable) == zero and six.next(iterable) == zero and six.next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourceiterable():
         source = padding.source.iterable(iter(b'\0' * 2))
-        zero, iterable = six.byte2int(b'\0'), six.iterbytes(source)
+        zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
         if six.next(iterable) == zero and six.next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourcezero():
         source = padding.source.zero()
-        zero, iterable = six.byte2int(b'\0'), six.iterbytes(source)
+        zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
         if six.next(iterable) == zero and six.next(iterable) == zero:
             raise Success
 
@@ -613,18 +613,18 @@ if __name__ == '__main__':
             def __init__(self, data):
                 self.iterable = iter(bytearray(data))
             def read(self, count):
-                res = b''
+                res = bytearray()
                 while count > 0:
-                    res += six.int2byte(six.next(self.iterable))
+                    res += bytearray([six.next(self.iterable)])
                     count -= 1
-                return res
+                return bytes(res)
 
         filedata = b'hola'
         f = fakefile(filedata)
         source = padding.source.file(f)
 
         for a, b in zip(source, bytearray(filedata)):
-            if a != six.int2byte(b):
+            if a != bytes(bytearray([b])):
                 raise Failure
             continue
         raise Success
