@@ -287,7 +287,7 @@ class consumer(object):
             # XXX: if we're a generator, we might _actually_ be iterating
             #      through bytes...
             if builtins.isinstance(iterable, types.GeneratorType):
-                return map(six.byte2int, iterable)
+                return (ord(item) for item in iterable)
 
             # XXX: but, in python3 byte-iterators always return ints...
             return six.iterbytes(iterable)
@@ -352,8 +352,8 @@ def data(bitmap, **kwargs):
         bitmap, n = remove(bitmap, 8)
         res.append(n)
 
-    # convert it to a string
-    return bytes().join(map(six.int2byte, res))
+    # convert it to a bytes
+    return bytes(bytearray(res))
 
 def size(bitmap):
     '''Return the size of the bitmap, ignoring signedness'''
@@ -1131,7 +1131,7 @@ if __name__ == '__main__':
 
     @TestCase
     def consumer_consumeiterable():
-        data = (six.int2byte(item) for item in [0xa5, 0xa5])
+        data = bytes(bytearray([0xa5, 0xa5]))
         valid = [0xa, 0x5, 0xa, 0x5]
 
         bc = bitmap.consumer(data)
