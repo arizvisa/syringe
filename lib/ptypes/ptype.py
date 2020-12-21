@@ -2452,7 +2452,7 @@ if __name__ == '__main__':
         class wrap(ptype.wrapper_t):
             _value_ = ptype.clone(ptype.block, length=0x10)
 
-        s = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+        s = bytearray(b'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
         a = wrap(source=ptypes.prov.bytes(s))
         a = a.l
         a.object[:0x10] = s[:0x10].lower()
@@ -2664,7 +2664,7 @@ if __name__ == '__main__':
         count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
         prefix = bytes(bytearray([math.trunc(math.ceil(count))] + [0] * math.trunc(count)))
 
-        src = prov.bytes(prefix + b'AAAA' + b'AAAA')
+        src = prov.bytes(bytearray(prefix + b'AAAA' + b'AAAA'))
 
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
@@ -2688,7 +2688,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref_32():
-        src = prov.bytes(b'\x04\x00\x00\x00AAAAAAAA')
+        src = prov.bytes(bytearray(b'\x04\x00\x00\x00AAAAAAAA'))
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
         if b.serialize() != b'\x41\x41\x41\x41':
@@ -2711,7 +2711,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref_64():
-        src = prov.bytes(b'\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA')
+        src = prov.bytes(bytearray(b'\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA'))
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint64_t).l
         b = a.d.l
         if b.serialize() != b'\x41\x41\x41\x41':
@@ -3143,7 +3143,7 @@ if __name__ == '__main__':
         x = block(value=[])
         for d in bytearray(b'ABCD'):
             x.value.append( x.new(E).load(source=ptypes.prov.bytes(bytes(bytearray([d, d])))) )
-        source = ptypes.prov.bytes(b'\x00'*16)
+        source = ptypes.prov.bytes(bytearray(b'\x00'*16))
         x.commit(source=source)
         if source.value == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success

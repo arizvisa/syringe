@@ -2038,7 +2038,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pbinary_struct_unaligned_7():
-        x = pbinary.new(RECT, source=provider.bytes('hello world')).l
+        x = pbinary.new(RECT, source=provider.bytes(b'hello world')).l
         if x['size'] == 6 and x.size() == (4 + 6*3 + 7)//8:
             raise Success
         return
