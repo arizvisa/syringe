@@ -375,7 +375,7 @@ class bytes(bounded):
         self.data = value
 
     def __init__(self, string=b''):
-        res = bytearray(string) if isinstance(string, builtins.bytes) else bytearray(string, sys.getdefaultencoding())
+        res = builtins.bytearray(string) if isinstance(string, builtins.bytes) else builtins.bytearray(string, sys.getdefaultencoding())
         self.offset = 0
         self.data = res
 
@@ -394,7 +394,7 @@ class bytes(bounded):
         if self.offset >= len(self.data):
             raise error.ConsumeError(self, self.offset, amount)
 
-        minimum = min((self.offset + amount, len(self.data)))
+        minimum = min(self.offset + amount, len(self.data))
         res = self.data[self.offset : minimum]
         if res == b'' and amount > 0:
             raise error.ConsumeError(self, self.offset, amount, len(res))
@@ -420,6 +420,58 @@ class bytes(bounded):
 
 class string(bytes):
     '''This is an alias for the bytes provider.'''
+
+class bytearray(bounded):
+    '''Provider for reading and writing to a bytearray reference.'''
+    @property
+    def value(self):
+        return self.data
+
+    @value.setter
+    def value(self, value):
+        self.data[:] = value
+
+    def __init__(self, reference):
+        self.offset, self.data = 0, reference
+
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res, self.offset = self.offset, offset
+        return res
+
+    @utils.mapexception(any=error.ProviderError)
+    def size(self):
+        return len(self.data)
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
+    def consume(self, amount):
+        '''Consume ``amount`` bytes from the given provider.'''
+        if amount < 0:
+            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.offset, amount, self))
+        if amount == 0:
+            return b''
+        if self.offset >= len(self.data):
+            raise error.ConsumeError(self, self.offset, amount)
+
+        minimum = min(self.offset + amount, len(self.data))
+        res = self.data[self.offset : minimum]
+        if not res and amount > 0:
+            raise error.ConsumeError(self, self.offset, amount, len(res))
+        if len(res) == amount:
+            self.offset += amount
+        return builtins.bytes(res)
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
+    def store(self, data):
+        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+        try:
+            left, right = self.offset, self.offset + len(data)
+            self.offset, self.data[left : right] = right, builtins.bytearray(data)
+            return len(data)
+
+        except Exception as E:
+            raise error.StoreError(self, self.offset, len(data), exception=E)
+        raise error.ProviderError
 
 class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
@@ -506,7 +558,7 @@ class random(base):
     def consume(self, amount):
         '''Consume ``amount`` bytes from the given provider.'''
         res = map(_random.randint, (0,) * amount, (255,) * amount)
-        return builtins.bytes(bytearray(res))
+        return builtins.bytes(builtins.bytearray(res))
 
     @utils.mapexception(any=error.ProviderError)
     def store(self, data):
@@ -550,7 +602,7 @@ class stream(base):
             raise EOFError
 
         data = self._read(amount)
-        self.data.extend( array.array('B', bytearray(data)) )
+        self.data.extend( array.array('B', builtins.bytearray(data)) )
         if len(data) < amount:    # XXX: this really can't be the only way(?) that an instance
                                   #      of something ~fileobj.read (...) can return for a 
             self.eof = True
@@ -598,7 +650,7 @@ class stream(base):
             # FIXME: this logic _apparently_ hasn't been thought out at all..check notes
             o = self.offset - self.data_ofs
             if o >= 0 and o <= len(self.data):
-                self.data[o : o + len(data)] = array.array('B', bytearray(data))
+                self.data[o : o + len(data)] = array.array('B', builtins.bytearray(data))
                 if o + len(data) >= len(self.data):
                     self.eof = False
                 self._write(data)
@@ -1247,7 +1299,7 @@ try:
                 return b''
             try:
                 data = self.__pykd__.loadBytes(self.addr, amount)
-                res = bytes(bytearray(data))
+                res = bytes(builtins.bytearray(data))
             except:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
@@ -1659,6 +1711,23 @@ if __name__ == '__main__':
         raise Failure
 
     @TestCase
+    def test_bytearray_read():
+        data = builtins.bytearray(b'ABCD')
+        z = provider.bytearray(data)
+        z.seek(2)
+        if bytes(z.consume(2)) == b'CD' and z.offset == 4:
+            raise Success
+
+    @TestCase
+    def test_bytearray_write():
+        data = builtins.bytearray(b'ABCDEF')
+        z = provider.bytearray(data)
+        z.seek(2)
+        z.store(b'FF')
+        if z.offset == 4 and bytes(z.consume(2)) == b'EF' and bytes(data) == b'ABFFEF':
+            raise Success
+
+    @TestCase
     def test_proxy_write_container():
         class t1(parray.type):
             _object_ = pint.uint8_t
@@ -1693,7 +1762,7 @@ if __name__ == '__main__':
         source.commit()
         res[1].set(0x42424242)
         res[1].commit()
-        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and [source[2]['a']] == [item for item in bytearray(b'B')] and [source[2]['b']] == [item for item in bytearray(b'B')]:
+        if source[0].serialize() == b'AAA' and source[1].serialize() == b'ABB' and [source[2]['a']] == [item for item in builtins.bytearray(b'B')] and [source[2]['b']] == [item for item in builtins.bytearray(b'B')]:
             raise Success
 
     try:
