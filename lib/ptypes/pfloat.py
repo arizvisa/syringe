@@ -511,12 +511,12 @@ if __name__ == '__main__':
 
     @TestCase
     def ufixed_point_word_get():
-        x = word(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\x80\x80')).l
+        x = word(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\x80\x80')).l
         if x.get() == 128.5: raise Success
         print(x.get(), '!=', 128.25)
     @TestCase
     def ufixed_point_dword_get():
-        x = dword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\x00\x64\x40\x00')).l
+        x = dword(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\x00\x64\x40\x00')).l
         if x.get() == 100.25: raise Success
         print(x.get(), '!=', 100.25)
 
@@ -550,12 +550,12 @@ if __name__ == '__main__':
 
     @TestCase
     def sfixed_point_word_get():
-        x = sword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\x40')).l
+        x = sword(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\xff\x40')).l
         if x.get() == -0.75: raise Success
         print(x.get(), '!=', -0.75)
     @TestCase
     def sfixed_point_dword_get():
-        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\xff\xc0\x00')).l
+        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\xff\xff\xc0\x00')).l
         if x.get() == -0.25: raise Success
         print(x.get(), '!=', -0.25)
 
@@ -572,12 +572,12 @@ if __name__ == '__main__':
 
     @TestCase
     def sfixed_point_dword_integral_set():
-        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\xfe\x40\x00'))
+        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\xff\xfe\x40\x00'))
         x.set(-1.75)
         if bytearray(x.serialize()[0:2]) == b'\xff\xfe': raise Success
     @TestCase
     def sfixed_point_dword_fractional_set():
-        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.string(b'\xff\xfe\xc0\x00'))
+        x = sdword(byteorder=config.byteorder.bigendian, source=ptypes.prov.bytes(b'\xff\xfe\xc0\x00'))
         x.set(-1.25)
         if bytearray(x.serialize()[2:]) == b'\xc0\x00': raise Success
 

@@ -1687,7 +1687,7 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
             length = 6
 
-        source = t1(source=ptypes.prov.string(b'abcABCdefDEFghiGHIjlkJLK')).l
+        source = t1(source=ptypes.prov.bytes(b'abcABCdefDEFghiGHIjlkJLK')).l
         res = t2(source=ptypes.prov.proxy(source)).l
         source[0].set((0x41,0x41,0x41))
         source.commit()

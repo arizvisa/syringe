@@ -492,13 +492,13 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_char():
-        x = pstr.char_t(source=provider.string(b'hello')).l
+        x = pstr.char_t(source=provider.bytes(b'hello')).l
         if x.get() == 'h':
             raise Success
 
     @TestCase
     def test_str_wchar():
-        x = pstr.wchar_t(source=provider.string(b'\x43\x00')).l
+        x = pstr.wchar_t(source=provider.bytes(b'\x43\x00')).l
         if x.get() == '\x43':
             raise Success
 
@@ -507,7 +507,7 @@ if __name__ == '__main__':
         x = pstr.string()
         string = b'helllo world ok, i\'m hungry for some sushi\0'
         x.length = len(string) // 2
-        x.source = provider.string(string)
+        x.source = provider.bytes(string)
         x.load()
         if x.str() == string[:len(string) // 2].decode(x[0].encoding.name):
             raise Success
@@ -519,7 +519,7 @@ if __name__ == '__main__':
         string = oldstring
         x.length = len(string) // 2
         string = bytes().join(six.int2byte(c) + b'\0' for c in bytearray(string))
-        x.source = provider.string(string)
+        x.source = provider.bytes(string)
         x.load()
         if x.str() == oldstring[:len(oldstring) // 2].decode('ascii'):
             raise Success
@@ -527,7 +527,7 @@ if __name__ == '__main__':
     @TestCase
     def test_str_szstring():
         string = b'null-terminated\0ok'
-        x = pstr.szstring(source=provider.string(string)).l
+        x = pstr.szstring(source=provider.bytes(string)).l
         if x.str() == 'null-terminated':
             raise Success
 
@@ -543,7 +543,7 @@ if __name__ == '__main__':
                     return True
                 return False
 
-        x = stringarray(source=provider.string(data)).l
+        x = stringarray(source=provider.bytes(data)).l
         if x[3].str() == 'null-terminated':
             raise Success
 
@@ -555,14 +555,14 @@ if __name__ == '__main__':
                 ( pstr.szstring, 'String' )
             ]
 
-        x = IMAGE_IMPORT_HINT(source=provider.string(b'AAHello world this is a zero0-terminated string\0this didnt work')).l
+        x = IMAGE_IMPORT_HINT(source=provider.bytes(b'AAHello world this is a zero0-terminated string\0this didnt work')).l
         if x['String'].str() == 'Hello world this is a zero0-terminated string':
             raise Success
 
     @TestCase
     def test_str_szwstring():
         s = b'C\x00:\x00\\\x00P\x00y\x00t\x00h\x00o\x00n\x002\x006\x00\\\x00D\x00L\x00L\x00s\x00\\\x00_\x00c\x00t\x00y\x00p\x00e\x00s\x00.\x00p\x00y\x00d\x00\x00\x00'
-        v = pstr.szwstring(source=provider.string(s)).l
+        v = pstr.szwstring(source=provider.bytes(s)).l
         if v.str() == 'C:\Python26\DLLs\_ctypes.pyd':
             raise Success
 
@@ -600,7 +600,7 @@ if __name__ == '__main__':
                 (unicodestring, 'msg'),
             ]
 
-        a = unicodestring(source=provider.string(data)).l
+        a = unicodestring(source=provider.bytes(data)).l
         if a.l.str() == 'Welcome':
             raise Success
         raise Failure
@@ -611,7 +611,7 @@ if __name__ == '__main__':
             def isTerminator(self, value):
                 return value.int() == 0x3f
 
-        s = provider.string(b'hello world\x3f..................')
+        s = provider.bytes(b'hello world\x3f..................')
         a = fuq(source=s)
         a = a.l
         if a.size() == 12:
@@ -626,7 +626,7 @@ if __name__ == '__main__':
                 (pint.uint16_t, 'sheetname_length'),
                 (lambda s: dyn.clone(pstr.wstring, length=s['sheetname_length'].li.int()), 'sheetname'),
             ]
-        s = ptypes.prov.string(fromhex('85001400e511000000000600530068006500650074003100')[4:])
+        s = ptypes.prov.bytes(fromhex('85001400e511000000000600530068006500650074003100')[4:])
         a = record0085(source=s)
         a=a.l
         if a['sheetname'].str() == 'Sheet1':
@@ -635,7 +635,7 @@ if __name__ == '__main__':
     @TestCase
     def test_str_szwstring_blockarray():
         data = fromhex('3d 00 3a 00 3a 00 3d 00 3a 00 3a 00 5c 00 00 00 65 00 2e 00 6c 00 6f 00 67 00 00 00 00 00 ab ab ab ab ab ab ab ab'.replace(' ', ''))
-        source = ptypes.prov.string(data)
+        source = ptypes.prov.bytes(data)
         t = dyn.blockarray(pstr.szwstring, 30)
         a = t(source=source).l
         if (a[0].str(),a[1].str(),a[2].str()) == ('=::=::\\','e.log','') and a[2].blocksize() == 2 and len(a) == 3:

@@ -2442,7 +2442,7 @@ if __name__ == '__main__':
             _value_ = ptype.clone(ptype.block, length=0x10)
 
         s = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        a = wrap(source=ptypes.prov.string(s))
+        a = wrap(source=ptypes.prov.bytes(s))
         a = a.l
         if a.serialize() == b'ABCDEFGHIJKLMNOP':
             raise Success
@@ -2453,7 +2453,7 @@ if __name__ == '__main__':
             _value_ = ptype.clone(ptype.block, length=0x10)
 
         s = b'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
-        a = wrap(source=ptypes.prov.string(s))
+        a = wrap(source=ptypes.prov.bytes(s))
         a = a.l
         a.object[:0x10] = s[:0x10].lower()
         a.commit()
@@ -2479,7 +2479,7 @@ if __name__ == '__main__':
                 return super(xor, self).decode(ptype.block(length=len(data)).set(data))
 
         global x
-        x = xor(source=ptypes.prov.string(s))
+        x = xor(source=ptypes.prov.bytes(s))
         x = x.l
         if x.d.l.serialize() == b'hello world':
             raise Success
@@ -2507,7 +2507,7 @@ if __name__ == '__main__':
 
         instance = pstr.string(length=len(match)).set(match)
 
-        x = xor(source=ptypes.prov.string(b'\x00'*0x100)).l
+        x = xor(source=ptypes.prov.bytes(b'\x00'*0x100)).l
         x.reference(instance)
         if x.serialize() == data:
             raise Success
@@ -2532,7 +2532,7 @@ if __name__ == '__main__':
                 data = b64decode(object.serialize())
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
-        x = b64(source=ptypes.prov.string(s)).l
+        x = b64(source=ptypes.prov.bytes(s)).l
         y = x.d.l
         if x.size() == 25 and y[0].serialize() == b'AAAA' and y[1].serialize() == b'BBBB' and y[2].serialize() == b'CCCC' and y[3].serialize() == b'DDDD':
             raise Success
@@ -2560,7 +2560,7 @@ if __name__ == '__main__':
                 data = b64decode(res)
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
-        x = b64(source=ptypes.prov.string(b'A'*0x100+b'\x00')).l
+        x = b64(source=ptypes.prov.bytes(b'A'*0x100+b'\x00')).l
         x = x.reference(instance)
         if builtins.isinstance(x.d, pstr.string) and x.serialize() == result:
             raise Success
@@ -2656,7 +2656,7 @@ if __name__ == '__main__':
 
         data = prefix + b'AAAA'
 
-        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
+        a = ptype.pointer_t(source=prov.bytes(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
         a = a.l
         b = a.dereference()
         if b.l.int() == 0x41414141:
@@ -2668,7 +2668,7 @@ if __name__ == '__main__':
         count = math.log(sys.maxint if sys.version_info.major < 3 else sys.maxsize) / math.log(0x100)
         prefix = six.int2byte(math.trunc(math.ceil(count))) + b'\x00'*math.trunc(count)
 
-        src = prov.string(prefix + b'AAAA' + b'AAAA')
+        src = prov.bytes(prefix + b'AAAA' + b'AAAA')
 
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
@@ -2684,7 +2684,7 @@ if __name__ == '__main__':
     def test_pointer_deref_32():
         data = b'\x04\x00\x00\x00AAAA'
 
-        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
+        a = ptype.pointer_t(source=prov.bytes(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint32_t)
         a = a.l
         b = a.dereference()
         if b.l.int() == 0x41414141:
@@ -2692,7 +2692,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref_32():
-        src = prov.string(b'\x04\x00\x00\x00AAAAAAAA')
+        src = prov.bytes(b'\x04\x00\x00\x00AAAAAAAA')
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint32_t).l
         b = a.d.l
         if b.serialize() != b'\x41\x41\x41\x41':
@@ -2707,7 +2707,7 @@ if __name__ == '__main__':
     def test_pointer_deref_64():
         data = b'\x08\x00\x00\x00\x00\x00\x00\x00AAAA'
 
-        a = ptype.pointer_t(source=prov.string(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint64_t)
+        a = ptype.pointer_t(source=prov.bytes(data), offset=0, _object_=pint.uint32_t, _value_=pint.uint64_t)
         a = a.l
         b = a.dereference()
         if b.l.int() == 0x41414141:
@@ -2715,7 +2715,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_pointer_ref_64():
-        src = prov.string(b'\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA')
+        src = prov.bytes(b'\x08\x00\x00\x00\x00\x00\x00\x00AAAAAAAA')
         a = ptype.pointer_t(source=src, offset=0, _object_=dynamic.block(4), _value_=pint.uint64_t).l
         b = a.d.l
         if b.serialize() != b'\x41\x41\x41\x41':
@@ -2731,7 +2731,7 @@ if __name__ == '__main__':
         t1 = dynamic.clone(ptype.type, length=4)
         t2 = pint.uint32_t
 
-        data = prov.string(b'AAAA')
+        data = prov.bytes(b'AAAA')
         a = t1(source=data).l
         b = a.cast(t2)
         if a.serialize() == b.serialize():
@@ -2742,7 +2742,7 @@ if __name__ == '__main__':
         t1 = dynamic.clone(ptype.type, length=4)
         t2 = dynamic.array(pint.uint8_t, 4)
 
-        data = prov.string(b'AAAA')
+        data = prov.bytes(b'AAAA')
         a = t1(source=data).l
         b = a.cast(t2)
         if a.serialize() == b.serialize():
@@ -2752,7 +2752,7 @@ if __name__ == '__main__':
     def test_type_cast_diff_large_to_small():
         t1 = ptype.clone(ptype.type, length=4)
         t2 = ptype.clone(ptype.type, length=2)
-        data = prov.string(b'ABCD')
+        data = prov.bytes(b'ABCD')
         a = t1(source=data).l
         b = a.cast(t2)
         if b.serialize() == b'AB':
@@ -2762,7 +2762,7 @@ if __name__ == '__main__':
     def test_type_cast_diff_small_to_large():
         t1 = ptype.clone(ptype.type, length=2)
         t2 = ptype.clone(ptype.type, length=4)
-        data = prov.string(b'ABCD')
+        data = prov.bytes(b'ABCD')
         a = t1(source=data).l
         b = a.cast(t2)
         if a.size() == b.size() and not b.initializedQ():
@@ -2772,7 +2772,7 @@ if __name__ == '__main__':
     def test_container_cast_large_to_small():
         t1 = dynamic.array(pint.uint8_t, 8)
         t2 = dynamic.array(pint.uint8_t, 4)
-        data = prov.string(b'ABCDEFGH')
+        data = prov.bytes(b'ABCDEFGH')
 
         a = t1(source=data).l
         b = a.cast(t2)
@@ -2783,7 +2783,7 @@ if __name__ == '__main__':
     def test_container_cast_small_to_large():
         t1 = dynamic.array(pint.uint8_t, 4)
         t2 = dynamic.array(pint.uint8_t, 8)
-        data = prov.string(b'ABCDEFGH')
+        data = prov.bytes(b'ABCDEFGH')
         a = t1(source=data).l
         b = a.cast(t2)
         if b.size() == 4 and not b.initializedQ() and b.blocksize() == 8:
@@ -2791,7 +2791,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_type_copy():
-        data = prov.string(b'WIQIWIQIWIQIWIQI')
+        data = prov.bytes(b'WIQIWIQIWIQIWIQI')
         a = pint.uint32_t(source=data).a
         b = a.copy()
         if b.l.serialize() == a.l.serialize() and a is not b:
@@ -2818,7 +2818,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_getoffset():
         class bah(ptype.type): length=2
-        data = prov.string(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
+        data = prov.bytes(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
         if a.getoffset() == 0 and a.l.serialize()==b'ab':
             raise Success
@@ -2826,7 +2826,7 @@ if __name__ == '__main__':
     @TestCase
     def test_type_setoffset():
         class bah(ptype.type): length=2
-        data = prov.string(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
+        data = prov.bytes(bytes().join(map(six.int2byte, range(six.byte2int(b'a'), six.byte2int(b'z')))))
         a = bah(offset=0,source=data)
         a.setoffset(20)
         if a.l.initializedQ() and a.getoffset() == 20 and a.serialize() == b'uv':
@@ -2888,7 +2888,7 @@ if __name__ == '__main__':
                 (__zlibblock, 'data'),
             ]
         data = pint.uint32_t().set(len(cmessage)).serialize()+cmessage
-        a = cblock(source=prov.string(data)).l
+        a = cblock(source=prov.bytes(data)).l
         if a['data'].d.l.serialize() == message:
             raise Success
 
@@ -2909,7 +2909,7 @@ if __name__ == '__main__':
                 data = zlib.decompress(object.serialize())
                 return super(zlibblock, self).decode(ptype.block(length=len(data)).set(data))
 
-        source = prov.string(b'\x00'*1000)
+        source = prov.bytes(b'\x00'*1000)
         a = zlibblock(source=source)
         a.object = pstr.string(length=1000, source=source).l
         a.reference(data)
@@ -2921,8 +2921,8 @@ if __name__ == '__main__':
         class type1(ptype.type): length=4
         class type2(ptype.type): length=4
         data = b'ABCDEFGHIJKLMNOP'
-        a = type1(source=prov.string(data)).l
-        b = type2(source=prov.string(data), offset=a.getoffset()).l
+        a = type1(source=prov.bytes(data)).l
+        b = type2(source=prov.bytes(data), offset=a.getoffset()).l
         if a.same(b):
             raise Success
 
@@ -2930,7 +2930,7 @@ if __name__ == '__main__':
     def test_equality_type_different():
         class type1(ptype.type): length=4
         data = b'ABCDEFGHIJKLMNOP'
-        a = type1(source=prov.string(data))
+        a = type1(source=prov.bytes(data))
         b = a.copy(offset=1)
         c = a.copy().l
         d = c.copy().load(offset=1)
@@ -3070,7 +3070,7 @@ if __name__ == '__main__':
 
     #@TestCase
     def test_collect_pointers():
-        ptype.source = provider.string(provider.random().consume(0x1000))
+        ptype.source = provider.bytes(provider.random().consume(0x1000))
         a = pint.uint32_t
         b = ptype.clone(ptype.pointer_t, _object_=a)
         c = ptype.clone(ptype.pointer_t, _object_=b)
@@ -3131,7 +3131,7 @@ if __name__ == '__main__':
                 return 4
         x = block(value=[])
         for d in bytearray(b'ABCD'):
-            x.value.append( x.new(E).load(source=ptypes.prov.string(six.int2byte(d)*2)) )
+            x.value.append( x.new(E).load(source=ptypes.prov.bytes(six.int2byte(d)*2)) )
         if x.serialize() == b'AABBCCDD':
             raise Success
 
@@ -3144,8 +3144,8 @@ if __name__ == '__main__':
                 return 4
         x = block(value=[])
         for d in bytearray(b'ABCD'):
-            x.value.append( x.new(E).load(source=ptypes.prov.string(six.int2byte(d)*2)) )
-        source = ptypes.prov.string(b'\x00'*16)
+            x.value.append( x.new(E).load(source=ptypes.prov.bytes(six.int2byte(d)*2)) )
+        source = ptypes.prov.bytes(b'\x00'*16)
         x.commit(source=source)
         if source.value == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success
@@ -3159,8 +3159,8 @@ if __name__ == '__main__':
                 return 4
         x = block(value=[])
         for d in bytearray(b'ABCD'):
-            x.value.append( x.new(E).load(source=ptypes.prov.string(six.int2byte(d)*2)) )
-        x.load(source=ptypes.prov.string(b'E'*16))
+            x.value.append( x.new(E).load(source=ptypes.prov.bytes(six.int2byte(d)*2)) )
+        x.load(source=ptypes.prov.bytes(b'E'*16))
         if x.serialize() == b'EEEECCDD':
             raise Success
 

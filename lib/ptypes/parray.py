@@ -703,7 +703,7 @@ if __name__ == '__main__':
         x = myarray()
 #        print(x)
 #        print(x.length,len(x), x.value)
-        x.source = provider.string(b'AAAA'*15)
+        x.source = provider.bytes(b'AAAA'*15)
         x.l
 #        print(x.length,len(x), x.value)
 #        print("{!r}".format(x))
@@ -735,7 +735,7 @@ if __name__ == '__main__':
                 return False
 
         block = b'GFEDCBABCDHEFG'
-        x = myarray(source=provider.string(block)).l
+        x = myarray(source=provider.bytes(block)).l
         if len(x) == 11:
             raise Success
 
@@ -748,7 +748,7 @@ if __name__ == '__main__':
         string = chars * 8
         string = string[:-1]
 
-        z = RecordContainer(source=provider.string(string)).l
+        z = RecordContainer(source=provider.bytes(string)).l
         if len(z)-1 == int(len(string)/2.0) and len(string)%2 == 1:
             raise Success
 
@@ -757,7 +757,7 @@ if __name__ == '__main__':
         class RecordContainer(parray.infinite):
             _object_ = RecordGeneral
 
-        data = provider.string(b'AAAAA')
+        data = provider.bytes(b'AAAAA')
         z = RecordContainer(source=data).l
         s = RecordGeneral().a.blocksize()
 
@@ -772,7 +772,7 @@ if __name__ == '__main__':
 
         block = bytes().join(map(six.int2byte, range(0x10)))
 
-        a = container(source=provider.string(block)).l
+        a = container(source=provider.bytes(block)).l
         if len(a) == 4:
             raise Success
 
@@ -789,7 +789,7 @@ if __name__ == '__main__':
         block_length = child_type.length * count
         block = b'\0'*block_length
 
-        n = container_type(source=provider.string(block)).l
+        n = container_type(source=provider.bytes(block)).l
         if len(n)-1 == count and not n[-1].initializedQ():
             raise Success
 
@@ -805,7 +805,7 @@ if __name__ == '__main__':
         block = b'\0'*block_length
         container_type.blocksize = lambda s: child_type.length * 4
 
-        a = container_type(source=provider.string(block)).l
+        a = container_type(source=provider.bytes(block)).l
         if len(a) == 4:
             raise Success
 
@@ -815,8 +815,7 @@ if __name__ == '__main__':
             length = 4
             _object_ = pint.uint8_t
             def int(self):
-                return functools.reduce(lambda x,y:x*256+int(y), self.v, 0)
-
+                return functools.reduce(lambda agg, item: 256 * agg + item.int(), self.value, 0)
             def repr(self, **options):
                 if self.initializedQ():
                     return self.classname() + " {:x}".format(self.int())
@@ -827,7 +826,7 @@ if __name__ == '__main__':
             def isTerminator(self, v):
                 return v.int() == 0x42424242
 
-        a = extreme(source=provider.string(b'A'*0x100 + b'B'*0x100 + b'C'*0x100 + b'DDDD'))
+        a = extreme(source=provider.bytes(b'A'*0x100 + b'B'*0x100 + b'C'*0x100 + b'DDDD'))
         a=a.l
         if len(a) == (0x100 / subarray.length)+1:
             raise Success
@@ -860,7 +859,7 @@ if __name__ == '__main__':
 
         iterable = (six.int2byte(random.randint(six.byte2int(b'A'), six.byte2int(b'Z'))) for x in range(0x100))
         string = bytes().join(iterable)
-        a = arr(source=provider.string(string))
+        a = arr(source=provider.bytes(string))
         a=a.l
         if a.blocksize() == 0x108:
             raise Success
@@ -897,7 +896,7 @@ if __name__ == '__main__':
             def isTerminator(self, value):
                 return value.int() == 0
 
-        data = provider.string(b'hello world\x00not included\x00')
+        data = provider.bytes(b'hello world\x00not included\x00')
         a = szstring(source=data).l
         if len(a) == len(b'hello world\x00'):
             raise Success
@@ -914,7 +913,7 @@ if __name__ == '__main__':
             def isTerminator(self, value):
                 return value.serialize() == b'end\x00'
 
-        data = provider.string(b'hello world\x00is included\x00end\x00not\x00')
+        data = provider.bytes(b'hello world\x00is included\x00end\x00not\x00')
         a = argh(source=data).l
         if len(a) == 3:
             raise Success
@@ -931,7 +930,7 @@ if __name__ == '__main__':
             blocksize = lambda x: 9000
 
         s = ((b'A'*498) + b'\x00\x00') + ((b'B'*498)+b'\x00\x00')
-        a = ninethousand(source=provider.string(s*9000)).l
+        a = ninethousand(source=provider.bytes(s*9000)).l
         if len(a) == 18 and a.size() == 9000:
             raise Success
 
@@ -953,7 +952,7 @@ if __name__ == '__main__':
         dat = b'A'*5
         end = b'\x00'*5
         s = (dat*4)+end + (dat*4)+end
-        a = dundundun(source=provider.string(s*5)).l
+        a = dundundun(source=provider.bytes(s*5)).l
         if len(a) == 2 and len(a[0]) == 5 and len(a[1]) == 5:
             raise Success
 
@@ -968,7 +967,7 @@ if __name__ == '__main__':
         data = b'\xAA\xAA\xAA\xAA'*4
         data+= b'\xBB'*4
 
-        x = blocked(source=provider.string(data))
+        x = blocked(source=provider.bytes(data))
         x = x.l
         if len(x) == 4 and x.size() == 16:
             raise Success

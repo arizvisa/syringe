@@ -534,7 +534,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_int_bigendian_uint32_load():
-        a = pint.bigendian(pint.uint32_t)(source=provider.string(string1))
+        a = pint.bigendian(pint.uint32_t)(source=provider.bytes(string1))
         a = a.l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
@@ -542,7 +542,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_int_bigendian_uint32_set():
-        a = pint.bigendian(pint.uint32_t)(source=provider.string(string1)).l
+        a = pint.bigendian(pint.uint32_t)(source=provider.bytes(string1)).l
         a.set(0x0abcdef0)
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
@@ -550,14 +550,14 @@ if __name__ == '__main__':
 
     @TestCase
     def test_int_littleendian_load():
-        b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
+        b = pint.littleendian(pint.uint32_t)(source=provider.bytes(string2)).l
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
         print(b, tohex(b.serialize()))
 
     @TestCase
     def test_int_littleendian_set():
-        b = pint.littleendian(pint.uint32_t)(source=provider.string(string2)).l
+        b = pint.littleendian(pint.uint32_t)(source=provider.bytes(string2)).l
         b.set(0x0abcdef0)
         if b.int() == 0x0abcdef0 and b.serialize() == string2:
             raise Success
@@ -566,7 +566,7 @@ if __name__ == '__main__':
     @TestCase
     def test_int_revert_bigendian_uint32_load():
         pint.setbyteorder(config.byteorder.bigendian)
-        a = pint.uint32_t(source=provider.string(string1)).l
+        a = pint.uint32_t(source=provider.bytes(string1)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string1:
             raise Success
         print(a, tohex(a.serialize()))
@@ -574,7 +574,7 @@ if __name__ == '__main__':
     @TestCase
     def test_int_revert_littleendian_uint32_load():
         pint.setbyteorder(config.byteorder.littleendian)
-        a = pint.uint32_t(source=provider.string(string2)).l
+        a = pint.uint32_t(source=provider.bytes(string2)).l
         if a.int() == 0x0abcdef0 and a.serialize() == string2:
             raise Success
         print(a, tohex(a.serialize()))
@@ -583,7 +583,7 @@ if __name__ == '__main__':
     def test_int_littleendian_int32_signed_load():
         pint.setbyteorder(config.byteorder.littleendian)
         s = b'\xff\xff\xff\xff'
-        a = pint.int32_t(source=provider.string(s)).l
+        a = pint.int32_t(source=provider.bytes(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
@@ -593,7 +593,7 @@ if __name__ == '__main__':
     def test_int_littleendian_int32_unsigned_load():
         pint.setbyteorder(config.byteorder.littleendian)
         s = b'\x00\x00\x00\x80'
-        a = pint.int32_t(source=provider.string(s)).l
+        a = pint.int32_t(source=provider.bytes(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
@@ -603,7 +603,7 @@ if __name__ == '__main__':
     def test_int_littleendian_int32_unsigned_highedge_load():
         pint.setbyteorder(config.byteorder.littleendian)
         s = b'\xff\xff\xff\x7f'
-        a = pint.int32_t(source=provider.string(s)).l
+        a = pint.int32_t(source=provider.bytes(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success
@@ -613,7 +613,7 @@ if __name__ == '__main__':
     def test_int_littleendian_int32_unsigned_lowedge_load():
         pint.setbyteorder(config.byteorder.littleendian)
         s = b'\x00\x00\x00\x00'
-        a = pint.int32_t(source=provider.string(s)).l
+        a = pint.int32_t(source=provider.bytes(s)).l
         b, = struct.unpack('i',s)
         if a.int() == b and a.serialize() == s:
             raise Success

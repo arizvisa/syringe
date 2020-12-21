@@ -444,7 +444,7 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string(b'ABCDEFG')
+        source = provider.bytes(b'ABCDEFG')
         x = st(source=source)
         x = x.l
         if x.serialize() == b'ABC':
@@ -459,7 +459,7 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string(b'ABCDEFG')
+        source = provider.bytes(b'ABCDEFG')
         x = st(source=source)
         x = x.l
         if x['b'].serialize() == b'BC':
@@ -474,7 +474,7 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string(b'ABCDEFG')
+        source = provider.bytes(b'ABCDEFG')
         v = uint32().set(b'XXXX')
         x = st(source=source)
         x = x.l
@@ -491,7 +491,7 @@ if __name__ == '__main__':
                 (uint8, 'c'),
             ]
 
-        source = provider.string(b'ABCDEFG')
+        source = provider.bytes(b'ABCDEFG')
         v = uint16().set(b'XX')
         x = st(source=source)
         x = x.l
@@ -508,7 +508,7 @@ if __name__ == '__main__':
                 (uint32, 'b'),
                 (uint32, 'c'),
             ]
-        source = provider.string(b'AAAABBBBCCC')
+        source = provider.bytes(b'AAAABBBBCCC')
         x = st(source=source)
 
         try:

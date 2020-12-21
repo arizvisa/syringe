@@ -567,10 +567,10 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,zlib
+    import ptypes,functools,zlib
     from ptypes import dynamic,pint,parray,pstruct,config
 
-    ptypes.setsource(ptypes.provider.string('A'*50000))
+    ptypes.setsource(ptypes.provider.bytes('A'*50000))
 
     string1=b'ABCD'  # bigendian
     string2=b'DCBA'  # littleendian
@@ -587,7 +587,7 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'int'),
             ]
 
-        a = test(source=ptypes.provider.string(b'A'*4))
+        a = test(source=ptypes.provider.bytes(b'A'*4))
         a=a.l
         if a.object[0].int() != 0x41:
             raise Failure
@@ -605,7 +605,7 @@ if __name__ == '__main__':
                 (pint.uint32_t, 'end'),
             ]
 
-        a = test(source=ptypes.provider.string(b'A'*12))
+        a = test(source=ptypes.provider.bytes(b'A'*12))
         a=a.l
         if a.size() == 12:
             raise Success
@@ -614,7 +614,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_bigendian():
         pint.setbyteorder(config.byteorder.bigendian)
 
-        s = ptype.provider.string(string1)
+        s = ptypes.provider.bytes(string1)
         p = dynamic.pointer(dynamic.block(0), pint.uint32_t)
         x = p(source=s).l
         if x.d.getoffset() == 0x41424344 and x.serialize() == string1:
@@ -623,7 +623,7 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_pointer_littleendian_1():
         pint.setbyteorder(config.byteorder.littleendian)
-        s = ptype.provider.string(string2)
+        s = ptypes.provider.bytes(string2)
 
         t = dynamic.pointer(dynamic.block(0), pint.uint32_t)
         x = t(source=s).l
@@ -634,7 +634,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_2():
         pint.setbyteorder(config.byteorder.littleendian)
         string = b'\x26\xf8\x1a\x77'
-        s = ptype.provider.string(string)
+        s = ptypes.provider.bytes(string)
 
         t = dynamic.pointer(dynamic.block(0), pint.uint32_t)
         x = t(source=s).l
@@ -645,7 +645,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_bigendian_deref():
         pint.setbyteorder(config.byteorder.bigendian)
 
-        s = ptype.provider.string(b'\x00\x00\x00\x04\x44\x43\x42\x41')
+        s = ptypes.provider.bytes(b'\x00\x00\x00\x04\x44\x43\x42\x41')
         t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
@@ -655,7 +655,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_deref():
         pint.setbyteorder(config.byteorder.littleendian)
 
-        s = ptype.provider.string(b'\x04\x00\x00\x00\x44\x43\x42\x41')
+        s = ptypes.provider.bytes(b'\x04\x00\x00\x00\x44\x43\x42\x41')
         t = dynamic.pointer(dynamic.block(4), pint.uint32_t)
         x = t(source=s)
         if x.l.d.getoffset() == 4:
@@ -665,7 +665,7 @@ if __name__ == '__main__':
     def test_dynamic_pointer_littleendian_64bit_deref():
         pint.setbyteorder(config.byteorder.littleendian)
         t = dynamic.pointer(dynamic.block(4), pint.uint64_t)
-        x = t(source=ptype.provider.string(b'\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
+        x = t(source=ptypes.provider.bytes(b'\x08\x00\x00\x00\x00\x00\x00\x00\x41\x41\x41\x41')).l
         if x.l.d.getoffset() == 8:
             raise Success
 
@@ -678,8 +678,8 @@ if __name__ == '__main__':
     @TestCase
     def test_dynamic_array_2():
         v = dynamic.array(pint.int32_t, 8)
-        i = range(0x40,0x40+v.length)
-        x = ptype.provider.string(bytes().join(six.int2byte(x)+b'\x00\x00\x00' for x in i))
+        i = range(0x40, 0x40 + v.length)
+        x = ptypes.provider.bytes(bytes(bytearray(functools.reduce(operator.add, ([x, 0, 0, 0] for x in i), []))))
         z = v(source=x).l
         if z[4].int() == 0x44:
             raise Success
