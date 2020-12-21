@@ -364,7 +364,7 @@ class proxy(bounded):
 class bytes(bounded):
     '''Basic writeable bytes provider.'''
     offset = int
-    data = bytearray     # this is backed by an bytearray type
+    data = memoryview     # this is backed by a memoryview type
 
     @property
     def value(self):
@@ -372,10 +372,10 @@ class bytes(bounded):
 
     @value.setter
     def value(self, value):
-        self.data[:] = value if isinstance(value, bytearray) else bytearray(value)
+        self.data[:] = memoryview(value)
 
     def __init__(self, reference=b''):
-        self.offset, self.data = 0, reference if isinstance(reference, bytearray) else bytearray(reference, sys.getdefaultencoding()) if isinstance(reference, unicode if sys.version_info.major < 3 else str) else bytearray(reference)
+        self.offset, self.data = 0, memoryview(reference)
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
@@ -398,14 +398,14 @@ class bytes(bounded):
             raise error.ConsumeError(self, self.offset, amount, len(res))
         if len(res) == amount:
             self.offset += amount
-        return builtins.bytes(res)
+        return res.tobytes()
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
             left, right = self.offset, self.offset + len(data)
-            self.offset, self.data[left : right] = right, bytearray(data)
+            self.offset, self.data[left : right] = right, memoryview(data)
             return len(data)
 
         except Exception as E:
