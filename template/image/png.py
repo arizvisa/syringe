@@ -225,12 +225,12 @@ ChunkType._values_[:] = [(t.__name__, intofdata(key)) for key, t in Chunks.cache
 
 if __name__ == '__main__':
     import sys
-    import ptypes, image.pngfile
+    import ptypes, image.png
 
     if len(sys.argv) != 2:
         print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
         sys.exit(0)
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1]))
-    a = image.pngfile.File()
+    a = image.png.File()
     a = a.l

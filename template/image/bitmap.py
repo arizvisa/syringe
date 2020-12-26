@@ -177,14 +177,14 @@ class File(pstruct.type):
 
 if __name__ == '__main__':
     import sys
-    import ptypes, image.bmpfile
+    import ptypes, image.bitmap
     if len(sys.argv) != 2:
         print("Usage: {:s} file".format(sys.argv[0] if len(sys.argv) else __file__))
         sys.exit(0)
 
     ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='rb'))
 
-    z = bmpfile.File()
+    z = image.bitmap.File()
     print("source: {!r}".format(z.source))
 
     z = z.l
