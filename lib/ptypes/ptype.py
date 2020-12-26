@@ -1834,9 +1834,16 @@ class definition(object):
             newattributes = {key : definition.__dict__[key] for key in definition.__dict__}
             newattributes.update(attributes)
 
-            name = newattributes.pop('__name__', definition.__name__)
-            object = builtins.type(name, (definition,), newattributes)
-            return add(object, **newattributes)
+            # if there were some attributes provided, then we need to clone
+            # the definition we were given when adding, and return the
+            # original type.
+            if attributes:
+                name = newattributes.pop('__name__', definition.__name__)
+                object = builtins.type(name, (definition,), newattributes)
+                return add(object, **newattributes) and definition
+
+            # otherwise, we can just return the original.
+            return add(definition)
 
         # if we received only 1 argument, then this is all we need to define.
         if len(args) == 1:
