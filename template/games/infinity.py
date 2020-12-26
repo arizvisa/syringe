@@ -58,13 +58,16 @@ class zdata(ptype.encoded_t):
         return self.new(ptype.block).set(encdata)
 
 ## record types
+class IndexRecord(ptype.definition):
+    '''
+    Key is an integer as used by the BIFF format.
+    '''
+    cache = {}
+
 class FileRecord(ptype.definition):
     '''
     Key is (signature, version=(major, minor))
     '''
-    cache = {}
-
-class IndexRecord(ptype.definition):
     cache = {}
 
 ## special types
@@ -138,6 +141,15 @@ class soFile(osFile):
         (u32, 'size'),
         (lambda self: self.__pointer_to_object__(), 'offset'),
     ]
+
+## unknown types
+@IndexRecord.define(type=2051)
+class Unknown_0803(parray.block):
+    _object_ = u32
+
+@IndexRecord.define(type=1007)
+class Unknown_03ef(pstr.string):
+    pass
 
 ## complex types
 class Statistics(pstruct.type):
@@ -631,7 +643,8 @@ class BiffContents(parray.terminated):
         item = self.__index__[index]
         if item.id is not None:
             self.__cache__[item.id] = index
-        return IndexRecord.withdefault(item.type, type=item.type, length=item.size)
+        t = IndexRecord.withdefault(item.type, ptype.block, type=item.type, length=item.size)
+        return t if t is ptype.block else dyn.clone(t, blocksize=lambda _, cb=item.size: cb)
 
     def locate(self, locator):
         idx = self.__cache__[locator]
@@ -639,14 +652,30 @@ class BiffContents(parray.terminated):
 
     def isTerminator(self, item):
         return len(self) >= len(self.__index__)
+
+    def enumerate(self):
+        for i, item in enumerate(self):
+            if item.type is not None:
+                yield i, item
+            continue
+        return
+
+    def iterate(self):
+        for _, item in self.enumerate():
+            yield item
+        return
+
+    def summary(self):
+        items = [item for item in self.iterate()]
+        if len(items):
+            first, last = items[0], items[-1]
+            types = {item.type for item in self.__index__ if item.type is not None}
+            return "({:d}) {:s}...{:s} types:{:s}".format(len(items), first.instance(), last.instance(), ','.join(map("{:d}".format, sorted(types))))
+        return "({:d}) ...".format(len(items))
     
 @FileRecord.define
 class BIFF(pstruct.type):
     type = 'BIFF', (1, None)
-
-    def __contents(self):
-        offset, fields = self['offset'].li.int() - self.getoffset(), ['count(files)', 'count(tiles)', 'offset', 'unknown']
-        return dyn.block(offset - sum(self[fld].li.size() for fld in fields))
 
     def __items(self):
         def closure(self, parent=self):
@@ -734,10 +763,14 @@ class DialogState(pstruct.type):
         (s32, 'trigger'),
     ]
 
+    def summary(self):
+        return "index={:d} count={:d} trigger={:d} response={!s}".format(self['index'].int(), self['count'].int(), self['trigger'].int(), self['response'].summary())
+
 class DialogTransition(pstruct.type):
+    @pbinary.littleendian
     class _flags(pbinary.flags):
         _fields_ = [
-            (22, 'unused'),
+            (21, 'unused'),
             (1, 'clear'),
             (1, 'immediateQ'),
             (1, 'journal(solved)'),
@@ -767,6 +800,20 @@ class DialogTransition(pstruct.type):
         (_nextState, 'next'),
     ]
 
+    #def summary(self):
+    #    items = []
+    #    if flags['textQ']:
+    #        items.append(self['text'])
+    #    if flags['journalQ']:
+    #        items.append(self['journal'])
+    #    if flags['triggerQ']:
+    #        items.append(self['trigger'])
+    #    if flags['actionQ']:
+    #        items.append(self['action'])
+    #    if not flags['sentinelQ']:
+    #        items.append(self['node'])
+    #    raise NotImplementedError
+
 class DialogTrigger(ocStructure):
     def __pointer_to_object__(self):
         def closure(ptr, parent=self):
@@ -774,18 +821,45 @@ class DialogTrigger(ocStructure):
             return dyn.clone(pstr.string, length=count.int())
         return dyn.rpointer(closure, self.getparent(File), u32)
 
+    def summary(self):
+        item = self['offset'].d
+        try:
+            return "offset={:#x} : {!s}".format(self['offset'].int(), item.li.summary())
+        except ptypes.error.LoadError:
+            pass
+        return super(DialogTrigger, self).summary()
+
+    def str(self):
+        item = self['offset'].d
+        return item.li.str()
+
 class DialogAction(DialogTrigger):
     pass
 
 @FileRecord.define
 class Dialog(pstruct.type):
     type = 'DLG ', (1, 0)
+
+    class _trigger(ocStructure):
+        _object_ = DialogTrigger
+        def items(self):
+            result = self['offset'].d.li
+            return [item.str() for item in result]
+
+        def summary(self):
+            result = self['offset'].d.li
+            iterable = (item.str() for item in result)
+            return "({:d}) [{:s}]".format(len(result), ', '.join(map(repr, iterable)))
+
+    class _action(_trigger):
+        _object_ = DialogAction
+
     _fields_ = [
         (dyn.clone(coStructure, _object_=DialogState), 'state'),
         (dyn.clone(coStructure, _object_=DialogTransition), 'transition'),
-        (dyn.clone(ocStructure, _object_=DialogTrigger), 'trigger(state)'),
-        (dyn.clone(ocStructure, _object_=DialogTrigger), 'trigger(transition)'),
-        (dyn.clone(ocStructure, _object_=DialogAction), 'action'),
+        (_trigger, 'trigger(state)'),
+        (_trigger, 'trigger(transition)'),
+        (_action, 'action'),
         (u32, 'hostile'),
     ]
 
@@ -832,12 +906,13 @@ class Header(pstruct.type):
             description = sig.rstrip( '\0')
         return "{:s} v{:s}".format(description, '.'.join(map("{:d}".format, filter(None, version))))
 
+@IndexRecord.define(type=1011)
 class File(pstruct.type):
     def __Contents(self):
         res, bs = self['Header'].li, self.blocksize()
         key = tuple(res[item].get() for item in ['Signature', 'Version'])
         t = FileRecord.lookup(key, ptype.block)
-        if issubclass(t, (ptype.block, parray.block)):
+        if issubclass(t, (ptype.block, parray.block, pstr.string)):
             return dyn.clone(t, blocksize=lambda _, cb=bs - res.size(): cb)
         return t
 
@@ -860,7 +935,7 @@ class File(pstruct.type):
 
 if __name__ == '__main__':
     import os, sys, os.path
-    import ptypes, infinity
+    import ptypes, games.infinity as infinity
     ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rw'))
 
     z = infinity.File()
@@ -903,3 +978,7 @@ if __name__ == '__main__':
                 item['length(data)'].set(len(zdata))
                 item['data'] = ptype.block().set(zdata)
             z.setoffset(z.getoffset(), recurse=True)
+
+    elif sig == 'BIFF':
+        a = z['contents']['items'].d
+        a = a.l
