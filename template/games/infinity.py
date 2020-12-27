@@ -1,8 +1,10 @@
 import functools, itertools, types, builtins, operator, weakref
 import logging, re, fnmatch
 
-import ptypes
+import ptypes, image.bitmap
 from ptypes import *
+
+ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 ## combinators
 fcompose = lambda *f: functools.reduce(lambda f1, f2: lambda *a: f1(f2(*a)), builtins.reversed(f))
@@ -143,12 +145,52 @@ class soFile(osFile):
     ]
 
 ## unknown types
+@IndexRecord.define(type=1)
+class Unknown_0001(image.bitmap.File):
+    '''This might be a bitmap file.'''
+
+@IndexRecord.define(type=2050)
+class Unknown_0802(pstr.string):
+    pass
+
 @IndexRecord.define(type=2051)
 class Unknown_0803(parray.block):
     _object_ = u32
 
+@IndexRecord.define(type=1003)
+class Unknown_03eb(parray.block):
+    _object_ = u32
+
 @IndexRecord.define(type=1007)
 class Unknown_03ef(pstr.string):
+    pass
+
+@IndexRecord.define(type=1008)
+class Unknown_03f0(pstr.string):
+    pass
+
+@IndexRecord.define(type=1023)
+class Unknown_03ff(ptype.block):
+    pass
+
+@IndexRecord.define(type=1028)
+class Unknown_0404(ptype.block):
+    pass
+
+@IndexRecord.define(type=1029)
+class Unknown_0405(pstr.string):
+    '''shader'''
+
+@IndexRecord.define(type=1032)
+class Unknown_0408(pstr.string):
+    '''looks like lua script for the ui'''
+
+@IndexRecord.define(type=1033)
+class Unknown_0409(pstr.string):
+    '''looks like lua script'''
+
+@IndexRecord.define(type=1034)
+class Unknown_040a(ptype.block):
     pass
 
 ## complex types
@@ -323,6 +365,54 @@ class Actor(pstruct.type):
         (osFile, 'CRE'),
         (dyn.block(128), 'unused3'),
     ]
+
+## some table format (we define a bunch of keys for it because the devers can't seem to type it right)
+@FileRecord.define(type=('2DA ', '    '))
+@FileRecord.define(type=(' 2DA', ' V1.'))
+@FileRecord.define
+class TwoDimensionalArray(pstr.string):
+    type = '2DA ', (1, 0)
+    def iterate(self):
+        string = self.str()
+        items = string.replace('\r\n', '\n').split('\n')
+        return (item.replace('\t', 7*' ') for item in items if item)
+
+    def split(self):
+        iterable = self.iterate()
+        return [item for item in iterable]
+
+    def Default(self):
+        iterable = self.iterate()
+        # figure out whatever the first single item is
+        item = next(iterable).strip()
+        return int(item) if item.isdigit() else item
+
+    def Columns(self):
+        iterable = self.iterate()
+        # some heuristics to extract the column headers
+        next(iterable)
+        row = next(iterable)
+        iterable = (item for item in row.split(' ') if item.strip())
+        return [item.strip() for item in iterable]
+
+    def Rows(self):
+        iterable = self.iterate()
+        next(iterable)
+        next(iterable)
+        # some heuristics to extract the first column
+        iterable = (item.strip().split(' ')[0] for item in iterable if item.strip())
+        return [item.strip() for item in iterable]
+
+    def summary(self):
+        default, rows, columns = self.Default(), self.Rows(), self.Columns()
+        if rows and columns:
+            return "default:{!s} rows:{:s} columns:{:s}".format(default, ','.join(rows), ','.join(columns))
+        return "default:{!s} rows:{:s}".format(default, ','.join(rows)) if rows else "default:{!s} columns:{:s}".format(default, ','.join(columns))
+
+    def details(self):
+        return self.str().strip('\r\n')
+    def repr(self):
+        return self.details()
 
 ## creature format
 @FileRecord.define
@@ -605,7 +695,7 @@ class Index(parray.type):
             first, last = self[0], self[-1]
             return "{:s} {:s}[{:#x}:{:+x}]...{:s}[{:#x}:{:+x}]".format(self.__element__(), File.typename(), first['offset'].int(), first['size'].int(), File.typename(), last['offset'].int(), last['size'].int())
         return "{:s} ...".format(self.__element__())
-    
+
 class FileIndex(Index):
     class Locator(pstruct.type):
         _fields_ = [
@@ -672,7 +762,7 @@ class BiffContents(parray.terminated):
             types = {item.type for item in self.__index__ if item.type is not None}
             return "({:d}) {:s}...{:s} types:{:s}".format(len(items), first.instance(), last.instance(), ','.join(map("{:d}".format, sorted(types))))
         return "({:d}) ...".format(len(items))
-    
+
 @FileRecord.define
 class BIFF(pstruct.type):
     type = 'BIFF', (1, None)
@@ -710,7 +800,7 @@ class BIFF(pstruct.type):
             if offset < position:
                 logging.warn("Item {!s} with bounds {:#x}{:+x} is {:s}".format(item.instance(), offset, item['size'].int(), "overlapping with previous entry {!s}".format(index[-1]) if len(index) else "not within expected bounds {:#x}:{:+x}".format(baseoffset, size)))
                 continue
-                
+
             # if our item offset is farther along than expected, then we
             # need to pad this entry till we get to the right position.
             shift = offset - position
@@ -863,6 +953,15 @@ class Dialog(pstruct.type):
         (u32, 'hostile'),
     ]
 
+    def States(self):
+        return [item for item in self['trigger(state)'].items()]
+
+    def Transitions(self):
+        return [item for item in self['trigger(transition)'].items()]
+
+    def Actions(self):
+        return [item for item in self['action'].items()]
+
 ## file format
 class Header(pstruct.type):
     class _Version(String):
@@ -904,9 +1003,29 @@ class Header(pstruct.type):
             description = "{:s} ({:s})".format(sig.rstrip(' \0'), t.__name__)
         except KeyError:
             description = sig.rstrip( '\0')
-        return "{:s} v{:s}".format(description, '.'.join(map("{:d}".format, filter(None, version))))
 
+        if isinstance(version, builtins.tuple):
+            filtered = (item for item in version if item is not None)
+            return "{:s} v{:s}".format(description, '.'.join(map("{:d}".format, filtered)))
+        return ' '.join(map("{!s}".format, [description, repr(version)]))
+
+@IndexRecord.define(type=4)
+@IndexRecord.define(type=1000)
+@IndexRecord.define(type=1001)
+@IndexRecord.define(type=1002)
+@IndexRecord.define(type=1004)
+@IndexRecord.define(type=1005)
+@IndexRecord.define(type=1006)
+@IndexRecord.define(type=1009)
+@IndexRecord.define(type=1010)
 @IndexRecord.define(type=1011)
+@IndexRecord.define(type=1012)
+@IndexRecord.define(type=1013)
+@IndexRecord.define(type=1014)
+@IndexRecord.define(type=1015)
+@IndexRecord.define(type=1016)
+@IndexRecord.define(type=1019)
+@IndexRecord.define(type=1021)
 class File(pstruct.type):
     def __Contents(self):
         res, bs = self['Header'].li, self.blocksize()
@@ -936,7 +1055,7 @@ class File(pstruct.type):
 if __name__ == '__main__':
     import os, sys, os.path
     import ptypes, games.infinity as infinity
-    ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rw'))
+    ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
 
     z = infinity.File()
     z = z.l
