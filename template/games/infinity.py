@@ -263,7 +263,7 @@ class SpellKnown(pstruct.type):
         (u16, 'type'),
     ]
 
-class SpellMemo(pstruct.type):
+class SpellInfo(pstruct.type):
     _fields_ = [
         (u16, 'level'),
         (u16, 'number'),
@@ -273,7 +273,7 @@ class SpellMemo(pstruct.type):
         (u32, 'count'),
     ]
 
-class SpellBook(pstruct.type):
+class SpellMemo(pstruct.type):
     _fields_ = [
         (resref, 'resname'),
         (u32, 'memorizedQ'),
@@ -364,6 +364,75 @@ class Actor(pstruct.type):
         (resref, 'file(CRE)'),
         (osFile, 'CRE'),
         (dyn.block(128), 'unused3'),
+    ]
+
+## bitmap animation format
+class RGBQUAD(pstruct.type):
+    _fields_ = [
+        (u8, 'b'),
+        (u8, 'g'),
+        (u8, 'r'),
+        (u8, 'a'),
+    ]
+
+class BitmapFrame(pstruct.type):
+    class _data(pbinary.flags):
+        _fields_ = [
+            (1, 'compressedQ'),
+            (31, 'offset'),
+        ]
+    _fields_ = [
+        (u16, 'width'),
+        (u16, 'height'),
+        (s16, 'x'),
+        (s16, 'y'),
+        (_data, 'data'),
+    ]
+
+class BitmapCycle(pstruct.type):
+    _fields_ = [
+        (u16, 'count(indices)'),
+        (u16, 'index'),
+    ]
+
+@FileRecord.define
+class BitmapAnimation(pstruct.type):
+    type = 'BAM ', (1, None)
+
+    def __offset_frame(self):
+        count = self['count(frame)'].li
+        t = dyn.array(BitmapFrame, count.int())
+        # FIXME: this should be followed by count(cycle) BitmapCycle entries...
+        return dyn.rpointer(t, self.getparent(File), u32)
+
+    def __offset_palette(self):
+        t = dyn.array(RGBQUAD, 0)
+        # FIXME: figure out the correct count for this
+        return dyn.rpointer(t, self.getparent(File), u32)
+
+    def __offset_table(self):
+        # FIXME: figure out the correct count for this
+        t = dyn.array(u32, 0)
+        return dyn.rpointer(t, self.getparent(File), u32)
+
+    _fields_ = [
+        (u16, 'count(frame)'),
+        (u8, 'count(cycle)'),
+        (u8, 'compressed'),
+        (__offset_frame, 'offset(frame)'),
+        (__offset_palette, 'offset(palette)'),
+        (__offset_table, 'offset(table)'),
+    ]
+
+@FileRecord.define
+class BitmapAnimationCompressed(pstruct.type):
+    type = 'BAMC', (1, None)
+    def __data(self):
+        t = dyn.block(self['length'].li.int())
+        return dyn.clone(zdata, _value_=t, _object_=ptype.block)
+    _fields_ = [
+        (u32, 'length'),
+        (__data, 'data'),
     ]
 
 ## some table format (we define a bunch of keys for it because the devers can't seem to type it right)
@@ -578,10 +647,11 @@ class Creature(pstruct.type):
         (Enum, 'actor'),
         (dyn.clone(String, length=32), 'variable(death)'),
         (dyn.clone(ocStructure, _object_=SpellKnown), 'spells(known)'),
+        (dyn.clone(ocStructure, _object_=SpellInfo), 'spells(info)'),
         (dyn.clone(ocStructure, _object_=SpellMemo), 'spells(memorized)'),
         (dyn.clone(ocStructure, _object_=Item), 'items'),
         (__items, 'items(slots)'),
-        (ocStructure, 'effects'),
+        (dyn.clone(ocStructure, _object_=ptype.block), 'effects'),
         (resref, 'dialog'),
     ]
 
