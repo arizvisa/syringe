@@ -9,6 +9,11 @@ from . import sdkddkver, rtltypes, error
 from .datatypes import *
 
 class HEAP_LOCK(pint.uint32_t): pass
+class HEAP_SIGNATURE(pint.enum, ULONG):
+    _fields_ = [
+        ('SegmentHeap', 0xddeeddee),
+        ('Heap', 0xeeffeeff),
+    ]
 
 if 'HeapMeta':
     class HEAP_BUCKET_COUNTERS(pstruct.type):
@@ -1188,7 +1193,8 @@ if 'LFH':
                     (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
                     (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
-                    (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Signature'),
+                    (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Signature)'),
+                    (HEAP_SIGNATURE, 'Signature'),
                     (__Blocks, 'Blocks'),
                 ])
 
@@ -1199,7 +1205,7 @@ if 'LFH':
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'GuardPagePresent'),
                     (USHORT, 'PaddingBytes'),
-                    (ULONG, 'Signature'),
+                    (HEAP_SIGNATURE, 'Signature'),
                     (HEAP_USERDATA_OFFSETS, 'EncodedOffsets'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(EncodedOffsets)'),
                     (rtltypes.RTL_BITMAP_EX if getattr(self, 'WIN64', False) else rtltypes.RTL_BITMAP, 'BusyBitmap'),
@@ -1644,7 +1650,7 @@ if 'Heap':
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
                 f.extend([
                     (_HEAP_ENTRY, 'Entry'),
-                    (ULONG, 'Signature'),
+                    (HEAP_SIGNATURE, 'Signature'),
                     (ULONG, 'Flags'),
                     (P(HEAP), 'Heap'),
                     (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'LargestUnCommittedRange'),
@@ -1663,7 +1669,7 @@ if 'Heap':
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN7:
                 f.extend([
                     (_HEAP_ENTRY, 'Entry'),
-                    (ULONG, 'SegmentSignature'),
+                    (HEAP_SIGNATURE, 'SegmentSignature'),
                     (ULONG, 'SegmentFlags'),
                     (lambda s: dyn.clone(LIST_ENTRY, _sentinel_='Blink', _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from HEAP
                     (P(HEAP), 'Heap'),
@@ -1851,7 +1857,7 @@ if 'Heap':
                 f.extend([
                     (HEAP_ENTRY, 'Entry'),
 
-                    (ULONG, 'Signature'),
+                    (HEAP_SIGNATURE, 'Signature'),
                     (ULONG, 'Flags'),
                     (ULONG, 'ForceFlags'),
                     (ULONG, 'VirtualMemoryThreshold'),
@@ -1901,7 +1907,7 @@ if 'Heap':
                     (self.__PointerKeyEncoding, 'PointerKey'),
                     (ULONG, 'Interceptor'),
                     (ULONG, 'VirtualMemoryThreshold'),
-                    (ULONG, 'Signature'),
+                    (HEAP_SIGNATURE, 'Signature'),
                     (aligned, 'align(SegmentReserve)'), # FIXME: alignment or padding?
                     (size_t, 'SegmentReserve'),
                     (size_t, 'SegmentCommit'),
@@ -1953,7 +1959,7 @@ if 'Heap':
                     (HEAP._Encoding, 'Encoding'),
                     (ULONG, 'Interceptor'),
                     (ULONG, 'VirtualMemoryThreshold'),
-                    (ULONG, 'Signature'),
+                    (HEAP_SIGNATURE, 'Signature'),
                     (aligned, 'align(SegmentReserve)'), # FIXME: alignment or padding?
                     (size_t, 'SegmentReserve'),
                     (size_t, 'SegmentCommit'),
