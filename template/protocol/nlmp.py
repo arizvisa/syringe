@@ -25,7 +25,7 @@ class Message(pstruct.type):
         except AttributeError:
             return dyn.block(0)
         bound = p.getoffset() + p.blocksize()
-        return dyn.block(max((0, bound - self.getoffset())))
+        return dyn.block(max(0, bound - self.getoffset()))
 
     def __Payload(self):
         res = self['MessageFields'].li
@@ -33,8 +33,8 @@ class Message(pstruct.type):
         payload_offset = sum(self[fld].li.size() for fld in ['Signature','MessageType','MessageFields'])
         fields = { field for field in fields if payload_offset <= field['BufferOffset'].int() }
         if fields:
-            largest_offset = max([ field['BufferOffset'].int() + field['MaximumLength'].int() for field in fields ])
-            return dyn.block(max((0, largest_offset - payload_offset)))
+            largest_offset = max(field['BufferOffset'].int() + field['MaximumLength'].int() for field in fields)
+            return dyn.block(max(0, largest_offset - payload_offset))
         return dyn.block(0)
 
     _fields_ = [
@@ -121,7 +121,7 @@ class PayloadString(pstruct.type):
             return ptype.undefined
 
         length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
-        return dyn.block(max((0, cb - length)))
+        return dyn.block(max(0, cb - length))
 
     _fields_ = [
         (__string, 'string'),
@@ -299,7 +299,7 @@ class PayloadPairs(pstruct.type):
         except ptypes.error.ItemNotFoundError:
             return ptypes.undefined
         length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
-        return dyn.block(max((0, cb - length)))
+        return dyn.block(max(0, cb - length))
 
     _fields_ = [
         (AV_PAIRs, 'pairs'),
@@ -404,7 +404,7 @@ class SessionKey(pstruct.type):
         except ptypes.error.ItemNotFoundError:
             return ptype.undefined
         length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
-        return dyn.block(max((0, cb - length)))
+        return dyn.block(max(0, cb - length))
 
     _fields_ = [
         (__session_key, 'session_key'),

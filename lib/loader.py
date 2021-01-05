@@ -63,7 +63,7 @@ class module(object):
             print('mapping %s:+%x to %x'%(name, length, address))
 
         # produce a lookup dict
-        sectionbases = dict([(name,address) for name,(address,length) in loadedsegments.items()])
+        sectionbases = {name : address for name, (address, length) in loadedsegments.items()}
         for k in sectionbases:
             ld[k] = sectionbases[k]
 
@@ -174,7 +174,7 @@ if __name__ == '__main__':
         print('using',modulename,'from memory address', '%x'% pe.parent.getoffset())
 
         st.load(pe.parent,modulename)
-        symlookup[modulename] = dict( ((k, st[k]) for k in st.getglobals()) )
+        symlookup[modulename] = {k : st[k] for k in st.getglobals()}
 
         for module,name in ( tuple(k.split('!')) for k in lnk.getglobals() if '!' in k and lnk[k] is None ):
             if module != modulename:
@@ -201,7 +201,7 @@ if __name__ == '__main__':
                 print('using',modulename,'from memory address', '%x'% pe.parent.getoffset())
 
                 st.load(pe.parent,modulename)
-                symlookup[modulename] = dict( ((k, st[k]) for k in st.getglobals()) )
+                symlookup[modulename] = {k : st[k] for k in st.getglobals()}
 
                 #            raise NotImplementedError
                 # Somehow a few of our exports in the iat don't get set

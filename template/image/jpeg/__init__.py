@@ -13,7 +13,7 @@ if __name__ == '__main__':
     input = bytes(input.replace(b'\xff\x00', b'\xff'))
     jpegfile = Jpeg()
     jpegfile.deserialize(input)
-    lookup = dict([(type(x).__name__, x) for x in jpegfile])
+    lookup = {type(item).__name__ : item for item in jpegfile}
 
     print(jpegfile[0])
     print(jpegfile[1])

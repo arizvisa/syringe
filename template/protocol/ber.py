@@ -372,8 +372,8 @@ class OBJECT_IDENTIFIER(ptype.type):
     tag = 0x06
 
     def set(self, string):
-        if string in self._values_.viewvalues():
-            res = dict((v, k) for k, v in self._values_.viewitems())
+        if string in self._values_.values():
+            res = {v : k for k, v in self._values_.items()}
             return self.set(res[string])
 
         res = map(int, string.split('.'))
@@ -483,7 +483,7 @@ class OBJECT_IDENTIFIER(ptype.type):
 
         ('itu-t recommendation t 124 version(0) 1', '0.0.20.124.0.1'),
     ]
-    _values_ = dict((__oid, __name) for __name, __oid in _values_)
+    _values_ = {__oid : __name for __name, __oid in _values_}
 
 @Universal.define
 class EXTERNAL(ptype.block):

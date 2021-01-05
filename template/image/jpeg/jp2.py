@@ -743,7 +743,7 @@ class DigitalSignature(ptype.block):
     # FIXME
 
 ### Update enumeration with any defined Box types
-BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in six.viewitems(Boxes.cache)]
+BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in Boxes.cache.items()]
 
 ### Marker types
 @Marker.define

@@ -3,7 +3,7 @@ from ptypes import bitmap
 from . import optable,typesize
 
 prefix_string = b'\x26\x2e\x36\x3e\x64\x65\x66\x67\xf0\xf2\xf3'
-prefix_lookup = dict([(_,None) for _ in prefix_string])
+prefix_lookup = {item : None for item in prefix_string}
 
 def isprefix(byte):
     try:
@@ -191,7 +191,7 @@ if __name__ == '__main__':
         list = []
         while code:
             opcode = decoder.consume(code)
-            res = dict( zip(labels, opcode) )
+            res = {lbl : op for lbl, op in zip(labels, opcode)}
             list.append(res)
             code = code[ len(''.join(opcode)) : ]
 

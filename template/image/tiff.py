@@ -542,7 +542,7 @@ class Entry(pstruct.type):
         if isinstance(self['value'].li, ptype.undefined):
             return dyn.block(0)
         cb = 4 - self['value'].li.size()
-        return dyn.block( max((0, cb)) )
+        return dyn.block(max(0, cb))
 
     def __pointer(self):
         count = self['count'].li.int()
@@ -590,10 +590,12 @@ class Header(pstruct.type):
 
     @classmethod
     def Big(cls):
-        return cls(recurse=dict(byteorder=ptypes.config.byteorder.bigendian)).a.set(order='bigendian', signature=0x002a)
+        items = {'byteorder': ptypes.config.byteorder.bigendian}
+        return cls(recurse=items).a.set(order='bigendian', signature=0x002a)
     @classmethod
     def Little(cls):
-        return cls(recurse=dict(byteorder=ptypes.config.byteorder.littleendian)).a.set(order='littleendian', signature=0x2a00)
+        items = {'byteorder': ptypes.config.byteorder.littleendian}
+        return cls(recurse=items).a.set(order='littleendian', signature=0x2a00)
 
     def Order(self):
         bo = self['order'].serialize()
@@ -624,7 +626,7 @@ class File(pstruct.type):
     def __pointer(self):
         bo = self['header'].li.Order()
         pointer = dyn.pointer(Directory, pint.uint32_t, byteorder=bo)
-        return dyn.clone(pointer, recurse=dict(byteorder=bo))
+        return dyn.clone(pointer, recurse={'byteorder': bo})
 
     def __data(self):
         res = self['header'].li.size() + self['pointer'].li.size()

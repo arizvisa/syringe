@@ -103,7 +103,7 @@ class File(pstruct.type, base.ElfXX_File):
 
         # Now we can clone it using the byteorder from EI_DATA
         ei_data = e_ident['EI_DATA']
-        return ptype.clone(t, recurse=dict(byteorder=ei_data.order()))
+        return ptype.clone(t, recurse={'byteorder': ei_data.order()})
 
     def __e_dataentries(self):
         data = self['e_data'].li

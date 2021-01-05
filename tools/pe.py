@@ -187,9 +187,9 @@ def list_imports(t, outformat, F=None, output=None):
     if F:
         return Extract(F(result), outformat, file=output)
     if not outformat:
-        _ = list(result.iterate())
-        imax = len(str(len(_)))
-        nmax = max([len(ite['Name'].d.li.str()) for ite in _] or [0])
+        items = [item for item in result.iterate()]
+        imax = len(str(len(items)))
+        nmax = max([len(ite['Name'].d.li.str()) for ite in items] or [0])
         for i, ite in enumerate(result.iterate()):
             iat, int = ite['IAT'].d.li, ite['INT'].d.li
             six.print_("[{:d}]{:s} {:<{:d}s} IAT[{:d}] INT[{:d}]".format(i, ' '*(imax-len(str(i))), ite['Name'].d.li.str(), nmax, len(iat), len(int)), file=output)

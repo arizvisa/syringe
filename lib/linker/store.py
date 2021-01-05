@@ -102,14 +102,14 @@ class symboltable(dict):
 
     ### iterables
     def iterkeys(self):
-        return iter(self.aliases.keys())
+        return (item for item in self.aliases.keys())
 
     def viewkeys(self):
-        return set(self.aliases.keys())
+        return {item for item in self.aliases.keys()}
 
     def iteritems(self):
         for k in self.iterkeys():
-            yield k,self[k]
+            yield k, self[k]
         return
 
     ### overloads
@@ -174,27 +174,27 @@ class symboltable(dict):
         self.__del_record(id)
 
     def __getitem__(self, key):
-        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
-        return self.__getitem__direct(key)
+        item = key if isinstance(key, tuple) and len(key) == 2 else (None, key)
+        return self.__getitem__direct(item)
 
     def __setitem__(self, key, value):
-        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
-        return self.__setitem__direct(key, value)
+        item = key if isinstance(key, tuple) and len(key) == 2 else (None, key)
+        return self.__setitem__direct(item, value)
 
     def __delitem__(self, key):
         '''Delete a symbol from the store. Warning: This will delete all aliases and hooks to the symbol as well'''
-        key = [(None,key), key][ isinstance(key, tuple) and len(key) == 2 ]
-        return self.__delitem__direct(key)
+        item = key if isinstance(key, tuple) and len(key) == 2 else (None, key)
+        return self.__delitem__direct(item)
 
     ### aliases
     def __alias_expand(self, names):
-        for x in ([(None,n),n][isinstance(key, tuple) and len(n) == 2] for n in names):
-            yield x
+        for item in names:
+            yield item if isinstance(item, tuple) and len(item) == 2 else (None, item)
         return
 
     def alias(self, name, target):
         '''Add an alias from one symbol name to another'''
-        name,target = tuple(self.__alias_expand([name,target]))
+        name, target = tuple(self.__alias_expand([name, target]))
         self.aliases[name] = self.aliases[target]
         return True
 
@@ -268,8 +268,8 @@ class symboltable(dict):
         store_lookup_aliases_by_key = dict(generate_key2alias_lookup(store, symbolnames))
 
         # add new elements that we're merging in
-        for n in localnames.difference(self.viewkeys()):
-            self.__setitem__direct(n, None)
+        for item in localnames.difference(self.viewkeys()):
+            self.__setitem__direct(item, None)
 
         local_lookup_aliases_by_key = dict(generate_key2alias_lookup(self, localnames))
 

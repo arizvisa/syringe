@@ -215,22 +215,22 @@ class package:
         def pack_references(self, data, **attributes):
             '''converts object data into reference id's'''
             if data.__class__ is __builtin__.tuple:
-                return __builtin__.tuple(self.store(x,**attributes) for x in data)
+                return __builtin__.tuple(self.store(item, **attributes) for item in data)
             elif data.__class__ is __builtin__.dict:
-                return __builtin__.dict((self.store(k,**attributes),self.store(v,**attributes)) for k,v in data.items())
+                return { self.store(k, **attributes) : self.store(v, **attributes) for k, v in data.items() }
             elif data.__class__ is __builtin__.list:
                 # a list contains multiple packed objects
-                return [self.pack_references(x, **attributes) for x in data]
+                return [self.pack_references(item, **attributes) for item in data]
             return data
 
         def unpack_references(self, data, **attributes):
             '''converts packed references into objects'''
             if data.__class__ is __builtin__.tuple:
-                return __builtin__.tuple(self.fetch(x,**attributes) for x in data)
+                return __builtin__.tuple(self.fetch(item, **attributes) for item in data)
             elif data.__class__ is __builtin__.dict:
-                return __builtin__.dict((self.fetch(k,**attributes),self.fetch(v,**attributes)) for k,v in data.items())
+                return { self.fetch(k, **attributes) : self.fetch(v, **attributes) for k, v in data.items() }
             elif data.__class__ is __builtin__.list:
-                return [self.unpack_references(x, **attributes) for x in data]
+                return [self.unpack_references(item, **attributes) for item in data]
             return data
 
         def identify(self, object):
@@ -899,7 +899,7 @@ if 'core':
             if sys.version_info.major >= 3 and hasattr(object, '__spec__') and isinstance(object.__spec__.loader, __import__('_frozen_importlib').BuiltinImporter):
                 return {}
             ignored = ('__builtins__', '__loader__')
-            return __builtin__.dict((k,v) for k,v in object.__dict__.items() if k not in ignored)
+            return {k : v for k, v in object.__dict__.items() if k not in ignored}
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):

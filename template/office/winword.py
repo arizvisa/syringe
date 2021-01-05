@@ -639,7 +639,7 @@ class FcLcb(pstruct.type):
         # now we can somehow transition to the type within the specified stream
         def newtype(self, type=type, entry=entry):
             res, source = self.getparent(FcLcb).li, ptypes.provider.proxy(entry.Data())
-            return dyn.block(res['lcb'].int(), source=source) if type is None else dyn.clone(type, blocksize=(lambda s, cb=res['lcb'].int(): cb), source=source)
+            return dyn.block(res['lcb'].int(), source=source) if type is None else dyn.clone(type, blocksize=(lambda _, cb=res['lcb'].int(): cb), source=source)
         return dyn.pointer(newtype)
 
     _fields_ = [
@@ -1075,7 +1075,7 @@ class Sprm_Unpacked(pbinary.struct):
         ]
 
     class _spra(pbinary.enum):
-        width, _values_ = 3, [(cls.__name__, ti) for ti, cls in SprmOperandType.cache.viewitems()]
+        width, _values_ = 3, [(cls.__name__, ti) for ti, cls in SprmOperandType.cache.items()]
 
     _fields_ = [
         (_spra, 'spra'),
@@ -1324,7 +1324,7 @@ class Pcdt(pstruct.type):
     clxt = 0x02
     _fields_ = [
         (pint.uint32_t, 'lcb'),
-        (lambda self: dyn.clone(PlcPcd, blocksize=(lambda s, cb=self['lcb'].li.int(): cb)), 'PlcPcd'),
+        (lambda self: dyn.clone(PlcPcd, blocksize=(lambda _, cb=self['lcb'].li.int(): cb)), 'PlcPcd'),
     ]
 
 class Clx(PLC, pstruct.type):
@@ -1578,7 +1578,7 @@ class PlcfBtePapx(PLC, pstruct.type):
 
     _fields_ = [
         (__aFC, 'aFC'),
-        (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpPapx, blockbits=(lambda s, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBtePapx'),
+        (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpPapx, blockbits=(lambda _, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBtePapx'),
     ]
 
 class PlcfBteChpx(PLC, pstruct.type):
@@ -1591,7 +1591,7 @@ class PlcfBteChpx(PLC, pstruct.type):
 
     _fields_ = [
         (__aFC, 'aFC'),
-        (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpChpx, blockbits=(lambda s, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBteChpx'),
+        (lambda self: dyn.clone(pbinary.blockarray, _object_=PnFkpChpx, blockbits=(lambda _, cb=self.blocksize() - self['aFC'].li.size(): cb * 8)), 'aPnBteChpx'),
     ]
 
 class GrpPrlAndIstd(pstruct.type):
@@ -1602,7 +1602,7 @@ class GrpPrlAndIstd(pstruct.type):
 class PapxInFkp(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'cb'),
-        (lambda self: dyn.clone(GrpPrlAndIstd, blocksize=(lambda s, cb=self['cb'].li.int(): cb * 2)), 'grpprlInPapx'),
+        (lambda self: dyn.clone(GrpPrlAndIstd, blocksize=(lambda _, cb=self['cb'].li.int(): cb * 2)), 'grpprlInPapx'),
     ]
 class BxPap(pstruct.type):
     _fields_ = [
@@ -2489,15 +2489,15 @@ class Dop2013(pstruct.type):
 
 class Dop(dynamic.union):
     _fields_ = [
-        (lambda self: dyn.clone(DopBase, blocksize=lambda s, cb=min((DopBase().a.blocksize(), self.o.li.blocksize())): cb), 'Base'),
-        (lambda self: dyn.clone(Dop95, blocksize=lambda s, cb=min((Dop95().a.blocksize(), self.o.li.blocksize())): cb), '95'),
-        (lambda self: dyn.clone(Dop97, blocksize=lambda s, cb=min((Dop97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
-        (lambda self: dyn.clone(Dop2000, blocksize=lambda s, cb=min((Dop2000().a.blocksize(), self.o.li.blocksize())): cb), '2000'),
-        (lambda self: dyn.clone(Dop2002, blocksize=lambda s, cb=min((Dop2002().a.blocksize(), self.o.li.blocksize())): cb), '2002'),
-        (lambda self: dyn.clone(Dop2003, blocksize=lambda s, cb=min((Dop2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
-        (lambda self: dyn.clone(Dop2007, blocksize=lambda s, cb=min((Dop2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
-        (lambda self: dyn.clone(Dop2010, blocksize=lambda s, cb=min((Dop2010().a.blocksize(), self.o.li.blocksize())): cb), '2010'),
-        (lambda self: dyn.clone(Dop2013, blocksize=lambda s, cb=min((Dop2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
+        (lambda self: dyn.clone(DopBase, blocksize=lambda _, cb=min(DopBase().a.blocksize(), self.o.li.blocksize()): cb), 'Base'),
+        (lambda self: dyn.clone(Dop95, blocksize=lambda _, cb=min(Dop95().a.blocksize(), self.o.li.blocksize()): cb), '95'),
+        (lambda self: dyn.clone(Dop97, blocksize=lambda _, cb=min(Dop97().a.blocksize(), self.o.li.blocksize()): cb), '97'),
+        (lambda self: dyn.clone(Dop2000, blocksize=lambda _, cb=min(Dop2000().a.blocksize(), self.o.li.blocksize()): cb), '2000'),
+        (lambda self: dyn.clone(Dop2002, blocksize=lambda _, cb=min(Dop2002().a.blocksize(), self.o.li.blocksize()): cb), '2002'),
+        (lambda self: dyn.clone(Dop2003, blocksize=lambda _, cb=min(Dop2003().a.blocksize(), self.o.li.blocksize()): cb), '2003'),
+        (lambda self: dyn.clone(Dop2007, blocksize=lambda _, cb=min(Dop2007().a.blocksize(), self.o.li.blocksize()): cb), '2007'),
+        (lambda self: dyn.clone(Dop2010, blocksize=lambda _, cb=min(Dop2010().a.blocksize(), self.o.li.blocksize()): cb), '2010'),
+        (lambda self: dyn.clone(Dop2013, blocksize=lambda _, cb=min(Dop2003().a.blocksize(), self.o.li.blocksize()): cb), '2003'),
     ]
 
     def latest(self):
@@ -2591,7 +2591,7 @@ class FibRgW97(pstruct.type):
 
 class FibRgW(dynamic.union):
     _fields_ = [
-        (lambda self: dyn.clone(FibRgW97, blocksize=lambda s, cb=min((FibRgW97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
+        (lambda self: dyn.clone(FibRgW97, blocksize=lambda _, cb=min(FibRgW97().a.blocksize(), self.o.li.blocksize()): cb), '97'),
     ]
 
     def latest(self):
@@ -2643,9 +2643,9 @@ class FibRgLw97x(pstruct.type):
 
 class FibRgLw(dynamic.union):
     _fields_ = [
-        (lambda self: dyn.clone(FibRgLw95, blocksize=lambda s, cb=min((FibRgLw95().a.blocksize(), self.o.li.blocksize())): cb), '95'),
-        (lambda self: dyn.clone(FibRgLw97, blocksize=lambda s, cb=min((FibRgLw97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
-        (lambda self: dyn.clone(FibRgLw97x, blocksize=lambda s, cb=min((FibRgLw97x().a.blocksize(), self.o.li.blocksize())): cb), '97x'),
+        (lambda self: dyn.clone(FibRgLw95, blocksize=lambda _, cb=min(FibRgLw95().a.blocksize(), self.o.li.blocksize()): cb), '95'),
+        (lambda self: dyn.clone(FibRgLw97, blocksize=lambda _, cb=min(FibRgLw97().a.blocksize(), self.o.li.blocksize()): cb), '97'),
+        (lambda self: dyn.clone(FibRgLw97x, blocksize=lambda _, cb=min(FibRgLw97x().a.blocksize(), self.o.li.blocksize()): cb), '97x'),
     ]
 
     def latest(self):
@@ -2867,11 +2867,11 @@ class FibRgFcLcb2007(pstruct.type):
 
 class FibRgFcLcb(dynamic.union):
     _fields_ = [
-        (lambda self: dyn.clone(FibRgFcLcb97, blocksize=lambda s, cb=min((FibRgFcLcb97().a.blocksize(), self.o.li.blocksize())): cb), '97'),
-        (lambda self: dyn.clone(FibRgFcLcb2000, blocksize=lambda s, cb=min((FibRgFcLcb2000().a.blocksize(), self.o.li.blocksize())): cb), '2000'),
-        (lambda self: dyn.clone(FibRgFcLcb2002, blocksize=lambda s, cb=min((FibRgFcLcb2002().a.blocksize(), self.o.li.blocksize())): cb), '2002'),
-        (lambda self: dyn.clone(FibRgFcLcb2003, blocksize=lambda s, cb=min((FibRgFcLcb2003().a.blocksize(), self.o.li.blocksize())): cb), '2003'),
-        (lambda self: dyn.clone(FibRgFcLcb2007, blocksize=lambda s, cb=min((FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
+        (lambda self: dyn.clone(FibRgFcLcb97, blocksize=lambda _, cb=min(FibRgFcLcb97().a.blocksize(), self.o.li.blocksize()): cb), '97'),
+        (lambda self: dyn.clone(FibRgFcLcb2000, blocksize=lambda _, cb=min(FibRgFcLcb2000().a.blocksize(), self.o.li.blocksize()): cb), '2000'),
+        (lambda self: dyn.clone(FibRgFcLcb2002, blocksize=lambda _, cb=min(FibRgFcLcb2002().a.blocksize(), self.o.li.blocksize()): cb), '2002'),
+        (lambda self: dyn.clone(FibRgFcLcb2003, blocksize=lambda _, cb=min(FibRgFcLcb2003().a.blocksize(), self.o.li.blocksize()): cb), '2003'),
+        (lambda self: dyn.clone(FibRgFcLcb2007, blocksize=lambda _, cb=min(FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize()): cb), '2007'),
     ]
 
     def latest(self):
@@ -2897,8 +2897,8 @@ class FibRgCswNewData2007(pstruct.type):
 
 class FibRgCswNew(dynamic.union):
     _fields_ = [
-        (lambda self: dyn.clone(FibRgCswNewData2000, blocksize=lambda s, cb=min((FibRgFcLcb2000().a.blocksize(), self.o.li.blocksize())): cb), '2000'),
-        (lambda self: dyn.clone(FibRgCswNewData2007, blocksize=lambda s, cb=min((FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize())): cb), '2007'),
+        (lambda self: dyn.clone(FibRgCswNewData2000, blocksize=lambda _, cb=min(FibRgFcLcb2000().a.blocksize(), self.o.li.blocksize()): cb), '2000'),
+        (lambda self: dyn.clone(FibRgCswNewData2007, blocksize=lambda _, cb=min(FibRgFcLcb2007().a.blocksize(), self.o.li.blocksize()): cb), '2007'),
     ]
 
     def latest(self):
@@ -2923,7 +2923,7 @@ class Fib(pstruct.type):
         (lambda self: dyn.clone(FibRgFcLcb, _value_=dyn.array(pint.uint64_t, self['cbRgFcLcb'].li.int())), 'fibRgFcLcbBlob'),
         (pint.uint16_t, 'cswNew'),
         (lambda self: pint.uint16_t if self['cswNew'].li.int() else pint.uint_t, 'nFibNew'),
-        (lambda self: dyn.clone(FibRgCswNew, _value_=dyn.array(pint.uint16_t, max((0, self['cswNew'].li.int() - 1)))), 'fibRgCswNew'),
+        (lambda self: dyn.clone(FibRgCswNew, _value_=dyn.array(pint.uint16_t, max(0, self['cswNew'].li.int() - 1))), 'fibRgCswNew'),
     ]
 
     def nFib(self):

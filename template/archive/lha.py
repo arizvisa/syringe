@@ -34,7 +34,7 @@ class method_id(pstr.string):
                 raise NotImplementedError((type, version))
             return super(Signature._method, self).set(res)
 
-        elif type in ('pc', 'pm'):
+        elif type in {'pc', 'pm'}:
             versionmap = '012'
             if version is None:
                 res = '-{:s}0-'.format(type)
@@ -154,8 +154,8 @@ class Header(pstruct.type):
     def __padding_header(self):
         res = self['signature'].li
         cb = res['size'].int()
-        fields = (self[fld].li.size() for fld in ('signature', 'attributes', 'extended'))
-        return dyn.block(max((0, cb - (sum(fields)+2))))
+        total = 2 + sum(self[fld].li.size() for fld in ['signature', 'attributes', 'extended'])
+        return dyn.block(max(0, cb - total))
 
     _fields_ = [
         (Signature, 'signature'),

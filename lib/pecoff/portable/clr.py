@@ -70,8 +70,8 @@ class MetaDataRoot(pstruct.type):
 
     def __StreamData(self):
         cb = self.getparent(IMAGE_DATA_DIRECTORY)['Size'].int()
-        total = sum(self[n].li.size() for _, n in self._fields_[:-1])
-        res = max((0, cb-total))
+        total = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
+        res = max(0, cb - total)
         return dyn.block(res)
 
     @pbinary.littleendian
@@ -87,7 +87,7 @@ class MetaDataRoot(pstruct.type):
         (pint.uint16_t, 'MinorVersion'),
         (pint.uint32_t, 'Reserved'),
         (pint.uint32_t, 'Length'),
-        (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'Version'),
+        (lambda self: dyn.clone(pstr.string, length=self['Length'].li.int()), 'Version'),
         (dyn.align(4), 'aligned(Version)'),
         (StorageFlags, 'Flags'),
         (pint.uint16_t, 'Streams'),
@@ -113,7 +113,7 @@ class EncodedInteger(parray.terminated):
 class ResourceString(pstruct.type):
     _fields_ = [
         (EncodedInteger, 'Length'),
-        (lambda s: dyn.clone(pstr.string, length=s['Length'].li.int()), 'Name'),
+        (lambda self: dyn.clone(pstr.string, length=self['Length'].li.int()), 'Name'),
     ]
     def str(self):
         return self['Name'].str()
@@ -123,8 +123,8 @@ class ResourceString(pstruct.type):
 class ResourceWString(pstruct.type):
     _fields_ = [
         (EncodedInteger, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int() // 2), 'Name'),
-        (lambda s: dyn.block(s['Length'].li.int() % 2), 'Padding'),
+        (lambda self: dyn.clone(pstr.wstring, length=self['Length'].li.int() // 2), 'Name'),
+        (lambda self: dyn.block(self['Length'].li.int() % 2), 'Padding'),
     ]
     def str(self):
         return self['Name'].str()
@@ -139,14 +139,14 @@ class ResourceManagerHeader(pstruct.type):
         #(pint.uint32_t, 'Magic'),
         (pint.uint32_t, 'Version'),
         (pint.uint32_t, 'Size'),
-        (lambda s: dyn.blockarray(ResourceString, s['Size'].li.int()), 'Parsers'),
+        (lambda self: dyn.blockarray(ResourceString, self['Size'].li.int()), 'Parsers'),
     ]
 
 class ResourceReaderHeader(pstruct.type):
     class _Types(pstruct.type):
         _fields_ = [
             (pint.uint32_t, 'Count'),
-            (lambda s: dyn.array(ResourceString, s['Count'].li.int()), 'Name'),
+            (lambda self: dyn.array(ResourceString, self['Count'].li.int()), 'Name'),
         ]
     def __Padding(self):
         cb = 0
@@ -157,7 +157,7 @@ class ResourceReaderHeader(pstruct.type):
         rfi = self.getparent(ResourceFileInfo)
         cb += rfi['Manager'].li.size()
 
-        cb += sum(self[n].li.size() for n in ('Version', 'Count', 'Types'))
+        cb += sum(self[fld].li.size() for fld in ['Version', 'Count', 'Types'])
 
         top = ri.getoffset() + ri['Size'].li.size()
         bottom = top + cb
@@ -170,8 +170,8 @@ class ResourceReaderHeader(pstruct.type):
         (_Types, 'Types'),
         (__Padding, 'Padding'),
 
-        (lambda s: dyn.array(pint.uint32_t, s['Count'].li.int()), 'Hash'),
-        (lambda s: dyn.array(pint.uint32_t, s['Count'].li.int()), 'NameOffset'),
+        (lambda self: dyn.array(pint.uint32_t, self['Count'].li.int()), 'Hash'),
+        (lambda self: dyn.array(pint.uint32_t, self['Count'].li.int()), 'NameOffset'),
         (pint.uint32_t, 'DataOffset'),
     ]
 
@@ -185,7 +185,7 @@ class ResourceReaderData(pstruct.type):
     _fields_ = [
         (EncodedInteger, 'Type'),
         (EncodedInteger, 'Length'),
-        (lambda s: dyn.block(s['Length'].li.int()), 'Blob'),
+        (lambda self: dyn.block(self['Length'].li.int()), 'Blob'),
     ]
 
 @ResourceFileType.define
@@ -207,7 +207,7 @@ class ResourceFileInfo(pstruct.type):
         ]
 
     def __Data(self):
-        res = self.blocksize() - sum(self[n].li.size() for n in ('Manager', 'Reader'))
+        res = self.blocksize() - sum(self[fld].li.size() for fld in ['Manager', 'Reader'])
         return dyn.clone(self.ResourceData, _value_=dyn.block(res), _object_=self._ResourceData)
 
     _fields_ = [
@@ -303,11 +303,11 @@ class IMAGE_COR20_HEADER(pstruct.type):
         (CORIMAGE_FLAGS_, 'Flags'),
         (pint.uint32_t, 'EntryPoint'),
 
-        (dyn.clone(IMAGE_DATA_DIRECTORY, _object_=lambda s:dyn.blockarray(ResourceInfo, s.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int())), 'Resources'),
+        (dyn.clone(IMAGE_DATA_DIRECTORY, _object_=lambda self: dyn.blockarray(ResourceInfo, self.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int())), 'Resources'),
         (IMAGE_DATA_DIRECTORY, 'StrongNameSignature'),
 
         (IMAGE_DATA_DIRECTORY, 'CodeManagerTable'),
-        (dyn.clone(IMAGE_DATA_DIRECTORY, _object_=lambda s:dyn.blockarray(VtableFixup, s.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int())), 'VTableFixups'),
+        (dyn.clone(IMAGE_DATA_DIRECTORY, _object_=lambda self: dyn.blockarray(VtableFixup, self.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int())), 'VTableFixups'),
         (IMAGE_DATA_DIRECTORY, 'ExportAddressTableJumps'),
 
         (IMAGE_DATA_DIRECTORY, 'ManagedNativeHeader'),
@@ -517,7 +517,7 @@ class rfc4122(pstruct.type):
 class SerString(pstruct.type):
     _fields_ = [
         (CInt, 'length'),
-        (lambda s: dyn.clone(pstr.string, length=s['length'].li.Get()), 'string'),
+        (lambda self: dyn.clone(pstr.string, length=self['length'].li.Get()), 'string'),
     ]
     def str(self):
         return self['string'].str()
@@ -528,7 +528,7 @@ class SerString(pstruct.type):
 class SerBlock(pstruct.type):
     _fields_ = [
         (CInt, 'length'),
-        (lambda s: dyn.block(s['length'].li.Get()), 'data'),
+        (lambda self: dyn.block(self['length'].li.Get()), 'data'),
     ]
 
     def summary(self):
@@ -543,7 +543,7 @@ class PermissionSet(pstruct.type):
     _fields_ = [
         (pint.uint8_t, 'period'),
         (CInt, 'count'),
-        (lambda s: dyn.array(s.Attribute, s['count'].li.Get()), 'attributes'),
+        (lambda self: dyn.array(self.Attribute, self['count'].li.Get()), 'attributes'),
     ]
 
 ### Stream types
@@ -711,8 +711,8 @@ class HTables(pstruct.type):
     def __padding_Tables(self):
         hdr = self.getparent(StreamHdr)
         cb = hdr['Size'].li.int()
-        total = sum(self[n].blocksize() for _, n in self._fields_[:-1])
-        return dyn.block(max((0, cb-total)))
+        total = sum(self[fld].blocksize() for _, fld in self._fields_[:-1])
+        return dyn.block(max(0, cb - total))
 
     _fields_ = [
         (pint.uint32_t, 'Reserved'),
@@ -813,15 +813,15 @@ class TaggedIndex(CodedIndex, pstruct.type):
         all_Tables, tag_Tables = TableType.mapping(), cls.Tag.mapping()
 
         # grab the intersection of them as some table names specified by self.Tag might not exist or be defined
-        res = tag_Tables.viewkeys() & all_Tables.viewkeys()
+        res = {item for item in tag_Tables.keys()} & {item for item in all_Tables.keys()}
 
         # convert each table name specified by self.Tag into it's correct index.
         return {all_Tables[name] for name in res}
 
     class TagByte(pbinary.struct):
         _fields_ = [
-            (lambda s: 8 - s.getparent(TaggedIndex).Tag.width, 'Index'),
-            (lambda s: s.getparent(TaggedIndex).Tag, 'Tag'),
+            (lambda self: 8 - self.getparent(TaggedIndex).Tag.width, 'Index'),
+            (lambda self: self.getparent(TaggedIndex).Tag, 'Tag'),
         ]
 
         def Get(self):

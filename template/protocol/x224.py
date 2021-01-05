@@ -244,7 +244,7 @@ class TPDU(pstruct.type):
     ]
 
     def alloc(self, **fields):
-        if 'length' in fields.viewkeys():
+        if 'length' in fields.keys():
             return super(TPDU, self).alloc(**fields)
 
         res = super(TPDU, self).alloc(**fields)
@@ -287,7 +287,7 @@ class TPKT(pstruct.type):
     ]
 
     def alloc(self, **fields):
-        if 'length' in fields.viewkeys():
+        if 'length' in fields.keys():
             return super(TPKT, self).alloc(**fields)
 
         res = super(TPKT, self).alloc(**fields)

@@ -5,7 +5,7 @@ from ndk.datatypes import *
 class _REPARSE_DATA_BUFFER(pstruct.type):
     def __PathBuffer(self):
         length = self['ReparseDataLength'].li.int()
-        return dyn.clone(pstr.wstring,length=length)
+        return dyn.clone(pstr.wstring, length=length)
     _fields_ = [
         (ULONG, 'ReparseTag'),
         (USHORT,'ReparseDataLength'),
@@ -168,14 +168,14 @@ class Attribute(pstruct.type):
 
     def __Space(self):
         res = self['Residency'].li
-        cb = sum(self[n].li.size() for n in ('Id', 'Header', 'Residency'))
+        cb = sum(self[fld].li.size() for fld in ['Id', 'Header', 'Residency'])
         return dyn.block(res.Offset() - cb)
 
     def __Extra(self):
         res = self['Residency'].li
         attribute = self['Attribute'].li
         cb = res.Length() - attribute.size()
-        return dyn.block(max((0, cb)))
+        return dyn.block(max(0, cb))
 
     _fields_ = [
         (MFT_Attribute_Id, 'Id'),

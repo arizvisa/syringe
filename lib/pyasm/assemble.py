@@ -119,7 +119,7 @@ def assemble(input):
                 raise ParseError((linenum, 'unable to resolve "%s"'% columns[1]))
 
         elif opnum in hascompare:
-            cmplookup = dict([ (value,idx) for value,idx in zip(cmp_op, range(len(cmp_op))) ])
+            cmplookup = {value : idx for value, idx in zip(cmp_op, range(len(cmp_op)))}
             try:
                 val = eval(columns[1])
                 oparg = cmplookup[val]

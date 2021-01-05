@@ -32,7 +32,8 @@ class registers_INT32(object):
         return result
 
     def __repr__(self):
-        return repr( dict(((k, self[k]) for k in self.keys())) )
+        items = {k : self[k] for k in self.keys()}
+        return repr(items)
 
 #class dbgeng(default.task.base):
 class dbgeng(object):

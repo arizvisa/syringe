@@ -144,7 +144,7 @@ class ACE(pstruct.type):
 
     def __ApplicationData(self):
         res = self['Header'].li
-        return dyn.block(max((0, res['AceSize'].size() - self['Access'].li.size())))
+        return dyn.block(max(0, res['AceSize'].size() - self['Access'].li.size()))
 
     _fields_ = [
         (ACE_HEADER, 'Header'),

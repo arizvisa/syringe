@@ -18,7 +18,7 @@ class Permissions(set):
     S,R,W,X = 8,4,2,1
     Unmapped = 0
     __map = {Unmapped:'Unmapped',R:'R',W:'W',X:'X',S:'S'}
-    __unmap = dict((v,k) for k,v in __map.items())
+    __unmap = {v : k for k, v in __map.items()}
     def add(self, value):
         if value in self.__unmap.keys():
             return self.add(self.__unmap[value])
@@ -152,9 +152,9 @@ class Symbols(object, UserDict.DictMixin):
     def merge(self, other):
         assert isinstance(other, internal.AliasDict)
 
-        count = self._data.viewkeys().difference(other._data.viewkeys())
+        count = {item for item in self._data.keys()}.difference({item for item in other._data.keys()})
         self._data.update(other)
-        [self._scope[sc].update(data) for sc,data in other._scope]
+        [self._scope[sc].update(data) for sc, data in other._scope]
         return count
 
     # aliases
@@ -166,11 +166,11 @@ class Symbols(object, UserDict.DictMixin):
         return self._data.unalias(name)[0]
 
     # general
-    def getglobals(self): return set(self._scope[Scope.Global])
-    def getlocals(self): return set(self._scope[Scope.Local])
-    def getexternals(self): return set(self._scope[Scope.External])
-    def getaliases(self): return set(self._data.aliases())
-    def getundefined(self): return set(k for k,v in self._data.items() if v is None)
+    def getglobals(self): return {item for item in self._scope[Scope.Global]}
+    def getlocals(self): return {item for item in self._scope[Scope.Local]}
+    def getexternals(self): return {item for item in self._scope[Scope.External]}
+    def getaliases(self): return {item for item in self._data.aliases()}
+    def getundefined(self): return {k for k, v in self._data.items() if v is None}
 
 class Segments(collections.MutableMapping):
     """This object contains the segments for a store.

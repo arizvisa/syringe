@@ -63,7 +63,7 @@ reg_xmm = {
 
 ### now invert them because i'm an asshole
 for d in (reg_8, reg_16, reg_32, reg_mmx, reg_xmm):
-    d.update( dict(((v,k) for k,v in d.items())) )
+    d.update({v : k for k, v in d.items()})
 
 ### mod/rm bits
 mod_8 = dict(reg_8)

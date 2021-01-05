@@ -117,7 +117,7 @@ class IMAGE_SECTION_HEADER(pstruct.type):
     def getloadedsize(self):
 
         nt = self.getparent(Header)
-        alignment = max((nt['OptionalHeader']['SectionAlignment'].int(), 0x1000))
+        alignment = max(nt['OptionalHeader']['SectionAlignment'].int(), 0x1000)
 
         # XXX: even though the loadedsize is aligned to SectionAlignment,
         #      the loader doesn't actually map data there and thus the
