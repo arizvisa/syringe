@@ -297,8 +297,8 @@ if __name__ == '__main__':
     import ptypes, protocol.x224 as x224
 
 ### connection request
-    data = "030000221de00000000000" + "Cookie: mstshash=hash\r\n".encode('hex')
-    ptypes.setsource(ptypes.prov.string(data.decode('hex')))
+    data = "030000221de00000000000" + str().join(map("{:02x}".format, bytearray(b'Cookie: mstshash=hash\r\n')))
+    ptypes.setsource(ptypes.prov.bytes(bytes(bytearray.fromhex(data))))
 
     a = x224.TPKT()
     a = a.l

@@ -52,6 +52,8 @@ class Name(pstruct.type):
         if isinstance(value, six.integer_types):
             res = pint.uint16_t().set(0xc000 | value)
             return self.load(source=ptypes.prov.bytes(res.serialize()))
+        elif isinstance(value, bytes) and len(value) < 0x40:
+            return self.alloc(length=len(value), string=value)
         elif isinstance(value, six.string_types) and len(value) < 0x40:
             return self.alloc(length=len(value), string=value.encode('ascii'))
         elif isinstance(value, six.string_types) and len(value) < 0xc0:

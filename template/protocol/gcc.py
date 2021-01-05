@@ -1,7 +1,7 @@
 '''
 Generic Conference Control protocol (T.124)
 '''
-import ptypes
+import sys, ptypes
 from ptypes import *
 
 from protocol import ber, per
@@ -205,7 +205,7 @@ class ConferenceName(ptype.type):
 
         def alloc(self, **fields):
             res = super(ConferenceName.Header, self).alloc(**fields)
-            return res if 'length' in fields else res.set(length=max((0, len(res['name']) - 1)))
+            return res if 'length' in fields else res.set(length=max(0, len(res['name']) - 1))
 
 class TerminationMethod(ptype.type):
     class Header(pbinary.flags):
@@ -352,11 +352,12 @@ class H221NonStandardIdentifier(pstruct.type):
 
     def alloc(self, **fields):
         res = super(H221NonStandardIdentifier, self).alloc(**fields)
-        return res if 'length' in fields else res.set(length=max((0, res['h221NonStandard'].size() - 4)))
+        return res if 'length' in fields else res.set(length=max(0, res['h221NonStandard'].size() - 4))
 
     def summary(self):
-        res = self['length'].li
-        return "length={:d} h221NonStandard=\"{:s}\"".format(res.int(), self['h221NonStandard'].serialize().encode('unicode_escape').replace('"', '\\"'))
+        res, standard = self['length'].li, self['h221NonStandard'].serialize().decode('latin1')
+        encoded = standard.encode('unicode_escape')
+        return "length={:d} h221NonStandard=\"{:s}\"".format(res.int(), encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'))
 
 ### GCC Definitions
 @RequestPDU.define

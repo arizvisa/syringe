@@ -54,15 +54,15 @@ class linkflag_t(pstr.char_t):
 
 class linkflag(pint.enum, linkflag_t):
     _values_ = [
-        ('REGTYPE',  '0'),  # regular file
-        ('AREGTYPE', '\0'), # regular file
-        ('LNKTYPE',  '1'),  # link
-        ('SYMTYPE',  '2'),  # reserved
-        ('CHRTYPE',  '3'),  # character special
-        ('BLKTYPE',  '4'),  # block special
-        ('DIRTYPE',  '5'),  # directory (in this case, the size field has no meaning)
-        ('FIFOTYPE', '6'),  # FIFO special (archiving a FIFO file archives its existence, not contents)
-        ('CONTTYPE', '7'),  # reserve
+        ('REGTYPE',  b'0'),  # regular file
+        ('AREGTYPE', b'\0'), # regular file
+        ('LNKTYPE',  b'1'),  # link
+        ('SYMTYPE',  b'2'),  # reserved
+        ('CHRTYPE',  b'3'),  # character special
+        ('BLKTYPE',  b'4'),  # block special
+        ('DIRTYPE',  b'5'),  # directory (in this case, the size field has no meaning)
+        ('FIFOTYPE', b'6'),  # FIFO special (archiving a FIFO file archives its existence, not contents)
+        ('CONTTYPE', b'7'),  # reserve
     ]
     _values_ = [(_, six.byte2int(by)) for _, by in _values_]
 
@@ -80,21 +80,21 @@ class common_t(pstruct.type):
     ]
 
     def summary(self):
-        filename = self['filename'].str()
+        filename = self['filename'].str().encode('unicode_escape').decode(sys.getdefaultencoding())
         mode, uid, gid, sz = (self[fld] for fld in ['mode', 'uid', 'gid', 'size'])
         mtime, checksum = (self[fld] for fld in ['mtime', 'checksum'])
-        return "filename=\"{:s}\" size={:#x} mode={:04d} uid={:d} gid={:d} mtime={:#x} checksum={:#x} linkflag={:s}{:s}".format(filename.encode('unicode_escape'), sz.int(), mode.int(), uid.int(), gid.int(), mtime.int(), checksum.int(), self['linkflag'].summary(), " linkname={:s}".format(self['linkname'].str()) if self['linkflag']['LNKTYPE'] else '')
+        return "filename=\"{:s}\" size={:#x} mode={:04d} uid={:d} gid={:d} mtime={:#x} checksum={:#x} linkflag={:s}{:s}".format(filename.replace('"', '\\"'), sz.int(), mode.int(), uid.int(), gid.int(), mtime.int(), checksum.int(), self['linkflag'].summary(), " linkname={:s}".format(self['linkname'].str()) if self['linkflag']['LNKTYPE'] else '')
 
     def isempty(self):
         return False
 
     def listing(self):
-        name = self['filename'].str()
+        name = self['filename'].str().encode('unicode_escape').decode(sys.getdefaultencoding())
         mode = self['mode'].int()
         uid, gid = self['uid'].int(), self['gid'].int()
         size = self['size'].int()
         mtime, checksum = self['mtime'].int(), self['checksum'].int()
-        return "\"{:s}\" {:s} size={:#x} mode={:04o} uid={:d} gid={:d} mtime={:#x} checksum={:#x}".format(name.encode('unicode_escape'), self['linkflag'].summary(), size, mode, uid, gid, mtime, checksum) + (" -> {:s}".format(self['linkname'].str().encode('unicode_escape')) if self['linkflag']['LNKTYPE'] else '')
+        return "\"{:s}\" {:s} size={:#x} mode={:04o} uid={:d} gid={:d} mtime={:#x} checksum={:#x}".format(name.replace('"', '\\"'), self['linkflag'].summary(), size, mode, uid, gid, mtime, checksum) + (" -> {:s}".format(self['linkname'].str().encode('unicode_escape').decode(sys.getdefaultencoding())) if self['linkflag']['LNKTYPE'] else '')
 
 ### Extended headers
 class header(ptype.definition):
@@ -176,9 +176,8 @@ class header_t(pstruct.type):
         return res.member_size()
 
     def listing(self):
-        res = self['magic'].str()
-        iterable = ( self[fld].listing() for fld in ['common', 'extended', 'member'] if hasattr(self[fld], 'isempty') and not self[fld].isempty() )
-        return "{:s}{:s}".format("<{:s}> ".format(res.encode('unicode_escape')) if res else '', ' | '.join(iterable))
+        magic, iterable = self['magic'].str(), (self[fld].listing() for fld in ['common', 'extended', 'member'] if hasattr(self[fld], 'isempty') and not self[fld].isempty())
+        return "{:s}{:s}".format("<{:s}> ".format(magic.encode('unicode_escape').decode(sys.getdefaultencoding())) if magic else '', ' | '.join(iterable))
 
     def dump(self):
         res = []
@@ -244,8 +243,8 @@ class header_old_member(pstruct.type):
     ]
 
     def summary(self):
-        res = self['pad'].str()
-        return "pad=\"{:s}\"".format(res.encode('unicode_escape'))
+        padding = self['pad'].str().encode('unicode_escape').decode(sys.getdefaultencoding())
+        return "pad=\"{:s}\"".format(padding.replace('"', '\\"'))
 
     def isempty(self):
         return self['pad'].str() == ""
@@ -272,8 +271,8 @@ class header_ustar_member(pstruct.type):
     ]
 
     def summary(self):
-        prefix = self['prefix'].str()
-        return "prefix=\"{:s}\" padding={:s}".format(prefix.encode('unicode_escape'), self['padding'].summary())
+        prefix = self['prefix'].str().encode('unicode_escape').decode(sys.getdefaultencoding())
+        return "prefix=\"{:s}\" padding={:s}".format(prefix.replace('"', '\\"'), self['padding'].summary())
 
     def isempty(self):
         return self['prefix'].str() == ""

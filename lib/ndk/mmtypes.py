@@ -1,4 +1,4 @@
-import ptypes
+import sys, ptypes
 from ptypes import *
 
 from .datatypes import *
@@ -66,8 +66,9 @@ class POOL_HEADER(pstruct.type, versioned):
     ]
 
     def summary(self):
-        res = self['Ulong1']
-        return "\"{:s}\" {:s}".format(self['PoolTag'].str().encode('escape_unicode').replace('"', '\\"'), res.summary())
+        res, tag = self['Ulong1'], self['PoolTag'].str()
+        encoded = tag.encode('unicode_escape')
+        return "\"{:s}\" {:s}".format(encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'), res.summary())
 
 class POOL_FREE_CHUNK(pstruct.type, versioned): pass
 class POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):

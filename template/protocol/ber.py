@@ -414,10 +414,11 @@ class OBJECT_IDENTIFIER(ptype.type):
         return '0'
 
     def summary(self):
-        oid,data = self.str(),self.serialize().encode('hex')
+        oid, data = self.str(), self.serialize()
+        hexed = str().join(map("\\x{:02x}".format, bytearray(data)))
         if oid in self._values_:
-            return '{:s} ({:s}) ({:s})'.format(self._values_[oid],oid,data)
-        return '{:s} ({:s})'.format(oid,data)
+            return '{:s} ({:s}) ({:s})'.format(self._values_[oid], oid, hexed)
+        return '{:s} ({:s})'.format(oid, hexed)
 
     # https://support.microsoft.com/en-us/help/287547/object-ids-associated-with-microsoft-cryptography
     _values_ = [

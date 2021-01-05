@@ -102,11 +102,12 @@ class ShortName(pstruct.type):
         return stringtable.extract( self['Offset'].int() )
 
     def set(self, string):
-        if len(string) <= 8:
-            return self.load(source=ptypes.provider.bytes(string.encode(sys.getdefaultencoding()) + b'\x00' * (8 - len(string))), offset=0)
+        encoded = string if isinstance(string, bytes) else string.encode('latin1')
+        if len(encoded) <= 8:
+            return self.load(source=ptypes.provider.bytes(encoded + b'\0' * (8 - len(encoded))), offset=0)
 
         table = self.getparent(SymbolTableAndStringTable)
-        res = table.AddString(string)
+        res = table.AddString(encoded)
 
         self['IsShort'].set(0)
         self['Offset'].set(res)
@@ -293,16 +294,16 @@ class StringTable(pstruct.type):
 
     def add(self, string):
         '''appends a string to string table, returns offset'''
-        res = string.encode(sys.getdefaultencoding()) + b'\0'
-        ofs, data = self.size(), self['Data']
-        data.length, data.value = data.length + len(res), data.serialize() + res
+        res, nullbyte = string if isinstance(string, bytes) else string.encode('latin1'), b'\0'
+        offset, data = self.size(), self['Data']
+        data.length, data.value = data.length + len(res) + len(nullbyte), data.serialize() + res + nullbyte
         self['Size'].set(data.size() + self['Size'].size())
-        return ofs
+        return offset
 
     def find(self, string):
         '''returns the offset of the specified string within the string table'''
-        res, data = string.encode(sys.getdefaultencoding()) + b'\0', self['Data'].serialize()
-        index = data.find(res)
+        res, nullbyte, data = string if isinstance(string, bytes) else string.encode('latin1'), b'\0', self['Data'].serialize()
+        index = data.find(res + nullbyte)
         if index == -1:
             raise LookupError("{:s} : Unable to find null-terminated string ({!r}) within string table".format(self.instance(), string))
         return index + self['Size'].size()
@@ -354,9 +355,9 @@ class SymbolTableAndStringTable(pstruct.type):
 
     def AddString(self, string):
         '''Add the specified `string` to the 'Strings' table and return the offset into the table'''
-        table = self['Strings']
-        res = table.add(string)
-        logging.info("{:s} : added a new string to string table {:s} at offset {:d} : {!r}".format(self.instance(), table.instance(), res, string))
+        table, item = self['Strings'], string if isinstance(string, bytes) else string.encode('latin1')
+        res = table.add(item)
+        logging.info("{:s} : added a new string to string table {:s} at offset {:d} : {!r}".format(self.instance(), table.instance(), res, string.decode('latin1') if isinstance(string, bytes) else string))
         return res
 
     ## symbol discovery and construction

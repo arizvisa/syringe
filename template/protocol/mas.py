@@ -1,7 +1,7 @@
 '''
 Multipoint Application Sharing protocol (T.128)
 '''
-import functools, itertools, types, builtins, operator, six
+import functools, itertools, types, builtins, operator, sys, six
 
 import ptypes, protocol.gcc as gcc
 from ptypes import *
@@ -435,7 +435,7 @@ class CapabilitySet(pstruct.type):
     def __capabilityParameters(self):
         type, capacity = (self[fld].li for fld in ['capabilitySetType','lengthCapability'])
         total = type.size() + capacity.size()
-        return CapabilitySetType.get(type.int(), blocksize=lambda self, cb=max((0, capacity.int() - total)): cb)
+        return CapabilitySetType.get(type.int(), blocksize=lambda self, cb=max(0, capacity.int() - total): cb)
 
     _fields_ = [
         (CapabilitySetType.Choice, 'capabilitySetType'),
@@ -509,7 +509,7 @@ class ShareControlPDU(pstruct.type):
         # that gets chosen as shareControlPacket
         res = self['shareControlHeader'].li
         total = length.size() + res.size()
-        return PDUType.get(res['pduType']['type'], ptype.block, blocksize=lambda self, cb=max((0, length.int() - total)): cb)
+        return PDUType.get(res['pduType']['type'], ptype.block, blocksize=lambda self, cb=max(0, length.int() - total): cb)
 
     _fields_ = [
         (ShareControlHeader, 'shareControlHeader'),
@@ -518,9 +518,9 @@ class ShareControlPDU(pstruct.type):
 
 class SourceDescriptor(ptype.block):
     def summary(self):
-        data = self.serialize()
-        res = data.encode('unicode_escape')
-        return "({:d}) \"{:s}\"".format(self.size(), res.replace('"', '\\"'))
+        data = self.serialize().decode('latin1')
+        encoded = data.encode('unicode_escape')
+        return "({:d}) \"{:s}\"".format(self.size(), encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'))
 
 @PDUType.define
 class DemandActivePDU(pstruct.type):
@@ -594,8 +594,9 @@ class DeactivateOtherPDU(DeactivatePDU):
         return res.set(**flds) if flds else res
 
     def summary(self):
-        res = self['sourceDescriptor'].serialize()
-        return "shareId={:s} deactivateId={:s} sourceDescriptor=\"{:s}\"".format(self['shareId'].summary(), self['deactivateId'].summary(), res.encode('unicode_escape'))
+        res = self['sourceDescriptor'].serialize().decode('latin1')
+        encoded = res.encode('unicode_escape')
+        return "shareId={:s} deactivateId={:s} sourceDescriptor=\"{:s}\"".format(self['shareId'].summary(), self['deactivateId'].summary(), encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'))
 
 @PDUType.define
 class DeactivateSelfPDU(DeactivatePDU):
@@ -623,8 +624,9 @@ class DeactivateAllPDU(DeactivatePDU):
         # we'll explicitly check for the abated property before dumping it out
         # regularly.
         if not res.get('abated', False):
-            res = self['sourceDescriptor'].serialize()
-            return "shareId={:s} sourceDescriptor=\"{:s}\"".format(self['shareId'].summary(), res.encode('unicode_escape'))
+            res = self['sourceDescriptor'].serialize().decode('latin1')
+            encoded = res.encode('unicode_escape')
+            return "shareId={:s} sourceDescriptor=\"{:s}\"".format(self['shareId'].summary(), encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'))
 
         # Otherwise, the structure is abated so we'll emit the parent's summary
         return super(DeactivateAllPDU, self).summary()
@@ -654,12 +656,12 @@ class ShareDataPacket(pstruct.type):
     def __data(self):
         res = sum(self[fld].li.size() for fld in ['pduType2','compressedType','compressedLength'])
         if self['compressedType']['COMPRESSED']:
-            return dyn.block(max((0, self.blocksize() - res)))
-        return PDUType2.withdefault(self['pduType2'].li.int(), ptype.block, length=max((0, self.blocksize() - res)))
+            return dyn.block(max(0, self.blocksize() - res))
+        return PDUType2.withdefault(self['pduType2'].li.int(), ptype.block, length=max(0, self.blocksize() - res))
 
     def __unparsed(self):
         res = sum(self[fld].li.size() for fld in ['pduType2','compressedType','compressedLength','data'])
-        return dyn.block(max((0, self.blocksize() - res)))
+        return dyn.block(max(0, self.blocksize() - res))
 
     _fields_ = [
         (PDUType2.type, 'pduType2'),
