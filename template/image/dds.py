@@ -1,11 +1,11 @@
 import ptypes
 from ptypes import *
-import six
+import functools
 
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
-intofdata = lambda data: six.moves.reduce(lambda t, c: t * 256 | c, reversed(bytearray(data)), 0)
-_dataofint = lambda integer: ((integer == 0) and b'\0') or (_dataofint(integer // 256).lstrip(b'\0') + six.int2byte(integer % 256))
+intofdata = lambda data: functools.reduce(lambda t, c: t * 256 | c, reversed(bytearray(data)), 0)
+_dataofint = lambda integer: ((integer == 0) and b'\0') or (_dataofint(integer // 256).lstrip(b'\0') + bytes(bytearray([integer % 256])[:1]))
 dataofint = lambda integer, be=_dataofint: bytes(bytearray(reversed(bytearray(be(integer)))))
 
 ## primitive types

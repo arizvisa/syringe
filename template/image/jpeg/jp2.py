@@ -1,4 +1,4 @@
-import ptypes, logging, operator, math, six
+import ptypes, logging, operator, math, functools
 
 from ptypes import *
 from . import codestream, intofdata, dataofint
@@ -812,7 +812,7 @@ class SIZ(pstruct.type):
         width = self['Xsiz'].int() - self['XOsiz'].int()
         height = self['Ysiz'].int() - self['YOsiz'].int()
         X, Y = (item / self[fld].int() for fld, item in zip(['XTsiz', 'YTsiz'], [width, height]))
-        return six.moves.reduce(operator.mul, map(math.ceil, [X, Y]))
+        return functools.reduce(operator.mul, map(math.ceil, [X, Y]))
 
 class Scod(pbinary.flags):
     _fields_ = [

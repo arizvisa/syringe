@@ -239,7 +239,7 @@ class RecordContainer(parray.block):
             return classname
         def emit_summary(_, records):
             if len(records) > 1:
-                res = bytes().join(item.serialize() for index, item in records)
+                res = b''.join(item.serialize() for index, item in records)
                 return ptypes.utils.emit_repr(res, ptypes.Config.display.threshold.summary) or '...'
             (_, record), = records
             return record.summary()

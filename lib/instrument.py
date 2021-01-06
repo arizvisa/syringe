@@ -5,7 +5,7 @@ an instance of a memorymanager.
 This module is also pretty stupid and shouldn't really be used without the python stub.
 '''
 
-import six,struct,ia32
+import functools,struct,ia32
 class instruction(object):
     """
     This is only for hooking 32-bit x86. oh and it's not threadsafe...not
@@ -85,7 +85,7 @@ class instruction(object):
         code
         '''
         loaded = self.loaded
-        return six.moves.reduce(lambda x,y: len(y)+x, loaded.values(), 0)
+        return functools.reduce(lambda x,y: len(y)+x, loaded.values(), 0)
 
     def __calculategluelength(self):
         '''

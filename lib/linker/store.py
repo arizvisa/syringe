@@ -62,7 +62,7 @@ objects
     the only thing in this module to care about is the base.
 '''
 
-import six,logging,warnings,array,bisect
+import six,functools,operator,logging,warnings,array,bisect
 class DuplicateSymbol(Warning): pass
 class UninitializedSymbol(Warning): pass
 
@@ -451,8 +451,8 @@ class base(symboltable):
         return list(result.intersection(self.scope[ExternalScope]))
 
     def dump(self):
-        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in six.integer_types]()) for k in self.getglobals()]
-        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[type(self[k]) in six.integer_types]()) for k in self.getlocals()]
+        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[isinstance(self[k], six.integer_types)]()) for k in self.getglobals()]
+        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[isinstance(self[k], six.integer_types)]()) for k in self.getlocals()]
         gs = "globals:{!r}".format(g)
         ls = "locals:{:d}".format(len(l))
         return '\n'.join((gs,ls))
@@ -619,7 +619,7 @@ class container(base):
 
     def getsegmentlength(self, name):
         segments = self.storesegments[name]
-        return six.moves.reduce(lambda a,b:a+b, (st.getsegmentlength(n) for i,n,st in segments))
+        return functools.reduce(operator.add, (st.getsegmentlength(n) for i,n,st in segments))
 
     def getsegmentprotection(self, name):
         segments = self.storesegments[name]

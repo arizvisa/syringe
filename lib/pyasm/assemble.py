@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import six, struct
+import functools, struct
 from opcode import *
 
 class ParseError(SyntaxError): pass
@@ -44,7 +44,7 @@ def assemble_insn(opnum, oparg):
 
 def valid_label(s):
     valid = 'abcdefghijklmnopqrstuvwxyz0123456789.?_'
-    return six.moves.reduce( lambda x,y: x+y, [int(x in valid) for x in s] ) == len(s)
+    return functools.reduce( lambda x,y: x+y, [int(x in valid) for x in s] ) == len(s)
 
 def strip_comment(s):
     comm = s.find('#')

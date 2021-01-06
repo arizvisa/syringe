@@ -1,5 +1,5 @@
 import abc,itertools,operator,weakref
-import six,collections,sets,sparse
+import functools,collections,sets,sparse
 
 class OrderedDict(collections.OrderedDict): pass
 
@@ -12,7 +12,7 @@ class OrderedSet(sets.Set):
 
     def add(self, element):
         if element in self._data:
-            raise TypeError, "Element already exists within set %s: %r"% (object.__repr__(self), element)
+            raise TypeError("Element already exists within set %s: %r"% (object.__repr__(self), element))
         return super(OrderedSet,self).add(element)
 
 class AliasDict(collections.MutableMapping):
@@ -76,7 +76,7 @@ class AliasDict(collections.MutableMapping):
             # validate
             for n in aliases:
                 if n in self._data:
-                    raise KeyError, "Alias %r already exists as a target in AliasDict %s"% (n, object.__repr__(self))
+                    raise KeyError("Alias %r already exists as a target in AliasDict %s"% (n, object.__repr__(self)))
                 continue
 
             create_count = 0
@@ -85,7 +85,7 @@ class AliasDict(collections.MutableMapping):
                     create_count += 1
                 self._aliases[n] = target
             return create_count
-        raise KeyError, "Target %r does not exist within AliasDict %s"% (target, object.__repr__(self))
+        raise KeyError("Target %r does not exist within AliasDict %s"% (target, object.__repr__(self)))
     def unalias(self, *aliases):
         return [self._aliases.pop(n) for n in aliases]
 
@@ -103,7 +103,7 @@ class HookedDict(AliasDict):
     def hook(self, key, fn, args=(), kwds={}):
         target = self._getkey(key)
         if target not in self._data:
-            raise KeyError, "Target %r does not exist within HookDict %s"% (key, object.__repr__(self))
+            raise KeyError("Target %r does not exist within HookDict %s"% (key, object.__repr__(self)))
         res = self.__hooks.pop(target) if target in self.__hooks else None
         self.__hooks[target] = lambda s,k,v,fn=fn,args=tuple(args),kwds=dict(kwds): fn(s,k,v,*args,**kwds)
         return res
@@ -150,7 +150,7 @@ class MergedMapping(collections.MutableMapping):
 
     def add(self, d):
         if id(d) in map(id,self._data):
-            raise ReferenceError, 'Dictionary %s already exists in MergedDict %s'%(object.__repr__(d), object.__repr__(self))
+            raise ReferenceError('Dictionary %s already exists in MergedDict %s'%(object.__repr__(d), object.__repr__(self)))
         ref = weakref.ref(d)
         self._data.append(ref)
         return self._sync(d)
@@ -174,10 +174,12 @@ class MergedMapping(collections.MutableMapping):
         return len(new)
 
     def sync(self):
-        res = set(itertools.chain(*(x.viewkeys() for x in self._data if x() is not None)))
-        cur = set(self._cache.viewkeys())
+        items = (item for item in self._data if item() is not None)
+        allkeys = itertools.chain(*(item.viewkeys() for item in items))
+        res = {item for item in allkeys}
+        cur = {item for item in self._cache.keys()}
         [self._cache.pop(k) for k in cur.difference(res)]
-        return six.moves.reduce(operator.add, (self._sync(r()) for r in self._data))
+        return functools.reduce(operator.add, (self._sync(r()) for r in self._data))
 
     def __setitem__(self, key, value):
         res = self._cache[key]
@@ -189,7 +191,7 @@ class MergedMapping(collections.MutableMapping):
         results = [d[key] for d in self._cache[key]]
         res = results.pop(0)
         if not all(x == res for x in results):
-            raise KeyError, 'More than one differnet value was returned'
+            raise KeyError('More than one differnet value was returned')
         return res
 
     def __delitem__(self, key):

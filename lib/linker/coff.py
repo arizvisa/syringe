@@ -1,4 +1,4 @@
-import os,array
+import os,array,functools
 import pecoff,ptypes
 import six,logging,warnings
 from . import store
@@ -155,7 +155,7 @@ class linktable(dict):
         return result
 
     def size(self):
-        return six.moves.reduce(lambda x,y: x+y.size(), self.itervalues())
+        return functools.reduce(lambda x,y: x+y.size(), self.itervalues())
 
 class table_eat(linktable):
     '''coff export address table'''
