@@ -22,7 +22,7 @@ Table = make_crc_table()
 
 def update_crc(crc, data, table):
     res = crc
-    for b in array.array('B', data):
+    for b in bytearray(data):
         res = table[(res ^ b) & 0xff] ^ (res >> 8)
     return res
 

@@ -110,7 +110,7 @@ if __name__ == '__main__':
 
         properties.append((assembly[mi], ma, res))
         mn, mid = next((mn, mid) for mn, mid in modules if mn.startswith(assembly[mi]))
-        six.print_('{:s}\t{:s}{:s}\t{:s}\t{:s}:{:s}'.format(filename, mn, mid or '', assembly[mi], ma, ','.join('{:s}={:d}'.format(k, v) for k, v in res.viewitems())), file=sys.stdout)
+        six.print_('{:s}\t{:s}{:s}\t{:s}\t{:s}:{:s}'.format(filename, mn, mid or '', assembly[mi], ma, ','.join('{:s}={:d}'.format(k, v) for k, v in res.items())), file=sys.stdout)
 
     else:
         if not properties:

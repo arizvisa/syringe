@@ -30,9 +30,9 @@ class AliasDict(collections.MutableMapping):
     def _getaliases(self, target):
         return set(k for k,v in self._aliases.items() if v == target)
     def _listkeys(self):
-        return self._data.viewkeys()
+        return {item for item in self._data.keys()}
     def _listaliases(self):
-        return self._aliases.viewkeys()
+        return {item for item in self._aliases.keys()}
 
     # abstract methods
     def __setitem__(self, key, value):
@@ -161,8 +161,8 @@ class MergedMapping(collections.MutableMapping):
         return self.sync()
 
     def _sync(self, d):
-        cur = set(self._cache.viewkeys())
-        new = set(list(d))
+        cur = {item for item in self._cache.keys()}
+        new = {item for item in d}
         ref = weakref.ref(d)
 
         for n in cur.intersection(new):
@@ -175,7 +175,7 @@ class MergedMapping(collections.MutableMapping):
 
     def sync(self):
         items = (item for item in self._data if item() is not None)
-        allkeys = itertools.chain(*(item.viewkeys() for item in items))
+        allkeys = itertools.chain(*(item.keys() for item in items))
         res = {item for item in allkeys}
         cur = {item for item in self._cache.keys()}
         [self._cache.pop(k) for k in cur.difference(res)]

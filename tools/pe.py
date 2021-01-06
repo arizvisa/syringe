@@ -368,7 +368,8 @@ def collectresources(entry):
     return res
 
 def dumpresources(r):
-    for n in sorted(six.viewkeys(r), key="{!s}".format):
+    keys = {item for item in r.keys()}
+    for n in sorted(keys, key="{!s}".format):
         if isinstance(r[n], dict):
             for p in dumpresources(r[n]):
                 yield (n,) + p

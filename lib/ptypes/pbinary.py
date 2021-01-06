@@ -522,7 +522,7 @@ class enum(integer):
         for value, items in itertools.groupby(self._values_, operator.itemgetter(0)):
             res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
 
-        for value, items in six.viewitems(res):
+        for value, items in res.items():
             if len(items) > 1:
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
             continue

@@ -114,4 +114,4 @@ if __name__ == '__main__':
             attributes.append(res)
         res = {}
         map(res.update, attributes)
-        six.print_('\t{:s} : {:s} : {:s}'.format(assembly[mi], ma, ', '.join('{:s}={:s}'.format(k, strify(v)) for k, v in res.viewitems())), file=sys.stdout)
+        six.print_('\t{:s} : {:s} : {:s}'.format(assembly[mi], ma, ', '.join('{:s}={:s}'.format(k, strify(v)) for k, v in res.items())), file=sys.stdout)

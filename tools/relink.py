@@ -60,18 +60,18 @@ class LinkerInternal(DictionaryBase):
     def apply(cls, segment, segmentbase, relocation, symbolbase, symbolvalue):
         offset, type = relocation['VirtualAddress'].int(), relocation['Type']
         if type['REL32']:
-            res = reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
+            res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue) - (segmentbase + offset + 4)
             data = [(res & (0x100 ** octet * 0xff)) // 0x100 ** octet for octet in range(4)]
         elif type['ADDR32NB']:
-            res = reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
+            res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue)
             data = [(res & (0x100 ** octet * 0xff)) // 0x100 ** octet for octet in range(4)]
         elif type['ADDR32']:
             raise TypeError(type)   # This would make the code non-relocatable
         elif type['DIR32NB']:
             raise TypeError(type)   # Untested..
-            res = reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
+            res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += symbolvalue
         elif type['DIR32']:
             raise TypeError(type)   # This would make the code non-relocatable
@@ -91,7 +91,8 @@ class LinkerInternal(DictionaryBase):
         return fmt('') if value is None else fmt("{:+#x}".format(value))
 
     def __iter__(self):
-        for name in reduce(operator.or_, map(six.viewkeys, (self.__undefined, self.__defined))):
+        items = ({key for key in item.keys()} for item in [self.__undefined, self.__defined])
+        for name in functools.reduce(operator.or_, items):
             yield name
         return
 
