@@ -68,7 +68,6 @@ Example usage:
 import sys, six
 import itertools, operator, functools
 import codecs
-from six.moves import builtins
 
 from . import ptype, parray, pint, utils, error, pstruct, provider, config
 Config = config.defaults
@@ -421,7 +420,7 @@ class szstring(string):
         obj = self.new(self._object_, offset=ofs)
         size = obj.blocksize()
 
-        getchar = lambda: bytes().join(itertools.islice(stream, size))
+        getchar = lambda: b''.join(itertools.islice(stream, size))
 
         self.value = b''
         while True:

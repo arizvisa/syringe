@@ -1,7 +1,6 @@
 #bitmap = (integer, bits)
-import six, sys, math
+import six, builtins, sys, math
 import functools, operator, itertools, types
-from six.moves import builtins
 
 ## start somewhere
 def new(value, size):

@@ -450,7 +450,7 @@ class uninitialized(terminated):
     def serialize(self):
         '''Serialize all currently available content of the array.'''
         iterable = itertools.takewhile(lambda item: item.initializedQ() or item.size() > 0, self.value)
-        return bytes().join(item.serialize() for item in iterable)
+        return b''.join(item.serialize() for item in iterable)
 
 class infinite(uninitialized):
     '''An array that reads elements until an exception or interrupt happens'''
@@ -669,10 +669,11 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,array,random
+    import ptypes,sys,array,random
     from ptypes import pstruct,parray,pint,provider,utils,dynamic,ptype
     import string
 
+    arraytobytes = operator.methodcaller('tostring' if sys.version_info.major < 3 else 'tobytes')
     class RecordGeneral(pstruct.type):
         _fields_ = [
             (pint.uint8_t, 'start'),
@@ -866,14 +867,15 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_infinite_nested_partial():
+        import sys, operator
         class fakefile(object):
-            d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((0xdead*x)&0xffffffff for x in range(0x100)))
-            d = array.array('B', bytearray(d.tostring() + b'\xde\xad\xde\xad'))
+            d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((item * 0xdead) & 0xffffffff for item in range(0x100)))
+            d = array.array('B', bytearray(arraytobytes(d) + b'\xde\xad\xde\xad'))
             o = 0
             def seek(self, ofs):
                 self.o = ofs
             def read(self, amount):
-                r = self.d[self.o:self.o+amount].tostring()
+                r = arraytobytes(self.d[self.o : amount + self.o])
                 self.o += amount
                 return r
         strm = provider.stream(fakefile())

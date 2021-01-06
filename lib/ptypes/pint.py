@@ -135,9 +135,8 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print(instance.str())
 """
-import six
+import six, builtins
 import functools, operator, itertools
-from six.moves import builtins
 
 from . import ptype, bitmap, config, error, utils
 Config = config.defaults
@@ -374,7 +373,7 @@ class enum(type):
         for value, items in itertools.groupby(self._values_, operator.itemgetter(0)):
             res.setdefault(value, set()).update(map(operator.itemgetter(1), items))
 
-        for value, items in six.viewitems(res):
+        for value, items in res.items():
             if len(items) > 1:
                 Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
             continue
@@ -492,7 +491,7 @@ class enum(type):
         raise KeyError(cls, 'enum.byname', name)
 
 # update our current state
-for _, definition in builtins.list(six.viewitems(globals())):
+for _, definition in sorted(globals().items()):
     if definition in [type] or getattr(definition, '__base__', type) is type:
         continue
     if isinstance(definition, builtins.type) and issubclass(definition, type):

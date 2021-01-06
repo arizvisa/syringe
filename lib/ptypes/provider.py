@@ -50,11 +50,10 @@ Example usage:
     instance.commit(source=ptypes.provider.name(...))
     print( repr(instance) )
 """
-import six
+import six, builtins
 import sys, os
 import itertools, operator, functools
 import importlib, array, random as _random
-from six.moves import builtins
 
 from . import config, utils, error
 Config = config.defaults
@@ -217,7 +216,7 @@ class proxy(bounded):
         self.offset = 0
 
         valid = {'autocommit', 'autoload'}
-        res = six.viewkeys(kwds) - valid
+        res = {item for item in kwds.keys()} - valid
         if res - valid:
             raise error.UserError(self, '__init__', message="Invalid keyword(s) specified. Expected ({!r}) : {!r}".format(valid, tuple(res)))
 
@@ -529,7 +528,7 @@ class stream(base):
 
     def __init__(self, source, offset=0):
         self.source = source
-        self.data = array.array('B')
+        self.data = bytearray()
         self.data_ofs = self.offset = offset
 
     def seek(self, offset):
@@ -551,7 +550,7 @@ class stream(base):
             raise EOFError
 
         data = self._read(amount)
-        self.data.extend( array.array('B', bytearray(data)) )
+        self.data.extend(bytearray(data))
         if len(data) < amount:    # XXX: this really can't be the only way(?) that an instance
                                   #      of something ~fileobj.read (...) can return for a 
             self.eof = True
@@ -564,7 +563,7 @@ class stream(base):
         result = self.data[:amount]
         del(self.data[:amount])
         self.data_ofs += amount
-        return result
+        return builtins.bytes(result)
 
     ###
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
@@ -576,7 +575,7 @@ class stream(base):
 
         # select the requested data
         if (self.eof) or (o + amount <= len(self.data)):
-            result = self.data[o : o + amount].tostring()
+            result = builtins.bytes(self.data[o : o + amount])
             self.offset += amount
             return result
 
@@ -599,7 +598,7 @@ class stream(base):
             # FIXME: this logic _apparently_ hasn't been thought out at all..check notes
             o = self.offset - self.data_ofs
             if o >= 0 and o <= len(self.data):
-                self.data[o : o + len(data)] = array.array('B', bytearray(data))
+                self.data[o : o + len(data)] = bytearray(data)
                 if o + len(data) >= len(self.data):
                     self.eof = False
                 self._write(data)
@@ -613,23 +612,28 @@ class stream(base):
 
     def __repr__(self):
         '''x.__repr__() <=> repr(x)'''
-        return "{:s}[eof={!r},base={:x},length={:+x}] offset={:x}".format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
+        return "{!s}[eof={!r},base={:x},length={:+x}] offset={:x}".format(type(self), self.eof, self.data_ofs, len(self.data), self.offset)
 
     def __getitem__(self, i):
         '''x.__getitem__(y) <==> x[y]'''
-        return self.data[i - self.data_ofs]
+        if isinstance(i, slice):
+            return self.__getslice__(i.start, i.stop)
+        res = self.data[i - self.data_ofs]
+        return chr(res)
 
     def __getslice__(self, i, j):
         '''x.__getslice__(i, j) <==> x[i:j]'''
-        return self.data[i - self.data_ofs : j - self.data_ofs].tostring()
+        res = self.data[i - self.data_ofs : j - self.data_ofs]
+        return builtins.bytes(res)
 
     def hexdump(self, **kwds):
-        return utils.hexdump(self.data.tostring(), offset=self.data_ofs, **kwds)
+        data = builtins.bytes(self.data)
+        return utils.hexdump(data, offset=self.data_ofs, **kwds)
 
 class iterable(stream):
     '''Provider that caches data read from a generator/iterable in order to provide random-access reading.'''
     def _read(self, amount):
-        return builtins.bytes().join(itertools.islice(self.source, amount))
+        return b''.join(itertools.islice(self.source, amount))
 
     def _write(self, data):
         Log.info("iter._write : Tried to write {:+x} bytes to an iterator".format(len(data)))
@@ -643,7 +647,7 @@ class posixfile(fileobj):
 
     @utils.mapexception(any=error.ProviderError)
     def open(self, filename, mode='rw', perms=0o644):
-        mode = builtins.bytes().join(sorted(set(x.lower() for x in mode)))
+        mode = str().join(sorted(item.lower() for item in mode))
         flags = (os.O_SHLOCK|os.O_FSYNC) if 'posix' in sys.modules else 0
 
         # this is always assumed
@@ -1059,7 +1063,7 @@ try:
 
             half = size // 2
             if half > 0:
-                return builtins.bytes().join((cls.read(offset, half, padding=padding), cls.read(offset + half, half + size%2, padding=padding)))
+                return b''.join([cls.read(offset, half, padding=padding), cls.read(offset + half, half + size % 2, padding=padding)])
             if cls.__api__.is_mapped(offset):
                 return b'' if size == 0 else (padding * size) if (cls.module.getFlags(offset) & cls.module.FF_IVL) == 0 else cls.module.get_many_bytes(offset, size)
             raise Exception((offset, size))
@@ -1248,11 +1252,11 @@ try:
                 return b''
             try:
                 data = self.__pykd__.loadBytes(self.addr, amount)
-                res = bytes(bytearray(data))
+                res = bytearray(data)
             except:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
-            return builtins.bytes().join(res)
+            return builtins.bytes(res)
 
         def store(self, data):
             '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
@@ -1449,9 +1453,8 @@ if __name__ == '__main__':
     import ptypes
     from ptypes import parray,pint,pbinary,provider
 
-    import six
-    import os,random,tempfile,time
-    from six.moves.builtins import *
+    import os,random,tempfile,time,builtins
+    from builtins import *
 
     class temporaryname(object):
         def __enter__(self, *args):
@@ -1686,11 +1689,11 @@ if __name__ == '__main__':
             _object_ = pint.uint32_t
             length = 0x10
 
-        source = t1().set((0x41,)*4 + (0x42,)*4 + (0x43,)*(4*0xe))
+        source = t1().set([0x41]*4 + [0x42]*4 + [0x43] * (4 * 0xe))
         res = t2(source=provider.proxy(source)).l
         res[1].set(0x0d0e0a0d)
         res.commit()
-        if builtins.bytes().join(n.serialize() for n in source[0 : 0xc]) == b'AAAA\x0d\x0a\x0e\x0dCCCC':
+        if b''.join(item.serialize() for item in source[:0xc]) == b'AAAA\x0d\x0a\x0e\x0dCCCC':
             raise Success
 
     @TestCase

@@ -227,10 +227,9 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
-import six
+import six, builtins
 import functools, operator, itertools, types
 import sys, inspect, time, traceback
-from six.moves import builtins
 
 from . import bitmap, provider, utils, config, error
 Config = config.defaults
@@ -248,7 +247,7 @@ def isiterator(t):
 
 def iscallable(t):
     """True if type ``t`` is a code object that can be called"""
-    return six.callable(t) and hasattr(t, '__call__')
+    return builtins.callable(t) and hasattr(t, '__call__')
 
 @utils.memoize('t')
 def isinstance(t):
@@ -1331,13 +1330,13 @@ class container(base):
         try:
             res = self.blocksize()
         except:
-            return bytes().join(map(operator.methodcaller('serialize'), iter(self.value)))
+            return b''.join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         # if there's no blocksize, then this field is empty
         if res <= 0: return b''
 
         # serialize all the elements that we currently have
-        data = bytes().join(map(operator.methodcaller('serialize'), iter(self.value)))
+        data = b''.join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         try:
             parent = self.getparent(encoded_t)
@@ -1511,7 +1510,7 @@ class container(base):
                 return res
 
             #data = ''.join([item.serialize() if item.initializedQ() else '?'*blocksizeorelse(item)] for item in self.value)
-            data = bytes().join(item.serialize() if item.initializedQ() else b'' for item in self.value)
+            data = b''.join(item.serialize() if item.initializedQ() else b'' for item in self.value)
             return u"\"{:s}\"".format(utils.emit_repr(data, threshold, message, **options)) if len(data) > 0 else u"???"
         return u"???"
 
@@ -1928,7 +1927,7 @@ class definition(object):
     @classmethod
     def update(cls, other):
         """Import the definition cache from ``other``, effectively merging the contents into the current definition."""
-        a, b = map(six.viewkeys, [cls.cache, other.cache])
+        a, b = ({key for key in item.keys()} for item in [cls.cache, other.cache])
         if a & b:
             fullname = '.'.join([cls.__module__, cls.__name__])
             Log.error("definition.update : {:s} : Unable to import cache {!r} due to multiple definitions of the same record".format(fullname, other))
@@ -1936,7 +1935,7 @@ class definition(object):
             return False
 
         # merge record caches into a single one
-        for key, object in six.viewitems(other.cache):
+        for key, object in other.cache.items():
             cls.__set__(key, object)
         return True
 
@@ -2974,7 +2973,7 @@ if __name__ == '__main__':
         result = dict(y.compare(z))
         if list(result.keys()) == [2]:
             s,o = result[2]
-            if c.serialize()+d.serialize() == bytes().join(_.serialize() for _ in s) and a.serialize()+a.serialize() == bytes().join(_.serialize() for _ in o):
+            if c.serialize()+d.serialize() == b''.join(item.serialize() for item in s) and a.serialize()+a.serialize() == b''.join(item.serialize() for item in o):
                 raise Success
 
     @TestCase
