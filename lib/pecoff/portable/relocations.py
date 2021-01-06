@@ -1,4 +1,4 @@
-import sys,array,importlib,ptypes,six
+import sys,array,importlib,ptypes,functools
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
 from ..headers import *
 
@@ -53,8 +53,9 @@ class Relocation(pstruct.type):
             section = sectionarray[symbolsectionnumber]
 
         # convert the data into an array that can be processed
-        data = array.array('B', data)
-        return self['Type'].__relocate__(data, symbol, section, namespace).tostring()
+        data = bytearray(data)
+        updated = self['Type'].__relocate__(data, symbol, section, namespace)
+        return bytes(updated)
 
 class RelocationTable(parray.type):
     _object_ = Relocation
@@ -130,7 +131,7 @@ class IMAGE_REL_I386(pint.enum, uint16):
             raise NotImplementedError(relocationtype)
 
         # calculate relocation and assign it into an array
-        result, serialized = bitmap.new(result, 32), array.array('B','')
+        result, serialized = bitmap.new(result, 32), bytearray()
         while result[1] > 0:
             result, value = bitmap.consume(result, 8)
             serialized.append(value)
@@ -182,17 +183,16 @@ class RelocationTypeBase(pbinary.integer):
 
     def read(self, data, offset, length):
         '''Given the specified data, read length bytes from the provided offset and return as a little-endian integer.'''
-        res = array.array('B', data[offset : offset + length])
-        return six.moves.reduce(lambda agg, item: agg * 0x100 + item, reversed(res), 0)
+        res = bytearray(data[offset : offset + length])
+        return functools.reduce(lambda agg, item: agg * 0x100 + item, reversed(res), 0)
 
     def write(self, integer, length):
         '''Given the specified integer and its length, encode it into its little-endian form and return a string.'''
-        res = array.array('B')
-        binteger = bitmap.new(integer, 8 * length)
+        res, binteger = bytearray(), bitmap.new(integer, 8 * length)
         octets = bitmap.split(binteger, 8)
         for item in reversed(octets):
             res.append(bitmap.int(item))
-        return res.tostring()
+        return bytes(res)
 
 @RelocationType.define(type=1)
 class RelocationType1(RelocationTypeBase):
@@ -272,7 +272,7 @@ class BaseRelocationEntry(pbinary.partial):
         offset = target - section['VirtualAddress'].int()
         res = relocation.write(offset, addresses.get(section['Name'].str(), section['VirtualAddress'].int()))
 
-        segment[offset : offset + len(res)] = array.array('B', res)
+        segment[offset : offset + len(res)] = bytearray(res)
 
         return segment
 
@@ -295,9 +295,9 @@ class IMAGE_BASERELOC_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
         (uint32, 'Page RVA'),   # FIXME: this can be a virtualaddress(...) to the page
         (uint32, 'Size'),
-        (lambda s: dyn.clone(BaseRelocationBlock, length=s['Size'].li.int()-8), 'Relocations'),
-#        (lambda s: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _:(s['Size'].li.int()-8)*8), 'Relocations')
-#        (lambda s: dyn.clone(BaseRelocationArray, blocksize=lambda _:s['Size'].li.int()-8), 'Relocations')
+        (lambda self: dyn.clone(BaseRelocationBlock, length=self['Size'].li.int() - 8), 'Relocations'),
+#        (lambda self: dyn.clone(pbinary.blockarray,_object_=BaseRelocationEntry, blockbits=lambda _: 8 * (self['Size'].li.int() - 8)), 'Relocations')
+#        (lambda self: dyn.clone(BaseRelocationArray, blocksize=lambda _: self['Size'].li.int() - 8), 'Relocations')
     ]
 
     def extract(self):
@@ -329,8 +329,8 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
         return
 
     def relocate(self, data, section, namespace):
-        if not isinstance(data, array.array):
-            raise AssertionError("Type of argument `data` must of an instance of {!r} : not isinstance({!r}, array.array)".format(array.array, data.__class__))
+        if not isinstance(data, bytearray):
+            raise AssertionError("Type of argument `data` must be an instance of {!s} : not isinstance({!s}, {!s})".format(bytearray, data.__class__, bytearray))
 
         sectionname = section['Name'].str()
         header = LocateHeader(self)
@@ -347,13 +347,13 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
             for type, offset in entry.getrelocations(section):
                 if type != 3:
                     raise NotImplementedError("Relocations other than type 3 aren't implemented because I couldn't find any to test with")
-                currentva = sectionvaLookup[sectionname]+offset
+                currentva = sectionvaLookup[sectionname] + offset
 
                 targetrva = R.read(data, offset)
-                targetva = targetrva-imagebase
+                targetva = targetrva - imagebase
 
                 try:
-                    targetsection = sectionarray.getsectionbyaddress(targetrva-imagebase)
+                    targetsection = sectionarray.getsectionbyaddress(targetrva - imagebase)
 
                 except KeyError:
                     currentrva = imagebase+currentva
@@ -369,8 +369,7 @@ class IMAGE_BASERELOC_DIRECTORY(parray.block):
 #                relocation = R.write(targetva, imagebase)
                 # apply the relocation to the data that was passed to us
                 relocation = R.write(targetoffset, namespace[targetsectionname])
-                data[offset : offset + len(relocation)] = array.array('c', relocation)
+                data[offset : offset + len(relocation)] = bytearray(relocation)
             continue
 
         return data
-

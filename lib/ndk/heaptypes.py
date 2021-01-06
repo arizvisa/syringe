@@ -1,5 +1,5 @@
 ### Implement the WIN64 version of this.
-import functools, itertools, types, builtins, operator, six
+import functools, itertools, types, builtins, operator
 import sys, math, logging
 
 import ptypes
@@ -422,7 +422,7 @@ if 'HeapEntry':
             # If HEAP.EncodeFlagMask has been set to something, then we'll just use it
             if self._HEAP_ENTRY_EncodeFlagMask:
                 iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
-                data = object['Unencoded'].serialize() + six.moves.reduce(operator.add, iterable)
+                data = object['Unencoded'].serialize() + functools.reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).encode(res)
             return super(_HEAP_ENTRY, self).encode(object)
@@ -437,7 +437,7 @@ if 'HeapEntry':
             # Now determine if we're encoded, and decode it if so.
             if object['Encoded'][0].int() & self._HEAP_ENTRY_EncodeFlagMask:
                 iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], self._HEAP_ENTRY_Encoding))
-                data = object['Unencoded'].serialize() + six.moves.reduce(operator.add, iterable)
+                data = object['Unencoded'].serialize() + functools.reduce(operator.add, iterable)
                 res = ptype.block().set(data)
                 return super(_HEAP_ENTRY, self).decode(res)
 
@@ -459,7 +459,7 @@ if 'HeapEntry':
             # Calculate checksum (a^9^8 == b)
             res = self.d.li.cast(self._BE_Encoded)
             data = bytearray(res['Encoded'].serialize())
-            chk = six.moves.reduce(operator.xor, data[:3], 0)
+            chk = functools.reduce(operator.xor, data[:3], 0)
             return chk == data[3]
 
         def Size(self):
@@ -1167,7 +1167,7 @@ if 'LFH':
             '''Return a bitmap showing the busy/free chunks that are available'''
             iterable = (int(item['Header'].BusyQ()) for item in self['Blocks'])
             iterable = (bitmap.new(item, 1) for item in iterable)
-            return six.moves.reduce(bitmap.push, iterable, bitmap.zero)
+            return functools.reduce(bitmap.push, iterable, bitmap.zero)
 
         def __Blocks(self):
             pss = self['SubSegment'].li

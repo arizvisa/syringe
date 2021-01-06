@@ -1,4 +1,4 @@
-import six, sys, math, datetime, itertools
+import six, sys, math, datetime, itertools, functools
 
 import ptypes
 from ptypes import *
@@ -581,7 +581,7 @@ class BitmapBitsArray(parray.type):
         return self.size() << 3
     def bitmap(self):
         iterable = (bitmap.new(item.int(), 8 * item.size()) for item in self)
-        return six.moves.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        return functools.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
     def check(self, index):
         bits = 8 * self.new(self._object_).a.size()
         res, offset = self[index // bits], index % bits
@@ -618,11 +618,11 @@ class BitmapBitsBytes(ptype.block):
     def bits(self):
         return self.size() << 3
     def bitmap(self):
-        iterable = (bitmap.new(six.byte2int(item), 8) for item in self.serialize())
-        return six.moves.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        iterable = (bitmap.new(item, 8) for item in bytearray(self.serialize()))
+        return functools.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
     def check(self, index):
         res, offset = self[index >> 3], index & 7
-        return six.byte2int(res) & (2 ** offset) and 1
+        return ord(res) & (2 ** offset) and 1
     def run(self):
         return self.bitmap()
 
