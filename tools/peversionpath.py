@@ -16,9 +16,7 @@ def parseResourceDirectory(filename):
     sections = pe['Sections']
     datadirectory = pe['DataDirectory']
     resourceDirectory = datadirectory[2]
-    if resourceDirectory['Address'].int():
-        return resourceDirectory['Address'].d
-    raise ptypes.error.LoadError(resourceDirectory)
+    return resourceDirectory['Address']
 
 def getChildByKey(versionInfo, szKey):
     return next(ch['Child'] for ch in versionInfo['Children'] if ch['Child']['szKey'].str() == szKey)
@@ -76,14 +74,14 @@ if __name__ == '__main__':
 
     # parse the executable
     try:
-        resource = parseResourceDirectory(filename)
+        resource_address = parseResourceDirectory(filename)
     except ptypes.error.LoadError as e:
         six.print_('File %s does not appear to be an executable'% filename, file=sys.stderr)
         sys.exit(1)
-    if resource.getoffset() == 0:
+    if resource_address.int() == 0:
         six.print_('File %s does not contain a resource datadirectory entry'% filename, file=sys.stderr)
         sys.exit(1)
-    resource = resource.l
+    resource = resource_address.d.li
 
     # save it somewhere
     pe = resource.getparent(pecoff.IMAGE_NT_HEADERS)

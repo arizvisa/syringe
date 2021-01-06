@@ -115,7 +115,7 @@ class Machine(pint.enum, pint.uint16_t):
 class TimeDateStamp(uint32):
     epoch = datetime.datetime(1970, 1, 1, 0, 0, 0)
     def details(self):
-        x = self.epoch + datetime.timedelta( seconds=int(self) )
+        x = self.epoch + datetime.timedelta( seconds=self.int() )
         return x.strftime('%Y-%m-%d %H:%M:%S')
     def summary(self):
         return '{:#x} {!r}'.format(self.int(), self.details())

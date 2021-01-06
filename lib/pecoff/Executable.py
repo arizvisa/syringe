@@ -582,21 +582,26 @@ class File(pstruct.type, ptype.boundary):
 
 if __name__ == '__main__':
     import sys
-    import Executable
+    import ptypes, pecoff.Executable
     if len(sys.argv) == 2:
         filename = sys.argv[1]
-        v = Executable.open(filename)
+        ptypes.setsource(ptypes.prov.file(filename, 'rb'))
+        z = pecoff.Executable.File()
+        z=z.l
     else:
         filename = 'obj/kernel32.dll'
+        ptypes.setsource(ptypes.prov.file(filename, 'rb'))
         for x in range(10):
             print(filename)
             try:
-                v = Executable.open(filename)
+                z = pecoff.Executable.File()
+                z=z.l
                 break
             except IOError:
                 pass
             filename = '../'+filename
 
+    v=z['next']['header']
     sections = v['Sections']
     exports = v['DataDirectory'][0]
     while exports['Address'].int() != 0:
@@ -615,8 +620,7 @@ if __name__ == '__main__':
     section = sections[0]
     data = section.data().serialize()
     for item in relo.filter(section):
-        for _, r in item.getrelocations(section):
-            print(item)
-            data = r.relocate(data, 0, section)
+        for type, offset in item.getrelocations(section):
+            print(type, offset)
         continue
 
