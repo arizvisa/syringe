@@ -35,7 +35,7 @@ class SCOPETABLE_ENTRY(pstruct.type):
 
 class EH4_SCOPETABLE_RECORD(pstruct.type):
     _fields_ = [
-        (DWORD, 'EnclosingLevel'),
+        (unsigned_long, 'EnclosingLevel'),
         (PVOID, 'FilterFunc'),  #long (*FilterFunc)()
         (PVOID, 'HandlerAddress'),
         #(PVOID, 'FinallyFunc'),
@@ -43,10 +43,10 @@ class EH4_SCOPETABLE_RECORD(pstruct.type):
 
 class EH4_SCOPETABLE(pstruct.type):
     _fields_ = [
-        (DWORD, 'GSCookieOffset'),
-        (DWORD, 'GSCookieXOROffset'),
-        (DWORD, 'EHCookieOffset'),
-        (DWORD, 'EHCookieXOROffset'),
+        (unsigned_long, 'GSCookieOffset'),
+        (unsigned_long, 'GSCookieXOROffset'),
+        (unsigned_long, 'EHCookieOffset'),
+        (unsigned_long, 'EHCookieXOROffset'),
         (dyn.array(EH4_SCOPETABLE_RECORD, 0), 'ScopeRecord'),
     ]
 
@@ -88,7 +88,7 @@ class EHRegistrationNode(pstruct.type):
 
 class UnwindMapEntry(pstruct.type):
     _fields_ = [
-        (pint.int32_t, 'toState'),
+        (int, 'toState'),
         (pointer(ptype.undefined, _value_=PVALUE32), 'action'),
     ]
 
@@ -101,26 +101,33 @@ class TypeDescriptor(pstruct.type):
 
 class HandlerType(pstruct.type):
     _fields_ = [
-        (DWORD, 'adjectives'),
+        (int, 'adjectives'),
         (pointer(TypeDescriptor, _value_=PVALUE32), 'pType'),
-        (pint.int32_t, 'dispCatchObj'),
+        (int, 'dispCatchObj'),
         (pointer(ptype.undefined, _value_=PVALUE32), 'addressOfHandler'),
-        (pint.int32_t, 'dispFrame'),
+        (lambda self: int if getattr(self, 'WIN64', False) else pint.int_t, 'dispFrame'),
     ]
 
 class TryBlockMapEntry(pstruct.type):
     _fields_ = [
-        (pint.int32_t, 'tryLow'),
-        (pint.int32_t, 'tryHigh'),
-        (pint.int32_t, 'catchHigh'),
-        (pint.int32_t, 'nCatches'),
+        (int, 'tryLow'),
+        (int, 'tryHigh'),
+        (int, 'catchHigh'),
+        (int, 'nCatches'),
         (lambda self: pointer(dyn.array(HandlerType, self['nCatches'].li.int()), _value_=PVALUE32), 'pHandlerArray'),
     ]
 
 class ESTypeList(pstruct.type):
     _fields_ = [
-        (pint.int32_t, 'nCount'),
+        (int, 'nCount'),
         (lambda self: pointer(dyn.array(HandlerType, self['nCount'].li.int()), _value_=PVALUE32), 'pHandlerArray'),
+    ]
+
+class PMD(pstruct.type):
+    _fields_ = [
+        (int, 'mdisp'),
+        (int, 'pdisp'),
+        (int, 'vdisp'),
     ]
 
 class TypeDescriptor(pstruct.type):
@@ -130,40 +137,33 @@ class TypeDescriptor(pstruct.type):
         (pstr.szstring, 'name'),
     ]
 
-class CatchableTypeArray(pstruct.type):
-    _fields_ = [
-        (pint.int32_t, 'nCatchableTypes'),
-        (lambda self: pointer(dyn.array(CatchableType, self['nCatchableTypes'].li.int()), _value_=PVALUE32), 'arrayOfCatchableTypes'),
-    ]
-
-class PMD(pstruct.type):
-    _fields_ = [
-        (pint.int32_t, 'mdisp'),
-        (pint.int32_t, 'pdisp'),
-        (pint.int32_t, 'vdisp'),
-    ]
-
 class CatchableType(pstruct.type):
     _fields_ = [
-        (DWORD, 'properties'),
-        (pointer(TypeDescriptor), 'pType'),
+        (unsigned_int, 'properties'),
+        (pointer(TypeDescriptor, _value_=PVALUE32), 'pType'),
         (PMD, 'thisDisplacement'),
-        (pint.int32_t, 'sizeOrOffset'),
-        (PVOID, 'copyFunction'),
+        (int, 'sizeOrOffset'),
+        (pointer(ptype.undefined, _value_=PVALUE32), 'copyFunction'),
+    ]
+
+class CatchableTypeArray(pstruct.type):
+    _fields_ = [
+        (int, 'nCatchableTypes'),
+        (lambda self: pointer(dyn.array(CatchableType, self['nCatchableTypes'].li.int()), _value_=PVALUE32), 'arrayOfCatchableTypes'),
     ]
 
 class ThrowInfo(pstruct.type):
     _fields_ = [
-        (DWORD, 'attributes'),
+        (unsigned_int, 'attributes'),
         (PVOID, 'pmfnUnwind'),
         (PVOID, 'pForwardCompat'),
-        (pointer(CatchableTypeArray, _value_=PVALUE32), 'pCatchableTypeArray'),
+        (pointer(CatchableTypeArray), 'pCatchableTypeArray'),
     ]
 
 class IPtoStateMap(pstruct.type):
     _fields_ = [
         (pointer(ptype.undefined, _value_=PVALUE32), 'pc'),
-        (pint.int32_t, 'state'),
+        (int, 'state'),
     ]
 
 class FuncInfo(pstruct.type):
@@ -178,18 +178,18 @@ class FuncInfo(pstruct.type):
     _fields_ = [
         (_magicNumber, 'magicNumber'),
 
-        (pint.int32_t, 'maxState'),
+        (int, 'maxState'),
         (pointer(UnwindMapEntry, _value_=PVALUE32), 'pUnwindMap'),
 
-        (pint.int32_t, 'nTryBlocks'),
+        (int, 'nTryBlocks'),
         (pointer(TryBlockMapEntry, _value_=PVALUE32), 'pTryBlockMap'),
 
-        (pint.int32_t, 'nIPMapEntries'),
+        (int, 'nIPMapEntries'),
         (pointer(IPtoStateMap, _value_=PVALUE32), 'pIPtoStateMap'),
-        (pint.int32_t, 'dispUnwindHelp'),
+        (lambda self: int if getattr(self, 'WIN64', False) else pint.int_t, 'dispUnwindHelp'),
 
         (pointer(ESTypeList, _value_=PVALUE32), 'pESTypeList'),
-        (pint.int32_t, 'EHFlags'),
+        (int, 'EHFlags'),
     ]
 
 class RUNTIME_FUNCTION(pstruct.type):
@@ -199,42 +199,35 @@ class RUNTIME_FUNCTION(pstruct.type):
         (pointer(ptype.undefined, _value_=PVALUE32), 'UnwindInfoAddress'),
     ]
 
-class RTTIClassHierarchyDescriptor(pstruct.type):
-    _fields_ = [
-        (DWORD, 'address'),
-        (DWORD, 'signature'),
-        (DWORD, 'attributes'),
-        (DWORD, 'BaseClassCount'),
-        (DWORD, 'BaseClassListAddress'),
-    ]
-
-class RTTICompleteObjectLocator(pstruct.type):
-    _fields_ = [
-        (DWORD, 'signature'),
-        (DWORD, 'offset'),
-        (DWORD, 'cdOffset'),
-        (pointer(TypeDescriptor), 'pTypeDescriptor'),
-        (pointer(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
-    ]
-
-class RTTIClassHierarchyDescriptor(pstruct.type):
-    _fields_ = [
-        (DWORD, 'signature'),
-        (DWORD, 'attributes'),
-        (DWORD, 'numBaseClasses'),
-        (lambda self: pointer(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
-    ]
+# corrected with http://www.geoffchappell.com/studies/msvc/language/predefined/index.htm?tx=12,14
 
 class RTTIBaseClassDescriptor(pstruct.type):
     _fields_= [
         (pointer(TypeDescriptor), 'pTypeDescriptor'),
-        (DWORD, 'numContainedBases'),
+        (unsigned_long, 'numContainedBases'),
         (PMD, 'where'),
-        (DWORD, 'attributes'),
+        (unsigned_long, 'attributes'),
     ]
 
 class RTTIBaseClassArray(parray.type):
     _object_ = RTTIBaseClassDescriptor
+
+class RTTIClassHierarchyDescriptor(pstruct.type):
+    _fields_ = [
+        (unsigned_long, 'signature'),
+        (unsigned_long, 'attributes'),
+        (unsigned_long, 'numBaseClasses'),
+        (lambda self: pointer(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
+    ]
+
+class RTTICompleteObjectLocator(pstruct.type):
+    _fields_ = [
+        (unsigned_long, 'signature'),
+        (unsigned_long, 'offset'),
+        (unsigned_long, 'cdOffset'),
+        (pointer(TypeDescriptor), 'pTypeDescriptor'),
+        (pointer(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
+    ]
 
 if False:
     class SCOPE_TABLE_AMD64(pstruct.type):
