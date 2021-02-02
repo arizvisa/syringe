@@ -78,7 +78,8 @@ class pointer_t(ptype.pointer_t, versioned):
         return cls.__name__
 
 def pointer(target, **attrs):
-    return dyn.clone(pointer_t, _object_=target)
+    attrs.setdefault('_object_', target)
+    return dyn.clone(pointer_t, **attrs)
 P = pointer
 
 ## relative pointers
@@ -97,6 +98,38 @@ def rpointer(target, base, **attrs):
     return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
 rptr = rpointer
 
+### C datatypes
+class char(pint.int8_t): pass
+class signed_char(pint.sint8_t): pass
+class unsigned_char(pint.uint8_t): pass
+class short(pint.int16_t): pass
+class signed_short(pint.sint16_t): pass
+class unsigned_short(pint.uint16_t): pass
+class int(pint.int32_t): pass
+class signed_int(pint.uint32_t): pass
+class unsigned_int(pint.uint32_t): pass
+class long_long(pint.int64_t): pass
+class signed_long_long(pint.sint64_t): pass
+class unsigned_long_long(pint.uint64_t): pass
+
+# variable sized types
+def wordsize(self):
+    return 8 if getattr(self, 'WIN64', False) else 4
+if wordsize:
+    class long(pint.int_t):
+        length = property(fget=wordsize)
+    class signed_long(pint.sint_t):
+        length = property(fget=wordsize)
+    class unsigned_long(pint.uint_t):
+        length = property(fget=wordsize)
+
+if wordsize:
+    class size_t(pint.uint_t):
+        length = property(fget=wordsize)
+    class ssize_t(pint.sint_t):
+        length = property(fget=wordsize)
+del(wordsize)
+
 ### core datatypes (handles and such)
 class BYTE(pint.uint8_t): pass
 class UCHAR(pint.uint8_t): pass
@@ -105,7 +138,6 @@ class PCHAR(pointer(CHAR)): pass
 class WORD(pint.uint16_t): pass
 class DWORD(pint.uint32_t): pass
 class DWORD_PTR(PVOID): pass
-class short(pint.int16_t): pass
 class SHORT(pint.sint16_t): pass
 class USHORT(pint.uint16_t): pass
 class INT(pint.sint32_t): pass
