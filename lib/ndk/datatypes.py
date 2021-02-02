@@ -140,7 +140,7 @@ class SIZE_T64(ULONGLONG): pass
 class BSTR(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'length'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['length'].li.int()), 'string')
+        (lambda self: dyn.clone(pstr.wstring, length=self['length'].li.int()), 'string')
     ]
 
 class DOUBLE(pfloat.double): pass
@@ -221,7 +221,7 @@ class MULTI_SZ(pstruct.type):
             res = self.getparent(MULTI_SZ)
             return res['nChar'].li.int()
     _fields_ = [
-        (pointer(lambda s: s.getparent(MULTI_SZ).StringsValue), 'Value'),
+        (pointer(lambda self: self.getparent(MULTI_SZ).StringsValue), 'Value'),
         (DWORD, 'nChar'),
     ]
 
@@ -384,34 +384,21 @@ class EXCEPTION_FLAGS(pbinary.struct):
         (1+24, 'unknown'),
     ]
 
-class EXCEPTION_RECORD32(pstruct.type):
+class EXCEPTION_RECORD(pstruct.type):
     _fields_ = [
         (DWORD, 'ExceptionCode'),
         (EXCEPTION_FLAGS, 'ExceptionFlags'),
-        (lambda s: pointer(EXCEPTION_RECORD32), 'ExceptionRecord'),
+        (lambda self: pointer(EXCEPTION_RECORD), 'ExceptionRecord'),
         (PVOID, 'ExceptionAddress'),
         (DWORD, 'NumberParameters'),
-        (lambda s: dyn.array(DWORD, s['NumberParameters'].li.int()), 'ExceptionInformation'),
+        (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(NumberParameters)'),
+        (lambda self: dyn.array(ULONG_PTR, self['NumberParameters'].li.int()), 'ExceptionInformation'),
     ]
-
-class EXCEPTION_RECORD(EXCEPTION_RECORD32): pass
-
-if False:
-    # FIXME: this isn't tested at all
-    class EXCEPTION_RECORD64(pstruct.type):
-        _fields_ = [
-            (DWORD, 'ExceptionCode'),
-            (EXCEPTION_FLAGS, 'ExceptionFlags'),
-            (lambda s: pointer(EXCEPTION_RECORD64), 'ExceptionRecord'), # FIXME: 64
-            (PVOID, 'ExceptionAddress'),    # FIXME: 64
-            (DWORD, 'NumberParameters'),
-            (DWORD, '__unusedAlignment'),
-            (lambda s: dyn.array(DWORD64, s['NumberParameters'].li.int()), 'ExceptionInformation'),
-        ]
+PEXCEPTION_RECORD = P(EXCEPTION_RECORD)
 
 class EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
-        (lambda s:pointer(EXCEPTION_REGISTRATION), 'Next'),
+        (lambda self: pointer(EXCEPTION_REGISTRATION), 'Next'),
         (PVOID, 'Handler'),
     ]
 
@@ -640,3 +627,155 @@ class BitmapBitsBytes(ptype.block):
 
         width = len("{:x}".format(self.bits()))
         return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, 8 * i * bytes_per_row, width, min(self.bits(), 8 * i * bytes_per_row + 8 * bytes_per_row) - 1, width, item) for i, item in enumerate(items)))
+
+class FLOATING_SAVE_AREA(pstruct.type):
+    _fields_ = [
+        (DWORD, 'ControlWord'),
+        (DWORD, 'StatusWord'),
+        (DWORD, 'TagWord'),
+        (DWORD, 'ErrorOffset'),
+        (DWORD, 'ErrorSelector'),
+        (DWORD, 'DataOffset'),
+        (DWORD, 'DataSelector'),
+        (dyn.array(BYTE, 80), 'RegisterArea'),
+        (DWORD, 'Spare0'),
+    ]
+
+class M128A(pstruct.type):
+    _fields_ = [
+        (ULONGLONG, 'Low'),
+        (LONGLONG, 'High'),
+    ]
+
+class XSAVE_FORMAT(pstruct.type):
+    _fields_ = [
+        (WORD, 'ControlWord'),
+        (WORD, 'StatusWord'),
+        (BYTE, 'TagWord'),
+        (BYTE, 'Reserved1'),
+        (WORD, 'ErrorOpcode'),
+        (DWORD, 'ErrorOffset'),
+        (WORD, 'ErrorSelector'),
+        (WORD, 'Reserved2'),
+        (DWORD, 'DataOffset'),
+        (WORD, 'DataSelector'),
+        (WORD, 'Reserved3'),
+        (DWORD, 'MxCsr'),
+        (DWORD, 'MxCsr_Mask'),
+        (dyn.array(M128A, 8), 'FloatRegisters'),
+        (dyn.array(M128A, 16), 'XmmRegisters'),
+        (dyn.array(BYTE, 96), 'Reserved4'),
+    ]
+
+class XMM_SAVE_AREA32(XSAVE_FORMAT): pass
+class _XMM_REGISTER_AREA(pstruct.type):
+    _fields_ = [
+        (dyn.array(M128A, 2), 'Header'),
+        (dyn.array(M128A, 8), 'Legacy'),
+        (M128A, 'Xmm0'),
+        (M128A, 'Xmm1'),
+        (M128A, 'Xmm2'),
+        (M128A, 'Xmm3'),
+        (M128A, 'Xmm4'),
+        (M128A, 'Xmm5'),
+        (M128A, 'Xmm6'),
+        (M128A, 'Xmm7'),
+        (M128A, 'Xmm8'),
+        (M128A, 'Xmm9'),
+        (M128A, 'Xmm10'),
+        (M128A, 'Xmm11'),
+        (M128A, 'Xmm12'),
+        (M128A, 'Xmm13'),
+        (M128A, 'Xmm14'),
+        (M128A, 'Xmm15'),
+    ]
+
+class CONTEXT(pstruct.type):
+    class FloatState(dynamic.union):
+        _fields_ = [
+            (XMM_SAVE_AREA32, 'FltSave'),
+            (_XMM_REGISTER_AREA, 'FltRegister'),
+        ]
+
+    def __init__(self, **attrs):
+        super(CONTEXT, self).__init__(**attrs)
+
+        if getattr(self, 'WIN64', False):
+            _fields_ = [
+                (DWORD64, 'P1Home'),
+                (DWORD64, 'P2Home'),
+                (DWORD64, 'P3Home'),
+                (DWORD64, 'P4Home'),
+                (DWORD64, 'P5Home'),
+                (DWORD64, 'P6Home'),
+                (DWORD, 'ContextFlags'),
+                (DWORD, 'MxCsr'),
+                (WORD, 'SegCs'),
+                (WORD, 'SegDs'),
+                (WORD, 'SegEs'),
+                (WORD, 'SegFs'),
+                (WORD, 'SegGs'),
+                (WORD, 'SegSs'),
+                (DWORD, 'EFlags'),
+                (DWORD64, 'Dr0'),
+                (DWORD64, 'Dr1'),
+                (DWORD64, 'Dr2'),
+                (DWORD64, 'Dr3'),
+                (DWORD64, 'Dr6'),
+                (DWORD64, 'Dr7'),
+                (DWORD64, 'Rax'),
+                (DWORD64, 'Rcx'),
+                (DWORD64, 'Rdx'),
+                (DWORD64, 'Rbx'),
+                (DWORD64, 'Rsp'),
+                (DWORD64, 'Rbp'),
+                (DWORD64, 'Rsi'),
+                (DWORD64, 'Rdi'),
+                (DWORD64, 'R8'),
+                (DWORD64, 'R9'),
+                (DWORD64, 'R10'),
+                (DWORD64, 'R11'),
+                (DWORD64, 'R12'),
+                (DWORD64, 'R13'),
+                (DWORD64, 'R14'),
+                (DWORD64, 'R15'),
+                (DWORD64, 'Rip'),
+                (self.FloatState, 'FltState'),
+                (dyn.array(M128A, 26), 'VectorRegister'),
+                (DWORD64, 'VectorControl'),
+                (DWORD64, 'DebugControl'),
+                (DWORD64, 'LastBranchToRip'),
+                (DWORD64, 'LastBranchFromRip'),
+                (DWORD64, 'LastExceptionToRip'),
+                (DWORD64, 'LastExceptionFromRip'),
+            ]
+        else:
+            _fields_ = [
+                (DWORD, 'ContextFlags'),
+                (DWORD, 'Dr0'),
+                (DWORD, 'Dr1'),
+                (DWORD, 'Dr2'),
+                (DWORD, 'Dr3'),
+                (DWORD, 'Dr6'),
+                (DWORD, 'Dr7'),
+                (FLOATING_SAVE_AREA, 'FloatSave'),
+                (DWORD, 'SegGs'),
+                (DWORD, 'SegFs'),
+                (DWORD, 'SegEs'),
+                (DWORD, 'SegDs'),
+                (DWORD, 'Edi'),
+                (DWORD, 'Esi'),
+                (DWORD, 'Ebx'),
+                (DWORD, 'Edx'),
+                (DWORD, 'Ecx'),
+                (DWORD, 'Eax'),
+                (DWORD, 'Ebp'),
+                (DWORD, 'Eip'),
+                (DWORD, 'SegCs'),
+                (DWORD, 'EFlags'),
+                (DWORD, 'Esp'),
+                (DWORD, 'SegSs'),
+                (dyn.array(BYTE, 512), 'ExtendedRegisters'),
+            ]
+        self._fields_ = _fields_
+PCONTEXT = P(CONTEXT)
