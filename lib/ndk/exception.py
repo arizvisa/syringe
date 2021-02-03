@@ -122,12 +122,12 @@ class UnwindMapEntry(pstruct.type):
         (pointer(ptype.undefined, _value_=PVALUE32), 'action'),
     ]
     def summary(self):
-        return "{:#x}<{:d}>".format(self['action'].int(), self['toState'].int())
+        return "action={:#x}(toState:{:d})".format(self['action'].int(), self['toState'].int())
 
 class TypeDescriptor(pstruct.type):
     _fields_ = [
         (PVOID, 'pVFTable'),
-        (PVOID, 'spare'),   # demangled name from type_info::name
+        (pointer(pstr.szstring), 'spare'),   # demangled name from type_info::name
         (pstr.szstring, 'name'),
     ]
     def summary(self):
@@ -135,10 +135,10 @@ class TypeDescriptor(pstruct.type):
         try:
             if spare.int():
                 demangled = spare.d.li
-                return "(VFTable:{:#x}) \"{:s}\" ({:s})".format(self['pVFTable'].int(), self['name'].str(), demangled.str())
+                return "(VFTable:{:#x}) {:s} ({:s})".format(self['pVFTable'].int(), self['name'].str(), demangled.str())
         except ptypes.error.LoadError:
             pass
-        return "(VFTable:{:#x}) \"{:s}\"".format(self['pVFTable'].int(), self['name'].str())
+        return "(VFTable:{:#x}) {:s}".format(self['pVFTable'].int(), self['name'].str())
 
 class HandlerType(pstruct.type):
     _fields_ = [
@@ -151,20 +151,19 @@ class HandlerType(pstruct.type):
     def summary(self):
         items = []
         if self['adjectives'].int():
-            items.append("adjectives:{:d}".format(self['adjectives'].int()))
+            items.append("adjectives:{:#x}".format(self['adjectives'].int()))
         if self['dispCatchObj'].int():
-            items.append("dispCatchObj:{:d}".format(self['dispCatchObj'].int()))
+            items.append("dispCatchObj:{:+#x}".format(self['dispCatchObj'].int()))
         if self['dispFrame'].int():
-            items.append("dispFrame:{:d}".format(self['dispFrame'].int()))
-        properties = "<{:s}>".format(','.join(items))
+            items.append("dispFrame:{:+#x}".format(self['dispFrame'].int()))
+        properties = "({:s})".format(', '.join(items))
 
         items = []
-        if self['addressOfHandler'].int():
-            items.append(self['addressOfHandler'].summary())
+        items.append("addressOfHandler={!s}".format(self['addressOfHandler'].summary()))
         if self['pType'].int():
             item = self['pType'].d
             try:
-                res = item.l
+                res = item.li
             except ptypes.error.LoadError:
                 res = self['pType']
             items.append(res.summary())
@@ -173,9 +172,32 @@ class HandlerType(pstruct.type):
 class TryBlockMapEntry(pstruct.type):
     class _pHandlerArray(parray.type):
         _object_ = HandlerType
-        def summary(self):
-            items = (item.summary() for item in self)
-            return "[{:s}]".format(', '.join(items))
+        def details(self):
+            items = []
+            for item in self:
+                position = ptypes.utils.repr_position(item.getposition())
+                description = ptypes.utils.repr_instance(item.classname(), item.name())
+
+                if item['dispFrame'].int():
+                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x} dispFrame={:+#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int(), item['dispFrame'].int())
+                else:
+                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int())
+                items.append(res)
+
+                name = 'pType'
+                field, type = item[name], item[name].d
+                try:
+                    if not field.int():
+                        raise ValueError
+                    res = field.d.li
+                except (ptypes.error.LoadError, ValueError):
+                    res = field
+                items.append("[{:s}] {:s} addressOfHandler={:#x} {!s}".format(position, description, item['addressOfHandler'].int(), res.summary()))
+            return '\n'.join(items)
+        def repr(self):
+            if self.initializedQ():
+                return self.details()
+            return self.summary()
 
     _fields_ = [
         (int, 'tryLow'),
@@ -187,7 +209,7 @@ class TryBlockMapEntry(pstruct.type):
     def summary(self):
         res = self['pHandlerArray'].d
         try:
-            res = res.l.summary()
+            res = res.li.summary()
         except ptypes.error.LoadError:
             res = self['pHandlerArray'].summary()
         return "try<{:d},{:d}> catch<{:d}> handler:({:d}) {:s}".format(self['tryLow'].int(), self['tryHigh'].int(), self['catchHigh'].int(), self['nCatches'].int(), res)
@@ -282,13 +304,22 @@ class FuncInfo(pstruct.type, versioned):
             for item in self:
                 position = ptypes.utils.repr_position(item.getposition())
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
-                handlers = item['pHandlerArray'].d
+                items.append("[{:s}] {:s} tryLow={:d} tryHigh={:d} catchHigh={:d}".format(position, description, item['tryLow'].int(), item['tryHigh'].int(), item['catchHigh'].int()))
+
+                name = 'pHandlerArray'
+                field, handlers = item[name], item[name].d
                 try:
+                    if not field.int():
+                        raise ValueError
                     res = handlers.li
-                except ptypes.error.LoadError:
-                    res = item['pHandlerArray']
-                items.append("[{:s}] {:s} tryLow({:d}) tryHigh({:d}) catchHigh({:d}) pHandlerArray={!s}".format(position, description, item['tryLow'].int(), item['tryHigh'].int(), item['catchHigh'].int(), res.summary()))
-            return '\n'.join(items) + ('' if items else '\n')
+                except (ptypes.error.LoadError, ValueError):
+                    res = field
+                position = ptypes.utils.repr_position(field.getposition())
+                for index, handler in enumerate(handlers):
+                    description = ptypes.utils.repr_instance(item.classname(), '.'.join([item.name(), name, "{:d}".format(index)]))
+                    items.append("[{:s}] {:s} {!s}".format(position, description, handler.summary()))
+                continue
+            return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
                 return self.details() + '\n'
