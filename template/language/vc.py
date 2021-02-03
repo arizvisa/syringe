@@ -1,211 +1,58 @@
-import ptypes
-from ptypes import *
+'''
+This module is based on the ndk.exception library module. Please
+consider using that module instead of this one.
+'''
 
-# https://github.com/hvdieren/swan_runtime/blob/master/runtime/except-win32.h
-# https://github.com/hvdieren/swan_runtime/blob/master/runtime/except-win64.h
+import ptypes, ndk, ndk.exception
+from ndk.exception import *
 
-# constants
-EXCEPTION_MAXIMUM_PARAMETERS = 15
+class vtable_ptr(PVOID): pass
+class type_info(TypeDescriptor): pass
 
-# native types
-class char(pint.int8_t): pass
-class int(pint.int32_t): pass
-class long(pint.integer.lookup(ptypes.Config.integer.size)): pass
-class DWORD(pint.uint32_t): pass
-class ULONG(pint.uint32_t): pass
-class ULONG64(pint.uint64_t): pass
-class PVOID(ptype.pointer_t):
-    _object_ = ptype.undefined
-class ULONG_PTR(ptype.pointer_t):
-    _object_ = ptype.undefined
-
-# structured types
-class TypeDescriptor(pstruct.type):
+class exception(pstruct.type):
     _fields_ = [
-        (PVOID, 'pVFTable'),
-        (PVOID, 'spare'),
-        (dyn.array(char, 1), 'name'),
+        (dyn.pointer(vtable_ptr), 'vtable'),
+        (dyn.pointer(pstr.szstring), 'name'),
+        (pint.int32_t, 'do_free'),
     ]
 
-class _EXCEPTION_RECORD(pstruct.type):
+class cxx_exception_frame(pstruct.type):
     _fields_ = [
-        (DWORD, 'ExceptionCode'),
-        (DWORD, 'ExceptionFlags'),
-        (dyn.pointer(lambda: _EXCEPTION_RECORD), 'ExceptionRecord'),
-        (PVOID, 'ExceptionAddress'),
-        (DWORD, 'NumberParameters'),
-        (dyn.array(dyn.pointer(ULONG), EXCEPTION_MAXIMUM_PARAMETERS), 'ExceptionInformation'),
+        (dyn.pointer(ptype.undefined), 'frame'), # XXX
+        (pint.int32_t, 'trylevel'),
+        (pint.uint32_t, 'ebp'),
     ]
-EXCEPTION_RECORD = _EXCEPTION_RECORD
 
-class PMD(pstruct.type):
+class cxx_copy_ctor(PVOID): pass
+
+class this_ptr_offsets(pstruct.type):
     _fields_ = [
-        (int, 'mdisp'),
-        (int, 'pdisp'),
-        (int, 'vdisp'),
+        (pint.int32_t, 'this_offset'),
+        (pint.int32_t, 'vbase_descr'),
+        (pint.int32_t, 'vbase_offset'),
     ]
 
-class win32_except_info(pint.enum):
-    _values_ = [
-        ('info_magic_number', 0),
-        ('info_cpp_object', 1),
-        ('info_throw_data', 2),
-        ('info_image_base', 3),
-    ]
-
-class win64_except_info(pint.enum):
-    _values_ = [
-        ('info_magic_number', 0),
-        ('info_cpp_object', 1),
-        ('info_throw_data', 2),
-        ('info_image_base', 3),
-    ]
-
-class UnwindMapEntry(pstruct.type):
+class cxx_type_info(pstruct.type):
     _fields_ = [
-        (int, 'toState'),
-        (DWORD, 'offWindFunclet'),
+        (pint.uint32_t, 'flags'),
+        (dyn.pointer(type_info), 'type_info'),
+        (this_ptr_offsets, 'offsets'),
+        (pint.uint32_t, 'size'),
+        (cxx_copy_ctor, 'copy_ctor'),
     ]
 
-class HandlerType(pstruct.type):
-    class _adjectives(pint.enum, DWORD):
-        _values_ = [
-            (1, 'const'),
-            (2, 'volatile'),
-            (8, 'reference'),
-        ]
+class cxx_type_info_table(pstruct.type):
     _fields_ = [
-        (_adjectives, 'adjectives'),
-        (DWORD, 'offTypeDescriptor'),
-        (int, 'dispCatchObj'),
-        (DWORD, 'offHandlerCode'),
-        (DWORD, 'unknown'),
+        (pint.uint32_t, 'count'),
+        (dyn.array(cxx_type_info, 3), 'info'),
     ]
 
-class TryBlockMapEntry(pstruct.type):
-    _fields_ = [
-        (int, 'tryLow'),
-        (int, 'tryHigh'),
-        (int, 'catchHigh'),
-        (int, 'nCatches'),
-        (DWORD, 'offHandlerArray'),
-    ]
+class cxx_exc_custom_handler(PVOID): pass
 
-class Ip2StateMapEntry(pstruct.type):
+class cxx_exception_type(pstruct.type):
     _fields_ = [
-        (DWORD, 'offIp'),
-        (int, 'iTryLevel'),
-    ]
-
-class FuncInfo(pstruct.type):
-    class _magicNumber(pbinary.struct):
-        _fields_ = [
-            (3, 'bbtFlags'),
-            (29, 'number'),
-        ]
-    _fields_ = [
-        (_magicNumber, 'magicNumber'),
-        (int, 'maxState'),
-        (DWORD, 'offUnwindMap'),
-        (DWORD, 'nTryBlocks'),
-        (DWORD, 'offTryBlockMap'),
-        (DWORD, 'nIpMapEntries'),
-        (DWORD, 'offIpToStateMap'),
-        (int, 'EHFlags'),
-    ]
-
-class Win32CatchableType(pstruct.type):
-    _fields_ = [
-        (DWORD, 'properties'),
-        (dyn.pointer(TypeDescriptor), 'pType'),
-        (PMD, 'thisDisplacement'),
-        (int, 'sizeOrOffset'),
-        (PVOID, 'copyFunction'),
-    ]
-
-class Win64CatchableType(pstruct.type):
-    _fields_ = [
-        (DWORD, 'properties'),
-        (DWORD, 'offTypeDescriptor'),
-        (PMD, 'thisDisplacement'),
-        (int, 'sizeOrOffset'),
-        (DWORD, 'offCopyFunction'),
-    ]
-
-class Win32CatchableTypeInfo(pstruct.type):
-    _fields_ = [
-        (int, 'nCatchableTypes'),
-        (dyn.array(dyn.pointer(Win32CatchableType), 1), 'arrayOfCatchableTypes'),
-    ]
-
-class Win64CatchableTypeInfo(pstruct.type):
-    _fields_ = [
-        (int, 'nCatchableTypes'),
-        (DWORD, 'offArrayOfCatchableTypes'),
-    ]
-
-class Win32ThrowInfo(pstruct.type):
-    _fields_ = [
-        (DWORD, 'attributes'),
-        (PVOID, 'pmfnUnwind'),
-        (PVOID, 'pForwardCompat'),
-        (dyn.pointer(Win32CatchableTypeInfo), 'pCatchableTypeArray'),
-    ]
-
-class Win64ThrowInfo(pstruct.type):
-    _fields_ = [
-        (DWORD, 'attributes'),
-        (DWORD, 'offDtor'),
-        (DWORD, 'pfnForwardCompat'),
-        (DWORD, 'offCatchableTypeInfo'),
-    ]
-
-### this is all cilk-related
-class cilk_fiber(ptype.undefined): pass
-class cilkrts_worker(ptype.undefined): pass
-class cilkrts_stack_frame(ptype.undefined): pass
-
-class pending_exception_info32(pstruct.type):
-    _fields_ = [
-        (PVOID, 'rethrow_sp'),
-        (dyn.pointer(cilk_fiber), 'fiber'),
-        (dyn.pointer(cilkrts_worker), 'w'),
-        (dyn.pointer(cilkrts_stack_frame), 'saved_sf'),
-        (Win32ThrowInfo, 'fake_info'),
-        (dyn.pointer(Win32ThrowInfo), 'real_info'),
-        (DWORD, 'ExceptionCode'),
-        (DWORD, 'ExceptionFlags'),
-        (DWORD, 'NumberParameters'),
-        (dyn.array(ULONG_PTR, EXCEPTION_MAXIMUM_PARAMETERS), 'ExceptionInformation'),
-    ]
-
-class pending_exception_info64(pstruct.type):
-    _fields_ = [
-        (dyn.pointer(lambda: pending_exception_info), 'nested_exception'),
-        (ULONG64, 'rethrow_rip'),
-        (ULONG64, 'exception_rbp'),
-        (ULONG64, 'exception_rsp'),
-        (ULONG64, 'sync_rbp'),
-        (ULONG64, 'sync_rsp'),
-        (dyn.pointer(cilk_fiber), 'exception_fiber'),
-        (dyn.pointer(cilkrts_worker), 'w'),
-        (dyn.pointer(cilkrts_stack_frame), 'saved_protected_tail'),
-        (dyn.pointer(EXCEPTION_RECORD), 'pExceptRec'),
-        (Win64ThrowInfo, 'copy_ThrowInfo'),
-        (DWORD, 'offset_dtor'),
-        (int, 'nested_exception_found'),
-        (int, 'saved_protected_tail_worker_id'),
-    ]
-
-class exception_entry_t(pstruct.type):
-    _fields_ = [
-        (PVOID, 'exception_object'),
-        (dyn.pointer(pending_exception_info32), 'pei'),
-    ]
-
-class pending_exceptions_t(pstruct.type):
-    _fields_ = [
-        (long, 'lock'),
-        (int, 'max_pending_exceptions'),
-        (dyn.pointer(exception_entry_t), 'entries'),
+        (pint.uint32_t, 'flags'),
+        (PVOID, 'destructor'),
+        (cxx_exc_custom_handler, 'custom_handler'),
+        (dyn.pointer(cxx_type_info_table), 'type_info_table'),
     ]
