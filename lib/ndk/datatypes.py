@@ -404,30 +404,6 @@ class PLUID(pointer(LUID)): pass
 
 class KSPIN_LOCK(ULONG): pass
 
-class EXCEPTION_FLAGS(pbinary.struct):
-    _fields_ = [
-        (1,    'NONCONTINUABLE'),
-        (1,    'UNWINDING'),
-        (1,    'EXIT_UNWIND'),
-        (1,    'STACK_INVALID'),
-        (1,    'NESTED_CALL'),
-        (1,    'TARGET_UNWIND'),
-        (1,    'COLLIDED_UNWIND'),
-        (1+24, 'unknown'),
-    ]
-
-class EXCEPTION_RECORD(pstruct.type):
-    _fields_ = [
-        (DWORD, 'ExceptionCode'),
-        (EXCEPTION_FLAGS, 'ExceptionFlags'),
-        (lambda self: pointer(EXCEPTION_RECORD), 'ExceptionRecord'),
-        (PVOID, 'ExceptionAddress'),
-        (DWORD, 'NumberParameters'),
-        (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(NumberParameters)'),
-        (lambda self: dyn.array(ULONG_PTR, self['NumberParameters'].li.int()), 'ExceptionInformation'),
-    ]
-PEXCEPTION_RECORD = P(EXCEPTION_RECORD)
-
 class EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
         (lambda self: pointer(EXCEPTION_REGISTRATION), 'Next'),
