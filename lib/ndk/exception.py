@@ -113,7 +113,7 @@ class EHRegistrationNode(pstruct.type):
     _fields_ = [
         (lambda self: pointer(EHRegistrationNode), 'pNext'),
         (PVOID, 'frameHandler'),
-        (pint.int32_t, 'state'),
+        (int, 'state'),
     ]
 
 class UnwindMapEntry(pstruct.type):
@@ -215,13 +215,13 @@ class FuncInfo(pstruct.type):
         (pbinary.littleendian(_magicNumber), 'magicNumber'),
 
         (int, 'maxState'),
-        (pointer(UnwindMapEntry, _value_=PVALUE32), 'pUnwindMap'),
+        (lambda self: pointer(dyn.array(UnwindMapEntry, self['maxState'].li.int()), _value_=PVALUE32), 'pUnwindMap'),
 
         (int, 'nTryBlocks'),
-        (pointer(TryBlockMapEntry, _value_=PVALUE32), 'pTryBlockMap'),
+        (lambda self: pointer(dyn.array(TryBlockMapEntry, self['nTryBlocks'].li.int()), _value_=PVALUE32), 'pTryBlockMap'),
 
         (int, 'nIPMapEntries'),
-        (pointer(IPtoStateMap, _value_=PVALUE32), 'pIPtoStateMap'),
+        (lambda self: pointer(dyn.array(IPtoStateMap, self['nIPMapEntries'].li.int()), _value_=PVALUE32), 'pIPtoStateMap'),
         (lambda self: int if getattr(self, 'WIN64', False) else pint.int_t, 'dispUnwindHelp'),
 
         (pointer(ESTypeList, _value_=PVALUE32), 'pESTypeList'),
