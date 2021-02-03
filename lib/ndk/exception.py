@@ -90,10 +90,16 @@ class EXCEPTION_POINTERS(pstruct.type):
 
 class C_SCOPE_TABLE(pstruct.type):
     _fields_ = [
-        (pointer(ptype.undefined, _value_=PVALUE32), 'Begin'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'End'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'Handler'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'Target'),
+        (pointer(ptype.undefined, _value_=PVALUE32), 'BeginAddress'),
+        (pointer(ptype.undefined, _value_=PVALUE32), 'EndAddress'),
+        (pointer(ptype.undefined, _value_=PVALUE32), 'HandlerAddress'),
+        (pointer(ptype.undefined, _value_=PVALUE32), 'JumpTarget'),
+    ]
+
+class SCOPE_TABLE(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Count'),
+        (lambda self: dyn.array(C_SCOPE_TABLE, self['Count'].li.int()), 'ScopeRecord'),
     ]
 
 class CPPEH_RECORD(pstruct.type):
@@ -195,12 +201,18 @@ class FuncInfo(pstruct.type):
         # 0x19930520    - pre-vc2005
         # 0x19930521    - pESTypeList is valid
         # 0x19930522    - EHFlags is valid
+        class _bbtFlags(pbinary.enum):
+            width, _values_ = 3, [
+                ('VC6', 0),
+                ('VC7', 1), # 7.x (2002-2003)
+                ('VC8', 2), # 8 (2005)
+            ]
         _fields_ = [
             (29, 'number'),
-            (3, 'bbtFlags'),
+            (_bbtFlags, 'bbtFlags'),
         ]
     _fields_ = [
-        (_magicNumber, 'magicNumber'),
+        (pbinary.littleendian(_magicNumber), 'magicNumber'),
 
         (int, 'maxState'),
         (pointer(UnwindMapEntry, _value_=PVALUE32), 'pUnwindMap'),
@@ -216,11 +228,110 @@ class FuncInfo(pstruct.type):
         (int, 'EHFlags'),
     ]
 
+class UWOP_(pbinary.enum):
+    width, _values_ = 4, [
+        ('PUSH_NONVOL', 0),
+        ('ALLOC_LARGE', 1),
+        ('ALLOC_SMALL', 2),
+        ('SET_FPREG', 3),
+        ('SAVE_NONVOL', 4),
+        ('SAVE_NONVOL_FAR', 5),
+        ('SAVE_XMM', 6),
+        ('SAVE_XMM_FAR', 7),
+        ('SAVE_XMM128', 8),
+        ('SAVE_XMM128_FAR', 9),
+        ('PUSH_MACHFRAME', 10),
+    ]
+
+class UNWIND_CODE(pbinary.struct):
+    _fields_ = [
+        (4, 'operation_info'),
+        (UWOP_, 'unwind_operation_code'),
+        (8, 'offset_in_prolog'),
+    ]
+
+class UNW_FLAG_(pbinary.enum):
+    width, _values_ = 5, [
+        ('NHANDLER', 0),
+        ('EHANDLER', 1),
+        ('UHANDLER', 2),
+        ('FHANDLER', 3),
+        ('CHAININFO', 4),
+    ]
+
+class UNWIND_INFO(pstruct.type):
+    class _VersionFlags(pbinary.struct):
+        _fields_ = [
+            (UNW_FLAG_, 'Flags'),
+            (3, 'Version'),
+        ]
+    class _Frame(pbinary.struct):
+        _fields_ = [
+            (4, 'Offset'),
+            (4, 'Register'),
+        ]
+    class _HandlerInfo(pstruct.type):
+        _fields_ = [
+            (ULONG, 'ExceptionHandler'),
+            (ULONG, 'ExceptionData'),
+        ]
+    def __HandlerInfo(self):
+        res = self['VersionFlags'].li
+        return self._HandlerInfo if any(res['Flags'][item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else ptype.undefined
+    def __FunctionEntry(self):
+        res = self['VersionFlags'].li
+        return RUNTIME_FUNCTION if res['Flags']['CHAININFO'] else ptype.undefined
+    _fields_ = [
+        (_VersionFlags, 'VersionFlags'),
+        (BYTE, 'SizeOfProlog'),
+        (BYTE, 'CountOfCodes'),
+        (_Frame, 'Frame'),
+        (lambda self: dyn.array(UNWIND_CODE, self['CountOfCodes'].li.int()), 'UnwindCode'),
+        (__HandlerInfo, 'HandlerInfo'),
+        (__FunctionEntry, 'FunctionEntry'),
+    ]
+
 class RUNTIME_FUNCTION(pstruct.type):
     _fields_ = [
         (pointer(ptype.undefined, _value_=PVALUE32), 'BeginAddress'),
         (pointer(ptype.undefined, _value_=PVALUE32), 'EndAddress'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'UnwindInfoAddress'),
+        (pointer(UNWIND_INFO, _value_=PVALUE32), 'UnwindInfoAddress'),
+    ]
+PRUNTIME_FUNCTION = P(RUNTIME_FUNCTION)
+
+class EXCEPTION_ROUTINE(ptype.undefined): pass
+PEXCEPTION_ROUTINE = P(EXCEPTION_ROUTINE)
+
+class UNWIND_HISTORY_TABLE_ENTRY(pstruct.type):
+    _fields_ = [
+        (ULONG64, 'ImageBase'),
+        (PRUNTIME_FUNCTION, 'FunctionEntry'),
+    ]
+
+class UNWIND_HISTORY_TABLE(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Count'),
+        (UCHAR, 'Search'),
+        (ULONG64, 'LowAddress'),
+        (ULONG64, 'HighAddress'),
+        (lambda self: dyn.array(UNWIND_HISTORY_TABLE_ENTRY, self['Count'].li.int()), 'Entry'),
+    ]
+PUNWIND_HISTORY_TABLE = P(UNWIND_HISTORY_TABLE)
+
+class DISPATCHER_CONTEXT(pstruct.type):
+    _fields_ = [
+        (ULONG64, 'ControlPc'),
+        (ULONG64, 'ImageBase'),
+        (PRUNTIME_FUNCTION, 'FunctionEntry'),
+        (ULONG64, 'EstablisherFrame'),
+        (ULONG64, 'TargetIp'),
+        (PCONTEXT, 'ContextRecord'),
+        (PEXCEPTION_ROUTINE, 'LanguageHandler'),
+        (PVOID, 'HandlerData'),
+
+        (PUNWIND_HISTORY_TABLE, 'HistoryTable'),
+        (ULONG, 'ScopeIndex'),
+        (ULONG, 'Fill0'),
     ]
 
 # corrected with http://www.geoffchappell.com/studies/msvc/language/predefined/index.htm?tx=12,14
