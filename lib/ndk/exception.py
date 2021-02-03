@@ -196,7 +196,7 @@ class IPtoStateMap(pstruct.type):
         (int, 'state'),
     ]
 
-class FuncInfo(pstruct.type):
+class FuncInfo(pstruct.type, versioned):
     class _magicNumber(pbinary.struct):
         # 0x19930520    - pre-vc2005
         # 0x19930521    - pESTypeList is valid
@@ -318,7 +318,7 @@ class UNWIND_HISTORY_TABLE(pstruct.type):
     ]
 PUNWIND_HISTORY_TABLE = P(UNWIND_HISTORY_TABLE)
 
-class DISPATCHER_CONTEXT(pstruct.type):
+class DISPATCHER_CONTEXT(pstruct.type, versioned):
     _fields_ = [
         (ULONG64, 'ControlPc'),
         (ULONG64, 'ImageBase'),
@@ -355,7 +355,7 @@ class RTTIClassHierarchyDescriptor(pstruct.type):
         (lambda self: pointer(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
     ]
 
-class RTTICompleteObjectLocator(pstruct.type):
+class RTTICompleteObjectLocator(pstruct.type, versioned):
     _fields_ = [
         (unsigned_long, 'signature'),
         (unsigned_long, 'offset'),

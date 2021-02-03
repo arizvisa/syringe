@@ -422,7 +422,7 @@ class EXCEPTION_REGISTRATION(pstruct.type):
             self = self['Next'].d.li
         return result
 
-class NT_TIB(pstruct.type):
+class NT_TIB(pstruct.type, versioned):
     _fields_ = [
 #        (dyn.block(4), 'ExceptionList'),
         (pointer(EXCEPTION_REGISTRATION), 'ExceptionList'),
@@ -698,7 +698,7 @@ class _XMM_REGISTER_AREA(pstruct.type):
         (M128A, 'Xmm15'),
     ]
 
-class CONTEXT(pstruct.type):
+class CONTEXT(pstruct.type, versioned):
     class FloatState(dynamic.union):
         _fields_ = [
             (XMM_SAVE_AREA32, 'FltSave'),
