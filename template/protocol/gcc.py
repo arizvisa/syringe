@@ -50,7 +50,7 @@ class Key(ptype.definition):
     cache = {}
 
     class Header(pbinary.enum):
-        width, _values_ = 1, [
+        _width_, _values_ = 1, [
             ('object', 0),
             ('h221NonStandard', 1),
         ]
@@ -60,7 +60,7 @@ class GCCPDU(ptype.definition):
     cache = {}
 
     class Choice(pbinary.enum):
-        width, _values_ = 2, [
+        _width_, _values_ = 2, [
             ('request', 0),
             ('response', 1),
             ('indication', 2),
@@ -72,7 +72,7 @@ class RequestPDU(ptype.definition):
     type, cache = 0, {}
     class Choice(pbinary.flags):
         class _choice(pbinary.enum):
-            width, _values_ = 4, [
+            _width_, _values_ = 4, [
                 ('conferenceJoinRequest', 0),
                 ('conferenceAddRequest', 1),
                 ('conferenceLockRequest', 2),
@@ -100,7 +100,7 @@ class ResponsePDU(ptype.definition):
     type, cache = 1, {}
     class Choice(pbinary.flags):
         class _choice(pbinary.enum):
-            width, _values_ = 4, [
+            _width_, _values_ = 4, [
                 ('conferenceJoinResponse', 0),
                 ('conferenceAddResponse', 1),
                 ('conferenceLockResponse', 2),
@@ -124,7 +124,7 @@ class IndicationPDU(ptype.definition):
     type, cache = 2, {}
     class Choice(pbinary.flags):
         class _choice(pbinary.enum):
-            width, _values_ = 5, [
+            _width_, _values_ = 5, [
                 ('userIDIndication', 0),
                 ('conferenceLockIndication', 1),
                 ('conferenceUnlockIndication', 2),
@@ -157,7 +157,7 @@ class ConnectGCCPDU(ptype.definition):
 
     class Choice(pbinary.struct):
         class _choice(pbinary.enum):
-            width, _values_ = 3, [
+            _width_, _values_ = 3, [
                 ('conferenceCreateRequest', 0),
                 ('conferenceCreateResponse', 1),
                 ('conferenceQueryRequest', 2),
@@ -177,7 +177,7 @@ class ConnectGCCPDU(ptype.definition):
 class Privilege(ptype.type):
     class Header(pbinary.flags):
         class _privilege(pbinary.enum):
-            width, _values_ = 3, [
+            _width_, _values_ = 3, [
                 ('terminate', 0),
                 ('ejectUser', 1),
                 ('add', 2),
@@ -210,7 +210,7 @@ class ConferenceName(ptype.type):
 class TerminationMethod(ptype.type):
     class Header(pbinary.flags):
         class _enumeration(pbinary.enum):
-            width, _values_ = 1, [
+            _width_, _values_ = 1, [
                 ('automatic', 0),
                 ('manual', 1),
             ]
@@ -365,7 +365,7 @@ class ConferenceTerminateRequest(ptype.undefined):
     type = 4
     class Header(pbinary.flags):
         class _result(pbinary.enum):
-            width, _values_ = 1, [
+            _width_, _values_ = 1, [
                 ('userInitiated', 0),
                 ('timedConferenceTermination', 1),
             ]
@@ -379,7 +379,7 @@ class ConferenceTerminateResponse(ptype.undefined):
     type = 4
     class Header(pbinary.flags):
         class _result(pbinary.enum):
-            width, _values_ = 1, [
+            _width_, _values_ = 1, [
                 ('success', 0),
                 ('invalidRequester', 1),
             ]
@@ -442,7 +442,7 @@ class ConferenceCreateResponse(pstruct.type):
 
     class extensionResult(pbinary.flags):
         class Result(pbinary.enum):
-            width, _values_=  3, [
+            _width_, _values_=  3, [
                 ('success', 0),
                 ('userRejected', 1),
                 ('resourcesNotAvailable', 2),

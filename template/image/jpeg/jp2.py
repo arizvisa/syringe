@@ -964,7 +964,7 @@ class RGN(pstruct.type):
 
 class Sqcd(pbinary.struct):
     class _style(pbinary.enum):
-        width, _values_ = 5, [
+        _width_, _values_ = 5, [
             ('None', 0),
             ('Scalar derived', 1),
             ('Scalar expounded', 2),

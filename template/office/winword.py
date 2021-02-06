@@ -81,7 +81,7 @@ class Fts(pint.enum, pint.uint8_t):
     ]
 
 class _Fts(pbinary.enum):
-    width, _values_ = 3, Fts._values_[:]
+    _width_, _values_ = 3, Fts._values_[:]
 
 class Bool8(pint.enum, pint.uint8_t):
     _values_ = [
@@ -196,7 +196,7 @@ class Ipat(pint.enum, pint.uint16_t):
     ]
 
 class _Ipat(pbinary.enum):
-    width, _values_ = 6, Ipat._values_[:-1] + [('iPatNil', 0x3f)]
+    _width_, _values_ = 6, Ipat._values_[:-1] + [('iPatNil', 0x3f)]
 
 class BrcType(pint.enum, pint.uint8_t):
     _values_ = [
@@ -394,10 +394,10 @@ class BrcType(pint.enum, pint.uint8_t):
     ]
 
 class _BrcType(pbinary.enum):
-    width, _values_ = 8, BrcType._values_[:]
+    _width_, _values_ = 8, BrcType._values_[:]
 
 class TabJC(pbinary.enum):
-    width, _values_ = 3, [
+    _width_, _values_ = 3, [
         ('jcLeft', 0),
         ('jcCenter', 1),
         ('jcRight', 2),
@@ -407,7 +407,7 @@ class TabJC(pbinary.enum):
     ]
 
 class TabLC(pbinary.enum):
-    width, _values_ = 3, [
+    _width_, _values_ = 3, [
         ('tlcNone', 0),
         ('tlcDot', 1),
         ('tlcHyphen', 2),
@@ -497,27 +497,27 @@ class Ico(pint.enum, pint.uint8_t):
         raise NotImplementedError
 
 class _Ico(pbinary.enum):
-    width, _values_ = 5, Ico._values_
+    _width_, _values_ = 5, Ico._values_
     def COLORREF(self):
         # FIXME: Copy the table and cons a COLORREF using it and the index.
         raise NotImplementedError
 
 class _VerticalAlign(pbinary.enum):
-    width, _values_ = 2, [
+    _width_, _values_ = 2, [
         ('vaTop', 0x00),
         ('vaCenter', 0x01),
         ('vaBottom', 0x02),
     ]
 
 class _VerticalMergeFlag(pbinary.enum):
-    width, _values_ = 2, [
+    _width_, _values_ = 2, [
         ('fvmClear', 0x00),
         ('fvmMerge', 0x01),
         ('fvmRestart', 0x02),
     ]
 
 class _TextFlow(pbinary.enum):
-    width, _values_ = 3, [
+    _width_, _values_ = 3, [
         ('grpfTFlrtb', 0x0000),
         ('grpfTFtbrl', 0x0001),
         ('grpfTFbtlr', 0x0003),
@@ -778,18 +778,18 @@ class Copts(pstruct.type):
 class DopTypography(pstruct.type):
     class _b(pbinary.flags):
         class _iJustification(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('doNotCompress', 0),
                 ('compressPunctuation', 1),
                 ('compressPunctuationAndJapaneseKana', 2),
             ]
         class _iLevelOfKinsoku(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 # FIXME
                 ('forbidSpecifiedPunctuation', 2),
             ]
         class _iCustomKsu(pbinary.enum):
-            width, _values_ = 3, [
+            _width_, _values_ = 3, [
                 ('No language', 0),
                 ('Japanese', 1),
                 ('Chinese (simplified)', 2),
@@ -835,7 +835,7 @@ class Dogrid(pstruct.type):
 class Asumyi(pstruct.type):
     class _b(pbinary.flags):
         class _iViewBy(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('highlight-summary', 0),
                 ('hide-non-summary', 0),
                 ('insert-summary', 0),
@@ -902,7 +902,7 @@ class Brc(pstruct.type):
 
 class UFEL(pbinary.flags):
     class _iWarichuBracket(pbinary.enum):
-        width, _values_ = 3, [
+        _width_, _values_ = 3, [
             (0, 'No brackets'),
             (1, 'Round brackets'),
             (2, 'Square brackets'),
@@ -987,7 +987,7 @@ class Brc80MayBeNil(dynamic.union):
 
 class TCGRF(pbinary.flags):
     class _horzMerge(pbinary.enum):
-        width, _values_ = 2, [
+        _width_, _values_ = 2, [
             ('unmerged', 0),
             ('horizontal', 1),
             ('consecutive', 2),
@@ -1066,7 +1066,7 @@ class SprmOperandType(SprmOperandType):
 class Sprm_Enumeration(pint.enum, pint.uint16_t): pass
 class Sprm_Unpacked(pbinary.struct):
     class _sgc(pbinary.enum):
-        width, _values_ = 3, [
+        _width_, _values_ = 3, [
             ('paragraph', 1),
             ('character', 2),
             ('picture', 3),
@@ -1075,7 +1075,7 @@ class Sprm_Unpacked(pbinary.struct):
         ]
 
     class _spra(pbinary.enum):
-        width, _values_ = 3, [(cls.__name__, ti) for ti, cls in SprmOperandType.cache.items()]
+        _width_, _values_ = 3, [(cls.__name__, ti) for ti, cls in SprmOperandType.cache.items()]
 
     _fields_ = [
         (_spra, 'spra'),
@@ -1151,7 +1151,7 @@ class FcCompressed(pbinary.struct):
 
 class Prm0(pbinary.struct):
     class _isprm(pbinary.enum):
-        width, _values_ = 7, [
+        _width_, _values_ = 7, [
             ('sprmCLbcCRJ', 0x00),
             ('sprmPIncLvl', 0x04),
             ('sprmPJc', 0x05),
@@ -2239,13 +2239,13 @@ class sprmTSetBrc80(TableBrc80Operand): pass
 class DopBase(pstruct.type):
     class _b(pbinary.flags):
         class _fpc(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('end-of-section', 0),
                 ('bottom-margin', 1),
                 ('last-line-of-page', 2),
             ]
         class _rncFtn(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('previous-section', 0),
                 ('unique-section', 1),
                 ('unique-page', 2),
@@ -2295,13 +2295,13 @@ class DopBase(pstruct.type):
         )
     class _b2(pbinary.flags):
         class _rncEdn(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('previous-section', 0),
                 ('unique-section', 1),
                 ('unique-page', 2),
             ]
         class _epc(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('end-of-section', 0),
                 ('end-of-document', 3),
             ]
@@ -2320,7 +2320,7 @@ class DopBase(pstruct.type):
         )
     class _b3(pbinary.flags):
         class _wvkoSaved(pbinary.enum):
-            width, _values_ = 3, [
+            _width_, _values_ = 3, [
                 ('none', 0),
                 ('print', 1),
                 ('outline', 2),
@@ -2329,7 +2329,7 @@ class DopBase(pstruct.type):
                 ('web', 5),
             ]
         class _zkSaved(pbinary.enum):
-            width, _values_ = 2, [
+            _width_, _values_ = 2, [
                 ('none', 0),
                 ('fullPage', 1),
                 ('bestFit', 2),
@@ -2385,7 +2385,7 @@ class Dop97(pstruct.type):
         ]
     class _b(pbinary.flags):
         class _lvlDop(pbinary.enum):
-            width, _values_ = 4, [
+            _width_, _values_ = 4, [
                 (                             'Heading 1', 0x0),
                 (                      'Headings 1 and 2', 0x1),
                 (                   'Headings 1, 2 and 3', 0x2),

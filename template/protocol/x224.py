@@ -71,7 +71,7 @@ class DC_TPDU(pstruct.type):
 
 class EOT_NR(pbinary.struct):
     class unused(pbinary.enum):
-        width, _values_ = 7, []
+        _width_, _values_ = 7, []
 
     def __nr(self):
         res = self['EOT']
@@ -198,7 +198,7 @@ class X224ParameterArray(parray.block):
 class TPDU(pstruct.type):
     class _type(pbinary.struct):
         class code(pbinary.enum):
-            width, _values_ = 4, [
+            _width_, _values_ = 4, [
                 ('Connection request', 0xe),
                 ('Connection confirm', 0xd),
                 ('Disconnect request', 0x8),

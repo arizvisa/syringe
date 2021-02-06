@@ -617,13 +617,13 @@ class SPF(parray.block):
     _object_ = String
 
 class QR(pbinary.enum):
-    width, _values_ = 1, [
+    _width_, _values_ = 1, [
         ('query', 0),
         ('response', 1),
     ]
 
 class OPCODE(pbinary.enum):
-    width, _values_ = 4, [
+    _width_, _values_ = 4, [
         ('QUERY', 0),
         ('IQUERY', 1),
         ('STATUS', 2),
@@ -632,7 +632,7 @@ class OPCODE(pbinary.enum):
     ]
 
 class RCODE(pbinary.enum):
-    width, _values_ = 4, [
+    _width_, _values_ = 4, [
         ('NOERROR', 0),
         ('SERVFAIL', 1),
         ('NXDOMAIN', 2),
