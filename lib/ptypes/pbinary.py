@@ -189,7 +189,7 @@ def force(t, self, chain=[]):
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
     chain_s = "{!s}".format(chain)
-    raise error.TypeError(self, 'force<pbinary>', message='chain={!s} : refusing request to resolve {!s} to a type that does not inherit from pbinary.type : {:s}'.format(chain_s, t, path))
+    raise error.TypeError(self, 'force<pbinary>', message="chain={!s} : refusing request to resolve `{!s}` to a type that does not inherit from `{!s}` : {:s}".format(chain_s, t, type.__class__, path))
 
 class base(ptype.generic):
     """A base class that all binary types with position/size must inherit from.
@@ -340,7 +340,7 @@ class type(base):
 
         value, = values
         if not bitmap.isinstance(value):
-            raise error.TypeError(self, 'type.set', message='The specified value {!r} is not a bitmap'.format(value.__class__))
+            raise error.TypeError(self, 'type.set', message="The specified value ({!s}) is not a bitmap".format(value.__class__))
 
         self.value = bitmap.new(*value)
         return self
@@ -350,16 +350,17 @@ class type(base):
 
     def cast(self, type, **attrs):
         if not istype(type):
-            raise error.UserError(self, 'type.cast', message='Unable to cast binary type to a none-binary type. : {:s}'.format(type.typename()))
+            raise error.UserError(self, 'type.cast', message="Unable to cast binary type ({:s}) to a none-binary type ({:s})".format(self.typename(), type.typename()))
 
         source = bitmap.consumer()
         source.push(self.bitmap())
 
-        target = self.new(type, __name__=self.name(), position=self.getposition(), **attrs)
+        position = self.getposition()
+        target = self.new(type, __name__=self.name(), position=position, **attrs)
         try:
             target.__deserialize_consumer__(source)
         except StopIteration:
-            Log.warn('type.cast : {:s} : Incomplete cast to {:s}. Target has been left partially initialized.'.format(self.classname(), target.typename()))
+            Log.warn("type.cast : {:s} : Incomplete cast to `{:s}` due to missing data returned from provider at {!s}. Target has been left partially initialized.".format(self.classname(), target.typename(), position))
         return target
 
     def alloc(self, **attrs):
@@ -386,13 +387,13 @@ class type(base):
         return result
 
     def load(self, **attrs):
-        raise error.UserError(self, 'type.load', "Unable to load from a binary-type when reading from a byte-stream. Promote to a partial type and then .load().")
+        raise error.UserError(self, 'type.load', "Unable to load from a binary-type when reading from a byte-stream. User must promote to a `{!s}` and then `{:s}`".format(partial, '.'.join([self.typename(), 'load'])))
 
     def commit(self, **attrs):
-        raise error.UserError(self, 'type.commit', "Unable to commit from a binary-type when writing to a byte-stream. Promote to a partial type and then .commit().")
+        raise error.UserError(self, 'type.commit', "Unable to commit from a binary-type when writing to a byte-stream. User must promote to a `{!s}` and then `{:s}`.commit().".format(partial, '.'.join([self.typename(), 'commit'])))
 
     def serialize(self):
-        Log.warn('container.serialize : {:s} : Returning a potentially unaligned binary structure as a string'.format(self.classname()))
+        Log.warn("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
         return bitmap.data(self.bitmap())
 
 class integer(type):
@@ -401,13 +402,24 @@ class integer(type):
     This type is used internally to represent an element of any binary container.
     """
 
+    def __init__(self, *args, **kwds):
+        super(integer, self).__init__(*args, **kwds)
+
+        # check if the user is using the outdated integer.signed property so that
+        # we can warn them that they're using a compatibility hack.
+        if hasattr(self, 'signed'):
+            typename, description = self.typename(), 'a signed' if self.signed else 'an unsigned'
+            Log.warning("{:s}.integer : {:s} : Assigning the value ({!s}) to `{:s}` for defining {:s} integer is deprecated.".format(__name__, self.classname(), self.signed, '.'.join([typename, 'signed']), description))
+            Log.info("{:s}.integer: {:s} : To fix the definition of `{:s}` please return a negative size (in bits) for the `{:s}` method.".format(__name__, self.classname(), typename, '.'.join([typename, 'blockbits'])))
+        return
+
     def int(self):
         res = self.bitmap()
         return bitmap.value(res)
 
     def bits(self):
         if self.value is None:
-            Log.info("integer.size : {:s} : Refusing to get size of uninitialized type.".format(self.instance()))
+            Log.info("integer.size : {:s} : Returning an empty size in bits due to type `{:s}` being uninitialized.".format(self.instance(), self.classname()))
             return 0
         res = self.bitmap()
         return bitmap.size(res)
@@ -453,19 +465,23 @@ class integer(type):
             # check signedness value by the attribute (for backwards compatibility) or the value
             smult = -1 if getattr(self, 'signed', value < 0) else +1
 
+            # extract the size from either our current state or the integer.blockbits
+            # method, and then transform the size to its unsigned value.
             try: _, size = self.value or (0, self.blockbits() * smult)
             except Exception: size = 0
 
-            res = bitmap.new(value, size)
+            # recreate a bitmap using the user's chosen value along with the signedness
+            # as defined by the integer's type, and assign it to our instance.
+            res = bitmap.new(value, size * smult)
             return self.__setvalue__(res, **attrs)
 
         # Otherwise, this is a bitmap and we can proceed to assign it
         if not bitmap.isinstance(value):
-            raise error.UserError(self, 'integer.__setvalue__', message='tried to call .__setvalue__ with an unknown type. : {:s}'.format(value.__class__))
+            raise error.UserError(self, 'integer.__setvalue__', message="Tried to call method with an unknown type ({!s})".format(value.__class__))
 
         size = bitmap.size(value)
         if size != self.blockbits():
-            Log.info("type.__setvalue__ : {:s} : Specified bitmap width is different from typed bitmap width. : {:#x} != {:#x}".format(self.instance(), size, self.blockbits()))
+            Log.info("type.__setvalue__ : {:s} : The specified bitmap width ({:#x}) is different from the typed bitmap width ({:#x}).".format(self.instance(), size, self.blockbits()))
 
         # check signedness value by the attribute (for backwards compatibility) or the bitmap size
         smult = -1 if getattr(self, 'signed', bitmap.signed(value)) else +1
@@ -482,7 +498,7 @@ class integer(type):
         if bitmap.isinstance(value):
             self.value = bitmap.new(*value)
             return self
-        raise error.UserError(self, 'type.update', message='tried to call .update with an unknown type {:s}'.format(value.__class__))
+        raise error.UserError(self, 'integer.update', message="Tried to call method with an unknown type ({!s})".format(value.__class__))
 
     def copy(self, **attrs):
         attrs.setdefault('value', self.value[:])
@@ -530,22 +546,22 @@ class enum(integer):
         # the correct place unless it's a callable.
         if candidate is not None and not callable(getattr(self, candidate)):
             length, typename = getattr(self, candidate), self.typename()
-            Log.warning("{:s}.enum : {:s} : the width ({!s}) in {:s} has been re-assigned to {:s}.".format(__name__, self.classname(), length, '.'.join([typename, candidate]), '.'.join([typename, 'length'])))
+            Log.warning("{:s}.enum : {:s} : The defined width ({!s}) in `{:s}` has been re-assigned to `{:s}` due to deprecation.".format(__name__, self.classname(), length, '.'.join([typename, candidate]), '.'.join([typename, 'length'])))
             self.length = length
 
-        # ensure that the enumeration has ._values_ defined
+        # ensure that the enumeration has enum._values_ defined
         if not hasattr(self, '_values_'):
             self._values_ = []
 
         # check that enumeration's ._values_ are defined correctly
         if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in self._values_):
-            res = map(operator.attrgetter('__name__'), six.string_types)
+            res = [item.__name__ for item in six.string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            res = map(operator.attrgetter('__name__'), six.integer_types)
-            inttypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+            res = [item.__name__ for item in six.integer_types]
+            integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
+            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition in `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
@@ -554,10 +570,10 @@ class enum(integer):
 
         for value, items in res.items():
             if len(items) > 1:
-                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
+                Log.warning("{:s}.enum : {:s} : The definition for `{:s}` has more than one value ({!s}) defined for the enumeration \"{:s}\".".format(__name__, self.classname(), '.'.join([self.typename(), '_values_']), ', '.join(map("{!s}".format, items)), value))
             continue
 
-        # XXX: we could fix all the constants within ._values_ by validating that
+        # XXX: we could constrain all the constants within ._values_ by validating that
         #      they're within the boundaries of our type
         return
 
@@ -601,11 +617,19 @@ class enum(integer):
         return res
 
     def __getattr__(self, name):
+
+        # until we deprecate this method of accessing enumerations, we need to
+        # raise an AttributeError if the enum._values_ attribute is missing.
+        if name in {'_values_'}:
+            raise AttributeError(enum, self, name)
+
         # if getattr fails, then assume the user wants the value of
-        #     a particular enum value
+        # a particular enum value
         try:
+            # FIXME: this has been deprecated and should probably be completely
+            #        removed at some point.
             res = self.__byname__(name)
-            Log.warning("{:s}.enum : {:s} : Using {:s}.attribute for fetching the value for `{:s}` is deprecated.".format(__name__, self.classname(), self.typename(), name))
+            Log.warning("{:s}.enum : {:s} : Using `{:s}` for fetching the value of \"{:s}\" is deprecated.".format(__name__, self.classname(), '.'.join([self.typename(), '__getattr__']), name))
             return res
         except KeyError: pass
         raise AttributeError(enum, self, name)
@@ -776,7 +800,7 @@ class container(type):
         if not values:
             return self
         elif len(values) > 1:
-            raise error.UserError(self, 'container.set', message="Too many values ({:d}) passed to .set()".format(len(value)))
+            raise error.UserError(self, 'container.set', message="Too many values ({:d}) were passed to the method".format(len(value)))
         value, = values
 
         # If a bitmap or an integer was passed to us, then break it down and assign
@@ -798,12 +822,12 @@ class container(type):
             return self
 
         # Otherwise, we'll just fail here because we don't know what to do
-        raise error.UserError(self, 'container.set', message='Unable to apply value with an unsupported type ({:s})'.format(value.__class__.__name__))
+        raise error.UserError(self, 'container.set', message="Unable to apply value with an unsupported type ({:s})".format(value.__class__.__name__))
 
     def update(self, value):
         result = value if bitmap.isinstance(value) else (value, self.blockbits())
         if bitmap.size(result) != self.blockbits():
-            raise error.UserError(self, 'container.update', message="Unable to change size of bitmap container. : {:d} != {:d}".format(bitmap.size(result), self.blockbits()))
+            raise error.UserError(self, 'container.update', message="Unable to change size ({:d}) of bitmap container to requested size ({:d})".format(self.blockbits(), bitmap.size(result)))
 
         value = self.value if self.initializedQ() else self.a.value
         for item in value:
@@ -883,7 +907,7 @@ class container(type):
         # if element it's being assigned to is a container
         res = self.value[index]
         if not isinstance(res, type):
-            raise error.AssertionError(self, 'container.__setitem__', message='Unknown {:s} at index {:d} while trying to assign to it'.format(res.__class__, index))
+            raise error.AssertionError(self, 'container.__setitem__', message="Unknown `{!s}` at index {:d} while trying to assign to it".format(res.__class__, index))
 
         # if value is a bitmap
         if bitmap.isinstance(value):
@@ -1099,12 +1123,12 @@ class __structure_interface__(container):
     def unalias(self, alias):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
         if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
-            raise error.UserError(self, '__structure_interface__.__contains__', message='Not allowed to remove {:s} from list of aliases.'.format(alias.lower()))
+            raise error.UserError(self, '__structure_interface__.__contains__', message="Unable to remove field name \"{:s}\" from list of aliases".format(alias.lower()))
         del self.__fastindex[alias.lower()]
 
     def __getindex__(self, name):
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '__structure_interface__.__getindex__', message='Element names must be a string type. : {!r}'.format(name.__class__))
+            raise error.UserError(self, '__structure_interface__.__getindex__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
         try:
             return self.__fastindex[name.lower()]
         except KeyError:
@@ -1219,7 +1243,7 @@ class __structure_interface__(container):
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, six.string_types):
-            raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
+            raise error.UserError(self, '__structure_interface__.__contains__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
         return name in self.__fastindex
 
     def __iter__(self):
@@ -1392,7 +1416,7 @@ class struct(__structure_interface__):
 
             if value:
                 if len(result._fields_) != len(value):
-                    raise error.UserError(result, 'struct.set', message='Refusing to assign iterable to instance due to different lengths')
+                    raise error.UserError(result, 'struct.set', message="Unable to assign iterable to instance due to iterator length ({:d}) being different from instance ({:d})".format(len(value), len(result._fields_)))
                 [ assign((index, value)) for index, value in enumerate(value) ]
 
             [ assign((self.__getindex__(name), item)) for name, item in fields.items() ]
@@ -1438,7 +1462,7 @@ class terminatedarray(__array_interface__):
         except StopIteration as E:
             item = self.value[-1]
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.info("terminatedarray : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), item.typename(), item.getoffset(), path))
+            Log.info("terminatedarray.__deserialize_consumer__ : {:s} : Terminated at {:s}<{:x}:+??>\n\t{:s}".format(self.instance(), item.typename(), item.getoffset(), path))
 
         return self
 
@@ -1507,11 +1531,11 @@ class blockarray(terminatedarray):
                 position = (offset, suboffset)
 
             if total < 0:
-                Log.info('blockarray.__deserialize_consumer__ : {:s} : Read {:d} extra bits'.format(self.instance(), -total))
+                Log.info("blockarray.__deserialize_consumer__ : {:s} : Read {:d} extra bits during deserialization.".format(self.instance(), -total))
 
         except StopIteration as E:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
-            Log.warn('blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!r} while consuming {:d} bits'.format(self.instance(), position, item.blockbits()))
+            Log.warn("blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!s} while consuming {:d} bits.".format(self.instance(), position, item.blockbits()))
         return self
 
 class partial(ptype.container):
@@ -1607,7 +1631,7 @@ class partial(ptype.container):
         if self.byteorder is config.byteorder.bigendian:
             return bitmap.data(res)
         if self.byteorder is not config.byteorder.littleendian:
-            raise error.AssertionError(self, 'partial.serialize', message='byteorder {:s} is invalid'.format(self.byteorder))
+            raise error.AssertionError(self, 'partial.serialize', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
         return bytes(bytearray(reversed(bitmap.data(res))))
 
     def __deserialize_block__(self, block):
@@ -1632,7 +1656,7 @@ class partial(ptype.container):
     def __load_bigendian(self, **attrs):
         # big-endian. stream-based
         if self.byteorder is not config.byteorder.bigendian:
-            raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
+            raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
 
         with utils.assign(self, **attrs):
             offset = self.getoffset()
@@ -1644,7 +1668,7 @@ class partial(ptype.container):
     def __load_littleendian(self, **attrs):
         # little-endian. block-based
         if self.byteorder is not config.byteorder.littleendian:
-            raise error.AssertionError(self, 'partial.load', message='byteorder {:s} is invalid'.format(self.byteorder))
+            raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
 
         # XXX: self.new(t) can potentially get called due to this call to self.blocksize().
         #      This can cause a field's closure to get called and raise an InitializationError().
@@ -1712,7 +1736,7 @@ class partial(ptype.container):
                 result['byteorder'] = 'big'
             else:
                 if self.byteorder is not config.byteorder.littleendian:
-                    raise error.AssertionError(self, 'partial.properties', message='byteorder {:s} is invalid'.format(self.byteorder))
+                    raise error.AssertionError(self, 'partial.properties', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
                 result['byteorder'] = 'little'
         return result
 
@@ -2906,7 +2930,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_integer_clamped_sign_65():
+    def test_pbinary_integer_clamped_signcompat_65():
         class v(pbinary.integer):
             signed = True
             def blockbits(self):
@@ -2916,7 +2940,16 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_signed_66():
+    def test_pbinary_integer_clamped_sign_65():
+        class v(pbinary.integer):
+            def blockbits(self):
+                return -8*4
+        x = v().set(-0xffffffffffffff)
+        if x.int() == +1:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_signcompat_66():
         class e(pbinary.enum):
             _width_, signed = 8, True
             _values_ = [
@@ -2926,6 +2959,34 @@ if __name__ == '__main__':
             ]
         x = e().set('0xff')
         if x['0xff'] and x.int() == -1:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_signed_66():
+        class e(pbinary.enum):
+            _width_ = -8
+            _values_ = [
+                ('0xff', -1),
+                ('0xfe', -2),
+                ('0xfd', -3),
+            ]
+        x = e().set('0xff')
+        if x['0xff'] and x.int() == -1:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_signcompat_conflict_66():
+        class e(pbinary.enum):
+            signed = False
+            def blockbits(self):
+                return -8
+            _values_ = [
+                ('0xff', -1),
+                ('0xfe', -2),
+                ('0xfd', -3),
+            ]
+        x = e().set('0xff')
+        if x.int() == 0xff:
             raise Success
 
     @TestCase

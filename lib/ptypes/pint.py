@@ -223,7 +223,7 @@ class type(ptype.type):
         elif self.byteorder is config.byteorder.littleendian:
             return config.defaults.pint.littleendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
         else:
-            raise error.SyntaxError(self, 'type.classname', message='Unknown integer endianness {!r}'.format(self.byteorder))
+            raise error.SyntaxError(self, 'type.classname', message="Unknown byteorder ({!s}) was specified".format(self.byteorder))
         return typename
 
     def flip(self):
@@ -232,7 +232,7 @@ class type(ptype.type):
             return self.cast(littleendian(self.__class__))
         elif self.byteorder is config.byteorder.littleendian:
             return self.cast(bigendian(self.__class__))
-        raise error.UserError(self, 'type.flip', message='Unexpected byte order {!r}'.format(self.byteorder))
+        raise error.UserError(self, 'type.flip', message="Unknown byte order ({!s}) was specified".format(self.byteorder))
 
     def __getvalue__(self):
         if not self.initializedQ():
@@ -242,7 +242,7 @@ class type(ptype.type):
             return functools.reduce(lambda agg, item: agg << 8 | item, data, 0)
         elif self.byteorder is config.byteorder.littleendian:
             return functools.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
-        raise error.SyntaxError(self, 'integer_t.int', message='Unknown integer endianness {!r}'.format(self.byteorder))
+        raise error.SyntaxError(self, 'integer_t.int', message="Unknown byteorder {!s} was specified".format(self.byteorder))
 
     def __setvalue__(self, *values, **attrs):
         if not values:
@@ -254,7 +254,7 @@ class type(ptype.type):
         elif self.byteorder is config.byteorder.littleendian:
             transform = iter
         else:
-            raise error.SyntaxError(self, 'integer_t.set', message='Unknown integer endianness {!r}'.format(self.byteorder))
+            raise error.SyntaxError(self, 'integer_t.set', message="Unknown byteorder ({!s}) was specified".format(self.byteorder))
         mask = (1<<self.blocksize() * 8) - 1
         integer &= mask
         bc = bitmap.new(integer, self.blocksize() * 8)
@@ -353,20 +353,19 @@ class enum(type):
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)
 
-        # ensure that the enumeration has ._values_ defined
+        # ensure that the enumeration has enum._values_ defined
         if not hasattr(self, '_values_'):
             self._values_ = []
 
         # check that enumeration's ._values_ are defined correctly
         if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in self._values_):
-            Fname = operator.attrgetter('__name__')
-            res = [Fname(item) for item in six.string_types]
+            res = [item.__name__ for item in six.string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            res = [Fname(item) for item in six.integer_types]
-            inttypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
+            res = [item.__name__ for item in six.integer_types]
+            integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "{:s}._values_ is of an incorrect format. Should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format(self.typename(), stringtypes, inttypes))
+            raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
 
         # collect duplicate values and give a warning if there are any found for a name
         res = {}
@@ -375,10 +374,11 @@ class enum(type):
 
         for value, items in res.items():
             if len(items) > 1:
-                Log.warning("{:s}.enum : {:s} : {:s}._values_ has more than one value defined for key `{:s}` : {:s}".format(__name__, self.classname(), self.typename(), value, value, ', '.join(res)))
+                Log.warning("{:s}.enum : {:s} : The definition for `{:s}` has more than one value ({!s}) defined for the enumeration \"{:s}\".".format(__name__, self.classname(), '.'.join([self.typename(), '_values_']), ', '.join(map("{!s}".format, items)), value))
             continue
 
-        # FIXME: fix constants within ._values_ by checking to see if they're out of bounds of our type
+        # XXX: we could constrain all the constants within ._values_ by validating that
+        #      they're within the boundaries of our type
         return
 
     def has(self, *value):
@@ -418,11 +418,19 @@ class enum(type):
         return res
 
     def __getattr__(self, name):
+
+        # until we deprecate this method of accessing enumerations, we need to
+        # raise an AttributeError if the enum._values_ attribute is missing.
+        if name in {'_values_'}:
+            raise AttributeError(enum, self, name)
+
         # if getattr fails, then assume the user wants the value of
-        #     a particular enum value
+        # a particular enum value
         try:
+            # FIXME: this has been deprecated and should probably be completely
+            #        removed at some point.
             res = self.__byname__(name)
-            Log.warning("{:s}.enum : {:s} : Using {:s}.attribute for fetching the value for `{:s}` is deprecated.".format(__name__, self.classname(), self.typename(), name))
+            Log.warning("{:s}.enum : {:s} : Using `{:s}` for fetching the value of \"{:s}\" is deprecated.".format(__name__, self.classname(), '.'.join([self.typename(), '__getattr__']), name))
             return res
         except KeyError: pass
         raise AttributeError(enum, self, name)
