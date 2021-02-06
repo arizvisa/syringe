@@ -435,7 +435,7 @@ if __name__ == '__main__':
     def test_mapexception_4():
         try:
             blah_noexception()
-        except:
+        except Exception:
             raise Failure
         raise Success
     @TestCase

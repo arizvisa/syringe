@@ -196,7 +196,7 @@ class __array_interface__(ptype.container):
 
     def __element__(self):
         try: length = len(self)
-        except: length = self.length or 0
+        except Exception: length = self.length or 0
 
         object = self._object_
         if object is None:

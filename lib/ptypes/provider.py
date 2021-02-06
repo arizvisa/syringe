@@ -486,7 +486,7 @@ class fileobj(bounded):
 
     def __del__(self):
         try: self.close()
-        except: pass
+        except Exception: pass
 filebase = fileobj
 
 ## other providers
@@ -783,7 +783,7 @@ try:
 
         def __del__(self):
             try: self.close()
-            except: pass
+            except Exception: pass
 
         def __repr__(self):
             '''x.__repr__() <=> repr(x)'''
@@ -1253,7 +1253,7 @@ try:
             try:
                 data = self.__pykd__.loadBytes(self.addr, amount)
                 res = bytearray(data)
-            except:
+            except Exception:
                 raise error.ConsumeError(self, self.addr, amount, 0)
             self.addr += amount
             return builtins.bytes(res)
@@ -1462,7 +1462,7 @@ if __name__ == '__main__':
             return self.name
         def __exit__(self, *args):
             try: os.unlink(self.name)
-            except: pass
+            except Exception: pass
             del(self.name)
 
     class temporaryfile(object):
@@ -1491,7 +1491,7 @@ if __name__ == '__main__':
 
             try:
                 z.store('nope')
-            except:
+            except Exception:
                 raise Success
             finally:
                 z.close()
@@ -1512,7 +1512,7 @@ if __name__ == '__main__':
             try:
                 a = z.consume(len(data))
                 assert a == data
-            except:
+            except Exception:
                 raise Success
             finally:
                 z.close()

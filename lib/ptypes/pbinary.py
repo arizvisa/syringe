@@ -454,7 +454,7 @@ class integer(type):
             smult = -1 if getattr(self, 'signed', value < 0) else +1
 
             try: _, size = self.value or (0, self.blockbits() * smult)
-            except: size = 0
+            except Exception: size = 0
 
             res = bitmap.new(value, size)
             return self.__setvalue__(res, **attrs)

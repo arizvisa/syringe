@@ -96,7 +96,7 @@ class SerializationError(ObjectBase):
         return '{{{:s}}}'.format(str().join(map("<{:s}>".format, self.object.backtrace() or [])))
     def position(self):
         try: bs = '{:+x}'.format(self.object.blocksize())
-        except: bs = '+?'
+        except Exception: bs = '+?'
         return '{:x}:{:s}'.format(self.object.getoffset(), bs)
     def __str__(self):
         return ' : '.join((self.objectname(), self.instance(), self.path(), super(SerializationError,self).__str__()))

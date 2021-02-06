@@ -758,7 +758,7 @@ if 'HeapEntry':
                 self._EncodedPointerKey = res
 
             # FIXME: Log that this encoded-pointer is non-encoded due to being unable to locate the key
-            except:
+            except Exception:
                 pass
 
             if hasattr(self, '_EncodedPointerKey'):

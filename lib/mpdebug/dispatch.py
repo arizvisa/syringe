@@ -13,7 +13,7 @@ class event(list):
                 if res is self.status.userbreak:
                     result = self.status.userbreak
                 continue
-            except:
+            except Exception:
                 logging.exception("debug.dispatch.event raised an Exception and will break to the user:")
                 result = self.status.userbreak
         return result

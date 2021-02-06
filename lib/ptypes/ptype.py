@@ -628,7 +628,7 @@ class __interface__(object):
         try:
             bs = self.blocksize()
             return "{:s}[{:x}:{:+x}]".format(name, ofs, bs)
-        except:
+        except Exception:
             pass
         return "{:s}[{:x}:+???]".format(name, ofs)
 
@@ -650,7 +650,7 @@ class __interface__(object):
 
         buf = self.serialize()
         try: sz = self.size()
-        except: sz = self.blocksize()
+        except Exception: sz = self.blocksize()
 
         length = options.setdefault('width', Config.display.hexdump.width)
         options.setdefault('offset', self.getoffset())
@@ -670,7 +670,7 @@ class __interface__(object):
 
         buf = self.serialize()
         try: sz = self.size()
-        except: sz = self.blocksize()
+        except Exception: sz = self.blocksize()
 
         options.setdefault('offset', self.getoffset())
 
@@ -1329,7 +1329,7 @@ class container(base):
         # check the blocksize(), if it's invalid then return what we have since we can't figure out the padding anyways
         try:
             res = self.blocksize()
-        except:
+        except Exception:
             return b''.join(map(operator.methodcaller('serialize'), iter(self.value)))
 
         # if there's no blocksize, then this field is empty
@@ -1506,7 +1506,7 @@ class container(base):
         if self.value is not None:
             def blocksizeorelse(self):
                 try: res = self.blocksize()
-                except: res = 0
+                except Exception: res = 0
                 return res
 
             #data = ''.join([item.serialize() if item.initializedQ() else '?'*blocksizeorelse(item)] for item in self.value)

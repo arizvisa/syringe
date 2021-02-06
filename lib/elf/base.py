@@ -23,10 +23,10 @@ class ElfXX_BaseAddr(ptype.opointer_t):
 
     def classname(self):
         try: object = self._object_() if callable(self._object_) else self._object_
-        except: object = self._object_
+        except Exception: object = self._object_
 
         try: type = object.classname() if ptypes.isinstance(object) else object.typename()
-        except: pass
+        except Exception: pass
         else: return "{:s}<{:s}>".format(self.typename(), type)
 
         type = object.__name__

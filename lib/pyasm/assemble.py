@@ -115,7 +115,7 @@ def assemble(input):
                 if opnum in hasjabs:
                     oparg = parsed['label'][oparg]
 
-            except:
+            except Exception:
                 raise ParseError((linenum, 'unable to resolve "%s"'% columns[1]))
 
         elif opnum in hascompare:
