@@ -491,10 +491,10 @@ class integer(type):
 class enum(integer):
     '''
     A pbinary.integer for managing constants used when definiing a binary type.
-    i.e. class myinteger(pbinary.enum): width = N
+    i.e. class myinteger(pbinary.enum): _width_ = N
 
     Settable properties:
-        width:int
+        _width_:int
             This defines the width of the enumeration.
         _values_:array( tuple( name, value ), ... )
             This contains which enumerations are defined.
@@ -502,6 +502,36 @@ class enum(integer):
 
     def __init__(self, *args, **kwds):
         super(enum, self).__init__(*args, **kwds)
+
+        # if the enum.length property was assigned or the user provided a custom
+        # implementation of enum.blockbits, then we have no work to do.
+        properties = ['_width_', 'width']
+        if hasattr(self, 'length') or not utils.callable_eq(self.blockbits, enum.blockbits):
+            candidate = None
+
+        # if all the properties were assigned, then we filter them for values
+        # that aren't callable and assume the user meant that length.
+        elif all(hasattr(self, fld) for fld in properties):
+            candidates = (fld for fld in properties if not callable(getattr(self, fld)))
+            candidate = six.next(candidates, '_width_')
+
+        # otherwise, we just grab the first property that was assigned and
+        # use that one to warn the user about.
+        elif any(hasattr(self, fld) for fld in properties):
+            iterable = (fld for fld in properties if hasattr(self, fld))
+            candidate = six.next(iterable, None)
+
+        # anything else means the user hasn't assigned any property.
+        else:
+            candidate = None
+
+        # if we found a candidate for the width of the instance that we need
+        # to warn about, then extract the length from it, and reassign it to
+        # the correct place unless it's a callable.
+        if candidate is not None and not callable(getattr(self, candidate)):
+            length, typename = getattr(self, candidate), self.typename()
+            Log.warning("{:s}.enum : {:s} : the width ({!s}) in {:s} has been re-assigned to {:s}.".format(__name__, self.classname(), length, '.'.join([typename, candidate]), '.'.join([typename, 'length'])))
+            self.length = length
 
         # ensure that the enumeration has ._values_ defined
         if not hasattr(self, '_values_'):
@@ -532,7 +562,7 @@ class enum(integer):
         return
 
     def blockbits(self):
-        return getattr(self, 'width', 0 if self.value is None else bitmap.size(self.value))
+        return getattr(self, 'length', 0 if self.value is None else bitmap.size(self.value))
 
     def has(self, *value):
         '''Return True if the provided parameter is contained by the enumeration. If no value is provided, then use the current instance.'''
@@ -2793,8 +2823,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_set_integer_58():
         class e(pbinary.enum):
-            width = 4
-            _values_ = [
+            _width_, _values_ = 4, [
                 ('aa', 0xa),
                 ('bb', 0xb),
                 ('cc', 0xc),
@@ -2806,8 +2835,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_set_name_59():
         class e(pbinary.enum):
-            width = 8
-            _values_ = [
+            _width_, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2819,8 +2847,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_set_unknown_name_60():
         class e(pbinary.enum):
-            width = 8
-            _values_ = [
+            _width_, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2832,8 +2859,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_check_attributes_61():
         class e(pbinary.enum):
-            width = 8
-            _values_ = [
+            _width_, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2846,8 +2872,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_check_output_name_62():
         class e(pbinary.enum):
-            width = 8
-            _values_ = [
+            _width_, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2860,8 +2885,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_check_output_number_63():
         class e(pbinary.enum):
-            width = 8
-            _values_ = [
+            _width_, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2894,7 +2918,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_signed_66():
         class e(pbinary.enum):
-            width, signed = 8, True
+            _width_, signed = 8, True
             _values_ = [
                 ('0xff', -1),
                 ('0xfe', -2),
@@ -2920,7 +2944,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_struct_enum_68():
         class e(pbinary.enum):
-            width, signed = 4, True
+            _width_, signed = 4, True
             _values_ = [
                 ('a', -6),
                 ('b', -5),
@@ -2941,7 +2965,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_array_enum_69():
         class e(pbinary.enum):
-            width, signed = 4, True
+            _width_, signed = 4, True
             _values_ = [
                 ('a', -6),
                 ('b', -5),
@@ -3093,6 +3117,109 @@ if __name__ == '__main__':
         a = t().a
         del(a.v[1])
         if len(a.v) == 1 and a.getposition('uninitialized') == (4, 0):
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_1():
+        class t(pbinary.enum):
+            width, _values_ = 4, []
+
+        x = t()
+        if getattr(x, 'length', -1) == t.width and x.blockbits() == t.width:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_2():
+        class t(pbinary.enum):
+            _width_, _values_ = 4, []
+
+        x = t()
+        if getattr(x, 'length', -1) == t._width_ and x.blockbits() == t._width_:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_3():
+        class t(pbinary.enum):
+            _width_, width, _values_ = 4, 8, []
+
+        x = t()
+        if getattr(x, 'length', -1) == t._width_ and x.blockbits() == t._width_:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_4():
+        class t(pbinary.enum):
+            _width_, width, length, _values_ = 4, 8, 16, []
+        correct = [getattr(t, property) for property in ['_width_','width','length']]
+
+        x = t()
+        if correct == [getattr(x, property) for property in ['_width_','width','length']] and x.blockbits() == t.length:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_5():
+        class t(pbinary.enum):
+            width, _values_ = 7, []
+            @classmethod
+            def _width_(cls):
+                raise NotImplementedError
+
+        x = t()
+        if getattr(x, 'length', -1) == t.width and x.blockbits() == t.width:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_6():
+        class t(pbinary.enum):
+            _width_, _values_ = 7, []
+            @classmethod
+            def width(cls):
+                raise NotImplementedError
+
+        x = t()
+        if getattr(x, 'length', -1) == t._width_ and x.blockbits() == t._width_:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_7():
+        class t(pbinary.enum):
+            _values_ = []
+
+            # both properties are callable, so nothing should happen.
+            @classmethod
+            def width(cls):
+                raise NotImplementedError
+            @classmethod
+            def _width_(cls):
+                raise NotImplementedError
+
+        x = t()
+        if not hasattr(x, 'length') and x.blockbits() == 0:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_8():
+        class t(pbinary.enum):
+            _values_ = []
+            # no properties should be assigned because this is
+            # using a customized method.
+            def blockbits(self):
+                return 16
+
+        x = t()
+        if not hasattr(x, 'length') and x.blockbits() == 16:
+            raise Success
+
+    @TestCase
+    def test_pbinary_enum_width_fixup_9():
+        class t(pbinary.enum):
+            width, _width_, _values_ = 7, 14, []
+            @classmethod
+            def blockbits(cls):
+                return 21
+
+        x = t()
+        if x.blockbits() == t.blockbits() and x.width == t.width and x._width_ == t._width_:
             raise Success
 
 if __name__ == '__main__':
