@@ -125,7 +125,7 @@ def dump_exports(pe, jsname, outfile):
     dd = pe['DataDirectory']['ExportTable']
     try:
         et = dd['Address'].d.l
-    except:
+    except Exception:
         six.print_("const {:s} = {{".format(jsname), file=outfile)
         six.print_("};", file=outfile)
         return jsname
@@ -147,7 +147,7 @@ def dump_imports(pe, jsname, outfile):
     dd = pe['DataDirectory']['ImportTable']
     try:
         it = dd['Address'].d.l
-    except:
+    except Exception:
         six.print_("const {:s} = {{".format(jsname), file=outfile)
         six.print_("};", file=outfile)
         return jsname

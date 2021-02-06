@@ -122,7 +122,7 @@ if __name__ == '__main__':
     try:
         filename = sys.argv[1]
 
-    except:
+    except Exception:
         print('Usage: %s [-z] filename [hexaddress]'% sys.argv[0])
         sys.exit(0)
 

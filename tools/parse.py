@@ -22,8 +22,8 @@ def iterfiles(parser, paths):
         log(': %d : %s : %s : parsing...',i+1,parser_name,filename)
         t1 = time.time()
         try:
-            p=p.l
-        except:
+            p = p.l
+        except Exception:
             t2 = time.time()
             exception = traceback.format_exc()
 

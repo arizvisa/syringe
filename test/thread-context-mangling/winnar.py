@@ -7,7 +7,7 @@ address = 0x7C935288
 try:
     guiThread, address = [int(x,16) for x in sys.argv[1:]]
 
-except:
+except Exception:
     blah = """
     guiThread
     specify the thread that you know contains the GDI message pump

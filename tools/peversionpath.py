@@ -68,7 +68,7 @@ if __name__ == '__main__':
     try:
         filename = args.pop(1)
 
-    except:
+    except Exception:
         help.print_help()
         sys.exit(0)
 
