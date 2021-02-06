@@ -1209,7 +1209,7 @@ class BOF5(BOF):
         if not hasattr(self, '_biffver'):
             try:
                 self._biffver
-            except:
+            except Exception:
                 import traceback
                 traceback.print_stack()
         return lookup.get(version.int(), self._biffver)
@@ -4799,7 +4799,7 @@ class TxO(pstruct.type):
         def reserved(self, type=type):
             try:
                 res = self.__previousObjRecord()
-            except:
+            except Exception:
                 return undefined
             if res.d['cmo'].li['data']['ot'].int() not in {0,5,7,11,12,14}:
                 return type
@@ -4811,7 +4811,7 @@ class TxO(pstruct.type):
             res = self.__previousObjRecord()
             if res.d['cmo'].li['data']['ot'].int() in {0,5,7,11,12,14}:
                 return ControlInfo
-        except: pass
+        except Exception: pass
         return ControlInfo
 
     _fields_ = [

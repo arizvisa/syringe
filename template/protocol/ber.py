@@ -121,7 +121,7 @@ class Structured(parray.type):
         try:
             if hasattr(self, '_fields_'):
                 index = next(i for i, (_, name) in enumerate(self._fields_) if name.lower() == index.lower())
-        except:
+        except Exception:
             return super(Structured, self).__getitem__(index)
         return super(Structured, self).__getitem__(index)
 

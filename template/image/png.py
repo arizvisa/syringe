@@ -90,7 +90,7 @@ class Chunk(pstruct.type):
         res = super(Chunk, self).properties()
         res['CRC'] = self.Calculate()
         try: res['Valid'] = res['CRC'] == self['crc'].int()
-        except: res['Valid'] = False
+        except Exception: res['Valid'] = False
         return res
 
     _fields_ = [

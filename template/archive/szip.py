@@ -57,7 +57,7 @@ class kSignature(pstruct.type):
         def properties(self):
             res = super(kSignature.sigbase, self).properties()
             try: res['valid'] = self.valid()
-            except: res['valid'] = False
+            except Exception: res['valid'] = False
             return res
 
     class sig1(u16, sigbase):
