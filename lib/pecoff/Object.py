@@ -29,14 +29,14 @@ class ImportHeader(pstruct.type):
 class ImportData(pstruct.type):
     class Type(pbinary.struct):
         class _type(pbinary.enum):
-            width = 2
+            _width_ = 2
             _values_ = [
                 ('IMPORT_CODE', 0),
                 ('IMPORT_DATA', 1),
                 ('IMPORT_CONST', 2),
             ]
         class _name(pbinary.enum):
-            width = 3
+            _width_ = 3
             _values_ = [
                 ('IMPORT_ORDINAL', 0),
                 ('IMPORT_NAME', 1),

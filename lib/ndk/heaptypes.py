@@ -190,7 +190,7 @@ if 'HeapEntry':
     class HEAP_ENTRY(pstruct.type, versioned):
         class UnusedBytes(pbinary.flags):
             class _Type(pbinary.enum):
-                width, _values_ = 3, [
+                _width_, _values_ = 3, [
                     ('Chunk', 0),
                     ('Segment', 1),
                     ('LargeChunk', 4),

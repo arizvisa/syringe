@@ -851,7 +851,7 @@ class TaggedIndex(CodedIndex, pstruct.type):
 
 class TypeDefOrRef(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('TypeDef', 0),
             ('TypeRef', 1),
@@ -860,7 +860,7 @@ class TypeDefOrRef(TaggedIndex):
 
 class HasConstant(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('Field', 0),
             ('Param', 1),
@@ -869,7 +869,7 @@ class HasConstant(TaggedIndex):
 
 class HasCustomAttribute(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 5
+        _width_ = 5
         _values_ = [
             ('MethodDef', 0),
             ('Field', 1),
@@ -894,7 +894,7 @@ class HasCustomAttribute(TaggedIndex):
 
 class HasFieldMarshal(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('Field', 0),
             ('Param', 1),
@@ -902,7 +902,7 @@ class HasFieldMarshal(TaggedIndex):
 
 class HasDeclSecurity(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('TypeDef', 0),
             ('MethodDef', 1),
@@ -911,7 +911,7 @@ class HasDeclSecurity(TaggedIndex):
 
 class MemberRefParent(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('TypeDef', 0),
             ('TypeRef', 1),
@@ -922,7 +922,7 @@ class MemberRefParent(TaggedIndex):
 
 class HasSemantics(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('Event', 0),
             ('Property', 1),
@@ -930,7 +930,7 @@ class HasSemantics(TaggedIndex):
 
 class MethodDefOrRef(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('MethodDef', 0),
             ('MemberRef', 1),
@@ -938,7 +938,7 @@ class MethodDefOrRef(TaggedIndex):
 
 class MemberForwarded(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('Field', 0),
             ('MethodDef', 1),
@@ -946,7 +946,7 @@ class MemberForwarded(TaggedIndex):
 
 class Implementation_ExportedType(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('File', 0),
             ('ExportedType', 1),
@@ -954,7 +954,7 @@ class Implementation_ExportedType(TaggedIndex):
 
 class Implementation_AssemblyRef(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('File', 0),
             ('AssemblyRef', 1),
@@ -962,7 +962,7 @@ class Implementation_AssemblyRef(TaggedIndex):
 
 class CustomAttributeType(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('Not used', 0),
             ('Not used', 1),
@@ -973,7 +973,7 @@ class CustomAttributeType(TaggedIndex):
 
 class ResolutionScope(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('Module', 0),
             ('ModuleRef', 1),
@@ -983,7 +983,7 @@ class ResolutionScope(TaggedIndex):
 
 class TypeOrMethodDef(TaggedIndex):
     class Tag(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('TypeDef', 0),
             ('MethodDef', 1),
@@ -992,7 +992,7 @@ class TypeOrMethodDef(TaggedIndex):
 ## Attributes and Flags
 class TypeAttributes(pbinary.flags):
     class VisibilityMask(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('NotPublic', 0),
             ('Public', 1),
@@ -1004,20 +1004,20 @@ class TypeAttributes(pbinary.flags):
             ('NestedFamORAssem', 7),
         ]
     class LayoutMask(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('AutoLayout', 0),
             ('SequentialLayout', 1),
             ('ExplicitLayout', 2),
         ]
     class ClassSemanticsMask(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('Class', 0),
             ('Interface', 1),
         ]
     class StringFormatMask(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('AnsiClass', 0),
             ('UnicodeClass', 1),
@@ -1048,7 +1048,7 @@ class TypeAttributes(pbinary.flags):
 
 class FieldAttributes(pbinary.flags):
     class FieldAccessMask(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('CompilerControlled', 0),
             ('Private', 1),
@@ -1078,7 +1078,7 @@ class FieldAttributes(pbinary.flags):
 
 class MethodImplAttributes(pbinary.flags):
     class CodeTypeMask(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('IL', 0),
             ('Native', 1),
@@ -1086,7 +1086,7 @@ class MethodImplAttributes(pbinary.flags):
             ('Runtime', 3),
         ]
     class ManagedMask(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('Unmanaged', 1),
             ('Managed', 0),
@@ -1106,7 +1106,7 @@ class MethodImplAttributes(pbinary.flags):
 
 class MethodAttributes(pbinary.flags):
     class MemberAccessMask(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('CompilerControlled', 0),
             ('Private', 1),
@@ -1117,7 +1117,7 @@ class MethodAttributes(pbinary.flags):
             ('Public', 6),
         ]
     class VtableLayoutMask(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('ReuseSlot', 0),
             ('NewSlot', 1),
@@ -1182,7 +1182,7 @@ class MethodSemanticsAttributes(pbinary.flags):
 
 class PInvokeAttributes(pbinary.flags):
     class CharSetMask(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('CharSetNotSpec', 0),
             ('CharSetAnsi', 1),
@@ -1190,7 +1190,7 @@ class PInvokeAttributes(pbinary.flags):
             ('CharSetAuto', 3),
         ]
     class CallConvMask(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('CallConvWinapi', 1),
             ('CallConvCdecl', 2),
@@ -1210,11 +1210,11 @@ class PInvokeAttributes(pbinary.flags):
 
 class AssemblyFlags(pbinary.flags):
     class Reserved(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = []
 
     class HasPublicKey(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('SideBySideCompatible', 0),
             ('HasPublicKey', 1),
@@ -1234,7 +1234,7 @@ class AssemblyFlags(pbinary.flags):
 
 class FileAttributes(pbinary.flags):
     class ContainsNoMetaData(pbinary.enum):
-        width = 1
+        _width_ = 1
         _values_ = [
             ('ContainsMetaData', 0),
             ('ContainsNoMetaData', 1),
@@ -1246,7 +1246,7 @@ class FileAttributes(pbinary.flags):
 
 class ManifestResourceAttributes(pbinary.flags):
     class VisibilityMask(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('Public', 1),
             ('Private', 2),
@@ -1258,7 +1258,7 @@ class ManifestResourceAttributes(pbinary.flags):
 
 class GenericParamAttributes(pbinary.flags):
     class VarianceMask(pbinary.enum):
-        width = 2
+        _width_ = 2
         _values_ = [
             ('None', 0),
             ('Covariant', 1),
@@ -1266,7 +1266,7 @@ class GenericParamAttributes(pbinary.flags):
         ]
 
     class SpecialConstraintMask(pbinary.enum):
-        width = 3
+        _width_ = 3
         _values_ = [
             ('ReferenceTypeConstraint', 1),
             ('NotNullableValueTypeConstraint', 2),

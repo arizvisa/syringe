@@ -24,11 +24,11 @@ class POOL_TYPE(pbinary.enum):
 
 @pbinary.littleendian
 class POOL_TYPE16(POOL_TYPE):
-    width = 16
+    _width_ = 16
 
 @pbinary.littleendian
 class POOL_TYPE32(POOL_TYPE):
-    width = 32
+    _width_ = 32
 
 class POOL_HEADER(pstruct.type, versioned):
     class _Ulong1(pbinary.struct):

@@ -23,7 +23,7 @@ class UNWIND_CODE(dyn.union):
 class UNWIND_INFO(pstruct.type):
     class Header(pbinary.struct):
         class UNW_FLAG_(pbinary.enum):
-            width = 5
+            _width_ = 5
             _values_ = [
                 ('NHANDLER', 0),
                 ('EHANDLER', 1),

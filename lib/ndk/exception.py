@@ -271,7 +271,7 @@ class FuncInfo(pstruct.type, versioned):
         # 0x19930521    - pESTypeList is valid
         # 0x19930522    - EHFlags is valid
         class _bbtFlags(pbinary.enum):
-            width, _values_ = 3, [
+            _width_, _values_ = 3, [
                 ('VC6', 0),
                 ('VC7', 1), # 7.x (2002-2003)
                 ('VC8', 2), # 8 (2005)
@@ -360,7 +360,7 @@ class FuncInfo(pstruct.type, versioned):
     ]
 
 class UWOP_(pbinary.enum):
-    width, _values_ = 4, [
+    _width_, _values_ = 4, [
         ('PUSH_NONVOL', 0),
         ('ALLOC_LARGE', 1),
         ('ALLOC_SMALL', 2),
@@ -382,7 +382,7 @@ class UNWIND_CODE(pbinary.struct):
     ]
 
 class UNW_FLAG_(pbinary.enum):
-    width, _values_ = 5, [
+    _width_, _values_ = 5, [
         ('NHANDLER', 0),
         ('EHANDLER', 1),
         ('UHANDLER', 2),

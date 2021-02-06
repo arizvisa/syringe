@@ -162,7 +162,7 @@ class _st_name(pint.type):
         raise ptypes.error.TypeError(self, 'str')
 
 class STT_(pbinary.enum):
-    width = 4
+    _width_ = 4
     _values_ = [
         ('STT_NOTYPE', 0),
         ('STT_OBJECT', 1),
@@ -179,7 +179,7 @@ class STT_(pbinary.enum):
     ]
 
 class STB_(pbinary.enum):
-    width = 4
+    _width_ = 4
     _values_ = [
         ('STB_LOCAL', 0),
         ('STB_GLOBAL', 1),
