@@ -546,7 +546,7 @@ class enum(integer):
         # the correct place unless it's a callable.
         if candidate is not None and not callable(getattr(self, candidate)):
             length, typename = getattr(self, candidate), self.typename()
-            Log.warning("{:s}.enum : {:s} : The defined width ({!s}) in `{:s}` has been re-assigned to `{:s}` due to deprecation.".format(__name__, self.classname(), length, '.'.join([typename, candidate]), '.'.join([typename, 'length'])))
+            Log.info("{:s}.enum : {:s} : The defined width ({!s}) in `{:s}` has been re-assigned to `{:s}` due to the former being deprecated.".format(__name__, self.classname(), length, '.'.join([typename, candidate]), '.'.join([typename, 'length'])))
             self.length = length
 
         # ensure that the enumeration has enum._values_ defined
