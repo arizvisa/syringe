@@ -222,9 +222,9 @@ class ESTypeList(pstruct.type):
 
 class PMD(pstruct.type):
     _fields_ = [
-        (int, 'mdisp'),
-        (int, 'pdisp'),
-        (int, 'vdisp'),
+        (int, 'mdisp'), # member displacement -- member within the class that introduces the member
+        (int, 'pdisp'), # vbtable displacement -- pointer to the vbtable within the derived class
+        (int, 'vdisp'), # vftable displacement -- entry in the vbtable that contains the offset of the occurrence of the introducing class within the derived class
     ]
 
 class TypeDescriptor(pstruct.type):
@@ -235,8 +235,12 @@ class TypeDescriptor(pstruct.type):
     ]
 
 class CatchableType(pstruct.type):
+    class _properties(pint.enum, unsigned_int):
+        _values_ = [
+            ('pointer', 1),
+        ]
     _fields_ = [
-        (unsigned_int, 'properties'),
+        (_properties, 'properties'),
         (pointer(TypeDescriptor, _value_=PVALUE32), 'pType'),
         (PMD, 'thisDisplacement'),
         (int, 'sizeOrOffset'),
@@ -250,20 +254,37 @@ class CatchableTypeArray(pstruct.type):
     ]
 
 class ThrowInfo(pstruct.type):
+    class _attributes(pint.enum, unsigned_int):
+        _values_ = [
+            ('const', 1),
+            ('volatile', 2),
+        ]
     _fields_ = [
-        (unsigned_int, 'attributes'),
+        (_attributes, 'attributes'),
         (PVOID, 'pmfnUnwind'),
         (PVOID, 'pForwardCompat'),
         (pointer(CatchableTypeArray), 'pCatchableTypeArray'),
     ]
 
 class IPtoStateMap(pstruct.type):
+    class _state(pint.enum, int):
+        _values_ = [
+            ('END', -1),
+        ]
     _fields_ = [
         (pointer(ptype.undefined, _value_=PVALUE32), 'pc'),
-        (int, 'state'),
+        (_state, 'state'),
     ]
     def summary(self):
         return "state={:d} pc={!s}".format(self['state'].int(), self['pc'].summary())
+
+class FI_(pbinary.flags):
+    _fields_ = [
+        (29, 'unused'),
+        (1, 'EHNOEXCEPT_FLAG'),
+        (1, 'DYNSTKALIGN_FLAG'),
+        (1, 'EHS_FLAG'),
+    ]
 
 class FuncInfo(pstruct.type, versioned):
     class _magicNumber(pbinary.struct):
@@ -356,7 +377,7 @@ class FuncInfo(pstruct.type, versioned):
         (lambda self: int if getattr(self, 'WIN64', False) else pint.int_t, 'dispUnwindHelp'),
 
         (pointer(ESTypeList, _value_=PVALUE32), 'pESTypeList'),
-        (int, 'EHFlags'),
+        (FI_, 'EHFlags'),
     ]
 
 class UWOP_(pbinary.enum):
@@ -479,9 +500,14 @@ class RTTIBaseClassArray(parray.type):
     _object_ = RTTIBaseClassDescriptor
 
 class RTTIClassHierarchyDescriptor(pstruct.type):
+    class _attributes(unsigned_long, pint.enum):
+        _values_ = [
+            (1, 'multiple'),
+            (2, 'virtual'),
+        ]
     _fields_ = [
         (unsigned_long, 'signature'),
-        (unsigned_long, 'attributes'),
+        (_attributes, 'attributes'),
         (unsigned_long, 'numBaseClasses'),
         (lambda self: pointer(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
     ]
