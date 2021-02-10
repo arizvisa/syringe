@@ -1,5 +1,6 @@
 import ptypes
 from ptypes import *
+pbinary.setbyteorder(pbinary.littleendian)
 
 from .datatypes import *
 
@@ -364,7 +365,7 @@ class FuncInfo(pstruct.type, versioned):
             return super(FuncInfo._pIPtoStateMap, self).summary()
 
     _fields_ = [
-        (pbinary.littleendian(_magicNumber), 'magicNumber'),
+        (_magicNumber, 'magicNumber'),
 
         (int, 'maxState'),
         (lambda self: pointer(dyn.clone(self._pUnwindMap, length=self['maxState'].li.int()), _value_=PVALUE32), 'pUnwindMap'),
