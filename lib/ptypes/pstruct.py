@@ -384,7 +384,7 @@ def make(fields, **attrs):
     if len({fld.getoffset() for fld in fields}) != len(fields):
         raise ValueError('more than one field is occupying the same location')
 
-    types = sorted(fields, key=lambda instance: item.getposition())
+    types = sorted(fields, key=lambda instance: instance.getposition())
 
     ofs, result = 0, []
     for object in types:
