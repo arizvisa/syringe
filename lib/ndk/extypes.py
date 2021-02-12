@@ -331,7 +331,8 @@ class ERESOURCE_THREAD(ULONG_PTR): pass
 class OWNER_ENTRY(pstruct.type, versioned):
     _fields_ = [
         (ERESOURCE_THREAD, 'OwnerThread'),
-        (ULONG, 'TableSize')
+        (ULONG, 'TableSize'),
+        (lambda self: dyn.padding(8 if getattr(self, 'WIN64', False) else 4), 'padding(TableSize)'),
     ]
 
 class ERESOURCE(pstruct.type, versioned):
@@ -348,11 +349,9 @@ class ERESOURCE(pstruct.type, versioned):
         (ULONG, 'ContentionCount'),
         (ULONG, 'NumberOfSharedWaiters'),
         (ULONG, 'NumberOfExclusiveWaiters'),
-        (lambda self: dyn.align(8 if getattr(self, 'WIN64', False) else 4), 'align(Reserved2)'),   # FIXME: this might not be right
         (lambda self: PVOID if getattr(self, 'WIN64', False) else pint.uint_t, 'Reserved2'),
         (PVOID, 'Address'),
-        (KSPIN_LOCK, 'SpinLock'),
-        (lambda self: dyn.padding(8 if getattr(self, 'WIN64', False) else 4), 'padding(SpinLock)'),   # FIXME: this might not be right
+        (ketypes.KSPIN_LOCK, 'SpinLock'),
     ]
 
 class GENERAL_LOOKASIDE(pstruct.type):

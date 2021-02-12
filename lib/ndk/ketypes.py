@@ -22,3 +22,6 @@ class KSEMAPHORE(pstruct.type):
     ]
 
 class KGATE(KEVENT): pass
+
+class KSPIN_LOCK(ULONG_PTR): pass
+

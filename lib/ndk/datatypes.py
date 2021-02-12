@@ -462,8 +462,6 @@ class LUID(pstruct.type):
         (LONG, 'HighPart'),
     ]
 
-class KSPIN_LOCK(ULONG): pass
-
 class EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
         (lambda self: pointer(EXCEPTION_REGISTRATION), 'Next'),
