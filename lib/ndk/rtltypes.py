@@ -4,6 +4,8 @@ from ptypes import *
 from . import umtypes
 from .datatypes import *
 
+class SIZE_T64(ULONGLONG): pass
+
 class RTL_CRITICAL_SECTION(pstruct.type, versioned):
     _fields_ = [
         (PVOID, 'DebugInfo'),

@@ -324,8 +324,6 @@ class ULARGE_INTEGER(dynamic.union):
         (ULONGLONG, 'QuadPart')
     ]
 
-class SIZE_T64(ULONGLONG): pass
-
 ## Singly-linked list
 class SLIST_ENTRY(fpointer_t):
     _object_ = None

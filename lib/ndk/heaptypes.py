@@ -8,6 +8,8 @@ from ptypes import bitmap
 from . import sdkddkver, rtltypes, error
 from .datatypes import *
 
+class SIZE_T64(ULONGLONG): pass
+
 class HEAP_LOCK(pint.uint32_t): pass
 class HEAP_SIGNATURE(pint.enum, ULONG):
     _fields_ = [
