@@ -130,6 +130,132 @@ class RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
         (dyn.clone(pstr.string, length=256), 'FullPathName'),
     ]
 
+
+class RTL_BALANCED_LINKS(pstruct.type):
+    def __init__(self, **attrs):
+        super(RTL_BALANCED_LINKS, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (P(RTL_BALANCED_LINKS), 'Parent'),
+            (P(RTL_BALANCED_LINKS), 'LeftChild'),
+            (P(RTL_BALANCED_LINKS), 'RightChild'),
+            (CHAR, 'Balance'),
+            (dyn.array(UCHAR, 3), 'Reserved'),
+        ])
+
+class RTL_AVL_COMPARE_ROUTINE(void): pass
+class RTL_AVL_ALLOCATE_ROUTINE(void): pass
+class RTL_AVL_FREE_ROUTINE(void): pass
+
+class RTL_AVL_TABLE(pstruct.type, versioned):
+    _fields_ = [
+        (RTL_BALANCED_LINKS, 'BalancedRoot'),
+        (PVOID, 'OrderedPointer'),
+        (ULONG, 'WhichOrderedElement'),
+        (ULONG, 'NumberGenericTableElements'),
+        (ULONG, 'DepthOfTree'),
+        (P(RTL_BALANCED_LINKS), 'RestartKey'),
+        (ULONG, 'DeleteCount'),
+        (P(RTL_AVL_COMPARE_ROUTINE), 'CompareRoutine'),
+        (P(RTL_AVL_ALLOCATE_ROUTINE), 'AllocateRoutine'),
+        (P(RTL_AVL_FREE_ROUTINE), 'FreeRoutine'),
+        (PVOID, 'TableContext'),
+    ]
+
+class RTL_STACK_TRACE_ENTRY(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(RTL_STACK_TRACE_ENTRY, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (P(RTL_STACK_TRACE_ENTRY), 'HashChain'),
+            (ULONG, 'TraceCount'),
+            (USHORT, 'Index'),
+            (USHORT, 'Depth'),
+            (dyn.array(PVOID, 32), 'BackTrace'),
+        ])
+
+class STACK_TRACE_DATABASE(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(STACK_TRACE_DATABASE, self).__init__(**attrs)
+        from . import extypes
+
+        f = self._fields_ = []
+        f.extend([
+            (extypes.ERESOURCE, 'Lock'),
+            (BOOLEAN, 'DumpInProgress'),
+            (dyn.align(8 if getattr(self, 'WIN64', False) else 4), 'align(CommitBase)'),
+            (PVOID, 'CommitBase'),
+            (PVOID, 'CurrentLowerCommitLimit'),
+            (PVOID, 'CurrentUpperCommitLimit'),
+            (P(UCHAR), 'NextFreeLowerMemory'),
+            (P(UCHAR), 'NextFreeUpperMemory'),
+            (ULONG, 'NumberOfEntriesAdded'),
+            (ULONG, 'NumberOfAllocationFailures'),
+            (P(RTL_STACK_TRACE_ENTRY), 'EntryIndexArray'),
+            (ULONG, 'NumberOfBuckets'),
+            (lambda self: dyn.array(P(RTL_STACK_TRACE_ENTRY), self['NumberOfBuckets'].li.int()), 'Buckets'),
+        ])
+
+class RTL_TRACE_BLOCK(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(RTL_TRACE_BLOCK, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (ULONG, 'Magic'),
+            (ULONG, 'Count'),
+            (ULONG, 'Size'),
+            (ULONG, 'UserCount'),
+            (ULONG, 'UserSize'),
+            (PVOID, 'UserContext'),
+            (P(RTL_TRACE_BLOCK), 'Next'),
+            (PVOID, 'Trace'),
+        ])
+
+class RTL_TRACE_DATABASE(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(RTL_TRACE_DATABASE, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (ULONG, 'Magic'),
+            (ULONG, 'Flags'),
+            (ULONG, 'Tag'),
+            (P(RTL_TRACE_SEGMENT), 'SegmentList'),
+            (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'MaximumSize'),
+            (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'CurrentSize'),
+            (PVOID, 'Owner'),
+            (RTL_CRITICAL_SECTION, 'Lock'),
+            (ULONG, 'NoOfBuckets'),
+            (lambda self: P(dyn.array(RTL_TRACE_BLOCK, self['NoOfBuckets'].li.int())), 'Buckets'),
+            (RTL_TRACE_HASH_FUNCTION, 'HashFunction'),
+            (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'NoOfTraces'),
+            (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'NoOfHits'),
+            (dyn.array(ULONG, 16), 'HashCount'),
+        ])
+
+class RTL_TRACE_SEGMENT(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(RTL_TRACE_SEGMENT, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (ULONG, 'Magic'),
+            (P(RTL_TRACE_DATABASE), 'Database'),
+            (P(RTL_TRACE_SEGMENT), 'NextSegment'),
+            (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'TotalSize'),
+            (P(CHAR), 'SegmentStart'),
+            (P(CHAR), 'SegmentEnd'),
+            (P(CHAR), 'SegmentFree'),
+        ])
+
+class RTL_TRACE_ENUMERATE(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(RTL_TRACE_SEGMENT, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (P(RTL_TRACE_DATABASE), 'Database'),
+            (ULONG, 'Index'),
+            (P(RTL_TRACE_BLOCK), 'Block'),
+        ])
+
 # XXX: These should probably be unions
 class RTL_RUN_ONCE(pstruct.type, versioned):
     _fields_ = [

@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import umtypes, rtltypes, ketypes
+from . import umtypes, rtltypes, ketypes, mmtypes
 from .datatypes import *
 
 class SYSTEM_INFORMATION_CLASS(pint.enum):
@@ -326,24 +326,51 @@ class SYSTEM_ROOT_SILO_INFORMATION(pstruct.type):
         (PVOID, 'SiloList'),
     ]
 
-class OWNER_ENTRY(pstruct.type):
+class ERESOURCE_THREAD(ULONG_PTR): pass
+
+class OWNER_ENTRY(pstruct.type, versioned):
     _fields_ = [
-        (pint.uint32_t, 'OwnerThread'),
-        (pint.uint32_t, 'OwnerCount')
+        (ERESOURCE_THREAD, 'OwnerThread'),
+        (ULONG, 'TableSize')
     ]
 
-class ERESOURCE(pstruct.type):
+class ERESOURCE(pstruct.type, versioned):
     _fields_ = [
         (LIST_ENTRY, 'SystemResourcesList'),
         (P(OWNER_ENTRY), 'OwnerTable'),
         (SHORT, 'ActiveCount'),
         (USHORT, 'Flag'),
+        (lambda self: dyn.align(8 if getattr(self, 'WIN64', False) else 4), 'align(SharedWaiters)'),   # FIXME: this might not be right
         (P(ketypes.KSEMAPHORE), 'SharedWaiters'),
         (P(ketypes.KEVENT), 'ExclusiveWatiers'),
-        (dyn.array(OWNER_ENTRY, 2), 'OwnerThreads'),
+        (OWNER_ENTRY, 'OwnerEntry'),
+        (ULONG, 'ActiveEntries'),
         (ULONG, 'ContentionCount'),
-        (pint.uint16_t, 'NumberOfSharedWaiters'),
-        (pint.uint16_t, 'NumberOfExclusiveWaiters'),
+        (ULONG, 'NumberOfSharedWaiters'),
+        (ULONG, 'NumberOfExclusiveWaiters'),
+        (lambda self: dyn.align(8 if getattr(self, 'WIN64', False) else 4), 'align(Reserved2)'),   # FIXME: this might not be right
+        (lambda self: PVOID if getattr(self, 'WIN64', False) else pint.uint_t, 'Reserved2'),
         (PVOID, 'Address'),
         (KSPIN_LOCK, 'SpinLock'),
+        (lambda self: dyn.padding(8 if getattr(self, 'WIN64', False) else 4), 'padding(SpinLock)'),   # FIXME: this might not be right
+    ]
+
+class GENERAL_LOOKASIDE(pstruct.type):
+    _fields_ = [
+        (dyn.clone(SLIST_HEADER, _object_=mmtypes.POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
+        (UINT16, 'Depth'),
+        (UINT16, 'MaximumDepth'),
+        (ULONG, 'TotalAllocates'),
+        (ULONG, 'AllocateMissesOrHits'),
+        (ULONG, 'TotalFrees'),
+        (ULONG, 'FreeMissesOrHits'),
+        (POOL_TYPE, 'Type'),
+        (dyn.clone(pstr.string, length=4), 'Tag'),
+        (ULONG, 'Size'),
+        (PVOID, 'Allocate'),
+        (PVOID, 'Free'),
+        (LIST_ENTRY, 'ListEntry'),
+        (ULONG, 'LastTotalAllocates'),
+        (ULONG, 'LastAllocateMissesOrHits'),
+        (dyn.array(ULONG, 2), 'Future'),
     ]

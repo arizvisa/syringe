@@ -145,6 +145,64 @@ if 'HeapMeta':
                 (ULONG, 'EndStamp'),    # 0xdcbaaaaa
             ])
 
+    class DPH_HEAP_BLOCK(pstruct.type, versioned):
+        def __init__(self, **attrs):
+            super(DPH_HEAP_BLOCK, self).__init__(**attrs)
+            f = self._fields_ = []
+            f.extend([
+                (LIST_ENTRY, 'AvailableEntry'),
+                (P(UCHAR), 'pUserAllocation'),
+                (P(UCHAR), 'pVirtualBlock'),
+                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'nVirtualBlockSize'),
+                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'nVirtualAccessSize'),
+                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'nUserRequestedSize'),
+                (SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'nUserActualSize'),
+                (PVOID, 'UserValue'),
+                (ULONG, 'UserFlags'),
+                (P(rtltypes.RTL_TRACE_BLOCK), 'StackTrace'),
+                (LIST_ENTRY, 'AdjacencyEntry'),
+                (P(UCHAR), 'pVirtualRegion'),
+            ])
+
+    class DPH_HEAP_ROOT(pstruct.type, versioned):
+        def __init__(self, **attrs):
+            super(DPH_HEAP_ROOT, self).__init__(**attrs)
+            f = self._fields_ = []
+            f.extend([
+                (ULONG, 'HeapFlags'),
+                (P(HEAP_LOCK), 'HeapCritSect'),
+                (ULONG, 'nRemoteLockAcquired'),
+                (P(DPH_HEAP_BLOCK), 'pVirtualStorageListHead'),
+                (P(DPH_HEAP_BLOCK), 'pVirtualStorageListTail'),
+                (ULONG, 'nVirtualStorageRanges'),
+                (SIZE_T, 'nVirtualStorageBytes'),
+                (rtltypes.RTL_AVL_TABLE, 'BusyNodesTable'),
+                (P(DPH_HEAP_BLOCK), 'NodeToAllocate'),
+                (ULONG, 'nBusyAllocations'),
+                (SIZE_T, 'nBusyAllocationBytesCommitted'),
+                (P(DPH_HEAP_BLOCK), 'pFreeAllocationListHead'),
+                (P(DPH_HEAP_BLOCK), 'pFreeAllocationListTail'),
+                (ULONG, 'nFreeAllocations'),
+                (SIZE_T, 'nFreeAllocationBytesCommitted'),
+                (LIST_ENTRY, 'AvailableAllocationHead'),
+                (ULONG, 'nAvailableAllocations'),
+                (SIZE_T, 'nAvailableAllocationBytesCommitted'),
+                (P(DPH_HEAP_BLOCK), 'pUnusedNodeListHead'),
+                (P(DPH_HEAP_BLOCK), 'pUnusedNodeListTail'),
+                (ULONG, 'nUnusedNodes'),
+                (SIZE_T, 'nBusyAllocationBytesAccessible'),
+                (P(DPH_HEAP_BLOCK), 'pNodePoolListHead'),
+                (P(DPH_HEAP_BLOCK), 'pNodePoolListTail'),
+                (ULONG, 'nNodePools'),
+                (SIZE_T, 'nNodePoolBytes'),
+                (LIST_ENTRY, 'NextHeap'),
+                (ULONG, 'ExtraFlags'),
+                (ULONG, 'Seed'),
+                (PVOID, 'NormalHeap'),
+                (P(rtltypes.RTL_TRACE_BLOCK), 'CreateStackTrace'),
+                (PVOID, 'FirstThread'),
+            ])
+
 if 'HeapEntry':
     class HEAP_BUCKET(pstruct.type):
         @pbinary.littleendian
@@ -1830,7 +1888,7 @@ if 'Heap':
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             size_and_header = size + blocksize
 
-            bi = math.trunc(math.floor(size_and_header / float(blocksize)))
+            bi = math.trunc(math.floor(size_and_header / (1. * blocksize)))
             heaplist = self.__HeapList(bi)
             return heaplist.ListHint(bi)
 
