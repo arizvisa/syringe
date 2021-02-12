@@ -1,4 +1,4 @@
-import six, sys, math, datetime, itertools, functools
+import six, sys, math, datetime, itertools, functools, codecs
 
 import ptypes
 from ptypes import *
@@ -24,166 +24,277 @@ class versioned(ptype.base):
         self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
         self.attributes['WIN64'] = self.WIN64
 
-### stdint.h (sorta)
-class int8(pint.sint8_t): pass
-class int16(pint.sint16_t): pass
-class int32(pint.sint32_t): pass
-class int64(pint.sint64_t): pass
+### C datatypes (microsoft)
+class int(pint.int32_t): pass
+class signed_int(pint.sint32_t): pass
+class unsigned_int(pint.uint32_t): pass
+class __int8(pint.int8_t): pass
+class signed___int8(pint.sint8_t): pass
+class unsigned___int8(pint.uint8_t): pass
+class __int16(pint.int16_t): pass
+class signed___int16(pint.sint16_t): pass
+class unsigned___int16(pint.uint16_t): pass
+class __int32(pint.int32_t): pass
+class signed___int32(pint.sint32_t): pass
+class unsigned___int32(pint.uint32_t): pass
+class __int64(pint.int64_t): pass
+class signed___int64(pint.sint64_t): pass
+class unsigned___int64(pint.uint64_t): pass
 
-class hyper(dynamic.union):
-    _fields_ = [
-        (pint.sint64_t, 'signed'),
-        (pint.uint64_t, 'unsigned'),
-    ]
-
-### pointer datatypes
-PVALUE32 = dyn.clone(ptype.pointer_t._value_, length=4)
-PVALUE64 = dyn.clone(ptype.pointer_t._value_, length=8)
-
-## field pointers
-class fpointer_t(ptype.opointer_t, versioned):
-    """This is typically used for LIST_ENTRY"""
-    @property
-    def _value_(self):
-        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
-
-    _path_ = ()
-    def _calculate_(self, offset):
-        res = self.new(self._object_).a
-        for p in self._path_: res = res[p]
-        return offset - res.getoffset()
-    def classname(self):
-        res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
-        return self.typename() + '(' + res.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
-
-def fpointer(type, fieldname):
-    return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname, '__iter__') else (fieldname,))
-
-## pointer types
-class PVOID(ptype.pointer_t, versioned):
-    @property
-    def _value_(self):
-        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
-    _object_ = ptype.undefined
-
-class pointer_t(ptype.pointer_t, versioned):
-    @property
-    def _value_(self):
-        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
-    _object_ = ptype.undefined
-
-    @classmethod
-    def typename(cls):
-        return cls.__name__
-
-def pointer(target, **attrs):
-    attrs.setdefault('_object_', target)
-    return dyn.clone(pointer_t, **attrs)
-P = pointer
-
-## relative pointers
-class rpointer_t(ptype.rpointer_t, versioned):
-    @property
-    def _value_(self):
-        return PVALUE64 if getattr(self, 'WIN64', False) else PVALUE32
-
-    def decode(self, object, **attrs):
-        root = ptype.force(self._baseobject_, self)
-        base = root.getoffset() if isinstance(root, ptype.generic) else root().getoffset()
-        t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-        return t().set(base + object.get())
-
-def rpointer(target, base, **attrs):
-    return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
-
-### C datatypes
 class char(pint.int8_t): pass
 class signed_char(pint.sint8_t): pass
 class unsigned_char(pint.uint8_t): pass
 class short(pint.int16_t): pass
 class signed_short(pint.sint16_t): pass
 class unsigned_short(pint.uint16_t): pass
-class int(pint.int32_t): pass
-class signed_int(pint.uint32_t): pass
-class unsigned_int(pint.uint32_t): pass
+class long(pint.int32_t): pass
+class signed_long(pint.sint32_t): pass
+class unsigned_long(pint.uint32_t): pass
 class long_long(pint.int64_t): pass
 class signed_long_long(pint.sint64_t): pass
 class unsigned_long_long(pint.uint64_t): pass
 
+class float(pfloat.single): pass
+class double(pfloat.double): pass
+class long_double(pfloat.double): pass
+
+class void(ptype.undefined): pass
+class bool(pint.int8_t, pint.enum): _values_ = [('false', 0)]
+
+class wchar_t(pstr.wchar_t): pass
+class __wchar_t(pstr.wchar_t): pass
+class char8_t(pstr.char_t): encoding = codecs.lookup('utf-8')
+class char16_t(pstr.wchar_t): pass
+class char32_t(pstr.wchar_t): encoding = codecs.lookup('utf-32-le' if ptypes.Config.integer.order == ptypes.config.byteorder.littleendian else 'utf-32-be')
+
+class __ptr32(ptype.pointer_t._value_): length = 4
+class __ptr64(ptype.pointer_t._value_): length = 8
+
+# aliases since dunder-prefixed symbols get mangled
+ptr32, ptr64 = __ptr32, __ptr64
+
+class star(ptype.pointer_t, versioned):
+    @property
+    def _value_(self):
+        return ptr64 if getattr(self, 'WIN64', False) else ptr32
+
+class rstar(ptype.rpointer_t, versioned):
+    @property
+    def _value_(self):
+        return ptr64 if getattr(self, 'WIN64', False) else ptr32
+
+    def decode(self, object, **attrs):
+        root = ptype.force(self._baseobject_, self)
+        base = root.getoffset() if isinstance(root, ptype.generic) else root().getoffset()
+        t = ptr64 if getattr(self, 'WIN64', False) else ptr32
+        return t().set(base + object.get())
+
+class fstar(ptype.opointer_t, versioned):
+    """This is typically used for LIST_ENTRY"""
+    @property
+    def _value_(self):
+        return ptr64 if getattr(self, 'WIN64', False) else ptr32
+
+    _path_ = ()
+    def _calculate_(self, offset):
+        res = self.new(self._object_).a
+        for p in self._path_: res = res[p]
+        return offset - res.getoffset()
+
+    def classname(self):
+        res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
+        return self.typename() + '(' + res.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
+
+class void_star(star): _object_ = void
+
+### Fixed-width integral types (stdint.h)
+class int8_t(signed_char): pass
+class uint8_t(unsigned_char): pass
+class int16_t(short): pass
+class uint16_t(unsigned_short): pass
+class int32_t(int): pass
+class uint32_t(unsigned_int): pass
+class int64_t(long_long): pass
+class uint64_t(unsigned_long_long): pass
+class int_least8_t(signed_char): pass
+class uint_least8_t(unsigned_char): pass
+class int_least16_t(short): pass
+class uint_least16_t(unsigned_short): pass
+class int_least32_t(int): pass
+class uint_least32_t(unsigned_int): pass
+class int_least64_t(long_long): pass
+class uint_least64_t(unsigned_long_long): pass
+class int_fast8_t(signed_char): pass
+class uint_fast8_t(unsigned_char): pass
+class int_fast16_t(short): pass
+class uint_fast16_t(unsigned_short): pass
+class int_fast32_t(int): pass
+class uint_fast32_t(unsigned_int): pass
+class int_fast64_t(long_long): pass
+class uint_fast64_t(unsigned_long_long): pass
+class intmax_t(long_long): pass
+class uintmax_t(unsigned_long_long): pass
+
 # variable sized types
-def wordsize(self):
-    return 8 if getattr(self, 'WIN64', False) else 4
-if wordsize:
-    class long(pint.int_t):
-        length = property(fget=wordsize)
-    class signed_long(pint.sint_t):
-        length = property(fget=wordsize)
-    class unsigned_long(pint.uint_t):
-        length = property(fget=wordsize)
+class __int3264(pint.int_t):
+    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else __int32).length)
+class unsigned___int3264(pint.uint_t):
+    length = property(fget=lambda self: (unsigned___int64 if getattr(self, 'WIN64', False) else unsigned___int32).length)
+class intptr_t(pint.int_t):
+    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else long).length)
+class uintptr_t(pint.uint_t):
+    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else long).length)
+class ptrdiff_t(pint.int_t):
+    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else int).length)
+class ssize_t(pint.sint_t):
+    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else int).length)
+class size_t(pint.uint_t):
+    length = property(fget=lambda self: (unsigned___int64 if getattr(self, 'WIN64', False) else unsigned_int).length)
 
-if wordsize:
-    class size_t(pint.uint_t):
-        length = property(fget=wordsize)
-    class ssize_t(pint.sint_t):
-        length = property(fget=wordsize)
-del(wordsize)
+## pointer types and utilities
+class pointer_t(star):
+    @classmethod
+    def typename(cls):
+        return cls.__name__
 
-### core datatypes (handles and such)
-class BYTE(pint.uint8_t): pass
-class UCHAR(pint.uint8_t): pass
-class CHAR(pint.sint8_t): pass
-class PCHAR(pointer(CHAR)): pass
-class WORD(pint.uint16_t): pass
-class DWORD(pint.uint32_t): pass
-class DWORD_PTR(PVOID): pass
-class SHORT(pint.sint16_t): pass
-class USHORT(pint.uint16_t): pass
-class INT(pint.sint32_t): pass
-class UINT(pint.uint32_t): pass
-class LONG(pint.int32_t): pass
-class ULONG(pint.uint32_t): pass
-class LONG_PTR(PVOID): pass
-class ULONG_PTR(PVOID): pass
-class LONGLONG(pint.sint64_t): pass
-class ULONGLONG(pint.uint64_t): pass
-class INT8(pint.sint8_t): pass
-class INT16(pint.sint16_t): pass
-class INT32(pint.sint32_t): pass
-class INT64(pint.sint64_t): pass
-class UINT8(pint.uint8_t): pass
-class UINT16(pint.uint16_t): pass
-class UINT32(pint.uint32_t): pass
-class UINT64(pint.uint64_t): pass
-class LONG32(pint.sint32_t): pass
-class LONG64(pint.sint64_t): pass
-class ULONG32(pint.uint32_t): pass
-class ULONG64(pint.uint64_t): pass
-class octet(pint.uint8_t): pass
-class BOOL(pint.uint32_t): pass
+class fpointer_t(fstar): pass
+class rpointer_t(rstar): pass
+
+## pointer utilities
+def pointer(target, **attrs):
+    attrs.setdefault('_object_', target)
+    return dyn.clone(pointer_t, **attrs)
+def fpointer(type, fieldname):
+    return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname, '__iter__') else (fieldname,))
+
+def rpointer(target, base, **attrs):
+    return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
+
+P = pointer
+
+### intsafe.h
+class CHAR(char): pass
+class INT8(signed_char): pass
+class UCHAR(unsigned_char): pass
+class UINT8(unsigned_char): pass
+class BYTE(unsigned_char): pass
+class SHORT(short): pass
+class INT16(signed_short): pass
+class USHORT(unsigned_short): pass
+class UINT16(unsigned_short): pass
+class WORD(unsigned_short): pass
+class INT(int): pass
+class INT32(signed_int): pass
+class UINT(unsigned_int): pass
+class UINT32(unsigned_int): pass
+class LONG(long): pass
+class ULONG(unsigned_long): pass
+class DWORD(unsigned_long): pass
+class LONGLONG(__int64): pass
+class LONG64(__int64): pass
+class INT64(signed___int64): pass
+class ULONGLONG(unsigned___int64): pass
+class DWORDLONG(unsigned___int64): pass
+class ULONG64(unsigned___int64): pass
+class DWORD64(unsigned___int64): pass
+class UINT64(unsigned___int64): pass
+
+class INT_PTR(__int3264): pass
+class UINT_PTR(unsigned___int3264): pass
+class LONG_PTR(__int3264): pass
+class ULONG_PTR(unsigned___int3264): pass
+
+class DWORD_PTR(ULONG_PTR): pass
+class SSIZE_T(LONG_PTR): pass
+class SIZE_T(ULONG_PTR): pass
+
+### typedefs.h
+class VOID(void): pass
+class PVOID(void_star):
+    def classname(self):
+        return self.typename()
+#class LPVOID(PVOID): pass
+#class CHAR(char): pass
+class CCHAR(char): pass
+#class PCHAR(P(CHAR)): pass
+#class PSTR(P(pstr.szstring)): pass
+#class LPSTR(PSTR): pass
+#class PCSTR(P(pstr.szstring)): pass
+#class LCPSTR(PCSTR): pass
+#class UCHAR(unsigned_char): pass
+#class PUCHAR(P(UCHAR)): pass
+#class BYTE(unsigned_char): pass
+#class LPBYTE(P(BYTE)): pass
 class BOOLEAN(BYTE): pass
-class PBOOLEAN(pointer(BOOLEAN)): pass
-class QWORD(int64): pass
+#class PBOOLEAN(P(BOOLEAN)): pass
+#class UINT8(uint8_t): pass
+#class SHORT(int16_t): pass
+#class PSHORT(P(SHORT)): pass
+#class USHORT(uint16_t): pass
+#class PUSHORT(P(USHORT)): pass
+#class PWORD(P(WORD)): pass
+#class LPWORD(PWORD): pass
+class WCHAR(wchar_t): pass
+#class PWCHAR(P(WCHAR)): pass
+class PWSTR(P(pstr.szwstring)): pass
+#class LPWSTR(PWSTR): pass
+#class UINT16(uint16_t): pass
+#class PCWSTR(PWSTR): pass
+#class LPCWSTR(PCWSTR): pass
+#class INT(int32_t): pass
+#class LONG(int32_t): pass
+#class PLONG(P(LONG)): pass
+#class LPLONG(PLONG): pass
+class BOOL(int32_t): pass
+class WINBOOL(BOOL): pass
+#class INT32(int32_t): pass
+#class UINT(uint32_t): pass
+#class PUINT(P(UINT)): pass
+#class LPUINT(PUINT): pass
+#class ULONG(uint32_t): pass
+#class PULONG(P(ULONG)): pass
+#class LPULONG(PULONG): pass
+#class DWORD(uint32_t): pass
+#class PDWORD(P(DWORD)): pass
+#class LPDWORD(PDWORD): pass
+#class UINT32(uint32_t): pass
+#class ULONG64(uint64_t): pass
+#class DWORD64(uint64_t): pass
+#class PDWORD64(P(DWORD64)): pass
+#class UINT64(uint64_t): pass
+#class ULONGLONG(uint64_t): pass
+class FLOAT(float): pass
+class DOUBLE(double): pass
 
-class SIZE_T(ULONG): pass
-class SIZE_T64(ULONGLONG): pass
+class HANDLE(PVOID): pass
+class HKEY(HANDLE): pass
+#class PHKEY(P(HKEY)): pass
+class HMODULE(HANDLE): pass
+class HINSTANCE(HANDLE): pass
+class NTSTATUS(winerror.NTSTATUS, LONG): pass
+class POOL_TYPE(INT): pass
+#class HRESULT(LONG): pass
+#class SIZE_T(ULONG_PTR): pass
+#class PSIZE_T(P(SIZE_T)): pass
+class LANGID(WORD): pass
+
+class LARGE_INTEGER(dynamic.union):
+    class u(pstruct.type):
+        _fields_ = [
+            (DWORD, 'LowPart'),
+            (DWORD, 'HighPart'),
+        ]
+    _fields_ = [
+        (u, 'u'),
+        (LONGLONG, 'QuadPart')
+    ]
+#class PLARGE_INTEGER(P(LARGE_INTEGER)): pass
 
 class BSTR(pstruct.type):
     _fields_ = [
         (pint.uint32_t, 'length'),
         (lambda self: dyn.clone(pstr.wstring, length=self['length'].li.int()), 'string')
     ]
-
-class DOUBLE(pfloat.double): pass
-class FLOAT(pfloat.single): pass
-
-class DWORD32(pint.uint32_t): pass
-class DWORD64(pint.uint64_t): pass
-class DWORDLONG(ULONGLONG): pass
-class error_status_t(pint.uint32_t): pass
-
-class HANDLE(PVOID): pass
-class PHANDLE(pointer(HANDLE)): pass
-class HCALL(DWORD): pass
 
 class HRESULT(dynamic.union):
     @pbinary.littleendian
@@ -202,35 +313,6 @@ class HRESULT(dynamic.union):
         (_hresult, 'hresult'),
     ]
 
-class LMCSTR(pstr.szwstring): pass
-class LMSTR(pstr.szwstring): pass
-class LPCSTR(pointer(pstr.szstring)): pass
-class LPCWSTR(pointer(pstr.szwstring)): pass
-class PWSTR(pointer(pstr.wstring)): pass
-class LPWSTR(pointer(pstr.szwstring)): pass
-class LPCVOID(PVOID): pass
-class NET_API_STATUS(DWORD): pass
-class NTSTATUS(winerror.NTSTATUS, LONG): pass
-class PCONTEXT_HANDLE(PVOID): pass
-class RPC_BINDING_HANDLE(PVOID): pass
-
-class UNICODE(pstr.wchar_t): pass
-class STRING(pstr.szstring): pass
-class WCHAR(pstr.wchar_t): pass
-class PWCHAR(pointer(WCHAR)): pass
-class UNC(STRING): pass
-
-class LARGE_INTEGER(dynamic.union):
-    class u(pstruct.type):
-        _fields_ = [
-            (DWORD, 'LowPart'),
-            (DWORD, 'HighPart'),
-        ]
-    _fields_ = [
-        (u, 'u'),
-        (LONGLONG, 'QuadPart')
-    ]
-
 class ULARGE_INTEGER(dynamic.union):
     class u(pstruct.type):
         _fields_ = [
@@ -242,24 +324,7 @@ class ULARGE_INTEGER(dynamic.union):
         (ULONGLONG, 'QuadPart')
     ]
 
-class MULTI_SZ(pstruct.type):
-    class StringsValue(parray.block):
-        _object_ = pstr.szwstring
-        def isTerminator(self, value):
-            return value.str() == ''
-        def blocksize(self):
-            res = self.getparent(MULTI_SZ)
-            return res['nChar'].li.int()
-    _fields_ = [
-        (pointer(lambda self: self.getparent(MULTI_SZ).StringsValue), 'Value'),
-        (DWORD, 'nChar'),
-    ]
-
-class UINT128(pstruct.type):
-    _fields_ = [
-        (UINT64, 'lower'),
-        (UINT64, 'upper'),
-    ]
+class SIZE_T64(ULONGLONG): pass
 
 ## Singly-linked list
 class SLIST_ENTRY(fpointer_t):
@@ -398,7 +463,6 @@ class LUID(pstruct.type):
         (DWORD, 'LowPart'),
         (LONG, 'HighPart'),
     ]
-class PLUID(pointer(LUID)): pass
 
 class KSPIN_LOCK(ULONG): pass
 
@@ -784,4 +848,3 @@ class CONTEXT(pstruct.type, versioned):
                 (dyn.array(BYTE, 512), 'ExtendedRegisters'),
             ]
         self._fields_ = _fields_
-PCONTEXT = P(CONTEXT)
