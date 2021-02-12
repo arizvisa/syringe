@@ -4,6 +4,9 @@ pbinary.setbyteorder(pbinary.littleendian)
 
 from .datatypes import *
 
+def P32(target):
+    return P(target, _value_=ptr32)
+
 class EXCEPTION_FLAGS(pbinary.struct):
     _fields_ = [
         (1,    'NONCONTINUABLE'),
@@ -20,13 +23,12 @@ class EXCEPTION_RECORD(pstruct.type):
     _fields_ = [
         (DWORD, 'ExceptionCode'),
         (EXCEPTION_FLAGS, 'ExceptionFlags'),
-        (lambda self: pointer(EXCEPTION_RECORD), 'ExceptionRecord'),
+        (lambda self: P(EXCEPTION_RECORD), 'ExceptionRecord'),
         (PVOID, 'ExceptionAddress'),
         (DWORD, 'NumberParameters'),
         (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(NumberParameters)'),
         (lambda self: dyn.array(ULONG_PTR, self['NumberParameters'].li.int()), 'ExceptionInformation'),
     ]
-PEXCEPTION_RECORD = P(EXCEPTION_RECORD)
 
 # from Recon-2012-Skochinsky-Compiler-Internals.pdf
 
@@ -77,7 +79,7 @@ class EH4_SCOPETABLE(pstruct.type):
 
 class EH3_EXCEPTION_REGISTRATION(pstruct.type):
     _fields_ = [
-        (lambda self: pointer(EH3_EXCEPTION_REGISTRATION), 'Next'),
+        (lambda self: P(EH3_EXCEPTION_REGISTRATION), 'Next'),
         (PVOID, 'ExceptionHandler'),
         (PSCOPETABLE_ENTRY, 'ScopeTable'),
         (DWORD, 'TryLevel'),
@@ -85,16 +87,16 @@ class EH3_EXCEPTION_REGISTRATION(pstruct.type):
 
 class EXCEPTION_POINTERS(pstruct.type):
     _fields_ = [
-        (PEXCEPTION_RECORD, 'ExceptionRecord'),
-        (PCONTEXT, 'ContextRecord'),
+        (P(EXCEPTION_RECORD), 'ExceptionRecord'),
+        (P(CONTEXT), 'ContextRecord'),
     ]
 
 class C_SCOPE_TABLE(pstruct.type):
     _fields_ = [
-        (pointer(ptype.undefined, _value_=PVALUE32), 'BeginAddress'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'EndAddress'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'HandlerAddress'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'JumpTarget'),
+        (P32(void), 'BeginAddress'),
+        (P32(void), 'EndAddress'),
+        (P32(void), 'HandlerAddress'),
+        (P32(void), 'JumpTarget'),
     ]
 
 class SCOPE_TABLE(pstruct.type):
@@ -106,13 +108,13 @@ class SCOPE_TABLE(pstruct.type):
 class CPPEH_RECORD(pstruct.type):
     _fields_ = [
         (DWORD, 'old_esp'),
-        (dyn.pointer(EXCEPTION_POINTERS), 'exc_ptr'),
+        (P(EXCEPTION_POINTERS), 'exc_ptr'),
         (EH3_EXCEPTION_REGISTRATION, 'registration'),
     ]
 
 class EHRegistrationNode(pstruct.type):
     _fields_ = [
-        (lambda self: pointer(EHRegistrationNode), 'pNext'),
+        (lambda self: P(EHRegistrationNode), 'pNext'),
         (PVOID, 'frameHandler'),
         (int, 'state'),
     ]
@@ -120,7 +122,7 @@ class EHRegistrationNode(pstruct.type):
 class UnwindMapEntry(pstruct.type):
     _fields_ = [
         (int, 'toState'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'action'),
+        (P32(void), 'action'),
     ]
     def summary(self):
         return "action={:#x}(toState:{:d})".format(self['action'].int(), self['toState'].int())
@@ -128,7 +130,7 @@ class UnwindMapEntry(pstruct.type):
 class TypeDescriptor(pstruct.type):
     _fields_ = [
         (PVOID, 'pVFTable'),
-        (pointer(pstr.szstring), 'spare'),   # demangled name from type_info::name
+        (P(pstr.szstring), 'spare'),   # demangled name from type_info::name
         (pstr.szstring, 'name'),
     ]
     def summary(self):
@@ -144,9 +146,9 @@ class TypeDescriptor(pstruct.type):
 class HandlerType(pstruct.type):
     _fields_ = [
         (int, 'adjectives'),
-        (pointer(TypeDescriptor, _value_=PVALUE32), 'pType'),
+        (P32(TypeDescriptor), 'pType'),
         (int, 'dispCatchObj'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'addressOfHandler'),
+        (P32(void), 'addressOfHandler'),
         (lambda self: int if getattr(self, 'WIN64', False) else pint.int_t, 'dispFrame'),
     ]
     def summary(self):
@@ -205,7 +207,7 @@ class TryBlockMapEntry(pstruct.type):
         (int, 'tryHigh'),
         (int, 'catchHigh'),
         (int, 'nCatches'),
-        (lambda self: pointer(dyn.clone(self._pHandlerArray, length=self['nCatches'].li.int()), _value_=PVALUE32), 'pHandlerArray'),
+        (lambda self: P32(dyn.clone(self._pHandlerArray, length=self['nCatches'].li.int())), 'pHandlerArray'),
     ]
     def summary(self):
         res = self['pHandlerArray'].d
@@ -218,7 +220,7 @@ class TryBlockMapEntry(pstruct.type):
 class ESTypeList(pstruct.type):
     _fields_ = [
         (int, 'nCount'),
-        (lambda self: pointer(dyn.array(HandlerType, self['nCount'].li.int()), _value_=PVALUE32), 'pHandlerArray'),
+        (lambda self: P32(dyn.array(HandlerType, self['nCount'].li.int())), 'pHandlerArray'),
     ]
 
 class PMD(pstruct.type):
@@ -242,16 +244,16 @@ class CatchableType(pstruct.type):
         ]
     _fields_ = [
         (_properties, 'properties'),
-        (pointer(TypeDescriptor, _value_=PVALUE32), 'pType'),
+        (P32(TypeDescriptor), 'pType'),
         (PMD, 'thisDisplacement'),
         (int, 'sizeOrOffset'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'copyFunction'),
+        (P32(void), 'copyFunction'),
     ]
 
 class CatchableTypeArray(pstruct.type):
     _fields_ = [
         (int, 'nCatchableTypes'),
-        (lambda self: pointer(dyn.array(CatchableType, self['nCatchableTypes'].li.int()), _value_=PVALUE32), 'arrayOfCatchableTypes'),
+        (lambda self: P32(dyn.array(CatchableType, self['nCatchableTypes'].li.int())), 'arrayOfCatchableTypes'),
     ]
 
 class ThrowInfo(pstruct.type):
@@ -264,7 +266,7 @@ class ThrowInfo(pstruct.type):
         (_attributes, 'attributes'),
         (PVOID, 'pmfnUnwind'),
         (PVOID, 'pForwardCompat'),
-        (pointer(CatchableTypeArray), 'pCatchableTypeArray'),
+        (P(CatchableTypeArray), 'pCatchableTypeArray'),
     ]
 
 class IPtoStateMap(pstruct.type):
@@ -273,7 +275,7 @@ class IPtoStateMap(pstruct.type):
             ('END', -1),
         ]
     _fields_ = [
-        (pointer(ptype.undefined, _value_=PVALUE32), 'pc'),
+        (P32(void), 'pc'),
         (_state, 'state'),
     ]
     def summary(self):
@@ -368,16 +370,16 @@ class FuncInfo(pstruct.type, versioned):
         (_magicNumber, 'magicNumber'),
 
         (int, 'maxState'),
-        (lambda self: pointer(dyn.clone(self._pUnwindMap, length=self['maxState'].li.int()), _value_=PVALUE32), 'pUnwindMap'),
+        (lambda self: P32(dyn.clone(self._pUnwindMap, length=self['maxState'].li.int())), 'pUnwindMap'),
 
         (int, 'nTryBlocks'),
-        (lambda self: pointer(dyn.clone(self._pTryBlockMap, length=self['nTryBlocks'].li.int()), _value_=PVALUE32), 'pTryBlockMap'),
+        (lambda self: P32(dyn.clone(self._pTryBlockMap, length=self['nTryBlocks'].li.int())), 'pTryBlockMap'),
 
         (int, 'nIPMapEntries'),
-        (lambda self: pointer(dyn.clone(self._pIPtoStateMap, length=self['nIPMapEntries'].li.int()), _value_=PVALUE32), 'pIPtoStateMap'),
+        (lambda self: P32(dyn.clone(self._pIPtoStateMap, length=self['nIPMapEntries'].li.int())), 'pIPtoStateMap'),
         (lambda self: int if getattr(self, 'WIN64', False) else pint.int_t, 'dispUnwindHelp'),
 
-        (pointer(ESTypeList, _value_=PVALUE32), 'pESTypeList'),
+        (P32(ESTypeList), 'pESTypeList'),
         (FI_, 'EHFlags'),
     ]
 
@@ -446,9 +448,9 @@ class UNWIND_INFO(pstruct.type):
 
 class RUNTIME_FUNCTION(pstruct.type):
     _fields_ = [
-        (pointer(ptype.undefined, _value_=PVALUE32), 'BeginAddress'),
-        (pointer(ptype.undefined, _value_=PVALUE32), 'EndAddress'),
-        (pointer(UNWIND_INFO, _value_=PVALUE32), 'UnwindInfoAddress'),
+        (P32(void), 'BeginAddress'),
+        (P32(void), 'EndAddress'),
+        (P32(UNWIND_INFO), 'UnwindInfoAddress'),
     ]
 PRUNTIME_FUNCTION = P(RUNTIME_FUNCTION)
 
@@ -478,7 +480,7 @@ class DISPATCHER_CONTEXT(pstruct.type, versioned):
         (PRUNTIME_FUNCTION, 'FunctionEntry'),
         (ULONG64, 'EstablisherFrame'),
         (ULONG64, 'TargetIp'),
-        (PCONTEXT, 'ContextRecord'),
+        (P(CONTEXT), 'ContextRecord'),
         (PEXCEPTION_ROUTINE, 'LanguageHandler'),
         (PVOID, 'HandlerData'),
 
@@ -491,7 +493,7 @@ class DISPATCHER_CONTEXT(pstruct.type, versioned):
 
 class RTTIBaseClassDescriptor(pstruct.type):
     _fields_= [
-        (pointer(TypeDescriptor), 'pTypeDescriptor'),
+        (P(TypeDescriptor), 'pTypeDescriptor'),
         (unsigned_long, 'numContainedBases'),
         (PMD, 'where'),
         (unsigned_long, 'attributes'),
@@ -510,7 +512,7 @@ class RTTIClassHierarchyDescriptor(pstruct.type):
         (unsigned_long, 'signature'),
         (_attributes, 'attributes'),
         (unsigned_long, 'numBaseClasses'),
-        (lambda self: pointer(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
+        (lambda self: P(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
     ]
 
 class RTTICompleteObjectLocator(pstruct.type, versioned):
@@ -518,8 +520,8 @@ class RTTICompleteObjectLocator(pstruct.type, versioned):
         (unsigned_long, 'signature'),
         (unsigned_long, 'offset'),
         (unsigned_long, 'cdOffset'),
-        (pointer(TypeDescriptor), 'pTypeDescriptor'),
-        (pointer(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
+        (P(TypeDescriptor), 'pTypeDescriptor'),
+        (P(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
     ]
 
 if False:
