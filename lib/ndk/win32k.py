@@ -3,6 +3,25 @@ from ptypes import *
 
 from .datatypes import *
 
+class LONG32(LONG): pass
+class ULONG32(ULONG): pass
+class ULONG64(ULONGLONG): pass
+class PVOID64(PVOID): pass
+class SIZE(pstruct.type):
+    _fields_ = [(LONG, 'cx'), (LONG, 'cy')]
+class SIZEL(SIZE): pass
+class FLONG(unsigned_long): pass
+class HDC(HANDLE): pass
+class HPALETTE(HANDLE): pass
+class PALETTEENTRY(pstruct.type):
+    _fields_ = [(BYTE, 'peRed'), (BYTE, 'peGreen'), (BYTE, 'peBlue'), (BYTE, 'peFlags')]
+class LOGCOLORSPACEW(pstruct.type):
+    # FIXME
+    _fields_ = []
+class ENUMLOGFONTEXDVW(pstruct.type):
+    # FIXME
+    _fields_ = []
+
 # constants
 MAX_GDI_CELLS = 0x10000
 UNUSED_GDI_CELLS = 10
@@ -22,6 +41,7 @@ STYPE_DEVICE = 1
 STYPE_DEVBITMAP = 3
 
 # Window Messages
+WM_APP = 0x8000
 WM_DBGREADENTRY = WM_APP+1
 WM_DBGREADCOLORTRANSFORM = WM_APP+2
 WM_DBGREADLFONT = WM_APP+3
@@ -31,6 +51,10 @@ WM_DBGREADPALETTE = WM_APP+6
 WM_DBGREADBASEOBJ = WM_APP+7
 WM_DBGDPRINT = WM_APP+8
 WM_GONE = WM_APP+9
+
+# Font sizes (FIXME)
+LF_FACESIZE = 0
+LF_FULLFACESIZE = 0
 
 # structures ripped from https://github.com/CoreSecurity/GDIObjDump/blob/master/src/GDIObjDump/common.h
 class GDICELL32(pstruct.type):
@@ -199,7 +223,7 @@ class PALETTE32(pstruct.type):
         (dyn.array(PALETTEENTRY, 1), 'apalColors'),
     ]
 
-class PALETTE64(pstruct.type):
+class PALETTE(pstruct.type):
     _fields_ = [
         (BASEOBJECT64, 'BaseObject'),
         (FLONG, 'flPal'),
@@ -218,7 +242,7 @@ class PALETTE64(pstruct.type):
         (ULONG64, 'ulRGBTime'),
         (ULONG64, 'pRGBXlate'),
         (P(PALETTEENTRY), 'pFirstColor'),
-        (P(PALETTE), 'ppalThis'),
+        (P(lambda _: PALETTE), 'ppalThis'),
         (dyn.array(PALETTEENTRY, 3), 'apalColors'),
     ]
 
@@ -344,9 +368,9 @@ class GDI_HANDLE_TABLE(pstruct.type):
     class _Type(pint.enum, ULONG):
         _values_ = [
             ('DeviceContext', 1),
-            ('Region', 4)
-            ('Bitmap', 5)
-            ('Palette', 8)
+            ('Region', 4),
+            ('Bitmap', 5),
+            ('Palette', 8),
             ('Font', 10),
             ('Brush', 16),
             ('EnhancedMetaFile', 33),
