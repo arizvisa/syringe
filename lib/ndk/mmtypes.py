@@ -3,7 +3,7 @@ from ptypes import *
 
 from .datatypes import *
 
-class POOL_TYPE(pbinary.enum):
+class _POOL_TYPE(pbinary.enum):
     _values_ = [
         ('NonPagedPool', 0x0000),
         ('PagedPool', 0x0001),
@@ -23,17 +23,13 @@ class POOL_TYPE(pbinary.enum):
     ]
 
 @pbinary.littleendian
-class POOL_TYPE16(POOL_TYPE):
-    _width_ = 16
-
-@pbinary.littleendian
-class POOL_TYPE32(POOL_TYPE):
+class POOL_TYPE(_POOL_TYPE):
     _width_ = 32
 
 class POOL_HEADER(pstruct.type, versioned):
     class _Ulong1(pbinary.struct):
         _fields_ = [
-            (dyn.clone(POOL_TYPE, width=7), 'PoolType'),
+            (dyn.clone(_POOL_TYPE, _width_=7), 'PoolType'),
             (9, 'BlockSize'),
             (7, 'PoolIndex'),
             (9, 'PreviousSize'),
@@ -49,7 +45,7 @@ class POOL_HEADER(pstruct.type, versioned):
 
     class _Ulong164(_Ulong1):
         _fields_ = [
-            (dyn.clone(POOL_TYPE, width=8), 'PoolType'),
+            (dyn.clone(_POOL_TYPE, _width_=8), 'PoolType'),
             (8, 'BlockSize'),
             (8, 'PoolIndex'),
             (8, 'PreviousSize'),
@@ -88,7 +84,7 @@ class POOL_DESCRIPTOR(pstruct.type, versioned):
         return dyn.array(POOL_FREE_CHUNK_LIST_ENTRY, POOL_LISTS_PER_PAGE)
 
     _fields_ = [
-        (POOL_TYPE32, 'PoolType;'),
+        (POOL_TYPE, 'PoolType;'),
         (ULONG, 'PoolIndex;'),
         (ULONG, 'RunningAllocs;'),
         (ULONG, 'RunningDeAllocs;'),
@@ -110,7 +106,7 @@ class GENERAL_LOOKASIDE(pstruct.type):
         (ULONG, 'AllocateMissesOrHits'),
         (ULONG, 'TotalFrees'),
         (ULONG, 'FreeMissesOrHits'),
-        (POOL_TYPE32, 'Type'),
+        (POOL_TYPE, 'Type'),
         (dyn.clone(pstr.string, length=4), 'Tag'),
         (ULONG, 'Size'),
         (PVOID, 'Allocate'),
