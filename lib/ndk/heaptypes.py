@@ -822,7 +822,7 @@ if 'HeapChunk':
             # really no need to decode anything when loading
             header = self['Header'].li
             if header.object.Type()['Chunk'] and header.object.FreeQ():
-                return dyn.clone(LIST_ENTRY, _object_=fptr(self.__class__, 'ListEntry'), _path_=('ListEntry',))
+                return dyn.clone(LIST_ENTRY, _object_=fpointer(self.__class__, 'ListEntry'), _path_=('ListEntry',))
 
             # No linked-list as the chunk is busy or not a chunk
             return ptype.undefined
@@ -983,7 +983,7 @@ if 'Frontend':
             repr = details
 
         _fields_ = [
-            (fptr(_HEAP_CHUNK, 'ListEntry'), 'Flink'),
+            (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Flink'),
             (_HeapBucketLink, 'Blink'),
         ]
 
@@ -1017,7 +1017,7 @@ if 'Frontend':
 if 'LookasideList':
     class HEAP_LOOKASIDE(pstruct.type):
         _fields_ = [
-            (dyn.clone(SLIST_HEADER, _object_=fptr(_HEAP_CHUNK, 'ListHead'), _path_=('ListHead',)), 'ListHead'),
+            (dyn.clone(SLIST_HEADER, _object_=fpointer(_HEAP_CHUNK, 'ListHead'), _path_=('ListHead',)), 'ListHead'),
             (USHORT, 'Depth'),
             (USHORT, 'MaximumDepth'),
             (ULONG, 'TotalAllocates'),
@@ -1191,7 +1191,7 @@ if 'LFH':
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10:
                 f.extend([
                     (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
-                    (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
+                    (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
                     (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Signature)'),
                     (HEAP_SIGNATURE, 'Signature'),
@@ -1201,7 +1201,7 @@ if 'LFH':
             else:
                 f.extend([
                     (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
-                    (fptr(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
+                    (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'GuardPagePresent'),
                     (USHORT, 'PaddingBytes'),
@@ -1479,7 +1479,7 @@ if 'LFH':
                     (USHORT, 'BlockCount'),
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'AffinityIndex'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
                     (ULONG, 'Lock'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
                 ])
@@ -1488,7 +1488,7 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
                     (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'DelayFreeList'),
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'DelayFreeList'),
                     (INTERLOCK_SEQ, 'AggregateExchg'),
                     (USHORT, 'BlockSize'),
                     (USHORT, 'Flags'),
@@ -1497,7 +1497,7 @@ if 'LFH':
                     (UCHAR, 'AffinityIndex'),
                     (dyn.array(ULONG, 2), 'Alignment'),     # XXX: This is not really an alignment as claimed
                     (ULONG, 'Lock'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'SFreeListEntry'),    # XXX: DelayFreeList
                 ])
 
             else:
@@ -1534,7 +1534,7 @@ if 'LFH':
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10:
                 f.extend([
-                    (dyn.clone(SLIST_HEADER, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'DeletedSubSegments'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'DeletedSubSegments'),
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
@@ -1545,7 +1545,7 @@ if 'LFH':
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) == sdkddkver.NTDDI_WIN10:
                 f.extend([
-                    (dyn.clone(SLIST_HEADER, _object_=fptr(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'DeletedSubSegments'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=('SFreeListEntry',)), 'DeletedSubSegments'),
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
@@ -1671,7 +1671,7 @@ if 'Heap':
                     (_HEAP_ENTRY, 'Entry'),
                     (HEAP_SIGNATURE, 'SegmentSignature'),
                     (ULONG, 'SegmentFlags'),
-                    (lambda s: dyn.clone(LIST_ENTRY, _sentinel_='Blink', _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from HEAP
+                    (lambda s: dyn.clone(LIST_ENTRY, _sentinel_='Blink', _path_=('SegmentListEntry',), _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from HEAP
                     (P(HEAP), 'Heap'),
                     (PVOID, 'BaseAddress'),
                     (ULONG, 'NumberOfPages'),
@@ -1683,7 +1683,7 @@ if 'Heap':
                     (USHORT, 'AllocatorBackTraceIndex'),
                     (USHORT, 'Reserved'),
                     (aligned, 'align(UCRSegmentList)'),
-                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fptr(HEAP_UCR_DESCRIPTOR, 'SegmentEntry')), 'UCRSegmentList'),
+                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fpointer(HEAP_UCR_DESCRIPTOR, 'SegmentEntry')), 'UCRSegmentList'),
                 ])
 
             else:
@@ -1766,7 +1766,7 @@ if 'Heap':
 
         _fields_ = [
             (__ListEntry, 'ListEntry'),
-            (dyn.clone(LIST_ENTRY, _path_=('UCRSegmentList',), _object_=fptr(HEAP_SEGMENT, 'UCRSegmentList')), 'SegmentEntry'),
+            (dyn.clone(LIST_ENTRY, _path_=('UCRSegmentList',), _object_=fpointer(HEAP_SEGMENT, 'UCRSegmentList')), 'SegmentEntry'),
             (__Address, 'Address'),  # Sentinel Address
             (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'Size'),
         ]
@@ -1927,14 +1927,14 @@ if 'Heap':
                     (ULONG_PTR, 'AlignRound'),
                     (ULONG_PTR, 'AlignMask'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
-                    (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
+                    (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
                     (USHORT, 'AllocatorBackTraceIndex'),
                     (USHORT, 'FreeListInUseTerminate'),  # XXX: Is this for real?
                     (ULONG, 'NonDedicatedListLength'),
                     (P(HEAP_LIST_LOOKUP), 'BlocksIndex'),
-                    (fptr(_HEAP_CHUNK, 'ListEntry'), 'UCRIndex'),
+                    (fpointer(_HEAP_CHUNK, 'ListEntry'), 'UCRIndex'),
                     (P(HEAP_PSEUDO_TAG_ENTRY), 'PseudoTagEntries'),
-                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fptr(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
+                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
                     (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
@@ -1979,13 +1979,13 @@ if 'Heap':
                     (size_t, 'AlignRound'),
                     (size_t, 'AlignMask'),
                     (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
-                    (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fptr(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
+                    (dyn.clone(LIST_ENTRY, _path_=('SegmentListEntry',), _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
                     (ULONG, 'AllocatorBackTraceIndex'),
                     (ULONG, 'NonDedicatedListLength'),
                     (P(HEAP_LIST_LOOKUP), 'BlocksIndex'),
-                    (fptr(_HEAP_CHUNK, 'ListEntry'), 'UCRIndex'),
+                    (fpointer(_HEAP_CHUNK, 'ListEntry'), 'UCRIndex'),
                     (P(HEAP_PSEUDO_TAG_ENTRY), 'PseudoTagEntries'),
-                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fptr(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
+                    (dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),   # FIXME: this is encoded with something somewhere
                     #(P(ptype.undefined), 'CommitRoutine'),
@@ -2025,9 +2025,9 @@ if 'Heap':
                 (ULONG, 'BaseIndex'),
 
                 (aligned, 'align(ListHead)'),
-                (P(dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fptr(_HEAP_CHUNK, 'ListEntry'))), 'ListHead'),
+                (P(dyn.clone(LIST_ENTRY, _path_=('ListEntry',), _object_=fpointer(_HEAP_CHUNK, 'ListEntry'))), 'ListHead'),
                 (P(lambda s: dyn.clone(ListsInUseUlong, length=s.p.ListHintsCount() >> 5)), 'ListsInUseUlong'),
-                (P(lambda s: dyn.array(dyn.clone(FreeListBucket, _object_=fptr(_HEAP_CHUNK, 'ListEntry'), _path_=('ListEntry',), _sentinel_=s.p['ListHead'].int()), s.p.ListHintsCount())), 'ListHints'),
+                (P(lambda s: dyn.array(dyn.clone(FreeListBucket, _object_=fpointer(_HEAP_CHUNK, 'ListEntry'), _path_=('ListEntry',), _sentinel_=s.p['ListHead'].int()), s.p.ListHintsCount())), 'ListHints'),
             ])
 
         def ListHintsCount(self):

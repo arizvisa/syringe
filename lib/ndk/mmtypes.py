@@ -72,7 +72,7 @@ class POOL_HEADER(pstruct.type, versioned):
 
 class POOL_FREE_CHUNK(pstruct.type, versioned): pass
 class POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):
-    _object_ = fptr(POOL_FREE_CHUNK, 'ListEntry')
+    _object_ = fpointer(POOL_FREE_CHUNK, 'ListEntry')
     _path_ = ('ListEntry',)
 
 POOL_FREE_CHUNK._fields_ = [

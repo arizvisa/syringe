@@ -58,7 +58,6 @@ class fpointer_t(ptype.opointer_t, versioned):
 
 def fpointer(type, fieldname):
     return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname, '__iter__') else (fieldname,))
-fptr = fpointer
 
 ## pointer types
 class PVOID(ptype.pointer_t, versioned):
@@ -96,7 +95,6 @@ class rpointer_t(ptype.rpointer_t, versioned):
 
 def rpointer(target, base, **attrs):
     return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
-rptr = rpointer
 
 ### C datatypes
 class char(pint.int8_t): pass
