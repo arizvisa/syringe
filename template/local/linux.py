@@ -44,6 +44,8 @@ class size_t(long_unsigned_int): pass
 class __ssize_t(long_int): pass
 class ssize_t(__ssize_t): pass
 
+class wchar_t(pstr.wchar_t): pass
+
 # core types
 class __dev_t(__uint64_t): pass
 class __uid_t(unsigned_int): pass
@@ -69,6 +71,8 @@ class __key_t(int): pass
 
 class sigset_t(unsigned_long): pass
 class pid_t(__pid_t): pass
+class off_t(__off_t): pass
+class off64_t(__off64_t): pass
 
 # base types
 class list_head(pstruct.type): pass
@@ -553,3 +557,177 @@ class pthread(pstruct.type):
         (bool, 'c11'),
         (dyn.padding(pfloat.double.length), 'end_padding'),
     ]
+
+class _IO_marker(pstruct.type):
+    _fields_ = [
+        (lambda _: dyn.pointer(_IO_marker), '_next'),
+        (lambda _: dyn.pointer(FILE), '_sbuf'),
+        (int, 'pos'),
+    ]
+
+class _IO_lock_t(void): pass
+
+class __gconv_fct__(void_star): pass
+class __gconv_init_fct__(void_star): pass
+class __gconv_end_fct__(void_star): pass
+
+class __gconv_loaded_object__(pstruct.type):
+    _fields_ = [
+        (dyn.pointer(pstr.szstring), 'name'),
+        (int, 'counter'),
+        (void_star, 'handle'),
+        (__gconv_fct__, 'fct'),
+        (__gconv_init_fct__, 'init_fct'),
+        (__gconv_end_fct__, 'end_fct'),
+    ]
+
+class __gconv_btowc_fct__(void_star): pass
+
+class __gconv_step__(pstruct.type):
+    _fields_ = [
+        (dyn.pointer(__gconv_loaded_object__), '__shlib_handle'),
+        (dyn.pointer(pstr.szstring), '__modname'),
+        (int, '__counter'),
+        (dyn.pointer(pstr.szstring), '__from_name'),
+        (dyn.pointer(pstr.szstring), '__to_name'),
+        (__gconv_fct__, '__fct'),
+        (__gconv_btowc_fct__, '__btowc_fct'),
+        (__gconv_init_fct__, '__init_fct'),
+        (__gconv_end_fct__, '__end_fct'),
+        (int, '__min_needed_from'),
+        (int, '__max_needed_from'),
+        (int, '__min_needed_to'),
+        (int, '__max_needed_to'),
+        (int, '__stateful'),
+        (void_star, '__data'),
+    ]
+
+class __mbstate_t__(pstruct.type):
+    _fields_ = [
+        (int, '__count'),
+        (unsigned_int, '__wch'),
+    ]
+
+class __gconv_step_data__(pstruct.type):
+    _fields_ = [
+        (dyn.pointer(unsigned_char), '__outbuf'),
+        (dyn.pointer(unsigned_char), '__outbufend'),
+        (int, '__flags'),
+        (int, '__invocation_counter'),
+        (int, '__internal_use'),
+        (dyn.pointer(__mbstate_t__), '__statep'),
+        (__mbstate_t__, '__state'),
+    ]
+
+class _IO_iconv_t(pstruct.type):
+    _fields_ = [
+        (dyn.pointer(__gconv_step__), 'step'),
+        (dyn.pointer(__gconv_step_data__), 'step_data'),
+    ]
+
+class _IO_codecvt(pstruct.type):
+    _fields_ = [
+        (_IO_iconv_t, '__cd_in'),
+        (_IO_iconv_t, '__cd_out'),
+    ]
+
+class _IO_finish_t(void_star): pass
+class _IO_overflow_t(void_star): pass
+class _IO_underflow_t(void_star): pass
+class _IO_underflow_t(void_star): pass
+class _IO_pbackfail_t(void_star): pass
+class _IO_xsputn_t(void_star): pass
+class _IO_xsgetn_t(void_star): pass
+class _IO_seekoff_t(void_star): pass
+class _IO_seekpos_t(void_star): pass
+class _IO_setbuf_t(void_star): pass
+class _IO_sync_t(void_star): pass
+class _IO_doallocate_t(void_star): pass
+class _IO_read_t(void_star): pass
+class _IO_write_t(void_star): pass
+class _IO_seek_t(void_star): pass
+class _IO_close_t(void_star): pass
+class _IO_stat_t(void_star): pass
+class _IO_showmanyc_t(void_star): pass
+class _IO_imbue_t(void_star): pass
+
+class _IO_jump_t(pstruct.type):
+    _fields_ = [
+        (size_t, '__dummy'),
+        (size_t, '__dummy2'),
+        (_IO_finish_t, '__finish'),
+        (_IO_overflow_t, '__overflow'),
+        (_IO_underflow_t, '__underflow'),
+        (_IO_underflow_t, '__uflow'),
+        (_IO_pbackfail_t, '__pbackfail'),
+        (_IO_xsputn_t, '__xsputn'),
+        (_IO_xsgetn_t, '__xsgetn'),
+        (_IO_seekoff_t, '__seekoff'),
+        (_IO_seekpos_t, '__seekpos'),
+        (_IO_setbuf_t, '__setbuf'),
+        (_IO_sync_t, '__sync'),
+        (_IO_doallocate_t, '__doallocate'),
+        (_IO_read_t, '__read'),
+        (_IO_write_t, '__write'),
+        (_IO_seek_t, '__seek'),
+        (_IO_close_t, '__close'),
+        (_IO_stat_t, '__stat'),
+        (_IO_showmanyc_t, '__showmanyc'),
+        (_IO_imbue_t, '__imbue'),
+    ]
+
+class _IO_wide_data(pstruct.type):
+    _fields_ = [
+        (dyn.pointer(wchar_t), '_IO_read_base'),
+        (dyn.pointer(wchar_t), '_IO_read_ptr'),
+        (dyn.pointer(wchar_t), '_IO_read_end'),
+        (dyn.pointer(wchar_t), '_IO_write_base'),
+        (dyn.pointer(wchar_t), '_IO_write_ptr'),
+        (dyn.pointer(wchar_t), '_IO_write_end'),
+        (dyn.pointer(wchar_t), '_IO_buf_base'),
+        (dyn.pointer(wchar_t), '_IO_buf_end'),
+        (dyn.pointer(wchar_t), '_IO_save_base'),
+        (dyn.pointer(wchar_t), '_IO_backup_base'),
+        (dyn.pointer(wchar_t), '_IO_save_end'),
+        (__mbstate_t__, '_IO_state'),
+        (__mbstate_t__, '_IO_last_state'),
+        (_IO_codecvt, '_codecvt'),
+        (dyn.array(wchar_t, 1), '_shortbuf'),
+        (dyn.pointer(_IO_jump_t), '_wide_vtable'),
+    ]
+
+class _IO_FILE(pstruct.type):
+    _fields_ = [
+        (int, '_flags'),
+        (lambda self: dyn.align(ptypes.Config.integer.size), 'align(_IO_read_ptr)'),
+        (dyn.pointer(char), '_IO_read_ptr'),
+        (dyn.pointer(char), '_IO_read_end'),
+        (dyn.pointer(char), '_IO_read_base'),
+        (dyn.pointer(char), '_IO_write_base'),
+        (dyn.pointer(char), '_IO_write_ptr'),
+        (dyn.pointer(char), '_IO_write_end'),
+        (dyn.pointer(char), '_IO_buf_base'),
+        (dyn.pointer(char), '_IO_buf_end'),
+        (dyn.pointer(char), '_IO_save_base'),
+        (dyn.pointer(char), '_IO_backup_base'),
+        (dyn.pointer(char), '_IO_save_end'),
+        (dyn.pointer(_IO_marker), '_markers'),
+        (lambda _: dyn.pointer(_IO_FILE), '_chain'),
+        (int, '_fileno'),
+        (int, '_flags2'),
+        (off_t, '_old_offset'),
+        (unsigned_short, '_cur_column'),
+        (signed_char, '_vtable_offset'),
+        (dyn.array(char, 1), '_shortbuf'),
+        (lambda self: dyn.align(ptypes.Config.integer.size), 'align(_lock)'),
+        (dyn.pointer(_IO_lock_t), '_lock'),
+        (off64_t, '_offset'),
+        (dyn.pointer(_IO_codecvt), '_codecvt'),
+        (dyn.pointer(_IO_wide_data), '_wide_data'),
+        (lambda self: dyn.pointer(_IO_FILE), '_freeres_list'),
+        (void_star, '_freeres_buf'),
+        (size_t, '__pad5'),
+        (int, '_mode'),
+        (lambda self: dyn.block(15 * int().blocksize() - 4 * void_star().blocksize() - size_t().blocksize()), '_unused2'),
+    ]
+class FILE(_IO_FILE): pass
