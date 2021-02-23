@@ -21,8 +21,10 @@ class long_long(pint.int64_t): pass
 class signed_long_long(pint.sint64_t): pass
 class unsigned_long_long(pint.uint64_t): pass
 
-class void_p(ptype.pointer_t):
-    _object_ = ptype.undefined
+class void(ptype.undefined):
+    length = 1
+class void_star(ptype.pointer_t):
+    _object_ = void
 class uintptr_t(ptype.pointer_t):
     _object_ = ptype.undefined
 class intptr_t(ptype.pointer_t):
@@ -87,7 +89,7 @@ class slab(pstruct.type):
     _fields_ = [
         (list_head, 'list'),
         (unsigned_long, 'colouroff'),
-        (void_p, 's_mem'),
+        (void_star, 's_mem'),
         (unsigned_int, 'inuse'),
         (unsigned_short, 'nodeid'),
     ]
@@ -112,13 +114,13 @@ class slob_page(pstruct.type):
 class tlsdesc(pstruct.type):
     _fields_ = [
         (pint.uint64_t, 'entry_slot'),  # (ptrdiff_t* entry)(struct tlsdesc* on_rax)
-        (pint.uint64_t, 'arg_slot'),    # void_p arg
+        (pint.uint64_t, 'arg_slot'),    # void_star arg
     ]
 
 class dtv_pointer(pstruct.type):
     _fields_ = [
-        (void_p, 'val'),
-        (void_p, 'to_free'),
+        (void_star, 'val'),
+        (void_star, 'to_free'),
     ]
 
 class dtv_t(dynamic.union):
@@ -140,9 +142,9 @@ class tcbhead_t(pstruct.type):
             (dyn.array(int, 4), 'i'),
         ]
     _fields_ = [
-        (void_p, 'tcb'),
+        (void_star, 'tcb'),
         (dyn.pointer(dtv_t), 'dtv'),
-        (void_p, 'self'),
+        (void_star, 'self'),
         (int, 'multiple_threads'),
         (int, 'gscope_flag'),
         (uintptr_t, 'sysinfo'),
@@ -151,12 +153,12 @@ class tcbhead_t(pstruct.type):
         (dyn.array(unsigned_long_int, 2), 'vgetcpu_cache'),
         (X86_FEATURE_1_, 'feature_1'),
         (int, '__glibc_unused1'),
-        (dyn.array(void_p, 4), '__private_tm'),
-        (void_p, '__private_ss'),
+        (dyn.array(void_star, 4), '__private_tm'),
+        (void_star, '__private_ss'),
         (unsigned_long_long_int, 'ssp_base'),
         (dyn.align(32), 'align(__glibc_unused2)'),
         (dyn.array(dyn.array(__128bits, 8), 4), '__glibc_unused2'),
-        (dyn.array(void_p, 8), '__padding'),
+        (dyn.array(void_star, 8), '__padding'),
     ]
 
 class list_t(pstruct.type): pass
@@ -167,15 +169,15 @@ list_t._fields_ = [
 
 class robust_list_head(pstruct.type):
     _fields_ = [
-        (void_p, 'list'),
+        (void_star, 'list'),
         (long_int, 'futex_offset'),
-        (void_p, 'list_op_pending'),
+        (void_star, 'list_op_pending'),
     ]
 
 class pthread_cleanup_buffer(pstruct.type):
     _fields_ = [
         (dyn.pointer(ptype.undefined), '__routine'),
-        (void_p, '__arg'),
+        (void_star, '__arg'),
         (int, '__canceltype'),
     ]
 pthread_cleanup_buffer._fields_ += [(dyn.pointer(pthread_cleanup_buffer), '__prev')]
@@ -199,7 +201,7 @@ class pthread_unwind_buf(pstruct.type):
                 (int, 'canceltype'),
             ]
         _fields_ = [
-            (dyn.array(void_p, 4), 'pad'),
+            (dyn.array(void_star, 4), 'pad'),
             (_data, 'data'),
         ]
     _fields_ = [
@@ -240,7 +242,7 @@ class td_notify_e(pbinary.flags):
         (1, 'NOTIFY_SYSCALL'),  # System call u.syscallno will be invoked.
     ]
 
-class psaddr_t(void_p): pass
+class psaddr_t(void_star): pass
 class td_notify_t(pstruct.type):
     class _u(dynamic.union):
         _fields_ = [
@@ -302,7 +304,7 @@ class td_eventbuf_t(pstruct.type):
     _fields_ = [
         (td_thr_events_t, 'eventmask'),
         (td_event_e, 'eventnum'),
-        (void_p, 'eventdata'),
+        (void_star, 'eventdata'),
     ]
 
 class thread_t(unsigned_long_int): pass
@@ -471,8 +473,8 @@ class res_state(pstruct.type):
         (__state, 'state'),
         (dyn.array(_sort_list, MAXRESOLVSORT), 'sort_list'),
         (dyn.padding(8), '1) 4 byte hole here on 64-bit architectures.'),
-        (void_p, '__glibc_unused_qhook'),
-        (void_p, '__glibc_unused_rhook'),
+        (void_star, '__glibc_unused_qhook'),
+        (void_star, '__glibc_unused_rhook'),
         (int, 'res_h_errno'),
         (int, '_vcsock'),
         (unsigned_int, '_flags'),
@@ -494,7 +496,7 @@ class pthread(pstruct.type):
         _fields_ = [
             (tcbhead_t, 'tcb'),
             (_multiple_threads, 'multiple_threads'),
-            (dyn.array(void_p, 24), '__padding'),
+            (dyn.array(void_star, 24), '__padding'),
         ]
     class _cancelhandling(pbinary.flags):
         '''int'''
@@ -511,14 +513,14 @@ class pthread(pstruct.type):
     class pthread_key_data(pstruct.type):
         _fields_ = [
             (uintptr_t, 'seq'),
-            (void_p, 'data'),
+            (void_star, 'data'),
         ]
     _fields_ = [
         (_header, 'header'),
         (list_t, 'list'),
         (pid_t, 'tid'),
         (pid_t, 'pid_ununsed'),
-        (void_p, 'robust_prev'),
+        (void_star, 'robust_prev'),
         (robust_list_head, 'robust_head'),
         (dyn.pointer(pthread_cleanup_buffer), 'cleanup'),
         (dyn.pointer(pthread_unwind_buf), 'cleanup_jmp_buf'),
@@ -534,15 +536,15 @@ class pthread(pstruct.type):
         (int, 'lock'),
         (unsigned_int, 'setxid_futex'),
         (dyn.pointer(lambda self: pthread), 'joinid'),
-        (void_p, 'result'),
+        (void_star, 'result'),
         (sched_param, 'schedparam'),
         (int, 'schedpolicy'),
         (dyn.pointer(ptype.undefined), 'start_routine'),
-        (void_p, 'arg'),
+        (void_star, 'arg'),
         (td_eventbuf_t, 'eventbuf'),
         (dyn.pointer(lambda self: pthread), 'nextevent'),
         (_Unwind_Exception, 'exc'),
-        (void_p, 'stackblock'),
+        (void_star, 'stackblock'),
         (size_t, 'stackblock_size'),
         (size_t, 'guardsize'),
         (size_t, 'reported_guardsize'),
