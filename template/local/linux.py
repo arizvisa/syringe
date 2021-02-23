@@ -15,6 +15,7 @@ class uintptr_t(ptype.pointer_t):
     _object_ = ptype.undefined
 class intptr_t(ptype.pointer_t):
     _object_ = ptype.undefined
+class bool(int): pass
 
 class size_t(pint.uinteger.lookup(ptypes.Config.integer.size)): pass
 class ssize_t(pint.sinteger.lookup(ptypes.Config.integer.size)): pass
