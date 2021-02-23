@@ -565,6 +565,17 @@ class _IO_marker(pstruct.type):
         (int, 'pos'),
     ]
 
+class _IO_FLAGS2_(pbinary.flags):
+    _fields_ = [
+        (26, 'unused'),
+        (1, 'NEED_LOCK'),
+        (1, 'CLOEXEC'),
+        (1, 'NOCLOSE'),
+        (1, 'USER_WBUF'),
+        (1, 'NOTCANCEL'),
+        (1, 'MMAP'),
+    ]
+
 class _IO_lock_t(void): pass
 
 class __gconv_fct__(void_star): pass
@@ -697,8 +708,37 @@ class _IO_wide_data(pstruct.type):
     ]
 
 class _IO_FILE(pstruct.type):
+    @pbinary.littleendian
+    class __flags(pbinary.flags):
+        _fields_ = [
+            (16, '_IO_MAGIC'),
+            (1, '_IO_USER_LOCK'),
+            (1, 'unused'),
+            (1, '_IO_IS_FILEBUF'),
+            (1, '_IO_IS_APPENDING'),
+            (1, '_IO_CURRENTLY_PUTTING'),
+            (1, '_IO_TIED_PUT_GET'),
+            (1, '_IO_LINE_BUF'),
+            (1, '_IO_IN_BACKUP'),
+            (1, '_IO_LINKED'),
+            (1, '_IO_DELETE_DONT_CLOSE'),
+            (1, '_IO_ERR_SEEN'),
+            (1, '_IO_EOF_SEEN'),
+            (1, '_IO_NO_WRITES'),
+            (1, '_IO_NO_READS'),
+            (1, '_IO_UNBUFFERED'),
+            (1, '_IO_USER_BUF'),
+        ]
+    @pbinary.littleendian
+    class __flags2(_IO_FLAGS2_): pass
+    class __mode(pint.enum, int):
+        _values_ = [
+            ('needflush', -1),
+            ('single', 0),
+            ('wide', 1),
+        ]
     _fields_ = [
-        (int, '_flags'),
+        (__flags, '_flags'),
         (lambda self: dyn.align(ptypes.Config.integer.size), 'align(_IO_read_ptr)'),
         (dyn.pointer(char), '_IO_read_ptr'),
         (dyn.pointer(char), '_IO_read_end'),
@@ -714,7 +754,7 @@ class _IO_FILE(pstruct.type):
         (dyn.pointer(_IO_marker), '_markers'),
         (lambda _: dyn.pointer(_IO_FILE), '_chain'),
         (int, '_fileno'),
-        (int, '_flags2'),
+        (__flags2, '_flags2'),
         (off_t, '_old_offset'),
         (unsigned_short, '_cur_column'),
         (signed_char, '_vtable_offset'),
