@@ -2,13 +2,25 @@ import ptypes
 from ptypes import *
 
 # primitive types
+class char(pint.int8_t): pass
+class signed_char(pint.sint8_t): pass
+class unsigned_char(pint.uint8_t): pass
 class short(pint.int16_t): pass
-class int(pint.uint32_t): pass
-class long(pint.int32_t): pass
+class signed_short(pint.sint16_t): pass
 class unsigned_short(pint.uint16_t): pass
+class int(pint.int32_t): pass
 class signed_int(pint.sint32_t): pass
 class unsigned_int(pint.uint32_t): pass
-class unsigned_long(pint.uint32_t): pass
+class long(pint.int_t):
+    length = property(fget=lambda _: ptypes.Config.integer.size)
+class signed_long(pint.sint_t):
+    length = property(fget=lambda _: ptypes.Config.integer.size)
+class unsigned_long(pint.uint_t):
+    length = property(fget=lambda _: ptypes.Config.integer.size)
+class long_long(pint.int64_t): pass
+class signed_long_long(pint.sint64_t): pass
+class unsigned_long_long(pint.uint64_t): pass
+
 class void_p(ptype.pointer_t):
     _object_ = ptype.undefined
 class uintptr_t(ptype.pointer_t):
@@ -17,20 +29,43 @@ class intptr_t(ptype.pointer_t):
     _object_ = ptype.undefined
 class bool(int): pass
 
-class size_t(pint.uinteger.lookup(ptypes.Config.integer.size)): pass
-class ssize_t(pint.sinteger.lookup(ptypes.Config.integer.size)): pass
+class unsigned_short_int(unsigned_short): pass
+class long_int(long): pass
+class long_unsigned_int(unsigned_long): pass
+class unsigned_long_int(unsigned_long): pass
+class unsigned_long_long_int(unsigned_long_long): pass
 
-class char(pint.int8_t): pass
-class unsigned_char(pint.uint8_t): pass
-class unsigned_short_int(pint.uint16_t): pass
-class long_int(pint.sinteger.lookup(ptypes.Config.integer.size)): pass
-class unsigned_long_int(pint.uinteger.lookup(ptypes.Config.integer.size)): pass
-class unsigned_long_long_int(pint.uinteger.lookup(8)): pass
+class __int64_t(pint.int64_t): pass
+class __uint64_t(pint.uint64_t): pass
+
+class size_t(long_unsigned_int): pass
+class __ssize_t(long_int): pass
+class ssize_t(__ssize_t): pass
 
 # core types
+class __dev_t(__uint64_t): pass
+class __uid_t(unsigned_int): pass
+class __gid_t(unsigned_int): pass
+class __ino_t(unsigned_long_int): pass
+class __ino64_t(__uint64_t): pass
+class __mode_t(unsigned_int): pass
+class __nlink_t(unsigned_long_int): pass
+class __off_t(long_int): pass
+class __off64_t(__int64_t): pass
 class __pid_t(int): pass
-class sigset_t(unsigned_long): pass
+#class __fsid_t(parray.type): length, _object_ = 2, int
+class __clock_t(long_int): pass
+class __rlim_t(unsigned_long_int): pass
+class __rlim64_t(__uint64_t): pass
+class __id_t(unsigned_int): pass
+class __time_t(long_int): pass
+class __useconds_t(unsigned_int): pass
+class __suseconds_t(long_int): pass
+class __suseconds64_t(__int64_t): pass
+class __daddr_t(int): pass
+class __key_t(int): pass
 
+class sigset_t(unsigned_long): pass
 class pid_t(__pid_t): pass
 
 # base types
