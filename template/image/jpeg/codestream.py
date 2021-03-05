@@ -104,8 +104,32 @@ class StreamMarker(pstruct.type):
 
         return res.set(Type=intofdata(Fattribute(res['Value']))) if hasattr(res['Value'], attribute) else res
 
+class StreamData(pstruct.type):
+    class _Type(pint.enum):
+        _values_ = [
+            ('DATA', 0),
+        ]
+
+    def _Value(self):
+        fields = ['Type']
+        t = dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        return dyn.clone(ByteStuffer, _value_=t)
+
+    def _Extra(self):
+        fields = ['Type', 'Value']
+        t = dyn.block(self.blocksize() - sum(self[fld].li.size() for fld in fields))
+        if hasattr(self['Value'], 'EncodedQ') and self['Value'].EncodedQ():
+            return dyn.clone(ByteStuffer, _value_=t)
+        return t
+
+    _fields_ = [
+        (_Type, 'Type'),
+        (_Value, 'Value'),
+        (_Extra, 'Extra'),
+    ]
+
 class DecodedStream(parray.block):
-    Element = StreamMarker
+    Element, Data = StreamMarker, StreamData
     def __init__(self, **attrs):
         super(DecodedStream, self).__init__(**attrs)
 
@@ -116,11 +140,12 @@ class DecodedStream(parray.block):
         bounds = self.__bounds__[len(self.value)]
 
         # First figure out if we're a delimited marker
-        t = dyn.clone(self.Element.Type, length=0) if bounds < 0 else self.Element.Type
+        t = dyn.clone(self.Element.Type, length=0) if bounds < 2 else self.Element.Type
 
-        # Using the bounds, construct a new marker using it as the blocksize
+        # Using the bounds, construct a new marker using it as the blocksize. If the
+        # bounds are negative, then this is just data that's separated by the markers
         Fsize = lambda self, cb=abs(bounds): cb
-        return dyn.clone(self.Element, Type=t, blocksize=Fsize)
+        return dyn.clone(self.Element, Type=t, blocksize=Fsize) if bounds > 0 else dyn.clone(self.Data, blocksize=Fsize)
 
     def blocksize(self):
         return sum(map(abs, self.__bounds__))
@@ -187,14 +212,31 @@ class Stream(ptype.encoded_t):
                 bounds.append(+size if marker else -size)
                 break
 
-            # Check to see if the marker is a valid marker that we should add
-            if FmarkerQ(marker):
+            # If we have a valid marker and enough data to figure out a length, then calculate the length,
+            # consume that much data, and use it to determine the boundaries of the element.
+            if FmarkerQ(marker) and len(data) >= 2:
+                skip, res = len(data), functools.reduce(lambda agg, item: agg * 2**8 + item, data[:2], 0)
+                while skip < res:
+                    skip += sum(map(len, (yield)))
+
+                # Take the data that we read, and add it to the list of boundaries since
+                # this represents the contents of the element that we read.
+                size = len(marker) + res
+                bounds.append(+size)
+
+                # If it didn't align properly, then this is just block data (like SOS) that doesn't
+                # really have a marker associated with it.
+                if skip != res:
+                    bounds.append(res - skip)
+
+            # Otherwise, we don't have enough data and this is just a marker that needs to be added
+            elif FmarkerQ(marker):
                 bounds.append(+size if marker else -size)
 
-            # Otherwise, just extend the previous record
+            # If it wasn't a valid marker, then this is part of the previous element so we need
+            # to extend the previous element with this new size
             else:
                 bounds[-1] = (bounds[-1] - size) if bounds[-1] < 0 else (bounds[-1] + size)
-
             continue
         return
 
