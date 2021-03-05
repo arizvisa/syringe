@@ -76,6 +76,14 @@ class Marker(codestream.Marker):
 class MarkerType(codestream.MarkerType):
     _values_ = Marker.table
 
+class StreamData(codestream.StreamData):
+    _fields_ = [
+        (codestream.StreamData._Type, 'Type'),
+        (pint.uint_t, 'Lp'),
+        (codestream.StreamData._Value, 'Value'),
+        (codestream.StreamData._Extra, 'Extra'),
+    ]
+
 class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker
 
@@ -88,8 +96,8 @@ class StreamMarker(codestream.StreamMarker):
 
         t, res = self.Table.withdefault(self['Type'].li.serialize()), self['Lp'].li
         if issubclass(t, ptype.block):
-            return dyn.clone(t, length=res.int() - res.size())
-        return dyn.clone(t, blocksize=lambda self, cb=res.int() - res.size(): cb)
+            return dyn.clone(t, length=res.int() - self['Type'].size())
+        return dyn.clone(t, blocksize=lambda self, cb=res.int() - self['Type'].size(): cb)
 
     def __Extra(self):
         fields = ['Type', 'Lp', 'Value']
@@ -399,7 +407,7 @@ class APP0(pstruct.type):
 
 class File(codestream.Stream):
     class _object_(codestream.DecodedStream):
-        Element = StreamMarker
+        Element, Data = StreamMarker, StreamData
 
     def _value_(self):
         return dyn.clone(ptype.block, length=self.source.size())

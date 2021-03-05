@@ -52,8 +52,11 @@ class Marker(codestream.Marker):
 class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker
 
+class StreamData(codestream.StreamData):
+    pass
+
 class DecodedStream(codestream.DecodedStream):
-    Element = StreamMarker
+    Element, Data = StreamMarker, StreamData
 
 ### enumerations
 class Boxes(ptype.definition): cache = {}
