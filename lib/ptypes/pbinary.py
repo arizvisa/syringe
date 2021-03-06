@@ -1680,8 +1680,12 @@ class partial(ptype.container):
             offset, size = self.getoffset(), self.blocksize()
             self.source.seek(offset)
             data = bytes(bytearray(reversed(self.source.consume(size))))
-            bc = bitmap.consumer(data)
-            self.object.__deserialize_consumer__(bc)
+
+            # If we were able to read some data, then use it to deserialize our object
+            if len(data):
+                bc = bitmap.consumer(data)
+                self.object.__deserialize_consumer__(bc)
+            return self
         return self
 
     def commit(self, **attrs):
