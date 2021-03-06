@@ -411,8 +411,9 @@ class ImageResourceBlock(pstruct.type):
             (pint.uint8_t, 'length'),
             (lambda self: dyn.clone(pstr.string, length=1 + self['length'].li.int()), 'string'),
         ]
+
     _fields_ = [
-        (dyn.block(4), 'signature'),
+        (dyn.clone(pstr.string, length=4), 'signature'),
         (pint.uint16_t, 'identifier'),
         (_name, 'name'),
         (pint.uint32_t, 'size'),
