@@ -66,8 +66,9 @@ def CalculateRelativeOffset(self, offset):
 
 def CalculateRealAddress(self, address):
     """given an rva, return offset relative to the baseaddress"""
-    base = LocateBase(self)
-    address -= base['OptionalHeader']['ImageBase'].int()
+    header = LocateHeader(self)
+    base = LocateBase(header)
+    address -= header['OptionalHeader']['ImageBase'].int()
     base = base.getoffset()
 
     # file
