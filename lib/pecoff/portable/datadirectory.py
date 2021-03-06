@@ -47,7 +47,8 @@ class IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG(AddressEntry):
     def _object_(self):
         res = self.getparent(Header)['OptionalHeader'].li
         res = loader.IMAGE_LOADCONFIG_DIRECTORY64 if res.is64() else loader.IMAGE_LOADCONFIG_DIRECTORY
-        return dyn.clone(res, blocksize=lambda s, cb=self['Size'].li.int(): cb)
+        #return dyn.clone(res, blocksize=lambda s, cb=self['Size'].li.int(): cb)
+        return res
 
 class IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT(OffsetEntry):
     _object_ = imports.IMAGE_BOUND_IMPORT_DIRECTORY

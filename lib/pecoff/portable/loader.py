@@ -1,5 +1,6 @@
 import ptypes
 from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
+from .headers import IMAGE_DATA_DIRECTORY
 from ..headers import *
 
 class IMAGE_LOAD_CONFIG_CODE_INTEGRITY(pstruct.type):
@@ -85,6 +86,16 @@ class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
     #        should be used. Once that's done, then we can define a
     #        sub-object that chooses the correct IMAGE_LOADCONFIG_DIRECTORY
     #        to use.
+    def blocksize(self):
+
+        # If we're not allocated, then look at our parent directory for that size.
+        if not self.value:
+            p = self.getparent(IMAGE_DATA_DIRECTORY)
+            return p['Size'].int()
+
+        # Otherwise, we're allocated and just need to read our size field.
+        return self['Size'].li.int()
+
 
     _fields_ = [
         (uint32, 'Size'),
