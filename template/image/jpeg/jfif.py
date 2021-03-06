@@ -405,6 +405,37 @@ class APP0(pstruct.type):
         (lambda self: ptype.undefined if self.blocksize() < 12 else dyn.array(RGB, self['HthumbnailA'].li.int() * self['VthumbnailA'].li.int()), 'k'),
     ]
 
+class ImageResourceBlock(pstruct.type):
+    class _name(pstruct.type):
+        _fields_ = [
+            (pint.uint8_t, 'length'),
+            (lambda self: dyn.clone(pstr.string, length=1 + self['length'].li.int()), 'string'),
+        ]
+    _fields_ = [
+        (dyn.block(4), 'signature'),
+        (pint.uint16_t, 'identifier'),
+        (_name, 'name'),
+        (pint.uint32_t, 'size'),
+        (lambda self: dyn.block(self['size'].li.int()), 'data'),
+        (dyn.padding(2), 'padding(data)'),
+    ]
+
+@Marker.define
+class APP13(pstruct.type):
+    def __extra(self):
+        bs, res = self.blocksize(), sum(self[fld].li.size() for fld in ['identifier', 'resources'])
+        return dyn.block(max(0, bs - res))
+
+    def __resources(self):
+        bs, res = self.blocksize(), self['identifier'].li.size()
+        return dyn.blockarray(ImageResourceBlock, bs - res)
+
+    _fields_ = [
+        (pstr.szstring, 'identifier'),
+        (__resources, 'resources'),
+        (__extra, 'extra'),
+    ]
+
 class File(codestream.Stream):
     class _object_(codestream.DecodedStream):
         Element, Data = StreamMarker, StreamData
