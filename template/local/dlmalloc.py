@@ -2,6 +2,47 @@ import ptypes
 from ptypes import *
 pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
 
+### C99 types
+class void(ptype.undefined): pass
+class char(pint.int8_t): pass
+class signed_char(pint.sint8_t): pass
+class unsigned_char(pint.uint8_t): pass
+class short(pint.int16_t): pass
+class signed_short(pint.sint16_t): pass
+class unsigned_short(pint.uint16_t): pass
+class int(pint.int32_t): pass
+class signed_int(pint.sint32_t): pass
+class unsigned_int(pint.uint32_t): pass
+class long_long(pint.int64_t): pass
+class signed_long_long(pint.sint64_t): pass
+class unsigned_long_long(pint.uint64_t): pass
+class star(ptype.pointer_t): pass
+
+## variable types
+class long(pint.int_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class signed_long(pint.sint_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class unsigned_long(pint.uint_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class long_int(pint.int_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class signed_long_int(pint.sint_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class unsigned_long_int(pint.uint_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class long_signed_int(pint.sint_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+class long_unsigned_int(pint.uint_t):
+    length = property(fget=lambda self: ptypes.Config.integer.size)
+
+class size_t(long_unsigned_int): pass
+class ptrdiff_t(long_int): pass
+
+class void_star(star):
+    _object_ = void
+
+### original types (old)
 class char(pint.uint8_t): pass
 class schar(pint.sint8_t): pass
 class uint(pint.uint32_t): pass
@@ -17,6 +58,7 @@ class pointer_t(ptype.opointer_t):
             res = res[item]
         return offset - res.getoffset()
 
+### malloc types
 libc_lock_define = uint
 
 class INTERNAL_SIZE_T(size_t): pass
