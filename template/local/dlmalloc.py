@@ -16,7 +16,6 @@ class unsigned_int(pint.uint32_t): pass
 class long_long(pint.int64_t): pass
 class signed_long_long(pint.sint64_t): pass
 class unsigned_long_long(pint.uint64_t): pass
-class star(ptype.pointer_t): pass
 
 ## variable types
 class long(pint.int_t):
@@ -36,11 +35,42 @@ class long_signed_int(pint.sint_t):
 class long_unsigned_int(pint.uint_t):
     length = property(fget=lambda self: ptypes.Config.integer.size)
 
+## general types
+class short_int(short): pass
+class signed_short_int(signed_short): pass
+class unsigned_short_int(unsigned_short): pass
+
+class star(ptype.pointer_t): pass
 class size_t(long_unsigned_int): pass
 class ptrdiff_t(long_int): pass
 
 class void_star(star):
     _object_ = void
+
+## stdint.h
+class __u_char(unsigned_char): pass
+class __u_short(unsigned_short): pass
+class __u_int(unsigned_int): pass
+class __u_long(unsigned_long_int): pass
+
+class __int8_t(signed_char): pass
+class __uint8_t(unsigned_char): pass
+class __int16_t(signed_short_int): pass
+class __uint16_t(unsigned_short_int): pass
+class __int32_t(signed_int): pass
+class __uint32_t(unsigned_int): pass
+class __int64_t(signed_long_int): pass
+class __uint64_t(unsigned_long_int): pass
+
+class int8_t(__int8_t): pass
+class int16_t(__int16_t): pass
+class int32_t(__int32_t): pass
+class int64_t(__int64_t): pass
+
+class uint8_t(__uint8_t): pass
+class uint16_t(__uint16_t): pass
+class uint32_t(__uint32_t): pass
+class uint64_t(__uint64_t): pass
 
 ### original types (old)
 class mpointer_t(ptype.opointer_t):
@@ -161,25 +191,17 @@ class mchunk(pstruct.type):
         prev, current = (self[fld] for fld in ['prev_size', 'size'])
         return "size={!s} prev_size={:+#x}".format(current.summary(), prev.int())
 
-class tcache_perthread_struct(pstruct.type):
-    def __init__(self, **attrs):
-        super(tcache_perthread_struct, self).__init__(**attrs)
-        self._fields_ = _fields_ = []
-
-        _fields_.extend([
-            (dyn.array(pint.uint16_t, TCACHE_MAX_BINS), 'counts'),
-            (dyn.array(dyn.pointer(tcache_entry), TCACHE_MAX_BINS), 'entries'),
-        ])
-
 class tcache_entry(pstruct.type):
-    def __init__(self, **attrs):
-        super(tcache_entry, self).__init__(**attrs)
-        self._fields_ = _fields_ = []
+    _fields_ = [
+        (lambda self: dyn.clone(star, _object_=self.__class__), 'next'),
+        (lambda _: dyn.clone(star, _object_=tcache_perthread_struct), 'key'),
+    ]
 
-        _fields_.extend([
-            (dyn.pointer(tcache_entry), 'next'),
-            (dyn.pointer(tcache_perthread_struct), 'key'),
-        ])
+class tcache_perthread_struct(pstruct.type):
+    _fields_ = [
+        (dyn.array(uint16_t, TCACHE_MAX_BINS), 'counts'),
+        (dyn.array(dyn.clone(star, _object_=tcache_entry), TCACHE_MAX_BINS), 'entries'),
+    ]
 
 # consolidate these things together
 class malloc_chunk_free(pstruct.type):
@@ -190,7 +212,7 @@ class malloc_chunk_free(pstruct.type):
 
     _fields_ = [
         (mchunk, 'mchunk'),
-        (ptype.undefined, 'freelink'),
+        (void, 'freelink'),
         (__mem, 'mem'),
         (lambda self: dyn.clone(mpointer_t, _object_=self.__class__, _path_=['mem']), 'link'),
         (lambda self: dyn.clone(mpointer_t, _object_=self.__class__, _path_=['mem']), 'linksize'),
@@ -245,16 +267,16 @@ class mfastbinptr(mpointer_t):
 
 class mallinfo(pstruct.type):
     _fields_ = [
-        (pint.uint32_t, 'arena'), # non-mmapped space allocated from system
-        (pint.uint32_t, 'ordblks'), # number of free chunks
-        (pint.uint32_t, 'smblks'), # number of fastbin blocks
-        (pint.uint32_t, 'hblks'), # number of mmapped regions
-        (pint.uint32_t, 'hblkhd'), # space in mmapped regions
-        (pint.uint32_t, 'usmblks'), # always 0, preserved for backwards compatibility
-        (pint.uint32_t, 'fsmblks'), # space available in freed fastbin blocks
-        (pint.uint32_t, 'uordblks'), # total allocated space
-        (pint.uint32_t, 'fordblks'), # total free space
-        (pint.uint32_t, 'keepcost'), # top-most, releasable (via malloc_trim) space
+        (int, 'arena'), # non-mmapped space allocated from system
+        (int, 'ordblks'), # number of free chunks
+        (int, 'smblks'), # number of fastbin blocks
+        (int, 'hblks'), # number of mmapped regions
+        (int, 'hblkhd'), # space in mmapped regions
+        (int, 'usmblks'), # always 0, preserved for backwards compatibility
+        (int, 'fsmblks'), # space available in freed fastbin blocks
+        (int, 'uordblks'), # total allocated space
+        (int, 'fordblks'), # total free space
+        (int, 'keepcost'), # top-most, releasable (via malloc_trim) space
     ]
 
 class malloc_fastbins(parray.type):
