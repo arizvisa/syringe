@@ -43,14 +43,7 @@ class void_star(star):
     _object_ = void
 
 ### original types (old)
-class char(pint.uint8_t): pass
-class schar(pint.sint8_t): pass
-class uint(pint.uint32_t): pass
-class sint(pint.sint32_t): pass
-class ulong(pint.uint64_t): pass
-class slong(pint.sint64_t): pass
-class size_t(pint.uint64_t): pass
-class pointer_t(ptype.opointer_t):
+class mpointer_t(ptype.opointer_t):
     _path_ = ()
     def _calculate_(self, offset):
         res = self.new(self._object_).a
@@ -59,7 +52,8 @@ class pointer_t(ptype.opointer_t):
         return offset - res.getoffset()
 
 ### malloc types
-libc_lock_define = uint
+class __libc_lock_t(unsigned_int): pass
+libc_lock_define = __libc_lock_t
 
 class INTERNAL_SIZE_T(size_t): pass
 SIZE_SZ = INTERNAL_SIZE_T().a.blocksize()
@@ -77,7 +71,7 @@ BINMAPSHIFT = 5
 BITSPERMAP = 2 ** BINMAPSHIFT
 BINMAPSIZE = NBINS // BITSPERMAP
 
-MIN_CHUNK_SIZE = 2 * SIZE_SZ + 2 * pointer_t().a.blocksize()
+MIN_CHUNK_SIZE = 2 * SIZE_SZ + 2 * mpointer_t().a.blocksize()
 MINSIZE = (MIN_CHUNK_SIZE + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK
 
 request2size = lambda req: MINSIZE if req + SIZE_SZ + MALLOC_ALIGN_MASK < MINSIZE else ((req + SIZE_SZ + MALLOC_ALIGN_MASK) & ~MALLOC_ALIGN_MASK)
@@ -86,10 +80,13 @@ MAX_FAST_SIZE = 80 * SIZE_SZ // 4
 
 NFASTBINS = fastbin_index(request2size(MAX_FAST_SIZE)) + 1
 
+TCACHE_MAX_BINS = 64
+TCACHE_FILL_COUNT = 7
+
 class malloc_link(pstruct.type):
     _fields_ = [
-        (lambda self: dyn.clone(pointer_t, _object_=self._object_, _path_=self._path_), 'fd'),
-        (lambda self: dyn.clone(pointer_t, _object_=self._object_, _path_=self._path_), 'bk'),
+        (lambda self: dyn.clone(mpointer_t, _object_=self._object_, _path_=self._path_), 'fd'),
+        (lambda self: dyn.clone(mpointer_t, _object_=self._object_, _path_=self._path_), 'bk'),
     ]
 
     _object_, _path_ = None, ()
@@ -131,7 +128,7 @@ class mchunk(pstruct.type):
             def summary(self):
                 flags = [name for name in ['NON_MAIN_ARENA', 'IS_MMAPPED', 'PREV_INUSE'] if self[name]]
                 return ' '.join(flags)
-        class _integer(ulong):
+        class _integer(unsigned_long):
             pass
 
         _fields_ = [
@@ -164,8 +161,6 @@ class mchunk(pstruct.type):
         prev, current = (self[fld] for fld in ['prev_size', 'size'])
         return "size={!s} prev_size={:+#x}".format(current.summary(), prev.int())
 
-TCACHE_MAX_BINS = 64
-TCACHE_FILL_COUNT = 7
 class tcache_perthread_struct(pstruct.type):
     def __init__(self, **attrs):
         super(tcache_perthread_struct, self).__init__(**attrs)
@@ -197,8 +192,8 @@ class malloc_chunk_free(pstruct.type):
         (mchunk, 'mchunk'),
         (ptype.undefined, 'freelink'),
         (__mem, 'mem'),
-        (lambda self: dyn.clone(pointer_t, _object_=self.__class__, _path_=['mem']), 'link'),
-        (lambda self: dyn.clone(pointer_t, _object_=self.__class__, _path_=['mem']), 'linksize'),
+        (lambda self: dyn.clone(mpointer_t, _object_=self.__class__, _path_=['mem']), 'link'),
+        (lambda self: dyn.clone(mpointer_t, _object_=self.__class__, _path_=['mem']), 'linksize'),
     ]
 
 class malloc_chunk(pstruct.type):
@@ -233,7 +228,7 @@ class malloc_chunk_free(malloc_chunk):
 
     _fields_ = [
         (mchunk, 'mchunk'),
-        (ptype.undefined, 'freelink'),
+        (void, 'freelink'),
         (__mem, 'mem'),
         (mchunk, 'nextchunk'),
     ]
@@ -241,11 +236,11 @@ class malloc_chunk_free(malloc_chunk):
 class malloc_chunk_fastbin(malloc_chunk_free):
     pass
 
-class mchunkptr(pointer_t):
+class mchunkptr(mpointer_t):
     _object_ = malloc_chunk
     _path_ = ['freelink']
 
-class mfastbinptr(pointer_t):
+class mfastbinptr(mpointer_t):
     _object_ = malloc_chunk_fastbin
 
 class mallinfo(pstruct.type):
@@ -269,9 +264,9 @@ class malloc_bins(parray.type):
     _object_ = dyn.clone(malloc_link, _object_=malloc_chunk, _path_=['freelink'])
 
 class malloc_binmap(parray.type):
-    _object_ = uint
+    _object_ = unsigned_int
 
-class mstate(pointer_t):
+class mstate(mpointer_t):
     _object_ = None     # assigned later
 
 class malloc_state(pstruct.type):
@@ -285,7 +280,7 @@ class malloc_state(pstruct.type):
     _fields_ = [
         (libc_lock_define, 'mutex'),
         (_flags, 'flags'),
-        (sint, 'have_fastchunks'),
+        (int, 'have_fastchunks'),
         (dyn.align(8), 'alignment(fastbinsY)'),
         (dyn.clone(malloc_fastbins, length=NFASTBINS), 'fastbinsY'),
         (mchunkptr, 'top'),
@@ -303,15 +298,15 @@ mstate._object_ = malloc_state  # defined prior
 
 class malloc_par(pstruct.type):
     _fields_ = [
-        (ulong, 'trim_threshold'),
+        (unsigned_long, 'trim_threshold'),
         (INTERNAL_SIZE_T, 'top_pad'),
         (INTERNAL_SIZE_T, 'mmap_threshold'),
         (INTERNAL_SIZE_T, 'arena_test'),
         (INTERNAL_SIZE_T, 'arena_max'),
-        (sint, 'n_mmaps'),
-        (sint, 'n_mmaps_max'),
-        (sint, 'max_n_mmaps'),
-        (sint, 'no_dyn_threshold'),
+        (int, 'n_mmaps'),
+        (int, 'n_mmaps_max'),
+        (int, 'max_n_mmaps'),
+        (int, 'no_dyn_threshold'),
         (INTERNAL_SIZE_T, 'mmapped_mem'),
         (INTERNAL_SIZE_T, 'max_mmapped_mem'),
         (ptype.pointer_t, 'sbrk_base'),
@@ -324,7 +319,7 @@ class malloc_par(pstruct.type):
 
 class heap_info(pstruct.type):
     def __reference(self):
-        return dyn.clone(pointer_t, _object_=heap_info)
+        return dyn.clone(mpointer_t, _object_=heap_info)
 
     _fields_ = [
         (mstate, 'ar_ptr'),
