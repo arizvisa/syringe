@@ -122,6 +122,28 @@ class mchunk(pstruct.type):
         prev, current = (self[fld] for fld in ['prev_size', 'size'])
         return "size={!s} prev_size={:+#x}".format(current.summary(), prev.int())
 
+TCACHE_MAX_BINS = 64
+TCACHE_FILL_COUNT = 7
+class tcache_perthread_struct(pstruct.type):
+    def __init__(self, **attrs):
+        super(tcache_perthread_struct, self).__init__(**attrs)
+        self._fields_ = _fields_ = []
+
+        _fields_.extend([
+            (dyn.array(pint.uint16_t, TCACHE_MAX_BINS), 'counts'),
+            (dyn.array(dyn.pointer(tcache_entry), TCACHE_MAX_BINS), 'entries'),
+        ])
+
+class tcache_entry(pstruct.type):
+    def __init__(self, **attrs):
+        super(tcache_entry, self).__init__(**attrs)
+        self._fields_ = _fields_ = []
+
+        _fields_.extend([
+            (dyn.pointer(tcache_entry), 'next'),
+            (dyn.pointer(tcache_perthread_struct), 'key'),
+        ])
+
 # consolidate these things together
 class malloc_chunk_free(pstruct.type):
     def __mem(self):
