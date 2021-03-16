@@ -5,15 +5,29 @@ ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
 class MessageType(pint.enum, pint.uint32_t):
     _values_ = [
-        ('NtlmNegotiate', 0x00000001),
-        ('NtlmChallenge', 0x00000002),
-        ('NtlmAuthenticate', 0x00000003),
+        ('NtLmNegotiate', 0x00000001),
+        ('NtLmChallenge', 0x00000002),
+        ('NtLmAuthenticate', 0x00000003),
     ]
 
 class NTLMMessageType(ptype.definition):
     cache = {}
 
 class Message(pstruct.type):
+    class _Signature(pstr.string):
+        length = 8
+        def default(self):
+            return self.set('NTLMSSP\0')
+        def valid(self):
+            return self.copy().default().serialize() == self.serialize()
+        def alloc(self, **attrs):
+            return super(Message._Signature, self).alloc(**attrs).default()
+        def properties(self):
+            res = super(Message._Signature, self).properties()
+            if self.initializedQ():
+                res['valid'] = self.valid()
+            return res
+
     def __MessageFields(self):
         res = self['MessageType'].li
         return NTLMMessageType.withdefault(res.int())
@@ -38,7 +52,7 @@ class Message(pstruct.type):
         return dyn.block(0)
 
     _fields_ = [
-        (dyn.clone(pstr.string, length=8), 'Signature'),
+        (_Signature, 'Signature'),
         (MessageType, 'MessageType'),
         (__MessageFields, 'MessageFields'), 
         (__Payload, 'MessagePayload'),
@@ -52,7 +66,7 @@ class Message(pstruct.type):
 
 @pbinary.littleendian
 class NTLMSSP_(pbinary.flags):
-#class NEGOTIATE(pbinary.flags):
+#class NEGOTIATE_(pbinary.flags):
     _fields_ = [
         (1, 'NEGOTIATE_56'),
         (1, 'NEGOTIATE_KEY_EXCH'),
@@ -170,9 +184,25 @@ class NEGOTIATE_MESSAGE(pstruct.type):
         (VERSION, 'Version'),
     ]
 
-    def Fields(self):
+    def enumerate(self):
+        '''Yield the name and field that compose the message type payload.'''
         for fld in ['DomainNameFields','WorkstationFields']:
-            yield self[fld]
+            yield fld, self[fld]
+        return
+
+    def iterate(self):
+        '''Yield each field that composes the message type payload.'''
+        for _, item in self.enumerate():
+            yield item
+        return
+
+    def Fields(self):
+        """
+        Yield all of the fields that are used to calculate the size
+        and compose the payload for this message type.
+        """
+        for item in self.iterate():
+            yield item
         return
 
 class TargetNameFields(MessageDependentFields):
@@ -324,9 +354,25 @@ class CHALLENGE_MESSAGE(pstruct.type):
         (VERSION, 'Version'),
     ]
 
-    def Fields(self):
+    def enumerate(self):
+        '''Yield the name and field that compose the message type payload.'''
         for fld in ['TargetNameFields','TargetInfoFields']:
-            yield self[fld]
+            yield fld, self[fld]
+        return
+
+    def iterate(self):
+        '''Yield each field that composes the message type payload.'''
+        for _, item in self.enumerate():
+            yield item
+        return
+
+    def Fields(self):
+        """
+        Yield all of the fields that are used to calculate the size
+        and compose the payload for this message type.
+        """
+        for item in self.iterate():
+            yield item
         return
 
 class LM_RESPONSE(pstruct.type):
@@ -429,9 +475,25 @@ class AUTHENTICATE_MESSAGE(pstruct.type):
         (dyn.clone(pint.uint_t, length=16), 'MIC'),
     ]
 
-    def Fields(self):
+    def enumerate(self):
+        '''Yield the name and field that compose the message type payload.'''
         for fld in ['LmChallengeResponseFields','NtChallengeResponseFields','DomainNameFields','UserNameFields','WorkstationFields','EncryptedRandomSessionKeyFields']:
-            yield self[fld]
+            yield fld, self[fld]
+        return
+
+    def iterate(self):
+        '''Yield each field that composes the message type payload.'''
+        for _, item in self.enumerate():
+            yield item
+        return
+
+    def Fields(self):
+        """
+        Yield all of the fields that are used to calculate the size
+        and compose the payload for this message type.
+        """
+        for item in self.iterate():
+            yield item
         return
 
 if __name__ == '__main__':
