@@ -242,7 +242,7 @@ class Element(pstruct.type):
         return result
 
     def __type__(self, type, length, **attrs):
-        klass, constructedQ, tag = (type[fld] for fld in ['Class','Constructed','Tag'])
+        klass, constructedQ, tag = (type[fld] for fld in ['Class', 'Constructed', 'Tag'])
 
         # Now we can look up the type that we need by grabbing hte protocol, then
         # using it to determine the class, and then its tag.
@@ -262,17 +262,27 @@ class Element(pstruct.type):
 
         if self.initializedQ():
             res = self['Value']
+
+        # XXX: This is tied into the Structured mixin
+        elif hasattr(self, '_object_'):
+            res = self._object_()
+
+        # Otherwise, just figure out the correct type
         else:
-            # XXX: This is tied into the Structured mixin
-            res = self._object_() if hasattr(self, '_object_') else self.__type__(self['Type'], self['Length'])
+            res = self.__type__(self['Type'], self['Length'])
         return res.typename()
 
     def __Value(self):
         '''Return the correct ptype and size it correctly according to Element's properties.'''
-        t, length = (self[fld].li for fld in ['Type','Length'])
+        t, length = (self[fld].li for fld in ['Type', 'Length'])
 
         # XXX: This is tied into the Structured mixin
-        result = self._object_() if hasattr(self, '_object_') else self.__type__(t, length)
+        if hasattr(self, '_object_'):
+            result = self._object_()
+
+        # Fetch the correct type adjusted to the length in our structure
+        else:
+            result = self.__type__(t, length)
 
         # Apply our length to the type we determined
         return self.__apply_length_type(result, length.int(), length.isIndefinite())
@@ -436,6 +446,8 @@ class OBJECT_IDENTIFIER(ptype.type):
         ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256
         ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
         ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
+
+        ('iso.org.dod.internet.security.mechanism.snego', '1.3.6.1.5.5.2'), # FIXME
 
         # Authenticode PE
         ('codeSigning', '1.3.6.1.5.5.7.3.3'),
