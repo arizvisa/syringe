@@ -175,7 +175,7 @@ class float_t(type):
         '''Assign the provided integral components to the floating-point instance.'''
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
-        exponentbias = 2 ** self.components[1] // 2 - 1
+        exponentbias = pow(2, self.components[1]) // 2 - 1
 
         components, = values
         mantissa, exponent = components
@@ -183,12 +183,12 @@ class float_t(type):
         # if the number is infinite, then the mantissa is set to 0
         # with the exponent set to its maximum possible value.
         if math.isinf(mantissa):
-            m, e = 0., 2 ** self.components[1] - 1
+            m, e = 0., pow(2, self.components[1]) - 1
 
         # if the number is explicitly NaN, then we set the 2 highest
         # bits in the mantissa, and the exponent to its max.
         elif math.isnan(mantissa):
-            m, e = 0.5, 2 ** self.components[1] - 1
+            m, e = 0.5, pow(2, self.components[1]) - 1
 
         # if the number is zero, then we need to clear the mantissa and exponent
         elif math.fabs(mantissa) == 0.0:
@@ -197,7 +197,7 @@ class float_t(type):
         # if the number is denormalized due to the exponent being larger than
         # the precision we support, then shift its precision a bit.
         elif exponent <= 1 - exponentbias:
-            m, e = math.fabs(mantissa) * 2 ** (exponent + exponentbias - 1), 0
+            m, e = math.fabs(mantissa) * pow(2, exponent + exponentbias - 1), 0
 
         # otherwise it's just a normalized number and we just need to
         # remove the explicit bit if there's a non-zero exponent.
@@ -208,7 +208,7 @@ class float_t(type):
         result = bitmap.zero
         result = bitmap.push(result, bitmap.new(1 if math.copysign(1., mantissa) < 0 else 0, self.components[0]))
         result = bitmap.push(result, bitmap.new(e, self.components[1]))
-        result = bitmap.push(result, bitmap.new(math.trunc(m * 2 ** self.components[2]), self.components[2]))
+        result = bitmap.push(result, bitmap.new(math.trunc(m * pow(2, self.components[2])), self.components[2]))
 
         return super(type, self).__setvalue__(bitmap.int(result), **attrs)
 
@@ -223,7 +223,7 @@ class float_t(type):
         res, m = bitmap.shift(res, self.components[2])
 
         # set some constants that we'll need
-        exponentbias = 2 ** self.components[1] // 2 - 1
+        exponentbias = pow(2, self.components[1]) // 2 - 1
         infinite, NaN = (float(item) for item in ['inf', 'nan'])
 
         # adjust the exponent if its non-zero, and assign the sign flag.
@@ -272,10 +272,10 @@ class fixed_t(type):
     def __getvalue__(self):
         '''Return the components of the fixed-point type.'''
         bits = 8 * self.length
-        magnitude = 2 ** self.fractional
+        magnitude = pow(2, self.fractional)
 
-        unsigned_mask = 2 ** bits - 1
-        signed_mask = 2 ** (bits - self.sign) - 1
+        unsigned_mask = pow(2, bits) - 1
+        signed_mask = pow(2, bits - self.sign) - 1
 
         res = super(type, self).__getvalue__() & unsigned_mask
 
@@ -288,7 +288,7 @@ class fixed_t(type):
 
     def get(self):
         '''Return the value of the fixed-point type as a floating-point number.'''
-        magnitude = 2 ** self.fractional
+        magnitude = pow(2, self.fractional)
         integer, fraction = self.__getvalue__()
         return math.copysign(integer + float(fraction) / magnitude, integer)
 
@@ -300,7 +300,7 @@ class fixed_t(type):
 
         parts, = values
         integer, fraction = parts
-        magnitude = 2 ** (bits - self.fractional)
+        magnitude = pow(2, bits - self.fractional)
 
         parameter = math.trunc(integer * magnitude) + fraction
         return super(type, self).__setvalue__(parameter, **attrs)
@@ -312,7 +312,7 @@ class fixed_t(type):
 
         number, = values
         integer, fraction = math.floor(number), number - math.floor(number)
-        magnitude = 2 ** self.fractional
+        magnitude = pow(2, self.fractional)
 
         parameter = math.trunc(integer), math.trunc(fraction * magnitude)
         return self.__setvalue__(parameter, **attrs)

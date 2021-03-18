@@ -286,7 +286,7 @@ class sinteger_t(type):
     def __getvalue__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
-        signmask = int(2**(8 * self.blocksize() - 1))
+        signmask = pow(2, 8 * self.blocksize() - 1)
         num = super(sinteger_t, self).__getvalue__()
         res = num & (signmask - 1)
         if num & signmask:
@@ -298,7 +298,7 @@ class sinteger_t(type):
             return super(sinteger_t, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        signmask = int(2**(8 * self.blocksize()))
+        signmask = pow(2, 8 * self.blocksize())
         res = integer & (signmask - 1)
         if integer < 0:
             res |= signmask

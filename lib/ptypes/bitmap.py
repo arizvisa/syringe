@@ -5,9 +5,9 @@ import functools, operator, itertools, types
 ## start somewhere
 def new(value, size):
     '''creates a new bitmap object. Bitmaps "grow" to the left.'''
-    mask = (2 ** abs(size)) - 1
+    mask = pow(2, abs(size)) - 1
     if size < 0:
-        #signmask = 2 ** (abs(size)-1)
+        #signmask = pow(2, abs(size) - 1)
         return value & mask, size
     return value & mask, size
 
@@ -48,10 +48,10 @@ def hex(bitmap):
     size = abs(s)
     length = math.trunc(math.ceil(size / 4.0))
     if s < 0:
-        max, sign = 2 ** size, 2 ** (size - 1)
+        max, sign = pow(2, size), pow(2, size - 1)
         res = n & (max - 1)
         return "{:+#0{:d}x}".format((res - max) if res & sign else res & (sign - 1), length + 3)
-    return "{:#0{:d}x}".format(n & (2 ** size) - 1, length + 2)
+    return "{:#0{:d}x}".format(n & pow(2, size) - 1, length + 2)
 
 def scan(bitmap, value=True, position=0):
     '''Searches through bitmap for the specified value and returns it's position'''
@@ -60,7 +60,7 @@ def scan(bitmap, value=True, position=0):
     if position < 0 or position > abs(size):
         raise AssertionError("Invalid position : {:d}".format(position))
 
-    size, bitmask = abs(size), 2 ** position
+    size, bitmask = abs(size), pow(2, position)
     for i in range(size):
         if bool(integer & bitmask) == value or position >= size:
             return position
@@ -110,7 +110,7 @@ def set(bitmap, position, value=True, count=1):
     if position + count > abs(size):
         raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask, size = functools.reduce(lambda r, v: 2 ** v | r, range(position, position + count), 0), abs(size)
+    mask, size = functools.reduce(lambda r, v: pow(2, v) | r, range(position, position + count), 0), abs(size)
     if value:
         return integer | mask, size
     return integer & ~mask, size
@@ -124,7 +124,7 @@ def get(bitmap, position, count):
     if position + count > abs(size):
         raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
 
-    mask, size = functools.reduce(lambda r, v: 2 ** v | r, range(position, position + count), 0), abs(size)
+    mask, size = functools.reduce(lambda r, v: pow(2, v) | r, range(position, position + count), 0), abs(size)
     return (integer & mask) >> position, count
 
 def add(bitmap, integer):
@@ -132,38 +132,38 @@ def add(bitmap, integer):
     res, size = bitmap
     if size < 0:
         pass        # XXX: we trust that python handles signedness properly via &
-    mask = 2 ** abs(size) - 1
+    mask = pow(2, abs(size)) - 1
     return (integer + res) & mask, size
 def sub(bitmap, integer):
     '''Subtracts an integer to the specified bitmap whilst preserving signedness'''
     res, size = bitmap
     if size < 0:
         pass        # XXX: we trust that python handles signedness properly via &
-    mask = 2 ** abs(size) - 1
+    mask = pow(2, abs(size)) - 1
     return (res - integer) & mask, size
 
 def mul(bitmap, integer):
     '''Multiplies the specified bitmap with an integer whilst preserving signedness'''
     res, size = bitmap
-    max = 2 ** abs(size)
+    max = pow(2, abs(size))
     if size < 0:
-        sign = 2 ** (abs(size) - 1)
+        sign = pow(2, abs(size) - 1)
         res = (res - max) if res & sign else res & (sign - 1)
     return (res * integer) & (max - 1), size
 def div(bitmap, integer):
     '''Divides the specified bitmap with an integer whilst preserving signedness'''
     res, size = bitmap
-    max = 2 ** abs(size)
+    max = pow(2, abs(size))
     if size < 0:
-        sign = 2 ** (abs(size) - 1)
+        sign = pow(2, abs(size) - 1)
         res = (res - max) if res & sign else res & (sign - 1)
     return math.trunc(float(res) / integer) & (max - 1), size
 def mod(bitmap, integer):
     '''Modular divides the specified bitmap with an integer whilst preserving signedness'''
     res, size = bitmap
-    max = 2 ** abs(size)
+    max = pow(2, abs(size))
     if size < 0:
-        sign = 2 ** (abs(size) - 1)
+        sign = pow(2, abs(size) - 1)
         res = (res - max) if res & sign else res & (sign - 1)
     return (res % integer) & (max - 1), size
 
@@ -175,7 +175,7 @@ def grow(bitmap, count):
     if count < 0:
         return shrink(bitmap, -count)
     integer, size = bitmap
-    shift, sign = 2 ** count, -1 if size < 0 else +1
+    shift, sign = pow(2, count), -1 if size < 0 else +1
     return integer * shift, size + count * sign
 
 def shrink(bitmap, count):
@@ -186,7 +186,7 @@ def shrink(bitmap, count):
     if count < 0:
         return grow(bitmap, -count)
     integer, size = bitmap
-    shift, sign = 2 ** count, -1 if size < 0 else +1
+    shift, sign = pow(2, count), -1 if size < 0 else +1
     return integer // shift, size - count * sign
 
 ## for treating a bitmap like an integer stream
@@ -198,9 +198,9 @@ def push(bitmap, operand):
     (result, rbits) = bitmap
     (number, nbits) = operand
 
-    rmask = 2 ** abs(rbits) - 1
-    nmask = 2 ** abs(nbits) - 1
-    shift = 2 ** abs(nbits)
+    rmask = pow(2, abs(rbits)) - 1
+    nmask = pow(2, abs(nbits)) - 1
+    shift = pow(2, abs(nbits))
 
     res = (result & rmask) * shift
     res |= number & nmask
@@ -214,9 +214,9 @@ def insert(bitmap, operand):
     (result, rbits) = bitmap
     (number, nbits) = operand
 
-    rmask = 2 ** abs(rbits) - 1
-    nmask = 2 ** abs(nbits) - 1
-    shift = 2 ** abs(rbits)
+    rmask = pow(2, abs(rbits)) - 1
+    nmask = pow(2, abs(nbits)) - 1
+    shift = pow(2, abs(rbits))
 
     res = (number & nmask) * shift
     res |= result & rmask
@@ -233,7 +233,7 @@ def consume(bitmap, bits):
 
     if bits > abs(bitmapsize):
         return zero, bitmapinteger
-    integersize, integershift, integermask = bits, 2 ** bits, 2 ** bits - 1
+    integersize, integershift, integermask = bits, pow(2, bits), pow(2, bits) - 1
 
     res = bitmapinteger & integermask
     if bitmapsize < 0:
@@ -255,10 +255,10 @@ def shift(bitmap, bits):
 
     if bits > abs(bitmapsize):
         return zero, bitmapinteger
-    integersize, integershift, integermask = bits, 2 ** bits, 2 ** bits - 1
+    integersize, integershift, integermask = bits, pow(2, bits), pow(2, bits) - 1
 
     resultsize = abs(bitmapsize) - integersize
-    resultshift = 2 ** resultsize
+    resultshift = pow(2, resultsize)
     resultmask = integermask * resultshift
 
     if bitmapsize < 0:
@@ -374,7 +374,7 @@ def value(bitmap):
     '''Return the integral part of a bitmap, handling signedness if necessary'''
     integer, size = bitmap
     if size < 0:
-        signmask = 2 ** (abs(size) - 1)
+        signmask = pow(2, abs(size) - 1)
         res = integer & (signmask - 1)
         if integer & signmask:
             return (signmask - res) * -1
@@ -436,7 +436,7 @@ def ror(bitmap, shift=1):
     ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
     '''
     (value, size) = bitmap
-    return new((((value & 2**shift - 1) << size - shift) | (value >> shift)) & 2**size - 1, size)
+    return new((((value & pow(2,shift) - 1) << size - shift) | (value >> shift)) & pow(2,size) - 1, size)
 
 # jspelman. he's everywhere.
 def rol(bitmap, shift=1):
@@ -445,7 +445,7 @@ def rol(bitmap, shift=1):
     rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
     '''
     (value, size) = bitmap
-    return new(((value << shift) | ((value & ((2**size - 1) ^ (2**(size - shift) - 1))) >> (size - shift))) & 2**size - 1, size)
+    return new(((value << shift) | ((value & ((pow(2,size) - 1) ^ (pow(2, size - shift) - 1))) >> (size - shift))) & pow(2, size) - 1, size)
 
 def reverse(bitmap):
     '''Flip the bit order of the bitmap'''
@@ -489,7 +489,7 @@ class WBitmap(object):
         # rest of it with the logic that follows this next statement.
 
         if used and bits <= leftover:
-            shift, mask = 2 ** bits, 2 ** bits - 1
+            shift, mask = pow(2, bits), pow(2, bits) - 1
             self.data[-1] *= shift
             self.data[-1] |= integer & mask
             self.bits += bits
@@ -499,7 +499,7 @@ class WBitmap(object):
         # to consume what is left to pad our data to 8-bits and then
         # proceed through the logic that follows
         elif used:
-            shift, mask = 2 ** leftover, 2 ** leftover - 1
+            shift, mask = pow(2, leftover), pow(2, leftover) - 1
 
             # Shift the last byte of our data up by the number of bits
             # that we're going to append
@@ -509,8 +509,8 @@ class WBitmap(object):
             # last byte of our data so that we should now be padded
             # along a byte boundary (multiple of 8).
             offset = bits - leftover
-            res = integer & (mask * 2**offset)
-            self.data[-1] |= res // 2**offset
+            res = integer & (mask * pow(2,offset))
+            self.data[-1] |= res // pow(2,offset)
 
             # Update the bits that we've processed
             self.bits, bits = self.bits + leftover, bits - leftover
@@ -519,14 +519,14 @@ class WBitmap(object):
         # just push the integer to our data and update our size. This
         # same logic should also apply if our data is empty.
         while bits >= 8:
-            shift = 2 ** bits // 0x100
+            shift = pow(2, bits) // 0x100
             res = integer & (0xff * shift)
             self.data.append(res // shift)
             self.bits, bits = self.bits + 8, bits - 8
 
         # Add any extra bits that were leftover as the last byte
         if bits:
-            mask = 2 ** bits - 1
+            mask = pow(2, bits) - 1
             self.data.append(integer & mask)
             self.bits += bits
 
@@ -536,7 +536,7 @@ class WBitmap(object):
         '''Return the bitmap as an integer.'''
         used = self.bits & 7
         if used:
-            shift, mask = 2 ** used, 2 ** used - 1
+            shift, mask = pow(2, used), pow(2, used) - 1
             res = functools.reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
             return (res * shift) | (self.data[-1] & mask)
         return functools.reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
@@ -570,13 +570,13 @@ class RBitmap(object):
         leftover = 8 - self.offset
 
         if self.offset and bits < leftover:
-            shift, mask = 2 ** (leftover - bits), 2 ** bits - 1
+            shift, mask = pow(2, leftover - bits), pow(2, bits) - 1
             result = self.data[0] // shift
             self.offset, self.data[0] = self.offset + bits, self.data[0] & (2 * shift - 1)
             return result & mask
 
         elif self.offset:
-            shift, mask = 2 ** leftover, 2 ** leftover - 1
+            shift, mask = pow(2, leftover), pow(2, leftover) - 1
             result = self.data[0] & mask
             self.offset, bits = 0, bits - leftover
             self.data[:] = self.data[1:]
@@ -584,7 +584,7 @@ class RBitmap(object):
         else:
             result = 0
 
-        shift = 2 ** 8
+        shift = pow(2, 8)
         while bits >= 8:
             result *= shift
             result += self.data[0]
@@ -592,8 +592,8 @@ class RBitmap(object):
 
         leftover = 8 - bits
         if bits > 0:
-            shift, mask = 2 ** leftover, 2 ** bits - 1
-            result *= 2 ** bits
+            shift, mask = pow(2, leftover), pow(2, bits) - 1
+            result *= pow(2, bits)
             result += ((self.data[0] // shift) & mask) if len(self.data) else 0
             self.offset = bits
         return result
@@ -755,13 +755,13 @@ if __name__ == '__main__':
     def grow_unsigned():
         x = (5, 4)
         res = bitmap.grow(x, 4)
-        if res == (5*2**4,8) and bitmap.value(res) == 5*2**4:
+        if res == (5*pow(2,4),8) and bitmap.value(res) == 5*pow(2,4):
             raise Success
     @TestCase
     def grow_signed():
         x = (15, -4)
         res = bitmap.grow(x, 4)
-        if res == (15*2**4,-8) and bitmap.value(res) == -16:
+        if res == (15*pow(2,4),-8) and bitmap.value(res) == -16:
             raise Success
 
     ### shrink
@@ -945,7 +945,7 @@ if __name__ == '__main__':
     @TestCase
     def mod_unsigned_bitmap_unsigned():
         '''23983 % 5 == 3'''
-        mask=2**64-1
+        mask=pow(2,64)-1
         x = (23983&mask,64)
         res = bitmap.mod(x, 5)
         if bitmap.value(res) == 3:
@@ -953,7 +953,7 @@ if __name__ == '__main__':
     @TestCase
     def mod_unsigned_bitmap_signed():
         '''23983 % -5 == -2'''
-        mask=2**64-1
+        mask=pow(2,64)-1
         x = (23983&mask,-64)
         res = bitmap.mod(x, -5)
         if bitmap.signed(res) and bitmap.value(res) == -2:
@@ -961,7 +961,7 @@ if __name__ == '__main__':
     @TestCase
     def mod_signed_bitmap_unsigned():
         '''-23983 % -5 == 2'''
-        mask=2**64-1
+        mask=pow(2,64)-1
         x = (-23983&mask,64)
         res = bitmap.mod(x, -5)
         if bitmap.value(res) == 0xfffffffffffffffe:
@@ -970,7 +970,7 @@ if __name__ == '__main__':
     @TestCase
     def mod_signed_bitmap_signed():
         '''-23983 % -5 == -3'''
-        mask=2**64-1
+        mask=pow(2,64)-1
         x = (-23983&mask,-64)
         res = bitmap.mod(x, -5)
         if bitmap.signed(res) and bitmap.value(res) == -3:
