@@ -752,6 +752,7 @@ class container(type):
         # create an instance of self and update with requested attributes
         result = super(container, self).copy(**attrs)
         result.value = map(operator.methodcaller('copy', **attrs), self.value)
+        result.value = [item.copy(**attrs) for item in self.value]
         return result
 
     def initializedQ(self):
@@ -765,8 +766,8 @@ class container(type):
     def bitmap(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.bitmap')
-        res = map(operator.methodcaller('bitmap'), self.value)
-        return functools.reduce(bitmap.push, filter(None, res), bitmap.new(0, 0))
+        iterable = map(operator.methodcaller('bitmap'), self.value)
+        return functools.reduce(bitmap.push, filter(None, iterable), bitmap.new(0, 0))
 
     def bits(self):
         return sum(item.bits() for item in self.value or [])
@@ -2794,8 +2795,8 @@ if __name__ == '__main__':
                 length = 2
                 _object_ = 4
         data = 0x1122334455abcdef
-        result = map(bitmap.value, bitmap.split(bitmap.new(data, 64), 4))
-        result = list(zip(*((iter(result),)*2)))
+        iterable = map(bitmap.value, bitmap.split(bitmap.new(data, 64), 4))
+        result = list(zip(*(2*[iter(iterable)])))
         x = array().set(result)
         if all(a[0] == b[0] and a[1] == b[1] for a, b in zip(x[2 : 8], result[2 : 8])):
             raise Success
@@ -2808,8 +2809,8 @@ if __name__ == '__main__':
             length = 4
 
         data = 0x1122334455abcdef
-        result = map(bitmap.value, bitmap.split(bitmap.new(data,64), 4))
-        result = list(zip(*((iter(result),)*2)))
+        iterable = map(bitmap.value, bitmap.split(bitmap.new(data,64), 4))
+        result = list(zip(*(2*[iter(iterable)])))
         x = array().set(result)
         if all(a['a'] == b[0] and a['b'] == b[1] for a,b in zip(x[2:8],result[2:8])):
             raise Success
@@ -3185,7 +3186,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_1():
+    def test_pbinary_enum_width_fixup_81():
         class t(pbinary.enum):
             width, _values_ = 4, []
 
@@ -3194,7 +3195,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_2():
+    def test_pbinary_enum_width_fixup_82():
         class t(pbinary.enum):
             _width_, _values_ = 4, []
 
@@ -3203,7 +3204,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_3():
+    def test_pbinary_enum_width_fixup_83():
         class t(pbinary.enum):
             _width_, width, _values_ = 4, 8, []
 
@@ -3212,7 +3213,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_4():
+    def test_pbinary_enum_width_fixup_84():
         class t(pbinary.enum):
             _width_, width, length, _values_ = 4, 8, 16, []
         correct = [getattr(t, property) for property in ['_width_','width','length']]
@@ -3222,7 +3223,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_5():
+    def test_pbinary_enum_width_fixup_85():
         class t(pbinary.enum):
             width, _values_ = 7, []
             @classmethod
@@ -3234,7 +3235,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_6():
+    def test_pbinary_enum_width_fixup_86():
         class t(pbinary.enum):
             _width_, _values_ = 7, []
             @classmethod
@@ -3246,7 +3247,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_7():
+    def test_pbinary_enum_width_fixup_87():
         class t(pbinary.enum):
             _values_ = []
 
@@ -3263,7 +3264,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_8():
+    def test_pbinary_enum_width_fixup_88():
         class t(pbinary.enum):
             _values_ = []
             # no properties should be assigned because this is
@@ -3276,7 +3277,7 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_enum_width_fixup_9():
+    def test_pbinary_enum_width_fixup_89():
         class t(pbinary.enum):
             width, _width_, _values_ = 7, 14, []
             @classmethod
@@ -3285,6 +3286,64 @@ if __name__ == '__main__':
 
         x = t()
         if x.blockbits() == t.blockbits() and x.width == t.width and x._width_ == t._width_:
+            raise Success
+
+    @TestCase
+    def test_pbinary_container_copy_90():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+                (4, 'd'),
+                (4, 'e'),
+                (4, 'f'),
+                (4, 'g'),
+                (4, 'h'),
+            ]
+
+        data = b'\x41\x42\x43\x44'
+        a = pbinary.new(t, source=ptypes.prov.bytes(data)).l
+        if a.copy().serialize() == data:
+            raise Success
+
+    @TestCase
+    def test_pbinary_container_unaligned_copy_90():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+                (4, 'd'),
+                (4, 'e'),
+                (4, 'f'),
+                (4, 'g'),
+                (4, 'h'),
+            ]
+
+        data = b'\x41\x42\x43\x44'
+        a = pbinary.new(t, source=ptypes.prov.bytes(data)).l
+        if a.o.copy().serialize() == data:
+            raise Success
+
+    @TestCase
+    def test_pbinary_containers_unaligned_copy_91():
+        class u(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+                (4, 'd'),
+            ]
+        class t(pbinary.struct):
+            _fields_ = [
+                (u, 'a'),
+                (u, 'b'),
+            ]
+
+        data = b'\x41\x42\x43\x44'
+        a = pbinary.new(t, source=ptypes.prov.bytes(data)).l
+        if a.o.copy().serialize() == data:
             raise Success
 
 if __name__ == '__main__':
