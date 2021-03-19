@@ -314,6 +314,10 @@ class string(ptype.type):
         self.length = len(result)
         return self.load(offset=0, source=provider.proxy(result))
 
+    def alloc(self, *args, **fields):
+        res = super(string, self).alloc(**fields)
+        return res.set(*args) if args else res
+
     def str(self):
         '''Decode the string into the specified encoding type.'''
         res = self.__getvalue__()
