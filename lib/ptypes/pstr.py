@@ -409,31 +409,33 @@ class szstring(string):
         return self.load(offset=0, source=provider.proxy(result))
 
     def __deserialize_block__(self, block):
-        iterable = (bytes(bytearray([item])) for item in bytearray(block))
-        return self.__deserialize_stream__(iterable)
+        data = bytearray(block)
+        stream = (bytes(data[idx : idx + 1]) for idx, _ in enumerate(data))
+        return self.__deserialize_stream__(stream)
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             self.source.seek(self.getoffset())
-            producer = (self.source.consume(1) for _ in itertools.count())
+            producer = (self.source.consume(1) for byte in itertools.count())
             result = self.__deserialize_stream__(producer)
         return result
 
     def __deserialize_stream__(self, stream):
-        ofs = self.getoffset()
-        obj = self.new(self._object_, offset=ofs)
-        size = obj.blocksize()
-
-        getchar = lambda: b''.join(itertools.islice(stream, size))
-
         self.value = b''
+
+        # instantiate a new character object that we will reuse when
+        # deserializing any input and checking for a terminator.
+        item = self.new(self._object_, offset=self.getoffset())
         while True:
-            obj.setoffset(ofs)
-            obj.__deserialize_block__(getchar())
-            self.value += obj.serialize()
-            if self.isTerminator(obj):
+            res = itertools.islice(stream, item.blocksize())
+            item.__deserialize_block__(bytes().join(res))
+
+            # we now have a character to deserialize into our value
+            # after which we can check to see if it's a sentinel.
+            offset = self.__append__(item)
+            if self.isTerminator(item):
                 break
-            ofs += size
+            continue
         return self
 
     def blocksize(self):
