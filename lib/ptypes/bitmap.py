@@ -48,7 +48,7 @@ def hex(bitmap):
     size = abs(s)
     length = math.trunc(math.ceil(size / 4.0))
     if s < 0:
-        max, sign = pow(2, size), pow(2, size - 1)
+        max, sign = pow(2, size), math.trunc(pow(2, size - 1))
         res = n & (max - 1)
         return "{:+#0{:d}x}".format((res - max) if res & sign else res & (sign - 1), length + 3)
     return "{:#0{:d}x}".format(n & pow(2, size) - 1, length + 2)
@@ -147,7 +147,7 @@ def mul(bitmap, integer):
     res, size = bitmap
     max = pow(2, abs(size))
     if size < 0:
-        sign = pow(2, abs(size) - 1)
+        sign = math.trunc(pow(2, abs(size) - 1))
         res = (res - max) if res & sign else res & (sign - 1)
     return (res * integer) & (max - 1), size
 def div(bitmap, integer):
@@ -155,7 +155,7 @@ def div(bitmap, integer):
     res, size = bitmap
     max = pow(2, abs(size))
     if size < 0:
-        sign = pow(2, abs(size) - 1)
+        sign = math.trunc(pow(2, abs(size) - 1))
         res = (res - max) if res & sign else res & (sign - 1)
     return math.trunc(float(res) / integer) & (max - 1), size
 def mod(bitmap, integer):
@@ -163,7 +163,7 @@ def mod(bitmap, integer):
     res, size = bitmap
     max = pow(2, abs(size))
     if size < 0:
-        sign = pow(2, abs(size) - 1)
+        sign = math.trunc(pow(2, abs(size) - 1))
         res = (res - max) if res & sign else res & (sign - 1)
     return (res % integer) & (max - 1), size
 
@@ -374,7 +374,7 @@ def value(bitmap):
     '''Return the integral part of a bitmap, handling signedness if necessary'''
     integer, size = bitmap
     if size < 0:
-        signmask = pow(2, abs(size) - 1)
+        signmask = math.trunc(pow(2, abs(size) - 1))
         res = integer & (signmask - 1)
         if integer & signmask:
             return (signmask - res) * -1
@@ -436,7 +436,7 @@ def ror(bitmap, shift=1):
     ror = lambda (v,b),shift=1: ((((v&2**shift-1) << b-shift) | (v>>shift)) & 2**b-1, b)
     '''
     (value, size) = bitmap
-    return new((((value & pow(2,shift) - 1) << size - shift) | (value >> shift)) & pow(2,size) - 1, size)
+    return new((((value & pow(2, shift) - 1) << size - shift) | (value >> shift)) & pow(2, size) - 1, size)
 
 # jspelman. he's everywhere.
 def rol(bitmap, shift=1):
@@ -445,7 +445,7 @@ def rol(bitmap, shift=1):
     rol = lambda (v,b),shift=1: (((v << shift) | ((v & ((2**b-1) ^ (2**(b-shift)-1))) >> (b-shift))) & 2**b-1, b)
     '''
     (value, size) = bitmap
-    return new(((value << shift) | ((value & ((pow(2,size) - 1) ^ (pow(2, size - shift) - 1))) >> (size - shift))) & pow(2, size) - 1, size)
+    return new(((value << shift) | ((value & ((pow(2, size) - 1) ^ (pow(2, size - shift) - 1))) >> (size - shift))) & pow(2, size) - 1, size)
 
 def reverse(bitmap):
     '''Flip the bit order of the bitmap'''
@@ -509,8 +509,8 @@ class WBitmap(object):
             # last byte of our data so that we should now be padded
             # along a byte boundary (multiple of 8).
             offset = bits - leftover
-            res = integer & (mask * pow(2,offset))
-            self.data[-1] |= res // pow(2,offset)
+            res = integer & (mask * pow(2, offset))
+            self.data[-1] |= res // pow(2, offset)
 
             # Update the bits that we've processed
             self.bits, bits = self.bits + leftover, bits - leftover
