@@ -783,6 +783,14 @@ class generic(__interface__):
         raise error.ImplementationError(self, 'generic.repr')
 
     def __deserialize_block__(self, block):
+        """
+        This method should only be able to raise exceptions of the types:
+
+            - error.ProviderError
+                - error.ConsumeError
+                - error.StoreError
+            - StopIteration
+        """
         raise error.ImplementationError(self, 'generic.__deserialize_block__', message="Subclass {:s} must implement deserialize_block".format(self.classname()))
 
     def serialize(self):
@@ -925,7 +933,7 @@ class base(generic):
 
         # force partial or overcommited initializations
         try: result = result.__deserialize_block__(data)
-        except (error.LoadError, StopIteration): pass
+        except (StopIteration, error.ProviderError): pass
 
         # log whether our size has changed somehow
         a, b = self.size(), result.size()
@@ -950,15 +958,19 @@ class base(generic):
     def load(self, **attrs):
         """Synchronize the current instance with data from the .source attributes"""
         with utils.assign(self, **attrs):
-            ofs, bs = self.getoffset(), self.blocksize()
+            offset, blocksize = self.getoffset(), self.blocksize()
 
+            # seek to the correct offset that we'll be consuming from.
+            self.source.seek(offset)
             try:
-                self.source.seek(ofs)
-                block = self.source.consume(bs)
+                block = self.source.consume(blocksize)
                 self = self.__deserialize_block__(block)
+
+            # if we got an exception from the provider, then recast it
+            # as a load error since the block was not read completely.
             except (StopIteration, error.ProviderError) as E:
-                self.source.seek(ofs + bs)
-                raise error.LoadError(self, consumed=bs, exception=E)
+                self.source.seek(offset + blocksize)
+                raise error.LoadError(self, consumed=blocksize, exception=E)
         return self
 
     def commit(self, **attrs):
@@ -1045,13 +1057,13 @@ class type(base):
     ## byte stream input/output
     def __deserialize_block__(self, block):
         """Load type using the string provided by ``block``"""
-        bs = self.blocksize()
-        if len(block) < bs:
-            self.value = block[:bs]
+        blocksize = self.blocksize()
+        if len(block) < blocksize:
+            self.value = block[:blocksize]
             raise StopIteration(self.name(), len(block))
 
         # all is good.
-        self.value = block[:bs]
+        self.value = block[:blocksize]
         return self
 
     def serialize(self):
@@ -1321,7 +1333,7 @@ class container(base):
         elif total > expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.debug("container.__deserialize_block__ : {:s} : Container larger than expected blocksize : {:#x} > {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
-            raise error.LoadError(self, consumed=total) # XXX
+            raise error.ConsumeError(self, self.getoffset(), expected, amount=total) # XXX
         return self
 
     def serialize(self):
@@ -2016,7 +2028,11 @@ class wrapper_t(type):
     @value.setter
     def value(self, data):
         '''Re-assigns the contents of the wrapper_t'''
-        self.__deserialize_block__(data)
+        try:
+            self.__deserialize_block__(data)
+        except (StopIteration, error.ProviderError) as E:
+            raise error.LoadError(self, consumed=len(data), exception=E)
+        return
 
     __object__ = None
     # setters/getters for the object's backing instance
@@ -2052,7 +2068,12 @@ class wrapper_t(type):
 
         # if the backing type wasn't created yet, then create it
         if self.__value__ is None and res.initializedQ():
-            return self.__deserialize_block__(res.serialize())
+            block = res.serialize()
+            try:
+                self.__deserialize_block__(block)
+            except (StopIteration, error.ProviderError) as E:
+                raise error.LoadError(self, consumed=len(block), exception=E)
+            return
 
         # update our value with the type that we assigned
         self.value = res.serialize()
@@ -2075,13 +2096,21 @@ class wrapper_t(type):
         value = self.new(self._value_ or type, offset=self.getoffset(), source=self.source)
         try:
             res = value.l.blocksize()
+
         except error.LoadError:
             res = value.a.blocksize()
         return res
 
     def __deserialize_block__(self, block):
         self.__value__ = block
-        self.object.load(offset=0, source=provider.proxy(self))
+        try:
+            self.object.load(offset=0, source=provider.proxy(self))
+
+        # If we got a LoadError or similar, then we need to recast the
+        # exception as a ConsumeError since this method is used to
+        # deserialize a block for our wrapped type.
+        except (StopIteration, error.ProviderError) as E:
+            raise error.ConsumeError(self, self.getoffset(), len(block), amount=self.object.size(), exception=E)
         return self
 
     # forwarded methods
@@ -2509,7 +2538,7 @@ if __name__ == '__main__':
 
         instance = pstr.string(length=len(match)).set(match)
 
-        x = xor(source=ptypes.prov.bytes(b'\x00'*0x100)).l
+        x = xor(source=ptypes.prov.bytes(b'\0'*0x100)).l
         x.reference(instance)
         if x.serialize() == data:
             raise Success
@@ -2519,7 +2548,7 @@ if __name__ == '__main__':
         import base64
         b64encode, b64decode = (base64.encodestring, base64.decodestring) if sys.version_info.major < 3 else (base64.encodebytes, base64.decodebytes)
 
-        s = b64encode(b'AAAABBBBCCCCDDDD').strip() + b'\x00' + b'A'*20
+        s = b64encode(b'AAAABBBBCCCCDDDD').strip() + b'\0' + b'A'*20
         class b64(ptype.encoded_t):
             _value_ = pstr.szstring
             _object_ = dynamic.array(pint.uint32_t, 4)
@@ -2562,7 +2591,7 @@ if __name__ == '__main__':
                 data = b64decode(res)
                 return super(b64, self).decode(ptype.block(length=len(data)).set(data))
 
-        x = b64(source=ptypes.prov.bytes(b'A'*0x100+b'\x00')).l
+        x = b64(source=ptypes.prov.bytes(b'A'*0x100+b'\0')).l
         x = x.reference(instance)
         if builtins.isinstance(x.d, pstr.string) and x.serialize() == result:
             raise Success
@@ -2913,7 +2942,7 @@ if __name__ == '__main__':
                 data = zlib.decompress(object.serialize())
                 return super(zlibblock, self).decode(ptype.block(length=len(data)).set(data))
 
-        source = prov.bytes(b'\x00'*1000)
+        source = prov.bytes(b'\0'*1000)
         a = zlibblock(source=source)
         a.object = pstr.string(length=1000, source=source).l
         a.reference(data)
@@ -2950,7 +2979,7 @@ if __name__ == '__main__':
             return string[index : index + len(self)].serialize()
         result = list(a.compare(b))
         c,d = result
-        if getstr(a, c) == b'over the top!' and getstr(b,c) == b'unpunctuaTed\x00' and d[0] >= b.size() and getstr(a,d) == b'\x00':
+        if getstr(a, c) == b'over the top!' and getstr(b,c) == b'unpunctuaTed\0' and d[0] >= b.size() and getstr(a,d) == b'\0':
             raise Success
 
     @TestCase
@@ -3149,7 +3178,7 @@ if __name__ == '__main__':
         x = block(value=[])
         for d in bytearray(b'ABCD'):
             x.value.append( x.new(E).load(source=ptypes.prov.bytes(bytes(bytearray([d, d])))) )
-        source = ptypes.prov.bytes(bytearray(b'\x00'*16))
+        source = ptypes.prov.bytes(bytearray(b'\0'*16))
         x.commit(source=source)
         if source.value == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success

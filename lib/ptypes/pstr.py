@@ -340,15 +340,22 @@ class string(ptype.type):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            sz = self._object_().blocksize()
-            self.source.seek(self.getoffset())
-            block = self.source.consume( self.blocksize() )
-            result = self.__deserialize_block__(block)
+            offset, blocksize = self.getoffset(), self.blocksize()
+            self.source.seek(offset)
+            try:
+                block = self.source.consume(blocksize)
+                result = self.__deserialize_block__(block)
+
+            # If the provider gave us an error, then recast it as a load
+            # error due to being an exception while loading a block
+            except (StopIteration, error.ProviderError) as E:
+                self.source.seek(offset + self.size())
+                raise error.LoadError(self, consumed=blocksize, exception=E)
         return result
 
     def __deserialize_block__(self, block):
         if len(block) != self.blocksize():
-            raise error.LoadError(self, len(block))
+            raise error.ConsumeError(self, self.getoffset(), self.blocksize(), amount=len(block))
         self.value = block
         return self
 
@@ -415,9 +422,17 @@ class szstring(string):
 
     def load(self, **attrs):
         with utils.assign(self, **attrs):
-            self.source.seek(self.getoffset())
-            producer = (self.source.consume(1) for byte in itertools.count())
-            result = self.__deserialize_stream__(producer)
+            offset = self.getoffset()
+            self.source.seek(offset)
+            try:
+                producer = (self.source.consume(1) for byte in itertools.count())
+                result = self.__deserialize_stream__(producer)
+
+            # If the provider gave us an error, then recast it as a load
+            # error due to being an exception while loading a block
+            except (StopIteration, error.ProviderError) as E:
+                self.source.seek(offset + self.size())
+                raise error.LoadError(self, consumed=self.size(), exception=E)
         return result
 
     def __deserialize_stream__(self, stream):
