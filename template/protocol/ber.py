@@ -1,4 +1,4 @@
-import logging, math, six, builtins
+import sys, logging, math, six, operator, builtins, itertools, functools
 import ptypes, ptypes.bitmap as bitmap
 from ptypes import *
 
@@ -17,7 +17,7 @@ class IdentifierLong(pbinary.terminatedarray):
 
     def int(self):
         '''Return the integer from the structure'''
-        return reduce(lambda t, item: (t * 2**7) | item['integer'], self, 0)
+        return functools.reduce(lambda t, item: (t * pow(2,7)) | item['integer'], self, 0)
 
     def set(self, *integer, **fields):
         '''Apply the specified integer to the structure'''
@@ -25,14 +25,14 @@ class IdentifierLong(pbinary.terminatedarray):
             integer, = integer
 
             # calculate the number of 7-bit pieces for our integer
-            res = math.floor(math.log(integer) / math.log(2**7) + 1)
+            res = math.floor(math.log(integer) / math.log(pow(2,7)) + 1)
             length = fields.pop('length', math.trunc(res))
 
             # slice the integer into 7-bit pieces. we could use ptypes.bitmap, but
             # that requires reading documentation and things. so let's avoid that.
             res = []
             while integer > 0:
-                res.insert(0, integer & (2**7 - 1))
+                res.insert(0, integer & (pow(2,7) - 1))
                 integer >>= 7
 
             # append any extra zeroes in order to pad the list to the specified length
@@ -43,7 +43,7 @@ class IdentifierLong(pbinary.terminatedarray):
 class Length(pbinary.struct):
     '''Indefinite Length (short form) 8.1.3.3'''
     def __value(self):
-        return (self['count']*8) if self['form'] else 0
+        return (8 * self['count']) if self['form'] else 0
 
     _fields_ = [
         (1, 'form'),
@@ -61,23 +61,24 @@ class Length(pbinary.struct):
             integer, = integer
 
             # if our integer can be fit within 7 bits, then just assign it to 'count'
-            if integer < 2**7:
+            if integer < pow(2,7):
                 return self.alloc(form=0).set(count=integer)
 
             # otherwise, figure out how many bytes we need to allocate and then
             # simply assign the integer to them
-            res = math.floor(math.log(integer) / math.log(2**8) + 1)
+            res = math.floor(math.log(integer) / math.log(pow(2,8)) + 1)
             return self.alloc(form=1, count=math.trunc(res)).set(value=integer)
         return super(Length, self).set(*integer, **fields)
 
-    def isIndefinite(self):
+    def IndefiniteQ(self):
+        '''Return whether the contents will be terminated by an EOC tag.'''
         if not self.initializedQ():
-            raise ptypes.error.InitializationError(self, 'isIndefinite')
-        return self['form'] == self['count'] == 0
+            raise ptypes.error.InitializationError(self, 'IndefiniteQ')
+        return (self['form'], self['count']) == (1, 0)
 
     def summary(self):
         res = self.int()
-        return '{:d} ({:#x}) -- {:s}'.format(res, res, super(Length, self).summary()) + (' Indefinite' if self.isIndefinite() else '')
+        return '{:d} ({:#x}) -- {:s}'.format(res, res, super(Length, self).summary()) + (' Indefinite' if self.IndefiniteQ() else '')
 
 class Tag(pbinary.struct):
     def __TagLong(self):
@@ -90,7 +91,7 @@ class Tag(pbinary.struct):
 
     def int(self):
         '''Return the tag number based on the values in our fields'''
-        if self['TagShort'] < 2**5 - 1:
+        if self['TagShort'] < pow(2,5) - 1:
             return self['TagShort']
         return self['TagLong'].int()
 
@@ -98,7 +99,7 @@ class Tag(pbinary.struct):
         '''Apply the tag number to the structure'''
         if len(integer) == 1 and isinstance(integer[0], six.integer_types):
             integer, = integer
-            return self.alloc(TagShort=integer) if integer < 2**5 - 1 else self.alloc(TagShort=2**5 - 1).set(TagLong=integer)
+            return self.alloc(TagShort=integer) if integer < pow(2,5) - 1 else self.alloc(TagShort=pow(2,5) - 1).set(TagLong=integer)
         return super(Tag, self).set(*integer, **fields)
 
     def summary(self):
@@ -116,48 +117,136 @@ class Type(pbinary.struct):
         klass, constructedQ, tag = self['Class'], self['Constructed'], self['Tag'].int()
         return 'class:{:d} tag:{:d} {:s}'.format(klass, tag, 'Constructed' if constructedQ else 'Universal')
 
-class Structured(parray.type):
-    def __getitem__(self, index):
-        try:
-            if hasattr(self, '_fields_'):
-                index = next(i for i, (_, name) in enumerate(self._fields_) if name.lower() == index.lower())
-        except Exception:
-            return super(Structured, self).__getitem__(index)
-        return super(Structured, self).__getitem__(index)
+class Constructed(parray.block):
+    @classmethod
+    def typename(cls):
+        if hasattr(cls, 'type'):
+            klass, tag = cls.type
+            return "{:s}<{:d},{:d}>".format(cls.__name__, klass, tag)
+        return super(Constructed, cls).typename()
 
-    def summary(self):
-        if hasattr(self, '_fields_'):
-            res = ("{:s}={:s}".format(name, n.__element__() if isinstance(n, Element) else n.classname()) for (_, name), n in zip(self._fields_, self.value))
-        else:
-            res = (n.__element__() if isinstance(n, Element) else n.classname() for n in self.value)
-        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(res))
+    def classname(self):
+        if hasattr(self, 'type'):
+            klass, tag = self.type
+            protocol = self.parent.Protocol if self.parent else Protocol
+
+            # Use the protocol to look up the Class and Tag for the type
+            # that we're supposed to be.
+            K = protocol.lookup(klass)
+            try:
+                t = K.lookup(tag)
+
+            # If we didn't find it, then we use the same format for an
+            # UnknownConstruct type.
+            except KeyError:
+                return self.typename()
+            return t.typename()
+        return super(Constructed, self).classname()
+
+    def __getitem__(self, index):
+        if not isinstance(index, six.string_types):
+            return super(Constructed, self).__getitem__(index)
+        klass, definitions = Context.Class, getattr(self, '_fields_', [])
+
+        try:
+            if any(len(item) > 2 for item in definitions):
+                tag = next(tag for tag, _, name in definitions if name.lower() == index.lower())
+                index = next(idx for idx, item in enumerate(self.value) if (item.Class(), item.Tag()) == (klass, tag))
+            else:
+                iterable = itertools.chain(definitions, itertools.repeat((None, '')))
+                index = next(idx for idx, (_, name) in zip(range(len(self.value)), iterable) if name.lower() == index.lower())
+        except StopIteration:
+            raise KeyError(index)
+        return super(Constructed, self).__getitem__(index)
+
+    def __object_key(self, protocol, definition):
+
+        # We need to duplicate our protocol because there was some tags
+        # defined which requires us to update it.
+        protocol = protocol.copy(recurse=True)
+        res = dyn.clone(protocol.default, Protocol=protocol)
+
+        # Lookup the Context class so we can update it with the new defs
+        context = protocol.lookup(Context.Class)
+        for tag, type, name in definition:
+            context.add(tag, type)
+
+        # Now we can return the cloned element we fixed up
+        return res
+
+    def __object_list(self, protocol, definition):
+        if len(self.value) < len(definition):
+            type, name = definition[len(self.value)]
+            return dyn.clone(protocol.default, _object_=type)
+        return protocol.default
 
     def _object_(self):
-        protocol = getattr(self.parent, 'Protocol', Protocol)
-        if hasattr(self, '_fields_') and len(self.value) < len(self._fields_):
-            t, name = self._fields_[len(self.value)]
-            return dyn.clone(protocol.default, _object_=lambda self, res=dyn.clone(t): res)
-        return dyn.clone(protocol.default)
+        protocol = self.parent.Protocol if self.parent else Protocol
 
-    def __fields(self):
-        for _, name in self._fields_:
-            yield name
+        # If there's no tags that we need to update the protocol with, then
+        # we can just leave because there's nothing else to do.
+        if not hasattr(self, '_fields_'):
+            return protocol.default
+
+        if any(len(item) > 2 for item in self._fields_):
+            return self.__object_key(protocol, self._fields_)
+        return self.__object_list(protocol, self._fields_)
+
+    def __summary_list(self):
+        for item, description in zip(self.value, itertools.chain(getattr(self, '_fields_', []), itertools.repeat(None))):
+            if description:
+                type, name = description
+                summary = type.typename() if item is None else item.__element__() if isinstance(item, Element) else item.classname() if item.initializedQ() else item.typename()
+                yield "{:s}={:s}".format(name, summary)
+            else:
+                summary = '???' if item is None else item.__element__() if isinstance(item, Element) else item.classname() if item.initializedQ() else item.typename()
+                yield "{:s}".format(item.__element__() if isinstance(item, Element) else item.classname() if item.initializedQ() else item.typename())
+            continue
         return
-    def fields(self):
-        return [ name for name in self.__fields() ]
-    def iterfields(self):
-        for name in self.__fields():
-            yield name
+
+    def __summary_key(self):
+        tags = {}
+        for item, description in zip(self.value, itertools.chain(getattr(self, '_fields_', []), itertools.repeat(None))):
+            if description:
+                tag, type, name = description
+                tags[tag] = type, name
+            continue
+
+        for item in self.value:
+            try:
+                if isinstance(item, Element) and item.initializedQ():
+                    klass, tag = item.Class(), item.Tag()
+                    type, name = tags[tag]
+                    yield "{:s}={:s}".format(name, item.__element__())
+                    continue
+            except KeyError:
+                pass
+            yield "{:s}".format('???' if item is None else item.classname() if item.initializedQ() else item.typename())
         return
+
+    def summary(self):
+        if any(len(item) > 2 for item in getattr(self, '_fields_', [])):
+            iterable = self.__summary_key()
+        else:
+            iterable = self.__summary_list()
+        return "{:s} : {{ {:s} }}".format(self.__element__(), ', '.join(iterable))
 
     def alloc(self, *args, **fields):
-        if hasattr(self, '_fields_'):
+        cls = self.__class__
+        if hasattr(self, '_fields_') and fields:
             res, protocol = [], getattr(self.parent, 'Protocol', Protocol)
 
-            # iterate through all of our fields
-            for t, name in self._fields_:
+            # figure out which iterator we need to use so we can remove the tag
+            # identifier if necessary.
+            if any(len(item) > 2 for item in self._fields_):
+                klass, iterable = Context.Class, ((type, tag, name) for tag, type, name in self._fields_)
+            else:
+                klass, iterable = Context.Class, ((type, None, name) for type, name in self._fields_)
 
-                # If no field was specified, then construct the default
+            # iterate through all of our fields
+            for t, tag, name in iterable:
+
+                # If no field was specified, then we don't need to do anything.
                 if name not in fields:
                     E = protocol.default().alloc(Value=t)
 
@@ -169,93 +258,67 @@ class Structured(parray.type):
                 elif isinstance(fields[name], ptype.base):
                     E = protocol.default().alloc(Value=fields[name])
 
-                # If a just a ptype was specified, then instantiate it as the Value for an element
+                # If just a ptype was specified, then instantiate it as the Value for an Element
                 elif ptypes.istype(fields[name]):
                     E = protocol.default().alloc(Value=fields[name]().a)
 
                 # Otherwise, we just simply assign the field to the Element's Value
+                elif isinstance(fields[name], cls):
+                    E = protocol.default().alloc(Value=item)
+
+                # If it's a list, then we need need to use a Constructed instance
+                elif isinstance(fields[name], (list, tuple)):
+                    raise NotImplementedError   # FIXME: this might be unnecessary
+                    item = cls(type=fields[name].type) if hasattr(fields[name], 'type') else cls(type=(klass, tag))
+                    E = protocol.default().alloc(Value=item.alloc(fields[name]))
+
+                # Otherwise, we need to take the type the user gave us and cast it to
+                # the field's type.
                 else:
+                    raise NotImplementedError   # FIXME: this might be unnecessary
                     E = protocol.default().alloc(Value=t().a.set(fields[name]))
 
-                res.append(E)
-            return super(Structured, self).alloc(res, length=len(res))
-        return super(Structured, self).alloc(*args, **fields)
+                if name in fields:
+                    res.append(E)
+                continue
+            return self.alloc(res)
+        return super(Constructed, self).alloc(*args, **fields)
 
-class String(pstr.string):
-    def set(self, value):
-        return self.alloc(length=len(value)).__setvalue__(value)
+class U8(pint.uint8_t):
+    pass
+
+class Block(parray.block):
+    _object_ = U8
+    def isTerminator(self, value):
+        return False
+
+class String(pstr.szstring):
+    def isTerminator(self, value):
+        return False
 
 ### Element structure
 class Protocol(ptype.definition):
     attribute, cache = 'Class', {}
-    class UnknownConstruct(parray.block, Structured):
-        def classname(self):
-            klass, tag = self.type
-            return "UnknownConstruct<{:d},{:d}>".format(klass, tag)
-    class Unknown(ptype.block):
-        def classname(self):
-            klass, tag = self.type
-            return "UnknownPrimitive<{:d},{:d}>".format(klass, tag)
+
+    # use the following packet type for this protocol (assigned later)
+    default = None
+
+    # any elements that are unknown (or undefined) will use one of the
+    # following types depending on whether it's constructed or not.
+    class UnknownConstruct(Constructed):
+        pass
+    class UnknownPrimitive(Block):
+        @classmethod
+        def typename(cls):
+            klass, tag = cls.type
+            return "{:s}<{:d},{:d}>".format(cls.__name__, klass, tag)
 
 class Element(pstruct.type):
-    Protocol = Protocol
-    def __apply_length_type(self, result, length, indefiniteQ=False):
-        '''Apply the specified length to the type specified by variable'''
-
-        # Determine how to assign length to a type
-        # FIXME: These cases should be implicitly defined instead of explicitly
-        if issubclass(result, parray.block):
-            result.blocksize = lambda self, cb=length: cb
-
-        elif indefiniteQ and issubclass(result, parray.terminated):
-            # Type['Constructed']
-            # Length['Form'] and !Length['Value']
-            result.isTerminator = lambda self, value: isinstance(value['Value'], EOC)
-
-        elif ptype.iscontainer(result):
-            result = result
-
-        elif ptype.istype(result):
-            result.length = length
-
-        return result
-
-    def __apply_length_instance(self, result, length, indefiniteQ=False):
-        '''Apply the specified length to the instance specified by variable'''
-
-        # Determine how to assign length to an already existing instance
-        # FIXME: These cases should be implicitly defined instead of explicitly
-        if isinstance(result, parray.block):
-            result.blocksize = lambda cb=length: cb
-
-        elif indefiniteQ and isinstance(result, parray.terminated):
-            # Type['Constructed']
-            # Length['Form'] and !Length['Value']
-            result.isTerminator = lambda value: isinstance(value['Value'], EOC)
-
-        elif isinstance(result, ptype.container):
-            result = result
-
-        elif isinstance(result, ptype.type):
-            result.length = length
-
-        return result
-
-    def __type__(self, type, length, **attrs):
-        klass, constructedQ, tag = (type[fld] for fld in ['Class', 'Constructed', 'Tag'])
-
-        # Now we can look up the type that we need by grabbing hte protocol, then
-        # using it to determine the class, and then its tag.
-        protocol = self.Protocol
-
-        K = protocol.lookup(klass)
-        try:
-            result = K.lookup(tag.int())
-
-        except KeyError:
-            result = protocol.UnknownConstruct if constructedQ else protocol.Unknown
-            attrs.setdefault('type', (klass, tag.int()))
-        return dyn.clone(result, **attrs)
+    def classname(self):
+        res = self.typename()
+        return "{:s}<{:s}>".format(res, self['Value'].typename()) if self.value and 2 < len(self.value) else super(Element, self).classname()
+        #return "{:s}<{:s}>".format(res, self['Value'].typename()) if self.value and not(len(self.value) < 3) else super(Element, self).classname()
+        #return super(Element, self).classname() if len(self.value) < 3 else "{:s}<{:s}>".format(res, self['Value'].typename())
 
     def __element__(self):
         '''Return the typename so that it's a lot easier to read.'''
@@ -263,35 +326,169 @@ class Element(pstruct.type):
         if self.initializedQ():
             res = self['Value']
 
-        # XXX: This is tied into the Structured mixin
+        # XXX: This is tied into the Constructed mixin
         elif hasattr(self, '_object_'):
-            res = self._object_()
+            res = ptype.force(self._object_, self)
 
         # Otherwise, just figure out the correct type
         else:
-            res = self.__type__(self['Type'], self['Length'])
-        return res.typename()
+            res = self.__object__(self['Type'], self['Length'])
+        return res.classname() if isinstance(res, ptype.base) else res.typename()
+
+    def __object__(self, type, length, **attrs):
+        indefiniteQ, (klass, constructedQ, tag) = length.IndefiniteQ(), (type[fld] for fld in ['Class', 'Constructed', 'Tag'])
+
+        # First look up the type that we're going to need by grabbing the protocol,
+        # then using it to determine the class, and then then by the actual tag.
+        protocol = self.Protocol
+
+        K = protocol.lookup(klass)
+        try:
+            result = K.lookup(tag.int())
+
+        # If we couldn't find a type matching the right tag number, then check
+        # to see whether we return an unknown primitive or a construct.
+        except KeyError:
+            result = protocol.UnknownConstruct if constructedQ else K.unknown
+            attrs.setdefault('type', (klass, tag.int()))
+
+        # If this Element is supposed to be a particular type, then verify that
+        # it's a subclass of the type that matches the class and tag we found.
+        result = getattr(self, '_object_', result)
+
+        # If this is not a constructed type and not an indefinite length, then
+        # this is all we actually needed to do.
+        if not constructedQ and not indefiniteQ:
+            attrs.setdefault('blocksize', lambda _, cb=length.int(): cb)
+            return dyn.clone(result, **attrs)
+
+        # Next we need to figure out if it's an indefinite length, because then if
+        # so then it'll continue until the protocol terminator (EOC) is encountered.
+        if indefiniteQ:
+            assert(hasattr(result, 'isTerminator'))
+
+            # If it's a string type, then we terminate if one of its bytes is EOC.
+            if issubclass(result, (String, Block)):
+                attrs.setdefault('isTerminator', lambda _, value, sentinel=EOC.tag: value.int() == sentinel)
+
+            # If it's an array type, then we terminate if one of its elements is EOC.
+            elif issubclass(result, parray.terminated):
+                attrs.setdefault('isTerminator', lambda _, value, sentinel=EOC: isinstance(value['Value'], sentinel))
+
+            # Otherwise, we have no idea and this needs to be examined.
+            else:
+                raise NotImplementedError(length.summary(), type.summary(), result)
+
+            # Now we can return it with the attributes we've assigned
+            return dyn.clone(result, **attrs)
+
+        # Otherwise, this type is constructed which means the length is valid,
+        # but the type that we've returned is encoded with a length that needs
+        # to be properly applied.
+        attrs.setdefault('type', (klass, tag.int()))
+        attrs.setdefault('blocksize', lambda _, cb=length.int(): cb)
+        if issubclass(result, Constructed):
+            return dyn.clone(result, **attrs)
+
+        # If our result type isn't constructed, then this element is a wrapper
+        # and we'll need to return a constructed value using a copy of our
+        # element type as the object.
+        attrs.setdefault('_object_', self.__class__)
+        return dyn.clone(Constructed, **attrs)
 
     def __Value(self):
-        '''Return the correct ptype and size it correctly according to Element's properties.'''
         t, length = (self[fld].li for fld in ['Type', 'Length'])
-
-        # XXX: This is tied into the Structured mixin
-        if hasattr(self, '_object_'):
-            result = self._object_()
+        res = self.__object__(t, length)
 
         # Fetch the correct type adjusted to the length in our structure
+        if t['Constructed'] and not issubclass(res, Constructed):
+            res = dyn.clone(self.__class__, _object_=res)
         else:
-            result = self.__type__(t, length)
+            res = res
+        return res
 
-        # Apply our length to the type we determined
-        return self.__apply_length_type(result, length.int(), length.isIndefinite())
+    def __Padding(self):
+        length, value = (self[fld].li for fld in ['Length', 'Value'])
+        return dyn.block(max(0, length.int() - value.size()))
 
     _fields_ = [
         (Type, 'Type'),
         (Length, 'Length'), # FIXME: Distinguish between definite and indefinite (long and short) forms
         (__Value, 'Value'),
+        (__Padding, 'Padding'),
     ]
+
+    def __alloc_value_primitive(self, result, size):
+        if isinstance(result, parray.block):
+            method_t = type(result.isTerminator)
+            F = lambda _, cb=size: cb
+            if ptypes.utils.callable_eq(result.isTerminator, parray.block.isTerminator):
+                result.blocksize = method_t(F, result)
+        elif hasattr(result, 'length'):
+            result.length = size
+        return result
+
+    def __alloc_value_indefinite(self, result):
+        method_t, items = type(result.isTerminator), [String, Block]
+
+        # If the array type is composed of integers, then we just
+        # check to see if it's last element is the EOC byte.
+        if isinstance(result, items):
+            F = lambda _, value, sentinel=EOC.tag: value.int() == sentinel
+            if any(ptypes.utils.callable_eq(result.isTerminator, item.isTerminator) for item in items):
+                result.isTerminator = method_t(F, result)
+            Fsentinel = result.isTerminator
+
+        # Verify that the array is a terminated array. If it is,
+        # then this might be a Constructed instance and so one of
+        # its elements could be an EOC instance.
+        elif isinstance(result, parray.terminated):
+            F = lambda _, value, sentinel=EOC: isinstance(value['value'], sentinel)
+            if ptypes.utils.callable_eq(result.isTerminator, parray.terminated.isTerminator):
+                result.isTerminator = method_t(F, result)
+            Fsentinel = result.isTerminator
+
+        # Otherwise if we're not even an array, then we need to warn
+        # the user that we have no clue what to do.
+        elif not isinstance(result, parray.type):
+            logging.warning("{:s}.alloc : Skipping verification of terminator in {:s} with an indefinite length due to usage of a non-array type ({:s})".format('.'.join([cls.__module__, cls.__name__]), self.instance(), result.classname()))
+            return result
+
+        # This is a constant-length array type, so we need to explicitly
+        # check it in order to warn the user.
+        else:
+            isterminator_int = lambda value, sentinel=EOC.tag: value.int() == sentinel
+            isterminator_object = lambda value, sentinel=EOC: isinstance(value['value'], sentinel)
+            isterminator_empty = lambda value: False
+            Fsentinel = is_teminator_empty if not len(result.value) else isterminator_object if isinstance(result.value[-1], Element) else isterminator_int
+
+        # Warn the user if the terminator does not check out.
+        item = result.value[-1] if len(result.value) else None
+        if not Fsentinel(item):
+            logging.warning("{:s}.alloc : Element {:s} with an indefinite length does not have an array instance that ends with an EOC element ({!s})".format('.'.join([cls.__module__, cls.__name__]), self.instance(), item if isinstance(item, six.integer_types) else item.summary()))
+        return result
+
+    def __alloc_value_construct(self, result, size):
+        method_t = type(result.isTerminator)
+        F = lambda _, cb=size: cb
+        if ptypes.utils.callable_eq(result.isTerminator, parray.block.isTerminator):
+            result.blocksize = method_t(F, result)
+        return result
+
+    def __alloc_value(self, value, size, constructedQ, indefiniteQ):
+        cls = self.__class__
+        if not constructedQ and not indefiniteQ:
+            result = self.__alloc_value_primitive(value, size)
+
+        elif indefiniteQ:
+            result = self.__alloc_value_indefinite(value)
+
+        elif isinstance(value, Constructed):
+            result = self.__alloc_value_construct(value, size)
+
+        else:
+            result.length = size
+        return result
 
     def alloc(self, **fields):
 
@@ -300,7 +497,7 @@ class Element(pstruct.type):
         value = fields.get('Value', None)
         if hasattr(value, 'type'):
             klass, tag = value.type
-            constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Structured)) or isinstance(value, Structured) else  0
+            constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Constructed)) or isinstance(value, Constructed) else 0
             fields.setdefault('Type', Type().alloc(Class=klass, Constructed=constructedQ).set(Tag=tag))
 
         if 'Length' in fields:
@@ -308,9 +505,23 @@ class Element(pstruct.type):
 
         res = super(Element, self).alloc(**fields)
         res['Length'].set(res['Value'].size())
-        self.__apply_length_instance(res['Value'], res['Value'].size(), res['Length'].isIndefinite())
+        self.__alloc_value(res['Value'], res['Value'].size(), res['Type']['Constructed'], res['Length'].IndefiniteQ())
         return res
-Protocol.default = Element
+
+    def Tag(self):
+        t = self['Type']
+        return t['Tag'].int()
+
+    def ConstructedQ(self):
+        t = self['Type']
+        return t['Constructed'] == 1
+
+    def Class(self):
+        t = self['Type']
+        return t['Class']
+
+# set the defaults by connecting the Element type to the Protocol we defined.
+Protocol.default, Element.Protocol = Element, Protocol
 
 ### Element classes
 class ProtocolClass(ptype.definition):
@@ -328,6 +539,9 @@ class Universal(ProtocolClass):
     Class, cache = 0x00, {}
     # FIXME: These types need to distinguish between constructed and non-constructed
     #        types instead of just generalizing them.
+    class UniversalUnknown(Protocol.UnknownPrimitive):
+        pass
+    unknown = UniversalUnknown
 Protocol.Universal = Universal
 
 @Protocol.define
@@ -335,17 +549,26 @@ class Application(ProtocolClass):
     Class, cache = 0x01, {}
     # FIXME: This needs to be unique to the instance of all ber.Element types
     #        used by the application.
+    class ApplicationUnknown(Protocol.UnknownPrimitive):
+        pass
+    unknown = ApplicationUnknown
 Protocol.Application = Application
 
 @Protocol.define
 class Context(ProtocolClass):
     Class, cache = 0x02, {}
     # FIXME: This needs to be unique to a specific ber.Element type
+    class ContextUnknown(Protocol.UnknownPrimitive):
+        pass
+    unknown = ContextUnknown
 Protocol.Context = Context
 
 @Protocol.define
 class Private(ProtocolClass):
     Class, cache = 0x03, {}
+    class PrivateUnknown(Protocol.UnknownPrimitive):
+        pass
+    unknown = PrivateUnknown
 Protocol.Private = Private
 
 ### Tag definitions (X.208)
@@ -363,11 +586,14 @@ class INTEGER(pint.uint_t):
     tag = 0x02
 
 @Universal.define
-class BITSTRING(ptype.block):
+class BITSTRING(Block):
     tag = 0x03
+    def summary(self):
+        res = str().join(map('{:02X}'.format, bytearray(self.serialize())))
+        return "({:d}) {:s}".format(self.size(), res)
 
 @Universal.define
-class OCTETSTRING(ptype.block):
+class OCTETSTRING(Block):
     tag = 0x04
     def summary(self):
         res = str().join(map('{:02X}'.format, bytearray(self.serialize())))
@@ -514,11 +740,11 @@ class UTF8String(String):
     tag = 0x0c
 
 @Universal.define
-class SEQUENCE(parray.block, Structured):
+class SEQUENCE(Constructed):
     tag = 0x10
 
 @Universal.define
-class SET(parray.block, Structured):
+class SET(Constructed):
     tag = 0x11
 
 @Universal.define
@@ -571,40 +797,126 @@ class File(Element):
     byteorder = ptypes.config.byteorder.bigendian
 
 if __name__ == '__main__':
+    import importlib
     import ptypes,protocol.ber as ber
-    import ptypes.bitmap as bitmap
-    ptypes.setsource(ptypes.file('./test.3','rb'))
+    from ptypes import bitmap
+    from ptypes import *
 
-    a = ber.Element
-    a = a()
-    a=a.l
-
-    def test_tag():
-        res = bitmap.new(0x1e, 5)
-
-        res = bitmap.zero
-        res = bitmap.push(res, (0x1f, 5))
-        res = bitmap.push(res, (0x1, 1))
-        res = bitmap.push(res, (0x10, 7))
-        res = bitmap.push(res, (0x1, 0))
-        res = bitmap.push(res, (0x0, 7))
-        x = pbinary.new(ber.Tag,source=ptypes.prov.string(bitmap.data(res)))
-        print(x.l)
-        print(x['TagLong'][0])
-        print(x.int())
-        print(int(x['TagLong']))
+    importlib.reload(ber)
 
     def test_length():
-        res = bitmap.zero
-        res = bitmap.push(res, (0, 1))
-        res = bitmap.push(res, (38, 7))
-        x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
-        print(x.l)
-        print(x.int())
+        data = b'\x38'
+        res = pbinary.new(ber.Length, source=ptypes.prov.bytes(data)).l
+        assert(res.int() == 0x38)
 
-        res = bitmap.zero
-        res = bitmap.push(res, (0x81,8))
-        res = bitmap.push(res, (0xc9,8))
-        x = pbinary.new(ber.Length,source=ptypes.prov.string(bitmap.data(res)))
-        print(x.l)
-        print(x.int())
+        data = b'\x81\xc9'
+        res = pbinary.new(ber.Length, source=ptypes.prov.bytes(data)).l
+        assert(res.int() == 201)
+
+        data = bitmap.zero
+        data = bitmap.push(data, (0, 1))
+        data = bitmap.push(data, (38, 7))
+        res = pbinary.new(ber.Length, source=ptypes.prov.bytes(bitmap.data(data))).l
+        assert(res.int() == 38)
+
+        data = bitmap.zero
+        data = bitmap.push(data, (0x81,8))
+        data = bitmap.push(data, (0xc9,8))
+        res = pbinary.new(ber.Length, source=ptypes.prov.bytes(bitmap.data(data))).l
+        assert(res.int() == 201)
+
+    def test_tag():
+        data = bitmap.new(0x1e, 5)
+        res = pbinary.new(ber.Tag, source=ptypes.prov.string(bitmap.data(data))).l
+        assert(res.int() == 0x1e)
+
+        data = bitmap.zero
+        data = bitmap.push(data, (0x1f, 5))
+        data = bitmap.push(data, (0x1, 1))
+        data = bitmap.push(data, (0x10, 7))
+        data = bitmap.push(data, (0x1, 0))
+        data = bitmap.push(data, (0x0, 7))
+        res = pbinary.new(ber.Tag, source=ptypes.prov.string(bitmap.data(data))).l
+        assert(res['TagLong'][0].int() == 0x90)
+        assert(res.int() == 0x800)
+
+    def t_dsa_sig():
+        data = bytearray([ 0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02 ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_dsa_sig_extra():
+        data = bytearray([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x05, 0x00])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_dsa_sig_msb():
+        data = bytearray([ 0x30, 0x08, 0x02, 0x02, 0x00, 0x81, 0x02, 0x02, 0x00, 0x82 ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_dsa_sig_two():
+        data = bytearray([ 0x30, 0x08, 0x02, 0x02, 0x01, 0x00, 0x02, 0x02, 0x02, 0x00 ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_invalid_int_zero():
+        data = bytearray([ 0x30, 0x05, 0x02, 0x00, 0x02, 0x01, 0x2a ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_invalid_int():
+        data = bytearray([ 0x30, 0x07, 0x02, 0x02, 0x00, 0x7f, 0x02, 0x01, 0x2a ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_neg_int():
+        data = bytearray([ 0x30, 0x06, 0x02, 0x01, 0xaa, 0x02, 0x01, 0x2a ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'][1])
+
+    def t_trunc_der():
+        data = bytearray([ 0x30, 0x08, 0x02, 0x02, 0x00, 0x81, 0x02, 0x02, 0x00 ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a)
+        print(a['value'])
+
+    def t_trunc_seq():
+        data = bytearray([ 0x30, 0x07, 0x02, 0x02, 0x00, 0x81, 0x02, 0x02, 0x00, 0x82 ])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_invalid_zero():
+        data = bytearray([0x30, 0x02, 0x02, 0x00])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    def t_invalid_template():
+        data = bytearray([0x30, 0x03, 0x0c, 0x01, 0x41])
+        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        a=a.l
+        print(a['value'])
+
+    if False:
+        a = '0307040A3B5F291CD0'
+        A = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(a))).l
+        print(A['value'])
+        #open('/home/user/bah', 'wb').write(bytes.fromhex(a))
+
+        b = '23 80 03 03 000A3B'
+        b = '23 80 03 05 045F291CD0 00 00'
+        B = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(b))).l
+        #open('/home/user/bah', 'wb').write(bytes.fromhex(b))
+        print(B['value'])
+        print(B['value']['value'])
+        print(B.source.size())
