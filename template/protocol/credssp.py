@@ -148,6 +148,7 @@ if __name__ == '__main__':
 
         z = credssp.Packet().alloc(Value=tsversion)
         assert(z.serialize() == b'\x30\3\2\1\2')
+    test_credssp_encode_tsversion()
 
     def test_credssp_decode_path():
         data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
@@ -155,11 +156,12 @@ if __name__ == '__main__':
         z=z.l
 
         #print(z['value'][0]['value']['Version']['value'])
-        nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
+        nlmsg = z['value']['negodata']['value']['data']['value']['messages']['value']['negotoken']['value']['negomessage']['value']
 
         #print(a['messagefields'])
         assert(z.size() == z.source.size())
         assert(isinstance(nlmsg, nlmp.Message))
+    test_credssp_decode_path()
 
     def test_credssp_token():
         data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
@@ -171,6 +173,7 @@ if __name__ == '__main__':
         data = z['value']['negodata']['value']
         assert(isinstance(data[0]['value'][0]['value'][0]['value'], credssp.NegoToken))
         assert(data[0]['value'][0]['value'][0]['value'][0]['value'].serialize() == fromhex(msg))
+    test_credssp_token()
 
     def test_credssp_encode_token():
         data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
@@ -179,7 +182,7 @@ if __name__ == '__main__':
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
         assert(z['value']['version']['value'].serialize() == tsversion.serialize())
 
-        nlmsg = z['value']['negoData']['value']['data']['value']['messages']['value']['negoToken']['value']['Message']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
+        nlmsg = z['value']['negoData']['value']['data']['value']['messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
         negotoken = credssp.NegoToken().alloc(negoMessage=nlmsg)
         negodata_seq_seq = credssp.NegoDataSequenceOfSequence().alloc([credssp.Packet().alloc(Value=negotoken)])
         negodata_seq = credssp.NegoDataSequence().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])
@@ -191,6 +194,7 @@ if __name__ == '__main__':
 
         assert(cssp['value']['version'].serialize() == z['value']['version'].serialize())
         assert(cssp.serialize() == z.serialize())
+    test_credssp_encode_token()
 
     def make_challenge():
         challenge = nlmp.CHALLENGE_MESSAGE().alloc(NegotiateFlags=dict(
@@ -237,6 +241,7 @@ if __name__ == '__main__':
         msg['MessageFields']['TargetInfoFields']['BufferOffset'].reference(targetinfo)
 
         assert(a.serialize() == msg.serialize())
+    test_encode_nlmp()
 
     if True:
         print('-'*72)
