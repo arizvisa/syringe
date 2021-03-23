@@ -1,4 +1,4 @@
-import sys, logging, math, six, operator, builtins, itertools, functools
+import sys, logging, math, six, codecs, operator, builtins, itertools, functools
 import ptypes, ptypes.bitmap as bitmap
 from ptypes import *
 
@@ -124,6 +124,18 @@ class Constructed(parray.block):
             klass, tag = cls.type
             return "{:s}<{:d},{:d}>".format(cls.__name__, klass, tag)
         return super(Constructed, cls).typename()
+
+    def load(self, **attrs):
+        cls = self.__class__
+
+        # If the Constructed.isTerminator method hasn't been overwritten, then
+        # we can just use the original loader for the instance.
+        if ptypes.utils.callable_eq(cls.isTerminator, Constructed.isTerminator):
+            return super(Constructed, self).load(**attrs)
+
+        # Otherwise, we want to treat this as a parray.terminated instance so
+        # that the user can control when the array should stop being loaded.
+        return super(parray.block, self).load(**attrs)
 
     def classname(self):
         if hasattr(self, 'type'):
@@ -292,7 +304,12 @@ class Block(parray.block):
     def isTerminator(self, value):
         return False
 
-class String(pstr.szstring):
+class String(parray.block):
+    _object_ = pstr.char_t
+    def str(self):
+        encoding = self._object_.encoding
+        res, _ = encoding.decode(self.serialize())
+        return res
     def isTerminator(self, value):
         return False
 
@@ -362,31 +379,20 @@ class Element(pstruct.type):
             attrs.setdefault('blocksize', lambda _, cb=length.int(): cb)
             return dyn.clone(result, **attrs)
 
+        attrs.setdefault('type', (klass, tag.int()))
+
         # Next we need to figure out if it's an indefinite length, because then if
         # so then it'll continue until the protocol terminator (EOC) is encountered.
         if indefiniteQ:
-            assert(hasattr(result, 'isTerminator'))
+            attrs.setdefault('isTerminator', lambda _, value, sentinel=EOC: isinstance(value['Value'], sentinel))
 
-            # If it's a string type, then we terminate if one of its bytes is EOC.
-            if issubclass(result, (String, Block)):
-                attrs.setdefault('isTerminator', lambda _, value, sentinel=EOC.tag: value.int() == sentinel)
+        # Otherwise the length is defined, so we use that as the actual terminator
+        # for the array type.
+        else:
+            attrs.setdefault('blocksize', lambda _, cb=length.int(): cb)
 
-            # If it's an array type, then we terminate if one of its elements is EOC.
-            elif issubclass(result, parray.terminated):
-                attrs.setdefault('isTerminator', lambda _, value, sentinel=EOC: isinstance(value['Value'], sentinel))
-
-            # Otherwise, we have no idea and this needs to be examined.
-            else:
-                raise NotImplementedError(length.summary(), type.summary(), result)
-
-            # Now we can return it with the attributes we've assigned
-            return dyn.clone(result, **attrs)
-
-        # Otherwise, this type is constructed which means the length is valid,
-        # but the type that we've returned is encoded with a length that needs
-        # to be properly applied.
-        attrs.setdefault('type', (klass, tag.int()))
-        attrs.setdefault('blocksize', lambda _, cb=length.int(): cb)
+        # If the result type is a member of the Constructed type, then we can
+        # just use it as the array that we return.
         if issubclass(result, Constructed):
             return dyn.clone(result, **attrs)
 
@@ -578,11 +584,19 @@ class EOC(ptype.type):
     # Required only if the length field specifies it
 
 @Universal.define
-class BOOLEAN(ptype.block):
+class BOOLEAN(pint.uint_t):
     tag = 0x01
 
+    def bool(self):
+        res = self.int()
+        return not(res == 0)
+
+    def summary(self):
+        res = "{!s}".format(self.bool())
+        return ' : '.join([super(BOOLEAN, self).summary(), res.upper()])
+
 @Universal.define
-class INTEGER(pint.uint_t):
+class INTEGER(pint.sint_t):
     tag = 0x02
 
 @Universal.define
@@ -738,6 +752,8 @@ class ENUMERATED(ptype.block):
 @Universal.define
 class UTF8String(String):
     tag = 0x0c
+    class _object_(pstr.char_t):
+        encoding = codecs.lookup('utf-8')
 
 @Universal.define
 class SEQUENCE(Constructed):
@@ -824,6 +840,7 @@ if __name__ == '__main__':
         data = bitmap.push(data, (0xc9,8))
         res = pbinary.new(ber.Length, source=ptypes.prov.bytes(bitmap.data(data))).l
         assert(res.int() == 201)
+    test_length()
 
     def test_tag():
         data = bitmap.new(0x1e, 5)
@@ -839,84 +856,300 @@ if __name__ == '__main__':
         res = pbinary.new(ber.Tag, source=ptypes.prov.string(bitmap.data(data))).l
         assert(res['TagLong'][0].int() == 0x90)
         assert(res.int() == 0x800)
+    test_tag()
 
     def t_dsa_sig():
         data = bytearray([ 0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02 ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].size() == 1)
+        assert(z['value'][0]['value'].int() == 0x1)
+        assert(z['value'][1]['value'].size() == 1)
+        assert(z['value'][1]['value'].int() == 0x2)
+    t_dsa_sig()
 
     def t_dsa_sig_extra():
         data = bytearray([0x30, 0x06, 0x02, 0x01, 0x01, 0x02, 0x01, 0x02, 0x05, 0x00])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() + 2 == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].size() == 1)
+        assert(z['value'][0]['value'].int() == 0x1)
+        assert(z['value'][1]['value'].size() == 1)
+        assert(z['value'][1]['value'].int() == 0x2)
+    t_dsa_sig_extra()
 
     def t_dsa_sig_msb():
         data = bytearray([ 0x30, 0x08, 0x02, 0x02, 0x00, 0x81, 0x02, 0x02, 0x00, 0x82 ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].size() == 2)
+        assert(z['value'][0]['value'].int() == 0x81)
+        assert(z['value'][1]['value'].size() == 2)
+        assert(z['value'][1]['value'].int() == 0x82)
+    t_dsa_sig_msb()
 
     def t_dsa_sig_two():
         data = bytearray([ 0x30, 0x08, 0x02, 0x02, 0x01, 0x00, 0x02, 0x02, 0x02, 0x00 ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].size() == 2)
+        assert(z['value'][0]['value'].int() == 0x100)
+        assert(z['value'][1]['value'].size() == 2)
+        assert(z['value'][1]['value'].int() == 0x200)
+    t_dsa_sig_two()
 
     def t_invalid_int_zero():
         data = bytearray([ 0x30, 0x05, 0x02, 0x00, 0x02, 0x01, 0x2a ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].int() == 0x0)
+        assert(z['value'][1]['value'].int() == 0x2a)
+    t_invalid_int_zero()
 
     def t_invalid_int():
         data = bytearray([ 0x30, 0x07, 0x02, 0x02, 0x00, 0x7f, 0x02, 0x01, 0x2a ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].int() == 0x7f)
+        assert(z['value'][1]['value'].int() == 0x2a)
+    t_invalid_int()
 
     def t_neg_int():
         data = bytearray([ 0x30, 0x06, 0x02, 0x01, 0xaa, 0x02, 0x01, 0x2a ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'][1])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].int() == 0xaa - 0x100)
+        assert(z['value'][1]['value'].int() == 0x2a)
+    t_neg_int()
 
     def t_trunc_der():
         data = bytearray([ 0x30, 0x08, 0x02, 0x02, 0x00, 0x81, 0x02, 0x02, 0x00 ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a)
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        try: z=z.l
+        except: pass
+        assert(z.size() < z.source.size())
+        assert(isinstance(z['value'], ber.Constructed))
+        assert(len(z['value']) == 1)
+        assert(z['value'][0].size() == 4)
+        assert(isinstance(z['value'][0]['value'], ber.INTEGER))
+    t_trunc_der()
 
     def t_trunc_seq():
         data = bytearray([ 0x30, 0x07, 0x02, 0x02, 0x00, 0x81, 0x02, 0x02, 0x00, 0x82 ])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        try: z=z.l
+        except: pass
+        assert(z.size() < z.source.size())
+        assert(z['length'].int() == z['value'].size())
+        assert(len(z['value']) == 2)
+        assert(z['value'][0].initializedQ())
+        assert(z['value'][0]['value'].size() == 2)
+        assert(z['value'][0]['value'].int() == 0x81)
+        assert(not z['value'][1].initializedQ())
+        assert(z['value'][1]['value'].size() == 1)
+        assert(isinstance(z['value'][1]['value'], ber.INTEGER))
+    t_trunc_seq()
 
     def t_invalid_zero():
         data = bytearray([0x30, 0x02, 0x02, 0x00])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 2)
+        assert(len(z['value']) == 1)
+        assert(all(isinstance(item['value'], ber.INTEGER) for item in z['value']))
+        assert(z['value'][0]['value'].int() == 0)
+    t_invalid_zero()
 
     def t_invalid_template():
         data = bytearray([0x30, 0x03, 0x0c, 0x01, 0x41])
-        a = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
-        a=a.l
-        print(a['value'])
+        z = ber.Packet(source=ptypes.prov.bytes(bytes(data)))
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 3)
+        assert(len(z['value']) == 1)
+        assert(all(isinstance(item['value'], ber.UTF8String) for item in z['value']))
+        assert(z['value'][0]['value'].str() == u'A')
+    t_invalid_template()
 
-    if False:
-        a = '0307040A3B5F291CD0'
-        A = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(a))).l
-        print(A['value'])
-        #open('/home/user/bah', 'wb').write(bytes.fromhex(a))
+    def test_x690_spec_0():
+        data = '0307040A3B5F291CD0'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 7)
+        assert(isinstance(z['value'], ber.BITSTRING))
+        assert(z['value'].serialize() == bytes.fromhex('04 0A 3B 5F 29 1C D0'))
+    test_x690_spec_0()
 
-        b = '23 80 03 03 000A3B'
-        b = '23 80 03 05 045F291CD0 00 00'
-        B = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(b))).l
-        #open('/home/user/bah', 'wb').write(bytes.fromhex(b))
-        print(B['value'])
-        print(B['value']['value'])
-        print(B.source.size())
+    def test_x690_spec_1():
+        data = '23 80 03 05 045F291CD0 00 00'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 0)
+        assert(z['length'].IndefiniteQ())
+        assert(len(z['value']) == 2)
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+        assert(isinstance(z['value'][0]['value'], ber.BITSTRING))
+        assert(z['value'][0]['value'].serialize() == b'\x04\x5f\x29\x1c\xd0')
+    test_x690_spec_1()
+
+    def test_indef_cons():
+        data = '23800403000a3b0405045f291cd00000'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(len(z['value']) == 3)
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+    test_indef_cons()
+
+    def test_indef_cons_cons():
+        data = '23802380030200010302010200000302040f0000'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(len(z['value']) == 3)
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+        z = z['value'][0]
+        assert(z['length'].IndefiniteQ())
+        assert(len(z['value']) == 3)
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+    test_indef_cons_cons()
+
+    def test_cons():
+        data = '230c03020001030200010302040f'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 12)
+        assert(len(z['value']) == 3)
+        assert(all(isinstance(item, ber.Element) for item in z['value']))
+        assert([item['value'].serialize() for item in z['value']] == [b'\0\1', b'\0\1', b'\4\x0f'])
+    test_cons()
+
+    def test_indef_bit_bit():
+        data = '23800303000a3b0305045f291cd00000'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(all(isinstance(item, ber.Element) for item in z['value']))
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+        assert([item['value'].serialize() for item in z['value'][:-1]] == [bytes.fromhex('00 0A 3B'), bytes.fromhex('04 5F 29 1C D0')])
+    test_indef_bit_bit()
+
+    def test_empty_bit_cons():
+        data = '2300'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 0)
+        assert(len(z['value']) == 0)
+        assert(isinstance(z['value'].alloc(length=1)[0], ber.Element))
+    test_empty_bit_cons()
+
+    def test_empty_bit_prim():
+        data = '0300'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 0)
+        assert(len(z['value']) == 0)
+        assert(isinstance(z['value'].alloc(length=1)[0], ber.U8))
+    test_empty_bit_prim()
+
+    def test_cons_octetbit():
+        data = '24800303000a3b0305045f291cd00000'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(z['value'].type == (0, 4))
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+        assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
+        assert([item['value'].serialize() for item in z['value'][:-1]] == [bytes.fromhex('00 0A 3B'), bytes.fromhex('04 5F 29 1C D0')])
+    test_cons_octetbit()
+
+    def test_indef_incomplete():
+        data = '24800403000405045f291cd00000'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data)))
+        try: z.l
+        except: pass
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(z['value'].type == (0, 4))
+        assert(len(z['value']) == 2)
+        assert(all(isinstance(item['value'], ber.OCTETSTRING) for item in z['value']))
+    test_indef_incomplete()
+
+    def test_empty_prim_oct():
+        data = '0400'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 0)
+        assert(z['value'].type == (0, 4))
+        assert(len(z['value']) == 0)
+        assert(isinstance(z['value'].alloc(length=1)[0], ber.U8))
+    test_empty_prim_oct()
+
+    def test_empty_cons_oct():
+        data = '2400'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == 0)
+        assert(z['value'].type == (0, 4))
+        assert(len(z['value']) == 0)
+        assert(isinstance(z['value'].alloc(length=1)[0], ber.Element))
+    test_empty_cons_oct()
+
+    def test_consdef_bit():
+        data = '230e030200010000030200010302040f'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].int() == z['value'].size())
+        assert(len(z['value']) == 4)
+        assert(all(isinstance(item['value'], t) for item, t in zip(z['value'], [ber.BITSTRING, ber.EOC, ber.BITSTRING, ber.BITSTRING])))
+        assert([item['value'].serialize() for item in z['value']] == [b'\0\1', b'', b'\0\1', b'\4\x0F'])
+    test_consdef_bit()
+
+    def test_consindef_bit():
+        data = '2380030200010302000103020f0f0000'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+        assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
+        assert(z['value'][-1]['value'].size() == 0)
+    test_consindef_bit()
+
+    def test_consindef_bit_nonzeroeoc():
+        data = '2380030200010302000103020f0f000120'
+        z = ber.Packet(source=ptypes.prov.bytes(bytes.fromhex(data))).l
+        assert(z.size() == z.source.size())
+        assert(z['length'].IndefiniteQ())
+        assert(isinstance(z['value'][-1]['value'], ber.EOC))
+        assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
+        assert(z['value'][-1]['value'].size() == 1)
+    test_consindef_bit_nonzeroeoc()
