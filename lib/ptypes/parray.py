@@ -208,6 +208,8 @@ class __array_interface__(ptype.container):
 
     def summary(self, **options):
         res = super(__array_interface__, self).summary(**options)
+        if self.initializedQ():
+            return ' '.join([self.__element__(), res])
         return ' '.join([self.__element__(), res])
 
     def __repr__(self):
@@ -434,6 +436,24 @@ class uninitialized(terminated):
             return sum(item.size() for item in self.value if item.value is not None)
         raise error.InitializationError(self, 'uninitialized.size')
 
+    def __properties__(self):
+        res = super(uninitialized, self).__properties__()
+
+        # If we're really not initialized, then there's nothing to do.
+        if self.value is None:
+            return res
+
+        # Otherwise, we're actually initialized but not entirely and we need
+        # to fix up our properties a bit to clean up the rendering of the instance.
+        # fix up our properties a bit to clean up our rendering of the instance.
+        if self.length is not None:
+            if self.length < len(self.value):
+                res['inflated'] = True
+            elif self.length > len(self.value):
+                res['abated'] = True
+            return res
+        return res
+
     def initializedQ(self):
         '''Returns True if all elements are partial or completely initialized.'''
 
@@ -641,6 +661,9 @@ class block(uninitialized):
 
             pass
         return self
+
+    def alloc(self, *args, **attrs):
+        return super(block if args else terminated, self).alloc(*args, **attrs)
 
     def initializedQ(self):
         return super(block, self).initializedQ() and (self.size() >= self.blocksize() if self.length is None else len(self.value) == self.length)
