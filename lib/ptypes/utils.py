@@ -24,18 +24,18 @@ class assign(object):
         'source' : '__source__',
     }
 
-    def __init__(self, *objects, **attrs):
+    def __init__(self, *objects, **attributes):
         self.objects = objects
-        self.attributes = { self.magical.get(k, k) : v for k, v in attrs.items() }
+        self.attributes = { self.magical.get(attribute, attribute) : value for attribute, value in attributes.items() }
 
     def __enter__(self):
-        objects, attrs = self.objects, self.attributes
-        self.states = tuple( dict((k, getattr(o, k)) for k in attrs.keys()) for o in objects)
-        [o.__update__(attrs) for o in objects]
+        objects, attributes = self.objects, self.attributes
+        self.states = tuple({attribute : getattr(item, attribute) for attribute in attributes.keys()} for item in objects)
+        [item.__update__(attributes) for item in objects]
         return objects
 
     def __exit__(self, exc_type, exc_value, traceback):
-        [o.__update__(a) for o, a in zip(self.objects, self.states)]
+        [item.__update__(attributes) for item, attributes in zip(self.objects, self.states)]
         return
 
 ## ptype padding types
