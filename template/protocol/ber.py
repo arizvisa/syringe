@@ -217,13 +217,7 @@ class Constructed(parray.block):
         return
 
     def __summary_key(self):
-        tags = {}
-        for item, description in zip(self.value, itertools.chain(getattr(self, '_fields_', []), itertools.repeat(None))):
-            if description:
-                tag, type, name = description
-                tags[tag] = type, name
-            continue
-
+        tags = {tag : (type, name) for tag, type, name in self._fields_}
         for item in self.value:
             try:
                 if isinstance(item, Element) and item.initializedQ():
