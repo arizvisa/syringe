@@ -534,7 +534,7 @@ class __interface__(object):
             result['unnamed'] = True
 
         # Check if we're initialized
-        if self.initializedQ():
+        if self.value is not None:
             try:
                 size = self.size()
 
@@ -665,22 +665,24 @@ class __interface__(object):
 
     def summary(self, **options):
         """Return a summary of the object. This can be displayed on a single-line."""
-        if not self.initializedQ():
+        if self.value is None:
             return u"???"
 
-        buf = self.serialize()
-        try: sz = self.size()
-        except Exception: sz = self.blocksize()
+        data = self.serialize()
+        try: size = self.size()
+        except Exception: size = self.blocksize()
 
         options.setdefault('offset', self.getoffset())
 
         # if larger than threshold...
         threshold = options.pop('threshold', Config.display.threshold.summary)
         message = options.pop('threshold_message', Config.display.threshold.summary_message)
-        if threshold > 0 and sz > threshold:
+        if threshold > 0 and size > threshold:
             threshold = options.pop('width', threshold) # 'threshold' maps to 'width' for emit_repr
-            return u'"' + utils.emit_repr(buf, threshold, message, **options) + u'"'
-        return u'"' + utils.emit_repr(buf, **options) + u'"'
+            res = utils.emit_repr(data[:size], threshold, message, **options)
+        else:
+            res = utils.emit_repr(data[:size], **options)
+        return u'"{:s}"'.format(res)
 
     @utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
     def getparent(self, *args, **kwds):
@@ -1475,7 +1477,7 @@ class container(base):
         extra arguments are passed to .getparent in order to only return
         differences in elements that are of a particular type.
         """
-        if False in (self.initializedQ(), other.initializedQ()):
+        if False in {self.initializedQ(), other.initializedQ()}:
             Log.fatal("container.compare : {:s} : Instance not initialized ({:s})".format(self.instance(), self.instance() if not self.initializedQ() else other.instance()))
             return
 

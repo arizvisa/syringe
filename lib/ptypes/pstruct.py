@@ -317,26 +317,25 @@ class type(__structure_interface__):
             res = (f(utils.repr_class(gettypename(t)), name) for t, name in self._fields_ or [])
             return '\n'.join(res)
 
-        result, o = [], self.getoffset()
-        fmt = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, o)
-        for fld, value in __izip_longest__(self._fields_ or [], self.value):
-            t, name = fld or (value.__class__, value.name())
-            if value is None:
+        result, offset = [], self.getoffset()
+        fmt = functools.partial(u"[{:x}] {:s} {:s} {:s}".format, offset)
+        for fld, item in __izip_longest__(self._fields_ or [], self.value):
+            t, name = fld or (item.__class__, item.name())
+            if item is None:
                 i = utils.repr_class(gettypename(t))
                 item = ptype.undefined().a
                 result.append(fmt(i, name, item.summary(**options)))
                 continue
-            ofs = self.getoffset(getattr(value, '__name__', None) or name)
-            inst = utils.repr_instance(value.classname(), value.name() or name)
-            val = value.summary(**options) if value.initializedQ() else u'???'
-            prop = ','.join(u"{:s}={!r}".format(k, v) for k, v in value.properties().items())
-            result.append(u"[{:x}] {:s}{:s} {:s}".format(ofs, inst, u" {{{:s}}}".format(prop) if prop else u"", val))
-            o += value.size()
+            offset = self.getoffset(getattr(item, '__name__', None) or name)
+            instance = utils.repr_instance(item.classname(), item.name() or name)
+            value = u'???' if item.value is None else item.summary(**options)
+            properties = ','.join(u"{:s}={!r}".format(k, v) for k, v in item.properties().items())
+            result.append(u"[{:x}] {:s}{:s} {:s}".format(offset, instance, u" {{{:s}}}".format(properties) if properties else u"", value))
+            offset += item.size()
 
         if len(result) > 0:
             return '\n'.join(result)
         return u"[{:x}] Empty[]".format(self.getoffset())
-
     def __setvalue__(self, *values, **fields):
         result = self
 
