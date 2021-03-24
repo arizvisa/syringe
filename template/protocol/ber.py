@@ -1043,11 +1043,11 @@ if __name__ == '__main__':
         assert(z.size() == z.source.size())
         assert(z['length'].int() == 7)
         assert(isinstance(z['value'], ber.BITSTRING))
-        assert(z['value'].serialize() == fromhex('04 0A 3B 5F 29 1C D0'))
+        assert(z['value'].serialize() == fromhex('040a3b5f291cd0'))
     test_x690_spec_0()
 
     def test_x690_spec_1():
-        data = '23 80 03 05 045F291CD0 00 00'
+        data = '23800305045f291cd00000'
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.size() == z.source.size())
         assert(z['length'].int() == 0)
@@ -1097,7 +1097,7 @@ if __name__ == '__main__':
         assert(z['length'].IndefiniteQ())
         assert(all(isinstance(item, ber.Element) for item in z['value']))
         assert(isinstance(z['value'][-1]['value'], ber.EOC))
-        assert([item['value'].serialize() for item in z['value'][:-1]] == [fromhex('00 0A 3B'), fromhex('04 5F 29 1C D0')])
+        assert([item['value'].serialize() for item in z['value'][:-1]] == [fromhex('000a3b'), fromhex('045f291cd0')])
     test_indef_bit_bit()
 
     def test_empty_bit_cons():
@@ -1126,7 +1126,7 @@ if __name__ == '__main__':
         assert(z['value'].type == (0, 4))
         assert(isinstance(z['value'][-1]['value'], ber.EOC))
         assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
-        assert([item['value'].serialize() for item in z['value'][:-1]] == [fromhex('00 0A 3B'), fromhex('04 5F 29 1C D0')])
+        assert([item['value'].serialize() for item in z['value'][:-1]] == [fromhex('000a3b'), fromhex('045f291cd0')])
     test_cons_octetbit()
 
     def test_indef_incomplete():
