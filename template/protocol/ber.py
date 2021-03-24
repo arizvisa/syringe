@@ -785,7 +785,7 @@ class REAL(ptype.block):
     tag = 0x09
 
 @Universal.define
-class ENUMERATED(ptype.block):
+class ENUMERATED(pint.enum):
     tag = 0x0a
 
 @Universal.define
