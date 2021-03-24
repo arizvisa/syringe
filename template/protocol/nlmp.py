@@ -356,7 +356,7 @@ class CHALLENGE_MESSAGE(pstruct.type):
 
     def enumerate(self):
         '''Yield the name and field that compose the message type payload.'''
-        for fld in ['TargetNameFields','TargetInfoFields']:
+        for fld in ['TargetNameFields', 'TargetInfoFields']:
             yield fld, self[fld]
         return
 
@@ -501,59 +501,7 @@ if __name__ == '__main__':
     from ptypes import *
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
-    if True:
-        data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
-        z = credssp.Packet(source=ptypes.prov.string(fromhex(data)))
-        z=z.l
-
-        #print(z['value'][0]['value']['Version']['value'])
-        nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
-
-        #print(a['messagefields'])
-        assert(z.size() == z.source.size())
-        assert(isinstance(nlmsg, nlmp.Message))
-
-    def test_message_negotiation_flags():
-        data = '3037a003020106a130302e302ca02a04284e544c4d5353500001000000b78208e2000000000000000000000000000000000a00cb490000000f'
-        z = credssp.Packet(source=ptypes.prov.string(fromhex(data))).l
-        nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
-        print(nlmsg['messagefields'])
-
-        negotiate = nlmp.NEGOTIATE_MESSAGE().alloc(NegotiateFlags=dict(
-            NEGOTIATE_56=1, NEGOTIATE_KEY_EXCH=1, NEGOTIATE_128=1, NEGOTIATE_VERSION=1,
-            NEGOTIATE_EXTENDED_SESSIONSECURITY=1, NEGOTIATE_ALWAYS_SIGN=1, NEGOTIATE_NTLM=1,
-            NEGOTIATE_LM_KEY=1, NEGOTIATE_SEAL=1, NEGOTIATE_SIGN=1, REQUEST_TARGET=1,
-            NEGOTIATE_OEM=1, NEGOTIATE_UNICODE=1,
-        )).set(Version=dict(ProductMajorVersion=10, ProductBuild=18891, NTLMRevisionCurrent='W2K3'))
-
-        msg = nlmp.Message().alloc(MessageFields=negotiate)
-        assert(msg.serialize() == nlmsg.serialize())
-
-    if True:
-        tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print(z['value'][0]['value'].hexdump())
-        print(tsversion.hexdump())
-
-        nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
-        negotoken = credssp.NegoToken().alloc(NegoToken=nlmsg)
-        negodata_seq_seq = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=negotoken)])
-        negodata_seq = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])
-        negodata = credssp.NegoData().alloc([credssp.Packet().alloc(Value=negodata_seq)])
-
-        tsrequest = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=item) for item in [tsversion, negodata]])
-        cssp = credssp.Packet().alloc(Value=tsrequest)
-
-        assert cssp.serialize() == z.serialize()
-
-    if True:
-        assert False
-        data = '30820102a003020106a181fa3081f73081f4a081f10481ee4e544c4d53535000020000001e001e003800000035828ae2a326c589b91aacc7000000000000000098009800560000000a0063450000000f4400450053004b0054004f0050002d00550041004700430056004b00430002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50100000000'
-        ptypes.setsource(ptypes.prov.string(fromhex(data)))
-        z = credssp.Packet()
-        z=z.l
-
-        a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
-
+    def make_challenge():
         challenge = nlmp.CHALLENGE_MESSAGE().alloc(NegotiateFlags=dict(
             NEGOTIATE_56=1, NEGOTIATE_KEY_EXCH=1, NEGOTIATE_128=1, NEGOTIATE_VERSION=1,
             NEGOTIATE_TARGET_INFO=1, NEGOTIATE_EXTENDED_SESSIONSECURITY=1, TARGET_TYPE_SERVER=1,
@@ -564,20 +512,34 @@ if __name__ == '__main__':
             ServerChallenge=0xc7ac1ab989c526a3,
         )
 
-        res = pstr.wstring().set('DESKTOP-UAGCVKC', retain=False)
+        res = pstr.wstring().set(u'DESKTOP-UAGCVKC', retain=False)
         targetname = nlmp.PayloadString().alloc(string=res)
         challenge['TargetNameFields'].set(Length=targetname.size(), MaximumLength=targetname.size())
 
         res = []
-        res.append(nlmp.AvNbDomainName().set('DESKTOP-UAGCVKC', retain=False))
-        res.append(nlmp.AvNbComputerName().set('DESKTOP-UAGCVKC', retain=False))
-        res.append(nlmp.AvDnsDomainName().set('DESKTOP-UAGCVKC', retain=False))
-        res.append(nlmp.AvDnsComputerName().set('DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvNbDomainName().set(u'DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvNbComputerName().set(u'DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvDnsDomainName().set(u'DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvDnsComputerName().set(u'DESKTOP-UAGCVKC', retain=False))
         res.append(nlmp.AvTimestamp().a.set(dwLowDateTime=1329434256, dwHighDateTime=30757815))
         res.append(nlmp.AvEOL().a)
         pairs = nlmp.AV_PAIRs().alloc([nlmp.AV_PAIR().alloc(Value=item) for item in res])
         targetinfo = nlmp.AV_PAIRs().alloc(pairs)
         challenge['TargetInfoFields'].set(Length=targetinfo.size(), MaximumLength=targetinfo.size())
+
+        return challenge, targetname, targetinfo
+
+    def test_encode_nlmp():
+        data = '30820102a003020106a181fa3081f73081f4a081f10481ee4e544c4d53535000020000001e001e003800000035828ae2a326c589b91aacc7000000000000000098009800560000000a0063450000000f4400450053004b0054004f0050002d00550041004700430056004b00430002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50100000000'
+        ptypes.setsource(ptypes.prov.string(fromhex(data)))
+        z = credssp.Packet()
+        z=z.l
+        assert(z.size() == z.source.size())
+        assert(z.serialize() == z.source.value)
+
+        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value']
+
+        challenge, targetname, targetinfo = make_challenge()
 
         msg = nlmp.Message().alloc(MessageFields=challenge)
         targetname_offset = msg['MessagePayload'].append(targetname)
@@ -585,68 +547,62 @@ if __name__ == '__main__':
         msg['MessageFields']['TargetNameFields']['BufferOffset'].reference(targetname)
         msg['MessageFields']['TargetInfoFields']['BufferOffset'].reference(targetinfo)
 
-        print(a.serialize() == msg.serialize())
+        assert(nlmsg.serialize() == msg.serialize())
+    test_encode_nlmp()
 
-    if True:
-        print('-'*72)
+    def test_decode_nlmp_messagefields_0():
         data = '30820102a003020106a181fa3081f73081f4a081f10481ee4e544c4d53535000020000001e001e003800000035828ae2a326c589b91aacc7000000000000000098009800560000000a0063450000000f4400450053004b0054004f0050002d00550041004700430056004b00430002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50100000000'
         ptypes.setsource(ptypes.prov.string(fromhex(data)))
         z = credssp.Packet()
         z=z.l
 
-        print(z['value'][0]['value']['Version']['value'])
-        a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
+        assert(z.size() == z.source.size())
+        assert(z['value'][0]['value']['Version'].serialize() == b'\2\1\6')
 
-        print(a['messagefields'])
-        if z.size() != z.source.size():
-            raise AssertionError
+        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value']
 
-        for item in a['messagefields'].Fields():
-            if not item['bufferoffset'].int(): continue
-            print(item.name(), item['BufferOffset'].d.li.summary())
+        expected = {
+            'TargetNameFields': '4400450053004b0054004f0050002d00550041004700430056004b004300',
+            'TargetInfoFields': '02001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50100000000',
+        }
 
-    if True:
-        tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print(z['value'][0]['value'].hexdump())
-        print(tsversion.hexdump())
+        for name, item in nlmsg['messagefields'].enumerate():
+            value = fromhex(expected[name])
+            assert(item['BufferOffset'].d.li.serialize() == fromhex(expected[name]))
+        assert(z.serialize() == z.source.value)
+    test_decode_nlmp_messagefields_0()
 
-        nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
-        negotoken = credssp.NegoToken().alloc(NegoToken=nlmsg)
-        negodata_seq_seq = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=negotoken)])
-        negodata_seq = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])
-        negodata = credssp.NegoData().alloc([credssp.Packet().alloc(Value=negodata_seq)])
+    def test_decode_nlmp_messagefields_1():
+        data = '30820287a003020106a1820226308202223082021ea082021a048202164e544c4d535350000300000018001800a40000004a014a01bc0000001e001e005800000010001000760000001e001e00860000001000100006020000358288e20a00cb490000000f1e8f34474eb81d34c93de8ac22879f874400450053004b0054004f0050002d00370031004d003600440045004d0041004e0046004c0041004e004e0045004400450053004b0054004f0050002d00370031004d003600440045004d000000000000000000000000000000000000000000000000009ebe92602c8cf4986a1e18c570600cab0101000000000000908e3d4fb753d501669921e98c449f240000000002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50106000400020000000800300030000000000000000100000000200000f709fbc26afc6b10f259990a0d52b750bdf52ac081e50e05bd8e5b7c2cc4773e0a0010000000000000000000000000000000000009002a005400450052004d005300520056002f00310030002e003100360031002e003100370037002e0038003300000000000000000000000000c45115d42f73fac9522c4f5efeaccaf3a3320430010000003fc0504ff20375d000000000928ea327764e838d7a00dc499898e47f3e18b4e59e38feee09e0f516ea5bd00ca5220420e50faca0b401a6e585727dbc6436231e79d000d113d21809e8ba7e6f7b26543c'
+        ptypes.setsource(ptypes.prov.string(fromhex(data)))
+        z = credssp.Packet()
+        z=z.l
+        assert(z.size() == z.source.size())
+        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value']
 
-        tsrequest = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=item) for item in [tsversion, negodata]])
-        cssp = credssp.Packet().alloc(Value=tsrequest)
-        assert cssp.serialize() == z.serialize()
+        expected = {
+            'LmChallengeResponseFields': '000000000000000000000000000000000000000000000000',
+            'NtChallengeResponseFields': '9ebe92602c8cf4986a1e18c570600cab0101000000000000908e3d4fb753d501669921e98c449f240000000002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50106000400020000000800300030000000000000000100000000200000f709fbc26afc6b10f259990a0d52b750bdf52ac081e50e05bd8e5b7c2cc4773e0a0010000000000000000000000000000000000009002a005400450052004d005300520056002f00310030002e003100360031002e003100370037002e003800330000000000',
+            'DomainNameFields': '4400450053004b0054004f0050002d00370031004d003600440045004d00',
+            'UserNameFields': '41004e0046004c0041004e004e004500',
+            'WorkstationFields': '4400450053004b0054004f0050002d00370031004d003600440045004d00',
+            'EncryptedRandomSessionKeyFields': 'c45115d42f73fac9522c4f5efeaccaf3',
+        }
 
-    if True:
-        print('-'*72)
+        for name, item in nlmsg['messagefields'].enumerate():
+            value = fromhex(expected[name])
+            assert(item['BufferOffset'].d.li.serialize() == fromhex(expected[name]))
+        assert(z.serialize() == z.source.value)
+    test_decode_nlmp_messagefields_1()
+
+    def test_decode_nlmp_messagefields_2():
         data = '30820287a003020106a1820226308202223082021ea082021a048202164e544c4d535350000300000018001800a40000004a014a01bc0000001e001e005800000010001000760000001e001e00860000001000100006020000358288e20a00cb490000000f1e8f34474eb81d34c93de8ac22879f874400450053004b0054004f0050002d00370031004d003600440045004d0041004e0046004c0041004e004e0045004400450053004b0054004f0050002d00370031004d003600440045004d000000000000000000000000000000000000000000000000009ebe92602c8cf4986a1e18c570600cab0101000000000000908e3d4fb753d501669921e98c449f240000000002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50106000400020000000800300030000000000000000100000000200000f709fbc26afc6b10f259990a0d52b750bdf52ac081e50e05bd8e5b7c2cc4773e0a0010000000000000000000000000000000000009002a005400450052004d005300520056002f00310030002e003100360031002e003100370037002e0038003300000000000000000000000000c45115d42f73fac9522c4f5efeaccaf3a3320430010000003fc0504ff20375d000000000928ea327764e838d7a00dc499898e47f3e18b4e59e38feee09e0f516ea5bd00ca5220420e50faca0b401a6e585727dbc6436231e79d000d113d21809e8ba7e6f7b26543c'
         ptypes.setsource(ptypes.prov.string(fromhex(data)))
         z = credssp.Packet()
         z=z.l
 
-        print(z['value'][0]['value']['Version']['value'])
-        a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
-
-        print(a['messagefields'])
-        if z.size() != z.source.size():
-            raise AssertionError
-
-        for item in a['messagefields'].Fields():
-            if not item['bufferoffset'].int(): continue
-            print(item.name(), item['BufferOffset'].d.li.summary())
-
-    if True:
-        print('-'*72)
-        data = '30820287a003020106a1820226308202223082021ea082021a048202164e544c4d535350000300000018001800a40000004a014a01bc0000001e001e005800000010001000760000001e001e00860000001000100006020000358288e20a00cb490000000f1e8f34474eb81d34c93de8ac22879f874400450053004b0054004f0050002d00370031004d003600440045004d0041004e0046004c0041004e004e0045004400450053004b0054004f0050002d00370031004d003600440045004d000000000000000000000000000000000000000000000000009ebe92602c8cf4986a1e18c570600cab0101000000000000908e3d4fb753d501669921e98c449f240000000002001e004400450053004b0054004f0050002d00550041004700430056004b00430001001e004400450053004b0054004f0050002d00550041004700430056004b00430004001e004400450053004b0054004f0050002d00550041004700430056004b00430003001e004400450053004b0054004f0050002d00550041004700430056004b00430007000800908e3d4fb753d50106000400020000000800300030000000000000000100000000200000f709fbc26afc6b10f259990a0d52b750bdf52ac081e50e05bd8e5b7c2cc4773e0a0010000000000000000000000000000000000009002a005400450052004d005300520056002f00310030002e003100360031002e003100370037002e0038003300000000000000000000000000c45115d42f73fac9522c4f5efeaccaf3a3320430010000003fc0504ff20375d000000000928ea327764e838d7a00dc499898e47f3e18b4e59e38feee09e0f516ea5bd00ca5220420e50faca0b401a6e585727dbc6436231e79d000d113d21809e8ba7e6f7b26543c'
-        ptypes.setsource(ptypes.prov.string(fromhex(data)))
-        z = credssp.Packet()
-        z=z.l
-
-        print(z['value'][0]['value']['Version']['value'])
-        a = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['negotoken']['value']
+        assert(z['value'][0]['value']['Version'].serialize() == b'\2\1\6')
+        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value']
 
         authenticate = nlmp.AUTHENTICATE_MESSAGE().alloc(NegotiateFlags=dict(
             NEGOTIATE_56=1, NEGOTIATE_KEY_EXCH=1, NEGOTIATE_128=1,
@@ -662,15 +618,15 @@ if __name__ == '__main__':
         authenticate['LmChallengeResponseFields'].set(Length=lm.size(), MaximumLength=lm.size())
 
         res = []
-        res.append(nlmp.AvNbDomainName().set('DESKTOP-UAGCVKC', retain=False))
-        res.append(nlmp.AvNbComputerName().set('DESKTOP-UAGCVKC', retain=False))
-        res.append(nlmp.AvDnsDomainName().set('DESKTOP-UAGCVKC', retain=False))
-        res.append(nlmp.AvDnsComputerName().set('DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvNbDomainName().set(u'DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvNbComputerName().set(u'DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvDnsDomainName().set(u'DESKTOP-UAGCVKC', retain=False))
+        res.append(nlmp.AvDnsComputerName().set(u'DESKTOP-UAGCVKC', retain=False))
         res.append(nlmp.AvTimestamp().a.set(dwLowDateTime=1329434256, dwHighDateTime=30757815))
         res.append(nlmp.AvFlags().a.set(Flags=dict(HasMessageIntegrity=1)))
         res.append(nlmp.AvSingleHost().alloc(CustomData=0x0000200000000001 , MachineID=0x3e77c42c7c5b8ebd050ee581c02af5bd50b7520d0a9959f2106bfc6ac2fb09f7))
         res.append(nlmp.AvChannelBindings().a)
-        res.append(nlmp.AvTargetName().set('TERMSRV/10.161.177.83', retain=False))
+        res.append(nlmp.AvTargetName().set(u'TERMSRV/10.161.177.83', retain=False))
         res.append(nlmp.AvEOL().a)
         pairs = nlmp.AV_PAIRs().alloc([nlmp.AV_PAIR().alloc(Value=item) for item in res])
 
@@ -680,21 +636,23 @@ if __name__ == '__main__':
         ))
         authenticate['NtChallengeResponseFields'].set(Length=nt.size(), MaximumLength=nt.size())
 
-        print(a['messagefields']['domainnamefields']['bufferoffset'].d.l)
-        domainname = nlmp.PayloadString().alloc(string=pstr.wstring().set('DESKTOP-71M6DEM', retain=False))
+        #print(nlmsg['messagefields']['domainnamefields']['bufferoffset'].d.l)
+        domainname = nlmp.PayloadString().alloc(string=pstr.wstring().set(u'DESKTOP-71M6DEM', retain=False))
         authenticate['DomainNameFields'].set(Length=domainname.size(), MaximumLength=domainname.size())
 
-        print(a['messagefields']['usernamefields']['bufferoffset'].d.l)
-        username = nlmp.PayloadString().alloc(string=pstr.wstring().set('ANFLANNE', retain=False))
+        #print(nlmsg['messagefields']['usernamefields']['bufferoffset'].d.l)
+        username = nlmp.PayloadString().alloc(string=pstr.wstring().set(u'ANFLANNE', retain=False))
         authenticate['UserNameFields'].set(Length=username.size(), MaximumLength=username.size())
 
-        print(a['messagefields']['workstationfields']['bufferoffset'].d.l)
-        workstation = nlmp.PayloadString().alloc(string=pstr.wstring().set('DESKTOP-71M6DEM', retain=False))
-        authenticate['WorkstationNameFields'].set(Length=workstation.size(), MaximumLength=workstation.size())
+        #print(nlmsg['messagefields']['workstationfields']['bufferoffset'].d.l)
+        workstation = nlmp.PayloadString().alloc(string=pstr.wstring().set(u'DESKTOP-71M6DEM', retain=False))
+        authenticate['WorkstationFields'].set(Length=workstation.size(), MaximumLength=workstation.size())
 
-        print(a['messagefields']['encryptedrandomsessionkeyfields']['bufferoffset'].d.l)
+        #print(nlmsg['messagefields']['encryptedrandomsessionkeyfields']['bufferoffset'].d.l)
         sessionkey = nlmp.SessionKey().alloc(session_key=pint.uint_t(length=0x10).set(0xf3caacfe5e4f2c52c9fa732fd41551c4))
         authenticate['EncryptedRandomSessionKeyFields'].set(Length=sessionkey.size(), MaximumLength=sessionkey.size())
+
+        challenge, targetname, targetinfo = make_challenge()
 
         msg = nlmp.Message().alloc(MessageFields=challenge)
         lm_offset = msg['MessagePayload'].append(lm)
@@ -704,83 +662,4 @@ if __name__ == '__main__':
         workstation_offset = msg['MessagePayload'].append(workstation)
         sessionkeyoffset = msg['MessagePayload'].append(sessionkey)
         msg['MessageFields']['TargetNameFields']['BufferOffset'].reference(targetname)
-
-    if True:
-        tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print(z['value'][0]['value'].hexdump())
-        print(tsversion.hexdump())
-
-        nlmsg = z['value'][1]['value'][0]['value'][0]['value'][0]['value']['NegoToken']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
-        negotoken = credssp.NegoToken().alloc(NegoToken=nlmsg)
-        negodata_seq_seq = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=negotoken)])
-        negodata_seq = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])
-        negodata = credssp.NegoData().alloc([credssp.Packet().alloc(Value=negodata_seq)])
-
-        signature = z['value'][2]['value']['pubKeyAuth']['value'].copy()
-        pubkeyauth = credssp.PubKeyAuth().alloc(pubKeyAuth=signature)
-
-        clientnonce = z['value'][3]['value'].copy()
-
-        tsrequest = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=item) for item in [tsversion, negodata, pubkeyauth, clientnonce]])
-        cssp = credssp.Packet().alloc(Value=tsrequest)
-        assert cssp.serialize() == z.serialize()
-
-    if True:
-        print('-'*72)
-        data = '3039a003020106a3320430010000006c21ea64533bfeb3000000005e004ea3b9c8d210230c8d45b147cfe50f86f954456022171371f877e6bfc260'
-        ptypes.setsource(ptypes.prov.string(fromhex(data)))
-        z = credssp.Packet()
-        z=z.l
-
-        print(z['value'][0]['value']['Version']['value'])
-        print(z['value'][1]['value']['pubKeyAuth']['value'])
-
-        if z.size() != z.source.size():
-            raise AssertionError
-
-    if True:
-        tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print(z['value'][0]['value'].hexdump())
-        print(tsversion.hexdump())
-
-        signature = z['value'][1]['value']['pubKeyAuth']['value'].copy()
-        pubkeyauth = credssp.PubKeyAuth().alloc(pubKeyAuth=signature)
-
-        tsrequest = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=item) for item in [tsversion, pubkeyauth]])
-        cssp = credssp.Packet().alloc(Value=tsrequest)
-        assert cssp.serialize() == z.serialize()
-
-    if True:
-        print('-'*72)
-        data = '305ea003020106a2570455010000003ba4b813060c896a010000006496f0b88995b70e63ca52bc1fa443fb09d843561a7f90ed37acf851188ebf043add1941e0becf9666628169fb057a573edaee6776c76912a40d09b296ac9595bc92212eac'
-        ptypes.setsource(ptypes.prov.string(fromhex(data)))
-        z = credssp.Packet()
-        z=z.l
-
-        print(z['value'][0]['value']['Version']['value'])
-        print(z['value'][1]['value']['Credentials']['value'])
-
-    if True:
-        tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
-        print(z['value'][0]['value'].hexdump())
-        print(tsversion.hexdump())
-
-        credentials = z['value'][1]['value']['Credentials']['value'].copy()
-        authinfo = credssp.AuthInfo().alloc(Credentials=credentials)
-
-        tsrequest = ber.SEQUENCE().alloc([credssp.Packet().alloc(Value=item) for item in [tsversion, authinfo]])
-        cssp = credssp.Packet().alloc(Value=tsrequest)
-        assert cssp.serialize() == z.serialize()
-
-    if True:
-        print('-'*72)
-        data = '00000000'
-        ptypes.setsource(ptypes.prov.string(fromhex(data)))
-        z = credssp.Packet()
-        z=z.l
-
-        print(z['value'].classname())
-
-    if True:
-        cssp = credssp.Packet().alloc(Value=ber.EOC)
-        assert cssp.serialize() == z.serialize()
+    test_decode_nlmp_messagefields_2()
