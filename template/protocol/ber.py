@@ -123,7 +123,7 @@ class Constructed(parray.block):
     @classmethod
     def typename(cls):
         if hasattr(cls, 'type'):
-            klass, tag = cls.type
+            klass, tag = (Context.Class, cls.type) if isinstance(cls.type, six.integer_types) else cls.type
             return "{:s}<{:d},{:d}>".format(cls.__name__, klass, tag)
         return super(Constructed, cls).typename()
 
@@ -166,7 +166,7 @@ class Constructed(parray.block):
 
     def classname(self):
         if hasattr(self, 'type'):
-            klass, tag = self.type
+            klass, tag = (Context.Class, self.type) if isinstance(self.type, six.integer_types) else self.type
             protocol = self.parent.Protocol if self.parent else Protocol
 
             # Use the protocol to look up the Class and Tag for the type
@@ -190,17 +190,21 @@ class Constructed(parray.block):
         # them into a lookup table.
         res = {}
         for item, name in self._fields_:
-            klass, tag = item.type
-            res[klass, tag] = (name, item)
+            klass, tag = (Context.Class, item.type) if isinstance(item.type, six.integer_types) else item.type
+            res[getattr(klass, 'Class', klass), tag] = (name, item)
         return res
 
     def __getitem__(self, index):
         if not isinstance(index, six.string_types):
             return super(Constructed, self).__getitem__(index)
-        klass, res = Context.Class, self.__get_lookup_table__()
 
         # Start by building the lookup table keyed by the field name.
+        cls, res = self.__class__, self.__get_lookup_table__()
         table = {name : (klass, tag) for (klass, tag), (name, _) in res.items()}
+        if len(res) != len(table):
+            logging.warning("{:s}.getitem({!s}) : Duplicate name found in fields for instance {:s}".format('.'.join([cls.__module__, cls.__name__]), index, self.instance()))
+
+        # Now we can search the lookup table for the index that was provided.
         try:
             klasstag = next(item for name, item in table.items() if name.lower() == index.lower())
             index = next(idx for idx, item in enumerate(self.value) if (item.Class(), item.Tag()) == klasstag)
@@ -537,7 +541,7 @@ class Element(pstruct.type):
         # one from the Universal/Primitive class using whatever its Tag is in .type
         value = fields.get('Value', None)
         if hasattr(value, 'type'):
-            klass, tag = value.type
+            klass, tag = (Context.Class, value.type) if isinstance(value.type, six.integer_types) else value.type
             constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Constructed)) or isinstance(value, Constructed) else 0
             fields.setdefault('Type', Type().alloc(Class=klass, Constructed=constructedQ).set(Tag=tag))
 
