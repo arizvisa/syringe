@@ -44,7 +44,7 @@ class Message(pstruct.type):
     def __Payload(self):
         res = self['MessageFields'].li
         fields = res.Fields() if hasattr(res, 'Fields') else []
-        payload_offset = sum(self[fld].li.size() for fld in ['Signature','MessageType','MessageFields'])
+        payload_offset = sum(self[fld].li.size() for fld in ['Signature', 'MessageType', 'MessageFields'])
         fields = { field for field in fields if payload_offset <= field['BufferOffset'].int() }
         if fields:
             largest_offset = max(field['BufferOffset'].int() + field['MaximumLength'].int() for field in fields)
@@ -134,7 +134,7 @@ class PayloadString(pstruct.type):
         except ptypes.error.ItemNotFoundError:
             return ptype.undefined
 
-        length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
+        length, cb = (fields[fld].li.int() for fld in ['Length', 'MaximumLength'])
         return dyn.block(max(0, cb - length))
 
     _fields_ = [
@@ -186,7 +186,7 @@ class NEGOTIATE_MESSAGE(pstruct.type):
 
     def enumerate(self):
         '''Yield the name and field that compose the message type payload.'''
-        for fld in ['DomainNameFields','WorkstationFields']:
+        for fld in ['DomainNameFields', 'WorkstationFields']:
             yield fld, self[fld]
         return
 
@@ -247,7 +247,6 @@ class AvDnsTreeName(pstr.wstring):
 @MsvValue.define
 class AvFlags(pstruct.type):
     type = 0x0006
-
     @pbinary.littleendian
     class _Flags(pbinary.flags):
         _fields_ = [
@@ -259,6 +258,9 @@ class AvFlags(pstruct.type):
     _fields_ = [
         (_Flags, 'Flags'),
     ]
+    def summary(self):
+        res = self['Flags']
+        return "Flags={:s}".format(res.summary())
 @MsvValue.define
 class AvTimestamp(ndk.FILETIME):
     type = 0x0007
@@ -273,7 +275,15 @@ class AvSingleHost(pstruct.type):
     ]
     def alloc(self, **fields):
         res = super(AvSingleHost, self).alloc(**fields)
-        return res if 'Size' in fields else res.set(Size=sum(res[fld].size() for fld in ['Size','Z4','CustomData','MachineID']))
+        return res if 'Size' in fields else res.set(Size=sum(res[fld].size() for fld in ['Size', 'Z4', 'CustomData', 'MachineID']))
+    def summary(self):
+        res, required = [], {'Size', 'MachineID'}
+        for key in self:
+            value = self[key]
+            if value.int() or key in required:
+                res.append("{:s}={:#x}".format(key, value.int()))
+            continue
+        return ' '.join(res)
 @MsvValue.define
 class AvTargetName(pstr.wstring):
     type = 0x0009
@@ -284,7 +294,7 @@ class AvChannelBindings(pint.uint_t):
 
 class AV_PAIR(pstruct.type):
     def __Value(self):
-        res, cb = (self[fld].li for fld in ['AvId','AvLen'])
+        res, cb = (self[fld].li for fld in ['AvId', 'AvLen'])
         try:
             t = MsvValue.lookup(res.int())
         except KeyError:
@@ -322,13 +332,33 @@ class AV_PAIRs(parray.terminated):
         iterable = (item.summary() for item in self)
         return "[{:s}]".format(', '.join(iterable))
 
+    def has(self, id):
+        for item in self:
+            if item['AvId'][id]:
+                return True
+            continue
+        return False
+
+    def item(self, id):
+        for item in self:
+            if item['AvId'][id]:
+                return item['value']
+            continue
+        return
+
+    def enumerate(self):
+        for item in self:
+            res = item['AvId']
+            yield res.int(), item['value']
+        return
+
 class PayloadPairs(pstruct.type):
     def __padding(self):
         try:
             fields = self.getparent(MessageDependentFields)
         except ptypes.error.ItemNotFoundError:
             return ptypes.undefined
-        length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
+        length, cb = (fields[fld].li.int() for fld in ['Length', 'MaximumLength'])
         return dyn.block(max(0, cb - length))
 
     _fields_ = [
@@ -449,7 +479,7 @@ class SessionKey(pstruct.type):
             fields = self.getparent(MessageDependentFields)
         except ptypes.error.ItemNotFoundError:
             return ptype.undefined
-        length, cb = (fields[fld].li.int() for fld in ('Length','MaximumLength'))
+        length, cb = (fields[fld].li.int() for fld in ['Length', 'MaximumLength'])
         return dyn.block(max(0, cb - length))
 
     _fields_ = [
@@ -477,7 +507,7 @@ class AUTHENTICATE_MESSAGE(pstruct.type):
 
     def enumerate(self):
         '''Yield the name and field that compose the message type payload.'''
-        for fld in ['LmChallengeResponseFields','NtChallengeResponseFields','DomainNameFields','UserNameFields','WorkstationFields','EncryptedRandomSessionKeyFields']:
+        for fld in ['LmChallengeResponseFields', 'NtChallengeResponseFields', 'DomainNameFields', 'UserNameFields', 'WorkstationFields', 'EncryptedRandomSessionKeyFields']:
             yield fld, self[fld]
         return
 
