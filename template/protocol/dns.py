@@ -133,6 +133,8 @@ class TYPE(pint.enum, pint.uint16_t):
         ('AAAA', 28),
         ('LOC', 29),
         ('NXT', 30),
+        ('NB', 31),
+        ('NBSTAT', 32),
         ('SRV', 33),
         ('NAPTR', 35),
         ('KX', 36),
@@ -465,6 +467,54 @@ class NXT(pstruct.type):
         (ptype.undefined, 'type-bitmap'),
     ]
 
+class NB_NODETYPE(pbinary.enum):
+    length, _values_ = 2, [
+        ('B node', 0b00),
+        ('P node', 0b01),
+        ('M node', 0b10),
+        (  'NBDD', 0b11),
+    ]
+
+class NB_FLAGS(pbinary.flags):
+    _fields_ = [
+        (13, 'RESERVED'),
+        (NB_NODETYPE, 'ONT'),
+        (1, 'G'),
+    ]
+
+@RDATA.define
+class NB(pstruct.type):
+    type = TYPE.byname('NB'), CLASS.byname('IN')
+    _fields_ = [
+        (NB_FLAGS, 'NB_FLAGS'),
+        (osi.network.inet4.in_addr, 'NB_ADDRESS'),
+    ]
+
+class NAME_FLAGS(pbinary.flags):
+    _fields_ = [
+        (9, 'RESERVED'),
+        (1, 'PRM'),
+        (1, 'ACT'),
+        (1, 'CNF'),
+        (1, 'DRG'),
+        (NB_NODETYPE, 'ONT'),
+        (1, 'G'),
+    ]
+
+class NODE_NAME(pstruct.type):
+    _fields_ = [
+        (Label, 'NAME'),
+        (NAME_FLAGS, 'NAME_FLAGS'),
+    ]
+
+@RDATA.define
+class NBSTAT(pstruct.type):
+    type = TYPE.byname('NBSTAT'), CLASS.byname('IN')
+    _fields_ = [
+        (u8, 'NUM_NAMES'),
+        (lambda self: dyn.array(NODE_NAME, self['NUM_NAMES'].li.int()), 'NAMES'),
+    ]
+
 @RDATA.define
 class SRV(pstruct.type):
     type = TYPE.byname('SRV'), CLASS.byname('IN')
@@ -767,9 +817,6 @@ class Stream(parray.infinite):
     _object_ = MessageTCP
 
 if __name__ == '__main__':
-    import importlib
-    dns = importlib.reload(dns)
-
     import ptypes, protocol.dns as dns
     res = 'fce2 0100 0001 0000 0000 0000 0670 6861 7474 7905 6c6f 6361 6c00 0006 0001               '
     res = 'fce2 8183 0001 0000 0001 0000 0670 6861 7474 7905 6c6f 6361 6c00 0006 0001 0000 0600 0100 000e 1000 4001 610c 726f 6f74 2d73 6572 7665 7273 036e 6574 0005 6e73 746c 640c 7665 7269 7369 676e 2d67 7273 0363 6f6d 0078 67b1 a200 0007 0800 0003 8400 093a 8000 0151 80                           '
