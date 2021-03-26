@@ -294,7 +294,6 @@ class Constructed(parray.block):
         # that we can preserve the order of the fields to append.
         if hasattr(self, '_fields_') and fields:
             nametable = [(name, (klasstag, t)) for klasstag, (name, t) in table.items()]
-            #print('fields left', [item for item, _ in nametable])
 
             # Iterate through all of the names in the nametable looking
             # for fields that the caller has given us.
@@ -582,8 +581,6 @@ class ProtocolClass(ptype.definition):
 @Protocol.define
 class Universal(ProtocolClass):
     Class, cache = 0x00, {}
-    # FIXME: These types need to distinguish between constructed and non-constructed
-    #        types instead of just generalizing them.
     class UniversalUnknown(Protocol.UnknownPrimitive):
         pass
     unknown = UniversalUnknown
@@ -592,8 +589,6 @@ Protocol.Universal = Universal
 @Protocol.define
 class Application(ProtocolClass):
     Class, cache = 0x01, {}
-    # FIXME: This needs to be unique to the instance of all ber.Element types
-    #        used by the application.
     class ApplicationUnknown(Protocol.UnknownPrimitive):
         pass
     unknown = ApplicationUnknown
@@ -602,7 +597,6 @@ Protocol.Application = Application
 @Protocol.define
 class Context(ProtocolClass):
     Class, cache = 0x02, {}
-    # FIXME: This needs to be unique to a specific ber.Element type
     class ContextUnknown(Protocol.UnknownPrimitive):
         pass
     unknown = ContextUnknown
@@ -666,28 +660,51 @@ class OBJECT_IDENTIFIER(ptype.type):
             return self.set(res[string])
 
         # Convert our input into a list of their integral components.
-        iterable = (int(item, 10) for item in string.split('.')) if isinstance(string, six.string_types) else iter(string)
+        if isinstance(string, six.string_types):
+            iterable = (int(item, 10) if item else 0 for item in string.split('.'))
+            return self.set(iterable)
+        iterable = iter(string)
 
-        # Consume the oid prefix and combine them into the first byte.
-        component = next(iterable, None)
-        res = [] if component is None else [component * 40 + next(iterable, 0)]
+        # Define a closure which takes an integer and breaks it down into its
+        # 7-bit components so that we can manually clear the sentinel bit when
+        # the end of the integer is reached. This returns its results as a stack.
+        def reduce(integral):
+            if integral:
+                while integral > 0:
+                    yield integral & 0x7f
+                    integral //= pow(2, 7)
+                return
+            yield 0
 
-        # Iterate through each component belonging to the oid.
-        for component in iterable:
+        # Consume the oid identifier prefix, and combine it into the very
+        # first octet according to the X.690 specification. If there's not
+        # enough numbers provided, then we pad the expression with zeroes
+        # since the oid identifier prefix is required.
+        res, X, Y = [], next(iterable, 0), next(iterable, None)
+        item = X * 40 + (Y or 0)
 
-            # Collect all the components broken down into multiples
-            # of 7-bits so that we can later set their highest bit.
-            items = []
-            while component > 0:
-                items.insert(0, component & 0x7f)
-                component //= pow(2, 7)
+        # Now that we have the first two identifier components encoded, we
+        # need to set the high bit for the entire list of octets excluding
+        # the last one which has its bit clear. If we didn't actually
+        # consume a value from the iterable, then we don't need to process
+        # anything because this isn't a valid identifier.
+        items = [] if Y is None else [item for item in reduce(item)][::-1]
+        res.extend([item | 0x80 for item in items[:-1]])
+        res.extend([item & 0x7f for item in items[-1:]])
+
+        # Iterate through the rest of the digits that we were given, and
+        # continue to break them into 7-bit components and append them
+        # to our result list of octets.
+        for item in iterable:
+            items = [item for item in reduce(item)][::-1]
 
             # Iterate through the array, and set the highest bit in
             # every element except for the last one.
-            res.extend([octet | 0x80 for octet in items[:-1]])
-            res.extend([octet & 0x7f for octet in items[-1:]])
+            res.extend([item | 0x80 for item in items[:-1]])
+            res.extend([item & 0x7f for item in items[-1:]])
 
-        # Convert our array into some bytes that we can deserialize
+        # Now we can convert our array of packed 7-bit numbers to some
+        # bytes that we can use to set our instance using the super method.
         data = bytearray(res)
         return super(OBJECT_IDENTIFIER, self).set(bytes(data))
 
@@ -1168,7 +1185,8 @@ if __name__ == '__main__':
         assert(z['value'].type == (0, 4))
         assert(len(z['value']) == 2)
         assert(all(isinstance(item['value'], ber.OCTETSTRING) for item in z['value']))
-    test_indef_incomplete()
+    # This testcase is supposed to generate a non-critical LoadError.
+    #test_indef_incomplete()
 
     def test_empty_prim_oct():
         data = '0400'
@@ -1240,7 +1258,19 @@ if __name__ == '__main__':
         assert(z['value'].identifier() == expected)
     test_object_identifier_1()
 
-    def test_object_identifier_2():
+    def test_object_identifier_set_2():
+        data = '0603 813403'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 3)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([2,100,3])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_2()
+
+    def test_object_identifier_3():
         data = '0609 2b0601040182371514'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1249,9 +1279,21 @@ if __name__ == '__main__':
 
         expected = [1,3,6,1,4,1,311,21,20]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_2()
+    test_object_identifier_3()
 
-    def test_object_identifier_3():
+    def test_object_identifier_set_4():
+        data = '0609 2b0601040182371514'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 9)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([1,3,6,1,4,1,311,21,20])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_4()
+
+    def test_object_identifier_5():
         data = '0603 818403'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1260,9 +1302,21 @@ if __name__ == '__main__':
 
         expected = [2,16819]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_3()
+    test_object_identifier_5()
 
-    def test_object_identifier_4():
+    def test_object_identifier_set_6():
+        data = '0603 818403'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 3)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([2,16819])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_6()
+
+    def test_object_identifier_7():
         data = '0604 ffffff00'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1271,9 +1325,21 @@ if __name__ == '__main__':
 
         expected = [2,268435248]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_4()
+    test_object_identifier_7()
 
-    def test_object_identifier_5():
+    def test_object_identifier_set_8():
+        data = '0604 ffffff00'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 4)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([2,268435248])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_8()
+
+    def test_object_identifier_9():
         data = '0604 ffffff7f'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1282,9 +1348,21 @@ if __name__ == '__main__':
 
         expected = [2,268435375]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_5()
+    test_object_identifier_9()
 
-    def test_object_identifier_6():
+    def test_object_identifier_set_10():
+        data = '0604 ffffff7f'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 4)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([2,268435375])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_10()
+
+    def test_object_identifier_11():
         data = '0604 00ffff00'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1293,9 +1371,21 @@ if __name__ == '__main__':
 
         expected = [0,0,2097024]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_6()
+    test_object_identifier_11()
 
-    def test_object_identifier_7():
+    def test_object_identifier_set_12():
+        data = '0604 00ffff00'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 4)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([0,0,2097024])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_12()
+
+    def test_object_identifier_13():
         data = '0601 7f'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1304,9 +1394,21 @@ if __name__ == '__main__':
 
         expected = [2,47]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_7()
+    test_object_identifier_13()
 
-    def test_object_identifier_8():
+    def test_object_identifier_set_14():
+        data = '0601 7f'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 1)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([2,47])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_14()
+
+    def test_object_identifier_15():
         data = '0602 8000'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1315,9 +1417,20 @@ if __name__ == '__main__':
 
         expected = [0,0]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_8()
+    test_object_identifier_15()
 
-    def test_object_identifier_9():
+    def test_object_identifier_16():
+        data = '0608 8000000000000000'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 8)
+
+        expected = [0,0,0,0,0,0,0,0]
+        assert(z['value'].identifier() == expected)
+    test_object_identifier_16()
+
+    def test_object_identifier_17():
         data = '0601 28'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1326,9 +1439,21 @@ if __name__ == '__main__':
 
         expected = [1,0]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_9()
+    test_object_identifier_17()
 
-    def test_object_identifier_10():
+    def test_object_identifier_set_18():
+        data = '0601 28'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 1)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([1,0])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_18()
+
+    def test_object_identifier_19():
         data = '0601 27'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1337,9 +1462,21 @@ if __name__ == '__main__':
 
         expected = [0,39]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_10()
+    test_object_identifier_19()
 
-    def test_object_identifier_11():
+    def test_object_identifier_set_20():
+        data = '0601 27'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 1)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([0,39])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_20()
+
+    def test_object_identifier_21():
         data = '0601 00'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1348,9 +1485,21 @@ if __name__ == '__main__':
 
         expected = [0,0]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_11()
+    test_object_identifier_21()
 
-    def test_object_identifier_12():
+    def test_object_identifier_set_22():
+        data = '0601 00'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 1)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([0,0])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_22()
+
+    def test_object_identifier_23():
         data = '0600'.replace(' ', '')
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.serialize() == z.source.value)
@@ -1359,4 +1508,40 @@ if __name__ == '__main__':
 
         expected = [0]
         assert(z['value'].identifier() == expected)
-    test_object_identifier_12()
+    test_object_identifier_23()
+
+    def test_object_identifier_set_24():
+        data = '0600'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 0)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set([0])
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_24()
+
+    def test_object_identifier_set_25():
+        data = '06028120'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 2)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set('2.80')
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_25()
+
+    def test_object_identifier_set_26():
+        data = '060128'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
+        assert(z['value'].size() == 1)
+
+        expected = z['value']
+        res = ber.OBJECT_IDENTIFIER().set('1.')
+        assert(res.serialize() == expected.serialize())
+    test_object_identifier_set_26()
