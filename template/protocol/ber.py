@@ -768,7 +768,7 @@ class OBJECT_IDENTIFIER(ptype.type):
         ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
         ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
 
-        ('iso.org.dod.internet.security.mechanism.snego', '1.3.6.1.5.5.2'), # FIXME
+        ('iso.org.dod.internet.security.mechanism.spnego', '1.3.6.1.5.5.2'), # FIXME
 
         # Authenticode PE
         ('codeSigning', '1.3.6.1.5.5.7.3.3'),
