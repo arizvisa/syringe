@@ -194,6 +194,42 @@ class Constructed(parray.block):
             res[getattr(klass, 'Class', klass), tag] = (name, item)
         return res
 
+    def has(self, key):
+
+        # If we're looking for a particular field name, then we need to
+        # fetch the lookup table from our current fields.
+        if isinstance(key, six.string_types):
+            cls, res = self.__class__, self.__get_lookup_table__()
+
+            # Start by building the lookup table keyed by the field name.
+            table = {name : (klass, tag) for (klass, tag), (name, _) in res.items()}
+            if len(res) != len(table):
+                logging.warning("{:s}.getitem({!s}) : Duplicate name found in fields for instance {:s}".format('.'.join([cls.__module__, cls.__name__]), index, self.instance()))
+
+            # Check our list of fields for the name that we're supposed to be
+            # looking for, otherwise we just raise a KeyError.
+            klasstag = next((item for name, item in table.items() if name.lower() == key.lower()), None)
+            if klasstag is None:
+                raise KeyError(key)
+
+        # Otherwise, we should be being asked to look for a (Class, Tag)
+        # pair which is pretty straightforward.
+        else:
+            if not isinstance(key, tuple):
+                raise TypeError(key)
+
+            # Verify that we have the expected number of items in the key,
+            # and assign it to the variable that we use for searching.
+            klass, tag = key
+            klasstag = klass, tag
+
+        # Now we can look through our values for an item that matches.
+        for item in self.value:
+            if (item.Class(), item.Tag()) == klasstag:
+                return True
+            continue
+        return False
+
     def __getitem__(self, index):
         if not isinstance(index, six.string_types):
             return super(Constructed, self).__getitem__(index)
