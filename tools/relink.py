@@ -62,11 +62,11 @@ class LinkerInternal(DictionaryBase):
         if type['REL32']:
             res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue) - (segmentbase + offset + 4)
-            data = [(res & (0x100 ** octet * 0xff)) // 0x100 ** octet for octet in range(4)]
+            data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
         elif type['ADDR32NB']:
             res = functools.reduce(lambda agg, by: agg * 0x100 + by, reversed(segment[offset : offset + 4]))
             res += (symbolbase + symbolvalue)
-            data = [(res & (0x100 ** octet * 0xff)) // 0x100 ** octet for octet in range(4)]
+            data = [(res & (pow(0x100, octet) * 0xff)) // pow(0x100, octet) for octet in range(4)]
         elif type['ADDR32']:
             raise TypeError(type)   # This would make the code non-relocatable
         elif type['DIR32NB']:
@@ -360,7 +360,7 @@ class Linker(object):
     def segment(self, section, align=''):
         res = section['pointertorawdata'].d
         data = '\0' * section['sizeofrawdata'].int() if section['characteristics']['CNT_UNINITIALIZED_DATA'] else res.li.serialize()
-        alignment = 2 ** (section['characteristics']['ALIGN'] if align else 0)
+        alignment = pow(2, section['characteristics']['ALIGN'] if align else 0)
         padding = (alignment - len(data) % alignment) & (alignment - 1)
         self.__add_segment(section, data + align * padding)
 

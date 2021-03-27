@@ -105,7 +105,7 @@ class BitmapCore(pstruct.type):
     def Width(self): return self['bcWidth'].int()
     def Height(self): return self['bcHeight'].int()
     def Bits(self): return self['bcBitcount'].int()
-    def Colors(self): return 2 ** self.Bits()
+    def Colors(self): return pow(2, self.Bits())
 
 @InfoHeaderType.define(type=40)
 class BitmapInfo(pstruct.type):
@@ -127,7 +127,7 @@ class BitmapInfo(pstruct.type):
     def Bits(self): return self['biBitcount'].int()
     def Colors(self):
         res = self['biClrUsed'].int()
-        return 2**self.Bits() if res or self.Bits() < 24 else res
+        return pow(2, self.Bits()) if res or self.Bits() < 24 else res
 
 # FIXME: this might not be complete
 class DIB(pstruct.type):
@@ -136,7 +136,7 @@ class DIB(pstruct.type):
         clrsused = header['biClrUsed'].int()
         bitcount = header['biBitCount'].int()
 
-        return dyn.array(RGBQUAD, 2**bitcount if clsused == 0 or bitcount < 24 else clrsused)
+        return dyn.array(RGBQUAD, pow(2, bitcount) if clsused == 0 or bitcount < 24 else clrsused)
 
     def __aBitmapBits(self):
         header = self['bmih'].li

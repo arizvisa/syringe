@@ -86,7 +86,7 @@ class ArchiveVersion(pstruct.type):
     def float(self):
         major, minor = self['major'].int(), self['minor'].int()
         precision = math.floor(math.log(minor, 10)) + 1.0
-        return self['major'].int() + minor // 10 ** precision
+        return self['major'].int() + minor // pow(10, precision)
 
     def summary(self):
         major, minor = self['major'].int(), self['minor'].int()

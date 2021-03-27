@@ -77,7 +77,7 @@ class IMAGE_IMPORT_NAME_TABLE_NAME64(_IMAGE_IMPORT_NAME_TABLE_NAME):
 class _IMAGE_IMPORT_NAME_TABLE_ENTRY(dyn.union):
     def OrdinalQ(self):
         bc = 8 * self.object.size()
-        mask = 2 ** (bc-1)
+        mask = pow(2, bc - 1)
         return bool(self.object.int() & mask)
     def NameQ(self):
         return not self.OrdinalQ()

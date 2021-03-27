@@ -238,9 +238,9 @@ class float_t(type):
         # to add the implicit bit back to the mantissa.
         elif -exponentbias < exponent < exponentbias + 1:
             if e:
-                mantissa = 1.0 + float(m) / 2. ** self.components[2]
+                mantissa = 1.0 + float(m) / pow(2., self.components[2])
             else:
-                mantissa = float(m) / 2. ** self.components[2]
+                mantissa = float(m) / pow(2., self.components[2])
                 exponent = 1 - exponentbias
 
         # if the mantissa is empty, and our exponent is at its max

@@ -3,7 +3,7 @@ import ptypes
 from ptypes import *
 import sys, operator, six
 
-BLOCKSIZE = 2**9
+BLOCKSIZE = pow(2, 9)
 largeinteger = long if sys.version_info.major < 3 else int
 
 class stringinteger(pstr.string):

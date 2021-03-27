@@ -8,7 +8,7 @@ def consume(iterable, bits=(32-6,)):
     for b in bits:
         s = abs(b)
 
-        sf,mask = 2**(s-1), (2**(s-1))-1
+        sf, mask = pow(2, s - 1), pow(2, s - 1) - 1
         x = source.consume(s)
 
         if b < 0:

@@ -215,7 +215,7 @@ class Stream(ptype.encoded_t):
             # If we have a valid marker and enough data to figure out a length, then calculate the length,
             # consume that much data, and use it to determine the boundaries of the element.
             if FmarkerQ(marker) and len(data) >= 2:
-                skip, res = len(data), functools.reduce(lambda agg, item: agg * 2**8 + item, data[:2], 0)
+                skip, res = len(data), functools.reduce(lambda agg, item: agg * pow(2, 8) + item, data[:2], 0)
                 while skip < res:
                     skip += sum(map(len, (yield)))
 

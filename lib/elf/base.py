@@ -91,10 +91,11 @@ class ULEB128(pbinary.terminatedarray):
             res = (res << 7) | n['value']
         return res
     def set(self, value):
-        result = []
+        result, mask = [], pow(2, 7) - 1
         while value > 0:
-            result.append( self.new(self.septet).set((1, value & (2**7-1))) )
-            value //= 2**7
+            item = self.new(self.septet).set((1, value & mask))
+            result.append(item)
+            value //= pow(2, 7)
         result[-1].set(more=0)
         self.value[:] = result[:]
         return self

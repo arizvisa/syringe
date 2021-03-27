@@ -12,7 +12,7 @@ class LogicalScreenDescriptor(pstruct.type):
 
     def optional(self):
         if self['Flags'].li['Global Color Table'] > 0:
-            return dyn.clone(ColorTable, length=2**(self['Flags']['Size']+1))
+            return dyn.clone(ColorTable, length=pow(2, self['Flags']['Size'] + 1))
         return dyn.clone(ColorTable, length=0)
 
     _fields_ = [
@@ -41,7 +41,7 @@ class ImageDescriptor(pstruct.type):
 
     def optional(self):
         if self['Flags'].li['Local Color Table'] > 0:
-            return dyn.clone(ColorTable, length=2**(self['Flags']['Size']+1))
+            return dyn.clone(ColorTable, length=pow(2, self['Flags']['Size'] + 1))
         return dyn.clone(ColorTable, length=0)
 
     _fields_ = [

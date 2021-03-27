@@ -267,7 +267,7 @@ class Header(pstruct.type):
 
     def Version(self):
         major, minor = (self[fld].int() for fld in ['uMajorVersion', 'uMinorVersion'])
-        mantissa = 10 ** math.floor(1. + math.log10(minor))
+        mantissa = pow(10, math.floor(1. + math.log10(minor)))
         return major + minor / mantissa
 
     def ByteOrder(self):
@@ -280,13 +280,13 @@ class HeaderSectorShift(pstruct.type):
     ]
     def summary(self):
         fields = ['uSectorShift', 'uMiniSectorShift']
-        return ' '.join("{:s}={:d} ({:#x})".format(fld, self[fld].int(), 2 ** self[fld].int()) for fld in fields)
+        return ' '.join("{:s}={:d} ({:#x})".format(fld, self[fld].int(), pow(2, self[fld].int())) for fld in fields)
     def SectorSize(self):
         res = self['uSectorShift'].int()
-        return 2 ** res
+        return pow(2, res)
     def MiniSectorSize(self):
         res = self['uMiniSectorShift'].int()
-        return 2 ** res
+        return pow(2, res)
 
 class HeaderFat(pstruct.type):
     _fields_ = [
@@ -581,7 +581,7 @@ class File(pstruct.type):
         '''Yield the minisector for each minisector index specified in iterable.'''
         sectors, shift = self.minisectors(), self['SectorShift']['uMiniSectorShift'].int()
         res = self.new(ptype.container, value=sectors)
-        minisectors = res.cast(parray.type, _object_=dyn.block(2 ** shift), length=res.size() // 2 ** shift)
+        minisectors = res.cast(parray.type, _object_=dyn.block(pow(2, shift)), length=res.size() // pow(2, shift))
         for index in iterable:
             yield minisectors[index]
         return

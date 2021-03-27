@@ -1,6 +1,6 @@
 class base(object):
     proc = dict
-    pagesize = 2**12
+    pagesize = pow(2, 12)
     arch = None
     # and other host-specific attributes
 

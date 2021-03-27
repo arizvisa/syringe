@@ -12,12 +12,12 @@ class SHORT(bigendian(pint.int16_t)): pass
 class UINT24(bigendian(pint.uint_t)): length = 3
 class ULONG(bigendian(pint.uint32_t)): pass
 class LONG(bigendian(pint.int32_t)): pass
-class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda x: int(x) // 65536.0)
+class Fixed(bigendian(pint.uint32_t)): pass   #float = lambda item: int(item) // 65536.0)
 
 #class FUNIT(wtf): pass
 class FWORD(SHORT): pass
 class UFWORD(USHORT): pass
-class F2DOT14(SHORT): pass      # float = lambda x: int(x) // 2**14)
+class F2DOT14(SHORT): pass      # float = lambda item: int(item) // pow(2, 14)
 class LONGDATETIME(bigendian(pint.uint64_t)): pass
 
 class Tag(dyn.block(4)): pass
@@ -37,7 +37,7 @@ class OffsetTable(pstruct.type):
 class OpenTypeFile(pstruct.type):
     _fields_ = [
         (OffsetTable, 'header'),
-        (lambda s: dyn.array(TableRecord, int(s['header']['numTables'])), 'tables')
+        (lambda self: dyn.array(TableRecord, self['header']['numTables'].int()), 'tables')
     ]
 
 import inspect
@@ -52,8 +52,8 @@ class TableRecord(pstruct.type):
 
     def getblock(self):
         opentypefile = self.getparent(OpenTypeFile)
-        offset = opentypefile.getoffset() + int(self['offset'])
-        return self.newelement( dyn.block(int(self['length'])), self['identifier'].serialize(), offset)
+        offset, length = opentypefile.getoffset() + self['offset'].int(), self['length'].int()
+        return self.newelement(dyn.block(length), self['identifier'].serialize(), offset)
 
     def getrecord(self):
         id = self['identifier'].serialize()
@@ -62,7 +62,7 @@ class TableRecord(pstruct.type):
         for x in tables:
             if x.identifier == id:
                 result = self.newelement(x, id, block.getoffset())
-                result.maxsize = int(self['length'])
+                result.maxsize = self['length'].int()
                 return result.load(source=ptypes.prov.string(block.load().serialize()))
             continue
         return block

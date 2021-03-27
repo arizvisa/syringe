@@ -803,7 +803,7 @@ class TaggedIndex(CodedIndex, pstruct.type):
         count = max(res[index].int() for index in indices)
 
         # return a uint16_t if the tagged index is able to store the maximum number of rows otherwise use a uint32_t
-        return dyn.clone(pint.uint_t, length=1) if count < 2**(16 - self.Tag.width) else dyn.clone(pint.uint_t, length=3)
+        return dyn.clone(pint.uint_t, length=1) if count < pow(2, 16 - self.Tag.width) else dyn.clone(pint.uint_t, length=3)
 
     @classmethod
     def Tables(cls):
@@ -1294,7 +1294,7 @@ class PreCalculatableTable(ptype.generic):
                     res.append(2 if rows[t.type].int() < 0x10000 else 4)
                 elif issubclass(t, CodedIndex):
                     count = max(rows[index].int() for index in t.Tables())
-                    res.append(2 if count < 2**(16 - t.Tag.width) else 4)
+                    res.append(2 if count < pow(2, 16 - t.Tag.width) else 4)
                 else:
                     raise TypeError((cls, t, name))
                 continue

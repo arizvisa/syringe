@@ -21,7 +21,7 @@ class LengthDeterminant(pbinary.struct):
 
     def int(self):
         if self['check']:
-            return self['first'] * 2**8 + self['second']
+            return self['first'] * pow(2, 8) + self['second']
         return self['first']
 
     def set(self, *integer, **fields):
@@ -30,9 +30,9 @@ class LengthDeterminant(pbinary.struct):
                 return self.a.set(*integer)
             integer, = integer
             if self['check']:
-                res = integer / 2**8
-                return self.set(first=res, second=integer - res * 2**8)
-            return self.set(first=integer) if integer < 2**7 else self.alloc(check=1).set(integer)
+                res = integer / pow(2, 8)
+                return self.set(first=res, second=integer - res * pow(2, 8))
+            return self.set(first=integer) if integer < pow(2, 7) else self.alloc(check=1).set(integer)
         return super(LengthDeterminant, self).set(**fields)
 
     def summary(self):
@@ -51,7 +51,7 @@ class INTEGER(pstruct.type):
     def set(self, *integer, **fields):
         if not fields:
             integer, = integer
-            count = math.floor(math.log(integer) / math.log(2**8) + 1) if integer else 1
+            count = math.floor(math.log(integer) / math.log(pow(2, 8)) + 1) if integer else 1
             return self.alloc(length=math.trunc(count)).set(integer=integer)
         return super(INTEGER, self).set(*integer, **fields)
 

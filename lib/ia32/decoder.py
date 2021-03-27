@@ -42,7 +42,7 @@ def decodeInteger(string, signed=False):
     if not signed:
         return res
 
-    bitflag = (0x100**len(string)) // 2
+    bitflag = pow(0x100, len(string)) // 2
     signbit,value = res & bitflag, res & (bitflag - 1)
     if res & signbit:
         return value - bitflag
@@ -50,12 +50,12 @@ def decodeInteger(string, signed=False):
 
 def encodeInteger(number, bytes):
     '''given an integer and a number of bytes, will return a string encoded in the native endianness'''
-    number &= (0x100**bytes) - 1    # convert to absolute using side-effect of &
+    number &= pow(0x100, bytes) - 1    # convert to absolute using side-effect of &
 
-    counter = bitmap.new(number,bytes*8)
+    counter = bitmap.new(number, bytes * 8)
     res = ''
     while counter[1] > 0:
-        counter,_ = bitmap.consume(counter,8)
+        counter, _ = bitmap.consume(counter, 8)
         res += chr(_)
     return res
 
