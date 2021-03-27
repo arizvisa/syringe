@@ -929,8 +929,6 @@ if __name__ == '__main__':
     from ptypes import bitmap
     from ptypes import *
 
-    #import importlib
-    #importlib.reload(ber)
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
     def test_length():

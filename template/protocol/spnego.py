@@ -112,8 +112,6 @@ class Packet(ber.Packet):
 if __name__ == '__main__':
     import importlib
     import sys, ptypes, protocol.ber as ber, protocol.spnego as spnego
-    #importlib.reload(spnego.ber)
-    importlib.reload(spnego)
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
     data = []
