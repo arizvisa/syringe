@@ -141,6 +141,8 @@ class TYPE(pint.enum, pint.uint16_t):
         ('CERT', 37),
         ('A6', 38),
         ('DNAME', 39),
+        ('OPT', 41),
+        ('APL', 42),
         ('DS', 43),
         ('SSHFP', 44),
         ('IPSECKEY', 45),
@@ -576,6 +578,86 @@ class DNAME(pstruct.type):
     ]
 
 @RDATA.define
+class OPTION(pstruct.type):
+    type = TYPE.byname('OPT'), None
+    _fields_ = [
+        (u16, 'CODE'),
+        (u16, 'LENGTH'),
+        (lambda self: dyn.block(self['LENGTH'].li.int()), 'DATA'),
+    ]
+
+class ADDRESSFAMILY(pint.enum):
+    # https://www.iana.org/assignments/address-family-numbers/address-family-numbers.xhtml
+    _values_ = [
+        ('IP', 1),
+        ('IP6', 2),
+        ('NSAP ', 3),
+        ('HDLC', 4),
+        ('BBN', 5),
+        ('802', 6),
+        ('E.163 ', 7),
+        ('E.164', 8),
+        ('F.69', 9),
+        ('X.121', 10),
+        ('IPX ', 11),
+        ('Appletalk ', 12),
+        ('Decnet IV ', 13),
+        ('Banyan Vines ', 14),
+        ('E.164', 15),
+        ('DNS', 16),
+        ('DN', 17),
+        ('AS', 18),
+        ('XTP-IP4', 19),
+        ('XTP-IP6', 20),
+        ('XTP-XTP', 21),
+        ('FChannel-WW-Port', 22),
+        ('FChannel-WW-Node', 23),
+        ('GWID', 24),
+        ('AFI', 25),
+        ('MPLS-TP-SE', 26),
+        ('MPLS-TP-LSP', 27),
+        ('MPLS-TP-P', 28),
+        ('MTIP', 29),
+        ('MTIPv6', 30),
+        ('EIGRP-Common', 16384),
+        ('EIGRP-IPv4', 16385),
+        ('EIGRP-IPv6', 16386),
+        ('LCAF', 16387),
+        ('BGP-LS', 16388),
+        ('MAC48', 16389),
+        ('MAC64', 16390),
+        ('OUI', 16391),
+        ('MAC/24', 16392),
+        ('MAC/40', 16393),
+        ('IPv6/64', 16394),
+        ('RBridge', 16395),
+        ('TRILL', 16396),
+        ('UUID', 16397),
+        ('AFI', 16398),
+        ('Reserved', 65535),
+    ]
+
+@RDATA.define
+class APL(pstruct.type):
+    type = TYPE.byname('APL'), CLASS.byname('IN')
+    class _ADDRESSFAMILY(ADDRESSFAMILY, u16):
+        pass
+    class _AFD(pbinary.flags):
+        _fields_ = [
+            (1, 'N'),
+            (7, 'LENGTH'),
+        ]
+    def __AFDPART(self):
+        res = self['AFD'].li
+        return dyn.block(res['LENGTH'])
+    _fields_ = [
+        (_ADDRESSFAMILY, 'ADDRESSFAMILY'),
+        (u8, 'PREFIX'),
+        (_AFD, 'AFD'),
+        (__AFDPART, 'AFDPART'),
+    ]
+
+@RDATA.define
 class DS(pstruct.type):
     type = TYPE.byname('DS'), CLASS.byname('IN')
     _fields_ = [
@@ -723,7 +805,7 @@ class RR(pstruct.type):
     def __RDATA(self):
         res, klass = (self[fld].li.int() for fld in ['TYPE', 'CLASS'])
         try:
-            t = RDATA.lookup((res, klass))
+            t = RDATA.lookup((res, klass), None) or RDATA.lookup((res, None))
 
         except KeyError:
             res = self['RDLENGTH'].li
@@ -818,10 +900,11 @@ class Stream(parray.infinite):
 
 if __name__ == '__main__':
     import ptypes, protocol.dns as dns
-    res = 'fce2 0100 0001 0000 0000 0000 0670 6861 7474 7905 6c6f 6361 6c00 0006 0001               '
-    res = 'fce2 8183 0001 0000 0001 0000 0670 6861 7474 7905 6c6f 6361 6c00 0006 0001 0000 0600 0100 000e 1000 4001 610c 726f 6f74 2d73 6572 7665 7273 036e 6574 0005 6e73 746c 640c 7665 7269 7369 676e 2d67 7273 0363 6f6d 0078 67b1 a200 0007 0800 0003 8400 093a 8000 0151 80                           '
+    fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
-    data = bytes.fromhex(res)
+    res = 'fce2 0100 0001 0000 0000 0000 0670 6861 7474 7905 6c6f 6361 6c00 0006 0001               '.replace(' ', '')
+    res = 'fce2 8183 0001 0000 0001 0000 0670 6861 7474 7905 6c6f 6361 6c00 0006 0001 0000 0600 0100 000e 1000 4001 610c 726f 6f74 2d73 6572 7665 7273 036e 6574 0005 6e73 746c 640c 7665 7269 7369 676e 2d67 7273 0363 6f6d 0078 67b1 a200 0007 0800 0003 8400 093a 8000 0151 80                           '.replace(' ', '')
+    data = fromhex(res)
 
     a = dns.Message(source=ptypes.prov.bytes(data))
     a=a.l
@@ -885,4 +968,8 @@ if __name__ == '__main__':
 
     print(x['question'][0])
     print(x['answer'][20])
+
+    data = '1f990120000100000000000106676f6f676c6503636f6d0000010001000029100000000000000c000a0008dd288f3fc1040a68'
+    z = dns.Message(source=ptypes.prov.bytes(fromhex(data)))
+    z=z.l
 
