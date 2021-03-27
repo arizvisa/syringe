@@ -1,4 +1,4 @@
-import datetime, ptypes
+import ptypes, datetime, pytz
 from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pfloat,pbinary
 
 ## primitives
@@ -114,12 +114,16 @@ class Machine(pint.enum, pint.uint16_t):
     ]
 
 class TimeDateStamp(uint32):
-    epoch = datetime.datetime(1970, 1, 1, 0, 0, 0)
+    def datetime(self):
+        res = self.int()
+        epoch = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
+        delta = datetime.timedelta(seconds=res)
+        return epoch + delta
     def details(self):
-        x = self.epoch + datetime.timedelta( seconds=self.int() )
-        return x.strftime('%Y-%m-%d %H:%M:%S')
+        res = self.datetime()
+        return res.isoformat()
     def summary(self):
-        return '{:#x} {!r}'.format(self.int(), self.details())
+        return '({:#0{:d}x}) {!s}'.format(self.int(), 2 + 2 * self.size(), self.details())
 
 class IMAGE_COMDAT_SELECT(ptypes.pint.enum, byte):
     _values_ = [

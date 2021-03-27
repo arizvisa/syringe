@@ -1,4 +1,4 @@
-import time, datetime, ptypes
+import ptypes, time, datetime, pytz
 from . import EV_, E_IDENT, section, segment
 from .base import *
 
@@ -527,10 +527,10 @@ class Elf_Armag(pstr.string):
 class Elf_Arhdr(pstruct.type):
     class time_t(stringinteger):
         length = 12
-        epoch = datetime.datetime(1970, 1, 1)
+        epoch = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
         def datetime(self):
             res = time.localtime(self.int())
-            return datetime.datetime(*res[:7])
+            return datetime.datetime(*res[:7], tzinfo=pytz.utc)
         def gmtime(self):
             res = self.int()
             return time.gmtime(res)

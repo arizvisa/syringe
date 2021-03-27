@@ -1,4 +1,4 @@
-import six, sys, math, datetime, itertools, functools, codecs
+import six, sys, math, datetime, time, pytz, itertools, functools, codecs
 
 import ptypes
 from ptypes import *
@@ -561,29 +561,32 @@ class FILETIME(pstruct.type):
 
     def timestamp(self):
         low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
-        return high * 2**32 + low
+        return high * pow(2, 32) + low
 
     def datetime(self):
-        epoch = datetime.datetime(1601, 1, 1)
-        return epoch + datetime.timedelta(microseconds=self.timestamp() / 1e1)
+        epoch = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
+        delta = datetime.timedelta(microseconds=self.timestamp() / 1e1)
+        return epoch + delta
 
     def get(self):
         return self.datetime()
 
     def set(self, *dt, **fields):
         if not fields:
-            dt, = dt or (datetime.datetime.now(),)
-            delta = dt - datetime.datetime(1601, 1, 1)
+            now, epoch = time.localtime(), datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
+            dt, = dt or [datetime.datetime(*now[:7], tzinfo=pytz.utc)]
+            delta = dt - epoch
             day_ms, second_ms, ms_100ns = map(math.trunc, (8.64e10, 1e6, 1e1))
             microseconds = delta.days * day_ms + delta.seconds * second_ms + delta.microseconds
 
             res = microseconds * ms_100ns
-            fields['dwLowDateTime']  = (res // 2**0 ) & 0xffffffff
-            fields['dwHighDateTime'] = (res // 2**32) & 0xffffffff
+            fields['dwLowDateTime']  = (res // pow(2, 0)) & 0xffffffff
+            fields['dwHighDateTime'] = (res // pow(2,32)) & 0xffffffff
+            return self.set(**fields)
         return super(FILETIME, self).set(**fields)
 
     def summary(self):
-        epoch, ts = datetime.datetime(1601, 1, 1), self.timestamp()
+        epoch, ts = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc), self.timestamp()
         ts_s, ts_hns = ts // 1e7, ts % 1e7
         ts_ns = ts_hns * 1e-7
 
@@ -638,7 +641,7 @@ class BitmapBitsArray(parray.type):
     def check(self, index):
         bits = 8 * self.new(self._object_).a.size()
         res, offset = self[index // bits], index % bits
-        return res.int() & (2 ** offset) and 1
+        return res.int() & pow(2, offset) and 1
     def run(self):
         return self.bitmap()
 
@@ -675,7 +678,7 @@ class BitmapBitsBytes(ptype.block):
         return functools.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
     def check(self, index):
         res, offset = self[index >> 3], index & 7
-        return ord(res) & (2 ** offset) and 1
+        return ord(res) & pow(2, offset) and 1
     def run(self):
         return self.bitmap()
 
