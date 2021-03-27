@@ -4,7 +4,7 @@ logging.root.setLevel(logging.INFO)
 import six, ptypes
 from ptypes import *
 
-import datetime
+import datetime, pytz
 
 ## General structures
 class MSTime(pbinary.struct):
@@ -14,7 +14,7 @@ class MSTime(pbinary.struct):
         (5, '2Seconds'),
     ]
     def time(self):
-        return datetime.time(self['Hour'] % 24, self['Minute'] % 60, (2 * self['2Seconds']) % 60)
+        return datetime.time(self['Hour'] % 24, self['Minute'] % 60, (2 * self['2Seconds']) % 60, tzinfo=pytz.utc)
 
     def isoformat(self):
         res = self.time()
@@ -166,7 +166,7 @@ class NTFS_Attributes(pstruct.type):
     tag = 1
     class TenthOfAMicrosecond(pint.uint64_t):
         def datetime(self):
-            epoch = datetime.datetime(1601, 1, 1, 0, 0, 0)
+            epoch = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
             res = datetime.timedelta(microseconds=self.int() / 10.)
             return epoch + res
         def isoformat(self):

@@ -1,5 +1,4 @@
-import logging
-from datetime import datetime
+import logging, datetime, pytz
 import ptypes
 from ptypes import *
 
@@ -31,18 +30,26 @@ class pcap_hdr_t(pstruct.type):
         (guint32, 'network'),
     ]
 
+    def timezone(self):
+        res = self['thiszone'].int()
+        return pytz.FixedOffset(res / -60.)
+
 class pcaprec_hdr_s(pstruct.type):
     class timestamp(pstruct.type):
         _fields_ = [
             (guint32, 'sec'),
             (guint32, 'usec'),
         ]
-        def now(self):
-            ts = self['sec'].int() + self['usec'].int()/1000000.0
-            return datetime.fromtimestamp(ts)
+        def datetime(self):
+            epoch = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
+            delta = datetime.timedelta(seconds=self['sec'].int(), microseconds=self['usec'].int())
+            return epoch + delta
 
         def summary(self):
-            return self.now().isoformat()
+            parent = self.getparent(File)
+            header, dt = parent['header'], self.datetime()
+            res = dt.astimezone(header.timezone())
+            return res.isoformat()
 
     _fields_ = [
         (timestamp, 'ts'),
@@ -57,7 +64,7 @@ class Packet(pstruct.type):
 
     _fields_ = [
         (__header, 'header'),
-        (lambda s: dyn.block(s['header']['incl_len'].li.int()), 'data'),
+        (lambda self: dyn.block(self['header']['incl_len'].li.int()), 'data'),
     ]
 
 class List(parray.infinite):
@@ -70,10 +77,10 @@ class List(parray.infinite):
         return '..%d packets..'% l
 
     def within(self, start, end):
-        for n in self:
-            d = n['header'].now()
-            if start >= d > end:
-                yield n
+        for item in self:
+            dt = item['header'].datetime()
+            if start <= dt < end:
+                yield item
             continue
         return
 

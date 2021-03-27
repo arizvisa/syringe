@@ -1,4 +1,4 @@
-import logging, datetime
+import logging, datetime, pytz
 
 import ptypes
 from ptypes import *
@@ -658,10 +658,10 @@ class FILETIME(pstruct.type):
         low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
         return high * 0x100000000 | + low
     def datetime(self):
-        epoch = datetime.datetime(1601, 1, 1)
+        epoch = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
         return epoch + datetime.timedelta(microseconds=self.timestamp() / 10.0)
     def summary(self):
-        epoch, ts = datetime.datetime(1601, 1, 1), self.timestamp()
+        epoch, ts = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc), self.timestamp()
         ts_s, ts_hns = ts // 1e7, ts % 1e7
         ts_ns = ts_hns * 1e-7
 
