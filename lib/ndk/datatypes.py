@@ -572,9 +572,10 @@ class FILETIME(pstruct.type):
         return self.datetime()
 
     def set(self, *dt, **fields):
+        cons = datetime.datetime
         if not fields:
-            now, epoch = time.localtime(), datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
-            dt, = dt or [datetime.datetime(*now[:7], tzinfo=pytz.utc)]
+            now, epoch = time.time(), cons(1601, 1, 1, tzinfo=pytz.utc)
+            dt, = dt or [cons.fromtimestamp(now, pytz.utc)]
             delta = dt - epoch
             day_ms, second_ms, ms_100ns = map(math.trunc, (8.64e10, 1e6, 1e1))
             microseconds = delta.days * day_ms + delta.seconds * second_ms + delta.microseconds
