@@ -6,4 +6,4 @@ from . import aspie, mp, tara
 from . import ber, per
 from . import nlmp, credssp, spnego
 from . import gcc, mcs, mas
-from . import dns
+from . import dns, netbios
