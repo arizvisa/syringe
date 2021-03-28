@@ -87,7 +87,6 @@ class List(pstruct.type):
     _fields_ = [
         (__items, 'items')
     ]
-
     def classname(self):
         res = getattr(self, '_object_', None)
         if res is None:
@@ -100,6 +99,16 @@ class List(pstruct.type):
         res = (item.summary() for item in self['items'])
         return "({:d}) items=[{:s}]".format(len(self['items']), ', '.join(res))
     repr = summary
+
+    def enumerate(self):
+        for index, item in enumerate(self['items']):
+            yield index, item
+        return
+
+    def iterate(self):
+        for _, item in self.enumerate():
+            yield item
+        return
 
 class List8(List):
     _fields_ = [(uint8, 'size')] + List._fields_
@@ -187,6 +196,14 @@ class NamedCurveList(pstruct.type):
     ]
     def summary(self):
         return "named_curve_list={:s}".format(self['named_curve_list'].summary())
+    def enumerate(self):
+        for item in self['named_curve_list'].enumerate():
+            yield item
+        return
+    def iterate(self):
+        for item in self['named_curve_list'].iterate():
+            yield item
+        return
 
 class ECPointFormat(pint.enum, uint8):
     _values_ = [
