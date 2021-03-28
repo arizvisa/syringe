@@ -272,9 +272,6 @@ class base(ptype.generic):
     def cast(self, type, **attrs):
         raise error.ImplementationError(self, 'base.cast')
 
-    def __deserialize_consumer__(self, consumer):
-        raise error.ImplementationError(self, 'base.__deserialize_consumer__')
-
     def alloc(self, **attrs):
         raise error.ImplementationError(self, 'base.alloc')
 
@@ -286,6 +283,9 @@ class base(ptype.generic):
 
     def repr(self, **options):
         raise error.ImplementationError(self, 'base.repr')
+
+    def __deserialize_consumer__(self, consumer):
+        raise error.ImplementationError(self, 'base.__deserialize_consumer__')
 
     def __getvalue__(self):
         raise error.ImplementationError(self, 'base.__getvalue__')
@@ -332,7 +332,9 @@ class type(base):
         raise error.ImplementationError(self, 'type.bitmap')
 
     def __getvalue__(self):
-        raise error.ImplementationError(self, 'type.__getvalue__')
+        if self.value is None:
+            raise bitmap.new(0, self.blockbits())
+        return bitmap.new(*self.value)
 
     def __setvalue__(self, *values, **attrs):
         if not values:
@@ -353,7 +355,7 @@ class type(base):
             raise error.UserError(self, 'type.cast', message="Unable to cast binary type ({:s}) to a none-binary type ({:s})".format(self.typename(), type.typename()))
 
         source = bitmap.consumer()
-        source.push(self.bitmap())
+        source.push(self.__getvalue__())
 
         position = self.getposition()
         target = self.new(type, __name__=self.name(), position=position, **attrs)
@@ -394,7 +396,7 @@ class type(base):
 
     def serialize(self):
         Log.warn("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
-        return bitmap.data(self.bitmap())
+        return bitmap.data(self.__getvalue__())
 
 class integer(type):
     """An atomic component of any binary array or structure.
@@ -402,59 +404,75 @@ class integer(type):
     This type is used internally to represent an element of any binary container.
     """
 
-    def __init__(self, *args, **kwds):
-        super(integer, self).__init__(*args, **kwds)
-
-        # check if the user is using the outdated integer.signed property so that
-        # we can warn them that they're using a compatibility hack.
-        if hasattr(self, 'signed'):
-            typename, description = self.typename(), 'a signed' if self.signed else 'an unsigned'
-            Log.warning("{:s}.integer : {:s} : Assigning the value ({!s}) to `{:s}` for defining {:s} integer is deprecated.".format(__name__, self.classname(), self.signed, '.'.join([typename, 'signed']), description))
-            Log.info("{:s}.integer: {:s} : To fix the definition of `{:s}` please return a negative size (in bits) for the `{:s}` method.".format(__name__, self.classname(), typename, '.'.join([typename, 'blockbits'])))
-        return
-
     def int(self):
-        res = self.bitmap()
+        res = self.__getvalue__()
         return bitmap.value(res)
 
     def bits(self):
         if self.value is None:
             Log.info("integer.size : {:s} : Returning an empty size in bits due to type `{:s}` being uninitialized.".format(self.instance(), self.classname()))
             return 0
-        res = self.bitmap()
+        res = self.__getvalue__()
         return bitmap.size(res)
 
     def blockbits(self):
         if self.value is None:
             return 0
-        res = self.bitmap()
-        return bitmap.size(res)
-
-    def __deserialize_consumer__(self, consumer):
-        try: self.__setvalue__(consumer.consume(self.blockbits()))
-        except (StopIteration, error.ProviderError) as E: raise E
-        return self
+        item = self.__getvalue__()
+        _, res = item
+        return res
 
     def summary(self, **options):
-        res = self.bitmap()
+        res = self.__getvalue__()
         return u"({:s},{:d})".format(bitmap.hex(res), bitmap.size(res))
 
     def details(self, **options):
-        res = self.bitmap()
+        res = self.__getvalue__()
         return bitmap.string(res)
 
     def __properties__(self):
         result = super(type, self).__properties__()
-        if self.initializedQ() and bitmap.signed(self.bitmap()):
+        if self.initializedQ() and bitmap.signed(self.__getvalue__()):
             result['signed'] = True
         return result
 
-    def __getvalue__(self):
+    def bitmap(self):
         if self.value is None:
-            raise error.InitializationError(self, '__getvalue__')
-        return self.bitmap()
+            raise error.InitializationError(self, 'integer.bitmap')
+        return bitmap.new(*self.value)
+
+    def __deserialize_consumer__(self, consumer):
+        _, blocksize = (0, self.blockbits())
+
+        # Now that we've grabbed the number of bits that we're sized
+        # for, use it to consume an integer
+        try:
+            res = consumer.consume(abs(blocksize))
+
+        # If an exception was raised, then pass it up the chain.
+        except (StopIteration, error.ProviderError) as E:
+            raise E
+
+        # Otherwise we're free to put the integer into a bitmap, and
+        # then assign it.
+        else:
+            self.__setvalue__(bitmap.new(res, blocksize))
+        return self
 
     def __setvalue__(self, *values, **attrs):
+        value, = values
+        if not bitmap.isinstance(value):
+            raise error.TypeError(self, 'integer.set', message="Tried to call method with an unknown type ({!s})".format(value.__class__))
+
+        # Warn the user if the sizes are different than we expect.
+        size = bitmap.size(value)
+        if size != abs(self.blockbits()):
+            Log.info("type.__setvalue__ : {:s} : The specified bitmap width ({:#x}) is different from the typed bitmap width ({:#x}).".format(self.instance(), size, self.blockbits()))
+
+        # Assign the bitmap that we received.
+        return super(integer, self).__setvalue__(value, **attrs)
+
+    def set(self, *values, **attrs):
         if not values:
             return super(integer, self).__setvalue__(*values, **attrs)
 
@@ -462,37 +480,19 @@ class integer(type):
         value, = values
         if isinstance(value, six.integer_types):
 
-            # check signedness value by the attribute (for backwards compatibility) or the value
-            smult = -1 if getattr(self, 'signed', value < 0) else +1
-
-            # extract the size from either our current state or the integer.blockbits
-            # method, and then transform the size to its unsigned value.
-            try: _, size = self.value or (0, self.blockbits() * smult)
-            except Exception: size = 0
+            # extract the size from either our current state or the blockbits method.
+            try: _, size = bitmap.new(value, self.blockbits()) if self.value is None else self.__getvalue__()
+            except Exception: size = self.blockbits()
 
             # recreate a bitmap using the user's chosen value along with the signedness
-            # as defined by the integer's type, and assign it to our instance.
-            res = bitmap.new(value, size * smult)
+            # as defined by the integer's type, and then we can assign it.
+            res = bitmap.new(value, size)
             return self.__setvalue__(res, **attrs)
 
         # Otherwise, this is a bitmap and we can proceed to assign it
         if not bitmap.isinstance(value):
-            raise error.UserError(self, 'integer.__setvalue__', message="Tried to call method with an unknown type ({!s})".format(value.__class__))
-
-        size = bitmap.size(value)
-        if size != self.blockbits():
-            Log.info("type.__setvalue__ : {:s} : The specified bitmap width ({:#x}) is different from the typed bitmap width ({:#x}).".format(self.instance(), size, self.blockbits()))
-
-        # check signedness value by the attribute (for backwards compatibility) or the bitmap size
-        smult = -1 if getattr(self, 'signed', bitmap.signed(value)) else +1
-
-        res = bitmap.new(bitmap.value(value), size * smult)
-        return super(integer, self).__setvalue__(res, **attrs)
-
-    def bitmap(self):
-        if self.value is None:
-            return None
-        return bitmap.new(*self.value)
+            raise error.UserError(self, 'integer.set', message="Tried to call method with an unknown type ({!s})".format(value.__class__))
+        return self.__setvalue__(value, **attrs)
 
     def update(self, value):
         if bitmap.isinstance(value):
@@ -578,7 +578,16 @@ class enum(integer):
         return
 
     def blockbits(self):
-        return getattr(self, 'length', 0 if self.value is None else bitmap.size(self.value))
+        if self.value is None:
+            return getattr(self, 'length', 0)
+        _, res = self.__getvalue__()
+        return res
+
+    def __getvalue__(self):
+        if self.value is None:
+            res = getattr(self, 'length', 0)
+            return bitmap.new(0, res)
+        return super(enum, self).__getvalue__()
 
     def has(self, *value):
         '''Return True if the provided parameter is contained by the enumeration. If no value is provided, then use the current instance.'''
@@ -651,12 +660,12 @@ class enum(integer):
         except (ValueError, KeyError): pass
         return super(enum, self).details()
 
-    def __setvalue__(self, *values, **attrs):
+    def set(self, *values, **attrs):
         if not values:
-            return super(enum, self).__setvalue__(*values, **attrs)
+            return super(enum, self).set(*values, **attrs)
         value, = values
         res = self.__byname__(value) if isinstance(value, six.string_types) else value
-        return super(enum, self).__setvalue__(res, **attrs)
+        return super(enum, self).set(res, **attrs)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
@@ -763,12 +772,6 @@ class container(type):
         res = self.bitmap()
         return bitmap.value(res)
 
-    def bitmap(self):
-        if self.value is None:
-            raise error.InitializationError(self, 'container.bitmap')
-        iterable = map(operator.methodcaller('bitmap'), self.value)
-        return functools.reduce(bitmap.push, filter(None, iterable), bitmap.new(0, 0))
-
     def bits(self):
         return sum(item.bits() for item in self.value or [])
 
@@ -794,27 +797,55 @@ class container(type):
     def item(self, key):
         return self.__field__(key)
 
+    def bitmap(self):
+        if self.value is None:
+            raise error.InitializationError(self, 'container.bitmap')
+        iterable = map(operator.methodcaller('bitmap'), self.value)
+        filtered = (item for item in iterable if item)
+        return functools.reduce(bitmap.push, filtered, bitmap.zero)
+
     def __getvalue__(self):
-        return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
+        result = bitmap.zero
+        for item in self.value or []:
+            result = bitmap.push(result, item if bitmap.isinstance(item) else item.__getvalue__())
+        return result
 
     def __setvalue__(self, *values, **attrs):
         if not values:
             return self
         elif len(values) > 1:
             raise error.UserError(self, 'container.set', message="Too many values ({:d}) were passed to the method".format(len(value)))
+
+        # Extract the bitmap from the parameters and validate its type.
+        value, = values
+        if not bitmap.isinstance(value):
+            raise error.UserError(self, 'container.set', message="Unable to apply value with an unsupported type ({:s})".format(value.__class__.__name__))
+
+        # Break down our bitmap and assign each piece of it using the
+        # lower-level .__setvalue__() method.
+        result = value
+        for item in self.value:
+            bs = item.bits()
+            result, number = bitmap.shift(result, item.bits())
+            item.__setvalue__(bitmap.new(number, bs))
+
+        if bitmap.size(result) > 0:
+            raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
+        return self
+
+    def set(self, *values, **attrs):
+        if not values:
+            return self
+        elif len(values) > 1:
+            raise error.UserError(self, 'container.set', message="Too many values ({:d}) were passed to the method".format(len(value)))
         value, = values
 
-        # If a bitmap or an integer was passed to us, then break it down and assign
-        # to each of our members using the lower-level .__setvalue__() method
+        # If a bitmap or an integer was passed to us, then we can use the
+        # lower-level .__setvalue__() method. If it's an integer, then we
+        # need to promote it to a bitmap.
         if (bitmap.isinstance(value) or isinstance(value, six.integer_types)):
-            result = value if bitmap.isinstance(value) else bitmap.new(value, self.blockbits())
-            for item in self.value:
-                result, number = bitmap.shift(result, item.bits())
-                item.__setvalue__(number)
-
-            if bitmap.size(result) > 0:
-                raise error.AssertionError(self, 'container.__setvalue__', message="Some bits were still left over while trying to update bitmap container. : {!r}".format(result))
-            return self
+            item = value if bitmap.isinstance(value) else bitmap.new(value, self.blockbits())
+            return self.__setvalue__(item, **attrs)
 
         # If a list was passed to us, then just .set() the value to each member
         elif isinstance(value, list):
@@ -1052,7 +1083,7 @@ class __array_interface__(container):
         elif istype(object) or ptype.isresolveable(object):
             res = self.new(object, __name__=name).a
         else:
-            res = self.new(self._object_, __name__=name).__setvalue__(object)
+            res = self.new(self._object_, __name__=name).set(object)
         return self.__append__(res)
 
     def __iter__(self):
@@ -1081,6 +1112,39 @@ class __array_interface__(container):
         if isinstance(value, type):
             value.__name__ = str(index)
         return
+
+    def get(self):
+        return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
+
+    def set(self, *values, **attrs):
+        if not values:
+            return self
+
+        items, = values
+        if self.initializedQ():
+            iterable = iter(items) if isinstance(items, (tuple, list)) and len(items) > 0 and isinstance(items[0], tuple) else iter(enumerate(items))
+            for idx, value in iterable:
+                if istype(value) or ptype.isresolveable(value) or isinstance(value, type):
+                    self.value[idx] = self.new(value, __name__=str(idx))
+                else:
+                    self[idx] = value
+                continue
+            self.setposition(self.getposition(), recurse=True)
+            return self
+
+        self.value = result = []
+        for idx, value in enumerate(items):
+            name = "{:d}".format(idx)
+            if istype(value) or ptype.isresolveable(value):
+                res = self.new(value, __name__=name).a
+            elif isinstance(value, type):
+                res = self.new(value, __name__=name)
+            else:
+                res = self.new(self._object_, __name__=name).a.set(value)
+            self.value.append(res)
+
+        self.length = len(self.value)
+        return self
 
 class __structure_interface__(container):
     def __init__(self, *args, **kwds):
@@ -1264,6 +1328,41 @@ class __structure_interface__(container):
             value.__name__ = name
         return value
 
+    def get(self):
+        return tuple(item.int() if isinstance(item, type) else item.get() for item in self.value)
+
+    def set(self, *values, **fields):
+        result = self
+        value, = values or ((),)
+
+        def assign(pack_indexvalue):
+            (index, value) = pack_indexvalue
+            if istype(value) or ptype.isresolveable(value):
+                name = result.value[index].__name__
+                result.value[index] = result.new(value, __name__=name).a
+            elif isinstance(value, type):
+                name = result.value[index].__name__
+                result.value[index] = result.new(value, __name__=name)
+            elif isinstance(value, dict):
+                result.value[index].set(**value)
+            else:
+                result.value[index].set(value)
+            return
+
+        if result.initializedQ():
+            if isinstance(value, dict):
+                value = fields.update(value)
+
+            if value:
+                if len(result._fields_) != len(value):
+                    raise error.UserError(result, 'struct.set', message="Unable to assign iterable to instance due to iterator length ({:d}) being different from instance ({:d})".format(len(value), len(result._fields_)))
+                [ assign((index, value)) for index, value in enumerate(value) ]
+
+            [ assign((self.__getindex__(name), item)) for name, item in fields.items() ]
+            result.setposition(result.getposition(), recurse=True)
+            return result
+        return result.a.set(value, **fields)
+
     def __repr__(self):
         """Calls .repr() to display the details of a specific object"""
         try:
@@ -1309,41 +1408,11 @@ class array(__array_interface__):
         result.length = self.length
         return result
 
-    def __setvalue__(self, *values, **attrs):
-        if not values:
-            return self
-
-        items, = values
-        if self.initializedQ():
-            iterable = iter(items) if isinstance(items, (tuple, list)) and len(items) > 0 and isinstance(items[0], tuple) else iter(enumerate(items))
-            for idx, value in iterable:
-                if istype(value) or ptype.isresolveable(value) or isinstance(value, type):
-                    self.value[idx] = self.new(value, __name__=str(idx))
-                else:
-                    self[idx] = value
-                continue
-            self.setposition(self.getposition(), recurse=True)
-            return self
-
-        self.value = result = []
-        for idx, value in enumerate(items):
-            name = "{:d}".format(idx)
-            if istype(value) or ptype.isresolveable(value):
-                res = self.new(value, __name__=name).a
-            elif isinstance(value, type):
-                res = self.new(value, __name__=name)
-            else:
-                res = self.new(self._object_, __name__=name).a.set(value)
-            self.value.append(res)
-
-        self.length = len(self.value)
-        return self
-
     def __deserialize_consumer__(self, consumer):
         position = self.getposition()
-        obj = getattr(self, '_object_', 0)
+        object = getattr(self, '_object_', 0)
         self.value = []
-        generator = (self.new(obj, __name__=str(index), position=position) for index in range(self.length))
+        generator = (self.new(object, __name__=str(index), position=position) for index in range(self.length))
         return super(array, self).__deserialize_consumer__(consumer, generator)
 
     def blockbits(self):
@@ -1393,38 +1462,6 @@ class struct(__structure_interface__):
         '''Used to test the value of the specified field'''
         return operator.getitem(self, field)
 
-    def __setvalue__(self, *values, **fields):
-        result = self
-        value, = values or ((),)
-
-        def assign(pack_indexvalue):
-            (index, value) = pack_indexvalue
-            if istype(value) or ptype.isresolveable(value):
-                name = result.value[index].__name__
-                result.value[index] = result.new(value, __name__=name).a
-            elif isinstance(value, type):
-                name = result.value[index].__name__
-                result.value[index] = result.new(value, __name__=name)
-            elif isinstance(value, dict):
-                result.value[index].set(**value)
-            else:
-                result.value[index].set(value)
-            return
-
-        if result.initializedQ():
-            if isinstance(value, dict):
-                value = fields.update(value)
-
-            if value:
-                if len(result._fields_) != len(value):
-                    raise error.UserError(result, 'struct.set', message="Unable to assign iterable to instance due to iterator length ({:d}) being different from instance ({:d})".format(len(value), len(result._fields_)))
-                [ assign((index, value)) for index, value in enumerate(value) ]
-
-            [ assign((self.__getindex__(name), item)) for name, item in fields.items() ]
-            result.setposition(result.getposition(), recurse=True)
-            return result
-        return result.a.__setvalue__(value, **fields)
-
     #def __getstate__(self):
     #    return super(struct, self).__getstate__(), self._fields_,
 
@@ -1442,13 +1479,13 @@ class terminatedarray(__array_interface__):
 
     def __deserialize_consumer__(self, consumer):
         self.value = []
-        obj = self._object_
+        object = self._object_
         forever = itertools.count() if self.length is None else range(self.length)
         position = self.getposition()
 
         def generator():
             for index in forever:
-                item = self.new(obj, __name__=str(index), position=position)
+                item = self.new(object, __name__=str(index), position=position)
                 yield item
                 if self.isTerminator(item):
                     break
@@ -1499,11 +1536,11 @@ class blockarray(terminatedarray):
         return False
 
     def __deserialize_consumer__(self, consumer):
-        obj, position = getattr(self, '_object_', 0), self.getposition()
+        object, position = getattr(self, '_object_', 0), self.getposition()
         total = self.blockbits()
         value = self.value = []
         forever = itertools.count() if self.length is None else range(self.length)
-        generator = (self.new(obj, __name__=str(index), position=position) for index in forever)
+        generator = (self.new(object, __name__=str(index), position=position) for index in forever)
 
         # fork the consumer
         consumer = bitmap.consumer().push((consumer.consume(total), total))
@@ -1547,7 +1584,7 @@ class partial(ptype.container):
     __pb_attribute = None
 
     def __pb_object(self, **attrs):
-        offset, obj = self.getoffset(), force(self._object_, self)
+        offset, object = self.getoffset(), force(self._object_, self)
         res = {}
 
         # first include the type's attributes, then any user-supplied ones
@@ -1567,7 +1604,7 @@ class partial(ptype.container):
 
         # now we can finally construct our object using the attributes we
         # determined
-        return obj(**res)
+        return object(**res)
 
     def __update__(self, attrs={}, **moreattrs):
         res = dict(attrs)
@@ -1602,7 +1639,7 @@ class partial(ptype.container):
         return None
 
     @object.setter
-    def object(self, obj):
+    def object(self, object):
 
         # Figure out the attributes we need to copy
         res = dict(self.attributes)
@@ -1620,7 +1657,7 @@ class partial(ptype.container):
             res.setdefault('__name__', self.__name__)
 
         # now we can pivot our object using the attributes we determined
-        self.value = [ obj.__update__(**res) ]
+        self.value = [ object.__update__(**res) ]
 
     o = object
 
@@ -1941,8 +1978,8 @@ if __name__ == '__main__':
                 return True
             except Failure as E:
                 print('%s: %r'% (name, E))
-            except Exception as E:
-                print('%s: %r : %r'% (name, Failure(), E))
+            #except Exception as E:
+            #    print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -2937,9 +2974,9 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_integer_clamped_signcompat_65():
         class v(pbinary.integer):
-            signed = True
+            #signed = True
             def blockbits(self):
-                return 8*4
+                return 8*4 * -1
         x = v().set(-0xffffffffffffff)
         if x.int() == +1:
             raise Success
@@ -2956,8 +2993,8 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_signcompat_66():
         class e(pbinary.enum):
-            _width_, signed = 8, True
-            _values_ = [
+            #_width_, signed = 8, True
+            length, _values_ = -8, [
                 ('0xff', -1),
                 ('0xfe', -2),
                 ('0xfd', -3),
@@ -2982,9 +3019,9 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_signcompat_conflict_66():
         class e(pbinary.enum):
-            signed = False
+            #signed = False
             def blockbits(self):
-                return -8
+                return 8
             _values_ = [
                 ('0xff', -1),
                 ('0xfe', -2),
@@ -3010,8 +3047,8 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_struct_enum_68():
         class e(pbinary.enum):
-            _width_, signed = 4, True
-            _values_ = [
+            #_width_, signed = 4, True
+            length, _values_ = -4, [
                 ('a', -6),
                 ('b', -5),
                 ('c', -4),
@@ -3031,8 +3068,8 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_array_enum_69():
         class e(pbinary.enum):
-            _width_, signed = 4, True
-            _values_ = [
+            #_width_, signed = 4, True
+            length, _values_ = -4, [
                 ('a', -6),
                 ('b', -5),
                 ('c', -4),

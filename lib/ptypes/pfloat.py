@@ -142,7 +142,10 @@ class type(pint.type):
         raise error.ImplementationError(self, 'type.__getvalue__')
 
     def float(self):
-        return self.get()
+        raise error.ImplementationError(self, 'type.float')
+
+    def get(self):
+        return self.__getvalue__()
 
     def int(self):
         return super(type, self).__getvalue__()
@@ -259,6 +262,10 @@ class float_t(type):
         mantissa, exponent = self.__getvalue__()
         return math.ldexp(mantissa, exponent)
 
+    def float(self):
+        mantissa, exponent = self.__getvalue__()
+        return math.ldexp(mantissa, exponent)
+
 class fixed_t(type):
     """Represents a fixed-point number.
 
@@ -287,6 +294,11 @@ class fixed_t(type):
         return integer if math.fabs(integer) == 0.0 else math.trunc(integer), fraction
 
     def get(self):
+        magnitude = pow(2, self.fractional)
+        integer, fraction = self.__getvalue__()
+        return math.copysign(integer + float(fraction) / magnitude, integer)
+
+    def float(self):
         '''Return the value of the fixed-point type as a floating-point number.'''
         magnitude = pow(2, self.fractional)
         integer, fraction = self.__getvalue__()

@@ -269,7 +269,7 @@ class type(ptype.type):
         return self.__getvalue__()
 
     def int(self):
-        return self.get()
+        return self.__getvalue__()
 
 class uinteger_t(type):
     '''Provides unsigned integer support'''
