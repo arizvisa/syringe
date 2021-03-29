@@ -110,7 +110,7 @@ class Packet(ber.Packet):
         return NegTokenRespContext if self.Tag() == 1 else NegotiationToken
 
 if __name__ == '__main__':
-    import importlib
+    import operator
     import sys, ptypes, protocol.ber as ber, protocol.spnego as spnego
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex

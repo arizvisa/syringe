@@ -191,30 +191,45 @@ class Constructed(parray.block):
         res = {}
         for item, name in self._fields_:
             klass, tag = (Context.Class, item.type) if isinstance(item.type, six.integer_types) else item.type
-            res[getattr(klass, 'Class', klass), tag] = (name, item)
+            klasstag = getattr(klass, 'Class', klass), tag
+            res.setdefault(klasstag, []).append( (name, item) )
         return res
 
     def has(self, key):
-        klasstag = self.__get_type_by_field(key)
+        count, klasstag = self.__get_typeindex_by_field(key)
 
         # Now we can look through our values for an item that matches.
         for item in self.value:
             if (item.Class(), item.Tag()) == klasstag:
-                return True
+                if count > 0:
+                    count -= 1
+                else:
+                    return True
+                continue
             continue
         return False
 
-    def __get_type_by_field(self, key):
+    def __get_typeindex_by_field(self, key):
 
         # If we're looking for a particular field name, then we need to
         # fetch the lookup table from our current fields.
         if isinstance(key, six.string_types):
             cls, table = self.__class__, self.__get_lookup_table__()
 
-            # Start by building the lookup table keyed by the field name.
-            res = {name.lower() : (klass, tag) for (klass, tag), (name, _) in table.items()}
-            if len(res) != len(table):
-                logging.warning("{:s}.getitem({!s}) : Duplicate name found in fields for instance {:s}".format('.'.join([cls.__module__, cls.__name__]), index, self.instance()))
+            # Start by building the lookup table keyed by the field name
+            # and storing the klasstag for that particular field. We also
+            # keep track of the index so that way we can count which
+            # element the requested field is supposed to be at.
+            res = {}
+            for (klass, tag), items in table.items():
+                for i, (name, _) in enumerate(items):
+                    res[name.lower()] = i, (klass, tag)
+                continue
+
+            # Validate that the lengths match and that we didn't lose an
+            # item due to a duplicate name.
+            if len(res) != sum(len(items) for items in table.values()):
+                logging.warning("{:s}.getitem({!s}) : Duplicate name found in fields for instance {:s}".format('.'.join([cls.__module__, cls.__name__]), key, self.instance()))
 
             # Now we can query our lookup table for the key.
             return res[key.lower()]
@@ -225,17 +240,23 @@ class Constructed(parray.block):
             raise TypeError(key)
 
         # Verify that we have the expected number of items in the key,
-        # and assign it to the variable that we use for searching.
+        # and assign it to the variable that we use for searching. We
+        # return the index 0 because this should be the only field
+        # that matches.
         klass, tag = key
-        return klass, tag
+        return 0, (klass, tag)
 
     def item(self, key):
-        klasstag = self.__get_type_by_field(key)
+        count, klasstag = self.__get_typeindex_by_field(key)
 
         # Now we can look through our values for an item that matches.
         for item in self.value:
             if (item.Class(), item.Tag()) == klasstag:
-                return item
+                if count > 0:
+                    count -= 1
+                else:
+                    return item
+                continue
             continue
         raise KeyError(key)
 
@@ -253,12 +274,13 @@ class Constructed(parray.block):
         # be used when decoding their value.
         def lookup(self, klasstag, protocol=protocol, state=objectstate):
             try:
-                _, type = state.pop(klasstag)
+                items = state[klasstag]
+                _, type = items.pop(0)
                 result = type
 
             # If we couldn't find the klasstag in our current state,
             # then we need to fall-back to a standard protocol lookup.
-            except KeyError:
+            except (KeyError, IndexError):
                 klass, tag = klasstag
 
             # Otherwise, we found what we're looking for and can just
@@ -290,9 +312,10 @@ class Constructed(parray.block):
             try:
                 if isinstance(item, Element) and item.initializedQ():
                     klasstag = item.Class(), item.Tag()
-                    name, type = table.pop(klasstag)
+                    items = table[klasstag]
+                    name, type = items.pop(0)
                     yield "{:s}={:s}".format(name, item.__element__())
-            except KeyError:
+            except (KeyError, IndexError):
                 yield "{:s}".format('???' if item is None else item.classname() if item.initializedQ() else item.typename())
             continue
         return
@@ -307,23 +330,29 @@ class Constructed(parray.block):
 
     def alloc(self, *args, **fields):
         cls, protocol = self.__class__, getattr(self.parent, 'Protocol', Protocol)
-        res, table = [], self.__get_lookup_table__()
+        items, table = [], self.__get_lookup_table__()
 
         # First we need to figure out what positional fields we were
         # given so that we use them to empty out our lookup table, and
         # also preserve them when allocating our array later.
-        items, = args if args else ([],)
-        for fld in items:
+        args, = args if args else ([],)
+        for fld in args:
             klasstag = getattr(fld, 'type', (fld.Class(), fld.Tag()))
-            table.pop(klasstag, None)
-            res.append(fld)
+            matched = table.get(klasstag, [])
+            matched.pop(0) if len(matched) else matched
+            items.append(fld)
 
         # Now that we've used up some of the names for the positional
         # fields we were given, if we have some explicit fields that
         # were specified then we need to reshape our lookup table so
         # that we can preserve the order of the fields to append.
         if hasattr(self, '_fields_') and fields:
-            nametable = [(name, (klasstag, t)) for klasstag, (name, t) in table.items()]
+            res = []
+            for klasstag, list in table.items():
+                for name, t in list:
+                    res.append((name, (klasstag, t)))
+                continue
+            nametable = res
 
             # Iterate through all of the names in the nametable looking
             # for fields that the caller has given us.
@@ -355,14 +384,14 @@ class Constructed(parray.block):
                     raise NotImplementedError
 
                 # Append the item to our current list of elements
-                res.append(E)
+                items.append(E)
 
             # Now we need to figure out what fields this array will be
             # composed of. Before doing this though, we need to iterate
             # through any explicit elements we were given and use them
             # to empty out our table.
-            return super(Constructed, self).alloc(res, **fields)
-        return super(Constructed, self).alloc(res, **fields)
+            return super(Constructed, self).alloc(items, **fields)
+        return super(Constructed, self).alloc(items, **fields)
 
 class U8(pint.uint8_t):
     pass
@@ -477,8 +506,9 @@ class Element(pstruct.type):
 
         # If our result type isn't actually constructed, then this element
         # is a wrapper and we'll need to return a constructed value using
-        # a copy of our element type as the object.
-        attributes.setdefault('_object_', self.__class__)
+        # a copy of our element type as the object. If this is supposed to
+        # be a primitive (non-constructed) type, then there's likely
+        # something missing from the definition.
         return dyn.clone(Constructed, **attributes)
 
     def __Padding(self):
