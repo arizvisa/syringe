@@ -411,6 +411,11 @@ class Block(parray.block):
     def isTerminator(self, value):
         return False
 
+    def summary(self):
+        octets = bytearray(self.serialize())
+        res = str().join(map('{:02X}'.format, octets))
+        return "({:d}) {:s}".format(len(octets), res)
+
 class String(parray.block):
     _object_ = pstr.char_t
     def str(self):
@@ -419,6 +424,9 @@ class String(parray.block):
         return res
     def isTerminator(self, value):
         return False
+    def summary(self):
+        string = self.str()
+        return "({:d}) {:s}".format(self.size(), string)
 
 ### Element structure
 class Protocol(ptype.definition):
@@ -712,18 +720,30 @@ class INTEGER(pint.sint_t):
     tag = 0x02
 
 @Universal.define
-class BITSTRING(Block):
+class BITSTRING(pstruct.type):
     tag = 0x03
+    def __string(self):
+        cls = self.__class__
+        if ptypes.utils.callable_eq(cls.blocksize, BITSTRING.blocksize):
+            return Block
+        total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused'])
+        return dyn.clone(Block, blocksize=lambda _, cb=max(0, total - res): cb)
+
+    _fields_ = [
+        (U8, 'unused'),
+        (__string, 'string'),
+    ]
     def summary(self):
-        res = str().join(map('{:02X}'.format, bytearray(self.serialize())))
-        return "({:d}) {:s}".format(self.size(), res)
+        unused, string = (self[fld] for fld in ['unused', 'string'])
+        return "unused={:d} string={:s}".format(unused.int(), string.summary())
 
 @Universal.define
 class OCTETSTRING(Block):
     tag = 0x04
     def summary(self):
-        res = str().join(map('{:02X}'.format, bytearray(self.serialize())))
-        return "({:d}) {:s}".format(self.size(), res)
+        octets = bytearray(self.serialize())
+        iterable = map('{:02X}'.format, octets)
+        return "({:d}) {:s}".format(self.size(), str().join(iterable))
 
 @Universal.define
 class NULL(ptype.block):
