@@ -722,17 +722,30 @@ class INTEGER(pint.sint_t):
 @Universal.define
 class BITSTRING(pstruct.type):
     tag = 0x03
+    _object_ = Block
     def __string(self):
+        cls, t = self.__class__, self._object_
+        if ptypes.utils.callable_eq(cls.blocksize, BITSTRING.blocksize):
+            return t
+        total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused'])
+        return dyn.clone(t, blocksize=lambda _, cb=max(0, total - res): cb)
+
+    def __padding(self):
         cls = self.__class__
         if ptypes.utils.callable_eq(cls.blocksize, BITSTRING.blocksize):
-            return Block
-        total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused'])
-        return dyn.clone(Block, blocksize=lambda _, cb=max(0, total - res): cb)
+            return 0
+        total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused', 'string'])
+        return dyn.block(max(0, total - res))
 
     _fields_ = [
         (U8, 'unused'),
         (__string, 'string'),
+        (__padding, 'padding(string)'),
     ]
+
+    def bitstring(self):
+        return self['string']
+
     def summary(self):
         if self.blocksize() > 0:
             unused, string = (self[fld] for fld in ['unused', 'string'])
