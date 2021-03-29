@@ -190,8 +190,18 @@ class Constructed(parray.block):
         # them into a lookup table.
         res = {}
         for item, name in self._fields_:
+
+            # Fail hard if the field doesn't have a type attribute
+            # and has been midefined by the user.
+            if not hasattr(item, 'type'):
+                cls = self.__class__
+                raise ValueError("Error with {:s} due to its definition for field \"{:s}\" using a type ({!s}) that is missing a \"{:s}\" attribute.".format('.'.join([cls.__module__, cls.__name__]), name, item, 'type'))
+
+            # Now that we have the ptype, we can rip its klasstag...
             klass, tag = (Context.Class, item.type) if isinstance(item.type, six.integer_types) else item.type
             klasstag = getattr(klass, 'Class', klass), tag
+
+            # ...and append it to our table for later retrieval.
             res.setdefault(klasstag, []).append( (name, item) )
         return res
 
@@ -447,7 +457,13 @@ class Element(pstruct.type):
         # Otherwise, just figure out the correct type
         else:
             res = self.__object__(self['Type'], self['Length'])
-        return res.classname() if isinstance(res, ptype.base) else res.typename()
+
+        # Figure out how we need to represent this type.
+        if isinstance(res, ptype.base):
+            return res.classname()
+        elif ptype.istype(res):
+            return res.typename()
+        return res.__name__
 
     def __object__(self, klasstag):
         protocol, (klass, tag) = self.Protocol, klasstag
@@ -471,12 +487,15 @@ class Element(pstruct.type):
 
         # First grab the type that our Class and Tag should return.
         klasstag = klass, tag.int()
-        result = self.__object__(klasstag)
+        t = self.__object__(klasstag)
 
         # If one wasn't found, then we need to figure out whether we're
         # returning an unknown constructed or an unknown primitive.
-        if result is None:
-            result = self.Protocol.UnknownConstruct if constructedQ else self.Protocol.UnknownPrimitive
+        if t is None:
+            t = self.Protocol.UnknownConstruct if constructedQ else self.Protocol.UnknownPrimitive
+
+        # Force what was discovered to a type that we can actually use.
+        result = ptype.force(t, self)
 
         # If this is not a constructed type and not of an indefinite length,
         # then that was all we really needed to do. So prior to returning it,
