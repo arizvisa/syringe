@@ -734,8 +734,10 @@ class BITSTRING(pstruct.type):
         (__string, 'string'),
     ]
     def summary(self):
-        unused, string = (self[fld] for fld in ['unused', 'string'])
-        return "unused={:d} string={:s}".format(unused.int(), string.summary())
+        if self.blocksize() > 0:
+            unused, string = (self[fld] for fld in ['unused', 'string'])
+            return "unused={:d} string={:s}".format(unused.int(), string.summary())
+        return '...'
 
 @Universal.define
 class OCTETSTRING(Block):
@@ -1257,8 +1259,8 @@ if __name__ == '__main__':
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.size() == z.source.size())
         assert(z['length'].int() == 0)
-        assert(len(z['value']) == 0)
-        assert(isinstance(z['value'].alloc(length=1)[0], ber.U8))
+        assert(z['value'].size() == 0)
+        assert(isinstance(z['value'], ber.BITSTRING))
     test_empty_bit_prim()
 
     def test_cons_octetbit():
