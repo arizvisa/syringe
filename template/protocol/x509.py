@@ -4,27 +4,55 @@ from ptypes import *
 
 Protocol = ber.Protocol.copy(recurse=True)
 Context = Protocol.lookup(ber.Context.Class)
+Application = Protocol.lookup(ber.Application.Class)
 
-class AttributeType(ber.OBJECT_IDENTIFIER): pass
-class AttributeValue(ber.PrintableString): pass
+class AttributeType(ber.OBJECT_IDENTIFIER):
+    id_at = lambda name, oid: tuple('.'.join([item, value]) for item, value in zip(['joint-iso-itu-t.ds.attributeType', '2.5.4'], [name, "{:d}".format(oid)]))
+    _values_ = [
+        id_at('title', 12),
+        id_at('dnQualifier', 46),
+        id_at('countryName', 6),
+        id_at('serialNumber', 5),
+        id_at('pseudonym', 65),
+        id_at('name', 41),
+        id_at('surname', 4),
+        id_at('givenName', 42),
+        id_at('initials', 43),
+        id_at('generationQualifier', 44),
+        id_at('commonName', 3),
+        id_at('localityName', 7),
+        id_at('stateOrProvinceName', 8),
+        id_at('organizationName', 10),
+        id_at('organizationUnitName', 11),
+        id_at('title', 12),
+        id_at('dnQualifier', 46),
+    ]
+
+class AttributeValue(ber.PrintableString):
+    pass
+
 class AttributeTypeAndValue(ber.SEQUENCE):
+    def __AttributeValue(self):
+        p = self.getparent(AttributeTypeAndValue)
+        res = p['type']['value']
+        return AttributeValue
+    __AttributeValue.type = ber.PrintableString.type
+
     _fields_ = [
         (AttributeType, 'type'),
-        (AttributeValue, 'value'),
+        (__AttributeValue, 'value'),
     ]
 
 class RelativeDistinguishedName(ber.SET):
-    _fields_ = [
-        (AttributeTypeAndValue, 'Item'),
-    ]
+    def _object_(self):
+        return dyn.clone(Packet, __object__=lambda self, _: AttributeTypeAndValue)
 
-class RDNSequence(RelativeDistinguishedName):
-    _fields_ = []
+class RDNSequence(ber.SEQUENCE):
+    def _object_(self):
+        return dyn.clone(Packet, __object__=lambda self, _: RelativeDistinguishedName)
 
-class Name(ber.SEQUENCE):
-    _fields_ = [
-        (RDNSequence, 'rdnSequence'),
-    ]
+class Name(RDNSequence):
+    pass
 
 class Version(pint.enum, ber.INTEGER):
     _values_ = [
@@ -52,6 +80,48 @@ class Validity(ber.SEQUENCE):
 
 class UniqueIdentifier(ber.BITSTRING):
     pass
+
+class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
+    # PKCS #7 & #9
+    _values_ = [
+        ('md5', '1.2.840.113549.2.5'),
+        ('rsa', '1.3.14.3.2.1.1'),
+        ('desMAC', '1.3.14.3.2.10'),
+        ('rsaSignature', '1.3.14.3.2.11'),
+        ('dsa', '1.3.14.3.2.12'),
+        ('dsaWithSHA', '1.3.14.3.2.13'),
+        ('mdc2WithRSASignature', '1.3.14.3.2.14'),
+        ('shaWithRSASignature', '1.3.14.3.2.15'),
+        ('dhWithCommonModulus', '1.3.14.3.2.16'),
+        ('desEDE', '1.3.14.3.2.17'),
+        ('sha', '1.3.14.3.2.18'),
+        ('mdc-2', '1.3.14.3.2.19'),
+        ('dsaCommon', '1.3.14.3.2.20'),
+        ('dsaCommonWithSHA', '1.3.14.3.2.21'),
+        ('rsaKeyTransport', '1.3.14.3.2.22'),
+        ('keyed-hash-seal', '1.3.14.3.2.23'),
+        ('md2WithRSASignature', '1.3.14.3.2.24'),
+        ('md5WithRSASignature', '1.3.14.3.2.25'),
+        ('sha1', '1.3.14.3.2.26'),
+        ('dsaWithSHA1', '1.3.14.3.2.27'),
+        ('dsaWithCommandSHA1', '1.3.14.3.2.28'),
+        ('sha-1WithRSAEncryption', '1.3.14.3.2.29'),
+        ('contentType', '1.2.840.113549.1.9.3'),
+        ('messageDigest', '1.2.840.113549.1.9.4'),
+        ('signingTime', '1.2.840.113549.1.9.5'),
+        ('counterSignature', '1.2.840.113549.1.9.6'),
+        ('challengePassword', '1.2.840.113549.1.9.7'),
+        ('unstructuredAddress', '1.2.840.113549.1.9.8'),
+        ('extendedCertificateAttributes', '1.2.840.113549.1.9.9'),
+        ('rsaEncryption', '1.2.840.113549.1.1.1'),
+        ('md2withRSAEncryption', '1.2.840.113549.1.1.2'),
+        ('md4withRSAEncryption', '1.2.840.113549.1.1.3'),
+        ('md5withRSAEncryption', '1.2.840.113549.1.1.4'),
+        ('sha1withRSAEncryption', '1.2.840.113549.1.1.5'),
+        ('rsaOAEPEncryptionSET', '1.2.840.113549.1.1.6'),
+        ('dsa', '1.2.840.10040.4.1'),
+        ('dsaWithSha1', '1.2.840.10040.4.3'),
+    ]
 
 class AlgorithmIdentifier(ber.SEQUENCE):
     def __parameters(self):
@@ -88,22 +158,145 @@ class SubjectPublicKeyInfo(ber.SEQUENCE):
 class KeyIdentifier(ber.OCTETSTRING):
     pass
 
+@Application.define
+class CountryName(ber.Constructed):
+    tag = 1
+    _fields_ = [
+        (ber.NumericString, 'x121-dcc-code'),
+        (ber.PrintableString, 'iso-3166-alpha2-code'),
+    ]
+
+@Application.define
+class AdministrationDomainName(ber.Constructed):
+    tag = 2
+    _fields_ = [
+        (ber.NumericString, 'numeric'),
+        (ber.PrintableString, 'printable'),
+    ]
+
+class X121Address(ber.NumericString):
+    pass
+
+class NetworkAddress(ber.Constructed):
+    _fields_ = [
+        (X121Address, 'address'),
+    ]
+
+class TerminalIdentifier(ber.PrintableString):
+    pass
+
+class PrivateDomainName(ber.Constructed):
+    _fields_ = [
+        (ber.NumericString, 'numeric'),
+        (ber.PrintableString, 'printable'),
+    ]
+
+class OrganizationName(ber.PrintableString):
+    pass
+
+class NumericUserIdentifier(ber.NumericString):
+    pass
+
+class PersonalName(ber.SET):
+    _fields_ = [
+        (dyn.clone(ber.PrintableString, type=(Context, 0)), 'surname'),
+        (dyn.clone(ber.PrintableString, type=(Context, 1)), 'given-name'),
+        (dyn.clone(ber.PrintableString, type=(Context, 2)), 'initials'),
+        (dyn.clone(ber.PrintableString, type=(Context, 3)), 'generation-qualifier'),
+    ]
+
+class OrganizationalUnitName(ber.PrintableString):
+    pass
+
+class OrganizationalUnitNames(ber.SEQUENCE):
+    def _object_(self):
+        return dyn.clone(Packet, __object__=lambda self, _: OrganizationalUnitName)
+
+class BuiltInStandardAttributes(ber.SEQUENCE):
+    _fields_ = [
+        (CountryName, 'country-name'),
+        (AdministrationDomainName, 'administration-domain-name'),
+        (dyn.clone(NetworkAddress, type=(Context, 0)), 'network-address'),
+        (dyn.clone(TerminalIdentifier, type=(Context, 1)), 'terminal-identifier'),
+        (dyn.clone(PrivateDomainName, type=(Context, 2)), 'private-domain-name'),
+        (dyn.clone(OrganizationName, type=(Context, 3)), 'organization-name'),
+        (dyn.clone(NumericUserIdentifier, type=(Context, 4)), 'numeric-user-identifier'),
+        (dyn.clone(PersonalName, type=(Context, 5)), 'personal-name'),
+        (dyn.clone(OrganizationalUnitNames, type=(Context, 6)), 'organizational-unit-names'),
+    ]
+
+class BuiltInDomainDefinedAttribute(ber.SEQUENCE):
+    _fields_ = [
+        (ber.PrintableString, 'type'),
+        (ber.PrintableString, 'value'),
+    ]
+
+class BuiltInDomainDefinedAttributes(ber.SEQUENCE):
+    def _object_(self):
+        return dyn.clone(Packet, __object__=lambda self, _: BuiltInDomainDefineAttribute)
+
+class ExtensionAttribute(ber.SEQUENCE):
+    def __extension_attribute_value(self):
+        p = self.getparent(ExtensionAttribute)
+        t = p['extension-attribute-type']['value']
+        return ber.Constructed
+    __extension_attribute_value.type = (Context, 1)
+
+    _fields_ = [
+        (dyn.clone(ber.INTEGER, type=(Context, 0)), 'extension-attribute-type'),
+        (__extension_attribute_value, 'extension-attribute-value'),
+    ]
+
+class ExtensionAttributes(ber.SET):
+    def _object_(self):
+        return dyn.clone(Packet, __object__=lambda self, _: ExtensionAttribute)
+
 class ORAddress(ber.SEQUENCE):
-    _fields_ = []
+    _fields_ = [
+        (BuiltInStandardAttributes, 'built-in-standard-attributes'),
+        (BuiltInDomainDefinedAttributes, 'built-in-domain-defined-attributes'),
+        (ExtensionAttributes, 'extension-attributes'),
+    ]
+
+class TeletexString(ber.T61String):
+    pass
+
+class DirectoryString(ber.Constructed):
+    _fields_ = [
+        (TeletexString, 'teletexString'),
+        (ber.PrintableString, 'printableString'),
+        (ber.UniversalString, 'universalString'),
+        (ber.UTF8String, 'utf8String'),
+        (ber.BMPString, 'bmpString'),
+    ]
 
 class EDIPartyName(ber.SEQUENCE):
-    _fields_ = []
+    _fields_ = [
+        (dyn.clone(DirectoryString, type=(Context, 0)), 'nameAssigner'),
+        (dyn.clone(DirectoryString, type=(Context, 1)), 'partyName'),
+    ]
+
+class AnotherName(ber.SEQUENCE):
+    def __value(self):
+        p = self.getparent(AnotherName)
+        t = p['type-id']['value']
+        return ber.Constructed
+    __value.type = (Context, 0)
+
+    _fields_ = [
+        (ber.OBJECT_IDENTIFIER, 'type-id'),
+        (__value, 'value'),
+    ]
 
 class GeneralName(ber.Constructed):
-    # FIXME
     _fields_ = [
-        (dyn.clone(ber.PrintableString, type=(Context, 0)), 'otherName'),
-        (dyn.clone(ber.PrintableString, type=(Context, 1)), 'rfc822Name'),
-        (dyn.clone(ber.PrintableString, type=(Context, 2)), 'dNSName'),
+        (dyn.clone(AnotherName, type=(Context, 0)), 'otherName'),
+        (dyn.clone(ber.IA5String, type=(Context, 1)), 'rfc822Name'),
+        (dyn.clone(ber.IA5String, type=(Context, 2)), 'dNSName'),
         (dyn.clone(ORAddress, type=(Context, 3)), 'x400Address'),
         (dyn.clone(Name, type=(Context, 4)), 'directoryName'),
         (dyn.clone(EDIPartyName, type=(Context, 5)), 'ediPartyName'),
-        (dyn.clone(ber.PrintableString, type=(Context, 6)), 'uniformResourceIdentifier'),
+        (dyn.clone(ber.IA5String, type=(Context, 6)), 'uniformResourceIdentifier'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 7)), 'iPAddress'),
         (dyn.clone(ber.OBJECT_IDENTIFIER, type=(Context, 8)), 'registeredID'),
     ]
@@ -177,3 +370,5 @@ if __name__ == '__main__':
     print(cert['value']['version'])
     x = z['value']['tbscertificate']['value']['extensions']['value']['items']['value']
     k = z.at(0x99).getparent(ber.Element)
+    print(z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0])
+    print(z['value']['tbsCertificate']['value']['issuer']['value'][0]['value'][0]['value']['type'])
