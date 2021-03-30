@@ -283,14 +283,14 @@ class Constructed(parray.block):
         # elements. This way they can use us to lookup what type should
         # be used when decoding their value.
         def lookup(self, klasstag, protocol=protocol, state=objectstate):
+            items = state.get(klasstag, [])
             try:
-                items = state[klasstag]
-                _, type = items.pop(0)
-                result = type
+                item = items.pop(0)
+                _, result = item
 
             # If we couldn't find the klasstag in our current state,
             # then we need to fall-back to a standard protocol lookup.
-            except (KeyError, IndexError):
+            except (IndexError, TypeError):
                 klass, tag = klasstag
 
             # Otherwise, we found what we're looking for and can just
@@ -769,8 +769,8 @@ class OBJECT_IDENTIFIER(ptype.type):
     tag = 0x06
 
     def set(self, string):
-        if string in self._values_.values():
-            res = {oid : description for description, oid in self._values_.items()}
+        if isinstance(string, six.string_types) and string in {description for description, oid in getattr(self, '_values_', [])}:
+            res = next(oid for description, oid in self._values_ if description == string)
             return self.set(res[string])
 
         # Convert our input into a list of their integral components.
@@ -858,79 +858,17 @@ class OBJECT_IDENTIFIER(ptype.type):
         res = self.identifier()
         return '.'.join(map("{:d}".format, res))
 
+    def description(self):
+        res = {oid : name for name, oid in getattr(self, '_values_', [])}
+        oid = '.'.join(map("{:d}".format, self.identifier()))
+        return res.get(oid, None)
+
     def summary(self):
-        oid, data = self.str(), self.serialize()
+        oid, data, description = self.str(), self.serialize(), self.description()
         res = super(OBJECT_IDENTIFIER, self).summary()
-        if oid in self._values_:
-            return '{:s} ({:s}) : {:s}'.format(self._values_[oid], oid, res)
-        return '{:s} : {:s}'.format(oid, res)
-
-    # https://support.microsoft.com/en-us/help/287547/object-ids-associated-with-microsoft-cryptography
-    _values_ = [
-        ('spcIndirectDataContext', '1.3.6.1.4.1.311.2.1.4'),
-        ('spcStatementType', '1.3.6.1.4.1.311.2.1.11'),
-        ('spcSpOpusInfo', '1.3.6.1.4.1.311.2.1.12'),
-        ('individualCodeSigning', '1.3.6.1.4.1.311.2.1.21'),
-        ('commercialCodeSigning', '1.3.6.1.4.1.311.2.1.22'),
-        ('SPC_MS_JAVA_SOMETHING', '1.3.6.1.4.1.311.15.1'),
-        ('spcPelmageData', '1.3.6.1.4.1.311.2.1.15'),
-        ('spcLink', '1.3.6.1.4.1.311.2.1.25'),
-        ('SPC_TIME_STAMP_REQUEST_OBJID', '1.3.6.1.4.1.311.3.2.1'),
-        ('SPC_SIPINFO_OBJID', '1.3.6.1.4.1.311.2.1.30'),
-        ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1
-        ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256
-        ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
-        ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
-
-        ('iso.org.dod.internet.security.mechanism.spnego', '1.3.6.1.5.5.2'), # FIXME
-
-        # Authenticode PE
-        ('codeSigning', '1.3.6.1.5.5.7.3.3'),
-        ('timeStamping', '1.3.6.1.5.5.7.3.8'),
-        ('SPC_KP_LIFETIME_SIGNING_OBJID',  '1.3.6.1.4.1.311.10.3.13'),
-
-        # PKCS #7 & #9
-        ('md5', '1.2.840.113549.2.5'),
-        ('rsa', '1.3.14.3.2.1.1'),
-        ('desMAC', '1.3.14.3.2.10'),
-        ('rsaSignature', '1.3.14.3.2.11'),
-        ('dsa', '1.3.14.3.2.12'),
-        ('dsaWithSHA', '1.3.14.3.2.13'),
-        ('mdc2WithRSASignature', '1.3.14.3.2.14'),
-        ('shaWithRSASignature', '1.3.14.3.2.15'),
-        ('dhWithCommonModulus', '1.3.14.3.2.16'),
-        ('desEDE', '1.3.14.3.2.17'),
-        ('sha', '1.3.14.3.2.18'),
-        ('mdc-2', '1.3.14.3.2.19'),
-        ('dsaCommon', '1.3.14.3.2.20'),
-        ('dsaCommonWithSHA', '1.3.14.3.2.21'),
-        ('rsaKeyTransport', '1.3.14.3.2.22'),
-        ('keyed-hash-seal', '1.3.14.3.2.23'),
-        ('md2WithRSASignature', '1.3.14.3.2.24'),
-        ('md5WithRSASignature', '1.3.14.3.2.25'),
-        ('sha1', '1.3.14.3.2.26'),
-        ('dsaWithSHA1', '1.3.14.3.2.27'),
-        ('dsaWithCommandSHA1', '1.3.14.3.2.28'),
-        ('sha-1WithRSAEncryption', '1.3.14.3.2.29'),
-        ('contentType', '1.2.840.113549.1.9.3'),
-        ('messageDigest', '1.2.840.113549.1.9.4'),
-        ('signingTime', '1.2.840.113549.1.9.5'),
-        ('counterSignature', '1.2.840.113549.1.9.6'),
-        ('challengePassword', '1.2.840.113549.1.9.7'),
-        ('unstructuredAddress', '1.2.840.113549.1.9.8'),
-        ('extendedCertificateAttributes', '1.2.840.113549.1.9.9'),
-        ('rsaEncryption', '1.2.840.113549.1.1.1'),
-        ('md2withRSAEncryption', '1.2.840.113549.1.1.2'),
-        ('md4withRSAEncryption', '1.2.840.113549.1.1.3'),
-        ('md5withRSAEncryption', '1.2.840.113549.1.1.4'),
-        ('sha1withRSAEncryption', '1.2.840.113549.1.1.5'),
-        ('rsaOAEPEncryptionSET', '1.2.840.113549.1.1.6'),
-        ('dsa', '1.2.840.10040.4.1'),
-        ('dsaWithSha1', '1.2.840.10040.4.3'),
-
-        ('itu-t recommendation t 124 version(0) 1', '0.0.20.124.0.1'),
-    ]
-    _values_ = {__oid : __name for __name, __oid in _values_}
+        if description is None:
+            return '{:s} : {:s}'.format(oid, res)
+        return '{:s} ({:s}) : {:s}'.format(description, oid, res)
 
 @Universal.define
 class EXTERNAL(ptype.block):

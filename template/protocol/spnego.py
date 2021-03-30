@@ -95,11 +95,16 @@ class NegTokenRespContext(ber.SEQUENCE):
         (NegTokenResp, 'context'),
     ]
 
+class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
+    _values_ = [
+        ('iso.org.dod.internet.security.mechanism.spnego', '1.3.6.1.5.5.2'),
+    ]
+
 @SPNEGO.Application.define
 class NegotiationToken(ber.SEQUENCE):
     tag = 0
     _fields_ = [
-        (ber.OBJECT_IDENTIFIER, 'securityMechanism'),
+        (OBJECT_IDENTIFIER, 'securityMechanism'),
         (dyn.clone(NegTokenInitContext, type=(Context, 0)), 'negTokenInit'),
         (dyn.clone(NegTokenRespContext, type=(Context, 1)), 'negTokenResp'),
     ]
