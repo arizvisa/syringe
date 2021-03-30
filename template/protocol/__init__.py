@@ -7,3 +7,4 @@ from . import ber, per
 from . import nlmp, credssp, spnego
 from . import gcc, mcs, mas
 from . import dns, netbios
+from . import kerberos
