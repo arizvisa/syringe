@@ -3,10 +3,12 @@ from . import ber
 from ptypes import *
 
 Protocol = ber.Protocol.copy(recurse=True)
+Universal = Protocol.lookup(ber.Universal.Class)
 Context = Protocol.lookup(ber.Context.Class)
 Application = Protocol.lookup(ber.Application.Class)
 
-class AttributeType(ber.OBJECT_IDENTIFIER):
+@Universal.define
+class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
     id_at = lambda name, oid: tuple('.'.join([item, value]) for item, value in zip(['joint-iso-itu-t.ds.attributeType', '2.5.4'], [name, "{:d}".format(oid)]))
     _values_ = [
         id_at('title', 12),
@@ -27,6 +29,51 @@ class AttributeType(ber.OBJECT_IDENTIFIER):
         id_at('title', 12),
         id_at('dnQualifier', 46),
     ]
+
+    # PKCS #7 & #9
+    _values_ += [
+        ('md5', '1.2.840.113549.2.5'),
+        ('rsa', '1.3.14.3.2.1.1'),
+        ('desMAC', '1.3.14.3.2.10'),
+        ('rsaSignature', '1.3.14.3.2.11'),
+        ('dsa', '1.3.14.3.2.12'),
+        ('dsaWithSHA', '1.3.14.3.2.13'),
+        ('mdc2WithRSASignature', '1.3.14.3.2.14'),
+        ('shaWithRSASignature', '1.3.14.3.2.15'),
+        ('dhWithCommonModulus', '1.3.14.3.2.16'),
+        ('desEDE', '1.3.14.3.2.17'),
+        ('sha', '1.3.14.3.2.18'),
+        ('mdc-2', '1.3.14.3.2.19'),
+        ('dsaCommon', '1.3.14.3.2.20'),
+        ('dsaCommonWithSHA', '1.3.14.3.2.21'),
+        ('rsaKeyTransport', '1.3.14.3.2.22'),
+        ('keyed-hash-seal', '1.3.14.3.2.23'),
+        ('md2WithRSASignature', '1.3.14.3.2.24'),
+        ('md5WithRSASignature', '1.3.14.3.2.25'),
+        ('sha1', '1.3.14.3.2.26'),
+        ('dsaWithSHA1', '1.3.14.3.2.27'),
+        ('dsaWithCommandSHA1', '1.3.14.3.2.28'),
+        ('sha-1WithRSAEncryption', '1.3.14.3.2.29'),
+        ('contentType', '1.2.840.113549.1.9.3'),
+        ('messageDigest', '1.2.840.113549.1.9.4'),
+        ('signingTime', '1.2.840.113549.1.9.5'),
+        ('counterSignature', '1.2.840.113549.1.9.6'),
+        ('challengePassword', '1.2.840.113549.1.9.7'),
+        ('unstructuredAddress', '1.2.840.113549.1.9.8'),
+        ('extendedCertificateAttributes', '1.2.840.113549.1.9.9'),
+        ('rsaEncryption', '1.2.840.113549.1.1.1'),
+        ('md2withRSAEncryption', '1.2.840.113549.1.1.2'),
+        ('md4withRSAEncryption', '1.2.840.113549.1.1.3'),
+        ('md5withRSAEncryption', '1.2.840.113549.1.1.4'),
+        ('sha1withRSAEncryption', '1.2.840.113549.1.1.5'),
+        ('rsaOAEPEncryptionSET', '1.2.840.113549.1.1.6'),
+        ('dsa', '1.2.840.10040.4.1'),
+        ('dsaWithSha1', '1.2.840.10040.4.3'),
+        ('joint-iso-itu-t.ds.certificateExtension.authorityKeyIdentifier', (2,5,29,1)),
+    ]
+
+class AttributeType(OBJECT_IDENTIFIER):
+    pass
 
 class AttributeValue(ber.PrintableString):
     pass
@@ -81,55 +128,13 @@ class Validity(ber.SEQUENCE):
 class UniqueIdentifier(ber.BITSTRING):
     pass
 
-class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
-    # PKCS #7 & #9
-    _values_ = [
-        ('md5', '1.2.840.113549.2.5'),
-        ('rsa', '1.3.14.3.2.1.1'),
-        ('desMAC', '1.3.14.3.2.10'),
-        ('rsaSignature', '1.3.14.3.2.11'),
-        ('dsa', '1.3.14.3.2.12'),
-        ('dsaWithSHA', '1.3.14.3.2.13'),
-        ('mdc2WithRSASignature', '1.3.14.3.2.14'),
-        ('shaWithRSASignature', '1.3.14.3.2.15'),
-        ('dhWithCommonModulus', '1.3.14.3.2.16'),
-        ('desEDE', '1.3.14.3.2.17'),
-        ('sha', '1.3.14.3.2.18'),
-        ('mdc-2', '1.3.14.3.2.19'),
-        ('dsaCommon', '1.3.14.3.2.20'),
-        ('dsaCommonWithSHA', '1.3.14.3.2.21'),
-        ('rsaKeyTransport', '1.3.14.3.2.22'),
-        ('keyed-hash-seal', '1.3.14.3.2.23'),
-        ('md2WithRSASignature', '1.3.14.3.2.24'),
-        ('md5WithRSASignature', '1.3.14.3.2.25'),
-        ('sha1', '1.3.14.3.2.26'),
-        ('dsaWithSHA1', '1.3.14.3.2.27'),
-        ('dsaWithCommandSHA1', '1.3.14.3.2.28'),
-        ('sha-1WithRSAEncryption', '1.3.14.3.2.29'),
-        ('contentType', '1.2.840.113549.1.9.3'),
-        ('messageDigest', '1.2.840.113549.1.9.4'),
-        ('signingTime', '1.2.840.113549.1.9.5'),
-        ('counterSignature', '1.2.840.113549.1.9.6'),
-        ('challengePassword', '1.2.840.113549.1.9.7'),
-        ('unstructuredAddress', '1.2.840.113549.1.9.8'),
-        ('extendedCertificateAttributes', '1.2.840.113549.1.9.9'),
-        ('rsaEncryption', '1.2.840.113549.1.1.1'),
-        ('md2withRSAEncryption', '1.2.840.113549.1.1.2'),
-        ('md4withRSAEncryption', '1.2.840.113549.1.1.3'),
-        ('md5withRSAEncryption', '1.2.840.113549.1.1.4'),
-        ('sha1withRSAEncryption', '1.2.840.113549.1.1.5'),
-        ('rsaOAEPEncryptionSET', '1.2.840.113549.1.1.6'),
-        ('dsa', '1.2.840.10040.4.1'),
-        ('dsaWithSha1', '1.2.840.10040.4.3'),
-    ]
-
 class AlgorithmIdentifier(ber.SEQUENCE):
     def __parameters(self):
         return ber.SEQUENCE
     __parameters.type = ber.SEQUENCE.type
 
     _fields_ = [
-        (ber.OBJECT_IDENTIFIER, 'algorithm'),
+        (OBJECT_IDENTIFIER, 'algorithm'),
         (__parameters, 'parameters'),
     ]
 
@@ -145,6 +150,9 @@ class SubjectPublicKeyInfo(ber.SEQUENCE):
         res = p['algorithm']['value']
         algorithm, parameters = (res[fld]['value'] if res.has(fld) else None for fld in ['algorithm', 'parameters'])
         algoIdentifier = tuple(algorithm.identifier())
+
+        # FIXME: this won't always be an RSAPublicKey as it depends
+        #        on the algorithm.
         t = dyn.clone(Packet, __object__=lambda self, _: RSAPublicKey)
         return dyn.clone(ber.BITSTRING, _object_=t)
     __subjectPublicKey.type = ber.BITSTRING.type
@@ -284,7 +292,7 @@ class AnotherName(ber.SEQUENCE):
     __value.type = (Context, 0)
 
     _fields_ = [
-        (ber.OBJECT_IDENTIFIER, 'type-id'),
+        (OBJECT_IDENTIFIER, 'type-id'),
         (__value, 'value'),
     ]
 
@@ -298,7 +306,7 @@ class GeneralName(ber.Constructed):
         (dyn.clone(EDIPartyName, type=(Context, 5)), 'ediPartyName'),
         (dyn.clone(ber.IA5String, type=(Context, 6)), 'uniformResourceIdentifier'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 7)), 'iPAddress'),
-        (dyn.clone(ber.OBJECT_IDENTIFIER, type=(Context, 8)), 'registeredID'),
+        (dyn.clone(OBJECT_IDENTIFIER, type=(Context, 8)), 'registeredID'),
     ]
 
 class GeneralNames(ber.SEQUENCE):
@@ -313,10 +321,22 @@ class AuthorityKeyIdentifier(ber.SEQUENCE):
     ]
 
 class Extension(ber.SEQUENCE):
+    def __extnValue(self):
+        p = self.getparent(Extension)
+        extensionId = p['extnID']['value']
+        id = extensionId.identifier()
+
+        # This octet string is actually der-encoded, so we should
+        # return a packet type specifically for the x509 extensions.
+        # However, since that isn't implemented we'll just return a
+        # packet so that we can force its decoding.
+        return Packet
+    __extnValue.type = ber.OCTETSTRING.type
+
     _fields_ = [
-        (ber.OBJECT_IDENTIFIER, 'extnID'),
+        (OBJECT_IDENTIFIER, 'extnID'),
         (ber.BOOLEAN, 'critical'),
-        (dyn.clone(ber.Packet, type=ber.OCTETSTRING.type), 'extnValue'),
+        (__extnValue, 'extnValue'),
     ]
 
 class ExtensionList(ber.SEQUENCE):
@@ -350,15 +370,13 @@ class Certificate(ber.SEQUENCE):
     ]
 
 class Packet(ber.Packet):
+    Protocol = Protocol
     def __object__(self, _):
         return Certificate
 
 if __name__ == '__main__':
-    import sys, ptypes, protocol.x509 as x509
+    import sys, operator, ptypes, protocol.x509 as x509
     from ptypes import *
-
-    import importlib
-    importlib.reload(x509)
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
