@@ -336,6 +336,32 @@ class Certificate(pstruct.type):
         (lambda s: dyn.block(s['dwLength'].li.int() - 8), 'bCertificate'),
     ]
 
+# https://support.microsoft.com/en-us/help/287547/object-ids-associated-with-microsoft-cryptography
+# XXX: some of these identifiers are likely in the certificate if we decode it.
+_values_ = [
+    ('spcIndirectDataContext', '1.3.6.1.4.1.311.2.1.4'),
+    ('spcStatementType', '1.3.6.1.4.1.311.2.1.11'),
+    ('spcSpOpusInfo', '1.3.6.1.4.1.311.2.1.12'),
+    ('individualCodeSigning', '1.3.6.1.4.1.311.2.1.21'),
+    ('commercialCodeSigning', '1.3.6.1.4.1.311.2.1.22'),
+    ('SPC_MS_JAVA_SOMETHING', '1.3.6.1.4.1.311.15.1'),
+    ('spcPelmageData', '1.3.6.1.4.1.311.2.1.15'),
+    ('spcLink', '1.3.6.1.4.1.311.2.1.25'),
+    ('SPC_TIME_STAMP_REQUEST_OBJID', '1.3.6.1.4.1.311.3.2.1'),
+    ('SPC_SIPINFO_OBJID', '1.3.6.1.4.1.311.2.1.30'),
+    ('SPC_PE_IMAGE_PAGE_HASHES_V1', '1.3.6.1.4.1.311.2.3.1'), # Page hash using SHA1
+    ('SPC_PE_IMAGE_PAGE_HASHES_V2', '1.3.6.1.4.1.311.2.3.2'), # Page hash using SHA256
+    ('SPC_NESTED_SIGNATURE_OBJID', '1.3.6.1.4.1.311.2.4.1'),
+    ('SPC_RFC3161_OBJID', '1.3.6.1.4.1.311.3.3.1'),
+
+    # Authenticode PE
+    ('codeSigning', '1.3.6.1.5.5.7.3.3'),
+    ('timeStamping', '1.3.6.1.5.5.7.3.8'),
+    ('SPC_KP_LIFETIME_SIGNING_OBJID',  '1.3.6.1.4.1.311.10.3.13'),
+
+    ('itu-t recommendation t 124 version(0) 1', '0.0.20.124.0.1'),
+]
+
 if __name__ == '__main__':
     from ptypes import provider
     import pecoff
