@@ -769,15 +769,26 @@ class OBJECT_IDENTIFIER(ptype.type):
     tag = 0x06
 
     def set(self, string):
-        if isinstance(string, six.string_types) and string in {description for description, oid in getattr(self, '_values_', [])}:
-            res = next(oid for description, oid in self._values_ if description == string)
-            return self.set(res[string])
 
-        # Convert our input into a list of their integral components.
+        # If our input is a string, then we need to convert it into a list
+        # of identifier components so we can encode it.
         if isinstance(string, six.string_types):
+
+            # Check if our string is in the description list stored in the
+            # _values_ attribute.
+            if string in {description for description, oid in getattr(self, '_values_', [])}:
+                res = next(oid for description, oid in self._values_ if description == string)
+                return self.set(res[string])
+
+            # If it isn't, then this should be a '.'-delimited list that
+            # we need to split up into its integral components.
             iterable = (int(item, 10) if item else 0 for item in string.split('.'))
             return self.set(iterable)
-        iterable = iter(string)
+
+        # If it isn't a string, then convert it to an iterator that we
+        # will later process.
+        else:
+            iterable = iter(string)
 
         # Define a closure which takes an integer and breaks it down into its
         # 7-bit components so that we can manually clear the sentinel bit when
@@ -852,16 +863,16 @@ class OBJECT_IDENTIFIER(ptype.type):
         # that we return to the caller. The number of identifiers should be
         # one less than the number of components, so if there's no items
         # left, then we end up returning just the single identifier.
-        return [res] + ([item - res * 40] if len(items) else []) + [subIdentifier for subIdentifier in items[1:]]
+        return tuple([res] + ([item - res * 40] if len(items) else []) + [subIdentifier for subIdentifier in items[1:]])
 
     def str(self):
         res = self.identifier()
         return '.'.join(map("{:d}".format, res))
 
     def description(self):
-        res = {oid : name for name, oid in getattr(self, '_values_', [])}
-        oid = '.'.join(map("{:d}".format, self.identifier()))
-        return res.get(oid, None)
+        Fidentifier = lambda oid: tuple((int(item, 16) for item in oid.split('.')) if isinstance(oid, six.string_types) else oid)
+        descriptions = {Fidentifier(oid) : name for name, oid in getattr(self, '_values_', [])}
+        return descriptions.get(self.identifier(), None)
 
     def summary(self):
         oid, data, description = self.str(), self.serialize(), self.description()
@@ -1304,7 +1315,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 3)
 
-        expected = [2,100,3]
+        expected = (2,100,3)
         assert(z['value'].identifier() == expected)
     test_object_identifier_1()
 
@@ -1327,7 +1338,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 9)
 
-        expected = [1,3,6,1,4,1,311,21,20]
+        expected = (1,3,6,1,4,1,311,21,20)
         assert(z['value'].identifier() == expected)
     test_object_identifier_3()
 
@@ -1350,7 +1361,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 3)
 
-        expected = [2,16819]
+        expected = (2,16819)
         assert(z['value'].identifier() == expected)
     test_object_identifier_5()
 
@@ -1373,7 +1384,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 4)
 
-        expected = [2,268435248]
+        expected = (2,268435248)
         assert(z['value'].identifier() == expected)
     test_object_identifier_7()
 
@@ -1396,7 +1407,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 4)
 
-        expected = [2,268435375]
+        expected = (2,268435375)
         assert(z['value'].identifier() == expected)
     test_object_identifier_9()
 
@@ -1419,7 +1430,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 4)
 
-        expected = [0,0,2097024]
+        expected = (0,0,2097024)
         assert(z['value'].identifier() == expected)
     test_object_identifier_11()
 
@@ -1442,7 +1453,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 1)
 
-        expected = [2,47]
+        expected = (2,47)
         assert(z['value'].identifier() == expected)
     test_object_identifier_13()
 
@@ -1465,7 +1476,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 2)
 
-        expected = [0,0]
+        expected = (0,0)
         assert(z['value'].identifier() == expected)
     test_object_identifier_15()
 
@@ -1476,7 +1487,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 8)
 
-        expected = [0,0,0,0,0,0,0,0]
+        expected = (0,0,0,0,0,0,0,0)
         assert(z['value'].identifier() == expected)
     test_object_identifier_16()
 
@@ -1487,7 +1498,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 1)
 
-        expected = [1,0]
+        expected = (1,0)
         assert(z['value'].identifier() == expected)
     test_object_identifier_17()
 
@@ -1510,7 +1521,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 1)
 
-        expected = [0,39]
+        expected = (0,39)
         assert(z['value'].identifier() == expected)
     test_object_identifier_19()
 
@@ -1533,7 +1544,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 1)
 
-        expected = [0,0]
+        expected = (0,0)
         assert(z['value'].identifier() == expected)
     test_object_identifier_21()
 
@@ -1556,7 +1567,7 @@ if __name__ == '__main__':
         assert(isinstance(z['value'], ber.OBJECT_IDENTIFIER))
         assert(z['value'].size() == 0)
 
-        expected = [0]
+        expected = (0,)
         assert(z['value'].identifier() == expected)
     test_object_identifier_23()
 
