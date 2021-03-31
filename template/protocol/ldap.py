@@ -3,102 +3,76 @@ import ptypes
 from . import ber
 from ptypes import *
 
-### Helpers
-if False:
-    class CHOICE(ber.Element):
-        def __init__(self, **kwds):
-            ctx = self.protocol.get(Context.Class)
-            for tag,name,element in self._values_:
-                result = dyn.clone(element, __name__=name, type=(self.__class__,tag))
-                element = ctx.define(result)
-            return super(CHOICE,self).__init__(**kwds)
+Protocol = ber.Protocol.copy(recurse=True)
+class Record(ber.Packet):
+    Protocol = Protocol
 
-        def Value(self):
-            cls, t = self.__class__, self['Type'].li
-            cons, tag = t['Constructed'], t['Tag'].int()
-            ctx = self.protocol.get(Context.Class)
-            try:
-                res = ctx.lookup((cls, tag))
-            except KeyError:
-                return super(CHOICE,self).Value()
-            return res
-
-    class CONSTRAINT(parray.type):
-        class Local(ptype.definition): cache = {}
-        class Optional(ptype.definition): cache = {}
-
-        def __init__(self, **kwds):
-            for i,(t,name) in enumerate(self._fields_):
-                type = t.type if hasattr(t,'type') else i
-                result = dyn.clone(t, __name__=name)
-                if hasattr(t,'OPTIONAL'):
-                    self.Optional.define(dyn.clone(result, type=(self.__class__,type)))
-                self.Local.define(dyn.clone(result, type=(self.__class__,i)))
-            return super(CONSTRAINT,self).__init__(**kwds)
-
-        def append(self, value):
-            cls, Type = self.__class__, value['Type'].li
-            K, tag = Type['Class'], Type['Tag'].int()
-            index = len(self)
-
-            cache = self.Optional.cache
-            try:
-                L = self.Local.lookup((cls, index))
-                T = cache.get((cls, tag), L)
-            except KeyError:
-                res = value
-            else:
-                res = value.copy(Value=(lambda type=T: type), __name__=T.__name__)
-            return super(CONSTRAINT, self).append(res)
-
-###########
-class protocol(ber.Protocol.copy()): pass
-class record(ber.Element): protocol = protocol
-
-@protocol.define
-class Application(ber.Application): cache = {}
-@protocol.define
-class Context(ber.Context): cache = {}
+Application = Protocol.lookup(ber.Application.Class)
+Context = Protocol.lookup(ber.Context.Class)
+Universal = Protocol.lookup(ber.Universal.Class)
 
 ### ber primitives
-class CHOICE(ber.Element): protocol = protocol  # FIXME: this needs to be dynamic
-def OPTIONAL(t): return dyn.clone(t, OPTIONAL=True)
+def OPTIONAL(t, **attrs):
+    attrs.setdefault('OPTIONAL', True)
+    return dyn.clone(t, **attrs)
 
-def SETOF(t):
-    return dyn.clone(ber.SET, _object_=t)
-def COMPONENTSOF(t):
-    return t
-def SEQUENCEOF(t):
-    return dyn.clone(ber.SEQUENCE, _object_=t)
+def SETOF(t, **attrs):
+    class result(Record): pass
+    def lookup(self, klasstag, primitive=t):
+        return primitive if primitive.type == klasstag else None
+    result.__object__ = lookup
+    result.__name__ = "SETOF({:s})".format(t.__name__)
+    attrs.setdefault('_object_', result)
+    return dyn.clone(ber.SET, **attrs)
+
+def SEQUENCEOF(t, **attrs):
+    class result(Record): pass
+    def lookup(self, klasstag, primitive=t):
+        return primitive if primitive.type == klasstag else None
+    result.__object__ = lookup
+    result.__name__ = "SEQUENCEOF({:s})".format(t.__name__)
+    attrs.setdefault('_object_', result)
+    return dyn.clone(ber.SEQUENCE, **attrs)
 
 ### primitives
-class MessageID(ber.INTEGER): pass
-class LDAPString(ber.OCTETSTRING): pass
-class LDAPOID(ber.OCTETSTRING): pass
-class URI(LDAPString): pass
-class Referral(URI): pass
+class LDAPString(ber.OCTETSTRING):
+    pass
 
-class LDAPDN(LDAPString): pass
-class RelativeLDAPDN(LDAPString): pass
-class AttributeDescription(LDAPString): pass
-class AttributeValue(ber.OCTETSTRING): pass
-class MatchingRuleId(LDAPString): pass
+class LDAPOID(ber.OCTETSTRING):
+    pass
 
-class Op(record): pass
+class LDAPDN(LDAPString):
+    pass
 
-class Control(ber.SEQUENCE):
+class RelativeLDAPDN(LDAPString):
+    pass
+
+class AttributeDescription(LDAPString):
+    pass
+
+class AttributeValue(ber.OCTETSTRING):
+    pass
+
+class AssertionValue(ber.OCTETSTRING):
+    pass
+
+class AttributeValueAssertion(ber.SEQUENCE):
     _fields_ = [
-        (LDAPOID, 'controlType'),
-        (ber.BOOLEAN, 'criticality'),
-        (OPTIONAL(ber.OCTETSTRING), 'controlValue'),
+        (AttributeDescription, 'attributeDesc'),
+        (AssertionValue, 'assertionValue'),
     ]
 
-class LDAPMessage(ber.SEQUENCE):
+class PartialAttribute(ber.SEQUENCE):
     _fields_ = [
-        (MessageID, 'MessageID'),
-        (Op, 'protocolOp'),
-        (Control, 'controls'),
+        (AttributeDescription, 'type'),
+        (SETOF(AttributeValue), 'vals'),
     ]
+
+class Attribute(PartialAttribute):
+    pass
+
+class MatchingRuleId(LDAPString):
+    pass
 
 class ResultCode(ber.ENUMERATED):
     _values_ = [
@@ -146,41 +120,40 @@ class ResultCode(ber.ENUMERATED):
         ('other', 80),
     ]
 
-class AssertionValue(ber.OCTETSTRING): pass
+class URI(LDAPString):
+    pass
 
-class AttributeValueAssertion(ber.SEQUENCE):
-    _fields_ = [
-        (AttributeDescription, 'attributeDesc'),
-        (AssertionValue, 'assertionValue'),
-    ]
-
-class PartialAttribute(ber.SEQUENCE):
-    _fields_ = [
-        (AttributeDescription, 'type'),
-        (SETOF(AttributeValue), 'vals'),
-    ]
-
-class Attribute(PartialAttribute): pass
+class Referral(SEQUENCEOF(URI)):
+    pass
 
 class LDAPResult(ber.SEQUENCE):
     _fields_ = [
         (ResultCode, 'resultCode'),
         (LDAPDN, 'matchedDN'),
         (LDAPString, 'diagnosticMessage'),
-        (OPTIONAL(Referral), 'referral'),
+        (OPTIONAL(Referral, type=(Context, 3)), 'referral'),
     ]
 
-#### requests
+class Control(ber.SEQUENCE):
+    _fields_ = [
+        (LDAPOID, 'controlType'),
+        (ber.BOOLEAN, 'criticality'),
+        (OPTIONAL(ber.OCTETSTRING), 'controlValue'),
+    ]
+
+class Controls(SEQUENCEOF(Control)):
+    pass
+
 class SaslCredentials(ber.SEQUENCE):
     _fields_ = [
         (LDAPString, 'mechanism'),
         (OPTIONAL(ber.OCTETSTRING), 'credentials'),
     ]
 
-class AuthenticationChoice(CHOICE):
+class AuthenticationChoice(ber.Constructed):
     _values_ = [
-        (0, 'simple', ber.OCTETSTRING),
-        (3, 'sasl', SaslCredentials),
+        (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'simple'),
+        (dyn.clone(SaslCredentials, type=(Context, 3)), 'sasl'),
     ]
 
 @Application.define
@@ -193,11 +166,10 @@ class BindRequest(ber.SEQUENCE):
     ]
 
 @Application.define
-class BindResponse(ber.SEQUENCE):
+class BindResponse(LDAPResult):
     tag = 1
-    _fields_ = [
-        (COMPONENTSOF(LDAPResult), 'result'),
-        (OPTIONAL(ber.OCTETSTRING), 'serverSaslCreds'),
+    _fields_ = LDAPResult._fields_ + [
+        (OPTIONAL(ber.OCTETSTRING, type=(Context, 7)), 'serverSaslCreds'),
     ]
 
 @Application.define
@@ -205,64 +177,79 @@ class UnbindRequest(ber.NULL):
     tag = 2
 
 class SubstringFilter(ber.SEQUENCE):
-    class substrings(ber.SEQUENCE):
-        class _object_(CHOICE):
-            _values_ = [
-                (0, 'initial', AssertionValue),
-                (1, 'any', AssertionValue),
-                (2, 'final', AssertionValue),
-            ]
+    class _substrings(ber.Constructed):
+        _fields_ = [
+            (dyn.clone(AssertionValue, type=(Context, 0)), 'initial'),
+            (dyn.clone(AssertionValue, type=(Context, 1)), 'any'),
+            (dyn.clone(AssertionValue, type=(Context, 2)), 'final'),
+        ]
     _fields_ = [
         (AttributeDescription, 'type'),
-        (substrings, 'substrings'),
+        (SEQUENCEOF(_substrings), 'substrings'),
     ]
+
+class MatchingRuleId(LDAPString):
+    pass
 
 class MatchingRuleAssertion(ber.SEQUENCE):
-    class MatchingRuleId(LDAPString): pass
     _fields_ = [
-        (OPTIONAL(MatchingRuleId), 'MatchingRule'),
-        (OPTIONAL(AttributeDescription), 'type'),
-        (AssertionValue, 'matchValue'),
-        (ber.BOOLEAN, 'dnAttributes'),
+        (OPTIONAL(MatchingRuleId, type=(Context, 1)), 'MatchingRule'),
+        (OPTIONAL(AttributeDescription, type=(Context, 2)), 'type'),
+        (dyn.clone(AssertionValue, type=(Context, 3)), 'matchValue'),
+        (dyn.clone(ber.BOOLEAN, type=(Context, 4)), 'dnAttributes'),
     ]
 
-class Filter(CHOICE):
-    _values_ = [
-        (0, 'and', lambda s: SETOF(Filter)),
-        (1, 'or', lambda s: SETOF(Filter)),
-        (2, 'not', lambda s: Filter),
-        (3, 'equalityMatch', AttributeValueAssertion),
-        (4, 'substrings', SubstringFilter),
-        (5, 'greaterOrEqual', AttributeValueAssertion),
-        (6, 'lessOrEqual', AttributeValueAssertion),
-        (7, 'present', AttributeDescription),
-        (8, 'approxMatch', AttributeValueAssertion),
-        (9, 'extensibleMatch', MatchingRuleAssertion),
+class Filter(ber.Constructed):
+    def __and(self):
+        return SETOF(Filter, **attrs)
+    __and.type = (Context, 0)
+
+    def __or(self):
+        return SETOF(Filter, **attrs)
+    __or.type = (Context, 1)
+
+    def __not(self):
+        return Filter
+    __not.type = (Context, 2)
+
+    _fields_ = [
+        (__and, 'and'),
+        (__or, 'or'),
+        (__not, 'not'),
+        (dyn.clone(AttributeValueAssertion, type=(Context, 3)), 'equalityMatch'),
+        (dyn.clone(SubstringFilter, type=(Context, 4)), 'substrings'),
+        (dyn.clone(AttributeValueAssertion, type=(Context, 5)), 'greaterOrEqual'),
+        (dyn.clone(AttributeValueAssertion, type=(Context, 6)), 'lessOrEqual'),
+        (dyn.clone(AttributeDescription, type=(Context, 7)), 'present'),
+        (dyn.clone(AttributeValueAssertion, type=(Context, 8)), 'approxMatch'),
+        (dyn.clone(MatchingRuleAssertion, type=(Context, 9)), 'extensibleMatch'),
     ]
+
+class AttributeSelection(SEQUENCEOF(LDAPString)):
+    pass
 
 @Application.define
 class SearchRequest(ber.SEQUENCE):
     tag = 3
+    class _scope(ber.ENUMERATED):
+        _values_ = [
+            ('baseObject', 0),
+            ('singleLevel', 1),
+            ('wholeSubtree', 2),
+        ]
 
-    class scope(ber.ENUMERATED):
+    class _derefAliases(ber.ENUMERATED):
         _values_ = [
-            (0, 'baseObject'),
-            (1, 'singleLevel'),
-            (2, 'wholeSubtree'),
+            ('neverDerefAliases', 0),
+            ('derefInSearching', 1),
+            ('derefFindingBaseObj', 2),
+            ('derefAlways', 3),
         ]
-    class derefAliases(ber.ENUMERATED):
-        _values_ = [
-            (0, 'neverDerefAliases'),
-            (1, 'derefInSearching'),
-            (2, 'derefFindingBaseObj'),
-            (3, 'derefAlways'),
-        ]
-    class AttributeSelection(SEQUENCEOF(LDAPString)): pass
 
     _fields_ = [
         (LDAPDN, 'baseObject'),
-        (scope, 'scope'),
-        (derefAliases, 'derefAliases'),
+        (_scope, 'scope'),
+        (_derefAliases, 'derefAliases'),
         (ber.INTEGER, 'sizeLimit'),
         (ber.INTEGER, 'timeLimit'),
         (ber.BOOLEAN, 'typesOnly'),
@@ -270,10 +257,12 @@ class SearchRequest(ber.SEQUENCE):
         (AttributeSelection, 'attributes'),
     ]
 
+class PartialAttributeList(SEQUENCEOF(PartialAttribute)):
+    pass
+
 @Application.define
-class SearchResult(ber.SEQUENCE):
+class SearchResultEntry(ber.SEQUENCE):
     tag = 4
-    class PartialAttributeList(SEQUENCEOF(PartialAttribute)): pass
     _fields_ = [
         (LDAPDN, 'objectName'),
         (PartialAttributeList, 'attributes'),
@@ -290,30 +279,37 @@ class SearchResultDone(LDAPResult):
 @Application.define
 class ModifyRequest(ber.SEQUENCE):
     tag = 6
-    class change(ber.SEQUENCE):
-        class operation(ber.ENUMERATED):
-            _values_ = [(0,'add'), (1,'delete'), (2,'replace')]
+    class _changes(ber.SEQUENCE):
+        class _operation(ber.ENUMERATED):
+            _values_ = [
+                (0, 'add'),
+                (1, 'delete'),
+                (2, 'replace')
+            ]
         _fields_ = [
-            (operation, 'operation'),
+            (_operation, 'operation'),
             (PartialAttribute, 'modification'),
         ]
     _fields_ = [
         (LDAPDN, 'object'),
-        (SEQUENCEOF(change), 'changes'),
+        (SEQUENCEOF(_changes), 'changes'),
     ]
 
 @Application.define
 class ModifyResponse(LDAPResult):
     tag = 7
 
+class AttributeList(SEQUENCEOF(Attribute)):
+    pass
+
 @Application.define
 class AddRequest(ber.SEQUENCE):
     tag = 8
-    class AttributeList(SEQUENCEOF(Attribute)): pass
     _fields_ = [
         (LDAPDN, 'entry'),
         (AttributeList, 'attributes'),
     ]
+
 @Application.define
 class AddResponse(LDAPResult):
     tag = 9
@@ -333,7 +329,7 @@ class ModifyDNRequest(ber.SEQUENCE):
         (LDAPDN, 'entry'),
         (RelativeLDAPDN, 'newrdn'),
         (ber.BOOLEAN, 'deleteoldrdn'),
-        (OPTIONAL(LDAPDN), 'newSuperior'),
+        (OPTIONAL(LDAPDN, type=(Context, 0)), 'newSuperior'),
     ]
 
 @Application.define
@@ -352,6 +348,9 @@ class CompareRequest(ber.SEQUENCE):
 class CompareResponse(LDAPResult):
     tag = 15
 
+class MessageID(ber.INTEGER):
+    pass
+
 @Application.define
 class AbandonRequest(MessageID):
     tag = 16
@@ -360,27 +359,66 @@ class AbandonRequest(MessageID):
 class ExtendedRequest(ber.SEQUENCE):
     tag = 23
     _fields_ = [
-        (LDAPOID, 'requestName'),
-        (OPTIONAL(ber.OCTETSTRING), 'requestValue'),
+        (dyn.clone(LDAPOID, type=(Context, 0)), 'requestName'),
+        (OPTIONAL(ber.OCTETSTRING, type=(Context, 1)), 'requestValue'),
     ]
 
 @Application.define
-class ExtendedResponse(ber.SEQUENCE):
+class ExtendedResponse(LDAPResult):
     tag = 24
-    _fields_ = [
-        (COMPONENTSOF(LDAPResult), 'result'),
-        (OPTIONAL(LDAPOID), 'responseName'),
-        (OPTIONAL(ber.OCTETSTRING), 'responseValue'),
+    _fields_ = LDAPResult._fields_ + [
+        (OPTIONAL(LDAPOID, type=(Context, 10)), 'responseName'),
+        (OPTIONAL(ber.OCTETSTRING, type=(Context, 11)), 'responseValue'),
     ]
 
 @Application.define
 class IntermediateResponse(ber.SEQUENCE):
     tag = 25
     _fields_ = [
-        (OPTIONAL(LDAPOID), 'responseName'),
-        (OPTIONAL(ber.OCTETSTRING), 'responseValue'),
+        (OPTIONAL(LDAPOID, type=(Context, 0)), 'responseName'),
+        (OPTIONAL(ber.OCTETSTRING, type=(Context, 1)), 'responseValue'),
     ]
 
-class packet(record):
-    def Value(self):
+class Op(ber.Constructed):
+    _fields_ = [
+        (BindRequest, 'bindRequest'),
+        (BindResponse, 'bindResponse'),
+        (UnbindRequest, 'unbindRequest'),
+        (SearchRequest, 'searchRequest'),
+        (SearchResultEntry, 'searchResEntry'),
+        (SearchResultDone, 'searchResDone'),
+        (SearchResultReference, 'searchResRef'),
+        (ModifyRequest, 'modifyRequest'),
+        (ModifyResponse, 'modifyResponse'),
+        (AddRequest, 'addRequest'),
+        (AddResponse, 'addResponse'),
+        (DelRequest, 'delRequest'),
+        (DelResponse, 'delResponse'),
+        (ModifyDNRequest, 'modDNRequest'),
+        (ModifyDNResponse, 'modDNResponse'),
+        (CompareRequest, 'compareRequest'),
+        (CompareResponse, 'compareResponse'),
+        (AbandonRequest, 'abandonRequest'),
+        (ExtendedRequest, 'extendedReq'),
+        (ExtendedResponse, 'extendedResp'),
+    ]
+
+class LDAPMessage(ber.SEQUENCE):
+    _fields_ = [
+        (MessageID, 'messageID'),
+    ] + Op._fields_ + [
+        (dyn.clone(Controls, type=(Context, 0)), 'controls'),
+    ]
+
+class Packet(Record):
+    def __object__(self, _):
         return LDAPMessage
+
+if __name__ == '__main__':
+    import sys, operator, ptypes, protocol.ldap as ldap
+    from ptypes import *
+
+    fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
+    x = ldap.MessageID(length=1).set(5)
+    y = ldap.Packet().alloc(Value=LDAPMessage().alloc(messageID=x, controls=dict()))
+    print(y)
