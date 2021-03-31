@@ -151,7 +151,7 @@ class SaslCredentials(ber.SEQUENCE):
     ]
 
 class AuthenticationChoice(ber.Constructed):
-    _values_ = [
+    _fields_ = [
         (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'simple'),
         (dyn.clone(SaslCredentials, type=(Context, 3)), 'sasl'),
     ]
@@ -162,8 +162,8 @@ class BindRequest(ber.SEQUENCE):
     _fields_ = [
         (ber.INTEGER, 'version'),
         (LDAPDN, 'name'),
-        (AuthenticationChoice, 'authentication'),
-    ]
+        #(AuthenticationChoice, 'authentication'),
+    ] + AuthenticationChoice._fields_
 
 @Application.define
 class BindResponse(LDAPResult):
@@ -415,10 +415,13 @@ class Packet(Record):
         return LDAPMessage
 
 if __name__ == '__main__':
-    import sys, operator, ptypes, protocol.ldap as ldap
+    import sys, operator
+    import ptypes, protocol.ber as ber, protocol.ldap as ldap
     from ptypes import *
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
-    x = ldap.MessageID(length=1).set(5)
-    y = ldap.Packet().alloc(Value=LDAPMessage().alloc(messageID=x, controls=dict()))
+    dn = ldap.LDAPDN().alloc('myname'.encode('utf8'))
+    req = ldap.BindRequest().alloc(version=ber.INTEGER(length=1).set(5), name=dn)
+    mid = ldap.MessageID(length=1).set(5)
+    y = ldap.Packet().alloc(Value=LDAPMessage().alloc(messageID=mid, bindRequest=req, controls=dict()))
     print(y)
