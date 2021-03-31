@@ -124,7 +124,7 @@ class Constructed(parray.block):
     def typename(cls):
         if hasattr(cls, 'type'):
             klass, tag = (Context.Class, cls.type) if isinstance(cls.type, six.integer_types) else cls.type
-            return "{:s}<{:d},{:d}>".format(cls.__name__, klass, tag)
+            return "{:s}<{:d},{:d}>".format(cls.__name__, getattr(klass, 'Class', klass), tag)
         return super(Constructed, cls).typename()
 
     def load(self, **attrs):
@@ -171,7 +171,7 @@ class Constructed(parray.block):
 
             # Use the protocol to look up the Class and Tag for the type
             # that we're supposed to be.
-            K = protocol.lookup(klass)
+            K = protocol.lookup(getattr(klass, 'Class', klass))
             try:
                 t = K.lookup(tag)
 
@@ -391,7 +391,17 @@ class Constructed(parray.block):
 
                 # Otherwise, we have no idea what we're doing.
                 else:
-                    raise NotImplementedError
+                    try:
+                        value = type().alloc(item)
+
+                    except TypeError:
+                        logging.warning("{:s}.alloc(...) : Error allocating field \"{:s}\" for 0-sized type {!s} using value {!r}.".format('.'.join([cls.__module__, cls.__name__]), name, type, item))
+                        logging.info("{:s}.alloc(...) : Attempting to set type {!s} with value {!r}.".format('.'.join([cls.__module__, cls.__name__]), type, item))
+                        value = type().set(item)
+
+                    if not value.size():
+                        logging.fatal("{:s}.alloc(...) : The \"{:s}\" field was added as a 0-sized instance of type {!s}.".format('.'.join([cls.__module__, cls.__name__]), name, type))
+                    E = protocol.default().alloc(Value=value)
 
                 # Append the item to our current list of elements
                 items.append(E)
@@ -629,7 +639,8 @@ class Element(pstruct.type):
         if hasattr(value, 'type'):
             klass, tag = (Context.Class, value.type) if isinstance(value.type, six.integer_types) else value.type
             constructedQ = 1 if (ptypes.istype(value) and issubclass(value, Constructed)) or isinstance(value, Constructed) else 0
-            fields.setdefault('Type', Type().alloc(Class=klass, Constructed=constructedQ).set(Tag=tag))
+            type = Type().alloc(Class=getattr(klass, 'Class', klass), Constructed=constructedQ)
+            fields.setdefault('Type', type.set(Tag=tag))
 
         if 'Length' in fields:
             return super(Element, self).alloc(**fields)

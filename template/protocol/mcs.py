@@ -230,7 +230,7 @@ class PDU(pstruct.type):
                 hdr['value'] = res.Header().a
                 res.__header__ = hdr['value']
             elif ptypes.istype(res) and not hasattr(res, 'Header'):
-                logging.warn("Unable to map .__header__ attribute for {:s} due to missing .Header attribute for value {:s}".format(self.classname(), res.typename()))
+                logging.warning("Unable to map .__header__ attribute for {:s} due to missing .Header attribute for value {:s}".format(self.classname(), res.typename()))
 
         # Now we can finally allocate our instance
         res = super(PDU, self).alloc(**fields)
