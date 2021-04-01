@@ -4,9 +4,9 @@ from ..headers import *
 
 class IMAGE_IMPORT_HINT(pstruct.type):
     _fields_ = [
-        ( word, 'Hint' ),
-        ( pstr.szstring, 'String' ),
-        ( dyn.align(2), 'Padding' )
+        (word, 'Hint'),
+        (pstr.szstring, 'String'),
+        (dyn.align(2), 'Padding')
     ]
     def str(self): return self.String()
     def Hint(self):
@@ -135,11 +135,11 @@ class IMAGE_IMPORT_DESCRIPTOR(pstruct.type):
         return res
 
     _fields_ = [
-        ( virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE, type=dword), 'INT'),  # FIXME
-        ( TimeDateStamp, 'TimeDateStamp' ),
-        ( dword, 'ForwarderChain' ),
-        ( virtualaddress(pstr.szstring, type=dword), 'Name'),
-        ( virtualaddress(__IAT, type=dword), 'IAT')
+        (virtualaddress(lambda s: IMAGE_IMPORT_NAME_TABLE64 if s.getparent(Header)['OptionalHeader'].is64() else IMAGE_IMPORT_NAME_TABLE, type=dword), 'INT'),  # FIXME
+        (TimeDateStamp, 'TimeDateStamp'),
+        (dword, 'ForwarderChain'),
+        (virtualaddress(pstr.szstring, type=dword), 'Name'),
+        (virtualaddress(__IAT, type=dword), 'IAT')
     ]
 
     def Hint(self, index):
@@ -230,14 +230,14 @@ class IMAGE_DELAYLOAD_DIRECTORY_ENTRY(pstruct.type):
             return dyn.clone(res, length=len(count))
         return res
     _fields_ = [
-        ( dword, 'Attributes'),
-        ( virtualaddress(pstr.szstring), 'Name'),
-        ( virtualaddress(dword), 'ModuleHandle'),
-        ( virtualaddress(__IAT), 'DIAT'),
-        ( lambda s: virtualaddress(IMAGE_IMPORT_NAME_TABLE64) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
-        ( virtualaddress(__IAT), 'BDIAT' ),
-        ( virtualaddress(__IAT), 'UDAT'),
-        ( TimeDateStamp, 'TimeStamp'),
+        (dword, 'Attributes'),
+        (virtualaddress(pstr.szstring), 'Name'),
+        (virtualaddress(dword), 'ModuleHandle'),
+        (virtualaddress(__IAT), 'DIAT'),
+        (lambda s: virtualaddress(IMAGE_IMPORT_NAME_TABLE64) if self.getparent(Header)['OptionalHeader'].is64() else virtualaddress(IMAGE_IMPORT_NAME_TABLE), 'DINT'),
+        (virtualaddress(__IAT), 'BDIAT'),
+        (virtualaddress(__IAT), 'UDAT'),
+        (TimeDateStamp, 'TimeStamp'),
     ]
 
 class IMAGE_DELAYLOAD_DIRECTORY(parray.block):
