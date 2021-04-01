@@ -58,31 +58,38 @@ class pcap_hdr_t(pstruct.type):
 
     def timezone(self):
         res = self['thiszone'].int()
-        delta = datetime.timedelta(seconds=res)
+        delta = datetime.timedelta(seconds=-res)
         return datetime.timezone(delta)
 
+class timestamp(pstruct.type):
+    _fields_ = [
+        (guint32, 'sec'),
+        (guint32, 'usec'),
+    ]
+    def datetime(self):
+        epoch = datetime.datetime(1970, 1, 1)
+        delta = datetime.timedelta(seconds=self['sec'].int(), microseconds=self['usec'].int() * 1e-1)
+        return epoch + delta
+
+    def summary(self):
+        parent = self.getparent(File)
+        header, dt = parent['header'], self.datetime()
+        res = dt.replace(tzinfo=header.timezone())
+        return res.isoformat()
+
 class pcaprec_hdr_s(pstruct.type):
-    class timestamp(pstruct.type):
-        _fields_ = [
-            (guint32, 'sec'),
-            (guint32, 'usec'),
-        ]
-        def datetime(self):
-            epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
-            delta = datetime.timedelta(seconds=self['sec'].int(), microseconds=self['usec'].int())
-            return epoch + delta
-
-        def summary(self):
-            parent = self.getparent(File)
-            header, dt = parent['header'], self.datetime()
-            res = dt.astimezone(header.timezone())
-            return res.isoformat()
-
     _fields_ = [
         (timestamp, 'ts'),
         (guint32, 'incl_len'),
         (guint32, 'orig_len'),
     ]
+
+    def summary(self):
+        included, original = (self[fld].int() for fld in ['incl_len', 'orig_len'])
+        timestamp = self['ts'].datetime()
+        if original != included:
+            return "ts={:s} : incl_len={:+#x} : orig_len={:#x}".format(timestamp.isoformat(), included, original)
+        return "ts={:s} : orig_len={:+#x}".format(timestamp.isoformat(), original)
 
 class Packet(pstruct.type):
     def __header(self):
