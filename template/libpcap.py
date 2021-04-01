@@ -1,4 +1,4 @@
-import logging, datetime, pytz
+import sys, logging, itertools, functools, math, fractions, datetime
 import ptypes
 from ptypes import *
 
@@ -7,11 +7,36 @@ class guint16(pint.uint16_t): pass
 class gint32(pint.int32_t): pass
 class gint32(pint.int32_t): pass
 
-class pcap_hdr_t(pstruct.type):
-    class version(pstruct.type):
-        _fields_ = [(guint16,'major'),(guint16,'minor')]
+class version(pstruct.type):
+    _fields_ = [
+        (guint16, 'major'),
+        (guint16, 'minor')
+    ]
 
-    def __version(self):
+    def set(self, *args, **fields):
+        if args:
+            res, = args
+            if isinstance(res, tuple):
+                major, minor = res
+                fields.setdefault('minor', minor)
+                fields.setdefault('major', major)
+                return self.set(**fields)
+
+            gcd = fractions.gcd if sys.version_info.major < 3 else math.gcd
+            lcm = lambda *numbers: functools.reduce(lambda x, y: (x * y) // gcd(x, y), numbers, 1)
+
+            mantissa, integer = math.modf(res)
+            fraction = fractions.Fraction.from_float(mantissa).limit_denominator()
+            next10 = pow(10, math.ceil(math.log10(fraction.denominator)))
+            exponent = math.log10(lcm(fraction.denominator, next10))
+
+            fields.setdefault('minor', math.trunc(0.5 + mantissa * pow(10, math.ceil(exponent))))
+            fields.setdefault('major', math.trunc(integer))
+            return self.set(**fields)
+        return super(version, self).set(**fields)
+
+class pcap_hdr_t(pstruct.type):
+    def __byteorder(self):
         magic_number = self['magic_number'].li.serialize()
         if magic_number == b'\xa1\xb2\xc3\xd4':
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.bigendian
@@ -19,11 +44,12 @@ class pcap_hdr_t(pstruct.type):
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.littleendian
         else:
             logging.warn("Unable to determine byteorder : {!r}".format(magic_number))
-        return self.version
+        return ptype.undefined
 
     _fields_ = [
         (dyn.block(4), 'magic_number'),
-        (__version, 'version'),
+        (__byteorder, 'byteorder'),
+        (version, 'version'),
         (gint32, 'thiszone'),
         (guint32, 'sigfigs'),
         (guint32, 'snaplen'),
@@ -32,7 +58,8 @@ class pcap_hdr_t(pstruct.type):
 
     def timezone(self):
         res = self['thiszone'].int()
-        return pytz.FixedOffset(res / -60.)
+        delta = datetime.timedelta(seconds=res)
+        return datetime.timezone(delta)
 
 class pcaprec_hdr_s(pstruct.type):
     class timestamp(pstruct.type):
@@ -41,7 +68,7 @@ class pcaprec_hdr_s(pstruct.type):
             (guint32, 'usec'),
         ]
         def datetime(self):
-            epoch = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
+            epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
             delta = datetime.timedelta(seconds=self['sec'].int(), microseconds=self['usec'].int())
             return epoch + delta
 
