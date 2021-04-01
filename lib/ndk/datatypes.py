@@ -1,4 +1,4 @@
-import six, sys, math, datetime, time, pytz, itertools, functools, codecs
+import six, sys, math, datetime, time, itertools, functools, codecs
 
 import ptypes
 from ptypes import *
@@ -560,12 +560,13 @@ class FILETIME(pstruct.type):
     ]
 
     def timestamp(self):
+        '''Return the number of 100ns represented by the instance.'''
         low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
         return high * pow(2, 32) + low
 
     def datetime(self):
-        epoch = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
-        delta = datetime.timedelta(microseconds=self.timestamp() / 1e1)
+        res, epoch = self.timestamp(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
+        delta = datetime.timedelta(microseconds=res * 1e-1)
         return epoch + delta
 
     def get(self):
@@ -574,28 +575,27 @@ class FILETIME(pstruct.type):
     def set(self, *dt, **fields):
         cons = datetime.datetime
         if not fields:
-            now, epoch = time.time(), cons(1601, 1, 1, tzinfo=pytz.utc)
-            dt, = dt or [cons.fromtimestamp(now, pytz.utc)]
-            delta = dt - epoch
-            day_ms, second_ms, ms_100ns = map(math.trunc, (8.64e10, 1e6, 1e1))
-            microseconds = delta.days * day_ms + delta.seconds * second_ms + delta.microseconds
+            epoch = cons(1601, 1, 1, tzinfo=datetime.timezone.utc)
+            dt, = dt or [cons.fromtimestamp(time.time(), datetime.timezone.utc)]
+            result = dt - epoch
 
-            res = microseconds * ms_100ns
+            microseconds = math.trunc(result.total_seconds() * 1e6)
+            hundred_nanoseconds = res = math.trunc(microseconds * 1e1)
+
             fields['dwLowDateTime']  = (res // pow(2, 0)) & 0xffffffff
             fields['dwHighDateTime'] = (res // pow(2,32)) & 0xffffffff
             return self.set(**fields)
         return super(FILETIME, self).set(**fields)
 
     def summary(self):
-        epoch, ts = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc), self.timestamp()
-        ts_s, ts_hns = ts // 1e7, ts % 1e7
-        ts_ns = ts_hns * 1e-7
-
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
         try:
-            res = epoch + datetime.timedelta(seconds=ts_s)
-        except OverflowError:
+            res = self.datetime().astimezone(tzinfo)
+        except (ValueError, OverflowError):
             return super(FILETIME, self).summary()
-        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.9f}".format(res.second + ts_ns).zfill(12), ts)
+
+        ts, seconds = self.timestamp(), res.second + res.microsecond * 1e-6
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.6f}".format(seconds).zfill(9), ts)
 
 class EVENT_DESCRIPTOR(pstruct.type):
     _fields_ = [
