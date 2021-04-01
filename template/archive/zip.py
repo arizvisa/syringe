@@ -588,7 +588,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # fix up arguments
-    source_a, target_a = args.source, args.target
+    source_a, target_a = args.source.buffer if hasattr(args.source, 'buffer') else args.source, args.target.buffer if hasattr(args.target, 'buffer') else args.target
     if args.use_eoc:
         if source_a.name == '<stdin>':
             if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)

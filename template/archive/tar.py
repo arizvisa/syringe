@@ -197,8 +197,8 @@ class member_t(pstruct.type):
     ]
 
     def iseof(self):
-        iterable = self.serialize()
-        return all(item == '\0' for item in iterable)
+        iterable = bytearray(self.serialize())
+        return all(item == 0 for item in iterable)
 
     def listing(self):
         index = int(self.name())
@@ -365,7 +365,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # fix up arguments
-    source_a, target_a = args.source, args.target
+    source_a, target_a = args.source.buffer if hasattr(args.source, 'buffer') else args.source, args.target.buffer if hasattr(args.target, 'buffer') else args.target
     if source_a == '-':
         if sys.platform == 'win32': msvcrt.setmode(source_a.fileno(), os.O_BINARY)
         source = ptypes.prov.stream(source_a)
