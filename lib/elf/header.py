@@ -1,4 +1,4 @@
-import ptypes, time, datetime, pytz
+import ptypes, time, datetime
 from . import EV_, E_IDENT, section, segment
 from .base import *
 
@@ -527,28 +527,27 @@ class Elf_Armag(pstr.string):
 class Elf_Arhdr(pstruct.type):
     class time_t(stringinteger):
         length = 12
-        epoch = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
         def datetime(self):
-            res = time.localtime(self.int())
-            return datetime.datetime(*res[:7], tzinfo=pytz.utc)
+            res = self.int()
+            return datetime.datetime.fromtimestamp(res, datetime.timezone.utc)
         def gmtime(self):
             res = self.int()
             return time.gmtime(res)
         def details(self):
+            tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
             try:
-                res = self.datetime()
-            except ValueError:
+                res = self.datetime().astimezone(tzinfo)
+            except (ValueError, OverflowError):
                 return super(Elf_Arhdr.time_t, self).details()
-            else:
-                return "{!s} ({:d})".format(res.ctime(), self.int())
+            return "({:d}) {!s}".format(self.int(), res.ctime())
         repr = details
         def summary(self):
+            tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
             try:
-                res = self.datetime()
-            except ValueError:
+                res = self.datetime().astimezone(tzinfo)
+            except (ValueError, OverflowError):
                 return super(Elf_Arhdr.time_t, self).summary()
-            else:
-                return "{!s} ({:d})".format(res.isoformat(), self.int())
+            return "({:d}) {!s}".format(self.int(), res.isoformat())
 
     class uid_t(stringinteger): length = 6
     class gid_t(stringinteger): length = 6
@@ -572,7 +571,7 @@ class Elf_Arhdr(pstruct.type):
 
     def summary(self):
         try:
-            name, ts = self['ar_name'], self['ar_date'].datetime()
+            name, ts = self['ar_name'], self['ar_date'].summary()
             mode, size, uid, gid = (self[fld].int() for fld in ['ar_mode', 'ar_size', 'ar_uid', 'ar_gid'])
             return "ar_name=\"{!s}\" ar_mode={:o} ar_size={:+d} ar_date={:s} ar_uid/ar_gid={:d}/{:d}".format(name.str(), mode, size, ts.isoformat(), uid, gid)
         except ValueError:

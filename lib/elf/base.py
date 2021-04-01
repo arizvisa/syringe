@@ -141,7 +141,7 @@ class Elf64_Sxword(pint.int64_t): pass
 class padstring(pstr.string):
     def set(self, string):
         res, bs = "{!s}".format(string), self.blocksize()
-        return super(Elf_Arhdr.padstring, self).set("{:{:d}s}".format(padding, bs))
+        return super(padstring, self).set("{:{:d}s}".format(padding, bs))
 
     def str(self):
         res = super(padstring, self).str()
