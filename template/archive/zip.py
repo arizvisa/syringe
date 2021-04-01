@@ -4,25 +4,23 @@ logging.root.setLevel(logging.INFO)
 import six, ptypes
 from ptypes import *
 
-import datetime, pytz
+import datetime, time
 
 ## General structures
 class MSTime(pbinary.struct):
     _fields_ = [
-        (6, 'Hour'),
-        (5, 'Minute'),
+        (5, 'Hour'),
+        (6, 'Minute'),
         (5, '2Seconds'),
     ]
     def time(self):
-        return datetime.time(self['Hour'] % 24, self['Minute'] % 60, (2 * self['2Seconds']) % 60, tzinfo=pytz.utc)
-
-    def isoformat(self):
-        res = self.time()
-        return res.isoformat()
+        h, m, ds = (self[fld] for fld in ['Hour', 'Minute', '2Seconds'])
+        return datetime.time(h % 24, m % 60, (2 * ds) % 60)
 
     def summary(self):
         if self['Hour'] < 24 and self['Minute'] < 60 and 2 * self['2Seconds'] < 60:
-            return self.isoformat()
+            res = self.time()
+            return res.isoformat()
         return super(MSTime, self).summary()
 
 class MSDate(pbinary.struct):
@@ -32,14 +30,12 @@ class MSDate(pbinary.struct):
         (5, 'Day'),
     ]
     def date(self):
-        return datetime.date(1980 + self['Year'], self['Month'], self['Day'])
-
-    def isoformat(self):
-        res = self.date()
-        return res.isoformat()
+        y, m, d = (self[fld] for fld in ['Year', 'Month', 'Day'])
+        return datetime.date(1980 + y, m, d)
 
     def summary(self):
-        return self.isoformat()
+        res = self.date()
+        return res.isoformat()
 
 class VersionMadeBy(pint.enum, pint.uint16_t):
     _values_ = [(n, i) for i, n in enumerate(('MSDOS', 'Amiga', 'OpenVMS', 'Unix', 'VM/CMS', 'Atari ST', 'OS/2', 'Macintosh', 'Z-System', 'CP/M', 'Windows', 'MVS', 'VSE', 'Acorn', 'VFAT', 'Alternate MVS', 'BeOS', 'Tandem', 'Os/400', 'OSX'))]
@@ -166,14 +162,12 @@ class NTFS_Attributes(pstruct.type):
     tag = 1
     class TenthOfAMicrosecond(pint.uint64_t):
         def datetime(self):
-            epoch = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
-            res = datetime.timedelta(microseconds=self.int() / 10.)
-            return epoch + res
-        def isoformat(self):
-            res = self.datetime()
-            return res.isoformat()
+            res, epoch = self.int(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
+            return epoch + datetime.timedelta(microseconds=res * 1e-1)
         def summary(self):
-            return self.isoformat()
+            tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+            res = self.datetime().astimezone(tzinfo)
+            return res.isoformat()
 
     _fields_ = [
         (TenthOfAMicrosecond, 'Mtime'),
@@ -182,7 +176,8 @@ class NTFS_Attributes(pstruct.type):
     ]
 
     def summary(self):
-        return "Mtime={:s} Atime={:s} Ctime={:s}".format(self['Mtime'].isoformat(), self['Atime'].isoformat(), self['Ctime'].isoformat())
+        mtime, atime, ctime = (self[fld].datetime() for fld in ['Mtime', 'Atime', 'Ctime'])
+        return "Mtime={:s} Atime={:s} Ctime={:s}".format(mtime.isoformat(), atime.isoformat(), ctime.isoformat())
 
 @ExtraField.define
 class Extra_NTFS(pstruct.type):
@@ -373,7 +368,6 @@ class CentralDirectoryEntry32(CentralDirectoryEntry):
         filename, meth, descr = self.Name(), self.Method(), self.Descriptor()
         dt = datetime.datetime.combine(self['last mod file date'].date(), self['last mod file time'].time())
         return '{{{:d}}} {:s} ({:x}{:+x}) {!r} version-made-by={:s} version-needed-to-extract={:s} compression-method={:s} {:s} timestamp={:s} disk-number-start={:d} internal-file-attributes={:#x} external-file-attributes={:#x}'.format(index, cls, ofs, bs, filename, self['version made by'].str(), self['version needed to extract'].str(), meth.str(), descr.summary(), dt.isoformat(), self['disk number start'].int(), self['internal file attributes'].int(), self['external file attributes'].int()) + ('// {:s}'.format(self.Comment()) if self['file comment length'].int() > 0 else '')
-
 
 class EndOfCentralDirectory(pstruct.type):
     signature = 0, 0x06054b50
@@ -601,7 +595,7 @@ if __name__ == '__main__':
             source_data = source_a.read()
         else:
             source_data = source_a.read()
-        source = ptypes.prov.string(source_data)
+        source = ptypes.prov.bytes(source_data)
     else:
         source = ptypes.prov.fileobj(source_a)
 
@@ -668,7 +662,7 @@ if __name__ == '__main__':
         logging.debug("Locating EndOfCentralDirectory in {:#x} bytes...".format(len(source_data)))
         signature = pint.uint32_t().set(EndOfCentralDirectory.signature[1])
         idx = signature.size() + source_data[::-1].index(signature.serialize()[::-1])
-        rec = archive.zip.Record(source=ptypes.prov.string(source_data[-idx:])).l
+        rec = archive.zip.Record(source=ptypes.prov.bytes(source_data[-idx:])).l
 
         # validate it
         if rec['Signature'].int() == signature.int():

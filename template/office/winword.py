@@ -1,4 +1,4 @@
-import logging, datetime, pytz
+import logging, datetime, time
 
 import ptypes
 from ptypes import *
@@ -655,18 +655,22 @@ class FILETIME(pstruct.type):
         (pint.uint32_t, 'dwHighDateTime')
     ]
     def timestamp(self):
+        '''Returns the number of 100-nanosecond intervals since the epoch.'''
         low, high = self['dwLowDateTime'].int(), self['dwHighDateTime'].int()
-        return high * 0x100000000 | + low
+        return high * pow(2, 32) + low
     def datetime(self):
-        epoch = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc)
-        return epoch + datetime.timedelta(microseconds=self.timestamp() / 10.0)
+        res, epoch = self.timestamp(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
+        delta = datetime.timedelta(microseconds=res * 1e-1)
+        return epoch + delta
     def summary(self):
-        epoch, ts = datetime.datetime(1601, 1, 1, tzinfo=pytz.utc), self.timestamp()
-        ts_s, ts_hns = ts // 1e7, ts % 1e7
-        ts_ns = ts_hns * 1e-7
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+        try:
+            res = self.datetime().astimezone(tzinfo)
+        except (ValueError, OverflowError):
+            return super(FILETIME, self).summary()
 
-        res = epoch + datetime.timedelta(seconds=ts_s)
-        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.9f}".format(res.second + ts_ns).zfill(12), ts)
+        ts, seconds = self.timestamp(), res.second + res.microsecond * 1e-6
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.6f}".format(seconds).zfill(9), ts)
 
 class DTTM(pbinary.struct):
     _fields_ = rl(

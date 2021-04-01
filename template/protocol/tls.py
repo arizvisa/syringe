@@ -1,4 +1,4 @@
-import ptypes, datetime, time, pytz
+import ptypes, math, datetime, time
 from . import ber, tlsext
 from ptypes import *
 
@@ -156,19 +156,19 @@ class HelloRequest(pstruct.type):
 class gmt_unix_time(uint32):
     def datetime(self):
         cons, res = datetime.datetime, self.__getvalue__()
-        return cons.fromtimestamp(res)
+        return cons.fromtimestamp(res, datetime.timezone.utc)
     def get(self):
         return self.datetime()
     def set(self, *args, **fields):
         cons, now = datetime.datetime, time.time()
-        dt, = args or [cons.fromtimestamp(now, pytz.utc)]
-        epoch = datetime.datetime(1970, 1, 1, tzinfo=pytz.utc)
-        delta = dt.astimezone(pytz.utc) - epoch
-        res = math.trunc(res.total_seconds())
+        dt, = args or [cons.fromtimestamp(now, datetime.timezone.utc)]
+        epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+        delta = dt.astimezone(datetime.timezone.utc) - epoch
+        res = math.trunc(delta.total_seconds())
         return super(gmt_unix_time, self).set(res, **fields)
     def summary(self):
-        res, dt = self.int(), self.datetime()
-        return "({:#0{:d}x}) {:s}".format(res, 2 + 2 * self.size(), dt.isoformat())
+        dt, tzinfo = self.datetime(), datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+        return "({:#0{:d}x}) {:s}".format(self.int(), 2 + 2 * self.size(), dt.astimezone(tzinfo).isoformat())
 
 class Random(pstruct.type):
     _fields_ = [
@@ -176,8 +176,8 @@ class Random(pstruct.type):
         (dyn.block(28), 'random_bytes'),
     ]
     def summary(self):
-        dt, random = self['gmt_unix_time'].datetime(), self['random_bytes'].serialize()
-        return "gmt_unix_time={:s} random_bytes={:s}".format(dt.isoformat(), str().join(map("{:02x}".format, bytearray(random))))
+        ts, random = self['gmt_unix_time'], self['random_bytes'].serialize()
+        return "gmt_unix_time={:s} random_bytes={:s}".format(ts.summary(), str().join(map("{:02x}".format, bytearray(random))))
 
 class SessionID(pstruct.type):
     _fields_ = [
