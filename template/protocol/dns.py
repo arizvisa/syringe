@@ -127,24 +127,24 @@ class TYPE(pint.enum, u16):
         ('ISDN', 20),
         ('RT', 21),
         ('NSAP', 22),
-        ('NSAPPTR', 23),    # FIXME
+        ('NSAPPTR', 23),
         ('SIG', 24),
         ('KEY', 25),
         ('PX', 26),
-        ('GPOS', 27),       # FIXME
+        ('GPOS', 27),
         ('AAAA', 28),
         ('LOC', 29),
         ('NXT', 30),
         ('NB', 31),
         ('NBSTAT', 32),
         ('SRV', 33),
-        ('ATMA', 34),       # FIXME
+        ('ATMA', 34),
         ('NAPTR', 35),
         ('KX', 36),
         ('CERT', 37),
         ('A6', 38),
         ('DNAME', 39),
-        ('SINK', 40),       # FIXME
+        ('SINK', 40),
         ('OPT', 41),
         ('APL', 42),
         ('DS', 43),
@@ -180,15 +180,15 @@ class TYPE(pint.enum, u16):
         ('LP', 107),        # FIXME
         ('EUI48', 108),     # FIXME
         ('EUI64', 109),     # FIXME
-        ('TKEY', 249),      # FIXME
-        ('TSIG', 250),      # FIXME
-        ('MAILB', 253),     # FIXME
-        ('MAILA', 254),     # FIXME
-        ('URI', 256),       # FIXME
-        ('CAA', 257),       # FIXME
-        ('DOA', 259),       # FIXME
-        ('TAA', 32768),     # FIXME
-        ('DLV', 32769),     # FIXME
+        ('TKEY', 249),
+        ('TSIG', 250),
+        ('MAILB', 253),
+        ('MAILA', 254),
+        ('URI', 256),
+        ('CAA', 257),
+        ('DOA', 259),
+        ('TA', 32768),
+        ('DLV', 32769),
     ]
 
 class QTYPE(TYPE):
@@ -234,19 +234,34 @@ class OPCODE(pbinary.enum):
         ('UPDATE', 5),
     ]
 
-class RCODE(pbinary.enum):
-    length, _values_ = 4, [
+class _RCODE(object):
+    _values_ = [
         ('NOERROR', 0),
-        ('SERVFAIL', 1),
-        ('NXDOMAIN', 2),
-        ('NOTIMP', 3),
-        ('REFUSED', 4),
-        ('YXDOMAIN', 5),
-        ('YXRRSET', 6),
-        ('NXRRSET', 7),
-        ('NOTAUTH', 8),
-        ('NOTZONE', 9),
+        ('FORMERR', 1),
+        ('SERVFAIL', 2),
+        ('NXDOMAIN', 3),
+        ('NOTIMP', 4),
+        ('REFUSED', 5),
+        ('YXDOMAIN', 6),
+        ('YXRRSET', 7),
+        ('NXRRSET', 8),
+        ('NOTAUTH', 9),
+        ('NOTZONE', 10),
+
+        ('DSOTYPENI', 11),
+        ('BADVERS', 16),
+        ('BADSIG', 16),
+        ('BADKEY', 17),
+        ('BADTIME', 18),
+        ('BADMODE', 19),
+        ('BADNAME', 20),
+        ('BADALG', 21),
+        ('BADTRUNC', 22),
+        ('BADCOOKIE', 23),
     ]
+
+class RCODE(pbinary.enum, _RCODE):
+    length = 4
 
 class SECURITY_ALGORITHM(pint.enum, u8):
     _values_ = [
@@ -499,6 +514,15 @@ class PX(pstruct.type):
     ]
 
 @RDATA.define
+class GPOS(pstruct.type):
+    type = TYPE.byname('GPOS')
+    _fields_ = [
+        (String, 'LONGITUDE'),
+        (String, 'LATITUDE'),
+        (String, 'ALTITUDE'),
+    ]
+
+@RDATA.define
 class AAAA(pstruct.type):
     type = TYPE.byname('AAAA')
     _fields_ = [
@@ -591,6 +615,20 @@ class SRV(pstruct.type):
         (Label, 'Target'),
     ]
 
+class ATMA_FORMAT(pint.enum, u8):
+    _values_ = [
+        ('AESA', 0),
+        ('E164', 1),
+    ]
+
+@RDATA.define
+class ATMA(pstruct.type):
+    type = TYPE.byname('ATMA')
+    _fields_ = [
+        (ATMA_FORMAT, 'FORMAT'),
+        (Label, 'ADDRESS'),
+    ]
+
 @RDATA.define
 class NAPTR(pstruct.type):
     type = TYPE.byname('NAPTR')
@@ -662,13 +700,76 @@ class DNAME(pstruct.type):
         (Label, 'target'),
     ]
 
+class SINK_CODING(pint.enum, u8):
+    _values_ = [
+        ('SNMP', 1),
+        ('OSI-1990', 2),
+        ('OSI-1994', 3),
+        ('PRIVATE', 63),
+        ('DNS', 64),
+        ('MIME', 65),
+        ('TEXT', 66),
+        ('URL', 254),
+    ]
+
 @RDATA.define
-class OPTION(pstruct.type):
+class SINK(pstruct.type):
+    type = TYPE.byname('SINK')
+    class ASN1_SUBCODING(pint.enum, u8):
+        _values_ = [
+            ('reserved', 0),
+            ('ber', 1),
+            ('der', 2),
+            ('per-aligned', 3),
+            ('per', 4),
+            ('cer', 5),
+        ]
+
+    class MIME_SUBCODING(pint.enum, u8):
+        _values_ = [
+            ('reserved', 0),
+            ('7bit', 1),
+            ('8bit', 2),
+            ('binary', 3),
+            ('quoted', 4),
+            ('base64', 5),
+            ('private', 254),
+        ]
+
+    class TEXT_SUBCODING(pint.enum, u8):
+        _values_ = [
+            ('reserved', 0),
+            ('ASCII', 1),
+            ('UTF-7', 2),
+            ('UTF-8', 3),
+            ('ASCII-MIME', 4),
+            ('private', 254),
+        ]
+    def __subcoding(self):
+        res = self['coding'].li
+        if 0 < res.int() < 64:
+            return SINK.ASN1_SUBCODING
+        elif res['MIME']:
+            return SINK.MIME_SUBCODING
+        elif res['TEXT']:
+            return SINK.TEXT_SUBCODING
+        return u8
+    _fields_ = [
+        (SINK_CODING, 'coding'),
+        (__subcoding, 'subcoding'),
+        (ptype.block, 'data'),
+    ]
+
+@RDATA.define
+class OPT(pstruct.type):
     type = TYPE.byname('OPT')
+    def __DATA(self):
+        res, length = (self[fld].li for fld in ['CODE', 'LENGTH'])
+        return dyn.block(length.int())
     _fields_ = [
         (u16, 'CODE'),
         (u16, 'LENGTH'),
-        (lambda self: dyn.block(self['LENGTH'].li.int()), 'DATA'),
+        (__DATA, 'DATA'),
     ]
 
 class ADDRESSFAMILY(pint.enum):
@@ -891,6 +992,101 @@ class DHCID(pstruct.type):
 class SPF(parray.block):
     type = TYPE.byname('SPF')
     _object_ = String
+
+class TKEY_ERROR(pint.enum, pint.uint16_t, _RCODE):
+    pass
+
+@RDATA.define
+class TKEY(pstruct.type):
+    type = TYPE.byname('TKEY')
+    _fields_ = [
+        (Label, 'Algorithm'),
+        (pint.uint32_t, 'Inception'),
+        (pint.uint32_t, 'Expiration'),
+        (pint.uint16_t, 'Mode'),
+        (pint.uint16_t, 'Error'),
+        (pint.uint16_t, 'Key Size'),
+        (lambda self: dyn.block(self['Key Size'].li.int()), 'Key Data'),
+        (pint.uint16_t, 'Other Size'),
+        (lambda self: dyn.block(self['Other Size'].li.int()), 'Other Data'),
+    ]
+
+class TSIG_ERROR(pint.enum, pint.uint16_t, _RCODE):
+    pass
+
+@RDATA.define
+class TSIG(pstruct.type):
+    type = TYPE.byname('TSIG')
+    _fields_ = [
+        (Label, 'Algorithm Name'),
+        (dyn.clone(pint.uint_t, length=6), 'Time Signed'),
+        (pint.uint16_t, 'Fudge'),
+        (pint.uint16_t, 'MAC Size'),
+        (lambda self: dyn.block(self['MAC Size'].li.int()), 'MAC'),
+        (pint.uint16_t, 'Original ID'),
+        (pint.uint16_t, 'Error'),
+        (pint.uint16_t, 'Other Len'),
+        (lambda self: dyn.block(self['Other Len'].li.int()), 'Other Data'),
+    ]
+
+@RDATA.define
+class MAILB(pstruct.type):
+    type = TYPE.byname('MAILB')
+    _fields_ = [
+        (Label, 'NAME'),
+    ]
+    def summary(self):
+        return self['NAME'].str()
+
+@RDATA.define
+class MAILA(pstruct.type):
+    type = TYPE.byname('MAILA')
+    _fields_ = [
+        (Label, 'NAME'),
+    ]
+    def summary(self):
+        return self['NAME'].str()
+
+@RDATA.define
+class URI(pstruct.type):
+    type = TYPE.byname('URI')
+    _fields_ = [
+        (u16, 'Priority'),
+        (u16, 'Weight'),
+        (pstr.string, 'Target'),
+    ]
+
+@RDATA.define
+class CAA(pstruct.type):
+    type = TYPE.byname('CAA')
+    def __Tag(self):
+        res = self['Tag Length'].li
+        return dyn.clone(pstr.string, length=res.int())
+    _fields_ = [
+        (u8, 'Flags'),
+        (u8, 'Tag Length'),
+        (__Tag, 'Tag'),
+        (ptype.block, 'Value'),
+    ]
+
+@RDATA.define
+class DOA(pstruct.type):
+    type = TYPE.byname('DOA')
+    _fields_ = [
+        (u32, 'ENTERPRISE'),
+        (u32, 'TYPE'),
+        (u8, 'LOCATION'),
+        (String, 'MEDIA-TYPE'),
+        (ptype.block, 'DATA'),
+    ]
+
+@RDATA.define
+class TA(DS):
+    type = TYPE.byname('TA')
+
+@RDATA.define
+class DLV(DS):
+    type = TYPE.byname('DLV')
 
 class Header(pbinary.flags):
     _fields_ = [
