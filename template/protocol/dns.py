@@ -265,7 +265,7 @@ class RDATA(ptype.definition):
 
 @RDATA.define
 class A(pstruct.type):
-    type = TYPE.byname('A'), CLASS.byname('IN')
+    type = TYPE.byname('A')
     _fields_ = [
         (osi.network.inet4.in_addr, 'ADDRESS'),
     ]
@@ -274,7 +274,7 @@ class A(pstruct.type):
 
 @RDATA.define
 class NS(pstruct.type):
-    type = TYPE.byname('NS'), CLASS.byname('IN')
+    type = TYPE.byname('NS')
     _fields_ = [
         (Label, 'NSDNAME'),
     ]
@@ -283,7 +283,7 @@ class NS(pstruct.type):
 
 @RDATA.define
 class MD(pstruct.type):
-    type = TYPE.byname('MD'), CLASS.byname('IN')
+    type = TYPE.byname('MD')
     _fields_ = [
         (Label, 'MADNAME'),
     ]
@@ -292,7 +292,7 @@ class MD(pstruct.type):
 
 @RDATA.define
 class MF(pstruct.type):
-    type = TYPE.byname('MF'), CLASS.byname('IN')
+    type = TYPE.byname('MF')
     _fields_ = [
         (Label, 'MADNAME'),
     ]
@@ -301,7 +301,7 @@ class MF(pstruct.type):
 
 @RDATA.define
 class CNAME(pstruct.type):
-    type = TYPE.byname('CNAME'), CLASS.byname('IN')
+    type = TYPE.byname('CNAME')
     _fields_ = [
         (Label, 'CNAME'),
     ]
@@ -310,7 +310,7 @@ class CNAME(pstruct.type):
 
 @RDATA.define
 class SOA(pstruct.type):
-    type = TYPE.byname('SOA'), CLASS.byname('IN')
+    type = TYPE.byname('SOA')
     _fields_ = [
         (Label, 'MNAME'),
         (Label, 'RNAME'),
@@ -327,7 +327,7 @@ class SOA(pstruct.type):
 
 @RDATA.define
 class MB(pstruct.type):
-    type = TYPE.byname('MB'), CLASS.byname('IN')
+    type = TYPE.byname('MB')
     _fields_ = [
         (Label, 'MADNAME'),
     ]
@@ -336,7 +336,7 @@ class MB(pstruct.type):
 
 @RDATA.define
 class MG(pstruct.type):
-    type = TYPE.byname('MG'), CLASS.byname('IN')
+    type = TYPE.byname('MG')
     _fields_ = [
         (Label, 'MGMNAME'),
     ]
@@ -345,7 +345,7 @@ class MG(pstruct.type):
 
 @RDATA.define
 class MR(pstruct.type):
-    type = TYPE.byname('MR'), CLASS.byname('IN')
+    type = TYPE.byname('MR')
     _fields_ = [
         (Label, 'NEWNAME'),
     ]
@@ -354,11 +354,11 @@ class MR(pstruct.type):
 
 @RDATA.define
 class NULL(ptype.block):
-    type = TYPE.byname('NULL'), CLASS.byname('IN')
+    type = TYPE.byname('NULL')
 
 @RDATA.define
 class WKS(pstruct.type):
-    type = TYPE.byname('WKS'), CLASS.byname('IN')
+    type = TYPE.byname('WKS')
     _fields_ = [
         (osi.network.inet4.in_addr, 'ADDRESS'),
         (u8, 'PROTOCOL'),
@@ -367,7 +367,7 @@ class WKS(pstruct.type):
 
 @RDATA.define
 class PTR(pstruct.type):
-    type = TYPE.byname('PTR'), CLASS.byname('IN')
+    type = TYPE.byname('PTR')
     _fields_ = [
         (Label, 'PTRDNAME'),
     ]
@@ -376,7 +376,7 @@ class PTR(pstruct.type):
 
 @RDATA.define
 class HINFO(pstruct.type):
-    type = TYPE.byname('HINFO'), CLASS.byname('IN')
+    type = TYPE.byname('HINFO')
     _fields_ = [
         (String, 'CPU'),
         (String, 'OS'),
@@ -386,7 +386,7 @@ class HINFO(pstruct.type):
 
 @RDATA.define
 class MINFO(pstruct.type):
-    type = TYPE.byname('MINFO'), CLASS.byname('IN')
+    type = TYPE.byname('MINFO')
     _fields_ = [
         (Label, 'RMAILBX'),
         (Label, 'EMAILBX'),
@@ -396,7 +396,7 @@ class MINFO(pstruct.type):
 
 @RDATA.define
 class MX(pstruct.type):
-    type = TYPE.byname('MX'), CLASS.byname('IN')
+    type = TYPE.byname('MX')
     _fields_ = [
         (u16, 'PREFERENCE'),
         (Label, 'EXCHANGE'),
@@ -406,12 +406,12 @@ class MX(pstruct.type):
 
 @RDATA.define
 class TXT(parray.block):
-    type = TYPE.byname('TXT'), CLASS.byname('IN')
+    type = TYPE.byname('TXT')
     _object_ = String
 
 @RDATA.define
 class RP(pstruct.type):
-    type = TYPE.byname('RP'), CLASS.byname('IN')
+    type = TYPE.byname('RP')
     _fields_ = [
         (Label, 'mbox'),
         (Label, 'txt'),
@@ -419,7 +419,7 @@ class RP(pstruct.type):
 
 @RDATA.define
 class AFSDB(pstruct.type):
-    type = TYPE.byname('AFSDB'), CLASS.byname('IN')
+    type = TYPE.byname('AFSDB')
     _fields_ = [
         (u16, 'subtype'),
         (Label, 'hostname'),
@@ -427,14 +427,14 @@ class AFSDB(pstruct.type):
 
 @RDATA.define
 class X25(pstruct.type):
-    type = TYPE.byname('X25'), CLASS.byname('IN')
+    type = TYPE.byname('X25')
     _fields_ = [
         (String, 'PSDN-address'),
     ]
 
 @RDATA.define
 class ISDN(pstruct.type):
-    type = TYPE.byname('ISDN'), CLASS.byname('IN')
+    type = TYPE.byname('ISDN')
     _fields_ = [
         (String, 'ISDN-address'),
         (String, 'sa'),
@@ -442,7 +442,7 @@ class ISDN(pstruct.type):
 
 @RDATA.define
 class RT(pstruct.type):
-    type = TYPE.byname('RT'), CLASS.byname('IN')
+    type = TYPE.byname('RT')
     _fields_ = [
         (u16, 'preference'),
         (Label, 'intermediate-host'),
@@ -450,11 +450,11 @@ class RT(pstruct.type):
 
 @RDATA.define
 class NSAP(pstr.string):
-    type = TYPE.byname('NSAP'), CLASS.byname('IN')
+    type = TYPE.byname('NSAP')
 
 @RDATA.define
 class NSAPPTR(PTR):
-    type = TYPE.byname('NSAPPTR'), CLASS.byname('IN')
+    type = TYPE.byname('NSAPPTR')
     _fields_ = [
         (Label, 'PTRNAME'),
     ]
@@ -466,7 +466,7 @@ class SECEXT_ALGORITHM(SECURITY_ALGORITHM):
 
 @RDATA.define
 class SIG(pstruct.type):
-    type = TYPE.byname('SIG'), CLASS.byname('IN')
+    type = TYPE.byname('SIG')
     _fields_ = [
         (u16, 'type-covered'),
         (SECEXT_ALGORITHM, 'algorithm'),
@@ -481,7 +481,7 @@ class SIG(pstruct.type):
 
 @RDATA.define
 class KEY(pstruct.type):
-    type = TYPE.byname('KEY'), CLASS.byname('IN')
+    type = TYPE.byname('KEY')
     _fields_ = [
         (u16, 'flags'),
         (u8, 'protocol'),
@@ -491,7 +491,7 @@ class KEY(pstruct.type):
 
 @RDATA.define
 class PX(pstruct.type):
-    type = TYPE.byname('PX'), CLASS.byname('IN')
+    type = TYPE.byname('PX')
     _fields_ = [
         (u16, 'PREFERENCE'),
         (Label, 'MAP822'),
@@ -500,7 +500,7 @@ class PX(pstruct.type):
 
 @RDATA.define
 class AAAA(pstruct.type):
-    type = TYPE.byname('AAAA'), CLASS.byname('IN')
+    type = TYPE.byname('AAAA')
     _fields_ = [
         (osi.network.inet6.in_addr, 'ADDRESS'),
     ]
@@ -509,7 +509,7 @@ class AAAA(pstruct.type):
 
 @RDATA.define
 class LOC(pstr.string):
-    type = TYPE.byname('LOC'), CLASS.byname('IN')
+    type = TYPE.byname('LOC')
     class Pow10(pbinary.struct):
         _fields_ = [
             (4, 'base'),
@@ -527,7 +527,7 @@ class LOC(pstr.string):
 
 @RDATA.define
 class NXT(pstruct.type):
-    type = TYPE.byname('NXT'), CLASS.byname('IN')
+    type = TYPE.byname('NXT')
     _fields_ = [
         (Label, 'next-domain-name'),
         (ptype.undefined, 'type-bitmap'),
@@ -550,7 +550,7 @@ class NB_FLAGS(pbinary.flags):
 
 @RDATA.define
 class NB(pstruct.type):
-    type = TYPE.byname('NB'), CLASS.byname('IN')
+    type = TYPE.byname('NB')
     _fields_ = [
         (NB_FLAGS, 'NB_FLAGS'),
         (osi.network.inet4.in_addr, 'NB_ADDRESS'),
@@ -575,7 +575,7 @@ class NODE_NAME(pstruct.type):
 
 @RDATA.define
 class NBSTAT(pstruct.type):
-    type = TYPE.byname('NBSTAT'), CLASS.byname('IN')
+    type = TYPE.byname('NBSTAT')
     _fields_ = [
         (u8, 'NUM_NAMES'),
         (lambda self: dyn.array(NODE_NAME, self['NUM_NAMES'].li.int()), 'NAMES'),
@@ -583,7 +583,7 @@ class NBSTAT(pstruct.type):
 
 @RDATA.define
 class SRV(pstruct.type):
-    type = TYPE.byname('SRV'), CLASS.byname('IN')
+    type = TYPE.byname('SRV')
     _fields_ = [
         (u16, 'Priority'),
         (u16, 'Weight'),
@@ -593,7 +593,7 @@ class SRV(pstruct.type):
 
 @RDATA.define
 class NAPTR(pstruct.type):
-    type = TYPE.byname('NAPTR'), CLASS.byname('IN')
+    type = TYPE.byname('NAPTR')
     _fields_ = [
         (u16, 'ORDER'),
         (u16, 'PREFERENCE'),
@@ -604,7 +604,7 @@ class NAPTR(pstruct.type):
 
 @RDATA.define
 class KX(pstruct.type):
-    type = TYPE.byname('KX'), CLASS.byname('IN')
+    type = TYPE.byname('KX')
     _fields_ = [
         (u16, 'PREFERENCE'),
         (Label, 'EXCHANGER'),
@@ -630,7 +630,7 @@ class CERT_ALGORITHM(SECURITY_ALGORITHM):
 
 @RDATA.define
 class CERT(pstruct.type):
-    type = TYPE.byname('CERT'), CLASS.byname('IN')
+    type = TYPE.byname('CERT')
     _fields_ = [
         (CERT_TYPE, 'type'),
         (u16, 'key tag'),
@@ -640,7 +640,7 @@ class CERT(pstruct.type):
 
 @RDATA.define
 class A6(pstruct.type):
-    type = TYPE.byname('A6'), CLASS.byname('IN')
+    type = TYPE.byname('A6')
     def __Suffix(self):
         prefix, bits = self['Prefix'].li.int(), 128
         res = max(bits, prefix) - prefix
@@ -657,14 +657,14 @@ class A6(pstruct.type):
 
 @RDATA.define
 class DNAME(pstruct.type):
-    type = TYPE.byname('DNAME'), CLASS.byname('IN')
+    type = TYPE.byname('DNAME')
     _fields_ = [
         (Label, 'target'),
     ]
 
 @RDATA.define
 class OPTION(pstruct.type):
-    type = TYPE.byname('OPT'), None
+    type = TYPE.byname('OPT')
     _fields_ = [
         (u16, 'CODE'),
         (u16, 'LENGTH'),
@@ -724,7 +724,7 @@ class ADDRESSFAMILY(pint.enum):
 
 @RDATA.define
 class APL(pstruct.type):
-    type = TYPE.byname('APL'), CLASS.byname('IN')
+    type = TYPE.byname('APL')
     class _ADDRESSFAMILY(ADDRESSFAMILY, u16):
         pass
     class _AFD(pbinary.flags):
@@ -750,7 +750,7 @@ class DS_TYPE(DIGEST_TYPE):
 
 @RDATA.define
 class DS(pstruct.type):
-    type = TYPE.byname('DS'), CLASS.byname('IN')
+    type = TYPE.byname('DS')
     _fields_ = [
         (u16, 'Key Tag'),
         (DNSKEY_ALGORITHM, 'Algorithm'),
@@ -770,7 +770,7 @@ class SSHFP_TYPE(DS_TYPE):
 
 @RDATA.define
 class SSHFP(pstruct.type):
-    type = TYPE.byname('SSHFP'), CLASS.byname('IN')
+    type = TYPE.byname('SSHFP')
     _fields_ = [
         (SSHFP_ALGORITHM, 'algorithm'),
         (SSHFP_TYPE, 'fp type'),
@@ -793,7 +793,7 @@ class IPSECKEY_ALGORITHM(pint.enum, u8):
 
 @RDATA.define
 class IPSECKEY(pstruct.type):
-    type = TYPE.byname('IPSECKEY'), CLASS.byname('IN')
+    type = TYPE.byname('IPSECKEY')
     def __gateway(self):
         res = self['gateway-type'].li
         if res['none']:
@@ -816,7 +816,7 @@ class IPSECKEY(pstruct.type):
 
 @RDATA.define
 class RRSIG(pstruct.type):
-    type = TYPE.byname('RRSIG'), CLASS.byname('IN')
+    type = TYPE.byname('RRSIG')
     _fields_ = [
         (TYPE, 'Type Covered'),
         (DNSKEY_ALGORITHM, 'Algorithm'),
@@ -831,7 +831,7 @@ class RRSIG(pstruct.type):
 
 @RDATA.define
 class NSEC(pstruct.type):
-    type = TYPE.byname('NSEC'), CLASS.byname('IN')
+    type = TYPE.byname('NSEC')
     _fields_ = [
         (Label, 'Next Domain Name'),
         (ptype.undefined, 'Type Bit Maps'),
@@ -859,7 +859,7 @@ class DNSKEY_PROTOCOL(pint.enum, u8):
 
 @RDATA.define
 class DNSKEY(pstruct.type):
-    type = TYPE.byname('DNSKEY'), CLASS.byname('IN')
+    type = TYPE.byname('DNSKEY')
     _fields_ = [
         (DNSKEY_FLAGS, 'Flags'),
         (DNSKEY_PROTOCOL, 'Protocol'),
@@ -869,7 +869,7 @@ class DNSKEY(pstruct.type):
 
 @RDATA.define
 class DHCID(pstruct.type):
-    type = TYPE.byname('DHCID'), CLASS.byname('IN')
+    type = TYPE.byname('DHCID')
     class _Identifier_type(pint.enum, u16):
         _values_ = [
             ('HTYPE', 0),
@@ -889,7 +889,7 @@ class DHCID(pstruct.type):
 
 @RDATA.define
 class SPF(parray.block):
-    type = TYPE.byname('SPF'), CLASS.byname('IN')
+    type = TYPE.byname('SPF')
     _object_ = String
 
 class Header(pbinary.flags):
@@ -918,9 +918,9 @@ class Q(pstruct.type):
 
 class RR(pstruct.type):
     def __RDATA(self):
-        res, klass = (self[fld].li.int() for fld in ['TYPE', 'CLASS'])
+        res = self['TYPE'].li.int()
         try:
-            t = RDATA.lookup((res, klass), None) or RDATA.lookup((res, None))
+            t = RDATA.lookup(res)
 
         except KeyError:
             res = self['RDLENGTH'].li
