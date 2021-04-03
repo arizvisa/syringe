@@ -3,6 +3,8 @@ from ptypes import *
 
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
+class u0(pint.uint_t): pass
+class s0(pint.sint_t): pass
 class u8(pint.uint8_t): pass
 class s8(pint.sint8_t): pass
 class u16(pint.uint16_t): pass
@@ -12,10 +14,8 @@ class s32(pint.sint32_t): pass
 
 class Name(pstruct.type):
     def __string(self):
-        octet = self['length'].li
-        if octet.int() & 0xc0:
-            return pint.uint8_t
-        return dyn.block(octet.int())
+        res = self['length'].li.int()
+        return u8 if res & 0xc0 else dyn.block(res)
 
     _fields_ = [
         (u8, 'length'),
@@ -23,8 +23,8 @@ class Name(pstruct.type):
     ]
 
     def CompressedQ(self):
-        length = self['length'].int()
-        return True if length & 0xc0 else False
+        res = self['length'].int()
+        return True if res & 0xc0 else False
 
     def str(self):
         if self.CompressedQ():
@@ -103,7 +103,7 @@ class Label(parray.terminated):
     def summary(self):
         return "({:d}) {:s}".format(len(self), self.str())
 
-class TYPE(pint.enum, pint.uint16_t):
+class TYPE(pint.enum, u16):
     _values_ = [
         ('A', 1),
         ('NS', 2),
@@ -162,7 +162,7 @@ class QTYPE(TYPE):
         ('*', 255),
     ]
 
-class CLASS(pint.enum, pint.uint16_t):
+class CLASS(pint.enum, u16):
     _values_ = [
         ('IN', 1),
         ('CS', 2),
@@ -175,68 +175,75 @@ class QCLASS(CLASS):
         ('*', 255),
     ]
 
+class DIGEST_TYPE(pint.enum, u8):
+    _values_ = [
+        ('Reserved', 0),
+        ('SHA1', 1),
+    ]
+
+class SECURITY_ALGORITHM(pint.enum, u8):
+    _values_ = [
+        ('reserved', 0),
+        ('RSAMD5', 1),
+        ('DH', 2),
+        ('DSA', 3),
+        ('ECC', 4),
+        ('INDIRECT', 254),
+        ('PRIVATEDNS', 253),
+        ('PRIVATEOID', 254),
+    ]
+
 class RDATA(ptype.definition):
     cache = {}
 
 @RDATA.define
 class A(pstruct.type):
     type = TYPE.byname('A'), CLASS.byname('IN')
-
     _fields_ = [
         (osi.network.inet4.in_addr, 'ADDRESS'),
     ]
-
     def summary(self):
         return self['ADDRESS'].summary()
 
 @RDATA.define
 class NS(pstruct.type):
     type = TYPE.byname('NS'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'NSDNAME'),
     ]
-
     def summary(self):
         return self['NSDNAME'].str()
 
 @RDATA.define
 class MD(pstruct.type):
     type = TYPE.byname('MD'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'MADNAME'),
     ]
-
     def summary(self):
         return self['MADNAME'].str()
 
 @RDATA.define
 class MF(pstruct.type):
     type = TYPE.byname('MF'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'MADNAME'),
     ]
-
     def summary(self):
         return self['MADNAME'].str()
 
 @RDATA.define
 class CNAME(pstruct.type):
     type = TYPE.byname('CNAME'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'CNAME'),
     ]
-
     def summary(self):
         return self['CNAME'].str()
 
 @RDATA.define
 class SOA(pstruct.type):
     type = TYPE.byname('SOA'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'MNAME'),
         (Label, 'RNAME'),
@@ -246,7 +253,6 @@ class SOA(pstruct.type):
         (u32, 'EXPIRE'),
         (u32, 'MINIMUM'),
     ]
-
     def summary(self):
         fields = ['SERIAL', 'REFRESH', 'RETRY', 'EXPIRE', 'MINIMUM']
         items = ["{:d}".format(self[fld].int()) for fld in fields]
@@ -255,33 +261,27 @@ class SOA(pstruct.type):
 @RDATA.define
 class MB(pstruct.type):
     type = TYPE.byname('MB'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'MADNAME'),
     ]
-
     def summary(self):
         return self['MADNAME'].str()
 
 @RDATA.define
 class MG(pstruct.type):
     type = TYPE.byname('MG'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'MGMNAME'),
     ]
-
     def summary(self):
         return self['MGMNAME'].str()
 
 @RDATA.define
 class MR(pstruct.type):
     type = TYPE.byname('MR'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'NEWNAME'),
     ]
-
     def summary(self):
         return self['NEWNAME'].str()
 
@@ -301,47 +301,39 @@ class WKS(pstruct.type):
 @RDATA.define
 class PTR(pstruct.type):
     type = TYPE.byname('PTR'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'PTRDNAME'),
     ]
-
     def summary(self):
         return self['PTRDNAME'].str()
 
 @RDATA.define
 class HINFO(pstruct.type):
     type = TYPE.byname('HINFO'), CLASS.byname('IN')
-
     _fields_ = [
         (String, 'CPU'),
         (String, 'OS'),
     ]
-
     def summary(self):
         return "CPU={:s} OS={:s}".format(self['CPU'].str(), self['OS'].str())
 
 @RDATA.define
 class MINFO(pstruct.type):
     type = TYPE.byname('MINFO'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'RMAILBX'),
         (Label, 'EMAILBX'),
     ]
-
     def summary(self):
         return ' '.join([self['RMAILBX'].str(), self['EMAILBX'].str()])
 
 @RDATA.define
 class MX(pstruct.type):
     type = TYPE.byname('MX'), CLASS.byname('IN')
-
     _fields_ = [
         (u16, 'PREFERENCE'),
         (Label, 'EXCHANGE'),
     ]
-
     def summary(self):
         return "{:d} {:s}".format(self['PREFERENCE'].int(), self['EXCHANGE'].str())
 
@@ -353,7 +345,6 @@ class TXT(parray.block):
 @RDATA.define
 class RP(pstruct.type):
     type = TYPE.byname('RP'), CLASS.byname('IN')
-
     _fields_ = [
         (Label, 'mbox'),
         (Label, 'txt'),
@@ -362,7 +353,6 @@ class RP(pstruct.type):
 @RDATA.define
 class AFSDB(pstruct.type):
     type = TYPE.byname('AFSDB'), CLASS.byname('IN')
-
     _fields_ = [
         (u16, 'subtype'),
         (Label, 'hostname'),
@@ -371,7 +361,6 @@ class AFSDB(pstruct.type):
 @RDATA.define
 class X25(pstruct.type):
     type = TYPE.byname('X25'), CLASS.byname('IN')
-
     _fields_ = [
         (String, 'PSDN-address'),
     ]
@@ -396,12 +385,15 @@ class RT(pstruct.type):
 class NSAP(pstr.string):
     type = TYPE.byname('NSAP'), CLASS.byname('IN')
 
+class SECEXT_ALGORITHM(SECURITY_ALGORITHM):
+    pass
+
 @RDATA.define
 class SIG(pstruct.type):
     type = TYPE.byname('SIG'), CLASS.byname('IN')
     _fields_ = [
         (u16, 'type-covered'),
-        (u8, 'algorithm'),
+        (SECEXT_ALGORITHM, 'algorithm'),
         (u8, 'labels'),
         (u32, 'original-ttl'),
         (u32, 'signature-expiration'),
@@ -417,7 +409,7 @@ class KEY(pstruct.type):
     _fields_ = [
         (u16, 'flags'),
         (u8, 'protocol'),
-        (u8, 'algorithm'),
+        (SECEXT_ALGORITHM, 'algorithm'),
         (ptype.undefined, 'public-key'),
     ]
 
@@ -433,24 +425,20 @@ class PX(pstruct.type):
 @RDATA.define
 class AAAA(pstruct.type):
     type = TYPE.byname('AAAA'), CLASS.byname('IN')
-
     _fields_ = [
         (osi.network.inet6.in_addr, 'ADDRESS'),
     ]
-
     def summary(self):
         return self['ADDRESS'].summary()
 
 @RDATA.define
 class LOC(pstr.string):
     type = TYPE.byname('LOC'), CLASS.byname('IN')
-
     class Pow10(pbinary.struct):
         _fields_ = [
             (4, 'base'),
             (4, 'power'),
         ]
-
     _fields_ = [
         (u8, 'VERSION'),
         (Pow10, 'SIZE'),
@@ -546,27 +534,48 @@ class KX(pstruct.type):
         (Label, 'EXCHANGER'),
     ]
 
+class CERT_TYPE(pint.enum, u16):
+    _values_ = [
+        ('PKIX', 1),
+        ('SPKI', 2),
+        ('PGP', 3),
+        ('IPKIX', 4),
+        ('ISPKI', 5),
+        ('IPGP', 6),
+        ('ACPKIX', 7),
+        ('IACPKIX', 8),
+        ('URI', 253),
+        ('OID', 254),
+        ('Reserved', 255),
+    ]
+
+class CERT_ALGORITHM(SECURITY_ALGORITHM):
+    pass
+
 @RDATA.define
 class CERT(pstruct.type):
     type = TYPE.byname('CERT'), CLASS.byname('IN')
     _fields_ = [
-        (u16, 'type'),
+        (CERT_TYPE, 'type'),
         (u16, 'key tag'),
-        (u8, 'algorithm'),
-        (ptype.undefined, 'certificate or CRL'),
+        (CERT_ALGORITHM, 'algorithm'),
+        (ptype.undefined, 'certificate'),
     ]
 
 @RDATA.define
 class A6(pstruct.type):
     type = TYPE.byname('A6'), CLASS.byname('IN')
-
     def __Suffix(self):
-        res = 7 + self['Prefix'].li.int()
-        return dyn.block(res // 8)
-
+        prefix, bits = self['Prefix'].li.int(), 128
+        res = max(bits, prefix) - prefix
+        return dyn.block((prefix + 7) // 8)
+    def __padding_Suffix(self):
+        res = (self['Prefix'].li + 7) // 8
+        return dyn.block(max(0, res) - self['Suffix'].li.size())
     _fields_ = [
         (u8, 'Prefix'),
         (__Suffix, 'Suffix'),
+        (__padding_Suffix, 'padding(Suffix)'),
         (Label, 'Name'),
     ]
 
@@ -657,45 +666,74 @@ class APL(pstruct.type):
         (__AFDPART, 'AFDPART'),
     ]
 
+class DNSKEY_ALGORITHM(SECURITY_ALGORITHM):
+    pass
+
+class DS_TYPE(DIGEST_TYPE):
+    pass
+
 @RDATA.define
 class DS(pstruct.type):
     type = TYPE.byname('DS'), CLASS.byname('IN')
     _fields_ = [
         (u16, 'Key Tag'),
-        (u8, 'Algorithm'),
-        (u8, 'Digest Type'),
+        (DNSKEY_ALGORITHM, 'Algorithm'),
+        (DS_TYPE, 'Digest Type'),
         (ptype.undefined, 'Digest'),
     ]
+
+class SSHFP_ALGORITHM(pint.enum, u8):
+    _values_ = [
+        ('reserved', 0),
+        ('RSA', 1),
+        ('DSS', 2),
+    ]
+
+class SSHFP_TYPE(DS_TYPE):
+    pass
 
 @RDATA.define
 class SSHFP(pstruct.type):
     type = TYPE.byname('SSHFP'), CLASS.byname('IN')
     _fields_ = [
-        (u8, 'algorithm'),
-        (u8, 'fp type'),
+        (SSHFP_ALGORITHM, 'algorithm'),
+        (SSHFP_TYPE, 'fp type'),
         (ptype.undefined, 'fingerprint'),
+    ]
+
+class IPSECKEY_GATEWAY(pint.enum, u8):
+    _values_ = [
+        ('none', 0),
+        ('v4', 1),
+        ('v6', 2),
+        ('name', 3),
+    ]
+
+class IPSECKEY_ALGORITHM(pint.enum, u8):
+    _values_ = [
+        ('DSA', 1),
+        ('RSA', 2),
     ]
 
 @RDATA.define
 class IPSECKEY(pstruct.type):
     type = TYPE.byname('IPSECKEY'), CLASS.byname('IN')
-
     def __gateway(self):
         res = self['gateway-type'].li
-        if res.int() == 0:
+        if res['none']:
             return ptype.block
-        elif res.int() == 1:
+        elif res['v4']:
             return osi.network.inet4.in_addr
-        elif res.int() == 2:
+        elif res['v6']:
             return osi.network.inet6.in_addr
-        elif res.int() == 3:
+        elif res['name']:
             return Label
         return ptype.undefined
 
     _fields_ = [
         (u8, 'precedence'),
-        (u8, 'gateway-type'),
-        (u8, 'algorithm'),
+        (IPSECKEY_GATEWAY, 'gateway-type'),
+        (IPSECKEY_ALGORITHM, 'algorithm'),
         (__gateway, 'gateway'),
         (ptype.undefined, 'public-key'),
     ]
@@ -703,10 +741,9 @@ class IPSECKEY(pstruct.type):
 @RDATA.define
 class RRSIG(pstruct.type):
     type = TYPE.byname('RRSIG'), CLASS.byname('IN')
-
     _fields_ = [
-        (u16, 'Type Covered'),
-        (u8, 'Algorithm'),
+        (TYPE, 'Type Covered'),
+        (DNSKEY_ALGORITHM, 'Algorithm'),
         (u8, 'Labels'),
         (u32, 'Original TTL'),
         (u32, 'Signature Expiration'),
@@ -724,22 +761,53 @@ class NSEC(pstruct.type):
         (ptype.undefined, 'Type Bit Maps'),
     ]
 
+class DNSKEY_FLAGS(pbinary.flags):
+    _fields_ = [
+        (1, 'SE'),
+        (7, 'Reserved'),
+        (1, 'ZK'),
+        (7, 'Reserved'),
+    ]
+
+class DNSKEY_PROTOCOL(pint.enum, u8):
+    _values_ = [
+        ('Default', 3),
+    ]
+    def default(self):
+        return self.set('Default')
+    def valid(self):
+        res = self.copy().default()
+        return res.int() == self.int()
+    def alloc(self, **attrs):
+        return super(DNSKEY_PROTOCOL, self).alloc(**attrs).default()
+
 @RDATA.define
 class DNSKEY(pstruct.type):
     type = TYPE.byname('DNSKEY'), CLASS.byname('IN')
     _fields_ = [
-        (u16, 'Flags'),
-        (u8, 'Protocol'),
-        (u8, 'Algorithm'),
+        (DNSKEY_FLAGS, 'Flags'),
+        (DNSKEY_PROTOCOL, 'Protocol'),
+        (DNSKEY_ALGORITHM, 'Algorithm'),
         (ptype.undefined, 'Public Key'),
     ]
 
 @RDATA.define
 class DHCID(pstruct.type):
     type = TYPE.byname('DHCID'), CLASS.byname('IN')
+    class _Identifier_type(pint.enum, u16):
+        _values_ = [
+            ('HTYPE', 0),
+            ('CID', 1),
+            ('DUID', 2),
+            ('Undefined', 0xffff),
+        ]
+    class _Digest_type(pint.enum, u8):
+        _values_ = [
+            ('SHA256', 1),
+        ]
     _fields_ = [
-        (u16, 'Identifier type code'),
-        (u8, 'Digest type code'),
+        (_Identifier_type, 'Identifier type'),
+        (_Digest_type, 'Digest type'),
         (ptype.undefined, 'Digest'),
     ]
 
@@ -749,13 +817,13 @@ class SPF(parray.block):
     _object_ = String
 
 class QR(pbinary.enum):
-    _width_, _values_ = 1, [
+    length, _values_ = 1, [
         ('query', 0),
         ('response', 1),
     ]
 
 class OPCODE(pbinary.enum):
-    _width_, _values_ = 4, [
+    length, _values_ = 4, [
         ('QUERY', 0),
         ('IQUERY', 1),
         ('STATUS', 2),
@@ -764,7 +832,7 @@ class OPCODE(pbinary.enum):
     ]
 
 class RCODE(pbinary.enum):
-    _width_, _values_ = 4, [
+    length, _values_ = 4, [
         ('NOERROR', 0),
         ('SERVFAIL', 1),
         ('NXDOMAIN', 2),
@@ -899,6 +967,7 @@ class Stream(parray.infinite):
     _object_ = MessageTCP
 
 if __name__ == '__main__':
+    import sys, operator
     import ptypes, protocol.dns as dns
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
@@ -967,9 +1036,8 @@ if __name__ == '__main__':
     print(x)
 
     print(x['question'][0])
-    print(x['answer'][20])
+    print(x['answer'][19])
 
     data = '1f990120000100000000000106676f6f676c6503636f6d0000010001000029100000000000000c000a0008dd288f3fc1040a68'
     z = dns.Message(source=ptypes.prov.bytes(fromhex(data)))
     z=z.l
-
