@@ -181,6 +181,35 @@ class DIGEST_TYPE(pint.enum, u8):
         ('SHA1', 1),
     ]
 
+class QR(pbinary.enum):
+    length, _values_ = 1, [
+        ('query', 0),
+        ('response', 1),
+    ]
+
+class OPCODE(pbinary.enum):
+    length, _values_ = 4, [
+        ('QUERY', 0),
+        ('IQUERY', 1),
+        ('STATUS', 2),
+        ('NOTIFY', 4),
+        ('UPDATE', 5),
+    ]
+
+class RCODE(pbinary.enum):
+    length, _values_ = 4, [
+        ('NOERROR', 0),
+        ('SERVFAIL', 1),
+        ('NXDOMAIN', 2),
+        ('NOTIMP', 3),
+        ('REFUSED', 4),
+        ('YXDOMAIN', 5),
+        ('YXRRSET', 6),
+        ('NXRRSET', 7),
+        ('NOTAUTH', 8),
+        ('NOTZONE', 9),
+    ]
+
 class SECURITY_ALGORITHM(pint.enum, u8):
     _values_ = [
         ('reserved', 0),
@@ -815,35 +844,6 @@ class DHCID(pstruct.type):
 class SPF(parray.block):
     type = TYPE.byname('SPF'), CLASS.byname('IN')
     _object_ = String
-
-class QR(pbinary.enum):
-    length, _values_ = 1, [
-        ('query', 0),
-        ('response', 1),
-    ]
-
-class OPCODE(pbinary.enum):
-    length, _values_ = 4, [
-        ('QUERY', 0),
-        ('IQUERY', 1),
-        ('STATUS', 2),
-        ('NOTIFY', 4),
-        ('UPDATE', 5),
-    ]
-
-class RCODE(pbinary.enum):
-    length, _values_ = 4, [
-        ('NOERROR', 0),
-        ('SERVFAIL', 1),
-        ('NXDOMAIN', 2),
-        ('NOTIMP', 3),
-        ('REFUSED', 4),
-        ('YXDOMAIN', 5),
-        ('YXRRSET', 6),
-        ('NXRRSET', 7),
-        ('NOTAUTH', 8),
-        ('NOTZONE', 9),
-    ]
 
 class Header(pbinary.flags):
     _fields_ = [
