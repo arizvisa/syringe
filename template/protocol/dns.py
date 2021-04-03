@@ -127,20 +127,24 @@ class TYPE(pint.enum, u16):
         ('ISDN', 20),
         ('RT', 21),
         ('NSAP', 22),
+        ('NSAPPTR', 23),    # FIXME
         ('SIG', 24),
         ('KEY', 25),
         ('PX', 26),
+        ('GPOS', 27),       # FIXME
         ('AAAA', 28),
         ('LOC', 29),
         ('NXT', 30),
         ('NB', 31),
         ('NBSTAT', 32),
         ('SRV', 33),
+        ('ATMA', 34),       # FIXME
         ('NAPTR', 35),
         ('KX', 36),
         ('CERT', 37),
         ('A6', 38),
         ('DNAME', 39),
+        ('SINK', 40),       # FIXME
         ('OPT', 41),
         ('APL', 42),
         ('DS', 43),
@@ -150,7 +154,41 @@ class TYPE(pint.enum, u16):
         ('NSEC', 47),
         ('DNSKEY', 48),
         ('DHCID', 49),
+        ('NSEC3', 50),      # FIXME
+        ('NSEC3PARAM', 51), # FIXME
+        ('TLSA', 52),       # FIXME
+        ('SMIMEA', 53),     # FIXME
+        ('HIP', 54),        # FIXME
+        ('NINFO', 56),      # FIXME
+        ('RKEY', 57),       # FIXME
+        ('TALINK', 58),     # FIXME
+        ('CDS', 59),        # FIXME
+        ('CDNSKEY', 60),    # FIXME
+        ('OPENPGPKEY', 61), # FIXME
+        ('CSYNC', 62),      # FIXME
+        ('ZONEMD', 63),     # FIXME
+        ('SVCB', 64),       # FIXME
+        ('HTTPS', 65),      # FIXME
         ('SPF', 99),
+        ('UINFO', 100),     # FIXME
+        ('UID', 101),       # FIXME
+        ('GID', 102),       # FIXME
+        ('UNSPEC', 103),    # FIXME
+        ('NID', 104),       # FIXME
+        ('L32', 105),       # FIXME
+        ('L64', 106),       # FIXME
+        ('LP', 107),        # FIXME
+        ('EUI48', 108),     # FIXME
+        ('EUI64', 109),     # FIXME
+        ('TKEY', 249),      # FIXME
+        ('TSIG', 250),      # FIXME
+        ('MAILB', 253),     # FIXME
+        ('MAILA', 254),     # FIXME
+        ('URI', 256),       # FIXME
+        ('CAA', 257),       # FIXME
+        ('DOA', 259),       # FIXME
+        ('TAA', 32768),     # FIXME
+        ('DLV', 32769),     # FIXME
     ]
 
 class QTYPE(TYPE):
@@ -413,6 +451,15 @@ class RT(pstruct.type):
 @RDATA.define
 class NSAP(pstr.string):
     type = TYPE.byname('NSAP'), CLASS.byname('IN')
+
+@RDATA.define
+class NSAPPTR(PTR):
+    type = TYPE.byname('NSAPPTR'), CLASS.byname('IN')
+    _fields_ = [
+        (Label, 'PTRNAME'),
+    ]
+    def summary(self):
+        return self['PTRNAME'].str()
 
 class SECEXT_ALGORITHM(SECURITY_ALGORITHM):
     pass
