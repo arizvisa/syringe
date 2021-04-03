@@ -215,9 +215,18 @@ class Stream(ptype.encoded_t):
             # If we have a valid marker and enough data to figure out a length, then calculate the length,
             # consume that much data, and use it to determine the boundaries of the element.
             if FmarkerQ(marker) and len(data) >= 2:
-                skip, res = len(data), functools.reduce(lambda agg, item: agg * pow(2, 8) + item, data[:2], 0)
-                while skip < res:
-                    skip += sum(map(len, (yield)))
+                try:
+                  skip, res = len(data), functools.reduce(lambda agg, item: agg * pow(2, 8) + item, bytearray(data[:2]), 0)
+                  while skip < res:
+                      skip += sum(map(len, (yield)))
+
+                # If our generator was terminated, then we need to use the value that we were
+                # just aggregating. We use a negative size because terminating our decoding at
+                # this point is an error, and it'd be impossible to decode properly if so.
+                except GeneratorExit:
+                    size = len(marker) + skip
+                    bounds.append(-size)
+                    break
 
                 # Take the data that we read, and add it to the list of boundaries since
                 # this represents the contents of the element that we read.
@@ -256,7 +265,7 @@ class Stream(ptype.encoded_t):
         bounds, result = [], self.__split_stream(object.serialize())
 
         # Pair up each marker with its data
-        iterable = __izip_longest__(*[iter(result)] * 2)
+        iterable = iter(__izip_longest__(*[iter(result)] * 2))
 
         # Now we'll enter a loop that will continue cycling while trying to
         # decode markers. Our first segment will keep consuming our iterable
@@ -291,6 +300,8 @@ class Stream(ptype.encoded_t):
             # the bounds of each marker. So simply exit our while-loop so that
             # we can finalize decoding using the parent's decode method.
             else:
+                decoder.close()
+                self.__bounds__[:] = bounds
                 break
 
             # Now we're at the next stage of our processing, and we keep consuming
@@ -305,7 +316,7 @@ class Stream(ptype.encoded_t):
                     decoder.send(item)
 
                 # If our loop has terminated legitimately, then we didn't find an
-                # end-of-data marker, and we're done processing. Make a copy of
+                # end-of-data marker and we're done processing. Make a copy of
                 # our bounds so that we can hand it off to the parent class to
                 # finish decoding.
                 else:
@@ -321,6 +332,8 @@ class Stream(ptype.encoded_t):
             # need to do is exit the while-loop so we can hand-off our bounds
             # that we decoded to the parent to finish decoding.
             else:
+                decoder.close()
+                self.__bounds__[:] = bounds
                 break
 
             continue
