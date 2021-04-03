@@ -77,12 +77,9 @@ class MarkerType(codestream.MarkerType):
     _values_ = Marker.table
 
 class StreamData(codestream.StreamData):
-    _fields_ = [
-        (codestream.StreamData._Type, 'Type'),
-        (pint.uint_t, 'Lp'),
-        (codestream.StreamData._Value, 'Value'),
-        (codestream.StreamData._Extra, 'Extra'),
-    ]
+    _fields_ = codestream.StreamData._fields_[:1] + [
+        (pint.uint_t, 'Lp')
+    ] + codestream.StreamData._fields_[1:]
 
 class StreamMarker(codestream.StreamMarker):
     Type, Table = MarkerType, Marker
@@ -441,8 +438,30 @@ class File(codestream.Stream):
     class _object_(codestream.DecodedStream):
         Element, Data = StreamMarker, StreamData
 
+    def StartOfDataMarkerQ(self, marker):
+        # If we see the SOS code, then that's our data marker and the rest of our data
+        # are all compressed scanlines.
+        return intofdata(marker) in {0xffda}
+
+    def DataMarkerQ(self, marker):
+        res = intofdata(marker)
+        if 0xffc0 <= res < 0xffff:
+            # FIXME: it'd be nice if we could split our image data across these RST codes, but
+            #        our codestream.Stream implementation doesn't support it.
+            return res not in {0xffd0, 0xffd1, 0xffd2, 0xffd3, 0xffd4, 0xffd5, 0xffd6, 0xffd7}
+        return False
+
+    def EndOfDataMarkerQ(self, marker):
+        # This EOI marker represents the end of our image data.
+        return intofdata(marker) in {0xffd9}
+
     def _value_(self):
         return dyn.clone(ptype.block, length=self.source.size())
 
 if __name__ == '__main__':
-    pass
+    import sys, ptypes, image.jpeg.jfif as jfif
+    ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
+    z = jfif.File()
+    z=z.l
+    z=z.d
+    z.l
