@@ -4,8 +4,17 @@ pbinary.setbyteorder(pbinary.littleendian)
 
 from .datatypes import *
 
+class PTR(opointer_t):
+    pass
+
 def P32(target):
-    return P(target, _value_=ptr32)
+    def Fbaseaddress(self, offset):
+        mask, shift = pow(2, 64 - 31) - 1, pow(2, 31)
+        if getattr(self, 'WIN64', 0):
+            baseaddress = self.getoffset() & (mask * shift)
+            return baseaddress + offset
+        return offset
+    return dyn.clone(PTR, _calculate_=Fbaseaddress, _object_=target, _value_=ptr32)
 
 class EXCEPTION_FLAGS(pbinary.struct):
     _fields_ = [
@@ -229,6 +238,9 @@ class PMD(pstruct.type):
         (int, 'pdisp'), # vbtable displacement -- pointer to the vbtable within the derived class
         (int, 'vdisp'), # vftable displacement -- entry in the vbtable that contains the offset of the occurrence of the introducing class within the derived class
     ]
+    def summary(self):
+        m, p, v = (self[fld] for fld in ['mdisp', 'pdisp', 'vdisp'])
+        return "mdisp={:+#0{:d}x} pdisp={:+#0{:d}x} vdisp={:+#0{:d}x}".format(m.int(), 1 + 2 + m.size() * 2, p.int(), 1 + 2 + p.size() * 2, v.int(), 1 + 2 + v.size() * 2)
 
 class TypeDescriptor(pstruct.type):
     _fields_ = [
@@ -295,13 +307,13 @@ class FuncInfo(pstruct.type, versioned):
         # 0x19930521    - pESTypeList is valid
         # 0x19930522    - EHFlags is valid
         class _bbtFlags(pbinary.enum):
-            _width_, _values_ = 3, [
+            length, _values_ = 3, [
                 ('VC6', 0),
                 ('VC7', 1), # 7.x (2002-2003)
                 ('VC8', 2), # 8 (2005)
             ]
         _fields_ = [
-            (29, 'number'),
+            (29, 'magicNumber'),
             (_bbtFlags, 'bbtFlags'),
         ]
     class _pUnwindMap(parray.type):
@@ -384,7 +396,7 @@ class FuncInfo(pstruct.type, versioned):
     ]
 
 class UWOP_(pbinary.enum):
-    _width_, _values_ = 4, [
+    length, _values_ = 4, [
         ('PUSH_NONVOL', 0),
         ('ALLOC_LARGE', 1),
         ('ALLOC_SMALL', 2),
@@ -406,7 +418,7 @@ class UNWIND_CODE(pbinary.struct):
     ]
 
 class UNW_FLAG_(pbinary.enum):
-    _width_, _values_ = 5, [
+    length, _values_ = 5, [
         ('NHANDLER', 0),
         ('EHANDLER', 1),
         ('UHANDLER', 2),
@@ -491,37 +503,48 @@ class DISPATCHER_CONTEXT(pstruct.type, versioned):
 
 # corrected with http://www.geoffchappell.com/studies/msvc/language/predefined/index.htm?tx=12,14
 
-class RTTIBaseClassDescriptor(pstruct.type):
-    _fields_= [
-        (P(TypeDescriptor), 'pTypeDescriptor'),
-        (unsigned_long, 'numContainedBases'),
-        (PMD, 'where'),
-        (unsigned_long, 'attributes'),
-    ]
-
-class RTTIBaseClassArray(parray.type):
-    _object_ = RTTIBaseClassDescriptor
-
 class RTTIClassHierarchyDescriptor(pstruct.type):
     class _attributes(unsigned_long, pint.enum):
         _values_ = [
-            (1, 'multiple'),
-            (2, 'virtual'),
+            ('multiple', 1),
+            ('virtual', 2),
         ]
+    def __pBaseClassArray(self):
+        length = self['numBaseClasses'].li
+        return P32(dyn.clone(RTTIBaseClassArray, length=length.int()))
     _fields_ = [
         (unsigned_long, 'signature'),
         (_attributes, 'attributes'),
         (unsigned_long, 'numBaseClasses'),
-        (lambda self: P(dyn.clone(RTTIBaseClassArray, length=self['numBaseClasses'].li.int())), 'pBaseClassArray'),
+        (__pBaseClassArray, 'pBaseClassArray'),
     ]
 
+class RTTIBaseClassDescriptor(pstruct.type):
+    _fields_= [
+        (P32(TypeDescriptor), 'pTypeDescriptor'),
+        (unsigned_long, 'numContainedBases'),
+        (PMD, 'where'),
+        (unsigned_long, 'attributes'),
+        (P32(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
+    ]
+
+class RTTIBaseClassArray(parray.type):
+    _object_ = P32(RTTIBaseClassDescriptor)
+
 class RTTICompleteObjectLocator(pstruct.type, versioned):
+    def __pObjectLocator(self):
+        if getattr(self, 'WIN64', 0):
+            return P32(RTTICompleteObjectLocator)
+        return ptype.undefined
     _fields_ = [
         (unsigned_long, 'signature'),
         (unsigned_long, 'offset'),
         (unsigned_long, 'cdOffset'),
-        (P(TypeDescriptor), 'pTypeDescriptor'),
-        (P(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
+        (P32(TypeDescriptor), 'pTypeDescriptor'),
+        (P32(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
+
+        # FIXME: crosscheck this from vcruntime.dll
+        (__pObjectLocator, 'pObjectLocator'),
     ]
 
 if False:
