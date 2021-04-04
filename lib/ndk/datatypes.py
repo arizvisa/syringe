@@ -71,7 +71,8 @@ class __ptr32(ptype.pointer_t._value_): length = 4
 class __ptr64(ptype.pointer_t._value_): length = 8
 
 # aliases since dunder-prefixed symbols get mangled
-ptr32, ptr64 = __ptr32, __ptr64
+class ptr32(__ptr32): pass
+class ptr64(__ptr64): pass
 
 class star(ptype.pointer_t, versioned):
     @property
@@ -79,6 +80,10 @@ class star(ptype.pointer_t, versioned):
         return ptr64 if getattr(self, 'WIN64', False) else ptr32
 
 class rstar(ptype.rpointer_t, versioned):
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
     @property
     def _value_(self):
         return ptr64 if getattr(self, 'WIN64', False) else ptr32
@@ -95,6 +100,10 @@ class fstar(ptype.opointer_t, versioned):
     def _value_(self):
         return ptr64 if getattr(self, 'WIN64', False) else ptr32
 
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
     _path_ = ()
     def _calculate_(self, offset):
         res = self.new(self._object_).a
@@ -104,6 +113,28 @@ class fstar(ptype.opointer_t, versioned):
     def classname(self):
         res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
         return self.typename() + '(' + res.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
+
+class ostar(ptype.opointer_t, versioned):
+    @property
+    def _value_(self):
+        return ptr64 if getattr(self, 'WIN64', False) else ptr32
+
+    @classmethod
+    def typename(cls):
+        return cls.__name__
+
+    def classname(self):
+        cls = self.__class__
+        res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
+        return self.typename() + '(' + res.typename() + ')'
+
+    def _calculate_(self, offset):
+        raise NotImplementedError
+
+    def summary(self):
+        res = self.int()
+        ptr, calculated = self._value_, self._calculate_(res)
+        return u"({:s}*) {:+#x} : *{:#x}".format(ptr.__name__, res, calculated)
 
 class void_star(star): _object_ = void
 
@@ -159,6 +190,7 @@ class pointer_t(star):
 
 class fpointer_t(fstar): pass
 class rpointer_t(rstar): pass
+class opointer_t(ostar): pass
 
 ## pointer utilities
 def pointer(target, **attrs):
@@ -169,6 +201,8 @@ def fpointer(type, fieldname):
 
 def rpointer(target, base, **attrs):
     return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
+def opointer(target, Fcalculate, **attrs):
+    return dyn.clone(opointer_t, _calculate_=Fcalculate, _object_=target, **attrs)
 
 P = pointer
 
