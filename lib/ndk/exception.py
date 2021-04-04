@@ -536,12 +536,16 @@ class RTTIBaseClassArray(parray.type):
     _object_ = P32(RTTIBaseClassDescriptor)
 
 class RTTICompleteObjectLocator(pstruct.type, versioned):
+    class _signature(pint.enum, unsigned_long):
+        _values_ = [
+            ('64bit', 1),
+            ('32bit', 0),
+        ]
     def __pObjectLocator(self):
-        if getattr(self, 'WIN64', 0):
-            return P32(RTTICompleteObjectLocator)
-        return ptype.undefined
+        sig = self['signature'].li
+        return P32(RTTICompleteObjectLocator) if sig['64bit'] else ptype.undefined
     _fields_ = [
-        (unsigned_long, 'signature'),
+        (_signature, 'signature'),
         (unsigned_long, 'offset'),
         (unsigned_long, 'cdOffset'),
         (P32(TypeDescriptor), 'pTypeDescriptor'),
