@@ -9,9 +9,10 @@ class PTR(opointer_t):
 
 def P32(target):
     def Fbaseaddress(self, offset):
-        mask, shift = pow(2, 64 - 31) - 1, pow(2, 31)
+        shift = 31
+        mask = pow(2, 64 - shift) - 1
         if getattr(self, 'WIN64', 0):
-            baseaddress = self.getoffset() & (mask * shift)
+            baseaddress = self.getoffset() & (mask * pow(2, shift))
             return baseaddress + offset
         return offset
     return dyn.clone(PTR, _calculate_=Fbaseaddress, _object_=target, _value_=ptr32)
@@ -411,6 +412,7 @@ class UWOP_(pbinary.enum):
     ]
 
 class UNWIND_CODE(pbinary.struct):
+    # FIXME: define operation_info which depends on the unwind_operation_code.
     _fields_ = [
         (4, 'operation_info'),
         (UWOP_, 'unwind_operation_code'),
@@ -444,10 +446,12 @@ class UNWIND_INFO(pstruct.type):
         ]
     def __HandlerInfo(self):
         res = self['VersionFlags'].li
-        return self._HandlerInfo if any(res['Flags'][item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else ptype.undefined
+        flags = res.item('Flags')
+        return self._HandlerInfo if any(flags[item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else ptype.undefined
     def __FunctionEntry(self):
         res = self['VersionFlags'].li
-        return RUNTIME_FUNCTION if res['Flags']['CHAININFO'] else ptype.undefined
+        flags = res.item('Flags')
+        return RUNTIME_FUNCTION if flags['CHAININFO'] else ptype.undefined
     _fields_ = [
         (_VersionFlags, 'VersionFlags'),
         (BYTE, 'SizeOfProlog'),
@@ -543,7 +547,7 @@ class RTTICompleteObjectLocator(pstruct.type, versioned):
         (P32(TypeDescriptor), 'pTypeDescriptor'),
         (P32(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
 
-        # FIXME: crosscheck this from vcruntime.dll
+        # FIXME: crosscheck this from x64 vcruntime.dll
         (__pObjectLocator, 'pObjectLocator'),
     ]
 
