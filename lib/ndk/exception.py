@@ -441,8 +441,8 @@ class UNWIND_INFO(pstruct.type):
         ]
     class _HandlerInfo(pstruct.type):
         _fields_ = [
-            (ULONG, 'ExceptionHandler'),
-            (ULONG, 'ExceptionData'),
+            (P32(VOID), 'ExceptionHandler'),
+            (P32(FuncInfo), 'ExceptionData'),
         ]
     def __HandlerInfo(self):
         res = self['VersionFlags'].li
