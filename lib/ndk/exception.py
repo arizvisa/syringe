@@ -11,7 +11,7 @@ def P32(target):
     def Fbaseaddress(self, offset):
         shift = 31
         mask = pow(2, 64 - shift) - 1
-        if getattr(self, 'WIN64', 0):
+        if offset and getattr(self, 'WIN64', 0):
             baseaddress = self.getoffset() & (mask * pow(2, shift))
             return baseaddress + offset
         return offset
@@ -135,7 +135,7 @@ class UnwindMapEntry(pstruct.type):
         (P32(void), 'action'),
     ]
     def summary(self):
-        return "action={:#x}(toState:{:d})".format(self['action'].int(), self['toState'].int())
+        return "action={:#x}(toState:{:d})".format(self['action'].d.getoffset(), self['toState'].int())
 
 class TypeDescriptor(pstruct.type):
     _fields_ = [
@@ -205,7 +205,7 @@ class TryBlockMapEntry(pstruct.type):
                     res = field.d.li
                 except (ptypes.error.LoadError, ValueError):
                     res = field
-                items.append("[{:s}] {:s} addressOfHandler={:#x} {!s}".format(position, description, item['addressOfHandler'].int(), res.summary()))
+                items.append("[{:s}] {:s} addressOfHandler={:#x} {!s}".format(position, description, item['addressOfHandler'].d.getoffset(), res.summary()))
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
@@ -327,7 +327,7 @@ class FuncInfo(pstruct.type, versioned):
             for item in self:
                 position = ptypes.utils.repr_position(item.getposition())
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
-                items.append("[{:s}] {:s} toState={:d} action={:#x}".format(position, description, item['toState'].int(), item['action'].int()))
+                items.append("[{:s}] {:s} toState={:d} action={:#x}".format(position, description, item['toState'].int(), item['action'].d.getoffset()))
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
@@ -365,14 +365,14 @@ class FuncInfo(pstruct.type, versioned):
     class _pIPtoStateMap(parray.type):
         _object_ = IPtoStateMap
         def summary(self):
-            items = ("({:d}) {:#x}".format(item['state'].int(), item['pc'].int()) for item in self)
+            items = ("({:d}) {:#x}".format(item['state'].int(), item['pc'].d.getoffset()) for item in self)
             return "[{:s}]".format(', '.join(items))
         def details(self):
             items = []
             for item in self:
                 position = ptypes.utils.repr_position(item.getposition())
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
-                items.append("[{:s}] {:s} state={:d} pc={:#x}".format(position, description, item['state'].int(), item['pc'].int()))
+                items.append("[{:s}] {:s} state={:d} pc={:#x}".format(position, description, item['state'].int(), item['pc'].d.getoffset()))
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
