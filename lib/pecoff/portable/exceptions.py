@@ -1,86 +1,93 @@
-import ptypes
+import sys, ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary
 from ..headers import *
 
-class UNWIND_CODE(dyn.union):
-    # http://msdn.microsoft.com/en-us/library/ck9asaa9.aspx
+class UWOP_(pbinary.enum):
+    length, _values_ = 4, [
+        ('PUSH_NONVOL', 0),
+        ('ALLOC_LARGE', 1),
+        ('ALLOC_SMALL', 2),
+        ('SET_FPREG', 3),
+        ('SAVE_NONVOL', 4),
+        ('SAVE_NONVOL_FAR', 5),
+        ('SAVE_XMM', 6),
+        ('SAVE_XMM_FAR', 7),
+        ('SAVE_XMM128', 8),
+        ('SAVE_XMM128_FAR', 9),
+        ('PUSH_MACHFRAME', 10),
+    ]
 
-    # FIXME: this is a pretty minimal grammar...
-    #            fix this implementation and treat like one.
-
-    @pbinary.bigendian
-    class _CodeOffset(pbinary.struct):
-        _fields_ = [
-            (8, 'CodeOffset'),
-            (4, 'UnwindOp'),
-            (4, 'OpInfo'),
-        ]
+class UNWIND_CODE(pbinary.struct):
+    # FIXME: define operation_info which depends on the unwind_operation_code.
     _fields_ = [
-        (_CodeOffset, 'CodeOffset'),
-        (word, 'FrameOffset')
+        (4, 'operation_info'),
+        (UWOP_, 'unwind_operation_code'),
+        (8, 'offset_in_prolog'),
+    ]
+
+class UNW_FLAG_(pbinary.enum):
+    length, _values_ = 5, [
+        ('NHANDLER', 0),
+        ('EHANDLER', 1),
+        ('UHANDLER', 2),
+        ('FHANDLER', 3),
+        ('CHAININFO', 4),
     ]
 
 class UNWIND_INFO(pstruct.type):
-    class Header(pbinary.struct):
-        class UNW_FLAG_(pbinary.enum):
-            _width_ = 5
-            _values_ = [
-                ('NHANDLER', 0),
-                ('EHANDLER', 1),
-                ('UHANDLER', 2),
-                ('FHANDLER', 3),
-                ('CHAININFO', 4),
-            ]
+    class _Header(pbinary.struct):
         _fields_=[
             (UNW_FLAG_, 'Flags'),
             (3, 'Version'),
         ]
 
-    class Frame(pbinary.struct):
+    class _Frame(pbinary.struct):
         _fields_ = [
-            (4, 'Register'),
             (4, 'Offset'),
+            (4, 'Register'),
         ]
-    class ExceptionHandler(pstruct.type):
+
+    class _HandlerInfo(pstruct.type):
+        def __Data(self):
+            if 'ndk' in sys.modules:
+                import ndk.exception
+                return ndk.exception.FuncInfo
+            return ptype.undefined
         _fields_ = [
             (virtualaddress(ptype.undefined, type=dword), 'Address'),
-            (ptype.undefined, 'Data')
+            (virtualaddress(__Data, type=dword), 'Data')
         ]
 
-    def __ExceptionHandler(self):
-        h = self['Header'].l
-        n = h.__field__('Flags')
-        if (n.int() & (n.byname('EHANDLER') | n.byname('UHANDLER')) > 0) and (n.int() & n.byname('CHAININFO') == 0):
-            return self.ExceptionHandler
-        return ptype.undefined
+    def __HandlerInfo(self):
+        res = self['Header'].li
+        flags = res.item('Flags')
+        return self._HandlerInfo if any(flags[item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else ptype.undefined
 
-    def __ChainedUnwindInfo(self):
-        h = self['Header'].l
-        n = h.__field__('Flags')
-        if n.int() == n.byname('CHAININFO') > 0:
-            return RUNTIME_FUNCTION
-        return ptype.undefined
+    def __FunctionEntry(self):
+        res = self['Header'].li
+        flags = res.item('Flags')
+        return RUNTIME_FUNCTION if flags['CHAININFO'] else ptype.undefined
 
     _fields_ = [
-        (Header, 'Header'),
+        (_Header, 'Header'),
         (byte, 'SizeOfProlog'),
         (byte, 'CountOfCodes'),
-        (Frame, 'Frame'),
-        (lambda s: dyn.array(UNWIND_CODE, s['CountOfCodes'].li.int()), 'UnwindCode'),
+        (_Frame, 'Frame'),
+        (lambda self: dyn.array(UNWIND_CODE, self['CountOfCodes'].li.int()), 'UnwindCode'),
         (dyn.align(4), 'align(ExceptionHandler)'),  # FIXME: this was copied from IDA
-        (__ExceptionHandler, 'ExceptionHandler'),
-        (__ChainedUnwindInfo, 'ChainedUnwindInfo'),
+        (__HandlerInfo, 'HandlerInfo'),
+        (__FunctionEntry, 'FunctionEntry'),
     ]
 
-class RUNTIME_FUNCTION(pstruct.type):
+class IMAGE_RUNTIME_FUNCTION_ENTRY(pstruct.type):
     _fields_ = [
-        (dword, 'BeginAddress'),
-        (dword, 'EndAddress'),
+        (virtualaddress(ptype.undefined, type=dword), 'BeginAddress'),
+        (virtualaddress(ptype.undefined, type=dword), 'EndAddress'),
         (virtualaddress(UNWIND_INFO, type=dword), 'UnwindData'),
     ]
 
 class IMAGE_EXCEPTION_DIRECTORY(parray.block):
-    _object_ = RUNTIME_FUNCTION
+    _object_ = IMAGE_RUNTIME_FUNCTION_ENTRY
 
     def blocksize(self):
         return self.p.p['Size'].int()
