@@ -221,8 +221,7 @@ class E_FLAGS(ptype.definition):
 class E_FLAGS_SPARC(pbinary.flags):
     VENDOR_MASK = 0x00ffff00
     class EF_SPARCV9_MM(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('EF_SPARCV9_TSO', 0),
             ('EF_SPARCV9_PSO', 1),
             ('EF_SPARCV9_RMO', 2),
@@ -268,8 +267,7 @@ class E_FLAGS_ARM(pbinary.flags):
 class E_FLAGS_MIPS(pbinary.flags):
     type = EM_.byname('EM_MIPS')
     class EF_MIPS_ARCH_(pbinary.enum):
-        _width_ = 4
-        _values_ = [
+        length, _values_ = 4, [
             ('EF_MIPS_ARCH_1', 0),
             ('EF_MIPS_ARCH_2', 1),
             ('EF_MIPS_ARCH_3', 2),
@@ -281,15 +279,13 @@ class E_FLAGS_MIPS(pbinary.flags):
             ('EF_MIPS_ARCH_64R2', 8),
         ]
     class EF_MIPS_ARCH_ASE_(pbinary.enum):
-        _width_ = 4
-        _values_ = [
+        length, _values_ = 4, [
             ('EF_MIPS_ARCH_ASE_MDMX', 8),
             ('EF_MIPS_ARCH_ASE_M16', 4),
             ('EF_MIPS_ARCH_ASE_MICROMIPS', 2),
         ]
     class E_MIPS_ABI_(pbinary.enum):
-        _width_ = 4
-        _values_ = [
+        length, _values_ = 4, [
             ('E_MIPS_ABI_O32', 1),
             ('E_MIPS_ABI_O64', 2),
             ('E_MIPS_ABI_EABI32', 3),
