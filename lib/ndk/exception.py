@@ -153,22 +153,25 @@ class TypeDescriptor(pstruct.type):
             pass
         return "(VFTable:{:#x}) {:s}".format(self['pVFTable'].int(), self['name'].str())
 
-class HandlerType(pstruct.type):
-    @pbinary.littleendian
-    class _adjectives(pbinary.flags):
-        _fields_ = [
-            (1, 'complus'),
-            (24, 'reserved'),
-            (1, 'all_catch'),
-            (1, 'unknown'),
-            (1, 'resumable'),
-            (1, 'reference'),
-            (1, 'unaligned'),
-            (1, 'volatile'),
-            (1, 'const'),
-        ]
+@pbinary.littleendian
+class HT_(pbinary.flags):
+    '''unsigned_int'''
     _fields_ = [
-        (_adjectives, 'adjectives'),
+        (1, 'IsComPlusEh'),         # Is handling within complus eh.
+        (23, 'reserved'),
+        (1, 'IsBadAllocCompat'),    # the WinRT type can catch a std::bad_alloc
+        (1, 'IsStdDotDot'),         # the catch is std C++ catch(...) which is suppose to catch only C++ exception.
+        (1, 'unknown'),
+        (1, 'IsResumable'),         # the catch may choose to resume (reserved)
+        (1, 'IsReference'),         # catch type is by reference
+        (1, 'IsUnaligned'),         # type referenced is 'unaligned' qualified
+        (1, 'IsVolatile'),          # type referenced is 'volatile' qualified
+        (1, 'IsConst'),             # type referenced is 'const' qualified
+    ]
+
+class HandlerType(pstruct.type):
+    _fields_ = [
+        (HT_, 'adjectives'),
         (P32(TypeDescriptor), 'pType'),
         (int, 'dispCatchObj'),
         (P32(void), 'addressOfHandler'),
@@ -177,10 +180,12 @@ class HandlerType(pstruct.type):
     def summary(self):
         items = []
         if self['adjectives'].int():
-            items.append("adjectives:{:#x}".format(self['adjectives'].int()))
+            item = self['adjectives']
+            iterable = (fld if item[fld] in {1} else "{:s}={:#x}".format(fld, item[fld]) for fld in item if item[fld])
+            items.append("adjectives:{:s}".format('|'.join(iterable) or "{:#x}".format(item.int())))
         if self['dispCatchObj'].int():
             items.append("dispCatchObj:{:+#x}".format(self['dispCatchObj'].int()))
-        if self['dispFrame'].int():
+        if self['dispFrame'].size() and self['dispFrame'].int():
             items.append("dispFrame:{:+#x}".format(self['dispFrame'].int()))
         properties = "({:s})".format(', '.join(items))
 
@@ -204,10 +209,14 @@ class TryBlockMapEntry(pstruct.type):
                 position = ptypes.utils.repr_position(item.getposition())
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
 
+                res = item['adjectives']
+                iterable = (fld if item[fld] in {1} else "{:s}={:#x}".format(fld, item[fld]) for fld in item if item[fld])
+                adjectives = '|'.join(iterable) or "{:#x}".format(res.int())
+
                 if item['dispFrame'].int():
-                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x} dispFrame={:+#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int(), item['dispFrame'].int())
+                    res = "[{:s}] {:s} dispCatchObj={:+#x} dispFrame={:+#x} adjectives={:s}".format(position, description, adjectives, item['dispCatchObj'].int(), item['dispFrame'].int(), adjectives)
                 else:
-                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int())
+                    res = "[{:s}] {:s} dispCatchObj={:+#x} adjectives={:s}".format(position, description, adjectives, item['dispCatchObj'].int(), adjectives)
                 items.append(res)
 
                 name = 'pType'
@@ -263,13 +272,21 @@ class TypeDescriptor(pstruct.type):
         (pstr.szstring, 'name'),
     ]
 
-class CatchableType(pstruct.type):
-    class _properties(pint.enum, unsigned_int):
-        _values_ = [
-            ('pointer', 1),
-        ]
+@pbinary.littleendian
+class CT_(pbinary.flags):
+    '''unsigned_int'''
     _fields_ = [
-        (_properties, 'properties'),
+        (27, 'reserved'),
+        (1, 'IsStdBadAlloc'),
+        (1, 'IsWinRTHandle'),
+        (1, 'HasVirtualBase'),
+        (1, 'ByReferenceOnly'),
+        (1, 'IsSimpleType'),
+    ]
+
+class CatchableType(pstruct.type):
+    _fields_ = [
+        (CT_, 'properties'),
         (P32(TypeDescriptor), 'pType'),
         (PMD, 'thisDisplacement'),
         (int, 'sizeOrOffset'),
@@ -282,14 +299,21 @@ class CatchableTypeArray(pstruct.type):
         (lambda self: P32(dyn.array(CatchableType, self['nCatchableTypes'].li.int())), 'arrayOfCatchableTypes'),
     ]
 
-class ThrowInfo(pstruct.type):
-    class _attributes(pint.enum, unsigned_int):
-        _values_ = [
-            ('const', 1),
-            ('volatile', 2),
-        ]
+@pbinary.littleendian
+class TI_(pbinary.flags):
+    '''unsigned_int'''
     _fields_ = [
-        (_attributes, 'attributes'),
+        (27, 'reserved'),
+        (1, 'IsWinRT'),
+        (1, 'IsPure'),
+        (1, 'IsUnaligned'),
+        (1, 'IsVolatile'),
+        (1, 'IsConst'),
+    ]
+
+class ThrowInfo(pstruct.type):
+    _fields_ = [
+        (TI_, 'attributes'),
         (PVOID, 'pmfnUnwind'),
         (PVOID, 'pForwardCompat'),
         (P(CatchableTypeArray), 'pCatchableTypeArray'),
