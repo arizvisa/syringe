@@ -2,6 +2,192 @@ import sys, ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary
 from ..headers import *
 
+class UnwindMapEntry(pstruct.type):
+    _fields_ = [
+        (int32, 'toState'),
+        (virtualaddress(ptype.undefined, type=dword), 'action'),
+    ]
+    def summary(self):
+        return "action={:#x}(toState:{:d})".format(self['action'].int(), self['toState'].int())
+
+class TypeDescriptor(pstruct.type):
+    _fields_ = [
+        (realaddress(ptype.undefined), 'pVFTable'),
+        (realaddress(ptype.undefined), 'spare'),
+        (pstr.szstring, 'name'),
+    ]
+
+class HandlerType(pstruct.type):
+    def __dispFrame(self):
+        header = self.getparent(Header)
+        return int32 if header.is64() else False
+    _fields_ = [
+        (int32, 'adjectives'),
+        (virtualaddress(TypeDescriptor, type=dword), 'pType'),
+        (int32, 'dispCatchObj'),
+        (virtualaddress(ptype.undefined, type=dword), 'addressOfHandler'),
+        (__dispFrame, 'dispFrame'),
+    ]
+    def summary(self):
+        items = []
+        if self['adjectives'].int():
+            items.append("adjectives:{:#x}".format(self['adjectives'].int()))
+        if self['dispCatchObj'].int():
+            items.append("dispCatchObj:{:+#x}".format(self['dispCatchObj'].int()))
+        if self['dispFrame'].int():
+            items.append("dispFrame:{:+#x}".format(self['dispFrame'].int()))
+        properties = "({:s})".format(', '.join(items))
+
+        items = []
+        items.append("addressOfHandler={!s}".format(self['addressOfHandler'].summary()))
+        if self['pType'].int():
+            item = self['pType'].d
+            try:
+                res = item.li
+            except ptypes.error.LoadError:
+                res = self['pType']
+            items.append(res.summary())
+        return ' '.join([properties] + items)
+
+class TryBlockMapEntry(pstruct.type):
+    class _pHandlerArray(parray.type):
+        _object_ = HandlerType
+        def details(self):
+            items = []
+            for item in self:
+                position = ptypes.utils.repr_position(item.getposition())
+                description = ptypes.utils.repr_instance(item.classname(), item.name())
+
+                if item['dispFrame'].int():
+                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x} dispFrame={:+#x} addressOfHandler={:#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int(), item['dispFrame'].int(), item['addressOfHandler'].int())
+                else:
+                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x} addressOfHandler={:#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int(), item['addressOfHandler'].int())
+                items.append(res)
+            return '\n'.join(items)
+        def repr(self):
+            if self.initializedQ():
+                return self.details()
+            return self.summary()
+    _fields_ = [
+        (int32, 'tryLow'),
+        (int32, 'tryHigh'),
+        (int32, 'catchHigh'),
+        (int32, 'nCatches'),
+        (lambda self: virtualaddress(dyn.clone(self._pHandlerArray, length=self['nCatches'].li.int()), type=dword), 'pHandlerArray'),
+    ]
+
+class IPtoStateMap(pstruct.type):
+    class _state(pint.enum, int32):
+        _values_ = [
+            ('END', -1),
+        ]
+    _fields_ = [
+        (virtualaddress(ptype.undefined, type=dword), 'pc'),
+        (_state, 'state'),
+    ]
+    def summary(self):
+        return "state={:d} pc={!s}".format(self['state'].int(), self['pc'].summary())
+
+class ESTypeList(pstruct.type):
+    _fields_ = [
+        (int32, 'nCount'),
+        (lambda self: virtualaddress(dyn.array(HandlerType, self['nCount'].li.int()), type=dword), 'pHandlerArray'),
+    ]
+
+@pbinary.littleendian
+class FI_(pbinary.flags):
+    _fields_ = [
+        (29, 'unused'),
+        (1, 'EHNOEXCEPT_FLAG'),
+        (1, 'DYNSTKALIGN_FLAG'),
+        (1, 'EHS_FLAG'),
+    ]
+
+class FuncInfo(pstruct.type):
+    @pbinary.littleendian
+    class _magicNumber(pbinary.struct):
+        # 0x19930520    - pre-vc2005
+        # 0x19930521    - pESTypeList is valid
+        # 0x19930522    - EHFlags is valid
+        class _bbtFlags(pbinary.enum):
+            length, _values_ = 3, [
+                ('VC6', 0),
+                ('VC7', 1), # 7.x (2002-2003)
+                ('VC8', 2), # 8 (2005)
+            ]
+        _fields_ = [
+            (29, 'magicNumber'),
+            (_bbtFlags, 'bbtFlags'),
+        ]
+    class _pUnwindMap(parray.type):
+        _object_ = UnwindMapEntry
+        def summary(self):
+            items = (item.summary() for item in self)
+            return "({:d}) [{:s}]".format(len(self), ', '.join(items))
+        def details(self):
+            items = []
+            for item in self:
+                position = ptypes.utils.repr_position(item.getposition())
+                description = ptypes.utils.repr_instance(item.classname(), item.name())
+                items.append("[{:s}] {:s} toState={:d} action={:#x}".format(position, description, item['toState'].int(), item['action'].int()))
+            return '\n'.join(items)
+        def repr(self):
+            if self.initializedQ():
+                return self.details()
+            return super(FuncInfo._pUnwindMap, self).summary()
+
+    class _pTryBlockMap(parray.type):
+        _object_ = TryBlockMapEntry
+        def details(self):
+            items = []
+            for item in self:
+                position = ptypes.utils.repr_position(item.getposition())
+                description = ptypes.utils.repr_instance(item.classname(), item.name())
+                items.append("[{:s}] {:s} tryLow={:d} tryHigh={:d} catchHigh={:d} nCatches={:d} pHandlerArray={:#x}".format(position, description, item['tryLow'].int(), item['tryHigh'].int(), item['catchHigh'].int(), item['nCatches'].int(), item['pHandlerArray'].int()))
+            return '\n'.join(items)
+        def repr(self):
+            if self.initializedQ():
+                return self.details() + '\n'
+            return self.summary()
+
+    class _pIPtoStateMap(parray.type):
+        _object_ = IPtoStateMap
+        def summary(self):
+            items = ("({:d}) {:#x}".format(item['state'].int(), item['pc'].d.getoffset()) for item in self)
+            return "[{:s}]".format(', '.join(items))
+        def details(self):
+            items = []
+            for item in self:
+                position = ptypes.utils.repr_position(item.getposition())
+                description = ptypes.utils.repr_instance(item.classname(), item.name())
+                items.append("[{:s}] {:s} state={:d} pc={:#x}".format(position, description, item['state'].int(), item['pc'].int()))
+            return '\n'.join(items)
+        def repr(self):
+            if self.initializedQ():
+                return self.details()
+            return super(FuncInfo._pIPtoStateMap, self).summary()
+
+    def __dispUnwindHelp(self):
+        header = self.getparent(Header)
+        return int32 if header.is64() else False
+
+    _fields_ = [
+        (_magicNumber, 'magicNumber'),
+
+        (int32, 'maxState'),
+        (lambda self: virtualaddress(dyn.clone(self._pUnwindMap, length=self['maxState'].li.int()), type=dword), 'pUnwindMap'),
+
+        (int32, 'nTryBlocks'),
+        (lambda self: virtualaddress(dyn.clone(self._pTryBlockMap, length=self['nTryBlocks'].li.int()), type=dword), 'pTryBlockMap'),
+
+        (int32, 'nIPMapEntries'),
+        (lambda self: virtualaddress(dyn.clone(self._pIPtoStateMap, length=self['nIPMapEntries'].li.int()), type=dword), 'pIPtoStateMap'),
+        (__dispUnwindHelp, 'dispUnwindHelp'),
+
+        (virtualaddress(ESTypeList, type=dword), 'pESTypeList'),
+        (FI_, 'EHFlags'),
+    ]
+
 class UWOP_(pbinary.enum):
     length, _values_ = 4, [
         ('PUSH_NONVOL', 0),
@@ -17,12 +203,13 @@ class UWOP_(pbinary.enum):
         ('PUSH_MACHFRAME', 10),
     ]
 
+@pbinary.bigendian
 class UNWIND_CODE(pbinary.struct):
     # FIXME: define operation_info which depends on the unwind_operation_code.
     _fields_ = [
+        (8, 'offset_in_prolog'),
         (4, 'operation_info'),
         (UWOP_, 'unwind_operation_code'),
-        (8, 'offset_in_prolog'),
     ]
 
 class UNW_FLAG_(pbinary.enum):
@@ -36,7 +223,7 @@ class UNW_FLAG_(pbinary.enum):
 
 class UNWIND_INFO(pstruct.type):
     class _Header(pbinary.struct):
-        _fields_=[
+        _fields_= [
             (UNW_FLAG_, 'Flags'),
             (3, 'Version'),
         ]
@@ -48,14 +235,9 @@ class UNWIND_INFO(pstruct.type):
         ]
 
     class _HandlerInfo(pstruct.type):
-        def __Data(self):
-            if 'ndk' in sys.modules:
-                import ndk.exception
-                return ndk.exception.FuncInfo
-            return ptype.undefined
         _fields_ = [
-            (virtualaddress(ptype.undefined, type=dword), 'Address'),
-            (virtualaddress(__Data, type=dword), 'Data')
+            (virtualaddress(ptype.undefined, type=dword), 'ExceptionHandler'),
+            (virtualaddress(FuncInfo, type=dword), 'ExceptionData')
         ]
 
     def __HandlerInfo(self):
