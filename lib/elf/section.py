@@ -28,47 +28,47 @@ class _sh_name(pint.type):
 
 class SHT_(pint.enum):
     _values_ = [
-        ('SHT_NULL', 0),
-        ('SHT_PROGBITS', 1),
-        ('SHT_SYMTAB', 2),
-        ('SHT_STRTAB', 3),
-        ('SHT_RELA', 4),
-        ('SHT_HASH', 5),
-        ('SHT_DYNAMIC', 6),
-        ('SHT_NOTE', 7),
-        ('SHT_NOBITS', 8),
-        ('SHT_REL', 9),
-        ('SHT_SHLIB', 10),
-        ('SHT_DYNSYM', 11),
-        ('SHT_UNKNOWN12', 12),
-        ('SHT_UNKNOWN13', 13),
-        ('SHT_INIT_ARRAY', 14),
-        ('SHT_FINI_ARRAY', 15),
-        ('SHT_PREINIT_ARRAY', 16),
-        ('SHT_GROUP', 17),
-        ('SHT_SYMTAB_SHNDX', 18),
+        ('NULL', 0),
+        ('PROGBITS', 1),
+        ('SYMTAB', 2),
+        ('STRTAB', 3),
+        ('RELA', 4),
+        ('HASH', 5),
+        ('DYNAMIC', 6),
+        ('NOTE', 7),
+        ('NOBITS', 8),
+        ('REL', 9),
+        ('SHLIB', 10),
+        ('DYNSYM', 11),
+        ('UNKNOWN12', 12),
+        ('UNKNOWN13', 13),
+        ('INIT_ARRAY', 14),
+        ('FINI_ARRAY', 15),
+        ('PREINIT_ARRAY', 16),
+        ('GROUP', 17),
+        ('SYMTAB_SHNDX', 18),
 
         # SHT_LOOS(0x60000000) - SHT_HIOS(0x6fffffff)
-        ('SHT_GNU_INCREMENTAL_INPUTS', 0x6fff4700),
-        ('SHT_GNU_ATTRIBUTES', 0x6ffffff5),
-        ('SHT_GNU_HASH', 0x6ffffff6),
-        ('SHT_GNU_LIBLIST', 0x6ffffff7),
-        ('SHT_CHECKSUM', 0x6ffffff8),
+        ('GNU_INCREMENTAL_INPUTS', 0x6fff4700),
+        ('GNU_ATTRIBUTES', 0x6ffffff5),
+        ('GNU_HASH', 0x6ffffff6),
+        ('GNU_LIBLIST', 0x6ffffff7),
+        ('CHECKSUM', 0x6ffffff8),
 
         # SHT_LOSUNW(0x6ffffffa) - SHT_HISUNW(0x6fffffff)
-        ('SHT_SUNW_move', 0x6ffffffa),
-        ('SHT_SUNW_COMDAT', 0x6ffffffb),
-        ('SHT_SUNW_syminfo', 0x6ffffffc),
-        ('SHT_GNU_verdef', 0x6ffffffd),
-        ('SHT_GNU_verneed', 0x6ffffffe),
-        ('SHT_GNU_versym', 0x6fffffff),
+        ('SUNW_move', 0x6ffffffa),
+        ('SUNW_COMDAT', 0x6ffffffb),
+        ('SUNW_syminfo', 0x6ffffffc),
+        ('GNU_verdef', 0x6ffffffd),
+        ('GNU_verneed', 0x6ffffffe),
+        ('GNU_versym', 0x6fffffff),
 
         # SHT_LOPROC(0x70000000) - SHT_HIPROC(0x7fffffff)
-        ('SHT_ARM_EXIDX', 0x70000001),
-        ('SHT_ARM_PREEMPTMAP', 0x70000002),
-        ('SHT_ARM_ATTRIBUTES', 0x70000003),
-        ('SHT_ARM_DEBUGOVERLAY', 0x70000004),
-        ('SHT_ARM_OVERLAYSECTION', 0x70000005),
+        ('ARM_EXIDX', 0x70000001),
+        ('ARM_PREEMPTMAP', 0x70000002),
+        ('ARM_ATTRIBUTES', 0x70000003),
+        ('ARM_DEBUGOVERLAY', 0x70000004),
+        ('ARM_OVERLAYSECTION', 0x70000005),
         # SHT_LOUSER(0x80000000) - SHT_HIUSER(0xffffffff)
     ]
 
@@ -130,19 +130,6 @@ def _sh_vaddress(ptr, CLASS):
         return dyn.clone(ptr, _object_=target)
     return sh_vaddress
 
-class _sh_index(pint.enum):
-    _values_ = [
-        ('SHN_UNDEF', 0),
-        # SHN_LOPROC(0xff00) - SHN_HIPROC(0xff1f)
-        ('SHN_BEFORE', 0xff00),
-        ('SHN_AFTER', 0xff01),
-        # SHN_LOOS(0xff20) - SHN_HIOS(0xff3f)
-        # SHN_LORESERVE(0xff00) - SHN_HIRESERVE(0xffff)
-        ('SHN_ABS', 0xfff1),
-        ('SHN_COMMON', 0xfff2),
-        ('SHN_XINDEX', 0xffff),
-    ]
-
 class _st_name(pint.type):
     def summary(self):
         try:
@@ -163,28 +150,28 @@ class _st_name(pint.type):
 
 class STT_(pbinary.enum):
     length, _values_ = 4, [
-        ('STT_NOTYPE', 0),
-        ('STT_OBJECT', 1),
-        ('STT_FUNC', 2),
-        ('STT_SECTION', 3),
-        ('STT_FILE', 4),
-        ('STT_COMMON', 5),
-        ('STT_TLS', 6),
+        ('NOTYPE', 0),
+        ('OBJECT', 1),
+        ('FUNC', 2),
+        ('SECTION', 3),
+        ('FILE', 4),
+        ('COMMON', 5),
+        ('TLS', 6),
 
         # STT_LOOS(10) - STT_HIOS(12)
-        ('STT_GNU_IFUNC', 10),
+        ('GNU_IFUNC', 10),
 
         # STT_LOPROC(13) - STT_HIPROC(15)
     ]
 
 class STB_(pbinary.enum):
     length, _values_ = 4, [
-        ('STB_LOCAL', 0),
-        ('STB_GLOBAL', 1),
-        ('STB_WEAK', 2),
+        ('LOCAL', 0),
+        ('GLOBAL', 1),
+        ('WEAK', 2),
 
         # STB_LOOS(10) - STB_HIOS(12)
-        ('STB_GNU_UNIQUE', 10),
+        ('GNU_UNIQUE', 10),
         # STB_LOPROC(13) - STB_HIPROC(15)
     ]
 
@@ -205,19 +192,22 @@ class st_info(pbinary.struct):
 
 class STV_(pint.enum, uchar):
     _values_ = [
-        ('STV_DEFAULT', 0),
-        ('STV_INTERNAL', 1),
-        ('STV_HIDDEN', 2),
-        ('STV_PROTECTED', 3),
+        ('DEFAULT', 0),
+        ('INTERNAL', 1),
+        ('HIDDEN', 2),
+        ('PROTECTED', 3),
     ]
 
-class ElfXX_Section(pint.enum):
+class SHN_(pint.enum):
     _values_ = [
-        ('SHN_UNDEF', 0),
+        ('UNDEF', 0),
         # SHN_LORESERVE(0xff00) - SHN_HIRESERVE(0xffff)
+        ('BEFORE', 0xff00),
+        ('AFTER', 0xff01),
         # SHN_LOPROC(0xff00) - SHN_HIPROC(0xff1f)
-        ('SHN_ABS', 0xfff1),
-        ('SHN_COMMON', 0xfff2),
+        ('ABS', 0xfff1),
+        ('COMMON', 0xfff2),
+        ('XINDEX', 0xffff),
     ]
 
 class ElfXX_Shdr(ElfXX_Header):
@@ -242,7 +232,7 @@ class ElfXX_Shdr(ElfXX_Header):
 
 class ELFCOMPRESS_(pint.enum):
     _values_ = [
-        ('ELFCOMPRESS_ZLIB', 1),
+        ('ZLIB', 1),
     ]
 class ElfXX_Chdr(ElfXX_Header):
     def getreadsize(self):
@@ -317,7 +307,7 @@ class Elf64_Chdr(pstruct.type, ElfXX_Chdr):
     ]
 
 ### section types
-class Elf32_Section(ElfXX_Section, pint.uint16_t): pass
+class Elf32_Section(SHN_, pint.uint16_t): pass
 class Elf32_Sym(pstruct.type):
     class st_name(_st_name, Elf32_Word): pass
     _fields_ = [
@@ -328,7 +318,7 @@ class Elf32_Sym(pstruct.type):
         (STV_, 'st_other'),
         (Elf32_Section, 'st_shndx'),
     ]
-class Elf64_Section(ElfXX_Section, pint.uint16_t): pass
+class Elf64_Section(SHN_, pint.uint16_t): pass
 class Elf64_Sym(pstruct.type):
     class st_name(_st_name, Elf64_Word): pass
     _fields_ = [
@@ -412,9 +402,9 @@ class Elf64_Syminfo(pstruct.type):
 ### version definitions
 class VER_DEF_(pint.enum):
     _values_ = [
-        ('VER_DEF_NON', 0),
-        ('VER_DEF_CURRENT', 1),
-        ('VER_DEF_NUM', 2),
+        ('NON', 0),
+        ('CURRENT', 1),
+        ('NUM', 2),
     ]
 
 class VER_FLG_(pbinary.flags):
@@ -427,16 +417,16 @@ class VER_FLG_(pbinary.flags):
 
 class VER_NDX_(pint.enum):
     _values_ = [
-        ('VER_NDX_LOCAL', 0),
-        ('VER_NDX_GLOBAL', 1),
-        ('VER_NDX_ELIMINATE', 0xff01),
+        ('LOCAL', 0),
+        ('GLOBAL', 1),
+        ('ELIMINATE', 0xff01),
     ]
 
 class VER_NEED_(pint.enum):
     _values_ = [
-        ('VER_NEED_NONE', 0),
-        ('VER_NEED_CURRENT', 1),
-        ('VER_NEED_NUM', 2),
+        ('NONE', 0),
+        ('CURRENT', 1),
+        ('NUM', 2),
     ]
 
 class ElfXX_VerXauxName(ptype.opointer_t):

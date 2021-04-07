@@ -4,11 +4,11 @@ from .base import *
 
 class ET_(pint.enum, Elf32_Half):
     _values_ = [
-        ('ET_NONE', 0),
-        ('ET_REL', 1),
-        ('ET_EXEC', 2),
-        ('ET_DYN', 3),
-        ('ET_CORE', 4),
+        ('NONE', 0),
+        ('REL', 1),
+        ('EXEC', 2),
+        ('DYN', 3),
+        ('CORE', 4),
         # ET_LOOS(0xfe00) - ET_HIOS(0xfeff)
         # ET_LOPROC(0xff00) - ET_HIPROC(0xffff)
     ]

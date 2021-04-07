@@ -807,9 +807,9 @@ class link_map64(pstruct.type):
 
 class RT_(pint.enum):
     _values_ = [
-        ('RT_CONSISTENT', 0),
-        ('RT_ADD', 1),
-        ('RT_DELETE', 2),
+        ('CONSISTENT', 0),
+        ('ADD', 1),
+        ('DELETE', 2),
     ]
 
 class r_debug32(pstruct.type):

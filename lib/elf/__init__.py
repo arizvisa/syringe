@@ -8,8 +8,8 @@ EI_NIDENT = 16
 
 class EV_(pint.enum):
     _values_ = [
-        ('EV_NONE', 0),
-        ('EV_CURRENT', 1),
+        ('NONE', 0),
+        ('CURRENT', 1),
     ]
 
 class EI_MAG(ptype.block):
