@@ -217,7 +217,7 @@ class DHT(parray.block):
     class Table(pstruct.type):
         class _Th(pbinary.struct):
             class _Tc(pbinary.enum):
-                _width_, _values_ = 1, [
+                length, _values_ = 1, [
                     ('DC', 0),
                     ('AC', 1),
                 ]
