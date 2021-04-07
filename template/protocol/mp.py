@@ -127,7 +127,7 @@ class t_negative_fixint(pbinary.integer):
 
 @bit2msgtype.define
 class t_message(pbinary.enum):
-    type, _width_ = 0, 5
+    type, length = 0, 5
     def PackedType(self): return (0b11 << 6) | self.int()
     def PackedValue(self): raise NotImplementedError
     _values_ = [

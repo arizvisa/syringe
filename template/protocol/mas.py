@@ -73,7 +73,7 @@ class PDUType(ptype.definition):
     cache = {}
 
     class type(pbinary.enum):
-        _width_, _values_ = 4, [
+        length, _values_ = 4, [
             ('confirmActive', 3),
             ('data', 7),
             ('deactivateAll', 6),
@@ -207,7 +207,7 @@ class GeneralCapabilitySet(pstruct.type):
 
 @pbinary.littleendian
 class BitmapCompressionCapabilityFlags(pbinary.enum):
-    _width_, _values_ = 16, [
+    length, _values_ = 16, [
         ('FALSE', 0x0000),
         ('TRUE', 0x0001),
     ]
@@ -924,7 +924,7 @@ class KeyboardEvent(pstruct.type):
 
 class InputEvent(pstruct.type):
     class Choice(pbinary.enum):
-        _width_, _values_ = 3, [
+        length, _values_ = 3, [
             ('pointingDevice', 0),
             ('keyboard', 1),
             ('synchronize', 2),

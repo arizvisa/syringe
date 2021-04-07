@@ -21,7 +21,7 @@ class Packet(Element):
 
 # FIXME: this number is actually encoded with PER-ALIGNED
 class Result(pbinary.enum):
-    _width_, _values_ = 4, [
+    length, _values_ = 4, [
         ('rt-successful', 0),
         ('rt-domain-merging', 1),
         ('rt-domain-not-hierarchical', 2),
@@ -43,7 +43,7 @@ class Result(pbinary.enum):
         return "{:s}({:d})".format(self.str(), self.int())
 
 class Reason(pbinary.enum):
-    _width_, _values_ = 3, [
+    length, _values_ = 3, [
         ('rn-domain-disconnect', 0),
         ('rn-provider-initiated', 1),
         ('rn-token-purged', 2),
@@ -143,7 +143,7 @@ class DomainMCSPDU(ptype.definition):
     cache = {}
 
     class Choice(pbinary.enum):
-        _width_, _values_ = 6, [
+        length, _values_ = 6, [
             ('plumbDomainIndication', 0),
             ('erectDomainRequest', 1),
             ('mergeChannelsRequest', 2),
@@ -287,7 +287,7 @@ class DisconnectProviderUltimatum(ptype.undefined):
         return self.details()
 
 class Diagnostic(pbinary.enum):
-    _width_, _values_ = 4, [
+    length, _values_ = 4, [
         ('dc-inconsistent-merge', 0),
         ('dc-forbidden-PDU-downward', 1),
         ('dc-forbidden-PDU-upward', 2),
@@ -473,7 +473,7 @@ class ChannelDisbandIndication(pstruct.type):
         return "channelId={:s}".format(self['channelId'].summary())
 
 class DataPriority(pbinary.enum):
-    _width_, _values_ = 2, [
+    length, _values_ = 2, [
         ('top', 0),
         ('high', 1),
         ('medium', 2),
