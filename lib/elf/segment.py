@@ -4,26 +4,26 @@ from . import dynamic
 
 class PT_(pint.enum):
     _values_ = [
-        ('PT_NULL', 0),
-        ('PT_LOAD', 1),
-        ('PT_DYNAMIC', 2),
-        ('PT_INTERP', 3),
-        ('PT_NOTE', 4),
-        ('PT_SHLIB', 5),
-        ('PT_PHDR', 6),
-        ('PT_TLS', 7),
+        ('NULL', 0),
+        ('LOAD', 1),
+        ('DYNAMIC', 2),
+        ('INTERP', 3),
+        ('NOTE', 4),
+        ('SHLIB', 5),
+        ('PHDR', 6),
+        ('TLS', 7),
 
-        ('PT_GNU_EH_FRAME', 0x6474e550),
-        ('PT_GNU_STACK', 0x6474e551),
-        ('PT_GNU_RELRO', 0x6474e552),
-        ('PT_GNU_PROPERTY', 0x6474e553),
+        ('GNU_EH_FRAME', 0x6474e550),
+        ('GNU_STACK', 0x6474e551),
+        ('GNU_RELRO', 0x6474e552),
+        ('GNU_PROPERTY', 0x6474e553),
 
-        ('PT_SUNWBSS', 0x6ffffffa),     # Sun-specific segment
-        ('PT_SUNWSTACK', 0x6ffffffb),   # Stack segment
+        ('SUNWBSS', 0x6ffffffa),     # Sun-specific segment
+        ('SUNWSTACK', 0x6ffffffb),   # Stack segment
 
         # PT_LOPROC(0x70000000) - PT_HIPROC(0x7fffffff)
-        ('PT_ARM_ARCHEXT', 0x70000000), # Platform architecture compatibility information
-        ('PT_ARM_UNWIND', 0x70000001),  # Exception unwind tables
+        ('ARM_ARCHEXT', 0x70000000), # Platform architecture compatibility information
+        ('ARM_UNWIND', 0x70000001),  # Exception unwind tables
     ]
 
 class PF_(pbinary.flags):
@@ -65,7 +65,7 @@ def _p_vaddress(ptr, CLASS):
 
 class ElfXX_Phdr(ElfXX_Header):
     def loadableQ(self):
-        loadable = {'PT_LOAD', 'PT_DYNAMIC', 'PT_PHDR', 'PT_TLS', 'PT_GNU_RELRO'}
+        loadable = {'LOAD', 'DYNAMIC', 'PHDR', 'TLS', 'GNU_RELRO'}
         return any(self['p_type'][item] for item in loadable)
 
     def properties(self):

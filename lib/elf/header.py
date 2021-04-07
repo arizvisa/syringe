@@ -391,8 +391,8 @@ class PhdrEntries(XhdrEntries):
                 yield item
                 continue
 
-            flags = item['p_flags']
-            if any(flags[fl] for fl in ['PT_LOAD', 'PT_DYNAMIC']):
+            flags = item['p_type']
+            if any(flags[fl] for fl in ['LOAD', 'DYNAMIC']):
                 yield item
             continue
         return
