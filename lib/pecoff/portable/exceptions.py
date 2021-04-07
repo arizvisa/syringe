@@ -203,13 +203,33 @@ class UWOP_(pbinary.enum):
         ('PUSH_MACHFRAME', 10),
     ]
 
-@pbinary.bigendian
-class UNWIND_CODE(pbinary.struct):
-    # FIXME: define operation_info which depends on the unwind_operation_code.
+class operation_(pbinary.struct):
     _fields_ = [
-        (8, 'offset_in_prolog'),
-        (4, 'operation_info'),
-        (UWOP_, 'unwind_operation_code'),
+        (4, 'info'),
+        (UWOP_, 'code')
+    ]
+
+class UNWIND_CODE(pstruct.type):
+    # FIXME: define operation_info which depends on the unwind_operation_code.
+    def __parameter(self):
+        res = self['operation']
+        op, info = res.item('code'), res['info']
+        if op['ALLOC_LARGE']:
+            if info not in {0, 1}:
+                raise NotImplementedError
+            return pint.uint16_t if info == 0 else pint.uint32_t
+
+        elif any(op[code] for code in ['SAVE_NONVOL', 'SAVE_XMM128']):
+            return pint.uint16_t
+
+        elif any(op[code] for code in ['SAVE_NONVOL_FAR', 'SAVE_XMM128_FAR']):
+            return pint.uint32_t
+
+        return pint.uint_t
+    _fields_ = [
+        (pint.uint8_t, 'offset'),
+        (operation_, 'operation'),
+        (__parameter, 'parameter'),
     ]
 
 class UNW_FLAG_(pbinary.enum):
@@ -255,7 +275,7 @@ class UNWIND_INFO(pstruct.type):
         (byte, 'SizeOfProlog'),
         (byte, 'CountOfCodes'),
         (_Frame, 'Frame'),
-        (lambda self: dyn.array(UNWIND_CODE, self['CountOfCodes'].li.int()), 'UnwindCode'),
+        (lambda self: dyn.blockarray(UNWIND_CODE, 2 * self['CountOfCodes'].li.int()), 'UnwindCode'),
         (dyn.align(4), 'align(ExceptionHandler)'),  # FIXME: this was copied from IDA
         (__HandlerInfo, 'HandlerInfo'),
         (__FunctionEntry, 'FunctionEntry'),
