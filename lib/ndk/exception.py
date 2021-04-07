@@ -411,12 +411,13 @@ class UWOP_(pbinary.enum):
         ('PUSH_MACHFRAME', 10),
     ]
 
+@pbinary.bigendian
 class UNWIND_CODE(pbinary.struct):
     # FIXME: define operation_info which depends on the unwind_operation_code.
     _fields_ = [
+        (8, 'offset_in_prolog'),
         (4, 'operation_info'),
         (UWOP_, 'unwind_operation_code'),
-        (8, 'offset_in_prolog'),
     ]
 
 class UNW_FLAG_(pbinary.enum):
@@ -458,6 +459,7 @@ class UNWIND_INFO(pstruct.type):
         (BYTE, 'CountOfCodes'),
         (_Frame, 'Frame'),
         (lambda self: dyn.array(UNWIND_CODE, self['CountOfCodes'].li.int()), 'UnwindCode'),
+        (dyn.align(4), 'align(UnwindCode)'),
         (__HandlerInfo, 'HandlerInfo'),
         (__FunctionEntry, 'FunctionEntry'),
     ]
