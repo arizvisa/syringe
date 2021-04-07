@@ -18,11 +18,24 @@ class TypeDescriptor(pstruct.type):
     ]
 
 class HandlerType(pstruct.type):
+    @pbinary.littleendian
+    class _adjectives(pbinary.flags):
+        _fields_ = [
+            (1, 'complus'),
+            (24, 'reserved'),
+            (1, 'all_catch'),
+            (1, 'unknown'),
+            (1, 'resumable'),
+            (1, 'reference'),
+            (1, 'unaligned'),
+            (1, 'volatile'),
+            (1, 'const'),
+        ]
     def __dispFrame(self):
         header = self.getparent(Header)
         return int32 if header.is64() else False
     _fields_ = [
-        (int32, 'adjectives'),
+        (_adjectives, 'adjectives'),
         (virtualaddress(TypeDescriptor, type=dword), 'pType'),
         (int32, 'dispCatchObj'),
         (virtualaddress(ptype.undefined, type=dword), 'addressOfHandler'),
@@ -66,7 +79,7 @@ class TryBlockMapEntry(pstruct.type):
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
-                return self.details()
+                return self.details() + '\n'
             return self.summary()
     _fields_ = [
         (int32, 'tryLow'),
@@ -133,7 +146,7 @@ class FuncInfo(pstruct.type):
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
-                return self.details()
+                return self.details() + '\n'
             return super(FuncInfo._pUnwindMap, self).summary()
 
     class _pTryBlockMap(parray.type):
@@ -164,7 +177,7 @@ class FuncInfo(pstruct.type):
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
-                return self.details()
+                return self.details() + '\n'
             return super(FuncInfo._pIPtoStateMap, self).summary()
 
     def __dispUnwindHelp(self):
