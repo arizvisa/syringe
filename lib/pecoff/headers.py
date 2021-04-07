@@ -8,6 +8,8 @@ dword = dyn.clone(pint.uint32_t)
 float = dyn.clone(pfloat.single)
 double = dyn.clone(pfloat.double)
 
+uint0 = dyn.clone(pint.uint_t)
+int0 = dyn.clone(pint.int_t)
 uint8 = dyn.clone(pint.uint8_t)
 int8 = dyn.clone(pint.int8_t)
 int16 = dyn.clone(pint.int16_t)
