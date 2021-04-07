@@ -851,8 +851,7 @@ class TaggedIndex(CodedIndex, pstruct.type):
 
 class TypeDefOrRef(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('TypeDef', 0),
             ('TypeRef', 1),
             ('TypeSpec', 2),
@@ -860,8 +859,7 @@ class TypeDefOrRef(TaggedIndex):
 
 class HasConstant(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('Field', 0),
             ('Param', 1),
             ('Property', 2),
@@ -869,8 +867,7 @@ class HasConstant(TaggedIndex):
 
 class HasCustomAttribute(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 5
-        _values_ = [
+        length, _values_ = 5, [
             ('MethodDef', 0),
             ('Field', 1),
             ('TypeRef', 2),
@@ -894,16 +891,14 @@ class HasCustomAttribute(TaggedIndex):
 
 class HasFieldMarshal(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('Field', 0),
             ('Param', 1),
         ]
 
 class HasDeclSecurity(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('TypeDef', 0),
             ('MethodDef', 1),
             ('Assembly', 2),
@@ -911,8 +906,7 @@ class HasDeclSecurity(TaggedIndex):
 
 class MemberRefParent(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('TypeDef', 0),
             ('TypeRef', 1),
             ('ModuleRef', 2),
@@ -922,48 +916,42 @@ class MemberRefParent(TaggedIndex):
 
 class HasSemantics(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('Event', 0),
             ('Property', 1),
         ]
 
 class MethodDefOrRef(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('MethodDef', 0),
             ('MemberRef', 1),
         ]
 
 class MemberForwarded(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('Field', 0),
             ('MethodDef', 1),
         ]
 
 class Implementation_ExportedType(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('File', 0),
             ('ExportedType', 1),
         ]
 
 class Implementation_AssemblyRef(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('File', 0),
             ('AssemblyRef', 1),
         ]
 
 class CustomAttributeType(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('Not used', 0),
             ('Not used', 1),
             ('MethodDef', 2),
@@ -973,8 +961,7 @@ class CustomAttributeType(TaggedIndex):
 
 class ResolutionScope(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('Module', 0),
             ('ModuleRef', 1),
             ('AssemblyRef', 2),
@@ -983,8 +970,7 @@ class ResolutionScope(TaggedIndex):
 
 class TypeOrMethodDef(TaggedIndex):
     class Tag(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('TypeDef', 0),
             ('MethodDef', 1),
         ]
@@ -992,8 +978,7 @@ class TypeOrMethodDef(TaggedIndex):
 ## Attributes and Flags
 class TypeAttributes(pbinary.flags):
     class VisibilityMask(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('NotPublic', 0),
             ('Public', 1),
             ('NestedPublic', 2),
@@ -1004,21 +989,18 @@ class TypeAttributes(pbinary.flags):
             ('NestedFamORAssem', 7),
         ]
     class LayoutMask(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('AutoLayout', 0),
             ('SequentialLayout', 1),
             ('ExplicitLayout', 2),
         ]
     class ClassSemanticsMask(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('Class', 0),
             ('Interface', 1),
         ]
     class StringFormatMask(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('AnsiClass', 0),
             ('UnicodeClass', 1),
             ('AutoClass', 2),
@@ -1048,8 +1030,7 @@ class TypeAttributes(pbinary.flags):
 
 class FieldAttributes(pbinary.flags):
     class FieldAccessMask(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('CompilerControlled', 0),
             ('Private', 1),
             ('FamANDAssem', 2),
@@ -1078,16 +1059,14 @@ class FieldAttributes(pbinary.flags):
 
 class MethodImplAttributes(pbinary.flags):
     class CodeTypeMask(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('IL', 0),
             ('Native', 1),
             ('OPTIL', 2),
             ('Runtime', 3),
         ]
     class ManagedMask(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('Unmanaged', 1),
             ('Managed', 0),
         ]
@@ -1106,8 +1085,7 @@ class MethodImplAttributes(pbinary.flags):
 
 class MethodAttributes(pbinary.flags):
     class MemberAccessMask(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('CompilerControlled', 0),
             ('Private', 1),
             ('FamANDAssem', 2),
@@ -1117,8 +1095,7 @@ class MethodAttributes(pbinary.flags):
             ('Public', 6),
         ]
     class VtableLayoutMask(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('ReuseSlot', 0),
             ('NewSlot', 1),
         ]
@@ -1182,16 +1159,14 @@ class MethodSemanticsAttributes(pbinary.flags):
 
 class PInvokeAttributes(pbinary.flags):
     class CharSetMask(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('CharSetNotSpec', 0),
             ('CharSetAnsi', 1),
             ('CharSetUnicode', 2),
             ('CharSetAuto', 3),
         ]
     class CallConvMask(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('CallConvWinapi', 1),
             ('CallConvCdecl', 2),
             ('CallConvStdcall', 3),
@@ -1210,12 +1185,10 @@ class PInvokeAttributes(pbinary.flags):
 
 class AssemblyFlags(pbinary.flags):
     class Reserved(pbinary.enum):
-        _width_ = 2
-        _values_ = []
+        length, _values_ = 2, []
 
     class HasPublicKey(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('SideBySideCompatible', 0),
             ('HasPublicKey', 1),
         ]
@@ -1234,8 +1207,7 @@ class AssemblyFlags(pbinary.flags):
 
 class FileAttributes(pbinary.flags):
     class ContainsNoMetaData(pbinary.enum):
-        _width_ = 1
-        _values_ = [
+        length, _values_ = 1, [
             ('ContainsMetaData', 0),
             ('ContainsNoMetaData', 1),
         ]
@@ -1246,8 +1218,7 @@ class FileAttributes(pbinary.flags):
 
 class ManifestResourceAttributes(pbinary.flags):
     class VisibilityMask(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('Public', 1),
             ('Private', 2),
         ]
@@ -1258,16 +1229,14 @@ class ManifestResourceAttributes(pbinary.flags):
 
 class GenericParamAttributes(pbinary.flags):
     class VarianceMask(pbinary.enum):
-        _width_ = 2
-        _values_ = [
+        length, _values_ = 2, [
             ('None', 0),
             ('Covariant', 1),
             ('Contravariant', 2),
         ]
 
     class SpecialConstraintMask(pbinary.enum):
-        _width_ = 3
-        _values_ = [
+        length, _values_ = 3, [
             ('ReferenceTypeConstraint', 1),
             ('NotNullableValueTypeConstraint', 2),
             ('DefaultConstructorConstraint', 4),

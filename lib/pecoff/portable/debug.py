@@ -142,7 +142,7 @@ class IMAGE_DEBUG_DATA_COFF(pstruct.type):
 ## IMAGE_DEBUG_TYPE_FPO
 # https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx?id=19509
 class FRAME_(pbinary.enum):
-    _width_, _values_ = 2, [
+    length, _values_ = 2, [
         ('FPO', 0),
         ('TRAP', 1),
         ('TSS', 2),

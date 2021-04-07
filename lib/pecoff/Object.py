@@ -26,27 +26,27 @@ class ImportHeader(pstruct.type):
         (uint32, 'SizeOfData'),
     ]
 
+class IMPORT_TYPE(pbinary.enum):
+    length, _values_ = 2, [
+        ('CODE', 0),
+        ('DATA', 1),
+        ('CONST', 2),
+    ]
+
+class IMPORT_(pbinary.enum):
+    length, _values_ = 3, [
+        ('ORDINAL', 0),
+        ('NAME', 1),
+        ('NAME_NOPREFIX', 2),
+        ('NAME_UNDECORATE', 3),
+    ]
+
 class ImportData(pstruct.type):
     class Type(pbinary.struct):
-        class _type(pbinary.enum):
-            _width_ = 2
-            _values_ = [
-                ('IMPORT_CODE', 0),
-                ('IMPORT_DATA', 1),
-                ('IMPORT_CONST', 2),
-            ]
-        class _name(pbinary.enum):
-            _width_ = 3
-            _values_ = [
-                ('IMPORT_ORDINAL', 0),
-                ('IMPORT_NAME', 1),
-                ('IMPORT_NAME_NOPREFIX', 2),
-                ('IMPORT_NAME_UNDECORATE', 3),
-            ]
         _fields_ = [
             (11, 'Reserved'),
-            (_name, 'Name'),
-            (_type, 'Type'),
+            (IMPORT_, 'Name'),
+            (IMPORT_TYPE, 'Type'),
         ]
 
     _fields_ = [
