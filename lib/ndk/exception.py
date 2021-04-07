@@ -542,20 +542,37 @@ class DISPATCHER_CONTEXT(pstruct.type, versioned):
 
 # corrected with http://www.geoffchappell.com/studies/msvc/language/predefined/index.htm?tx=12,14
 
+class CHD_(pbinary.flags):
+    '''unsigned_long'''
+    _fields_ = [
+        (29, 'RESERVED'),
+        (1, 'AMBIGUOUS'),
+        (1, 'VIRTINH'),
+        (1, 'MULTINH'),
+    ]
+
 class RTTIClassHierarchyDescriptor(pstruct.type):
-    class _attributes(unsigned_long, pint.enum):
-        _values_ = [
-            ('multiple', 1),
-            ('virtual', 2),
-        ]
     def __pBaseClassArray(self):
         length = self['numBaseClasses'].li
         return P32(dyn.clone(RTTIBaseClassArray, length=length.int()))
     _fields_ = [
         (unsigned_long, 'signature'),
-        (_attributes, 'attributes'),
+        (CHD_, 'attributes'),
         (unsigned_long, 'numBaseClasses'),
         (__pBaseClassArray, 'pBaseClassArray'),
+    ]
+
+class BCD_(pbinary.flags):
+    '''unsigned_long'''
+    _fields_ = [
+        (25, 'RESERVED'),
+        (1, 'HASPCHD'),
+        (1, 'NONPOLYMORPHIC'),
+        (1, 'VBOFCONTOBJ'),
+        (1, 'PRIVORPROTINCOMPOBJ'),
+        (1, 'PRIVORPROTBASE'),
+        (1, 'AMBIGUOUS'),
+        (1, 'NOTVISIBLE'),
     ]
 
 class RTTIBaseClassDescriptor(pstruct.type):
@@ -563,31 +580,32 @@ class RTTIBaseClassDescriptor(pstruct.type):
         (P32(TypeDescriptor), 'pTypeDescriptor'),
         (unsigned_long, 'numContainedBases'),
         (PMD, 'where'),
-        (unsigned_long, 'attributes'),
+        (BCD_, 'attributes'),
         (P32(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
     ]
 
 class RTTIBaseClassArray(parray.type):
     _object_ = P32(RTTIBaseClassDescriptor)
 
+class COL_SIG_(pint.enum, unsigned_long):
+    _values_ = [
+        ('REV0', 0),
+        ('REV1', 1),
+    ]
+
 class RTTICompleteObjectLocator(pstruct.type, versioned):
-    class _signature(pint.enum, unsigned_long):
-        _values_ = [
-            ('64bit', 1),
-            ('32bit', 0),
-        ]
-    def __pObjectLocator(self):
+    def __pObjectBase(self):
         sig = self['signature'].li
-        return P32(RTTICompleteObjectLocator) if sig['64bit'] else ptype.undefined
+        return P32(RTTICompleteObjectLocator) if sig['REV1'] else ptype.undefined
     _fields_ = [
-        (_signature, 'signature'),
+        (COL_SIG_, 'signature'),
         (unsigned_long, 'offset'),
         (unsigned_long, 'cdOffset'),
         (P32(TypeDescriptor), 'pTypeDescriptor'),
         (P32(RTTIClassHierarchyDescriptor), 'pClassDescriptor'),
 
         # FIXME: crosscheck this from x64 vcruntime.dll
-        (__pObjectLocator, 'pObjectLocator'),
+        (__pObjectBase, 'pObjectBase'),
     ]
 
 if False:
