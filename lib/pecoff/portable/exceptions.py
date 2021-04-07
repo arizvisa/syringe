@@ -1,5 +1,5 @@
 import sys, ptypes
-from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary
+from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary,pint
 from ..headers import *
 
 class UnwindMapEntry(pstruct.type):
@@ -17,25 +17,32 @@ class TypeDescriptor(pstruct.type):
         (pstr.szstring, 'name'),
     ]
 
-class HandlerType(pstruct.type):
-    @pbinary.littleendian
-    class _adjectives(pbinary.flags):
-        _fields_ = [
-            (1, 'complus'),
-            (24, 'reserved'),
-            (1, 'all_catch'),
-            (1, 'unknown'),
-            (1, 'resumable'),
-            (1, 'reference'),
-            (1, 'unaligned'),
-            (1, 'volatile'),
-            (1, 'const'),
-        ]
-    def __dispFrame(self):
-        header = self.getparent(Header)
-        return int32 if header.is64() else False
+@pbinary.littleendian
+class HT_(pbinary.flags):
+    '''unsigned_int'''
     _fields_ = [
-        (_adjectives, 'adjectives'),
+        (1, 'IsComPlusEh'),         # Is handling within complus eh.
+        (23, 'reserved'),
+        (1, 'IsBadAllocCompat'),    # the WinRT type can catch a std::bad_alloc
+        (1, 'IsStdDotDot'),         # the catch is std C++ catch(...) which is suppose to catch only C++ exception.
+        (1, 'unknown'),
+        (1, 'IsResumable'),         # the catch may choose to resume (reserved)
+        (1, 'IsReference'),         # catch type is by reference
+        (1, 'IsUnaligned'),         # type referenced is 'unaligned' qualified
+        (1, 'IsVolatile'),          # type referenced is 'volatile' qualified
+        (1, 'IsConst'),             # type referenced is 'const' qualified
+    ]
+
+class HandlerType(pstruct.type):
+    def __dispFrame(self):
+        try:
+            header = self.getparent(Header)
+        except ptypes.error.ItemNotFoundError:
+            return int0
+        return int32 if header.is64() else int0
+
+    _fields_ = [
+        (HT_, 'adjectives'),
         (virtualaddress(TypeDescriptor, type=dword), 'pType'),
         (int32, 'dispCatchObj'),
         (virtualaddress(ptype.undefined, type=dword), 'addressOfHandler'),
@@ -44,10 +51,12 @@ class HandlerType(pstruct.type):
     def summary(self):
         items = []
         if self['adjectives'].int():
-            items.append("adjectives:{:#x}".format(self['adjectives'].int()))
+            item = self['adjectives']
+            iterable = (fld if item[fld] in {1} else "{:s}={:#x}".format(fld, item[fld]) for fld in item if item[fld])
+            items.append("adjectives:{:s}".format('|'.join(iterable) or "{:#x}".format(item.int())))
         if self['dispCatchObj'].int():
             items.append("dispCatchObj:{:+#x}".format(self['dispCatchObj'].int()))
-        if self['dispFrame'].int():
+        if self['dispFrame'].size() and self['dispFrame'].int():
             items.append("dispFrame:{:+#x}".format(self['dispFrame'].int()))
         properties = "({:s})".format(', '.join(items))
 
@@ -71,10 +80,14 @@ class TryBlockMapEntry(pstruct.type):
                 position = ptypes.utils.repr_position(item.getposition())
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
 
+                res = item['adjectives']
+                iterable = (fld if item[fld] in {1} else "{:s}={:#x}".format(fld, item[fld]) for fld in item if item[fld])
+                adjectives = '|'.join(iterable) or "{:#x}".format(res.int())
+
                 if item['dispFrame'].int():
-                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x} dispFrame={:+#x} addressOfHandler={:#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int(), item['dispFrame'].int(), item['addressOfHandler'].int())
+                    res = "[{:s}] {:s} dispCatchObj={:+#x} dispFrame={:+#x} addressOfHandler={:#x} adjectives={:s}".format(position, description, item['dispCatchObj'].int(), item['dispFrame'].int(), item['addressOfHandler'].int(), adjectives)
                 else:
-                    res = "[{:s}] {:s} adjectives={:#x} dispCatchObj={:+#x} addressOfHandler={:#x}".format(position, description, item['adjectives'].int(), item['dispCatchObj'].int(), item['addressOfHandler'].int())
+                    res = "[{:s}] {:s} dispCatchObj={:+#x} addressOfHandler={:#x} adjectives={:s}".format(position, description, item['dispCatchObj'].int(), item['addressOfHandler'].int(), adjectives)
                 items.append(res)
             return '\n'.join(items)
         def repr(self):
@@ -181,8 +194,11 @@ class FuncInfo(pstruct.type):
             return super(FuncInfo._pIPtoStateMap, self).summary()
 
     def __dispUnwindHelp(self):
-        header = self.getparent(Header)
-        return int32 if header.is64() else False
+        try:
+            header = self.getparent(Header)
+        except ptypes.error.ItemNotFoundError:
+            return int0
+        return int32 if header.is64() else int0
 
     _fields_ = [
         (_magicNumber, 'magicNumber'),
