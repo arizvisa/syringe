@@ -154,8 +154,21 @@ class TypeDescriptor(pstruct.type):
         return "(VFTable:{:#x}) {:s}".format(self['pVFTable'].int(), self['name'].str())
 
 class HandlerType(pstruct.type):
+    @pbinary.littleendian
+    class _adjectives(pbinary.flags):
+        _fields_ = [
+            (1, 'complus'),
+            (24, 'reserved'),
+            (1, 'all_catch'),
+            (1, 'unknown'),
+            (1, 'resumable'),
+            (1, 'reference'),
+            (1, 'unaligned'),
+            (1, 'volatile'),
+            (1, 'const'),
+        ]
     _fields_ = [
-        (int, 'adjectives'),
+        (_adjectives, 'adjectives'),
         (P32(TypeDescriptor), 'pType'),
         (int, 'dispCatchObj'),
         (P32(void), 'addressOfHandler'),
@@ -209,7 +222,7 @@ class TryBlockMapEntry(pstruct.type):
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
-                return self.details()
+                return self.details() + '\n'
             return self.summary()
 
     _fields_ = [
@@ -331,7 +344,7 @@ class FuncInfo(pstruct.type, versioned):
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
-                return self.details()
+                return self.details() + '\n'
             return super(FuncInfo._pUnwindMap, self).summary()
 
     class _pTryBlockMap(parray.type):
@@ -376,7 +389,7 @@ class FuncInfo(pstruct.type, versioned):
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
-                return self.details()
+                return self.details() + '\n'
             return super(FuncInfo._pIPtoStateMap, self).summary()
 
     _fields_ = [
