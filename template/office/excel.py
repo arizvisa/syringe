@@ -285,14 +285,12 @@ class CFMStateItem(pstruct.type):
     ]
 
 class Cetab(pbinary.enum):
-    _width_ = 15
-    _values_ = [
+    length, _values_ = 15, [
         # FIXME
     ]
 
 class Ftab(pbinary.enum):
-    _width_ = 15
-    _values_ = [
+    length, _values_ = 15, [
         # FIXME
     ]
 
@@ -305,8 +303,7 @@ class FontScheme(pint.enum, uint2):
     ]
 
 class HorizAlign(pbinary.enum):
-    _width_ = 3
-    _values_ = [
+    length, _values_ = 3, [
         ('ALCNIL', 0xFF), # Alignment not specified
         ('ALCGEN', 0x00), # General alignment
         ('ALCLEFT', 0x01), # Left alignment
@@ -319,8 +316,7 @@ class HorizAlign(pbinary.enum):
     ]
 
 class VertAlign(pbinary.enum):
-    _width_ = 3
-    _values_ = [
+    length, _values_ = 3, [
         ('ALCVTOP', 0x00), # Top alignment
         ('ALCVCTR', 0x01), # Center alignment
         ('ALCVBOT', 0x02), # Bottom alignment
@@ -329,16 +325,14 @@ class VertAlign(pbinary.enum):
     ]
 
 class ReadingOrder(pbinary.enum):
-    _width_ = 2
-    _values_ = [
+    length, _values_ = 2, [
         ('READING_ORDER_CONTEXT', 0x00), # Context reading order
         ('READING_ORDER_LTR', 0x01), # Left-to-right reading order
         ('READING_ORDER_RTL', 0x02), # Right-to-left reading order
     ]
 
 class BorderStyle(pbinary.enum):
-    _width_ = 4
-    _values_ = [
+    length, _values_ = 4, [
         ('NONE', 0x0000), # No border
         ('THIN', 0x0001), # Thin line
         ('MEDIUM', 0x0002), # Medium line
@@ -356,8 +350,7 @@ class BorderStyle(pbinary.enum):
     ]
 
 class FillPattern(pbinary.enum):
-    _width_ = 6
-    _values_ = [
+    length, _values_ = 6, [
         ('FLSNULL', 0x00), # No fill pattern
         ('FLSSOLID', 0x01), # Solid
         ('FLSMEDGRAY', 0x02), # 50% gray
@@ -1229,13 +1222,13 @@ class BOUNDSHEET(pstruct.type):
 
     class _grbit(pbinary.struct):
         class _hsState(pbinary.enum):
-            _width_, _values_ = 2, [
+            length, _values_ = 2, [
                 ('visible', 0),
                 ('hidden', 1),
                 ('very-hidden', 2),
             ]
         class _docType(pbinary.enum):
-            _width_, _values_ = 8, [
+            length, _values_ = 8, [
                 ('worksheet', 0x00),
                 ('macro', 0x01),
                 ('chart', 0x02),
@@ -2374,8 +2367,7 @@ class Ptg(ptype.definition):
     default = PtgUnknown
 
 class PtgDataType(pbinary.enum):
-    _width_ = 2
-    _values_ = [
+    length, _values_ = 2, [
         ('UNKNOWN', 0x0),
         ('REFERENCE', 0x1),
         ('VALUE', 0x2),
@@ -4551,8 +4543,7 @@ class FtCblsData(pstruct.type):
 class LbsDropData(pstruct.type):
     class _flags(pbinary.struct):
         class _wStyle(pbinary.enum):
-            _width_ = 2
-            _values_ = [
+            length, _values_ = 2, [
                 ('combo', 0),
                 ('edit', 1),
                 ('simple', 2),
@@ -4577,8 +4568,7 @@ class FtLbsData(pstruct.type):
     featureType = 0x0013
     class _flags(pbinary.flags):
         class _lct(pbinary.enum):
-            _width_ = 8
-            _values_ = [
+            length, _values_ = 8, [
                 ('regular', 0x01),
                 ('pivot-page', 0x02),
                 ('autofilter', 0x03),
@@ -4742,8 +4732,7 @@ class TxO(pstruct.type):
 
     class _flags(pbinary.flags):
         class _hAlignment(pbinary.enum):
-            _width_ = 3
-            _values_ = [
+            length, _values_ = 3, [
                 ('left', 1),
                 ('center', 2),
                 ('right', 3),
@@ -4751,8 +4740,7 @@ class TxO(pstruct.type):
                 ('distributed', 7),
             ]
         class _vAlignment(pbinary.enum):
-            _width_ = 3
-            _values_ = [
+            length, _values_ = 3, [
                 ('top', 1),
                 ('middle', 2),
                 ('bottom', 3),
@@ -5322,8 +5310,7 @@ class Text(pstruct.type):
 
     class _dlp(pbinary.struct):
         class _position(pbinary.enum):
-            _width_ = 4
-            _values_ = [
+            length, _values_ = 4, [
                 ('default', 0x0),
                 ('outside-end', 0x1),
                 ('inside-end', 0x2),
@@ -5337,8 +5324,7 @@ class Text(pstruct.type):
                 ('user', 0xa),
             ]
         class _iReadingOrder(pbinary.enum):
-            _width_ = 2
-            _values_ = [
+            length, _values_ = 2, [
                 ('default', 0),
                 ('left-to-right', 1),
                 ('right-to-left', 2),
