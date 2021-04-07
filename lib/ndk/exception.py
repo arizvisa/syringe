@@ -157,7 +157,7 @@ class TypeDescriptor(pstruct.type):
 class HT_(pbinary.flags):
     '''unsigned_int'''
     _fields_ = [
-        (1, 'IsComPlusEh'),         # Is handling within complus eh.
+        (1, 'IsComplusEh'),         # Is handling within complus eh.
         (23, 'reserved'),
         (1, 'IsBadAllocCompat'),    # the WinRT type can catch a std::bad_alloc
         (1, 'IsStdDotDot'),         # the catch is std C++ catch(...) which is suppose to catch only C++ exception.
