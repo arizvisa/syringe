@@ -334,7 +334,7 @@ class HRESULT(dynamic.union):
     @pbinary.littleendian
     class _hresult(pbinary.struct):
         class _severity(pbinary.enum):
-            _width_, _values_ = 1, [('TRUE', 1), ('FALSE', 0)]
+            length, _values_ = 1, [('TRUE', 1), ('FALSE', 0)]
         _fields_ = [
             (_severity, 'severity'),
             (4, 'reserved'),

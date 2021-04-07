@@ -24,12 +24,12 @@ class _POOL_TYPE(pbinary.enum):
 
 @pbinary.littleendian
 class POOL_TYPE(_POOL_TYPE):
-    _width_ = 32
+    length = 32
 
 class POOL_HEADER(pstruct.type, versioned):
     class _Ulong1(pbinary.struct):
         _fields_ = [
-            (dyn.clone(_POOL_TYPE, _width_=7), 'PoolType'),
+            (dyn.clone(_POOL_TYPE, length=7), 'PoolType'),
             (9, 'BlockSize'),
             (7, 'PoolIndex'),
             (9, 'PreviousSize'),
@@ -45,7 +45,7 @@ class POOL_HEADER(pstruct.type, versioned):
 
     class _Ulong164(_Ulong1):
         _fields_ = [
-            (dyn.clone(_POOL_TYPE, _width_=8), 'PoolType'),
+            (dyn.clone(_POOL_TYPE, length=8), 'PoolType'),
             (8, 'BlockSize'),
             (8, 'PoolIndex'),
             (8, 'PreviousSize'),

@@ -1,7 +1,7 @@
 from ptypes import pint, pbinary
 
 class FACILITY_(pbinary.enum):
-    _width_, _values_ = 11, [
+    length, _values_ = 11, [
         ('NULL', 0),
         ('RPC', 1),
         ('DISPATCH', 2),
