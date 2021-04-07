@@ -507,10 +507,10 @@ class integer(type):
 class enum(integer):
     '''
     A pbinary.integer for managing constants used when definiing a binary type.
-    i.e. class myinteger(pbinary.enum): _width_ = N
+    i.e. class myinteger(pbinary.enum): length = N
 
     Settable properties:
-        _width_:int
+        length:int
             This defines the width of the enumeration.
         _values_:array( tuple( name, value ), ... )
             This contains which enumerations are defined.
@@ -2889,7 +2889,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_set_integer_58():
         class e(pbinary.enum):
-            _width_, _values_ = 4, [
+            length, _values_ = 4, [
                 ('aa', 0xa),
                 ('bb', 0xb),
                 ('cc', 0xc),
@@ -2901,7 +2901,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_set_name_59():
         class e(pbinary.enum):
-            _width_, _values_ = 8, [
+            length, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2913,7 +2913,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_set_unknown_name_60():
         class e(pbinary.enum):
-            _width_, _values_ = 8, [
+            length, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2925,7 +2925,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_check_attributes_61():
         class e(pbinary.enum):
-            _width_, _values_ = 8, [
+            length, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2938,7 +2938,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_check_output_name_62():
         class e(pbinary.enum):
-            _width_, _values_ = 8, [
+            length, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -2951,7 +2951,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_check_output_number_63():
         class e(pbinary.enum):
-            _width_, _values_ = 8, [
+            length, _values_ = 8, [
                 ('aa', 0xaa),
                 ('bb', 0xbb),
                 ('cc', 0xcc),
@@ -3006,8 +3006,7 @@ if __name__ == '__main__':
     @TestCase
     def test_pbinary_enum_signed_66():
         class e(pbinary.enum):
-            _width_ = -8
-            _values_ = [
+            length, _values_ = -8, [
                 ('0xff', -1),
                 ('0xfe', -2),
                 ('0xfd', -3),
