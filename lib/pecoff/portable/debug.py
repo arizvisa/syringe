@@ -88,6 +88,7 @@ class IMAGE_DEBUG_DATA_CODEVIEW(pstruct.type):
         (__Info, 'Info'),
         (__Extra, 'Extra'),
     ]
+IMAGE_DEBUG_TYPE_CODEVIEW = IMAGE_DEBUG_DATA_CODEVIEW
 
 ## IMAGE_DEBUG_TYPE_MISC
 class IMAGE_DEBUG_MISC_(pint.enum, uint32):
@@ -109,6 +110,7 @@ class IMAGE_DEBUG_DATA_MISC(pstruct.type):
         (lambda s: dyn.clone(pstr.wstring if s['Unicode'].int() else pstr.string, length=s['Length'].li.int()), 'Data'),
         (__Extra, 'Extra'),
     ]
+IMAGE_DEBUG_TYPE_MISC = IMAGE_DEBUG_DATA_MISC
 
 ## IMAGE_DEBUG_TYPE_COFF
 # http://waleedassar.blogspot.com/2012/06/loading-coff-symbols.html
@@ -138,6 +140,7 @@ class IMAGE_DEBUG_DATA_COFF(pstruct.type):
 
         (__Extra, 'Extra'),
     ]
+IMAGE_DEBUG_TYPE_COFF = IMAGE_DEBUG_DATA_COFF
 
 ## IMAGE_DEBUG_TYPE_FPO
 # https://msdn.microsoft.com/library/windows/desktop/ms680547(v=vs.85).aspx?id=19509
@@ -172,6 +175,7 @@ class FPO_DATA(pstruct.type):
 class IMAGE_DEBUG_DATA_FPO(parray.block):
     type = IMAGE_DEBUG_TYPE_.byname('FPO')
     _object_ = FPO_DATA
+IAMGE_DEBUG_TYPE_FPO = IMAGE_DEBUG_DATA_FPO
 
 ## IMAGE_DEBUG_TYPE_RESERVED10
 #https://github.com/dotnet/roslyn/issues/5940
@@ -191,10 +195,11 @@ class IMAGE_DEBUG_DATA_RESERVED10(pstruct.type):
         (_Signature, 'Signature'),
         (__Extra, 'Extra'),
     ]
+IMAGE_DEBUG_TYPE_RESERVED10 = IMAGE_DEBUG_DATA_RESERVED10
 
 ## IMAGE_DEBUG_TYPE_VC_FEATURE
 @IMAGE_DEBUG_DIRECTORY_DATA.define
-class IMAGE_DEBUG_TYPE_VC_FEATURE(pstruct.type):
+class IMAGE_DEBUG_DATA_VC_FEATURE(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('VC_FEATURE')
     #Counts: Pre-VC++ 11.00=0, C/C++=202, /GS=202, /sdl=0, guardN=201
     _fields_ = [
@@ -204,6 +209,7 @@ class IMAGE_DEBUG_TYPE_VC_FEATURE(pstruct.type):
         (uint32, 'SDL'),
         (uint32, 'guardN'),
     ]
+IMAGE_DEBUG_TYPE_VC_FEATURE = IMAGE_DEBUG_DATA_VC_FEATURE
 
 ## IMAGE_DEBUG_TYPE_POGO
 class LTCG_ENTRY(pstruct.type):
@@ -215,7 +221,7 @@ class LTCG_ENTRY(pstruct.type):
     ]
 
 @IMAGE_DEBUG_DIRECTORY_DATA.define
-class IMAGE_DEBUG_TYPE_POGO(pstruct.type):
+class IMAGE_DEBUG_DATA_POGO(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('POGO')
 
     class _Signature(uint32):
@@ -231,3 +237,4 @@ class IMAGE_DEBUG_TYPE_POGO(pstruct.type):
         (_Signature, 'Signature'),
         (__entries, 'Entries'),
     ]
+IMAGE_DEBUG_TYPE_POGO = IMAGE_DEBUG_DATA_POGO
