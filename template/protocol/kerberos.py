@@ -194,6 +194,8 @@ class Checksum(ber.SEQUENCE):
             ('rsa-md4-des-k', 6),
             ('rsa-md5', 7),
             ('rsa-md5-des', 8),
+            ('hmac-sha1-96-aes128', 15),
+            ('hmac-sha1-96-aes256', 16),
         ]
     _fields_ = [
         (dyn.clone(_cksumtype, type=(Context, 0)), 'cksumtype'),
@@ -238,6 +240,8 @@ class EncryptedData(ber.SEQUENCE):
             ('des-cbc-crc', 1),
             ('des-cbc-md4', 2),
             ('des-cbc-md5', 3),
+            ('aes128-cts-hmac-sha1-96', 17),
+            ('aes256-cts-hmac-sha1-96', 18),
         ]
 
     _fields_ = [
