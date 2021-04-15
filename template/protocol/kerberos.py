@@ -183,22 +183,24 @@ class AuthorizationData(ber.SEQUENCE):
         def __object__(self, klasstag):
             return AuthorizationData.AuthorizationDataItems
 
+class KERB_CHECKSUM_(pint.enum, Int32):
+    _values_ = [
+        ('CRC32', 1),
+        ('rsa-md4', 2),
+        ('rsa-md4-des', 3),
+        ('des-mac', 4),
+        ('des-mac-k', 5),
+        ('rsa-md4-des-k', 6),
+        ('rsa-md5', 7),
+        ('rsa-md5-des', 8),
+        ('hmac-sha1-96-aes128', 15),
+        ('hmac-sha1-96-aes256', 16),
+        ('hmac-md5', -138),
+    ]
+
 class Checksum(ber.SEQUENCE):
-    class _cksumtype(pint.enum, Int32):
-        _values_ = [
-            ('CRC32', 1),
-            ('rsa-md4', 2),
-            ('rsa-md4-des', 3),
-            ('des-mac', 4),
-            ('des-mac-k', 5),
-            ('rsa-md4-des-k', 6),
-            ('rsa-md5', 7),
-            ('rsa-md5-des', 8),
-            ('hmac-sha1-96-aes128', 15),
-            ('hmac-sha1-96-aes256', 16),
-        ]
     _fields_ = [
-        (dyn.clone(_cksumtype, type=(Context, 0)), 'cksumtype'),
+        (dyn.clone(KERB_CHECKSUM_, type=(Context, 0)), 'cksumtype'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'checksum'),
     ]
 
@@ -228,24 +230,26 @@ class EncryptionKey(ber.SEQUENCE):
         (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'keyvalue'),
     ]
 
+class KERB_ETYPE_(pint.enum, Int32):
+    _values_ = [
+        ('NULL', 0),
+        ('des-cbc-crc', 1),
+        ('des-cbc-md4', 2),
+        ('des-cbc-md5', 3),
+        ('aes128-cts-hmac-sha1-96', 17),
+        ('aes256-cts-hmac-sha1-96', 18),
+        ('arcfour-hmac', 23),
+        ('arcfour-hmac-exp', 24),
+    ]
+
 class EncryptedData(ber.SEQUENCE):
     # FIXME: the "cipher" field should have its _object_
     #        attribute assigned with a ptype.encoded_t so
     #        that we can encrypt/decrypt its data when it's
     #        given a proper stream that has been seeded by
     #        a key.
-    class _etype(pint.enum, Int32):
-        _values_ = [
-            ('NULL', 0),
-            ('des-cbc-crc', 1),
-            ('des-cbc-md4', 2),
-            ('des-cbc-md5', 3),
-            ('aes128-cts-hmac-sha1-96', 17),
-            ('aes256-cts-hmac-sha1-96', 18),
-        ]
-
     _fields_ = [
-        (dyn.clone(_etype, type=(Context, 0)), 'etype'),
+        (dyn.clone(KERB_ETYPE_, type=(Context, 0)), 'etype'),
         (dyn.clone(UInt32, type=(Context, 1)), 'kvno'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 'cipher'),
     ]
