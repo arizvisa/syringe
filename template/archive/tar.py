@@ -477,7 +477,7 @@ if __name__ == '__main__':
 
         # fall-back to writing to already open target
         else:
-            six.print_(data, file=target)
+            six.print_(data.decode('latin1'), file=target)
         continue
 
     sys.exit(0)

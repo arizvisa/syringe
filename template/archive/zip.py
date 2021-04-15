@@ -756,7 +756,7 @@ if __name__ == '__main__':
         # fall-back to writing to already open target
         else:
             logging.debug('{:s}ing {:d} bytes from record({:d}) to stream: {:s}'.format(args.mode.title(), len(data), int(rec.name()), target.name))
-            six.print_(data, file=target)
+            six.print_(data.decode('latin1'), file=target)
         continue
 
     sys.exit(0)
