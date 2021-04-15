@@ -186,6 +186,9 @@ class AuthorizationData(ber.SEQUENCE):
                 ('AD-OSF-DCE-PKI-CERTID', 66),
                 ('AD-WIN2K-PAC', 128),
                 ('AD-ETYPE-NEGOTIATION', 129),
+                ('AD-authentication-strength', 70),
+                ('AD-fx-fast-armor', 71),
+                ('AD-fx-fast-used', 72),
             ]
         _fields_ = [
             (dyn.clone(_ad_type, type=(Context, 0)), 'ad-type'),
@@ -364,46 +367,82 @@ class ETYPE_INFO2(ber.SEQUENCE):
             return ETYPE_INFO2_ENTRY if klasstag == ETYPE_INFO2_ENTRY.type else None
         return dyn.clone(Packet, __object__=lookup)
 
+class FX_FAST_ARMOR_(pint.enum, Int32):
+    _values_ = [
+        ('AP_REQUEST', 1),
+    ]
+
+# FIXME: There's some more definitions in RFC6113 that can be done.
+class KrbFastArmor(ber.SEQUENCE):
+    _fields_ = [
+        (dyn.clone(FX_FAST_ARMOR_, type=(Context, 0)), 'armor-type'),
+        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'armor-value'),
+    ]
+
 class PA_DATA(ber.SEQUENCE):
     class _padata_type(pint.enum, ber.INTEGER):
         _values_ = [
-            ('pa-tgs-req', 1),          # FIXME: this points to AP-REQ
-            ('pa-enc-timestamp', 2),
-            ('pa-pw-salt', 3),          # FIXME: not ASN.1 encoded data
-            ('pa-etype-info', 11),
-            ('pa-etype-info2', 19),
-            ('pa-enc-unix-time', 5),
-            ('pa-sandia-secureid', 6),
-            ('pa-sesame', 7),
-            ('pa-osf-dce', 8),
-            ('pa-cybersafe-secureid', 9),
-            ('pa-afs3-salt', 10),
-            ('pa-etype-info', 11),
-            ('pa-sam-challenge', 12),
-            ('pa-sam-response', 13),
-            ('pa-pk-as-req_old', 14),
-            ('pa-pk-as-rep_old', 15),
-            ('pa-pk-as-req', 16),
-            ('pa-pk-as-rep', 17),
-            ('pa-etype-info2', 19),
-            ('pa-use-specified-kvno', 20),
-            ('pa-sam-redirect', 21),
-            ('pa-get-from-typed-data', 22),
-            ('td-padata', 22),
-            ('pa-sam-etype-info', 23),
-            ('pa-alt-princ', 24),
-            ('pa-sam-challenge2', 30),
-            ('pa-sam-response2', 31),
-            ('pa-extra-tgt', 41),
-            ('td-pkinit-cms-certificates', 101),
-            ('td-krb-principal', 102),
-            ('td-krb-realm', 103),
-            ('td-trusted-certifiers', 104),
-            ('td-certificate-index', 105),
-            ('td-app-defined-error', 106),
-            ('td-req-nonce', 107),
-            ('td-req-seq', 108),
-            ('pa-pac-request', 128),
+            ('pa-tgs-req', 1),                      # [RFC4120] FIXME: this points to AP-REQ
+            ('pa-enc-timestamp', 2),                # [RFC4120]
+            ('pa-pw-salt', 3),                      # [RFC4120] FIXME: not ASN.1 encoded data
+            ('pa-enc-unix-time', 5),                # [RFC4120]
+            ('pa-sandia-secureid', 6),              # [RFC4120]
+            ('pa-sesame', 7),                       # [RFC4120]
+            ('pa-osf-dce', 8),                      # [RFC4120]
+            ('pa-cybersafe-secureid', 9),           # [RFC4120]
+            ('pa-afs3-salt', 10),                   # [RFC4120] [RFC3961]
+            ('pa-etype-info', 11),                  # [RFC4120]
+            ('pa-sam-challenge', 12),               # [KRB-WG.SAM]
+            ('pa-sam-response', 13),                # [KRB-WG.SAM]
+            ('pa-pk-as-req_old', 14),               # [PK-INIT-1999]
+            ('pa-pk-as-rep_old', 15),               # [PK-INIT-1999]
+            ('pa-pk-as-req', 16),                   # [RFC4556]
+            ('pa-pk-as-rep', 17),                   # [RFC4556]
+            ('pa-pk-ocsp-response', 18),            # [RFC4557]
+            ('pa-etype-info2', 19),                 # [RFC4120]
+            ('pa-use-specified-kvno', 20),          # [RFC4120]
+            ('pa-svr-referral-info', 20),           # [REFERRALS]
+            ('pa-sam-redirect', 21),                # [KRB-WG.SAM]
+            ('pa-get-from-typed-data', 22),         # (embedded in typed data) [RFC4120]
+            ('td-padata', 22),                      # (embeds padata) [RFC4120]
+            ('pa-sam-etype-info', 23),              # (sam/otp) [KRB-WG.SAM]
+            ('pa-alt-princ', 24),                   # (crawdad@fnal.gov) [HW-AUTH]
+            ('pa-server-referral', 25),             # [REFERRALS]
+            ('pa-sam-challenge2', 30),              # (kenh@pobox.com) [KRB-WG.SAM]
+            ('pa-sam-response2', 31),               # (kenh@pobox.com) [KRB-WG.SAM]
+            ('pa-extra-tgt', 41),                   # Reserved extra TGT [RFC6113]
+            ('td-pkinit-cms-certificates', 101),    # CertificateSet from CMS
+            ('td-krb-principal', 102),              # PrincipalName
+            ('td-krb-realm', 103),                  # Realm
+            ('td-trusted-certifiers', 104),         # [RFC4556]
+            ('td-certificate-index', 105),          # [RFC4556]
+            ('td-app-defined-error', 106),          # Application specific [RFC6113]
+            ('td-req-nonce', 107),                  # INTEGER [RFC6113]
+            ('td-req-seq', 108),                    # INTEGER [RFC6113]
+            ('td_dh_parameters', 109),              # [RFC4556]
+            ('td-cms-digest-algorithms', 111),      # [ALG-AGILITY]
+            ('td-cert-digest-algorithms', 112),     # [ALG-AGILITY]
+            ('pa-pac-request', 128),                # [MS-KILE]
+            ('pa-for_user', 129),                   # [MS-KILE]
+            ('pa-for-x509-user', 130),              # [MS-KILE]
+            ('pa-for-check_dups', 131),             # [MS-KILE]
+            ('pa-as-checksum', 132),                # [MS-KILE]
+            ('pa-fx-cookie', 133),                  # [RFC6113]
+            ('pa-authentication-set', 134),         # [RFC6113]
+            ('pa-auth-set-selected', 135),          # [RFC6113]
+            ('pa-fx-fast', 136),                    # [RFC6113]
+            ('pa-fx-error', 137),                   # [RFC6113]
+            ('pa-encrypted-challenge', 138),        # [RFC6113]
+            ('pa-otp-challenge', 141),              # (gareth.richards@rsa.com) [OTP-PREAUTH]
+            ('pa-otp-request', 142),                # (gareth.richards@rsa.com) [OTP-PREAUTH]
+            ('pa-otp-confirm', 143),                # (gareth.richards@rsa.com) [OTP-PREAUTH]
+            ('pa-otp-pin-change', 144),             # (gareth.richards@rsa.com) [OTP-PREAUTH]
+            ('pa-epak-as-req', 145),                # (sshock@gmail.com) [RFC6113]
+            ('pa-epak-as-rep', 146),                # (sshock@gmail.com) [RFC6113]
+            ('pa_pkinit_kx', 147),                  # [RFC6112]
+            ('pa_pku2u_name', 148),                 # [PKU2U]
+            ('pa-supported-etypes', 165),           # [MS-KILE]
+            ('pa-extended_error', 166),             # [MS-KILE]
         ]
     _fields_ = [
         (dyn.clone(_padata_type, type=(Context, 1)), 'padata-type'),
@@ -694,6 +733,10 @@ class KDC_ERR(pint.enum, Int32):
         ('KDC_ERR_REVOCATION_STATUS_UNAVAILABLE', 74),  # Reserved for PKINIT
         ('KDC_ERR_CLIENT_NAME_MISMATCH', 75),           # Reserved for PKINIT
         ('KDC_ERR_KDC_NAME_MISMATCH', 76),              # Reserved for PKINIT
+        ('KDC_ERR_PREAUTH_EXPIRED', 90),                # [RFC6113]
+        ('KDC_ERR_MORE_PREAUTH_DATA_REQUIRED', 91),     # [RFC6113]
+        ('KDC_ERR_PREAUTH_BAD_AUTHENTICATION_SET', 92), # [RFC6113]
+        ('KDC_ERR_UNKNOWN_CRITICAL_FAST_OPTIONS', 93),  # [RFC6113]
     ]
 
 @Application.define
