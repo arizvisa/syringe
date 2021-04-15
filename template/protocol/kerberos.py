@@ -16,6 +16,21 @@ class OBJECT_IDENTIFIER(ber.OBJECT_IDENTIFIER):
         ('iso.org.dod.internet.security.kerberosv5', (1,3,5,1,5,2)),
     ]
 
+class Int32(ber.INTEGER):
+    pass
+
+class UInt32(pint.uint_t, ber.INTEGER):
+    def __getvalue__(self):
+        return super(pint.sinteger_t, self).__getvalue__()
+    def __setvalue__(self, *values, **attrs):
+        return super(pint.sinteger_t, self).__setvalue__(*values, **attrs)
+
+class Microseconds(ber.INTEGER):
+    pass
+
+class KerberosString(ber.GeneralString):
+    pass
+
 class Realm(ber.GeneralString):
     pass
 
@@ -47,7 +62,7 @@ class PrincipalName(ber.SEQUENCE):
     class GeneralStringList(ber.SEQUENCE):
         def _object_(self):
             def lookup(_, klasstag):
-                return ber.GeneralString if klasstag == ber.GeneralString.type else None
+                return KerberosString if klasstag == KerberosString.type else None
             return dyn.clone(Packet, __object__=lookup)
 
     _fields_ = [
@@ -63,7 +78,7 @@ class KerberosTime(GeneralizedTime):
 
 class HostAddress(ber.SEQUENCE):
     _fields_ = [
-        (dyn.clone(ber.INTEGER, type=(Context, 0)), 'addr-type'),
+        (dyn.clone(Int32, type=(Context, 0)), 'addr-type'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'address'),
     ]
 
@@ -86,7 +101,9 @@ class APOptions(ber.BITSTRING):
 class TicketFlags(ber.BITSTRING):
     class flags(pbinary.flags):
         _fields_ = [
-            (20, 'reserved12-31'),
+            (18, 'reserved14-31'),
+            (1, 'ok-as-delegate'),
+            (1, 'transited-policy-checked'),
             (1, 'hw-authen'),
             (1, 'pre-authen'),
             (1, 'initial'),
@@ -109,10 +126,11 @@ class KDCOptions(ber.BITSTRING):
             (1, 'renew'),
             (1, 'enc-tkt-in-skey'),
             (1, 'renewable-ok'),
-            (16, 'reserved12-26'),
-            (1, 'unused11'),
+            (1, 'disable-transited-check'),
+            (15, 'reserved12-25'),
+            (1, 'opt-hardware-auth'),
             (1, 'unused10'),
-            (1, 'unused9'),
+            (1, 'PK-Cross'),
             (1, 'renewable'),
             (1, 'unused7'),
             (1, 'postdated'),
@@ -127,32 +145,84 @@ class KDCOptions(ber.BITSTRING):
 
 class LastReq(ber.SEQUENCE):
     class LastReqItems(ber.SEQUENCE):
+        class _lr_type(pint.enum, Int32):
+            _values_ = [
+                ('none', 0),
+                ('tgt-request', 1),
+                ('initial-request', 2),
+                ('tgt-issue', 3),
+                ('renewal', 4),
+                ('any', 5),
+                ('password-expire', 6),
+                ('account-expire', 7),
+            ]
         _fields_ = [
-            (dyn.clone(ber.INTEGER, type=(Context, 0)), 'lr-type'),
+            (dyn.clone(_lr_type, type=(Context, 0)), 'lr-type'),
             (dyn.clone(KerberosTime, type=(Context, 1)), 'lr-data'),
         ]
     class _object_(Packet):
         def __object__(self, klasstag):
-            return AuthorizationData.AuthorizationDataItems
+            return LastReq.LastReqItems
 
 class AuthorizationData(ber.SEQUENCE):
     class AuthorizationDataItems(ber.SEQUENCE):
-        class _ad_type(pint.enum, ber.INTEGER):
+        class _ad_type(pint.enum, Int32):
             _values_ = [
+                ('AD-IF-RELEVANT', 1),
+                ('AD-KDC-ISSUED', 4),
+                ('AD-AND-OR', 5),
+                ('AD-MANDATORY-FOR-KDC', 6),
                 ('OSF-DCE', 64),
                 ('SESAME', 65),
             ]
         _fields_ = [
             (dyn.clone(_ad_type, type=(Context, 0)), 'ad-type'),
-            (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'ad-data'),
+            (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'ad-data'), # FIXME: this should point to one of the post-defined AD_ types
         ]
     class _object_(Packet):
         def __object__(self, klasstag):
             return AuthorizationData.AuthorizationDataItems
 
+class Checksum(ber.SEQUENCE):
+    class _cksumtype(pint.enum, Int32):
+        _values_ = [
+            ('CRC32', 1),
+            ('rsa-md4', 2),
+            ('rsa-md4-des', 3),
+            ('des-mac', 4),
+            ('des-mac-k', 5),
+            ('rsa-md4-des-k', 6),
+            ('rsa-md5', 7),
+            ('rsa-md5-des', 8),
+        ]
+    _fields_ = [
+        (dyn.clone(_cksumtype, type=(Context, 0)), 'cksumtype'),
+        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'checksum'),
+    ]
+
+class AD_IF_RELEVANT(AuthorizationData):
+    pass
+
+class AD_KDCIssued(ber.SEQUENCE):
+    _fields_ = [
+        (dyn.clone(Checksum, type=(Context, 0)), 'ad-checksum'),
+        (dyn.clone(Realm, type=(Context, 1)), 'i-realm'),
+        (dyn.clone(PrincipalName, type=(Context, 2)), 'i-sname'),
+        (dyn.clone(AuthorizationData, type=(Context, 3)), 'elements'),
+    ]
+
+class AD_AND_OR(ber.SEQUENCE):
+    _fields_ = [
+        (dyn.clone(Int32, type=(Context, 0)), 'condition-count'),
+        (dyn.clone(AuthorizationData, type=(Context, 1)), 'elements'),
+    ]
+
+class AD_MANDATORY_FOR_KDC(AuthorizationData):
+    pass
+
 class EncryptionKey(ber.SEQUENCE):
     _fields_ = [
-        (dyn.clone(ber.INTEGER, type=(Context, 0)), 'keytype'),
+        (dyn.clone(Int32, type=(Context, 0)), 'keytype'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'keyvalue'),
     ]
 
@@ -162,7 +232,7 @@ class EncryptedData(ber.SEQUENCE):
     #        that we can encrypt/decrypt its data when it's
     #        given a proper stream that has been seeded by
     #        a key.
-    class _etype(pint.enum, ber.INTEGER):
+    class _etype(pint.enum, Int32):
         _values_ = [
             ('NULL', 0),
             ('des-cbc-crc', 1),
@@ -172,7 +242,7 @@ class EncryptedData(ber.SEQUENCE):
 
     _fields_ = [
         (dyn.clone(_etype, type=(Context, 0)), 'etype'),
-        (dyn.clone(ber.INTEGER, type=(Context, 1)), 'kvno'),
+        (dyn.clone(UInt32, type=(Context, 1)), 'kvno'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 'cipher'),
     ]
 
@@ -189,7 +259,7 @@ class CipherText(pstruct.type):
     ]
 
 class TransitedEncoding(ber.SEQUENCE):
-    class _tr_type(pint.enum, ber.INTEGER):
+    class _tr_type(pint.enum, Int32):
         _values_ = [
             ('DOMAIN-X500-COMPRESS', 1),
         ]
@@ -225,23 +295,6 @@ class EncTicketPart(ber.SEQUENCE):
         (dyn.clone(AuthorizationData, type=(Context, 10)), 'authorization-data'),
     ]
 
-class Checksum(ber.SEQUENCE):
-    class _cksumtype(pint.enum, ber.INTEGER):
-        _values_ = [
-            ('CRC32', 1),
-            ('rsa-md4', 2),
-            ('rsa-md4-des', 3),
-            ('des-mac', 4),
-            ('des-mac-k', 5),
-            ('rsa-md4-des-k', 6),
-            ('rsa-md5', 7),
-            ('rsa-md5-des', 8),
-        ]
-    _fields_ = [
-        (dyn.clone(_cksumtype, type=(Context, 0)), 'cksumtype'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'checksum'),
-    ]
-
 @Application.define
 class Authenticator(ber.SEQUENCE):
     tag = 2
@@ -250,35 +303,68 @@ class Authenticator(ber.SEQUENCE):
         (dyn.clone(Realm, type=(Context, 1)), 'crealm'),
         (dyn.clone(PrincipalName, type=(Context, 2)), 'cname'),
         (dyn.clone(Checksum, type=(Context, 3)), 'cksum'),
-        (dyn.clone(ber.INTEGER, type=(Context, 4)), 'cusec'),
+        (dyn.clone(Microseconds, type=(Context, 4)), 'cusec'),
         (dyn.clone(KerberosTime, type=(Context, 5)), 'ctime'),
         (dyn.clone(EncryptionKey, type=(Context, 6)), 'subkey'),
-        (dyn.clone(ber.INTEGER, type=(Context, 7)), 'seq-number'),
+        (dyn.clone(UInt32, type=(Context, 7)), 'seq-number'),
         (dyn.clone(AuthorizationData, type=(Context, 8)), 'authorization-data'),
     ]
 
 class PA_ENC_TS_ENC(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(KerberosTime, type=(Context, 0)), 'patimestamp'),
-        (dyn.clone(ber.INTEGER, type=(Context, 1)), 'pausec'),
+        (dyn.clone(Microseconds, type=(Context, 1)), 'pausec'),
     ]
+
+class PA_ENC_TIMESTAMP(EncryptedData):
+    pass
+
+class ETYPE_INFO_ENTRY(ber.SEQUENCE):
+    _fields_ = [
+        (dyn.clone(Int32, type=(Context, 0)), 'etype'),
+        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'salt'),
+    ]
+
+class ETYPE_INFO(ber.SEQUENCE):
+    def _object_(self):
+        def lookup(_, klasstag):
+            return ETYPE_INFO_ENTRY if klasstag == ETYPE_INFO_ENTRY.type else None
+        return dyn.clone(Packet, __object__=lookup)
+
+class ETYPE_INFO2_ENTRY(ber.SEQUENCE):
+    _fields_ = [
+        (dyn.clone(Int32, type=(Context, 0)), 'etype'),
+        (dyn.clone(KerberosString, type=(Context, 1)), 'salt'),
+        (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 's2kparams'),
+    ]
+
+class ETYPE_INFO2(ber.SEQUENCE):
+    def _object_(self):
+        def lookup(_, klasstag):
+            return ETYPE_INFO2_ENTRY if klasstag == ETYPE_INFO2_ENTRY.type else None
+        return dyn.clone(Packet, __object__=lookup)
 
 class PA_DATA(ber.SEQUENCE):
     class _padata_type(pint.enum, ber.INTEGER):
         _values_ = [
-            ('PA-TGS-REQ', 1),
-            ('PA-ENC-TIMESTAMP', 2),
-            ('PA-PW-SALT', 3),
+            ('pa-tgs-req', 1),          # FIXME: this points to AP-REQ
+            ('pa-enc-timestamp', 2),
+            ('pa-pw-salt', 3),          # FIXME: not ASN.1 encoded data
+            ('pa-etype-info', 11),
+            ('pa-etype-info2', 19),
         ]
     _fields_ = [
-        (dyn.clone(_padata_type, type=(Context, 0)), 'padata-type'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'padata-value'),
+        (dyn.clone(_padata_type, type=(Context, 1)), 'padata-type'),
+        (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 'padata-value'),    # FIXME: this should point to one of the prior types
     ]
+
+class KerberosFlags(ber.BITSTRING):
+    pass
 
 class EncryptionType(ber.SEQUENCE):
     class _object_(Packet):
         def __object__(self, klasstag):
-            return ber.INTEGER if klasstag == ber.INTEGER.type else None
+            return Int32 if klasstag == Int32.type else None
 
 class KDC_REQ_BODY(ber.SEQUENCE):
     class _additional_tickets(ber.SEQUENCE):
@@ -294,7 +380,7 @@ class KDC_REQ_BODY(ber.SEQUENCE):
         (dyn.clone(KerberosTime, type=(Context, 4)), 'from'),
         (dyn.clone(KerberosTime, type=(Context, 5)), 'till'),
         (dyn.clone(KerberosTime, type=(Context, 6)), 'rtime'),
-        (dyn.clone(ber.INTEGER, type=(Context, 7)), 'nonce'),
+        (dyn.clone(UInt32, type=(Context, 7)), 'nonce'),
         (dyn.clone(EncryptionType, type=(Context, 8)), 'etype'),
         (dyn.clone(HostAddresses, type=(Context, 9)), 'addresses'),
         (dyn.clone(EncryptedData, type=(Context, 10)), 'enc-authorization-data'),
@@ -308,10 +394,10 @@ class KDC_REQ(ber.SEQUENCE):
                 return PA_DATA if klasstag == PA_DATA.type else None
 
     _fields_ = [
-        (dyn.clone(ber.INTEGER, type=(Context, 0)), 'pvno'),
-        (dyn.clone(KRB_, type=(Context, 1)), 'msg-type'),
-        (dyn.clone(_pa_data, type=(Context, 2)), 'padata'),
-        (dyn.clone(KDC_REQ_BODY, type=(Context, 3)), 'req-body'),
+        (dyn.clone(ber.INTEGER, type=(Context, 1)), 'pvno'),
+        (dyn.clone(KRB_, type=(Context, 2)), 'msg-type'),
+        (dyn.clone(_pa_data, type=(Context, 3)), 'padata'),
+        (dyn.clone(KDC_REQ_BODY, type=(Context, 4)), 'req-body'),
     ]
 
 @Application.define
@@ -350,7 +436,7 @@ class EncKDCRepPart(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(EncryptionKey, type=(Context, 0)), 'key'),
         (dyn.clone(LastReq, type=(Context, 1)), 'last-req'),
-        (dyn.clone(ber.INTEGER, type=(Context, 2)), 'nonce'),
+        (dyn.clone(UInt32, type=(Context, 2)), 'nonce'),
         (dyn.clone(KerberosTime, type=(Context, 3)), 'key-expiration'),
         (dyn.clone(TicketFlags, type=(Context, 4)), 'flags'),
         (dyn.clone(KerberosTime, type=(Context, 5)), 'authtime'),
@@ -395,17 +481,17 @@ class EncAPRepPart(ber.SEQUENCE):
     tag = 27
     _fields_ = [
         (dyn.clone(KerberosTime, type=(Context, 0)), 'ctime'),
-        (dyn.clone(ber.INTEGER, type=(Context, 1)), 'cusec'),
+        (dyn.clone(Microseconds, type=(Context, 1)), 'cusec'),
         (dyn.clone(EncryptionKey, type=(Context, 2)), 'subkey'),
-        (dyn.clone(ber.INTEGER, type=(Context, 3)), 'seq-number'),
+        (dyn.clone(UInt32, type=(Context, 3)), 'seq-number'),
     ]
 
 class KRB_SAFE_BODY(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'user-data'),
         (dyn.clone(KerberosTime, type=(Context, 1)), 'timestamp'),
-        (dyn.clone(ber.INTEGER, type=(Context, 2)), 'usec'),
-        (dyn.clone(ber.INTEGER, type=(Context, 3)), 'seq-number'),
+        (dyn.clone(Microseconds, type=(Context, 2)), 'usec'),
+        (dyn.clone(UInt32, type=(Context, 3)), 'seq-number'),
         (dyn.clone(HostAddress, type=(Context, 4)), 's-address'),
         (dyn.clone(HostAddress, type=(Context, 5)), 'r-address'),
     ]
@@ -435,8 +521,8 @@ class EncKrbPrivPart(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'user-data'),
         (dyn.clone(KerberosTime, type=(Context, 1)), 'timestamp'),
-        (dyn.clone(ber.INTEGER, type=(Context, 2)), 'usec'),
-        (dyn.clone(ber.INTEGER, type=(Context, 3)), 'seq-number'),
+        (dyn.clone(Microseconds, type=(Context, 2)), 'usec'),
+        (dyn.clone(UInt32, type=(Context, 3)), 'seq-number'),
         (dyn.clone(HostAddress, type=(Context, 4)), 's-address'),
         (dyn.clone(HostAddress, type=(Context, 5)), 'r-address'),
     ]
@@ -479,14 +565,14 @@ class EncKrbCredPart(ber.SEQUENCE):
                 return KrbCredInfo if klasstag == KrbCredInfo.type else None
     _fields_ = [
         (dyn.clone(_ticket_info, type=(Context, 0)), 'ticket-info'),
-        (dyn.clone(ber.INTEGER, type=(Context, 1)), 'nonce'),
+        (dyn.clone(UInt32, type=(Context, 1)), 'nonce'),
         (dyn.clone(KerberosTime, type=(Context, 2)), 'timestamp'),
-        (dyn.clone(ber.INTEGER, type=(Context, 3)), 'usec'),
+        (dyn.clone(Microseconds, type=(Context, 3)), 'usec'),
         (dyn.clone(HostAddress, type=(Context, 4)), 's-address'),
         (dyn.clone(HostAddress, type=(Context, 5)), 'r-address'),
     ]
 
-class KDC_ERR(pint.enum, ber.INTEGER):
+class KDC_ERR(pint.enum, Int32):
     _values_ = [
         ('KDC_ERR_NONE', 0),                    # No error
         ('KDC_ERR_NAME_EXP', 1),                # Client's entry in database has expired
@@ -544,20 +630,20 @@ class KRB_ERROR(ber.SEQUENCE):
         (dyn.clone(ber.INTEGER, type=(Context, 0)), 'pvno'),
         (dyn.clone(KRB_, type=(Context, 1)), 'msg-type'),
         (dyn.clone(KerberosTime, type=(Context, 2)), 'ctime'),
-        (dyn.clone(ber.INTEGER, type=(Context, 3)), 'cusec'),
+        (dyn.clone(Microseconds, type=(Context, 3)), 'cusec'),
         (dyn.clone(KerberosTime, type=(Context, 4)), 'stime'),
-        (dyn.clone(ber.INTEGER, type=(Context, 5)), 'susec'),
+        (dyn.clone(Microseconds, type=(Context, 5)), 'susec'),
         (dyn.clone(KDC_ERR, type=(Context, 6)), 'error-code'),
         (dyn.clone(Realm, type=(Context, 7)), 'crealm'),
         (dyn.clone(PrincipalName, type=(Context, 8)), 'cname'),
         (dyn.clone(Realm, type=(Context, 9)), 'realm'),
         (dyn.clone(PrincipalName, type=(Context, 10)), 'sname'),
-        (dyn.clone(ber.GeneralString, type=(Context, 11)), 'e-text'),
+        (dyn.clone(KerberosString, type=(Context, 11)), 'e-text'),
         (dyn.clone(ber.OCTETSTRING, type=(Context, 12)), 'e-data'),
     ]
 
 class METHOD_DATA(ber.SEQUENCE):
-    class _method_type(pint.enum, ber.INTEGER):
+    class _method_type(pint.enum, Int32):
         _values_ = [
             ('ATT-CHALLENGE-RESPONSE', 64),
         ]
