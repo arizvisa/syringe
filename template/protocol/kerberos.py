@@ -42,6 +42,9 @@ class KRB_NT_(pint.enum, ber.INTEGER):
         ('SRV_HST', 3),
         ('SRV_XHST', 4),
         ('UID', 5),
+        ('X500_PRINCIPAL', 6),
+        ('SMTP_NAME', 7),
+        ('ENTERPRISE', 10),
     ]
 
 class KRB_(pint.enum, ber.INTEGER):
@@ -56,6 +59,8 @@ class KRB_(pint.enum, ber.INTEGER):
         ('PRIV', 21),
         ('CRED', 22),
         ('ERROR', 30),
+        ('RESERVED16', 16), # Reserved for user-to-user krb_tgt_request
+        ('RESERVED17', 17), # Reserved for user-to-user krb_tgt_reply
     ]
 
 class PrincipalName(ber.SEQUENCE):
@@ -169,11 +174,18 @@ class AuthorizationData(ber.SEQUENCE):
         class _ad_type(pint.enum, Int32):
             _values_ = [
                 ('AD-IF-RELEVANT', 1),
+                ('AD-INTENDED-FOR-SERVER', 2),
+                ('AD-INTENDED-FOR-APPLICATION-CLASS', 3),
                 ('AD-KDC-ISSUED', 4),
                 ('AD-AND-OR', 5),
-                ('AD-MANDATORY-FOR-KDC', 6),
+                ('AD-MANDATORY-TICKET-EXTENSIONS', 6),
+                ('AD-IN-TICKET-EXTENSIONS', 7),
+                ('AD-MANDATORY-FOR-KDC', 8),
                 ('OSF-DCE', 64),
                 ('SESAME', 65),
+                ('AD-OSF-DCE-PKI-CERTID', 66),
+                ('AD-WIN2K-PAC', 128),
+                ('AD-ETYPE-NEGOTIATION', 129),
             ]
         _fields_ = [
             (dyn.clone(_ad_type, type=(Context, 0)), 'ad-type'),
@@ -360,6 +372,38 @@ class PA_DATA(ber.SEQUENCE):
             ('pa-pw-salt', 3),          # FIXME: not ASN.1 encoded data
             ('pa-etype-info', 11),
             ('pa-etype-info2', 19),
+            ('pa-enc-unix-time', 5),
+            ('pa-sandia-secureid', 6),
+            ('pa-sesame', 7),
+            ('pa-osf-dce', 8),
+            ('pa-cybersafe-secureid', 9),
+            ('pa-afs3-salt', 10),
+            ('pa-etype-info', 11),
+            ('pa-sam-challenge', 12),
+            ('pa-sam-response', 13),
+            ('pa-pk-as-req_old', 14),
+            ('pa-pk-as-rep_old', 15),
+            ('pa-pk-as-req', 16),
+            ('pa-pk-as-rep', 17),
+            ('pa-etype-info2', 19),
+            ('pa-use-specified-kvno', 20),
+            ('pa-sam-redirect', 21),
+            ('pa-get-from-typed-data', 22),
+            ('td-padata', 22),
+            ('pa-sam-etype-info', 23),
+            ('pa-alt-princ', 24),
+            ('pa-sam-challenge2', 30),
+            ('pa-sam-response2', 31),
+            ('pa-extra-tgt', 41),
+            ('td-pkinit-cms-certificates', 101),
+            ('td-krb-principal', 102),
+            ('td-krb-realm', 103),
+            ('td-trusted-certifiers', 104),
+            ('td-certificate-index', 105),
+            ('td-app-defined-error', 106),
+            ('td-req-nonce', 107),
+            ('td-req-seq', 108),
+            ('pa-pac-request', 128),
         ]
     _fields_ = [
         (dyn.clone(_padata_type, type=(Context, 1)), 'padata-type'),
@@ -608,6 +652,10 @@ class KDC_ERR(pint.enum, Int32):
         ('KDC_ERR_KEY_EXPIRED', 23),            # Password has expired - change password to reset
         ('KDC_ERR_PREAUTH_FAILED', 24),         # Pre-authentication information was invalid
         ('KDC_ERR_PREAUTH_REQUIRED', 25),       # Additional pre-authentication required*
+        ('KDC_ERR_SERVER_NOMATCH', 26),         # Requested server and ticket don't match
+        ('KDC_ERR_MUST_USE_USER2USER', 27),     # Server principal valid for user2user only
+        ('KDC_ERR_PATH_NOT_ACCEPTED', 28),      # KDC Policy rejects transited path
+        ('KDC_ERR_SVC_UNAVAILABLE', 29),        # A service is not available
         ('KRB_AP_ERR_BAD_INTEGRITY', 31),       # Integrity check on decrypted field failed
         ('KRB_AP_ERR_TKT_EXPIRED', 32),         # Ticket expired
         ('KRB_AP_ERR_TKT_NYV', 33),             # Ticket not yet valid
@@ -627,8 +675,25 @@ class KDC_ERR(pint.enum, Int32):
         ('KRB_AP_ERR_METHOD', 48),              # Alternative authentication method required*
         ('KRB_AP_ERR_BADSEQ', 49),              # Incorrect sequence number in message
         ('KRB_AP_ERR_INAPP_CKSUM', 50),         # Inappropriate type of checksum in
+        ('KRB_AP_PATH_NOT_ACCEPTED', 51),       # Policy rejects transited path
+        ('KRB_ERR_RESPONSE_TOO_BIG', 52),       # Response too big for UDP; retry with TCP
         ('KRB_ERR_GENERIC', 60),                # Generic error (description in e-text)
         ('KRB_ERR_FIELD_TOOLONG', 61),          # Field is too long for this implementation
+        ('KDC_ERROR_CLIENT_NOT_TRUSTED', 62),           # Reserved for PKINIT
+        ('KDC_ERROR_KDC_NOT_TRUSTED', 63),              # Reserved for PKINIT
+        ('KDC_ERROR_INVALID_SIG', 64),                  # Reserved for PKINIT
+        ('KDC_ERR_KEY_TOO_WEAK', 65),                   # Reserved for PKINIT
+        ('KDC_ERR_CERTIFICATE_MISMATCH', 66),           # Reserved for PKINIT
+        ('KRB_AP_ERR_NO_TGT', 67),                      # No TGT available to validate USER-TO-USER
+        ('KDC_ERR_WRONG_REALM', 68),                    # Reserved for future use
+        ('KRB_AP_ERR_USER_TO_USER_REQUIRED', 69),       # Ticket must be for USER-TO-USER
+        ('KDC_ERR_CANT_VERIFY_CERTIFICATE', 70),        # Reserved for PKINIT
+        ('KDC_ERR_INVALID_CERTIFICATE', 71),            # Reserved for PKINIT
+        ('KDC_ERR_REVOKED_CERTIFICATE', 72),            # Reserved for PKINIT
+        ('KDC_ERR_REVOCATION_STATUS_UNKNOWN', 73),      # Reserved for PKINIT
+        ('KDC_ERR_REVOCATION_STATUS_UNAVAILABLE', 74),  # Reserved for PKINIT
+        ('KDC_ERR_CLIENT_NAME_MISMATCH', 75),           # Reserved for PKINIT
+        ('KDC_ERR_KDC_NAME_MISMATCH', 76),              # Reserved for PKINIT
     ]
 
 @Application.define
