@@ -438,6 +438,71 @@ class String(parray.block):
         string = self.str()
         return "({:d}) {:s}".format(self.size(), string)
 
+class OID(ptype.type):
+    def str(self):
+        res = self.identifier()
+        return '.'.join(map("{:d}".format, res))
+
+    def description(self):
+        Fidentifier = lambda oid: tuple((int(item, 16) for item in oid.split('.')) if isinstance(oid, six.string_types) else oid)
+        descriptions = {Fidentifier(oid) : name for name, oid in getattr(self, '_values_', [])}
+        return descriptions.get(self.identifier(), None)
+
+    def summary(self):
+        oid, data, description = self.str(), self.serialize(), self.description()
+        res = super(OID, self).summary()
+        if description is None:
+            return '{:s} : {:s}'.format(oid, res)
+        return '{:s} ({:s}) : {:s}'.format(description, oid, res)
+
+    def identifier(self):
+        iterable = iter(bytearray(self.serialize()))
+
+        # Collect the list of all of the numbers in the identifier.
+        # These are encoded like the previously defined IdentifierLong
+        # type in that each component is a 7-bit integer where the
+        # highest bit of each octet is used to determine when an
+        # integer is done being read.
+        items = []
+        for octet in iterable:
+            item = octet & 0x7f
+            while octet & 0x80:
+                item *= pow(2,7)
+                octet = next(iterable)
+                item += octet & 0x7f
+            items.append(item)
+        return tuple(items)
+
+    def set(self, items):
+        iterable = iter(items)
+
+        # Define a closure which takes an integer and breaks it down into its
+        # 7-bit components so that we can manually clear the sentinel bit when
+        # the end of the integer is reached. This returns its results as a stack.
+        def reduce(integral):
+            if integral:
+                while integral > 0:
+                    yield integral & 0x7f
+                    integral //= pow(2, 7)
+                return
+            yield 0
+        # Iterate through the digits that we were given, and continue to
+        # break them into 7-bit components. That way we can append them
+        # to our result list of octets.
+        res = []
+        for item in iterable:
+            items = [item for item in reduce(item)][::-1]
+
+            # Iterate through the array, and set the highest bit in
+            # every element except for the last one.
+            res.extend([item | 0x80 for item in items[:-1]])
+            res.extend([item & 0x7f for item in items[-1:]])
+
+        # Now we can convert our array of packed 7-bit numbers to some
+        # bytes that we can use to set our instance using the super method.
+        data = bytearray(res)
+        return super(OID, self).set(bytes(data))
+
 ### Element structure
 class Protocol(ptype.definition):
     attribute, cache = 'Class', {}
@@ -776,7 +841,7 @@ class NULL(ptype.block):
     tag = 0x05
 
 @Universal.define
-class OBJECT_IDENTIFIER(ptype.type):
+class OBJECT_IDENTIFIER(OID):
     tag = 0x06
 
     def set(self, string):
@@ -801,65 +866,25 @@ class OBJECT_IDENTIFIER(ptype.type):
         else:
             iterable = iter(string)
 
-        # Define a closure which takes an integer and breaks it down into its
-        # 7-bit components so that we can manually clear the sentinel bit when
-        # the end of the integer is reached. This returns its results as a stack.
-        def reduce(integral):
-            if integral:
-                while integral > 0:
-                    yield integral & 0x7f
-                    integral //= pow(2, 7)
-                return
-            yield 0
-
         # Consume the oid identifier prefix, and combine it into the very
         # first octet according to the X.690 specification. If there's not
         # enough numbers provided, then we pad the expression with zeroes
         # since the oid identifier prefix is required.
-        res, X, Y = [], next(iterable, 0), next(iterable, None)
+        X, Y = next(iterable, 0), next(iterable, None)
         item = X * 40 + (Y or 0)
 
-        # Now that we have the first two identifier components encoded, we
-        # need to set the high bit for the entire list of octets excluding
-        # the last one which has its bit clear. If we didn't actually
-        # consume a value from the iterable, then we don't need to process
-        # anything because this isn't a valid identifier.
-        items = [] if Y is None else [item for item in reduce(item)][::-1]
-        res.extend([item | 0x80 for item in items[:-1]])
-        res.extend([item & 0x7f for item in items[-1:]])
-
-        # Iterate through the rest of the digits that we were given, and
-        # continue to break them into 7-bit components and append them
-        # to our result list of octets.
-        for item in iterable:
-            items = [item for item in reduce(item)][::-1]
-
-            # Iterate through the array, and set the highest bit in
-            # every element except for the last one.
-            res.extend([item | 0x80 for item in items[:-1]])
-            res.extend([item & 0x7f for item in items[-1:]])
-
-        # Now we can convert our array of packed 7-bit numbers to some
-        # bytes that we can use to set our instance using the super method.
-        data = bytearray(res)
-        return super(OBJECT_IDENTIFIER, self).set(bytes(data))
+        # If we emptied our iterator already, then there's no data to
+        # serialize, so we can just assign some empty bytes right here.
+        if Y is None:
+            result = b''
+        # Otherwise, we'll want to prefix the iterable we were using with
+        # the item we calculated for the first two octets.
+        else:
+            result = itertools.chain([item], iterable)
+        return super(OBJECT_IDENTIFIER, self).set(result)
 
     def identifier(self):
-        iterable = iter(bytearray(self.serialize()))
-
-        # Collect the list of all of the numbers in the identifier.
-        # These are encoded like the previously defined IdentifierLong
-        # type in that each component is a 7-bit integer where the
-        # highest bit of each octet is used to determine when an
-        # integer is done being read.
-        items = []
-        for octet in iterable:
-            item = octet & 0x7f
-            while octet & 0x80:
-                item *= pow(2,7)
-                octet = next(iterable)
-                item += octet & 0x7f
-            items.append(item)
+        items = super(OBJECT_IDENTIFIER, self).identifier()
 
         # Figure out the first identifier component. This is related
         # to that (X*40)+Y expression, and the other article where the
