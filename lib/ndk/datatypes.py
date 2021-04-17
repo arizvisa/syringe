@@ -599,7 +599,7 @@ class FILETIME(pstruct.type):
         return high * pow(2, 32) + low
 
     def datetime(self):
-        res, epoch = self.timestamp(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
+        res, epoch = self.timestamp(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc if hasattr(datetime, 'timezone') else None)
         delta = datetime.timedelta(microseconds=res * 1e-1)
         return epoch + delta
 
@@ -609,8 +609,8 @@ class FILETIME(pstruct.type):
     def set(self, *dt, **fields):
         cons = datetime.datetime
         if not fields:
-            epoch = cons(1601, 1, 1, tzinfo=datetime.timezone.utc)
-            dt, = dt or [cons.fromtimestamp(time.time(), datetime.timezone.utc)]
+            epoch = cons(1601, 1, 1, tzinfo=datetime.timezone.utc if hasattr(datetime, 'timezone') else None)
+            dt, = dt or [cons.fromtimestamp(time.time(), datetime.timezone.utc if hasattr(datetime, 'timezone') else None)]
             result = dt - epoch
 
             microseconds = math.trunc(result.total_seconds() * 1e6)
@@ -622,9 +622,10 @@ class FILETIME(pstruct.type):
         return super(FILETIME, self).set(**fields)
 
     def summary(self):
-        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone))) if hasattr(datetime, 'timezone') else None
         try:
-            res = self.datetime().astimezone(tzinfo)
+            dt = self.datetime()
+            res = dt.astimezone(tzinfo) if tzinfo else dt
         except (ValueError, OverflowError):
             return super(FILETIME, self).summary()
 
