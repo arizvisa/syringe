@@ -125,7 +125,7 @@ class Validity(ber.SEQUENCE):
         (Time, 'notAfter'),
     ]
 
-class UniqueIdentifier(ber.BITSTRING):
+class UniqueIdentifier(ber.BIT_STRING):
     pass
 
 class AlgorithmIdentifier(ber.SEQUENCE):
@@ -154,16 +154,16 @@ class SubjectPublicKeyInfo(ber.SEQUENCE):
         # FIXME: this won't always be an RSAPublicKey as it depends
         #        on the algorithm.
         t = dyn.clone(Packet, __object__=lambda self, _: RSAPublicKey)
-        return dyn.clone(ber.BITSTRING, _object_=t)
-    __subjectPublicKey.type = ber.BITSTRING.type
+        return dyn.clone(ber.BIT_STRING, _object_=t)
+    __subjectPublicKey.type = ber.BIT_STRING.type
 
     _fields_ = [
         (AlgorithmIdentifier, 'algorithm'),
-        #(ber.BITSTRING, 'subjectPublicKey'),
+        #(ber.BIT_STRING, 'subjectPublicKey'),
         (__subjectPublicKey, 'subjectPublicKey'),
     ]
 
-class KeyIdentifier(ber.OCTETSTRING):
+class KeyIdentifier(ber.OCTET_STRING):
     pass
 
 @Application.define
@@ -305,7 +305,7 @@ class GeneralName(ber.Constructed):
         (dyn.clone(Name, type=(Context, 4)), 'directoryName'),
         (dyn.clone(EDIPartyName, type=(Context, 5)), 'ediPartyName'),
         (dyn.clone(ber.IA5String, type=(Context, 6)), 'uniformResourceIdentifier'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 7)), 'iPAddress'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 7)), 'iPAddress'),
         (dyn.clone(OBJECT_IDENTIFIER, type=(Context, 8)), 'registeredID'),
     ]
 
@@ -331,7 +331,7 @@ class Extension(ber.SEQUENCE):
         # However, since that isn't implemented we'll just return a
         # packet so that we can force its decoding.
         return Packet
-    __extnValue.type = ber.OCTETSTRING.type
+    __extnValue.type = ber.OCTET_STRING.type
 
     _fields_ = [
         (OBJECT_IDENTIFIER, 'extnID'),
@@ -366,7 +366,7 @@ class Certificate(ber.SEQUENCE):
     _fields_ = [
         (TBSCertificate, 'tbsCertificate'),
         (AlgorithmIdentifier, 'signatureAlgorithm'),
-        (ber.BITSTRING, 'signatureValue'),
+        (ber.BIT_STRING, 'signatureValue'),
     ]
 
 class Packet(ber.Packet):

@@ -30,12 +30,12 @@ class MechTypeList(ber.SEQUENCE):
             return
         return
 
-class ContextFlags(ber.BITSTRING):
+class ContextFlags(ber.BIT_STRING):
     type = Context, 1
 
 class MechanismToken(ber.Constructed):
     _fields_ = [
-        (dyn.clone(nlmp.Message, type=ber.OCTETSTRING.type), 'token'),
+        (dyn.clone(nlmp.Message, type=ber.OCTET_STRING.type), 'token'),
     ]
 
 class NegTokenInit(ber.SEQUENCE):
@@ -43,15 +43,15 @@ class NegTokenInit(ber.SEQUENCE):
         (dyn.clone(MechTypeList, type=(Context, 0)), 'mechTypes'),
         (dyn.clone(ContextFlags, type=(Context, 1)), 'reqFlags'),
         (dyn.clone(MechanismToken, type=(Context, 2)), 'mechToken'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 3)), 'mechListMIC'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 3)), 'mechListMIC'),
     ]
 
-class GeneralString(ber.OCTETSTRING): pass
+class GeneralString(ber.OCTET_STRING): pass
 
 class NegHints(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(GeneralString, type=(Context, 0)), 'hintName'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'hintAddress'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'hintAddress'),
     ]
 
 class NegTokenInit2(ber.SEQUENCE):
@@ -60,7 +60,7 @@ class NegTokenInit2(ber.SEQUENCE):
         (dyn.clone(ContextFlags, type=(Context, 1)), 'reqFlags'),
         (dyn.clone(MechanismToken, type=(Context, 2)), 'mechToken'),
         (dyn.clone(NegHints, type=(Context, 3)), 'negHints'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 4)), 'mechListMIC'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 4)), 'mechListMIC'),
     ]
 
 class NegTokenInitContext(ber.SEQUENCE):
@@ -87,7 +87,7 @@ class NegTokenResp(ber.SEQUENCE):
         (dyn.clone(NegotiationStateCons, type=(Context, 0)), 'negState'),
         (dyn.clone(MechTypeList, type=(Context, 1)), 'supportedMech'),
         (dyn.clone(MechanismToken, type=(Context, 2)), 'responseToken'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 3)), 'mechListMIC'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 3)), 'mechListMIC'),
     ]
 
 class NegTokenRespContext(ber.SEQUENCE):

@@ -88,20 +88,20 @@ class ConnectInitial(ber.SEQUENCE):
     tag = 101
 
     _fields_ = [
-        (ber.OCTETSTRING, 'callingDomainSelector'),
-        (ber.OCTETSTRING, 'calledDomainSelector'),
+        (ber.OCTET_STRING, 'callingDomainSelector'),
+        (ber.OCTET_STRING, 'calledDomainSelector'),
         (ber.BOOLEAN, 'upwardFlag'),
         (DomainParameters, 'targetParameters'),
         (DomainParameters, 'minimumParameters'),
         (DomainParameters, 'maximumParameters'),
-        (ber.OCTETSTRING, 'userData'),
+        (ber.OCTET_STRING, 'userData'),
     ]
 
 @Protocol.Application.define
 class ConnectResponse(ber.SEQUENCE):
     tag = 102
 
-    class Result(ber.OCTETSTRING):
+    class Result(ber.OCTET_STRING):
         def str(self):
             res = self.cast(Result, width=8 * self.size())
             return res.str()
@@ -118,7 +118,7 @@ class ConnectResponse(ber.SEQUENCE):
         (Result, 'result'),
         (ber.INTEGER, 'calledConnectId'),
         (DomainParameters, 'domainParameters'),
-        (ber.OCTETSTRING, 'userData'),
+        (ber.OCTET_STRING, 'userData'),
     ]
 
 @Protocol.Application.define
@@ -135,7 +135,7 @@ class ConnectResult(ber.SEQUENCE):
     tag = 104
 
     _fields_ = [
-        (ber.OCTETSTRING, 'result'),
+        (ber.OCTET_STRING, 'result'),
     ]
 
 ### DomainMCSPDU
@@ -311,7 +311,7 @@ class RejectMCSPDUUltimatum(pstruct.type):
 
     _fields_ = [
         (gcc.LengthDeterminant, 'length'),
-        (lambda self: dyn.clone(ber.OCTETSTRING, length=self['length'].li.int()), 'initialOctets'),
+        (lambda self: dyn.clone(ber.OCTET_STRING, length=self['length'].li.int()), 'initialOctets'),
     ]
 
     def __field__(self, name):

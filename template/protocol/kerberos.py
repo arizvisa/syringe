@@ -84,7 +84,7 @@ class KerberosTime(GeneralizedTime):
 class HostAddress(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(Int32, type=(Context, 0)), 'addr-type'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'address'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'address'),
     ]
 
 class HostAddresses(ber.SEQUENCE):
@@ -93,7 +93,7 @@ class HostAddresses(ber.SEQUENCE):
             return HostAddress if klasstag == HostAddress.type else None
         return dyn.clone(Packet, __object__=lookup)
 
-class APOptions(ber.BITSTRING):
+class APOptions(ber.BIT_STRING):
     class options(pbinary.flags):
         _fields_ = [
             (29, 'reserved3-31'),
@@ -103,7 +103,7 @@ class APOptions(ber.BITSTRING):
         ]
     _object_ = options
 
-class TicketFlags(ber.BITSTRING):
+class TicketFlags(ber.BIT_STRING):
     class flags(pbinary.flags):
         _fields_ = [
             (18, 'reserved14-31'),
@@ -124,7 +124,7 @@ class TicketFlags(ber.BITSTRING):
         ]
     _object_ = flags
 
-class KDCOptions(ber.BITSTRING):
+class KDCOptions(ber.BIT_STRING):
     class flags(pbinary.flags):
         _fields_ = [
             (1, 'validate'),
@@ -192,7 +192,7 @@ class AuthorizationData(ber.SEQUENCE):
             ]
         _fields_ = [
             (dyn.clone(_ad_type, type=(Context, 0)), 'ad-type'),
-            (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'ad-data'), # FIXME: this should point to one of the post-defined AD_ types
+            (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'ad-data'), # FIXME: this should point to one of the post-defined AD_ types
         ]
     class _object_(Packet):
         def __object__(self, klasstag):
@@ -216,7 +216,7 @@ class KERB_CHECKSUM_(pint.enum, Int32):
 class Checksum(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(KERB_CHECKSUM_, type=(Context, 0)), 'cksumtype'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'checksum'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'checksum'),
     ]
 
 class AD_IF_RELEVANT(AuthorizationData):
@@ -242,7 +242,7 @@ class AD_MANDATORY_FOR_KDC(AuthorizationData):
 class EncryptionKey(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(Int32, type=(Context, 0)), 'keytype'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'keyvalue'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'keyvalue'),
     ]
 
 class KERB_ETYPE_(pint.enum, Int32):
@@ -266,7 +266,7 @@ class EncryptedData(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(KERB_ETYPE_, type=(Context, 0)), 'etype'),
         (dyn.clone(UInt32, type=(Context, 1)), 'kvno'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 'cipher'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 2)), 'cipher'),
     ]
 
 class CipherText(pstruct.type):
@@ -288,7 +288,7 @@ class TransitedEncoding(ber.SEQUENCE):
         ]
     _fields_ = [
         (dyn.clone(_tr_type, type=(Context, 0)), 'tr-type'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'contents'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'contents'),
     ]
 
 @Application.define
@@ -345,7 +345,7 @@ class PA_ENC_TIMESTAMP(EncryptedData):
 class ETYPE_INFO_ENTRY(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(Int32, type=(Context, 0)), 'etype'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'salt'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'salt'),
     ]
 
 class ETYPE_INFO(ber.SEQUENCE):
@@ -358,7 +358,7 @@ class ETYPE_INFO2_ENTRY(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(Int32, type=(Context, 0)), 'etype'),
         (dyn.clone(KerberosString, type=(Context, 1)), 'salt'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 's2kparams'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 2)), 's2kparams'),
     ]
 
 class ETYPE_INFO2(ber.SEQUENCE):
@@ -376,7 +376,7 @@ class FX_FAST_ARMOR_(pint.enum, Int32):
 class KrbFastArmor(ber.SEQUENCE):
     _fields_ = [
         (dyn.clone(FX_FAST_ARMOR_, type=(Context, 0)), 'armor-type'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'armor-value'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'armor-value'),
     ]
 
 class PA_DATA(ber.SEQUENCE):
@@ -446,10 +446,10 @@ class PA_DATA(ber.SEQUENCE):
         ]
     _fields_ = [
         (dyn.clone(_padata_type, type=(Context, 1)), 'padata-type'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 2)), 'padata-value'),    # FIXME: this should point to one of the prior types
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 2)), 'padata-value'),    # FIXME: this should point to one of the prior types
     ]
 
-class KerberosFlags(ber.BITSTRING):
+class KerberosFlags(ber.BIT_STRING):
     pass
 
 class EncryptionType(ber.SEQUENCE):
@@ -579,7 +579,7 @@ class EncAPRepPart(ber.SEQUENCE):
 
 class KRB_SAFE_BODY(ber.SEQUENCE):
     _fields_ = [
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'user-data'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 0)), 'user-data'),
         (dyn.clone(KerberosTime, type=(Context, 1)), 'timestamp'),
         (dyn.clone(Microseconds, type=(Context, 2)), 'usec'),
         (dyn.clone(UInt32, type=(Context, 3)), 'seq-number'),
@@ -610,7 +610,7 @@ class KRB_PRIV(ber.SEQUENCE):
 class EncKrbPrivPart(ber.SEQUENCE):
     tag = 28
     _fields_ = [
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'user-data'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 0)), 'user-data'),
         (dyn.clone(KerberosTime, type=(Context, 1)), 'timestamp'),
         (dyn.clone(Microseconds, type=(Context, 2)), 'usec'),
         (dyn.clone(UInt32, type=(Context, 3)), 'seq-number'),
@@ -755,7 +755,7 @@ class KRB_ERROR(ber.SEQUENCE):
         (dyn.clone(Realm, type=(Context, 9)), 'realm'),
         (dyn.clone(PrincipalName, type=(Context, 10)), 'sname'),
         (dyn.clone(KerberosString, type=(Context, 11)), 'e-text'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 12)), 'e-data'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 12)), 'e-data'),
     ]
 
 class METHOD_DATA(ber.SEQUENCE):
@@ -765,7 +765,7 @@ class METHOD_DATA(ber.SEQUENCE):
         ]
     _fields_ = [
         (dyn.clone(_method_type, type=(Context, 0)), 'method-type'),
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 1)), 'method-value'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 1)), 'method-value'),
     ]
 
 if __name__ == '__main__':

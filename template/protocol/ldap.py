@@ -35,10 +35,10 @@ def SEQUENCEOF(t, **attrs):
     return dyn.clone(ber.SEQUENCE, **attrs)
 
 ### primitives
-class LDAPString(ber.OCTETSTRING):
+class LDAPString(ber.OCTET_STRING):
     pass
 
-class LDAPOID(ber.OCTETSTRING):
+class LDAPOID(ber.OCTET_STRING):
     pass
 
 class LDAPDN(LDAPString):
@@ -50,10 +50,10 @@ class RelativeLDAPDN(LDAPString):
 class AttributeDescription(LDAPString):
     pass
 
-class AttributeValue(ber.OCTETSTRING):
+class AttributeValue(ber.OCTET_STRING):
     pass
 
-class AssertionValue(ber.OCTETSTRING):
+class AssertionValue(ber.OCTET_STRING):
     pass
 
 class AttributeValueAssertion(ber.SEQUENCE):
@@ -138,7 +138,7 @@ class Control(ber.SEQUENCE):
     _fields_ = [
         (LDAPOID, 'controlType'),
         (ber.BOOLEAN, 'criticality'),
-        (OPTIONAL(ber.OCTETSTRING), 'controlValue'),
+        (OPTIONAL(ber.OCTET_STRING), 'controlValue'),
     ]
 
 class Controls(SEQUENCEOF(Control)):
@@ -147,12 +147,12 @@ class Controls(SEQUENCEOF(Control)):
 class SaslCredentials(ber.SEQUENCE):
     _fields_ = [
         (LDAPString, 'mechanism'),
-        (OPTIONAL(ber.OCTETSTRING), 'credentials'),
+        (OPTIONAL(ber.OCTET_STRING), 'credentials'),
     ]
 
 class AuthenticationChoice(ber.Constructed):
     _fields_ = [
-        (dyn.clone(ber.OCTETSTRING, type=(Context, 0)), 'simple'),
+        (dyn.clone(ber.OCTET_STRING, type=(Context, 0)), 'simple'),
         (dyn.clone(SaslCredentials, type=(Context, 3)), 'sasl'),
     ]
 
@@ -169,7 +169,7 @@ class BindRequest(ber.SEQUENCE):
 class BindResponse(LDAPResult):
     tag = 1
     _fields_ = LDAPResult._fields_ + [
-        (OPTIONAL(ber.OCTETSTRING, type=(Context, 7)), 'serverSaslCreds'),
+        (OPTIONAL(ber.OCTET_STRING, type=(Context, 7)), 'serverSaslCreds'),
     ]
 
 @Application.define
@@ -360,7 +360,7 @@ class ExtendedRequest(ber.SEQUENCE):
     tag = 23
     _fields_ = [
         (dyn.clone(LDAPOID, type=(Context, 0)), 'requestName'),
-        (OPTIONAL(ber.OCTETSTRING, type=(Context, 1)), 'requestValue'),
+        (OPTIONAL(ber.OCTET_STRING, type=(Context, 1)), 'requestValue'),
     ]
 
 @Application.define
@@ -368,7 +368,7 @@ class ExtendedResponse(LDAPResult):
     tag = 24
     _fields_ = LDAPResult._fields_ + [
         (OPTIONAL(LDAPOID, type=(Context, 10)), 'responseName'),
-        (OPTIONAL(ber.OCTETSTRING, type=(Context, 11)), 'responseValue'),
+        (OPTIONAL(ber.OCTET_STRING, type=(Context, 11)), 'responseValue'),
     ]
 
 @Application.define
@@ -376,7 +376,7 @@ class IntermediateResponse(ber.SEQUENCE):
     tag = 25
     _fields_ = [
         (OPTIONAL(LDAPOID, type=(Context, 0)), 'responseName'),
-        (OPTIONAL(ber.OCTETSTRING, type=(Context, 1)), 'responseValue'),
+        (OPTIONAL(ber.OCTET_STRING, type=(Context, 1)), 'responseValue'),
     ]
 
 class Op(ber.Constructed):

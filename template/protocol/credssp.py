@@ -14,7 +14,7 @@ class TSVersion(ber.SEQUENCE):
 class NegoToken(ber.SEQUENCE):
     type = Context.Class, 0
     _fields_ = [
-        (dyn.clone(nlmp.Message, type=ber.OCTETSTRING.type), 'negoMessage'),
+        (dyn.clone(nlmp.Message, type=ber.OCTET_STRING.type), 'negoMessage'),
     ]
 
 class NegoDataSequenceOfSequence(ber.SEQUENCE):
@@ -36,13 +36,13 @@ class NegoData(ber.SEQUENCE):
 class AuthInfo(ber.SEQUENCE):
     tag = 2
     _fields_ = [
-        (ber.OCTETSTRING, 'Credentials'),
+        (ber.OCTET_STRING, 'Credentials'),
     ]
 
 class PubKeyAuth(ber.SEQUENCE):
     tag = 3
     _fields_ = [
-        (ber.OCTETSTRING, 'pubKeyAuth'),
+        (ber.OCTET_STRING, 'pubKeyAuth'),
     ]
 
 class ErrorCode(ber.INTEGER):
@@ -51,7 +51,7 @@ class ErrorCode(ber.INTEGER):
 class ClientNonce(ber.SEQUENCE):
     tag = 5
     _fields_ = [
-        (ber.OCTETSTRING, 'clientNonce'),
+        (ber.OCTET_STRING, 'clientNonce'),
     ]
 
 class TSRequest(ber.SEQUENCE):
@@ -66,32 +66,32 @@ class TSRequest(ber.SEQUENCE):
 
 class TSPasswordCreds(ber.SEQUENCE):
     _fields_ = [
-        (0, ber.OCTETSTRING, 'domainName'),
-        (1, ber.OCTETSTRING, 'userName'),
-        (2, ber.OCTETSTRING, 'password'),
+        (0, ber.OCTET_STRING, 'domainName'),
+        (1, ber.OCTET_STRING, 'userName'),
+        (2, ber.OCTET_STRING, 'password'),
     ]
 
 class TSCspDataDetail(ber.SEQUENCE):
     _fields_ = [
         (0, ber.INTEGER, 'keySpec'),
-        (1, ber.OCTETSTRING, 'cardName'),
-        (2, ber.OCTETSTRING, 'readerName'),
-        (3, ber.OCTETSTRING, 'containerName'),
-        (4, ber.OCTETSTRING, 'cspName'),
+        (1, ber.OCTET_STRING, 'cardName'),
+        (2, ber.OCTET_STRING, 'readerName'),
+        (3, ber.OCTET_STRING, 'containerName'),
+        (4, ber.OCTET_STRING, 'cspName'),
     ]
 
 class TSSmartCardCreds(ber.SEQUENCE):
     _fields_ = [
-        (0, ber.OCTETSTRING, 'pin'),
+        (0, ber.OCTET_STRING, 'pin'),
         (1, TSCspDataDetail, 'cspData'),
-        (2, ber.OCTETSTRING, 'userHint'),
-        (3, ber.OCTETSTRING, 'domainHint'),
+        (2, ber.OCTET_STRING, 'userHint'),
+        (3, ber.OCTET_STRING, 'domainHint'),
     ]
 
 class TSRemoteGuardPackageCred(ber.SEQUENCE):
     _fields_ = [
-        (0, ber.OCTETSTRING, 'packageName'),
-        (1, ber.OCTETSTRING, 'credBuffer'),
+        (0, ber.OCTET_STRING, 'packageName'),
+        (1, ber.OCTET_STRING, 'credBuffer'),
     ]
 
 class TSRemoteGuardCreds(ber.SEQUENCE):
@@ -110,7 +110,7 @@ class TSRemoteGuardCreds(ber.SEQUENCE):
 class TSCredentials(ber.SEQUENCE):
     _fields_ = [
         (0, ber.INTEGER, 'credType'),
-        (1, ber.OCTETSTRING, 'credentials'),
+        (1, ber.OCTET_STRING, 'credentials'),
     ]
 
 class Packet(ber.Packet):
@@ -188,7 +188,7 @@ if __name__ == '__main__':
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
         assert(z['value']['version']['value'].serialize() == tsversion.serialize())
 
-        nlmsg = z['value']['negoData']['value']['data']['value']['messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
+        nlmsg = z['value']['negoData']['value']['data']['value']['messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTET_STRING.tag))
         negotoken = credssp.NegoToken().alloc(negoMessage=nlmsg)
         negodata_seq_seq = credssp.NegoDataSequenceOfSequence().alloc([credssp.Packet().alloc(Value=negotoken)])
         negodata_seq = credssp.NegoDataSequence().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])
@@ -210,7 +210,7 @@ if __name__ == '__main__':
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
         assert(z['value'][0]['value'].serialize() == tsversion.serialize())
 
-        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
+        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTET_STRING.tag))
         negotoken = credssp.NegoToken().alloc(negoMessage=nlmsg)
         negodata_seq_seq = credssp.NegoDataSequenceOfSequence().alloc([credssp.Packet().alloc(Value=negotoken)])
         negodata_seq = credssp.NegoDataSequence().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])
@@ -232,7 +232,7 @@ if __name__ == '__main__':
         tsversion = credssp.TSVersion().alloc(Version=ber.INTEGER(length=1).set(6))
         assert(z['value'][0]['value'].serialize() == tsversion.serialize())
 
-        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTETSTRING.tag))
+        nlmsg = z['value']['negoData']['value']['Data']['value']['Messages']['value']['negoToken']['value']['negoMessage']['value'].copy(type=(ber.Protocol.Universal.Class, ber.OCTET_STRING.tag))
         negotoken = credssp.NegoToken().alloc(negoMessage=nlmsg)
         negodata_seq_seq = credssp.NegoDataSequenceOfSequence().alloc([credssp.Packet().alloc(Value=negotoken)])
         negodata_seq = credssp.NegoDataSequence().alloc([credssp.Packet().alloc(Value=negodata_seq_seq)])

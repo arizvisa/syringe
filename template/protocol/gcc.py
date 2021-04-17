@@ -347,7 +347,7 @@ class H221NonStandardIdentifier(pstruct.type):
     type = 1
     _fields_ = [
         (LengthDeterminant, 'length'),
-        (lambda self: dyn.clone(ber.OCTETSTRING, length=self['length'].li.int() + 4), 'h221NonStandard'),
+        (lambda self: dyn.clone(ber.OCTET_STRING, length=self['length'].li.int() + 4), 'h221NonStandard'),
     ]
 
     def alloc(self, **fields):
