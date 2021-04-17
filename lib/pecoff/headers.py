@@ -122,11 +122,11 @@ class TimeDateStamp(uint32):
         delta = datetime.timedelta(seconds=res)
         return epoch + delta
     def details(self):
-        tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
         res = self.datetime().astimezone(tzinfo)
         return res.isoformat()
     def summary(self):
-        tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
         res = self.datetime().astimezone(tzinfo)
         return '({:#0{:d}x}) {!s}'.format(self.int(), 2 + 2 * self.size(), res)
 

@@ -622,7 +622,7 @@ class FILETIME(pstruct.type):
         return super(FILETIME, self).set(**fields)
 
     def summary(self):
-        tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+        tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
         try:
             res = self.datetime().astimezone(tzinfo)
         except (ValueError, OverflowError):
