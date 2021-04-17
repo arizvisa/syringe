@@ -564,7 +564,7 @@ class Element(pstruct.type):
             return res.typename()
         return res.__name__
 
-    def __object__(self, klasstag):
+    def __protocol_lookup__(self, klasstag):
         protocol, (klass, tag) = self.Protocol, klasstag
 
         # First look up the type that we're going to need by grabbing the protocol,
@@ -580,13 +580,16 @@ class Element(pstruct.type):
             return None
         return result
 
+    def __object__(self, klasstag):
+        return self.__protocol_lookup__(klasstag)
+
     def __Value(self):
         type, length = (self[fld].li for fld in ['Type', 'Length'])
         indefiniteQ, (klass, constructedQ, tag) = length.IndefiniteQ(), (type[fld] for fld in ['Class', 'Constructed', 'Tag'])
 
         # First grab the type that our Class and Tag should return.
         klasstag = klass, tag.int()
-        t = self.__object__(klasstag)
+        t = self.__object__(klasstag) or self.__protocol_lookup__(klasstag)
 
         # If one wasn't found, then we need to figure out whether we're
         # returning an unknown constructed or an unknown primitive.
