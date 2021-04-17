@@ -167,7 +167,7 @@ class gmt_unix_time(uint32):
         res = math.trunc(delta.total_seconds())
         return super(gmt_unix_time, self).set(res, **fields)
     def summary(self):
-        dt, tzinfo = self.datetime(), datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+        dt, tzinfo = self.datetime(), datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
         return "({:#0{:d}x}) {:s}".format(self.int(), 2 + 2 * self.size(), dt.astimezone(tzinfo).isoformat())
 
 class Random(pstruct.type):

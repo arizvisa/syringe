@@ -165,7 +165,7 @@ class NTFS_Attributes(pstruct.type):
             res, epoch = self.int(), datetime.datetime(1601, 1, 1, tzinfo=datetime.timezone.utc)
             return epoch + datetime.timedelta(microseconds=res * 1e-1)
         def summary(self):
-            tzinfo = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+            tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
             res = self.datetime().astimezone(tzinfo)
             return res.isoformat()
 
