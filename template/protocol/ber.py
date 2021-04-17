@@ -486,6 +486,7 @@ class OID(ptype.type):
                     integral //= pow(2, 7)
                 return
             yield 0
+
         # Iterate through the digits that we were given, and continue to
         # break them into 7-bit components. That way we can append them
         # to our result list of octets.
@@ -502,6 +503,9 @@ class OID(ptype.type):
         # bytes that we can use to set our instance using the super method.
         data = bytearray(res)
         return super(OID, self).set(bytes(data))
+
+class CHOICE(Constructed):
+    '''FIXME: this is a placeholder, but should probably be integrated into this template'''
 
 ### Element structure
 class Protocol(ptype.definition):
@@ -796,19 +800,19 @@ class INTEGER(pint.sint_t):
     tag = 0x02
 
 @Universal.define
-class BITSTRING(pstruct.type):
+class BIT_STRING(pstruct.type):
     tag = 0x03
     _object_ = Block
     def __string(self):
         cls, t = self.__class__, self._object_
-        if ptypes.utils.callable_eq(cls.blocksize, BITSTRING.blocksize):
+        if ptypes.utils.callable_eq(cls.blocksize, BIT_STRING.blocksize):
             return t
         total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused'])
         return dyn.clone(t, blocksize=lambda _, cb=max(0, total - res): cb)
 
     def __padding(self):
         cls = self.__class__
-        if ptypes.utils.callable_eq(cls.blocksize, BITSTRING.blocksize):
+        if ptypes.utils.callable_eq(cls.blocksize, BIT_STRING.blocksize):
             return 0
         total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused', 'string'])
         return dyn.block(max(0, total - res))
@@ -829,7 +833,7 @@ class BITSTRING(pstruct.type):
         return '...'
 
 @Universal.define
-class OCTETSTRING(Block):
+class OCTET_STRING(Block):
     tag = 0x04
     def summary(self):
         octets = bytearray(self.serialize())
@@ -877,6 +881,7 @@ class OBJECT_IDENTIFIER(OID):
         # serialize, so we can just assign some empty bytes right here.
         if Y is None:
             result = b''
+
         # Otherwise, we'll want to prefix the iterable we were using with
         # the item we calculated for the first two octets.
         else:
@@ -901,28 +906,13 @@ class OBJECT_IDENTIFIER(OID):
         # left, then we end up returning just the single identifier.
         return tuple([res] + ([item - res * 40] if len(items) else []) + [subIdentifier for subIdentifier in items[1:]])
 
-    def str(self):
-        res = self.identifier()
-        return '.'.join(map("{:d}".format, res))
-
-    def description(self):
-        Fidentifier = lambda oid: tuple((int(item, 16) for item in oid.split('.')) if isinstance(oid, six.string_types) else oid)
-        descriptions = {Fidentifier(oid) : name for name, oid in getattr(self, '_values_', [])}
-        return descriptions.get(self.identifier(), None)
-
-    def summary(self):
-        oid, data, description = self.str(), self.serialize(), self.description()
-        res = super(OBJECT_IDENTIFIER, self).summary()
-        if description is None:
-            return '{:s} : {:s}'.format(oid, res)
-        return '{:s} ({:s}) : {:s}'.format(description, oid, res)
-
 @Universal.define
 class EXTERNAL(ptype.block):
     tag = 0x08
 
 @Universal.define
 class REAL(ptype.block):
+    '''FIXME: Section 8.5 of X.690 explains how to decode these numerical types.'''
     tag = 0x09
 
 @Universal.define
@@ -934,6 +924,35 @@ class UTF8String(String):
     tag = 0x0c
     class _object_(pstr.char_t):
         encoding = codecs.lookup('utf-8')
+
+@Universal.define
+class RELATIVE_OID(OID):
+    tag = 0x0d
+    def set(self, string):
+
+        # If our input is a string, then we need to convert it into a list
+        # of identifier components so we can encode it.
+        if isinstance(string, six.string_types):
+
+            # Check if our string is in the description list stored in the
+            # _values_ attribute.
+            if string in {description for description, oid in getattr(self, '_values_', [])}:
+                res = next(oid for description, oid in self._values_ if description == string)
+                return self.set(res[string])
+
+            # If it isn't, then this should be a '.'-delimited list that
+            # we need to split up into its integral components.
+            iterable = (int(item, 10) if item else 0 for item in string.split('.'))
+            result = super(RELATIVE_OID, self).set(iterable)
+
+        # If it's not a string, then we can just pass it to our super class.
+        else:
+            result = super(RELATIVE_OID, self).set(string)
+        return result
+
+@Universal.define
+class TIME(UTF8String):
+    tag = 0x0e
 
 @Universal.define
 class SEQUENCE(Constructed):
@@ -956,6 +975,10 @@ class T61String(String):
     tag = 0x14
 
 @Universal.define
+class VideotexString(String):
+    tag = 0x15
+
+@Universal.define
 class IA5String(String):
     tag = 0x16
 
@@ -964,7 +987,15 @@ class UTCTime(String):
     tag = 0x17
 
 @Universal.define
-class VisibleString(ptype.block):
+class GeneralizedTime(String):
+    tag = 0x18
+
+@Universal.define
+class GraphicString(String):
+    tag = 0x19
+
+@Universal.define
+class VisibleString(String):
     tag = 0x1a
 
 @Universal.define
@@ -982,6 +1013,30 @@ class CHARACTER_STRING(String):
 @Universal.define
 class BMPString(String):
     tag = 0x1e
+
+@Universal.define
+class DATE(UTF8String):
+    tag = 0x1f
+
+@Universal.define
+class TIME_OF_DAY(UTF8String):
+    tag = 0x20
+
+@Universal.define
+class DATE_TIME(UTF8String):
+    tag = 0x21
+
+@Universal.define
+class DURATION(UTF8String):
+    tag = 0x22
+
+@Universal.define
+class OID_IRI(UTF8String):
+    tag = 0x23
+
+@Universal.define
+class RELATIVE_OID_IRI(UTF8String):
+    tag = 0x24
 
 ### End of Universal definitions
 
@@ -1185,7 +1240,7 @@ if __name__ == '__main__':
         z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
         assert(z.size() == z.source.size())
         assert(z['length'].int() == 7)
-        assert(isinstance(z['value'], ber.BITSTRING))
+        assert(isinstance(z['value'], ber.BIT_STRING))
         assert(z['value'].serialize() == fromhex('040a3b5f291cd0'))
     test_x690_spec_0()
 
@@ -1197,7 +1252,7 @@ if __name__ == '__main__':
         assert(z['length'].IndefiniteQ())
         assert(len(z['value']) == 2)
         assert(isinstance(z['value'][-1]['value'], ber.EOC))
-        assert(isinstance(z['value'][0]['value'], ber.BITSTRING))
+        assert(isinstance(z['value'][0]['value'], ber.BIT_STRING))
         assert(z['value'][0]['value'].serialize() == b'\x04\x5f\x29\x1c\xd0')
     test_x690_spec_1()
 
@@ -1258,7 +1313,7 @@ if __name__ == '__main__':
         assert(z.size() == z.source.size())
         assert(z['length'].int() == 0)
         assert(z['value'].size() == 0)
-        assert(isinstance(z['value'], ber.BITSTRING))
+        assert(isinstance(z['value'], ber.BIT_STRING))
     test_empty_bit_prim()
 
     def test_cons_octetbit():
@@ -1268,7 +1323,7 @@ if __name__ == '__main__':
         assert(z['length'].IndefiniteQ())
         assert(z['value'].type == (0, 4))
         assert(isinstance(z['value'][-1]['value'], ber.EOC))
-        assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
+        assert(all(isinstance(item['value'], ber.BIT_STRING) for item in z['value'][:-1]))
         assert([item['value'].serialize() for item in z['value'][:-1]] == [fromhex('000a3b'), fromhex('045f291cd0')])
     test_cons_octetbit()
 
@@ -1281,7 +1336,7 @@ if __name__ == '__main__':
         assert(z['length'].IndefiniteQ())
         assert(z['value'].type == (0, 4))
         assert(len(z['value']) == 2)
-        assert(all(isinstance(item['value'], ber.OCTETSTRING) for item in z['value']))
+        assert(all(isinstance(item['value'], ber.OCTET_STRING) for item in z['value']))
     # This testcase is supposed to generate a non-critical LoadError.
     #test_indef_incomplete()
 
@@ -1311,7 +1366,7 @@ if __name__ == '__main__':
         assert(z.size() == z.source.size())
         assert(z['length'].int() == z['value'].size())
         assert(len(z['value']) == 4)
-        assert(all(isinstance(item['value'], t) for item, t in zip(z['value'], [ber.BITSTRING, ber.EOC, ber.BITSTRING, ber.BITSTRING])))
+        assert(all(isinstance(item['value'], t) for item, t in zip(z['value'], [ber.BIT_STRING, ber.EOC, ber.BIT_STRING, ber.BIT_STRING])))
         assert([item['value'].serialize() for item in z['value']] == [b'\0\1', b'', b'\0\1', b'\4\x0F'])
     test_consdef_bit()
 
@@ -1321,7 +1376,7 @@ if __name__ == '__main__':
         assert(z.size() == z.source.size())
         assert(z['length'].IndefiniteQ())
         assert(isinstance(z['value'][-1]['value'], ber.EOC))
-        assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
+        assert(all(isinstance(item['value'], ber.BIT_STRING) for item in z['value'][:-1]))
         assert(z['value'][-1]['value'].size() == 0)
     test_consindef_bit()
 
@@ -1331,7 +1386,7 @@ if __name__ == '__main__':
         assert(z.size() == z.source.size())
         assert(z['length'].IndefiniteQ())
         assert(isinstance(z['value'][-1]['value'], ber.EOC))
-        assert(all(isinstance(item['value'], ber.BITSTRING) for item in z['value'][:-1]))
+        assert(all(isinstance(item['value'], ber.BIT_STRING) for item in z['value'][:-1]))
         assert(z['value'][-1]['value'].size() == 1)
     test_consindef_bit_nonzeroeoc()
 
@@ -1642,3 +1697,26 @@ if __name__ == '__main__':
         res = ber.OBJECT_IDENTIFIER().set('1.')
         assert(res.serialize() == expected.serialize())
     test_object_identifier_set_26()
+
+    def test_relative_object_identifier_27():
+        data = '0D04C27B0302'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.RELATIVE_OID))
+        assert(z['value'].size() == 4)
+
+        expected = (8571,3,2)
+        assert(z['value'].identifier() == expected)
+    test_relative_object_identifier_27()
+
+    def test_relative_object_identifier_set_28():
+        data = '0D04C27B0302'.replace(' ', '')
+        z = ber.Packet(source=ptypes.prov.bytes(fromhex(data))).l
+        assert(z.serialize() == z.source.value)
+        assert(isinstance(z['value'], ber.RELATIVE_OID))
+        assert(z['value'].size() == 4)
+
+        expected = z['value']
+        res = ber.RELATIVE_OID().set([8571,3,2])
+        assert(res.serialize() == expected.serialize())
+    test_relative_object_identifier_set_28()
