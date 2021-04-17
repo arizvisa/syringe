@@ -421,6 +421,18 @@ class Block(parray.block):
     def isTerminator(self, value):
         return False
 
+    def alloc(self, *values, **attrs):
+        if not values:
+            return super(Block, self).alloc(*values, **attrs)
+        value, = values
+        return super(Block, self).alloc(bytearray(value) if isinstance(value, bytes) else value, **attrs)
+
+    def __setvalue__(self, *values, **attrs):
+        if not values:
+            return super(Block, self).__setvalue__(*values, **attrs)
+        value, = values
+        return super(Block, self).__setvalue__(bytearray(value) if isinstance(value, bytes) else value, **attrs)
+
     def summary(self):
         octets = bytearray(self.serialize())
         res = str().join(map('{:02X}'.format, octets))
