@@ -828,7 +828,7 @@ class BIT_STRING(pstruct.type):
     def __padding(self):
         cls = self.__class__
         if ptypes.utils.callable_eq(cls.blocksize, BIT_STRING.blocksize):
-            return 0
+            return dyn.block(0)
         total, res = self.blocksize(), sum(self[fld].li.size() for fld in ['unused', 'string'])
         return dyn.block(max(0, total - res))
 
