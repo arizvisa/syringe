@@ -136,7 +136,6 @@ class RMRA(AtomList): type = b'rmda'
 @AtomType.define
 class MDAT(ptype.block):
     type = b'mdat'
-    length = property(fget=lambda self: self.blocksize())
 
 ## empty atoms
 @AtomType.define
