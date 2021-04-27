@@ -11,11 +11,13 @@ class Atom(pstruct.type):
         # Load all our size fields so we can figure out the size that
         # we're supposed to be using.
         res = sum(self[fld].li.size() for fld in ['size', 'type', 'extended_size'])
-        expected = self.Size() - res
+        expected = self.Size() - res if self.Size() > res else res
         
         # Figure out the type that we're supposed to return and return it.
         t = AtomType.withdefault(type, type=type, __name__="Unknown<{!s}>".format(typename), length=expected)
-        return dyn.clone(t, blocksize=lambda _, cb=expected: cb) if issubclass(t, parray.block) else t
+        if issubclass(t, parray.block):
+            return dyn.clone(t, blocksize=lambda _, cb=expected: cb)
+        return t
 
     def __missing(self):
         res = sum(self[fld].li.size() for fld in ['size', 'type', 'extended_size'])
@@ -51,12 +53,13 @@ class Atom(pstruct.type):
         return res
 
     def summary(self):
-        if not self.initializedQ() and self.v is None:
-            return "[%x] %s UNINITIALIZED expected:0x%x keys:(%s)"%( self.getoffset(), self.name(), 0, ','.join(self.keys()))
+        if not self.initializedQ() and self.value is None:
+            return "UNINITIALIZED expected:{:#x} keys:({:s})".format(0, ','.join(self.keys()))
+
         discrepancy = self.size() != self.blocksize()
         if discrepancy:
-            return "%s ERR size:0x%x expected:0x%x keys:(%s)"%( self['type'].serialize().decode('latin1'), self.size(), self.getsize(), ','.join(self.keys()))
-        return "%s size:0x%x (%s)"%( self['type'].serialize().decode('latin1'), self.getsize(), ','.join(self.keys()))
+            return "{!s} ERR size:{:#x} expected:{:#x} keys:({:s})".format(self['type'].serialize().decode('latin1'), self.size(), self.Size(), ','.join(self.keys()))
+        return "{!s} size:{:#x} ({:s})".format(self['type'].serialize().decode('latin1'), self.Size(), ','.join(self.keys()))
 
     def alloc(self, **fields):
         res = super(Atom, self).alloc(**fields)
@@ -78,7 +81,7 @@ class AtomList(parray.block):
 
     def summary(self):
         types = ','.join([x['type'].serialize().decode('latin1') for x in self])
-        return ' '.join(['atoms[%d] ->'% len(self), types])
+        return ' '.join(["atoms[{:d}] ->".format(len(self)), types])
 
 ## atom templates
 class EntriesAtom(pstruct.type):
