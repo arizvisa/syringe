@@ -7,8 +7,8 @@ class pQTType(pQTInt):
     def summary(self):
         octets = bytearray(self.serialize())
         if self.value:
-            return "%s '%c%c%c%c' (%08x)"% (self.name(), octets[0], octets[1], octets[2], octets[3], self.int() )
-        return "%s uninitialized"% (self.name())
+            return "{!r} ({:#0{:d}x})".format(bytes(octets).decode('latin1'), self.int(), 2 + 2 * self.size())
+        return 'uninitialized'
 
     def __eq__(self, other):
         octets = bytearray(self.serialize())
