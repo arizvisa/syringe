@@ -45,7 +45,9 @@ class Atom(pstruct.type):
             if container:
                 position = self.getoffset() - container.getoffset()
                 return max(0, container.Size() - position)
-            return max(0, self.source.size() - self.getoffset())
+            if isinstance(self.source, ptypes.prov.bounded):
+                return max(0, self.source.size() - self.getoffset())
+            return res
         return res
 
     def summary(self):
