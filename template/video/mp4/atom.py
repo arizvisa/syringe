@@ -92,59 +92,59 @@ class EntriesAtom(pstruct.type):
 
 ## container atoms
 @AtomType.define
-class MOOV(AtomList): type = 'moov'
+class MOOV(AtomList): type = b'moov'
 
 @AtomType.define
-class TRAK(AtomList): type = 'trak'
+class TRAK(AtomList): type = b'trak'
 
 @AtomType.define
-class EDTS(AtomList): type = 'edts'
+class EDTS(AtomList): type = b'edts'
 
 @AtomType.define
-class MDIA(AtomList): type = 'mdia'
+class MDIA(AtomList): type = b'mdia'
 
 @AtomType.define
-class MINF(AtomList): type = 'minf'
+class MINF(AtomList): type = b'minf'
 
 @AtomType.define
-class DINF(AtomList): type = 'dinf'
+class DINF(AtomList): type = b'dinf'
 
 @AtomType.define
-class UDTA(Atom): type = 'udta'
+class UDTA(Atom): type = b'udta'
 
 @AtomType.define
-class STBL(AtomList): type = 'stbl'
+class STBL(AtomList): type = b'stbl'
 
 @AtomType.define
-class GMHD(AtomList): type = 'gmhd'
+class GMHD(AtomList): type = b'gmhd'
 
 @AtomType.define
-class META(AtomList): type = 'meta'
+class META(AtomList): type = b'meta'
 
 @AtomType.define
-class RMRA(AtomList): type = 'rmra'
+class RMRA(AtomList): type = b'rmra'
 
 @AtomType.define
-class RMRA(AtomList): type = 'rmda'
+class RMRA(AtomList): type = b'rmda'
 
 #@AtomType.define
-#class MDAT(AtomList): type = 'mdat'  # XXX: sometimes this is not a container
+#class MDAT(AtomList): type = b'mdat'  # XXX: sometimes this is not a container
 
 @AtomType.define
 class MDAT(ptype.block):
-    type = 'mdat'
+    type = b'mdat'
     length = property(fget=lambda self: self.blocksize())
 
 ## empty atoms
 @AtomType.define
 class WIDE(pstruct.type):
-    type = 'wide'
+    type = b'wide'
     _fields_ = []
 
 ## WLOC
 @AtomType.define
 class WLOC(pstruct.type):
-    type = 'WLOC'
+    type = b'WLOC'
     _fields_ = [
         (pint.uint16_t, 'X'),
         (pint.uint16_t, 'Y')
@@ -153,7 +153,7 @@ class WLOC(pstruct.type):
 ## ftyp
 @AtomType.define
 class FileType(pstruct.type):
-    type = 'ftyp'
+    type = b'ftyp'
     class __Compatible_Brands(parray.block):
         _object_ = pQTInt
         def blocksize(self):
@@ -168,7 +168,7 @@ class FileType(pstruct.type):
 
 @AtomType.define
 class MVHD(pstruct.type):
-    type = 'mvhd'
+    type = b'mvhd'
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
@@ -191,7 +191,7 @@ class MVHD(pstruct.type):
 
 @AtomType.define
 class TKHD(pstruct.type):
-    type = 'tkhd'
+    type = b'tkhd'
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
@@ -212,7 +212,7 @@ class TKHD(pstruct.type):
 
 @AtomType.define
 class ELST(EntriesAtom):
-    type = 'elst'
+    type = b'elst'
 
     class Entry(pstruct.type):
         _fields_ = [
@@ -223,7 +223,7 @@ class ELST(EntriesAtom):
 
 @AtomType.define
 class MDHD(pstruct.type):
-    type = 'mdhd'
+    type = b'mdhd'
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
@@ -237,7 +237,7 @@ class MDHD(pstruct.type):
 
 @AtomType.define
 class HDLR(pstruct.type):
-    type = 'hdlr'
+    type = b'hdlr'
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
@@ -292,7 +292,7 @@ class MediaVideo_v1(pstruct.type):   #XXX: might need to be renamed
 
 # FIXME: this isn't decoding mpeg audio yet.
 class esds(pstruct.type):
-    type = 'esds'
+    type = b'esds'
     _fields_ = [
         (pint.uint32_t, 'Version'),
         (ptype.type, 'Elementary Stream Descriptor'),
@@ -330,7 +330,7 @@ class MediaAudio_v2(pstruct.type):
 @AtomType.define
 class stsd(EntriesAtom):
     '''Sample description atom'''
-    type = 'stsd'
+    type = b'stsd'
 
     class Audio(pstruct.type):
         _fields_ = [
@@ -376,7 +376,7 @@ class stsd(EntriesAtom):
 @AtomType.define
 class stts(EntriesAtom):
     '''Time-to-sample atom'''
-    type = 'stts'
+    type = b'stts'
     class Entry(pstruct.type):
         _fields_ = [
             (pQTInt, 'Sample count'),
@@ -387,7 +387,7 @@ class stts(EntriesAtom):
 @AtomType.define
 class stsc(EntriesAtom):
     '''Sample-to-chunk atom'''
-    type = 'stsc'
+    type = b'stsc'
     class Entry(pstruct.type):
         _fields_ = [
             (pQTInt, 'First chunk'),
@@ -399,7 +399,7 @@ class stsc(EntriesAtom):
 @AtomType.define
 class stsz(EntriesAtom):
     '''Sample size atom'''
-    type = 'stsz'
+    type = b'stsz'
 
     class Entry(pQTInt): pass
 
@@ -411,7 +411,7 @@ class stsz(EntriesAtom):
 @AtomType.define
 class stco(EntriesAtom):
     '''Chunk offset atom'''
-    type = 'stco'
+    type = b'stco'
 
     class Entry(dyn.pointer(pQTInt)): pass
 
@@ -419,14 +419,14 @@ class stco(EntriesAtom):
 @AtomType.define
 class stsh(EntriesAtom):
     '''Shadow sync atom'''
-    type = 'stsh'
+    type = b'stsh'
 
     class Entry(pQTInt): pass
 
 @AtomType.define
 class gmin(pstruct.type):
     '''Base media info atom'''
-    type = 'gmin'
+    type = b'gmin'
 
     _fields_ = [
         (pint.uint8_t, 'Version'),
@@ -440,5 +440,5 @@ class gmin(pstruct.type):
 @AtomType.define
 class dref(EntriesAtom):
     '''Chunk offset atom'''
-    type = 'dref'
+    type = b'dref'
     class Entry(Atom): pass
