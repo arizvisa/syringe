@@ -1,6 +1,7 @@
 import ptypes
 from . import atom
 from .atom import AtomType, Atom, AtomList
+import logging
 
 class File(ptypes.parray.block):
     _object_ = Atom
@@ -8,7 +9,10 @@ class File(ptypes.parray.block):
     def blocksize(self):
         if isinstance(self.source, ptypes.prov.bounded):
             return self.source.size()
-        raise NotImplementedError("Source is unbounded, a blocksize must be assigned to instance")
+        if self.value is not None:
+            return self.size()
+        logging.warning("Source is unbounded, a blocksize must be assigned to {:s}".format(self.instance()))
+        return 0
 
     def getsize(self):
         return self.blocksize()
