@@ -14,7 +14,7 @@ class File(ptypes.parray.block):
         logging.warning("Source is unbounded, a blocksize must be assigned to {:s}".format(self.instance()))
         return 0
 
-    def getsize(self):
+    def Size(self):
         return self.blocksize()
 
     def search(self, type):

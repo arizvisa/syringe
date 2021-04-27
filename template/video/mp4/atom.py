@@ -7,40 +7,46 @@ class Atom(pstruct.type):
     def __data(self):
         type = self['type'].li.serialize()
         typename = bytes(filter(None, bytearray(type))).decode('latin1')
-        name, size = 'Unknown<{!s}>'.format(typename), self.getsize() - self.getheadersize()
-        t = AtomType.withdefault(type, type=type, __name__=name, length=size)
-        return dyn.clone(t, blocksize=lambda _: size)
 
-    def getheadersize(self):
-        return 4 + 4 + self['extended_size'].li.size()
+        # Load all our size fields so we can figure out the size that
+        # we're supposed to be using.
+        res = sum(self[fld].li.size() for fld in ['size', 'type', 'extended_size'])
+        expected = self.Size() - res
+        
+        # Figure out the type that we're supposed to return and return it.
+        t = AtomType.withdefault(type, type=type, __name__="Unknown<{!s}>".format(typename), length=expected)
+        return dyn.clone(t, blocksize=lambda _, cb=expected: cb) if issubclass(t, parray.block) else t
 
-    def getsize(self):
-        s = self['size'].li.int()
-        if s == 1:
-            s = self['extended_size'].li.int()
-
-        if s >= self.getheadersize():
-            return s
-
-        if not self.parent:
-            return s
-
-        container = self.parent.parent
-        if s == 0:
-            if container is None:
-                return self.source.size() - (self.getoffset())
-
-            position = self.getoffset() - container.getoffset()
-            return container.getsize() - position
-
-        raise NotImplementedError("{!r}".format(self['type']), "{!r}".format(s))
-
+    def __missing(self):
+        res = sum(self[fld].li.size() for fld in ['size', 'type', 'extended_size'])
+        expected = self.Size() - res
+        leftover = expected - self['data'].li.size()
+        return dyn.block(max(0, leftover))
+        
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
         (lambda self: pint.uint64_t if self['size'].li.int() == 1 else pint.uint_t, 'extended_size'),
         (__data, 'data'),
+        (__missing, 'missing'),
     ]
+
+    def HeaderSize(self):
+        return sum(self[fld].size() for fld in ['size', 'type', 'extended_size'])
+
+    def Size(self):
+        res = self['size'].int()
+        if res == 1:
+            return self['extended_size'].li.int()
+
+        p = self.parent
+        if res == 0 and isinstance(p, parray.block):
+            container = p.parent
+            if container:
+                position = self.getoffset() - container.getoffset()
+                return max(0, container.Size() - position)
+            return max(0, self.source.size() - self.getoffset())
+        return res
 
     def summary(self):
         if not self.initializedQ() and self.v is None:
@@ -55,7 +61,7 @@ class Atom(pstruct.type):
         if all(fld not in fields for fld in ['size', 'extended_size']):
             cb = self['data'].size()
             return res.set(size=cb) if cb < pow(2,32) else res.alloc(size=1, extended_size=pint.uint64_t().set(cb), type=res['type'], data=res['data'])
-        return res
+        return res.set(type=res['data'].type) if hasattr(res['data'], 'type') else res
 
 class AtomList(parray.block):
     _object_ = Atom
@@ -154,11 +160,18 @@ class WLOC(pstruct.type):
 @AtomType.define
 class FileType(pstruct.type):
     type = b'ftyp'
-    class __Compatible_Brands(parray.block):
+    class _Compatible_Brands(parray.block):
         _object_ = pQTInt
-        def blocksize(self):
+
+    def __Compatible_Brands(self):
+        try:
             p = self.getparent(Atom)
-            return p.blocksize() - p.getheadersize() - 8
+        except ptypes.error.ItemNotFoundError:
+            return self._Compatible_Brands
+        expected = p.Size() - p.HeaderSize()
+
+        res = sum(self[fld].li.size() for fld in ['Major_Brand', 'Minor_Version'])
+        return dyn.clone(self._Compatible_Brands, blocksize=lambda _, cb=max(0, expected -res): cb)
 
     _fields_ = [
         (pQTInt, 'Major_Brand'),
