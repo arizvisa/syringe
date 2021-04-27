@@ -23,17 +23,11 @@ class File(ptypes.parray.block):
 
     def lookup(self, type):
         '''Return the first instance of specified atom type'''
-        res = [item for item in self if item['type'] == type]
-        if not res:
-            raise KeyError(type)
-        if len(res) == 1:
-            return res[0]
-        raise AssertionError("Unable to search for atom of type {!r}".format(res))
+        return next(item for item in self if item['type'] == type)
 
     def summary(self):
         iterable = (item['type'].serialize().decode('latin1') for item in self)
-        types = ','.join(iterable)
-        return ' '.join([self.name(), 'atoms[%d] ->'% len(self), types])
+        return ' '.join([self.name(), "atoms[{:d}] ->".format(len(self)), ', '.join(iterable)])
 
     def repr(self):
         return self.summary()

@@ -60,7 +60,7 @@ class Atom(pstruct.type):
         res = super(Atom, self).alloc(**fields)
         if all(fld not in fields for fld in ['size', 'extended_size']):
             cb = self['data'].size()
-            return res.set(size=cb) if cb < pow(2,32) else res.alloc(size=1, extended_size=pint.uint64_t().set(cb), type=res['type'], data=res['data'])
+            return self.alloc(size=cb, **fields) if cb < pow(2,32) else self.alloc(size=1, extended_size=pint.uint64_t().set(cb), type=res['type'], data=res['data'], **fields)
         return res.set(type=res['data'].type) if hasattr(res['data'], 'type') else res
 
 class AtomList(parray.block):
@@ -68,15 +68,11 @@ class AtomList(parray.block):
 
     def search(self, type):
         '''Search through a list of atoms for a particular fourcc type'''
-        return (x for x in self if x['type'] == type)
+        return (item for item in self if item['type'] == type)
 
     def lookup(self, type):
         '''Return the first instance of specified atom type'''
-        res = [x for x in self if x['type'] == type]
-        if not res:
-            raise KeyError(type)
-        assert len(res) == 1, repr(res)
-        return res[0]
+        return next(item for item in self if item['type'] == type)
 
     def summary(self):
         types = ','.join([x['type'].serialize().decode('latin1') for x in self])
@@ -94,7 +90,6 @@ class EntriesAtom(pstruct.type):
         (pQTInt, 'Number of entries'),
         (__Entry, 'Entry')
     ]
-
 
 ## container atoms
 @AtomType.define
