@@ -1,6 +1,6 @@
 import ptypes
 from . import atom
-from .atom import AtomType, Atom, AtomList
+from .atom import AtomType, Atom, AtomList, FullBox, EntriesAtom
 import logging
 
 class File(ptypes.parray.block):
