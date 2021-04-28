@@ -89,8 +89,8 @@ class AtomList(parray.block):
 ## atom templates
 class EntriesAtom(pstruct.type):
     def __Entry(self):
-        t,n = self.Entry,self['Number of entries'].li.int()
-        return dyn.array(t,n)
+        t, count = self.Entry, self['Number of entries'].li
+        return dyn.array(t, count.int())
 
     _fields_ = [
         (pint.uint8_t, 'Version'),
@@ -101,57 +101,71 @@ class EntriesAtom(pstruct.type):
 
 ## container atoms
 @AtomType.define
-class MOOV(AtomList): type = b'moov'
+class MovieBox(AtomList):
+    type = b'moov'
 
 @AtomType.define
-class TRAK(AtomList): type = b'trak'
+class TrackBox(AtomList):
+    type = b'trak'
 
 @AtomType.define
-class EDTS(AtomList): type = b'edts'
+class EditBox(AtomList):
+    type = b'edts'
 
 @AtomType.define
-class MDIA(AtomList): type = b'mdia'
+class MediaBox(AtomList):
+    type = b'mdia'
 
 @AtomType.define
-class MINF(AtomList): type = b'minf'
+class MediaInformationBox(AtomList):
+    type = b'minf'
 
 @AtomType.define
-class DINF(AtomList): type = b'dinf'
+class DataInformationBox(AtomList):
+    type = b'dinf'
 
 @AtomType.define
-class UDTA(Atom): type = b'udta'
+class UserDataBox(Atom):
+    type = b'udta'
 
 @AtomType.define
-class STBL(AtomList): type = b'stbl'
+class SampleTableBox(AtomList):
+    type = b'stbl'
 
 @AtomType.define
-class GMHD(AtomList): type = b'gmhd'
+class GenericMediaHeaderBox(AtomList):
+    type = b'gmhd'
 
 @AtomType.define
-class META(AtomList): type = b'meta'
+class MetaBox(AtomList):
+    type = b'meta'
 
 @AtomType.define
-class RMRA(AtomList): type = b'rmra'
+class ReferenceMovieAtom(AtomList):
+    type = b'rmra'
 
 @AtomType.define
-class RMRA(AtomList): type = b'rmda'
+class ReferenceMovieDescriptorAtom(AtomList):
+    type = b'rmda'
 
 #@AtomType.define
-#class MDAT(AtomList): type = b'mdat'  # XXX: sometimes this is not a container
+#class MediaDataBox(AtomList):
+#    'sometimes this is not a container'
+#    type = b'mdat'
 
 @AtomType.define
-class MDAT(ptype.block):
+class MediaDataBox(ptype.block):
     type = b'mdat'
 
 ## empty atoms
 @AtomType.define
-class WIDE(pstruct.type):
+class ExpansionSpaceReservationAtom(pstruct.type):
     type = b'wide'
     _fields_ = []
 
 ## WLOC
 @AtomType.define
-class WLOC(pstruct.type):
+class WindowLocationBox(pstruct.type):
     type = b'WLOC'
     _fields_ = [
         (pint.uint16_t, 'X'),
@@ -160,7 +174,7 @@ class WLOC(pstruct.type):
 
 ## ftyp
 @AtomType.define
-class FileType(pstruct.type):
+class FileTypeBox(pstruct.type):
     type = b'ftyp'
     class _Compatible_Brands(parray.block):
         _object_ = pQTInt
@@ -182,7 +196,7 @@ class FileType(pstruct.type):
     ]
 
 @AtomType.define
-class MVHD(pstruct.type):
+class MovieHeaderBox(pstruct.type):
     type = b'mvhd'
     _fields_ = [
         (pint.uint8_t, 'Version'),
@@ -205,7 +219,7 @@ class MVHD(pstruct.type):
     ]
 
 @AtomType.define
-class TKHD(pstruct.type):
+class TrackHeaderBox(pstruct.type):
     type = b'tkhd'
     _fields_ = [
         (pint.uint8_t, 'Version'),
@@ -226,7 +240,7 @@ class TKHD(pstruct.type):
     ]
 
 @AtomType.define
-class ELST(EntriesAtom):
+class EditListBox(EntriesAtom):
     type = b'elst'
 
     class Entry(pstruct.type):
@@ -237,7 +251,7 @@ class ELST(EntriesAtom):
         ]
 
 @AtomType.define
-class MDHD(pstruct.type):
+class MediaHeaderBox(pstruct.type):
     type = b'mdhd'
     _fields_ = [
         (pint.uint8_t, 'Version'),
@@ -251,7 +265,7 @@ class MDHD(pstruct.type):
     ]
 
 @AtomType.define
-class HDLR(pstruct.type):
+class HandlerBox(pstruct.type):
     type = b'hdlr'
     _fields_ = [
         (pint.uint8_t, 'Version'),
@@ -265,11 +279,13 @@ class HDLR(pstruct.type):
     ]
 
 ## stsd
-class MediaVideo(ptype.definition): attribute,cache = 'version',{}
+class MediaVideo(ptype.definition):
+    attribute, cache = 'version', {}
 
 @MediaVideo.define
-class MediaVideo_v1(pstruct.type):   #XXX: might need to be renamed
-    version,type = 1,'vide'
+class MediaVideo_v1(pstruct.type):
+    'might need to be renamed'
+    version, type = 1, 'vide'
     class CompressorName(pstruct.type):
         _fields_ = [
             (pint.uint8_t, 'length'),
@@ -306,22 +322,24 @@ class MediaVideo_v1(pstruct.type):   #XXX: might need to be renamed
     ]
 
 # FIXME: this isn't decoding mpeg audio yet.
-class esds(pstruct.type):
+class ElementaryStreamDescriptorAtom(pstruct.type):
     type = b'esds'
     _fields_ = [
         (pint.uint32_t, 'Version'),
         (ptype.type, 'Elementary Stream Descriptor'),
     ]
 
-class MediaAudio(ptype.definition): attribute,cache = 'version',{}
+class MediaAudio(ptype.definition):
+    attribute, cache = 'version', {}
+
 @MediaAudio.define
 class MediaAudio_v0(pstruct.type):
-    version,type = 0,'soun'
+    version, type = 0, 'soun'
     _fields_ = []
 
 @MediaAudio.define
 class MediaAudio_v1(pstruct.type):
-    version,type = 1,'soun'
+    version, type = 1, 'soun'
     _fields_ = [
         (pint.uint32_t, 'Samples per packet'),
         (pint.uint32_t, 'Bytes per packet'),
@@ -330,7 +348,7 @@ class MediaAudio_v1(pstruct.type):
     ]
 @MediaAudio.define
 class MediaAudio_v2(pstruct.type):
-    version,type = 2,'soun'
+    version, type = 2, 'soun'
     _fields_ = [
         (pint.uint32_t, 'Size'),
         (pfloat.double, 'Sample rate2'),
@@ -343,7 +361,7 @@ class MediaAudio_v2(pstruct.type):
     ]
 
 @AtomType.define
-class stsd(EntriesAtom):
+class SampleDescriptionBox(EntriesAtom):
     '''Sample description atom'''
     type = b'stsd'
 
@@ -389,7 +407,7 @@ class stsd(EntriesAtom):
 
 ### stts
 @AtomType.define
-class stts(EntriesAtom):
+class TimeToSampleBox(EntriesAtom):
     '''Time-to-sample atom'''
     type = b'stts'
     class Entry(pstruct.type):
@@ -400,7 +418,7 @@ class stts(EntriesAtom):
 
 ## stsc
 @AtomType.define
-class stsc(EntriesAtom):
+class SampleToChunkBox(EntriesAtom):
     '''Sample-to-chunk atom'''
     type = b'stsc'
     class Entry(pstruct.type):
@@ -412,7 +430,7 @@ class stsc(EntriesAtom):
 
 ## stsz
 @AtomType.define
-class stsz(EntriesAtom):
+class SampleSizeBox(EntriesAtom):
     '''Sample size atom'''
     type = b'stsz'
 
@@ -424,30 +442,29 @@ class stsz(EntriesAtom):
 
 ## stco
 @AtomType.define
-class stco(EntriesAtom):
+class ChunkOffsetBox(EntriesAtom):
     '''32-bit Chunk offset atom'''
     type = b'stco'
     class Entry(dyn.pointer(ptype.undefined, pQTInt)): pass
 
 @AtomType.define
-class co64(EntriesAtom):
+class ChunkLargeOffsetBox(EntriesAtom):
     '''64-bit Chunk offset atom'''
     type = b'co64'
     class Entry(dyn.pointer(ptype.undefined, pQTInt64)): pass
 
 # XXX: this doesn't exist (?)
 @AtomType.define
-class stsh(EntriesAtom):
+class ShadowSyncSampleBox(EntriesAtom):
     '''Shadow sync atom'''
     type = b'stsh'
 
     class Entry(pQTInt): pass
 
 @AtomType.define
-class gmin(pstruct.type):
+class BaseMediaInformationAtom(pstruct.type):
     '''Base media info atom'''
     type = b'gmin'
-
     _fields_ = [
         (pint.uint8_t, 'Version'),
         (dyn.block(3), 'Flags'),
@@ -458,7 +475,7 @@ class gmin(pstruct.type):
     ]
 
 @AtomType.define
-class dref(EntriesAtom):
+class DataReferenceBox(EntriesAtom):
     '''Chunk offset atom'''
     type = b'dref'
     class Entry(Atom): pass
