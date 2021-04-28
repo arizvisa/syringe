@@ -94,6 +94,10 @@ class FullBox(pstruct.type):
         (dyn.clone(pint.uint_t, length=3), 'Flags'),
         (lambda self: self.Box, 'Box'),
     ]
+    def Version(self):
+        return self['Version']
+    def Flags(self):
+        return self['Flags']
 
 class EntriesAtom(FullBox):
     class Box(pstruct.type):
@@ -265,12 +269,32 @@ class EditListBox(EntriesAtom):
 @AtomType.define
 class MediaHeaderBox(FullBox):
     type = b'mdhd'
-    class Box(pstruct.type):
+    class Box_v0(pstruct.type):
         _fields_ = [
             (pint.uint32_t, 'Creation time'),
             (pint.uint32_t, 'Modification time'),
             (pint.uint32_t, 'Time scale'),
             (pint.uint32_t, 'Duration'),
+        ]
+    class Box_v1(pstruct.type):
+        _fields_ = [
+            (pint.uint64_t, 'Creation time'),
+            (pint.uint64_t, 'Modification time'),
+            (pint.uint32_t, 'Time scale'),
+            (pint.uint64_t, 'Duration'),
+        ]
+
+    class Box(pstruct.type):
+        def __Time(self):
+            p = self.getparent(FullBox)
+            version = p.Version()
+            if version.int() == 1:
+                return p.Box_v1
+            elif version.int() == 0:
+                return p.Box_v0
+            raise NotImplementedError(version)
+        _fields_ = [
+            (__Time, 'Time'),
             (pint.uint16_t, 'Language'),
             (pint.uint16_t, 'Quality')
         ]
@@ -436,6 +460,13 @@ class SampleToChunkBox(EntriesAtom):
             (pQTInt, 'Samples per chunk'),
             (pQTInt, 'Sample description ID')
         ]
+
+## stss
+@AtomType.define
+class SyncSampleBox(EntriesAtom):
+    type = b'stss'
+    class Entry(pQTInt):
+        pass
 
 ## stsz
 @AtomType.define
