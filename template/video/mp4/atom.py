@@ -11,7 +11,7 @@ class Atom(pstruct.type):
         # Load all our size fields so we can figure out the size that
         # we're supposed to be using.
         res = sum(self[fld].li.size() for fld in ['size', 'type', 'extended_size'])
-        expected = self.Size() - res if self.Size() > res else res
+        expected = self.Size() - res if self.Size() > res else 0
         
         # Figure out the type that we're supposed to return and return it.
         t = AtomType.withdefault(type, type=type, __name__="Unknown<{!s}>".format(typename), length=expected)
@@ -32,6 +32,9 @@ class Atom(pstruct.type):
         (__data, 'data'),
         (__missing, 'missing'),
     ]
+
+    def ExtendedSizeQ(self):
+        return self['size'].int() == 1
 
     def HeaderSize(self):
         return sum(self[fld].size() for fld in ['size', 'type', 'extended_size'])
@@ -422,10 +425,15 @@ class stsz(EntriesAtom):
 ## stco
 @AtomType.define
 class stco(EntriesAtom):
-    '''Chunk offset atom'''
+    '''32-bit Chunk offset atom'''
     type = b'stco'
+    class Entry(dyn.pointer(ptype.undefined, pQTInt)): pass
 
-    class Entry(dyn.pointer(pQTInt)): pass
+@AtomType.define
+class co64(EntriesAtom):
+    '''64-bit Chunk offset atom'''
+    type = b'co64'
+    class Entry(dyn.pointer(ptype.undefined, pQTInt64)): pass
 
 # XXX: this doesn't exist (?)
 @AtomType.define

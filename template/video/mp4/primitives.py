@@ -3,6 +3,8 @@ from ptypes import *
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 class pQTInt(pint.bigendian(pint.uint32_t)): pass
+class pQTInt64(pint.bigendian(pint.uint64_t)): pass
+
 class pQTType(pQTInt):
     def summary(self):
         octets = bytearray(self.serialize())
@@ -29,7 +31,7 @@ class pQTType(pQTInt):
         return super(pQTType,self).set(res)
 
 class Fixed(pfloat.ufixed_t):
-    fractional,length = 16,4
+    fractional, length = 16, 4
 
 class Matrix(pstruct.type):
     _fields_ = [
@@ -49,6 +51,5 @@ class pQTString(pstruct.type):
         (pint.uint8_t, 'c'),
         (lambda self: dyn.clone(pstr.string, length=self['c'].li.int()), 's'),
     ]
-
     def str(self):
         return self['s'].str()
