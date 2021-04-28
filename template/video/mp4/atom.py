@@ -12,7 +12,7 @@ class Atom(pstruct.type):
         # we're supposed to be using.
         res = sum(self[fld].li.size() for fld in ['size', 'type', 'extended_size'])
         expected = self.Size() - res if self.Size() > res else 0
-        
+
         # Figure out the type that we're supposed to return and return it.
         t = AtomType.withdefault(type, type=type, __name__="Unknown<{!s}>".format(typename), length=expected)
         if issubclass(t, parray.block):
@@ -24,7 +24,7 @@ class Atom(pstruct.type):
         expected = self.Size() - res
         leftover = expected - self['data'].li.size()
         return dyn.block(max(0, leftover))
-        
+
     _fields_ = [
         (pQTInt, 'size'),
         (pQTType, 'type'),
@@ -87,17 +87,32 @@ class AtomList(parray.block):
         return ' '.join(["atoms[{:d}] ->".format(len(self)), types])
 
 ## atom templates
-class EntriesAtom(pstruct.type):
-    def __Entry(self):
-        t, count = self.Entry, self['Number of entries'].li
-        return dyn.array(t, count.int())
-
+class FullBox(pstruct.type):
+    Box = ptype.undefined
     _fields_ = [
         (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pQTInt, 'Number of entries'),
-        (__Entry, 'Entry')
+        (dyn.clone(pint.uint_t, length=3), 'Flags'),
+        (lambda self: self.Box, 'Box'),
     ]
+
+class EntriesAtom(FullBox):
+    class Box(pstruct.type):
+        def __Header(self):
+            p = self.getparent(EntriesAtom)
+            return p.Header
+        def __Entry(self):
+            p = self.getparent(EntriesAtom)
+            t, count = p.Entry, self['Count'].li
+            return dyn.array(t, count.int())
+        _fields_ = [
+            (__Header, 'Header'),
+            (pQTInt, 'Count'),
+            (__Entry, 'Entry'),
+        ]
+    class Header(pstruct.type):
+        _fields_ = []
+    class Entry(ptypes.undefined):
+        pass
 
 ## container atoms
 @AtomType.define
@@ -196,53 +211,50 @@ class FileTypeBox(pstruct.type):
     ]
 
 @AtomType.define
-class MovieHeaderBox(pstruct.type):
+class MovieHeaderBox(FullBox):
     type = b'mvhd'
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pint.uint32_t, 'Creation time'),
-        (pint.uint32_t, 'Modification time'),
-        (pint.uint32_t, 'Time scale'),
-        (pint.uint32_t, 'Duration'),
-        (pint.uint32_t, 'Preferred rate'),
-        (pint.uint16_t, 'Preferred volume'),
-        (dyn.block(10), 'Reserved'),
-        (Matrix, 'Matrix structure'),
-        (pint.uint32_t, 'Preview time'),
-        (pint.uint32_t, 'Preview duration'),
-        (pint.uint32_t, 'Poster time'),
-        (pint.uint32_t, 'Selection time'),
-        (pint.uint32_t, 'Selection duration'),
-        (pint.uint32_t, 'Current time'),
-        (pint.uint32_t, 'Next track ID'),
-    ]
+    class Box(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'Creation time'),
+            (pint.uint32_t, 'Modification time'),
+            (pint.uint32_t, 'Time scale'),
+            (pint.uint32_t, 'Duration'),
+            (pint.uint32_t, 'Preferred rate'),
+            (pint.uint16_t, 'Preferred volume'),
+            (dyn.block(10), 'Reserved'),
+            (Matrix, 'Matrix structure'),
+            (pint.uint32_t, 'Preview time'),
+            (pint.uint32_t, 'Preview duration'),
+            (pint.uint32_t, 'Poster time'),
+            (pint.uint32_t, 'Selection time'),
+            (pint.uint32_t, 'Selection duration'),
+            (pint.uint32_t, 'Current time'),
+            (pint.uint32_t, 'Next track ID'),
+        ]
 
 @AtomType.define
-class TrackHeaderBox(pstruct.type):
+class TrackHeaderBox(FullBox):
     type = b'tkhd'
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pint.uint32_t, 'Creation time'),
-        (pint.uint32_t, 'Modification time'),
-        (pint.uint32_t, 'Track ID'),
-        (pint.uint32_t, 'Reserved'),
-        (pint.uint32_t, 'Duration'),    # XXX: is this right?
-        (pint.uint64_t, 'Reserved'),
-        (pint.uint16_t, 'Layer'),
-        (pint.uint16_t, 'Alternate group'),
-        (pint.uint16_t, 'Volume'),
-        (pint.uint16_t, 'Reserved'),
-        (Matrix, 'Matrix structure'),
-        (Fixed, 'Track width'),
-        (Fixed, 'Track height'),
-    ]
+    class Box(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'Creation time'),
+            (pint.uint32_t, 'Modification time'),
+            (pint.uint32_t, 'Track ID'),
+            (pint.uint32_t, 'Reserved'),
+            (pint.uint32_t, 'Duration'),    # XXX: is this right?
+            (pint.uint64_t, 'Reserved'),
+            (pint.uint16_t, 'Layer'),
+            (pint.uint16_t, 'Alternate group'),
+            (pint.uint16_t, 'Volume'),
+            (pint.uint16_t, 'Reserved'),
+            (Matrix, 'Matrix structure'),
+            (Fixed, 'Track width'),
+            (Fixed, 'Track height'),
+        ]
 
 @AtomType.define
 class EditListBox(EntriesAtom):
     type = b'elst'
-
     class Entry(pstruct.type):
         _fields_ = [
             (pint.uint32_t, 'duration'),
@@ -251,32 +263,30 @@ class EditListBox(EntriesAtom):
         ]
 
 @AtomType.define
-class MediaHeaderBox(pstruct.type):
+class MediaHeaderBox(FullBox):
     type = b'mdhd'
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pint.uint32_t, 'Creation time'),
-        (pint.uint32_t, 'Modification time'),
-        (pint.uint32_t, 'Time scale'),
-        (pint.uint32_t, 'Duration'),
-        (pint.uint16_t, 'Language'),
-        (pint.uint16_t, 'Quality')
-    ]
+    class Box(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'Creation time'),
+            (pint.uint32_t, 'Modification time'),
+            (pint.uint32_t, 'Time scale'),
+            (pint.uint32_t, 'Duration'),
+            (pint.uint16_t, 'Language'),
+            (pint.uint16_t, 'Quality')
+        ]
 
 @AtomType.define
-class HandlerBox(pstruct.type):
+class HandlerBox(FullBox):
     type = b'hdlr'
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pint.uint32_t, 'Component type'),
-        (pint.uint32_t, 'Component subtype'),
-        (pint.uint32_t, 'Component manufacturer'),
-        (pint.uint32_t, 'Component flags'),
-        (pint.uint32_t, 'Component Flags mask'),
-        (pQTString, 'Component name')
-    ]
+    class Box(pstruct.type):
+        _fields_ = [
+            (pint.uint32_t, 'Component type'),
+            (pint.uint32_t, 'Component subtype'),
+            (pint.uint32_t, 'Component manufacturer'),
+            (pint.uint32_t, 'Component flags'),
+            (pint.uint32_t, 'Component Flags mask'),
+            (pQTString, 'Component name')
+        ]
 
 ## stsd
 class MediaVideo(ptype.definition):
@@ -294,18 +304,18 @@ class MediaVideo_v1(pstruct.type):
         ]
     class ColorTable(pstruct.type):
         class argb(pstruct.type):
-            _fields_ = [(pint.uint16_t, n) for n in 'irgb']
+            _fields_ = [(pint.uint16_t, item) for item in 'irgb']
             def summary(self):
-                i, r, g, b = (self[n].int() for n in 'irgb')
+                i, r, g, b = (self[item].int() for item in 'irgb')
                 return '{:d} ({:04x},{:04x},{:04x})'.format(i, r, g, b)
             repr = summary
         def __entries(self):
             n = self['end'].li.int() - self['start'].li.int()
             return dyn.array(self.argb, n+1)
         _fields_ = [
-            (pint.uint32_t,'start'),
-            (pint.uint8_t,'count'),
-            (pint.uint16_t,'end'),
+            (pint.uint32_t, 'start'),
+            (pint.uint8_t, 'count'),
+            (pint.uint16_t, 'end'),
             (__entries, 'entries'),
         ]
     def __ColorTable(self):
@@ -364,7 +374,6 @@ class MediaAudio_v2(pstruct.type):
 class SampleDescriptionBox(EntriesAtom):
     '''Sample description atom'''
     type = b'stsd'
-
     class Audio(pstruct.type):
         _fields_ = [
             (pint.uint16_t, 'Version'),
@@ -433,49 +442,51 @@ class SampleToChunkBox(EntriesAtom):
 class SampleSizeBox(EntriesAtom):
     '''Sample size atom'''
     type = b'stsz'
-
-    class Entry(pQTInt): pass
-
-    _fields_ = EntriesAtom._fields_[:2]
-    _fields_+=[(pQTInt, 'Sample size')]
-    _fields_+= EntriesAtom._fields_[2:]
+    class Entry(pQTInt):
+        pass
+    class Header(pstruct.type):
+        _fields_ = [
+            (pQTInt, 'Sample size'),
+        ]
 
 ## stco
 @AtomType.define
 class ChunkOffsetBox(EntriesAtom):
     '''32-bit Chunk offset atom'''
     type = b'stco'
-    class Entry(dyn.pointer(ptype.undefined, pQTInt)): pass
+    class Entry(dyn.pointer(ptype.undefined, pQTInt)):
+        pass
 
 @AtomType.define
 class ChunkLargeOffsetBox(EntriesAtom):
     '''64-bit Chunk offset atom'''
     type = b'co64'
-    class Entry(dyn.pointer(ptype.undefined, pQTInt64)): pass
+    class Entry(dyn.pointer(ptype.undefined, pQTInt64)):
+        pass
 
 # XXX: this doesn't exist (?)
 @AtomType.define
 class ShadowSyncSampleBox(EntriesAtom):
     '''Shadow sync atom'''
     type = b'stsh'
-
-    class Entry(pQTInt): pass
+    class Entry(pQTInt):
+        pass
 
 @AtomType.define
-class BaseMediaInformationAtom(pstruct.type):
+class BaseMediaInformationAtom(FullBox):
     '''Base media info atom'''
     type = b'gmin'
-    _fields_ = [
-        (pint.uint8_t, 'Version'),
-        (dyn.block(3), 'Flags'),
-        (pint.uint16_t, 'Graphics mode'),
-        (dyn.array(pint.uint16_t,3), 'Opcolor'),
-        (pint.uint16_t, 'Balance'),
-        (pint.uint16_t, 'Reserved'),
-    ]
+    class Box(pstruct.type):
+        _fields_ = [
+            (pint.uint16_t, 'Graphics mode'),
+            (dyn.array(pint.uint16_t,3), 'Opcolor'),
+            (pint.uint16_t, 'Balance'),
+            (pint.uint16_t, 'Reserved'),
+        ]
 
 @AtomType.define
 class DataReferenceBox(EntriesAtom):
     '''Chunk offset atom'''
     type = b'dref'
-    class Entry(Atom): pass
+    class Entry(Atom):
+        pass
