@@ -106,8 +106,10 @@ class EntriesAtom(FullBox):
             return p.Header
         def __Entry(self):
             p = self.getparent(EntriesAtom)
-            t, count = p.Entry, self['Count'].li
-            return dyn.array(t, count.int())
+            entry, count = p.Entry, self['Count'].li
+            if issubclass(entry, pbinary.base):
+                return dyn.clone(pbinary.array, _object_=entry, length=count.int())
+            return dyn.clone(parray.type, _object_=entry, length=count.int())
         _fields_ = [
             (__Header, 'Header'),
             (pQTInt, 'Count'),
