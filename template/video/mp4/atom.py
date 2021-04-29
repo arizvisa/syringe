@@ -114,12 +114,18 @@ class EntriesAtom(FullBox):
             if issubclass(entry, pbinary.base):
                 return dyn.clone(pbinary.array, _object_=entry, length=count.int())
             return dyn.clone(parray.type, _object_=entry, length=count.int())
+        def __Parameters(self):
+            p = self.getparent(EntriesAtom)
+            return p.Parameters
         _fields_ = [
             (__Header, 'Header'),
             (pQTInt, 'Count'),
+            (__Parameters, 'Parameters'),
             (__Entry, 'Entry'),
         ]
     class Header(pstruct.type):
+        _fields_ = []
+    class Parameters(pstruct.type):
         _fields_ = []
     class Entry(ptypes.undefined):
         pass
