@@ -156,7 +156,7 @@ class DataInformationBox(AtomList):
     type = b'dinf'
 
 @AtomType.define
-class UserDataBox(Atom):
+class UserDataBox(AtomList):
     type = b'udta'
 
 @AtomType.define
