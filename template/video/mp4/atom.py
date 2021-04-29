@@ -67,7 +67,7 @@ class Atom(pstruct.type):
     def alloc(self, **fields):
         res = super(Atom, self).alloc(**fields)
         if all(fld not in fields for fld in ['size', 'extended_size']):
-            cb = self['data'].size()
+            cb = self.HeaderSize() + self['data'].size()
             return self.alloc(size=cb, **fields) if cb < pow(2,32) else self.alloc(size=1, extended_size=pint.uint64_t().set(cb), type=res['type'], data=res['data'], **fields)
         return res.set(type=res['data'].type) if hasattr(res['data'], 'type') else res
 
@@ -108,6 +108,9 @@ class EntriesAtom(FullBox):
         def __Header(self):
             p = self.getparent(EntriesAtom)
             return p.Header
+        def __Count(self):
+            p = self.getparent(EntriesAtom)
+            return p.Count
         def __Entry(self):
             p = self.getparent(EntriesAtom)
             entry, count = p.Entry, self['Count'].li
@@ -119,7 +122,7 @@ class EntriesAtom(FullBox):
             return p.Parameters
         _fields_ = [
             (__Header, 'Header'),
-            (pQTInt, 'Count'),
+            (__Count, 'Count'),
             (__Parameters, 'Parameters'),
             (__Entry, 'Entry'),
         ]
@@ -129,6 +132,7 @@ class EntriesAtom(FullBox):
         _fields_ = []
     class Entry(ptypes.undefined):
         pass
+    Count = pQTInt
 
 ## container atoms
 @AtomType.define
