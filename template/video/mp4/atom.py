@@ -89,14 +89,18 @@ class AtomList(parray.block):
 ## atom templates
 class FullBox(pstruct.type):
     Box = ptype.undefined
+    def __Flags(self):
+        if hasattr(self, 'Flags'):
+            return self.Flags
+        return dyn.clone(pint.uint_t, length=3)
     _fields_ = [
         (pint.uint8_t, 'Version'),
-        (dyn.clone(pint.uint_t, length=3), 'Flags'),
+        (__Flags, 'Flags'),
         (lambda self: self.Box, 'Box'),
     ]
-    def Version(self):
+    def version(self):
         return self['Version']
-    def Flags(self):
+    def flags(self):
         return self['Flags']
 
 class EntriesAtom(FullBox):
@@ -289,7 +293,7 @@ class MediaHeaderBox(FullBox):
     class Box(pstruct.type):
         def __Time(self):
             p = self.getparent(FullBox)
-            version = p.Version()
+            version = p.version().li
             if version.int() == 1:
                 return p.Box_v1
             elif version.int() == 0:
@@ -310,7 +314,7 @@ class HandlerBox(FullBox):
             (pint.uint32_t, 'Component subtype'),
             (pint.uint32_t, 'Component manufacturer'),
             (pint.uint32_t, 'Component flags'),
-            (pint.uint32_t, 'Component Flags mask'),
+            (pint.uint32_t, 'Component flags mask'),
             (pQTString, 'Component name')
         ]
 
