@@ -165,7 +165,7 @@ class __structure_interface__(ptype.container):
         if self.value is None:
             raise error.InitializationError(self, '__structure_interface__.__iter__')
 
-        for name in six.iterkeys(self):
+        for name in self.iterkeys(self):
             yield name
         return
 

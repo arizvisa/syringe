@@ -308,8 +308,8 @@ class __union_interface__(ptype.container):
 
     def __iter__(self):
         '''x.__iter__() <==> iter(x)'''
-        for k in six.iterkeys(self):
-            yield k
+        for name in self.iterkeys():
+            yield name
         return
 
 class union(__union_interface__):

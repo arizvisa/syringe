@@ -1072,7 +1072,7 @@ try:
         def expr(cls, string):
             index = (i for i in range(cls.__api__.get_nlist_size()) if string == cls.module.get_nlist_name(i))
             try:
-                res = cls.__api__.get_nlist_ea(six.next(index))
+                res = cls.__api__.get_nlist_ea(next(index))
 
             except StopIteration:
                 raise NameError("{:s}.expr : Unable to resolve symbol : {!r}".format('.'.join((__name__, cls.__name__)), string))
@@ -1296,12 +1296,12 @@ try:
                 if err.Fail() or len(data) != amount:
                     raise error.ConsumeError(self, self.address, amount)
                 self.address += len(data)
-                return six.binary_type(data)
+                return bytes(data)
             return b''
 
         def store(self, data):
             process, err = self.__process, self.module.SBError()
-            amount = process.WriteMemory(self.address, six.binary_type(data), err)
+            amount = process.WriteMemory(self.address, bytes(data), err)
             if err.Fail() or len(data) != amount:
                 raise error.StoreError(self, self.address, len(data))
             self.address += amount

@@ -112,7 +112,7 @@ def namespace(cls):
             value.__name__ = '.'.join([cls.__name__, name])
         if name.startswith('_') or isinstance(value, property):
             attributes[name] = value
-        elif not six.callable(value) or issubclass(value, field.option_t):
+        elif not callable(value) or issubclass(value, field.option_t):
             properties[name] = value
         else:
             subclass[name] = namespace(value)
@@ -339,7 +339,7 @@ defaults.display.mangle_with_attributes = False
 # array types
 defaults.parray.break_on_zero_sized_element = False
 defaults.parray.break_on_max_count = False
-defaults.parray.max_count = six.MAXSIZE
+defaults.parray.max_count = sys.maxsize
 
 # structures
 defaults.pstruct.use_offset_on_duplicate = True

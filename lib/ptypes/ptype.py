@@ -324,12 +324,12 @@ def force(t, self, chain=[]):
 
     # generators
     elif inspect.isgenerator(t):
-        return force(six.next(t), self, chain)
+        return force(next(t), self, chain)
 
     # and lastly iterators (unsupported)
     if False:
         if isiterator(t):
-            return force(six.next(t), self, chain)
+            return force(next(t), self, chain)
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
     raise error.TypeError(self, "force<ptype>', message='chain={!r} : Refusing request to resolve {!r} to a type that does not inherit from ptype.type : {{{:s}}}".format(chain, t, path))
@@ -1097,8 +1097,8 @@ class type(base):
                     Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
                     res = maxElementSize
 
-            if res > six.MAXSIZE:
-                Log.fatal("type.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, six.MAXSIZE))
+            if res > sys.maxsize:
+                Log.fatal("type.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, sys.maxsize))
                 return b''
 
             # generate padding up to the blocksize
@@ -1379,8 +1379,8 @@ class container(base):
                 res = maxElementSize
 
         # if the blocksize is larger than maxsize, then ignore the padding
-        if res > six.MAXSIZE:
-            Log.warn("container.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, six.MAXSIZE))
+        if res > sys.maxsize:
+            Log.warn("container.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, sys.maxsize))
             return data
 
         # if the data is smaller then the blocksize, then pad the rest in

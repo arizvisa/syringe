@@ -311,7 +311,7 @@ class consumer(object):
         result, count = 0, 0
         while bytes > 0:
             result *= 256
-            result += six.next(self.source)
+            result += next(self.source)
             bytes, count = bytes - 1, count + 1
         self.cache = push(self.cache, new(result, count * 8))
         return count

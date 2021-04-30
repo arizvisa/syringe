@@ -185,7 +185,7 @@ def force(t, self, chain=[]):
         return force(t(), self, chain)
 
     if inspect.isgenerator(t):
-        return force(six.next(t), self, chain)
+        return force(next(t), self, chain)
 
     path = str().join(map("<{:s}>".format, self.backtrace()))
     chain_s = "{!s}".format(chain)
@@ -529,13 +529,13 @@ class enum(integer):
         # that aren't callable and assume the user meant that length.
         elif all(hasattr(self, fld) for fld in properties):
             candidates = (fld for fld in properties if not callable(getattr(self, fld)))
-            candidate = six.next(candidates, '_width_')
+            candidate = next(candidates, '_width_')
 
         # otherwise, we just grab the first property that was assigned and
         # use that one to warn the user about.
         elif any(hasattr(self, fld) for fld in properties):
             iterable = (fld for fld in properties if hasattr(self, fld))
-            candidate = six.next(iterable, None)
+            candidate = next(iterable, None)
 
         # anything else means the user hasn't assigned any property.
         else:
@@ -606,7 +606,7 @@ class enum(integer):
 
         iterable = (name for name, item in self._values_ if item == value)
         try:
-            res = six.next(iterable, *default)
+            res = next(iterable, *default)
 
         except StopIteration:
             raise KeyError(value)
@@ -619,7 +619,7 @@ class enum(integer):
 
         iterable = (value for item, value in self._values_ if item == name)
         try:
-            res = six.next(iterable, *default)
+            res = next(iterable, *default)
 
         except StopIteration:
             raise KeyError(name)
@@ -690,10 +690,10 @@ class enum(integer):
             raise TypeError("{:s}.byvalue expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(name for name, item in cls._values_ if item == value)
+            return next(name for name, item in cls._values_ if item == value)
 
         except StopIteration:
-            if default: return six.next(iter(default))
+            if default: return next(iter(default))
 
         raise KeyError(cls, 'enum.byvalue', value)
 
@@ -704,10 +704,10 @@ class enum(integer):
             raise TypeError("{:s}.byname expected at most 3 arguments, got {:d}".format(cls.typename(), 2+len(default)))
 
         try:
-            return six.next(value for item, value in cls._values_ if item == name)
+            return next(value for item, value in cls._values_ if item == name)
 
         except StopIteration:
-            if default: return six.next(iter(default))
+            if default: return next(iter(default))
 
         raise KeyError(cls, 'enum.byname', name)
 
@@ -1105,7 +1105,7 @@ class __array_interface__(container):
         if isinstance(index, slice):
             val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isinstance(value)) else iter(value)
             for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
-                super(__array_interface__, self).__setitem__(idx, six.next(val))
+                super(__array_interface__, self).__setitem__(idx, next(val))
             return
 
         value = super(__array_interface__, self).__setitem__(index, value)
@@ -1316,7 +1316,7 @@ class __structure_interface__(container):
         if self.value is None:
             raise error.InitializationError(self, '__structure_interface__.__iter__')
 
-        for name in six.iterkeys(self):
+        for name in self.iterkeys(self):
             yield name
         return
 
@@ -1547,7 +1547,7 @@ class blockarray(terminatedarray):
 
         try:
             while total > 0:
-                item = six.next(generator, None)
+                item = next(generator, None)
                 if item is None:
                     break
 

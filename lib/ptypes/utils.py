@@ -207,7 +207,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     bytewidth = width // charwidth
     leftover = size - bytewidth
 
-    hexify = lambda s: str().join(map(r"\x{:02x}".format, six.iterbytes(s)))
+    hexify = lambda data: str().join(map(r"\x{:02x}".format, six.iterbytes(data)))
 
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)
@@ -308,7 +308,7 @@ def memoize(*kargs, **kattrs):
         argnames = itertools.islice(varnames, co.co_argcount)
         c_positional = tuple(argnames)
         c_attribute = kattrs
-        c_var = (six.next(varnames) if flags & F_VARARG else None, six.next(varnames) if flags & F_VARKWD else None)
+        c_var = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
         if not kargs and not kattrs:
             kargs[:] = itertools.chain(c_positional, filter(None, c_var))
         def key(*args, **kwds):
@@ -590,21 +590,21 @@ if __name__ == '__main__':
     def test_padding_sourcerepeat():
         source = padding.source.repeat(iter(b'\0' * 2))
         zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
-        if six.next(iterable) == zero and six.next(iterable) == zero and six.next(iterable) == zero and six.next(iterable) == zero:
+        if next(iterable) == zero and next(iterable) == zero and next(iterable) == zero and next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourceiterable():
         source = padding.source.iterable(iter(b'\0' * 2))
         zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
-        if six.next(iterable) == zero and six.next(iterable) == zero:
+        if next(iterable) == zero and next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourcezero():
         source = padding.source.zero()
         zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
-        if six.next(iterable) == zero and six.next(iterable) == zero:
+        if next(iterable) == zero and next(iterable) == zero:
             raise Success
 
     @TestCase
@@ -615,7 +615,7 @@ if __name__ == '__main__':
             def read(self, count):
                 res = bytearray()
                 while count > 0:
-                    res += bytearray([six.next(self.iterable)])
+                    res += bytearray([next(self.iterable)])
                     count -= 1
                 return bytes(res)
 
