@@ -74,12 +74,13 @@ Config = config.defaults
 Log = Config.log.getChild('pstr')
 
 __izip_longest__ = utils.izip_longest
+text_types = utils.text_types
 
 def __ensure_text__(s, encoding='utf-8', errors='strict'):
     '''ripped from six v1.12.0'''
     if isinstance(s, bytes):
         return s.decode(encoding, errors)
-    elif isinstance(s, six.text_type):
+    elif isinstance(s, text_types):
         return s
     raise TypeError("not expecting type '%s'"% type(s))
 
@@ -595,7 +596,7 @@ if __name__ == '__main__':
 
         def __ensure_binary__(s, encoding='utf-8', errors='strict'):
             '''ripped from six v1.12.0'''
-            if isinstance(s, six.text_type):
+            if isinstance(s, text_types):
                 return s.encode(encoding, errors)
             elif isinstance(s, bytes):
                 return s
