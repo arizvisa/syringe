@@ -1,4 +1,4 @@
-import six, functools, ptypes
+import sys, functools, ptypes
 from ptypes import *
 ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
@@ -7,17 +7,17 @@ class pQTInt64(pint.bigendian(pint.uint64_t)): pass
 
 class pQTType(pQTInt):
     def summary(self):
+        if self.value is None:
+            return 'uninitialized'
         octets = bytearray(self.serialize())
-        if self.value:
-            return "{!r} ({:#0{:d}x})".format(bytes(octets).decode('latin1'), self.int(), 2 + 2 * self.size())
-        return 'uninitialized'
+        return "{!r} ({:#0{:d}x})".format(bytes(octets).decode('latin1'), self.int(), 2 + 2 * self.size())
 
     def __eq__(self, other):
         octets = bytearray(self.serialize())
         if isinstance(other, bytes):
             items = bytearray(other)
             return octets == items
-        elif isinstance(other, six.string_types):
+        elif isinstance(other, (bytes, unicode if sys.version_info.major < 3 else str)):
             item = bytes(octets).decode('latin1')
             return item == other
         return self.int() == other
@@ -26,9 +26,11 @@ class pQTType(pQTInt):
         return not(self.__eq__(other))
 
     def set(self, value):
-        octets = bytearray(value)
-        res = functools.reduce(lambda agg, item: agg * pow(2, 8) + item, octets, 0)
-        return super(pQTType,self).set(res)
+        if isinstance(value, (bytes, bytearray)):
+            octets = bytearray(value)
+            integer = functools.reduce(lambda agg, item: agg * pow(2, 8) + item, octets, 0)
+            return super(pQTType, self).set(integer)
+        return super(pQTType, self).set(value)
 
 class Fixed(pfloat.ufixed_t):
     fractional, length = 16, 4
