@@ -2,6 +2,9 @@
 import builtins, sys, math
 import functools, operator, itertools, types
 
+# Setup some version-agnostic types that we can perform checks with
+integer_types = (int, long) if sys.version_info.major < 3 else (int,)
+
 ## start somewhere
 def new(value, size):
     '''creates a new bitmap object. Bitmaps "grow" to the left.'''
@@ -13,16 +16,16 @@ def new(value, size):
 
 zero = new(0, 0)
 
-def isinteger(v):
+def isinteger(integer):
     '''Returns true if provided variable is of type int or long'''
-    return builtins.isinstance(v, six.integer_types)
+    return builtins.isinstance(integer, integer_types)
 integerQ = isinteger
 
-def isinstance(v):
+def isinstance(bitmap):
     '''Returns true if provided variable is a valid bitmap type'''
 
     # We really shouldn't be manually keeping track of types like this...
-    return builtins.isinstance(v, tuple) and len(v) == 2 and all((builtins.isinstance(v[0], six.integer_types), builtins.isinstance(v[1], six.integer_types)))
+    return builtins.isinstance(bitmap, tuple) and len(bitmap) == 2 and all(isinteger(item) for item in bitmap)
 bitmapQ = isinstance
 
 def isempty(bitmap):

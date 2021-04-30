@@ -1,6 +1,9 @@
-import sys,math,random
-import functools,operator,itertools,types
-import six
+import sys, math, random
+import functools, operator, itertools, types
+
+# Setup some version-agnostic types that we can perform checks with
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+iterbytes = functools.partial(itertools.imap, ord) if sys.version_info.major < 3 else iter
 
 ## string formatting
 def strdup(string, terminator='\0'):
@@ -51,13 +54,13 @@ class padding:
         @classmethod
         @__bytesdecorator__
         def repeat(cls, value):
-            iterable = six.iterbytes(value)
+            iterable = iterbytes(value)
             return itertools.cycle(iterable)
 
         @classmethod
         @__bytesdecorator__
         def iterable(cls, iterable):
-            return six.iterbytes(iterable)
+            return iterbytes(iterable)
 
         @classmethod
         def file(cls, file):
@@ -72,7 +75,7 @@ class padding:
         @classmethod
         @__bytesdecorator__
         def zero(cls):
-            return six.iterbytes(cls.repeat(b'\x00'))
+            return iterbytes(cls.repeat(b'\x00'))
 
     @classmethod
     def fill(cls, amount, source):
@@ -589,21 +592,21 @@ if __name__ == '__main__':
     @TestCase
     def test_padding_sourcerepeat():
         source = padding.source.repeat(iter(b'\0' * 2))
-        zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
+        zero, iterable = bytearray(b'\0')[0], (item for item in iterbytes(source))
         if next(iterable) == zero and next(iterable) == zero and next(iterable) == zero and next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourceiterable():
         source = padding.source.iterable(iter(b'\0' * 2))
-        zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
+        zero, iterable = bytearray(b'\0')[0], (item for item in iterbytes(source))
         if next(iterable) == zero and next(iterable) == zero:
             raise Success
 
     @TestCase
     def test_padding_sourcezero():
         source = padding.source.zero()
-        zero, iterable = bytearray(b'\0')[0], (item for item in six.iterbytes(source))
+        zero, iterable = bytearray(b'\0')[0], (item for item in iterbytes(source))
         if next(iterable) == zero and next(iterable) == zero:
             raise Success
 
