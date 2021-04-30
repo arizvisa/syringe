@@ -1,7 +1,10 @@
-import sys,os,math
-import six,logging
+import sys, os, math, logging
 
 __all__ = 'defaults,byteorder,partial'.split(',')
+
+# Setup some version-agnostic types that we can perform checks with
+integer_types = (int, long) if sys.version_info.major < 3 else (int,)
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 
 class field:
     class descriptor(object):
@@ -250,21 +253,21 @@ class defaults:
     log = field.type('default-logger', logging.Filterer, 'Default logging facility and level.')
 
     class integer:
-        size = field.type('integersize', six.integer_types, 'The word-size of the architecture.')
+        size = field.type('integersize', integer_types, 'The word-size of the architecture.')
         order = field.enum('byteorder', (byteorder.bigendian, byteorder.littleendian), 'The byteorder to use for new integers and pointers.')
 
     class ptype:
-        clone_name = field.type('clone_name', six.string_types, 'The formatspec to use when mangling the name during the cloning a type (will only affect newly cloned).')
+        clone_name = field.type('clone_name', string_types, 'The formatspec to use when mangling the name during the cloning a type (will only affect newly cloned).')
         noncontiguous = field.bool('noncontiguous', 'Allow optimization for non-contiguous ptype.container elements.')
 
     class pint:
-        bigendian_name = field.type('bigendian_name', six.string_types, 'The formatspec to use when mangling the names for integers that are big-endian.')
-        littleendian_name = field.type('littleendian_name', six.string_types, 'The formatspec to use when mangling the names for integers that are little-endian.')
+        bigendian_name = field.type('bigendian_name', string_types, 'The formatspec to use when mangling the names for integers that are big-endian.')
+        littleendian_name = field.type('littleendian_name', string_types, 'The formatspec to use when mangling the names for integers that are little-endian.')
 
     class parray:
         break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if an element size is invalid rather than looping indefinitely.')
         break_on_max_count = field.bool('break_on_max_count', 'If a dynamic array is larger than max_count, then raise an exception.')
-        max_count = field.type('max_count', six.integer_types, 'Notify via a warning (exception if \'break_on_max_count\') when length is larger than max_count.')
+        max_count = field.type('max_count', integer_types, 'Notify via a warning (exception if \'break_on_max_count\') when length is larger than max_count.')
 
     class pstruct:
         use_offset_on_duplicate = field.bool('use_offset_on_duplicate', 'If a name is duplicated, suffix it with the field offset (otherwise its index).')
@@ -276,22 +279,22 @@ class defaults:
 
         class hexdump:
             '''Formatting for a hexdump'''
-            width = field.type('width', six.integer_types)
-            threshold = field.type('threshold', six.integer_types)
+            width = field.type('width', integer_types)
+            threshold = field.type('threshold', integer_types)
 
         class threshold:
             '''Width and Row thresholds for displaying summaries'''
-            summary = field.type('summary_threshold', six.integer_types, 'Maximum number of bytes for a summary before shortening it with \'summary_message\'.')
-            summary_message = field.type('summary_threshold_message', six.string_types, 'Formatspec to use before summary has reached its threshold.')
-            details = field.type('details_threshold', six.integer_types, 'Maximum number of bytes for details before replacing it with \'details_message\'.')
-            details_message = field.type('details_threshold_message', six.string_types, 'Formatspec to use before details have reached their threshold.')
+            summary = field.type('summary_threshold', integer_types, 'Maximum number of bytes for a summary before shortening it with \'summary_message\'.')
+            summary_message = field.type('summary_threshold_message', string_types, 'Formatspec to use before summary has reached its threshold.')
+            details = field.type('details_threshold', integer_types, 'Maximum number of bytes for details before replacing it with \'details_message\'.')
+            details_message = field.type('details_threshold_message', string_types, 'Formatspec to use before details have reached their threshold.')
 
     class pbinary:
         '''How to display attributes of an element containing binary fields which might not be byte-aligned'''
         offset = field.enum('offset', (partial.bit, partial.fractional, partial.hex), 'The format to use when displaying the sub-offset for binary types.')
 
-        bigendian_name = field.type('bigendian_name', six.string_types, 'The formatspec to use for elements which are read most-significant to least-significant.')
-        littleendian_name = field.type('littleendian_name', six.string_types, 'The formatspec to use for elements which are read least-significant to most-significant.')
+        bigendian_name = field.type('bigendian_name', string_types, 'The formatspec to use for elements which are read most-significant to least-significant.')
+        littleendian_name = field.type('littleendian_name', string_types, 'The formatspec to use for elements which are read least-significant to most-significant.')
 
     def __getsource():
         global ptype
@@ -381,11 +384,11 @@ if __name__ == '__main__':
     @configuration
     class config(object):
         byteorder = field.enum('byteorder', (consts.bigendian, consts.littleendian), 'The endianness of integers/pointers')
-        integersize = field.type('integersize', six.integer_types, 'The word-size of the architecture')
+        integersize = field.type('integersize', integer_types, 'The word-size of the architecture')
 
         class display:
-            summary = field.type('single-line', six.integer_types)
-            details = field.type('multi-line', six.integer_types)
+            summary = field.type('single-line', integer_types)
+            details = field.type('multi-line', integer_types)
             show_module = field.bool('show-module-name')
 
         def __getlogger():
