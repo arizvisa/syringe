@@ -86,7 +86,7 @@ from . import ptype, parray, pstruct, config, error, utils, provider, pint
 Config = config.defaults
 Log = Config.log.getChild('dynamic')
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+__izip_longest__ = utils.izip_longest
 
 ## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
@@ -570,7 +570,7 @@ if __name__ == '__main__':
     import ptypes,functools,zlib
     from ptypes import dynamic,pint,parray,pstruct,config
 
-    ptypes.setsource(ptypes.provider.bytes('A'*50000))
+    ptypes.setsource(ptypes.provider.bytes(b'A'*50000))
 
     string1=b'ABCD'  # bigendian
     string2=b'DCBA'  # littleendian

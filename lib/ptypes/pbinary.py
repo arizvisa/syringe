@@ -129,7 +129,7 @@ from . import utils, bitmap, config, error, provider
 Config = config.defaults
 Log = Config.log.getChild('pbinary')
 __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+__izip_longest__ = utils.izip_longest
 
 def setbyteorder(endianness):
     '''Sets the _global_ byte order for any pbinary.type.

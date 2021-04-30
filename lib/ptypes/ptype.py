@@ -237,7 +237,7 @@ Log = Config.log.getChild('ptype')
 
 __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
 
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+__izip_longest__ = utils.izip_longest
 
 ## this is all a horrible and slow way to do this...
 def isiterator(t):

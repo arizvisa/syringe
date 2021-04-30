@@ -53,7 +53,7 @@ Config = config.defaults
 Log = Config.log.getChild('pstruct')
 __all__ = 'type,make'.split(',')
 
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+__izip_longest__ = utils.izip_longest
 
 class __structure_interface__(ptype.container):
     def __init__(self, *args, **kwds):

@@ -73,7 +73,7 @@ from . import ptype, parray, pint, utils, error, pstruct, provider, config
 Config = config.defaults
 Log = Config.log.getChild('pstr')
 
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+__izip_longest__ = utils.izip_longest
 
 def __ensure_text__(s, encoding='utf-8', errors='strict'):
     '''ripped from six v1.12.0'''
