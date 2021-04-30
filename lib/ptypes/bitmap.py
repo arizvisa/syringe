@@ -1,4 +1,5 @@
-#bitmap = (integer, bits)
+"""bitmap = (integer, bits)
+"""
 import builtins, sys, math
 import functools, operator, itertools, types
 

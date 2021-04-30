@@ -1,4 +1,4 @@
-import sys, os, math, logging
+import sys, math, logging
 
 __all__ = 'defaults,byteorder,partial'.split(',')
 
@@ -127,7 +127,7 @@ def namespace(cls):
             if isinstance(value, type):
                 fmt = '<iota>'
             elif hasattr(value, '__class__'):
-                fmt = "{!r}".format(value)
+                fmt = "{!s}".format(value)
             else:
                 raise ValueError(name)
             doc = value.__doc__.split('\n')[0] if value.__doc__ else None
@@ -174,7 +174,8 @@ def namespace(cls):
     # by not including the full contents of the .__name__ property in their output.
     for name in properties:
         value = getattr(result, name)
-        components = value.__name__.rsplit('.', 1)
+        fullname = name if not hasattr(value, '__name__') and isinstance(value, object) else value.__name__
+        components = fullname.rsplit('.', 1)
         if len(components) > 1:
             prefix, name = components
             value.__module__, value.__name__ = '.'.join([value.__module__, prefix]), name
@@ -408,4 +409,7 @@ if __name__ == '__main__':
 
     #ptypes.config.logger = logging.root
     print("{!r}".format(consts))
+    print("{!r}".format(consts.blah))
+    print("{!r}".format(consts.huh))
     print("{!r}".format(config))
+    print("{!r}".format(config.display))

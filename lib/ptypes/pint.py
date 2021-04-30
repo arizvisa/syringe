@@ -136,8 +136,9 @@ Example usage of pint.enum:
     print(instance.str())
 """
 import functools, operator, itertools, math, builtins
+from . import ptype, bitmap, error, utils
 
-from . import ptype, bitmap, config, error, utils
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('pint')
 
@@ -533,12 +534,12 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,struct
-    from ptypes import provider,utils,pint
+    import ptypes, sys, struct
+    from ptypes import provider, utils, pint
+
     string1 = b'\x0a\xbc\xde\xf0'
     string2 = b'\xf0\xde\xbc\x0a'
 
-    import sys
     tohex = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else operator.methodcaller('hex')
 
     @TestCase

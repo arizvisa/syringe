@@ -80,12 +80,13 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import sys, operator, itertools
+from . import ptype, parray, pstruct, error, utils, bitmap, provider, pint
 
-from . import ptype, parray, pstruct, config, error, utils, bitmap, provider, pint
+__all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
+
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('dynamic')
-__all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
 
 # Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
@@ -146,7 +147,7 @@ def padding(size, **kwds):
 
     def blocksize(self, mask=size - 1 if size > 0 else 0):
         parent = self.parent
-        if parent is None or not isinstance(parent, ptype.container) or not operator.contains(parent.value, self):
+        if parent is None or not isinstance(parent, ptype.container) or self not in parent.value:
             return 0
         idx = parent.value.index(self)
         res = sum(item.blocksize() for item in parent.value[:idx])
@@ -570,8 +571,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,functools,zlib
-    from ptypes import dynamic,pint,parray,pstruct,config
+    import ptypes, functools, zlib, operator
+    from ptypes import dynamic, pint, parray, pstruct, config
 
     ptypes.setsource(ptypes.provider.bytes(b'A'*50000))
 

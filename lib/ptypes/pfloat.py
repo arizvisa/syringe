@@ -94,8 +94,9 @@ Example usage:
     print(float(instance))
 """
 import builtins, math
+from . import ptype, pint, bitmap, error
 
-from . import ptype, pint, bitmap, config, error
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('pfloat')
 
@@ -399,7 +400,7 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     import ptypes, struct
-    from ptypes import pint,config,pfloat
+    from ptypes import pint, config, pfloat
     pint.setbyteorder(config.byteorder.bigendian)
 
     ## data

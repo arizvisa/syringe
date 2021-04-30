@@ -45,12 +45,14 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
-import functools, itertools, types, builtins, operator
+import functools
+from . import ptype, utils, pbinary, error
 
-from . import ptype, utils, config, pbinary, error
+__all__ = 'type,make'.split(',')
+
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('pstruct')
-__all__ = 'type,make'.split(',')
 
 # Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
@@ -426,7 +428,7 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     import ptypes
-    from ptypes import ptype,pstruct,provider,pint
+    from ptypes import ptype, pstruct, provider, pint
 
     class uint8(ptype.type):
         length = 1

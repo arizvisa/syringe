@@ -82,12 +82,14 @@ Example usage:
     # print the length of the array
     print(len(instance))
 """
-import itertools, operator, functools
+import itertools, operator
+from . import ptype, utils, error
 
-from . import ptype, utils, error, config
+__all__ = 'type,terminated,infinite,block'.split(',')
+
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('parray')
-__all__ = 'type,terminated,infinite,block'.split(',')
 
 class __array_interface__(ptype.container):
     '''provides the generic features expected out of an array'''
@@ -691,9 +693,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,sys,array,random
-    from ptypes import pstruct,parray,pint,provider,utils,dynamic,ptype
-    import string
+    import ptypes, sys, operator, array, string, random, functools
+    from ptypes import pstruct, parray, pint, provider, utils, dynamic, ptype
 
     arraytobytes = operator.methodcaller('tostring' if sys.version_info.major < 3 else 'tobytes')
     class RecordGeneral(pstruct.type):
@@ -889,7 +890,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_array_infinite_nested_partial():
-        import sys, operator
         class fakefile(object):
             d = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', ((item * 0xdead) & 0xffffffff for item in range(0x100)))
             d = array.array('B', bytearray(arraytobytes(d) + b'\xde\xad\xde\xad'))

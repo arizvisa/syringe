@@ -1,4 +1,5 @@
 import builtins as exceptions
+
 class Base(exceptions.Exception):
     """Root exception type in ptypes"""
     def __init__(self, *args):

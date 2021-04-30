@@ -65,10 +65,12 @@ Example usage:
     # return the type in ascii
     value = instance.str()
 """
-import sys, itertools, operator, functools
+import sys, itertools
 import codecs
 
-from . import ptype, parray, pint, utils, error, pstruct, provider, config
+from . import ptype, parray, pint, bitmap, utils, error, pstruct, provider
+
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('pstr')
 
@@ -506,8 +508,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes
-    from ptypes import pint,pstr,parray,pstruct,dyn,provider,utils
+    import ptypes, operator, functools
+    from ptypes import pint, pstr, parray, pstruct, dyn, provider, utils
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 

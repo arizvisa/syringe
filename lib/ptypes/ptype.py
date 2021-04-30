@@ -227,16 +227,18 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
-import builtins
-import functools, operator, itertools, types
-import sys, inspect, time, traceback
+import sys, builtins, functools, operator, itertools, types
+import inspect, time, traceback
 
-from . import bitmap, provider, utils, config, error
-Config = config.defaults
-Log = Config.log.getChild('ptype')
+from . import bitmap, provider, utils, error
 
 __all__ = 'istype,iscontainer,isrelated,type,container,undefined,block,definition,encoded_t,pointer_t,rpointer_t,opointer_t,boundary,debug,debugrecurse,clone,setbyteorder'.split(',')
 
+from . import config
+Config = config.defaults
+Log = Config.log.getChild('ptype')
+
+# Setup some version-agnostic utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
 
 ## this is all a horrible and slow way to do this...
@@ -2470,7 +2472,7 @@ if __name__ == '__main__':
 
 if __name__ == '__main__':
     import ptypes
-    from ptypes import dynamic,pint,pstr,parray,pstruct,ptype,provider,error
+    from ptypes import dynamic, pint, pstr, parray, pstruct, ptype, provider, error
     prov = provider
 
     @TestCase

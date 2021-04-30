@@ -123,11 +123,13 @@ except ImportError:
     # XXX: recursive. yay.
     import ptype
 
-from . import utils, bitmap, config, error, provider
+from . import utils, bitmap, error, provider
 
+__all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
+
+from . import config
 Config = config.defaults
 Log = Config.log.getChild('pbinary')
-__all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
 
 # Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
@@ -1987,8 +1989,8 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes,struct
-    from ptypes import pbinary,provider,pstruct,pint,bitmap
+    import ptypes, struct
+    from ptypes import pbinary, provider, pstruct, pint, bitmap
     prov = provider
 
     TESTDATA = b'ABCDIEAHFLSDFDLKADSJFLASKDJFALKDSFJ'

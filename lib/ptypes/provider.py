@@ -50,8 +50,7 @@ Example usage:
     instance.commit(source=ptypes.provider.name(...))
     print( repr(instance) )
 """
-import sys, os, builtins
-import itertools, operator, functools
+import sys, os, builtins, itertools, functools
 import importlib, array, random as _random
 
 from . import config, utils, error
@@ -1449,10 +1448,9 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import ptypes
-    from ptypes import parray,pint,pbinary,provider
+    import ptypes, os, random, tempfile, builtins
+    from ptypes import parray, pint, pbinary, provider
 
-    import os,random,tempfile,time,builtins
     from builtins import *
 
     class temporaryname(object):
@@ -1717,7 +1715,7 @@ if __name__ == '__main__':
             raise Success
 
     try:
-        import nt,multiprocessing,os,ctypes
+        import nt, multiprocessing, os, ctypes
         raise ImportError
         def stringalloc(string):
             v = ctypes.c_char*len(string)
@@ -1755,7 +1753,7 @@ if __name__ == '__main__':
         Log.warning("{:s} : Skipping the `WindowsProcessId` provider tests.".format(__name__))
 
 if __name__ == '__main__' and 0:
-    from ptypes import ptype,parray,pstruct,pint,provider
+    from ptypes import ptype, parray, pstruct, pint, provider
     from array import array
 
     # FIXME: the virtual provider is essentially an implementation of an interval tree. there's a
