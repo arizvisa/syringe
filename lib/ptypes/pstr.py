@@ -65,16 +65,16 @@ Example usage:
     # return the type in ascii
     value = instance.str()
 """
-import sys, six
-import itertools, operator, functools
+import sys, itertools, operator, functools
 import codecs
 
 from . import ptype, parray, pint, utils, error, pstruct, provider, config
 Config = config.defaults
 Log = Config.log.getChild('pstr')
 
+# Setup some version-agnostic types that we can perform checks with
 __izip_longest__ = utils.izip_longest
-text_types = utils.text_types
+integer_types, string_types, text_types = bitmap.integer_types, utils.string_types, utils.text_types
 
 def __ensure_text__(s, encoding='utf-8', errors='strict'):
     '''ripped from six v1.12.0'''
@@ -102,13 +102,13 @@ class _char_t(pint.type):
 
         value, = values
 
-        if isinstance(value, six.integer_types):
+        if isinstance(value, integer_types):
             return super(_char_t, self).__setvalue__(value)
 
         elif isinstance(value, bytes):
             return super(pint.type, self).__setvalue__(value)
 
-        elif isinstance(value, six.string_types):
+        elif isinstance(value, string_types):
             res = value.encode(self.encoding.name)
             return super(pint.type, self).__setvalue__(res, **attrs)
 

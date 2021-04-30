@@ -1181,7 +1181,7 @@ try:
                 result = cls.__PyDbgEng__.Connect("tcp:port={}, server={}".format(port, host))
             elif isinstance(remote, dict):
                 result = cls.__PyDbgEng__.Connect("tcp:port={port}, server={host}".format(**client))
-            elif isinstance(remote, six.string_types):
+            elif isinstance(remote, utils.string_types):
                 result = cls.__PyDbgEng__.Connect(client)
             return cls(result)
 

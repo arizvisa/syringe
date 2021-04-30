@@ -115,7 +115,6 @@ Example usage:
 """
 import sys, math, types, inspect
 import itertools, operator, functools
-import six
 
 try:
     from . import ptype
@@ -129,7 +128,10 @@ from . import utils, bitmap, config, error, provider
 Config = config.defaults
 Log = Config.log.getChild('pbinary')
 __all__ = 'setbyteorder,istype,iscontainer,new,bigendian,littleendian,align,type,container,array,struct,terminatedarray,blockarray,partial'.split(',')
+
+# Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
+integer_types, string_types = bitmap.integer_types, utils.string_types
 
 def setbyteorder(endianness):
     '''Sets the _global_ byte order for any pbinary.type.
@@ -243,7 +245,7 @@ class base(ptype.generic):
         raise error.ImplementationError(self, 'base.blocksize')
 
     def contains(self, offset):
-        if isinstance(offset, six.integer_types):
+        if isinstance(offset, integer_types):
             nmin = self.getoffset()
             nmax = nmin + self.blocksize()
             return nmin <= offset < nmax
@@ -478,7 +480,7 @@ class integer(type):
 
         # If an integer was passed to us, then convert it to a bitmap and try again
         value, = values
-        if isinstance(value, six.integer_types):
+        if isinstance(value, integer_types):
 
             # extract the size from either our current state or the blockbits method.
             try: _, size = bitmap.new(value, self.blockbits()) if self.value is None else self.__getvalue__()
@@ -554,11 +556,11 @@ class enum(integer):
             self._values_ = []
 
         # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in self._values_):
-            res = [item.__name__ for item in six.string_types]
+        if any(not isinstance(name, string_types) or not isinstance(value, integer_types) for name, value in self._values_):
+            res = [item.__name__ for item in string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            res = [item.__name__ for item in six.integer_types]
+            res = [item.__name__ for item in integer_types]
             integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
             raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition in `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
@@ -595,7 +597,7 @@ class enum(integer):
             value = (bitmap.value(self.get()),)
         res, = value
 
-        if isinstance(res, six.string_types):
+        if isinstance(res, string_types):
             return self.__byname__(res, None) == bitmap.value(self.get())
         return self.__byvalue__(res, False) and True or False
 
@@ -664,12 +666,12 @@ class enum(integer):
         if not values:
             return super(enum, self).set(*values, **attrs)
         value, = values
-        res = self.__byname__(value) if isinstance(value, six.string_types) else value
+        res = self.__byname__(value) if isinstance(value, string_types) else value
         return super(enum, self).set(res, **attrs)
 
     def __getitem__(self, name):
         '''If a key is specified, then return True if the enumeration actually matches the specified constant'''
-        if isinstance(name, six.string_types):
+        if isinstance(name, string_types):
             return self.has(name)
         return False
 
@@ -843,7 +845,7 @@ class container(type):
         # If a bitmap or an integer was passed to us, then we can use the
         # lower-level .__setvalue__() method. If it's an integer, then we
         # need to promote it to a bitmap.
-        if (bitmap.isinstance(value) or isinstance(value, six.integer_types)):
+        if (bitmap.isinstance(value) or isinstance(value, integer_types)):
             item = value if bitmap.isinstance(value) else bitmap.new(value, self.blockbits())
             return self.__setvalue__(item, **attrs)
 
@@ -1049,7 +1051,7 @@ class __array_interface__(container):
             result = ('signed<{:d}>' if bitmap.signed(object) else 'unsigned<{:d}>').format(bitmap.size(object))
         elif istype(object):
             result = object.typename()
-        elif isinstance(object, six.integer_types):
+        elif isinstance(object, integer_types):
             result = ('signed<{:d}>' if object < 0 else 'unsigned<{:d}>').format(abs(object))
         else:
             result = object.__name__
@@ -1057,7 +1059,7 @@ class __array_interface__(container):
 
     def __getindex__(self, index):
         # check to see if the user gave us a bad type
-        if not isinstance(index, six.integer_types):
+        if not isinstance(index, integer_types):
             raise TypeError(self, '__array_interface__.__getindex__', "Invalid type {!s} specified for index of {:s}.".format(index.__class__, self.typename()))
 
         ## validate the index
@@ -1103,7 +1105,7 @@ class __array_interface__(container):
     def __setitem__(self, index, value):
         '''x.__setitem__(i, y) <==> x[i]=y'''
         if isinstance(index, slice):
-            val = itertools.repeat(value) if (isinstance(value, (six.integer_types, type)) or bitmap.isinstance(value)) else iter(value)
+            val = itertools.repeat(value) if (isinstance(value, (integer_types, type)) or bitmap.isinstance(value)) else iter(value)
             for idx in range(*slice(index.start or 0, index.stop, index.step or 1).indices(index.stop)):
                 super(__array_interface__, self).__setitem__(idx, next(val))
             return
@@ -1192,7 +1194,7 @@ class __structure_interface__(container):
         del self.__fastindex[alias.lower()]
 
     def __getindex__(self, name):
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__getindex__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
         try:
             return self.__fastindex[name.lower()]
@@ -1229,7 +1231,7 @@ class __structure_interface__(container):
                     typename = t.typename()
                 elif bitmap.isinstance(t):
                     typename = 'signed<{:s}>'.format(bitmap.size(t)) if bitmap.signed(t) else 'unsigned<{:s}>'.format(bitmap.size(t))
-                elif isinstance(t, six.integer_types):
+                elif isinstance(t, integer_types):
                     typename = 'signed<{:d}>'.format(t) if t < 0 else 'unsigned<{:d}>'.format(t)
                 else:
                     typename = 'unknown<{!r}>'.format(t)
@@ -1255,7 +1257,7 @@ class __structure_interface__(container):
                 cb, typename = self.new(t).blockbits(), t.typename()
             elif bitmap.isinstance(t):
                 cb, typename = bitmap.size(t), 'signed' if bitmap.signed(t) else 'unsigned'
-            elif isinstance(t, six.integer_types):
+            elif isinstance(t, integer_types):
                 cb, typename = abs(t), 'signed' if t < 0 else 'unsigned'
             else:
                 cb, typename = 0, 'unknown'
@@ -1307,7 +1309,7 @@ class __structure_interface__(container):
     ## method overloads
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__contains__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
         return name in self.__fastindex
 
@@ -1420,7 +1422,7 @@ class array(__array_interface__):
             return super(array, self).blockbits()
 
         res = self._object_
-        if isinstance(res, six.integer_types):
+        if isinstance(res, integer_types):
             size = abs(res)
         elif bitmap.isinstance(res):
             size = bitmap.size(res)
@@ -1456,7 +1458,7 @@ class struct(__structure_interface__):
             return super(struct, self).blockbits()
         # FIXME: self.new(t) can potentially execute a function that it shouldn't
         #        when .blockbits() is called by .__load_littleendian
-        return sum((abs(t) if isinstance(t, six.integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_ or [])
+        return sum((abs(t) if isinstance(t, integer_types) else bitmap.size(t) if bitmap.isinstance(t) else self.new(t).blockbits()) for t, _ in self._fields_ or [])
 
     def __and__(self, field):
         '''Used to test the value of the specified field'''
@@ -1868,7 +1870,7 @@ class partial(ptype.container):
             res, = self.value
             cn = res.classname()
         else:
-            cn = self._object_.typename() if istype(self._object_) else self._object_ if isinstance(self._object_, six.integer_types) else self._object_.__name__
+            cn = self._object_.typename() if istype(self._object_) else self._object_ if isinstance(self._object_, integer_types) else self._object_.__name__
         return fmt[self.byteorder].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     def contains(self, offset):

@@ -82,16 +82,19 @@ Example usage:
 """
 import six, sys, operator, itertools
 
-from . import ptype, parray, pstruct, config, error, utils, provider, pint
+from . import ptype, parray, pstruct, config, error, utils, bitmap, provider, pint
 Config = config.defaults
 Log = Config.log.getChild('dynamic')
 __all__ = 'block,blockarray,align,array,clone,pointer,rpointer,opointer,union'.split(',')
+
+# Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
+integer_types, string_types = bitmap.integer_types, utils.string_types
 
 ## FIXME: might want to raise an exception or warning if we have too large of a block
 def block(size, **kwds):
     """Returns a ptype.block type with the specified ``size``"""
-    if not isinstance(size, six.integer_types):
+    if not isinstance(size, integer_types):
         t = ptype.block(length=size)
         raise error.UserError(t, 'block', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
@@ -109,7 +112,7 @@ def block(size, **kwds):
 
 def blockarray(type, size, **kwds):
     """Returns a parray.block with the specified ``size`` and ``type``"""
-    if not isinstance(size, six.integer_types):
+    if not isinstance(size, integer_types):
         t = parray.block(_object_=type)
         raise error.UserError(t, 'blockarray', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
@@ -133,7 +136,7 @@ def blockarray(type, size, **kwds):
 
 def padding(size, **kwds):
     '''Return a block that will pad a container to a multiple of the specified number of bytes.'''
-    if not isinstance(size, six.integer_types):
+    if not isinstance(size, integer_types):
         res = ptype.type(length=0)
         raise error.UserError(res, 'padding', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
@@ -175,7 +178,7 @@ def padding(size, **kwds):
 
 def align(size, **kwds):
     '''Return a block that will align a structure to a multiple of the specified number of bytes for its address.'''
-    if not isinstance(size, six.integer_types):
+    if not isinstance(size, integer_types):
         res = ptype.type(length=0)
         raise error.UserError(res, 'align', message="Argument size must be an integral : {!s} -> {!r}".format(size.__class__, size))
 
@@ -216,7 +219,7 @@ def array(type, count, **kwds):
     '''
     returns an array of the specified length containing elements of the specified type
     '''
-    if not isinstance(count, six.integer_types):
+    if not isinstance(count, integer_types):
         t = parray.type(_object_=type, length=count)
         raise error.UserError(t, 'array', message="Argument count must be an integral : {!s} -> {!r}".format(count.__class__, count))
 

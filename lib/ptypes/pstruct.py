@@ -53,7 +53,9 @@ Config = config.defaults
 Log = Config.log.getChild('pstruct')
 __all__ = 'type,make'.split(',')
 
+# Setup some version-agnostic types and utilities that we can perform checks with
 __izip_longest__ = utils.izip_longest
+string_types = utils.string_types
 
 class __structure_interface__(ptype.container):
     def __init__(self, *args, **kwds):
@@ -83,7 +85,7 @@ class __structure_interface__(ptype.container):
 
     def __getindex__(self, name):
         '''x.__getitem__(y) <==> x[y]'''
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__getindex__', message='Element names must be of a str type.')
 
         try:
@@ -156,7 +158,7 @@ class __structure_interface__(ptype.container):
     ## method overloads
     def __contains__(self, name):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
         return name in self.__fastindex
 
@@ -171,7 +173,7 @@ class __structure_interface__(ptype.container):
 
     def __getitem__(self, name):
         '''x.__getitem__(y) <==> x[y]'''
-        if not isinstance(name, six.string_types):
+        if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
         return super(__structure_interface__, self).__getitem__(name)
 

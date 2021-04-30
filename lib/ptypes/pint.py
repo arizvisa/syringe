@@ -142,6 +142,9 @@ from . import ptype, bitmap, config, error, utils
 Config = config.defaults
 Log = Config.log.getChild('pint')
 
+# Setup some version-agnostic types that we can perform checks with
+integer_types, string_types = bitmap.integer_types, utils.string_types
+
 __state__ = {}
 def setbyteorder(endianness):
     if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
@@ -358,11 +361,11 @@ class enum(type):
             self._values_ = []
 
         # check that enumeration's ._values_ are defined correctly
-        if any(not isinstance(name, six.string_types) or not isinstance(value, six.integer_types) for name, value in self._values_):
-            res = [item.__name__ for item in six.string_types]
+        if any(not isinstance(name, string_types) or not isinstance(value, integer_types) for name, value in self._values_):
+            res = [item.__name__ for item in string_types]
             stringtypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
-            res = [item.__name__ for item in six.integer_types]
+            res = [item.__name__ for item in integer_types]
             integraltypes = '({:s})'.format(','.join(res)) if len(res) > 1 else res[0]
 
             raise error.TypeError(self, "{:s}.enum.__init__".format(__name__), "The definition of `{:s}` is of an incorrect format and should be a list of tuples with the following types. : [({:s}, {:s}), ...]".format('.'.join([self.typename(), '_values_']), stringtypes, integraltypes))
@@ -387,7 +390,7 @@ class enum(type):
             value = (self.get(),)
         res, = value
 
-        if isinstance(res, six.string_types):
+        if isinstance(res, string_types):
             return self.__byname__(res, None) == self.get()
         return self.__byvalue__(res, False) and True or False
 
@@ -451,12 +454,12 @@ class enum(type):
             return super(enum, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        res = self.__byname__(integer) if isinstance(integer, six.string_types) else integer
+        res = self.__byname__(integer) if isinstance(integer, string_types) else integer
         return super(enum, self).__setvalue__(res, **attrs)
 
     def __getitem__(self, name):
         '''Return True if the enumeration matches the value of the constant specified by name.'''
-        if isinstance(name, six.string_types):
+        if isinstance(name, string_types):
             return self.has(name)
         return False
 
