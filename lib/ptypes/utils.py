@@ -207,7 +207,7 @@ def emit_repr(data, width=0, message=' .. skipped {leftover} chars .. ', padding
     bytewidth = width // charwidth
     leftover = size - bytewidth
 
-    hexify = lambda data: str().join(map(r"\x{:02x}".format, six.iterbytes(data)))
+    hexify = lambda data: str().join(map(r"\x{:02x}".format, bytearray(data)))
 
     if width <= 0 or bytewidth >= len(data):
         return hexify(data)

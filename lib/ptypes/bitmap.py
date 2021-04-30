@@ -1,5 +1,5 @@
 #bitmap = (integer, bits)
-import six, builtins, sys, math
+import builtins, sys, math
 import functools, operator, itertools, types
 
 ## start somewhere
@@ -278,7 +278,8 @@ class consumer(object):
         @classmethod
         def __make_interator__(cls, iterable):
             # XXX: in python2, byte-iterators always return bytes
-            return six.iterbytes(iterable)
+            F = functools.partial(itertools.imap, ord)
+            return F(iterable)
 
     else:
         @classmethod
@@ -289,7 +290,7 @@ class consumer(object):
                 return (ord(item) for item in iterable)
 
             # XXX: but, in python3 byte-iterators always return ints...
-            return six.iterbytes(iterable)
+            return iter(iterable)
 
     def __init__(self, iterable=()):
         self.source = self.__make_interator__(iterable)
