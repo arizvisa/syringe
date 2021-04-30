@@ -62,10 +62,11 @@ objects
     the only thing in this module to care about is the base.
 '''
 
-import six,functools,operator,logging,warnings,array,bisect
+import sys, functools, operator, logging, warnings, array, bisect
 class DuplicateSymbol(Warning): pass
 class UninitializedSymbol(Warning): pass
 
+integer_types = (int, long) if sys.version_info.major < 3 else (int,)
 logging.root=logging.RootLogger(logging.DEBUG)
 
 # symbol scopes
@@ -451,8 +452,8 @@ class base(symboltable):
         return list(result.intersection(self.scope[ExternalScope]))
 
     def dump(self):
-        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[isinstance(self[k], six.integer_types)]()) for k in self.getglobals()]
-        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[isinstance(self[k], six.integer_types)]()) for k in self.getlocals()]
+        g = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[isinstance(self[k], integer_types)]()) for k in self.getglobals()]
+        l = [(k, (lambda:'{!r}'.format(self[k]),lambda:'{:#x}'.format(self[k]))[isinstance(self[k], integer_types)]()) for k in self.getlocals()]
         gs = "globals:{!r}".format(g)
         ls = "locals:{:d}".format(len(l))
         return '\n'.join((gs,ls))

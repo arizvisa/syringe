@@ -234,7 +234,7 @@ if __name__ == 'CoffObject':
             section = sections[index]
 
             name = ptypes.utils.strdup(section['Name'].serialize(), terminator=b'\0')
-            __import__.six.print_(name, end='')
+            sys.stdout.write(name)
             if index in sym_static.keys():
                 sym,aux = sym_static[index]
                 print(sym['Name'].str(), sym['SectionNumber'].int(), int(sym['Value']))

@@ -1,8 +1,8 @@
-import six, ptypes
-from ptypes import pstruct,parray,ptype,pbinary,pstr,dyn
+import sys, ptypes
+from ptypes import pstruct, parray, ptype, pbinary, pstr, dyn
 from ..headers import *
 
-from . import exports,imports,resources,exceptions,relocations,debug,loader,clr,tls,headers
+from . import exports, imports, resources, exceptions, relocations, debug, loader, clr, tls, headers
 
 ## directory entry base types
 class AddressEntry(headers.IMAGE_DATA_DIRECTORY): addressing = staticmethod(virtualaddress)
@@ -111,7 +111,8 @@ class DataDirectory(parray.type):
     length = 16
 
     def __getindex__(self, key):
-        if isinstance(key, six.string_types):
+        string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+        if isinstance(key, string_types):
             # try and be smart in case user tries to be dumb
             mapping = DataDirectoryEntry.mapping()
             key, res = key.lower(), { k.lower() : v for k, v in mapping.items() }

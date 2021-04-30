@@ -1,9 +1,9 @@
-import sys, functools, itertools, types, builtins, operator, six
+import functools, itertools, sys, types, operator
 import ptypes
 
 from . import sdkddkver
 
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 
 class NdkException(ptypes.error.RequestError):
     '''
@@ -11,7 +11,7 @@ class NdkException(ptypes.error.RequestError):
     '''
     def __init__(self, object, method, *args, **kwds):
         super(NdkException, self).__init__(*((object, method) + args))
-        list(__izip_longest__(itertools.starmap(functools.partial(setattr, self), kwds.items())))
+        [ setattr(self, name, value) for name, value in kwds.items() ]
         self.__iterdata__ = tuple(args)
         self.__mapdata__ = dict(kwds)
     def __iter__(self):
@@ -21,7 +21,7 @@ class NdkException(ptypes.error.RequestError):
     def __str__(self):
         iterdata = map("{!r}".format, self.__iterdata__)
         mapdata = tuple(itertools.starmap("{:s}={!r}".format, self.__mapdata__.items()))
-        if hasattr(self, 'message') and isinstance(self.message, six.string_types):
+        if hasattr(self, 'message') and isinstance(self.message, string_types):
             return "{:s} : {:s}".format(super(NdkException, self).__str__(), self.message)
         res = "({:s})".format(', '.join(itertools.chain(iterdata, mapdata)) if self.__iterdata__ or self.__mapdata__ else '')
         return "{:s} : {:s}".format(super(NdkException, self).__str__(), res)

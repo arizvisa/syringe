@@ -1,4 +1,4 @@
-import six, sys, math, datetime, time, itertools, functools, codecs
+import sys, math, datetime, time, itertools, functools, codecs
 
 import ptypes
 from ptypes import *
@@ -6,7 +6,8 @@ from ptypes import bitmap
 
 from . import sdkddkver, winerror
 
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+izip_longest = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 
 ### versioned base-class
 class versioned(ptype.base):
@@ -466,7 +467,7 @@ class LIST_ENTRY(pstruct.type):
         '''Walks through a circular linked list'''
         if self._sentinel_ is None:
             sentinel = {self.getoffset()}
-        elif isinstance(self._sentinel_, six.string_types):
+        elif isinstance(self._sentinel_, string_types):
             sentinel = {self[self._sentinel_].int()}
         elif hasattr(self._sentinel_, '__iter__'):
             sentinel = {item for item in self._sentinel_}
@@ -726,7 +727,7 @@ class BitmapBitsBytes(ptype.block):
     def details(self):
         bytes_per_row = 8
         iterable = iter(bitmap.string(self.bitmap()))
-        rows = __izip_longest__(*(iterable,) * 8 * bytes_per_row)
+        rows = izip_longest(*[iterable] * 8 * bytes_per_row)
         res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
         items = map(str().join, res)
 

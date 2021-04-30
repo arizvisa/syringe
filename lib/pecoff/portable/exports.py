@@ -4,7 +4,7 @@ from ..headers import *
 
 from . import headers
 
-__izip_longest__ = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
+izip_longest = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 
 # FuncPointer can also point to some code too
 class FuncPointer(virtualaddress(pstr.szstring, type=dword)):
@@ -247,7 +247,7 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
         # now we can start returning things to the user
         va = CalculateRelativeOffset(self, aof.int())
-        for nameva, ordinal in __izip_longest__(nt, no):
+        for nameva, ordinal in izip_longest(nt, no):
 
             # grab the name if we can
             if nameva is None:

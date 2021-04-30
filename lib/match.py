@@ -2,6 +2,8 @@
 generic functions for use when searching through a list of objects for some specific type
 '''
 
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+
 class base(object):
     def __init__(self, *args, **kwds):
         pass
@@ -20,7 +22,7 @@ class regex(base):
         self.regex = re.compile(regularexpression, flags=flags)
 
     def compare(self, string, flags=re.I):
-        if not isinstance(string, six.string_types):  # if compared to against something not a string
+        if not isinstance(string, string_types):  # if compared to against something not a string
             return False
         return re.match(self.regex, string) is not None
 

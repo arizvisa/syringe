@@ -1,4 +1,4 @@
-import six
+import sys
 from .base import *
 from . import dynamic
 
@@ -148,12 +148,14 @@ class ELFCLASSXX(object):
         _object_ = dynamic.ElfXX_Dyn
 
         def filter_tag(self, entry):
-            if isinstance(entry, six.string_types):
+            string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+            integer_types = (int, long) if sys.version_info.major < 3 else (int,)
+            if isinstance(entry, string_types):
                 iterable = (item['d_un'] for item in self if item['d_tag'][entry])
-            elif isinstance(entry, six.integer_types):
+            elif isinstance(entry, integer_types):
                 iterable = (item['d_un'] for item in self if item['d_tag'].int() == entry)
             elif hasattr(entry, '__iter__'):
-                fmatch = lambda tag, m: (tag.int() == m) if isinstance(m, six.integer_types) else tag[m] if isinstance(m, six.string_types) else (tag.int() == m.type) if ptype.istype(m) else False
+                fmatch = lambda tag, m: (tag.int() == m) if isinstance(m, integer_types) else tag[m] if isinstance(m, string_types) else (tag.int() == m.type) if ptype.istype(m) else False
                 iterable = (item['d_un'] for item in self if any(fmatch(item['d_tag'], m) for m in entry))
             elif ptype.istype(item) or isinstance(entry, ptype.type):
                 return self.by_tag(item.type)

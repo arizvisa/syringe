@@ -1,4 +1,12 @@
-import six
+import sys
+
+integer_types = (int, long) if sys.version_info.major < 3 else (int,)
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+
+class byteorder:
+    '''Byte order constants'''
+    bigendian = object()
+    littleendian = object()
 
 class attributes:
     attributes = None
@@ -11,9 +19,9 @@ class attributes:
     def __repr__(self):
         attrs = []
         for k,v in self.attributes.items():
-            if isinstance(v, six.integer_types):
+            if isinstance(v, integer_types):
                 result = "%d"% v
-            elif isinstance(v, six.string_types):
+            elif isinstance(v, string_types):
                 result = "'%s'"% v
             elif isinstance(v, attributes):
                 result = repr(v)

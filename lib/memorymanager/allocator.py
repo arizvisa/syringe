@@ -8,7 +8,11 @@ allocator.new(pid=yourpid)
 allocator.new(handle=yourhandle)
 """
 
-import sys,ctypes,six
+import sys, ctypes
+
+integer_types = (int, long) if sys.version_info.major < 3 else (int,)
+string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
+
 ### this is written this way in case we need to target this at PaX.
 ## logic is like:
 ##    1] address = getWriteableMemory(suggestion, length)
@@ -82,7 +86,7 @@ class Local(OSExecPageAllocator):
         return ''.join(p.contents)
 
     def write(self, address, value):
-        assert isinstance(value, six.string_types)
+        assert isinstance(value, string_types)
         length = len(value)
         blockpointer = ctypes.POINTER(ctypes.c_char*length)
         v = ctypes.c_void_p(address)
@@ -266,8 +270,8 @@ if sys.platform == 'win32':
             return res != 0
 
         def read(self, address, length):
-            assert type(address) in six.integer_types, "Invalid address type {!r}".format(address)
-            assert type(length) in six.integer_types
+            assert type(address) in integer_types, "Invalid address type {!r}".format(address)
+            assert type(length) in integer_types
             NumberOfBytesRead = ctypes.c_int()
             res = ctypes.c_char*length
             Buffer = res()
@@ -280,8 +284,8 @@ if sys.platform == 'win32':
             return str(Buffer.raw)
 
         def write(self, address, value):
-            assert isinstance(address, six.integer_types), "Invalid address type {!r}".format(address)
-            assert isinstance(value, six.string_types)
+            assert isinstance(address, integer_types), "Invalid address type {!r}".format(address)
+            assert isinstance(value, string_types)
             NumberOfBytesWritten = ctypes.c_int()
 
             res = ctypes.c_char*len(value)
