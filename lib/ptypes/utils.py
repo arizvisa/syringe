@@ -2,6 +2,7 @@ import sys, math, random
 import functools, operator, itertools, types
 
 # Setup some version-agnostic types that we can perform checks with
+izip_longest = itertools.izip_longest if sys.version_info.major < 3 else itertools.zip_longest
 string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 iterbytes = functools.partial(itertools.imap, ord) if sys.version_info.major < 3 else iter
 
