@@ -93,7 +93,7 @@ Example usage:
     print(instance.float())
     print(float(instance))
 """
-import six, builtins, math
+import builtins, math
 
 from . import ptype, pint, bitmap, config, error
 Config = config.defaults

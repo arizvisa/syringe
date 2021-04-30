@@ -80,7 +80,7 @@ Example usage:
             (dyn.clone(pstr.wstring, length=8), 'widestring'),
         ]
 """
-import six, sys, operator, itertools
+import sys, operator, itertools
 
 from . import ptype, parray, pstruct, config, error, utils, bitmap, provider, pint
 Config = config.defaults

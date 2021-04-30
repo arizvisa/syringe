@@ -506,7 +506,7 @@ if __name__ == '__main__':
         return fn
 
 if __name__ == '__main__':
-    import six, ptypes
+    import ptypes
     from ptypes import pint,pstr,parray,pstruct,dyn,provider,utils
 
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex

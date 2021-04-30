@@ -45,8 +45,7 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
-import sys
-import functools, itertools, types, builtins, operator, six
+import functools, itertools, types, builtins, operator
 
 from . import ptype, utils, config, pbinary, error
 Config = config.defaults

@@ -135,8 +135,7 @@ Example usage of pint.enum:
     # return the instance as a name or an integer in string form
     print(instance.str())
 """
-import six, builtins
-import functools, operator, itertools, math
+import functools, operator, itertools, math, builtins
 
 from . import ptype, bitmap, config, error, utils
 Config = config.defaults

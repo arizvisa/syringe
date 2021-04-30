@@ -50,8 +50,7 @@ Example usage:
     instance.commit(source=ptypes.provider.name(...))
     print( repr(instance) )
 """
-import six, builtins
-import sys, os
+import sys, os, builtins
 import itertools, operator, functools
 import importlib, array, random as _random
 

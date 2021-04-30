@@ -82,7 +82,6 @@ Example usage:
     # print the length of the array
     print(len(instance))
 """
-import six
 import itertools, operator, functools
 
 from . import ptype, utils, error, config

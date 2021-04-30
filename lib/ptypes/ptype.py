@@ -227,7 +227,7 @@ Example pointer_t usage:
         def _calculate_(self, number):
             return number + 0x100
 """
-import six, builtins
+import builtins
 import functools, operator, itertools, types
 import sys, inspect, time, traceback
 
@@ -358,21 +358,21 @@ def debug(ptype, **attributes):
             if 'constructed' in dbg:
                 t, c = dbg['constructed']
                 _, st, bt = dbg['creation']
-                six.print_(u"[{!r}] {:s} -> {:s} -> {:s}".format(t, c, self.instance(), getattr(self, '__name__', u"")), file=file)
+                file.write(u"[{!r}] {:s} -> {:s} -> {:s}\n".format(t, c, self.instance(), getattr(self, '__name__', u"")))
             else:
                 t, st, bt = dbg['creation']
-                six.print_(u"[{!r}] {:s} -> {:s} -> {:s}".format(t, self.typename(), self.instance(), getattr(self, '__name__', u"")), file=file)
+                file.write(u"[{!r}] {:s} -> {:s} -> {:s}\n".format(t, self.typename(), self.instance(), getattr(self, '__name__', u"")))
 
-            six.print_(u"Created by:", file=file)
-            six.print_(format_stack(st), file=file)
-            six.print_(u"Located at:", file=file)
-            six.print_('\n'.join(u"{:s} : {:s}".format(x.instance(), x.name()) for x in bt), file=file)
-            six.print_(u"Loads from store", file=file)
-            six.print_('\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['load'])), file=file)
-            six.print_(u"Writes to store", file=file)
-            six.print_('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['commit'])), file=file)
-            six.print_(u"Serialized to a string:", file=file)
-            six.print_('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['serialize'])), file=file)
+            file.write(u"\nCreated by:\n")
+            file.write(format_stack(st))
+            file.write(u"\nLocated at:\n")
+            file.write('\n'.join(u"{:s} : {:s}".format(x.instance(), x.name()) for x in bt))
+            file.write(u"\nLoads from store\n")
+            file.write('\n'.join("[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['load'])))
+            file.write(u"\nWrites to store\n")
+            file.write('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['commit'])))
+            file.write(u"\nSerialized to a string:\n")
+            file.write('\n'.join(u"[:d] [{:f}] {:s}".format(i, t, string) for i, (t, _, string) in enumerate(dbg['serialize'])))
             return
 
         def serialize(self):
