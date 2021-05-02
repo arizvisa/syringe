@@ -1320,7 +1320,7 @@ class __structure_interface__(container):
         if self.value is None:
             raise error.InitializationError(self, '__structure_interface__.__iter__')
 
-        for name in self.iterkeys(self):
+        for name in self.iterkeys():
             yield name
         return
 
