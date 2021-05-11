@@ -751,7 +751,7 @@ if __name__ == '__main__':
                 logging.info('Creating new file for record({:d}): {:s}'.format(int(rec.name()), res))
 
             logging.debug('{:s}ing {:d} bytes from record({:d}) to file: {:s}'.format(args.mode.title(), len(data), int(rec.name()), res))
-            with file(res, 'wb') as out: six.print_(data, file=out)
+            with open(res, 'wb') as out: out.write(data)
 
         # fall-back to writing to already open target
         else:

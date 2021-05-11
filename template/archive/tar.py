@@ -473,7 +473,7 @@ if __name__ == '__main__':
             else:
                 logging.info("Creating file for member : {:d} : {:s}".format(int(member.name()), res))
 
-            with file(res, 'wb') as out: six.print_(data, file=out)
+            with open(res, 'wb') as out: out.write(data)
 
         # fall-back to writing to already open target
         else:
