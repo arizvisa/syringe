@@ -19,40 +19,37 @@ class _REPARSE_DATA_BUFFER(pstruct.type):
     ]
 
 # copied from http://www.writeblocked.org/resources/NTFS_CHEAT_SHEETS.pdf
-class BPB(pstruct.type):
-    '''BIOS Parameter Block'''
-    _fields_ = [
-        (USHORT, 'bytes/sector'),
-        (BYTE, 'sector/cluster'),
-        (USHORT, 'reserved'),
-        (dyn.clone(pint.uinteger_t, length=3), '0x000000'),
-        (USHORT, 'unused'),
-        (BYTE, 'descriptor'),
-        (USHORT, '0x0000'),
-        (USHORT, 'sector/track'),
-        (USHORT, 'heads'),
-        (ULONG, 'hidden sectors'),
-        (ULONGLONG, 'padding'),
-    ]
+# redefined based on https://raw.githubusercontent.com/REhints/Publications/master/Conferences/RECON'2013/RECON_2013.pdf
 
-class EBPB(pstruct.type):
-    '''Extended BIOS Parameter Block'''
+class _BIOS_PARAMETER_BLOCK(pstruct.type):
+    '''BPB @ EBPB'''
     _fields_ = [
-        (ULONGLONG, 'sectors'),
-        (ULONGLONG, '$MFT'),
-        (ULONGLONG, '$MFTMirror'),
-        (ULONG, 'cluster/file record segment'),
-        (ULONG, 'cluster/index block'),
-        (ULONGLONG, 'serial'),
-        (ULONG, 'checksum'),
+        (WORD, 'BytesPerSector'),
+        (BYTE, 'SecPerCluster'),
+        (WORD, 'ReservedSectors'),
+        (dyn.array(BYTE, 5), 'Reserved'),       # 0x000000xxxx
+        (BYTE, 'MediaDescriptorID'),
+        (WORD, 'Reserved2'),                    # 0x0000
+        (WORD, 'SectorsPerTrack'),
+        (WORD, 'NumberOfHeads'),
+        (DWORD, 'HiddenSectors'),
+        (dyn.array(DWORD, 2), 'Reserved3'),
+
+        # Extended BIOS Parameter Block
+        (LONGLONG, 'TotalSectors'),
+        (LONGLONG, 'StartingCluster'),          # $MFT
+        (LONGLONG, 'MFTMirrStartingCluster'),   # $MFTMirror
+        (DWORD, 'ClustersPerMFTRecord'),
+        (DWORD, 'ClustersPerIndexBuffer'),
+        (LONGLONG, 'VolumeSerialNumber'),
+        (DWORD, 'Reserved4'),                   # checksum
     ]
 
 class Boot(pstruct.type):
     _fields_ = [
         (dyn.block(3), 'branch'),
         (ULONGLONG, 'oem'),
-        (BPB, 'bios parameter block'),
-        (EBPB, 'extended bios parameter block'),
+        (_BIOS_PARAMETER_BLOCK, 'bios parameter block'),
         (dyn.block(426), 'code'),
         (USHORT, 'sentinel'),   # 0xaa55
     ]
@@ -108,25 +105,60 @@ class MFT_Attribute_Id(pint.enum, ULONG):
     ]
 
 @MFT_Attribute.define
-class Attribute_List(ptype.undefined): id = 0x20
+class Attribute_List(ptype.undefined):
+    id = 0x20
+
 @MFT_Attribute.define
-class Attribute_ObjectID(ptype.undefined): id = 0x40
+class Attribute_ObjectID(ptype.undefined):
+    id = 0x40
+
 @MFT_Attribute.define
-class Attribute_SecurityDescriptor(ptype.undefined): id = 0x50
+class Attribute_SecurityDescriptor(ptype.block):
+    '''$SECURITY_DESCRIPTOR'''
+    id = 0x50
+
 @MFT_Attribute.define
-class Attribute_VolumeName(ptype.undefined): id = 0x60
+class Attribute_VolumeName(ptype.undefined):
+    id = 0x60
+
 @MFT_Attribute.define
-class Attribute_VolumeInformation(ptype.undefined): id = 0x70
+class Attribute_VolumeInformation(ptype.undefined):
+    id = 0x70
+
 @MFT_Attribute.define
-class Attribute_IndexRoot(ptype.undefined): id = 0x90
+class Attribute_Data(ptype.block):
+    '''$DATA'''
+    id = 0x80
+
 @MFT_Attribute.define
-class Attribute_IndexAllocation(ptype.undefined): id = 0xa0
+class Attribute_IndexRoot(pstruct.type):
+    '''$INDEX_ROOT'''
+    id = 0x90
+
+    _fields_ = [
+        (ULONG, 'Type'),
+        (ULONG, 'Collation Rule'),
+        (ULONG, 'Allocation Index Entry Size'),
+        (BYTE, 'Clusters per Index Record'),
+        (dyn.align(8), 'Padding'),              # FIXME: padding, not alignment
+    ]
+
 @MFT_Attribute.define
-class Attribute_Bitmap(ptype.undefined): id = 0xb0
+class Attribute_IndexAllocation(ptype.undefined):
+    id = 0xa0
+
 @MFT_Attribute.define
-class Attribute_ReparsePoint(ptype.undefined): id = 0xc0
+class Attribute_Bitmap(ptype.undefined):
+    '''$BITMAP'''
+    id = 0xb0
+
 @MFT_Attribute.define
-class Attribute_LoggedToolStream(ptype.undefined): id = 0x100
+class Attribute_ReparsePoint(ptype.undefined):
+    id = 0xc0
+
+@MFT_Attribute.define
+class Attribute_LoggedToolStream(ptype.undefined):
+    id = 0x100
 
 class Attribute(pstruct.type):
     class Header(pstruct.type):
@@ -312,32 +344,4 @@ class File_Name(pstruct.type):
         (BYTE, 'Name Length'),
         (_Name_Type, 'Name Type'),
         (lambda self: dyn.block(self['Name Length'].li.int()), 'Name'),
-    ]
-
-@MFT_Attribute.define
-class Security_Descriptor(ptype.block):
-    '''$SECURITY_DESCRIPTOR'''
-    id = 0x50
-
-@MFT_Attribute.define
-class Data(ptype.block):
-    '''$DATA'''
-    id = 0x80
-
-@MFT_Attribute.define
-class Bitmap(ptype.block):
-    '''$BITMAP'''
-    id = 0xb0
-
-@MFT_Attribute.define
-class Index_Root(pstruct.type):
-    '''$INDEX_ROOT'''
-    id = 0x90
-
-    _fields_ = [
-        (ULONG, 'Type'),
-        (ULONG, 'Collation Rule'),
-        (ULONG, 'Allocation Index Entry Size'),
-        (BYTE, 'Clusters per Index Record'),
-        (dyn.align(8), 'Padding'),              # FIXME: padding, not alignment
     ]
