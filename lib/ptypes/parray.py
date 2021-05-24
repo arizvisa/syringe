@@ -662,6 +662,7 @@ class block(uninitialized):
                 if size <= 0:
                     if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
                         Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                        self.value.append(item)
                         break
 
                     # verify the sanity of the element size as lengths can't be less than zero.
