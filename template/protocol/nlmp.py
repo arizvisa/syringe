@@ -54,7 +54,7 @@ class Message(pstruct.type):
     _fields_ = [
         (_Signature, 'Signature'),
         (MessageType, 'MessageType'),
-        (__MessageFields, 'MessageFields'), 
+        (__MessageFields, 'MessageFields'),
         (__Payload, 'MessagePayload'),
     ]
 

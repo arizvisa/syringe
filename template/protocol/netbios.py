@@ -297,7 +297,7 @@ if __name__ == '__main__':
     import ptypes, protocol.netbios as nb
     import importlib
     importlib.reload(nb)
-    
+
     fromhex = operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex
 
     data = '8096011000010000000000002046484641454245454341434143414341434143414341434143414341434141410000200001'

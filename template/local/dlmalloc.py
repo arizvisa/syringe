@@ -173,11 +173,11 @@ class mchunk(pstruct.type):
         def summary(self):
             res, flags = self.Size(), self['flags']
             return "{:#0{:d}x} {:+#x}{:s}".format(self['integer'].int(), 2 + self['integer'].size() * 2, res, " {!s}".format(flags.summary()) if flags.summary() else '')
-        
+
     _fields_ = [
         (INTERNAL_SIZE_T, 'prev_size'),
         (_size, 'size'),
-    ] 
+    ]
 
     def Flag(self, name):
         item = self['size']['flags']
