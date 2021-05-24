@@ -10,16 +10,16 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
         (TimeDateStamp, 'TimeDateStamp'),
         (word, 'MajorVersion'),
         (word, 'MinorVersion'),
-        (word, 'NumberOfNames'),
-        (word, 'NumberOfIds'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=s['NumberOfNames'].li.int()), 'Names'),
-        (lambda s: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=s['NumberOfIds'].li.int()), 'Ids'),
+        (word, 'NumberOfNamedEntries'),
+        (word, 'NumberOfIdEntries'),
+        (lambda self: dyn.clone(IMAGE_RESOURCE_DIRECTORY_NAME, length=self['NumberOfNamedEntries'].li.int()), 'Names'),
+        (lambda self: dyn.clone(IMAGE_RESOURCE_DIRECTORY_ID, length=self['NumberOfIdEntries'].li.int()), 'Ids'),
     ]
 
     def Iterate(self):
         return itertools.chain((n.Name() for n in self['Names']), (n.Name() for n in self['Ids']))
     def List(self):
-        return list(self.Iterate())
+        return [item for item in self.Iterate()]
     def Entry(self, name):
         iterable = (n['Entry'].d for n in itertools.chain(iter(self['Names']), iter(self['Ids'])) if name == n.Name())
         return next(iterable, None)
@@ -32,33 +32,32 @@ class IMAGE_RESOURCE_DIRECTORY(pstruct.type):
 class IMAGE_RESOURCE_DIRECTORY_STRING(pstruct.type):
     _fields_ = [
         (word, 'Length'),
-        (lambda s: dyn.clone(pstr.wstring, length=s['Length'].li.int()), 'String')
+        (lambda self: dyn.clone(pstr.string, length=self['Length'].li.int()), 'String')
+    ]
+    def str(self):
+        return self['String'].str()
+
+class IMAGE_RESOURCE_DIRECTORY_STRING_U(pstruct.type):
+    _fields_ = [
+        (word, 'Length'),
+        (lambda self: dyn.clone(pstr.wstring, length=self['Length'].li.int()), 'String'),
     ]
     def str(self):
         return self['String'].str()
 
 class IMAGE_RESOURCE_DATA_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda s: dyn.block(s.parent['Size'].li.int()), type=dword), 'Data'),
+        (virtualaddress(lambda self: dyn.block(self.parent['Size'].li.int()), type=dword), 'OffsetToData'),
         (dword, 'Size'),
-        (dword, 'Codepage'),
+        (dword, 'CodePage'),
         (dword, 'Reserved'),
     ]
 
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.rpointer_t):
-    class RVAType(pbinary.struct):
-        _fields_ = [(1, 'type'), (31, 'offset')]
-        def get(self):
-            return self['offset']
-        def set(self, value):
-            self['type'] = 0
-            self['offset'] = value
-            return self
-    _value_ = pbinary.littleendian(RVAType)
     def _baseobject_(self):
         base = self.getparent(headers.IMAGE_DATA_DIRECTORY)['Address']
         if base.int() == 0:
-            raise ValueError("No Resource Data Directory Entry")
+            raise ValueError('No Resource Data Directory Entry')
         return base.d
     def encode(self, object, **attrs):
         raise NotImplementedError
@@ -66,15 +65,38 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA(ptype.rpointer_t):
         return self.object.summary(**attrs)
 
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA):
+    class RVAType(pbinary.struct):
+        _fields_ = [(1, 'NameIsString'), (31, 'NameOffset')]
+        def get(self):
+            return self['NameOffset']
+        def set(self, value):
+            self['NameIsString'] = 0
+            self['NameOffset'] = value
+            return self
+    _value_ = pbinary.littleendian(RVAType)
+
     def _object_(self):
-        return IMAGE_RESOURCE_DIRECTORY_STRING if self.object['type'] else ptype.undefined
+        return IMAGE_RESOURCE_DIRECTORY_STRING if self.object['NameIsString'] else ptype.undefined
+
     def get(self):
-        if self.object['type'] == 0:
-            return self.object['offset']
+        if self.object['NameIsString'] == 0:
+            return self.object['NameOffset']
         return self.d.li.str()
+
 class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_DATA(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA):
+    class RVAType(pbinary.struct):
+        _fields_ = [(1, 'DataIsDirectory'), (31, 'OffsetToDirectory')]
+        def get(self):
+            return self['OffsetToDirectory']
+        def set(self, value):
+            self['DataIsDirectory'] = 0
+            self['OffsetToDirecotry'] = value
+            return self
+    _value_ = pbinary.littleendian(RVAType)
+
     def _object_(self):
-        return IMAGE_RESOURCE_DIRECTORY if self.object['type'] else IMAGE_RESOURCE_DATA_ENTRY
+        return IMAGE_RESOURCE_DIRECTORY if self.object['DataIsDirectory'] else IMAGE_RESOURCE_DATA_ENTRY
+
 class IMAGE_RESOURCE_DIRECTORY_ENTRY(pstruct.type):
     _fields_ = [
         (IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME, 'Name'),
@@ -92,29 +114,29 @@ class IMAGE_RESOURCE_DIRECTORY_ID(parray.type):
     _object_ = IMAGE_RESOURCE_DIRECTORY_ENTRY
 
 ## Resource types
-class ResourceType(pint.enum):
+class RT_(pint.enum):
     _values_ = [
-        ('RT_CURSOR', 1),
-        ('RT_FONT', 8),
-        ('RT_BITMAP', 2),
-        ('RT_ICON', 3),
-        ('RT_MENU', 4),
-        ('RT_DIALOG', 5),
-        ('RT_STRING', 6),
-        ('RT_FONTDIR', 7),
-        ('RT_ACCELERATOR', 9),
-        ('RT_RCDATA', 10),
-        ('RT_MESSAGETABLE', 11),
-        ('RT_GROUP_CURSOR', 12),
-        ('RT_GROUP_ICON', 14),
-        ('RT_VERSION', 16),
-        ('RT_DLGINCLUDE', 17),
-        ('RT_PLUGPLAY', 19),
-        ('RT_VXD', 20),
-        ('RT_ANICURSOR', 21),
-        ('RT_ANIICON', 22),
-        ('RT_HTML', 23),
-        ('RT_MANIFEST', 24),
+        ('CURSOR', 1),
+        ('BITMAP', 2),
+        ('ICON', 3),
+        ('MENU', 4),
+        ('DIALOG', 5),
+        ('STRING', 6),
+        ('FONTDIR', 7),
+        ('FONT', 8),
+        ('ACCELERATOR', 9),
+        ('RCDATA', 10),
+        ('MESSAGETABLE', 11),
+        ('GROUP_CURSOR', 12),
+        ('GROUP_ICON', 14),
+        ('VERSION', 16),
+        ('DLGINCLUDE', 17),
+        ('PLUGPLAY', 19),
+        ('VXD', 20),
+        ('ANICURSOR', 21),
+        ('ANIICON', 22),
+        ('HTML', 23),
+        ('MANIFEST', 24),
     ]
 
 ## resource navigation
@@ -122,82 +144,83 @@ class RT_VERSION_ValueType(ptype.definition): cache = {}
 class RT_VERSION_EntryType(ptype.definition): cache = {}
 
 class RT_VERSION(pstruct.type):
-    def __Type(self):
-        if callable(getattr(self, 'Type', None)):
-            return self.Type()
+    class _wType(pint.enum, word):
+        _values_ = [
+            ('Binary', 0),
+            ('Text', 1),
+        ]
+    def __Value(self):
+        length, attribute = self['wValueLength'].li.int(), getattr(self, 'ValueType') if hasattr(self, 'ValueType') else None
+        if callable(attribute):
+            return self.ValueType(length)
 
         cls, key = self.__class__, self['szKey'].li.str()
-        if cls != RT_VERSION:
-            logging.debug("{:s} : No type callback implemented for Value in {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
-
-        sz = self['wValueLength'].li.int()
-        return RT_VERSION_ValueType.withdefault(key, type=key, length=sz)
-
-    def __ChildType(self):
-        if callable(getattr(self, 'ChildType', None)):
-            return self.ChildType()
-
-        cls, key = self.__class__, self['szKey'].li.str()
-        if self.__class__ != RT_VERSION:
-            logging.debug("{:s} : No type callback implemented for Children in {!r}. Searching for one instead.".format('.'.join((cls.__module__, cls.__name__)), key))
-
-        return RT_VERSION_EntryType.lookup(key)
-        #bs = self['wLength'].li.int() - self.blocksize()
-        #return RT_VERSION_EntryType.withdefault(szkey, type=szkey, length=bs)
+        if cls is not RT_VERSION:
+            logging.debug("{:s} : No type callback implemented for Value in {!r}. Searching for one instead.".format('.'.join([cls.__module__, cls.__name__]), key))
+        return RT_VERSION_ValueType.withdefault(key, type=key, length=length)
 
     def __Children(self):
-        fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Alignment', 'Value']
+        fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value', 'Padding2']
         length, cb = self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
-
         if cb > length:
-            raise AssertionError("Invalid block size returned for child: {:d}".format(bs))
+            raise AssertionError("Invalid block size returned for child: {:d} > {:d}".format(cb, length))
+        size = max(0, length - cb)
 
-        ct = self.__ChildType()
-        class Member(pstruct.type):
-            _fields_ = [
-                (dyn.align(4), 'Alignment'),
-                (ct, 'Child'),
-            ]
-        return dyn.clone(parray.block, _object_=Member, blocksize=lambda self, bs=length - cb: bs)
+        # If our class implements a .Children() method, then use that to determine the type.
+        attribute = getattr(self, 'Children') if hasattr(self, 'Children') else None
+        if callable(attribute):
+            return self.Children(size)
 
-    def __Padding(self):
-        cb = sum(self[fld].li.size() for _, fld in self._fields_[:-1])
-        return dyn.block(self.blocksize() - cb)
+        # Otherwise, use the key to lookup the type in our definition.
+        cls, key = self.__class__, self['szKey'].li.str()
+        if cls is not RT_VERSION:
+            logging.debug("{:s} : No type callback implemented for Children in {!r}. Searching for one instead.".format('.'.join([cls.__module__, cls.__name__]), key))
+
+        # And then use that type to build the array of children.
+        res = RT_VERSION_EntryType.lookup(key)
+        return dyn.blockarray(res, size)
+
+    def __Unknown(self):
+        res, fields = self['wLength'].li.int(), ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value', 'Padding2', 'Children']
+        cb = sum(self[fld].li.size() for fld in fields)
+        return dyn.block(max(0, res - cb))
 
     _fields_ = [
+        (dyn.align(4), 'alignment'),
         (word, 'wLength'),
         (word, 'wValueLength'),
-        (word, 'wType'),
+        (_wType, 'wType'),
         (pstr.szwstring, 'szKey'),
-        (dyn.align(4), 'Alignment'),
-        (__Type, 'Value'),
+        (dyn.align(4), 'Padding1'),
+        (__Value, 'Value'),
+        (dyn.align(4), 'Padding2'),
         (__Children, 'Children'),
-        (__Padding, 'Padding'),
+        (__Unknown, 'Unknown'),
     ]
 
 @RT_VERSION_EntryType.define
 class RT_VERSION_StringFileInfo(RT_VERSION):
     type = 'StringFileInfo'
-    def ChildType(self):
-        return RT_VERSION_String
+    def Children(self, size):
+        return dyn.blockarray(RT_VERSION_String, size)
 
 class RT_VERSION_String(RT_VERSION):
-    def ChildType(self):
-        return ptype.undefined
-    def Type(self):
+    def Children(self, length):
+        return dyn.clone(pstr.wstring, length=length // 2)
+    def ValueType(self, length):
         # wValueLength = number of 16-bit words of wValue
-        l = self['wValueLength'].li.int()
-        return dyn.clone(pstr.wstring, length=l)
+        return dyn.clone(pstr.wstring, length=length)
 
 @RT_VERSION_EntryType.define
 class RT_VERSION_VarFileInfo(RT_VERSION):
     type = 'VarFileInfo'
-    def Type(self):
-        l = self['wValueLength'].li.int()
-        return dyn.clone(parray.block, _object_=dword, blocksize=lambda s:l)
+    def ValueType(self, length):
+        return dyn.blockarray(dword, length)
+
 @RT_VERSION_EntryType.define
-class RT_VERSION_Translation(ptype.undefined):
+class RT_VERSION_Translation(ptype.block):
     type = 'Translation'
+
 @RT_VERSION_ValueType.define
 class VS_FIXEDFILEINFO(pstruct.type):
     type = 'VS_VERSION_INFO'
@@ -218,8 +241,8 @@ class VS_FIXEDFILEINFO(pstruct.type):
     ]
 
 class VS_VERSIONINFO(RT_VERSION):
-    def ChildType(self):
-        return RT_VERSION
+    def Children(self, length):
+        return dyn.blockarray(RT_VERSION, length)
 
 if __name__ == '__main__':
     import ptypes, pecoff
