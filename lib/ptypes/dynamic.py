@@ -483,6 +483,10 @@ class union(__union_interface__):
             return '\n'.join(result)
         return "[{:x}] Empty []".format(self.getoffset())
 
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, union.blocksize)
     def blocksize(self):
         return self.object.blocksize()
     def size(self):
