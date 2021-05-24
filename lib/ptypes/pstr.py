@@ -195,6 +195,10 @@ class string(ptype.type):
         ofs = offset - self.getoffset()
         return self[ ofs // self._object_().blocksize() ]
 
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, string.blocksize)
     def blocksize(self):
         return self._object_().blocksize() * self.length
 
@@ -456,6 +460,10 @@ class szstring(string):
             continue
         return self
 
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, szstring.blocksize)
     def blocksize(self):
         return self.size() if self.initializedQ() else self.load().size()
 

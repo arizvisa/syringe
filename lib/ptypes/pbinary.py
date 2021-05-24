@@ -419,6 +419,10 @@ class integer(type):
         res = self.__getvalue__()
         return bitmap.size(res)
 
+    def __blockbits_originalQ__(self):
+        '''Return whether the instance's blockbits have been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, integer.blockbits)
     def blockbits(self):
         if self.value is None:
             return 0
@@ -581,6 +585,10 @@ class enum(integer):
         #      they're within the boundaries of our type
         return
 
+    def __blockbits_originalQ__(self):
+        '''Return whether the instance's blockbits have been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, enum.blockbits)
     def blockbits(self):
         if self.value is None:
             return getattr(self, 'length', 0)
@@ -779,6 +787,10 @@ class container(type):
     def bits(self):
         return sum(item.bits() for item in self.value or [])
 
+    def __blockbits_originalQ__(self):
+        '''Return whether the instance's blockbits have been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, container.blockbits)
     def blockbits(self):
         if self.value is None:
             raise error.InitializationError(self, 'container.blockbits')
@@ -1419,6 +1431,10 @@ class array(__array_interface__):
         generator = (self.new(object, __name__=str(index), position=position) for index in range(self.length))
         return super(array, self).__deserialize_consumer__(consumer, generator)
 
+    def __blockbits_originalQ__(self):
+        '''Return whether the instance's blockbits have been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, array.blockbits)
     def blockbits(self):
         if self.initializedQ():
             return super(array, self).blockbits()
@@ -1455,6 +1471,10 @@ class struct(__structure_interface__):
         generator = (self.new(t, __name__=name, position=position) for t, name in self._fields_ or [])
         return super(struct, self).__deserialize_consumer__(consumer, generator)
 
+    def __blockbits_originalQ__(self):
+        '''Return whether the instance's blockbits have been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, struct.blockbits)
     def blockbits(self):
         if self.initializedQ():
             return super(struct, self).blockbits()
@@ -1512,6 +1532,10 @@ class terminatedarray(__array_interface__):
         '''Intended to be overloaded. Should return True if value ``item`` represents the end of the array.'''
         raise error.ImplementationError(self, 'terminatedarray.isTerminator')
 
+    def __blockbits_originalQ__(self):
+        '''Return whether the instance's blockbits have been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blockbits, cls.blockbits) and utils.callable_eq(cls.blockbits, terminatedarray.blockbits)
     def blockbits(self):
 
         # If the user implement a custom .blocksize() method, then use that to
@@ -1761,6 +1785,11 @@ class partial(ptype.container):
         size = value.bits()
         res = (size) if (size & 7) == 0x0 else ((size + 8) & ~7)
         return res // 8
+
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, partial.blocksize)
     def blocksize(self):
         value = self.value[0] if self.initializedQ() else self.__pb_object()
         size = value.blockbits()

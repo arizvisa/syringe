@@ -266,7 +266,6 @@ class defaults:
         littleendian_name = field.type('littleendian_name', string_types, 'The formatspec to use when mangling the names for integers that are little-endian.')
 
     class parray:
-        break_on_zero_sized_element = field.bool('break_on_zero_sized_element', 'Terminate an array if an element size is invalid rather than looping indefinitely.')
         break_on_max_count = field.bool('break_on_max_count', 'If a dynamic array is larger than max_count, then raise an exception.')
         max_count = field.type('max_count', integer_types, 'Notify via a warning (exception if \'break_on_max_count\') when length is larger than max_count.')
 
@@ -341,7 +340,6 @@ defaults.display.threshold.details_message = ' ..skipped {leftover} rows, {skipp
 defaults.display.mangle_with_attributes = False
 
 # array types
-defaults.parray.break_on_zero_sized_element = False
 defaults.parray.break_on_max_count = False
 defaults.parray.max_count = sys.maxsize
 

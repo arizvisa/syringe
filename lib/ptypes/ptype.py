@@ -1153,6 +1153,10 @@ class type(base):
         Log.info("type.size : {:s} : Unable to determine size of ptype.type, as object is still uninitialized.".format(self.instance()))
         return 0
 
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, type.blocksize)
     def blocksize(self):
         """Returns the expected size of the type
 
@@ -1197,6 +1201,10 @@ class container(base):
         """Returns a sum of the number of bytes that are currently in use by all sub-elements"""
         return sum(item.size() for item in self.value or [])
 
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, container.blocksize)
     def blocksize(self):
         """Returns a sum of the bytes that are expected to be read"""
         if self.value is None:
@@ -2087,6 +2095,10 @@ class wrapper_t(type):
     def initializedQ(self):
         return self.__object__ is not None and self.__object__.initializedQ()
 
+    def __blocksize_originalQ__(self):
+        '''Return whether the instance's blocksize has been rewritten by a definition.'''
+        cls = self.__class__
+        return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, wrapper_t.blocksize)
     def blocksize(self):
         if self.__object__ is not None:
             try:
