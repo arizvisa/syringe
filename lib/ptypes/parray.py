@@ -402,13 +402,20 @@ class terminated(type):
                     self.value.append(item)
                     if self.isTerminator(item.load()):
                         break
-
                     size = item.blocksize()
-                    if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
-                        break
-                    if size < 0:
-                        raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(item.classname()))
+
+                    # we only allow elements with a zero size when the object type is
+                    # a call (meaning it's a dynamic type) or if its blocksize is dynamic.
+                    if size <= 0:
+                        if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                            Log.warn("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                            break
+
+                        # validate that the element size is a sane value, as the size returned
+                        # by the user's implementation should _always_ be positive.
+                        if size < 0:
+                            raise error.AssertionError(self, 'terminated.load', message="Element size for {:s} is < 0".format(item.classname()))
+                        Log.info("terminated.load : {:s} : Added a dynamic element with a {:d} length to a terminated array : {:s}".format(self.instance(), size, item.instance()))
                     offset += size
 
         except (Exception, error.LoadError) as E:
@@ -528,14 +535,19 @@ class infinite(uninitialized):
 
                     if self.isTerminator(item):
                         break
-
-                    # check sanity of element size
                     size = item.blocksize()
-                    if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
-                        break
-                    if size < 0:
-                        raise error.AssertionError(self, 'infinite.load', message="Element size for {:s} is < 0".format(item.classname()))
+
+                    # only allow elements with a zero size when the object type is a call
+                    # or if its blocksize is dynamically calculated.
+                    if size <= 0:
+                        if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                            Log.warn("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                            break
+
+                        # check sanity of element size
+                        if size < 0:
+                            raise error.AssertionError(self, 'infinite.load', message="Element size for {:s} is < 0".format(item.classname()))
+                        Log.info("infinite.load : {:s} : Added a dynamic element with a {:d} length to an infinite array : {:s}".format(self.instance(), size, item.instance()))
 
                     # next iteration
                     offset += size
@@ -571,14 +583,19 @@ class infinite(uninitialized):
 
                     if self.isTerminator(item):
                         break
-
-                    # check sanity of element size
                     size = item.blocksize()
-                    if size <= 0 and Config.parray.break_on_zero_sized_element:
-                        Log.warn("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
-                        break
-                    if size < 0:
-                        raise error.AssertionError(self, 'infinite.loadstream', message="Element size for {:s} is < 0".format(item.classname()))
+
+                    # validate the size of the element, we only will allow zero-sized
+                    # elements if our object is dynamically determined via a callable.
+                    if size <= 0:
+                        if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                            Log.warn("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                            break
+
+                        # check sanity of element size
+                        if size < 0:
+                            raise error.AssertionError(self, 'infinite.loadstream', message="Element size for {:s} is < 0".format(item.classname()))
+                        Log.info("infinite.loadstream : {:s} : Added a dynamic element with a {:d} length to an infinite array : {:s}".format(self.instance(), size, item.instance()))
 
                     # next iteration
                     offset += size
@@ -637,15 +654,20 @@ class block(uninitialized):
                     elif o < self.blocksize():
                         Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), item.instance(), E))
                         self.value.append(item)
-
                     break
 
+                # validate the size of the element, we only will allow zero-sized
+                # elements if our object is dynamically determined via a callable.
                 size = item.blocksize()
-                if size <= 0 and Config.parray.break_on_zero_sized_element:
-                    Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
-                    break
-                if size < 0:
-                    raise error.AssertionError(self, 'block.load', message="Element size for {:s} is < 0".format(item.classname()))
+                if size <= 0:
+                    if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                        Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                        break
+
+                    # verify the sanity of the element size as lengths can't be less than zero.
+                    if size < 0:
+                        raise error.AssertionError(self, 'block.load', message="Element size for {:s} is < 0".format(item.classname()))
+                    Log.info("block.load : {:s} : Added a dynamic element with a {:d} length to a block array : {:s}".format(self.instance(), size, item.instance()))
 
                 # if our child element pushes us past the blocksize
                 if current + size >= self.blocksize():
