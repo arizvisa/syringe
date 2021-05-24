@@ -332,7 +332,7 @@ class Linker(object):
     def __process_symbols(self, section, symbols):
         for symbol in symbols:
             self.state.add_symbol(section, symbol)
-        return 
+        return
 
     def __process_section(self, object, section):
         res = object['header']['pointertosymboltable'].d.li
@@ -380,7 +380,7 @@ class Linker(object):
     def render_only(self, sections, address=0):
         '''render all the specified segments linked together at the specified base address'''
         available = { section for section in sections }
-        sections = [ (section, segment) for section, segment in self.__segments if section in available ] 
+        sections = [ (section, segment) for section, segment in self.__segments if section in available ]
 
         segmentbases = {}
         for section, segment in sections:
@@ -408,7 +408,7 @@ class Linker(object):
     def simulate_only(self, sections, address=0):
         '''return a dictionary containing all symbols and their addresses as if all segments were linked'''
         available = { section for section in sections }
-        sections = [ (section, segment) for section, segment in self.__segments if section in available ] 
+        sections = [ (section, segment) for section, segment in self.__segments if section in available ]
 
         segmentbases = {}
         for section, segment in sections:
