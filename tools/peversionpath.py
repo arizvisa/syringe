@@ -19,13 +19,13 @@ def parseResourceDirectory(filename):
     return resourceDirectory['Address']
 
 def getChildByKey(versionInfo, szKey):
-    return next(ch['Child'] for ch in versionInfo['Children'] if ch['Child']['szKey'].str() == szKey)
+    return next(item for item in versionInfo['Children'] if item['szKey'].str() == szKey)
 
 def extractLgCpIds(versionInfo):
     vfi = getChildByKey(versionInfo, u'VarFileInfo')
     sfi = getChildByKey(versionInfo, u'StringFileInfo')
     fichildren = itertools.chain(vfi['Children'], sfi['Children'])
-    res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Child']['Value'] for var in fichildren) ))
+    res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Value'] for var in fichildren) ))
     return tuple((cp.int(), lg.int()) for cp, lg in res)
 
 def getStringTable(versionInfo, pack_LgidCp):
@@ -33,9 +33,8 @@ def getStringTable(versionInfo, pack_LgidCp):
     sfi = getChildByKey(versionInfo, u'StringFileInfo')
     LgidCp = '{:04X}{:04X}'.format(Lgid,Cp)
     for st in sfi['Children']:
-        st = st['Child']
         if st['szKey'].str().upper() == LgidCp:
-            return [s['Child'] for s in st['Children']]
+            return [s for s in st['Children']]
         continue
     raise KeyError(Lgid, Cp)
 
@@ -106,7 +105,7 @@ if __name__ == '__main__':
         if opts.name is not None:
             resource_Languages = resource_Names.Entry(opts.name).l
         else:
-            if resource_Names['NumberOfIds'].int() != 1:
+            if resource_Names['NumberOfIdEntries'].int() != 1:
                 raise IndexError
             resource_Languages = resource_Names['Ids'][0]['Entry'].d.l
             six.print_('Defaulting to the only language entry: %d'%(resource_Names['Ids'][0]['Name'].int()), file=sys.stderr)
@@ -125,7 +124,7 @@ if __name__ == '__main__':
         if opts.language is not None:
             resource_Version = resource_Languages.Entry(opts.language).l
         else:
-            if resource_Languages['NumberOfIds'].int() != 1:
+            if resource_Languages['NumberOfIdEntries'].int() != 1:
                 raise IndexError
             resource_Version = resource_Languages['Ids'][0]['Entry'].d.l
             six.print_('Defaulting to the only version entry: %d'%(resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
@@ -137,10 +136,11 @@ if __name__ == '__main__':
         six.print_('No version record found in %s for the specified language : %r'%(filename, opts.language), file=sys.stderr)
         sys.exit(1)
     else:
-        versionInfo = resource_Version['Data'].d
+        versionInfo = resource_Version['OffsetToData'].d
 
     # parse the version info
-    vi = versionInfo.l.cast(pecoff.portable.resources.VS_VERSIONINFO)
+    vi = versionInfo.l
+    vi = vi.cast(pecoff.portable.resources.VS_VERSIONINFO)
     lgcpids = extractLgCpIds(vi)
     if opts.list:
         six.print_('\n'.join(map(repr,lgcpids)), file=sys.stdout)
@@ -183,4 +183,3 @@ if __name__ == '__main__':
     path = opts.format.format(**encoded)
     six.print_(path, file=sys.stdout)
     sys.exit(0)
-

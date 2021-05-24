@@ -223,7 +223,7 @@ def list_resources(t, outformat, F=None, output=None):
     global result; result = rt
     if F:
         return Extract(F(result), outformat, file=output)
-    summary = lambda n: "{:#x}:{:+#x} codepage:{:d}".format(n['Data'].int(), n['Size'].int(), n['Codepage'].int())
+    summary = lambda n: "{:#x}:{:+#x} CodePage:{:d}".format(n['OffsetToData'].int(), n['Size'].int(), n['Codepage'].int())
     if not outformat:
         res = collectresources(result)
         for re in dumpresources(res):
