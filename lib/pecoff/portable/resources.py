@@ -159,11 +159,16 @@ class RT_VERSION(pstruct.type):
             logging.debug("{:s} : No type callback implemented for Value in {!r}. Searching for one instead.".format('.'.join([cls.__module__, cls.__name__]), key))
         return RT_VERSION_ValueType.withdefault(key, type=key, length=length)
 
+    def __Padding2(self):
+        fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value']
+        length, cb = self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
+        return dyn.align(4) if cb < length else dyn.align(0)
+
     def __Children(self):
         fields = ['wLength', 'wValueLength', 'wType', 'szKey', 'Padding1', 'Value', 'Padding2']
         length, cb = self['wLength'].li.int(), sum(self[fld].li.size() for fld in fields)
         if cb > length:
-            raise AssertionError("Invalid block size returned for child: {:d} > {:d}".format(cb, length))
+            raise AssertionError("Invalid block size returned by {!s} for child: {:d} > {:d}".format(self.instance(), cb, length))
         size = max(0, length - cb)
 
         # If our class implements a .Children() method, then use that to determine the type.
@@ -193,7 +198,7 @@ class RT_VERSION(pstruct.type):
         (pstr.szwstring, 'szKey'),
         (dyn.align(4), 'Padding1'),
         (__Value, 'Value'),
-        (dyn.align(4), 'Padding2'),
+        (__Padding2, 'Padding2'),
         (__Children, 'Children'),
         (__Unknown, 'Unknown'),
     ]
