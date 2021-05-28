@@ -73,100 +73,6 @@ class base(object):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
         raise error.ImplementationError(self, 'store', message='User forgot to implement this method')
 
-class remote(base):
-    '''
-    Base remote provider class.
-
-    Intended to be inherited from when defining a remote provider that needs to
-    cache any data that is being read or written. To use this, simply inherit
-    from this class and implement the remote.read(), and the remote.send() methods.
-
-    Once the provider is instantiated, the user may call the .send() method to
-    submit any committed data, or the .reset() method when it is necessary to
-    reset the data that was cached.
-    '''
-    __cons__ = staticmethod(functools.partial(array.array, 'B'))
-
-    def __init__(self):
-        """This initializes any attributes required by a remote provider.
-
-        Supermethod initializes the default buffer and other required attributes.
-        This is required to be implemented and called by a child implementation.
-        """
-        self.offset = 0
-
-        # This is the buffer that gets committed to before sending
-        self.__buffer__ = self.__cons__()
-
-        # This is a cache that remote data will be read into as a
-        # ptype instance needs it. We make a copy to avoid re-construction.
-        self.__cache__ = self.__buffer__[:]
-
-    def seek(self, offset):
-        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res, self.offset = self.offset, offset
-        return res
-
-    def consume(self, amount):
-        '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
-        cache, left, right = self.__cache__, self.offset, self.offset + amount
-
-        # If we have enough data in our cache, then we can simply return it.
-        if len(cache) >= right:
-            self.offset, buffer = right, cache[left : right]
-            return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
-        # Otherwise, we need to read some more data from our class.
-        data = self.read(right - len(cache))
-        cache.fromstring(data) if sys.version_info.major < 3 else cache.frombytes(data)
-
-        # If we still don't have enough data, then raise an exception.
-        if len(cache) < right:
-            raise error.ConsumeError(self, self.offset, amount)
-
-        # Now we can return the data from our cache that we just populated.
-        self.offset, buffer = right, cache[left : right]
-        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
-
-    def store(self, data):
-        '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
-        buffer, data = self.__buffer__, self.__cons__(data)
-
-        # If our current offset is past the length of our buffer, then pad it
-        # to the size that we'll need.
-        if self.offset > len(buffer):
-            padding = b'\0' * (self.offset - len(self.__buffer__))
-            buffer.fromstring(padding) if sys.version_info.major < 3 else buffer.frombytes(padding)
-
-        # Update the offset and the buffer with the data the caller provided.
-        self.offset, buffer[self.offset:] = self.offset + len(data), data
-        return len(data)
-
-    def reset(self):
-        '''Reset the reader for the remote provider.'''
-        self.offset = 0
-
-        # Delete all elements in the cache to avoid re-construction
-        del(self.__cache__[:])
-
-    def send(self):
-        """Submit the currently committed data to the remote provider.
-
-        Supermethod returns a buffer containing the data that is to be sent.
-        This is required to be implemented and called by a child implementation.
-        """
-
-        # We make an empty copy of .__buffer__ here to avoid reconstructing
-        # the buffer instance.
-        buffer, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
-        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
-
-    def read(self, amount):
-        """Read some number of bytes from the provider and return it.
-
-        This is required to be implemented and called by a child implementation.
-        """
-        raise error.ImplementationError(self, 'read', message='User forgot to implement this method')
-
 class memorybase(base):
     '''Base provider class for reading/writing with a memory-type backing. Intended to be inherited from.'''
 
@@ -488,6 +394,104 @@ class fileobj(bounded):
 filebase = fileobj
 
 ## other providers
+class remote(bounded):
+    '''
+    Base remote provider class.
+
+    Intended to be inherited from when defining a remote provider that needs to
+    cache any data that is being read or written. To use this, simply inherit
+    from this class and implement the remote.read(), and the remote.send() methods.
+
+    Once the provider is instantiated, the user may call the .send() method to
+    submit any committed data, or the .reset() method when it is necessary to
+    reset the data that was cached.
+    '''
+    __cons__ = staticmethod(functools.partial(array.array, 'B'))
+
+    def __init__(self):
+        """This initializes any attributes required by a remote provider.
+
+        Supermethod initializes the default buffer and other required attributes.
+        This is required to be implemented and called by a child implementation.
+        """
+        self.offset = 0
+
+        # This is the buffer that gets committed to before sending
+        self.__buffer__ = self.__cons__()
+
+        # This is a cache that remote data will be read into as a
+        # ptype instance needs it. We make a copy to avoid re-construction.
+        self.__cache__ = self.__buffer__[:]
+
+    def size(self):
+        '''Return the number of bytes that have already been committed and would end up being sent.'''
+        return len(self.__buffer__)
+
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res, self.offset = self.offset, offset
+        return res
+
+    def consume(self, amount):
+        '''Read some number of bytes from the current offset. If the first byte wasn't able to be consumed, raise an exception.'''
+        cache, left, right = self.__cache__, self.offset, self.offset + amount
+
+        # If we have enough data in our cache, then we can simply return it.
+        if len(cache) >= right:
+            self.offset, buffer = right, cache[left : right]
+            return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+        # Otherwise, we need to read some more data from our class.
+        data = self.read(right - len(cache))
+        cache.fromstring(data) if sys.version_info.major < 3 else cache.frombytes(data)
+
+        # If we still don't have enough data, then raise an exception.
+        if len(cache) < right:
+            raise error.ConsumeError(self, self.offset, amount)
+
+        # Now we can return the data from our cache that we just populated.
+        self.offset, buffer = right, cache[left : right]
+        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+
+    def store(self, data):
+        '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
+        buffer, data = self.__buffer__, self.__cons__(data)
+
+        # If our current offset is past the length of our buffer, then pad it
+        # to the size that we'll need.
+        if self.offset > len(buffer):
+            padding = b'\0' * (self.offset - len(self.__buffer__))
+            buffer.fromstring(padding) if sys.version_info.major < 3 else buffer.frombytes(padding)
+
+        # Update the offset and the buffer with the data the caller provided.
+        self.offset, buffer[self.offset:] = self.offset + len(data), data
+        return len(data)
+
+    def reset(self):
+        '''Reset the reader for the remote provider.'''
+        self.offset = 0
+
+        # Delete all elements in the cache to avoid re-construction
+        del(self.__cache__[:])
+
+    def send(self):
+        """Submit the currently committed data to the remote provider.
+
+        Supermethod returns a buffer containing the data that is to be sent.
+        This is required to be implemented and called by a child implementation.
+        """
+
+        # We make an empty copy of .__buffer__ here to avoid reconstructing
+        # the buffer instance.
+        buffer, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
+        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+
+    def read(self, amount):
+        """Read some number of bytes from the provider and return it.
+
+        This is required to be implemented and called by a child implementation.
+        """
+        raise error.ImplementationError(self, 'read', message='User forgot to implement this method')
+
 class random(base):
     """Provider that returns random data when read from."""
     def __init__(self):
