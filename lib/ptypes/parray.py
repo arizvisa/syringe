@@ -284,26 +284,28 @@ class type(__array_interface__):
 
     def alloc(self, fields=(), **attrs):
         result = super(type, self).alloc(**attrs)
-        if len(fields) > 0 and isinstance(fields[0], tuple):
+        if len(fields) and isinstance(fields[0], tuple):
             for name, val in fields:
                 idx = result.__getindex__(name)
+                position = result.value[idx].getposition()
                 if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val).a
+                    result.value[idx] = result.new(val, position=position).a
                 elif isinstance(val, ptype.generic):
-                    result.value[idx] = result.new(val)
+                    result.value[idx] = result.new(val, position=position)
                 else:
                     result.value[idx].set(val)
                 continue
         else:
+            offset = result.getoffset()
             for idx, val in enumerate(fields):
                 name = "{:d}".format(idx)
                 if ptype.istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=name).a
+                    result.value[idx] = result.new(val, __name__=name, offset=offset).a
                 elif isinstance(val, ptype.generic):
-                    result.value[idx] = result.new(val, __name__=name)
+                    result.value[idx] = result.new(val, __name__=name, offset=offset)
                 else:
                     result.value[idx].set(val)
-                continue
+                offset += result.value[idx].blocksize()
 
             # re-alloc elements that exist in the rest of the array
             for idx in range(len(fields), len(result.value)):
@@ -1217,6 +1219,30 @@ if __name__ == '__main__':
         x = parray.type(length=2, _object_=pint.uint32_t, offset=0x10).a
         offset = x.append(pint.uint16_t)
         if offset == x.getoffset() + x[0].size() * 2:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_dynamic_element_blocksize_1():
+        class t(parray.type):
+            _object_, length = pint.uint8_t, 4
+
+        class dynamic_t(ptype.block):
+            def blocksize(self):
+                return 1 if self.getoffset() else 0
+        res = t().alloc([(2, dynamic_t)])
+        if res.size() == 4:
+            raise Success
+
+    @TestCase
+    def test_array_alloc_dynamic_element_blocksize_2():
+        class t(parray.type):
+            _object_, length = pint.uint8_t, 4
+
+        class dynamic_t(ptype.block):
+            def blocksize(self):
+                return 1 if self.getoffset() else 0
+        res = t().alloc([pint.uint8_t, pint.uint8_t, dynamic_t, pint.uint8_t])
+        if res.size() == 4:
             raise Success
 
 if __name__ == '__main__':

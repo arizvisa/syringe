@@ -225,21 +225,23 @@ class type(__structure_interface__):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
         result = super(type, self).alloc()
         if fields:
+            offset = result.getoffset()
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
                     if ptype.isresolveable(t):
-                        result.value[idx] = self.new(t, __name__=name).a
+                        result.value[idx] = self.new(t, __name__=name, offset=offset).a
+                    offset += result.value[idx].blocksize()
                     continue
                 item = fields[name]
                 if ptype.isresolveable(item) or ptype.istype(item):
-                    result.value[idx] = self.new(item, __name__=name).a
+                    result.value[idx] = self.new(item, __name__=name, offset=offset).a
                 elif isinstance(item, ptype.generic):
-                    result.value[idx] = self.new(item, __name__=name)
+                    result.value[idx] = self.new(item, __name__=name, offset=offset)
                 elif isinstance(item, dict):
                     result.value[idx].alloc(**item)
                 else:
                     result.value[idx].set(item)
-                continue
+                offset += result.value[idx].blocksize()
             self.setoffset(self.getoffset(), recurse=True)
         return result
 
@@ -660,6 +662,38 @@ if __name__ == '__main__':
             ]
         a = st2().set(a=5)
         if a['a'].int() == 5:
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_field_blocksize():
+        class t(ptype.block):
+            def blocksize(self):
+                res = self.getoffset()
+                return 0 if res == 0 else 1
+
+        class st(pstruct.type):
+            _fields_ = [
+                (pint.int8_t, 'a'),
+                (t, 'b'),
+            ]
+        a = st().alloc(a=3)
+        if a.size() == 2:
+            raise Success
+
+    @TestCase
+    def test_structure_alloc_dynamic_field_blocksize():
+        class t(ptype.block):
+            def blocksize(self):
+                res = self.getoffset()
+                return 0 if res == 0 else 1
+
+        class st(pstruct.type):
+            _fields_ = [
+                (pint.int8_t, 'a'),
+                (lambda _: t, 'b'),
+            ]
+        a = st().alloc(a=3)
+        if a.size() == 2:
             raise Success
 
 if __name__ == '__main__':

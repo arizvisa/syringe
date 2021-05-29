@@ -978,28 +978,37 @@ class __array_interface__(container):
         if len(fields) > 0 and isinstance(fields[0], tuple):
             for name, val in fields:
                 idx = result.__getindex__(name)
+                position = result.value[idx].getposition()
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
                 if istype(val) or ptype.isresolveable(val):
-                    result.value[idx] = result.new(val, __name__=name).a
+                    result.value[idx] = result.new(val, __name__=name, position=position).a
                 elif isinstance(val, type):
-                    result.value[idx] = result.new(val, __name__=name)
+                    result.value[idx] = result.new(val, __name__=name, position=position)
                 elif bitmap.isinstance(val):
-                    result.value[idx] = result.new(integer, __name__=name).__setvalue__(val)
+                    result.value[idx] = result.new(integer, __name__=name, position=position).__setvalue__(val)
                 else:
                     result.value[idx].set(val)
                 continue
 
         else:
+            position = result.getposition()
             for idx, val in enumerate(fields):
                 name = "{:d}".format(idx)
                 #if any((istype(val), isinstance(val, type), ptype.isresolveable(val))):
-                if istype(val) or ptype.isresolveable(val) or isinstance(val, type):
-                    result.value[idx] = result.new(val, __name__=name)
+                if istype(val) or ptype.isresolveable(val):
+                    result.value[idx] = result.new(val, __name__=name, position=position).a
+                elif isinstance(val, type):
+                    result.value[idx] = result.new(val, __name__=name, position=position)
                 elif bitmap.isinstance(val):
-                    result.value[idx] = result.new(integer, __name__=name).__setvalue__(val)
+                    result.value[idx] = result.new(integer, __name__=name, position=position).__setvalue__(val)
                 else:
                     result.value[idx].set(val)
-                continue
+
+                # Adjust the current position by the current element that we just modified.
+                (offset, suboffset) = position
+                suboffset += result.value[idx].blockbits()
+                offset, suboffset = (offset + suboffset // 8, suboffset % 8)
+                position = (offset, suboffset)
 
         result.setposition(result.getposition(), recurse=True)
         return result
@@ -1170,24 +1179,31 @@ class __structure_interface__(container):
     def alloc(self, **fields):
         result = super(__structure_interface__, self).alloc()
         if fields:
+            position = result.getposition()
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
                     if ptype.isresolveable(t):
-                        result.value[idx] = result.new(t, __name__=name).a
+                        result.value[idx] = result.new(t, __name__=name, position=position).a
                     continue
                 item = fields[name]
                 #if any((istype(item), isinstance(item, type), ptype.isresolveable(item))):
                 if istype(item) or ptype.isresolveable(item):
-                    result.value[idx] = result.new(item, __name__=name).a
+                    result.value[idx] = result.new(item, __name__=name, position=position).a
                 elif isinstance(item, type):
-                    result.value[idx] = result.new(item, __name__=name)
+                    result.value[idx] = result.new(item, __name__=name, position=position)
                 elif bitmap.isinstance(item):
-                    result.value[idx] = result.new(integer, __name__=name).__setvalue__(item)
+                    result.value[idx] = result.new(integer, __name__=name, position=position).__setvalue__(item)
                 elif isinstance(item, dict):
                     result.value[idx].alloc(**item)
                 else:
                     result.value[idx].set(item)
-                continue
+
+                # Shift the current position that we're keeping track of by the number of bits
+                # that were found for the current field.
+                (offset, suboffset) = position
+                suboffset += result.value[idx].blockbits()
+                offset, suboffset = (offset + suboffset // 8, suboffset % 8)
+                position = (offset, suboffset)
             self.setposition(self.getposition(), recurse=True)
         return result
 
@@ -3413,6 +3429,70 @@ if __name__ == '__main__':
         data = b'\x41\x42\x43\x44'
         a = pbinary.new(t, source=ptypes.prov.bytes(data)).l
         if a.o.copy().serialize() == data:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_alloc_field_blockbits():
+        class t(pbinary.integer):
+            def blockbits(self):
+                res = self.getposition()
+                return 8 if any(res) else 0
+
+        class st(pbinary.struct):
+            _fields_ = [
+                (8, 'a'),
+                (8, 'b'),
+                (8, 'c'),
+            ]
+
+        a = st().alloc(a=0, b=t)
+        if a.bits() == 24:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_alloc_dynamic_field_blockbits():
+        class t(pbinary.integer):
+            def blockbits(self):
+                res = self.getposition()
+                return 8 if any(res) else 0
+
+        class st(pbinary.struct):
+            _fields_ = [
+                (8, 'a'),
+                (lambda _: t, 'b'),
+                (8, 'c'),
+            ]
+
+        a = st().alloc(a=0)
+        if a.bits() == 24:
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_alloc_dynamic_element_blockbits_1():
+        class t(pbinary.array):
+            _object_, length = 8, 4
+
+        class dynamic_t(pbinary.integer):
+            def blockbits(self):
+                res = self.getposition()
+                return 8 if any(res) else 0
+
+        a = t().alloc([(2, dynamic_t)])
+        if a.bits() == 32:
+            raise Success
+
+    @TestCase
+    def test_pbinary_array_alloc_dynamic_element_blockbits_2():
+        class t(pbinary.array):
+            _object_, length = 8, 4
+
+        class dynamic_t(pbinary.integer):
+            def blockbits(self):
+                res = self.getposition()
+                return 8 if any(res) else 0
+
+        a = t().alloc([8, 8, dynamic_t, 8])
+        if a.bits() == 32:
             raise Success
 
 if __name__ == '__main__':
