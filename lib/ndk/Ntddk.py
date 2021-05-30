@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import sdkddkver, ketypes
+from . import sdkddkver, ketypes, umtypes
 from .datatypes import *
 
 class TL(pstruct.type):
@@ -44,7 +44,7 @@ class ETHREAD(pstruct.type, versioned):
         (PVOID, 'KeyedWaitValue'),  # XXX: union
         (ULONG, 'ActiveTimerListLock'),
         (LIST_ENTRY, 'ActiveTimerListHead'),
-        (CLIENT_ID, 'Cid'),
+        (umtypes.CLIENT_ID, 'Cid'),
         (ketypes.KSEMAPHORE, 'KeyedWaitSemaphore'), # XXX: union
 #        (PS_CLIENT_SECURITY_CONTEXT, 'ClientSecurity'),
         (dyn.block(4), 'ClientSecurity'),

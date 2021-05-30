@@ -12,14 +12,15 @@ string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 ### versioned base-class
 class versioned(ptype.base):
     '''
-    This base-class (mixin) will propagate all version-related attributes to
-    its children. This waythe user can instantiate their type with NTDDI_VERSION
-    and WIN64 being set to the desire structure, and everything can just check
-    itself to determine which structure variation to use.
+    This base class, or really a mixin, will propagate all version-related
+    attributes to its children instances. This way the user can instantiate
+    a type with the NTDDI_VERSION and WIN64 attributes set to whatever they
+    desire and then every type can just check its own attributes in order to
+    determine which structure variation it should use.
     '''
     NTDDI_VERSION = sdkddkver.NTDDI_VERSION
     WIN64 = sdkddkver.WIN64
-    attributes = { 'NTDDI_VERSION':NTDDI_VERSION, 'WIN64':WIN64 }
+    attributes = { 'NTDDI_VERSION': NTDDI_VERSION, 'WIN64': WIN64 }
     def __init__(self, **attrs):
         super(versioned, self).__init__(**attrs)
         self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
@@ -527,12 +528,6 @@ class NT_TIB(pstruct.type, versioned):
         (lambda self: pointer(NT_TIB), 'Self'),
     ]
 
-class CLIENT_ID(pstruct.type):
-    _fields_ = [
-        (PVOID, 'UniqueProcess'),
-        (PVOID, 'UniqueThread'),
-    ]
-
 ### GUID (rfc4122) types and aliases
 class rfc4122(pstruct.type):
     class _Data1(pint.bigendian(pint.uint32_t)):
@@ -774,7 +769,7 @@ class XSAVE_FORMAT(pstruct.type):
     ]
 
 class XMM_SAVE_AREA32(XSAVE_FORMAT): pass
-class _XMM_REGISTER_AREA(pstruct.type):
+class XMM_REGISTER_AREA(pstruct.type):
     _fields_ = [
         (dyn.array(M128A, 2), 'Header'),
         (dyn.array(M128A, 8), 'Legacy'),
@@ -800,7 +795,7 @@ class CONTEXT(pstruct.type, versioned):
     class FloatState(dynamic.union):
         _fields_ = [
             (XMM_SAVE_AREA32, 'FltSave'),
-            (_XMM_REGISTER_AREA, 'FltRegister'),
+            (XMM_REGISTER_AREA, 'FltRegister'),
         ]
 
     def __init__(self, **attrs):

@@ -868,7 +868,7 @@ if 'HeapChunk':
     class _HEAP_CHUNK(pstruct.type):
         '''
         This is an internal definition that isn't defined by Microsoft, but is
-        intended to support chunks that exist in either the frontend or the
+        intended to distinguish chunks that exist in either the frontend or the
         backend heap.
         '''
         def __ListEntry(self):
