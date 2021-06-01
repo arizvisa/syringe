@@ -168,6 +168,7 @@ if __name__ == '__main__':
         properties['OperatingSystem'] = ffi['dwFileOS'].item('OS').str()
         properties['FileType'] = ffi['dwFileType'].str()
         properties['FileSubtype'] = ffi['dwFileSubType'].str()
+        properties['OriginalFilename'] = filename
 
     # otherwise we just extract the properties from the string table
     else:
