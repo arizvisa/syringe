@@ -138,9 +138,18 @@ if __name__ == '__main__':
     else:
         versionInfo = resource_Version['OffsetToData'].d
 
-    # parse the version info
-    vi = versionInfo.l
-    vi = vi.cast(pecoff.portable.resources.VS_VERSIONINFO)
+    # parse the version info and check its size
+    viresource = versionInfo.l
+    vi = pecoff.portable.resources.VS_VERSIONINFO(source=ptypes.provider.proxy(viresource)).l
+    if vi['Unknown'].size():
+        Fhex, unknown = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else bytes.hex, vi['Unknown'].serialize()
+        logging.warning("Error parsing {:d} bytes from the version information: {:s}".format(vi['Unknown'].size(), Fhex(unknown)))
+    if viresource.size() != vi.size():
+        logging.warning("Found {:d} extra bytes in the resource that could be padding as it was not decoded as part of the version information".format(viresource.size() - vi.size()))
+        extra = vi['Unknown'].load(length=viresource.size() - vi.size())
+        logging.warning("{!s}".format(extra))
+
+    # extract the language/codepage ids from the version info
     lgcpids = extractLgCpIds(vi)
     if opts.list:
         six.print_('\n'.join(map(repr,lgcpids)), file=sys.stdout)
