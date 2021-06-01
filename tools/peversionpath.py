@@ -41,23 +41,25 @@ def getStringFileInfo(versionInfo, pack_LgidCp):
 class help(optparse.OptionParser):
     def __init__(self):
         optparse.OptionParser.__init__(self)
-        self.usage = '%prog executable'
+        self.usage = '%prog EXECUTABLE'
 
-        self.add_option('', '--dump-names', default=False, action='store_true', help='dump the VERSION_INFO name resources available')
-        self.add_option('', '--name', default=None, type='int', help='use the specified resource name')
-        self.add_option('', '--dump-languages', default=False, action='store_true', help='dump the VERSION_INFO language resources available')
-        self.add_option('', '--language', default=None, type='int', help='use the specified resource language')
+        self.add_option('', '--dump-names', default=False, action='store_true', help='dump the name tables available under the VERSION_INFO resource directory')
+        self.add_option('', '--name', default=None, type='int', help='use the specified name when searching through the resource directory')
+        self.add_option('', '--dump-languages', default=False, action='store_true', help='dump the languages available under the VERSION_INFO resource directory')
+        self.add_option('', '--language', default=None, type='int', help='use the specified language when searching through the resource directory')
+
+        # VS_FIXEDFILEINFO
+        self.add_option('-u', '--use-fixedfileinfo', default=False, action='store_true', help='use the VS_FIXEDFILEINFO structure instead of the string table')
 
         # VS_VERSIONINFO
-        self.add_option('', '--list', default=False, action='store_true', help='dump the language-id+codepages available')
-        self.add_option('-l', '--langid', default=None, type='int', help='use the specified language-id')
-        self.add_option('-c', '--codepage', default=None, type='int', help='use the specified codepage')
+        self.add_option('', '--list', default=False, action='store_true', help='dump the language-id/codepage pairs that are available')
+        self.add_option('-l', '--language-id', dest='lgid', default=None, type='int', help='use the specified language-id when locating the correct string table')
+        self.add_option('-c', '--codepage', default=None, type='int', help='use the specified codepage when locating the correct stringtable')
 
         # fields
-        self.add_option('-u', '--use-fixedfileinfo', default=False, action='store_true', help='use the VS_FIXEDFILEINFO structure instead of the string table')
-        self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
+        self.add_option('-d', '--dump', default=False, action='store_true', help='dump the discovered properties that can be used for FORMAT')
         self.add_option('-f', '--format', default='{__name__}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__}/{ProductVersion}/{OriginalFilename})')
-        self.description = 'If ``path-format`` is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table.'
+        self.description = 'Extract the version information from the resource directory of the specified EXECUTABLE and write it to stdout using FORMAT.'
 
 help = help()
 
@@ -179,7 +181,7 @@ if __name__ == '__main__':
         # check how many language/codepage identifiers we have. if we have
         # more than one, then we have to depend on the user to choose which one.
         if len(lgcpids) > 1:
-            language = opts.language if opts.langid is None else opts.langid
+            language = opts.language if opts.lgid is None else opts.lgid
             try:
                 codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
             except ValueError as e:
@@ -196,7 +198,7 @@ if __name__ == '__main__':
 
             # if the user tried to explicitly specify one, then let them know that
             # we didn't need their help figuring out the string table.
-            choices = [("language ({:d})", opts.langid), ("codepage ({:d})", opts.codepage)]
+            choices = [("language ({:d})", opts.lgid), ("codepage ({:d})", opts.codepage)]
             if any(item is not None for _, item in choices):
                 chosen = (spec.format(item) for spec, item in choices if item is not None)
                 six.print_("Ignoring the requested {:s} as only one identifier {!s} was found in file {:s}.".format(' and '.join(chosen), identifier, filename), file=sys.stderr)
