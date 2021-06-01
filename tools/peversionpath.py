@@ -28,7 +28,7 @@ def extractLgCpIds(versionInfo):
     res = (val.cast(parray.type(_object_=pint.uint16_t,length=2)) for val in itertools.chain( *(var['Value'] for var in fichildren) ))
     return tuple((cp.int(), lg.int()) for cp, lg in res)
 
-def getStringTable(versionInfo, pack_LgidCp):
+def getStringFileInfo(versionInfo, pack_LgidCp):
     (Lgid, Cp) = pack_LgidCp
     sfi = getChildByKey(versionInfo, u'StringFileInfo')
     LgidCp = '{:04X}{:04X}'.format(Lgid,Cp)
@@ -54,6 +54,7 @@ class help(optparse.OptionParser):
         self.add_option('', '--codepage', default=None, type='int', help='use the specified codepage')
 
         # fields
+        self.add_option('-u', '--use-fixedfileinfo', default=False, action='store_true', help='use the VS_FIXEDFILEINFO structure instead of the string table')
         self.add_option('-d', '--dump', default=False, action='store_true', help='dump the properties available')
         self.add_option('-f', '--format', default='{__name__}/{ProductVersion}/{OriginalFilename}', type='str', help='output the specified format (defaults to {__name__}/{ProductVersion}/{OriginalFilename})')
         self.description = 'If ``path-format`` is not specified, grab the VS_VERSIONINFO out of the executable\'s resource. Otherwise output ``path-format`` using the fields from the VS_VERSIONINFO\'s string table.'
@@ -156,39 +157,56 @@ if __name__ == '__main__':
         six.print_('\n'.join(map(repr,lgcpids)), file=sys.stdout)
         sys.exit(0)
 
-    # if we have to choose, figure out which language,codepage to find
-    if len(lgcpids) > 1:
-        language = opts.language if opts.langid is None else opts.langid
-        try:
-            codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
-        except ValueError as e:
-            six.print_('More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename, file=sys.stderr)
-            sys.exit(1)
-        if (language,codepage) not in lgcpids:
-            six.print_('Invalid (language,codepage) in %s : %r not in %s'%(filename, (language,codepage), lgcpids), file=sys.stderr)
-            sys.exit(1)
-    else:
-        (language,codepage), = lgcpids
+    # if the user wants to use the tagVS_FIXEDFILEINFO structure, then we'll
+    # just initialize the property dictionary here.
+    ffi = vi['Value']
+    if opts.use_fixedfileinfo:
+        properties = {}
+        properties['ProductVersion'] = ffi['dwProductVersion'].str()
+        properties['FileVersion'] = ffi['dwFileVersion'].str()
+        properties['Platform'] = ffi['dwFileOS'].item('PLATFORM').str()
+        properties['OperatingSystem'] = ffi['dwFileOS'].item('OS').str()
+        properties['FileType'] = ffi['dwFileType'].str()
+        properties['FileSubtype'] = ffi['dwFileSubType'].str()
 
-    # extract the properties for the language and cp
-    try:
-        st = getStringTable(vi, (language,codepage))
-    except KeyError:
-        six.print_('(language,codepage) in %s has no properties : %r'%(filename, (language,codepage)), file=sys.stderr)
-        sys.exit(1)
+    # otherwise we just extract the properties from the string table
     else:
-        strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
-        strings.setdefault('__path__', filename)
-        strings.setdefault('__name__', os.path.split(filename)[1])
-        strings.setdefault('__machine__', pe['FileHeader']['Machine'].str())
+        # check how many language/codepage identifiers we have. if we have
+        # more than one, then we have to depend on the user to choose which one.
+        if len(lgcpids) > 1:
+            language = opts.language if opts.langid is None else opts.langid
+            try:
+                codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
+            except ValueError as e:
+                six.print_('More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename, file=sys.stderr)
+                sys.exit(1)
+            if (language,codepage) not in lgcpids:
+                six.print_('Invalid (language,codepage) in %s : %r not in %s'%(filename, (language,codepage), lgcpids), file=sys.stderr)
+                sys.exit(1)
+
+        # otherwise, we can just use the only language/codepage that was there
+        else:
+            (language,codepage), = lgcpids
+
+        # extract the properties for the language/codepage from the string table
+        try:
+            stringTable = getStringFileInfo(vi, (language,codepage))
+        except KeyError:
+            six.print_('(language,codepage) in %s has no properties : %r'%(filename, (language,codepage)), file=sys.stderr)
+            sys.exit(1)
+        properties = {item['szKey'].str() : item['Value'].str() for item in stringTable}
+
+    properties.setdefault('__path__', filename)
+    properties.setdefault('__name__', os.path.split(filename)[1])
+    properties.setdefault('__machine__', pe['FileHeader']['Machine'].str())
 
     # build the path
     if opts.dump:
-        six.print_('\n'.join(map(repr, strings.items())), file=sys.stdout)
+        six.print_('\n'.join(map(repr, properties.items())), file=sys.stdout)
         sys.exit(0)
 
     res = sys.getfilesystemencoding()
-    encoded = { k : v for k, v in six.iteritems(strings) }
+    encoded = { attribute : property for attribute, property in properties.items() }
 
     path = opts.format.format(**encoded)
     six.print_(path, file=sys.stdout)
