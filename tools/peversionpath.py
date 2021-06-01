@@ -141,6 +141,7 @@ if __name__ == '__main__':
     # parse the version info and check its size
     viresource = versionInfo.l
     vi = viresource.new(pecoff.portable.resources.VS_VERSIONINFO, offset=viresource.getoffset()).load(offset=0, source=ptypes.provider.proxy(viresource))
+    vi.setoffset(vi.getoffset(), recurse=True)
     if vi['Unknown'].size():
         Fhex, unknown = operator.methodcaller('encode', 'hex') if sys.version_info.major < 3 else bytes.hex, vi['Unknown'].serialize()
         logging.warning("Error parsing {:d} bytes from the version information: {:s}".format(vi['Unknown'].size(), Fhex(unknown)))
