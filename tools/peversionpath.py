@@ -50,8 +50,8 @@ class help(optparse.OptionParser):
 
         # VS_VERSIONINFO
         self.add_option('', '--list', default=False, action='store_true', help='dump the language-id+codepages available')
-        self.add_option('', '--langid', default=None, type='int', help='use the specified language-id')
-        self.add_option('', '--codepage', default=None, type='int', help='use the specified codepage')
+        self.add_option('-l', '--langid', default=None, type='int', help='use the specified language-id')
+        self.add_option('-c', '--codepage', default=None, type='int', help='use the specified codepage')
 
         # fields
         self.add_option('-u', '--use-fixedfileinfo', default=False, action='store_true', help='use the VS_FIXEDFILEINFO structure instead of the string table')
@@ -76,10 +76,10 @@ if __name__ == '__main__':
     try:
         resource_address = parseResourceDirectory(filename)
     except ptypes.error.LoadError as e:
-        six.print_('File %s does not appear to be an executable'% filename, file=sys.stderr)
+        six.print_("File {:s} does not appear to be an executable.".format(filename), file=sys.stderr)
         sys.exit(1)
     if resource_address.int() == 0:
-        six.print_('File %s does not contain a resource datadirectory entry'% filename, file=sys.stderr)
+        six.print_("File {:s} does not contain a resource data directory entry.".format(filename), file=sys.stderr)
         sys.exit(1)
     resource = resource_address.d.li
 
@@ -89,19 +89,20 @@ if __name__ == '__main__':
     # parse the resource names
     VERSION_INFO = 16
     if VERSION_INFO not in resource.List():
-        six.print_('File %s does not appear to contain a VERSION_INFO entry within its resources directory.'% filename, file=sys.stderr)
+        six.print_("File {:s} does not appear to contain a VERSION_INFO ({:d}) entry within its resource directory.".format(filename, VERSION_INFO), file=sys.stderr)
         sys.exit(1)
 
     try:
         resource_Names = resource.Entry(VERSION_INFO).l
     except AttributeError:
-        six.print_('No resource entry in %s that matches VERSION_INFO : %r'%(filename, VERSION_INFO), file=sys.stderr)
+        six.print_("No entries for VERSION_INFO ({:d}) in the resource directory from file {:s}.".format(VERSION_INFO, filename), file=sys.stderr)
         sys.exit(1)
     if opts.dump_names:
-        six.print_('\n'.join(map(repr,resource_Names.Iterate())), file=sys.stdout)
+        six.print_('Dumping the name table entries from the resource directory as requested by user:', file=sys.stderr)
+        six.print_('\n'.join(map("{!s}".format, resource_Names.iterate())), file=sys.stdout)
         sys.exit(0)
 
-    # parse the resource languages
+    # parse the resource languages from the resource name
     try:
         if opts.name is not None:
             resource_Languages = resource_Names.Entry(opts.name).l
@@ -109,32 +110,34 @@ if __name__ == '__main__':
             if resource_Names['NumberOfIdEntries'].int() != 1:
                 raise IndexError
             resource_Languages = resource_Names['Ids'][0]['Entry'].d.l
-            six.print_('Defaulting to the only language entry: %d'%(resource_Names['Ids'][0]['Name'].int()), file=sys.stderr)
+            six.print_("Defaulting to the only available language entry: {:d}".format(resource_Names['Ids'][0]['Name'].int()), file=sys.stderr)
     except IndexError:
-        six.print_('More than one name found in %s : %r'%(filename, tuple(n['Name'].int() for n in resource_Names['Ids'])), file=sys.stderr)
+        six.print_("More than one entry was found under VERSION_INFO ({:d}) in file {:s}: {!s}".format(VERSION_INFO, filename, tuple(item['Name'].int() for item in resource_Names['Ids'])), file=sys.stderr)
         sys.exit(1)
     except AttributeError:
-        six.print_('No resource found in %s with the requested name : %r'%(filename, opts.name), file=sys.stderr)
+        six.print_("No resource found in file {:s} with the requested name ({!s}).".format(filename, opts.name), file=sys.stderr)
         sys.exit(1)
     if opts.dump_languages:
-        six.print_('\n'.join(map(repr,resource_Languages.Iterate())), file=sys.stdout)
+        six.print_('Dumping the language entries from the resource name table as requested by user:', file=sys.stderr)
+        six.print_('\n'.join(map("{!s}".format, resource_Languages.iterate())), file=sys.stdout)
         sys.exit(0)
 
-    # grab the version record
+    # grab the version record from the resource language
     try:
         if opts.language is not None:
-            resource_Version = resource_Languages.Entry(opts.language).l
+            resource_Version = resource_Languages.entry(opts.language).l
         else:
             if resource_Languages['NumberOfIdEntries'].int() != 1:
                 raise IndexError
             resource_Version = resource_Languages['Ids'][0]['Entry'].d.l
-            six.print_('Defaulting to the only version entry: %d'%(resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
+            six.print_("Defaulting to the only available language entry: {:d}".format(resource_Languages['Ids'][0]['Name'].int()), file=sys.stderr)
 
     except IndexError:
-        six.print_('More than one language found in %s : %r'%(filename, tuple(n['Name'].int() for n in resource_Languages['Ids'])), file=sys.stderr)
+        six.print_("More than one language entry was found in file {:s}: {!s}".format(filename, tuple(item['Name'].int() for item in resource_Languages['Ids'])), file=sys.stderr)
         sys.exit(1)
     except AttributeError:
-        six.print_('No version record found in %s for the specified language : %r'%(filename, opts.language), file=sys.stderr)
+        resource_Name = resource_Languages.getparent(pecoff.portable.resources.IMAGE_RESOURCE_DIRECTORY_ENTRY)
+        six.print_("No version record found in file {:s} for entry ({!s}) with the requested language ({!s}).".format(filename, resource_Name.Name(), opts.language), file=sys.stderr)
         sys.exit(1)
     else:
         versionInfo = resource_Version['OffsetToData'].d
@@ -154,7 +157,8 @@ if __name__ == '__main__':
     # extract the language/codepage ids from the version info
     lgcpids = extractLgCpIds(vi)
     if opts.list:
-        six.print_('\n'.join(map(repr,lgcpids)), file=sys.stdout)
+        six.print_('Dumping language/codepage identifiers as requested by user:', file=sys.stderr)
+        six.print_('\n'.join(map("{!s}".format, lgcpids)), file=sys.stdout)
         sys.exit(0)
 
     # if the user wants to use the tagVS_FIXEDFILEINFO structure, then we'll
@@ -179,21 +183,29 @@ if __name__ == '__main__':
             try:
                 codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
             except ValueError as e:
-                six.print_('More than one (language,codepage) has been found in %s. Use -d to list the ones available and choose one. Use -h for more information.'% filename, file=sys.stderr)
+                six.print_("More than one language/codepage identifier has been found in file {:s}. Use --list to list the ones available and choose one or use -h for more information.".format(filename), file=sys.stderr)
                 sys.exit(1)
-            if (language,codepage) not in lgcpids:
-                six.print_('Invalid (language,codepage) in %s : %r not in %s'%(filename, (language,codepage), lgcpids), file=sys.stderr)
+            identifier = language, codepage
+            if identifier not in lgcpids:
+                six.print_("The specified language/codepage identifier {!s} does not exist in file {:s}. Use --list to list the identifiers that are available or use -h for more information.".format(identifier, filename), file=sys.stderr)
                 sys.exit(1)
 
         # otherwise, we can just use the only language/codepage that was there
         else:
-            (language,codepage), = lgcpids
+            identifier, = lgcpids
+
+            # if the user tried to explicitly specify one, then let them know that
+            # we didn't need their help figuring out the string table.
+            choices = [("language ({:d})", opts.langid), ("codepage ({:d})", opts.codepage)]
+            if any(item is not None for _, item in choices):
+                chosen = (spec.format(item) for spec, item in choices if item is not None)
+                six.print_("Ignoring the requested {:s} as only one identifier {!s} was found in file {:s}.".format(' and '.join(chosen), identifier, filename), file=sys.stderr)
 
         # extract the properties for the language/codepage from the string table
         try:
-            stringTable = getStringFileInfo(vi, (language,codepage))
+            stringTable = getStringFileInfo(vi, identifier)
         except KeyError:
-            six.print_('(language,codepage) in %s has no properties : %r'%(filename, (language,codepage)), file=sys.stderr)
+            six.print_("The StringFileInfo table in {:s} for the chosen language/codepage identifier {!s} has no available properties.".format(filename, identifier), file=sys.stderr)
             sys.exit(1)
         properties = {item['szKey'].str() : item['Value'].str() for item in stringTable}
 
@@ -201,11 +213,13 @@ if __name__ == '__main__':
     properties.setdefault('__name__', os.path.split(filename)[1])
     properties.setdefault('__machine__', pe['FileHeader']['Machine'].str())
 
-    # build the path
+    # if we were asked to dump the available properties, then do just that.
     if opts.dump:
-        six.print_('\n'.join(map(repr, properties.items())), file=sys.stdout)
+        six.print_('Dumping the available properties as requested by user:', file=sys.stderr)
+        six.print_('\n'.join(map("{!s}".format, properties.items())), file=sys.stdout)
         sys.exit(0)
 
+    # format the path according to the filesystem encoding
     res = sys.getfilesystemencoding()
     encoded = { attribute : property for attribute, property in properties.items() }
 
