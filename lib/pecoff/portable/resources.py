@@ -226,21 +226,133 @@ class RT_VERSION_VarFileInfo(RT_VERSION):
 class RT_VERSION_Translation(ptype.block):
     type = 'Translation'
 
+@pbinary.littleendian
+class VS_FF_(pbinary.flags):
+    _fields_ = [
+        (26, 'Unused'),
+        (1, 'SPECIALBUILD'),
+        (1, 'INFOINFERRED'),
+        (1, 'PRIVATEBUILD'),
+        (1, 'PATCHED'),
+        (1, 'PRERELEASE'),
+        (1, 'DEBUG'),
+    ]
+
+class VOS_(pbinary.enum):
+    length, _values_ = 16, [
+        ('UNKNOWN', 0),
+        ('DOS', 1),
+        ('OS216', 2),
+        ('OS232', 3),
+        ('NT', 4),
+        ('WINCE', 5),
+    ]
+
+class VOS__(pbinary.enum):
+    length, _values_ = 16, [
+        ('BASE', 0),
+        ('WINDOWS16', 1),
+        ('PM16', 2),
+        ('PM32', 3),
+        ('WINDOWS32', 4),
+    ]
+
+class VFT_(pint.enum, dword):
+    _values_ = [
+        ('UNKNOWN', 0),
+        ('APP', 1),
+        ('DLL', 2),
+        ('DRV', 3),
+        ('FONT', 4),
+        ('VXD', 5),
+        ('STATIC_LIB', 7),
+    ]
+
+class VFT2_DRV_(pint.enum, dword):
+    _values_= [
+        ('UNKNOWN', 0),
+        ('PRINTER', 1),
+        ('KEYBOARD', 2),
+        ('LANGUAGE', 3),
+        ('DISPLAY', 4),
+        ('MOUSE', 5),
+        ('NETWORK', 6),
+        ('SYSTEM', 7),
+        ('INSTALLABLE', 8),
+        ('SOUND', 9),
+        ('COMM', 10),
+        ('INPUTMETHOD', 11),
+        ('VERSIONED_PRINTER', 12),
+    ]
+
+class VFT2_FONT_(pint.enum, dword):
+    _values_ = [
+        ('RASTER', 1),
+        ('VECTOR', 2),
+        ('TRUETYPE', 3),
+    ]
+
 @RT_VERSION_ValueType.define
 class VS_FIXEDFILEINFO(pstruct.type):
     type = 'VS_VERSION_INFO'
+    class _dwSignature(pint.enum, dword):
+        _values_ = [
+            ('VS_FFI_SIGNATURE', 0xfeef04bd),
+        ]
+    class _dwStrucVersion(pint.enum, dword):
+        _values_ = [
+            ('VS_FFI_STRUCVERSION', 0x10000),
+        ]
+    class _dwFileVersion(pstruct.type):
+        _fields_ = [
+            (dword, 'dwFileVersionMS'),
+            (dword, 'dwFileVersionLS'),
+        ]
+        def Version(self):
+            ms, ls = (self[fld].int() for fld in self.keys())
+            msh = (ms & 0xffff0000) // pow(2,16)
+            msl = (ms & 0x0000ffff) // pow(2,0)
+            lsh = (ls & 0xffff0000) // pow(2,16)
+            lsl = (ls & 0x0000ffff) // pow(2,0)
+            return [msh, msl, lsh, lsl]
+        def str(self):
+            res = self.Version()
+            return '.'.join(map("{:d}".format, res))
+        def summary(self):
+            description = ["{:s}={:#0{:d}x}".format(fld, self[fld].int(), 2 + 8) for fld in self.keys()]
+            return "{:s} ({:s})".format(self.str(), ', '.join(description))
+    class _dwProductVersion(_dwFileVersion):
+        _fields_ = [
+            (dword, 'dwProductVersionMS'),
+            (dword, 'dwProductVersionLS'),
+        ]
+    @pbinary.littleendian
+    class _dwFileOS(pbinary.struct):
+        _fields_ = [
+            (VOS__, 'Platform'),
+            (VOS_, 'OS'),
+        ]
+    def __dwFileSubtype(self):
+        res = self['dwFileType'].li
+        if res['DRV']:
+            return VFT2_DRV_
+        elif res['FONT']:
+            return VFT2_FONT_
+        return dword
     _fields_ = [
-        (dword, 'dwSignature'),
-        (dword, 'dwStrucVersion'),
-        (dword, 'dwFileVersionMS'),
-        (dword, 'dwFileVersionLS'),
-        (dword, 'dwProductVersionMS'),
-        (dword, 'dwProductVersionLS'),
+        (_dwSignature, 'dwSignature'),
+        (_dwStrucVersion, 'dwStrucVersion'),
+        #(dword, 'dwFileVersionMS'),
+        #(dword, 'dwFileVersionLS'),
+        (_dwFileVersion, 'dwFileVersion'),
+        #(dword, 'dwProductVersionMS'),
+        #(dword, 'dwProductVersionLS'),
+        (_dwProductVersion, 'dwProductVersion'),
         (dword, 'dwFileFlagsMask'),
-        (dword, 'dwFileFlags'),
-        (dword, 'dwFileOS'),
-        (dword, 'dwFileType'),
-        (dword, 'dwFileSubtype'),
+        (VS_FF_, 'dwFileFlags'),
+        (_dwFileOS, 'dwFileOS'),
+        (VFT_, 'dwFileType'),
+        (__dwFileSubtype, 'dwFileSubtype'),
         (dword, 'dwFileDateMS'),
         (dword, 'dwFileDateLS'),
     ]
