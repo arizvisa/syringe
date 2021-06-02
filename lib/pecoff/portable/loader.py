@@ -76,15 +76,15 @@ class IMAGE_GUARD_(pbinary.flags):
         (8, 'unused(8)_0'),
     ]
 
-class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
+class IMAGE_LOAD_CONFIG_DIRECTORY32(pstruct.type):
     # FIXME: The size field in the DataDirectory is used to determine which
-    #        IMAGE_LOADCONFIG_DIRECTORY to use. Instead we're cheating and
+    #        IMAGE_LOAD_CONFIG_DIRECTORY to use. Instead we're cheating and
     #        using the size specified in the data-directory entry and a
     #        feature of pstruct.type when defining a custom .blocksize(). A
     #        proper implementation should check the 'Size' field and then
-    #        use this to determine which IMAGE_LOADCONFIG_DIRECTORY
+    #        use this to determine which IMAGE_LOAD_CONFIG_DIRECTORY
     #        should be used. Once that's done, then we can define a
-    #        sub-object that chooses the correct IMAGE_LOADCONFIG_DIRECTORY
+    #        sub-object that chooses the correct IMAGE_LOAD_CONFIG_DIRECTORY
     #        to use.
     def blocksize(self):
 
@@ -95,7 +95,6 @@ class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
 
         # Otherwise, we're allocated and just need to read our size field.
         return self['Size'].li.int()
-
 
     _fields_ = [
         (uint32, 'Size'),
@@ -147,8 +146,9 @@ class IMAGE_LOADCONFIG_DIRECTORY(pstruct.type):
         (realaddress(pstr.wstring, type=uint32), 'AddressOfSomeUnicodeString'),
         (uint32, 'Reserved3'),
     ]
+IMAGE_LOAD_CONFIG_DIRECTORY = IMAGE_LOAD_CONFIG_DIRECTORY32
 
-class IMAGE_LOADCONFIG_DIRECTORY64(pstruct.type):
+class IMAGE_LOAD_CONFIG_DIRECTORY64(pstruct.type):
     _fields_ = [
         (uint32, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
