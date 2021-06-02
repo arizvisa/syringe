@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, sys
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
@@ -71,6 +71,30 @@ class CV_INFO_PDB70(pstruct.type):
         (uint32, 'Age'),
         (pstr.szstring, 'PdbFileName'),
     ]
+
+    def SymHash(self):
+        signature, items = self['Signature'], []
+        for fld in ['Data1', 'Data2', 'Data3']:
+            items.append("{:0{:d}X}".format(signature[fld].int(), 2 * signature[fld].size()))
+        res = signature['Data4'].serialize()
+        items.append(''.join(map("{:02X}".format, bytearray(res))))
+        items.append("{:X}".format(self['Age'].int()))
+        return ''.join(items)
+
+    def SymPath(self):
+        path = self.SymHash()
+        return '/'.join([path, self['PdbFileName'].str()])
+
+    def SymUrl(self, baseuri='https://msdl.microsoft.com/download/symbols'):
+        if sys.version_info.major < 3:
+            import urllib
+            path = '/'.join([self['PdbFileName'].str(), self.SymPath()])
+            return urllib.basejoin(baseuri, path)
+
+        import urllib.parse
+        scheme, location, path, query, fragment = urllib.parse.urlsplit(baseuri)
+        newpath = '/'.join([path, self['PdbFileName'].str(), self.SymPath()])
+        return urllib.parse.urlunsplit((scheme, location, newpath, query, fragment))
 
 @IMAGE_DEBUG_DIRECTORY_DATA.define
 class IMAGE_DEBUG_DATA_CODEVIEW(pstruct.type):
