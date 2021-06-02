@@ -145,7 +145,7 @@ def list_exports(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Export']
     if E['Address'].int() == 0:
         raise ValueError("No Exports directory entry was found.")
-    et = E['Address'].d.li
+    global et; et = E['Address'].d.li
     global result; result = et
     if F:
         return Extract(F(result), outformat, file=output)
@@ -163,7 +163,7 @@ def extract_export(t, index, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Export']
     if E['Address'].int() == 0:
         raise ValueError("No Exports directory entry was found.")
-    et = E['Address'].d.li
+    global et; et = E['Address'].d.li
     if not(0 <= index < len(et)):
         raise IndexError("Invalid Exports table index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(it)))
     ete = next(e for i, e in enumerate(et.iterate()) if i == index)
@@ -182,7 +182,7 @@ def list_imports(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Import']
     if E['Address'].int() == 0:
         raise ValueError("No Imports directory entry was found.")
-    it = E['Address'].d.li
+    global it; it = E['Address'].d.li
     global result; result = it
     if F:
         return Extract(F(result), outformat, file=output)
@@ -202,7 +202,7 @@ def extract_import(t, index, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Import']
     if E['Address'].int() == 0:
         raise ValueError("No Imports directory entry was found.")
-    it = E['Address'].d.li
+    global it; it = E['Address'].d.li
     if not(0 <= index < len(it)):
         raise IndexError("Invalid Imports table index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(it)))
     ite = it[index]
@@ -219,7 +219,7 @@ def list_resources(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Resource']
     if E['Address'].int() == 0:
         raise ValueError("No Resource directory entry was found.")
-    rt = E['Address'].d.li
+    global rt; rt = E['Address'].d.li
     global result; result = rt
     if F:
         return Extract(F(result), outformat, file=output)
@@ -235,7 +235,7 @@ def extract_resource(t, path, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Resource']
     if E['Address'].int() == 0:
         raise ValueError("No Resource directory entry was found.")
-    rt = E['Address'].d.li
+    global rt; rt = E['Address'].d.li
     rtp = []
     for p in path.split('/'):
         try: p = int(p)
@@ -263,7 +263,7 @@ def dump_loadconfig(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['LoadConfig']
     if E['Address'].int() == 0:
         raise ValueError("No LoadConfig directory entry was found.")
-    lc = E['Address'].d.li
+    global lc; lc = E['Address'].d.li
     global result; result = lc
     if F:
         return Extract(F(result), outformat, file=output)
@@ -273,7 +273,7 @@ def list_signature(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Security']
     if E['Address'].int() == 0:
         raise ValueError("No Security directory entry was found.")
-    s = E['Address'].d.li
+    global s; s = E['Address'].d.li
     global result; result = s
     if F:
         return Extract(F(result), outformat, file=output)
@@ -288,7 +288,7 @@ def extract_signature(t, index, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Security']
     if E['Address'].int() == 0:
         raise ValueError("No Security directory entry was found.")
-    s = E['Address'].d.li
+    global s; s = E['Address'].d.li
     if not (0 <= index < len(s)):
         raise IndexError("Invalid signature index was specified ({:d} <= {:d} < {:d}).".format(0, index, len(s)))
     se = s[index]
@@ -319,11 +319,11 @@ def extract_signature(t, index, outformat, F=None, output=None):
 def emit_pdb(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Debug']
     if E['Address'].int() == 0:
-        raise ValueError("No LoadConfig directory entry was found.")
-    lc = E['Address'].d.li
-    item = next((item for item in lc if item['Type']['CODEVIEW']), None)
+        raise ValueError("No debug data directory entry was found.")
+    global D; D = E['Address'].d.li
+    item = next((item for item in D if item['Type']['CODEVIEW']), None)
     if item is None:
-        raise ValueError("Unable to locate item type {:s} in debug data directory: {:s}".format('CODEVIEW', ', '.join(item['Type'].str() for item in lc)))
+        raise ValueError("Unable to locate item type {:s} in debug data directory: {:s}".format('CODEVIEW', ', '.join(item['Type'].str() for item in D)))
     global result; result = item['PointerToRawData'].d.li
     info = result['Info']
     if not outformat:
@@ -342,9 +342,9 @@ def emit_pdb(t, outformat, F=None, output=None):
 def list_debugpogo(t, outformat, F=None, output=None):
     E = t['Next']['Header']['DataDirectory']['Debug']
     if E['Address'].int() == 0:
-        raise ValueError("No LoadConfig directory entry was found.")
-    lc = E['Address'].d.li
-    item = next((item for item in lc if item['Type']['POGO']), None)
+        raise ValueError("No debug data directory entry was found.")
+    global D; D = E['Address'].d.li
+    item = next((item for item in D if item['Type']['POGO']), None)
     global result; result = item['PointerToRawData'].d.li
     entries = result['Entries']
     if F:
