@@ -17,7 +17,7 @@ def Extract(obj, outformat, file=None):
     elif outformat == 'hex':
         res = obj.hexdump()
     elif outformat == 'raw':
-        out = lambda string, **kwargs: kwargs['file'].write(string)
+        out = lambda string, **kwargs: (kwargs['file'] if sys.version_info.major < 3 else kwargs['file'].buffer).write(string)
         res = obj.serialize()
     elif outformat == 'list':
         res = '\n'.join((n.summary() if hasattr(n, 'summary') else str(n) for n in obj))
@@ -316,6 +316,49 @@ def extract_signature(t, index, outformat, F=None, output=None):
     result = result if rt is None else result.cast(rt)
     return Extract(result, outformat or 'print', file=output)
 
+def emit_pdb(t, outformat, F=None, output=None):
+    E = t['Next']['Header']['DataDirectory']['Debug']
+    if E['Address'].int() == 0:
+        raise ValueError("No LoadConfig directory entry was found.")
+    lc = E['Address'].d.li
+    item = next((item for item in lc if item['Type']['CODEVIEW']), None)
+    if item is None:
+        raise ValueError("Unable to locate item type {:s} in debug data directory: {:s}".format('CODEVIEW', ', '.join(item['Type'].str() for item in lc)))
+    global result; result = item['PointerToRawData'].d.li
+    info = result['Info']
+    if not outformat:
+        six.print_("{!s}".format(info.SymUrl()), file=output)
+        return
+    if outformat in {'list'}:
+        fields = [fld for fld in info]
+        six.print_(':'.join(fields[0:1] + [info[fields[0]].str().upper()]))
+        six.print_(':'.join(fields[1:2] + ["{:d}".format(info[fields[1]].int())]))
+        six.print_(':'.join(fields[2:3] + [info[fields[2]].str()]))
+        return
+    if F:
+        return Extract(F(info), outformat, file=output)
+    return Extract(info, outformat, file=output)
+
+def list_debugpogo(t, outformat, F=None, output=None):
+    E = t['Next']['Header']['DataDirectory']['Debug']
+    if E['Address'].int() == 0:
+        raise ValueError("No LoadConfig directory entry was found.")
+    lc = E['Address'].d.li
+    item = next((item for item in lc if item['Type']['POGO']), None)
+    global result; result = item['PointerToRawData'].d.li
+    entries = result['Entries']
+    if F:
+        return Extract(F(entries), outformat, file=output)
+    if not outformat or outformat in {'print'}:
+        items = [item for item in entries]
+        for i, item in enumerate(items):
+            rva, size = (item[fld] for fld in ['rva', 'size'])
+            six.print_("[{:d}] {:#x}-{:#x} {:+#x} {:s}".format(i, rva.int(), rva.int() + size.int(), size.int(), item['section'].str()))
+        return
+    if outformat in {'list'}:
+        return Extract(("{:x}{:+x}:{:x}:{:s}".format(item['rva'].int(), item['rva'].int()+item['size'].int(), item['size'].int(), item['section'].str()) for item in entries), outformat, file=output)
+    return Extract(entries, outformat, file=output)
+
 def args():
     p = argparse.ArgumentParser(prog="pe.py", description='Display some information about a portable executable file', add_help=True)
     p.add_argument('infile', type=argparse.FileType('rb'), help='a portable executable file')
@@ -339,6 +382,8 @@ def args():
     res.add_argument('-l','--dump-loaderconfig', action='store_const', const=dump_loadconfig, dest='command', help='dump the LoadConfig directory entry')
     res.add_argument('-k','--list-signature', action='store_const', const=list_signature, dest='command', help='list the certificates at the Security directory entry')
     res.add_argument('-K','--dump-signature', action='store', nargs=1, type=int, dest='xsignature', metavar='index', help='dump the certificate at the specified index')
+    res.add_argument('--dump-pogo', action='store_const', const=list_debugpogo, dest='command', help='dump the pogo entry from the debug datadirectory')
+    res.add_argument('--emit-pdb', action='store_const', const=emit_pdb, dest='command', help='display the pdb path from the debug datadirectory')
 
     return p
 
