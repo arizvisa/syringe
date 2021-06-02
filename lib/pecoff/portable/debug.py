@@ -89,7 +89,7 @@ class CV_INFO_PDB70(pstruct.type):
         if sys.version_info.major < 3:
             import urllib
             path = '/'.join([self['PdbFileName'].str(), self.SymPath()])
-            return urllib.basejoin(baseuri, path)
+            return urllib.basejoin(baseuri if baseuri.endswith('/') else "{:s}/".format(baseuri), path)
 
         import urllib.parse
         scheme, location, path, query, fragment = urllib.parse.urlsplit(baseuri)
