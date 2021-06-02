@@ -78,7 +78,7 @@ class IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA_NAME(IMAGE_RESOURCE_DIRECTORY_ENTRY_RVA
     _value_ = pbinary.littleendian(RVAType)
 
     def _object_(self):
-        return IMAGE_RESOURCE_DIRECTORY_STRING if self.object['NameIsString'] else ptype.undefined
+        return IMAGE_RESOURCE_DIRECTORY_STRING_U if self.object['NameIsString'] else ptype.undefined
 
     def get(self):
         if self.object['NameIsString'] == 0:
