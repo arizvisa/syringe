@@ -21,6 +21,12 @@ uint64 = dyn.clone(pint.uint64_t)
 class off_t(pint.uint32_t): pass
 class addr_t(pint.uint32_t): pass
 
+class VOID(ptype.undefined): pass
+class BYTE(pint.uint8_t): pass
+class WORD(pint.uint16_t): pass
+class DWORD(pint.uint32_t): pass
+class ULONGLONG(pint.uint64_t): pass
+
 ### locating particular parts of the executable
 def LocateBase(self):
     """Return the base object of the executable. This is used to find the base address."""
@@ -106,7 +112,7 @@ def virtualaddress(target, **kwds):
 ## core header types
 class Header(object): pass
 
-class Machine(pint.enum, pint.uint16_t):
+class Machine(pint.enum, WORD):
     _values_ = [
         ('UNKNOWN', 0x0000), ('AM33', 0x01d3), ('AMD64', 0x8664), ('ARM', 0x01c0),
         ('EBC', 0x0ebc), ('I386', 0x014c), ('IA64', 0x0200), ('M32R', 0x9041),
@@ -115,7 +121,7 @@ class Machine(pint.enum, pint.uint16_t):
         ('SH4', 0x01a6), ('SH5', 0x01a8), ('THUMB', 0x01c2), ('WCEMIPSV2', 0x0169),
     ]
 
-class TimeDateStamp(uint32):
+class TimeDateStamp(DWORD):
     def datetime(self):
         res = self.int()
         epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
