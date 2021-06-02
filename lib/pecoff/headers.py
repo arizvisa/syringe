@@ -142,19 +142,27 @@ class IMAGE_COMDAT_SELECT(ptypes.pint.enum, byte):
 
 class rfc4122(pstruct.type):
     class _Data1(pint.bigendian(pint.uint32_t)):
+        def str(self):
+            res = 2 * self.size()
+            return "{:0{:d}x}".format(self.int(), res)
         def summary(self):
-            return '{:08x}'.format(self.int())
+            return self.str()
 
     class _Data2and3(pint.bigendian(pint.uint16_t)):
+        def str(self):
+            res = 2 * self.size()
+            return "{:0{:d}x}".format(self.int(), res)
         def summary(self):
-            return '{:04x}'.format(self.int())
+            return self.str()
 
     class _Data4(pint.bigendian(pint.uint64_t)):
-        def summary(self):
+        def str(self):
             res = bytearray(self.serialize())
-            d1 = ''.join(map('{:02x}'.format,res[:2]))
-            d2 = ''.join(map('{:02x}'.format,res[2:]))
-            return '-'.join((d1,d2))
+            d1 = ''.join(map('{:02x}'.format, res[:2]))
+            d2 = ''.join(map('{:02x}'.format, res[2:]))
+            return '-'.join([d1, d2])
+        def summary(self):
+            return self.str()
 
     _fields_ = [
         (_Data1, 'Data1'),
