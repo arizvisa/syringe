@@ -224,6 +224,17 @@ class IMAGE_ENCLAVE_CONFIG64(pstruct.type):
         (IMAGE_ENCLAVE_FLAG_, 'EnclaveFlags'),
     ]
 
+class LOAD_LIBRARY_SEARCH_(pbinary.flags):
+    _fields_ = [
+        (3, 'Reserved'),
+        (1, 'DEFAULT_DIRS'),
+        (1, 'SYSTEM32'),
+        (1, 'USER_DIRS'),
+        (1, 'APPLICATION_DIR'),
+        (1, 'DLL_LOAD_DIR'),
+        (8, 'LOAD_LIBRARY_FLAGS?'),
+    ]
+
 class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
     _fields_ = [
         (DWORD, 'Size'),
@@ -243,7 +254,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
 
         (DWORD, 'ProcessHeapFlags'),   # FIXME: where are these flags at?
         (WORD, 'CSDVersion'),
-        (WORD, 'Reserved'),
+        (LOAD_LIBRARY_SEARCH_, 'DependentLoadFlags'),
 
         (realaddress(VOID, type=DWORD), 'EditList'),    # XXX: also probably a NULL-terminated list of VAs
         (realaddress(DWORD, type=DWORD), 'SecurityCookie'),
@@ -304,7 +315,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
 
         (DWORD, 'ProcessHeapFlags'),
         (WORD, 'CSDVersion'),
-        (WORD, 'Reserved1'),
+        (LOAD_LIBRARY_SEARCH_, 'DependentLoadFlags'),
 
         (realaddress(VOID, type=ULONGLONG), 'EditList'),
         (realaddress(ULONGLONG, type=ULONGLONG), 'SecurityCookie'),
