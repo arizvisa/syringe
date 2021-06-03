@@ -2,7 +2,7 @@ import ptypes, sys
 from ptypes import pstruct,parray,ptype,dyn,pstr,pbinary,utils
 from ..headers import *
 
-class IMAGE_DEBUG_TYPE_(pint.enum, uint32):
+class IMAGE_DEBUG_TYPE_(pint.enum, DWORD):
     _values_ = [
         ('UNKNOWN', 0),
         ('COFF', 1),
@@ -36,14 +36,14 @@ class IMAGE_DEBUG_DIRECTORY_ENTRY(pstruct.type):
         return IMAGE_DEBUG_DIRECTORY_DATA.get(res, blocksize=lambda _: blocksize)
 
     _fields_ = [
-        (uint32, 'Characteristics'),
+        (DWORD, 'Characteristics'),
         (TimeDateStamp, 'TimeDateStamp'),
-        (uint16, 'MajorVersion'),
-        (uint16, 'MinorVersion'),
+        (WORD, 'MajorVersion'),
+        (WORD, 'MinorVersion'),
         (IMAGE_DEBUG_TYPE_, 'Type'),
-        (uint32, 'SizeOfData'),
-        (virtualaddress(__RawData__, type=uint32), 'AddressOfRawData'),
-        (fileoffset(__RawData__, type=uint32), 'PointerToRawData'),
+        (DWORD, 'SizeOfData'),
+        (virtualaddress(__RawData__, type=DWORD), 'AddressOfRawData'),
+        (fileoffset(__RawData__, type=DWORD), 'PointerToRawData'),
     ]
 
 class IMAGE_DEBUG_DIRECTORY(parray.block):
@@ -57,9 +57,9 @@ class CodeViewInfo(ptype.definition):
 class CV_INFO_PDB20(pstruct.type):
     type = b'NB10'
     _fields_ = [
-        (uint32, 'Offset'),
-        (uint32, 'Signature'),
-        (uint32, 'Age'),
+        (DWORD, 'Offset'),
+        (DWORD, 'Signature'),
+        (DWORD, 'Age'),
         (pstr.szstring, 'PdbFileName'),
     ]
 
@@ -68,7 +68,7 @@ class CV_INFO_PDB70(pstruct.type):
     type = b'RSDS'
     _fields_ = [
         (GUID, 'Signature'),
-        (uint32, 'Age'),
+        (DWORD, 'Age'),
         (pstr.szstring, 'PdbFileName'),
     ]
 
@@ -115,7 +115,7 @@ class IMAGE_DEBUG_DATA_CODEVIEW(pstruct.type):
 IMAGE_DEBUG_TYPE_CODEVIEW = IMAGE_DEBUG_DATA_CODEVIEW
 
 ## IMAGE_DEBUG_TYPE_MISC
-class IMAGE_DEBUG_MISC_(pint.enum, uint32):
+class IMAGE_DEBUG_MISC_(pint.enum, DWORD):
     _values_ = [('EXENAME', 1)]
 
 @IMAGE_DEBUG_DIRECTORY_DATA.define
@@ -128,10 +128,10 @@ class IMAGE_DEBUG_DATA_MISC(pstruct.type):
 
     _fields_ = [
         (IMAGE_DEBUG_MISC_, 'DataType'),
-        (uint32, 'Length'),
-        (uint8, 'Unicode'),
+        (DWORD, 'Length'),
+        (BYTE, 'Unicode'),
         (dyn.block(3), 'align(Unicode)'),
-        (lambda s: dyn.clone(pstr.wstring if s['Unicode'].int() else pstr.string, length=s['Length'].li.int()), 'Data'),
+        (lambda self: dyn.clone(pstr.wstring if self['Unicode'].int() else pstr.string, length=self['Length'].li.int()), 'Data'),
         (__Extra, 'Extra'),
     ]
 IMAGE_DEBUG_TYPE_MISC = IMAGE_DEBUG_DATA_MISC
@@ -152,15 +152,15 @@ class IMAGE_DEBUG_DATA_COFF(pstruct.type):
         return dyn.block(max(0, bs - res))
 
     _fields_ = [
-        (uint32, 'NumberOfSymbols'),
-        (uint32, 'LvaToFirstSymbol'),
-        (uint32, 'NumberOfLinenumbers'),
-        (uint32, 'LvaToFirstLinenumber'),
+        (DWORD, 'NumberOfSymbols'),
+        (DWORD, 'LvaToFirstSymbol'),
+        (DWORD, 'NumberOfLinenumbers'),
+        (DWORD, 'LvaToFirstLinenumber'),
 
-        (virtualaddress(ptype.undefined, type=uint32), 'RvaToFirstByteOfCode'),
-        (virtualaddress(ptype.undefined, type=uint32), 'RvaToLastByteOfCode'),
-        (virtualaddress(ptype.undefined, type=uint32), 'RvaToFirstByteOfData'),
-        (virtualaddress(ptype.undefined, type=uint32), 'RvaToLastByteOfData'),
+        (virtualaddress(VOID, type=DWORD), 'RvaToFirstByteOfCode'),
+        (virtualaddress(VOID, type=DWORD), 'RvaToLastByteOfCode'),
+        (virtualaddress(VOID, type=DWORD), 'RvaToFirstByteOfData'),
+        (virtualaddress(VOID, type=DWORD), 'RvaToLastByteOfData'),
 
         (__Extra, 'Extra'),
     ]
@@ -188,10 +188,10 @@ class FPO_DATA(pstruct.type):
         ]
 
     _fields_ = [
-        (uint32, 'ulOffStart'),
-        (uint32, 'cbProcSize'),
-        (uint32, 'cdwLocals'),
-        (uint16, 'cdwParams'),
+        (DWORD, 'ulOffStart'),
+        (DWORD, 'cbProcSize'),
+        (DWORD, 'cdwLocals'),
+        (WORD, 'cdwParams'),
         (_BitValues, 'BitValues'),
     ]
 
@@ -206,7 +206,7 @@ IAMGE_DEBUG_TYPE_FPO = IMAGE_DEBUG_DATA_FPO
 @IMAGE_DEBUG_DIRECTORY_DATA.define
 class IMAGE_DEBUG_DATA_RESERVED10(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('RESERVED10')
-    class _Signature(uint32):
+    class _Signature(DWORD):
         def summary(self):
             res = bytes(bytearray(reversed(self.serialize())))
             return "{!r} ({:#08x})".format(res, self.int())
@@ -227,19 +227,19 @@ class IMAGE_DEBUG_DATA_VC_FEATURE(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('VC_FEATURE')
     #Counts: Pre-VC++ 11.00=0, C/C++=202, /GS=202, /sdl=0, guardN=201
     _fields_ = [
-        (uint32, 'Version'),
-        (uint32, 'C/C++'),
-        (uint32, 'GS'),
-        (uint32, 'SDL'),
-        (uint32, 'guardN'),
+        (DWORD, 'Version'),
+        (DWORD, 'C/C++'),
+        (DWORD, 'GS'),
+        (DWORD, 'SDL'),
+        (DWORD, 'guardN'),
     ]
 IMAGE_DEBUG_TYPE_VC_FEATURE = IMAGE_DEBUG_DATA_VC_FEATURE
 
 ## IMAGE_DEBUG_TYPE_POGO
 class LTCG_ENTRY(pstruct.type):
     _fields_ = [
-        (virtualaddress(lambda self: dyn.block(self.getparent(LTCG_ENTRY).li['size'].int()), type=uint32), 'rva'),
-        (uint32, 'size'),
+        (virtualaddress(lambda self: dyn.block(self.getparent(LTCG_ENTRY).li['size'].int()), type=DWORD), 'rva'),
+        (DWORD, 'size'),
         (pstr.szstring, 'section'),
         (dyn.padding(4), 'align(section)'),
     ]
@@ -248,7 +248,7 @@ class LTCG_ENTRY(pstruct.type):
 class IMAGE_DEBUG_DATA_POGO(pstruct.type):
     type = IMAGE_DEBUG_TYPE_.byname('POGO')
 
-    class _Signature(uint32):
+    class _Signature(DWORD):
         def summary(self):
             res = bytes(bytearray(reversed(self.serialize())))
             return "{!r} ({:#08x})".format(res, self.int())
@@ -262,3 +262,12 @@ class IMAGE_DEBUG_DATA_POGO(pstruct.type):
         (__entries, 'Entries'),
     ]
 IMAGE_DEBUG_TYPE_POGO = IMAGE_DEBUG_DATA_POGO
+
+@IMAGE_DEBUG_DIRECTORY_DATA.define
+class IMAGE_DEBUG_DATA_REPRO(pstruct.type):
+    type = IMAGE_DEBUG_TYPE_.byname('REPRO')
+    _fields_ = [
+        (DWORD, 'Size'),
+        (lambda self: dyn.block(self['Size'].li.int()), 'Unknown'),
+    ]
+IMAGE_DEBUG_TYPE_REPRO = IMAGE_DEBUG_DATA_REPRO
