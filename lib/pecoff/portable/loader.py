@@ -5,62 +5,95 @@ from ..headers import *
 
 class IMAGE_LOAD_CONFIG_CODE_INTEGRITY(pstruct.type):
     _fields_ = [
-        (uint16, 'Flags'),
-        (uint16, 'Catalog'),
-        (uint32, 'CatalogOffset'),
-        (uint32, 'Reserved'),
+        (WORD, 'Flags'),
+        (WORD, 'Catalog'),
+        (DWORD, 'CatalogOffset'),
+        (DWORD, 'Reserved'),
     ]
 
 class IMAGE_DYNAMIC_RELOCATION(pstruct.type):
     _fields_ = [
-        (uint32, 'Symbol'),
-        (uint32, 'BaseRelocSize'),
-        (lambda s: dyn.blockarray(uint32, s['BaseRelocSize'].li.int()), 'BaseRelocations'),
+        (realaddress(VOID, type=DWORD), 'Symbol'),
+        (DWORD, 'BaseRelocSize'),
+        (lambda self: dyn.blockarray(DWORD, self['BaseRelocSize'].li.int()), 'BaseRelocations'),
     ]
+IMAGE_DYNAMIC_RELOCATION32 = IMAGE_DYNAMIC_RELOCATION
 
 class IMAGE_DYNAMIC_RELOCATION64(pstruct.type):
     _fields_ = [
-        (uint32, 'HeaderSize'),
-        (uint32, 'FixupInfoSize'),
-        (uint64, 'Symbol'),
-        (uint32, 'SymbolGroup'),
-        (uint32, 'Flags'),
-        (lambda s: dyn.block(s['FixupInfoSize'].li.int()), 'FixupInfo'),
+        (realaddress(VOID, type=ULONGLONG), 'Symbol'),
+        (DWORD, 'BaseRelocSize'),
+        (lambda self: dyn.blockarray(DWORD, self['BaseRelocSize'].li.int()), 'BaseRelocations'),
+    ]
+
+class IMAGE_DYNAMIC_RELOCATION64_V2(pstruct.type):
+    _fields_ = [
+        (DWORD, 'HeaderSize'),
+        (DWORD, 'FixupInfoSize'),
+        (ULONGLONG, 'Symbol'),
+        (DWORD, 'SymbolGroup'),
+        (DWORD, 'Flags'),
+        (lambda self: dyn.array(BYTE, self['FixupInfoSize'].li.int()), 'FixupInfo'),
     ]
 
 class IMAGE_PROLOGUE_DYNAMIC_RELOCATION_HEADER(pstruct.type):
     _fields_ = [
-        (uint8, 'PrologueByteCount'),
-        (lambda s: dyn.block(s['PrologueByteCount'].li.int()), 'PrologueBytes'),
+        (BYTE, 'PrologueByteCount'),
+        (lambda self: dyn.array(BYTE, self['PrologueByteCount'].li.int()), 'PrologueBytes'),
     ]
 
 class IMAGE_EPILOGUE_DYNAMIC_RELOCATION_HEADER(pstruct.type):
+    class _BranchDescriptors(parray.type):
+        _object_ = BYTE
+    class _BranchDescriptorBitmap(parray.type):
+        _object_ = BYTE
+    def __BranchDescriptors(self):
+        res = self['BranchDescriptorCount'].li
+        return dyn.clone(self._BranchDescriptors, length=res.int())
+
+    def __BranchDescriptorBitmap(self):
+        res = self['BranchDescriptorCount'].li
+        aligned = (7 + res.int()) & -8
+        return dyn.clone(self._BranchDescriptorBitmap, length=aligned // 8)
+
     _fields_ = [
-        (uint32, 'EpilogueCount'),
-        (uint8, 'EpilogueByteCount'),
-        (uint8, 'BranchDescriptorElementSize'),
-        (uint16, 'BranchDescriptorCount'),
-        (lambda s: dyn.block(s['BranchDescriptorCount'].li.int()), 'BranchDescriptors'),
-        (lambda s: dyn.block(((s['BranchDescriptorCount'].li.int()+7) & -8) // 8), 'BranchDescriptorBitmap'),
+        (DWORD, 'EpilogueCount'),
+        (BYTE, 'EpilogueByteCount'),
+        (BYTE, 'BranchDescriptorElementSize'),
+        (WORD, 'BranchDescriptorCount'),
+        (__BranchDescriptors, 'BranchDescriptors'),
+        (__BranchDescriptorBitmap, 'BranchDescriptorBitmap'),
     ]
 
 class IMAGE_DYNAMIC_RELOCATION_TABLE(pstruct.type):
     def __DynamicRelocations(self):
-        # FIXME: figure out how to determine the type and size properly
-        t = IMAGE_DYNAMIC_RELOCATION
-        return dyn.blockarray(t, self['Size'].li.int())
+        p, version = self.getparent(IMAGE_LOAD_CONFIG_DIRECTORY), self['Version'].li
+        if version.int() < 2:
+            if isinstance(p, IMAGE_LOAD_CONFIG_DIRECTORY32):
+                t = IMAGE_DYNAMIC_RELOCATION32
+            elif isinstance(p, IMAGE_LOAD_CONFIG_DIRECTORY64):
+                t = IMAGE_DYNAMIC_RELOCATION64
+            else:
+                raise TypeError(p)
+            return dyn.blockarray(t, self['Size'].li.int())
 
-    # FIXME: use the version to determine how this structure looks
+        raise NotImplementedError(version.int())
+
+        # FIXME: Reverse what the 32-bit version of this structure should look like
+        #        and more importantly how the size fits into this...
+        return IMAGE_DYNAMIC_RELOCATION64_V2
+
     _fields_ = [
-        (uint32, 'Version'),
-        (uint32, 'Size'),
+        (DWORD, 'Version'),
+        (DWORD, 'Size'),
         (__DynamicRelocations, 'DynamicRelocations'),
     ]
 
 class IMAGE_GUARD_(pbinary.flags):
     _fields_ = [
-        (4, 'FUNCTION_TABLE_SIZE'),
-        (8, 'unused(8)_28'),
+        (4, 'CF_FUNCTION_TABLE_SIZE'),
+        (7, 'unused(7)_28'),
+        (1, 'RETPOLINE_PRESENT'),
         (1, 'RF_STRICT'),
         (1, 'RF_ENABLE'),
         (1, 'RF_INSTRUMENTED'),
@@ -76,7 +109,10 @@ class IMAGE_GUARD_(pbinary.flags):
         (8, 'unused(8)_0'),
     ]
 
-class IMAGE_LOAD_CONFIG_DIRECTORY32(pstruct.type):
+class IMAGE_LOAD_CONFIG_DIRECTORY(pstruct.type):
+    pass
+
+class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
     # FIXME: The size field in the DataDirectory is used to determine which
     #        IMAGE_LOAD_CONFIG_DIRECTORY to use. Instead we're cheating and
     #        using the size specified in the data-directory entry and a
@@ -97,106 +133,104 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(pstruct.type):
         return self['Size'].li.int()
 
     _fields_ = [
-        (uint32, 'Size'),
+        (DWORD, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
-        (uint16, 'MajorVersion'),
-        (uint16, 'MinorVersion'),
-        (uint32, 'GlobalFlagsClear'),   # FIXME
-        (uint32, 'GlobalFlagsSet'), # FIXME
-        (uint32, 'CriticalSectionDefaultTimeout'),
+        (WORD, 'MajorVersion'),
+        (WORD, 'MinorVersion'),
+        (DWORD, 'GlobalFlagsClear'),   # FIXME
+        (DWORD, 'GlobalFlagsSet'), # FIXME
+        (DWORD, 'CriticalSectionDefaultTimeout'),
 
-        (uint32, 'DeCommitFreeBlockThreshold'),
-        (uint32, 'DeCommitTotalFreeThreshold'),
-        (realaddress(ptype.undefined, type=uint32), 'LockPrefixTable'),     # XXX: NULL-terminated list of VAs
-        (uint32, 'MaximumAllocationSize'),
-        (uint32, 'VirtualMemoryThreshold'),
-        (uint32, 'ProcessAffinityMask'),
+        (DWORD, 'DeCommitFreeBlockThreshold'),
+        (DWORD, 'DeCommitTotalFreeThreshold'),
+        (realaddress(VOID, type=DWORD), 'LockPrefixTable'),     # XXX: NULL-terminated list of VAs
+        (DWORD, 'MaximumAllocationSize'),
+        (DWORD, 'VirtualMemoryThreshold'),
+        (DWORD, 'ProcessAffinityMask'),
 
-        (uint32, 'ProcessHeapFlags'),   # FIXME: where are these flags at?
-        (uint16, 'CSDVersion'),
-        (uint16, 'Reserved'),
+        (DWORD, 'ProcessHeapFlags'),   # FIXME: where are these flags at?
+        (WORD, 'CSDVersion'),
+        (WORD, 'Reserved'),
 
-        (realaddress(ptype.undefined, type=uint32), 'EditList'),    # XXX: also probably a NULL-terminated list of VAs
-        (realaddress(uint32, type=uint32), 'SecurityCookie'),
-        (realaddress(lambda s:dyn.array(uint32, s.parent['SEHandlerCount'].li.int()), type=uint32), 'SEHandlerTable'),
-        (uint32, 'SEHandlerCount'),
+        (realaddress(VOID, type=DWORD), 'EditList'),    # XXX: also probably a NULL-terminated list of VAs
+        (realaddress(DWORD, type=DWORD), 'SecurityCookie'),
+        (realaddress(lambda self: dyn.array(DWORD, self.parent['SEHandlerCount'].li.int()), type=DWORD), 'SEHandlerTable'),
+        (DWORD, 'SEHandlerCount'),
 
-        (realaddress(uint32, type=uint32), 'GuardCFCheckFunctionPointer'),
-        (realaddress(uint32, type=uint32), 'GuardCFDispatchFunctionPointer'),
-        (realaddress(lambda s: dyn.array(uint32, s.parent['GuardCFFunctionCount'].li.int()), type=uint32), 'GuardCFFunctionTable'),
-        (uint32, 'GuardCFFunctionCount'),
+        (realaddress(DWORD, type=DWORD), 'GuardCFCheckFunctionPointer'),
+        (realaddress(DWORD, type=DWORD), 'GuardCFDispatchFunctionPointer'),
+        (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardCFFunctionCount'].li.int()), type=DWORD), 'GuardCFFunctionTable'),
+        (DWORD, 'GuardCFFunctionCount'),
         (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
 
         (IMAGE_LOAD_CONFIG_CODE_INTEGRITY, 'CodeIntegrity'),
-        (realaddress(lambda s: dyn.array(uint32, s.parent['GuardAddressTakenIatEntryCount'].li.int()), type=uint32), 'GuardAddressTakenIatEntryTable'),
-        (uint32, 'GuardAddressTakenIatEntryCount'),
-        (realaddress(lambda s: dyn.array(uint32, s.parent['GuardLongJumpTargetCount'].li.int()), type=uint32), 'GuardLongJumpTargetTable'),
-        (uint32, 'GuardLongJumpTargetCount'),
+        (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardAddressTakenIatEntryCount'].li.int()), type=DWORD), 'GuardAddressTakenIatEntryTable'),
+        (DWORD, 'GuardAddressTakenIatEntryCount'),
+        (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardLongJumpTargetCount'].li.int()), type=DWORD), 'GuardLongJumpTargetTable'),
+        (DWORD, 'GuardLongJumpTargetCount'),
 
-        (realaddress(ptype.undefined, type=uint32), 'DynamicValueRelocTable'),  # XXX: Probably another NULL-terminated list of VAs
-        (realaddress(ptype.undefined, type=uint32), 'CHPEMetadataPointer'),     # FIXME
-        (realaddress(uint32, type=uint32), 'GuardRFFailureRoutine'),
-        (realaddress(uint32, type=uint32), 'GuardRFFailureRoutineFunctionPointer'),
-        (uint32, 'DynamicValueRelocTableOffset'),   # XXX: depends on DynamicValueRelocTableSection
-        (uint16, 'DynamicValueRelocTableSection'),
-        (uint16, 'Reserved2'),
+        (realaddress(VOID, type=DWORD), 'DynamicValueRelocTable'),  # XXX: Probably another NULL-terminated list of VAs
+        (realaddress(VOID, type=DWORD), 'CHPEMetadataPointer'),     # FIXME
+        (realaddress(DWORD, type=DWORD), 'GuardRFFailureRoutine'),
+        (realaddress(DWORD, type=DWORD), 'GuardRFFailureRoutineFunctionPointer'),
+        (DWORD, 'DynamicValueRelocTableOffset'),   # XXX: depends on DynamicValueRelocTableSection
+        (WORD, 'DynamicValueRelocTableSection'),
+        (WORD, 'Reserved2'),
 
-        (realaddress(uint32, type=uint32), 'GuardRFVerifyStackPointerFunctionPointer'),
-        (uint32, 'HotPatchTableOffset'),
-        (realaddress(pstr.wstring, type=uint32), 'AddressOfSomeUnicodeString'),
-        (uint32, 'Reserved3'),
+        (realaddress(DWORD, type=DWORD), 'GuardRFVerifyStackPointerFunctionPointer'),
+        (DWORD, 'HotPatchTableOffset'),
+        (realaddress(pstr.wstring, type=DWORD), 'AddressOfSomeUnicodeString'),
+        (DWORD, 'Reserved3'),
     ]
-IMAGE_LOAD_CONFIG_DIRECTORY = IMAGE_LOAD_CONFIG_DIRECTORY32
 
-class IMAGE_LOAD_CONFIG_DIRECTORY64(pstruct.type):
+class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
     _fields_ = [
-        (uint32, 'Size'),
+        (DWORD, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
-        (uint16, 'MajorVersion'),
-        (uint16, 'MinorVersion'),
-        (uint32, 'GlobalFlagsClear'),
-        (uint32, 'GlobalFlagsSet'),
-        (uint32, 'CriticalSectionDefaultTimeout'),
+        (WORD, 'MajorVersion'),
+        (WORD, 'MinorVersion'),
+        (DWORD, 'GlobalFlagsClear'),
+        (DWORD, 'GlobalFlagsSet'),
+        (DWORD, 'CriticalSectionDefaultTimeout'),
 
-        (uint64, 'DeCommitFreeBlockThreshold'),
-        (uint64, 'DeCommitTotalFreeThreshold'),
-        (realaddress(ptype.undefined, type=uint64), 'LockPrefixTable'),
-        (uint64, 'MaximumAllocationSize'),
-        (uint64, 'VirtualMemoryThreshold'),
-        (uint64, 'ProcessAffinityMask'),
+        (ULONGLONG, 'DeCommitFreeBlockThreshold'),
+        (ULONGLONG, 'DeCommitTotalFreeThreshold'),
+        (realaddress(VOID, type=ULONGLONG), 'LockPrefixTable'),
+        (ULONGLONG, 'MaximumAllocationSize'),
+        (ULONGLONG, 'VirtualMemoryThreshold'),
+        (ULONGLONG, 'ProcessAffinityMask'),
 
-        (uint32, 'ProcessHeapFlags'),
-        (uint16, 'CSDVersion'),
-        (uint16, 'Reserved1'),
+        (DWORD, 'ProcessHeapFlags'),
+        (WORD, 'CSDVersion'),
+        (WORD, 'Reserved1'),
 
-        (realaddress(ptype.undefined, type=uint64), 'EditList'),
-        (realaddress(uint64, type=uint64), 'SecurityCookie'),
-        (realaddress(lambda s:dyn.array(uint64, s.parent['SEHandlerCount'].li.int()), type=uint64), 'SEHandlerTable'),
-        (uint64, 'SEHandlerCount'),
+        (realaddress(VOID, type=ULONGLONG), 'EditList'),
+        (realaddress(ULONGLONG, type=ULONGLONG), 'SecurityCookie'),
+        (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['SEHandlerCount'].li.int()), type=ULONGLONG), 'SEHandlerTable'),
+        (ULONGLONG, 'SEHandlerCount'),
 
-        (realaddress(uint64, type=uint64), 'GuardCFCheckFunctionPointer'),
-        (realaddress(uint64, type=uint64), 'GuardCFDispatchFunctionPointer'),
-        (realaddress(lambda s: dyn.array(uint64, s.parent['GuardCFFunctionCount'].li.int()), type=uint64), 'GuardCFFunctionTable'),
-        (uint64, 'GuardCFFunctionCount'),
+        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardCFCheckFunctionPointer'),
+        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardCFDispatchFunctionPointer'),
+        (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardCFFunctionCount'].li.int()), type=ULONGLONG), 'GuardCFFunctionTable'),
+        (ULONGLONG, 'GuardCFFunctionCount'),
         (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
 
         (IMAGE_LOAD_CONFIG_CODE_INTEGRITY, 'CodeIntegrity'),
-        (realaddress(lambda s: dyn.array(uint64, s.parent['GuardAddressTakenIatEntryCount'].li.int()), type=uint64), 'GuardAddressTakenIatEntryTable'),
-        (uint64, 'GuardAddressTakenIatEntryCount'),
-        (realaddress(lambda s: dyn.array(uint64, s.parent['GuardLongJumpTargetCount'].li.int()), type=uint64), 'GuardLongJumpTargetTable'),
-        (uint64, 'GuardLongJumpTargetCount'),
+        (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardAddressTakenIatEntryCount'].li.int()), type=ULONGLONG), 'GuardAddressTakenIatEntryTable'),
+        (ULONGLONG, 'GuardAddressTakenIatEntryCount'),
+        (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardLongJumpTargetCount'].li.int()), type=ULONGLONG), 'GuardLongJumpTargetTable'),
+        (ULONGLONG, 'GuardLongJumpTargetCount'),
 
-        (realaddress(ptype.undefined, type=uint64), 'DynamicValueRelocTable'),
-        (realaddress(ptype.undefined, type=uint64), 'CHPEMetadataPointer'),
-        (realaddress(uint64, type=uint64), 'GuardRFFailureRoutine'),
-        (realaddress(uint64, type=uint64), 'GuardRFFailureRoutineFunctionPointer'),
-        (uint32, 'DynamicValueRelocTableOffset'),
-        (uint16, 'DynamicValueRelocTableSection'),
-        (uint16, 'Reserved2'),
+        (realaddress(VOID, type=ULONGLONG), 'DynamicValueRelocTable'),
+        (realaddress(VOID, type=ULONGLONG), 'CHPEMetadataPointer'),
+        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardRFFailureRoutine'),
+        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardRFFailureRoutineFunctionPointer'),
+        (DWORD, 'DynamicValueRelocTableOffset'),
+        (WORD, 'DynamicValueRelocTableSection'),
+        (WORD, 'Reserved2'),
 
-        (realaddress(uint64, type=uint64), 'GuardRFVerifyStackPointerFunctionPointer'),
-        (uint32, 'HotPatchTableOffset'),
-        (uint32, 'Reserved3'),
-        (realaddress(pstr.szwstring, type=uint64), 'AddressOfSomeUnicodeString'),
+        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardRFVerifyStackPointerFunctionPointer'),
+        (DWORD, 'HotPatchTableOffset'),
+        (DWORD, 'Reserved3'),
+        (realaddress(pstr.szwstring, type=ULONGLONG), 'AddressOfSomeUnicodeString'),
     ]
-
