@@ -33,7 +33,8 @@ def LocateBase(self):
     try:
         nth = self.getparent(ptype.boundary)
     except ValueError as msg:
-        nth = list(self.backtrace(fn=lambda x:x))[-1]
+        items = [item for item in self.backtrace(fn=lambda item: item)]
+        nth = items[-1]
     return nth
 
 def LocateHeader(self):
@@ -41,7 +42,8 @@ def LocateHeader(self):
     try:
         nth = self.getparent(Header)
     except ValueError as msg:
-        nth = list(self.backtrace(fn=lambda x:x))[-1]
+        items = [item for item in self.backtrace(fn=lambda item: item)]
+        nth = items[-1]
     return nth
 
 ## types of relative pointers in the executable
