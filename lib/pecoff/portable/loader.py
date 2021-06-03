@@ -115,7 +115,23 @@ class IMAGE_GUARD_(pbinary.flags):
     ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY(pstruct.type):
-    pass
+    # FIXME: The size field in the DataDirectory is used to determine which
+    #        IMAGE_LOAD_CONFIG_DIRECTORY to use. Instead we're cheating and
+    #        using the size specified in the data-directory entry and a
+    #        feature of pstruct.type when defining a custom .blocksize(). A
+    #        proper implementation should check the 'Size' field and then
+    #        use this to determine which IMAGE_LOAD_CONFIG_DIRECTORY
+    #        should be used. Once that's done, then we can define a
+    #        sub-object that chooses the correct IMAGE_LOAD_CONFIG_DIRECTORY
+    #        to use.
+    def blocksize(self):
+        # If we're not allocated, then look at our parent directory for that size.
+        if not self.value:
+            p = self.getparent(IMAGE_DATA_DIRECTORY)
+            return p['Size'].int()
+
+        # Otherwise, we're allocated and just need to read our size field.
+        return self['Size'].li.int()
 
 class IMAGE_ENCLAVE_IMPORT_MATCH_(pint.enum, DWORD):
     _values_ = [
@@ -209,25 +225,6 @@ class IMAGE_ENCLAVE_CONFIG64(pstruct.type):
     ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
-    # FIXME: The size field in the DataDirectory is used to determine which
-    #        IMAGE_LOAD_CONFIG_DIRECTORY to use. Instead we're cheating and
-    #        using the size specified in the data-directory entry and a
-    #        feature of pstruct.type when defining a custom .blocksize(). A
-    #        proper implementation should check the 'Size' field and then
-    #        use this to determine which IMAGE_LOAD_CONFIG_DIRECTORY
-    #        should be used. Once that's done, then we can define a
-    #        sub-object that chooses the correct IMAGE_LOAD_CONFIG_DIRECTORY
-    #        to use.
-    def blocksize(self):
-
-        # If we're not allocated, then look at our parent directory for that size.
-        if not self.value:
-            p = self.getparent(IMAGE_DATA_DIRECTORY)
-            return p['Size'].int()
-
-        # Otherwise, we're allocated and just need to read our size field.
-        return self['Size'].li.int()
-
     _fields_ = [
         (DWORD, 'Size'),
         (TimeDateStamp, 'TimeDateStamp'),
