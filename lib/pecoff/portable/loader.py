@@ -27,10 +27,15 @@ class IMAGE_DYNAMIC_RELOCATION64(pstruct.type):
     ]
 
 class IMAGE_DYNAMIC_RELOCATION64_V2(pstruct.type):
+    class _Symbol(pint.enum, ULONGLONG):
+        _values_ = [
+            ('PROLOGUE', 1),
+            ('EPILOGUE', 2),
+        ]
     _fields_ = [
         (DWORD, 'HeaderSize'),
         (DWORD, 'FixupInfoSize'),
-        (ULONGLONG, 'Symbol'),
+        (_Symbol, 'Symbol'),
         (DWORD, 'SymbolGroup'),
         (DWORD, 'Flags'),
         (lambda self: dyn.array(BYTE, self['FixupInfoSize'].li.int()), 'FixupInfo'),
@@ -77,10 +82,10 @@ class IMAGE_DYNAMIC_RELOCATION_TABLE(pstruct.type):
                 raise TypeError(p)
             return dyn.blockarray(t, self['Size'].li.int())
 
-        raise NotImplementedError(version.int())
-
         # FIXME: Reverse what the 32-bit version of this structure should look like
         #        and more importantly how the size fits into this...
+        raise NotImplementedError(version.int())
+
         return IMAGE_DYNAMIC_RELOCATION64_V2
 
     _fields_ = [
@@ -111,6 +116,97 @@ class IMAGE_GUARD_(pbinary.flags):
 
 class IMAGE_LOAD_CONFIG_DIRECTORY(pstruct.type):
     pass
+
+class IMAGE_ENCLAVE_IMPORT_MATCH_(pint.enum, DWORD):
+    _values_ = [
+        ('NONE', 0x00000000),
+        ('UNIQUE_ID', 0x00000001),
+        ('AUTHOR_ID', 0x00000002),
+        ('FAMILY_ID', 0x00000003),
+        ('IMAGE_ID', 0x00000004),
+    ]
+
+IMAGE_ENCLAVE_SHORT_ID_LENGTH = 16
+class IMAGE_ENCLAVE_IMPORT(pstruct.type):
+    _fields_ = [
+        (IMAGE_ENCLAVE_IMPORT_MATCH_, 'MatchType'),
+        (DWORD, 'MinimumSecurityVersion'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'UniqueOrAuthorID'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'FamilyID'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'ImageID'),
+        (virtualaddress(pstr.szstring, type=DWORD), 'ImportName'),
+        (DWORD, 'Reserved'),
+    ]
+
+class IMAGE_ENCLAVE_POLICY_(pint.enum, DWORD):
+    _values_ = [
+        ('DEBUGGABLE', 1)
+    ]
+
+class IMAGE_ENCLAVE_FLAG_(pint.enum, DWORD):
+    _values_ = [
+        ('PRIMARY_IMAGE', 1),
+    ]
+
+class IMAGE_ENCLAVE_CONFIG(pstruct.type):
+    def blocksize(self):
+        # If we're allocated, then we can just read our size field. If we're
+        # not allocated, then we need to cheat and assume the entire structure
+        # is populated.
+        return self['Size'].li.int() if self.value else self.copy().a.size()
+
+    def __ImportList(self):
+        count, size = (self[fld].li for fld in ['NumberOfImports', 'ImportEntrySize'])
+
+        # FIXME: set the size of IMAGE_ENCLAVE_IMPORT to the ImportEntrySize
+        t = dyn.array(IMAGE_ENCLAVE_IMPORT, count.int())
+        return virtualaddress(t, type=DWORD)
+
+    _fields_ = [
+        (DWORD, 'Size'),
+        (DWORD, 'MinimumRequiredConfigSize'),
+        (IMAGE_ENCLAVE_POLICY_, 'PolicyFlags'),
+        (DWORD, 'NumberOfImports'),
+        (__ImportList, 'ImportList'),
+        (DWORD, 'ImportEntrySize'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'FamilyID'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'ImageID'),
+        (DWORD, 'ImageVersion'),
+        (DWORD, 'SecurityVersion'),
+        (DWORD, 'EnclaveSize'),
+        (DWORD, 'NumberOfThreads'),
+        (IMAGE_ENCLAVE_FLAG_, 'EnclaveFlags'),
+    ]
+
+class IMAGE_ENCLAVE_CONFIG64(pstruct.type):
+    def blocksize(self):
+        # If we're allocated, then we can just read our size field. If we're
+        # not allocated, then we need to cheat and assume the entire structure
+        # is populated.
+        return self['Size'].li.int() if self.value else self.copy().a.size()
+
+    def __ImportList(self):
+        count, size = (self[fld].li for fld in ['NumberOfImports', 'ImportEntrySize'])
+
+        # FIXME: set the size of IMAGE_ENCLAVE_IMPORT to the ImportEntrySize
+        t = dyn.array(IMAGE_ENCLAVE_IMPORT, count.int())
+        return virtualaddress(t, type=DWORD)
+
+    _fields_ = [
+        (DWORD, 'Size'),
+        (DWORD, 'MinimumRequiredConfigSize'),
+        (IMAGE_ENCLAVE_POLICY_, 'PolicyFlags'),
+        (DWORD, 'NumberOfImports'),
+        (__ImportList, 'ImportList'),
+        (DWORD, 'ImportEntrySize'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'FamilyID'),
+        (dyn.array(BYTE, IMAGE_ENCLAVE_SHORT_ID_LENGTH), 'ImageID'),
+        (DWORD, 'ImageVersion'),
+        (DWORD, 'SecurityVersion'),
+        (ULONGLONG, 'EnclaveSize'),
+        (DWORD, 'NumberOfThreads'),
+        (IMAGE_ENCLAVE_FLAG_, 'EnclaveFlags'),
+    ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
     # FIXME: The size field in the DataDirectory is used to determine which
@@ -157,8 +253,8 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(lambda self: dyn.array(DWORD, self.parent['SEHandlerCount'].li.int()), type=DWORD), 'SEHandlerTable'),
         (DWORD, 'SEHandlerCount'),
 
-        (realaddress(DWORD, type=DWORD), 'GuardCFCheckFunctionPointer'),
-        (realaddress(DWORD, type=DWORD), 'GuardCFDispatchFunctionPointer'),
+        (realaddress(VOID, type=DWORD), 'GuardCFCheckFunctionPointer'),
+        (realaddress(VOID, type=DWORD), 'GuardCFDispatchFunctionPointer'),
         (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardCFFunctionCount'].li.int()), type=DWORD), 'GuardCFFunctionTable'),
         (DWORD, 'GuardCFFunctionCount'),
         (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
@@ -169,10 +265,10 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardLongJumpTargetCount'].li.int()), type=DWORD), 'GuardLongJumpTargetTable'),
         (DWORD, 'GuardLongJumpTargetCount'),
 
-        (realaddress(VOID, type=DWORD), 'DynamicValueRelocTable'),  # XXX: Probably another NULL-terminated list of VAs
+        (realaddress(IMAGE_DYNAMIC_RELOCATION_TABLE, type=DWORD), 'DynamicValueRelocTable'),
         (realaddress(VOID, type=DWORD), 'CHPEMetadataPointer'),     # FIXME
-        (realaddress(DWORD, type=DWORD), 'GuardRFFailureRoutine'),
-        (realaddress(DWORD, type=DWORD), 'GuardRFFailureRoutineFunctionPointer'),
+        (realaddress(VOID, type=DWORD), 'GuardRFFailureRoutine'),
+        (realaddress(VOID, type=DWORD), 'GuardRFFailureRoutineFunctionPointer'),
         (DWORD, 'DynamicValueRelocTableOffset'),   # XXX: depends on DynamicValueRelocTableSection
         (WORD, 'DynamicValueRelocTableSection'),
         (WORD, 'Reserved2'),
@@ -181,6 +277,15 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (DWORD, 'HotPatchTableOffset'),
         (realaddress(pstr.wstring, type=DWORD), 'AddressOfSomeUnicodeString'),
         (DWORD, 'Reserved3'),
+
+        (realaddress(IMAGE_ENCLAVE_CONFIG, type=DWORD), 'EnclaveConfigurationPointer'),
+        (realaddress(VOID, type=DWORD), 'VolatileMetadataPointer'),
+        (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardEHContinuationCount'].li.int()), type=DWORD), 'GuardEHContinuationTable'),
+        (DWORD, 'GuardEHContinuationCount'),
+        (realaddress(VOID, type=DWORD), 'GuardXFGCheckFunctionPointer'),
+        (realaddress(VOID, type=DWORD), 'GuardXFGDispatchFunctionPointer'),
+        (realaddress(VOID, type=DWORD), 'GuardXFGTableDispatchFunctionPointer'),
+        (DWORD, 'CastGuardOsDeterminedFailureMode'),
     ]
 
 class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
@@ -209,8 +314,8 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['SEHandlerCount'].li.int()), type=ULONGLONG), 'SEHandlerTable'),
         (ULONGLONG, 'SEHandlerCount'),
 
-        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardCFCheckFunctionPointer'),
-        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardCFDispatchFunctionPointer'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardCFCheckFunctionPointer'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardCFDispatchFunctionPointer'),
         (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardCFFunctionCount'].li.int()), type=ULONGLONG), 'GuardCFFunctionTable'),
         (ULONGLONG, 'GuardCFFunctionCount'),
         (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
@@ -221,10 +326,10 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardLongJumpTargetCount'].li.int()), type=ULONGLONG), 'GuardLongJumpTargetTable'),
         (ULONGLONG, 'GuardLongJumpTargetCount'),
 
-        (realaddress(VOID, type=ULONGLONG), 'DynamicValueRelocTable'),
+        (realaddress(IMAGE_DYNAMIC_RELOCATION_TABLE, type=ULONGLONG), 'DynamicValueRelocTable'),
         (realaddress(VOID, type=ULONGLONG), 'CHPEMetadataPointer'),
-        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardRFFailureRoutine'),
-        (realaddress(ULONGLONG, type=ULONGLONG), 'GuardRFFailureRoutineFunctionPointer'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardRFFailureRoutine'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardRFFailureRoutineFunctionPointer'),
         (DWORD, 'DynamicValueRelocTableOffset'),
         (WORD, 'DynamicValueRelocTableSection'),
         (WORD, 'Reserved2'),
@@ -232,5 +337,13 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(ULONGLONG, type=ULONGLONG), 'GuardRFVerifyStackPointerFunctionPointer'),
         (DWORD, 'HotPatchTableOffset'),
         (DWORD, 'Reserved3'),
-        (realaddress(pstr.szwstring, type=ULONGLONG), 'AddressOfSomeUnicodeString'),
+
+        (realaddress(IMAGE_ENCLAVE_CONFIG64, type=ULONGLONG), 'EnclaveConfigurationPointer'),
+        (realaddress(VOID, type=ULONGLONG), 'VolatileMetadataPointer'),
+        (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardEHContinuationCount'].li.int()), type=ULONGLONG), 'GuardEHContinuationTable'),
+        (ULONGLONG, 'GuardEHContinuationCount'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardXFGCheckFunctionPointer'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardXFGDispatchFunctionPointer'),
+        (realaddress(VOID, type=ULONGLONG), 'GuardXFGTableDispatchFunctionPointer'),
+        (ULONGLONG, 'CastGuardOsDeterminedFailureMode'),
     ]
