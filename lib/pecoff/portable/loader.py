@@ -250,9 +250,9 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(lambda self: dyn.array(DWORD, self.parent['SEHandlerCount'].li.int()), type=DWORD), 'SEHandlerTable'),
         (DWORD, 'SEHandlerCount'),
 
-        (realaddress(VOID, type=DWORD), 'GuardCFCheckFunctionPointer'),
-        (realaddress(VOID, type=DWORD), 'GuardCFDispatchFunctionPointer'),
-        (realaddress(lambda self: dyn.array(DWORD, self.parent['GuardCFFunctionCount'].li.int()), type=DWORD), 'GuardCFFunctionTable'),
+        (realaddress(realaddress(VOID, type=DWORD), type=DWORD), 'GuardCFCheckFunctionPointer'),
+        (realaddress(realaddress(VOID, type=DWORD), type=DWORD), 'GuardCFDispatchFunctionPointer'),
+        (realaddress(lambda self: dyn.array(virtualaddress(VOID, type=DWORD), self.parent['GuardCFFunctionCount'].li.int()), type=DWORD), 'GuardCFFunctionTable'),
         (DWORD, 'GuardCFFunctionCount'),
         (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
 
@@ -311,9 +311,9 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
         (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['SEHandlerCount'].li.int()), type=ULONGLONG), 'SEHandlerTable'),
         (ULONGLONG, 'SEHandlerCount'),
 
-        (realaddress(VOID, type=ULONGLONG), 'GuardCFCheckFunctionPointer'),
-        (realaddress(VOID, type=ULONGLONG), 'GuardCFDispatchFunctionPointer'),
-        (realaddress(lambda self: dyn.array(ULONGLONG, self.parent['GuardCFFunctionCount'].li.int()), type=ULONGLONG), 'GuardCFFunctionTable'),
+        (realaddress(realaddress(VOID, type=ULONGLONG), type=ULONGLONG), 'GuardCFCheckFunctionPointer'),
+        (realaddress(realaddress(VOID, type=ULONGLONG), type=ULONGLONG), 'GuardCFDispatchFunctionPointer'),
+        (realaddress(lambda self: dyn.array(virtualaddress(VOID, type=DWORD), self.parent['GuardCFFunctionCount'].li.int()), type=ULONGLONG), 'GuardCFFunctionTable'),
         (ULONGLONG, 'GuardCFFunctionCount'),
         (pbinary.littleendian(IMAGE_GUARD_), 'GuardFlags'),
 
