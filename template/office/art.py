@@ -1666,7 +1666,7 @@ class OfficeArtRGFOPTE(pstruct.type):
         calculatedSize = sum(item['op'].li.int() for item in rgfopte if item['opid'].li['fComplex'])
         realSize = bs - self['rgfopte'].li.size()
         if calculatedSize > realSize:
-            ptypes.Config.log.warn("OfficeArtRGFOPTE.complexData : calculated size of complexData is larger than available : {:x} > {:x}".format(calculatedSize,realSize))
+            ptypes.Config.log.warning("OfficeArtRGFOPTE.complexData : calculated size of complexData is larger than available : {:x} > {:x}".format(calculatedSize,realSize))
             return dyn.block(realSize)
         return dyn.clone(self.complexData, length=sum(item['opid']['fComplex'] for item in rgfopte))
 

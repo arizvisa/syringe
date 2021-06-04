@@ -1054,7 +1054,7 @@ class SprmOperandType(SprmOperandType):
             if cb - res >= 0:
                 return dyn.block(cb - res)
             cls = self.__class__
-            logging.warn("{:s}: Variable operand size ({:d}) is larger than specified size ({:d}): {:s}".format('.'.join((cls.__module__, cls.__name__)), res, cb, self.instance()))
+            logging.warning("{:s}: Variable operand size ({:d}) is larger than specified size ({:d}): {:s}".format('.'.join((cls.__module__, cls.__name__)), res, cb, self.instance()))
             return dyn.block(0)
 
         _fields_ = [
@@ -1999,7 +1999,7 @@ class SPPOperand(pstruct.type):
         if last >= first:
             return dyn.array(pint.uint16_t, last - first + 1)
         cls = self.__class__
-        logging.warn("{:s}: SPPOperand's fields (istdFirst={first:d}, istdLast={first:d}) are not sorted in the correct order. Fixing them to istdFirst={last:d}, istdLast={first:d}.".format('.'.join((cls.__module__, cls.__name__)), first=first, last=last))
+        logging.warning("{:s}: SPPOperand's fields (istdFirst={first:d}, istdLast={first:d}) are not sorted in the correct order. Fixing them to istdFirst={last:d}, istdLast={first:d}.".format('.'.join((cls.__module__, cls.__name__)), first=first, last=last))
         return dyn.array(pint.uint16_t, first - last + 1)
 
     _fields_ = [
@@ -2938,11 +2938,11 @@ class File(pstruct.type):
     def __init__(self, **attributes):
         cls, res = self.__class__, super(File, self).__init__(**attributes)
         if isinstance(self.parent, storage.DirectoryEntryData) and not isinstance(self.source, ptypes.provider.proxy):
-            logging.warn("{:s}: Class {:s} was instantiated with a source that does not point to the parent {:s}. Fixing it!".format('.'.join((cls.__module__, cls.__name__)), self.classname(), self.parent.classname()))
+            logging.warning("{:s}: Class {:s} was instantiated with a source that does not point to the parent {:s}. Fixing it!".format('.'.join((cls.__module__, cls.__name__)), self.classname(), self.parent.classname()))
             data = self.getparent(storage.DirectoryEntryData)
             self.source = ptypes.provider.proxy(data)
         elif not isinstance(self.parent, storage.DirectoryEntryData):
-            logging.warn("{:s}: Class {:s} was not instantiated as a child of {:s}. Fields that depend on other streams might not decode properly!".format('.'.join((cls.__module__, cls.__name__)), self.classname(), storage.DirectoryEntryData.typename()))
+            logging.warning("{:s}: Class {:s} was not instantiated as a child of {:s}. Fields that depend on other streams might not decode properly!".format('.'.join((cls.__module__, cls.__name__)), self.classname(), storage.DirectoryEntryData.typename()))
         return res
 
     _fields_ = [

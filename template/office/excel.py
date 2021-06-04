@@ -91,7 +91,7 @@ class RecordContainer(RecordContainer):
             version = 8
 
             cls = self.__class__
-            logging.warn("{:s} : Assuming version {:d} as version attribute is missing.".format('.'.join([__name__, cls.__name__]), version))
+            logging.warning("{:s} : Assuming version {:d} as version attribute is missing.".format('.'.join([__name__, cls.__name__]), version))
 
         # delete any attributes that might've contained our version
         else:
@@ -250,7 +250,7 @@ class CFColor(pstruct.type):
             return LongRGBA
         elif res == 'XCLRTHEMED':
             return ColorTheme
-        logging.warn('{:s}.__xclrValue : Unknown xclrType value. : {:04x}'.format(self.instance(), res.int()))
+        logging.warning('{:s}.__xclrValue : Unknown xclrType value. : {:04x}'.format(self.instance(), res.int()))
         return undefined
 
     _fields_ = [
@@ -437,7 +437,7 @@ class File(File):
             version = 8
 
             cls = self.__class__
-            logging.warn("{:s} : Assuming version {:d} as version attribute is missing.".format('.'.join([__name__, cls.__name__]), version))
+            logging.warning("{:s} : Assuming version {:d} as version attribute is missing.".format('.'.join([__name__, cls.__name__]), version))
 
         # delete any attributes that might've contained our version
         else:
@@ -1737,7 +1737,7 @@ class HFPicture(pstruct.type):
             return dyn.clone(art.OfficeArtDggContainer, blocksize=lambda _, size=max(0, cb - res): size)
         elif not fd and not fg:
             return undefined
-        logging.warn('{:s}.__rgDrawing : Mutually exclusive fIsDrawing and fIsDrawing is set. Using a generic RecordContainer.'.format(self.classname()))
+        logging.warning('{:s}.__rgDrawing : Mutually exclusive fIsDrawing and fIsDrawing is set. Using a generic RecordContainer.'.format(self.classname()))
         return dyn.clone(art.RecordContainer, blocksize=lambda _, size=cb - res: size)
 
     _fields_ = [
@@ -4233,7 +4233,7 @@ class ExtSST(pstruct.type):
             index -= 1
 
         if index == 0 or not isinstance(container[index - 1].d, SST):
-            logging.warn("{:s}.__rgISSTInf : Unable to locate SST at index {:d}".format(self.instance(), index))
+            logging.warning("{:s}.__rgISSTInf : Unable to locate SST at index {:d}".format(self.instance(), index))
             return dyn.array(ISSTInf, 0)
         previous = container[index - 1].d
 
@@ -5140,7 +5140,7 @@ class CF(pstruct.type):
             return CFFilter
         elif ct in {0x06}:
             return CFMultistate
-        logging.warn('{:s}.__rgbCT : Unknown ct value. : {:02x}'.format(self.instance(), ct))
+        logging.warning('{:s}.__rgbCT : Unknown ct value. : {:02x}'.format(self.instance(), ct))
         return undefined
 
     _fields_ = [

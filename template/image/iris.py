@@ -59,7 +59,7 @@ class File(pstruct.type):
         boolean = res['STORAGE']
         if boolean.int() not in (0, 1):
             cls = self.__class__
-            logging.warn('{:s}.__table : Unknown storage type. : {!r}'.format('.'.join((__name__,cls.__name__)), boolean.summary()))
+            logging.warning('{:s}.__table : Unknown storage type. : {!r}'.format('.'.join((__name__,cls.__name__)), boolean.summary()))
             boolean = 0
         return dyn.clone(Table, length=res['XSIZE'].int()*res['YSIZE'].int() * boolean.int())
 

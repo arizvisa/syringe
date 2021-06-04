@@ -224,7 +224,7 @@ class VP6FLVALPHAVIDEOPACKET(pstruct.type):
         ofs = self['OffsetToAlpha'].li.int()
 
         if ofs + self['Adjustment'].li.size() >= sz:
-            logging.warn('OffsetToAlpha incorrect : %x', self.getoffset())
+            logging.warning('OffsetToAlpha incorrect : %x', self.getoffset())
             return dyn.block(sz - self['Adjustment'].size() - self['OffsetToAlpha'].size())
         return dyn.block(ofs)
 

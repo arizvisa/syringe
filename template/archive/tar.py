@@ -462,14 +462,14 @@ if __name__ == '__main__':
             res = os.path.join(dirpath, name)
             if res.endswith(os.path.sep):
                 if os.path.isdir(res):
-                    logging.warn("Unable to create already existing subdirectory for member : {:d} : {:s}".format(int(member.name()), res))
+                    logging.warning("Unable to create already existing subdirectory for member : {:d} : {:s}".format(int(member.name()), res))
                 else:
                     logging.info("Creating subdirectory due to member : {:d} : {:s}".format(int(member.name()), res))
                     os.makedirs(res)
                 continue
 
             if os.path.exists(res):
-                logging.warn("Overwriting already existing file due to member : {:d} : {:s}".format(int(member.name()), res))
+                logging.warning("Overwriting already existing file due to member : {:d} : {:s}".format(int(member.name()), res))
             else:
                 logging.info("Creating file for member : {:d} : {:s}".format(int(member.name()), res))
 

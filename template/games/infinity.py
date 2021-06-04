@@ -868,7 +868,7 @@ class BIFF(pstruct.type):
             # case, we'll warn the user and continue skipping records
             # until we're back at a reasonable position.
             if offset < position:
-                logging.warn("Item {!s} with bounds {:#x}{:+x} is {:s}".format(item.instance(), offset, item['size'].int(), "overlapping with previous entry {!s}".format(index[-1]) if len(index) else "not within expected bounds {:#x}:{:+x}".format(baseoffset, size)))
+                logging.warning("Item {!s} with bounds {:#x}{:+x} is {:s}".format(item.instance(), offset, item['size'].int(), "overlapping with previous entry {!s}".format(index[-1]) if len(index) else "not within expected bounds {:#x}:{:+x}".format(baseoffset, size)))
                 continue
 
             # if our item offset is farther along than expected, then we

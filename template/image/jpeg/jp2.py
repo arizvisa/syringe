@@ -122,7 +122,7 @@ class Box(pstruct.type):
 
         cls = self.__class__
         if isinstance(self.source, ptypes.prov.bounded):
-            logging.warn("{:s}.Length : Found a {:s} of type {!r} with an unbounded length at {:s}.".format('.'.join((__name__, cls.__name__)), self.classname(), self['boxType'].serialize(), self.instance()))
+            logging.warning("{:s}.Length : Found a {:s} of type {!r} with an unbounded length at {:s}.".format('.'.join((__name__, cls.__name__)), self.classname(), self['boxType'].serialize(), self.instance()))
             return self.source.size() - self.getoffset()
 
         logging.info("{:s}.Length : Field `boxLength` is 0 and source is unbounded for `boxType`. : {!r}".format('.'.join((__name__, cls.__name__)), self['boxType'].serialize()))
@@ -913,7 +913,7 @@ class COC(pstruct.type):
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
-            logging.warn("Unable to locate SIZ marker!")
+            logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
         return u8 if Csiz.int() < 257 else u16
@@ -945,7 +945,7 @@ class RGN(pstruct.type):
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
-            logging.warn("Unable to locate SIZ marker!")
+            logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
         return u8 if Csiz.int() < 257 else u16
@@ -1052,7 +1052,7 @@ class QCC(pstruct.type):
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
-            logging.warn("Unable to locate SIZ marker!")
+            logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
         return u8 if Csiz.int() < 257 else u16
@@ -1086,7 +1086,7 @@ class POC(pstruct.type):
         try:
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
         except StopIteration:
-            logging.warn("Unable to locate SIZ marker!")
+            logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
         return u8 if Csiz.int() < 257 else u16

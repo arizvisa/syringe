@@ -43,7 +43,7 @@ class pcap_hdr_t(pstruct.type):
         elif magic_number == b'\xd4\xc3\xb2\xa1':
             self.attributes['pcap_byteorder'] = ptypes.config.byteorder.littleendian
         else:
-            logging.warn("Unable to determine byteorder : {!r}".format(magic_number))
+            logging.warning("Unable to determine byteorder : {!r}".format(magic_number))
         return ptype.undefined
 
     _fields_ = [

@@ -67,7 +67,7 @@ try:
         _decompress = pylzma.decompress
 
 except ImportError:
-    # logging.warn("swf.%s : Unable to import pylzma. lzma support not available."% __name__)
+    # logging.warning("swf.%s : Unable to import pylzma. lzma support not available."% __name__)
     pass
 
 class File(pstruct.type, ptype.boundary):

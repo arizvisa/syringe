@@ -413,7 +413,7 @@ class EndOfCentralDirectory64(EndOfCentralDirectory):
         size = EndOfCentralDirectory().a.size()
         expectedSize = self['size of zip64 end of central directory record'].li.int()
         if expectedSize < size:
-            ptypes.log.warn('size of zip64 end of central directory record is less than the minimum size: {:#x} < {:#x}'.format(expectedSize, size))
+            ptypes.Config.log.warning('size of zip64 end of central directory record is less than the minimum size: {:#x} < {:#x}'.format(expectedSize, size))
         return dyn.block(expectedSize - size)
 
     _fields_ = [
@@ -739,14 +739,14 @@ if __name__ == '__main__':
             res = os.path.join(dirpath, name)
             if res.endswith(os.path.sep):
                 if os.path.isdir(res):
-                    logging.warn('Refusing to overwrite already existing subdirectory for record({:d}): {:s}'.format(int(rec.name()), res))
+                    logging.warning('Refusing to overwrite already existing subdirectory for record({:d}): {:s}'.format(int(rec.name()), res))
                 else:
                     logging.info('Creating subdirectory for record({:d}): {:s}'.format(int(rec.name()), res))
                     os.makedirs(res)
                 continue
 
             if os.path.exists(res):
-                logging.warn('Overwriting already existing file with record({:d}): {:s}'.format(int(rec.name()), res))
+                logging.warning('Overwriting already existing file with record({:d}): {:s}'.format(int(rec.name()), res))
             else:
                 logging.info('Creating new file for record({:d}): {:s}'.format(int(rec.name()), res))
 

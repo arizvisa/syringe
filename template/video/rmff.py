@@ -329,7 +329,7 @@ class RealMedia_MediaProperties_Header_v0(pstruct.type):
             return dyn.clone(Type_Specific_RealAudio, blocksize=lambda s: typesize)
         elif mimetype == 'logical-fileinfo':
             return LogicalStream
-        logging.warn('%s:%s: Unable to identify mimetype "%s"'%(self.__module__, self.shortname(), mimetype))
+        logging.warning('%s:%s: Unable to identify mimetype "%s"'%(self.__module__, self.shortname(), mimetype))
         return dyn.block(typesize)
 
     _fields_ = [
@@ -429,7 +429,7 @@ class NameValueProperty_v0(pstruct.type):
         elif v == 2:
             return dyn.clone(pstr.string, length=l)
         else:
-            logging.warn('%s:%s: Unknown Value type %x size +%x'%(self.__module__, self.p.shortname(), v, l))
+            logging.warning('%s:%s: Unknown Value type %x size +%x'%(self.__module__, self.p.shortname(), v, l))
         return dyn.block(l)
 
     _fields_ = [
