@@ -305,7 +305,7 @@ def extract_signature(t, index, outformat, F=None, output=None):
         rt = CertificatePadded
 
     except (ImportError, AttributeError):
-        rt, _ = None, logging.warn("Unable to import ptypes template, `ber`, in order to cast the Security directory entry.")
+        rt, _ = None, logging.warning("Unable to import ptypes template, `ber`, in order to cast the Security directory entry.")
 
     global result; result = se['bCertificate']
     if F:

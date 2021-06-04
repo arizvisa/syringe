@@ -185,7 +185,7 @@ class LinkerInternal(DictionaryBase):
                 if self.__cache[self.__names[name]] == (None, None):
                     logging.info("overriding {:s} symbol {:s} with value {:s}".format(symbol['storageclass'].str(), name, self.location(section, symbol['value'].int())))
                 else:
-                    logging.warn("overriding duplicate {:s} symbol {:s} having value {:s} with value {:s}".format(symbol['storageclass'].str(), name, self.location(*self.__cache[self.__names[name]]), self.location(section, symbol['value'].int())))
+                    logging.warning("overriding duplicate {:s} symbol {:s} having value {:s} with value {:s}".format(symbol['storageclass'].str(), name, self.location(*self.__cache[self.__names[name]]), self.location(section, symbol['value'].int())))
             else:
                 logging.debug("creating {:s} symbol {:s} with value {:s}".format(symbol['storageclass'].str(), name, self.location(section, symbol['value'].int())))
             self.__cache[symbol] = (section, symbol['value'].int())
@@ -223,7 +223,7 @@ class LinkerInternal(DictionaryBase):
             section = self.section(symbol)
 
             if section is None:
-                logging.warn("Required {:s} symbol {:s} is undefined".format(symbol['storageclass'].str(), symbol.Name()))
+                logging.warning("Required {:s} symbol {:s} is undefined".format(symbol['storageclass'].str(), symbol.Name()))
                 return
             elif section in state:
                 return
@@ -247,7 +247,7 @@ class LinkerInternal(DictionaryBase):
                 logging.debug("user value for symbol {!s} is currently undefined: {:s}".format(symbol.Name(), symbol.summary()))
                 results.append(symbol)
             elif res is not None and value is None:
-                logging.warn("cache is missing a value ({!s}) for symbol {:s} belonging to relocation ({!r}): {:s}".format(value, symbol.Name(), relocation, symbol.summary()))
+                logging.warning("cache is missing a value ({!s}) for symbol {:s} belonging to relocation ({!r}): {:s}".format(value, symbol.Name(), relocation, symbol.summary()))
                 results.append(symbol)
             continue
         return results
@@ -387,7 +387,7 @@ class Linker(object):
             missing = self.state.missing(section)
             if missing:
                 for symbol in missing:
-                    logging.warn("Linking section {!s} requires the symbol {:s} to be defined!".format(section.name(), symbol.Name()))
+                    logging.warning("Linking section {!s} requires the symbol {:s} to be defined!".format(section.name(), symbol.Name()))
                 raise ValueError("unable to link due to undefined symbols")
             segmentbases[section] = address
             address += len(segment)
@@ -493,7 +493,7 @@ if __name__ == '__main__':
 
     if Args.link:
         if len(undefined) > 0:
-            logging.warn("The following symbols are currently {:s}...".format('being redefined' if Args.force else 'undefined'))
+            logging.warning("The following symbols are currently {:s}...".format('being redefined' if Args.force else 'undefined'))
             print('\n'.join("[{:d}] {:s}".format(1 + index, symbol) for index, symbol in enumerate(undefined)))
         else:
             logging.info('No undefined symbols were found!')

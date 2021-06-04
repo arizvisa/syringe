@@ -41,21 +41,21 @@ def get_resource_version(pe, opts):
     except ptypes.error.LoadError as e:
         return ''
     if resource.getoffset() == 0:
-        Log.warn("PE {:s} does not seem to have a resource entry. Unable to determine version info.".format(pe.source.file.name))
+        Log.warning("PE {:s} does not seem to have a resource entry. Unable to determine version info.".format(pe.source.file.name))
         return ''
     resource = resource.l
 
     # sanity check that a VERSION_INFO record exists
     VERSION_INFO = 16
     if VERSION_INFO not in resource.List():
-        Log.warn("PE {:s} does not appear to contain a VERSION_INFO entry within its resources directory.".format(pe.source.file.name))
+        Log.warning("PE {:s} does not appear to contain a VERSION_INFO entry within its resources directory.".format(pe.source.file.name))
         return ''
 
     # Get the VERSION_INFO entry
     try:
         names = resource.Entry(VERSION_INFO).l
     except AttributeError:
-        Log.warn("PE {:s} does not have a resource entry that matches VERSION_INFO.".format(pe.source.file.name))
+        Log.warning("PE {:s} does not have a resource entry that matches VERSION_INFO.".format(pe.source.file.name))
         return ''
 
     # Check the name
@@ -68,10 +68,10 @@ def get_resource_version(pe, opts):
             languages = names['Ids'][0]['Entry'].d.l
             Log.info("Defaulting to the only language entry: {:d}".format(names['Ids'][0]['Name'].int()))
     except IndexError:
-        Log.warn("PE {:s} has more than one name in VERSION_INFO. : {!r}".format(pe.source.file.name, tuple(n['Name'].int() for n in resource_Names['Ids'])))
+        Log.warning("PE {:s} has more than one name in VERSION_INFO. : {!r}".format(pe.source.file.name, tuple(n['Name'].int() for n in resource_Names['Ids'])))
         return ''
     except AttributeError:
-        Log.warn("PE {:s} has no resource in VERSION_INFO with the requested language. : {!r}".format(pe.source.file.name, tuple(n['Name'].int() for n in resource_Names['Ids'])))
+        Log.warning("PE {:s} has no resource in VERSION_INFO with the requested language. : {!r}".format(pe.source.file.name, tuple(n['Name'].int() for n in resource_Names['Ids'])))
         return ''
 
     # Check the languages
@@ -85,10 +85,10 @@ def get_resource_version(pe, opts):
             Log.info("Defaulting to the only version entry: {:d}".format(languages['Ids'][0]['Name'].int()))
 
     except IndexError:
-        Log.warn("PE {:s} has more than one language. : {!r}".format(pe.source.file.name, tuple(n['Name'].int() for n in languages['Ids'])))
+        Log.warning("PE {:s} has more than one language. : {!r}".format(pe.source.file.name, tuple(n['Name'].int() for n in languages['Ids'])))
         return ''
     except AttributeError:
-        Log.warn("PE {:s} has no version records found for the specified language. : {!r}".format(pe.source.file.name, opts.language))
+        Log.warning("PE {:s} has no version records found for the specified language. : {!r}".format(pe.source.file.name, opts.language))
         return ''
     else:
         versionInfo = version['Data'].d
@@ -103,10 +103,10 @@ def get_resource_version(pe, opts):
         try:
             codepage, = [cp for lg,cp in lgcpids if lg == language] if opts.codepage is None else (opts.codepage,)
         except ValueError as e:
-            Log.warn("PE {:s} has more than one (language,codepage). Please specify one via command-line. Use -h for more information.".format(pe.source.file.name))
+            Log.warning("PE {:s} has more than one (language,codepage). Please specify one via command-line. Use -h for more information.".format(pe.source.file.name))
             return ''
         if (language,codepage) not in lgcpids:
-            Log.warn("An invalid (language,codepage) was specified for {:s}. : {!r} not in {!r}".format(pe.source.file.name, (language,codepage), lgcpids))
+            Log.warning("An invalid (language,codepage) was specified for {:s}. : {!r} not in {!r}".format(pe.source.file.name, (language,codepage), lgcpids))
             return ''
     else:
         (language,codepage), = lgcpids
@@ -115,7 +115,7 @@ def get_resource_version(pe, opts):
     try:
         st = GetStringTable(vi, (language,codepage))
     except KeyError:
-        Log.warn("PE {:s} has no properties for the specified (language,codepage). : {!r}".format(pe.source.file.name, (language,codepage)))
+        Log.warning("PE {:s} has no properties for the specified (language,codepage). : {!r}".format(pe.source.file.name, (language,codepage)))
         return ''
     else:
         strings = dict((s['szKey'].str(),s['Value'].str()) for s in st)
