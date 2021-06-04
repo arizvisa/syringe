@@ -235,7 +235,7 @@ class proxy(bounded):
 
         # check to see if there's any data left
         if len(data) > 0:
-            Log.warn("{:s} : __write_range : {:d} bytes left-over from trying to write to {:d} bytes.".format(cls.__name__, len(data), result))
+            Log.warning("{:s} : __write_range : {:d} bytes left-over from trying to write to {:d} bytes.".format(cls.__name__, len(data), result))
 
         # return the aggregated total
         return result
@@ -711,14 +711,14 @@ class file(fileobj):
 
         if os.access(filename, 0):
             if 'wb' in access:
-                Log.warn("{:s}({!r}, {!r}) : Truncating file by user-request.".format(type(self).__name__, filename, access))
+                Log.warning("{:s}({!r}, {!r}) : Truncating file by user-request.".format(type(self).__name__, filename, access))
             Log.info("{:s}({!r}, {!r}) : Opening file for {:s}".format(type(self).__name__, filename, access, straccess))
 
         else:  # file not found
             if 'r+' in access:
-                Log.warn("{:s}({!r}, {!r}) : File not found. Modifying access to write-only.".format(type(self).__name__, filename, access))
+                Log.warning("{:s}({!r}, {!r}) : File not found. Modifying access to write-only.".format(type(self).__name__, filename, access))
                 access = 'wb'
-            Log.warn("{:s}({!r}, {!r}) : Creating new file for {:s}".format(type(self).__name__, filename, access, straccess))
+            Log.warning("{:s}({!r}, {!r}) : Creating new file for {:s}".format(type(self).__name__, filename, access, straccess))
 
         return builtins.open(filename, access, 0)
 

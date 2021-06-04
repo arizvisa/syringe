@@ -216,9 +216,9 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
             # check that the aof is within the bounds of the section, warn the user despite supporting it anyways
             if any(not section.containsaddress(ea) for ea in (aof.int(), aof.int() + 4*self['NumberOfFunctions'].int())):
-                logging.warn("{:s} : Export Address Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aof.int(), aof.int() + 4*self['NumberOfFunctions'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
+                logging.warning("{:s} : Export Address Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aof.int(), aof.int() + 4*self['NumberOfFunctions'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
         else:
-            logging.warn("{:s} : No export addresses found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
+            logging.warning("{:s} : No export addresses found in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aof.summary()))
             eat = array.array('L' if len(array.array('I', 4 * b'\0')) > 1 else 'I', [])
 
         ## name ordinal table
@@ -233,14 +233,14 @@ class IMAGE_EXPORT_DIRECTORY(pstruct.type):
 
             # check that the aono is within the bounds of the section, warn the user despite supporting it anyways
             if any(not section.containsaddress(ea) for ea in (aono.int(), aono.int() + 2*self['NumberOfNames'].int())):
-                logging.warn("{:s} : Export Name Ordinal Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aono.int(), aono.int() + 2*self['NumberOfNames'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
+                logging.warning("{:s} : Export Name Ordinal Table goes outside bounds of designated section. ({:#x} <= {:#x}{:+#x} < {:#x})".format('.'.join((cls.__module__, cls.__name__)), section['VirtualAddress'].int(), aono.int(), aono.int() + 2*self['NumberOfNames'].int(), section['VirtualAddress'].int() + section['VirtualSize'].int()))
         else:
-            logging.warn("{:s} : No Export Name Ordinal Table in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aono.summary()))
+            logging.warning("{:s} : No Export Name Ordinal Table in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aono.summary()))
             no = array.array('I' if len(array.array('I', 4 * b'\0')) > 1 else 'H', [])
 
         # check the name table
         if aon.int() == 0:
-            logging.warn("{:s} : No Export Name Table in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aon.summary()))
+            logging.warning("{:s} : No Export Name Table in IMAGE_EXPORT_DIRECTORY. ({:s})".format('.'.join((cls.__module__, cls.__name__)), aon.summary()))
             nt = []
         else:
             nt = aon.d.l

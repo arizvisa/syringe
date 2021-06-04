@@ -131,7 +131,7 @@ class _char_t(pint.type):
         try:
             res = data.decode(self.encoding.name)
         except UnicodeDecodeError:
-            Log.warn('{:s}.get : {:s} : Unable to decode to {:s}. Replacing invalid characters. : {!r}'.format(self.classname(), self.instance(), self.encoding.name, data))
+            Log.warning('{:s}.get : {:s} : Unable to decode to {:s}. Replacing invalid characters. : {!r}'.format(self.classname(), self.instance(), self.encoding.name, data))
             res = data.decode(self.encoding.name, 'replace')
         return res
 
@@ -337,7 +337,7 @@ class string(ptype.type):
         try:
             res = data.decode(t._object_.encoding.name)
         except UnicodeDecodeError:
-            Log.warn('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), t._object_.encoding.name))
+            Log.warning('{:s}.str : {:s} : Unable to decode {:s} to {:s}. Defaulting to unencoded string.'.format(self.classname(), self.instance(), self._object_.typename(), t._object_.encoding.name))
             res = data.decode(t._object_.encoding.name, 'ignore')
         return res
 

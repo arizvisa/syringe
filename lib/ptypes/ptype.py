@@ -1096,7 +1096,7 @@ class type(base):
                 childOffset = self.getoffset() - parent.getoffset()
                 maxElementSize = parentSize - childOffset
                 if res > maxElementSize:
-                    Log.warn("type.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
+                    Log.warning("type.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
                     res = maxElementSize
 
             if res > sys.maxsize:
@@ -1340,7 +1340,7 @@ class container(base):
         # log any information about deserialization errors
         if total < expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warn("container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
+            Log.warning("container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
             raise StopIteration(self.name(), total) # XXX
         elif total > expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
@@ -1385,12 +1385,12 @@ class container(base):
             childOffset = self.getoffset() - parent.getoffset()
             maxElementSize = parentSize - childOffset
             if res > maxElementSize:
-                Log.warn("container.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
+                Log.warning("container.serialize : {:s} : blocksize is outside the bounds of parent element {:s}. Clamping according to the parent's maximum : {:#x} > {:#x} : {:#x}".format(self.instance(), parent.instance(), res, maxElementSize, parentSize))
                 res = maxElementSize
 
         # if the blocksize is larger than maxsize, then ignore the padding
         if res > sys.maxsize:
-            Log.warn("container.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, sys.maxsize))
+            Log.warning("container.serialize : {:s} : blocksize is larger than maximum size. Refusing to add padding : {:#x} > {:#x}".format(self.instance(), res, sys.maxsize))
             return data
 
         # if the data is smaller then the blocksize, then pad the rest in
@@ -1812,7 +1812,7 @@ class definition(object):
         '''Overloadable: Update the current state of the definition to map the specified ``key`` to the specified ``object``.'''
         if cls.has(key, **kwargs):
             original, new = cls.cache[key], object
-            Log.warn("definition.__set__ : {:s} : Overwriting definition ({:s}) for key {!r} with new definition ({:s})".format('.'.join([cls.__module__, cls.__name__]), '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
+            Log.warning("definition.__set__ : {:s} : Overwriting definition ({:s}) for key {!r} with new definition ({:s})".format('.'.join([cls.__module__, cls.__name__]), '.'.join([original.__module__, original.__name__]), key, '.'.join([new.__module__, new.__name__])))
         return operator.setitem(cls.cache, key, object)
 
     @classmethod
@@ -1955,7 +1955,7 @@ class definition(object):
         if a & b:
             fullname = '.'.join([cls.__module__, cls.__name__])
             Log.error("definition.update : {:s} : Unable to import cache {!r} due to multiple definitions of the same record".format(fullname, other))
-            Log.warn("definition.update : {:s} : Discovered the following duplicate record types : {!r}".format(fullname, a & b))
+            Log.warning("definition.update : {:s} : Discovered the following duplicate record types : {!r}".format(fullname, a & b))
             return False
 
         # merge record caches into a single one
@@ -2064,7 +2064,7 @@ class wrapper_t(type):
         # Check if wrapper_t.__object__ is a different type than self._value_ but not a callable or a property
         elif not builtins.isinstance(cls._value_, (types.FunctionType, types.MethodType, property)) and self._value_ and not builtins.isinstance(self.__object__, self._value_):
             t, res = self._value_, self.__object__
-            Log.warn("wrapper_t.object : {:s} : Casting object with incompatible type {:s} to wrapper_t._value_ ({:s}).".format(self.instance(), res.instance(), t.typename()))
+            Log.warning("wrapper_t.object : {:s} : Casting object with incompatible type {:s} to wrapper_t._value_ ({:s}).".format(self.instance(), res.instance(), t.typename()))
             name = "wrapped<{:s}>".format(t.typename() if istype(res) else t.__name__)
             self.__object__ = res.cast(t, __name__=name, offset=0, source=provider.proxy(self))
 

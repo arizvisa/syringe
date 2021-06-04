@@ -159,7 +159,7 @@ class SectionTableArray(parray.type):
         sections = [n for n in self if n.containsaddress(address)]
         if len(sections) > 1:
             cls = self.__class__
-            logging.warn("{:s} : More than one section was returned for address {:x} ({:s})".format('.'.join((cls.__module__, cls.__name__)), address, ', '.join(s['Name'].str() for s in sections)))
+            logging.warning("{:s} : More than one section was returned for address {:x} ({:s})".format('.'.join((cls.__module__, cls.__name__)), address, ', '.join(s['Name'].str() for s in sections)))
         if len(sections):
             return sections[0]
         raise KeyError('Address %x not in a known section'% (address))
@@ -168,7 +168,7 @@ class SectionTableArray(parray.type):
         """Identify the `IMAGE_SECTION_HEADER` by the file-offset specified in /offset/"""
         sections = [n for n in self if n.containsoffset(offset)]
         if len(sections) > 1:
-            logging.warn("{:s} : More than one section was returned for offset {:x} ({:s})".format('.'.join((cls.__module__, cls.__name__)), address, ', '.join(s['Name'].str() for s in sections)))
+            logging.warning("{:s} : More than one section was returned for offset {:x} ({:s})".format('.'.join((cls.__module__, cls.__name__)), address, ', '.join(s['Name'].str() for s in sections)))
         if len(sections):
             return sections[0]
         raise KeyError('Offset %x not in a known section'% (offset))
@@ -186,7 +186,7 @@ class SectionTableArray(parray.type):
         """Return the `IMAGE_SECTION_HEADER` specified by /name/"""
         sections = [n for n in self if n['Name'].str() == name]
         if len(sections) > 1:
-            logging.warn("{:s} : More than one section was returned for name {!r}".format('.'.join((cls.__module__, cls.__name__)), name))
+            logging.warning("{:s} : More than one section was returned for name {!r}".format('.'.join((cls.__module__, cls.__name__)), name))
         if len(sections):
             return sections[0]
         raise KeyError('section name %s not known'% (name))

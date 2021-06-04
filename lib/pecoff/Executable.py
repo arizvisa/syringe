@@ -180,7 +180,7 @@ class IMAGE_NT_HEADERS(pstruct.type, Header):
         cls = self.__class__
         length = self['OptionalHeader'].li['NumberOfRvaAndSizes'].int()
         if length > 0x10:   # XXX
-            logging.warn("{:s} : OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries ({:#x}) for the DataDirectory. Assuming the maximum of 0x10.".format('.'.join((cls.__module__, cls.__name__)), length))
+            logging.warning("{:s} : OptionalHeader.NumberOfRvaAndSizes specified >0x10 entries ({:#x}) for the DataDirectory. Assuming the maximum of 0x10.".format('.'.join((cls.__module__, cls.__name__)), length))
             length = 0x10
         return dyn.clone(portable.DataDirectory, length=length)
 
@@ -339,7 +339,7 @@ class IMAGE_NT_DATA(pstruct.type, Header):
         # file-backed or memory-backed provider.
         if all(not isinstance(self.source, item) for item in {ptypes.provider.memorybase, ptypes.provider.fileobj}):
             cls = self.__class__
-            logging.warn("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
+            logging.warning("{:s} : Unknown ptype source.. treating as a fileobj : {!r}".format('.'.join((cls.__module__, cls.__name__)), self.source))
 
         return dyn.clone(SegmentTableArray, length=fileheader['NumberOfSections'].int())
 

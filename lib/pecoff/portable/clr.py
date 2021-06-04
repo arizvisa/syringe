@@ -274,10 +274,10 @@ class VtableFixup(pstruct.type):
 
         res = self['Type'].li
         if res['32BIT'] and res['64BIT']:
-            logging.warn("{:s} : {:s} : Both 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,cls.__name__)), self.instance(), res.summary()))
+            logging.warning("{:s} : {:s} : Both 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,cls.__name__)), self.instance(), res.summary()))
             t = pint.uint_t
         elif not res['32BIT'] and not res['64BIT']:
-            logging.warn("{:s} : {:s} : Neither 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,cls.__name__)), self.instance(), res.summary()))
+            logging.warning("{:s} : {:s} : Neither 32-bit and 64-bit flag is set. Assuming 0-bit. : {!r}".format('.'.join((__name__,cls.__name__)), self.instance(), res.summary()))
             t = pint.uint_t
         else:
             t = pint.uint32_t if res['32BIT'] else pint.uint64_t if res['64BIT'] else pint.uint_t

@@ -366,7 +366,7 @@ class type(base):
         try:
             target.__deserialize_consumer__(source)
         except StopIteration:
-            Log.warn("type.cast : {:s} : Incomplete cast to `{:s}` due to missing data returned from provider at {!s}. Target has been left partially initialized.".format(self.classname(), target.typename(), position))
+            Log.warning("type.cast : {:s} : Incomplete cast to `{:s}` due to missing data returned from provider at {!s}. Target has been left partially initialized.".format(self.classname(), target.typename(), position))
         return target
 
     def alloc(self, **attrs):
@@ -399,7 +399,7 @@ class type(base):
         raise error.UserError(self, 'type.commit', "Unable to commit from a binary-type when writing to a byte-stream. User must promote to a `{!s}` and then `{:s}`.commit().".format(partial, '.'.join([self.typename(), 'commit'])))
 
     def serialize(self):
-        Log.warn("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
+        Log.warning("container.serialize : {:s} : Padding `{:s}` due to user explicitly requesting serialization of misaligned binary instance.".format(self.classname(), self.instance()))
         return bitmap.data(self.__getvalue__())
 
 class integer(type):
@@ -1617,7 +1617,7 @@ class blockarray(terminatedarray):
 
         except StopIteration as E:
             # FIXME: fix this error: total bits, bits left, byte offset: bit offset
-            Log.warn("blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!s} while consuming {:d} bits.".format(self.instance(), position, item.blockbits()))
+            Log.warning("blockarray.__deserialize_consumer__ : {:s} : Incomplete read at {!s} while consuming {:d} bits.".format(self.instance(), position, item.blockbits()))
         return self
 
 class partial(ptype.container):

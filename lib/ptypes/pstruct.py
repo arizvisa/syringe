@@ -212,7 +212,7 @@ class type(__structure_interface__):
             res = res and self.size() >= self.blocksize()
         except Exception as E:
             path = str().join(map("<{:s}>".format, self.backtrace()))
-            Log.warn("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
+            Log.warning("type.initializedQ : {:s} : .blocksize() raised an exception when attempting to determine the initialization state of the instance : {!s} : {:s}".format(self.instance(), E, path), exc_info=True)
         finally:
             return res
 
@@ -248,7 +248,7 @@ class type(__structure_interface__):
     def __append_type(self, offset, cons, name, **attrs):
         if name in self.__fastindex:
             _, name = name, u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
-            Log.warn("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
+            Log.warning("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
 
         res = self.new(cons, __name__=name, offset=offset, **attrs)
         self.value.append(res)

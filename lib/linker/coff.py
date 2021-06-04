@@ -1,5 +1,5 @@
 import ptypes, pecoff
-import os, array, functools, logging, warnings
+import os, array, functools, logging
 from . import store
 
 raise NotImplementedError(".do and .loadsymbol logic needs to be redesigned")
@@ -400,7 +400,7 @@ class executable(coff):
 
         # sanity
         if len(data) != self.getsegmentlength(segmentname):
-            warnings.warn('argument data length is different than expected (%d != %d)'%(len(data), self.getsegmentlength(segmentname)),UserWarning)
+            logging.warning('argument data length is different than expected (%d != %d)'%(len(data), self.getsegmentlength(segmentname)),UserWarning)
 
         # XXX: update the segment data with whatever is in the import or export table
         # if we're in the import section

@@ -244,7 +244,7 @@ class Archive(pstruct.type):
             return ptype.clone(t, blocksize=lambda _, cb=max(0, expected): cb)
 
         cls = self.__class__
-        logging.warn("{:s} : Unable to determine number of members for {!s} when reading from an unbounded source.".format(self.instance(), t))
+        logging.warning("{:s} : Unable to determine number of members for {!s} when reading from an unbounded source.".format(self.instance(), t))
         return t
 
     _fields_ = [

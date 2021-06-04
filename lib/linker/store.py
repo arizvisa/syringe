@@ -62,7 +62,7 @@ objects
     the only thing in this module to care about is the base.
 '''
 
-import sys, functools, operator, logging, warnings, array, bisect
+import sys, functools, operator, logging, array, bisect
 class DuplicateSymbol(Warning): pass
 class UninitializedSymbol(Warning): pass
 
@@ -476,7 +476,7 @@ class base(symboltable):
     ## for peering at what info is given to us
     def listsegments(self):
         '''Intended to be overloaded. list names of all available segments that are contained in this store'''
-        warnings.warn('default method called', UserWarning)
+        logging.warning('default method called', UserWarning)
         return []
     segments = property(fget=lambda s:s.listsegments())
 

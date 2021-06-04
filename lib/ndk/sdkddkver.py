@@ -134,7 +134,7 @@ if 'pykd' in sys.modules and sys.modules['pykd'].isWindbgExt():
 # need to explicitly assign a default, or assign it as an attribute during
 # instantiation.
 if NTDDI_VERSION:
-    logging.warn("Importing ndk for a {:s}-based platform {:04x} SP{:d} (auto-detected from {:s}): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, __SOURCE__, NTDDI_VERSION, 2 + 8))
+    logging.warning("Importing ndk for a {:s}-based platform {:04x} SP{:d} (auto-detected from {:s}): NTDDI_VERSION={:#0{:d}x}".format(sys.platform, (NTDDI_VERSION&0xffff0000) >> 16, (NTDDI_VERSION&0x0000ffff)>>8, __SOURCE__, NTDDI_VERSION, 2 + 8))
 
 # Fall-back to some default since NTDDI_VERSION was not able to be detected..
 else:

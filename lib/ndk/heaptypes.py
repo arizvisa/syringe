@@ -624,7 +624,7 @@ if 'HeapEntry':
                 # First check for any attributes on our HEAP
                 p = self.getparent(HEAP)
                 if not hasattr(p, 'RtlpLFHKey'):
-                    logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
+                    logging.warning("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
                     return 0
 
                 # Found one that we can use, so use it.
@@ -790,7 +790,7 @@ if 'HeapEntry':
                 # First check for any attributes on our HEAP
                 p = self.getparent(HEAP)
                 if not hasattr(p, 'RtlpHeapKey'):
-                    logging.warn("Failure while attempting to determine address of {:s}".format('ntdll!RtlpHeapKey'))
+                    logging.warning("Failure while attempting to determine address of {:s}".format('ntdll!RtlpHeapKey'))
                     return 0
 
                 # Found one that we can use, so use it.

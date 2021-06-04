@@ -56,7 +56,7 @@ class UNICODE_STRING(pstruct.type, versioned):
     ]
 
     def get(self):
-        logging.warn('UNICODE_STRING.get() has been deprecated in favor of .str()')
+        logging.warning('UNICODE_STRING.get() has been deprecated in favor of .str()')
         return self.str()
 
     def str(self):
@@ -75,7 +75,7 @@ class STRING(pstruct.type):
     ]
 
     def get(self):
-        logging.warn('STRING.get() has been deprecated in favor of .str()')
+        logging.warning('STRING.get() has been deprecated in favor of .str()')
         return self.str()
 
     def str(self):

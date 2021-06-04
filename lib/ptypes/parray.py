@@ -357,7 +357,7 @@ class type(__array_interface__):
 
         # output a warning if the length is already set to something and the user explicitly changed it to something different.
         if length and length != len(self):
-            Log.warn("type.__setvalue__ : {:s} : Length of array was explicitly changed ({:d} != {:d}).".format(self.instance(), length, len(self)))
+            Log.warning("type.__setvalue__ : {:s} : Length of array was explicitly changed ({:d} != {:d}).".format(self.instance(), length, len(self)))
 
         result = super(type, self).__setvalue__(*value)
         result.length = len(self)
@@ -410,7 +410,7 @@ class terminated(type):
                     # a call (meaning it's a dynamic type) or if its blocksize is dynamic.
                     if size <= 0:
                         if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
-                            Log.warn("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                            Log.warning("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
 
                         # validate that the element size is a sane value, as the size returned
@@ -543,7 +543,7 @@ class infinite(uninitialized):
                     # or if its blocksize is dynamically calculated.
                     if size <= 0:
                         if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
-                            Log.warn("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                            Log.warning("infinite.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
 
                         # check sanity of element size
@@ -559,9 +559,9 @@ class infinite(uninitialized):
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
                     if len(self.value):
-                        Log.warn("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
+                        Log.warning("infinite.load : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), self.value[-1].instance(), path), exc_info=True)
                     else:
-                        Log.warn("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
+                        Log.warning("infinite.load : {:s} : Stopped reading before load : {:s}".format(self.instance(), path), exc_info=True)
                 raise error.LoadError(self, exception=E)
         return self
 
@@ -591,7 +591,7 @@ class infinite(uninitialized):
                     # elements if our object is dynamically determined via a callable.
                     if size <= 0:
                         if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
-                            Log.warn("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                            Log.warning("infinite.loadstream : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
 
                         # check sanity of element size
@@ -606,7 +606,7 @@ class infinite(uninitialized):
             except error.LoadError as E:
                 if self.parent is not None:
                     path = str().join(map("<{:s}>".format, self.backtrace()))
-                    Log.warn("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), item.instance(), path))
+                    Log.warning("infinite.loadstream : {:s} : Stopped reading at element {:s} : {:s}".format(self.instance(), item.instance(), path))
                 raise error.LoadError(self, exception=E)
             pass
 
@@ -649,12 +649,12 @@ class block(uninitialized):
                     # if we error'd while decoding too much, then let user know
                     if o > self.blocksize():
                         path = str().join(map("<{:s}>".format, item.backtrace()))
-                        Log.warn("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), item.instance(), path))
+                        Log.warning("block.load : {:s} : Reached end of blockarray at {:s} : {:s}".format(self.instance(), item.instance(), path))
                         self.value.append(item)
 
                     # otherwise add the incomplete element to the array
                     elif o < self.blocksize():
-                        Log.warn("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), item.instance(), E))
+                        Log.warning("block.load : {:s} : LoadError raised at {:s} : {!r}".format(self.instance(), item.instance(), E))
                         self.value.append(item)
                     break
 
@@ -663,7 +663,7 @@ class block(uninitialized):
                 size = item.blocksize()
                 if size <= 0:
                     if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
-                        Log.warn("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
+                        Log.warning("block.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                         self.value.append(item)
                         break
 

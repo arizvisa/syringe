@@ -50,7 +50,7 @@ class field:
     class __bool_descriptor(descriptor):
         def __set__(self, instance, value):
             if not isinstance(value, bool):
-                logging.warn("rvalue {!r} is not of boolean type. Coercing it into one : ({:s} != {:s})".format(value, type(value).__name__, bool.__name__))
+                logging.warning("rvalue {!r} is not of boolean type. Coercing it into one : ({:s} != {:s})".format(value, type(value).__name__, bool.__name__))
             return field.descriptor.__set__(self, instance, bool(value))
 
     class option_t(object): pass

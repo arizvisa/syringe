@@ -234,7 +234,7 @@ def array(type, count, **kwds):
         if Config.parray.break_on_max_count:
             Log.fatal("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
             raise error.UserError(t, 'array', message="Requested array count={:d} is larger than configuration max_count={:d}".format(count, Config.parray.max_count))
-        Log.warn("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
+        Log.warning("dynamic.array : {:s} : Requested argument count={:d} is larger than configuration max_count={:d}.".format(t.typename(), count, Config.parray.max_count))
 
     def classname(self):
         return "dynamic.array({:s}, {:s})".format(type.__name__, str(self.length))
@@ -404,7 +404,7 @@ class union(__union_interface__):
             try:
                 element.load(offset=0)
             except error.LoadError as E:
-                Log.warn("dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}".format(self.instance(), element.instance(), element.name()))
+                Log.warning("dynamic.union : {:s} : Unable to complete load for union member : {:s} {!r}".format(self.instance(), element.instance(), element.name()))
             continue
         return self
 

@@ -186,8 +186,8 @@ if __name__ == 'CoffObject':
         if len(aux) > 0:
             symbolcount = aux[0]['NumberOfRelocations'].int()
             if sectioncount != symbolcount:
-                logging.warn("number of relocations ({:d}) for section {:s} differs from section definition ({:d})".format(symbolcount, sym['Name'].str(), sectioncount))
-                logging.warn(aux[0])
+                logging.warning("number of relocations ({:d}) for section {:s} differs from section definition ({:d})".format(symbolcount, sym['Name'].str(), sectioncount))
+                logging.warning(aux[0])
                 print('failed with relocated section {!r}'.format(section))
                 continue
         print('successfully relocated section {!r}'.format(section))
