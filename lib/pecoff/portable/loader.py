@@ -94,10 +94,15 @@ class IMAGE_DYNAMIC_RELOCATION_TABLE(pstruct.type):
         (__DynamicRelocations, 'DynamicRelocations'),
     ]
 
+class CF_FUNCTION_TABLE_SIZE_(pbinary.struct):
+    _fields_ = [
+        (4, 'SHIFT'),
+    ]
+
 class IMAGE_GUARD_(pbinary.flags):
     _fields_ = [
-        (4, 'CF_FUNCTION_TABLE_SIZE'),
-        (7, 'unused(7)_28'),
+        (CF_FUNCTION_TABLE_SIZE_, 'CF_FUNCTION_TABLE_SIZE_MASK'),
+        (7, 'unused(7)_21'),
         (1, 'RETPOLINE_PRESENT'),
         (1, 'RF_STRICT'),
         (1, 'RF_ENABLE'),
