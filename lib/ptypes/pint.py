@@ -147,7 +147,7 @@ integer_types, string_types = bitmap.integer_types, utils.string_types
 
 __state__ = {}
 def setbyteorder(endianness):
-    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+    if endianness in {config.byteorder.bigendian, config.byteorder.littleendian}:
         transform = {config.byteorder.bigendian : bigendian, config.byteorder.littleendian : littleendian}[endianness]
         for name, definition in globals().items():
             if definition in [type] or getattr(definition, '__base__', type) is type:

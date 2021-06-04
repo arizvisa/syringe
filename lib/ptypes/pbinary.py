@@ -141,7 +141,7 @@ def setbyteorder(endianness):
     ``endianness`` can be either pbinary.bigendian or pbinary.littleendian
     '''
     global partial
-    if endianness in [config.byteorder.bigendian, config.byteorder.littleendian]:
+    if endianness in {config.byteorder.bigendian, config.byteorder.littleendian}:
         result = partial.byteorder
         partial.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
         return result
@@ -768,8 +768,7 @@ class container(type):
         return res
 
     def copy(self, **attrs):
-        """Performs a deep-copy of self repopulating the new instance if self is initialized
-        """
+        """Performs a deep-copy of self repopulating the new instance if self is initialized"""
         # create an instance of self and update with requested attributes
         result = super(container, self).copy(**attrs)
         result.value = map(operator.methodcaller('copy', **attrs), self.value)
@@ -1624,11 +1623,10 @@ class partial(ptype.container):
     value = None
     _object_ = None
     byteorder = config.byteorder.bigendian
-    initializedQ = lambda s: isinstance(s.value, list) and len(s.value) > 0 and s.value[0].initializedQ()
-    __pb_attribute = None
+    initializedQ = lambda self: isinstance(self.value, list) and len(self.value) > 0 and self.value[0].initializedQ()
 
     def __pb_object(self, **attrs):
-        offset, object = self.getoffset(), force(self._object_, self)
+        offset, object = self.getoffset(), force(self._object_ or 0, self)
         res = {}
 
         # first include the type's attributes, then any user-supplied ones
@@ -1709,11 +1707,14 @@ class partial(ptype.container):
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.serialize')
 
-        res = self.object.bitmap()
-        if self.byteorder is config.byteorder.bigendian:
+        res, order = self.object.bitmap(), self.byteorder
+        if order is config.byteorder.bigendian:
             return bitmap.data(res)
-        if self.byteorder is not config.byteorder.littleendian:
-            raise error.AssertionError(self, 'partial.serialize', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
+        elif order is not config.byteorder.littleendian:
+            Log.warning("partial.serialize : {:s} : The specified byteorder ({!s}) is invalid and will be normalized.".format(self.object.instance(), order))
+            if self.__normalize_byteorder() is config.byteorder.bigendian:
+                return bitmap.data(res)
+            return bytes(bytearray(reversed(bitmap.data(res))))
         return bytes(bytearray(reversed(bitmap.data(res))))
 
     def __deserialize_block__(self, block):
@@ -1823,12 +1824,8 @@ class partial(ptype.container):
 
         # endianness
         if 'bits' not in result or result['bits'] > 8:
-            if self.byteorder is config.byteorder.bigendian:
-                result['byteorder'] = 'big'
-            else:
-                if self.byteorder is not config.byteorder.littleendian:
-                    raise error.AssertionError(self, 'partial.properties', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
-                result['byteorder'] = 'little'
+            order = self.__normalize_byteorder()
+            result['byteorder'] = 'big' if self.byteorder is config.byteorder.bigendian else 'little'
         return result
 
     ## methods to passthrough if the object is initialized
@@ -1908,17 +1905,43 @@ class partial(ptype.container):
             return object.__getattribute__(self, name)
         return getattr(self.object, name)
 
+    def __element__(self):
+        if self.initializedQ():
+            item, = self.value
+            return item.classname()
+
+        # If element is not yet initialized, then figure out what kind of typename to use.
+        item = self._object_
+        if istype(item):
+            return item.typename()
+        elif isinstance(item, integer_types):
+            return "{!s}".format(item)
+        return item.__name__ if item else "{!s}".format(item)
+
+    def __normalize_byteorder(self):
+        order, result = getattr(self, 'byteorder', partial.byteorder), None
+        if order in {config.byteorder.bigendian, config.byteorder.littleendian}:
+            result = order
+        elif getattr(order, '__name__', '').startswith('big'):
+            result = config.byteorder.bigendian
+        elif getattr(order, '__name__', '').startswith('little'):
+            result = config.byteorder.littleendian
+        elif isinstance(order, string_types):
+            result = config.byteorder.bigendian if order.startswith('big') else config.byteorder.littleendian if order.startswith('little') else None
+
+        if result is None:
+            description = self.object.instance() if self.initializedQ() else "{:s}[{:x}:{:+x}]".format(self.__element__(), self.getoffset(), self.blocksize())
+            Log.warning("partial.byteorder : {:s} : Normalizing the invalid byteorder ({!s}) assigned to partial using default order {!s}.".format(description, order, partial.byteorder))
+            return partial.byteorder
+        return result
+
     def classname(self):
         fmt = {
             config.byteorder.littleendian : Config.pbinary.littleendian_name,
             config.byteorder.bigendian : Config.pbinary.bigendian_name,
         }
-        if self.initializedQ():
-            res, = self.value
-            cn = res.classname()
-        else:
-            cn = self._object_.typename() if istype(self._object_) else self._object_ if isinstance(self._object_, integer_types) else self._object_.__name__
-        return fmt[self.byteorder].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
+        cn, order = self.__element__(), self.__normalize_byteorder()
+        return fmt[order].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
