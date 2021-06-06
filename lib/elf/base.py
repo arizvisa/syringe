@@ -150,7 +150,7 @@ class padstring(pstr.string):
 class stringinteger(padstring):
     def set(self, integer):
         res, bs = "{!s}".format(integer), self.blocksize()
-        return super(padstring, self).set("{: {:d}s}".format(res, bs))
+        return super(padstring, self).set("{:<{:d}s}".format(res, bs))
 
     def int(self):
         res = super(padstring, self).str()

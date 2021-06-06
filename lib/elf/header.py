@@ -534,8 +534,8 @@ class Elf_Arhdr(pstruct.type):
             try:
                 res = self.datetime().astimezone(tzinfo)
             except (ValueError, OverflowError):
-                return super(Elf_Arhdr.time_t, self).details()
-            return "({:d}) {!s}".format(self.int(), res.ctime())
+                return super(Elf_Arhdr.time_t, self).details() + '\n'
+            return "({:d}) {!s}".format(self.int(), res.isoformat())
         repr = details
         def summary(self):
             tzinfo = datetime.timezone(datetime.timedelta(seconds=-(time.altzone if time.daylight else time.timezone)))
