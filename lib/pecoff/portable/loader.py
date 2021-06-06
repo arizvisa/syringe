@@ -171,10 +171,11 @@ class IMAGE_ENCLAVE_FLAG_(pint.enum, DWORD):
 
 class IMAGE_ENCLAVE_CONFIG(pstruct.type):
     def blocksize(self):
-        # If we're allocated, then we can just read our size field. If we're
-        # not allocated, then we need to cheat and assume the entire structure
-        # is populated.
-        return self['Size'].li.int() if self.value else self.copy().a.size()
+        # If we're already loaded, then we can just read our size field. If we're not
+        # loaded yet, then to get the size we need to cheat by duplicating the instance,
+        # allocating with the original blocksize, and then taking its loaded size.
+        Fblocksize = super(IMAGE_ENCLAVE_CONFIG, self).blocksize
+        return self['Size'].li.int() if self.value else self.copy(blocksize=Fblocksize).a.size()
 
     def __ImportList(self):
         count, size = (self[fld].li for fld in ['NumberOfImports', 'ImportEntrySize'])
@@ -201,10 +202,11 @@ class IMAGE_ENCLAVE_CONFIG(pstruct.type):
 
 class IMAGE_ENCLAVE_CONFIG64(pstruct.type):
     def blocksize(self):
-        # If we're allocated, then we can just read our size field. If we're
-        # not allocated, then we need to cheat and assume the entire structure
-        # is populated.
-        return self['Size'].li.int() if self.value else self.copy().a.size()
+        # If we're already loaded, then we can just read our size field. If we're not
+        # loaded yet, then to get the size we need to cheat by duplicating the instance,
+        # allocating with the original blocksize, and then taking its loaded size.
+        Fblocksize = super(IMAGE_ENCLAVE_CONFIG64, self).blocksize
+        return self['Size'].li.int() if self.value else self.copy(blocksize=Fblocksize).a.size()
 
     def __ImportList(self):
         count, size = (self[fld].li for fld in ['NumberOfImports', 'ImportEntrySize'])
