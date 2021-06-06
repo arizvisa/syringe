@@ -670,7 +670,7 @@ class FILETIME(pstruct.type):
             return super(FILETIME, self).summary()
 
         ts, seconds = self.timestamp(), res.second + res.microsecond * 1e-6
-        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.6f}".format(seconds).zfill(9), ts)
+        return "{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:s}{:s} ({:#x})".format(res.year, res.month, res.day, res.hour, res.minute, "{:02.6f}".format(seconds).zfill(9), res.strftime('%z'), ts)
 
 class DTTM(pbinary.struct):
     _fields_ = rl(
