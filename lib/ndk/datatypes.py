@@ -581,6 +581,9 @@ class GUID(rfc4122):
     _fields_ = [
         (Ftransform(__type), __fieldname) for Ftransform, (__type, __fieldname) in zip([pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian], rfc4122._fields_)
     ]
+    def str(self):
+        result = super(GUID, self).str()
+        return result.upper()
 
 CLSID = UUID = GUID
 
