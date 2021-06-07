@@ -538,10 +538,11 @@ class rfc4122(pstruct.type):
             return '{:04x}'.format(self.int())
     class _Data4(pint.bigendian(pint.uint64_t)):
         def summary(self):
-            res = list(self.serialize())
+            res = self.serialize()
             d1 = ''.join(map('{:02x}'.format, bytearray(res[:2])))
             d2 = ''.join(map('{:02x}'.format, bytearray(res[2:])))
-            return '-'.join((d1, d2))
+            return '-'.join([d1, d2])
+
     _fields_ = [
         (_Data1, 'Data1'),
         (_Data2and3, 'Data2'),
@@ -549,23 +550,36 @@ class rfc4122(pstruct.type):
         (_Data4, 'Data4'),
     ]
 
+    def iterate(self):
+        yield self['Data1'].int()
+        yield self['Data2'].int()
+        yield self['Data3'].int()
+        data4 = self['Data4'].serialize()
+        data4hi = bytearray(data4[:2])
+        data4lo = bytearray(data4[2:])
+        yield functools.reduce(lambda agg, item: agg * pow(2, 8) + item, data4hi)
+        yield functools.reduce(lambda agg, item: agg * pow(2, 8) + item, data4lo)
+
+    def components(self):
+        return [item for item in self.iterate()]
+
     def summary(self, **options):
         if self.initializedQ():
             return self.str()
-        return '{{????????-????-????-????-????????????}}'
+        return '{????????-????-????-????-????????????}'
 
     def str(self):
         d1 = '{:08x}'.format(self['Data1'].int())
         d2 = '{:04x}'.format(self['Data2'].int())
         d3 = '{:04x}'.format(self['Data3'].int())
-        _ = list(self['Data4'].serialize())
+        _ = self['Data4'].serialize()
         d4 = ''.join( map('{:02x}'.format, bytearray(_[:2])) )
         d5 = ''.join( map('{:02x}'.format, bytearray(_[2:])) )
-        return '{{{:s}}}'.format('-'.join((d1, d2, d3, d4, d5)))
+        return '{{{:s}}}'.format('-'.join([d1, d2, d3, d4, d5]))
 
 class GUID(rfc4122):
     _fields_ = [
-        (transformation(t), n) for transformation, (t, n) in zip((pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian), rfc4122._fields_)
+        (Ftransform(__type), __fieldname) for Ftransform, (__type, __fieldname) in zip([pint.littleendian, pint.littleendian, pint.littleendian, pint.bigendian], rfc4122._fields_)
     ]
 
 CLSID = UUID = GUID
@@ -879,3 +893,61 @@ class CONTEXT(pstruct.type, versioned):
                 (dyn.array(BYTE, 512), 'ExtendedRegisters'),
             ]
         self._fields_ = _fields_
+
+if __name__ == '__main__':
+    import ptypes
+    data = b'\x6b\xa7\xb8\x10\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8'
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x6ba7b810, 0x9dad, 0x11d1, 0x80b4, 0x00c04fd430c8]):
+        raise AssertionError
+
+    data = b'\x7d\x44\x48\x40\x9d\xc0\x11\xd1\xb2\x45\x5f\xfd\xce\x74\xfa\xd2'
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x7d444840, 0x9dc0, 0x11d1, 0xb245, 0x5ffdce74fad2]):
+        raise AssertionError
+
+    data = b'\x6b\xa7\xb8\x10\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8'
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x6ba7b810, 0x9dad, 0x11d1, 0x80b4, 0x00c04fd430c8]):
+        raise AssertionError
+
+    data = b'\x6b\xa7\xb8\x11\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8'
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x6ba7b811, 0x9dad, 0x11d1, 0x80b4, 0x00c04fd430c8]):
+        raise AssertionError
+
+    data = b'\x6b\xa7\xb8\x12\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8'
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x6ba7b812, 0x9dad, 0x11d1, 0x80b4, 0x00c04fd430c8]):
+        raise AssertionError
+
+    data = b'\x6b\xa7\xb8\x14\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8'
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x6ba7b814, 0x9dad, 0x11d1, 0x80b4, 0x00c04fd430c8]):
+        raise AssertionError
+
+    data = b'\x78\x56\x34\x12\x34\x12\x78\x56' + b'\x12\x34\x56\x78\x12\x34\x56\x78'
+    data = b'\x12\x34\x56\x78' * 4
+    instance = rfc4122(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x12345678, 0x1234, 0x5678, 0x1234, 0x567812345678]):
+        raise AssertionError
+
+    data = b'\x01\x14\x02\x00\x00\x00\x00\x00\xc0\x00\x00\x00\x00\x00\x00F'
+    instance = GUID(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x21401, 0, 0, 0xc000, 0x46]):
+        raise AssertionError
+
+    data = b'\x00\x67\x61\x56\x54\xC1\xCE\x11\x85\x53\x00\xAA\x00\xA1\xF9\x5B'
+    instance = CLSID(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x56616700, 0xc154, 0x11ce, 0x8553, 0x00aa00a1f95b]):
+        raise AssertionError
+
+    data = b'\x91\x22\xdb\xb2\xe8\x8f\x02\x45\xa2\x05\x56\xa2\x84\x96\xd4\x42'
+    instance = GUID(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0xB2DB2291, 0x8FE8, 0x4502, 0xA205, 0x56A28496D442]):
+        raise AssertionError
+
+    data = b'\x01\x00\x00\x00\x21\x07\xd3\x11\x44\x86\xc8\xc1\xca\x00\x00\x00'
+    instance = GUID(source=ptypes.prov.bytes(data)).l
+    if not([item for item in instance.iterate()] == [0x00000001, 0x0721, 0x11d3, 0x4486, 0xC8C1CA000000]):
+        raise AssertionError
