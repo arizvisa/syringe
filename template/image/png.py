@@ -36,8 +36,8 @@ class Chunks(ptype.definition):
         type, length = None, 0
 
         def classname(self):
-            res = super(Chunks.UnknownChunk, self).classname()
-            return '{:s}<{:s}>[size:{:#x}]'.format(res, self.type, self.blocksize())
+            res, type = super(Chunks.UnknownChunk, self).classname(), self.type.decode('latin1') if isinstance(self.type, bytes) else (self.type or '????')
+            return '{:s}<{:s}>[size:{:#x}]'.format(res, type, self.blocksize())
 
     default = UnknownChunk
 
