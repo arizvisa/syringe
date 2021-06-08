@@ -372,8 +372,8 @@ if __name__ == '__main__':
     import builtins, operator, os, math, functools, itertools, sys, types
     def FhexToData(representation):
         rows = map(operator.methodcaller('strip'), representation.split('\n'))
-        items = [item for offset, item in map(operator.methodcaller('split', ' ', 1), filter(None, rows))]
-        return bytes().join(map(bytes.fromhex, items))
+        items = [item.replace(' ', '') for offset, item in map(operator.methodcaller('split', ' ', 1), filter(None, rows))]
+        return bytes().join(map(operator.methodcaller('decode', 'hex') if sys.version_info.major < 3 else bytes.fromhex, items))
 
     ### SummaryInformation (PropertySetStream)
     #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
@@ -536,5 +536,184 @@ if __name__ == '__main__':
     #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
     hexadecimal_representation = '''
     00x 03 00 00 00 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Control Stream (alternate stream binding?)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 00 00 00 00 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### "CONTENTS" Stream (PropertySetStream)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x FE FF 01 00 06 00 02 00 53 FF 4B 99 F9 DD AD 42
+    01x A5 6A FF EA 36 17 AC 16 01 00 00 00 01 18 00 20
+    02x E6 5D D1 11 8E 38 00 C0 4F B9 38 6D 30 00 00 00
+    03x DC 01 00 00 0A 00 00 00 01 00 00 00 58 00 00 00
+    04x 00 00 00 80 60 00 00 00 01 00 00 80 68 00 00 00
+    05x 00 00 00 00 70 00 00 00 04 00 00 00 38 01 00 00
+    06x 06 00 00 00 4C 01 00 00 07 00 00 00 70 01 00 00
+    07x 0C 00 00 00 7C 01 00 00 27 00 00 00 94 01 00 00
+    08x 92 00 00 00 C0 01 00 00 02 00 00 00 B0 04 00 00
+    09x 13 00 00 00 00 00 09 08 13 00 00 00 01 00 00 00
+    0Ax 06 00 00 00 04 00 00 00 0E 00 00 00 44 00 69 00
+    0Bx 73 00 70 00 6C 00 61 00 79 00 43 00 6F 00 6C 00
+    0Cx 6F 00 75 00 72 00 00 00 06 00 00 00 09 00 00 00
+    0Dx 4D 00 79 00 53 00 74 00 72 00 65 00 61 00 6D 00
+    0Ex 00 00 00 00 07 00 00 00 0B 00 00 00 50 00 72 00
+    0Fx 69 00 63 00 65 00 28 00 47 00 42 00 50 00 29 00
+    10x 00 00 00 00 0C 00 00 00 0A 00 00 00 4D 00 79 00
+    11x 53 00 74 00 6F 00 72 00 61 00 67 00 65 00 00 00
+    12x 27 00 00 00 0E 00 00 00 43 00 61 00 73 00 65 00
+    13x 53 00 65 00 6E 00 73 00 69 00 74 00 69 00 76 00
+    14x 65 00 00 00 92 00 00 00 0E 00 00 00 43 00 41 00
+    15x 53 00 45 00 53 00 45 00 4E 00 53 00 49 00 54 00
+    16x 49 00 56 00 45 00 00 00 08 00 00 00 0A 00 00 00
+    17x 47 00 72 00 65 00 79 00 00 00 00 00 49 00 00 00
+    18x CA 84 95 F9 23 CA 0B 47 83 94 22 01 77 90 7A AD
+    19x 0C 00 00 00 70 00 72 00 6F 00 70 00 36 00 00 00
+    1Ax 06 00 00 00 00 50 14 00 00 00 00 00 45 00 00 00
+    1Bx 0E 00 00 00 70 00 72 00 6F 00 70 00 31 00 32 00
+    1Cx 00 00 00 00 10 20 00 00 10 00 00 00 02 00 00 00
+    1Dx 03 00 00 00 FF FF FF FF 05 00 00 00 00 00 00 00
+    1Ex 03 F8 14 17 12 87 45 29 25 11 33 56 79 A2 9C 00
+    1Fx 0C 10 00 00 02 00 00 00 11 00 00 00 A9 00 00 00
+    20x 14 00 00 00 A9 00 76 99 3B 22 10 9C
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### CodePage (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 02 00 00 00 B0 04 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Locale (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 13 00 00 00 00 00 09 08
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary (Dictionary)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 06 00 00 00 04 00 00 00 0E 00 00 00 44 00 69 00
+    01x 73 00 70 00 6C 00 61 00 79 00 43 00 6F 00 6C 00
+    02x 6F 00 75 00 72 00 00 00 06 00 00 00 09 00 00 00
+    03x 4D 00 79 00 53 00 74 00 72 00 65 00 61 00 6D 00
+    04x 00 00 00 00 07 00 00 00 0B 00 00 00 50 00 72 00
+    05x 69 00 63 00 65 00 28 00 47 00 42 00 50 00 29 00
+    06x 00 00 00 00 0C 00 00 00 0A 00 00 00 4D 00 79 00
+    07x 53 00 74 00 6F 00 72 00 61 00 67 00 65 00 00 00
+    08x 27 00 00 00 0E 00 00 00 43 00 61 00 73 00 65 00
+    09x 53 00 65 00 6E 00 73 00 69 00 74 00 69 00 76 00
+    0Ax 65 00 00 00 92 00 00 00 0E 00 00 00 43 00 41 00
+    0Bx 53 00 45 00 53 00 45 00 4E 00 53 00 49 00 54 00
+    0Cx 49 00 56 00 45 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary Entry 0 (DictionaryEntry)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 04 00 00 00 0E 00 00 00 44 00 69 00 73 00 70 00
+    00x 6C 00 61 00 79 00 43 00 6F 00 6C 00 6F 00 75 00
+    02x 72 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary Entry 1 (DictionaryEntry)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 06 00 00 00 09 00 00 00 4D 00 79 00 53 00 74 00
+    00x 72 00 65 00 61 00 6D 00 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary Entry 2 (DictionaryEntry)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 07 00 00 00 0B 00 00 00 50 00 72 00 69 00 63 00
+    00x 65 00 28 00 47 00 42 00 50 00 29 00 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary Entry 3 (DictionaryEntry)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 0C 00 00 00 0A 00 00 00 4D 00 79 00 53 00 74 00
+    00x 6F 00 72 00 61 00 67 00 65 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary Entry 4 (DictionaryEntry)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 27 00 00 00 0E 00 00 00 43 00 61 00 73 00 65 00
+    00x 53 00 65 00 6E 00 73 00 69 00 74 00 69 00 76 00
+    02x 65 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Dictionary Entry 5 (DictionaryEntry)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 92 00 00 00 0E 00 00 00 43 00 41 00 53 00 45 00
+    00x 53 00 45 00 4E 00 53 00 49 00 54 00 49 00 56 00
+    02x 45 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### DisplayColour (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 08 00 00 00 0A 00 00 00 47 00 72 00 65 00 79 00
+    01x 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### MyStream (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 49 00 00 00 CA 84 95 F9 23 CA 0B 47 83 94 22 01
+    01x 77 90 7A AD 0C 00 00 00 70 00 72 00 6F 00 70 00
+    02x 36 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### Price(GBP) (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 06 00 00 00 00 50 14 00 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### MyStorage (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    01x 45 00 00 00 0E 00 00 00 70 00 72 00 6F 00 70 00
+    02x 31 00 32 00 00 00 00 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### CaseSensitive Mixed Case (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 10 20 00 00 10 00 00 00 02 00 00 00 03 00 00 00
+    01x FF FF FF FF 05 00 00 00 00 00 00 00 03 F8 14 17
+    02x 12 87 45 29 25 11 33 56 79 A2 9C 00
+    '''
+    data = FhexToData(hexadecimal_representation)
+
+    ### CASESENSITIVE All Uppercase (TypedPropertyValue)
+    #   x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 xA xB xC xD xE xF
+    hexadecimal_representation = '''
+    00x 0C 10 00 00 02 00 00 00 11 00 00 00 A9 00 00 00
+    01x 14 00 00 00 A9 00 76 99 3B 22 10 9C
     '''
     data = FhexToData(hexadecimal_representation)
