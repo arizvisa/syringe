@@ -51,7 +51,7 @@ Example usage:
     print( repr(instance) )
 """
 import sys, os, builtins, itertools, functools
-import importlib, array, random as _random
+import importlib, random as _random
 
 from . import config, utils, error
 Config = config.defaults
@@ -78,15 +78,60 @@ class memorybase(base):
 
 class debuggerbase(memorybase):
     '''Base provider class for reading/writing with a debugger-type backing. Intended to be inherited from.'''
-
     def expr(self, string):
         raise error.ImplementationError(self, 'expr', message='User forgot to implement this method')
 
 class bounded(base):
     '''Base provider class for describing a backing that has boundaries of some kind.'''
-
     def size(self):
         raise error.ImplementationError(self, 'size', message='User forgot to implement this method')
+
+class backed(bounded):
+    '''Base provider class for describing a provider that is backed by some other type.'''
+    def __init__(self, offset, reference):
+        self.offset, self.__backing = offset, reference
+    @property
+    def backing(self):
+        return self.__backing
+    @backing.setter
+    def backing(self, new):
+        self.__backing[:] = new
+
+    @utils.mapexception(any=error.ProviderError)
+    def size(self):
+        return len(self.__backing)
+
+    def seek(self, offset):
+        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
+        res, self.offset = 0, offset
+        return res
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
+    def consume(self, amount):
+        '''Consume ``amount`` bytes from the backed provider.'''
+        if amount < 0:
+            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.offset, amount, self))
+        if amount == 0:
+            return b''
+
+        offset, size = self.offset, self.size()
+        if size <= offset:
+            raise error.ConsumeError(self, self.offset, amount)
+
+        minimum = min(self.offset + amount, size)
+        result = self.backing[self.offset : minimum]
+        if not result and amount > 0:
+            raise error.ConsumeError(self, self.offset, amount, len(result))
+        if len(result) == amount:
+            self.offset += amount
+        return result
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
+    def store(self, data):
+        '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
+        left, right = self.offset, self.offset + len(data)
+        self.offset, self.backing[left : right] = right, data
+        return len(data)
 
 ## core providers
 class empty(base):
@@ -97,7 +142,7 @@ class empty(base):
         offset = 0
         return 0
     def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
+        '''Consume ``amount`` bytes from the provider.'''
         return b'\0' * amount
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
@@ -139,7 +184,7 @@ class proxy(bounded):
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
+        '''Consume ``amount`` bytes from the provider.'''
         left, right = self.offset, self.offset + amount
 
         buf = self.instance.serialize() if self.autoload is None else self.instance.load(**self.autoload).serialize()
@@ -264,60 +309,44 @@ class proxy(bounded):
         '''x.__repr__() <=> repr(x)'''
         return "{:s} -> {:s}".format(super(proxy, self).__repr__(), self.instance.instance())
 
-class memoryview(bounded):
+class memoryview(backed):
     '''Basic writeable bytes provider.'''
-    offset = int
-    data = memoryview     # this is backed by a memoryview type
-
-    @property
-    def value(self):
-        return self.data
-
-    @value.setter
-    def value(self, value):
-        self.data[:] = builtins.memoryview(value)
-
+    offset, data = int, memoryview  # this is backed by a memoryview type
     def __init__(self, reference=b''):
-        self.offset, self.data = 0, builtins.memoryview(reference)
-
-    def seek(self, offset):
-        '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res, self.offset = self.offset, offset
-        return res
+        view = builtins.memoryview(reference)
+        super(memoryview, self).__init__(0, view)
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
     def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
-        if amount < 0:
-            raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.offset, amount, self))
-        if amount == 0:
-            return b''
-        if self.offset >= len(self.data):
-            raise error.ConsumeError(self, self.offset, amount)
-
-        minimum = min(self.offset + amount, len(self.data))
-        res = self.data[self.offset : minimum]
-        if not res and amount > 0:
-            raise error.ConsumeError(self, self.offset, amount, len(res))
-        if len(res) == amount:
-            self.offset += amount
-        return res.tobytes()
+        result = super(memoryview, self).consume(amount)
+        return result.tobytes()
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
         try:
-            left, right = self.offset, self.offset + len(data)
-            self.offset, self.data[left : right] = right, builtins.memoryview(data)
-            return len(data)
+            view = builtins.memoryview(data)
+            result = super(memoryview, self).store(view)
 
         except Exception as E:
             raise error.StoreError(self, self.offset, len(data), exception=E)
-        raise error.ProviderError
+        return result
 
-    @utils.mapexception(any=error.ProviderError)
-    def size(self):
-        return len(self.data)
+class array(backed):
+    '''Provider that is backed by an array of some sort.'''
+    offset, data = int, None
+
+    def __init__(self, reference=bytearray()):
+        super(array, self).__init__(0, reference)
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
+    def consume(self, amount):
+        result = super(array, self).consume(amount)
+        return builtins.bytes(bytearray(result))
+
+    @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
+    def store(self, data):
+        return super(array, self).store(bytearray(data))
 
 class bytes(memoryview):
     '''This is an alias for the memoryview provider.'''
@@ -340,7 +369,7 @@ class fileobj(bounded):
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
+        '''Consume ``amount`` bytes from the provider.'''
         offset = self.file.tell()
         if amount < 0:
             raise error.UserError(self, 'consume', message="Tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(offset, amount, self))
@@ -406,7 +435,7 @@ class remote(bounded):
     submit any committed data, or the .reset() method when it is necessary to
     reset the data that was cached.
     '''
-    __cons__ = staticmethod(functools.partial(array.array, 'B'))
+    __cons__ = staticmethod(bytearray)
 
     def __init__(self):
         """This initializes any attributes required by a remote provider.
@@ -506,7 +535,7 @@ class random(base):
 
     @utils.mapexception(any=error.ProviderError)
     def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
+        '''Consume ``amount`` bytes from the provider.'''
         res = map(_random.randint, (0,) * amount, (255,) * amount)
         return builtins.bytes(bytearray(res))
 
@@ -570,7 +599,7 @@ class stream(base):
     ###
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
     def consume(self, amount):
-        '''Consume ``amount`` bytes from the given provider.'''
+        '''Consume ``amount`` bytes from the provider.'''
         o = self.offset - self.data_ofs
         if o < 0:
             raise ValueError("{:s}.consume : Unable to seek to offset {:x} ({:x}:{:+x})".format(type(self).__name__, self.offset, self.data_ofs, len(self.data)))
@@ -854,7 +883,7 @@ try:
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
+            '''Consume ``amount`` bytes from the provider.'''
             if amount < 0:
                 raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.address, amount, self))
 
@@ -956,7 +985,7 @@ try:
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
+            '''Consume ``amount`` bytes from the provider.'''
             buffer_t = ctypes.c_char * amount
             resultBuffer = buffer_t()
 
@@ -1093,7 +1122,7 @@ try:
 
         @classmethod
         def consume(cls, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
+            '''Consume ``amount`` bytes from the provider.'''
             startofs = cls.offset
             try:
                 result = cls.read(cls.offset, amount)
@@ -1211,7 +1240,7 @@ try:
             return res
 
         def consume(self, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
+            '''Consume ``amount`` bytes from the provider.'''
             try:
                 result = self.client.DataSpaces.Virtual.Read(self.offset, amount)
 
@@ -1249,7 +1278,7 @@ try:
             return res
 
         def consume(self, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
+            '''Consume ``amount`` bytes from the provider.'''
             if amount == 0:
                 return b''
             try:
@@ -1384,7 +1413,7 @@ try:
 
         @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError,))
         def consume(self, amount):
-            '''Consume ``amount`` bytes from the given provider.'''
+            '''Consume ``amount`` bytes from the provider.'''
             if amount < 0:
                 raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.address, amount, self))
             res = memory._read(self.address, amount)
@@ -1758,7 +1787,6 @@ if __name__ == '__main__':
 
 if __name__ == '__main__' and 0:
     from ptypes import ptype, parray, pstruct, pint, provider
-    from array import array
 
     # FIXME: the virtual provider is essentially an implementation of an interval tree. there's a
     #        great bioinformatics library for this named cgranges which exposes a rope-like interface
@@ -1816,7 +1844,8 @@ if __name__ == '__main__' and 0:
 
     @TestCase
     def test_flatten():
-        s = lambda x:array('c',x)
+        import array
+        s = lambda x:array.array('c',x)
         a = provider.virtual()
         a.available = [0,5]
         a.data = {0:s('hello'),5:s('world')}
@@ -1826,6 +1855,7 @@ if __name__ == '__main__' and 0:
 
     @TestCase
     def test_consume():
+        import array
         s = lambda x:array.array('c',x)
 
         a = provider.virtual()

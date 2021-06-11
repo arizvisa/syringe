@@ -3196,7 +3196,7 @@ if __name__ == '__main__':
             x.value.append( x.new(E).load(source=ptypes.prov.bytes(bytes(bytearray([d, d])))) )
         source = ptypes.prov.bytes(bytearray(b'\0'*16))
         x.commit(source=source)
-        if source.value == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
+        if source.backing == b'AABBCCDD\x00\x00\x00\x00\x00\x00\x00\x00':
             raise Success
 
     @TestCase
