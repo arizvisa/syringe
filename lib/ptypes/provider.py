@@ -89,13 +89,16 @@ class bounded(base):
 class backed(bounded):
     '''Base provider class for describing a provider that is backed by some other type.'''
     def __init__(self, offset, reference):
-        self.offset, self.__backing = offset, reference
+        self.__offset, self.__backing = offset, reference
     @property
     def backing(self):
         return self.__backing
     @backing.setter
     def backing(self, new):
         self.__backing[:] = new
+    @property
+    def offset(self):
+        return self.__offset
 
     @utils.mapexception(any=error.ProviderError)
     def size(self):
@@ -103,7 +106,7 @@ class backed(bounded):
 
     def seek(self, offset):
         '''Seek to the specified ``offset``. Returns the last offset before it was modified.'''
-        res, self.offset = 0, offset
+        res, self.__offset = 0, offset
         return res
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.ConsumeError, error.UserError))
@@ -115,33 +118,33 @@ class backed(bounded):
             return b''
 
         # Check if the desired number of bytes are available in the backing.
-        offset, size = self.offset, self.size()
+        offset, size = self.__offset, self.size()
         if size <= offset:
-            raise error.ConsumeError(self, self.offset, amount)
+            raise error.ConsumeError(self, offset, amount)
 
         # Otherwise we need to clamp our read size to consume whatever is available.
-        minimum = min(self.offset + amount, size)
-        result = self.backing[self.offset : minimum]
+        minimum = min(offset + amount, size)
+        result = self.backing[offset : minimum]
         if not result and amount > 0:
-            raise error.ConsumeError(self, self.offset, amount, len(result))
+            raise error.ConsumeError(self, offset, amount, len(result))
         if len(result) == amount:
-            self.offset += amount
+            self.__offset += amount
         return result
 
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        left, right, size = self.offset, self.offset + len(data), self.size()
+        left, right, size = self.__offset, self.__offset + len(data), self.size()
         if left > size:
-            self.offset = size
+            self.__offset = size
             _ = self.store(b'\0' * max(0, left - size))
 
         # After padding our backing to the required size, we should now
         # actually point to the correct offset.
-        if self.offset == left:
-            self.offset, self.backing[left : right] = right, data
+        if self.__offset == left:
+            self.__offset, self.backing[left : right] = right, data
             return len(data)
-        raise error.StoreError(self, self.offset, len(data))
+        raise error.StoreError(self, left, len(data))
 
 ## core providers
 class empty(base):
@@ -321,7 +324,7 @@ class proxy(bounded):
 
 class memoryview(backed):
     '''Basic writeable bytes provider.'''
-    offset, data = int, memoryview  # this is backed by a memoryview type
+    data = memoryview   # this is backed by a memoryview type
     def __init__(self, reference=b''):
         view = builtins.memoryview(reference)
         super(memoryview, self).__init__(0, view)
@@ -344,7 +347,7 @@ class memoryview(backed):
 
 class array(backed):
     '''Provider that is backed by an array of some sort.'''
-    offset, data = int, None
+    data = list
 
     def __init__(self, reference=bytearray()):
         super(array, self).__init__(0, reference)
