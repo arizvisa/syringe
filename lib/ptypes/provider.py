@@ -114,10 +114,12 @@ class backed(bounded):
         if amount == 0:
             return b''
 
+        # Check if the desired number of bytes are available in the backing.
         offset, size = self.offset, self.size()
         if size <= offset:
             raise error.ConsumeError(self, self.offset, amount)
 
+        # Otherwise we need to clamp our read size to consume whatever is available.
         minimum = min(self.offset + amount, size)
         result = self.backing[self.offset : minimum]
         if not result and amount > 0:
@@ -129,9 +131,17 @@ class backed(bounded):
     @utils.mapexception(any=error.ProviderError, ignored=(error.StoreError, ))
     def store(self, data):
         '''Store ``data`` at the current offset. Returns the number of bytes successfully written.'''
-        left, right = self.offset, self.offset + len(data)
-        self.offset, self.backing[left : right] = right, data
-        return len(data)
+        left, right, size = self.offset, self.offset + len(data), self.size()
+        if left > size:
+            self.offset = size
+            _ = self.store(b'\0' * max(0, left - size))
+
+        # After padding our backing to the required size, we should now
+        # actually point to the correct offset.
+        if self.offset == left:
+            self.offset, self.backing[left : right] = right, data
+            return len(data)
+        raise error.StoreError(self, self.offset, len(data))
 
 ## core providers
 class empty(base):
