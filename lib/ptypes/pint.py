@@ -268,11 +268,9 @@ class type(ptype.type):
         res = res + [0] * (self.blocksize() - len(res))   # FIXME: use padding
         return super(type, self).__setvalue__(bytes(bytearray(transform(res))), **attrs)
 
-    def get(self):
-        return self.__getvalue__()
-
     def int(self):
         return self.__getvalue__()
+    get = int
 
 class uinteger_t(type):
     '''Provides unsigned integer support'''

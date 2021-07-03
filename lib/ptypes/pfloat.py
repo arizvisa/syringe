@@ -180,6 +180,11 @@ class float_t(type):
         _, exponent, _ = self.components
         return pow(2, exponent) // 2 - 1
 
+    @staticmethod
+    def __frexp_with_base(number, base):
+        '''Calculate the mantissa and exponent for the specified number with exponent base.'''
+        raise NotImplementedError
+
     def set(self, *values, **attrs):
         '''Assign the python float number to the floating-point instance.'''
         if not values:
@@ -194,8 +199,11 @@ class float_t(type):
         if base == 2:
             mantissa, exponent = math.frexp(number)
 
+        # Otherwise, rely on an internal implementation of
+        # math.frexp so we can split our number down using
+        # a specific exponent base.
         else:
-            raise NotImplementedError(base)
+            mantissa, exponent = self.__frexp_with_base(number, base)
 
         # Pass the calculated mantissa and exponent to the
         # internal setvalue implementation.
@@ -211,7 +219,7 @@ class float_t(type):
         base = self.__exponent_base__()
         if base == 2:
             return math.ldexp(mantissa, exponent)
-        raise NotImplementedError(base)
+        return mantissa * pow(base, exponent)
     get = float
 
     def __setvalue__(self, *values, **attrs):
