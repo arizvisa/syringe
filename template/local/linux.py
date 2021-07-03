@@ -31,6 +31,9 @@ class intptr_t(ptype.pointer_t):
     _object_ = ptype.undefined
 class bool(int): pass
 
+class float(pfloat.single): pass
+class double(pfloat.double): pass
+
 class unsigned_short_int(unsigned_short): pass
 class long_int(long): pass
 class long_unsigned_int(unsigned_long): pass
@@ -771,3 +774,77 @@ class _IO_FILE(pstruct.type):
         (lambda self: dyn.block(15 * int().blocksize() - 4 * void_star().blocksize() - size_t().blocksize()), '_unused2'),
     ]
 class FILE(_IO_FILE): pass
+
+class u8(pint.uint8_t): pass
+class u16(pint.uint16_t): pass
+class u32(pint.uint32_t): pass
+class comp_t(pfloat.float_t): components = (0, 3, 13) # base8
+class comp2_t(pfloat.float_t): components = (0, 5, 19) # base2
+
+ACCT_COMM = 16
+class acct(pstruct.type):
+    class _ac_flag(pbinary.flags):
+        _fields_ = [
+            (3, 'unused'),
+            (1, 'AXSIG'),
+            (1, 'ACORE'),
+            (1, 'reserved'),
+            (1, 'AFORK'),
+        ]
+    _fields_ = [
+        (_ac_flag, 'ac_flag'),                                      # Flags
+        (char, 'ac_version'),                                       # Always set to ACCT_VERSION
+        (u16, 'ac_uid16'),                                          # LSB of Real User ID
+        (u16, 'ac_gid16'),                                          # LSB of Real Group ID
+        (u16, 'ac_tty'),                                            # Control Terminal
+        (u32, 'ac_btime'),                                          # Process Creation Time
+        (comp_t, 'ac_utime'),                                       # User Time
+        (comp_t, 'ac_stime'),                                       # System Time
+        (comp_t, 'ac_etime'),                                       # Elapsed Time
+        (comp_t, 'ac_mem'),                                         # Average Memory Usage
+        (comp_t, 'ac_io'),                                          # Chars Transferred
+        (comp_t, 'ac_rw'),                                          # Blocks Read or Written
+        (comp_t, 'ac_minflt'),                                      # Minor Pagefaults
+        (comp_t, 'ac_majflt'),                                      # Major Pagefaults
+        (comp_t, 'ac_swaps'),                                       # Number of Swaps
+        (u16, 'ac_ahz'),                                            # AHZ
+        (u32, 'ac_exitcode'),                                       # Exitcode
+        (dyn.clone(pstr.string, length=ACCT_COMM + 1), 'ac_comm'),  # Command Name
+        (u8, 'ac_etime_hi'),                                        # Elapsed Time MSB
+        (u16, 'ac_etime_lo'),                                       # Elapsed Time LSB
+        (u32, 'ac_uid'),                                            # Real User ID
+        (u32, 'ac_gid'),                                            # Real Group ID
+    ]
+
+class acct_v3(pstruct.type):
+    class _ac_flag(pbinary.flags):
+        _fields_ = [
+            (3, 'unused'),
+            (1, 'AXSIG'),
+            (1, 'ACORE'),
+            (1, 'ACOMPAT'),
+            (1, 'ASU'),
+            (1, 'AFORK'),
+        ]
+    _fields_ = [
+        (char, 'ac_flag'),                                      # Flags
+        (char, 'ac_version'),                                   # Always set to ACCT_VERSION
+        (u16, 'ac_tty'),                                        # Control Terminal
+        (u32, 'ac_exitcode'),                                   # Exitcode
+        (u32, 'ac_uid'),                                        # Real User ID
+        (u32, 'ac_gid'),                                        # Real Group ID
+        (u32, 'ac_pid'),                                        # Process ID
+        (u32, 'ac_ppid'),                                       # Parent Process ID
+        (u32, 'ac_btime'),                                      # Process Creation Time
+        (float, 'ac_etime'),                                    # Elapsed Time
+        (comp_t, 'ac_utime'),                                   # User Time
+        (comp_t, 'ac_stime'),                                   # System Time
+        (comp_t, 'ac_mem'),                                     # Average Memory Usage
+        (comp_t, 'ac_io'),                                      # Chars Transferred
+        (comp_t, 'ac_rw'),                                      # Blocks Read or Written
+        (comp_t, 'ac_minflt'),                                  # Minor Pagefaults
+        (comp_t, 'ac_majflt'),                                  # Major Pagefaults
+        (comp_t, 'ac_swaps'),                                   # Number of Swaps
+        (dyn.clone(pstr.string, length=ACCT_COMM), 'ac_comm'),  # Command Name
+    ]
+
