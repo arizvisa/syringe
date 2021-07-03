@@ -778,8 +778,11 @@ class FILE(_IO_FILE): pass
 class u8(pint.uint8_t): pass
 class u16(pint.uint16_t): pass
 class u32(pint.uint32_t): pass
-class comp_t(pfloat.float_t): components = (0, 3, 13) # base8
-class comp2_t(pfloat.float_t): components = (0, 5, 19) # base2
+class comp_t(pfloat.float_t):
+    components = (0, 3, 13)
+    def __exponent_base__(self):
+        return 8
+class comp2_t(pfloat.float_t): components = (0, 5, 19)
 
 ACCT_COMM = 16
 class acct(pstruct.type):
