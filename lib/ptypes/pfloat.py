@@ -158,6 +158,7 @@ class float_t(type):
     # FIXME: include support for unsignedness (binary32)
     #        round up as per ieee-754
     #        handle errors (clamp numbers that are out of range as per spec)
+    #        allow specifying an arbitrary exponent base instead of using 2
 
     components = None    #(sign, exponent, fraction)
 
@@ -179,14 +180,22 @@ class float_t(type):
         number, = values
         return self.__setvalue__(math.frexp(number), **attrs)
 
+    def __exponent_bias__(self):
+        '''Return the exponent bias used for calculating the floating-point of the instance.'''
+        _, exponent, _ = self.components
+        return pow(2, exponent) // 2 - 1
+
     def __setvalue__(self, *values, **attrs):
         '''Assign the provided integral components to the floating-point instance.'''
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
-        exponentbias = pow(2, self.components[1]) // 2 - 1
 
+        # extract the components from the parameters
         components, = values
         mantissa, exponent = components
+
+        # some constants we'll need to use
+        exponentbias = self.__exponent_bias__()
 
         # if the number is infinite, then the mantissa is set to 0
         # with the exponent set to its maximum possible value.
@@ -231,7 +240,7 @@ class float_t(type):
         res, m = bitmap.shift(res, self.components[2])
 
         # set some constants that we'll need
-        exponentbias = pow(2, self.components[1]) // 2 - 1
+        exponentbias = self.__exponent_bias__()
         infinite, NaN = (float(item) for item in ['inf', 'nan'])
 
         # adjust the exponent if its non-zero, and assign the sign flag.
