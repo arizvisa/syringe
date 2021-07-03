@@ -158,7 +158,6 @@ class float_t(type):
     # FIXME: include support for unsignedness (binary32)
     #        round up as per ieee-754
     #        handle errors (clamp numbers that are out of range as per spec)
-    #        allow specifying an arbitrary exponent base instead of using 2
 
     components = None    #(sign, exponent, fraction)
 
@@ -172,18 +171,48 @@ class float_t(type):
         '''Round the floating-point number to the specified number of bits.'''
         raise error.ImplementationError(self, 'float_t.round')
 
-    def set(self, *values, **attrs):
-        '''Assign the python float number to the floating-point instance.'''
-        if not values:
-            return self.__setvalue__(*values, **attrs)
-
-        number, = values
-        return self.__setvalue__(math.frexp(number), **attrs)
+    def __exponent_base__(self):
+        '''Return the exponent base used to calculate the floating-point of the instance.'''
+        return 2
 
     def __exponent_bias__(self):
         '''Return the exponent bias used for calculating the floating-point of the instance.'''
         _, exponent, _ = self.components
         return pow(2, exponent) // 2 - 1
+
+    def set(self, *values, **attrs):
+        '''Assign the python float number to the floating-point instance.'''
+        if not values:
+            return self.__setvalue__(*values, **attrs)
+        number, = values
+
+        # Grab the exponent base and use it to break our
+        # number down into its mantissa and exponent. If we're
+        # using a base-2 exponent, then we can use math.frexp
+        # to determine where the decimal point is floating.
+        base = self.__exponent_base__()
+        if base == 2:
+            mantissa, exponent = math.frexp(number)
+
+        else:
+            raise NotImplementedError(base)
+
+        # Pass the calculated mantissa and exponent to the
+        # internal setvalue implementation.
+        return self.__setvalue__((mantissa, exponent), **attrs)
+
+    def float(self):
+        mantissa, exponent = self.__getvalue__()
+
+        # Grab our exponent base and use it to combine the
+        # mantissa and exponent that we received from our
+        # internal getvalue implementation. If it's base-2,
+        # then we can just juse math.ldexp to do it.
+        base = self.__exponent_base__()
+        if base == 2:
+            return math.ldexp(mantissa, exponent)
+        raise NotImplementedError(base)
+    get = float
 
     def __setvalue__(self, *values, **attrs):
         '''Assign the provided integral components to the floating-point instance.'''
@@ -195,7 +224,7 @@ class float_t(type):
         mantissa, exponent = components
 
         # some constants we'll need to use
-        exponentbias = self.__exponent_bias__()
+        bias = self.__exponent_bias__()
 
         # if the number is infinite, then the mantissa is set to 0
         # with the exponent set to its maximum possible value.
@@ -209,17 +238,17 @@ class float_t(type):
 
         # if the number is zero, then we need to clear the mantissa and exponent
         elif math.fabs(mantissa) == 0.0:
-            m, e = 0, 0
+            m, e = 0., 0
 
         # if the number is denormalized due to the exponent being larger than
         # the precision we support, then shift its precision a bit.
-        elif exponent <= 1 - exponentbias:
-            m, e = math.fabs(mantissa) * pow(2, exponent + exponentbias - 1), 0
+        elif exponent <= 1 - bias:
+            m, e = math.fabs(mantissa) * pow(2, exponent + bias - 1), 0
 
         # otherwise it's just a normalized number and we just need to
         # remove the explicit bit if there's a non-zero exponent.
         else:
-            m, e = math.fabs(mantissa) * 2.0 - 1.0, exponentbias - 1 + exponent
+            m, e = math.fabs(mantissa) * 2.0 - 1.0, bias - 1 + exponent
 
         # store components
         result = bitmap.zero
@@ -233,18 +262,18 @@ class float_t(type):
         '''Return the components of the floating-point instance.'''
         integer = super(type, self).__getvalue__()
 
-        # extract components and return them
+        # set some constants that we'll be using.
+        bias = self.__exponent_bias__()
+        infinite, NaN = (float(item) for item in ['inf', 'nan'])
+
+        # extract components from integer into its components.
         res = bitmap.new(integer, sum(self.components))
         res, sf = bitmap.shift(res, self.components[0])
         res, e = bitmap.shift(res, self.components[1])
         res, m = bitmap.shift(res, self.components[2])
 
-        # set some constants that we'll need
-        exponentbias = self.__exponent_bias__()
-        infinite, NaN = (float(item) for item in ['inf', 'nan'])
-
-        # adjust the exponent if its non-zero, and assign the sign flag.
-        exponent = e - exponentbias if e else 1 - exponentbias
+        # adjust the exponent if it's non-zero, and assign the sign flag.
+        exponent = e - bias if e else 1 - bias
         sign = -1 if sf else +1
 
         # if the mantissa and exponent are zero, then this is a zero
@@ -253,16 +282,16 @@ class float_t(type):
 
         # if the exponent is in a valid boundary, then we simply need
         # to add the implicit bit back to the mantissa.
-        elif -exponentbias < exponent < exponentbias + 1:
+        elif -bias < exponent < bias + 1:
             if e:
                 mantissa = 1.0 + float(m) / pow(2., self.components[2])
             else:
                 mantissa = float(m) / pow(2., self.components[2])
-                exponent = 1 - exponentbias
+                exponent = 1 - bias
 
         # if the mantissa is empty, and our exponent is at its max
         # then this number is representing infinite.
-        elif not m and exponent > exponentbias:
+        elif not m and exponent > bias:
             mantissa, exponent = infinite, 0
 
         # anything else is likely some weird form of NaN.
@@ -271,14 +300,6 @@ class float_t(type):
 
         # copy the sign flag back into the mantissa, and return.
         return math.copysign(mantissa, sign), exponent
-
-    def get(self):
-        mantissa, exponent = self.__getvalue__()
-        return math.ldexp(mantissa, exponent)
-
-    def float(self):
-        mantissa, exponent = self.__getvalue__()
-        return math.ldexp(mantissa, exponent)
 
 class fixed_t(type):
     """Represents a fixed-point number.
