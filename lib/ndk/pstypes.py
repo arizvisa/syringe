@@ -976,6 +976,63 @@ class XSTATE_CONFIGURATION(pstruct.type):
         (dyn.array(FEATURE, 64), 'Features'),
     ]
 
+class SHARED_GLOBAL_FLAGS_(pbinary.flags):
+    _fields_ = [
+        (21, 'SpareBits'),
+        (1, 'STATE_SEPARATION_ENABLED'),    # 0x00000400
+        (1, 'MULTIUSERS_IN_SESSION_SKU'),   # 0x00000200
+        (1, 'MULTI_SESSION_SKU'),           # 0x00000100
+        (1, 'SECURE_BOOT_ENABLED'),         # 0x00000080
+        (1, 'CONSOLE_BROKER_ENABLED'),      # 0x00000040
+#       (1, 'SEH_VALIDATION_ENABLED'),      # 0x00000040 (W7)
+        (1, 'DYNAMIC_PROC_ENABLED'),        # 0x00000020
+        (1, 'LKG_ENABLED'),                 # 0x00000010
+#       (1, 'SPARE'),                       # 0x00000010 (W7)
+        (1, 'INSTALLER_DETECT_ENABLED'),    # 0x00000008
+        (1, 'VIRT_ENABLED'),                # 0x00000004
+        (1, 'ELEVATION_ENABLED'),           # 0x00000002
+        (1, 'ERROR_PORT'),                  # 0x00000001
+    ]
+
+PROCESSOR_MAX_FEATURES = 64
+class PF_(parray.type):
+    _object_, length = BOOLEAN, PROCESSOR_MAX_FEATURES
+    _aliases_ = [
+        ('FLOATING_POINT_PRECISION_ERRATA', 0),          # 4.0 and higher (x86)
+        ('FLOATING_POINT_EMULATED', 1),                  # 4.0 and higher (x86)
+        ('COMPARE_EXCHANGE_DOUBLE', 2),                  # 4.0 and higher
+        ('MMX_INSTRUCTIONS_AVAILABLE', 3),               # 4.0 and higher
+        ('PPC_MOVEMEM_64BIT_OK', 4),                     # none
+        ('ALPHA_BYTE_INSTRUCTIONS', 5),                  # none
+        ('XMMI_INSTRUCTIONS_AVAILABLE', 6),              # 5.0 and higher
+        ('3DNOW_INSTRUCTIONS_AVAILABLE', 7),             # 5.0 and higher
+        ('RDTSC_INSTRUCTION_AVAILABLE', 8),              # 5.0 and higher
+        ('PAE_ENABLED', 9),                              # 5.0 and higher
+        ('XMMI64_INSTRUCTIONS_AVAILABLE', 10),           # 5.1 and higher
+        ('SSE_DAZ_MODE_AVAILABLE', 11),                  # none
+        ('NX_ENABLED', 12),                              # late 5.1; late 5.2 and higher
+        ('SSE3_INSTRUCTIONS_AVAILABLE', 13),             # 6.0 and higher
+        ('COMPARE_EXCHANGE128', 14),                     # 6.0 and higher (x64)
+        ('COMPARE64_EXCHANGE128', 15),                   # none
+        ('CHANNELS_ENABLED', 16),                        # 6.0 only
+        ('XSAVE_ENABLED', 17),                           # 6.1 and higher
+        ('ARM_VFP_32_REGISTERS_AVAILABLE', 18),          # none
+        ('ARM_NEON_INSTRUCTIONS_AVAILABLE', 19),         # none
+        ('SECOND_LEVEL_ADDRESS_TRANSLATION', 20),        # 6.2 and higher
+        ('VIRT_FIRMWARE_ENABLED', 21),                   # 6.2 and higher
+        ('RDWRFSGSBASE_AVAILABLE', 22),                  # 6.2 and higher (x64)
+        ('FASTFAIL_AVAILABLE', 23),                      # 6.2 and higher
+        ('ARM_DIVIDE_INSTRUCTION_AVAILABLE', 24),        # none
+        ('ARM_64BIT_LOADSTORE_ATOMIC', 25),              # none
+        ('ARM_EXTERNAL_CACHE_AVAILABLE', 26),            # none
+        ('ARM_FMAC_INSTRUCTIONS_AVAILABLE', 27),         # none
+        ('RDRAND_INSTRUCTION_AVAILABLE', 28),            # 6.3 and higher
+        ('ARM_V8_INSTRUCTIONS_AVAILABLE', 29),           # none
+        ('ARM_V8_CRYPTO_INSTRUCTIONS_AVAILABLE', 30),    # none
+        ('ARM_V8_CRC32_INSTRUCTIONS_AVAILABLE', 31),     # none
+        ('RDTSCP_INSTRUCTION_AVAILABLE', 32),            # 10.0 and higher
+    ]
+
 class KUSER_SHARED_DATA(pstruct.type, versioned):
     class TscQpc(pbinary.struct):
         _fields_ = [
@@ -988,13 +1045,24 @@ class KUSER_SHARED_DATA(pstruct.type, versioned):
     class SharedDataFlags(pbinary.flags):
         _fields_ = [
             (25, 'SpareBits'),
-            (1, 'DbgSEHValidationEnabled'),
-            (1, 'DbgDynProcessorEnabled'),
-            (1, 'DbgSystemDllRelocated'),
-            (1, 'DbgInstallerDetectEnabled'),
-            (1, 'DbgVirtEnabled'),
-            (1, 'DbgElevationEnabled'),
-            (1, 'DbgErrorPortPresent'),
+
+            (0, 'DbgStateSeparationEnabled'),   # 1709
+            (0, 'DbgMultiUsersInSessionSKU'),   # 1607
+            (0, 'DbgMultiSessionSKU'),          # 10.0
+            (0, 'DbgSecureBootEnabled'),        # 6.2
+
+            (1, 'DbgSEHValidationEnabled'),     # 6.1
+            (0, 'DbgConsoleBrokerEnabled'),     # 6.2
+
+            (1, 'DbgDynProcessorEnabled'),      # 6.1
+
+            (1, 'DbgSystemDllRelocated'),       # 6.0
+            (0, 'DbgLkgEnabled'),               # 6.2
+
+            (1, 'DbgInstallerDetectEnabled'),   # 6.0
+            (1, 'DbgVirtEnabled'),              # 6.0
+            (1, 'DbgElevationEnabled'),         # 6.0
+            (1, 'DbgErrorPortPresent'),         # 6.0
         ]
 
     def __init__(self, **attrs):
@@ -1022,7 +1090,7 @@ class KUSER_SHARED_DATA(pstruct.type, versioned):
             (dyn.align(4), 'ProductTypeIsValidAlignment'),
             (ULONG, 'NtMajorVersion'),
             (ULONG, 'NtMinorVersion'),
-            (dyn.array(BOOLEAN, PROCESSOR_MAX_FEATURES), 'ProcessorFeatures'),
+            (dyn.array(BOOLEAN, PROCESSOR_MAX_FEATURES), 'ProcessorFeatures'),  # PF_
             (ULONG, 'Reserved1'),
             (ULONG, 'Reserved3'),
             (ULONG, 'TimeSlip'),
