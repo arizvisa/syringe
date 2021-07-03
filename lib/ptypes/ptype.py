@@ -1051,7 +1051,10 @@ class type(base):
 
     def copy(self, **attrs):
         result = super(type, self).copy(**attrs)
-        if hasattr(self, 'length'):
+
+        # Explicitly copy the length if it wasn't copied properly. We
+        # check it's value first because "length" might be a property.
+        if hasattr(self, 'length') and result.length != self.length:
             result.length = self.length
         return result
 
@@ -1132,11 +1135,11 @@ class type(base):
 
         self.value = value[:]
 
-        # If there's a length attribute, then make sure to update it with
-        # the length of the value that was assigned
-        if hasattr(self, 'length'):
+        # If there's a length attribute, and it's different than our value,
+        # then update it with the new calculated value. We do a comparison
+        # first in case the class implemented "length" as a property.
+        if hasattr(self, 'length') and self.length != len(self.value):
             self.length = len(self.value)
-
         return self
 
     def __getvalue__(self):

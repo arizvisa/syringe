@@ -53,9 +53,9 @@ Within this module, the following ieee-754 types are defined:
     double -- 64-bit real number. 11-bits for the exponent, 52 for the fraction.
 
 Also defined within this module is a ptype.definition that can be used to locate
-a specific float_t that matches a particular size. It can be used as such:
+a specific floating point type that matches a particular size. It can be used as such:
 
-    # find a pfloat.float_t that is 4 bytes in length
+    # find a pfloat that is 4 bytes in length
     type = pfloat.ieee.get(4)
 
 Example usage:
@@ -65,7 +65,6 @@ Example usage:
 
     # define an ieee-754 single type
     class type(pfloat.float_t):
-        length = 4
         components = (1, 8, 23)
 
     # define a fixed-point 16.16 type
@@ -76,7 +75,6 @@ Example usage:
     # transform a type's byteorder to bigendian using decorator
     @pfloat.bigendian
     class type(pfloat.float_t):
-        length = 8
         components = (1, 11, 52)
 
     # transform the byteorder of a type to littleendian after definition
@@ -116,7 +114,7 @@ def setbyteorder(endianness):
     raise ValueError("Unknown integer endianness {!r}".format(endianness))
 
 def bigendian(ptype):
-    '''Will convert an pfloat_t to bigendian form'''
+    '''Will convert a pfloat.type to bigendian form'''
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'bigendian')
     res = dict(ptype.__dict__)
@@ -124,7 +122,7 @@ def bigendian(ptype):
     return builtins.type(ptype.__name__, ptype.__bases__, res)
 
 def littleendian(ptype):
-    '''Will convert an pfloat_t to littleendian form'''
+    '''Will convert a pfloat.type to littleendian form'''
     if not issubclass(ptype, type) or ptype is type:
         raise error.TypeError(ptype, 'littleendian')
     res = dict(ptype.__dict__)
@@ -152,7 +150,7 @@ class type(pint.type):
         return super(type, self).__getvalue__()
 
 class float_t(type):
-    """Represents a packed floating-point number.
+    """Represents a packed floating-point number corresponding to the binary interchange format.
 
     components = (signflag, exponent, fraction)
     """
@@ -163,8 +161,14 @@ class float_t(type):
 
     components = None    #(sign, exponent, fraction)
 
+    @property
+    def length(self):
+        components = getattr(self, 'components', None)
+        bits = sum(self.components) if isinstance(components, builtins.tuple) else 0
+        return (bits + 7) // 8
+
     def round(self, bits):
-        """round the floating-point number to the specified number of bits"""
+        '''Round the floating-point number to the specified number of bits.'''
         raise error.ImplementationError(self, 'float_t.round')
 
     def set(self, *values, **attrs):
@@ -356,24 +360,41 @@ class ufixed_t(fixed_t):
     def sign(self):
         return 0
 
-###
+### ieee754
+class binary16(float_t):
+    components = (1, 5, 10)
+
+class binary32(float_t):
+    components = (1, 8, 23)
+
+class binary64(float_t):
+    components = (1, 11, 52)
+
+class binary128(float_t):
+    components = (1, 15, 112)
+
+class binary256(float_t):
+    components = (1, 19, 236)
+
+### ieee754-1985
 class ieee(ptype.definition):
     attribute, cache = 'length', {}
 
 @ieee.define
-class half(float_t):
+class half(binary16):
     length = 2
-    components = (1, 5, 10)
 
 @ieee.define
-class single(float_t):
+class single(binary32):
     length = 4
-    components = (1, 8, 23)
 
 @ieee.define
-class double(float_t):
+class double(binary64):
     length = 8
-    components = (1, 11, 52)
+
+@ieee.define
+class long_double(binary128):
+    length = 16
 
 if __name__ == '__main__':
     class Result(Exception): pass
