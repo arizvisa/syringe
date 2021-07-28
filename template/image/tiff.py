@@ -547,12 +547,19 @@ class Entry(pstruct.type):
 
         # construct an enumeration type so that we can return it
         else:
+            # FIXME: we need to create this type iff the tagvalue
+            #        tells us that this is an enumeration, otherwise
+            #        we should use the tag_ type whilst falling back
+            #        to the type_ if there wasn't a definition for it.
             ns = {key : value for key, value in tag_.__dict__.items()}
             ns.update(type_.__dict__)
             t = type(tag_.__name__, (tag_, type_), ns)
         return t
 
     def __value(self):
+        # FIXME: we need to use the tagvalue somehow to determine
+        #        whether the type+tag combination results in this
+        #        actually being a pointer/offset or just a long.
         t, count = self.__figure_type(), self['count'].li.int()
 
         # if the length of our value is less than a dword, then the
