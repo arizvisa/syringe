@@ -1,8 +1,8 @@
-import math,fractions,itertools,operator,functools,logging
+import math, fractions, itertools, operator, functools, logging
 import ptypes
 from ptypes import *
 
-ptypes.setbyteorder( pint.bigendian )
+ptypes.setbyteorder(ptypes.config.byteorder.bigendian)
 
 ### types
 class Type(ptype.definition):
@@ -25,7 +25,7 @@ class RATIONAL(parray.type):
     length, _object_ = 2, pint.uint32_t
     type = 5
     def float(self):
-        numerator,denominator = map(operator.methodcaller('num'), (self[0],self[1]))
+        numerator, denominator = map(operator.methodcaller('int'), [self[0], self[1]])
         return float(numerator) / denominator
     def set(self, value):
         fr = fractions.Fraction(value)
@@ -33,7 +33,7 @@ class RATIONAL(parray.type):
     def get(self):
         return self.float()
     def summary(self):
-        return '{:f} (0x{:x}, 0x{:x})'.format(self.float(), self[0].int(), self[1].int())
+        return '{:f} ({:#x}, {:#x})'.format(self.float(), self[0].int(), self[1].int())
 
 @Type.define
 class SBYTE(pint.sint8_t): type = 6
@@ -61,7 +61,7 @@ class IFD(pint.uint32_t):
     type = 13
     def summary(self):
         res = self.int()
-        return '{:+#0{:d}x} ({:+d})'.format(res, 2*self.size() + sum(map(len, ('0x', '+'))), res)
+        return '{:+#0{:d}x} ({:+d})'.format(res, 2 * self.size() + sum(map(len, ['0x', '+'])), res)
 
 @Type.define
 class LONG8(pint.uint64_t): type = 16
@@ -72,8 +72,8 @@ class SLONG8(pint.sint64_t): type = 17
 class IFD8(pint.uint64_t):
     type = 18
     def summary(self):
-        res = self.int()
-        return '{:+#0{:d}x} ({:+d})'.format(res, 2*self.size() + sum(map(len, ('0x', '+'))), res)
+        integer = self.int()
+        return '{:+#0{:d}x} ({:+d})'.format(integer, 2 * self.size() + sum(map(len, ['0x', '+'])), integer)
 
 class DirectoryType(pint.enum, pint.uint16_t):
     _values_ = [(item.__name__, item.type) for _, item in Type.cache.items()]
@@ -166,7 +166,7 @@ class TIFFTAG(pint.enum):
         ('T82Options', 435),
         ('JPEGProc', 512),
         ('JPEGInterchangeFormat', 513),
-        ('JPEGInterchangeFormatLngth', 514),
+        ('JPEGInterchangeFormatLength', 514),
         ('JPEGRestartInterval', 515),
         ('JPEGLosslessPredictors', 517),
         ('JPEGPointTransforms', 518),
@@ -567,8 +567,8 @@ class Entry(pstruct.type):
 
 class Directory(pstruct.type):
     def iterate(self):
-        for n in self['entry']:
-            yield n
+        for item in self['entry']:
+            yield item
         return
 
     def data(self):
@@ -576,7 +576,7 @@ class Directory(pstruct.type):
 
 Directory._fields_ = [
     (pint.uint16_t, 'count'),
-    (lambda s: dyn.array(Entry, s['count'].li.int()), 'entry'),
+    (lambda self: dyn.array(Entry, self['count'].li.int()), 'entry'),
     (dyn.pointer(Directory, pint.uint32_t), 'next')
 ]
 
@@ -598,19 +598,18 @@ class Header(pstruct.type):
         return cls(recurse=items).a.set(order='littleendian', signature=0x2a00)
 
     def Order(self):
-        bo = self['order'].serialize()
-        if bo == 'II':
+        order = self['order'].serialize()
+        if order == 'II':
             return ptypes.config.byteorder.littleendian
-        elif bo == 'MM':
+        elif order == 'MM':
             return ptypes.config.byteorder.bigendian
         cls = self.__class__
-        logging.info("{:s}.byteorder : Unknown byteorder for {!r}. Defaulting to the platform. : {!r}.".format('.'.join((__name__, cls.__name__)), bo, ptypes.Config.integer.order.__name__))
+        logging.info("{:s}.byteorder : Unknown byteorder for {!r}. Defaulting to the platform. : {!r}.".format('.'.join([__name__, cls.__name__]), order, ptypes.Config.integer.order.__name__))
         return ptypes.Config.integer.order
 
     class _signature(pint.uint16_t):
-        @classmethod
-        def default(cls):
-            return cls().set(0x002a)
+        def default(self):
+            return self.copy().set(0x002a)
 
     _fields_ = [
         (_byteorder, 'order'),
@@ -624,9 +623,9 @@ class Header(pstruct.type):
 
 class File(pstruct.type):
     def __pointer(self):
-        bo = self['header'].li.Order()
-        pointer = dyn.pointer(Directory, pint.uint32_t, byteorder=bo)
-        return dyn.clone(pointer, recurse={'byteorder': bo})
+        order = self['header'].li.Order()
+        pointer = dyn.pointer(Directory, pint.uint32_t, byteorder=order)
+        return dyn.clone(pointer, recurse={'byteorder': order})
 
     def __data(self):
         res = self['header'].li.size() + self['pointer'].li.size()
@@ -641,18 +640,23 @@ class File(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes,image.tiff as tiff
-    ptypes.setsource( ptypes.file('sample.tif') )
+    import sys, ptypes, image.tiff as tiff
+    filename = sys.argv[1]
+    ptypes.setsource(ptypes.provider.file(filename, 'rb'))
 
-    a = tiff.File()
+    z = tiff.File()
+    z = z.l
+
+    a = z['pointer'].d
     a = a.l
-    for n in a['pointer'].d.l.iterate():
-        print(n.l)
-        if not isinstance(n['value'], ptypes.ptype.undefined):
-            print(n['value'])
-            continue
-        assert not isinstance(n['pointer'], ptypes.ptype.undefined)
-        for v in n['pointer'].d.l:
-            print(v)
-        continue
 
+    for item in a.iterate():
+        print(item.l)
+        if not isinstance(item['value'], ptypes.undefined):
+            print(item['value'])
+            continue
+        if isinstance(item['pointer'], ptypes.undefined):
+            raise AssertionError(item['pointer'])
+        for value in item['pointer'].d.l:
+            print(value)
+        continue
