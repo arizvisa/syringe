@@ -10,7 +10,7 @@ Config = config.defaults
 ## globally changing the ptype provider
 def setsource(provider):
     '''Sets the default ptype provider to the one specified'''
-    provider.seek,provider.consume,provider.store
+    provider.seek, provider.consume, provider.store
     ptype.source = provider
     return provider
 
@@ -20,13 +20,10 @@ def setbyteorder(endianness):
     Sets the integer byte order to the endianness specified for all non-binary types.
     Can be either config.byteorder.bigendian or config.byteorder.littleendian.
     '''
-    [ module.setbyteorder(endianness) for module in (ptype,pint,pfloat) ]
+    [ module.setbyteorder(endianness) for module in [ptype, pint, pfloat] ]
 
 ## some things people people might find useful
-#from ptype import debug, debugrecurse
 from .ptype import istype, iscontainer, isinstance, undefined
-
-from .provider import file, memory
 from .utils import hexdump
 
 if __name__ == '__main__':
