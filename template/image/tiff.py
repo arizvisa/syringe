@@ -25,11 +25,11 @@ class RATIONAL(parray.type):
     length, _object_ = 2, pint.uint32_t
     type = 5
     def float(self):
-        numerator, denominator = map(operator.methodcaller('int'), [self[0], self[1]])
+        numerator, denominator = (item.int() for item in self)
         return float(numerator) / denominator
     def set(self, value):
         fr = fractions.Fraction(value)
-        return super(RATIONAL,self).set((fr.numerator,fr.denominator))
+        return super(RATIONAL,self).set([fr.numerator, fr.denominator])
     def get(self):
         return self.float()
     def summary(self):
@@ -60,8 +60,8 @@ class DOUBLE(pfloat.double): type = 12
 class IFD(pint.uint32_t):
     type = 13
     def summary(self):
-        res = self.int()
-        return '{:+#0{:d}x} ({:+d})'.format(res, 2 * self.size() + sum(map(len, ['0x', '+'])), res)
+        integral = self.int()
+        return '{:+#0{:d}x} ({:+d})'.format(integral, 2 * self.size() + sum(map(len, ['0x', '+'])), integral)
 
 @Type.define
 class LONG8(pint.uint64_t): type = 16
@@ -72,15 +72,18 @@ class SLONG8(pint.sint64_t): type = 17
 class IFD8(pint.uint64_t):
     type = 18
     def summary(self):
-        integer = self.int()
-        return '{:+#0{:d}x} ({:+d})'.format(integer, 2 * self.size() + sum(map(len, ['0x', '+'])), integer)
+        integral = self.int()
+        return '{:+#0{:d}x} ({:+d})'.format(integral, 2 * self.size() + sum(map(len, ['0x', '+'])), integer)
 
 class DirectoryType(pint.enum, pint.uint16_t):
-    _values_ = [(item.__name__, item.type) for _, item in Type.cache.items()]
+    pass
+DirectoryType._values_ = [(item.__name__, item.type) for _, item in Type.cache.items()]
 
 ### tags
-class Tags(ptype.definition): attribute, cache = 'tag', {}
-class TagValue(ptype.definition): cache = {}
+class Tags(ptype.definition):
+    attribute, cache = 'tag', {}
+class TagValue(ptype.definition):
+    cache = {}
 
 class TIFFTAG(pint.enum):
     _values_ = [
@@ -138,7 +141,7 @@ class TIFFTAG(pint.enum):
         ('BadFaxLines', 326),
         ('CleanFaxData', 327),
         ('ConsecutiveBadFaxLines', 328),
-        ('SubIFD', 328),
+        ('SubIFD', 330),
         ('InkSet', 332),
         ('InkNames', 333),
         ('NumberOfInks', 334),
@@ -277,7 +280,8 @@ class TIFFTAG(pint.enum):
         ('DCSHueShiftValues', 65535),
     ]
 
-class DirectoryTag(TIFFTAG, pint.uint16_t): pass
+class DirectoryTag(TIFFTAG, pint.uint16_t):
+    pass
 
 ### Tag types
 @TagValue.define
@@ -526,17 +530,35 @@ class YCBRPOSITION(pint.enum):
 
 ### file
 class Entry(pstruct.type):
-    def __value(self):
-        count = self['count'].li.int()
+    def __figure_type(self):
+        tag_f, type_f = (self[fld].li for fld in ['tag', 'type'])
+
+        # determine the base type
         try:
-            res = Type.lookup(self['type'].li.int())
+            type_ = Type.lookup(type_f.int())
         except KeyError:
-            return pint.uint32_t
+            type_ = pint.uint32_t
+
+        # figure out if there's a tag enumeration associated with it
+        try:
+            tag_ = TagValue.lookup(tag_f.str())
+        except KeyError:
+            t = type_
+
+        # construct an enumeration type so that we can return it
         else:
-            t = dyn.array(res, count)
-            if count == 1 and t().a.size() <= 4: return res
-            if t().a.size() <= 4: return t
-        return ptype.undefined
+            ns = {key : value for key, value in tag_.__dict__.items()}
+            ns.update(type_.__dict__)
+            t = type(tag_.__name__, (tag_, type_), ns)
+        return t
+
+    def __value(self):
+        t, count = self.__figure_type(), self['count'].li.int()
+
+        # if the length of our value is less than a dword, then the
+        # type's value can be stored within the entry. otherwise,
+        # we undefine it so that we use the pointer.
+        return t if t().a.size() * count <= 4 else ptype.undefined
 
     def __padding(self):
         if isinstance(self['value'].li, ptype.undefined):
@@ -545,15 +567,16 @@ class Entry(pstruct.type):
         return dyn.block(max(0, cb))
 
     def __pointer(self):
-        count = self['count'].li.int()
-        try:
-            object = Type.lookup(self['type'].li.int())
-            res = dyn.array(object, count)
-        except KeyError:
-            pass
-        else:
-            if isinstance(self['value'].li, ptype.undefined):
-                return dyn.pointer(res, pint.uint32_t)
+        t, count = self.__figure_type(), self['count'].li.int()
+        result = dyn.clone(parray.type, _object_=t, length=count)
+
+        # if the value has been undefined, then this is a pointer
+        # to the result type.
+        if isinstance(self['value'].li, ptype.undefined):
+            return dyn.pointer(result, pint.uint32_t)
+
+        # otherwise our value is in the proper place, and we
+        # need to return an unsized fake pointer.
         return dyn.pointer(ptype.undefined, pint.uint_t)
 
     _fields_ = [
@@ -566,20 +589,29 @@ class Entry(pstruct.type):
     ]
 
 class Directory(pstruct.type):
+    _fields_ = [
+        (pint.uint16_t, 'count'),
+        (lambda self: dyn.array(Entry, self['count'].li.int()), 'entry'),
+        (lambda _: dyn.pointer(Directory, pint.uint32_t), 'next')
+    ]
+
     def iterate(self):
-        for item in self['entry']:
+        for _, item in self.enumerate():
             yield item
+        return
+
+    def enumerate(self):
+        count = 0
+        while True:
+            for index, item in enumerate(self['entry']):
+                yield count + index, item
+            if not self['next'].int():
+                break
+            self, count = self['next'].d.li, count + self['count'].int()
         return
 
     def data(self):
         raise NotImplementedError
-
-Directory._fields_ = [
-    (pint.uint16_t, 'count'),
-    (lambda self: dyn.array(Entry, self['count'].li.int()), 'entry'),
-    (dyn.pointer(Directory, pint.uint32_t), 'next')
-]
-
 
 class Header(pstruct.type):
     class _byteorder(pint.enum, pint.uint16_t):
@@ -624,14 +656,21 @@ class Header(pstruct.type):
 class File(pstruct.type):
     def __pointer(self):
         order = self['header'].li.Order()
-        pointer = dyn.pointer(Directory, pint.uint32_t, byteorder=order)
+        pointer = dyn.rpointer(Directory, self, pint.uint32_t, byteorder=order)
         return dyn.clone(pointer, recurse={'byteorder': order})
 
     def __data(self):
-        res = self['header'].li.size() + self['pointer'].li.size()
+        minimum = self['header'].li.size() + self['pointer'].li.size()
+
+        # if our source is bounded, then we can use it to determine
+        # how many bytes are used for the data.
         if isinstance(self.source, ptypes.prov.bounded):
-            return dyn.block(self.source.size() - res)
-        return ptype.undefined
+            size = self.source.size() - minimum
+
+        # otherwise, we can't be sure what the size is we use 0.
+        else:
+            size = 0
+        return dyn.block(max(0, size))
 
     _fields_ = [
         (Header, 'header'),
