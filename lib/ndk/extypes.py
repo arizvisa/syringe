@@ -326,6 +326,115 @@ class SYSTEM_ROOT_SILO_INFORMATION(pstruct.type):
         (PVOID, 'SiloList'),
     ]
 
+class SUPERFETCH_INFORMATION_CLASS(pint.enum):
+    _values_ = [(n, v) for v, n in (
+        (0x1, 'SuperfetchRetrieveTrace'),
+        (0x2, 'SuperfetchSystemParameters'),
+        (0x3, 'SuperfetchLogEvent'),
+        (0x4, 'SuperfetchGenerateTrace'),
+        (0x5, 'SuperfetchPrefetch'),
+        (0x6, 'SuperfetchPfnQuery'),
+        (0x7, 'SuperfetchPfnSetPriority'),
+        (0x8, 'SuperfetchPrivSourceQuery'),
+        (0x9, 'SuperfetchSequenceNumberQuery'),
+        (0xA, 'SuperfetchScenarioPhase'),
+        (0xB, 'SuperfetchWorkerPriority'),
+        (0xC, 'SuperfetchScenarioQuery'),
+        (0xD, 'SuperfetchScenarioPrefetch'),
+        (0xE, 'SuperfetchRobustnessControl'),
+        (0xF, 'SuperfetchTimeControl'),
+        (0x10, 'SuperfetchMemoryListQuery'),
+        (0x11, 'SuperfetchMemoryRangesQuery'),
+        (0x12, 'SuperfetchTracingControl'),
+        (0x13, 'SuperfetchTrimWhileAgingControl'),
+        (0x14, 'SuperfetchInformationMax'),
+    )]
+
+class SUPERFETCH_INFORMATION(pstruct.type):
+    type = SYSTEM_INFORMATION_CLASS.byname('SystemSuperfetchInformation')
+    class _InfoClass(SUPERFETCH_INFORMATION_CLASS, ULONG):
+        pass
+    _fields_ = [
+        (ULONG, 'Version'),
+        (ULONG, 'Magic'),
+        (_InfoClass, 'InfoClass'),
+        (PVOID, 'Data'),
+        (ULONG, 'Length'),
+    ]
+
+class PFS_PRIVATE_PAGE_SOURCE_TYPE(pint.enum):
+    _values_ = [(n, v) for v, n in (
+        (0x0, 'PfsPrivateSourceKernel'),
+        (0x1, 'PfsPrivateSourceSession'),
+        (0x2, 'PfsPrivateSourceProcess'),
+        (0x3, 'PrfsPrivateSourceMax'),
+    )]
+
+
+class PFS_PRIVATE_PAGE_SOURCE(pstruct.type):
+    class _SourceId(dynamic.union):
+        _fields_ = [
+            (DWORD, 'SessionId'),
+            (DWORD, 'ProcessId'),
+        ]
+    _fields_ = [
+        (PFS_PRIVATE_PAGE_SOURCE_TYPE, 'Type'),
+        (_SourceId, 'SourceId'),
+        (dyn.array(DWORD, 2), 'SpareDwords'),
+        (ULONG, 'ImagePathHash'),
+        (ULONG, 'UniqueProcessHash'),
+    ]
+
+class PF_PRIVSOURCE_INFO_V3(pstruct.type):
+    class _Owner(dynamic.union):
+        _fields_ = [
+            (ULONG_PTR, 'EProcess'),
+            (ULONG_PTR, 'GlobalVA'),
+        ]
+    _fields_ = [
+        (PFS_PRIVATE_PAGE_SOURCE, 'DbInfo'),
+	    (_Owner, 'Owner'),
+        (ULONG, 'WsPrivatePages'),
+        (ULONG, 'TotalPrivatePages'),
+        (ULONG, 'SessionID'),
+        (dyn.array(CHAR, 16), 'ImageName'),
+        (dyn.array(BYTE, 12), 'SpareBytes'),
+    ]
+
+class PF_PRIVSOURCE_INFO_V3PLUS(pstruct.type):
+    _fields_ = [
+        (dyn.array(BYTE, 8), 'data2'),
+        (DWORD, 'ProcessId'),
+        (dyn.array(BYTE, 16), 'data3'),
+        (ULONG_PTR, 'EProcess'),
+        (dyn.array(BYTE, 60), 'data'),
+    ]
+
+class PF_PRIVSOURCE_QUERY_REQUEST(pstruct.type):
+    class _sv3(pstruct.type):
+        _fields_ = [
+            (ULONG, 'InfoCount'),
+            (lambda self: dyn.array(PF_PRIVSOURCE_INFO_V3, self['InfoCount'].li.int()), 'InfoArrayV3'),
+        ]
+    class _sv3plus(pstruct.type):
+        _fields_ = [
+            (ULONG, 'Type'),
+            (ULONG, 'InfoCount'),
+            (lambda self: dyn.array(PF_PRIVSOURCE_INFO_V3PLUS, self['InfoCount'].li.int()), 'InfoArrayV3Plus'),
+        ]
+    def __Info(self):
+        version = self['Version'].li.int()
+        if version == 3:
+            return PF_PRIVSOURCE_QUERY_REQUEST._sv3
+        elif version > 3:
+            return PF_PRIVSOURCE_QUERY_REQUEST._sv3plus
+        raise NotImplementedError(version)
+    _fields_ = [
+        (ULONG, 'Version'),
+        (__Info, 'Info'),
+        (dyn.align(4), 'alignment(Info)'),
+    ]
+
 class ERESOURCE_THREAD(ULONG_PTR): pass
 
 class OWNER_ENTRY(pstruct.type, versioned):
