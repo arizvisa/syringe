@@ -1,3 +1,4 @@
+import sys, string
 from .primitives import *
 
 class AtomType(ptype.definition):
@@ -208,24 +209,52 @@ class WindowLocationBox(pstruct.type):
     ]
 
 ## ftyp
+class FileTypeBrand(pQTInt):
+    @staticmethod
+    def __printable_v2__(bytes):
+        characters = bytes.decode('latin1')
+        return ''.join(ch if ch in string.printable else r"\x{:02x}".format(ord(ch)) for ch in characters)
+    @staticmethod
+    def __printable_v3__(bytes):
+        characters = bytes.decode('latin1')
+        table = {i : r"\x{:02x}".format(i) for i in bytearray(bytes) if not chr(i).isprintable()}
+        return characters.translate(table)
+    __printable__ = __printable_v3__ if sys.version_info.major > 2 else __printable_v2__
+
+    def printable(self):
+        octets = bytearray(self.serialize())
+        return self.__printable__(bytes(octets))
+
+    def str(self):
+        octets = bytearray(self.serialize())
+        return bytes(octets).decode('latin1')
+
+    def summary(self):
+        integer, brand = self.int(), self.printable()
+        return "{!s} ({:#0{:d}x})".format(brand, integer, 2 + 2 * self.size())
+
 @AtomType.define
 class FileTypeBox(pstruct.type):
     type = b'ftyp'
     class _Compatible_Brands(parray.block):
-        _object_ = pQTInt
+        _object_ = FileTypeBrand
+        def summary(self):
+            items = [item.printable() for item in self]
+            return "({:d}) {:s}".format(len(items), ', '.join(items))
 
     def __Compatible_Brands(self):
+        brands_t = FileTypeBox._Compatible_Brands
         try:
             p = self.getparent(Atom)
         except ptypes.error.ItemNotFoundError:
-            return self._Compatible_Brands
+            return brands_t
         expected = p.Size() - p.HeaderSize()
 
         res = sum(self[fld].li.size() for fld in ['Major_Brand', 'Minor_Version'])
-        return dyn.clone(self._Compatible_Brands, blocksize=lambda _, cb=max(0, expected -res): cb)
+        return dyn.clone(brands_t, blocksize=lambda _, cb=max(0, expected - res): cb)
 
     _fields_ = [
-        (pQTInt, 'Major_Brand'),
+        (FileTypeBrand, 'Major_Brand'),
         (pQTInt, 'Minor_Version'),
         (__Compatible_Brands, 'Compatible_Brands')
     ]
