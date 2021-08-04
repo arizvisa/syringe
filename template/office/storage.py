@@ -822,9 +822,10 @@ class CompObjStream(pstruct.type):
     ]
 
 if __name__ == '__main__':
-    import ptypes, office.storage as storage
+    import sys, ptypes, office.storage as storage
     filename = 'test.xls'
     filename = 'plant_types.ppt'
+    filename = sys.argv[1]
     ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 
     a = storage.File()
