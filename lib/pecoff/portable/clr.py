@@ -804,7 +804,7 @@ class TaggedIndex(CodedIndex, pstruct.type):
         count = max(res[index].int() for index in indices)
 
         # return a uint16_t if the tagged index is able to store the maximum number of rows otherwise use a uint32_t
-        return dyn.clone(pint.uint_t, length=1) if count < pow(2, 16 - self.Tag.width) else dyn.clone(pint.uint_t, length=3)
+        return dyn.clone(pint.uint_t, length=1) if count < pow(2, 16 - self.Tag.length) else dyn.clone(pint.uint_t, length=3)
 
     @classmethod
     def Tables(cls):
@@ -821,7 +821,7 @@ class TaggedIndex(CodedIndex, pstruct.type):
 
     class TagByte(pbinary.struct):
         _fields_ = [
-            (lambda self: 8 - self.getparent(TaggedIndex).Tag.width, 'Index'),
+            (lambda self: 8 - self.getparent(TaggedIndex).Tag.length, 'Index'),
             (lambda self: self.getparent(TaggedIndex).Tag, 'Tag'),
         ]
 
@@ -846,7 +846,7 @@ class TaggedIndex(CodedIndex, pstruct.type):
 
     def Index(self):
         res = self['Index'].int()
-        res <<= 8 - self.Tag.width
+        res <<= 8 - self.Tag.length
         res |= self['Tag'].Index()
         return res
 
@@ -1264,7 +1264,7 @@ class PreCalculatableTable(ptype.generic):
                     res.append(2 if rows[t.type].int() < 0x10000 else 4)
                 elif issubclass(t, CodedIndex):
                     count = max(rows[index].int() for index in t.Tables())
-                    res.append(2 if count < pow(2, 16 - t.Tag.width) else 4)
+                    res.append(2 if count < pow(2, 16 - t.Tag.length) else 4)
                 else:
                     raise TypeError((cls, t, name))
                 continue
