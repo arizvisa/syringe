@@ -14,7 +14,65 @@ class WORD(pint.uint16_t): pass
 class DWORD(pint.uint32_t): pass
 class QWORD(pint.uint64_t): pass
 
-class CLSID(ndk.rfc4122): pass
+class CLSID(ndk.CLSID):
+    class _Data(pint.uint_t):
+        def summary(self):
+            return "{:0{:d}x}".format(self.int(), self.size() * 2)
+
+    class _Data4(pint.uint_t):
+        def summary(self):
+            res = self.serialize()
+            d1 = ''.join(map('{:02x}'.format, bytearray(res[:2])))
+            d2 = ''.join(map('{:02x}'.format, bytearray(res[2:])))
+            return '-'.join([d1, d2])
+
+    def __Data(self, byteorder, length):
+        class _Data(byteorder(self._Data)):
+            pass
+        _Data.length = length
+        return _Data
+
+    def __Data1(self):
+        if not hasattr(self, 'byteorder'):
+            return dyn.clone(self._Data, length=4)
+        if self.byteorder is ptypes.config.byteorder.bigendian:
+            order = pint.bigendian
+        elif self.byteorder is ptypes.config.byteorder.littleendian:
+            order = pint.littleendian
+        else:
+            raise ValueError(self.byteorder)
+        return self.__Data(order, 4)
+
+    def __Data2and3(self):
+        if not hasattr(self, 'byteorder'):
+            return dyn.clone(self._Data, length=2)
+        if self.byteorder is ptypes.config.byteorder.bigendian:
+            order = pint.bigendian
+        elif self.byteorder is ptypes.config.byteorder.littleendian:
+            order = pint.littleendian
+        else:
+            raise ValueError(self.byteorder)
+        return self.__Data(order, 2)
+
+    def __Data4(self):
+        if not hasattr(self, 'byteorder'):
+            return dyn.clone(self._Data4, length=8)
+        if self.byteorder is ptypes.config.byteorder.bigendian:
+            order = pint.bigendian
+        elif self.byteorder is ptypes.config.byteorder.littleendian:
+            order = pint.littleendian
+        else:
+            raise ValueError(self.byteorder)
+        class _Data4(order(self._Data4)):
+            length = 8
+        return _Data4
+
+    _fields_ = [
+        (__Data1, 'Data1'),
+        (__Data2and3, 'Data2'),
+        (__Data2and3, 'Data3'),
+        (__Data4, 'Data4'),
+    ]
 
 class FILETIME(ndk.FILETIME): pass
 class TIME_T(ndk.FILETIME): pass
@@ -346,6 +404,12 @@ class DirectoryEntryIdentifier(pint.enum, DWORD):
     _values_=[('MAXREGSID', 0xfffffffa), ('NOSTREAM', 0xffffffff)]
 
 class DirectoryEntry(pstruct.type):
+    def __clsid(self):
+        p = self.getparent(File)
+        header = p['Header']
+        order = header.ByteOrder()
+        return dyn.clone(CLSID, byteorder=order)
+
     _fields_ = [
         (dyn.clone(pstr.wstring, length=32), 'Name'),
         (USHORT, 'uName'),
@@ -354,7 +418,7 @@ class DirectoryEntry(pstruct.type):
         (DirectoryEntryIdentifier, 'iLeftSibling'),
         (DirectoryEntryIdentifier, 'iRightSibling'),
         (DirectoryEntryIdentifier, 'iChild'),
-        (CLSID, 'clsid'),
+        (__clsid, 'clsid'),
         (DWORD, 'dwState'),
         (FILETIME, 'ftCreation'),
         (FILETIME, 'ftModified'),
@@ -828,14 +892,14 @@ if __name__ == '__main__':
     filename = sys.argv[1]
     ptypes.setsource(ptypes.prov.file(filename, mode='r'))
 
-    a = storage.File()
-    a = a.l
-    print(a['Header'])
-    print(a['Fat']['sectDirectory'].d.l)
-    print(a['MiniFat']['sectMiniFat'].d.l[-1])
-    print(a['DiFat']['sectDifat'])
-    difat = a.DiFat()
-    fat = a.Fat()
-    minifat = a.MiniFat()
+    z = storage.File()
+    z = z.l
+    print(z['Header'])
+    print(z['Fat'])
+    print(z['MiniFat'])
+    print(z['DiFat'])
+    difat = z.DiFat()
+    fat = z.Fat()
+    minifat = z.MiniFat()
 
-    d = a.Directory()
+    D = z.Directory()
