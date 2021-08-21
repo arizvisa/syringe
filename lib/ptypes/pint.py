@@ -242,7 +242,7 @@ class type(ptype.type):
             raise error.InitializationError(self, 'int')
         data = bytearray(self.serialize())
         if self.byteorder is config.byteorder.bigendian:
-            return functools.reduce(lambda agg, item: agg << 8 | item, data, 0)
+            return functools.reduce(lambda agg, item: agg << 8 | item, iter(data), 0)
         elif self.byteorder is config.byteorder.littleendian:
             return functools.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
         raise error.SyntaxError(self, 'integer_t.int', message="Unknown byteorder {!s} was specified".format(self.byteorder))
@@ -258,9 +258,11 @@ class type(ptype.type):
             transform = iter
         else:
             raise error.SyntaxError(self, 'integer_t.set', message="Unknown byteorder ({!s}) was specified".format(self.byteorder))
-        mask = (1<<self.blocksize() * 8) - 1
+
+        mask = pow(2, 8 * self.blocksize()) - 1
         integer &= mask
-        bc = bitmap.new(integer, self.blocksize() * 8)
+
+        bc = bitmap.new(integer, 8 * self.blocksize())
         res = []
         while bc[1] > 0:
             bc, x = bitmap.consume(bc, 8)
