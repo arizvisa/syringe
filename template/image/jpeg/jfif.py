@@ -460,8 +460,82 @@ class File(codestream.Stream):
 
 if __name__ == '__main__':
     import sys, ptypes, image.jpeg.jfif as jfif
-    ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
-    z = jfif.File()
-    z=z.l
-    z=z.d
-    z.l
+    source = ptypes.setsource(ptypes.prov.file(sys.argv[1], 'rb'))
+
+    # Read the contents of the jfif file as an individual stream
+    z = jfif.File(source=source)
+    z = z.l
+
+    # Decode the jfif's codestream into its separate chunks
+    a = z.d
+    a = a.l
+
+    if False:
+        #input = getFileContents('Q100-2.JPG')
+        input = getFileContents('huff_simple0.jpg')
+        input = bytes(input.replace(b'\xff\x00', b'\xff'))
+
+        jpegfile = File()
+        jpegfile.deserialize(input)
+        lookup = {type(item).__name__ : item for item in jpegfile}
+
+        print(jpegfile[0])
+        print(jpegfile[1])
+
+    if False:
+        print('\n'.join(map("{!r}".format, jpegfile)))
+        dqt = lookup['DQT']['table']
+        dht = lookup['DHT']['table']
+        sosdata = lookup['SCANDATA']
+        print("{!r}".format(dqt))
+        print("{!r}".format(dht))
+        print("{!r}".format(sosdata))
+        print('\n'.join(map("{!r}".format, dht)))
+        print('\n'.join(map("{!r}".format, dqt)))
+
+    ### load_quant_table
+    if operator.contains(lookup, 'DQT'):
+        zigzag = [
+            0, 1, 5, 6,14,15,27,28,
+            2, 4, 7,13,16,26,29,42,
+            3, 8,12,17,25,30,41,43,
+            9,11,18,24,31,40,44,53,
+           10,19,23,32,39,45,52,54,
+           20,22,33,38,46,51,55,60,
+           21,34,37,47,50,56,59,61,
+           35,36,48,49,57,58,62,63
+        ]
+
+        scalefactor = [
+            1.0, 1.387039845, 1.306562965, 1.175875602,
+            1.0, 0.785694958, 0.541196100, 0.275899379
+        ]
+
+        self = lookup['DQT']['table'][0]
+        quantizationTable = bytearray(self['value'].serialize())
+        res, table = [], iter(quantizationTable)
+        for y in range(8):
+            for x in range(8):
+                res.append( next(table) * scalefactor[y] * scalefactor[x] )
+            continue
+
+        scaledQuantizationTable = res
+
+    ### decode_huffman ->
+    ###     decode AC coefficient
+    ###     decode DC coefficient
+
+    ## process dht table
+    if operator.contains(lookup, 'DHT'):
+        self = lookup['DHT']['table'][3]
+        print("{!r}".format(self))
+
+    ### process scan data
+    if operator.contains(lookup, 'SOS'):
+        self = lookup['SOS']
+        print("{!r}".format(self))
+        print(self['component'][0])
+        self = lookup['SOS']
+
+    if operator.contains(lookup, 'SOF'):
+        self = lookup['SOF']
