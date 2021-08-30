@@ -433,6 +433,16 @@ def memoize_method(*karguments, **kattributes):
             self.cache_name = "MemoizedMethod<{:s}>_cache".format(name)
 
         def __get__(self, object, type):
+
+            # Figure out if we're being called with an empty object, because if so
+            # then we need to return the original callable so that it looks like
+            # we haven't tampered with it in any way.
+            if object is None:
+                return self.callable
+
+            # Otherwise we have an object, and we need to grab the cache out of
+            # it using the property that we calculated. If the cache isn't there
+            # yet, then we need to stash an empty one there so that we can use it.
             cache_name = "__{:s}".format(self.cache_name)
             if not hasattr(object, cache_name):
                 setattr(object, cache_name, {})
