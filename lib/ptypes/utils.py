@@ -297,8 +297,8 @@ def memoize(*kargs, **kattrs):
     kattrs = tuple((o, a) for o, a in sorted(kattrs.items()))
 
     # Define some utility functions for interacting with a function object in a portable manner
-    has_function = (lambda F: hasattr(F, 'im_func')) if sys.version_info.major < 3 else (lambda F: hasattr(F, '__func__'))
-    get_function = (lambda F: F.im_func) if sys.version_info.major < 3 else (lambda F: F.__func__)
+    has_function = lambda F, attribute='im_func' if sys.version_info.major < 3 else '__func__': hasattr(F, attribute)
+    get_function = lambda F, attribute='im_func' if sys.version_info.major < 3 else '__func__': getattr(F, attribute)
 
     def prepare_callable(fn, kargs=kargs, kattrs=kattrs):
         if has_function(fn):
@@ -356,6 +356,120 @@ def memoize(*kargs, **kattrs):
         callee.callable = fn
         return callee if isinstance(callee, types.FunctionType) else types.FunctionType(callee)
     return prepare_callable(kargs.pop(0)) if not kattrs and len(kargs) == 1 and callable(kargs[0]) else prepare_callable
+
+def memoize_method(*karguments, **kattributes):
+    instancemethod = types.MethodType
+
+    ## Some constants that we will use for our decorator.
+    class undefined(object): pass
+    class memoization_key_barrier(object): pass
+
+    # Define a utility function for extracting the known parameter names from a function object
+    def extract_parameters(F):
+        '''Extract the names for all positional parameters and any variable length parameters available for the callable `F`.'''
+        F_VARARG = 0x4
+        F_VARKWD = 0x8
+        F_VARGEN = 0x20
+
+        # Check some of the attributes of the code type and verify that it's a proper candidate
+        co = F.__code__
+        flags, varnames = co.co_flags, iter(co.co_varnames)
+        if (flags & F_VARGEN):
+            raise TypeError("Unable to memoize a callable ({!s}) that is a generator type.".format(F))
+
+        # Extract the positional argument names including any variable argument names
+        items = itertools.islice(varnames, co.co_argcount)
+        positional_arguments = tuple(items)
+        variable_arguments = (next(varnames) if flags & F_VARARG else None, next(varnames) if flags & F_VARKWD else None)
+
+        # Return the argument names and a tuple of the variable arguments that are available
+        return positional_arguments, variable_arguments
+
+    # Define our getter class that we will use to keep track of the memoized
+    # method and cache all of its results
+    class MemoizedMethod(object):
+        def __init__(self, F, Karguments, Kattributes):
+            '''Instantiate class using the provided parameters and attributes to generate the key for the memoized function F.'''
+            self.cache_name, self.callable = 'MemoizedMethod_cache', F
+
+            # Attributes used to generate a key for items in the cache
+            self.Karguments = [item for item in Karguments]
+            self.Kattributes = [(name, item) for name, item in sorted(Kattributes.items() if isinstance(Kattributes, dict) else Kattributes)]
+
+            # Persist information from the callable's parameters that we will need. Since this
+            # is a method, we'll need to consume the first parameter since it's just going to
+            # be the instance identifier.
+            Favailable, self.Fvarargs = extract_parameters(F)
+            self.Fargs = [item for item in Favailable]
+
+        def key(self, *args, **kwargs):
+            '''Generate a key for the given parameter values.'''
+            values = iter(args)
+
+            # Build a dictionary of the arguments using the parameter names we fetched earlier,
+            # and combine them with the keyword parameters we were given now.
+            parameters = {argname : argvalue for argname, argvalue in zip(self.Fargs, values)}
+            parameters.update(kwargs)
+
+            # Now we need to extract the variable arguments and variable keywords. If the
+            # callable has a variable-length parameter, then consume the rest of the values
+            # so that it can be stored. If the callable has a keyword-argument parameter, then
+            # copy it into a dictionary so we can store it.
+            Fvarargs, Fvarkwds = self.Fvarargs
+            if Fvarargs is not None:
+                parameters[Fvarargs] = tuple(values)
+            if Fvarkwds is not None:
+                parameters[Fvarkwds] = { key : value for key, value in kwargs.items() }
+
+            # Now we have a dictionary containing all our parameter values keyed by their
+            # name, we need to iterate through our arguments whilst retaining their order so
+            # that we can combine them into a tuple that we can use as a key for our cache.
+            key_positionals = (parameters.get(key, undefined) for key in self.Karguments)
+            key_callables = (Fattribute(parameters[key]) if callable(Fattribute) else getattr(parameters[key], Fattribute, undefined) for key, Fattribute in self.Kattributes)
+            iterable = itertools.chain(key_positionals, [memoization_key_barrier], key_callables)
+            return tuple(iterable)
+
+        def __set_name__(self, object, name):
+            self.cache_name = "MemoizedMethod<{:s}>_cache".format(name)
+
+        def __get__(self, object, type):
+            cache_name = "__{:s}".format(self.cache_name)
+            if not hasattr(object, cache_name):
+                setattr(object, cache_name, {})
+
+            # Grab the cache that is associated with our object, and the method that will be
+            # called if the memoization key is not found in it.
+            cache, method = getattr(object, cache_name), instancemethod(self.callable, object)
+
+            def callee(*args, **kwargs):
+                identity = self.key(object, *args, **kwargs)
+                if identity in cache:
+                    return cache[identity]
+
+                # The key that we generated was not found in the cache. So,
+                # we need to execute the callable, grab the result, and store
+                # it into the cache using our key.
+                result = method(*args, **kwargs)
+                return cache.setdefault(identity, result)
+            return functools.update_wrapper(callee, self.callable)
+
+    # Define the closures that are used to when decorating a method
+    def prepare(F, karguments=karguments, kattributes=kattributes):
+        return MemoizedMethod(F, karguments, kattributes)
+
+    def prepare_all(F):
+        positional_arguments, variable_arguments = extract_parameters(F)
+        arguments = itertools.chain(positional_arguments, filter(None, variable_arguments))
+        return prepare(F, karguments=arguments, kattributes={})
+
+    # If we were only given a single argument, then this is parameter-less
+    # decorator that is being used and we use all arguments as a key.
+    if len(karguments) == 1 and callable(karguments[0]) and not kattributes:
+        return prepare_all(*karguments, **kattributes)
+
+    # Otherwise our parameters are the arguments that we use to make a key,
+    # and we need to need to return a closure to receive the callable to decorate.
+    return prepare
 
 # check equivalency of two callables
 def callable_eq2(a, b):
@@ -813,6 +927,104 @@ if __name__ == '__main__':
 
         if f(30) == 15:
             raise Success
+
+    @TestCase
+    def test_memoize_crossstore_1():
+        class mine(object):
+            def __init__(self):
+                self.count = 0
+            @utils.memoize('arg')
+            def method(self, arg):
+                self.count += 1
+                return arg * 2
+
+        self, expected = mine(), 0
+        if self.count != expected:
+            raise AssertionError
+        result, expected = self.method(20), 40
+        if not (result == expected and self.count == 1):
+            raise Failure
+        result, expected = self.method(20), 40
+        if not (result == expected and self.count == 1):
+            raise Failure
+
+        # the memoized decorator is specific to the method definition
+        # and therefore the cache that is used between various
+        # implementations is share.
+        self2, expected = mine(), 0
+        if self2.count != expected:
+            raise AssertionError
+        result, expected = self2.method(20), 40
+        if not (result == expected and self2.count == 0):
+            raise Failure
+        result, expected = self2.method(20), 40
+        if not (result == expected and self2.count == 0):
+            raise Failure
+        raise Success
+
+    @TestCase
+    def test_memoize_crossstore_2():
+        class mine(object):
+            def __init__(self):
+                self.count = 0
+            @utils.memoize_method('arg')
+            def method(self, arg):
+                self.count += 1
+                return arg * 2
+
+        self, expected = mine(), 0
+        if self.count != expected:
+            raise AssertionError
+        result, expected = self.method(20), 40
+        if not (result == expected and self.count == 1):
+            raise Failure
+        result, expected = self.method(20), 40
+        if not (result == expected and self.count == 1):
+            raise Failure
+
+        # the memoized method is using a cache that is locked to the
+        # instance the method is associated with.
+        self2, expected = mine(), 0
+        if self2.count != expected:
+            raise Failure
+        result, expected = self2.method(20), 40
+        if not (result == expected and self2.count == 1):
+            raise Failure
+        result, expected = self2.method(20), 40
+        if not (result == expected and self2.count == 1):
+            raise Failure
+        raise Success
+
+    @TestCase
+    def test_memoize_crossstore_3():
+        class mine(object):
+            def __init__(self):
+                self.count = 0
+            @utils.memoize_method('arg')
+            def method(self, arg):
+                self.count += 1
+                return arg * 2
+            @utils.memoize_method('arg')
+            def method2(self, arg):
+                self.count += 1
+                return 1 + arg * 2
+
+        self, expected = mine(), 0
+        if self.count != expected:
+            raise AssertionError
+        result, expected = self.method(20), 40
+        if not (result == expected and self.count == 1):
+            raise Failure
+        result, expected = self.method(20), 40
+        if not (result == expected and self.count == 1):
+            raise Failure
+        result, expected = self.method2(20), 41
+        if not (result == expected and self.count == 2):
+            raise Failure
+        result, expected = self.method2(20), 41
+        if not (result == expected and self.count == 2):
+            raise Failure
+        raise Success
 
 if __name__ == '__main__':
     import logging
