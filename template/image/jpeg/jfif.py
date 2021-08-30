@@ -482,7 +482,10 @@ if __name__ == '__main__':
         print(jpegfile[0])
         print(jpegfile[1])
 
-    if False:
+    else:
+        lookup = {}
+
+    if all(operator.contains(lookup, name) for name in ['DQT', 'DHT', 'SCANDATA']):
         print('\n'.join(map("{!r}".format, jpegfile)))
         dqt = lookup['DQT']['table']
         dht = lookup['DHT']['table']
