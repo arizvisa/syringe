@@ -1268,12 +1268,15 @@ class COM(pstruct.type):
         return res if operator.contains(fields, 'Lcom') else res.set(Lcom=res.size())
 
 if __name__ == '__main__':
-    import ptypes, image.jpeg.jp2 as jp2
-    ptypes.setsource(ptypes.prov.file('logo.jp2', mode='r'))
+    import sys, ptypes, image.jpeg.jp2 as jp2
+    source = ptypes.setsource(ptypes.prov.file(sys.argv[1], mode='rb'))
 
-    z = jp2.File().l
+    # Read the contents of the jp2 file as an array of boxes
+    z = jp2.File(source=source)
+    z = z.l
 
-    print(z[3]['data'].decode())
+    if False:
+        print(z[3]['data'].decode())
 
-    a = ptype.block(offset=z.getoffset()+z.size(), length=0x100).l
-    print(a.hexdump())
+        a = ptype.block(offset=z.getoffset()+z.size(), length=0x100).l
+        print(a.hexdump())
