@@ -306,8 +306,11 @@ class uByteOrder(pint.enum, USHORT):
         raise ValueError("{:s}: Unsupported value set for enumeration \"uByteOrder\". {:s}".format('.'.join((cls.__module__, cls.__name__)), self.summary()))
 
 class Header(pstruct.type):
+    class _abSig(ptype.block):
+        length = 8
+
     _fields_ = [
-        (dyn.block(8), 'abSig'),
+        (_abSig, 'abSig'),
         (CLSID, 'clsid'),
 
         (USHORT, 'uMinorVersion'),      # Minor version (0x3e)
