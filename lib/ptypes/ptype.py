@@ -2530,7 +2530,6 @@ if __name__ == '__main__':
                 data = bytearray(x ^ k for x in bytearray(object.serialize()))
                 return super(xor, self).decode(ptype.block(length=len(data)).set(bytes(data)))
 
-        global x
         x = xor(source=ptypes.prov.bytes(s))
         x = x.l
         if x.d.l.serialize() == b'hello world':
@@ -3162,7 +3161,6 @@ if __name__ == '__main__':
         source = ptypes.provider.file('~/mshtml.dll')
         a = pecoff.Executable.File(source=source).l
 
-        global result
         result = list(a.collect())
         for n in result:
             print(n)

@@ -674,7 +674,6 @@ if __name__ == '__main__':
 
     @TestCase
     def test_str_append_data():
-        global x
         x = pstr.string(length=5).a
         data = 'hola mundo'
         [ x.append(pstr.char_t().set(by)) for by in data ]
