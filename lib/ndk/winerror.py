@@ -147,16 +147,11 @@ class FACILITY_(pbinary.enum):
 
 class NTSTATUS(pint.enum):
     _values_ = [(__item, __value & 0xffffffff) for __item, __value in [
-        ('STATUS_WAIT_0', 0x0),
-        ('STATUS_SEVERITY_INFORMATIONAL', 0x1),
-        ('STATUS_SEVERITY_WARNING', 0x2),
-        ('STATUS_SEVERITY_ERROR', 0x3),
         ('STATUS_SUCCESS', 0x0),
         ('STATUS_WAIT_1', 0x1),
         ('STATUS_WAIT_2', 0x2),
         ('STATUS_WAIT_3', 0x3),
         ('STATUS_WAIT_63', 0x3F),
-        ('STATUS_ABANDONED', 0x80),
         ('STATUS_ABANDONED_WAIT_0', 0x80),
         ('STATUS_ABANDONED_WAIT_63', 0xBF),
         ('STATUS_USER_APC', 0xC0),
