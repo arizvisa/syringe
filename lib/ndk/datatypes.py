@@ -307,7 +307,7 @@ class HKEY(HANDLE): pass
 #class PHKEY(P(HKEY)): pass
 class HMODULE(HANDLE): pass
 class HINSTANCE(HANDLE): pass
-class NTSTATUS(winerror.NTSTATUS, LONG): pass
+class NTSTATUS(winerror.NTSTATUS, ULONG): pass
 class POOL_TYPE(INT): pass
 #class HRESULT(LONG): pass
 #class SIZE_T(ULONG_PTR): pass
