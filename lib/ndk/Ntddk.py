@@ -108,3 +108,74 @@ class WND(pstruct.type):
     _fields_ = [
         (THRDESKHEAD, 'head'),
     ]
+
+class MMPTE_HARDWARE(pbinary.flags, versioned):
+    def __init__(self, **attrs):
+        res = super(MMPTE_HARDWARE, self).__init__(**attrs)
+        major, minor = sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), sdkddkver.NTDDI_MINOR(self.NTDDI_VERSION)
+
+        self._fields_ = f = [
+            (1, 'Valid'),
+            (1, 'Writable'),
+            (1, 'Owner'),
+            (1, 'WriteThrough'),
+            (1, 'CacheDisable'),
+            (1, 'Accessed'),
+            (1, 'Dirty'),
+            (1, 'LargePage'),
+            (1, 'Global'),
+            (1, 'CopyOnWrite'),
+            (1, 'Prototype'),
+            (1, 'Write'),
+        ]
+
+        if not getattr(self, 'WIN64', False):
+            f.append((20, 'PageFrameNumber'),)
+
+        elif getattr(self, 'PAE', False):
+            raise NotImplementedError('PAE not implemented')
+
+            # 5.2 - 6.0
+            if False:
+                f.extend([
+                    (28, 'PageFrameNumber'),
+                    (12, 'Reserved1'),
+                    (11, 'SoftwareWsIndex'),
+                    (1, 'NoExecute'),
+                ])
+
+            # FIXME: 6.0 to 1607
+            if False:
+                f.extend([
+                    (36, 'PageFrameNumber'),
+                    (4, 'ReservedForHardware'),
+                    (11, 'SoftwareWsIndex'),
+                    (1, 'NoExecute'),
+                ])
+
+            # FIXME: 1703 and higher
+            if False:
+                f.extend([
+                    (36, 'PageFrameNumber'),
+                    (4, 'ReservedForHardware'),
+                    (4, 'ReservedForSoftware'),
+                    (4, 'WsleAge'),
+                    (3, 'WsleProtection'),
+                    (1, 'NoExecute'),
+                ])
+
+        # 5.0
+        elif major == 0x05000000:
+            f.append([
+                (24, 'PageFrameNumber'),
+                (28, 'Reserved1'),
+            ])
+
+        # 5.1
+        elif major >= 0x05010000:
+            f.append([
+                (26, 'PageFrameNumber'),
+                (25, 'Reserved1'),
+                (1, 'NoExecute'),
+            ])
+        return
