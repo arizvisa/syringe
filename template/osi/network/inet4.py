@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, builtins
 from ptypes import *
 
 import ptypes.bitmap as bitmap
@@ -16,6 +16,17 @@ class in_addr(u_long):
         integer = bitmap.new(res, 32)
         octets = bitmap.split(integer, 8)
         return '{:#x} {:d}.{:d}.{:d}.{:d}'.format(*map(bitmap.int, [integer] + octets))
+    def set(self, integer):
+        if isinstance(integer, str):
+            octets = integer.split('.', 3)
+            return self.set([builtins.int(item) for item in integer.split('.')])
+        elif isinstance(integer, list):
+            octets = bitmap.join([bitmap.new(item, 8) for item in integer])
+            integer = bitmap.push(octets, bitmap.new(0, 32 - bitmap.size(octets)))
+            return self.set(bitmap.int(integer))
+        elif not bitmap.isinteger(integer):
+            raise TypeError(integer)
+        return super(in_addr, self).set(integer)
 
 @layer.define
 class ip4_hdr(pstruct.type, stackable):
