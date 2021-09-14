@@ -481,10 +481,10 @@ class remote(bounded):
         # If we have enough data in our cache, then we can simply return it.
         if len(cache) >= right:
             self.offset, buffer = right, cache[left : right]
-            return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+            return builtins.bytes(buffer)
         # Otherwise, we need to read some more data from our class.
         data = self.read(right - len(cache))
-        cache.fromstring(data) if sys.version_info.major < 3 else cache.frombytes(data)
+        cache += data
 
         # If we still don't have enough data, then raise an exception.
         if len(cache) < right:
@@ -492,7 +492,7 @@ class remote(bounded):
 
         # Now we can return the data from our cache that we just populated.
         self.offset, buffer = right, cache[left : right]
-        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+        return builtins.bytes(buffer)
 
     def store(self, data):
         '''Write some number of bytes to the current offset. If nothing was able to be written, raise an exception.'''
@@ -502,7 +502,7 @@ class remote(bounded):
         # to the size that we'll need.
         if self.offset > len(buffer):
             padding = b'\0' * (self.offset - len(self.__buffer__))
-            buffer.fromstring(padding) if sys.version_info.major < 3 else buffer.frombytes(padding)
+            buffer += padding
 
         # Update the offset and the buffer with the data the caller provided.
         self.offset, buffer[self.offset:] = self.offset + len(data), data
@@ -525,7 +525,7 @@ class remote(bounded):
         # We make an empty copy of .__buffer__ here to avoid reconstructing
         # the buffer instance.
         buffer, self.__buffer__ = self.__buffer__, self.__buffer__[0 : 0]
-        return buffer.tostring() if sys.version_info.major < 3 else buffer.tobytes()
+        return builtins.bytes(buffer)
 
     def read(self, amount):
         """Read some number of bytes from the provider and return it.
