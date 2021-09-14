@@ -686,7 +686,8 @@ class __interface__(object):
             res = utils.emit_repr(data[:size], **options)
         return u'"{:s}"'.format(res)
 
-    @utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
+    #@utils.memoize('self', self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
+    @utils.memoize_method(self='parent', args=lambda item: (item[0],) if len(item) > 0 else (), kwds=lambda item: item.get('type', ()))
     def getparent(self, *args, **kwds):
         """Returns the creator of the current type.
 
@@ -2272,7 +2273,8 @@ class encoded_t(wrapper_t):
         # ..and we're done
         return object
 
-    @utils.memoize('self', self=lambda n:(n.source, n._object_), attrs=lambda n:tuple(sorted(n.items())))
+    #@utils.memoize('self', self=lambda n:(n.source, n._object_), attrs=lambda n:tuple(sorted(n.items())))
+    @utils.memoize_method(self=lambda self:(self.source, self._object_), attrs=lambda self:tuple(sorted(self.items())))
     def dereference(self, **attrs):
         """Dereference object into the target type specified by self._object_"""
         attrs.setdefault('__name__', '*'+self.name())
@@ -2376,7 +2378,8 @@ class pointer_t(encoded_t):
     def encode(self, object, **attrs):
         return object.cast(self._value_, **attrs)
 
-    @utils.memoize('self', self=lambda n:(n.source, n._object_, n.object.__getvalue__()), attrs=lambda n:tuple(sorted(n.items())))
+    #@utils.memoize('self', self=lambda n:(n.source, n._object_, n.object.__getvalue__()), attrs=lambda n:tuple(sorted(n.items())))
+    @utils.memoize_method(self=lambda self: (self.source, self._object_, self.object.__getvalue__()), attrs=lambda self:tuple(sorted(self.items())))
     def dereference(self, **attrs):
         res = self.decode(self.object)
         attrs.setdefault('__name__', '*'+self.name())

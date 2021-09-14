@@ -431,6 +431,8 @@ def memoize_method(*karguments, **kattributes):
 
         def __set_name__(self, object, name):
             self.cache_name = "MemoizedMethod<{:s}>_cache".format(name)
+            # FIXME: we should use self.callable as a key for the real cache so
+            #        that we don't have to ensure the cache names have to be unique.
 
         def __get__(self, object, type):
 
@@ -446,6 +448,10 @@ def memoize_method(*karguments, **kattributes):
             cache_name = "__{:s}".format(self.cache_name)
             if not hasattr(object, cache_name):
                 setattr(object, cache_name, {})
+            # FIXME: we should use self.callable as a key of some sort in case
+            #        the duplicate name being stored to the object's cache won't
+            #        result in the same cache being used for more than one method
+            #        within the same instance.
 
             # Grab the cache that is associated with our object, and the method that will be
             # called if the memoization key is not found in it.
