@@ -247,3 +247,19 @@ class KTRAP_FRAME(pstruct.type, versioned):
         ]
 
         self._fields_ = f64 if getattr(self, 'WIN64', False) else f32
+
+class FAST_MUTEX(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(FAST_MUTEX, self).__init__(**attrs)
+        alignment = 8 if getattr(self, 'WIN64', False) else 4
+        padding = 4 if getattr(self, 'WIN64', False) else 0
+        self._fields_ = [
+            (LONG, 'Count'),
+            (dyn.align(alignment), 'align(Owner)'),
+            (PVOID, 'Owner'),
+            (ULONG, 'Contention'),
+            (dyn.block(padding), 'padding(Contention)'),
+            (ketypes.KEVENT, 'Event'),
+            (ULONG, 'OldIrql'),
+            (dyn.block(padding), 'padding(OldIrql)'),
+        ]

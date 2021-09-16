@@ -154,6 +154,14 @@ class GROUP_AFFINITY(pstruct.type):
         #(dyn.array(USHORT, 3), 'Reserved'),
     ]
 
+class KAFFINITY_EX(pstruct.type):
+    _fields_ = [
+        (USHORT, 'Count'),
+        (USHORT, 'Size'),
+        (ULONG, 'Reserved'),
+        (lambda self: dyn.array(ULONGLONG, 20) if getattr(self, 'WIN64', False) else dyn.array(ULONG, 1), 'Bitmap'),
+    ]
+
 class KLOCK_ENTRY_LOCK_STATE(pstruct.type):
     _fields_ = [
         (PVOID, 'LockState'),
@@ -340,7 +348,147 @@ class KTHREAD(pstruct.type, versioned):
             ])
         return
 
+class KGDTENTRY(pstruct.type):
+    @pbinary.bigendian
+    class _Bits(pbinary.flags):
+        _fields_ = [
+            (8, 'BaseMid'),
+            (5, 'Type'),
+            (2, 'Dp2'),
+            (1, 'Pres'),
+            (4, 'LimitHi'),
+            (1, 'Sys'),
+            (1, 'Reserved_0'),
+            (1, 'Default_Big'),
+            (1, 'Granularity'),
+            (8, 'BaseHi'),
+        ]
+    _fields_ = [
+        (USHORT, 'LimitLow'),
+        (USHORT, 'BaseLow'),
+        (_Bits, 'Bits'),
+    ]
+
+class KGDTENTRY64(pstruct.type):
+    @pbinary.bigendian
+    class _Bits(pbinary.flags):
+        _fields_ = [
+            (8, 'BaseMiddle'),
+            (5, 'Type'),
+            (2, 'Dpl'),
+            (1, 'Present'),
+            (4, 'LimitHigh'),
+            (1, 'System'),
+            (1, 'LongMode'),
+            (1, 'DefaultBig'),
+            (1, 'Granularity'),
+            (8, 'BaseHigh'),
+        ]
+    _fields_ = [
+        (USHORT, 'LimitLow'),
+        (USHORT, 'BaseLow'),
+        (_Bits, 'Bits'),
+        (ULONG, 'BaseUpper'),
+        (ULONG, 'MustBeZero'),
+    ]
+
+class KIDTENTRY(pstruct.type):
+    _fields_ = [
+        (USHORT, 'Offset'),
+        (USHORT, 'Selector'),
+        (USHORT, 'Access'),
+        (USHORT, 'ExtendedOffset'),
+    ]
+
+class KEXECUTE_OPTIONS(UCHAR):
+    pass
+
+class KSTACK_COUNT(pstruct.type):
+    _fields_ = [
+        (LONG, 'Value'),
+    ]
+
 class KPROCESS(pstruct.type, versioned):
     def __init__(self, **attrs):
         super(KPROCESS, self).__init__(**attrs)
         self._fields_ = f = []
+
+        f.extend([
+            (DISPATCHER_HEADER, 'Header'),
+            (LIST_ENTRY, 'ProfileListHead'),
+            (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'DirectoryTableBase'),
+        ])
+
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (KGDTENTRY, 'LdtDescriptor'),
+                (KIDTENTRY, 'Int21Descriptor'),
+            ])
+
+        f.extend([
+            (LIST_ENTRY, 'ThreadListHead'),
+            (ULONG, 'ProcessLock'),
+        ])
+
+        if getattr(self, 'WIN64', False):
+            f.extend([
+                (ULONG, 'Spare0'),
+                (ULONGLONG, 'DeepFreezeStartTime'),
+            ])
+        
+        f.extend([
+            (KAFFINITY_EX, 'Affinity'),
+            (LIST_ENTRY, 'ReadyListHead'),
+            (SINGLE_LIST_ENTRY, 'SwapListEntry'),
+            (KAFFINITY_EX, 'ActiveProcessors'),
+            (LONG, 'ProcessFlags'),
+            (CHAR, 'BasePriority'),
+            (CHAR, 'QuantumReset'),
+            (UCHAR, 'Visited'),
+            (KEXECUTE_OPTIONS, 'Flags'),
+            (dyn.array(ULONG, 20 if getattr(self, 'WIN64', False) else 1), 'ThreadSeed'),
+            (dyn.array(USHORT, 20 if getattr(self, 'WIN64', False) else 1), 'IdealNode'),
+            (USHORT, 'IdealGlobalNode'),
+            (USHORT, 'Spare1'),
+        ])
+
+        if getattr(self, 'WIN64', False):
+            f.extend([
+                (KSTACK_COUNT, 'StackCount'),
+                (LIST_ENTRY, 'ProcessListEntry'),
+                (ULONGLONG, 'CycleTime'),
+                (ULONGLONG, 'ContextSwitches'),
+                (P(KSCHEDULING_GROUP), 'SchedulingGroup'),
+            ])
+
+        else:
+            f.extend([
+                (USHORT, 'IopmOffset'),
+                (P(KSCHEDULING_GROUP), 'SchedulingGroup'),
+                (KSTACK_COUNT, 'StackCount'),
+                (LIST_ENTRY, 'ProcessListEntry'),
+                (ULONGLONG, 'CycleTime'),
+                (ULONGLONG, 'ContextSwitches'),
+            ])
+
+        f.extend([
+            (ULONG, 'FreezeCount'),
+            (ULONG, 'KernelTime'),
+            (ULONG, 'UserTime'),
+        ])
+
+        if getattr(self, 'WIN64', False):
+            f.extend([
+                (USHORT, 'LdtFreeSelectorHint'),
+                (USHORT, 'LdtTableLength'),
+                (KGDTENTRY64, 'LdtSystemDescriptor'),
+                (PVOID, 'LdtBaseAddress'),
+                (Ntddk.FAST_MUTEX, 'LdtProcessLock'),
+                (PVOID, 'InstrumentationCallback'),
+                (ULONGLONG, 'SecurePid'),
+            ])
+        else:
+            f.extend([
+                (PVOID, 'VdmTrapClear'),
+            ])
+        return
