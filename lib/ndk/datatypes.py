@@ -170,17 +170,17 @@ class uintmax_t(unsigned_long_long): pass
 
 # variable sized types
 class __int3264(pint.int_t):
-    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else __int32).length)
+    length = property(fget=lambda self: (globals()['__int64'] if getattr(self, 'WIN64', False) else globals()['__int32']).length)
 class unsigned___int3264(pint.uint_t):
     length = property(fget=lambda self: (unsigned___int64 if getattr(self, 'WIN64', False) else unsigned___int32).length)
 class intptr_t(pint.int_t):
-    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else long).length)
+    length = property(fget=lambda self: (globals()['__int64'] if getattr(self, 'WIN64', False) else long).length)
 class uintptr_t(pint.uint_t):
-    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else long).length)
+    length = property(fget=lambda self: (globals()['__int64'] if getattr(self, 'WIN64', False) else long).length)
 class ptrdiff_t(pint.int_t):
-    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else int).length)
+    length = property(fget=lambda self: (globals()['__int64'] if getattr(self, 'WIN64', False) else int).length)
 class ssize_t(pint.sint_t):
-    length = property(fget=lambda self: (__int64 if getattr(self, 'WIN64', False) else int).length)
+    length = property(fget=lambda self: (globals()['__int64'] if getattr(self, 'WIN64', False) else int).length)
 class size_t(pint.uint_t):
     length = property(fget=lambda self: (unsigned___int64 if getattr(self, 'WIN64', False) else unsigned_int).length)
 
