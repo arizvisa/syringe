@@ -897,6 +897,15 @@ class CONTEXT(pstruct.type, versioned):
             ]
         self._fields_ = _fields_
 
+class KPROCESSOR_MODE(pint.enum, CCHAR):
+    _values_ = [
+        ('KernelMode', 0),
+        ('UserMode', 1),
+    ]
+
+class KIRQL(UCHAR):
+    pass
+
 if __name__ == '__main__':
     import ptypes
     data = b'\x6b\xa7\xb8\x10\x9d\xad\x11\xd1\x80\xb4\x00\xc0\x4f\xd4\x30\xc8'
