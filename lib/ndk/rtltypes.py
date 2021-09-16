@@ -130,7 +130,6 @@ class RTL_PROCESS_MODULE_INFORMATION(pstruct.type):
         (dyn.clone(pstr.string, length=256), 'FullPathName'),
     ]
 
-
 class RTL_BALANCED_LINKS(pstruct.type):
     def __init__(self, **attrs):
         super(RTL_BALANCED_LINKS, self).__init__(**attrs)
@@ -160,6 +159,23 @@ class RTL_AVL_TABLE(pstruct.type, versioned):
         (P(RTL_AVL_ALLOCATE_ROUTINE), 'AllocateRoutine'),
         (P(RTL_AVL_FREE_ROUTINE), 'FreeRoutine'),
         (PVOID, 'TableContext'),
+    ]
+
+class RTL_BALANCED_NODE(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(RTL_BALANCED_NODE, self).__init__(**attrs)
+        f = self._fields_ = []
+        f.extend([
+            (P(RTL_BALANCED_NODE), 'Left'),
+            (P(RTL_BALANCED_NODE), 'Right'),
+            (ULONG, 'ParentValue'),
+            (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(ParentValue)'),
+        ])
+
+class RTL_RB_TREE(pstruct.type):
+    _fields_ = [
+        (P(RTL_BALANCED_NODE), 'Root'),
+        (P(RTL_BALANCED_NODE), 'Min'),
     ]
 
 class RTL_STACK_TRACE_ENTRY(pstruct.type, versioned):
