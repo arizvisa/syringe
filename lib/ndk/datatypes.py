@@ -399,6 +399,9 @@ class SLIST_ENTRY(fpointer_t):
 SLIST_ENTRY._object_ = SLIST_ENTRY
 SLIST_ENTRY._path_ = ()
 
+class SINGLE_LIST_ENTRY(SLIST_ENTRY):
+    pass
+
 class SLIST_HEADER(pstruct.type, versioned):
     def __Next(self):
         path = getattr(self, '_path_', SLIST_ENTRY._path_)
