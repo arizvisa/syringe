@@ -281,14 +281,38 @@ class ETHREAD(pstruct.type, versioned):
             (LARGE_INTEGER, 'CreateTime'),
         ])
 
+class MDL_(pbinary.flags):
+    '''WORD'''
+    _fields_ = [
+        (1, 'INTERNAL'),
+        (1, 'PAGE_CONTENTS_INVARIANT'),
+        (1, 'MAPPING_CAN_FAIL'),
+        (1, 'NETWORK_HEADER'),
+        (1, 'IO_SPACE'),
+        (1, 'DESCRIBES_AWE'),
+        (1, 'FREE_EXTRA_PTES'),
+        (1, 'LOCKED_PAGE_TABLES'),
+        (1, 'WRITE_OPERATION'),
+        (1, 'IO_PAGE_READ'),
+        (1, 'PARTIAL_HAS_BEEN_MAPPED'),
+        (1, 'PARTIAL'),
+        (1, 'ALLOCATED_FIXED_SIZE'),
+        (1, 'SOURCE_IS_NONPAGED_POOL'),
+        (1, 'PAGES_LOCKED'),
+        (1, 'MAPPED_TO_SYSTEM_VA'),
+    ]
+
 class MDL(pstruct.type, versioned):
+    @pbinary.littleendian
+    class _MdlFlags(MDL_):
+        '''WORD'''
     def __init__(self, **attrs):
         super(MDL, self).__init__(**attrs)
         self._fields_ = F = []
         F.extend([
             (P(MDL), 'Next'),
             (WORD, 'Size'),
-            (WORD, 'MdlFlags'),
+            (self._MdlFlags, 'MdlFlags'),
         ])
         if getattr(self, 'WIN64', False):
             F.extend([
