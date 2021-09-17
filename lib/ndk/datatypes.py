@@ -750,6 +750,7 @@ class BitmapBitsBytes(ptype.block):
         return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, 8 * i * bytes_per_row, width, min(self.bits(), 8 * i * bytes_per_row + 8 * bytes_per_row) - 1, width, item) for i, item in enumerate(items)))
 
 class FLOATING_SAVE_AREA(pstruct.type):
+    SIZE_OF_80387_REGISTERS = 80
     _fields_ = [
         (DWORD, 'ControlWord'),
         (DWORD, 'StatusWord'),
@@ -758,7 +759,7 @@ class FLOATING_SAVE_AREA(pstruct.type):
         (DWORD, 'ErrorSelector'),
         (DWORD, 'DataOffset'),
         (DWORD, 'DataSelector'),
-        (dyn.array(BYTE, 80), 'RegisterArea'),
+        (dyn.array(BYTE, SIZE_OF_80387_REGISTERS), 'RegisterArea'),
         (DWORD, 'Spare0'),
     ]
 
@@ -768,27 +769,88 @@ class M128A(pstruct.type):
         (LONGLONG, 'High'),
     ]
 
-class XSAVE_FORMAT(pstruct.type):
+class NEON128(M128A):
     _fields_ = [
-        (WORD, 'ControlWord'),
-        (WORD, 'StatusWord'),
-        (BYTE, 'TagWord'),
-        (BYTE, 'Reserved1'),
-        (WORD, 'ErrorOpcode'),
-        (DWORD, 'ErrorOffset'),
-        (WORD, 'ErrorSelector'),
-        (WORD, 'Reserved2'),
-        (DWORD, 'DataOffset'),
-        (WORD, 'DataSelector'),
-        (WORD, 'Reserved3'),
-        (DWORD, 'MxCsr'),
-        (DWORD, 'MxCsr_Mask'),
-        (dyn.array(M128A, 8), 'FloatRegisters'),
-        (dyn.array(M128A, 16), 'XmmRegisters'),
-        (dyn.array(BYTE, 96), 'Reserved4'),
+        (ULONGLONG, 'Low'),
+        (LONGLONG, 'High'),
     ]
 
-class XMM_SAVE_AREA32(XSAVE_FORMAT): pass
+class ARM64_NT_NEON128(dynamic.union):
+    class DUMMYSTRUCTNAME(NEON128):
+        pass
+
+    _fields_ = [
+        (DUMMYSTRUCTNAME, 'DUMMYSTRUCTNAME'),
+        (dyn.array(double, 2), 'D'),
+        (dyn.array(float, 4), 'S'),
+        (dyn.array(WORD, 8), 'H'),
+        (dyn.array(BYTE, 16), 'B'),
+    ]
+
+class XSAVE_FORMAT(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(XSAVE_FORMAT, self).__init__(**attrs)
+        self._fields_ = F = []
+
+        F.extend([
+            (WORD, 'ControlWord'),
+            (WORD, 'StatusWord'),
+            (BYTE, 'TagWord'),
+            (BYTE, 'Reserved1'),
+
+            (WORD, 'ErrorOpcode'),
+            (DWORD, 'ErrorOffset'),
+            (WORD, 'ErrorSelector'),
+            (WORD, 'Reserved2'),
+
+            (DWORD, 'DataOffset'),
+            (WORD, 'DataSelector'),
+            (WORD, 'Reserved3'),
+
+            (DWORD, 'MxCsr'),
+            (DWORD, 'MxCsr_Mask'),
+            (dyn.array(M128A, 8), 'FloatRegisters'),
+        ])
+
+        if getattr(self, 'WIN64', False):
+            F.extend([
+                (dyn.array(M128A, 16), 'XmmRegisters'),
+                (dyn.array(BYTE, 96), 'Reserved4'),
+            ])
+        else:
+            F.extend([
+                (dyn.array(M128A, 8), 'XmmRegisters'),
+                (dyn.array(BYTE, 224), 'Reserved4'),
+            ])
+        return
+
+class XSAVE_AREA_HEADER(pstruct.type):
+    _fields_ = [
+        (DWORD64, 'Mask'),
+        (DWORD64, 'CompactionMask'),
+        (dyn.array(DWORD64, 6), 'Reserved'),
+    ]
+
+class XSAVE_AREA(pstruct.type):
+    _fields_ = [
+        (XSAVE_FORMAT, 'LegacyState'),
+        (XSAVE_AREA_HEADER, 'Header'),
+    ]
+
+class XSTATE_CONTEXT(pstruct.type):
+    _fields_ = [
+        (DWORD64, 'Mask'),
+        (DWORD, 'Length'),
+        (DWORD, 'Reserved1'),
+        (P(XSAVE_AREA), 'Area'),
+        (lambda self: pint.uint_t if getattr(self, 'WIN64', False) else DWORD, 'Reserved2'),
+        (PVOID, 'Buffer'),
+        (lambda self: pint.uint_t if getattr(self, 'WIN64', False) else DWORD, 'Reserved3'),
+    ]
+
+class XMM_SAVE_AREA32(XSAVE_FORMAT):
+    pass
+
 class XMM_REGISTER_AREA(pstruct.type):
     _fields_ = [
         (dyn.array(M128A, 2), 'Header'),
@@ -811,94 +873,342 @@ class XMM_REGISTER_AREA(pstruct.type):
         (M128A, 'Xmm15'),
     ]
 
-class CONTEXT(pstruct.type, versioned):
-    class FloatState(dynamic.union):
-        _fields_ = [
-            (XMM_SAVE_AREA32, 'FltSave'),
-            (XMM_REGISTER_AREA, 'FltRegister'),
-        ]
+class CONTEXT_(pbinary.flags):
+    '''DWORD'''
+    _fields_ = [
+        (1, 'EXCEPTION_REPORTING'),
+        (1, 'EXCEPTION_REQUEST'),
+        (1, 'UNWOUND_TO_CALL'),
+        (1, 'SERVICE_ACTIVE'),
+        (1, 'EXCEPTION_ACTIVE'),
+        (1, 'RET_TO_GUEST'),
+        (3, 'Unused'),
+        (1, 'ARM64'),
+        (1, 'ARM'),
+        (1, 'AMD64'),
+        (1, 'IA64'),
+        (2, 'SpareCpu'),
+        (1, 'i386'),
 
+        (9, 'Reserved'),
+        (1, 'XSTATE'),
+        (1, 'EXTENDED_REGISTERS'),
+        (1, 'DEBUG_REGISTERS'),
+        (1, 'FLOATING_POINT'),
+        (1, 'SEGMENTS'),
+        (1, 'INTEGER'),
+        (1, 'CONTROL'),
+    ]
+
+class CONTEXT(pstruct.type):
     def __init__(self, **attrs):
         super(CONTEXT, self).__init__(**attrs)
+        self._fields_ = []
+        if any(hasattr(self, attribute) for attribute in ['_M_ARM', '_M_ARM64']):
+            if getattr(self, '_M_ARM', False):
+                return self.__init__ARM(**attrs)
+            if getattr(self, '_M_ARM64', False):
+                return self.__init__ARM64(**attrs)
+            raise NotImplementedError
 
         if getattr(self, 'WIN64', False):
+            return self.__init__WIN64(**attrs)
+        return self.__init__not_WIN64(**attrs)
+
+    @pbinary.littleendian
+    class _ContextFlags(CONTEXT_):
+        pass
+
+    def __init__not_WIN64(self, **attrs):
+        MAXIMUM_SUPPORTED_EXTENSION = 512
+        self._fields_[:] = [
+            (CONTEXT._ContextFlags, 'ContextFlags'),
+
+            # CONTEXT_DEBUG_REGISTERS
+            (DWORD, 'Dr0'),
+            (DWORD, 'Dr1'),
+            (DWORD, 'Dr2'),
+            (DWORD, 'Dr3'),
+            (DWORD, 'Dr6'),
+            (DWORD, 'Dr7'),
+
+            # CONTEXT_FLOATING_POINT
+            (FLOATING_SAVE_AREA, 'FloatSave'),
+
+            # CONTEXT_SEGMENTS
+            (DWORD, 'SegGs'),
+            (DWORD, 'SegFs'),
+            (DWORD, 'SegEs'),
+            (DWORD, 'SegDs'),
+
+            # CONTEXT_INTEGER
+            (DWORD, 'Edi'),
+            (DWORD, 'Esi'),
+            (DWORD, 'Ebx'),
+            (DWORD, 'Edx'),
+            (DWORD, 'Ecx'),
+            (DWORD, 'Eax'),
+
+            # CONTEXT_CONTROL
+            (DWORD, 'Ebp'),
+            (DWORD, 'Eip'),
+            (DWORD, 'SegCs'),
+            (DWORD, 'EFlags'),
+            (DWORD, 'Esp'),
+            (DWORD, 'SegSs'),
+
+            # CONTEXT_EXTENDED_REGISTERS
+            (dyn.array(BYTE, MAXIMUM_SUPPORTED_EXTENSION), 'ExtendedRegisters'),
+        ]
+
+    def __init__WIN64(self, **attrs):
+        class DUMMYUNIONNAME(dynamic.union):
             _fields_ = [
-                (DWORD64, 'P1Home'),
-                (DWORD64, 'P2Home'),
-                (DWORD64, 'P3Home'),
-                (DWORD64, 'P4Home'),
-                (DWORD64, 'P5Home'),
-                (DWORD64, 'P6Home'),
-                (DWORD, 'ContextFlags'),
-                (DWORD, 'MxCsr'),
-                (WORD, 'SegCs'),
-                (WORD, 'SegDs'),
-                (WORD, 'SegEs'),
-                (WORD, 'SegFs'),
-                (WORD, 'SegGs'),
-                (WORD, 'SegSs'),
-                (DWORD, 'EFlags'),
-                (DWORD64, 'Dr0'),
-                (DWORD64, 'Dr1'),
-                (DWORD64, 'Dr2'),
-                (DWORD64, 'Dr3'),
-                (DWORD64, 'Dr6'),
-                (DWORD64, 'Dr7'),
-                (DWORD64, 'Rax'),
-                (DWORD64, 'Rcx'),
-                (DWORD64, 'Rdx'),
-                (DWORD64, 'Rbx'),
-                (DWORD64, 'Rsp'),
-                (DWORD64, 'Rbp'),
-                (DWORD64, 'Rsi'),
-                (DWORD64, 'Rdi'),
-                (DWORD64, 'R8'),
-                (DWORD64, 'R9'),
-                (DWORD64, 'R10'),
-                (DWORD64, 'R11'),
-                (DWORD64, 'R12'),
-                (DWORD64, 'R13'),
-                (DWORD64, 'R14'),
-                (DWORD64, 'R15'),
-                (DWORD64, 'Rip'),
-                (self.FloatState, 'FltState'),
-                (dyn.array(M128A, 26), 'VectorRegister'),
-                (DWORD64, 'VectorControl'),
-                (DWORD64, 'DebugControl'),
-                (DWORD64, 'LastBranchToRip'),
-                (DWORD64, 'LastBranchFromRip'),
-                (DWORD64, 'LastExceptionToRip'),
-                (DWORD64, 'LastExceptionFromRip'),
+                (XMM_SAVE_AREA32, 'FltSave'),
+                (XMM_REGISTER_AREA, 'DUMMYSTRUCTNAME'),
             ]
-        else:
+        self._fields_[:] = [
+            (DWORD64, 'P1Home'),
+            (DWORD64, 'P2Home'),
+            (DWORD64, 'P3Home'),
+            (DWORD64, 'P4Home'),
+            (DWORD64, 'P5Home'),
+            (DWORD64, 'P6Home'),
+
+            (CONTEXT._ContextFlags, 'ContextFlags'),
+            (DWORD, 'MxCsr'),
+
+            # CONTEXT_SEGMENTS
+            (WORD, 'SegCs'),
+            (WORD, 'SegDs'),
+            (WORD, 'SegEs'),
+            (WORD, 'SegFs'),
+            (WORD, 'SegGs'),
+            (WORD, 'SegSs'),
+            (DWORD, 'EFlags'),
+
+            # CONTEXT_DEBUG_REGISTERS
+            (DWORD64, 'Dr0'),
+            (DWORD64, 'Dr1'),
+            (DWORD64, 'Dr2'),
+            (DWORD64, 'Dr3'),
+            (DWORD64, 'Dr6'),
+            (DWORD64, 'Dr7'),
+
+            # CONTEXT_INTEGER
+            (DWORD64, 'Rax'),
+            (DWORD64, 'Rcx'),
+            (DWORD64, 'Rdx'),
+            (DWORD64, 'Rbx'),
+            (DWORD64, 'Rsp'),
+            (DWORD64, 'Rbp'),
+            (DWORD64, 'Rsi'),
+            (DWORD64, 'Rdi'),
+            (DWORD64, 'R8'),
+            (DWORD64, 'R9'),
+            (DWORD64, 'R10'),
+            (DWORD64, 'R11'),
+            (DWORD64, 'R12'),
+            (DWORD64, 'R13'),
+            (DWORD64, 'R14'),
+            (DWORD64, 'R15'),
+            (DWORD64, 'Rip'),
+
+            # CONTEXT_FLOATING_POINT
+            (DUMMYUNIONNAME, 'DUMMYUNIONNAME'),
+            (dyn.array(M128A, 26), 'VectorRegister'),
+            (DWORD64, 'VectorControl'),
+
+            (DWORD64, 'DebugControl'),
+            (DWORD64, 'LastBranchToRip'),
+            (DWORD64, 'LastBranchFromRip'),
+            (DWORD64, 'LastExceptionToRip'),
+            (DWORD64, 'LastExceptionFromRip'),
+        ]
+
+    def __init__ARM(self, **attrs):
+        ARM_MAX_BREAKPOINTS = 8
+        ARM_MAX_WATCHPOINTS = 1
+
+        class DUMMYUNIONNAME(dynamic.union):
             _fields_ = [
-                (DWORD, 'ContextFlags'),
-                (DWORD, 'Dr0'),
-                (DWORD, 'Dr1'),
-                (DWORD, 'Dr2'),
-                (DWORD, 'Dr3'),
-                (DWORD, 'Dr6'),
-                (DWORD, 'Dr7'),
-                (FLOATING_SAVE_AREA, 'FloatSave'),
-                (DWORD, 'SegGs'),
-                (DWORD, 'SegFs'),
-                (DWORD, 'SegEs'),
-                (DWORD, 'SegDs'),
-                (DWORD, 'Edi'),
-                (DWORD, 'Esi'),
-                (DWORD, 'Ebx'),
-                (DWORD, 'Edx'),
-                (DWORD, 'Ecx'),
-                (DWORD, 'Eax'),
-                (DWORD, 'Ebp'),
-                (DWORD, 'Eip'),
-                (DWORD, 'SegCs'),
-                (DWORD, 'EFlags'),
-                (DWORD, 'Esp'),
-                (DWORD, 'SegSs'),
-                (dyn.array(BYTE, 512), 'ExtendedRegisters'),
+                (dyn.array(NEON128, 16), 'Q'),
+                (dyn.array(ULONGLONG, 32), 'D'),
+                (dyn.array(DWORD, 32), 'S'),
             ]
-        self._fields_ = _fields_
+
+        self._fields_[:] = [
+            (CONTEXT._ContextFlags, 'ContextFlags'),
+
+            # CONTEXT_INTEGER
+            (DWORD, 'R0'),
+            (DWORD, 'R1'),
+            (DWORD, 'R2'),
+            (DWORD, 'R3'),
+            (DWORD, 'R4'),
+            (DWORD, 'R5'),
+            (DWORD, 'R6'),
+            (DWORD, 'R7'),
+            (DWORD, 'R8'),
+            (DWORD, 'R9'),
+            (DWORD, 'R10'),
+            (DWORD, 'R11'),
+            (DWORD, 'R12'),
+
+            # CONTEXT_CONTROL
+            (DWORD, 'Sp'),
+            (DWORD, 'Lr'),
+            (DWORD, 'Pc'),
+            (DWORD, 'Cpsr'),
+
+            # CONTEXT_FLOATING_POINT
+            (DWORD, 'Fpscr'),
+            (DWORD, 'Padding'),
+            (DUMMYUNIONNAME, 'DUMMYUNIONNAME'),
+
+            # CONTEXT_DEBUG_REGISTERS
+            (dyn.array(DWORD, ARM_MAX_BREAKPOINTS), 'Bvr'),
+            (dyn.array(DWORD, ARM_MAX_BREAKPOINTS), 'Bcr'),
+            (dyn.array(DWORD, ARM_MAX_WATCHPOINTS), 'Wvr'),
+            (dyn.array(DWORD, ARM_MAX_WATCHPOINTS), 'Wcr'),
+
+            (dyn.array(DWORD, 2), 'Padding2'),
+        ]
+
+    def __init__ARM64(self, **attrs):
+        self._fields_ = ARM64_NT_CONTEXT._fields_
+
+class ARM64_NT_CONTEXT(pstruct.type):
+    ARM64_MAX_BREAKPOINTS = 8
+    ARM64_MAX_WATCHPOINTS = 2
+
+    class _ContextFlags(CONTEXT_):
+        pass
+
+    class DUMMYUNIONNAME(dynamic.union):
+        class DUMMYSTRUCTNAME(pstruct.type):
+            _fields_ = [
+                (DWORD64, 'X0'),
+                (DWORD64, 'X1'),
+                (DWORD64, 'X2'),
+                (DWORD64, 'X3'),
+                (DWORD64, 'X4'),
+                (DWORD64, 'X5'),
+                (DWORD64, 'X6'),
+                (DWORD64, 'X7'),
+                (DWORD64, 'X8'),
+                (DWORD64, 'X9'),
+                (DWORD64, 'X10'),
+                (DWORD64, 'X11'),
+                (DWORD64, 'X12'),
+                (DWORD64, 'X13'),
+                (DWORD64, 'X14'),
+                (DWORD64, 'X15'),
+                (DWORD64, 'X16'),
+                (DWORD64, 'X17'),
+                (DWORD64, 'X18'),
+                (DWORD64, 'X19'),
+                (DWORD64, 'X20'),
+                (DWORD64, 'X21'),
+                (DWORD64, 'X22'),
+                (DWORD64, 'X23'),
+                (DWORD64, 'X24'),
+                (DWORD64, 'X25'),
+                (DWORD64, 'X26'),
+                (DWORD64, 'X27'),
+                (DWORD64, 'X28'),
+                (DWORD64, 'Fp'),
+                (DWORD64, 'Lr'),
+            ]
+        _fields_ = [
+            (DUMMYSTRUCTNAME, 'DUMMYSTRUCTNAME'),
+            (dyn.array(DWORD64, 31), 'X'),
+        ]
+
+    _fields_ = [
+        (_ContextFlags, 'ContextFlags'),
+
+        # CONTEXT_INTEGER
+        (DWORD, 'Cpsr'),
+        (DUMMYUNIONNAME, 'DUMMYUNIONNAME'),
+        (DWORD64, 'Sp'),
+        (DWORD64, 'Pc'),
+
+        # CONTEXT_FLOATING_POINT
+        (dyn.array(ARM64_NT_NEON128, 32), 'V'),
+        (DWORD, 'Fpcr'),
+        (DWORD, 'Fpsr'),
+
+        # CONTEXT_DEBUG_REGISTERS
+        (dyn.array(DWORD, ARM64_MAX_BREAKPOINTS), 'Bcr'),
+        (dyn.array(DWORD64, ARM64_MAX_BREAKPOINTS), 'Bvr'),
+        (dyn.array(DWORD, ARM64_MAX_WATCHPOINTS), 'Wcr'),
+        (dyn.array(DWORD64, ARM64_MAX_WATCHPOINTS), 'Wvr'),
+    ]
+
+class WOW64_FLOATING_SAVE_AREA(pstruct.type):
+    WOW64_SIZE_OF_80387_REGISTERS = 80
+
+    _fields_ = [
+        (DWORD, 'ControlWord'),
+        (DWORD, 'StatusWord'),
+        (DWORD, 'TagWord'),
+        (DWORD, 'ErrorOffset'),
+        (DWORD, 'ErrorSelector'),
+        (DWORD, 'DataOffset'),
+        (DWORD, 'DataSelector'),
+        (dyn.array(BYTE, WOW64_SIZE_OF_80387_REGISTERS), 'RegisterArea'),
+        (DWORD, 'Cr0NpxState'),
+    ]
+
+class WOW64_CONTEXT_(CONTEXT_):
+    '''DWORD'''
+
+class WOW64_CONTEXT(pstruct.type):
+    class _ContextFlags(WOW64_CONTEXT_):
+        pass
+
+    WOW64_MAXIMUM_SUPPORTED_EXTENSION = 512
+
+    _fields_ = [
+        (_ContextFlags, 'ContextFlags'),
+
+        # CONTEXT_DEBUG_REGISTERS
+        (DWORD, 'Dr0'),
+        (DWORD, 'Dr1'),
+        (DWORD, 'Dr2'),
+        (DWORD, 'Dr3'),
+        (DWORD, 'Dr6'),
+        (DWORD, 'Dr7'),
+
+        # CONTEXT_FLOATING_POINT
+        (WOW64_FLOATING_SAVE_AREA, 'FloatSave'),
+
+        # CONTEXT_SEGMENTS
+        (DWORD, 'SegGs'),
+        (DWORD, 'SegFs'),
+        (DWORD, 'SegEs'),
+        (DWORD, 'SegDs'),
+
+        # CONTEXT_INTEGER
+        (DWORD, 'Edi'),
+        (DWORD, 'Esi'),
+        (DWORD, 'Ebx'),
+        (DWORD, 'Edx'),
+        (DWORD, 'Ecx'),
+        (DWORD, 'Eax'),
+
+        # CONTEXT_CONTROL
+        (DWORD, 'Ebp'),
+        (DWORD, 'Eip'),
+        (DWORD, 'SegCs'),
+        (DWORD, 'EFlags'),
+        (DWORD, 'Esp'),
+        (DWORD, 'SegSs'),
+
+        # CONTEXT_EXTENDED_REGISTERS
+        (dyn.array(BYTE, WOW64_MAXIMUM_SUPPORTED_EXTENSION), 'ExtendedRegisters'),
+    ]
 
 class KPROCESSOR_MODE(pint.enum, CCHAR):
     _values_ = [

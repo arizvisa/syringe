@@ -147,6 +147,19 @@ class _Win32kCallbackTable(pstruct.type, versioned):
         return
 
 class PEB(pstruct.type, versioned):
+    '''
+    0x0098    NT 3.51
+    0x0150    NT 4.0
+    0x01E8    Win2k
+    0x020C    XP
+    0x0230    WS03
+    0x0238    Vista
+    0x0240    Win7_BETA
+    0x0248    Win6
+    0x0250    Win8
+    0x045C    Win10
+    '''
+
     class BitField(pbinary.flags):
         _fields_ = [
             (1, 'ImageUsesLargePages'),
@@ -473,6 +486,19 @@ class GDI_TEB_BATCH(pstruct.type):
     ]
 
 class TEB(pstruct.type, versioned):
+    '''
+    0x0F28    NT 3.51
+    0x0F88    NT 4.0
+    0x0FA4    Win2k
+    0x0FB4    prior to XP SP2
+    0x0FB8    XP SP2/WS03+
+    0x0FBC    WS03 SP1+
+    0x0FF8    Vista/WS08
+    0x0FE4    Win7/WS08 R2
+    0x0FE8    Win8-Win8.1/WS12
+    0x1000    Win10
+    '''
+
     @pbinary.littleendian
     class _SameTebFlags(pbinary.flags):
         _fields_ = [
