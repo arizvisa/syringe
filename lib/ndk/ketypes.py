@@ -26,7 +26,7 @@ class KGATE(KEVENT): pass
 
 class KSPIN_LOCK(ULONG_PTR): pass
 
-class KDPC(pstruct.type):
+class KDPC(pstruct.type, versioned):
     _fields_ = [
         (UCHAR, 'Type'),
         (UCHAR, 'Importance'),
@@ -64,7 +64,7 @@ class KSCB(pstruct.type):
         (dyn.array(LIST_ENTRY, 16), 'ReadyListHead'),
     ]
 
-class KSCHEDULING_GROUP(pstruct.type):
+class KSCHEDULING_GROUP(pstruct.type, versioned):
     _fields_ = [
         (USHORT, 'Value'),
         (UCHAR, 'Type'),
@@ -227,8 +227,7 @@ class KTHREAD(pstruct.type, versioned):
             (ULONG, 'ExpectedRunTime'),
             (PVOID, 'KernelStack'),
             (P(XSAVE_FORMAT), 'StateSaveArea'),
-            #(P(KSCHEDULING_GROUP), 'SchedulingGroup'),
-            (PVOID, 'SchedulingGroup'),
+            (P(KSCHEDULING_GROUP), 'SchedulingGroup'),
             (KWAIT_STATUS_REGISTER, 'WaitRegister'),
             (BOOLEAN, 'Running'),
             (dyn.array(BOOLEAN, 2), 'Alerted'),

@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import sdkddkver, ketypes, umtypes
+from . import sdkddkver, ketypes, umtypes, pstypes
 from .datatypes import *
 
 class TL(pstruct.type):
@@ -263,3 +263,43 @@ class FAST_MUTEX(pstruct.type, versioned):
             (ULONG, 'OldIrql'),
             (dyn.block(padding), 'padding(OldIrql)'),
         ]
+
+class EPROCESS(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(EPROCESS, self).__init__(**attrs)
+        self._fields_ = F = []
+        F.extend([
+            (ketypes.KPROCESS, 'Pcb'),
+        ])
+
+class ETHREAD(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(ETHREAD, self).__init__(**attrs)
+        self._fields_ = F = []
+        F.extend([
+            (ketypes.KTHREAD, 'Pcb'),
+            (LARGE_INTEGER, 'CreateTime'),
+        ])
+
+class MDL(pstruct.type, versioned):
+    def __init__(self, **attrs):
+        super(MDL, self).__init__(**attrs)
+        self._fields_ = F = []
+        F.extend([
+            (P(MDL), 'Next'),
+            (WORD, 'Size'),
+            (WORD, 'MdlFlags'),
+        ])
+        if getattr(self, 'WIN64', False):
+            F.extend([
+                (WORD, 'AllocationProcessorNumber'),
+                (WORD, 'Reserved'),
+            ])
+
+        F.extend([
+            (P(EPROCESS), 'Process'),
+            (PVOID, 'MappedSystemVa'),
+            (PVOID, 'StartVa'),
+            (ULONG, 'ByteCount'),
+            (ULONG, 'ByteOffset'),
+        ])
