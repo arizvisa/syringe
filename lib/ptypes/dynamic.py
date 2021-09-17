@@ -839,6 +839,28 @@ if __name__ == '__main__':
         if a['b'].size() == 0:
             raise Success
 
+    @TestCase
+    def test_dynamic_union_field():
+        class myunion(dynamic.union):
+            _fields_ = [
+                (dynamic.block(0x8), 'B'),
+                (dynamic.array(pint.uint32_t, 2), 'D'),
+                (pint.uint64_t, 'Q'),
+            ]
+
+        class mystruct(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (myunion, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        data = b'AAAABBBBBBBBCCCCDDDDEEEEFFFF'
+        global a
+        a = mystruct().load(source=ptypes.provider.bytes(data))
+        if a.size() == 0x10 and all(a['b'][fld].serialize() == b'BBBBBBBB' for fld in ['B', 'D', 'Q']) and a['c'].int() == 0x43434343:
+            raise Success
+
 if __name__ == '__main__':
     import logging
     ptypes.config.defaults.log.setLevel(logging.DEBUG)
