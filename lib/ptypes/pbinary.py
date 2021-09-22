@@ -314,7 +314,7 @@ class type(base):
     """
 
     def __hash__(self):
-        return super(type, self).__hash__() ^ hash(tuple(self.value))
+        return super(type, self).__hash__() ^ hash(None if self.value is None else tuple(self.value))
 
     def size(self):
         return math.trunc(math.ceil(self.bits() / 8.0))

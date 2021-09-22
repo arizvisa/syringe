@@ -1193,7 +1193,7 @@ class container(base):
     '''
 
     def __hash__(self):
-        return super(container, self).__hash__() ^ hash(tuple(self.value))
+        return super(container, self).__hash__() ^ hash(None if self.value is None else tuple(self.value))
 
     def initializedQ(self):
         """True if the type is fully initialized"""
