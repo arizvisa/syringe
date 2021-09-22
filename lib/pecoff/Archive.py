@@ -1,4 +1,4 @@
-import logging,itertools,ptypes
+import logging, itertools, ptypes
 from ptypes import *
 
 from . import Object
@@ -10,10 +10,27 @@ class stringinteger(pstr.string):
         res, bs = str(integer), self.blocksize()
         size = bs - len(res)
         return self.__setvalue__(res + ' ' * max(0, size))
+
     def get(self):
-        string = self.__getvalue__()
-        return int(string.rstrip(' ') or '0', 10)
+        result, string = 0, self.__getvalue__()
+        stripped = string.rstrip()
+        try:
+            if stripped:
+                result = int(stripped, 10)
+            else:
+                logging.warning("Returning {:d} due to the inability to convert the empty string ({!r}) at {:s} to an integer.".format(0, string, self.instance()))
+        except Exception as E:
+            logging.warning("Returning {:d} due to the inability to convert the string ({!r}) at {:s} to an integer.".format(0, string, self.instance()))
+        return result
+
     int = get
+
+class stringdate(stringinteger):
+    # FIXME: implement some of the methods that conver this instance
+    #        into a proper date that we can interact with.
+    def datetime(self):
+        string = self.get()
+        raise NotImplementedError
 
 class Index(pint.uint16_t):
     def GetIndex(self):
@@ -88,7 +105,11 @@ class Linker1(pstruct.type):
     ]
 
     def GetTable(self):
-        return [(str(k), v.int()) for k,v in zip(self['Strings'], self['Offsets'])]
+        table = []
+        for string, offset in zip(self['Strings'], self['Offsets']):
+            item = string.str(), offset.int()
+            table.append(item)
+        return table
 
 @MemberType.define
 class Linker2(pstruct.type):
@@ -102,7 +123,13 @@ class Linker2(pstruct.type):
     ]
 
     def GetTable(self):
-        return [(k.str(), self['Offsets'][i.GetIndex()].int()) for k,i in zip(self['Strings'], self['Indices'])]
+        table, offsets = [], self['Offsets']
+        for string, index in zip(self['Strings'], self['Indices']):
+            realindex = index.GetIndex()
+            offset = offsets[realindex]
+            item = string.str(), offset.int()
+            table.append(item)
+        return table
 
 #@MemberType.define
 class LinkerMember1(Linker1):
@@ -118,8 +145,8 @@ class Longnames(ptype.block):
     def extract(self, index):
         data = self.serialize()[index:]
         bytes = ptypes.utils.strdup(data, terminator=b'\0')
-        #return bytes.decode('latin1')
         return bytes
+        #return bytes.decode('latin1')      # FIXME: probably a better idea to decode this using the correct encoding
 
 #######
 class Member(pstruct.type):
@@ -135,7 +162,7 @@ class Member(pstruct.type):
 
         _fields_ = [
             (Name, 'Name'),
-            (dyn.clone(pstr.string, length=12), 'Date'),
+            (dyn.clone(stringdate, length=12), 'Date'),
             (dyn.clone(stringinteger, length=6), 'User ID'),
             (dyn.clone(stringinteger, length=6), 'Group ID'),
             (dyn.clone(stringinteger, length=8), 'Mode'),
@@ -145,7 +172,7 @@ class Member(pstruct.type):
 
         def data(self):
             size = self['Size'].int()
-            return self.new(dyn.block(self['Size'].int()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
+            return self.new(dyn.block(self['Size'].int()), __name__=self['Name'].str(), offset=self.getoffset() + self.size())
 
     __LinkerMember__ = None
     def __Data(self):
@@ -185,7 +212,7 @@ class Members(parray.terminated):
 
     def _object_(self):
 
-        # Hardcore the first two members of our archive
+        # Hardcode the first two members of our archive
         if len(self.value) < 2:
             index = len(self.value)
             t = MemberType.lookup(index)
@@ -196,10 +223,15 @@ class Members(parray.terminated):
 
     def isTerminator(self, value):
         name = value['Header']['Name'].str()
+
+        # Always read at least 2 members. If one of them has a member named "/"
+        # then we cache it in the "Linker" property.
         if len(self.value) <= 2:
             if name == '/':
                 self.Linker = value['Member']
             return False
+
+        # If we find a member named "//" then cache it in the "Names" property.
         if name == '//':
             self.Names = value
 
@@ -220,27 +252,17 @@ class Members(parray.terminated):
             continue
         return
 
-    def repr(self):
-        if self.initializedQ():
-            return "{:s} {:d} members".format(self.name(), len(self))
-        return super(Members,self).repr()
-
 class File(pstruct.type):
     '''A .LIB file'''
     _fields_ = [
-        (dyn.block(8), 'signature'),
+        (dyn.clone(pstr.string, length=8), 'signature'),
         (Members, 'members'),
     ]
-
-    def repr(self):
-        if self.initializedQ():
-            return "{:s} signature:{:s} members:{:d}".format(self.name(), self['signature'].summary(), self.getmembercount())
-        return super(File,self).repr()
 
     ## really slow interface
     def getmember(self, index):
         offsets = self['members'].Linker['Offsets']
-        return self.new(MemberHeader, __name__="member[{:d}]".format(index), offset=offsets[index])
+        return self.new(Member, __name__="member[{:d}]".format(index), offset=offsets[index])
 
     def getmemberdata(self, index):
         return self.getmember(index).li.data().l.serialize()
@@ -250,42 +272,44 @@ class File(pstruct.type):
 
     ## faster interface using ptypes to slide view
     def fetchimports(self):
+        # FIXME: this seems to be broken at the moment
         offsets = self['members'].Linker['Offsets']
 
-        memberheader = self.new(MemberHeader, __name__='header', offset=0)
-        importheader = self.new(ImportHeader, __name__='header', offset=0)
+        member_view = self.new(Member, __name__='header', offset=0)
+        import_view = self.new(Import, __name__='header', offset=0)
 
         p = self.new(dyn.block(4), __name__='magic', offset=0)
-        imp = self.new(Import, __name__='import', offset=0)
-        memblocksize = memberheader.alloc().size()
-        impblocksize = importheader.alloc().size()
+        import_view = self.new(Import, __name__='import', offset=0)
+        member_bs = member_view.alloc().size()
+        import_bs = import_view.alloc().size()
 
-        for o in offsets:
-            o = int(o) + memblocksize
-            p.setoffset(o)
+        for item in offsets:
+            offset = item.int() + member_bs
+            p.setoffset(offset)
             if p.load().serialize() == b'\x00\x00\xff\xff':
-                importheader.setoffset(o)
-                imp.setoffset(o+impblocksize)
-                imp.load()
-                yield (imp['Module'].str(), imp['Name'].str(), importheader['Ordinal/Hint'].int(), tuple(importheader['Type'].values()[:2]))
+                import_view.setoffset(offset)
+                import_view.setoffset(offset + import_bs)
+                import_view.load()
+                yield (import_view['Module'].str(), import_view['Name'].str(), import_view['Ordinal/Hint'].int(), tuple(import_view['Type'].values()[:2]))
             continue
         return
 
     def fetchmembers(self):
+        # FIXME: this seems to be broken at the moment
         offsets = self['members'].Linker['Offsets']
-        memberheader = self.new(MemberHeader, __name__='header', offset=0)
+        member_view = self.new(Member, __name__='header', offset=0)
 
         p = self.new(dyn.block(4), __name__='magic', offset=0)
-        memblocksize = memberheader.alloc().size()
+        member_bs = member_view.alloc().size()
 
-        for index,o in enumerate(offsets):
-            o = int(o) + memblocksize
-            p.setoffset(o)
+        for index, item in enumerate(offsets):
+            offset = item.int() + member_bs
+            p.setoffset(offset)
             if p.load().serialize() == b'\x00\x00\xff\xff':
                 continue
 
-#            yield self.new(Object.File, __name__="Member[{:d}]".format(index), offset=o)
-            yield self.new(Object.File, offset=o)
+#            yield self.new(Object.File, __name__="Member[{:d}]".format(index), offset=offset)
+            yield self.new(Object.File, offset=offset)
         return
 
 if __name__ == '__main__':
