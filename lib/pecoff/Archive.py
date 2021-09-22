@@ -63,7 +63,7 @@ class Import(pstruct.type):
 
 #######
 class MemberType(ptype.definition):
-    attribute,cache = 'internalname',{}
+    attribute, cache = 'internalname', {}
 
     class Data(dynamic.union):
         _fields_ = [
@@ -116,23 +116,14 @@ class Longnames(ptype.block):
     internalname = "//"
 
     def extract(self, index):
-        return utils.strdup(self.serialize()[index:], terminator=b'\0')
-
-    def blocksize(self):
-        header = self.p['Header'].li
-        return header['Size'].int()
+        data = self.serialize()[index:]
+        bytes = ptypes.utils.strdup(data, terminator=b'\0')
+        #return bytes.decode('latin1')
+        return bytes
 
 #######
 class Member(pstruct.type):
     internalname = None
-
-    @classmethod
-    def get(cls, internalname):
-        t = MemberType.lookup(internalname)
-        res = list(cls._fields_)
-        _, name = cls._fields_[1]
-        res[1] = (t, name)
-        return dyn.clone(cls, _fields_=res)
 
     class Header(pstruct.type):
         class Name(pstr.string):
@@ -156,11 +147,21 @@ class Member(pstruct.type):
             size = self['Size'].int()
             return self.new(dyn.block(self['Size'].int()), __name__=self['Name'].str(), offset=self.getoffset()+self.size())
 
+    __LinkerMember__ = None
     def __Data(self):
         header = self['Header'].li
-        filename,size = header['Name'].str(),header['Size'].int()
-        default = dyn.clone(MemberType.default, internalname=filename, _value_=dyn.block(size))
-        res = MemberType.lookup(filename, default)
+
+        # If the __LinkerMember__ property is defined as something, then use it for our type
+        if self.__LinkerMember__:
+            res, size = self.__LinkerMember__, header['Size'].int()
+
+        # Otherwise, we use the member name in order to determine the type.
+        else:
+            filename, size = header['Name'].str(), header['Size'].int()
+            default = dyn.clone(MemberType.default, internalname=filename, _value_=dyn.block(size))
+            res = MemberType.lookup(filename, default)
+
+        # If our type is related to a block, then clone it using the size from the header.
         return dyn.clone(res, length=size) if ptype.isrelated(res, ptype.block) else res
 
     def __newline(self):
@@ -177,13 +178,20 @@ class Member(pstruct.type):
     ]
 
 class Members(parray.terminated):
-    # FIXME: it'd be supremely useful to cache all the import and object records somewhere
+    # FIXME: it'd be supremely useful to cache all the import and object records
+    #        somewhere instead of assigning them directly to Linker and Names
 
     Linker, Names = None, None
 
     def _object_(self):
+
+        # Hardcore the first two members of our archive
         if len(self.value) < 2:
-            return Member.get(len(self.value))
+            index = len(self.value)
+            t = MemberType.lookup(index)
+            return dyn.clone(Member, __LinkerMember__=t)
+
+        # Otherwise we can determine the type by using the name
         return Member
 
     def isTerminator(self, value):
