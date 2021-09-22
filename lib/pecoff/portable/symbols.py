@@ -89,7 +89,9 @@ class ShortName(pstruct.type):
     def str(self):
         '''resolve the Name of the object utilizing the provided StringTable if necessary'''
         if self['IsShort'].int() != 0x00000000:
-            return ptypes.utils.strdup(self.serialize(), terminator=b'\0')
+            bytes = self.serialize()
+            terminated = ptypes.utils.strdup(bytes, terminator=b'\0')
+            return terminated.decode('latin1')
 
         try:
             res = self.getparent(SymbolTableAndStringTable)
@@ -99,7 +101,7 @@ class ShortName(pstruct.type):
             return '<MissingStringTable>'
 
         stringtable = res['Strings']
-        return stringtable.extract( self['Offset'].int() )
+        return stringtable.extract(self['Offset'].int())
 
     def set(self, string):
         encoded = string if isinstance(string, bytes) else string.encode('latin1')
@@ -132,7 +134,7 @@ class Symbol(pstruct.type):
     def AuxiliarySymbols(self):
         res = self.parent.value
         index = res.index(self)+1
-        return tuple(res[index:index+self['NumberOfAuxSymbols'].int()])
+        return tuple(res[index : index + self['NumberOfAuxSymbols'].int()])
 
     def summary(self, **options):
         if self.initializedQ():
@@ -289,8 +291,9 @@ class StringTable(pstruct.type):
 
     def extract(self, offset):
         '''return the string associated with a particular offset'''
-        string = self.serialize()[offset:]
-        return ptypes.utils.strdup(string, terminator=b'\0')
+        bytes = self.serialize()[offset:]
+        terminated = ptypes.utils.strdup(bytes, terminator=b'\0')
+        return terminated.decode('latin1')
 
     def add(self, string):
         '''appends a string to string table, returns offset'''
