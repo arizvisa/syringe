@@ -6,15 +6,18 @@ from . import Object
 class ulong(pint.bigendian(pint.uint32_t)): pass
 
 class stringinteger(pstr.string):
-    def __getvalue__(self):
-        return int(self.str())
-    def __setvalue__(self, integer):
+    def set(self, integer):
         res, bs = str(integer), self.blocksize()
-        return super(stringinteger, self).__setvalue__(res + ' '*(bs-len(res)))
+        size = bs - len(res)
+        return self.__setvalue__(res + ' ' * max(0, size))
+    def get(self):
+        string = self.__getvalue__()
+        return int(string.rstrip(' ') or '0', 10)
+    int = get
 
 class Index(pint.uint16_t):
     def GetIndex(self):
-        return self.int()-1      # 1 off
+        return self.int() - 1      # 1 off
 
 class Import(pstruct.type):
     class Header(pstruct.type):
@@ -116,7 +119,8 @@ class Longnames(ptype.block):
         return utils.strdup(self.serialize()[index:], terminator=b'\0')
 
     def blocksize(self):
-        return self.p['Header'].li['Size'].int()
+        header = self.p['Header'].li
+        return header['Size'].int()
 
 #######
 class Member(pstruct.type):
@@ -124,15 +128,19 @@ class Member(pstruct.type):
 
     @classmethod
     def get(cls, internalname):
+        t = MemberType.lookup(internalname)
         res = list(cls._fields_)
-        _,name = cls._fields_[1]
-        res[1] = (MemberType.lookup(internalname), name)
+        _, name = cls._fields_[1]
+        res[1] = (t, name)
         return dyn.clone(cls, _fields_=res)
 
     class Header(pstruct.type):
         class Name(pstr.string):
             length = 16
-            str = lambda s: s.serialize().rstrip()
+            def get(self):
+                string = super(Member.Header.Name, self).get()
+                return string.rstrip()
+            str = get
 
         _fields_ = [
             (Name, 'Name'),
@@ -171,7 +179,7 @@ class Member(pstruct.type):
 class Members(parray.terminated):
     # FIXME: it'd be supremely useful to cache all the import and object records somewhere
 
-    Linker,Names = None,None
+    Linker, Names = None, None
 
     def _object_(self):
         if len(self.value) < 2:
@@ -245,7 +253,7 @@ class File(pstruct.type):
         impblocksize = importheader.alloc().size()
 
         for o in offsets:
-            o = int(o)+memblocksize
+            o = int(o) + memblocksize
             p.setoffset(o)
             if p.load().serialize() == b'\x00\x00\xff\xff':
                 importheader.setoffset(o)
@@ -263,7 +271,7 @@ class File(pstruct.type):
         memblocksize = memberheader.alloc().size()
 
         for index,o in enumerate(offsets):
-            o = int(o)+memblocksize
+            o = int(o) + memblocksize
             p.setoffset(o)
             if p.load().serialize() == b'\x00\x00\xff\xff':
                 continue
