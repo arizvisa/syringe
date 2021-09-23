@@ -175,7 +175,7 @@ class wchar_t(_char_t):
 
 class string(ptype.type):
     '''String of characters'''
-    length = 0
+    length = None
     _object_ = char_t
     initializedQ = lambda self: self.value is not None    # bool
 
@@ -200,7 +200,8 @@ class string(ptype.type):
         cls = self.__class__
         return utils.callable_eq(self.blocksize, cls.blocksize) and utils.callable_eq(cls.blocksize, string.blocksize)
     def blocksize(self):
-        return self._object_().blocksize() * self.length
+        length = self.length or 0
+        return self._object_().blocksize() * length
 
     def __insert(self, index, string):
         l = self._object_().blocksize()
@@ -293,13 +294,10 @@ class string(ptype.type):
         [ self.append(item) for item in iterable ]
         return self
 
-    def __setvalue__(self, *values, **retain):
-        """Replaces the contents of ``self`` with the string ``value``.
-
-        Does not resize the string according to the length of ``value`` unless the ``retain`` attribute is cleared.
-        """
+    def __setvalue__(self, *values, **attrs):
+        '''Replaces the contents of ``self`` with the string ``value``.'''
         if not values:
-            return self
+            return super(string, self).__setvalue__(*values, **attrs)
 
         value, = values
 
@@ -307,7 +305,7 @@ class string(ptype.type):
         glyphs = [ item for item in value ]
 
         t = ptype.clone(parray.type, _object_=self._object_)
-        result = t(length=size // esize) if retain.get('retain', True) else t(length=len(glyphs))
+        result = t(length=size // esize)
 
         # Now we can finally izip_longest here...
         for element, glyph in __izip_longest__(result.alloc(), value):
@@ -315,15 +313,29 @@ class string(ptype.type):
                 break
             element.set(glyph or '\0')
 
-        if retain.get('retain', True):
-            return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
+        return self.load(offset=0, source=provider.proxy(result), blocksize=(lambda cb=result.blocksize(): cb))
+
+    def alloc(self, *values, **attrs):
+        '''Allocate the instance using the provided string and attributes.'''
+        if not values:
+            return super(string, self).alloc(*values, **attrs)
+
+        value, = values
+
+        size, esize = self.size() if self.initializedQ() else self.blocksize(), self.new(self._object_).a.size()
+        glyphs = [ item for item in value ]
+
+        t = ptype.clone(parray.type, _object_=self._object_)
+        result = t(length=len(glyphs))
+
+        # Now we can finally izip_longest here...
+        for element, glyph in __izip_longest__(result.alloc(), value):
+            if element is None:
+                break
+            element.set(glyph or '\0')
 
         self.length = len(result)
         return self.load(offset=0, source=provider.proxy(result))
-
-    def alloc(self, *args, **fields):
-        res = super(string, self).alloc(**fields)
-        return res.set(*args) if args else res
 
     def str(self):
         '''Decode the string into the specified encoding type.'''
@@ -693,7 +705,7 @@ if __name__ == '__main__':
         x = pstr.string(length=10).a
         if x.serialize() != b'\0\0\0\0\0\0\0\0\0\0':
             raise Failure
-        x.set(data, retain=True)
+        x.set(data)
         if x.serialize() == b'hola\0\0\0\0\0\0':
             raise Success
 
@@ -703,7 +715,7 @@ if __name__ == '__main__':
         x = pstr.string(length=10).a
         if x.serialize() != b'\0\0\0\0\0\0\0\0\0\0':
             raise Failure
-        x.set(data, retain=False)
+        x.alloc(data)
         if x.serialize() == b'hola':
             raise Success
 
