@@ -665,26 +665,26 @@ if __name__ == '__main__':
 
 #    @TestCase
     def set_bitmap_unsigned():
-        x = bitmap.new(0xf000000000000000,64)
+        x = bitmap.new(0xf000000000000000, 64)
         #x = bitmap.set(x, 60, count=4)
         print(bitmap.string(x))
 
-        y,res = bitmap.shift(x, 4)
-        print(res,bitmap.string(y))
+        y, res = bitmap.shift(x, 4)
+        print(res, bitmap.string(y))
 
-        x = bitmap.new(0,0)
-        x = bitmap.push(x, (0x1,4) )
-        x = bitmap.push(x, (0x2,4) )
-        x = bitmap.push(x, (0x3,4) )
-        x = bitmap.push(x, (0x4,4) )
-        print(x,bitmap.string(x))
+        x = bitmap.new(0, 0)
+        x = bitmap.push(x, (0x1, 4) )
+        x = bitmap.push(x, (0x2, 4) )
+        x = bitmap.push(x, (0x3, 4) )
+        x = bitmap.push(x, (0x4, 4) )
+        print(x, bitmap.string(x))
 
-        x = bitmap.new(0,0)
-        x = bitmap.insert(x, (0x1,4) )
-        x = bitmap.insert(x, (0x2,4) )
-        x = bitmap.insert(x, (0x3,4) )
-        x = bitmap.insert(x, (0x4,4) )
-        print(x,bitmap.string(x))
+        x = bitmap.new(0, 0)
+        x = bitmap.insert(x, (0x1, 4) )
+        x = bitmap.insert(x, (0x2, 4) )
+        x = bitmap.insert(x, (0x3, 4) )
+        x = bitmap.insert(x, (0x4, 4) )
+        print(x, bitmap.string(x))
 
         x = bitmap.consumer(b'\x12\x34')
         print(x.consume(4))
@@ -701,203 +701,203 @@ if __name__ == '__main__':
             print(x)
             x = bitmap.sub(x, 6)
 
-        x = bitmap.new(4,4)
+        x = bitmap.new(4, 4)
         print(bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x)))))
 
     ### add
     @TestCase
     def signed_add_positive_wrap():
-        x = (255, -8)
+        x = bitmap.new(255, -8)
         res = bitmap.add(x, 1)
         if res == (0, -8) and bitmap.value(res) == 0:
             raise Success
     @TestCase
     def signed_add_positive_nowrap():
-        x = (254, -8)
+        x = bitmap.new(254, -8)
         res = bitmap.add(x, 1)
         if res == (255, -8) and bitmap.value(res) == -1:
             raise Success
     @TestCase
     def signed_add_negative_wrap():
-        x = (254,-8)
+        x = bitmap.new(254, -8)
         res = bitmap.add(x, 2)
-        if res == (0,-8) and bitmap.value(res) == 0:
+        if res == (0, -8) and bitmap.value(res) == 0:
             raise Success
     @TestCase
     def signed_add_negative_nowrap():
-        x = (250,-8)
+        x = bitmap.new(250, -8)
         res = bitmap.add(x, 5)
-        if res == (255,-8) and bitmap.value(res) == -1:
+        if res == (255, -8) and bitmap.value(res) == -1:
             raise Success
 
     ### sub
     @TestCase
     def signed_sub_positive_wrap():
-        x = (5, -8)
+        x = bitmap.new(5, -8)
         res = bitmap.sub(x, 10)
         if res == (251, -8) and bitmap.value(res) == -5:
             raise Success
     @TestCase
     def signed_sub_positive_nowrap():
-        x = (10, -8)
+        x = bitmap.new(10, -8)
         res = bitmap.sub(x, 5)
         if res == (5, -8) and bitmap.value(res) == 5:
             raise Success
     @TestCase
     def signed_sub_negative_nowrap():
-        x = (156,-8)
+        x = bitmap.new(156, -8)
         res = bitmap.sub(x, 10)
-        if res == (146,-8) and bitmap.value(res) == -110:
+        if res == (146, -8) and bitmap.value(res) == -110:
             raise Success
     @TestCase
     def signed_sub_negative_wrap():
-        x = (133,-8)
+        x = bitmap.new(133, -8)
         res = bitmap.sub(x, 10)
-        if res == (123,-8) and bitmap.value(res) == 123:
+        if res == (123, -8) and bitmap.value(res) == 123:
             raise Success
 
     ### grow
     @TestCase
     def grow_unsigned():
-        x = (5, 4)
+        x = bitmap.new(5, 4)
         res = bitmap.grow(x, 4)
-        if res == (5*pow(2,4),8) and bitmap.value(res) == 5*pow(2,4):
+        if res == (5 * pow(2, 4), 8) and bitmap.value(res) == 5 * pow(2, 4):
             raise Success
     @TestCase
     def grow_signed():
-        x = (15, -4)
+        x = bitmap.new(15, -4)
         res = bitmap.grow(x, 4)
-        if res == (15*pow(2,4),-8) and bitmap.value(res) == -16:
+        if res == (15 * pow(2, 4), -8) and bitmap.value(res) == -16:
             raise Success
 
     ### shrink
     @TestCase
     def shrink_unsigned():
-        x = (0x50, 8)
+        x = bitmap.new(0x50, 8)
         res = bitmap.shrink(x, 4)
-        if res == (5,4) and bitmap.value(res) == 5:
+        if res == (5, 4) and bitmap.value(res) == 5:
             raise Success
     @TestCase
     def shrink_signed():
-        x = (0xff, -8)
+        x = bitmap.new(0xff, -8)
         res = bitmap.shrink(x, 4)
-        if res == (15,-4) and bitmap.value(res) == -1:
+        if res == (15, -4) and bitmap.value(res) == -1:
             raise Success
 
     ### push
     @TestCase
     def push_bitmap_unsigned():
-        x = (15,4)
-        res = bitmap.push(x, (15,4))
-        if res == (0xff,8) and bitmap.value(res) == 255:
+        x = bitmap.new(15, 4)
+        res = bitmap.push(x, (15, 4))
+        if res == (0xff, 8) and bitmap.value(res) == 255:
             raise Success
     @TestCase
     def push_bitmap_signed():
-        x = (15,-4)
-        res = bitmap.push(x, (15,4))
-        if res == (0xff,-8) and bitmap.value(res) == -1:
+        x = bitmap.new(15, -4)
+        res = bitmap.push(x, (15, 4))
+        if res == (0xff, -8) and bitmap.value(res) == -1:
             raise Success
 
     ### consume
     @TestCase
     def consume_unsigned_bitmap_unsigned():
-        x = (0x41424344,32)
-        res,n = bitmap.consume(x, 8)
-        if n == 0x44 and res == (0x414243,24):
+        x = bitmap.new(0x41424344, 32)
+        res, n = bitmap.consume(x, 8)
+        if n == 0x44 and res == (0x414243, 24):
             raise Success
     @TestCase
     def consume_signed_bitmap_unsigned():
-        x = (0x414243ff,32)
-        res,n = bitmap.consume(x, 8)
-        if n == 0xff and res == (0x414243,24):
+        x = bitmap.new(0x414243ff, 32)
+        res, n = bitmap.consume(x, 8)
+        if n == 0xff and res == (0x414243, 24):
             raise Success
     @TestCase
     def consume_unsigned_bitmap_signed():
-        x = (0x41424344,-32)
-        res,n = bitmap.consume(x, 8)
-        if n == 0x44 and res == (0x414243,-24):
+        x = bitmap.new(0x41424344, -32)
+        res, n = bitmap.consume(x, 8)
+        if n == 0x44 and res == (0x414243, -24):
             raise Success
     @TestCase
     def consume_signed_bitmap_signed():
-        x = (0x414243ff,-32)
-        res,n = bitmap.consume(x, 8)
-        if n == -1 and res == (0x414243,-24):
+        x = bitmap.new(0x414243ff, -32)
+        res, n = bitmap.consume(x, 8)
+        if n == -1 and res == (0x414243, -24):
             raise Success
     @TestCase
     def consume_zero_bitmap_unsigned():
-        x = (0x41424344,32)
-        res,n = bitmap.consume(x, 0)
+        x = bitmap.new(0x41424344, 32)
+        res, n = bitmap.consume(x, 0)
         if n == 0 and res == x:
             raise Success
     @TestCase
     def consume_zero_bitmap_signed():
-        x = (0x41424344,-32)
-        res,n = bitmap.consume(x, 0)
+        x = bitmap.new(0x41424344, -32)
+        res, n = bitmap.consume(x, 0)
         if n == 0 and res == x:
             raise Success
     @TestCase
     def consume_empty_bitmap():
-        x = (0,0)
-        res,n = bitmap.consume(x, 8)
+        x = bitmap.zero
+        res, n = bitmap.consume(x, 8)
         if n == 0 and res == x:
             raise Success
 
     ### shift
     @TestCase
     def shift_unsigned_bitmap_unsigned():
-        x = (0x41424344,32)
-        res,n = bitmap.shift(x, 8)
-        if n == 0x41 and res == (0x424344,24):
+        x = bitmap.new(0x41424344, 32)
+        res, n = bitmap.shift(x, 8)
+        if n == 0x41 and res == (0x424344, 24):
             raise Success
     @TestCase
     def shift_signed_bitmap_unsigned():
-        x = (0xff424344,32)
-        res,n = bitmap.shift(x, 8)
-        if n == 0xff and res == (0x424344,24):
+        x = bitmap.new(0xff424344, 32)
+        res, n = bitmap.shift(x, 8)
+        if n == 0xff and res == (0x424344, 24):
             raise Success
     @TestCase
     def shift_unsigned_bitmap_signed():
-        x = (0x41424344,-32)
-        res,n = bitmap.shift(x, 8)
-        if n == 0x41 and res == (0x424344,-24):
+        x = bitmap.new(0x41424344, -32)
+        res, n = bitmap.shift(x, 8)
+        if n == 0x41 and res == (0x424344, -24):
             raise Success
     @TestCase
     def shift_signed_bitmap_signed():
-        x = (0xff424344,-32)
-        res,n = bitmap.shift(x, 8)
-        if n == -1 and res == (0x424344,-24):
+        x = bitmap.new(0xff424344, -32)
+        res, n = bitmap.shift(x, 8)
+        if n == -1 and res == (0x424344, -24):
             raise Success
     @TestCase
     def shift_zero_bitmap_unsigned():
-        x = (0x41424344, 32)
-        res,n = bitmap.shift(x, 0)
-        if n == 0 and res == (0x41424344,32):
+        x = bitmap.new(0x41424344, 32)
+        res, n = bitmap.shift(x, 0)
+        if n == 0 and res == (0x41424344, 32):
             raise Success
     @TestCase
     def shift_zero_bitmap_signed():
-        x = (0x41424344, -32)
-        res,n = bitmap.shift(x, 0)
-        if n == 0 and res == (0x41424344,-32):
+        x = bitmap.new(0x41424344, -32)
+        res, n = bitmap.shift(x, 0)
+        if n == 0 and res == (0x41424344, -32):
             raise Success
     @TestCase
     def shift_empty_bitmap():
-        x = (0,0)
-        res,n = bitmap.shift(x, 8)
-        if n == 0 and res == (0,0):
+        x = bitmap.zero
+        res, n = bitmap.shift(x, 8)
+        if n == 0 and res == (0, 0):
             raise Success
 
     ### mul
     @TestCase
     def mul_unsigned_bitmap_unsigned():
-        x = (0x40000000,32)
+        x = bitmap.new(0x40000000, 32)
         res = bitmap.mul(x, 4)
-        if res == (0,32) and bitmap.value(res) == 0:
+        if res == (0, 32) and bitmap.value(res) == 0:
             raise Success
     @TestCase
     def mul_unsigned_bitmap_signed():
-        x = (0x40000000,32)
+        x = bitmap.new(0x40000000, 32)
         res = bitmap.mul(x, -4)
-        if res == (0,32) and bitmap.value(res) == 0:
+        if res == (0, 32) and bitmap.value(res) == 0:
             raise Success
 
     #signed_divide(4,4) == 0xc000000000000002L and signed_divide(4,-4) !=
@@ -914,27 +914,26 @@ if __name__ == '__main__':
     @TestCase
     def div_unsigned_bitmap_unsigned():
         '''0x10000000 / 0x10 = 0x1000000'''
-
-        x = (0x10000000,32)
-        res = bitmap.div(x,0x10)
+        x = bitmap.new(0x10000000, 32)
+        res = bitmap.div(x, 0x10)
         if bitmap.value(res) == 0x1000000:
             raise Success
     @TestCase
     def div_unsigned_bitmap_signed():
         '''0x10 / -0x10 = -1'''
-        x = (0x10,-32)
-        res = bitmap.div(x,-0x10)
+        x = bitmap.new(0x10, -32)
+        res = bitmap.div(x, -0x10)
         if bitmap.value(res) == -1:
             raise Success
     @TestCase
     def div_signed_bitmap_signed_1():
-        x = (0xffffffffffffa251,-64)
+        x = bitmap.new(0xffffffffffffa251, -64)
         res = bitmap.div(x, 0xc1)
         if bitmap.value(res) == -125:
             raise Success
     @TestCase
     def div_signed_bitmap_signed_2():
-        x = (0xffffffffffff1634,-64)
+        x = bitmap.new(0xffffffffffff1634, -64)
         res = bitmap.div(x, 0xad)
         if bitmap.value(res) == -346:
             raise Success
@@ -942,7 +941,7 @@ if __name__ == '__main__':
     @TestCase
     def div_signed_bitmap_unsigned():
         '''-0x10/-0x10 = 1'''
-        x = (0xfffffffffffffff0,-64)
+        x = bitmap.new(0xfffffffffffffff0, -64)
         res = bitmap.div(x, -0x10)
         if bitmap.value(res) == 1:
             raise Success
@@ -951,24 +950,24 @@ if __name__ == '__main__':
     @TestCase
     def mod_unsigned_bitmap_unsigned():
         '''23983 % 5 == 3'''
-        mask=pow(2,64)-1
-        x = (23983&mask,64)
+        mask = pow(2, 64) - 1
+        x = (23983 & mask, 64)
         res = bitmap.mod(x, 5)
         if bitmap.value(res) == 3:
             raise Success
     @TestCase
     def mod_unsigned_bitmap_signed():
         '''23983 % -5 == -2'''
-        mask=pow(2,64)-1
-        x = (23983&mask,-64)
+        mask = pow(2, 64) - 1
+        x = (23983 & mask, -64)
         res = bitmap.mod(x, -5)
         if bitmap.signed(res) and bitmap.value(res) == -2:
             raise Success
     @TestCase
     def mod_signed_bitmap_unsigned():
         '''-23983 % -5 == 2'''
-        mask=pow(2,64)-1
-        x = (-23983&mask,64)
+        mask = pow(2, 64) - 1
+        x = (-23983 & mask, 64)
         res = bitmap.mod(x, -5)
         if bitmap.value(res) == 0xfffffffffffffffe:
             raise Success
@@ -976,8 +975,8 @@ if __name__ == '__main__':
     @TestCase
     def mod_signed_bitmap_signed():
         '''-23983 % -5 == -3'''
-        mask=pow(2,64)-1
-        x = (-23983&mask,-64)
+        mask = pow(2, 64) - 1
+        x = (-23983 & mask, -64)
         res = bitmap.mod(x, -5)
         if bitmap.signed(res) and bitmap.value(res) == -3:
             raise Success
