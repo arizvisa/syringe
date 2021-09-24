@@ -161,7 +161,7 @@ def div(bitmap, integer):
     if size < 0:
         sign = math.trunc(pow(2, abs(size) - 1))
         res = (res - max) if res & sign else res & (sign - 1)
-    return math.trunc(float(res) / integer) & (max - 1), size
+    return (res // integer) & (max - 1), size
 def mod(bitmap, integer):
     '''Modular divides the specified bitmap with an integer whilst preserving signedness'''
     res, size = bitmap
@@ -370,11 +370,11 @@ def signed(bitmap):
 def cast_signed(bitmap):
     '''Casts a bitmap to a signed integer'''
     integer, size = bitmap
-    return integer, -abs(size)
+    return new(integer, -abs(size))
 def cast_unsigned(bitmap):
     '''Casts a bitmap to a unsigned integer'''
     integer, size = bitmap
-    return integer, abs(size)
+    return new(integer, abs(size))
 def value(bitmap):
     '''Return the integral part of a bitmap, handling signedness if necessary'''
     integer, size = bitmap
@@ -387,19 +387,20 @@ def value(bitmap):
     return integer
 int = num = number = value
 
-def weight(bitmap):
-    '''Return the number of bits that are set'''
-    integer, size = bitmap
+def hamming(bitmap):
+    '''Return the number of bits that are set (hamming distance)'''
+    integer, _ = bitmap
     res = 0
     while integer > 0:
         res, integer = res + 1, integer & (integer - 1)
     return res
+weight = hamming
 
 def count(bitmap, value=False):
     '''Returns the number of bits that are set to value and returns the count'''
     _, size = bitmap
     res = weight(bitmap)
-    return res if value else (size - res)
+    return res if value else (abs(size) - res)
 
 def splitter(bitmap, maxsize):
     '''Split bitmap into multiple of maxsize bits starting from the low bit.'''
@@ -435,6 +436,7 @@ def groupby(sequence, count):
         yield builtins.map(operator.itemgetter(1), res)
     return
 
+# jspelman. he's everywhere.
 def ror(bitmap, shift=1):
     '''
     jspelman. he's everywhere.
@@ -443,7 +445,6 @@ def ror(bitmap, shift=1):
     (value, size) = bitmap
     return new((((value & pow(2, shift) - 1) << size - shift) | (value >> shift)) & pow(2, size) - 1, size)
 
-# jspelman. he's everywhere.
 def rol(bitmap, shift=1):
     '''
     jspelman. he's everywhere.
@@ -929,13 +930,13 @@ if __name__ == '__main__':
     def div_signed_bitmap_signed_1():
         x = (0xffffffffffffa251,-64)
         res = bitmap.div(x, 0xc1)
-        if bitmap.value(res) == -124:
+        if bitmap.value(res) == -125:
             raise Success
     @TestCase
     def div_signed_bitmap_signed_2():
         x = (0xffffffffffff1634,-64)
         res = bitmap.div(x, 0xad)
-        if bitmap.value(res) == -345:
+        if bitmap.value(res) == -346:
             raise Success
 
     @TestCase
