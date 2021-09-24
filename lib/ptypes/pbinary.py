@@ -450,7 +450,7 @@ class integer(type):
         return bitmap.new(*self.value)
 
     def __deserialize_consumer__(self, consumer):
-        _, blocksize = (0, self.blockbits())
+        _, blocksize = 0, self.blockbits()
 
         # Now that we've grabbed the number of bits that we're sized
         # for, use it to consume an integer
@@ -905,9 +905,8 @@ class container(type):
 
             # FIXME: if the byteorder is little-endian, then this fucks up
             #        the positions pretty hard
-            size = item.blockbits()
             offset, suboffset = position
-            suboffset += size
+            suboffset += item.blockbits()
             offset, suboffset = (offset + suboffset // 8, suboffset % 8)
             position = (offset, suboffset)
         return self
@@ -1719,7 +1718,8 @@ class partial(ptype.container):
 
     def __deserialize_block__(self, block):
         self.value = res = [self.__pb_object()]
-        data = iter(block) if self.byteorder is config.byteorder.bigendian else reversed(block)
+        Ftransform = iter if self.byteorder is config.byteorder.bigendian else reversed
+        data = Ftransform(block)
         res = res[0].__deserialize_consumer__(bitmap.consumer(data))
         if res.parent is not self:
             raise error.AssertionError(self, 'partial.__deserialize_block__', message="parent for binary type {:s} is not {:s}".format(res[0].instance(), self.instance()))

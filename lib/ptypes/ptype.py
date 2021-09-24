@@ -1326,7 +1326,7 @@ class container(base):
             raise error.SyntaxError(self, 'container.__deserialize_block__', message='caller is responsible for allocation of elements in self.value')
 
         # read everything up to the blocksize
-        value, expected, bs, total = self.value[:], self.blocksize(), 0, 0
+        value, expected, total = self.value[:], self.blocksize(), 0
         while value and total < expected:
             res = value.pop(0)
             bs = res.blocksize()
