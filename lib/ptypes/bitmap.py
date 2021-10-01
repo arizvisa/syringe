@@ -399,7 +399,7 @@ weight = hamming
 def count(bitmap, value=False):
     '''Returns the number of bits that are set to value and returns the count'''
     _, size = bitmap
-    res = weight(bitmap)
+    res = hamming(bitmap)
     return res if value else (abs(size) - res)
 
 def splitter(bitmap, maxsize):
@@ -474,6 +474,15 @@ def riterate(bitmap):
         bitmap, value = consume(bitmap, 1)
         yield bool(value)
     return
+
+def shannon(bitmap):
+    '''Calculate the entropy for the bits in a bitmap.'''
+    Flog2 = (lambda x: math.log(x, 2)) if sys.version_info.major < 3 else math.log2
+    Fx = lambda probability: -probability * Flog2(probability)
+    count, weight = size(bitmap), hamming(bitmap)
+    collection = [weight, count - weight]
+    probabilities = [item / float(count) for item in collection if item]
+    return sum(map(Fx, probabilities))
 
 class WBitmap(object):
     '''
@@ -1145,6 +1154,26 @@ if __name__ == '__main__':
             res.append(item)
 
         if res == valid:
+            raise Success
+
+    @TestCase
+    def bitmap_entropy_1():
+        integer = 0b1010010110100101
+        res = bitmap.new(integer, 16)
+        if bitmap.shannon(res) == 1.0:
+            raise Success
+
+    @TestCase
+    def bitmap_entropy_2():
+        integer = 0b0000000000000000
+        res = bitmap.new(integer, 16)
+        if bitmap.shannon(res) == 0.0:
+            raise Success
+    @TestCase
+    def bitmap_entropy_3():
+        integer = 0b1111111111111111
+        res = bitmap.new(integer, 16)
+        if bitmap.shannon(res) == 0.0:
             raise Success
 
 if __name__ == '__main__':
