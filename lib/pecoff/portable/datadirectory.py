@@ -41,7 +41,7 @@ class IMAGE_DIRECTORY_ENTRY_GLOBALPTR(AddressEntry):
 class IMAGE_DIRECTORY_ENTRY_TLS(AddressEntry):
     def _object_(self):
         res = self.getparent(Header)['OptionalHeader'].li
-        return tls.IMAGE_TLS_DIRECTORY64 if res.is64() else tls.IMAGE_TLS_DIRECTORY
+        return tls.IMAGE_TLS_DIRECTORY64 if res.is64() else tls.IMAGE_TLS_DIRECTORY32
 
 class IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG(AddressEntry):
     def _object_(self):
