@@ -179,8 +179,9 @@ class _WER_REPORT_TYPE(pint.enum):
     ]
 
 class WER_FILE_(pbinary.flags):
-    # FIXME: this is not packed properly
     _fields_ = [
+        (16, 'reserved'),
+        (13, 'unused'),
         (1, 'COMPRESSED'),          # This file has been compressed using SQS
         (1, 'ANONYMOUS_DATA'),      # This file does not contain any PII
         (1, 'DELETE_WHEN_DONE'),    # Delete the file once WER is done
@@ -210,14 +211,14 @@ class WER_REPORT_INFORMATION_V3(pstruct.type):
     _fields_ = [
         (DWORD, 'dwSize'),
         (HANDLE, 'hProcess'),
-        (dyn.array(WCHAR, 64), 'wzConsentKey'),
-        (dyn.array(WCHAR, 128), 'wzFriendlyEventName'),
-        (dyn.array(WCHAR, 128), 'wzApplicationName'),
-        (dyn.array(WCHAR, MAX_PATH), 'wzApplicationPath'),
-        (dyn.array(WCHAR, 512), 'wzDescription'),
+        (dyn.clone(pstr.wstring, length=64), 'wzConsentKey'),
+        (dyn.clone(pstr.wstring, length=128), 'wzFriendlyEventName'),
+        (dyn.clone(pstr.wstring, length=128), 'wzApplicationName'),
+        (dyn.clone(pstr.wstring, length=MAX_PATH), 'wzApplicationPath'),
+        (dyn.clone(pstr.wstring, length=512), 'wzDescription'),
         (HWND, 'hwndParent'),
-        (dyn.array(WCHAR, 64), 'wzNamespacePartner'),
-        (dyn.array(WCHAR, 64), 'wzNamespaceGroup'),
+        (dyn.clone(pstr.wstring, length=64), 'wzNamespacePartner'),
+        (dyn.clone(pstr.wstring, length=64), 'wzNamespaceGroup'),
     ]
 
 class WER_DUMP_CUSTOM_OPTIONS(pstruct.type):
@@ -232,7 +233,7 @@ class WER_DUMP_CUSTOM_OPTIONS(pstruct.type):
         (DWORD, 'dwOtherThreadExFlags'),
         (DWORD, 'dwPreferredModuleFlags'),
         (DWORD, 'dwOtherModuleFlags'),
-        (dyn.array(WCHAR, WER_MAX_PREFERRED_MODULES_BUFFER), 'wzPreferredModuleList'),
+        (dyn.clone(pstr.wstring, length=WER_MAX_PREFERRED_MODULES_BUFFER), 'wzPreferredModuleList'),
     ]
 
 class WER_DUMP_CUSTOM_OPTIONS_V2(pstruct.type):
@@ -247,7 +248,7 @@ class WER_DUMP_CUSTOM_OPTIONS_V2(pstruct.type):
         (DWORD, 'dwOtherThreadExFlags'),
         (DWORD, 'dwPreferredModuleFlags'),
         (DWORD, 'dwOtherModuleFlags'),
-        (dyn.array(WCHAR, WER_MAX_PREFERRED_MODULES_BUFFER), 'wzPreferredModuleList'),
+        (dyn.clone(pstr.wstring, length=WER_MAX_PREFERRED_MODULES_BUFFER), 'wzPreferredModuleList'),
         (DWORD, 'dwPreferredModuleResetFlags'),
         (DWORD, 'dwOtherModuleResetFlags'),
     ]
@@ -256,35 +257,37 @@ class WER_REPORT_INFORMATION_V4(pstruct.type):
     _fields_ = [
         (DWORD, 'dwSize'),
         (HANDLE, 'hProcess'),
-        (dyn.array(WCHAR, 64), 'wzConsentKey'),
-        (dyn.array(WCHAR, 128), 'wzFriendlyEventName'),
-        (dyn.array(WCHAR, 128), 'wzApplicationName'),
-        (dyn.array(WCHAR, MAX_PATH), 'wzApplicationPath'),
-        (dyn.array(WCHAR, 512), 'wzDescription'),
+        (dyn.clone(pstr.wstring, length=64), 'wzConsentKey'),
+        (dyn.clone(pstr.wstring, length=128), 'wzFriendlyEventName'),
+        (dyn.clone(pstr.wstring, length=128), 'wzApplicationName'),
+        (dyn.clone(pstr.wstring, length=MAX_PATH), 'wzApplicationPath'),
+        (dyn.clone(pstr.wstring, length=512), 'wzDescription'),
         (HWND, 'hwndParent'),
-        (dyn.array(WCHAR, 64), 'wzNamespacePartner'),
-        (dyn.array(WCHAR, 64), 'wzNamespaceGroup'),
+        (dyn.clone(pstr.wstring, length=64), 'wzNamespacePartner'),
+        (dyn.clone(pstr.wstring, length=64), 'wzNamespaceGroup'),
         (dyn.array(BYTE, 16), 'rgbApplicationIdentity'),
         (HANDLE, 'hSnapshot'),
         (HANDLE, 'hDeleteFilesImpersonationToken'),
     ]
 
 class WER_REPORT_INFORMATION(pstruct.type):
+    class _submitResultMax(WER_SUBMIT_RESULT, DWORD):
+        pass
     _fields_ = [
         (DWORD, 'dwSize'),
         (HANDLE, 'hProcess'),
-        (dyn.array(WCHAR, 64), 'wzConsentKey'),
-        (dyn.array(WCHAR, 128), 'wzFriendlyEventName'),
-        (dyn.array(WCHAR, 128), 'wzApplicationName'),
-        (dyn.array(WCHAR, MAX_PATH), 'wzApplicationPath'),
-        (dyn.array(WCHAR, 512), 'wzDescription'),
+        (dyn.clone(pstr.wstring, length=64), 'wzConsentKey'),
+        (dyn.clone(pstr.wstring, length=128), 'wzFriendlyEventName'),
+        (dyn.clone(pstr.wstring, length=128), 'wzApplicationName'),
+        (dyn.clone(pstr.wstring, length=MAX_PATH), 'wzApplicationPath'),
+        (dyn.clone(pstr.wstring, length=512), 'wzDescription'),
         (HWND, 'hwndParent'),
-        (dyn.array(WCHAR, 64), 'wzNamespacePartner'),
-        (dyn.array(WCHAR, 64), 'wzNamespaceGroup'),
+        (dyn.clone(pstr.wstring, length=64), 'wzNamespacePartner'),
+        (dyn.clone(pstr.wstring, length=64), 'wzNamespaceGroup'),
         (dyn.array(BYTE, 16), 'rgbApplicationIdentity'),
         (HANDLE, 'hSnapshot'),
         (HANDLE, 'hDeleteFilesImpersonationToken'),
-        (WER_SUBMIT_RESULT, 'submitResultMax'),
+        (_submitResultMax, 'submitResultMax'),
     ]
 
 class WER_DUMP_CUSTOM_OPTIONS_V3(pstruct.type):
@@ -299,7 +302,7 @@ class WER_DUMP_CUSTOM_OPTIONS_V3(pstruct.type):
         (DWORD, 'dwOtherThreadExFlags'),
         (DWORD, 'dwPreferredModuleFlags'),
         (DWORD, 'dwOtherModuleFlags'),
-        (dyn.array(WCHAR, WER_MAX_PREFERRED_MODULES_BUFFER), 'wzPreferredModuleList'),
+        (dyn.clone(pstr.wstring, length=WER_MAX_PREFERRED_MODULES_BUFFER), 'wzPreferredModuleList'),
         (DWORD, 'dwPreferredModuleResetFlags'),
         (DWORD, 'dwOtherModuleResetFlags'),
         (PVOID, 'pvDumpKey'),
