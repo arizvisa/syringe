@@ -313,7 +313,12 @@ class POOL_TYPE(INT): pass
 #class SIZE_T(ULONG_PTR): pass
 #class PSIZE_T(P(SIZE_T)): pass
 class LANGID(WORD): pass
+class HWND(HANDLE): pass
 
+# Some constants
+MAX_PATH = 104
+
+# Core structures
 class LARGE_INTEGER(dynamic.union):
     class u(pstruct.type):
         _fields_ = [
