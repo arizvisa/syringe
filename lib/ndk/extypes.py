@@ -482,3 +482,79 @@ class GENERAL_LOOKASIDE(pstruct.type):
         (ULONG, 'LastAllocateMissesOrHits'),
         (dyn.array(ULONG, 2), 'Future'),
     ]
+
+class POOL_DESCRIPTOR(pstruct.type, versioned):
+    def __ListHeads(self):
+        POOL_PAGE_SIZE = 0x1000
+        POOL_BLOCK_SHIFT = 4 if getattr(self, 'WIN64', False) else 3
+        POOL_LIST_HEADS = POOL_PAGE_SIZE // pow(2, POOL_BLOCK_SHIFT)
+        return dyn.array(LIST_ENTRY, POOL_LIST_HEADS)
+
+    _fields_ = [
+        (POOL_TYPE, 'PoolType'),
+        (ULONG, 'PoolIndex'),
+        (ULONG, 'RunningAllocs'),
+        (ULONG, 'RunningDeAllocs'),
+        (ULONG, 'TotalPages'),
+        (ULONG, 'TotalBigPages'),
+        (ULONG, 'Threshold'),
+        (PVOID, 'LockAddress'),
+        (PVOID, 'PendingFrees'),
+        (LONG, 'PendingFreeDepth'),
+        (SIZE_T, 'TotalBytes'),
+        (SIZE_T, 'Spare0'),
+        (__ListHeads, 'ListHeads'),
+    ]
+
+class POOL_HEADER(pstruct.type):
+    class _Ulong1_32(pbinary.struct):
+        _fields_ = [
+            (9, 'PreviousSize'),
+            (7, 'PoolIndex'),
+            (9, 'BlockSize'),
+            (7, 'PoolType'),
+        ]
+    class _Ulong1_64(pbinary.struct):
+        _fields_ = [
+            (8, 'PreviousSize'),
+            (8, 'PoolIndex'),
+            (8, 'BlockSize'),
+            (8, 'PoolType'),
+        ]
+
+    def __init__(self, **attrs):
+        super(POOL_HEADER, self).__init__(**attrs)
+        f = self._fields_ = []
+
+        if getattr(self, 'WIN64', False):
+            f.extend([
+                (self._Ulong1_64, 'Ulong1'),
+                (ULONG, 'PoolTag'),
+                (P(Ntddk.EPROCESS), 'ProcessBilled'),
+            ])
+
+        else:
+            f.extend([
+                (self._Ulong1_32, 'Ulong1'),
+                (ULONG, 'PoolTag'),
+            ])
+        return
+
+class POOL_TRACKER_TABLE(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Key'),
+        (ULONG, 'NonPagedAllocs'),
+        (ULONG, 'NonPagedFrees'),
+        (SIZE_T, 'NonPagedBytes'),
+        (ULONG, 'PagedAllocs'),
+        (ULONG, 'PagedFrees'),
+        (SIZE_T, 'PagedBytes'),
+    ]
+
+class POOL_TRACKER_BIG_PAGES(pstruct.type):
+    _fields_ = [
+        (PVOID, 'Va'),
+        (ULONG, 'Key'),
+        (ULONG, 'NumberOfPages'),
+        (ULONG, 'QuotaObject'),
+    ]

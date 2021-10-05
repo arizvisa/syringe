@@ -122,3 +122,18 @@ class PP_LOOKASIDE_LIST(pstruct.type):
         (P(GENERAL_LOOKASIDE), 'P'),
         (P(GENERAL_LOOKASIDE), 'L'),
     ]
+
+class SECTION_IMAGE_INFORMATION(pstruct.type):
+    _fields_ = [
+        (PVOID, 'EntryPoint'),
+        (ULONG, 'StackZeroBits'),
+        (ULONG, 'StackReserved'),
+        (ULONG, 'StackCommit'),
+        (ULONG, 'ImageSubsystem'),
+        (WORD, 'SubSystemVersionLow'),
+        (WORD, 'SubSystemVersionHigh'),
+        (ULONG, 'Unknown1'),
+        (ULONG, 'ImageCharacteristics'),
+        (ULONG, 'ImageMachineType'),
+        (dyn.array(ULONG, 3), 'Unknown2'),
+    ]

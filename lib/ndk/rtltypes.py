@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import umtypes
+from . import umtypes, mmtypes
 from .datatypes import *
 
 class SIZE_T64(ULONGLONG): pass
@@ -61,6 +61,15 @@ class CURDIR(pstruct.type):
     ]
     def summary(self):
         return 'Handle={:x} DosPath={!r}'.format(self['Handle'].int(), self['DosPath'].str())
+
+class RTL_USER_PROCESS_INFORMATION(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Size'),
+        (HANDLE, 'Process'),
+        (HANDLE, 'Thread'),
+        (umtypes.CLIENT_ID, 'ClientId'),
+        (mmtypes.SECTION_IMAGE_INFORMATION, 'ImageInformation'),
+    ]
 
 class RTL_USER_PROCESS_PARAMETERS(pstruct.type):
     _fields_ = [
