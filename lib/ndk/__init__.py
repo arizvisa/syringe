@@ -10,6 +10,7 @@ from . import mmtypes
 from . import ketypes
 from . import setypes
 from . import extypes
+from . import iotypes
 
 from . import winerror
 from . import sdkddkver as ver

@@ -1,9 +1,10 @@
 import sys, ptypes
 from ptypes import *
 
+from . import iotypes
 from .datatypes import *
 
-class _POOL_TYPE(pbinary.enum):
+class _POOL_TYPE_PagedPool(pbinary.enum):
     _values_ = [
         ('NonPagedPool', 0x0000),
         ('PagedPool', 0x0001),
@@ -13,6 +14,15 @@ class _POOL_TYPE(pbinary.enum):
         ('PagedPoolCacheAligned', 0x0005),
         ('NonPagedPoolCacheAlignedMustS', 0x0006),
         ('MaxPoolType', 0x0007),
+    ]
+
+class _POOL_TYPE_NonPagedPool(pbinary.enum):
+    _values_ = [
+        ('NonPagedPoolBase', 0),
+        ('NonPagedPoolBaseMustSucceed', 2),
+        ('NonPagedPoolBaseCacheAligned', 4),
+        ('NonPagedPoolBaseCacheAlignedMustS', 6),
+
         ('NonPagedPoolSession', 0x0020),
         ('PagedPoolSession', 0x0021),
         ('NonPagedPoolMustSucceedSession', 0x0022),
@@ -20,107 +30,17 @@ class _POOL_TYPE(pbinary.enum):
         ('NonPagedPoolCacheAlignedSession', 0x0024),
         ('PagedPoolCacheAlignedSession', 0x0025),
         ('NonPagedPoolCacheAlignedMustSSession', 0x0026),
+
+        ('NonPagedPoolNx', 0x200),
+        ('NonPagedPoolNxCacheAligned', 0x204),
+        ('NonPagedPoolSessionNx', 0x220),
     ]
 
-@pbinary.littleendian
-class POOL_TYPE(_POOL_TYPE):
-    length = 32
-
-class POOL_HEADER(pstruct.type, versioned):
-    class _Ulong1(pbinary.struct):
-        _fields_ = [
-            (dyn.clone(_POOL_TYPE, length=7), 'PoolType'),
-            (9, 'BlockSize'),
-            (7, 'PoolIndex'),
-            (9, 'PreviousSize'),
-        ]
-
-        def summary(self):
-            res = []
-            res.append("Type={:s}({:d})".format(self.item('PoolType').str(), self.item('PoolType').int()))
-            res.append("Index={:d}".format(self['PoolIndex']))
-            res.append("PreviousSize={:#x}".format(self['PreviousSize']))
-            res.append("BlockSize={:#x}".format(self['BlockSize']))
-            return ' '.join(res)
-
-    class _Ulong164(_Ulong1):
-        _fields_ = [
-            (dyn.clone(_POOL_TYPE, length=8), 'PoolType'),
-            (8, 'BlockSize'),
-            (8, 'PoolIndex'),
-            (8, 'PreviousSize'),
-        ]
-
-    def __Ulong1(self):
-        res = POOL_HEADER._Ulong164 if getattr(self, 'WIN64', False) else POOL_HEADER._Ulong1
-        return pbinary.littleendian(res)
-
+class SECTION_BASIC_INFORMATION(pstruct.type):
     _fields_ = [
-        (__Ulong1, 'Ulong1'),
-        (dyn.clone(pstr.string, length=4), 'PoolTag'),
-        (lambda self: PVOID if getattr(self, 'WIN64', False) else pint.uint_t, 'ProcessBilled'),
-    ]
-
-    def summary(self):
-        res, tag = self['Ulong1'], self['PoolTag'].str()
-        encoded = tag.encode('unicode_escape')
-        return "\"{:s}\" {:s}".format(encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'), res.summary())
-
-class POOL_FREE_CHUNK(pstruct.type, versioned): pass
-class POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):
-    _object_ = fpointer(POOL_FREE_CHUNK, 'ListEntry')
-    _path_ = ('ListEntry',)
-
-POOL_FREE_CHUNK._fields_ = [
-    (POOL_HEADER, 'Header'),
-    (POOL_FREE_CHUNK_LIST_ENTRY, 'ListEntry'),
-]
-
-class POOL_DESCRIPTOR(pstruct.type, versioned):
-    def __ListHeads(self):
-        PAGE_SIZE = pow(2, 12)
-        POOL_BLOCK_SIZE = 16 if getattr(self, 'WIN64', False) else 8
-        POOL_LISTS_PER_PAGE = PAGE_SIZE // POOL_BLOCK_SIZE
-        return dyn.array(POOL_FREE_CHUNK_LIST_ENTRY, POOL_LISTS_PER_PAGE)
-
-    _fields_ = [
-        (POOL_TYPE, 'PoolType;'),
-        (ULONG, 'PoolIndex;'),
-        (ULONG, 'RunningAllocs;'),
-        (ULONG, 'RunningDeAllocs;'),
-        (ULONG, 'TotalPages;'),
-        (ULONG, 'TotalBigPages;'),
-        (ULONG, 'Threshold;'),
-        (PVOID, 'LockAddress;'),
-        (PVOID, 'PendingFrees;'),
-        (LONG, 'PendingFreeDepth;'),
-        (__ListHeads, 'ListHeads'),
-    ]
-
-class GENERAL_LOOKASIDE(pstruct.type):
-    _fields_ = [
-        (dyn.clone(SLIST_HEADER, _object_=POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
-        (UINT16, 'Depth'),
-        (UINT16, 'MaximumDepth'),
-        (ULONG, 'TotalAllocates'),
-        (ULONG, 'AllocateMissesOrHits'),
-        (ULONG, 'TotalFrees'),
-        (ULONG, 'FreeMissesOrHits'),
-        (POOL_TYPE, 'Type'),
-        (dyn.clone(pstr.string, length=4), 'Tag'),
-        (ULONG, 'Size'),
-        (PVOID, 'Allocate'),
-        (PVOID, 'Free'),
-        (LIST_ENTRY, 'ListEntry'),
-        (ULONG, 'LastTotalAllocates'),
-        (ULONG, 'LastAllocateMissesOrHits'),
-        (dyn.array(ULONG, 2), 'Future'),
-    ]
-
-class PP_LOOKASIDE_LIST(pstruct.type):
-    _fields_ = [
-        (P(GENERAL_LOOKASIDE), 'P'),
-        (P(GENERAL_LOOKASIDE), 'L'),
+        (PVOID, 'BaseAddress'),
+        (ULONG, 'Attributes'),
+        (LARGE_INTEGER, 'Size'),
     ]
 
 class SECTION_IMAGE_INFORMATION(pstruct.type):
@@ -136,4 +56,169 @@ class SECTION_IMAGE_INFORMATION(pstruct.type):
         (ULONG, 'ImageCharacteristics'),
         (ULONG, 'ImageMachineType'),
         (dyn.array(ULONG, 3), 'Unknown2'),
+    ]
+
+@pbinary.littleendian
+class SEGMENT_FLAGS(pbinary.flags):
+    _fields_ = [
+        (10, 'TotalNumberOfPtes4132'),
+        (1, 'ExtraSharedWowSubsections'),
+        (1, 'LargePages'),
+        (20, 'Spare'),
+    ]
+
+class EVENT_COUNTER(pstruct.type):
+    def __Event(self):
+        # lazy loading to prevent python's stupid module recursion issues
+        from . import ketypes
+        return ketypes.KEVENT
+    _fields_ = [
+        (ULONG, 'RefCount'),
+        (__Event, 'Event'),
+        (LIST_ENTRY, 'ListEntry'),
+    ]
+
+@pbinary.littleendian
+class MMSECTION_FLAGS(pbinary.flags):
+    _fields_ = [
+        (1, 'BeingDeleted'),
+        (1, 'BeingCreated'),
+        (1, 'BeingPurged'),
+        (1, 'NoModifiedWriting'),
+        (1, 'FailAllIo'),
+        (1, 'Image'),
+        (1, 'Based'),
+        (1, 'File'),
+        (1, 'Networked'),
+        (1, 'NoCache'),
+        (1, 'PhysicalMemory'),
+        (1, 'CopyOnWrite'),
+        (1, 'Reserve'),
+        (1, 'Commit'),
+        (1, 'FloppyMedia'),
+        (1, 'WasPurged'),
+        (1, 'UserReference'),
+        (1, 'GlobalMemory'),
+        (1, 'DeleteOnClose'),
+        (1, 'FilePointerNull'),
+        (1, 'DebugSymbolsLoaded'),
+        (1, 'SetMappedFileIoComplete'),
+        (1, 'CollidedFlush'),
+        (1, 'NoChange'),
+        (1, 'filler0'),
+        (1, 'ImageMappedInSystemSpace'),
+        (1, 'UserWritable'),
+        (1, 'Accessed'),
+        (1, 'GlobalOnlyPerSession'),
+        (1, 'Rom'),
+        (1, 'WriteCombined'),
+        (1, 'filler'),
+    ]
+
+@pbinary.littleendian
+class MMSUBSECTION_FLAGS(pbinary.flags):
+    _fields_ = [
+        (1, 'ReadOnly'),
+        (1, 'ReadWrite'),
+        (1, 'SubsectionStatic'),
+        (1, 'GlobalMemory'),
+        (5, 'Protection'),
+        (1, 'Spare'),
+        (10, 'StartingSector4132'),
+        (12, 'SectorEndOffset'),
+    ]
+
+@pbinary.littleendian
+class MMSUBSECTION_FLAGS2(pbinary.flags):
+    _fields_ = [
+        (1, 'SubsectionAccessed'),
+        (1, 'SubsectionConverted'),
+        (30, 'Reserved'),
+    ]
+
+class CONTROL_AREA(pstruct.type):
+    _fields_ = [
+        (lambda self: P(SEGMENT), 'Segment'),
+        (LIST_ENTRY, 'DereferenceList'),
+        (ULONG, 'NumberOfSectionReferences'),
+        (ULONG, 'NumberOfPfnReferences'),
+        (ULONG, 'NumberOfMappedViews'),
+        (ULONG, 'NumberOfSystemCacheViews'),
+        (ULONG, 'NumberOfUserReferences'),
+        (MMSECTION_FLAGS, 'Flags'),
+        (P(iotypes.FILE_OBJECT), 'FilePointer'),
+        (P(EVENT_COUNTER), 'WaitingForDeletion'),
+        (USHORT, 'ModifiedWriteCount'),
+        (USHORT, 'FlushInProgressCount'),
+        (ULONG, 'WritableUserReferences'),
+        (ULONG, 'QuadwordPad'),
+    ]
+
+class LARGE_CONTROL_AREA(pstruct.type):
+    _fields_ = [
+        (lambda self: P(SEGMENT), 'Segment'),
+        (LIST_ENTRY, 'DereferenceList'),
+        (ULONG, 'NumberOfSectionReferences'),
+        (ULONG, 'NumberOfPfnReferences'),
+        (ULONG, 'NumberOfMappedViews'),
+        (ULONG, 'NumberOfSystemCacheViews'),
+        (ULONG, 'NumberOfUserReferences'),
+        (MMSECTION_FLAGS, 'Flags'),
+        (P(iotypes.FILE_OBJECT), 'FilePointer'),
+        (P(EVENT_COUNTER), 'WaitingForDeletion'),
+        (USHORT, 'ModifiedWriteCount'),
+        (USHORT, 'FlushInProgressCount'),
+        (ULONG, 'WritableUserReferences'),
+        (ULONG, 'QuadwordPad'),
+        (ULONG, 'StartingFrame'),
+        (LIST_ENTRY, 'UserGlobalList'),
+        (ULONG, 'SessionId'),
+    ]
+
+class MMPTE(dynamic.union):
+    _fields_ = [
+        (ULONG, 'Long'),
+        # TODO
+        #(HARDWARE_PTE, 'Flush'),
+        #(MMPTE_HARDWARE, 'Hard'),
+        #(MMPTE_PROTOTYPE, 'Proto'),
+        #(MMPTE_SOFTWARE, 'Soft'),
+        #(MMPTE_TRANSITION, 'Trans'),
+        #(MMPTE_SUBSECTION, 'Subsect'),
+        #(MMPTE_LIST, 'List'),
+    ]
+
+class SUBSECTION(pstruct.type):
+    _fields_ = [
+        (P(CONTROL_AREA), 'ControlArea'),
+        (MMSUBSECTION_FLAGS, 'SubsectionFlags'),
+        (ULONG, 'StartingSector'),
+        (ULONG, 'NumberOfFullSectors'),
+        (P(MMPTE), 'SubsectionBase'),
+        (ULONG, 'UnusedPtes'),
+        (ULONG, 'PtesInSubsection'),
+        (lambda self: P(SUBSECTION), 'NextSubsection'),
+    ]
+
+class SEGMENT_OBJECT(pstruct.type):
+    _fields_ = [
+        (PVOID, 'BaseAddress'),
+        (ULONG, 'TotalNumberOfPtes'),
+        (LARGE_INTEGER, 'SizeOfSegment'),
+        (ULONG, 'NonExtendedPtes'),
+        (ULONG, 'ImageCommitment'),
+        (P(CONTROL_AREA), 'ControlArea'),
+        (P(SUBSECTION), 'Subsection'),
+        (P(LARGE_CONTROL_AREA), 'LargeControlArea'),
+        (P(MMSECTION_FLAGS), 'MmSectionFlags'),
+        (P(MMSUBSECTION_FLAGS), 'MmSubSectionFlags'),
+    ]
+
+class SECTION_OBJECT(pstruct.type):
+    _fields_ = [
+        (PVOID, 'StartingVa'),
+        (PVOID, 'EndingVa'),
+        (PVOID, 'LeftChild'),
+        (PVOID, 'RightChild'),
+        (P(SEGMENT_OBJECT), 'Segment'),
     ]

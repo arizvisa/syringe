@@ -463,16 +463,108 @@ class ERESOURCE(pstruct.type, versioned):
         (ketypes.KSPIN_LOCK, 'SpinLock'),
     ]
 
-class GENERAL_LOOKASIDE(pstruct.type):
+class POOL_HEADER(pstruct.type, versioned):
+    class _Ulong(pbinary.struct):
+        def summary(self):
+            res = []
+            res.append("Type={:s}({:d})".format(self.item('PoolType').str(), self.item('PoolType').int()))
+            res.append("Index={:d}".format(self['PoolIndex']))
+            res.append("PreviousSize={:#x}".format(self['PreviousSize']))
+            res.append("BlockSize={:#x}".format(self['BlockSize']))
+            return ' '.join(res)
+
+    class _Ulong1_PagedPool(_Ulong):
+        class _PagedPoolType(mmtypes._POOL_TYPE_PagedPool):
+            length = 7
+        _fields_ = [
+            (_PagedPoolType, 'PoolType'),
+            (9, 'BlockSize'),
+            (7, 'PoolIndex'),
+            (9, 'PreviousSize'),
+        ]
+
+    class _Ulong1_NonPagedPool(_Ulong):
+        class _NonPagedPoolType(mmtypes._POOL_TYPE_NonPagedPool):
+            length = 7
+        _fields_ = [
+            (_NonPagedPoolType, 'PoolType'),
+            (9, 'BlockSize'),
+            (7, 'PoolIndex'),
+            (9, 'PreviousSize'),
+        ]
+
+    class _Ulong164_PagedPool(_Ulong):
+        class _PagedPoolType(mmtypes._POOL_TYPE_PagedPool):
+            length = 8
+        _fields_ = [
+            (_PagedPoolType, 'PoolType'),
+            (8, 'BlockSize'),
+            (8, 'PoolIndex'),
+            (8, 'PreviousSize'),
+        ]
+
+    class _Ulong164_NonPagedPool(_Ulong):
+        class _NonPagedPoolType(mmtypes._POOL_TYPE_NonPagedPool):
+            length = 8
+        _fields_ = [
+            (_NonPagedPoolType, 'PoolType'),
+            (8, 'BlockSize'),
+            (8, 'PoolIndex'),
+            (8, 'PreviousSize'),
+        ]
+
+    def __Ulong1(self):
+        nonpaged_attribute = self.NONPAGED if hasattr(self, 'NONPAGED') else not self.PAGED if hasattr(self, 'PAGED') else False
+        if nonpaged_attribute:
+            pooltype32, pooltype64 = (POOL_HEADER._Ulong1_NonPagedPool, POOL_HEADER._Ulong164_NonPagedPool) 
+        else:
+            pooltype32, pooltype64 = (POOL_HEADER._Ulong1_PagedPool, POOL_HEADER._Ulong164_PagedPool) 
+        res = pooltype64 if getattr(self, 'WIN64', False) else pooltype
+        return pbinary.littleendian(res)
+
     _fields_ = [
-        (dyn.clone(SLIST_HEADER, _object_=mmtypes.POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
+        (__Ulong1, 'Ulong1'),
+        (dyn.clone(pstr.string, length=4), 'PoolTag'),
+        (lambda self: PVOID if getattr(self, 'WIN64', False) else pint.uint_t, 'ProcessBilled'),
+    ]
+
+    def summary(self):
+        res, tag = self['Ulong1'], self['PoolTag'].str()
+        encoded = tag.encode('unicode_escape')
+        return "\"{:s}\" {:s}".format(encoded.decode(sys.getdefaultencoding()).replace('"', '\\"'), res.summary())
+
+class POOL_FREE_CHUNK(pstruct.type, versioned): pass
+class POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):
+    _object_ = fpointer(POOL_FREE_CHUNK, 'ListEntry')
+    _path_ = ('ListEntry',)
+
+POOL_FREE_CHUNK._fields_ = [
+    (POOL_HEADER, 'Header'),
+    (POOL_FREE_CHUNK_LIST_ENTRY, 'ListEntry'),
+]
+
+class GENERAL_LOOKASIDE(pstruct.type):
+    @pbinary.littleendian
+    class _PagedPoolType(mmtypes._POOL_TYPE_PagedPool):
+        length = 32
+
+    @pbinary.littleendian
+    class _NonPagedPoolType(mmtypes._POOL_TYPE_NonPagedPool):
+        length = 32
+
+    def __PoolType(self):
+        nonpaged_attribute = self.NONPAGED if hasattr(self, 'NONPAGED') else not self.PAGED if hasattr(self, 'PAGED') else False
+        return GENERAL_LOOKASIDE._NonPagedPoolType if nonpaged_Attribute else GENERAL_LOOKASIDE._PagedPoolType
+
+    _fields_ = [
+        (dyn.clone(SLIST_HEADER, _object_=POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
         (UINT16, 'Depth'),
         (UINT16, 'MaximumDepth'),
         (ULONG, 'TotalAllocates'),
         (ULONG, 'AllocateMissesOrHits'),
         (ULONG, 'TotalFrees'),
         (ULONG, 'FreeMissesOrHits'),
-        (POOL_TYPE, 'Type'),
+        (__PoolType, 'Type'),
         (dyn.clone(pstr.string, length=4), 'Tag'),
         (ULONG, 'Size'),
         (PVOID, 'Allocate'),
@@ -483,15 +575,33 @@ class GENERAL_LOOKASIDE(pstruct.type):
         (dyn.array(ULONG, 2), 'Future'),
     ]
 
+class PP_LOOKASIDE_LIST(pstruct.type):
+    _fields_ = [
+        (P(GENERAL_LOOKASIDE), 'P'),
+        (P(GENERAL_LOOKASIDE), 'L'),
+    ]
+
 class POOL_DESCRIPTOR(pstruct.type, versioned):
+    @pbinary.littleendian
+    class _PagedPoolType(mmtypes._POOL_TYPE_PagedPool):
+        length = 32
+
+    @pbinary.littleendian
+    class _NonPagedPoolType(mmtypes._POOL_TYPE_NonPagedPool):
+        length = 32
+
+    def __PoolType(self):
+        nonpaged_attribute = self.NONPAGED if hasattr(self, 'NONPAGED') else not self.PAGED if hasattr(self, 'PAGED') else False
+        return POOL_DESCRIPTOR._NonPagedPoolType if nonpaged_Attribute else POOL_DESCRIPTOR._PagedPoolType
+
     def __ListHeads(self):
-        POOL_PAGE_SIZE = 0x1000
-        POOL_BLOCK_SHIFT = 4 if getattr(self, 'WIN64', False) else 3
-        POOL_LIST_HEADS = POOL_PAGE_SIZE // pow(2, POOL_BLOCK_SHIFT)
-        return dyn.array(LIST_ENTRY, POOL_LIST_HEADS)
+        POOL_PAGE_SIZE = pow(2, 12)
+        POOL_BLOCK_SIZE = 16 if getattr(self, 'WIN64', False) else 8
+        POOL_LISTS_PER_PAGE = POOL_PAGE_SIZE // POOL_BLOCK_SIZE
+        return dyn.array(POOL_FREE_CHUNK_LIST_ENTRY, POOL_LISTS_PER_PAGE)
 
     _fields_ = [
-        (POOL_TYPE, 'PoolType'),
+        (__PoolType, 'PoolType'),
         (ULONG, 'PoolIndex'),
         (ULONG, 'RunningAllocs'),
         (ULONG, 'RunningDeAllocs'),
@@ -500,45 +610,12 @@ class POOL_DESCRIPTOR(pstruct.type, versioned):
         (ULONG, 'Threshold'),
         (PVOID, 'LockAddress'),
         (PVOID, 'PendingFrees'),
+        (LONG, 'ThreadsProcessingDeferrals'),
         (LONG, 'PendingFreeDepth'),
-        (SIZE_T, 'TotalBytes'),
-        (SIZE_T, 'Spare0'),
+        (ULONG, 'TotalBytes'),
+        (ULONG, 'Spare0'),
         (__ListHeads, 'ListHeads'),
     ]
-
-class POOL_HEADER(pstruct.type):
-    class _Ulong1_32(pbinary.struct):
-        _fields_ = [
-            (9, 'PreviousSize'),
-            (7, 'PoolIndex'),
-            (9, 'BlockSize'),
-            (7, 'PoolType'),
-        ]
-    class _Ulong1_64(pbinary.struct):
-        _fields_ = [
-            (8, 'PreviousSize'),
-            (8, 'PoolIndex'),
-            (8, 'BlockSize'),
-            (8, 'PoolType'),
-        ]
-
-    def __init__(self, **attrs):
-        super(POOL_HEADER, self).__init__(**attrs)
-        f = self._fields_ = []
-
-        if getattr(self, 'WIN64', False):
-            f.extend([
-                (self._Ulong1_64, 'Ulong1'),
-                (ULONG, 'PoolTag'),
-                (P(Ntddk.EPROCESS), 'ProcessBilled'),
-            ])
-
-        else:
-            f.extend([
-                (self._Ulong1_32, 'Ulong1'),
-                (ULONG, 'PoolTag'),
-            ])
-        return
 
 class POOL_TRACKER_TABLE(pstruct.type):
     _fields_ = [

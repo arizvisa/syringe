@@ -308,12 +308,16 @@ class HKEY(HANDLE): pass
 class HMODULE(HANDLE): pass
 class HINSTANCE(HANDLE): pass
 class NTSTATUS(winerror.NTSTATUS, ULONG): pass
-class POOL_TYPE(INT): pass
+#class POOL_TYPE(INT): pass
 #class HRESULT(LONG): pass
 #class SIZE_T(ULONG_PTR): pass
 #class PSIZE_T(P(SIZE_T)): pass
 class LANGID(WORD): pass
 class HWND(HANDLE): pass
+
+class CINT(int): pass
+class CSHORT(short): pass
+class CLONG(ULONG): pass
 
 # Some constants
 MAX_PATH = 104

@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import rtltypes, Ntddk
+from . import Ntddk, rtltypes
 from .datatypes import *
 
 class DISPATCHER_HEADER(pstruct.type):
@@ -48,21 +48,26 @@ class KSCB(pstruct.type):
             (1, 'OverQuota'),
             (1, 'Inserted'),
         ]
-    _fields_ = [
-        (ULONGLONG, 'GenerationCycles'),
-        (ULONGLONG, 'UnderQuotaCycleTarget'),
-        (ULONGLONG, 'RankCycleTarget'),
-        (ULONGLONG, 'LongTermCycles'),
-        (ULONGLONG, 'LastReportedCycles'),
-        (ULONGLONG, 'OverQuotaHistory'),
-        (LIST_ENTRY, 'PerProcessorList'),
-        (rtltypes.RTL_BALANCED_NODE, 'QueueNode'),
-        (_Spare1, 'Spare1'),
-        (UCHAR, 'Spare2'),
-        (USHORT, 'ReadySummary'),
-        (ULONG, 'Rank'),
-        (dyn.array(LIST_ENTRY, 16), 'ReadyListHead'),
-    ]
+    def __init__(self, **attrs):
+        super(KLOCK_ENTRY, self).__init__(**attrs)
+
+        # circular import
+        from . import rtltypes
+        self._fields_ = [
+            (ULONGLONG, 'GenerationCycles'),
+            (ULONGLONG, 'UnderQuotaCycleTarget'),
+            (ULONGLONG, 'RankCycleTarget'),
+            (ULONGLONG, 'LongTermCycles'),
+            (ULONGLONG, 'LastReportedCycles'),
+            (ULONGLONG, 'OverQuotaHistory'),
+            (LIST_ENTRY, 'PerProcessorList'),
+            (rtltypes.RTL_BALANCED_NODE, 'QueueNode'),
+            (_Spare1, 'Spare1'),
+            (UCHAR, 'Spare2'),
+            (USHORT, 'ReadySummary'),
+            (ULONG, 'Rank'),
+            (dyn.array(LIST_ENTRY, 16), 'ReadyListHead'),
+        ]
 
 class KSCHEDULING_GROUP(pstruct.type, versioned):
     _fields_ = [
@@ -171,6 +176,9 @@ class KLOCK_ENTRY_LOCK_STATE(pstruct.type):
 class KLOCK_ENTRY(pstruct.type, versioned):
     def __init__(self, **attrs):
         super(KLOCK_ENTRY, self).__init__(**attrs)
+
+        # circular import
+        from . import rtltypes
         self._fields_ = f = [
             (rtltypes.RTL_BALANCED_NODE, 'TreeNode'),
         ]
