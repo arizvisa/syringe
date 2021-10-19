@@ -181,12 +181,12 @@ class CTL_CODE(pbinary.struct):
             ('SDFXHCI',                       0x0000005c),
             ('IRCLASS',                       0x00000f60),
         ]
-    class FILE_(pbinary.enum):
+    class FILE_ACCESS(pbinary.enum):
         length, _values_ = 2, [
-            ('ANY_ACCESS', 0),
-            ('READ_ACCESS', 1),
-            ('WRITE_ACCESS', 2),
-            ('READWRITE_ACCESS', 3),
+            ('ANY', 0),         # FILE_ANY_ACCESS
+            ('READ', 1),        # FILE_READ_ACCESS
+            ('WRITE', 2),       # FILE_WRITE_ACCESS
+            ('READ_WRITE', 3),  # FILE_READ_ACCESS|FILE_WRITE_ACCESS
         ]
     class METHOD_(pbinary.enum):
         length, _values_ = 2, [
@@ -197,7 +197,7 @@ class CTL_CODE(pbinary.struct):
         ]
     _fields_ = [
         (FILE_DEVICE_, 'DeviceType'),
-        (FILE_, 'Access'),
+        (FILE_ACCESS, 'Access'),
         (12, 'Function'),
         (METHOD_, 'Method'),
     ]
