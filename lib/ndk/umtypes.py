@@ -101,6 +101,22 @@ class EX_PUSH_LOCK(pbinary.struct):
         (28, 'Shared'),
     ]
 
+class OBJECT_ATTRIBUTES(pstruct.type, versioned):
+    _fields_ = [
+        (ULONG, 'Length'),
+        (HANDLE, 'RootDirectory'),
+        (PUNICODE_STRING, 'ObjectName'),
+        (ULONG, 'Attributes'),
+        (PVOID, 'SecurityDescriptor'),
+        (PVOID, 'SecurityQualityOfService'),
+    ]
+
+class PHYSICAL_MEMORY_RANGE(pstruct.type):
+    _fields_ = [
+        (PHYSICAL_ADDRESS, 'BaseAddress'),
+        (LARGE_INTEGER, 'NumberOfBytes'),
+    ]
+
 WER_MAX_PREFERRED_MODULES = 128
 WER_MAX_PREFERRED_MODULES_BUFFER = 256
 
@@ -322,4 +338,42 @@ class WER_CONSENT(pint.enum):
         ('WerConsentApproved', 2),
         ('WerConsentDenied', 3),
         ('WerConsentAlwaysPrompt', 4),
+    ]
+
+class KERB_ETYPE_(pint.enum):
+    _values_ = [
+        ('RC4_HMAC_NT', 0x17),
+    ]
+
+class KERB_ECRYPT(pstruct.type):
+    class _EncryptionType(KERB_ETYPE_, ULONG): pass
+    class PKERB_ECRYPT_INITIALIZE(PVOID): pass
+    class PKERB_ECRYPT_ENCRYPT(PVOID): pass
+    class PKERB_ECRYPT_DECRYPT(PVOID): pass
+    class PKERB_ECRYPT_FINISH(PVOID): pass
+    class PKERB_ECRYPT_RANDOMKEY(PVOID): pass
+    class PKERB_ECRYPT_CONTROL(PVOID): pass
+    def __HashPassword(self):
+        res = self['EncryptionType'].li
+        return PVOID
+    _fields_ = [
+        (_EncryptionType, 'EncryptionType'),
+        (ULONG, 'BlockSize'),
+        (ULONG, 'ExportableEncryptionType'),
+        (ULONG, 'KeySize'),
+        (ULONG, 'HeaderSize'),
+        (ULONG, 'PreferredCheckSum'),
+        (ULONG, 'Attributes'),
+        #(PCWSTR, 'Name'),
+        (PWSTR, 'Name'),
+        (PKERB_ECRYPT_INITIALIZE, 'Initialize'),
+        (PKERB_ECRYPT_ENCRYPT, 'Encrypt'),
+        (PKERB_ECRYPT_DECRYPT, 'Decrypt'),
+        (PKERB_ECRYPT_FINISH, 'Finish'),
+        (__HashPassword, 'HashPassword'),
+        (PKERB_ECRYPT_RANDOMKEY, 'RandomKey'),
+        (PKERB_ECRYPT_CONTROL, 'Control'),
+        (PVOID, 'unk0_null'),
+        (PVOID, 'unk1_null'),
+        (PVOID, 'unk2_null'),
     ]
