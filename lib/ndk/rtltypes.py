@@ -107,7 +107,7 @@ class RTL_USER_PROCESS_PARAMETERS(pstruct.type):
         (ULONG, 'EnvironmentSize'),
     ]
 
-class RLT_PATH_TYPE(pint.enum):
+class RTL_PATH_TYPE(pint.enum):
     _values_ = [
         ('RtlPathTypeUnknown', 0),
         ('RtlPathTypeUncAbsolute', 1),
@@ -281,13 +281,84 @@ class RTL_TRACE_ENUMERATE(pstruct.type, versioned):
             (P(RTL_TRACE_BLOCK), 'Block'),
         ])
 
-# XXX: These should probably be unions
-class RTL_RUN_ONCE(pstruct.type, versioned):
+class RTL_RUN_ONCE(dynamic.union, versioned):
+    def __ULONG3264(self):
+        return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
     _fields_ = [
-        (P(ptype.undefined), 'Ptr'),
+        (PVOID, 'Ptr'),
+        (__ULONG3264, 'Value'),
+        (__ULONG3264, 'State'),   # ULONGLONG State:2
     ]
 
-class RTL_SRWLOCK(pstruct.type, versioned):
+class RTL_SRWLOCK(dynamic.union, versioned):
+    class _Shared(pbinary.flags):
+        _fields_ = [
+            (lambda self: 60 if getattr(self, 'WIN64', False) else 28, 'Shared'),
+            (1, 'MultipleShared'),
+            (1, 'Waking'),
+            (1, 'Waiting'),
+            (1, 'Locked'),
+        ]
     _fields_ = [
-        (P(ptype.undefined), 'Ptr'),
+        (_Shared, 'Shared'),
+        (ULONG, 'Value'),
+        (PVOID, 'Ptr'),
+    ]
+
+class RTL_HP_SEG_ALLOC_POLICY(pstruct.type, versioned):
+    def __ULONG3264(self):
+        return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+    _fields_ = [
+        (__ULONG3264, 'MinLargePages'),
+        (__ULONG3264, 'MaxLargePages'),
+        (UCHAR, 'MinUtilization'),
+        (lambda self: dyn.block(7 if getattr(self, 'WIN64', False) else 3), 'padding(MinUtilization)'),
+    ]
+
+class RTL_HP_ENV_HANDLE(pstruct.type):
+    _fields_ = [
+        (dyn.array(PVOID, 2), 'h'),
+    ]
+
+class RTL_HEAP_MEMORY_LIMIT_DATA(pstruct.type, versioned):
+    def __ULONG3264(self):
+        return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+    _fields_ = [
+        (__ULONG3264, 'CommitLimitBytes'),
+        (__ULONG3264, 'CommitLimitFailureCode'),
+        (__ULONG3264, 'MaxAllocationSizeBytes'),
+        (__ULONG3264, 'AllocationLimitFailureCode'),
+    ]
+
+class RTLP_HP_LOCK_TYPE(pint.enum):
+    _values_ = [
+        ('HeapLockPaged', 0),
+        ('HeapLockNonPaged', 1),
+        ('HeapLockTypeMax', 2),
+    ]
+
+class RTL_HP_VS_CONFIG(pstruct.type):
+    @pbinary.littleendian
+    class _Flags(pbinary.flags):
+        _fields_ = [
+            (29, 'Reserved'),
+            (1, 'EnableDelayFree'),
+            (1, 'FullDecommit'),
+            (1, 'PageAlignLargeAllocs'),
+        ]
+    _fields_ = [
+        (_Flags, 'Flags'),
+    ]
+
+class RTL_HP_LFH_CONFIG(pstruct.type):
+    @pbinary.littleendian
+    class _Options(pbinary.flags):
+        _fields_ = [
+            (14, 'Reserved'),
+            (1, 'DisableRandomization'),
+            (1, 'WitholdPageCrossingBlocks'),
+        ]
+    _fields_ = [
+        (USHORT, 'MaxBlockSize'),
+        (_Options, 'Options'),
     ]

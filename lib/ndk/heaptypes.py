@@ -322,7 +322,7 @@ if 'HeapEntry':
 
         def FrontEndQ(self):
             res = self.Flags()
-            return bool(res['AllocatedByFrontend'])
+            return True if res['AllocatedByFrontend'] else False
         def BackEndQ(self):
             return not self.FrontEndQ()
 
@@ -1139,15 +1139,248 @@ if 'LookasideList':
         ]
 
 if 'SegmentHeap':
-    # FIXME: These are just placeholders for now
-    class SEGMENT_HEAP(ptype.block):
+    # XXX: https://www.sstic.org/media/SSTIC2020/SSTIC-actes/pool_overflow_exploitation_since_windows_10_19h1/SSTIC2020-Article-pool_overflow_exploitation_since_windows_10_19h1-bayet_fariello.pdf
+    class HEAP_VS_DELAY_FREE_CONTEXT(pstruct.type):
+        _fields_ = [
+            (SLIST_HEADER, 'ListHead'),
+        ]
+    class HEAP_SUBALLOCATOR_CALLBACKS(pstruct.type, versioned):
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        _fields_ = [
+            (__ULONG3264, 'Allocate'),
+            (__ULONG3264, 'Free'),
+            (__ULONG3264, 'Commit'),
+            (__ULONG3264, 'Decommit'),
+            (__ULONG3264, 'ExtendContext'),
+        ]
+    class HEAP_VS_CONTEXT(pstruct.type, versioned):
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        class _LockType32(rtltypes.RTLP_HP_LOCK_TYPE, ULONG): pass
+        class _LockType64(rtltypes.RTLP_HP_LOCK_TYPE, ULONGLONG): pass
+        def __ForceOffset(field, offset):
+            def __padding(self):
+                predicate = functools.partial(operator.ne, field)
+                iterable = itertools.chain(itertools.takewhile(predicate, iter(self.keys())))
+                return dyn.block(max(0, offset - sum(self[fld].li.size() for fld in iterable)))
+            return __padding
+        _fields_ = [
+            (__ULONG3264, 'Lock'),
+            (lambda self: self._LockType64 if getattr(self, 'WIN64', False) else self._LockType32, 'LockType'),
+            (rtltypes.RTL_RB_TREE, 'FreeChunkTree'),
+            (LIST_ENTRY, 'SubsegmentList'),
+            (__ULONG3264, 'TotalCommittedUnits'),
+            (__ULONG3264, 'FreeCommittedUnits'),
+            (__ForceOffset('offset(DelayFreeContext)', 0x40), 'offset(DelayFreeContext)'),
+            (HEAP_VS_DELAY_FREE_CONTEXT, 'DelayFreeContext'),
+            (__ForceOffset('offset(BackendCtx)', 0x80), 'offset(BackendCtx)'),
+            (PVOID, 'BackendCtx'),
+            (HEAP_SUBALLOCATOR_CALLBACKS, 'Callbacks'),
+            (rtltypes.RTL_HP_VS_CONFIG, 'Config'),
+            (ULONG, 'Flags'),
+            (__ForceOffset('size(HEAP_VS_CONTEXT)', 0xc0), 'size(HEAP_VS_CONTEXT)'),
+        ]
+
+    class HEAP_LFH_SUBSEGMENT_STAT(pstruct.type):
+        _fields_ = [
+            (UCHAR, 'Index'),
+            (UCHAR, 'Count'),
+        ]
+
+    class HEAP_LFH_SUBSEGMENT_STATS(dynamic.union, versioned):
+        _fields_ = [
+            (lambda self: dyn.array(HEAP_LFH_SUBSEGMENT_STAT, 4 if getattr(self, 'WIN64', False) else 2), 'Buckets'),
+            (PVOID, 'AllStats'),
+        ]
+
+    class HEAP_LFH_SUBSEGMENT_OWNER(pstruct.type):
+        class _Spare0(pbinary.flags):
+            _fields_ = [
+                (7, 'Spare'),
+                (1, 'IsBucket'),
+            ]
+        class _Slot(dynamic.union):
+            _fields_ = [
+                (UCHAR, 'SlotCount'),
+                (UCHAR, 'SlotIndex'),
+            ]
+        _fields_ = [
+            (_Spare0, 'Spare0'),
+            (UCHAR, 'BucketIndex'),
+            (_Slot, 'Slot'),
+            (UCHAR, 'Spare1'),
+            (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(AvailableSubsegmentCount)'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'AvailableSubsegmentCount'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Lock'),
+            (LIST_ENTRY, 'AvailableSubsegmentList'),
+            (LIST_ENTRY, 'FullSubsegmentList'),
+        ]
+
+    class HEAP_LFH_FAST_REF(dynamic.union):
+        @pbinary.littleendian
+        class _RefCount(pbinary.struct):
+            _fields_ = [
+                (lambda self: 52 if getattr(self, 'WIN64', False) else 20, 'Unknown'),
+                (12, 'RefCount'),
+            ]
+        _fields_ = [
+            (PVOID, 'Target'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Value'),
+            (_RefCount, 'RefCount'),
+        ]
+
+    class HEAP_LFH_AFFINITY_SLOT(pstruct.type):
+        _fields_ = [
+            (HEAP_LFH_SUBSEGMENT_OWNER, 'State'),
+            (HEAP_LFH_FAST_REF, 'ActiveSubsegment'),
+        ]
+
+    class HEAP_LFH_BUCKET(pstruct.type, versioned):
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        _fields_ = [
+            (HEAP_LFH_SUBSEGMENT_OWNER, 'State'),
+            (__ULONG3264, 'TotalBlockCount'),
+            (__ULONG3264, 'TotalSubsegmentCount'),
+            (ULONG, 'ReciprocalBlockSize'),
+            (UCHAR, 'Shift'),
+            (UCHAR, 'ContentionCount'),
+            (lambda self: dyn.block(2 if getattr(self, 'WIN64', False) else 2), 'Padding(ContentionCount)'),
+            (__ULONG3264, 'AffinityMappingLock'),
+            (P(UCHAR), 'ProcAffinityMapping'),
+            (P(dyn.array(P(HEAP_LFH_AFFINITY_SLOT), 0)), 'AffinitySlots'),  # FIXME
+        ]
+
+    class HEAP_LFH_CONTEXT(pstruct.type, versioned):
+        def __ForceOffset(field, offset):
+            def __padding(self):
+                predicate = functools.partial(operator.ne, field)
+                iterable = itertools.chain(itertools.takewhile(predicate, iter(self.keys())))
+                return dyn.block(max(0, offset - sum(self[fld].li.size() for fld in iterable)))
+            return __padding
+        _fields_ = [
+            (PVOID, 'BackendCtx'),
+            (HEAP_SUBALLOCATOR_CALLBACKS, 'Callbacks'),
+            (P(UCHAR), 'AffinityModArray'),
+            (UCHAR, 'MaxAffinity'),
+            (UCHAR, 'LockType'),
+            (SHORT, 'MemStatsOffset'),
+            (rtltypes.RTL_HP_LFH_CONFIG, 'Config'),
+            (__ForceOffset('offset(BucketStats)', 0x40), 'offset(BucketStats)'),
+            (HEAP_LFH_SUBSEGMENT_STATS, 'BucketStats'),
+            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SubsegmentCreationLock'),
+            (__ForceOffset('offset(Buckets)', 0x80), 'offset(Buckets)'),
+            (dyn.array(P(HEAP_LFH_BUCKET), 129), 'Buckets'),
+            (lambda self: dyn.block(0x38 if getattr(self, 'WIN64', False) else 0x3c), 'size(HEAP_LFH_CONTEXT)')
+        ]
+
+    class HEAP_OPPORTUNISTIC_LARGE_PAGE_STATS(pstruct.type):
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        _fields_ = [
+            (__ULONG3264, 'SmallPagesInUseWithinLarge'),
+            (__ULONG3264, 'OpportunisticLargePageCount'),
+        ]
+
+    class HEAP_RUNTIME_MEMORY_STATS(pstruct.type, versioned):
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        _fields_ = [
+            (__ULONG3264, 'TotalReservedPages'),
+            (__ULONG3264, 'TotalCommittedPages'),
+            (__ULONG3264, 'FreeCommittedPages'),
+            (__ULONG3264, 'LfhFreeCommittedPages'),
+            (dyn.array(HEAP_OPPORTUNISTIC_LARGE_PAGE_STATS, 2), 'LargePageStats'),
+            (rtltypes.RTL_HP_SEG_ALLOC_POLICY, 'LargePageUtilizationPolicy'),
+        ]
+
+    class HEAP_SEG_CONTEXT(pstruct.type, versioned):
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        class _Flags(pstruct.type):
+            _fields_ = [
+                #(UCHAR, 'LargePagePolicy'),         # UCHAR LargePagePolicy:3
+                #(UCHAR, 'FullDecommit'),            # UCHAR FullDecommit:1
+                #(UCHAR, 'ReleaseEmptySegments'),    # UCHAR ReleaseEmptySegments:1
+                (UCHAR, 'AllFlags'),
+                (dyn.block(2), 'padding(AllFlags)'),
+            ]
+        _fields_ = [
+            (__ULONG3264, 'SegmentMask'),
+            (UCHAR, 'UnitShift'),
+            (UCHAR, 'PagesPerUnitShift'),
+            (UCHAR, 'FirstDescriptorIndex'),
+            (UCHAR, 'CachedCommitSoftShift'),
+            (UCHAR, 'CachedCommitHighShift'),
+            (_Flags, 'Flags'),
+            (ULONG, 'MaxAllocationSize'),
+            (SHORT, 'OlpStatsOffset'),
+            (SHORT, 'MemStatsOffset'),
+            (PVOID, 'LfhContext'),
+            (PVOID, 'VsContext'),
+            (rtltypes.RTL_HP_ENV_HANDLE, 'EnvHandle'),
+            (PVOID, 'Heap'),
+            (lambda self: dyn.block(0 if getattr(self, 'WIN64', False) else 0x18), 'padding(Heap)'),
+            (__ULONG3264, 'SegmentLock'),
+            (LIST_ENTRY, 'SegmentListHead'),
+            (__ULONG3264, 'SegmentCount'),
+            (rtltypes.RTL_RB_TREE, 'FreePageRanges'),
+            (__ULONG3264, 'FreeSegmentListLock'),
+            (dyn.array(SINGLE_LIST_ENTRY, 2), 'FreeSegmentList'),
+            (lambda self: dyn.block(0x38 if getattr(self, 'WIN64', False) else 0x1c), 'Padding'),
+        ]
+
+    class SEGMENT_HEAP(pstruct.type, versioned):
         length = 0x5f0
-
-    class HEAP_VS_CONTEXT(ptype.block):
-        length = 0x48
-
-    class HEAP_LFH_CONTEXT(ptype.block):
-        length = 0x4d0
+        class _CommitLimitMetadata(pstruct.type):
+            def __ULONG3264(self):
+                return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+            _fields_ = [
+                (__ULONG3264, 'ReservedMustBeZero1'),
+                (PVOID, 'UserContext'),
+                (__ULONG3264, 'ReservedMustBeZero2'),
+                (PVOID, 'Spare'),
+            ]
+        def __ULONG3264(self):
+            return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
+        def __ForceOffset(field, offset):
+            def __padding(self):
+                predicate = functools.partial(operator.ne, field)
+                iterable = itertools.chain(itertools.takewhile(predicate, iter(self.keys())))
+                return dyn.block(max(0, offset - sum(self[fld].li.size() for fld in iterable)))
+            return __padding
+        _fields_ = [
+            (rtltypes.RTL_HP_ENV_HANDLE, 'EnvHandle'),
+            (ULONG, 'Signature'),
+            (ULONG, 'GlobalFlags'),
+            (ULONG, 'Interceptor'),
+            (USHORT, 'ProcessHeapIndex'),
+            (USHORT, 'AllocatedFromMetadata'),  # USHORT AllocatedFromMetadata:1
+            # XXX: union {
+            (lambda self: ptype.undefined if self['AllocatedFromMetadata'].li.int() & 1 else rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA, 'CommitLimitData'),
+            (lambda self: _CommitLimitMetadata if self['AllocatedFromMetadata'].li.int() & 1 else ptype.undefined, 'CommitLimitMetadata?'),
+            # XXX: }
+            (__ForceOffset('offset(LargeMetadataLock)', 0x40), 'offset(LargeMetadataLock)'),
+            (__ULONG3264, 'LargeMetadataLock'),
+            (rtltypes.RTL_RB_TREE, 'LargeAllocMetadata'),
+            (__ULONG3264, 'LargeReservedPages'),
+            (__ULONG3264, 'LargeCommitedPages'),
+            (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
+            (__ForceOffset('offset(MemStats)', 0x80), 'offset(MemStats)'),
+            (HEAP_RUNTIME_MEMORY_STATS, 'MemStats'),
+            (USHORT, 'GlobalLockCount'),
+            (dyn.block(2), 'padding(GlobalLockCount)'),
+            (ULONG, 'GlobalLockOwner'),
+            (__ULONG3264, 'ContextExtendLock'),
+            (P(UCHAR), 'AllocatedBase'),
+            (P(UCHAR), 'UncommittedBase'),
+            (P(UCHAR), 'ReservedLimit'),
+            (__ForceOffset('offset(SegContexts)', 0x100), 'offset(SegContexts)'),
+            (dyn.array(HEAP_SEG_CONTEXT, 2), 'SegContexts'),
+            (HEAP_VS_CONTEXT, 'VsContext'),
+            (HEAP_LFH_CONTEXT, 'LfhContext'),
+        ]
 
 if 'LFH':
     class INTERLOCK_SEQ(pstruct.type):
@@ -1747,6 +1980,7 @@ if 'Heap':
                 ])
 
             else:
+                # XXX: https://lzeroyuee.cn/old-blog/%E5%88%9D%E8%AF%86win32%E5%A0%86%20-%20lZeroyuee%27s%20Blog.html
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
