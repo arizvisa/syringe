@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import umtypes, rtltypes, ketypes, mmtypes
+from . import umtypes, ketypes, mmtypes
 from .datatypes import *
 
 class SYSTEM_INFORMATION_CLASS(pint.enum):
@@ -283,9 +283,13 @@ class SYSTEM_ISOLATED_USER_MODE_INFORMATION(pstruct.type):
 
 class SYSTEM_SINGLE_MODULE_INFORMATION(pstruct.type):
     type = SYSTEM_INFORMATION_CLASS.byname('SystemSingleModuleInformation')
+    def __ExInfo(self):
+        import rtltypes
+        return rtltypes.RTL_PROCESS_MODULE_INFORMATION
+
     _fields_ = [
         (PVOID, 'TargetModuleAddress'),
-        (rtltypes.RTL_PROCESS_MODULE_INFORMATION, 'ExInfo'),
+        (__ExInfo, 'ExInfo'),
     ]
 
 class SYSTEM_DMA_PROTECTION_INFORMATION(pstruct.type):

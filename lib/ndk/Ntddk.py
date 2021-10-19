@@ -265,6 +265,56 @@ class FAST_MUTEX(pstruct.type, versioned):
         ]
 
 class EPROCESS(pstruct.type, versioned):
+    class _MitigationFlags(pbinary.flags):
+        _fields_ = [
+            (2, 'Unused'),
+            (1, 'EnableModuleTamperingProtectionNoInherit'),
+            (1, 'EnableModuleTamperingProtection'),
+            (1, 'AuditLoaderIntegrityContinuity'),
+            (1, 'LoaderIntegrityContinuityEnabled'),
+            (1, 'AuditBlockNonMicrosoftBinariesAllowStore'),
+            (1, 'AuditBlockNonMicrosoftBinaries'),
+            (1, 'SignatureMitigationOptIn'),
+            (1, 'AuditProhibitLowILImageMap'),
+            (1, 'ProhibitLowILImageMap'),
+            (1, 'AuditProhibitRemoteImageMap'),
+            (1, 'ProhibitRemoteImageMap'),
+            (1, 'PreferSystem32Images'),
+            (1, 'AuditNonSystemFontLoading'),
+            (1, 'DisableNonSystemFonts'),
+            (1, 'AuditFilteredWin32kAPIs'),
+            (1, 'EnableFilteredWin32kAPIs'),
+            (1, 'AuditDisallowWin32kSystemCalls'),
+            (1, 'DisallowWin32kSystemCalls'),
+            (1, 'AuditDisableDynamicCode'),
+            (1, 'DisableDynamicCodeAllowRemoteDowngrade'),
+            (1, 'DisableDynamicCodeAllowOptOut'),
+            (1, 'DisableDynamicCode'),
+            (1, 'ExtensionPointDisable'),
+            (1, 'StackRandomizationDisabled'),
+            (1, 'HighEntropyASLREnabled'),
+            (1, 'ForceRelocateImages'),
+            (1, 'DisallowStrippedImages'),
+            (1, 'ControlFlowGuardStrict'),
+            (1, 'ControlFlowGuardExportSuppressionEnabled'),
+            (1, 'ControlFlowGuardEnabled'),
+        ]
+    class _MitigationFlags2(pbinary.flags):
+        _fields_ = [
+            (20, 'Unused'),
+            (1, 'AuditImportAddressFilter'),
+            (1, 'EnableImportAddressFilter'),
+            (1, 'AuditRopSimExec'),
+            (1, 'EnableRopSimExec'),
+            (1, 'AuditRopCallerCheck'),
+            (1, 'EnableRopCallerCheck'),
+            (1, 'AuditRopStackPivot'),
+            (1, 'EnableRopStackPivot'),
+            (1, 'AuditExportAddressFilterPlus'),
+            (1, 'EnableExportAddressFilterPlus'),
+            (1, 'AuditExportAddressFilter'),
+            (1, 'EnableExportAddressFilter'),
+        ]
     def __init__(self, **attrs):
         super(EPROCESS, self).__init__(**attrs)
         self._fields_ = F = []
@@ -327,3 +377,24 @@ class MDL(pstruct.type, versioned):
             (ULONG, 'ByteCount'),
             (ULONG, 'ByteOffset'),
         ])
+
+class SYSTEM_MODULE_ENTRY(pstruct.type):
+    _fields_ = [
+        (HANDLE, 'Section'),
+        (PVOID, 'MappedBase'),
+        (PVOID, 'ImageBase'),
+        (ULONG, 'ImageSize'),
+        (ULONG, 'Flags'),
+        (USHORT, 'LoadOrderIndex'),
+        (USHORT, 'InitOrderIndex'),
+        (USHORT, 'LoadCount'),
+        (USHORT, 'OffsetToFileName'),
+        #(dyn.array(UCHAR, 256), 'FullPathName'),
+        (dyn.clone(pstr.string, length=256), 'FullPathName'),
+    ]
+
+class SYSTEM_MODULE_INFORMATION(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Count'),
+        (lambda self: dyn.array(SYSTEM_MODULE_ENTRY, self['Count'].li.int()), 'Module'),
+    ]

@@ -64,3 +64,29 @@ class FILE_OBJECT(pstruct.type):
         (LIST_ENTRY, 'IrpList'),
         (PVOID, 'FileObjectExtension'),
     ]
+
+class IO_STATUS_BLOCK(pstruct.type):
+    _fields_ = [
+        (PVOID, 'Pointer'),
+        (ULONG_PTR, 'Information'),
+    ]
+
+class SYSTEM_HANDLE_INFORMATION(pstruct.type):
+    def __GrantedAccess(self):
+        import setypes
+        return setypes.ACCESS_MASK
+    _fields_ = [
+        (USHORT, 'ProcessId'),
+        (USHORT, 'CreatorBackTraceIndex'),
+        (UCHAR, 'ObjectTypeNumber'),
+        (UCHAR, 'Flags'),
+        (USHORT, 'Handle'),
+        (PVOID, 'Object'),
+        (__GrantedAccess, 'GrantedAccess'),
+    ]
+
+class SYSTEM_HANDLE_INFORMATION_EX(pstruct.type):
+    _fields_ = [
+        (ULONG, 'NumberOfHandles'),
+        (lambda self: dyn.array(SYSTEM_HANDLE_INFORMATION, self['NumberOfHandles'].li.int()), 'Information'),
+    ]
