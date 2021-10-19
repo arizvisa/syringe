@@ -1,7 +1,7 @@
 import ptypes
 from ptypes import *
 
-from . import sdkddkver, ketypes
+from . import sdkddkver, ketypes, umtypes
 from .datatypes import *
 
 class TL(pstruct.type):
@@ -397,4 +397,28 @@ class SYSTEM_MODULE_INFORMATION(pstruct.type):
     _fields_ = [
         (ULONG, 'Count'),
         (lambda self: dyn.array(SYSTEM_MODULE_ENTRY, self['Count'].li.int()), 'Module'),
+    ]
+
+class KLDR_DATA_TABLE_ENTRY(pstruct.type):
+    def __InLoadOrderLinks(self):
+        return dyn.clone(LIST_ENTRY, _object_=KLDR_DATA_TABLE_ENTRY)
+    class PNON_PAGED_DEBUG_INFO(PVOID): pass
+    _fields_ = [
+        (__InLoadOrderLinks, 'InLoadOrderLinks'),
+        (PVOID, 'ExceptionTable'),
+        (ULONG, 'ExceptionTableSize'),
+        (PVOID, 'GpValue'),
+        (PNON_PAGED_DEBUG_INFO, 'NonPagedDebugInfo'),
+        (PVOID, 'DllBase'),
+        (PVOID, 'EntryPoint'),
+        (ULONG, 'SizeOfImage'),
+        (umtypes.UNICODE_STRING, 'FullDllName'),
+        (umtypes.UNICODE_STRING, 'BaseDllName'),
+        (ULONG, 'Flags'),
+        (USHORT, 'LoadCount'),
+        (USHORT, '__Unused5'),
+        (PVOID, 'SectionPointer'),
+        (ULONG, 'CheckSum'),
+        (PVOID, 'LoadedImports'),
+        (PVOID, 'PatchInformation'),
     ]
