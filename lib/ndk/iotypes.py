@@ -185,7 +185,7 @@ class CTL_CODE(pbinary.struct):
             ('ANY_ACCESS', 0),
             ('READ_ACCESS', 1),
             ('WRITE_ACCESS', 2),
-            ('READ_ACCESS|WRITE_ACCESS', 3),
+            ('READWRITE_ACCESS', 3),
         ]
     class METHOD_(pbinary.enum):
         length, _values_ = 2, [
