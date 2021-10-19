@@ -91,6 +91,7 @@ class SYSTEM_HANDLE_INFORMATION_EX(pstruct.type):
         (lambda self: dyn.array(SYSTEM_HANDLE_INFORMATION, self['NumberOfHandles'].li.int()), 'Information'),
     ]
 
+@pbinary.littleendian
 class CTL_CODE(pbinary.struct):
     class FILE_DEVICE_(pbinary.enum):
         length, _values_ = 16, [
