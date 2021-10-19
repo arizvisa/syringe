@@ -1,6 +1,9 @@
 import ptypes
 from ptypes import *
 
+from . import Ntddk, umtypes
+from .datatypes import *
+
 ### ntdll.dll!ZwQueryObject
 #ntdll_ZwQueryObject = __stdcall(NTSTATUS, (HANDLE, 'Handle'), (DWORD, 'ObjectInformationClass'), (PVOID, 'ObjectInformation'), (ULONG, 'ObjectInformationLength'), (PULONG, 'ReturnLength'))
 
@@ -12,7 +15,7 @@ class OBJECT_INFORMATION_CLASS(pint.enum, pint.uint32_t):
 
 class PUBLIC_OBJECT_TYPE_INFORMATION(pstruct.type):
     _fields_ = [
-        (UNICODE_STRING, 'TypeName'),
+        (umtypes.UNICODE_STRING, 'TypeName'),
         (dyn.array(ULONG, MAX_PATH), 'Reserved'),
     ]
 
