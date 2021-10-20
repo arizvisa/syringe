@@ -145,15 +145,17 @@ def padding(size, **kwds):
     def repr(self, **options):
         return self.summary(**options)
 
-    def blocksize(self, mask=size - 1 if size > 0 else 0):
+    def blocksize(self, denomination=size if size > 0 else 0):
         parent = self.parent
-        if parent is None or not isinstance(parent, ptype.container) or self not in parent.value:
-            return 0
-        idx = parent.value.index(self)
-        res = sum(item.blocksize() for item in parent.value[:idx])
-        position = (res + mask) & ~mask
-        return position - res
+        if parent and denomination and isinstance(parent, ptype.container) and self in parent.value:
+            idx = parent.value.index(self)
+            offset = sum(item.blocksize() for item in parent.value[:idx])
+            res = abs((offset % denomination) - denomination)
+            return res % denomination
+        return 0
     getinitargs = lambda self: (type, kwds)
+
+    res, denomination = 4, 3
 
     # if padding is undefined and represents empty space
     if kwds.get('undefined', False):
@@ -187,10 +189,12 @@ def align(size, **kwds):
     def repr(self, **options):
         return self.summary(**options)
 
-    def blocksize(self, mask=size - 1 if size > 1 else 1):
-        res = self.getoffset()
-        position = (res + mask) & ~mask
-        return position - res
+    def blocksize(self, denomination=size if size > 0 else 0):
+        offset = self.getoffset()
+        if denomination:
+            res = abs((offset % denomination) - denomination) if denomination else 0
+            return res % denomination
+        return 0
     getinitargs = lambda self: (type, kwds)
 
     # if alignment is undefined and represents empty space
@@ -856,9 +860,157 @@ if __name__ == '__main__':
             ]
 
         data = b'AAAABBBBBBBBCCCCDDDDEEEEFFFF'
-        global a
         a = mystruct().load(source=ptypes.provider.bytes(data))
         if a.size() == 0x10 and all(a['b'][fld].serialize() == b'BBBBBBBB' for fld in ['B', 'D', 'Q']) and a['c'].int() == 0x43434343:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_zero():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dynamic.padding(0), 'b'),
+            ]
+
+        a = test().a
+        if a.size() == 4 and a['b'].size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_one():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dynamic.padding(1), 'b'),
+            ]
+
+        a = test().a
+        if a.size() == 4 and a['b'].size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_two_0():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dynamic.padding(2), 'b'),
+            ]
+
+        a = test().a
+        if a.size() == 4 and a['b'].size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_two_1():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint8_t, 'b'),
+                (dynamic.padding(2), 'c'),
+            ]
+
+        a = test().a
+        if a.size() == 6 and a['c'].size() == 1:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_three_0():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (dynamic.padding(3), 'b'),
+            ]
+
+        a = test().a
+        if a.size() == 6 and a['b'].size() == 2:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_three_1():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint16_t, 'a'),
+                (dynamic.padding(3), 'b'),
+            ]
+
+        a = test().a
+        if a.size() == 3 and a['b'].size() == 1:
+            raise Success
+
+    @TestCase
+    def test_dynamic_padding_three_1():
+        class test(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint16_t, 'b'),
+                (dynamic.padding(3), 'c'),
+            ]
+
+        a = test().a
+        if a.size() == 6 and a['c'].size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_page_0():
+        t = dynamic.align(0x1000)
+        x = t(offset=0x10).a
+        if x.size() == 0xff0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_page_1():
+        t = dynamic.align(0x1000)
+        x = t(offset=0x401200).a
+        if x.size() == 0xe00:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_page_2():
+        t = dynamic.align(0x1000)
+        x = t(offset=-0xf0000).a
+        if x.size() == 0x0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_page_3():
+        t = dynamic.align(0x1000)
+        x = t(offset=-0xfffff).a
+        if x.size() == 0xfff:
+            raise Success
+
+    @TestCase
+    def test_dynamic_alignment_page_4():
+        t = dynamic.align(0x1000)
+        x = t(offset=-1).a
+        if x.size() == 1:
+            raise Success
+
+    @TestCase
+    def test_dynamic_oddalignment_negativeoffset_0():
+        t = dynamic.align(3)
+        x = t(offset=-1).a
+        if x.size() == 1:
+            raise Success
+
+    @TestCase
+    def test_dynamic_oddalignment_negativeoffset_1():
+        t = dynamic.align(3)
+        x = t(offset=-2).a
+        if x.size() == 2:
+            raise Success
+
+    @TestCase
+    def test_dynamic_oddalignment_negativeoffset_2():
+        t = dynamic.align(3)
+        x = t(offset=-3).a
+        if x.size() == 0:
+            raise Success
+
+    @TestCase
+    def test_dynamic_oddalignment_negativeoffset_3():
+        t = dynamic.align(3)
+        x = t(offset=-4).a
+        if x.size() == 1:
             raise Success
 
 if __name__ == '__main__':
