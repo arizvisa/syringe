@@ -20,11 +20,13 @@ class versioned(ptype.base):
     '''
     NTDDI_VERSION = sdkddkver.NTDDI_VERSION
     WIN64 = sdkddkver.WIN64
-    attributes = { 'NTDDI_VERSION': NTDDI_VERSION, 'WIN64': WIN64 }
+    MSC_VER = getattr(sdkddkver, 'MSC_VER', 0)
+    attributes = { 'NTDDI_VERSION': NTDDI_VERSION, 'WIN64': WIN64, 'MSC_VER': MSC_VER }
     def __init__(self, **attrs):
         super(versioned, self).__init__(**attrs)
         self.attributes['NTDDI_VERSION'] = self.NTDDI_VERSION
         self.attributes['WIN64'] = self.WIN64
+        self.attributes['MSC_VER'] = self.MSC_VER
 
 ### C datatypes (microsoft)
 class int(pint.int32_t): pass
@@ -139,6 +141,7 @@ class ostar(ptype.opointer_t, versioned):
         return u"({:s}*) {:+#x} : *{:#x}".format(ptr.__name__, res, calculated)
 
 class void_star(star): _object_ = void
+voidstar = void_star
 
 ### Fixed-width integral types (stdint.h)
 class int8_t(signed_char): pass
