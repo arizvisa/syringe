@@ -1,3 +1,6 @@
+'''
+https://github.com/DFIR-ORC/dfir-orc/tree/main/src/OrcLib
+'''
 import ndk, ptypes
 from ptypes import *
 from ndk.datatypes import *
@@ -345,3 +348,95 @@ class File_Name(pstruct.type):
         (_Name_Type, 'Name Type'),
         (lambda self: dyn.block(self['Name Length'].li.int()), 'Name'),
     ]
+
+### FIXME: integrate this into the deviceiocontrol context manager, maybe fix the names too
+class USNRecord(pstruct.type):
+    @pbinary.littleendian
+    class _reason(pbinary.flags):
+        _fields_ = [
+            (1, 'CLOSE'),
+            (9, 'RESERVED'),
+            (1, 'STREAM_CHANGE'),
+            (1, 'REPARSE_POINT_CHANGE'),
+            (1, 'OBJECT_ID_CHANGE'),
+            (1, 'ENCRYPTION_CHANGE'),
+            (1, 'COMPRESSION_CHANGE'),
+            (1, 'HARD_LINK_CHANGE'),
+            (1, 'BASIC_INFO_CHANGE'),
+            (1, 'INDEXABLE_CHANGE'),
+            (1, 'RENAME_NEW_NAME'),
+            (1, 'RENAME_OLD_NAME'),
+            (1, 'SECURITY_CHANGE'),
+            (1, 'EA_CHANGE'),
+            (1, 'FILE_DELETE'),
+            (1, 'FILE_CREATE'),
+            (1, 'unknown(7)'),
+            (1, 'NAMED_DATA_TRUNCATION'),
+            (1, 'NAMED_DATA_EXTEND'),
+            (1, 'NAMED_DATA_OVERWRITE'),
+            (1, 'unknown(3)'),
+            (1, 'DATA_TRUNCATION'),
+            (1, 'DATA_EXTEND'),
+            (1, 'DATA_OVERWRITE'),
+        ]
+
+    @pbinary.littleendian
+    class _fileAttributes(pbinary.flags):
+        _fields_ = [
+            (14, 'RESERVED'),
+            (1, 'NO_SCRUB_DATA'),
+            (1, 'VIRTUAL'),
+            (1, 'INTEGRITY_STREAM'),
+            (1, 'ENCRYPTED'),
+            (1, 'NOT_CONTENT_INDEXED'),
+            (1, 'OFFLINE'),
+            (1, 'COMPRESSED'),
+            (1, 'REPARSE_POINT'),
+            (1, 'SPARSE_FILE'),
+            (1, 'TEMPORARY'),
+            (1, 'NORMAL'),
+            (1, 'DEVICE'),
+            (1, 'ARCHIVE'),
+            (1, 'DIRECTORY'),
+            (1, 'unknown'),
+            (1, 'SYSTEM'),
+            (1, 'HIDDEN'),
+            (1, 'READONLY'),
+        ]
+
+    @pbinary.littleendian
+    class _referenceNumber(pbinary.struct):
+        _fields_ = [
+            (16, 'sequenceNumber'),
+            (48, 'entryNumber'),
+        ]
+    def __filenameOffset(self):
+        length = self['filenameLength'].li
+        t = dyn.clone(pstr.wstring, length=length.int())
+        return dyn.rpointer(t, self, USHORT)
+    _fields_ = [
+        (USHORT, 'majorVersion'),
+        (USHORT, 'minorVersion'),
+        (_referenceNumber, 'fileReferenceNumber'),
+        (_referenceNumber, 'parentFileReferenceNumber'),
+        (ULONGLONG, 'usn'),
+        (ULONGLONG, 'timestamp'),                           # might be an ndk.FILETIME from epoch
+        (_reason, 'reason'),
+        (ULONG, 'sourceInfo'),
+        (ULONG, 'securityId'),
+        (_fileAttributes, 'fileAttributes'),
+        (USHORT, 'filenameLength'),
+        (__filenameOffset, 'filenameOffset'),               # this is an rpointer to a utf16 pstr.swstring
+    ]
+
+class USNJournal(parray.block):
+    class Record(pstruct.type):
+        def __content(self):
+            res, fields = self['length'].li, ['length', 'record']
+            return dyn.block(max(0, res - sum(self[fld].li.size() for fld in fields)))
+        _fields_ = [
+            (ULONG, 'length'),
+            (USNRecord, 'record'),
+            (__content, 'content'),
+        ]
+    _object_ = Record
