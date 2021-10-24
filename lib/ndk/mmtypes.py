@@ -136,6 +136,58 @@ class MMSUBSECTION_FLAGS2(pbinary.flags):
         (30, 'Reserved'),
     ]
 
+@pbinary.littleendian
+class MMVAD_FLAGS(pbinary.flags):
+    _fields_ = [
+        (1, 'PrivateMemory'),
+        (2, 'Spare'),
+        (5, 'Protection'),
+        (1, 'MemCommit'),
+        (3, 'VadType'),
+        (1, 'NoChange'),
+        (19, 'CommitCharge'),
+    ]
+
+@pbinary.littleendian
+class MMVAD_FLAGS2(pbinary.flags):
+    _fields_ = [
+        (1, 'CopyOnWrite'),
+        (1, 'Inherit'),
+        (1, 'ExtendableFile'),
+        (1, 'LongVad'),
+        (1, 'ReadOnly'),
+        (1, 'MultipleSecured'),
+        (1, 'OneSecured'),
+        (1, 'SecNoChange'),
+        (24, 'CommitCharge'),
+    ]
+
+@pbinary.littleendian
+class MMVAD_FLAGS3(pbinary.flags):
+    _fields_ = [
+        (8, 'Spare2'),
+        (15, 'LastSequentialTrim'),
+        (1, 'SequentialAccess'),
+        (1, 'Spare'),
+        (1, 'Teb'),
+        (6, 'PreferredNode'),
+    ]
+
+class MMADDRESS_LIST(pstruct.type):
+    _fields_ = [
+        (ULONG_PTR, 'StartVpn'),
+        (ULONG_PTR, 'EndVpn'),
+    ]
+
+class MMSECURE_ENTRY(pstruct.type):
+    def __List(self):
+        return dyn.clone(LIST_ENTRY, _path_=('List',), _object_=MMSECURE_ENTRY)
+    _fields_ = [
+        (ULONG_PTR, 'StartVpn'),
+        (ULONG_PTR, 'EndVpn'),
+        (__List, 'List'),
+    ]
+
 class CONTROL_AREA(pstruct.type):
     _fields_ = [
         (lambda self: P(SEGMENT), 'Segment'),

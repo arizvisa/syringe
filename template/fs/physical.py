@@ -16,10 +16,26 @@ class partition_table_entry(pstruct.type):
     ]
 
 class common_boot_record(pstruct.type):
+    class _mbr_signature(pint.uint16_t):
+        def default(self):
+            return self.set(0xaa55)
+        def valid(self):
+            return self.int() == self.copy().default().int()
+        def properties(self):
+            res = super(common_boot_record._mbr_signature, self).properties()
+            if self.initializedQ() and self.valid():
+                res['valid'] = self.valid()
+            return res
+        def alloc(self, **attrs):
+            res = super(common_boot_record._mbr_signature, self).alloc(**attrs)
+            return res.default()
+
     _fields_ = [
-        (dyn.block(446), 'bootstrap'),
+        (dyn.block(440), 'bootstrap'),
+        (pint.uint32_t, 'uuid'),
+        (pint.uint16_t, 'unknown'),
         (dyn.array(partition_table_entry, 4), 'partition'),
-        (pint.uint16_t, 'mbr_signature'),
+        (_mbr_signature, 'mbr_signature'),
     ]
 
 if __name__ == '__main__':

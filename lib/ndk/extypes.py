@@ -439,6 +439,23 @@ class PF_PRIVSOURCE_QUERY_REQUEST(pstruct.type):
         (dyn.align(4), 'alignment(Info)'),
     ]
 
+class SYSTEM_POOLTAG(pstruct.type):
+    _fields_ = [
+        (dyn.clone(pstr.string, length=4), 'Tag'),
+        (ULONG, 'PagedAllocs'),
+        (ULONG, 'PagedFrees'),
+        (SIZE_T, 'PagedUsed'),
+        (ULONG, 'NonPagedAllocs'),
+        (ULONG, 'NonPagedFrees'),
+        (SIZE_T, 'NonPagedUsed'),
+    ]
+
+class SYSTEM_POOLTAG_INFORMATION(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Count'),
+        (lambda self: dyn.array(SYSTEM_POOLTAG, self['Count'].li.int()), 'TagInfo'),
+    ]
+
 class ERESOURCE_THREAD(ULONG_PTR): pass
 
 class OWNER_ENTRY(pstruct.type, versioned):

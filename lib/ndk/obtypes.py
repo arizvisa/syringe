@@ -124,6 +124,7 @@ class OB_OPERATION(pint.enum, ULONG):
     _values_ = [('HANDLE_CREATE', 1), ('HANDLE_DUPLICATE', 2)]
 
 class OBJECT_TYPE(pstruct.type): pass
+class OBJECT_HEADER(pstruct.type): pass     # FIXME
 class OB_OPERATION_REGISTRATION(pstruct.type): pass
 class CALLBACK_ENTRY_ITEM(pstruct.type): pass
 class CALLBACK_ENTRY(pstruct.type): pass
@@ -133,13 +134,16 @@ OBJECT_TYPE._fields_ = [
         (umtypes.UNICODE_STRING, 'Name'),
         (PVOID, 'DefaultObject'),
         (UCHAR, 'Index'),
+        (dyn.padding(4), 'padding(Index)'),
         (ULONG, 'TotalNumberOfObjects'),
         (ULONG, 'TotalNumberOfHandles'),
         (ULONG, 'HighWaterNumberOfObjects'),
         (ULONG, 'HighWaterNumberOfHandles'),
+        (lambda self: dyn.padding(8 if getattr(self, 'WIN64', False) else 4), 'align(TypeInfo)'),
         (OBJECT_TYPE_INITIALIZER, 'TypeInfo'),
         (umtypes.EX_PUSH_LOCK, 'TypeLock'),
         (ULONG, 'Key'),
+        (lambda self: dyn.padding(8 if getattr(self, 'WIN64', False) else 4), 'padding(Key)'),
         (dyn.clone(LIST_ENTRY, _object_=CALLBACK_ENTRY_ITEM), 'CallbackList'),
     ]
 
@@ -169,6 +173,33 @@ CALLBACK_ENTRY._fields_ = [
         (dyn.block(4), 'buffer2'),
         (P(pstr.wstring), 'AltitudeString'),
         (CALLBACK_ENTRY_ITEM, 'Items'),
+    ]
+
+@pbinary.littleendian
+class OBJ_(pbinary.flags):
+    _fields_ = [
+        (20, 'INVALID_ATTRIBUTES'),
+        (1, 'IGNORE_IMPERSONATED_DEVICEMAP'),
+        (1, 'FORCE_ACCESS_CHECK'),
+        (1, 'KERNEL_HANDLE'),
+        (1, 'OPENLINK'),
+        (1, 'OPENIF'),
+        (1, 'CASE_INSENSITIVE'),
+        (1, 'EXCLUSIVE'),
+        (1, 'PERMANENT'),
+        (2, 'reserved'),
+        (1, 'INHERIT'),
+        (1, 'unused'),
+    ]
+
+class OBJECT_ATTRIBUTES(pstruct.type):
+    _fields_ = [
+        (ULONG, 'Length'),
+        (ULONG64, 'RootDirectory'),
+        (ULONG64, 'ObjectName'),
+        (OBJ_, 'Attributes'),
+        (ULONG64, 'SecurityDescriptor'),
+        (ULONG64, 'SecurityQualityOfService'),
     ]
 
 if __name__ == '__main__':
