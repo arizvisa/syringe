@@ -31,7 +31,7 @@ class stringdate(stringinteger):
         seconds = self.get()
         epoch = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc if hasattr(datetime, 'timezone') else None)
         delta = datetime.timedelta(seconds=seconds)
-        raise epoch + delta
+        return epoch + delta
 
 class Index(pint.uint16_t):
     def GetIndex(self):
@@ -129,9 +129,9 @@ class Linker2(pstruct.type):
 
 class Longnames(ptype.block):
     def extract(self, index):
-        data = self.serialize()[index:]
-        bytes = ptypes.utils.strdup(data, terminator=b'\0')
-        return bytes.decode('latin1')
+        data = bytearray(self.serialize()[index:])
+        iterable = itertools.takewhile(lambda byte, sentinel=bytearray(b'\0\n'): byte not in sentinel, iter(data))
+        return bytes(iterable).decode('latin1')
 
 class Data(ptype.encoded_t):
     def _object_(self):
@@ -141,19 +141,24 @@ class Data(ptype.encoded_t):
 
 class Member(pstruct.type):
     class Header(pstruct.type):
-        class Name(pstr.string):
+        class _Name(pstr.string):
             length = 16
             def get(self):
-                string = super(Member.Header.Name, self).get()
+                string = super(Member.Header._Name, self).get()
                 return string.rstrip()
             str = get
 
-            # FIXME: this string has the format "/%d" where the integer
-            #        that it contains represents the offset into the
-            #        Longnames member.
+            def OffsetQ(self):
+                '''check if the string is of the format "/%d".'''
+                res = self.str().rstrip()
+                return res.startswith('/')
+            def Offset(self):
+                '''if the string is a valid offset, then the integer represents the offset into the Longnames member.'''
+                res = self.str().rstrip()
+                return int(res[1:]) if res.startswith('/') else None
 
         _fields_ = [
-            (Name, 'Name'),
+            (_Name, 'Name'),
             (dyn.clone(stringdate, length=12), 'Date'),
             (dyn.clone(stringinteger, length=6), 'User ID'),
             (dyn.clone(stringinteger, length=6), 'Group ID'),
@@ -161,6 +166,24 @@ class Member(pstruct.type):
             (dyn.clone(stringinteger, length=10), 'Size'),
             (dyn.clone(pstr.string, length=2), 'End of Header'),
         ]
+
+        def Name(self):
+            res = self['Name']
+            return res.str().rstrip()
+
+        def summary(self):
+            result = []
+            result.append("size={:d}".format(self['Size'].int()))
+            if self['User ID'].str().rstrip():
+                result.append("uid={:d}".format(self['User ID'].int()))
+            if self['Group ID'].str().rstrip():
+                result.append("gid={:d}".format(self['Group ID'].int()))
+            if self['Mode'].str().rstrip():
+                result.append("mode={:o}".format(self['Mode'].int()))
+            if self['Date'].str().rstrip() and self['Date'].int() > 0:
+                dt = self['Date'].datetime()
+                return "name={!r} date={!s}{:s}".format(self.Name(), dt.isoformat(), " {:s}".format(' '.join(result)) if result else '')
+            return "name={!r}{:s}".format(self.Name(), " {:s}".format(' '.join(result)) if result else '')
 
         def data(self):
             size = self['Size'].int()
@@ -171,7 +194,7 @@ class Member(pstruct.type):
         if name == '/':
             result = Linker2
         elif name == '//':
-            result = Longnames
+            result = dyn.clone(Longnames, length=size)
         else:
             result = dyn.clone(Data, _value_=dyn.block(size))
         return result
@@ -185,16 +208,25 @@ class Member(pstruct.type):
         callable = self._Member_
         return callable if ptype.istype(callable) else callable(name.str(), size.int())
 
+    def __padding(self):
+        res, fields = self['Header'].li, ['Member']
+        return dyn.block(max(0, res['Size'].int() - sum(self[fld].li.size() for fld in fields)))
+
     def __newline(self):
         ofs = self.getoffset('Member') + self['Header'].li['Size'].int()
         res = self.new(pstr.char_t, __name__='newline', offset=ofs)
-        if res.l.serialize() == b'\n':
-            return pstr.char_t
+        try:
+            if res.l.str() == '\n':
+                return pstr.char_t
+            return ptype.undefined
+        except ptypes.error.LoadError:
+            pass
         return ptype.undefined
 
     _fields_ = [
         (Header, 'Header'),
         (__Member, 'Member'),
+        (__padding, 'padding'),
         (__newline, 'newline'),
     ]
 
@@ -219,7 +251,7 @@ class Members(parray.terminated):
             elif name == '/':
                 result = Linker2
             elif name == '//':
-                result = Longnames
+                result = dyn.clone(Longnames, length=size)
             else:
                 result = dyn.clone(Data, _value_=dyn.block(size))
             return result
