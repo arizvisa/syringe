@@ -97,7 +97,7 @@ class TryBlockMapEntry(pstruct.type):
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
 
                 res = item['adjectives']
-                iterable = (fld if item[fld] in {1} else "{:s}={:#x}".format(fld, item[fld]) for fld in item if item[fld])
+                iterable = (fld if res[fld] in {1} else "{:s}={:#x}".format(fld, res[fld]) for fld in res if res[fld])
                 adjectives = '|'.join(iterable) or "{:#x}".format(res.int())
 
                 if item['dispFrame'].int():
@@ -107,14 +107,14 @@ class TryBlockMapEntry(pstruct.type):
                 items.append(res)
 
                 name = 'pType'
-                field, type = item[name], item[name].d
+                field = item[name]
                 try:
                     if not field.int():
                         raise ValueError
-                    res = field.d.li
+                    type = field.d.li
                 except (ptypes.error.LoadError, ValueError):
-                    res = field
-                items.append("[{:s}] {:s} addressOfHandler={:#x} {!s}".format(position, description, item['addressOfHandler'].d.getoffset(), res.summary()))
+                    type = field
+                items.append("[{:s}] {:s} addressOfHandler={:#x} {!s}".format(position, description, item['addressOfHandler'].d.getoffset(), type.summary()))
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
