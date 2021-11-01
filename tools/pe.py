@@ -453,4 +453,4 @@ if __name__ == '__main__':
     result = None
     figureargs(res)(z, format=res.format, output=res.output)
     globals().pop('res')
-
+    self = result
