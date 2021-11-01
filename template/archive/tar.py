@@ -258,9 +258,9 @@ class header_ustar(extended_t):
     magic = 'ustar'
     def member_size(self):
         p = self.getparent(header_t)
-        res = p['common']
-        count = res['size'].int()
-        return count + BLOCKSIZE - (count % BLOCKSIZE) if count > 0 else 0
+        count = p['common']['size'].int()
+        res = abs((count % BLOCKSIZE) - BLOCKSIZE)
+        return count + (res % BLOCKSIZE) if count > 0 else 0
 
 @header_member.define
 class header_ustar_member(pstruct.type):
