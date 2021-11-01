@@ -2,6 +2,8 @@ import sys,array,importlib,ptypes,functools
 from ptypes import ptype,pstruct,pbinary,dyn,parray,bitmap,pint
 from ..headers import *
 
+# TODO: https://github.com/polycone/pe-loader/blob/master/loader/src/loader/relocations.cpp
+
 ## Base Relocation class (Sub-class for each machine type)
 class MachineRelocation(ptype.definition):
     cache = {}

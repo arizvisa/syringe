@@ -316,6 +316,7 @@ class EPROCESS(pstruct.type, versioned):
             (1, 'EnableExportAddressFilter'),
         ]
     def __init__(self, **attrs):
+        # TODO: https://rayanfam.com/topics/reversing-windows-internals-part1/
         super(EPROCESS, self).__init__(**attrs)
         self._fields_ = F = []
         F.extend([
