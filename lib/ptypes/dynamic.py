@@ -155,8 +155,6 @@ def padding(size, **kwds):
         return 0
     getinitargs = lambda self: (type, kwds)
 
-    res, denomination = 4, 3
-
     # if padding is undefined and represents empty space
     if kwds.get('undefined', False):
         class result(ptype.undefined):
