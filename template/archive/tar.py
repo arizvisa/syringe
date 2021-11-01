@@ -473,11 +473,13 @@ if __name__ == '__main__':
             else:
                 logging.info("Creating file for member : {:d} : {:s}".format(int(member.name()), res))
 
-            with open(res, 'wb') as out: out.write(data)
+            encoded = data if isinstance(data, bytes) else data.encode('latin1')
+            with open(res, 'wb') as out: out.write(encoded)
 
         # fall-back to writing to already open target
         else:
-            six.print_(data.decode('latin1'), file=target)
+            decoded = data.decode('latin1') if isinstance(data, bytes) else data
+            six.print_(decoded, file=target)
         continue
 
     sys.exit(0)
