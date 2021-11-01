@@ -1,21 +1,37 @@
 import sys, ptypes
 from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary,pint
+
 from ..headers import *
+
+class VOID(ptype.undefined):
+    pass
+
+def P32(target):
+    return virtualaddress(target, type=dword)
 
 class UnwindMapEntry(pstruct.type):
     _fields_ = [
         (int32, 'toState'),
-        (virtualaddress(ptype.undefined, type=dword), 'action'),
+        (P32(VOID), 'action'),
     ]
     def summary(self):
         return "action={:#x}(toState:{:d})".format(self['action'].int(), self['toState'].int())
 
 class TypeDescriptor(pstruct.type):
     _fields_ = [
-        (realaddress(ptype.undefined), 'pVFTable'),
-        (realaddress(ptype.undefined), 'spare'),
+        (realaddress(VOID), 'pVFTable'),
+        (realaddress(pstr.szstring), 'spare'),  # demangled name from type_info::name
         (pstr.szstring, 'name'),
     ]
+    def summary(self):
+        spare = self['spare']
+        try:
+            if spare.int():
+                demangled = spare.d.li
+                return "(VFTable:{:#x}) {:s} ({:s})".format(self['pVFTable'].int(), self['name'].str(), demangled.str())
+        except ptypes.error.LoadError:
+            pass
+        return "(VFTable:{:#x}) {:s}".format(self['pVFTable'].int(), self['name'].str())
 
 @pbinary.littleendian
 class HT_(pbinary.flags):
@@ -43,9 +59,9 @@ class HandlerType(pstruct.type):
 
     _fields_ = [
         (HT_, 'adjectives'),
-        (virtualaddress(TypeDescriptor, type=dword), 'pType'),
+        (P32(TypeDescriptor), 'pType'),
         (int32, 'dispCatchObj'),
-        (virtualaddress(ptype.undefined, type=dword), 'addressOfHandler'),
+        (P32(VOID), 'addressOfHandler'),
         (__dispFrame, 'dispFrame'),
     ]
     def summary(self):
@@ -89,18 +105,36 @@ class TryBlockMapEntry(pstruct.type):
                 else:
                     res = "[{:s}] {:s} dispCatchObj={:+#x} addressOfHandler={:#x} adjectives={:s}".format(position, description, item['dispCatchObj'].int(), item['addressOfHandler'].int(), adjectives)
                 items.append(res)
+
+                name = 'pType'
+                field, type = item[name], item[name].d
+                try:
+                    if not field.int():
+                        raise ValueError
+                    res = field.d.li
+                except (ptypes.error.LoadError, ValueError):
+                    res = field
+                items.append("[{:s}] {:s} addressOfHandler={:#x} {!s}".format(position, description, item['addressOfHandler'].d.getoffset(), res.summary()))
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
                 return self.details() + '\n'
             return self.summary()
+
     _fields_ = [
         (int32, 'tryLow'),
         (int32, 'tryHigh'),
         (int32, 'catchHigh'),
         (int32, 'nCatches'),
-        (lambda self: virtualaddress(dyn.clone(self._pHandlerArray, length=self['nCatches'].li.int()), type=dword), 'pHandlerArray'),
+        (lambda self: P32(dyn.clone(self._pHandlerArray, length=self['nCatches'].li.int())), 'pHandlerArray'),
     ]
+    def summary(self):
+        res = self['pHandlerArray'].d
+        try:
+            res = res.li.summary()
+        except ptypes.error.LoadError:
+            res = self['pHandlerArray'].summary()
+        return "try<{:d},{:d}> catch<{:d}> handler:({:d}) {:s}".format(self['tryLow'].int(), self['tryHigh'].int(), self['catchHigh'].int(), self['nCatches'].int(), res)
 
 class IPtoStateMap(pstruct.type):
     class _state(pint.enum, int32):
@@ -108,7 +142,7 @@ class IPtoStateMap(pstruct.type):
             ('END', -1),
         ]
     _fields_ = [
-        (virtualaddress(ptype.undefined, type=dword), 'pc'),
+        (P32(VOID), 'pc'),
         (_state, 'state'),
     ]
     def summary(self):
@@ -117,7 +151,7 @@ class IPtoStateMap(pstruct.type):
 class ESTypeList(pstruct.type):
     _fields_ = [
         (int32, 'nCount'),
-        (lambda self: virtualaddress(dyn.array(HandlerType, self['nCount'].li.int()), type=dword), 'pHandlerArray'),
+        (lambda self: P32(dyn.array(HandlerType, self['nCount'].li.int())), 'pHandlerArray'),
     ]
 
 @pbinary.littleendian
@@ -170,6 +204,20 @@ class FuncInfo(pstruct.type):
                 position = ptypes.utils.repr_position(item.getposition())
                 description = ptypes.utils.repr_instance(item.classname(), item.name())
                 items.append("[{:s}] {:s} tryLow={:d} tryHigh={:d} catchHigh={:d} nCatches={:d} pHandlerArray={:#x}".format(position, description, item['tryLow'].int(), item['tryHigh'].int(), item['catchHigh'].int(), item['nCatches'].int(), item['pHandlerArray'].int()))
+
+                name = 'pHandlerArray'
+                field, handlers = item[name], item[name].d
+                try:
+                    if not field.int():
+                        raise ValueError
+                    res = handlers.li
+                except (ptypes.error.LoadError, ValueError):
+                    res = field
+                position = ptypes.utils.repr_position(field.getposition())
+                for index, handler in enumerate(handlers):
+                    description = ptypes.utils.repr_instance(item.classname(), '.'.join([item.name(), name, "{:d}".format(index)]))
+                    items.append("[{:s}] {:s} {!s}".format(position, description, handler.summary()))
+                continue
             return '\n'.join(items)
         def repr(self):
             if self.initializedQ():
@@ -204,16 +252,16 @@ class FuncInfo(pstruct.type):
         (_magicNumber, 'magicNumber'),
 
         (int32, 'maxState'),
-        (lambda self: virtualaddress(dyn.clone(self._pUnwindMap, length=self['maxState'].li.int()), type=dword), 'pUnwindMap'),
+        (lambda self: P32(dyn.clone(self._pUnwindMap, length=self['maxState'].li.int())), 'pUnwindMap'),
 
         (int32, 'nTryBlocks'),
-        (lambda self: virtualaddress(dyn.clone(self._pTryBlockMap, length=self['nTryBlocks'].li.int()), type=dword), 'pTryBlockMap'),
+        (lambda self: P32(dyn.clone(self._pTryBlockMap, length=self['nTryBlocks'].li.int())), 'pTryBlockMap'),
 
         (int32, 'nIPMapEntries'),
-        (lambda self: virtualaddress(dyn.clone(self._pIPtoStateMap, length=self['nIPMapEntries'].li.int()), type=dword), 'pIPtoStateMap'),
+        (lambda self: P32(dyn.clone(self._pIPtoStateMap, length=self['nIPMapEntries'].li.int())), 'pIPtoStateMap'),
         (__dispUnwindHelp, 'dispUnwindHelp'),
 
-        (virtualaddress(ESTypeList, type=dword), 'pESTypeList'),
+        (P32(ESTypeList), 'pESTypeList'),
         (FI_, 'EHFlags'),
     ]
 
@@ -246,17 +294,17 @@ class UNWIND_CODE(pstruct.type):
         if op['ALLOC_LARGE']:
             if info not in {0, 1}:
                 raise NotImplementedError
-            return pint.uint16_t if info == 0 else pint.uint32_t
+            return uint16 if info == 0 else uint32
 
         elif any(op[code] for code in ['SAVE_NONVOL', 'SAVE_XMM128']):
-            return pint.uint16_t
+            return uint16
 
         elif any(op[code] for code in ['SAVE_NONVOL_FAR', 'SAVE_XMM128_FAR']):
-            return pint.uint32_t
+            return uint32
 
         return pint.uint_t
     _fields_ = [
-        (pint.uint8_t, 'offset'),
+        (byte, 'offset'),
         (operation_, 'operation'),
         (__parameter, 'parameter'),
     ]
@@ -272,32 +320,37 @@ class UNW_FLAG_(pbinary.enum):
 
 class UNWIND_INFO(pstruct.type):
     class _Header(pbinary.struct):
-        _fields_= [
+        _fields_ = [
             (UNW_FLAG_, 'Flags'),
             (3, 'Version'),
         ]
-
     class _Frame(pbinary.struct):
         _fields_ = [
             (4, 'Offset'),
             (4, 'Register'),
         ]
+        def FrameOffset(self):
+            return self['Offset'] * 0x10
+        def FrameRegister(self):
+            raise NotImplementedError
+        def summary(self):
+            res = self['Offset']
+            return "Register={:d} Offset={:#x} ({:d})".format(self['Register'], res, res * 0x10)
 
     class _HandlerInfo(pstruct.type):
         _fields_ = [
-            (virtualaddress(ptype.undefined, type=dword), 'ExceptionHandler'),
-            (virtualaddress(FuncInfo, type=dword), 'ExceptionData')
+            (P32(VOID), 'ExceptionHandler'),
+            (P32(FuncInfo), 'ExceptionData'),
         ]
-
     def __HandlerInfo(self):
         res = self['Header'].li
         flags = res.item('Flags')
-        return self._HandlerInfo if any(flags[item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else ptype.undefined
+        return self._HandlerInfo if any(flags[item] for item in ['EHANDLER', 'UHANDLER', 'FHANDLER']) else VOID
 
     def __FunctionEntry(self):
         res = self['Header'].li
         flags = res.item('Flags')
-        return RUNTIME_FUNCTION if flags['CHAININFO'] else ptype.undefined
+        return IMAGE_RUNTIME_FUNCTION_ENTRY if flags['CHAININFO'] else VOID
 
     _fields_ = [
         (_Header, 'Header'),
@@ -305,21 +358,31 @@ class UNWIND_INFO(pstruct.type):
         (byte, 'CountOfCodes'),
         (_Frame, 'Frame'),
         (lambda self: dyn.blockarray(UNWIND_CODE, 2 * self['CountOfCodes'].li.int()), 'UnwindCode'),
-        (dyn.align(4), 'align(ExceptionHandler)'),  # FIXME: this was copied from IDA
+        (dyn.align(4), 'align(UnwindCode)'),
         (__HandlerInfo, 'HandlerInfo'),
         (__FunctionEntry, 'FunctionEntry'),
     ]
 
 class IMAGE_RUNTIME_FUNCTION_ENTRY(pstruct.type):
+    def __BeginAddressPointer(self):
+        if not self.parent:
+            return ptype.block
+
+        # Grab our parent and collect our function boundaries
+        p = self.getparent(IMAGE_RUNTIME_FUNCTION_ENTRY)
+        begin, end = (p[fld].li for fld in ['BeginAddress', 'EndAddress'])
+
+        # Figure out its size and return a block that fits it.
+        length = abs(end.int() - begin.int())
+        return dyn.block(length)
     _fields_ = [
-        (virtualaddress(ptype.undefined, type=dword), 'BeginAddress'),
-        (virtualaddress(ptype.undefined, type=dword), 'EndAddress'),
-        (virtualaddress(UNWIND_INFO, type=dword), 'UnwindData'),
+        (P32(__BeginAddressPointer), 'BeginAddress'),
+        (P32(ptype.block), 'EndAddress'),
+        (P32(UNWIND_INFO), 'UnwindData'),
     ]
 
 class IMAGE_EXCEPTION_DIRECTORY(parray.block):
     _object_ = IMAGE_RUNTIME_FUNCTION_ENTRY
-
     def blocksize(self):
         return self.p.p['Size'].int()
 
