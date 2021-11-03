@@ -3,17 +3,17 @@
 # TODO:
 #       memoryview -- not possible? .tolist or .tobytes will return the data, but i haven't found a way to get the object that it references
 #       bytearray -- use str() to get the data
-#       operator.methodcaller -- can be done by using an object with __getattr__ for the name, and grabbing the method's *args,**kwds for the default args. hopefully doing this doesn't influence state...
+#       operator.methodcaller -- can be done by using an object with __getattr__ for the name, and grabbing the method's *args, **kwds for the default args. hopefully doing this doesn't influence state...
 
 # TODO: add a decorator that can transform anything into an object that will pass an instance of self
 #          to serialization service
 
 import sys
 if sys.version_info.major < 3:
-    import __builtin__
+    import builtins, types
 else:
-    import builtins as __builtin__
-__all__ = ['caller','pack','unpack','loads','dumps']
+    import builtins, types
+__all__ = ['caller', 'pack', 'unpack', 'loads', 'dumps']
 
 VERSION = '0.7'
 
@@ -40,17 +40,18 @@ class package:
     def pack(cls, object, **attributes):
         '''convert any python object into a packable format'''
         st = cls.stash()
-        id = st.store(object,**attributes)
-        return VERSION,id,st.packed()
+        id = st.store(object, **attributes)
+        return VERSION, id, st.packed()
 
     @classmethod
     def unpack(cls, data, **attributes):
         '''unpack data into a real python object'''
-        ver,id,data = data
-        assert ver == VERSION,'fu.package.unpack : invalid version %s != %s'%(ver,VERSION)
+        ver, id, data = data
+        if ver != VERSION:
+            raise AssertionError('fu.package.unpack : invalid version %s != %s'%(ver, VERSION))
         st = cls.stash()
         st.unpack(data)
-        return st.fetch(id,**attributes)
+        return st.fetch(id, **attributes)
 
     ### stuff that's hidden within this namespace
     class cache(object):
@@ -62,7 +63,7 @@ class package:
         instance.
         '''
         class registration:
-            id,const,type = {},{},{}
+            id, const, type = {}, {}, {}
 
             @staticmethod
             def hash(data):
@@ -75,6 +76,7 @@ class package:
         @classmethod
         def register(cls, definition):
             id = cls.registration.hash(definition.__name__)
+            #id = definition.__name__
             if id in cls.registration.id:
                 raise KeyError("Duplicate id %x in cache"% id)
 
@@ -124,8 +126,8 @@ class package:
         @classmethod
         def byinstance(cls, instance):
             '''iterate through all registered definitions to determine which one can work for serialization/deserialization'''
-            global package,object_,module_
-            type, object, module = __builtin__.type, __builtin__.object, __builtin__.__class__
+            global package, object_, module_
+            type, object, module = types.TypeType if sys.version_info.major < 3 else builtins.type, types.ObjectType if sys.version_info.major < 3 else builtins.object, types.ModuleType
             t = type(instance)
 
             # any constant
@@ -152,7 +154,7 @@ class package:
             # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
-                    return partial  # XXX
+                    #return partial  # XXX
                     raise KeyError(instance, 'Unable to determine module name from builtin method')
                 return builtin_
 
@@ -168,7 +170,7 @@ class package:
 
             raise KeyError(instance)
 
-    class stash(__builtin__.object):
+    class stash(builtins.object):
         '''
         This class is used to recursively serialize/deserialize an instance or
         type. It is temporarily constructed and will use the cache to identify
@@ -181,7 +183,7 @@ class package:
         def __init__(self):
             # cache for .fetch
             self.fetch_cache = {}
-            self.store_cache = __builtin__.set()
+            self.store_cache = builtins.set()
 
             # caches for .store
             self.cons_data = {}
@@ -192,17 +194,18 @@ class package:
         @staticmethod
         def clsbyinstance(item): return package.cache.byinstance(item)
 
+        # FIXME: should prolly implement __str__, __unicode__, and __repr__
         def __repr__(self):
-            cons = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid,v) in self.cons_data.items()]
-            inst = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid,v) in self.inst_data.items()]
-            return "<class '%s'> %s"%(self.__class__.__name__, repr(__builtin__.dict(cons)))
+            cons = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid, v) in self.cons_data.items()]
+            inst = [(k, (self.clsbyid(clsid).__name__, v)) for k, (clsid, v) in self.inst_data.items()]
+            return "<class '%s'> %s"%(self.__class__.__name__, builtins.repr({key : item for key, item in cons}))
 
         ## serializing/deserializing entire state
         def packed(self):
-            return self.cons_data,self.inst_data
+            return self.cons_data, self.inst_data
 
         def unpack(self, data):
-            cons,inst = data
+            cons, inst = data
 
             self.cons_data.clear()
             self.inst_data.clear()
@@ -214,22 +217,22 @@ class package:
         ## packing/unpacking of id's
         def pack_references(self, data, **attributes):
             '''converts object data into reference id's'''
-            if data.__class__ is __builtin__.tuple:
-                return __builtin__.tuple(self.store(item, **attributes) for item in data)
-            elif data.__class__ is __builtin__.dict:
-                return { self.store(k, **attributes) : self.store(v, **attributes) for k, v in data.items() }
-            elif data.__class__ is __builtin__.list:
+            if data.__class__ is ().__class__:
+                return ().__class__(self.store(item, **attributes) for item in data)
+            elif data.__class__ is {}.__class__:
+                return {self.store(k, **attributes) : self.store(v, **attributes) for k, v in data.items()}
+            elif data.__class__ is [].__class__:
                 # a list contains multiple packed objects
                 return [self.pack_references(item, **attributes) for item in data]
             return data
 
         def unpack_references(self, data, **attributes):
             '''converts packed references into objects'''
-            if data.__class__ is __builtin__.tuple:
-                return __builtin__.tuple(self.fetch(item, **attributes) for item in data)
-            elif data.__class__ is __builtin__.dict:
-                return { self.fetch(k, **attributes) : self.fetch(v, **attributes) for k, v in data.items() }
-            elif data.__class__ is __builtin__.list:
+            if data.__class__ is ().__class__:
+                return ().__class__(self.fetch(item, **attributes) for item in data)
+            elif data.__class__ is {}.__class__:
+                return {self.fetch(k, **attributes) : self.fetch(v, **attributes) for k, v in data.items()}
+            elif data.__class__ is [].__class__:
                 return [self.unpack_references(item, **attributes) for item in data]
             return data
 
@@ -257,29 +260,29 @@ class package:
 
             if False:       # XXX: if we want to make the module and name part of the protocol. (for assistance with attributes)
                 # get naming info
-                modulename,name = getattr(object,'__module__',None),getattr(object,'__name__',None)
-                fullname = ('%s.%s'% (modulename,name)) if modulename else name
+                modulename, name = getattr(object, '__module__', None), getattr(object, '__name__', None)
+                fullname = ('%s.%s'% (modulename, name)) if modulename else name
 
-                # attribute[ignore=list of types,exclude=list of names]
-                if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
-                    (fullname in __builtin__.set(attributes.get('exclude',()))):
+                # attribute[ignore=list of types, exclude=list of names]
+                if (cls.__name__ in builtins.set(attributes.get('ignore', ()))) or \
+                    (fullname in builtins.set(attributes.get('exclude', ()))):
                     cls = partial
                 # attribute[local=list of names]
-                if name in __builtin__.set(attributes.get('local',())):
+                if name in builtins.set(attributes.get('local', ())):
                     cls = module
 
             # store constructor info
-            data = cls.p_constructor(object,**attributes)
+            data = cls.p_constructor(object, **attributes)
             self.store_cache.add(identity)
-            data = self.pack_references(data,**attributes)
-            self.cons_data[identity] = cls.id,data
-#            self.cons_data[identity] = cls.id,(modulename,name),data   # XXX: for attributes by name
+            data = self.pack_references(data, **attributes)
+            self.cons_data[identity] = cls.id, data
+#            self.cons_data[identity] = cls.id, (modulename, name), data   # XXX: for attributes by name
 
             # recurse into instance data
-            data = cls.p_instance(object,**attributes)
-            data = self.pack_references(data,**attributes)
+            data = cls.p_instance(object, **attributes)
+            data = self.pack_references(data, **attributes)
 
-            self.inst_data[identity] = cls.id,data
+            self.inst_data[identity] = cls.id, data
             return identity
 
         def fetch(self, identity, **attributes):
@@ -287,24 +290,24 @@ class package:
                 return self.fetch_cache[identity]
 
             # unpack constructor
-#            _,(modulename,name),data = self.cons_data[identity]    # XXX: for attributes by name
+#            _, (modulename, name), data = self.cons_data[identity]    # XXX: for attributes by name
             _, data = self.cons_data[identity]
             cls, data = self.clsbyid(_), self.unpack_references(data, **attributes)
 
             if False:   # XXX: attributes
                 # naming info
-                fullname = ('%s.%s'% (modulename,name)) if modulename else name
+                fullname = ('%s.%s'% (modulename, name)) if modulename else name
 
-                # attribute[ignore=list of types,exclude=list of names]
-                if (cls.__name__ in __builtin__.set(attributes.get('ignore',()))) or \
-                    (fullname in __builtin__.set(attributes.get('exclude',()))):
+                # attribute[ignore=list of types, exclude=list of names]
+                if (cls.__name__ in builtins.set(attributes.get('ignore', ()))) or \
+                    (fullname in builtins.set(attributes.get('exclude', ()))):
                     cls = partial
                     instance = partial.new()
                     self.fetch_cache[identity] = instance
                     return instance
 
                 # attribute[local=list of names]
-                if name in __builtin__.set(attributes.get('local',())):
+                if name in builtins.set(attributes.get('local', ())):
                     cls = module
 
             # create an instance of packed object
@@ -312,13 +315,14 @@ class package:
             self.fetch_cache[identity] = instance
 
             # update instance with packed attributes
-            _,data = self.inst_data[identity]
+            _, data = self.inst_data[identity]
             cls, data = self.clsbyid(_), self.unpack_references(data, **attributes)
             _ = cls.u_instance(instance, data, **attributes)
-            assert instance is _, '%s.fetch(%d) : constructed instance is different from updated instance'% (__builtin__.object.__repr__(self), identity)
+            if instance is not _:
+                raise AssertionError('%s.fetch(%d) : constructed instance is different from updated instance'% (builtins.object.__repr__(self), identity))
             return instance
 
-class __type__(__builtin__.object):
+class __type__(builtins.object):
     '''
     This base class is used to help register an instance of a type. Once
     identifying the type of an instance, the class will be responsible for
@@ -456,19 +460,19 @@ if 'constants':
     class type(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.type
+            return builtins.type
 
     @package.cache.register_const
     class object(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.object
+            return builtins.object
 
     @package.cache.register_const
     class module(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.__class__
+            return builtins.__class__
 
         @classmethod
         def instancelocal(cls, modulename, **kwds):
@@ -488,7 +492,7 @@ if 'constants':
     class bool(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.bool
+            return builtins.bool
 
     @package.cache.register_const
     class int(__constant):
@@ -532,7 +536,7 @@ if 'constants':
         class buffer(__constant):
             @classmethod
             def getclass(cls):
-                return __builtin__.buffer('').__class__
+                return builtins.buffer('').__class__
 
     else:
         @package.cache.register_const
@@ -545,7 +549,7 @@ if 'constants':
     class tuple(__constant):
         @classmethod
         def getclass(cls):
-            return (().__class__)
+            return ().__class__
 
     @package.cache.register_const
     class list(__constant):
@@ -563,13 +567,13 @@ if 'constants':
     class set(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.set
+            return {item for item in []}.__class__
 
     @package.cache.register_const
     class frozenset(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.frozenset
+            return builtins.frozenset
 
     @package.cache.register_const
     class instancemethod(__constant):
@@ -581,20 +585,20 @@ if 'constants':
     class property(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.property
+            return builtins.property
 
     @package.cache.register_const
     class code(__constant):
         @classmethod
         def getclass(cls):
-            res = eval('lambda:fake')
+            res = lambda: None
             return res.func_code.__class__ if sys.version_info.major < 3 else res.__code__.__class__
 
         if sys.version_info.major < 3:
             @classmethod
             def new(cls, argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
-                i, s, t, b = __builtin__.int, __builtin__.str, __builtin__.tuple, __builtin__.bytes
-                optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
+                i, s, t, b = (0).__class__, ''.__class__, ().__class__, b''.__class__
+                optional = lambda x: lambda y: (y, ())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
                 types = [ i, i, i, i, b, t, t, t, s, s, i, b, optional(t), optional(t) ]
                 values = [ argcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
                 for idx, cons in enumerate(types):
@@ -602,11 +606,11 @@ if 'constants':
                 return cls.getclass()(*values)
         else:
             @classmethod
-            def new(cls, argcount, kwonlyargcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
-                i, s, t, b = __builtin__.int, __builtin__.str, __builtin__.tuple, __builtin__.bytes
-                optional = lambda x: lambda y: (y,())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
-                types = [ i, i, i, i, i, b, t, t, t, s, s, i, b, optional(t), optional(t) ]
-                values = [ argcount, kwonlyargcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
+            def new(cls, argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename='<memory>', name='<unnamed>', firstlineno=0, lnotab='', freevars=(), cellvars=()):
+                i, s, t, b = (0).__class__, ''.__class__, ().__class__, b''.__class__
+                optional = lambda x: lambda y: (y, ())[y is None]    # FIXME: it'd be less stupid to not ignore the provided type in 'x'
+                types = [ i, i, i, i, i, i, b, t, t, t, s, s, i, b, optional(t), optional(t) ]
+                values = [ argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, codestring, constants, names, varnames, filename, name, firstlineno, lnotab, freevars, cellvars ]
                 for idx, cons in enumerate(types):
                     values[idx] = cons(values[idx])
                 return cls.getclass()(*values)
@@ -630,31 +634,31 @@ if 'constants':
     class builtin(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.setattr.__class__
+            return builtins.setattr.__class__
 
     @package.cache.register_const
     class generator(__constant):
         @classmethod
         def getclass(cls):
-            return (x for x in (0,)).__class__
+            return (x for x in [0]).__class__
 
     @package.cache.register_const
     class frame(__constant):
         @classmethod
         def getclass(cls):
-            return (x for x in (0,)).gi_frame.__class__
+            return (x for x in [0]).gi_frame.__class__
 
     @package.cache.register_const
     class Staticmethod(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.staticmethod
+            return builtins.staticmethod
 
     @package.cache.register_const
     class Classmethod(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.classmethod
+            return builtins.classmethod
 
     ## real constant
     @package.cache.register_const
@@ -679,20 +683,20 @@ if 'constants':
     class notImplemented(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.NotImplemented
+            return builtins.NotImplemented
 
     @package.cache.register_const
     class ellipsis(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.Ellipsis
+            return builtins.Ellipsis
 
     if sys.version_info.major < 3:
         @package.cache.register_const
         class file(__constant):
             @classmethod
             def getclass(cls):
-                return __builtin__.file
+                return builtins.file
 
     import _weakref
     @package.cache.register_const
@@ -705,7 +709,7 @@ if 'constants':
     class super(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.super
+            return builtins.super
 
     import _thread
     @package.cache.register_const
@@ -729,7 +733,8 @@ if 'core':
         @classmethod
         def subclasses(cls, type):
             '''return all subclasses of type'''
-            assert __builtin__.isinstance(type, __builtin__.type), '%s is not a valid python type'% __builtin__.type(type)
+            if not builtins.isinstance(type, builtins.type):
+                raise AssertionError('%s is not a valid python type'% builtins.type(type))
             if type.__bases__ == ():
                 return ()
             result = type.__bases__
@@ -739,38 +744,38 @@ if 'core':
 
         @classmethod
         def p_constructor(cls, object, **attributes):
-            name,bases,slots = (object.__name__,object.__bases__,__builtin__.tuple(getattr(object,'__slots__')) if hasattr(object,'__slots__') else None)
-            result = [slots,name]
+            name, bases, slots = (object.__name__, object.__bases__, ().__class__(getattr(object, '__slots__')) if hasattr(object, '__slots__') else None)
+            result = [slots, name]
             result.extend(bases)
-            return __builtin__.tuple(result)
+            return ().__class__(result)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            result = __builtin__.list(data)
-            slots,name = result.pop(0),result.pop(0)
+            result = [].__class__(data)
+            slots, name = result.pop(0), result.pop(0)
             if slots is None:
-                return __builtin__.type(name, __builtin__.tuple(result), {})
-            return __builtin__.type(name, __builtin__.tuple(result), {'__slots__':slots})
+                return builtins.type(name, ().__class__(result), {})
+            return builtins.type(name, ().__class__(result), {'__slots__': slots})
 
         @classmethod
         def p_instance(cls, object, **attributes):
-            state = __builtin__.dict(getattr(object,'__dict__', {}))
-            if hasattr(object,'__slots__'):
-                state.update((k,getattr(object,k)) for k in object.__slots__ if hasattr(object,k))
+            state = {key : value for key, value in getattr(object, '__dict__', {}).items()}
+            if hasattr(object, '__slots__'):
+                state.update((k, getattr(object, k)) for k in object.__slots__ if hasattr(object, k))
 
             f = lambda: wat
-            t = __builtin__.type(f)
+            t = builtins.type(f)
 
             # non-serializeable descriptors
             getset_descriptor = cls.__weakref__.__class__
             method_descriptor = cls.__reduce_ex__.__class__
             wrapper_descriptor = cls.__setattr__.__class__
             member_descriptor = t.func_globals.__class__ if sys.version_info.major < 3 else t.__globals__.__class__
-            classmethod_descriptor = __builtin__.type(__builtin__.float.__dict__['fromhex'])
+            classmethod_descriptor = builtins.type(builtins.float.__dict__['fromhex'])
 
             result = {}
             for k, v in state.items():
-                if __builtin__.type(v) in (getset_descriptor,method_descriptor,wrapper_descriptor,member_descriptor,classmethod_descriptor,generator_.getclass()):
+                if builtins.type(v) in {getset_descriptor, method_descriptor, wrapper_descriptor, member_descriptor, classmethod_descriptor, generator_.getclass()}:
                     continue
 
                 try:
@@ -783,7 +788,7 @@ if 'core':
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
-            for k,v in data.items():
+            for k, v in data.items():
                 try:
                     setattr(instance, k, v)
                 except (TypeError, AttributeError):
@@ -796,13 +801,13 @@ if 'core':
             '''an old-style python class'''
             @classmethod
             def getclass(cls):
-                return __builtin__.type(package)
+                return builtins.type(package)
 
     @package.cache.register_type
     class Object(__constant):
         @classmethod
         def getclass(cls):
-            return __builtin__.object
+            return builtins.object
         @classmethod
         def u_constructor(cls, data, **attributes):
             return cls.new()
@@ -812,25 +817,30 @@ if 'core':
         '''a generic python object and all it's parentclass' properties'''
         @classmethod
         def p_constructor(cls, object, **attributes):
-            name,type = getattr(object,'__name__',None),object.__class__
-            return (name,type,)
+            name, type = getattr(object, '__name__', None), object.__class__
+
+            # FIXME: we should check for serialization methods here
+            #        like getnewargs, getstate, reduce, etc.
+            return (name, type)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            name,type = data
+            name, type = data
             type.__name__ = name or ''
 
-#            class type(type): pass  # XXX: this type-change might mess up something
-            # FIXME: create an instance illegitimately
-            # TODO: bniemczyk would like a hint here for customizing __new__
-            _ = type.__init__
-            type.__init__ = lambda s: None
-            if hasattr(type, '__new__'):
-                # FIXME: abc.ABCMeta
+            object = cls.getclass()
+            wrapper_descriptor, builtin_function_or_method = (item.__class__ for item in [object.__init__, object.__new__])
+
+            # FIXME: create the instance illegitimately
+            if type.__new__.__class__ is not builtin_function_or_method:
                 raise Exception('Unable to support custom-defined .__new__ operators')
-            type.__new__ = lambda *a: a
+
+            # TODO: bniemczyk would like a hint here for customizing __new__
+            old_init, new_init = type.__init__, lambda self: None,
+
+            type.__init__ = new_init
             result = type()
-            type.__init__ = _
+            type.__init__ = old_init
 
             #result.__name__ = name
             return result
@@ -838,9 +848,9 @@ if 'core':
         @classmethod
         def p_instance(cls, object, **attributes):
             c = type_
-            result = [(c.id,c.p_instance(object,**attributes))]
+            result = [(c.id, c.p_instance(object, **attributes))]
 
-            for t in type_.subclasses(__builtin__.type(object)):
+            for t in type_.subclasses(builtins.type(object)):
                 try:
                     c = package.cache.byclass(t)
                 except KeyError:
@@ -852,7 +862,7 @@ if 'core':
         def u_instance(cls, instance, data, **attributes):
             if len(data) == 0:
                 return instance
-            for id,data in data:
+            for id, data in data:
                 c = package.cache.byid(id)
                 instance = c.u_instance(instance, data, **attributes)
             return instance
@@ -1036,7 +1046,7 @@ if 'immutable':
             return object
         @classmethod
         def u_constructor(cls, data, **attributes):
-            return __builtin__.tuple(data)
+            return ().__class__(data)
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
@@ -1045,8 +1055,8 @@ if 'immutable':
         def u_instance(cls, instance, data, **attributes):
             return instance
 
-if 'muteable':
-    class __muteable(__type__):
+if 'mutable':
+    class __mutable(__type__):
         @classmethod
         def p_constructor(cls, object, **attributes):
             return ()
@@ -1058,7 +1068,7 @@ if 'muteable':
             return cls.getclass()(*args, **kwds)
 
     @package.cache.register_type
-    class list_(__muteable):
+    class list_(__mutable):
         '''a list'''
         @classmethod
         def getclass(cls):
@@ -1066,16 +1076,15 @@ if 'muteable':
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
-            return __builtin__.tuple(object)
+            return ().__class__(object)
         @classmethod
         def u_instance(cls, instance, data, **attributes):
             '''update the object with the provided data'''
-            del(instance[:])
-            instance.extend(data)
+            instance[:] = data
             return instance
 
     @package.cache.register_type
-    class dict_(__muteable):
+    class dict_(__mutable):
         '''a dictionary'''
         @classmethod
         def getclass(cls):
@@ -1092,7 +1101,7 @@ if 'muteable':
             return instance
 
     @package.cache.register_type
-    class set_(__muteable):
+    class set_(__mutable):
         '''a set'''
         @classmethod
         def getclass(cls):
@@ -1100,7 +1109,7 @@ if 'muteable':
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
-            return __builtin__.tuple(object)
+            return ().__class__(object)
         @classmethod
         def u_instance(cls, instance, data, **attributes):
             instance.clear()
@@ -1108,7 +1117,7 @@ if 'muteable':
             return instance
 
     @package.cache.register_type
-    class frozenset_(__muteable):
+    class frozenset_(__mutable):
         '''a frozenset'''
         @classmethod
         def getclass(cls):
@@ -1116,7 +1125,7 @@ if 'muteable':
         @classmethod
         def p_instance(cls, object, **attributes):
             '''return attributes of type that will be used to update'''
-            return __builtin__.tuple(object)
+            return ().__class__(object)
 
 if 'special':
     class __special(__type__):
@@ -1130,9 +1139,9 @@ if 'special':
         def p_constructor(cls, object, **attributes):
             result = {}
             if cls.attributes.__class__ == {}.__class__:
-                result.update((k,getattr(object,k, cls.attributes[k])) for k in cls.attributes)
+                result.update((k, getattr(object, k, cls.attributes[k])) for k in cls.attributes)
             else:
-                result.update((k,getattr(object,k)) for k in cls.attributes)
+                result.update((k, getattr(object, k)) for k in cls.attributes)
             return result
 
         @classmethod
@@ -1176,7 +1185,7 @@ if 'special':
             ]
         else:
             attributes = [
-                'co_argcount', 'co_kwonlyargcount', 'co_nlocals', 'co_stacksize',
+                'co_argcount', 'co_posonlyargcount', 'co_kwonlyargcount', 'co_nlocals', 'co_stacksize',
                 'co_flags', 'co_code', 'co_consts', 'co_names', 'co_varnames',
                 'co_filename', 'co_name', 'co_firstlineno', 'co_lnotab',
                 'co_freevars', 'co_cellvars'
@@ -1205,14 +1214,16 @@ if 'special':
             res = object.func_closure if sys.version_info.major < 3 else object.__closure__
             func_closure = () if res is None else res
             func_code = object.func_code if sys.version_info.major < 3 else object.__code__
-            assert object.__module__ is not None, 'FIXME: Unable to pack an unbound function'
-            return object.__module__, func_code, __builtin__.tuple(cell.cell_contents for cell in func_closure)
+            if object.__module__ is None:
+                raise AssertionError('FIXME: Unable to pack an unbound function')
+            return object.__module__, func_code, ().__class__(cell.cell_contents for cell in func_closure)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-#            modulename,code,closure,globals = data
-            modulename,code,closure = data
-            assert object.__module__ is not None, 'FIXME: Unable to unpack an unbound function'
+#            modulename, code, closure, globals = data
+            modulename, code, closure = data
+            if object.__module__ is None:
+                raise AssertionError('FIXME: Unable to unpack an unbound function')
 
             # XXX: assign the globals from hints if requested
             globs = attributes['globals'] if 'globals' in attributes else module.instance(modulename).__dict__
@@ -1227,13 +1238,15 @@ if 'special':
 
         @classmethod
         def u_instance(cls, instance, data, **attributes):
-            instance.func_code,instance.func_name,instance.func_defaults = data
+            instance.func_code, instance.func_name, instance.func_defaults = data
             return instance
 
         @classmethod
         def cell(cls, *args):
             '''Convert args into a cell tuple'''
-            return __builtin__.tuple(((lambda n: lambda : n)(n).func_closure[0]) for n in args)
+            if sys.version_info.major < 3:
+                return ().__class__(((lambda item: lambda : item)(item).func_closure[0]) for item in args)
+            return ().__class__(((lambda item: lambda : item)(item).__closure__[0]) for item in args)
 
     @package.cache.register
     class builtin_(__constant):
@@ -1248,9 +1261,9 @@ if 'special':
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            mod,name = data
+            mod, name = data
             m = module.instancelocal(mod)
-            return getattr(m,name)
+            return getattr(m, name)
 
     if sys.version_info.major < 3:
         @package.cache.register
@@ -1267,7 +1280,7 @@ if 'special':
 
             @classmethod
             def u_constructor(cls, data, **attributes):
-                name,mode,offset = data
+                name, mode, offset = data
                 file = open(name, mode)
                 file.seek(offset)
                 return file
@@ -1289,12 +1302,12 @@ if 'special':
 
             @classmethod
             def u_constructor(cls, data, **attributes):
-                name,mode,offset,content = data
+                name, mode, offset, content = data
                 file = open(name, "w")
                 file.write(content)
                 file.close()
 
-                file = open(name,mode)
+                file = open(name, mode)
                 file.seek(offset)
                 return file
 
@@ -1314,7 +1327,7 @@ if 'special':
                 def __new__(self, object):
                     self.__cycle__ = object
                     return _weakref.ref(object)
-#                    return super(extref,self)(object)
+#                    return super(extref, self)(object)
             return extref(object)
         @classmethod
         def p_instance(cls, object, **attributes):
@@ -1324,14 +1337,14 @@ if 'special':
     class super_(__type__):
         @classmethod
         def getclass(cls):
-            return __builtin__.super
+            return builtins.super
         @classmethod
         def p_constructor(cls, object, **attributes):
             return (object.__thisclass__, object.__self__)
         @classmethod
         def u_constructor(cls, data, **attributes):
-            thisclass,self = data
-            return __builtin__.super(thisclass,self)
+            thisclass, self = data
+            return builtins.super(thisclass, self)
         @classmethod
         def p_instance(cls, object, **attributes):
             return ()
@@ -1362,11 +1375,11 @@ if 'special':
         @classmethod
         def p_constructor(cls, object, **attributes):
             raise NotImplementedError('Unable to pack objects of type generator_')  # Due to the gi_frame property
-            return object.gi_running,object.gi_code,object.gi_frame
+            return object.gi_running, object.gi_code, object.gi_frame
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            co,fr = data
+            co, fr = data
             result = function.new(co, fr.f_globals)
             raise NotImplementedError('Unable to unpack objects of type generator_')
             return result
@@ -1489,7 +1502,7 @@ if 'operator':
 import marshal as pickle
 def dumps(object, **attributes):
     '''Convert any python object into a string.'''
-    return pickle.dumps(package.pack(object,**attributes))
+    return pickle.dumps(package.pack(object, **attributes))
 
 def loads(data, **attributes):
     '''Convert a string back into a python object.'''
@@ -1511,10 +1524,10 @@ def caller(frame=None):
     """
     import sys
     fr = sys._getframe().f_back if frame is None else frame
-    source,name = fr.f_code.co_filename,fr.f_code.co_name
+    source, name = fr.f_code.co_filename, fr.f_code.co_name
     module = [x for x in sys.modules.values() if hasattr(x, '__file__') and (x.__file__.endswith(source) or x.__file__.endswith('%sc'%source))]
     module, = (None,) if not module else module
-    return module,name
+    return module, name
 
 if __name__ == '__main__':
     import traceback
@@ -1537,33 +1550,34 @@ if __name__ == '__main__':
                 print('%s: %r'% (name, E))
             except Exception as E:
                 print('%s: %r : %r'% (name, Failure(), E))
-            print(traceback.format_exc())
+            #print(traceback.format_exc())
             return False
         TestCaseList.append(harness)
         return fn
 
 if __name__ == '__main__':
-    from __builtin__ import *
-    import fu
+    from builtins import *
+    import builtins, fu
 
     # lame helpers for testcases
     def make_package(cls, cons, inst):
-        m,n = '__main__', 'unnamed'
-        result = (fu.VERSION, 0, ({0:(cls.id,cons)},{0:(cls.id,inst)}))
-#        result = (fu.VERSION, 0, ({0:(cls.id,(m,n),cons)},{0:(cls.id,inst)}))
+        m, n = '__main__', 'unnamed'
+        result = (fu.VERSION, 0, ({0:(cls.id, cons)}, {0:(cls.id, inst)}))
+#        result = (fu.VERSION, 0, ({0:(cls.id, (m, n), cons)}, {0:(cls.id, inst)}))
         return result
     def extract_package(package):
-        _,id,(cons,inst) = package
-        return id,cons,inst
+        _, id, (cons, inst) = package
+        return id, cons, inst
     def check_package(package):
-        ver,id,(cons,inst) = package
-        if set(cons.keys()) != set(inst.keys()):
+        ver, id, (cons, inst) = package
+        if {item for item in cons.keys()} != {item for item in inst.keys()}:
             return False
         if ver != fu.VERSION:
             return False
         return id in cons
 
-    class A(object): pass
+    class A(object):
+        pass
     class B(A):
         def method(self):
             return 'B'
@@ -1589,39 +1603,40 @@ if __name__ == '__main__':
     def test_builtin_pack():
         input = 0x40
         result = fu.package.pack(input)
-        id,cons,inst = extract_package(result)
+        id, cons, inst = extract_package(result)
         if cons[id][-1] == input:
             raise Success
 
     @TestCase
     def test_builtin_unpack():
-        input = make_package(fu.bool_,True,())
+        input = make_package(fu.bool_, True, ())
         result = fu.package.unpack(input)
         if result == True:
             raise Success
 
     @TestCase
     def test_constant_unpack():
-        input = make_package(fu.none,(),())
+        input = make_package(fu.none, (), ())
         result = fu.package.unpack(input)
         if result == None:
             raise Success
 
     @TestCase
     def test_list_pack():
-        l = range(5)
+        l = [item for item in range(5)]
         result = fu.package.pack(l)
-        id,cons,inst = extract_package(result)
-        if check_package(result) and len(cons) == len(l)+1:
+        id, cons, inst = extract_package(result)
+        if check_package(result) and len(cons) == len(l) + 1:
             raise Success
 
     @TestCase
     def test_listref_pack():
-        a = range(5)
-        l = [a,a,a,a]
+        a = [item for item in range(5)]
+        l = 4 * [a]
         result = fu.package.pack(l)
-        id,cons,inst = extract_package(result)
-        if check_package(result) and len(cons) == len(a)+1+1:
+        id, cons, inst = extract_package(result)
+        _, items = inst[id]
+        if check_package(result) and len(cons) == len(inst) == len(a) + 1 + 1 and len({item for item in items}) == 1:
             raise Success
 
     @TestCase
@@ -1629,25 +1644,25 @@ if __name__ == '__main__':
         a = []
         a.append(a)
         result = fu.package.pack(a)
-        id,cons,inst = extract_package(result)
+        id, cons, inst = extract_package(result)
         if inst[id][1][0] == id:
             raise Success
 
     @TestCase
     def test_dict_pack():
-        l = {'hello':'world', 5:10, True:False}
+        l = {'hello': 'world', 5: 10, True: False}
         result = fu.package.pack(l)
-        id,cons,inst = extract_package(result)
-        if check_package(result) and len(cons) == len(l)*2 + 1:
+        id, cons, inst = extract_package(result)
+        if check_package(result) and len(inst) == len(cons) == 2 * len(l) + 1:
             raise Success
 
     @TestCase
     def test_dictref_pack():
-        a = range(5)
-        l = {'hello':a, 'world':a}
+        a = [item for item in range(5)]
+        l = {'hello': a, 'world': a}
         result = fu.package.pack(l)
-        id,cons,inst = extract_package(result)
-        if len(inst) == len(a)+1 + len(l)+1:
+        id, cons, inst = extract_package(result)
+        if check_package(result) and len(cons) == len(inst) == len(a) + 1 + len(l) + 1:
             raise Success
 
     @TestCase
@@ -1655,8 +1670,8 @@ if __name__ == '__main__':
         a = {}
         a[5] = a
         result = fu.package.pack(a)
-        id,cons,inst = extract_package(result)
-        if len(a) == 1 and check_package(result) and inst[id][1].values()[0] == id:
+        id, cons, inst = extract_package(result)
+        if check_package(result) and [item for item in inst[id][1].values()][0] == id:
             raise Success
 
     @TestCase
@@ -1678,8 +1693,7 @@ if __name__ == '__main__':
         if y[6][5] is None:
             raise Success
 
-    @TestCase
-    def test_code_packunpack():
+    def test_code_packunpack_v2():
         def func(*args):
             return ' '.join(args)
         a = fu.package.pack(func.func_code)
@@ -1687,13 +1701,22 @@ if __name__ == '__main__':
         if func.func_code.co_name == b.co_name and func.func_code is not b:
             raise Success
 
+    def test_code_packunpack_v3():
+        def func(*args):
+            return ' '.join(args)
+        a = fu.package.pack(func.__code__)
+        b = fu.package.unpack(a)
+        if func.__code__.co_name == b.co_name and func.__code__ is not b:
+            raise Success
+    test_code_packunpack = TestCase(test_code_packunpack_v2 if sys.version_info.major < 3 else test_code_packunpack_v3)
+
     @TestCase
     def test_func_packunpack():
         def func(*args):
             return ' '.join(args)
         a = fu.package.pack(func)
         b = fu.package.unpack(a)
-        if func is not b and b('hello','world') == 'hello world':
+        if func is not b and b('hello', 'world') == 'hello world':
             raise Success
 
     @TestCase
@@ -1704,7 +1727,7 @@ if __name__ == '__main__':
         a = fu.package.pack(blah)
         b = fu.package.unpack(a)
         b = b()
-        if b.func('hello','world') == 'hello world':
+        if b.func('hello', 'world') == 'hello world':
             raise Success
 
     @TestCase
@@ -1714,7 +1737,7 @@ if __name__ == '__main__':
                 return ' '.join(args)
         a = fu.package.pack(blah())
         b = fu.package.unpack(a)
-        if b.func('hello','world') == 'hello world':
+        if b.func('hello', 'world') == 'hello world':
             raise Success
 
     @TestCase
@@ -1782,18 +1805,19 @@ if __name__ == '__main__':
 
         a = test2()
         identity = id(a.tenor) == id(a.fiver)
-        assert identity is True, "yay, your python isn't lying about id being unique"
+        if identity is not True:
+            raise AssertionError('yay, your python isn\'t lying about id being unique')
         if a.tenor() != a.fiver():
             raise Success
 
     @TestCase
     def test_func_closure():
-        def fn(a1,a2):
+        def fn(a1, a2):
             def closure(a3):
                 return (a1+a2)*a3
             return closure
 
-        a = fn(1,2)
+        a = fn(1, 2)
         b = fu.package.pack(a)
         c = fu.package.unpack(b)
         if a(222) == int(c('6')):
@@ -1809,7 +1833,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_inheritance_native():
-        class blah(list): pass
+        class blah([].__class__): pass
         x = blah()
         x.append(5)
         a = fu.package.pack(x)
@@ -1844,6 +1868,14 @@ if __name__ == '__main__':
     @TestCase
     def test_module_general():
         import re
+
+        #pattern
+        #flags
+        #code
+        #groups
+        #groupindex
+        #indexgroup
+
         a = re
         b = fu.pack(a)
         c = fu.unpack(b)
@@ -1862,7 +1894,7 @@ if __name__ == '__main__':
     def test_ignore_modulepack():
         import sys
         a = fu.package.pack(sys, local=('sys',))
-        _,x,y = a
+        _, x, y = a
         if y[0][x][0] is not fu.module.id:
             raise Failure
 
@@ -1874,7 +1906,7 @@ if __name__ == '__main__':
     def test_ignore_moduleunpack():
         import _ast as testpackage
         a = fu.package.pack(testpackage)
-        _,x,y = a
+        _, x, y = a
         if y[0][x][0] is not fu.module_.id:
             raise Failure
 
@@ -1886,7 +1918,7 @@ if __name__ == '__main__':
     def test_ptype_pack():
         from ptypes import pint
         a = pint.uint32_t()
-        a.setoffset(id(__builtin__.type))
+        a.setoffset(id(builtins.type))
         result = a.l.value
         b = fu.package.unpack(fu.package.pack(a))
         if b.value == result:
@@ -1897,9 +1929,10 @@ if __name__ == '__main__':
         def fn():
             yield 1
             yield 2
-        global a,b,c
+        global a, b, c
         a = fn()
-        assert a.next() == 1
+        if a.next() != 1:
+            raise AssertionError
         b = fu.package.pack(a)
         c = fu.package.unpack(b)
         if c.next() == 2:
@@ -1907,9 +1940,8 @@ if __name__ == '__main__':
 
     @TestCase
     def test_weakref_packunpack():
-        import fu,_weakref
-        reload(fu)
-        a = set(('hello',))
+        import fu, _weakref
+        a = set(('hello', ))
         b = _weakref.ref(a)
         c = fu.pack(b)
         d = fu.unpack(c)
@@ -1918,14 +1950,14 @@ if __name__ == '__main__':
 
     @TestCase
     def test_super_packunpack():
-        import fu,__builtin__
-        class blah(set):
+        import fu
+        class blah({item for item in []}.__class__):
             def huh(self):
                 return 5
         class blahsub(blah):
             def huh(self):
                 return super(blahsub, self)
-        a = blahsub((20,40,60))
+        a = blahsub((20, 40, 60))
         b = a.huh()
         c = fu.pack(b)
         d = fu.unpack(c)
@@ -1934,7 +1966,7 @@ if __name__ == '__main__':
 
     @TestCase
     def test_threadlock_packunpack():
-        import thread,fu
+        import thread, fu
         a = thread.allocate_lock()
         b = fu.pack(a)
         c = fu.unpack(b)
@@ -1947,14 +1979,14 @@ if __name__ == '__main__':
         a = object()
         b = fu.pack(a)
         c = fu.unpack(b)
-        if type(a) == type(c) and isinstance(c,type(a)):
+        if type(a) == type(c) and isinstance(c, type(a)):
             raise Success
 
     @TestCase
     def test_instancevalue_slots_packunpack():
         import fu
         class mytype(object):
-            __slots__ = ['blargh','huh']
+            __slots__ = ['blargh', 'huh']
             readonly = 20
             #blargh = 500
             #huh = 20
@@ -1997,71 +2029,72 @@ if __name__ == 'bootstrap':
     n = st.store(package)
 
     t1 = set()
-    t1.update(n for n,_ in st.cons_data.values())
-    t1.update(n for n,_ in st.inst_data.values())
+    t1.update(n for n, _ in st.cons_data.values())
+    t1.update(n for n, _ in st.inst_data.values())
     print(len(t1))
     [st.store(fu.package.cache.byid(n)) for n in t]
     t2 = set()
-    t2.update(n for n,_ in st.cons_data.values())
-    t2.update(n for n,_ in st.inst_data.values())
+    t2.update(n for n, _ in st.cons_data.values())
+    t2.update(n for n, _ in st.inst_data.values())
     print(len(t2))
-    print(sum(map(len,(fu.package.cache.registration.id,fu.package.cache.registration.type,fu.package.cache.registration.const))))
+    print(sum(map(len, (fu.package.cache.registration.id, fu.package.cache.registration.type, fu.package.cache.registration.const))))
     t = t2
 
     mymethod = type(fu.function.new)
     myfunc = type(fu.function.new.im_func)
 
     ## serialize the stash methods
-    stashed_up,stashed_fe = (getattr(st,attr).im_func.func_code for attr in ('unpack_references','fetch'))
-    res = stashed_up,stashed_fe,st.packed()
+    stashed_up, stashed_fe = (getattr(st, attr).im_func.func_code for attr in ['unpack_references', 'fetch'])
+    res = stashed_up, stashed_fe, st.packed()
     #marshal.dumps(res)
 
     class mystash:
         cons_data = {}
         inst_data = {}
         def fetch(self, identity, **attributes):
-            _,data = self.cons_data[identity]
-            cls,data = self.byid(_),self.unpack_references(data,**attributes)
-            instance = cls.u_constructor(data,**attributes)
+            _, data = self.cons_data[identity]
+            cls, data = self.byid(_), self.unpack_references(data, **attributes)
+            instance = cls.u_constructor(data, **attributes)
             self.fetch_cache[identity] = instance
-            _,data = self.inst_data[identity]
-            cls,data = self.byid(_),self.unpack_References(data,**attributes)
-            _ = cls.u_instance(instance,data,**attributes)
-            assert instance is _
+            _, data = self.inst_data[identity]
+            cls, data = self.byid(_), self.unpack_References(data, **attributes)
+            _ = cls.u_instance(instance, data, **attributes)
+            if instance is not _:
+                raise AssertionError
             return instance
 
     mystash.unpack_references = myfunc(stashed_up, namespace)
     mystash.fetch = myfunc(stashed_fe, namespace)
     x = mystash()
-    x.cons_data,x.inst_data = st.packed()
+    x.cons_data, x.inst_data = st.packed()
 
     ## serialize the necessary type methods
-    classes = [(n,fu.package.cache.byid(n)) for n in t]
-    methods = [(n,(cls.__name__,cls.new.im_func.func_code,cls.getclass.im_func.func_code,cls.u_constructor.im_func.func_code,cls.u_instance.im_func.func_code)) for n,cls in classes]
+    classes = [(n, fu.package.cache.byid(n)) for n in t]
+    methods = [(n, (cls.__name__, cls.new.im_func.func_code, cls.getclass.im_func.func_code, cls.u_constructor.im_func.func_code, cls.u_instance.im_func.func_code)) for n, cls in classes]
     marshal.dumps(methods)
 
     ## ensure that we can recreate all these type methods
-    result,namespace = {},{}
+    result, namespace = {}, {}
     namespace['thread'] = importlib.import_module('thread')
     namespace['imp'] = importlib.import_module('imp')
     namespace['_weakref'] = importlib.import_module('_weakref')
-    for n,(name,new,get,cons,inst) in methods:
+    for n, (name, new, get, cons, inst) in methods:
         objspace = {
-            'new' : myfunc(new,namespace),
-            'getclass' : myfunc(get,namespace),
-            'u_constructor' : myfunc(cons,namespace),
-            'u_instance' : myfunc(inst,namespace),
+            'new' : myfunc(new, namespace),
+            'getclass' : myfunc(get, namespace),
+            'u_constructor' : myfunc(cons, namespace),
+            'u_instance' : myfunc(inst, namespace),
         }
         o = type(name, (object,), objspace)()
         result[n] = namespace[name] = o
 
     #for attr in ['func_closure', 'func_code', 'func_defaults', 'func_dict', 'func_doc', 'func_globals', 'func_name']:
-    #for n,(new,cons,inst) in methods:
-    #    if any(x.func_closure is not None for x in (cons,inst)):
+    #for n, (new, cons, inst) in methods:
+    #    if any(x.func_closure is not None for x in [cons, inst]):
     #        raise Exception(n)
-    #    if any(x.func_defaults is not None for x in (cons,inst)):
+    #    if any(x.func_defaults is not None for x in [cons, inst]):
     #        raise Exception(n)
-    #    if any(len(x.func_dict) != 0 for x in (cons,inst)):
+    #    if any(len(x.func_dict) != 0 for x in [cons, inst]):
     #        raise Exception(n)
     #    for attr in ['func_code', 'func_name']:
     #        print(n, attr, repr(getattr(cons, attr)))
