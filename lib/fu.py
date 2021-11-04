@@ -1437,6 +1437,23 @@ if 'special':
             fn, = data
             return cls.new(fn)
 
+    import re, _sre
+    @package.cache.register_type
+    class re_pattern(__constant):
+        @classmethod
+        def getclass(cls):
+            res = _sre.compile('', 0, [1], 0, {}, ())
+            return res.__class__
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.pattern, object.flags
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            pattern, flags = data
+            return re._compile(pattern, flags)
+
 if 'operator':
     import functools, operator
 
@@ -1974,18 +1991,10 @@ if __name__ == '__main__':
     @TestCase
     def test_module_general():
         import re
-
-        #pattern
-        #flags
-        #code
-        #groups
-        #groupindex
-        #indexgroup
-
-        a = re
+        a = re.compile('fuckyou', 0)
         b = fu.pack(a)
         c = fu.unpack(b)
-        if c is not a:
+        if id(b) != id(c) if sys.version_info.major < 3 else c is not a:
             raise Success
 
 #    @TestCase
@@ -2063,6 +2072,8 @@ if __name__ == '__main__':
         class blahsub(blah):
             def huh(self):
                 return super(blahsub, self)
+
+        # FIXME: this is busted in python2
         a = blahsub((20, 40, 60))
         b = a.huh()
         c = fu.pack(b)
