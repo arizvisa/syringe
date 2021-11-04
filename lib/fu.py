@@ -154,7 +154,7 @@ class package:
             # builtins for known-modules that can be copied from
             if t == builtin_.getclass():
                 if instance.__module__ is None:
-                    #return partial  # XXX
+                    #return incomplete  # XXX
                     raise KeyError(instance, 'Unable to determine module name from builtin method')
                 return builtin_
 
@@ -166,7 +166,7 @@ class package:
             if hasattr(instance, '__getstate__'):
                 raise NotImplementedError('Pickle protocol for type %r is unimplemented'% instance)
                 pickle.loads(pickle.dumps(instance))
-                return partial
+                return incomplete
 
             raise KeyError(instance)
 
@@ -266,7 +266,7 @@ class package:
                 # attribute[ignore=list of types, exclude=list of names]
                 if (cls.__name__ in builtins.set(attributes.get('ignore', ()))) or \
                     (fullname in builtins.set(attributes.get('exclude', ()))):
-                    cls = partial
+                    cls = incomplete
                 # attribute[local=list of names]
                 if name in builtins.set(attributes.get('local', ())):
                     cls = module
@@ -301,8 +301,8 @@ class package:
                 # attribute[ignore=list of types, exclude=list of names]
                 if (cls.__name__ in builtins.set(attributes.get('ignore', ()))) or \
                     (fullname in builtins.set(attributes.get('exclude', ()))):
-                    cls = partial
-                    instance = partial.new()
+                    cls = incomplete
+                    instance = incomplete.new()
                     self.fetch_cache[identity] = instance
                     return instance
 
@@ -396,15 +396,15 @@ class __type__(builtins.object):
         return instance
 
 @package.cache.register_type
-class partial(__type__):
+class incomplete(__type__):
     '''just a general type for incomplete objects'''
     class partialinstance(object):
         __name__ = '--incomplete--'
         def __getattr__(self, attribute):
-            message = 'unable to access attribute "%s" from partial type "%s"'
+            message = 'unable to access attribute "%s" from incomplete type "%s"'
             raise Exception(message% (attribute, self.__name__))
         def __call__(self, *args, **kwds):
-            message = 'unable to call partial type "%s"'
+            message = 'unable to call incomplete type "%s"'
             raise Exception(message% (self.__name__))
         def __repr__(self):
             return "%s %s"%( self.__class__, self.__name__ )
@@ -1393,7 +1393,7 @@ if 'special':
             return instance
 
     @package.cache.register_type
-    class frame_(partial):  # FIXME: can't construct these, we can create a shell object for these tho maybe
+    class frame_(incomplete):  # FIXME: can't construct these, we can create a shell object for these tho maybe
         attributes = ['f_back', 'f_builtins', 'f_code', 'f_exc_traceback', 'f_exc_type', 'f_exc_value', 'f_globals', 'f_lasti', 'f_lineno', 'f_locals', 'f_restricted', 'f_trace']
         @classmethod
         def getclass(cls):
@@ -1438,7 +1438,39 @@ if 'special':
             return cls.new(fn)
 
 if 'operator':
-    import operator
+    import functools, operator
+
+    class __operator_reduceable(__constant):
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            return object.__reduce__()
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            t, parameters = data
+            return t(*parameters)
+
+    @package.cache.register_const
+    class partial(__constant):
+        @classmethod
+        def getclass(cls):
+            return functools.partial
+
+    @package.cache.register_type
+    class partial_(__operator_reduceable):
+        @classmethod
+        def getclass(cls):
+            return functools.partial
+
+        @classmethod
+        def p_constructor(cls, object, **attributes):
+            t = object.__class__
+            return t, (object.func, object.args, object.keywords)
+
+        @classmethod
+        def u_constructor(cls, data, **attributes):
+            t, (f, args, kwargs) = data
+            return t(f, *args, **kwargs)
 
     @package.cache.register_const
     class attrgetter(__constant):
@@ -1447,55 +1479,129 @@ if 'operator':
             return operator.attrgetter
 
     @package.cache.register_type
-    class attrgetter_(__constant):
+    class attrgetter_(__operator_reduceable):
         @classmethod
         def getclass(cls):
             return operator.attrgetter
 
+        # Python2 methodology for determining which attributes
+        # of a class are being touched by an operator.
         @classmethod
-        def helper(cls):
-            class attrgetter(object):
-                def __getattribute__(self, name):
-                    raise Exception(name)
-            return attrgetter()
+        def attribute_collector(cls, append):
+            def closure(self, name, append=append):
+                items = [name]
+                append(items)
+                return cls.attribute_collector(items.append)
+            class dummy(object): pass
+            dummy.__getattribute__ = closure
+            return dummy()
 
         @classmethod
-        def p_constructor(cls, object, **attributes):
-            helper = cls.helper()
-            try:
-                object(helper)
-            except Exception as E:
-                name, = E
-            return (name,)
+        def attribute_flatten(cls, items):
+            def collect(item):
+                if len(item) > 1:
+                    head, tail = item[0], collect(item[1])
+                    return [head] + tail
+                return item
+            return [collect(item) for item in items]
 
-        @classmethod
-        def u_constructor(cls, data, **attributes):
-            name, = data
-            return cls.new(name)
+        # Python2 methodology of figuring out the attributes
+        def __p_constructor_v2(cls, object, **attributes):
+            t, state = cls.getclass(), []
+            dummy = cls.attribute_collector(state.append)
+            object(dummy)
+            attribs = cls.attribute_flatten(state)
+            return t, ().__class__('.'.join(item) for item in attribs)
 
+        def __p_constructor_v3(cls, object, **attributes):
+            return object.__reduce__()
+
+        p_constructor = classmethod(__p_constructor_v2 if sys.version_info.major < 3 else __p_constructor_v3)
+
+    @package.cache.register_const
     class itemgetter(__constant):
         @classmethod
         def getclass(cls):
             return operator.itemgetter
 
     @package.cache.register_type
-    class itemgetter_(__constant):
+    class itemgetter_(__operator_reduceable):
         @classmethod
         def getclass(cls):
             return operator.itemgetter
 
+        # Python2 methodology for determining which items
+        # of an object are being fetched by an operator.
         @classmethod
-        def p_constructor(cls, object, **attributes):
-            # XXX: we can implement a class that implements __getitem__,
-            #      and hook it to a coroutine to figure out how many
-            #      times the itemgetter accesses it, and what indices
-            #      it's trying to access.
-            raise NotImplementedError
+        def item_collector(cls, append):
+            def closure(self, item, append=append):
+                append(item)
+                return None
+            class dummy(object): pass
+            dummy.__getitem__ = closure
+            return dummy()
+
+        # Python2 methodology of figuring out the items
+        def __p_constructor_v2(cls, object, **attributes):
+            t, state = cls.getclass(), []
+            dummy = cls.item_collector(state.append)
+            object(dummy)
+            return t, ().__class__(item for item in state)
+
+        def __p_constructor_v3(cls, object, **attributes):
+            return object.__reduce__()
+
+        p_constructor = classmethod(__p_constructor_v2 if sys.version_info.major < 3 else __p_constructor_v3)
+
+    @package.cache.register_const
+    class methodcaller(__constant):
+        @classmethod
+        def getclass(cls):
+            return operator.methodcaller
+
+    @package.cache.register_type
+    class methodcaller_(__operator_reduceable):
+        @classmethod
+        def getclass(cls):
+            return operator.methodcaller
+
+        # Python2 methodology for determining which attributes
+        # of a class will be called by an operator
+        @classmethod
+        def method_collector(cls, append):
+            def preserve(state):
+                def call(*args, **kwargs):
+                    state.append((args, kwargs))
+                return call
+            def closure(self, name, callable=preserve, append=append):
+                item = [name]
+                append(item)
+                return callable(item)
+            class dummy(object): pass
+            dummy.__getattribute__ = closure
+            return dummy()
+
+        # Python2 methodology of figuring out the attributes
+        def __p_constructor_v2(cls, object, **attributes):
+            t, state = cls.getclass(), []
+            dummy = cls.method_collector(state.append)
+            object(dummy)
+            f, (args, keywords) = state[0]
+            fargs = (f,) + args
+            return t, (fargs, keywords)
+
+        def __p_constructor_v3(cls, object, **attributes):
+            partial, args = object.__reduce__()
+            if partial is cls.getclass():
+                return partial, (args, {})
+            return partial.func, (partial.args + args, partial.keywords)
+
+        p_constructor = classmethod(__p_constructor_v2 if sys.version_info.major < 3 else __p_constructor_v3)
 
         @classmethod
         def u_constructor(cls, data, **attributes):
-            name, = data
-            return cls.new(name)
+            t, (args, keywords) = data
+            return t(*args, **keywords)
 
 ## regular functions
 #import cPickle as pickle
@@ -1966,11 +2072,11 @@ if __name__ == '__main__':
 
     @TestCase
     def test_threadlock_packunpack():
-        import thread, fu
-        a = thread.allocate_lock()
+        import _thread, fu
+        a = _thread.allocate_lock()
         b = fu.pack(a)
         c = fu.unpack(b)
-        if type(a) == type(c):
+        if a.__class__ == c.__class__:
             raise Success
 
     @TestCase
@@ -2013,6 +2119,158 @@ if __name__ == '__main__':
             pass
 
         if b.blargh == b.huh == 500 and b.readonly == 20:
+            raise Success
+
+    @TestCase
+    def test_operator_partial():
+        def fucker(x, y, z):
+            return x * y + z
+
+        f = functools.partial(fucker, 2, 3)
+        g = fu.unpack(fu.pack(f))
+        if f(1) == g(1):
+            raise Success
+
+    @TestCase
+    def test_operator_attrgetter_0():
+        class t(object):
+            mine = 5
+        f = operator.attrgetter('mine')
+        g = fu.unpack(fu.pack(f))
+        if f(t) == g(t):
+            raise Success
+
+    @TestCase
+    def test_operator_attrgetter_1():
+        f = operator.attrgetter('mine', 'two')
+        result = fu.package.pack(f)
+        id, cons, inst = extract_package(result)
+        _, items = cons[id]
+        _, args = [cons[id] for id in items][-1]
+        parameters = [cons[id] for id in args]
+        attributes = [name for _, name in parameters]
+        if attributes == ['mine', 'two']:
+            raise Success
+
+    @TestCase
+    def test_operator_attrgetter_2():
+        f = operator.attrgetter('this.is.a.deep', 'one.and.this.one.too')
+        result = fu.package.pack(f)
+        id, cons, inst = extract_package(result)
+        _, items = cons[id]
+        _, args = [cons[id] for id in items][-1]
+        parameters = [cons[id] for id in args]
+        attributes = [name for _, name in parameters]
+        if attributes == ['this.is.a.deep', 'one.and.this.one.too']:
+            raise Success
+
+    @TestCase
+    def test_operator_itemgetter_0():
+        x = {'mine': 5}
+        f = operator.itemgetter('mine')
+        g = fu.unpack(fu.pack(f))
+        if f(x) == g(x):
+            raise Success
+
+    @TestCase
+    def test_operator_itemgetter_1():
+        f = operator.itemgetter('mine', 'two')
+        result = fu.package.pack(f)
+        id, cons, inst = extract_package(result)
+        _, items = cons[id]
+        _, args = [cons[id] for id in items][-1]
+        parameters = [cons[id] for id in args]
+        attributes = [name for _, name in parameters]
+        if attributes == ['mine', 'two']:
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_0():
+        class t(object):
+            @classmethod
+            def mine(cls, x):
+                return 2 * x
+        f = operator.methodcaller('mine', 3)
+        g = fu.unpack(fu.pack(f))
+        if f(t) == g(t):
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_1():
+        class t(object):
+            @classmethod
+            def mine(cls, x):
+                return 2 * x
+        f = operator.methodcaller('mine', x=3)
+        g = fu.unpack(fu.pack(f))
+        if f(t) == g(t):
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_2():
+        class t(object):
+            @classmethod
+            def mine(cls, x, **kwargs):
+                return 2 * x + kwargs.get('y')
+        f = operator.methodcaller('mine', 3, y=20)
+        g = fu.unpack(fu.pack(f))
+        if f(t) == g(t):
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_3():
+        class t(object):
+            @classmethod
+            def mine(cls, x, **kwargs):
+                return 2 * x + kwargs.get('y')
+        f = operator.methodcaller('mine', x=3, y=20)
+        g = fu.unpack(fu.pack(f))
+        if f(t) == g(t):
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_classmethod_0():
+        class t1(object):
+            def mine(self, x, y):
+                return 2 * x + y
+        class t2(object):
+            def mine(self, x, y):
+                return i1.mine(x, y)
+        i1, i2 = t1(), t2()
+
+        f = operator.methodcaller('mine', 20, 5)
+        g = fu.unpack(fu.pack(f))
+        if f(i1) == g(i2):
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_classmethod_1():
+        class t1(object):
+            def mine(self, x, y):
+                return 2 * x + y
+        class t2(object):
+            def mine(self, x, y):
+                return i1.mine(x, y)
+        i1, i2 = t1(), t2()
+
+        f = operator.methodcaller('mine', 20, y=5)
+        g = fu.unpack(fu.pack(f))
+        if f(i1) == g(i2):
+            raise Success
+
+    @TestCase
+    def test_operator_methodcaller_classmethod_2():
+        class t1(object):
+            def mine(self, x, y):
+                return 2 * x + y
+        class t2(object):
+            def mine(self, x, y):
+                return i1.mine(x, y)
+        i1, i2 = t1(), t2()
+
+        f = operator.methodcaller('mine', x=20, y=5)
+        g = fu.unpack(fu.pack(f))
+        if f(i1) == g(i2):
             raise Success
 
 if __name__ == '__main__':
