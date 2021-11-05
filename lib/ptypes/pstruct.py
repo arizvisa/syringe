@@ -45,10 +45,10 @@ Example usage:
     # remove an alias
     instance.unalias('alternative-name')
 """
-import functools
+import functools, operator, itertools
 from . import ptype, utils, pbinary, error
 
-__all__ = 'type,make'.split(',')
+__all__ = ['type', 'make']
 
 from . import config
 Config = config.defaults
@@ -381,28 +381,62 @@ def make(fields, **attrs):
 
     This will automatically create padding in the structure for any holes that were found.
     """
-    fields = set(fields)
+    fields = [item for item in fields]
+    items = sorted(fields, key=operator.methodcaller('getoffset'))
+    grouped = [(offset, [item for item in items]) for offset, items in itertools.groupby(items, key=operator.methodcaller('getoffset'))]
+    baseoffset = next(position for position, _ in grouped)
 
-    # FIXME: instead of this explicit check, if more than one structure occupies the
-    # same location, then we should promote them all into a union.
-    if len({fld.getoffset() for fld in fields}) != len(fields):
-        raise ValueError('more than one field is occupying the same location')
+    # FIXME: we need to build a segment tree of all of our items that are grouped
+    #        so that we can figure out what elements are overlapped and how we
+    #        should group them into a union.
+    if attrs.get('offset', baseoffset) > baseoffset:
+        raise ValueError("{:s}.make : Unable to specify a base offset ({:#x}) after the offset of any existing fields ({:#x} > {:#x}).".format(__name__, attrs.get('offset', baseoffset), attrs.get('offset', baseoffset), grouped[0][0]))
 
-    types = sorted(fields, key=lambda instance: instance.getposition())
+    # define a closure that will take the provided fields and make them into
+    # a dynamic.union type that we can add into a structure.
+    from . import dynamic
+    def make_union(name, items):
+        definition = []
+        for index, instance in enumerate(items):
+            definition.append((instance.__class__, "anonymous_{:d}".format(1 + index) if getattr(instance, '__name__', None) is None else instance.shortname()))
 
-    ofs, result = 0, []
-    for object in types:
-        loc, name, size = object.getoffset(), object.shortname(), object.blocksize()
+        # create the union that we plan on returning
+        class union_t(dynamic.union):
+            pass
+        union_t.__name__ = name
+        union_t._fields_ = definition
+        return union_t
 
-        delta = loc - ofs
+    # iterate through all of the fields that we've grouped, and pad them
+    # into a structure type that we can return.
+    result, offset = [], attrs.setdefault('offset', baseoffset)
+    for expected, items in grouped:
+        if len(items) > 1:
+            object_t = make_union("__union_{:x}".format(expected), items)
+            location, name, size = expected, "field_{:x}".format(expected), object_t().a.blocksize()
+
+        elif len(items) > 0:
+            object = items[0]
+            location, size = object.getoffset(), object.blocksize()
+            object_t, name = object.__class__, "field_{:x}".format(expected) if getattr(object, '__name__', None) is None else object.shortname()
+
+        else:
+            Log.warning("{:s}.make : An unexpected number of items ({:d}) were found for the specified offset ({:+#x}).".format(__name__, len(items), expected))
+            continue
+
+        delta = location - offset
         if delta > 0:
-            result.append((ptype.clone(ptype.block, length=delta), u'__padding_{:x}'.format(ofs)))
-            ofs += delta
+            result.append((ptype.clone(ptype.block, length=delta), u'__padding_{:x}'.format(offset)))
+            offset += delta
 
         if size > 0:
-            result.append((object.__class__, name))
-            ofs += size
+            result.append((object_t, name))
+            offset += size
         continue
+
+    # we need to hack up the offset and place it into the position attribute
+    # so that the user's choice will work appear in the constructed type.
+    attrs['__position__'] = attrs.pop('offset'),
     return ptype.clone(type, _fields_=result, **attrs)
 
 if __name__ == '__main__':
@@ -694,6 +728,59 @@ if __name__ == '__main__':
             ]
         a = st().alloc(a=3)
         if a.size() == 2:
+            raise Success
+
+    @TestCase
+    def test_make_structure_padding():
+        items = []
+        items.append(pint.uint16_t(offset=0x10))
+        items.append(pint.uint8_t(offset=0))
+        t = pstruct.make(items)
+        instance = t().a
+        if len(instance.value) == 3 and instance.value[1].size() == 0xf:
+            raise Success
+
+    @TestCase
+    def test_make_structure_offset_0():
+        items = []
+        items.append(pint.uint16_t(offset=0x1e))
+        items.append(pint.uint8_t(offset=0x10))
+        t = pstruct.make(items, offset=0)
+        instance = t().a
+        if len(instance.value) == 4 and instance.getoffset() == 0 and instance.value[0].size() == 0x10:
+            raise Success
+
+    @TestCase
+    def test_make_structure_offset_1():
+        items = []
+        items.append(pint.uint8_t(offset=0x10))
+        items.append(pint.uint16_t(offset=0x1e))
+        t = pstruct.make(items, offset=0x8)
+        instance = t().a
+        if len(instance.value) == 4 and instance.getoffset() == 8 and instance.value[0].size() == 0x8:
+            raise Success
+
+    @TestCase
+    def test_make_structure_offset_2():
+        items = []
+        items.append(pint.uint8_t(offset=0x10))
+        items.append(pint.uint16_t(offset=0x1e))
+        t = pstruct.make(items, offset=0x10)
+        instance = t().a
+        if len(instance.value) == 3 and instance.getoffset() == 0x10 and instance.value[0].size() == 0x1:
+            raise Success
+
+    @TestCase
+    def test_make_structure_union():
+        items = []
+        items.append(pint.uint16_t(offset=0x10))
+        items.append(pint.uint32_t(offset=4))
+        items.append(pint.uint16_t(offset=4))
+        items.append(pint.uint8_t(offset=0))
+        t = pstruct.make(items)
+        instance = t().a
+        union, expected = instance.field(4), [4, 2]
+        if len(instance.value) == 5 and union.getoffset() == 4 and union.blocksize() == union.size() == 4 and all(union[fld].size() == size for fld, size in zip(union.keys(), expected)):
             raise Success
 
 if __name__ == '__main__':
