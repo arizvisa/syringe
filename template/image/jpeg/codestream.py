@@ -147,6 +147,10 @@ class DecodedStream(parray.block):
         Fsize = lambda self, cb=abs(bounds): cb
         return dyn.clone(self.Element, Type=t, blocksize=Fsize) if bounds > 0 else dyn.clone(self.Data, blocksize=Fsize)
 
+    def alloc(self, items=(), **attrs):
+        self.__bounds__ = [item.size() for item in items]
+        return super(DecodedStream, self).alloc(items, **attrs)
+
     def blocksize(self):
         return sum(map(abs, self.__bounds__))
 
