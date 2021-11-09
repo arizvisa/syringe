@@ -409,7 +409,7 @@ class terminated(type):
                     # we only allow elements with a zero size when the object type is
                     # a call (meaning it's a dynamic type) or if its blocksize is dynamic.
                     if size <= 0:
-                        if issubclass(self._object_, ptype.generic) and item.__blocksize_originalQ__():
+                        if issubclass(item.__class__, ptype.generic) and item.__blocksize_originalQ__():
                             Log.warning("terminated.load : {:s} : Terminated early due to zero-length element : {:s}".format(self.instance(), item.instance()))
                             break
 
