@@ -259,6 +259,10 @@ class type(ptype.type):
         else:
             raise error.SyntaxError(self, 'integer_t.set', message="Unknown byteorder ({!s}) was specified".format(self.byteorder))
 
+        # If we received some bytes, than just toss the value up the chain.
+        if isinstance(integer, bytes):
+            return super(type, self).__setvalue__(integer, **attrs)
+
         mask = pow(2, 8 * self.blocksize()) - 1
         integer &= mask
 
