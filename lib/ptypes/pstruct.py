@@ -225,6 +225,15 @@ class type(__structure_interface__):
         """Allocate the current instance. Attach any elements defined in **fields to container."""
         result = super(type, self).alloc()
         if fields:
+            # we need to iterate through all of the fields first
+            # in order to consolidate any aliases that were specified.
+            # this is a hack, and really we should first be sorting our
+            # fields that were provided by the fields in the structure.
+            names = [name for _, name in self._fields_ or []]
+            fields = {names[self.__getindex__(name)] : item for name, item in fields.items()}
+
+            # now we can iterate through our structure fields to allocate
+            # them using the fields given to us by the caller.
             offset = result.getoffset()
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
@@ -781,6 +790,52 @@ if __name__ == '__main__':
         instance = t().a
         union, expected = instance.field(4), [4, 2]
         if len(instance.value) == 5 and union.getoffset() == 4 and union.blocksize() == union.size() == 4 and all(union[fld].size() == size for fld, size in zip(union.keys(), expected)):
+            raise Success
+
+    @TestCase
+    def test_structure_alias_0():
+        class t(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        x.alias('myfield', 'a')
+        if x['myfield'].int() == 1:
+            raise Success
+
+    @TestCase
+    def test_structure_alias_1():
+        class t(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        x.alias('myfield', 'a')
+        x.set(myfield=5)
+
+        if x['myfield'].int() == 5:
+            raise Success
+
+    @TestCase
+    def test_structure_alias_2():
+        class t(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+            def __init__(self, **attrs):
+                super(t, self).__init__(**attrs)
+                self.alias('myfield', 'b')
+
+        x = t().alloc(a=1, c=3, myfield=20)
+        if x['myfield'].int() == 20:
             raise Success
 
 if __name__ == '__main__':
