@@ -777,8 +777,8 @@ class SOD(ptype.block):
 class EOC(ptype.block):
     pass
 
-class OPJ_PROFILE_(pint.enum):
-    _values_ = [
+class OPJ_PROFILE_(pbinary.enum):
+    length, _values_ = 14, [
         ('NONE', 0x0000),           # no profile, conform to 15444-1
         ('0', 0x0001),              # Profile 0 as described in 15444-1,Table A.45
         ('1', 0x0002),              # Profile 1 as described in 15444-1,Table A.45
@@ -799,24 +799,77 @@ class OPJ_PROFILE_(pint.enum):
         ('IMF_8K_R', 0x0900),       # 8K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
     ]
 
+class OPJ_PROFILE_IMF_(pbinary.enum):
+    length, _values_ = 4, [
+        ('2K', 0x0400),     # 2K Single Tile Lossy IMF profile defined in 15444-1 AMD 8
+        ('4K', 0x0500),     # 4K Single Tile Lossy IMF profile defined in 15444-1 AMD 8
+        ('8K', 0x0600),     # 8K Single Tile Lossy IMF profile defined in 15444-1 AMD 8
+        ('2K_R', 0x0700),   # 2K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
+        ('4K_R', 0x0800),   # 4K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
+        ('8K_R', 0x0900),   # 8K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
+    ]
+
+class OPJ_PROFILE_BC_(pbinary.enum):
+    length, _values_ = 4, [
+        ('SINGLE', 0x0100),     # Single Tile Broadcast profile defined in 15444-1 AMD3
+        ('MULTI', 0x0200),      # Multi Tile Broadcast profile defined in 15444-1 AMD3
+        ('MULTI_R', 0x0300),    # Multi Tile Reversible Broadcast profile defined in 15444-1 AMD3
+    ]
+
+class OPJ_PROFILE_CINEMA_(pbinary.enum):
+    length, _values_ = 4, [
+        ('2K', 0x0003),     # 2K cinema profile defined in 15444-1 AMD1
+        ('4K', 0x0004),     # 4K cinema profile defined in 15444-1 AMD1
+        ('S2K', 0x0005),    # Scalable 2K cinema profile defined in 15444-1 AMD2
+        ('S4K', 0x0006),    # Scalable 4K cinema profile defined in 15444-1 AMD2
+        ('LTS', 0x0007),    # Long term storage cinema profile defined in 15444-1 AMD2
+    ]
+
+class OPJ_PROFILE(pbinary.struct):
+    _fields_ = [
+        (6, 'PROFILE'),
+        (4, 'SUBLEVEL'),
+        (4, 'MAINLEVEL'),
+    ]
+
+class OPJ_EXTENSION_(pbinary.enum):
+    length, _values_ = 14, [
+        ('NONE', 0x0000),   # No Part-2 extension
+        ('MCT', 0x0100),    # Custom MCT support
+    ]
+
 @Marker.define
 class SIZ(pstruct.type):
-    class Capabilities(OPJ_PROFILE_, u16):
-        pass
-
-    class C(pstruct.type):
-        class Ssiz(pbinary.struct):
-            _fields_ = [
-                (1, 'Signed'),
-                (7, 'Components'),
-            ]
+    class Capabilities(pbinary.struct):
+        def __Sextensions(self):
+            has_extensions = self['PART2']
+            return OPJ_EXTENSION_ if has_extensions else 0
+        def __Sprofile(self):
+            has_extensions = self['PART2']
+            return OPJ_PROFILE_ if not has_extensions else 0
         _fields_ = [
-            (Ssiz, 'Ssiz'),     # Ssiz[i]
-            (u8, 'XRsiz'),      # XRsiz[i]
-            (u8, 'YRsiz'),      # YRsiz[i]
+            (1, 'PART2'),
+            (1, 'Scap'),
+            (__Sextensions, 'Sextensions'),
+            (__Sprofile, 'Sprofile'),
+        ]
+    class C(pstruct.type):
+        class S(pbinary.struct):
+            _fields_ = [
+                (1, 'Ssigned'),     # Signed
+                (7, 'Sprecision'),  # Components
+            ]
+            def __init__(self, **attrs):
+                super(SIZ.C.S, self).__init__(**attrs)
+                self.alias('Ssigned', 'Signed'),
+                self.alias('Sprecision', 'Components'),
+        _fields_ = [
+            (S, 'Ssiz'),    # Ssiz[i]
+            (u8, 'XRsiz'),  # XRsiz[i]
+            (u8, 'YRsiz'),  # YRsiz[i]
         ]
     _fields_ = [
-        (u16, 'Lsiz'),          # L_SIZ
+        (u16, 'Lsiz'),          # L_SIZ (Length)
         (Capabilities, 'Rsiz'), # Rsiz (Capabilities)
         (u32, 'X1siz'),         # Xsiz
         (u32, 'Y1siz'),         # Ysiz
