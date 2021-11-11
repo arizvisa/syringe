@@ -777,8 +777,33 @@ class SOD(ptype.block):
 class EOC(ptype.block):
     pass
 
+class OPJ_PROFILE_(pint.enum):
+    _values_ = [
+        ('NONE', 0x0000),           # no profile, conform to 15444-1
+        ('0', 0x0001),              # Profile 0 as described in 15444-1,Table A.45
+        ('1', 0x0002),              # Profile 1 as described in 15444-1,Table A.45
+        ('PART2', 0x8000),          # At least 1 extension defined in 15444-2 (Part-2)
+        ('CINEMA_2K', 0x0003),      # 2K cinema profile defined in 15444-1 AMD1
+        ('CINEMA_4K', 0x0004),      # 4K cinema profile defined in 15444-1 AMD1
+        ('CINEMA_S2K', 0x0005),     # Scalable 2K cinema profile defined in 15444-1 AMD2
+        ('CINEMA_S4K', 0x0006),     # Scalable 4K cinema profile defined in 15444-1 AMD2
+        ('CINEMA_LTS', 0x0007),     # Long term storage cinema profile defined in 15444-1 AMD2
+        ('BC_SINGLE', 0x0100),      # Single Tile Broadcast profile defined in 15444-1 AMD3
+        ('BC_MULTI', 0x0200),       # Multi Tile Broadcast profile defined in 15444-1 AMD3
+        ('BC_MULTI_R', 0x0300),     # Multi Tile Reversible Broadcast profile defined in 15444-1 AMD3
+        ('IMF_2K', 0x0400),         # 2K Single Tile Lossy IMF profile defined in 15444-1 AMD 8
+        ('IMF_4K', 0x0500),         # 4K Single Tile Lossy IMF profile defined in 15444-1 AMD 8
+        ('IMF_8K', 0x0600),         # 8K Single Tile Lossy IMF profile defined in 15444-1 AMD 8
+        ('IMF_2K_R', 0x0700),       # 2K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
+        ('IMF_4K_R', 0x0800),       # 4K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
+        ('IMF_8K_R', 0x0900),       # 8K Single/Multi Tile Reversible IMF profile defined in 15444-1 AMD 8
+    ]
+
 @Marker.define
 class SIZ(pstruct.type):
+    class Capabilities(OPJ_PROFILE_, u16):
+        pass
+
     class C(pstruct.type):
         class Ssiz(pbinary.struct):
             _fields_ = [
@@ -786,24 +811,32 @@ class SIZ(pstruct.type):
                 (7, 'Components'),
             ]
         _fields_ = [
-            (Ssiz, 'Ssiz'),
-            (u8, 'XRsiz'),
-            (u8, 'YRsiz'),
+            (Ssiz, 'Ssiz'),     # Ssiz[i]
+            (u8, 'XRsiz'),      # XRsiz[i]
+            (u8, 'YRsiz'),      # YRsiz[i]
         ]
     _fields_ = [
-        (u16, 'Lsiz'),
-        (u16, 'Rsiz'),
-        (u32, 'Xsiz'),
-        (u32, 'Ysiz'),
-        (u32, 'XOsiz'),
-        (u32, 'YOsiz'),
-        (u32, 'XTsiz'),
-        (u32, 'YTsiz'),
-        (u32, 'XTOsiz'),
-        (u32, 'YTOsiz'),
+        (u16, 'Lsiz'),          # L_SIZ
+        (Capabilities, 'Rsiz'), # Rsiz (Capabilities)
+        (u32, 'X1siz'),         # Xsiz
+        (u32, 'Y1siz'),         # Ysiz
+        (u32, 'X0siz'),         # XOsiz
+        (u32, 'Y0siz'),         # YOsiz
+        (u32, 'XT1siz'),        # XTsiz
+        (u32, 'YT1siz'),        # YTsiz
+        (u32, 'XT0siz'),        # XTOsiz
+        (u32, 'YT0siz'),        # YTOsiz
         (u16, 'Csiz'),
-        (lambda s: dyn.array(SIZ.C, s['Csiz'].li.int()), 'C'),
+        (lambda self: dyn.array(SIZ.C, self['Csiz'].li.int()), 'C'),
     ]
+
+    def __init__(self, **attrs):
+        super(SIZ, self).__init__(**attrs)
+        self.alias('Lsiz', 'L_SIZ'), self.alias('Rsiz', 'Capabilities')
+        [self.alias(field, item) for field, item in zip(['X1siz', 'Y1siz'], ['Xsiz', 'Ysiz'])]
+        [self.alias(field, item) for field, item in zip(['X0siz', 'Y0siz'], ['XOsiz', 'YOsiz'])]
+        [self.alias(field, item) for field, item in zip(['XT1siz', 'YT1siz'], ['XTsiz', 'YTsiz'])]
+        [self.alias(field, item) for field, item in zip(['XT0siz', 'YT0siz'], ['XTOsiz', 'YTOsiz'])]
 
     def alloc(self, **fields):
         res = super(SIZ, self).alloc(**fields)
@@ -812,9 +845,9 @@ class SIZ(pstruct.type):
         return res if operator.contains(fields, 'Lsiz') else res.set(Lsiz=res.size())
 
     def NumberOfTiles(self):
-        width = self['Xsiz'].int() - self['XOsiz'].int()
-        height = self['Ysiz'].int() - self['YOsiz'].int()
-        X, Y = (item / self[fld].int() for fld, item in zip(['XTsiz', 'YTsiz'], [width, height]))
+        width = self['X1siz'].int() - self['X0siz'].int()
+        height = self['Y1siz'].int() - self['Y0siz'].int()
+        X, Y = (item / self[fld].int() for fld, item in zip(['XT1siz', 'YT1siz'], [width, height]))
         return functools.reduce(operator.mul, map(math.ceil, [X, Y]))
 
 class Scod(pbinary.flags):
