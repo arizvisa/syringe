@@ -63,15 +63,21 @@ class __structure_interface__(ptype.container):
         super(__structure_interface__, self).__init__(*args, **kwds)
         self.__fastindex = {}
 
-    def alias(self, alias, target):
-        """Add an alias from /alias/ to the field /target/"""
+    def alias(self, target, *aliases):
+        """Add any of the specified aliases to point to the target field."""
         res = self.__getindex__(target)
-        self.__fastindex[alias.lower()] = res
-    def unalias(self, alias):
+        for item in aliases:
+            self.__fastindex[item.lower()] = res
+        return res
+    def unalias(self, *aliases):
         """Remove the alias /alias/ as long as it's not defined in self._fields_"""
-        if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
-            raise error.UserError(self, '__structure_interface__.__contains__', message='Not allowed to remove {:s} from aliases'.format(alias.lower()))
-        del self.__fastindex[alias.lower()]
+        fields = {name.lower() for _, name in self._fields_ or []}
+        items = {item.lower() for item in aliases}
+        if fields & items:
+            message = "Unable to remove the specified fields ({:s}) from the available aliases.".format(', '.join(item for item in fields & items))
+            raise error.UserError(self, '__structure_interface__.unalias', message)
+        indices = [self.__fastindex.pop(item) for item in items if item in self.__fastindex]
+        return len(indices)
 
     def append(self, object):
         '''L.append(object) -- append an element to a pstruct.type and return its offset.'''
@@ -802,7 +808,7 @@ if __name__ == '__main__':
             ]
 
         x = t().alloc(a=1, b=2, c=3)
-        x.alias('myfield', 'a')
+        x.alias('a', 'myfield')
         if x['myfield'].int() == 1:
             raise Success
 
@@ -816,7 +822,7 @@ if __name__ == '__main__':
             ]
 
         x = t().alloc(a=1, b=2, c=3)
-        x.alias('myfield', 'a')
+        x.alias('a', 'myfield')
         x.set(myfield=5)
 
         if x['myfield'].int() == 5:
@@ -832,10 +838,52 @@ if __name__ == '__main__':
             ]
             def __init__(self, **attrs):
                 super(t, self).__init__(**attrs)
-                self.alias('myfield', 'b')
+                self.alias('b', 'myfield')
 
         x = t().alloc(a=1, c=3, myfield=20)
         if x['myfield'].int() == 20:
+            raise Success
+
+    @TestCase
+    def test_structure_unalias_0():
+        class t(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        try:
+            x.unalias('a')
+        except Exception:
+            raise Success
+
+    @TestCase
+    def test_structure_unalias_1():
+        class t(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        if not x.unalias('item'):
+            raise Success
+
+    @TestCase
+    def test_structure_unalias_2():
+        class t(pstruct.type):
+            _fields_ = [
+                (pint.uint32_t, 'a'),
+                (pint.uint32_t, 'b'),
+                (pint.uint32_t, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        x.alias('a', 'fuck1', 'fuck2')
+        if x.unalias('fuck1', 'fuck2') == 2:
             raise Success
 
 if __name__ == '__main__':

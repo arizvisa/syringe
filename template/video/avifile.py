@@ -176,9 +176,9 @@ class Sample(Chunk):
 
     def __init__(self, **attrs):
         super(Sample, self).__init__(**attrs)
-        self.alias('ckID', 'stID'),
-        self.alias('ckSize', 'stSize'),
-        self.alias('ckData', 'stData'),
+        self.alias('stID', 'ckID'),
+        self.alias('stSize', 'ckSize'),
+        self.alias('stData', 'ckData'),
 
     _fields_ = [
         (ID, 'stID'),
