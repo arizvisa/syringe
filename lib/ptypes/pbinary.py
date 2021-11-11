@@ -1177,6 +1177,15 @@ class __structure_interface__(container):
     def alloc(self, **fields):
         result = super(__structure_interface__, self).alloc()
         if fields:
+            # we need to iterate through all of the fields first
+            # in order to consolidate any aliases that were specified.
+            # this is a hack, and really we should first be sorting our
+            # fields that were provided by the fields in the structure.
+            names = [name for _, name in self._fields_ or []]
+            fields = {names[self.__getindex__(name)] : item for name, item in fields.items()}
+
+            # now we can iterate through our structure fields to allocate
+            # them using the fields given to us by the caller.
             position = result.getposition()
             for idx, (t, name) in enumerate(self._fields_ or []):
                 if name not in fields:
@@ -1211,15 +1220,21 @@ class __structure_interface__(container):
         self.__fastindex[object.name().lower()] = current
         return position
 
-    def alias(self, alias, target):
-        """Add an alias from /alias/ to the field /target/"""
+    def alias(self, target, *aliases):
+        """Add any of the specified aliases to point to the target field."""
         res = self.__getindex__(target)
-        self.__fastindex[alias.lower()] = res
-    def unalias(self, alias):
-        """Remove the alias /alias/ as long as it's not defined in self._fields_"""
-        if any(alias.lower() == name.lower() for _, name in self._fields_ or []):
-            raise error.UserError(self, '__structure_interface__.__contains__', message="Unable to remove field name \"{:s}\" from list of aliases".format(alias.lower()))
-        del self.__fastindex[alias.lower()]
+        for item in aliases:
+            self.__fastindex[item.lower()] = res
+        return res
+    def unalias(self, *aliases):
+        '''Remove the specified aliases from the structure.'''
+        fields = {name.lower() for _, name in self._fields_ or []}
+        items = {item.lower() for item in aliases}
+        if fields & items:
+            message = "Unable to remove the specified fields ({:s}) from the available aliases.".format(', '.join(item for item in fields & items))
+            raise error.UserError(self, '__structure_interface__.unalias', message)
+        indices = [self.__fastindex.pop(item) for item in items if item in self.__fastindex]
+        return len(indices)
 
     def __getindex__(self, name):
         if not isinstance(name, string_types):
@@ -3516,6 +3531,94 @@ if __name__ == '__main__':
 
         a = t().alloc([8, 8, dynamic_t, 8])
         if a.bits() == 32:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_alias_0():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        x.alias('a', 'myfield')
+        if x['myfield'] == 1:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_alias_1():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        x.alias('a', 'myfield')
+        x.set(myfield=5)
+
+        if x['myfield'] == 5:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_alias_2():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+            ]
+            def __init__(self, **attrs):
+                super(t, self).__init__(**attrs)
+                self.alias('b', 'myfield')
+
+        x = t().alloc(a=1, c=3, myfield=2)
+        if x['myfield'] == 2:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_unalias_0():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        try:
+            x.unalias('a')
+        except Exception:
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_unalias_1():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        if not x.unalias('item'):
+            raise Success
+
+    @TestCase
+    def test_pbinary_struct_unalias_2():
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+            ]
+
+        x = t().alloc(a=1, b=2, c=3)
+        x.alias('a', 'fuck1', 'fuck2')
+        if x.unalias('fuck1', 'fuck2') == 2:
             raise Success
 
 if __name__ == '__main__':

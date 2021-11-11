@@ -64,13 +64,13 @@ class __structure_interface__(ptype.container):
         self.__fastindex = {}
 
     def alias(self, target, *aliases):
-        """Add any of the specified aliases to point to the target field."""
+        '''Add any of the specified aliases to point to the target field.'''
         res = self.__getindex__(target)
         for item in aliases:
             self.__fastindex[item.lower()] = res
         return res
     def unalias(self, *aliases):
-        """Remove the alias /alias/ as long as it's not defined in self._fields_"""
+        '''Remove the specified aliases from the structure.'''
         fields = {name.lower() for _, name in self._fields_ or []}
         items = {item.lower() for item in aliases}
         if fields & items:
