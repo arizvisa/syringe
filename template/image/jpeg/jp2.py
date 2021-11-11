@@ -879,13 +879,13 @@ class SIZ(pstruct.type):
         (u32, 'YT1siz'),        # YTsiz
         (u32, 'XT0siz'),        # XTOsiz
         (u32, 'YT0siz'),        # YTOsiz
-        (u16, 'Csiz'),
+        (u16, 'Csiz'),          # Scomponents
         (lambda self: dyn.array(SIZ.C, self['Csiz'].li.int()), 'C'),
     ]
 
     def __init__(self, **attrs):
         super(SIZ, self).__init__(**attrs)
-        self.alias('Lsiz', 'L_SIZ'), self.alias('Rsiz', 'Capabilities')
+        self.alias('Lsiz', 'L_SIZ'), self.alias('Rsiz', 'Capabilities'), self.alias('Csiz', 'Scomponents')
         [self.alias(field, item) for field, item in zip(['X1siz', 'Y1siz'], ['Xsiz', 'Ysiz'])]
         [self.alias(field, item) for field, item in zip(['X0siz', 'Y0siz'], ['XOsiz', 'YOsiz'])]
         [self.alias(field, item) for field, item in zip(['XT1siz', 'YT1siz'], ['XTsiz', 'YTsiz'])]
