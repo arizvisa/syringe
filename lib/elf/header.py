@@ -357,8 +357,8 @@ class ShdrEntries(XhdrEntries):
         return result
 
     def sorted(self):
-        for item in super(ShdrEntries, self).sorted('sh_offset'):
-            yield item
+        for index, item in super(ShdrEntries, self).sorted('sh_offset'):
+            yield index, item
         return
 
 class PhdrEntries(XhdrEntries):
@@ -378,37 +378,45 @@ class PhdrEntries(XhdrEntries):
     def byaddress(self, va):
         iterable = (item for item in self if item.loadableQ() and item.containsaddress(va))
 
-        # Now that we have an iterable, return the first result we find
+        # Now that we have an iterable, return the first result we find.
         try:
             result = next(iterable)
+
+        # If our iterator has no items, then we weren't able to find a match
+        # and we'll need to raise an exception.
         except StopIteration:
             raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
         return result
 
     def enumerate(self):
-        for item in super(PhdrEntries, self).enumerate():
-            if not isinstance(self.source, ptypes.provider.memorybase):
-                yield item
+        for index, item in super(PhdrEntries, self).enumerate():
+
+            # If our source is memory-backed, then we'll want to filter our
+            # items by whether they're loaded or not. So, we'll just check the
+            # phdr flags in order to figure that out.
+            if isinstance(self.source, ptypes.provider.memorybase):
+                flags = item['p_type']
+                if any(flags[fl] for fl in ['LOAD', 'DYNAMIC']):
+                    yield index, item
                 continue
 
-            flags = item['p_type']
-            if any(flags[fl] for fl in ['LOAD', 'DYNAMIC']):
-                yield item
-            continue
+            # Otherwise we'll just yield everything because it's in the file.
+            yield index, item
         return
 
     def sorted(self):
-        fld = 'p_offset' if not isinstance(self.source, ptypes.provider.memorybase) else 'p_vaddr'
+        fld = 'p_vaddr' if isinstance(self.source, ptypes.provider.memorybase) else 'p_offset'
         for index, item in super(PhdrEntries, self).sorted(fld):
-            if not isinstance(item.source, ptypes.provider.memory):
-                yield index, item
+
+            # If we are actually dealing with a source that's backed by
+            # actual memory, then only yield a phdr if it's actually loaded.
+            if isinstance(item.source, ptypes.provider.memory):
+                if item.loadableQ():
+                    yield index, item
                 continue
 
-            # If we are actually mapped into memory, then only yield the
-            # segments that are actually loaded.
-            if item.loadableQ():
-                yield index, item
-            continue
+            # Otherwise, we can just yield everything without having to filter.
+            yield index, item
         return
 
 ### 32-bit
