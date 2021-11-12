@@ -1340,12 +1340,12 @@ try:
                 if err.Fail() or len(data) != amount:
                     raise error.ConsumeError(self, self.address, amount)
                 self.address += len(data)
-                return bytes(data)
+                return builtins.bytes(data)
             return b''
 
         def store(self, data):
             process, err = self.__process, self.module.SBError()
-            amount = process.WriteMemory(self.address, bytes(data), err)
+            amount = process.WriteMemory(self.address, builtins.bytes(data), err)
             if err.Fail() or len(data) != amount:
                 raise error.StoreError(self, self.address, len(data))
             self.address += amount

@@ -1131,10 +1131,10 @@ class type(base):
         if not values: return self
 
         value, = values
-        if not builtins.isinstance(value, bytes):
-            raise error.TypeError(self, 'type.set', message="type {!r} is not serialized data".format(value.__class__))
+        if not builtins.isinstance(value, (bytes, bytearray)):
+            raise error.TypeError(self, 'type.set', message="provided value {!r} is not serialized data".format(value.__class__))
 
-        self.value = value[:]
+        self.value = bytes(value) if builtins.isinstance(value, bytearray) else value[:]
 
         # If there's a length attribute, and it's different than our value,
         # then update it with the new calculated value. We do a comparison
@@ -1154,7 +1154,8 @@ class type(base):
         """
         if self.initializedQ() or self.value:
             return len(self.value)
-        Log.info("type.size : {:s} : Unable to determine size of ptype.type, as object is still uninitialized.".format(self.instance()))
+        cls = type
+        Log.info("type.size : {:s} : Unable to determine (real) size with {!s}, as object is still uninitialized.".format(self.instance(), type.typename()))
         return 0
 
     def __blocksize_originalQ__(self):
@@ -1345,11 +1346,12 @@ class container(base):
         if total < expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.warning("container.__deserialize_block__ : {:s} : Container less than expected blocksize : {:#x} < {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
-            raise StopIteration(self.name(), total) # XXX
+            raise StopIteration(self.name(), total)
+
         elif total > expected:
             path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.debug("container.__deserialize_block__ : {:s} : Container larger than expected blocksize : {:#x} > {:#x} : {{{:s}}}".format(self.instance(), total, expected, path))
-            raise error.ConsumeError(self, self.getoffset(), expected, amount=total) # XXX
+            raise error.ConsumeError(self, self.getoffset(), expected, amount=total)
         return self
 
     def serialize(self):
@@ -2155,7 +2157,8 @@ class wrapper_t(type):
             return self.__object__.size()
         elif self.__value__ is not None:
             return len(self.__value__)
-        Log.info("wrapper_t.size : {:s} : Unable to determine size of ptype.wrapper_t, as object is still uninitialized.".format(self.instance()))
+        cls, backing = wrapper_t, self._value_
+        Log.info("wrapper_t.size : {:s} : Unable to determine (real) size with {!s} ({!s}), as object is still uninitialized.".format(self.instance(), cls.typename(), backing))
         return 0
 
     def classname(self):
@@ -2359,7 +2362,7 @@ class pointer_t(encoded_t):
 
             offset, = values
             bs = self.blocksize()
-            res = bitmap.new(offset, bs*8)
+            res = bitmap.new(offset, bs * 8)
             res = bitmap.data(res, reversed=(self.byteorder is config.byteorder.littleendian))
             return super(pointer_t._value_, self).__setvalue__(res, **attrs)
 

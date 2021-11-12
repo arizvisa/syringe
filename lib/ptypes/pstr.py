@@ -78,13 +78,14 @@ Log = Config.log.getChild('pstr')
 __izip_longest__ = utils.izip_longest
 integer_types, string_types, text_types = bitmap.integer_types, utils.string_types, utils.text_types
 
-def __ensure_text__(s, encoding='utf-8', errors='strict'):
+def __ensure_text__(input, encoding='utf-8', errors='strict'):
     '''ripped from six v1.12.0'''
-    if isinstance(s, bytes):
-        return s.decode(encoding, errors)
-    elif isinstance(s, text_types):
-        return s
-    raise TypeError("not expecting type '%s'"% type(s))
+    if isinstance(input, (bytes, bytearray)):
+        unencoded = bytes(input) if isinstance(input, bytearray) else input
+        return input.decode(encoding, errors)
+    elif isinstance(input, text_types):
+        return input
+    raise TypeError("not expecting type '{!s}'".format(input.__class__))
 
 class _char_t(pint.type):
     encoding = codecs.lookup('latin1')
@@ -107,8 +108,8 @@ class _char_t(pint.type):
         if isinstance(value, integer_types):
             return super(_char_t, self).__setvalue__(value)
 
-        elif isinstance(value, bytes):
-            return super(pint.type, self).__setvalue__(value)
+        elif isinstance(value, (bytes, bytearray)):
+            return super(pint.type, self).__setvalue__(bytes(value) if isinstance(value, bytearray) else value)
 
         elif isinstance(value, string_types):
             res = value.encode(self.encoding.name)

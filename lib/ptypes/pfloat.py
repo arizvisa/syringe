@@ -576,9 +576,9 @@ if __name__ == '__main__':
 
     ## fixed
     class word(ufixed_t):
-        length,fractional = 2,8
+        length, fractional = 2, 8
     class dword(ufixed_t):
-        length,fractional = 4,16
+        length, fractional = 4, 16
 
     @TestCase
     def ufixed_point_word_get():
@@ -615,9 +615,9 @@ if __name__ == '__main__':
 
     ## sfixed_t
     class sword(pfloat.sfixed_t):
-        length,fractional,sign = 2,8,1
+        length, fractional, sign = 2, 8, 1
     class sdword(pfloat.sfixed_t):
-        length,fractional,sign = 4,16,1
+        length, fractional, sign = 4, 16, 1
 
     @TestCase
     def sfixed_point_word_get():

@@ -73,20 +73,20 @@ class ProviderError(Base):
 class StoreError(ProviderError):
     """Error while attempting to store some number of bytes"""
     def __init__(self, identity, offset, amount, written=0, **kwds):
-        super(StoreError,self).__init__(*[(name, kwds[name]) for name in kwds])
-        self.stored = identity,offset,amount,written
+        super(StoreError, self).__init__(*[(name, kwds[name]) for name in kwds])
+        self.stored = identity, offset, amount, written
     def __str__(self):
-        identity,offset,amount,written = self.stored
+        identity, offset, amount, written = self.stored
         if written > 0:
             return 'StoreError({!s}) : Unable to store bytes ({:x}:{:+x}) : Wrote only {:+d} bytes'.format(type(identity), offset, amount, written)
         return 'StoreError({!s}) : Unable to store bytes ({:x}:{:+x})'.format(type(identity), offset, amount)
 class ConsumeError(ProviderError):
     """Error while attempting to consume some number of bytes"""
     def __init__(self, identity, offset, desired, amount=0, **kwds):
-        super(ConsumeError,self).__init__(**kwds)
-        self.consumed = identity,offset,desired,amount
+        super(ConsumeError, self).__init__(**kwds)
+        self.consumed = identity, offset, desired, amount
     def __str__(self):
-        identity,offset,desired,amount = self.consumed
+        identity, offset, desired, amount = self.consumed
         if amount > 0:
             return 'ConsumeError({!s}) : Unable to consume bytes ({:x}:{:+x}) : Read only {:+d} bytes'.format(type(identity), offset, desired, amount)
         return 'ConsumeError({!s}) : Unable to consume bytes ({:x}:{:+x})'.format(type(identity), offset, desired)
@@ -100,31 +100,31 @@ class SerializationError(ObjectBase):
         except Exception: bs = '+?'
         return '{:x}:{:s}'.format(self.object.getoffset(), bs)
     def __str__(self):
-        return ' : '.join((self.objectname(), self.instance(), self.path(), super(SerializationError,self).__str__()))
+        return ' : '.join((self.objectname(), self.instance(), self.path(), super(SerializationError, self).__str__()))
 
 class LoadError(SerializationError, exceptions.EnvironmentError):
     """Error while initializing object from source"""
     def __init__(self, object, consumed=0, **kwds):
-        super(LoadError,self).__init__(object, **kwds)
+        super(LoadError, self).__init__(object, **kwds)
         self.loaded = consumed,
 
     def __str__(self):
         consumed, = self.loaded
         if consumed > 0:
-            return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.instance(), self.path(), consumed, super(LoadError,self).__str__())
-        return super(LoadError,self).__str__()
+            return '{:s} : {:s} : Unable to consume {:+#x} from source ({:s})'.format(self.instance(), self.path(), consumed, super(LoadError, self).__str__())
+        return super(LoadError, self).__str__()
 
 class CommitError(SerializationError, exceptions.EnvironmentError):
     """Error while committing object to source"""
     def __init__(self, object, written=0, **kwds):
-        super(CommitError,self).__init__(object, **kwds)
+        super(CommitError, self).__init__(object, **kwds)
         self.committed = written,
 
     def __str__(self):
         written, = self.committed
         if written > 0:
             return '{:s} : wrote {:+#x} : {:s}'.format(self.instance(), written, self.path())
-        return super(CommitError,self).__str__()
+        return super(CommitError, self).__str__()
 
 class MemoryError(SerializationError, exceptions.MemoryError):
     """Out of memory or unable to load type due to not enough memory"""

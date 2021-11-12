@@ -77,7 +77,7 @@ class padding:
         @classmethod
         @__bytesdecorator__
         def zero(cls):
-            return iterbytes(cls.repeat(b'\x00'))
+            return iterbytes(cls.repeat(b'\0'))
 
     @classmethod
     def fill(cls, amount, source):
