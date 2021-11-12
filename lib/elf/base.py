@@ -1,6 +1,49 @@
 import ptypes
-from ptypes import ptype,parray,pstruct,pint,pstr,dyn,pbinary
+from ptypes import ptype, parray, pstruct, pint, pstr, dyn, pbinary
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+
+# primitive types
+class char(pint.int8_t): pass
+class signed_char(pint.sint8_t): pass
+class unsigned_char(pint.uint8_t): pass
+class short(pint.int16_t): pass
+class signed_short(pint.sint16_t): pass
+class unsigned_short(pint.uint16_t): pass
+class int(pint.int32_t): pass
+class signed_int(pint.sint32_t): pass
+class unsigned_int(pint.uint32_t): pass
+class long(pint.int_t):
+    length = property(fget=lambda _: ptypes.Config.integer.size)
+class signed_long(pint.sint_t):
+    length = property(fget=lambda _: ptypes.Config.integer.size)
+class unsigned_long(pint.uint_t):
+    length = property(fget=lambda _: ptypes.Config.integer.size)
+class long_long(pint.int64_t): pass
+class signed_long_long(pint.sint64_t): pass
+class unsigned_long_long(pint.uint64_t): pass
+
+class void(ptype.undefined):
+    length = 1
+class void_star(ptype.pointer_t):
+    _object_ = void
+class uintptr_t(ptype.pointer_t):
+    _object_ = ptype.undefined
+class intptr_t(ptype.pointer_t):
+    _object_ = ptype.undefined
+class bool(int): pass
+
+class unsigned_short_int(unsigned_short): pass
+class long_int(long): pass
+class long_unsigned_int(unsigned_long): pass
+class unsigned_long_int(unsigned_long): pass
+class unsigned_long_long_int(unsigned_long_long): pass
+
+class size_t(long_unsigned_int): pass
+
+class uchar(pint.uint8_t): pass
+
+class Elf_Symndx(pint.uint32_t):
+    pass
 
 ### header markers
 class ElfXX_File(ptype.boundary): pass
@@ -8,7 +51,12 @@ class ElfXX_Header(ptype.boundary): pass
 class ElfXX_Ehdr(ElfXX_Header): pass
 
 ### base
-class uchar(pint.uint8_t): pass
+class ElfXX_Half(pint.uint16_t): pass
+class ElfXX_Sword(pint.int32_t): pass
+class ElfXX_Word(pint.uint32_t): pass
+
+class ElfXX_Versym(ElfXX_Half): pass
+
 class ElfXX_BaseOff(ptype.rpointer_t):
     '''Always an offset relative to base of file.'''
     _object_ = ptype.undefined
@@ -38,7 +86,7 @@ class ElfXX_BaseAddr(ptype.opointer_t):
 
 class ElfXX_Off(ElfXX_BaseAddr):
     '''Always an offset that will be converted to an address when its in memory.'''
-    _object_ = ptype.undefined
+    _object_ = void
     def _calculate_(self, offset):
         base = self.getparent(ElfXX_File)
         try:
@@ -55,7 +103,7 @@ class ElfXX_Off(ElfXX_BaseAddr):
 
 class ElfXX_VAddr(ElfXX_BaseAddr):
     '''Always a virtual address that will be converted to an offset when its a file.'''
-    _object_ = ptype.undefined
+    _object_ = void
     def _calculate_(self, address):
         base = self.getparent(ElfXX_File)
         try:
@@ -72,7 +120,7 @@ class ElfXX_VAddr(ElfXX_BaseAddr):
 
 class ElfXX_Addr(ptype.pointer_t):
     '''Just a regular address.'''
-    _object_ = ptype.undefined
+    _object_ = void
 
 class ULEB128(pbinary.terminatedarray):
     class septet(pbinary.struct):
@@ -116,9 +164,11 @@ class Elf32_Addr(ElfXX_Addr):
 class Elf32_VAddr(ElfXX_VAddr):
     _value_ = pint.uint32_t
 
-class Elf32_Half(pint.uint16_t): pass
-class Elf32_Sword(pint.int32_t): pass
-class Elf32_Word(pint.uint32_t): pass
+class Elf32_Half(ElfXX_Half): pass
+class Elf32_Sword(ElfXX_Sword): pass
+class Elf32_Word(ElfXX_Word): pass
+
+class Elf32_Versym(ElfXX_Versym): pass
 
 ### elf64
 class Elf64_BaseOff(ElfXX_BaseOff):
@@ -132,11 +182,13 @@ class Elf64_Addr(ElfXX_Addr):
 class Elf64_VAddr(ElfXX_VAddr):
     _value_ = pint.uint64_t
 
-class Elf64_Half(Elf32_Half): pass
-class Elf64_Word(Elf32_Word): pass
-class Elf64_Sword(Elf32_Sword): pass
+class Elf64_Half(ElfXX_Half): pass
+class Elf64_Word(ElfXX_Word): pass
+class Elf64_Sword(ElfXX_Sword): pass
 class Elf64_Xword(pint.uint64_t): pass
 class Elf64_Sxword(pint.int64_t): pass
+
+class Elf64_Versym(ElfXX_Half): pass
 
 class padstring(pstr.string):
     def set(self, string):
