@@ -19,14 +19,17 @@ class s64(pint.sint64_t): pass
 
 ### JPEG2k Markers
 class MarkerType(codestream.MarkerType):
+    '''J2K_MS_'''
     _values_ = [
         ('SOC', 0xff4f),
         ('SOT', 0xff90),
         ('SOD', 0xff93),
         ('EOC', 0xffd9),
+        ('CAP', 0xff50),
         ('SIZ', 0xff51),
         ('COD', 0xff52),
         ('COC', 0xff53),
+        ('CPF', 0xff59),
         ('RGN', 0xff5e),
         ('QCD', 0xff5c),
         ('QCC', 0xff5d),
@@ -44,6 +47,14 @@ class MarkerType(codestream.MarkerType):
         ('MCC', 0xff75),
         ('MCT', 0xff74),
         ('MCO', 0xff77),
+
+        ('EPC', 0xff68),
+        ('EPB', 0xff66),
+        ('ESD', 0xff67),
+        ('RED', 0xff69),
+
+        ('SEC', 0xff65),
+        ('INSEC', 0xff94),
     ]
 
 class Marker(codestream.Marker):
@@ -751,10 +762,11 @@ BoxType._values_ = [(t.__name__, intofdata(key)) for key, t in Boxes.cache.items
 ### Marker types
 @Marker.define
 class SOC(ptype.block):
-    pass
+    '''Start of Codestream Marker'''
 
 @Marker.define
 class SOT(pstruct.type):
+    '''Start of Tile Marker'''
     _fields_ = [
         (u16, 'Lsot'),
         (u16, 'Isot'),
@@ -769,13 +781,14 @@ class SOT(pstruct.type):
 
 @Marker.define
 class SOD(ptype.block):
+    '''Start of Data Marker'''
     @classmethod
     def EncodedQ(cls):
         return True
 
 @Marker.define
 class EOC(ptype.block):
-    pass
+    '''End of Codestream Marker'''
 
 class OPJ_PROFILE_(pbinary.enum):
     length, _values_ = 14, [
@@ -840,6 +853,7 @@ class OPJ_EXTENSION_(pbinary.enum):
 
 @Marker.define
 class SIZ(pstruct.type):
+    '''Image and Tile Size'''
     class Capabilities(pbinary.struct):
         def __Sextensions(self):
             has_extensions = self['PART2']
@@ -960,6 +974,7 @@ class SPcod(pstruct.type):
 
 @Marker.define
 class COD(pstruct.type):
+    '''Coding-style Default'''
     def __missed(self):
         length, fields = self['Lcod'].li, ['Lcod', 'Scod', 'SGcod', 'SPcod']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
@@ -994,6 +1009,7 @@ class SPcoc(SPcod): pass
 
 @Marker.define
 class COC(pstruct.type):
+    '''Coding-style Component'''
     def __Ccoc(self):
         stream = self.getparent(codestream.DecodedStream)
         try:
@@ -1026,6 +1042,7 @@ class COC(pstruct.type):
 
 @Marker.define
 class RGN(pstruct.type):
+    '''Region of Interest'''
     def __Crgn(self):
         stream = self.getparent(codestream.DecodedStream)
         try:
@@ -1108,6 +1125,7 @@ class ScalarArray(pbinary.array):
 
 @Marker.define
 class QCD(pstruct.type):
+    '''Quantization Default'''
     def __SPqcd(self):
         p, res, fields = self.parent, self['Sqcd'].li, ['Lqcd', 'Sqcd']
         style, length = res.item('style'), 0 if p is None else (p.blocksize() - p['Type'].blocksize()) - sum(self[fld].li.size() for fld in fields)
@@ -1133,6 +1151,7 @@ class Sqcc(Sqcd): pass
 
 @Marker.define
 class QCC(pstruct.type):
+    '''Quantization Component'''
     def __Cqcc(self):
         stream = self.getparent(codestream.DecodedStream)
         try:
@@ -1167,6 +1186,7 @@ class QCC(pstruct.type):
 
 @Marker.define
 class POC(pstruct.type):
+    '''Progression Order Change'''
     def __CSpoc(self):
         stream = self.getparent(codestream.DecodedStream)
         try:
@@ -1200,6 +1220,7 @@ class POC(pstruct.type):
 
 @Marker.define
 class TLM(pstruct.type):
+    '''Tile Length Marker'''
     class _Stlm(pbinary.struct):
         _fields_ = [
             (1, 'Unused'),
@@ -1241,6 +1262,7 @@ class TLM(pstruct.type):
 
 @Marker.define
 class PLM(pstruct.type):
+    '''Packet Length (main) Marker'''
     def __missed(self):
         length, fields = self['Lplm'].li, ['Lplm', 'Zplm', 'Nplm']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
@@ -1258,6 +1280,7 @@ class PLM(pstruct.type):
 
 @Marker.define
 class PLT(pstruct.type):
+    '''Packet Length (tile) Marker'''
     def __Iplt(self):
         length, fields = self['Lplt'].li, ['Lplt', 'Zplt']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
@@ -1274,6 +1297,7 @@ class PLT(pstruct.type):
 
 @Marker.define
 class PPM(pstruct.type):
+    '''Packed-packet (main) Marker'''
     def __Ippm(self):
         length, fields = self['Lppm'].li, ['Lppm', 'Zppm', 'Nppm']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
@@ -1291,6 +1315,7 @@ class PPM(pstruct.type):
 
 @Marker.define
 class PPT(pstruct.type):
+    '''Packet-packet (tile) Marker'''
     def __Ippt(self):
         length, fields = self['Lppt'].li, ['Lppt', 'Zppt']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
@@ -1307,6 +1332,7 @@ class PPT(pstruct.type):
 
 @Marker.define
 class SOP(pstruct.type):
+    '''Start-of-packet Marker'''
     def __missed(self):
         length, fields = self['Lsop'].li, ['Lsop', 'Nsop']
         return dyn.clone(ptype.block, length=length.int() - sum(self[fld].li.size() for fld in fields))
@@ -1323,10 +1349,11 @@ class SOP(pstruct.type):
 
 @Marker.define
 class EPH(ptype.block):
-    pass
+    '''End-of-packet Header Marker'''
 
 @Marker.define
 class CRG(pstruct.type):
+    '''Component registration Marker'''
     _fields_ = [
         (u16, 'Lcrg'),
         (u16, 'Xcrg'),
@@ -1339,6 +1366,7 @@ class CRG(pstruct.type):
 
 @Marker.define
 class COM(pstruct.type):
+    '''Comment Marker'''
     def __content(self):
         length, fields = self['Lcom'].li, ['Lcom', 'Rcom']
         return dyn.clone(pstr.string, length=length.int() - sum(self[fld].li.size() for fld in fields))
