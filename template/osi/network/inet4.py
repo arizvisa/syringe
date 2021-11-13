@@ -27,6 +27,11 @@ class in_addr(u_long):
         elif not bitmap.isinteger(integer):
             raise TypeError(integer)
         return super(in_addr, self).set(integer)
+    def is_linklocal(self):
+        # 169.254/16
+        res = self.int()
+        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
+        return res & Fcidr(32)(16) == 0xa9fe0000
 
 @layer.define
 class ip4_hdr(pstruct.type, stackable):

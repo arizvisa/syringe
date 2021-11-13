@@ -16,7 +16,7 @@ class in_addr(parray.type):
     length, _object_ = 4, pint.uint32_t
     def summary(self):
         iterable = (item.int() for item in self)
-        res = functools.reduce(lambda agg, item: agg * 0x100000000 + item, iterable, 0)
+        res = functools.reduce(lambda agg, item: agg * pow(2, 32) + item, iterable, 0)
         num = bitmap.new(res, 128)
         components = bitmap.split(num, 16)
 
@@ -35,6 +35,11 @@ class in_addr(parray.type):
                     continue
             result.append("{:x}".format(item))
         return ':'.join(result)
+    def is_linklocal(self):
+        # fe80::/10
+        res = functools.reduce(lambda agg, item: agg * pow(2, 32) + item, iterable, 0)
+        Fcidr = lambda size: lambda bits, broadcast=pow(2, size) - 1: broadcast & ~(pow(2, size - bits) - 1)
+        return res & Fcidr(128)(10) == 0xfe800000000000000000000000000000
 in6_addr = in_addr
 
 class u_int32_t(pint.uint32_t): pass
