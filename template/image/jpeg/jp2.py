@@ -43,9 +43,6 @@ class MarkerType(codestream.MarkerType):
         ('EPH', 0xff92),
         ('CRG', 0xff63),
         ('COM', 0xff64),
-        ('CBD', 0xff78),
-        ('MCC', 0xff75),
-        ('MCT', 0xff74),
         ('MCO', 0xff77),
 
         ('EPC', 0xff68),
@@ -55,6 +52,18 @@ class MarkerType(codestream.MarkerType):
 
         ('SEC', 0xff65),
         ('INSEC', 0xff94),
+
+        ('CME', 0xff64),    # comment and extension
+        ('DCO', 0xff70),    # variable DC offset
+        ('VMS', 0xff71),    # visual masking
+        ('DFS', 0xff72),    # downsampling factor style
+        ('ADS', 0xff73),    # arbitrary decomposition style
+        ('ATK', 0xff72),    # arbitrary transformation kernels
+        ('CBD', 0xff78),    # component bit depth
+        ('MCT', 0xff74),    # multiple component transformation definition
+        ('MCC', 0xff75),    # multiple component collection
+        ('NLT', 0xff76),    # non-linearity point transformation
+        ('MIC', 0xff77),    # multiple component intermediate collection
     ]
 
 class Marker(codestream.Marker):
@@ -1011,10 +1020,10 @@ class SPcoc(SPcod): pass
 class COC(pstruct.type):
     '''Coding-style Component'''
     def __Ccoc(self):
-        stream = self.getparent(codestream.DecodedStream)
         try:
+            stream = self.getparent(codestream.DecodedStream)
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
-        except StopIteration:
+        except (ptypes.error.ItemNotFoundError, StopIteration):
             logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
@@ -1044,10 +1053,10 @@ class COC(pstruct.type):
 class RGN(pstruct.type):
     '''Region of Interest'''
     def __Crgn(self):
-        stream = self.getparent(codestream.DecodedStream)
         try:
+            stream = self.getparent(codestream.DecodedStream)
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
-        except StopIteration:
+        except (ptypes.error.ItemNotFoundError, StopIteration):
             logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
@@ -1153,10 +1162,10 @@ class Sqcc(Sqcd): pass
 class QCC(pstruct.type):
     '''Quantization Component'''
     def __Cqcc(self):
-        stream = self.getparent(codestream.DecodedStream)
         try:
+            stream = self.getparent(codestream.DecodedStream)
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
-        except StopIteration:
+        except (ptypes.error.ItemNotFoundError, StopIteration):
             logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
@@ -1188,10 +1197,10 @@ class QCC(pstruct.type):
 class POC(pstruct.type):
     '''Progression Order Change'''
     def __CSpoc(self):
-        stream = self.getparent(codestream.DecodedStream)
         try:
+            stream = self.getparent(codestream.DecodedStream)
             index = next(i for i, item in enumerate(stream) if isinstance(item['Value'], SIZ))
-        except StopIteration:
+        except (ptypes.error.ItemNotFoundError, StopIteration):
             logging.warning("Unable to locate SIZ marker!")
             return u8
         Csiz = stream[index]['Value']['Csiz']
