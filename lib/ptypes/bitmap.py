@@ -488,9 +488,8 @@ class WBitmap(object):
     '''
     A write-only bitmap for stuffing bits into.
     '''
-    def __init__(self):
-        import array
-        self.bits, self.data = 0, array.array('B')
+    def __init__(self, data=b''):
+        self.bits, self.data = 8 * len(data), bytearray(data)
 
     def push(self, integer, bits):
         '''Stash an integer of the specified number of bits to the object.'''
@@ -552,9 +551,9 @@ class WBitmap(object):
         used = self.bits & 7
         if used:
             shift, mask = pow(2, used), pow(2, used) - 1
-            res = functools.reduce(lambda agg, n: agg * 0x100 + n, self.data[:-1], 0)
+            res = functools.reduce(lambda agg, item: agg * 0x100 + item, self.data[:-1], 0)
             return (res * shift) | (self.data[-1] & mask)
-        return functools.reduce(lambda agg, n: agg * 0x100 + n, self.data, 0)
+        return functools.reduce(lambda agg, item: agg * 0x100 + item, self.data, 0)
 
     def size(self):
         '''Return the current number of bits that have been stored.'''
@@ -562,7 +561,7 @@ class WBitmap(object):
 
     def serialize(self):
         '''Return the object rendered to a string (serialized).'''
-        return self.data.tostring()
+        return bytes(self.data)
 
     def __repr__(self):
         cls, length = self.__class__, math.ceil(self.bits / 4.0)
@@ -573,8 +572,7 @@ class RBitmap(object):
     A read-only bitmap for consuming bits from some arbitrary data.
     '''
     def __init__(self, data):
-        import array
-        self.offset, self.data = 0, array.array('B', data)
+        self.offset, self.data = 0, bytearray(data)
 
     def size(self):
         '''Return the number of bits that are available.'''
@@ -672,46 +670,70 @@ if __name__ == '__main__':
         if bitmap.value(result) == 7:
             raise Success
 
-#    @TestCase
-    def set_bitmap_unsigned():
+    @TestCase
+    def set_bitmap_unsigned_0():
         x = bitmap.new(0xf000000000000000, 64)
-        #x = bitmap.set(x, 60, count=4)
-        print(bitmap.string(x))
+        y = bitmap.set(x, 60, count=4)
+        s = bitmap.string(x)
+        if x == y and s.count('0') == 60 and s.count('1') == 4:
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_1():
+        x = bitmap.new(0xf000000000000000, 64)
         y, res = bitmap.shift(x, 4)
-        print(res, bitmap.string(y))
+        if (res, 4) == (0xf, 4) and y == (0, 60):
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_2():
         x = bitmap.new(0, 0)
         x = bitmap.push(x, (0x1, 4) )
         x = bitmap.push(x, (0x2, 4) )
         x = bitmap.push(x, (0x3, 4) )
         x = bitmap.push(x, (0x4, 4) )
-        print(x, bitmap.string(x))
+        if bitmap.int(x) == 0x1234:
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_3():
         x = bitmap.new(0, 0)
         x = bitmap.insert(x, (0x1, 4) )
         x = bitmap.insert(x, (0x2, 4) )
         x = bitmap.insert(x, (0x3, 4) )
         x = bitmap.insert(x, (0x4, 4) )
-        print(x, bitmap.string(x))
+        if bitmap.int(x) == 0x4321:
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_4():
         x = bitmap.consumer(b'\x12\x34')
-        print(x.consume(4))
-        print(x.consume(4))
-        print(x.consume(4))
-        print(x.consume(4))
+        items = [x.consume(item) for item in 4*[4]]
+        if items == [1,2,3,4]:
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_5():
         x = bitmap.new(0, 4)
         for i in range(6):
-            print(x)
             x = bitmap.add(x, 3)
+        if x == ((6 * 3) % 0x10, 4):
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_6():
+        x = bitmap.new(2, 4)
         for i in range(6):
-            print(x)
             x = bitmap.sub(x, 6)
+        if x == (( 2 - 6 * 6) % 0x10, 4):
+            raise Success
 
+    @TestCase
+    def set_bitmap_unsigned_7():
         x = bitmap.new(4, 4)
-        print(bitmap.string(bitmap.ror(bitmap.ror(bitmap.ror(x)))))
+        y = bitmap.ror(bitmap.ror(bitmap.ror(x)))
+        if bitmap.string(x) == '0001' and bitmap.string(y) == '1000':
+            raise Success
 
     ### add
     @TestCase
@@ -1174,6 +1196,49 @@ if __name__ == '__main__':
         integer = 0b1111111111111111
         res = bitmap.new(integer, 16)
         if bitmap.shannon(res) == 0.0:
+            raise Success
+
+    @TestCase
+    def rbitmap_consume_0():
+        x = bitmap.RBitmap(b'\x2d')
+        items = [x.consume(item) for item in [2, 3, 3]]
+        if x.size() == 0 and items == [0, 5, 5]:
+            raise Success
+
+    @TestCase
+    def rbitmap_consume_1():
+        x = bitmap.RBitmap(b'\x15')
+        items = [x.consume(item) for item in [2, 3]]
+        if x.size() == 3 and items == [0, 2]:
+            raise Success
+
+    @TestCase
+    def rbitmap_consume_2():
+        x = bitmap.RBitmap(b'\xdf')
+        if x.size() == 8 and x.consume(1) == 1 and x.consume(3) == 5 and x.consume(4) == 15:
+            raise Success
+
+    @TestCase
+    def wbitmap_push_0():
+        x = bitmap.WBitmap(b'\x2d')
+        if x.size() == 8 and x.int() == 0x2d:
+            raise Success
+
+    @TestCase
+    def wbitmap_push_1():
+        x = bitmap.WBitmap()
+        x.push(0xf, 4)
+        if x.size() == 4 and x.int() == 0xf:
+            raise Success
+
+    @TestCase
+    def wbitmap_push_2():
+        x = bitmap.WBitmap()
+        x.push(0x1, 4)
+        x.push(0x2, 4)
+        x.push(0x3, 4)
+        x.push(0x4, 4)
+        if x.size() == 16 and x.serialize() == b'\x12\x34':
             raise Success
 
 if __name__ == '__main__':
