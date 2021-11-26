@@ -111,12 +111,14 @@ class fstar(ptype.opointer_t, versioned):
     _path_ = ()
     def _calculate_(self, offset):
         res = self.new(self._object_).a
-        for p in self._path_: res = res[p]
+        for field in self._path_:
+            res = res[field]
         return offset - res.getoffset()
 
     def classname(self):
         res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
-        return self.typename() + '(' + res.typename() + (', _path_={!r})'.format(self._path_) if self._path_ else ')')
+        path = [field for field in self._path_]
+        return "{:s}({:s}{:s})".format(self.typename(), res.typename(), ', _path_={!r}'.format(path) if path else '')
 
 class ostar(ptype.opointer_t, versioned):
     @property
@@ -130,7 +132,7 @@ class ostar(ptype.opointer_t, versioned):
     def classname(self):
         cls = self.__class__
         res = getattr(self, '_object_', ptype.undefined) or ptype.undefined
-        return self.typename() + '(' + res.typename() + ')'
+        return "{:s}({:s})".format(self.typename(), res.typename())
 
     def _calculate_(self, offset):
         raise NotImplementedError
@@ -202,7 +204,8 @@ def pointer(target, **attrs):
     attrs.setdefault('_object_', target)
     return dyn.clone(pointer_t, **attrs)
 def fpointer(type, fieldname):
-    return dyn.clone(fpointer_t, _object_=type, _path_=tuple(fieldname) if hasattr(fieldname, '__iter__') else (fieldname,))
+    path = [item for item in fieldname] if isinstance(fieldname, (tuple, list)) else [fieldname]
+    return dyn.clone(fpointer_t, _object_=type, _path_=path)
 
 def rpointer(target, base, **attrs):
     return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
