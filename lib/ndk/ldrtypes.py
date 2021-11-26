@@ -56,9 +56,9 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
         aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
 
         f.extend([
-            (lambda s:LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
-            (lambda s:LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
-            (lambda s:LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
+            (lambda self: LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder, 'InLoadOrderLinks'),
+            (lambda self: LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder, 'InMemoryOrderModuleList'),
+            (lambda self: LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder, 'InInitializationOrderModuleList'),
             (P(pecoff.Executable.File), 'DllBase'),
             (PVOID, 'EntryPoint'),
             (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeOfImage'),
@@ -97,9 +97,14 @@ class LDR_DATA_TABLE_ENTRY(pstruct.type, versioned):
 class LDR_DATA_TABLE_ENTRY_LIST(LIST_ENTRY):
     _object_ = P(LDR_DATA_TABLE_ENTRY)
 
-class LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InLoadOrderLinks',)
-class LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InMemoryOrderModuleList',)
-class LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(LDR_DATA_TABLE_ENTRY_LIST): _path_ = ('InInitializationOrderModuleList',)
+class LDR_DATA_TABLE_ENTRY_LIST_InLoadOrder(LDR_DATA_TABLE_ENTRY_LIST):
+    _path_, _object_ = ['InLoadOrderLinks'], fpointer(LDR_DATA_TABLE_ENTRY, 'InLoadOrderLinks')
+
+class LDR_DATA_TABLE_ENTRY_LIST_InMemoryOrder(LDR_DATA_TABLE_ENTRY_LIST):
+    _path_, _object_ = ['InMemoryOrderModuleList'], fpointer(LDR_DATA_TABLE_ENTRY, 'InMemoryOrderModuleList')
+
+class LDR_DATA_TABLE_ENTRY_LIST_InInitializationOrder(LDR_DATA_TABLE_ENTRY_LIST):
+    _path_, _object_ = ['InInitializationOrderModuleList'], fpointer(LDR_DATA_TABLE_ENTRY, 'InInitializationOrderModuleList')
 
 class PEB_LDR_DATA(pstruct.type, versioned):
     def __init__(self, **attrs):
@@ -120,14 +125,14 @@ class PEB_LDR_DATA(pstruct.type, versioned):
         ])
 
     def walk(self):
-        for x in self['InLoadOrderModuleList'].walk():
-            yield x
+        for item in self['InLoadOrderModuleList'].walk():
+            yield item
         return
 
     def search(self, string):
-        for x in self.walk():
-            if string == x['FullDllName'].str():
-                return x
+        for item in self.walk():
+            if string == item['FullDllName'].str():
+                return item
             continue
         raise KeyError
 
