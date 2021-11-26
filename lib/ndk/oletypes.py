@@ -43,9 +43,9 @@ class StandardPresentationObject(pstruct.type):
     class MetaFilePresentationSize(pint.uint32_t): pass
 
     def __SizeType(self):
-        if self.type in ('BITMAP', 'DIB'):
+        if self.type in {'BITMAP', 'DIB'}:
             return self.BitmapPresentationSize
-        if self.type in ('METAFILEPICT',):
+        if self.type in {'METAFILEPICT'}:
             return self.MetaFilePresentationSize
         return pint.uint32_t
 

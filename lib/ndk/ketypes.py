@@ -31,7 +31,7 @@ class KDPC(pstruct.type, versioned):
         (UCHAR, 'Type'),
         (UCHAR, 'Importance'),
         (USHORT, 'Number'),
-        (lambda self: dyn.clone(LIST_ENTRY, _path_=('DpcListEntry',), _object_=P(KDPC)), 'DpcListEntry'),
+        (lambda self: dyn.clone(LIST_ENTRY, _path_=['DpcListEntry'], _object_=P(KDPC)), 'DpcListEntry'),
         (PVOID, 'DeferredRoutine'),
         (PVOID, 'DeferredContext'),
         (PVOID, 'SystemArgument1'),
@@ -77,7 +77,7 @@ class KSCHEDULING_GROUP(pstruct.type, versioned):
         (ULONG, 'RelativeWeight'),
         (ULONGLONG, 'QueryHistoryTimeStamp'),
         (LONGLONG, 'NotificationCycles'),
-        (lambda self: dyn.clone(LIST_ENTRY, _path_=('SchedulingGroupList',), _object_=P(KSCHEDULING_GROUP)), 'SchedulingGroupList'),
+        (lambda self: dyn.clone(LIST_ENTRY, _path_=['SchedulingGroupList'], _object_=P(KSCHEDULING_GROUP)), 'SchedulingGroupList'),
         (P(KDPC), 'NotificationDpc'),
         (P(KSCB), 'PerProcessor'),
     ]

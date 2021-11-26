@@ -676,7 +676,11 @@ class EVENT_DESCRIPTOR(pstruct.type):
 
 class EVENT_HEADER(pstruct.type):
     class Time(dynamic.union):
-        class UserTime(pstruct.type): _fields_ = [(ULONG, name) for name in ('Kernel', 'User')]
+        class UserTime(pstruct.type):
+            _fields_ = [
+                (ULONG, 'Kernel'),
+                (ULONG, 'User'),
+            ]
         _fields_ = [
             (UserTime, 'System'),
             (ULONG64, 'Processor'),

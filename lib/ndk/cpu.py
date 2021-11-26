@@ -11,7 +11,7 @@ class systemsegment(pstruct.type):
 
 class descriptor(pbinary.struct):
     class flags(pbinary.struct):
-        _fields_ = [(1, n) for n in ('G', 'D/B', 'L', 'AVL')]
+        _fields_ = [(1, 'G') (1, 'D/B') (1, 'L'), (1, 'AVL')]
     class access(pbinary.struct):
         _fields_ = [(1, 'P'), (2, 'DPL'), (1, 'S'), (4, 'Type')]
 
@@ -28,11 +28,12 @@ class descriptor64(descriptor):
     _fields_ = [(32, 'Reserved'), (32, 'Base[High]')] + descriptor._fields_
 
 class general(pbinary.struct):
-    _fields_ = [(32, name) for name in ('eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi')]
+    _fields_ = [(32, regname) for regname in ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi']]
 class rex(pbinary.struct):
-    _fields_ = list(itertools.chain(((64, name) for name in ('rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp', )), ((64, 'r%d'%num) for num in range(8, 16))))
+    _fields_ = [(64, regname) for regname in ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp']]
+    _fields_+= [(64, "r{:d}".format(regnum)) for regnum in range(8, 16)]
 class segment(pbinary.struct):
-    _fields_ = [(32, name) for name in ('cs', 'ds', 'ss', 'es', 'fs', 'gs')]
+    _fields_ = [(32, regname) for regname in ['cs', 'ds', 'ss', 'es', 'fs', 'gs']]
 
 class flags(pbinary.flags):
     _fields_ = [
@@ -187,9 +188,9 @@ class tss16(pstruct.type):
         _fields_ = [(pint.uint16_t, 'SP'), (pint.uint16_t, 'SS')]
 
     class general(pstruct.type):
-        _fields_ = [(pint.uint16_t, name) for name in ('AX', 'CX', 'DX', 'BX', 'SP', 'BP', 'SI', 'DI')]
+        _fields_ = [(pint.uint16_t, regname) for regname in ['AX', 'CX', 'DX', 'BX', 'SP', 'BP', 'SI', 'DI']]
     class segment(pstruct.type):
-        _fields_ = [(pint.uint16_t, name) for name in ('ES', 'CS', 'SS', 'DS')]
+        _fields_ = [(pint.uint16_t, regname) for regname in ['ES', 'CS', 'SS', 'DS']]
 
     _fields_ = [
         (pint.uint16_t, 'Previous Task Link'),
@@ -208,9 +209,9 @@ class tss32(pstruct.type):
     class align16(pstruct.type):
         _fields_ = [(pint.uint16_t, 'reserved'), (pint.uint16_t, 'value')]
     class general(pstruct.type):
-        _fields_ = [(pint.uint32_t, name) for name in ('EAX', 'ECX', 'EDX', 'EBX', 'ESP', 'EBP', 'ESI', 'EDI')]
+        _fields_ = [(pint.uint32_t, regname) for regname in ['EAX', 'ECX', 'EDX', 'EBX', 'ESP', 'EBP', 'ESI', 'EDI']]
     class segment(pstruct.type):
-        _fields_ = [(align16, name) for name in ('ES', 'CS', 'SS', 'DS', 'FS', 'GS')]
+        _fields_ = [(align16, regname) for regname in ['ES', 'CS', 'SS', 'DS', 'FS', 'GS']]
     class ESPSS(pstruct.type):
         _fields_ = [(align16, 'SS'), (pint.uint32_t, 'ESP')]
 

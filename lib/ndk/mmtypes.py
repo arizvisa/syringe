@@ -181,7 +181,7 @@ class MMADDRESS_LIST(pstruct.type):
 
 class MMSECURE_ENTRY(pstruct.type):
     def __List(self):
-        return dyn.clone(LIST_ENTRY, _path_=('List',), _object_=MMSECURE_ENTRY)
+        return dyn.clone(LIST_ENTRY, _path_=['List'], _object_=MMSECURE_ENTRY)
     _fields_ = [
         (ULONG_PTR, 'StartVpn'),
         (ULONG_PTR, 'EndVpn'),

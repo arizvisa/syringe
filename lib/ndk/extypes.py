@@ -5,7 +5,7 @@ from . import umtypes, ketypes, mmtypes
 from .datatypes import *
 
 class SYSTEM_INFORMATION_CLASS(pint.enum):
-    _values_ = [(n, v) for v, n in (
+    _values_ = [(n, v) for v, n in [
         (0, 'SystemBasicInformation'),
         (1, 'SystemProcessorInformation'),
         (2, 'SystemPerformanceInformation'),
@@ -216,7 +216,7 @@ class SYSTEM_INFORMATION_CLASS(pint.enum):
         (207, 'SystemFlags2Information'),
         (208, 'SystemSecurityModelInformation'),
         (209, 'SystemCodeIntegritySyntheticCacheInformation'),
-    )]
+    ]]
 
 class SYSTEM_MANUFACTURING_INFORMATION(pstruct.type):
     type = SYSTEM_INFORMATION_CLASS.byname('SystemManufacturingInformation')
@@ -331,7 +331,7 @@ class SYSTEM_ROOT_SILO_INFORMATION(pstruct.type):
     ]
 
 class SUPERFETCH_INFORMATION_CLASS(pint.enum):
-    _values_ = [(n, v) for v, n in (
+    _values_ = [(n, v) for v, n in [
         (0x1, 'SuperfetchRetrieveTrace'),
         (0x2, 'SuperfetchSystemParameters'),
         (0x3, 'SuperfetchLogEvent'),
@@ -352,7 +352,7 @@ class SUPERFETCH_INFORMATION_CLASS(pint.enum):
         (0x12, 'SuperfetchTracingControl'),
         (0x13, 'SuperfetchTrimWhileAgingControl'),
         (0x14, 'SuperfetchInformationMax'),
-    )]
+    ]]
 
 class SUPERFETCH_INFORMATION(pstruct.type):
     type = SYSTEM_INFORMATION_CLASS.byname('SystemSuperfetchInformation')
@@ -367,12 +367,12 @@ class SUPERFETCH_INFORMATION(pstruct.type):
     ]
 
 class PFS_PRIVATE_PAGE_SOURCE_TYPE(pint.enum):
-    _values_ = [(n, v) for v, n in (
+    _values_ = [(n, v) for v, n in [
         (0x0, 'PfsPrivateSourceKernel'),
         (0x1, 'PfsPrivateSourceSession'),
         (0x2, 'PfsPrivateSourceProcess'),
         (0x3, 'PrfsPrivateSourceMax'),
-    )]
+    ]]
 
 
 class PFS_PRIVATE_PAGE_SOURCE(pstruct.type):
@@ -557,7 +557,7 @@ class POOL_HEADER(pstruct.type, versioned):
 class POOL_FREE_CHUNK(pstruct.type, versioned): pass
 class POOL_FREE_CHUNK_LIST_ENTRY(LIST_ENTRY):
     _object_ = fpointer(POOL_FREE_CHUNK, 'ListEntry')
-    _path_ = ('ListEntry',)
+    _path_ = ['ListEntry']
 
 POOL_FREE_CHUNK._fields_ = [
     (POOL_HEADER, 'Header'),
@@ -578,7 +578,7 @@ class GENERAL_LOOKASIDE(pstruct.type):
         return GENERAL_LOOKASIDE._NonPagedPoolType if nonpaged_Attribute else GENERAL_LOOKASIDE._PagedPoolType
 
     _fields_ = [
-        (dyn.clone(SLIST_HEADER, _object_=POOL_FREE_CHUNK, _path_=('ListEntry',)), 'ListHead'),
+        (dyn.clone(SLIST_HEADER, _object_=POOL_FREE_CHUNK, _path_=['ListEntry']), 'ListHead'),
         (UINT16, 'Depth'),
         (UINT16, 'MaximumDepth'),
         (ULONG, 'TotalAllocates'),
