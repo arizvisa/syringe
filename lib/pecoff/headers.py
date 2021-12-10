@@ -1,5 +1,5 @@
-import ptypes, datetime, time
-from ptypes import pstruct,parray,ptype,dyn,pstr,pint,pfloat,pbinary
+import ptypes, datetime, time, logging
+from ptypes import pstruct, parray, ptype, dyn, pstr, pint, pfloat, pbinary
 
 ## primitives
 byte = dyn.clone(pint.uint8_t)
@@ -28,28 +28,36 @@ class DWORD(pint.uint32_t): pass
 class ULONGLONG(pint.uint64_t): pass
 
 ### locating particular parts of the executable
-def LocateBase(self):
+def LocateBaseAddress(self):
     """Return the base object of the executable. This is used to find the base address."""
     try:
         nth = self.getparent(ptype.boundary)
     except ValueError as msg:
-        items = [item for item in self.backtrace(fn=lambda item: item)]
-        nth = items[-1]
-    return nth
+        api = getattr(self.source, '__api__', None)
+
+        # ptypes.provider.Ida
+        if hasattr(api, 'get_imagebase'):
+            return api.get_imagebase()
+
+        nth = self.getparent(None)
+        logging.warning("Unable to identify a boundary for calculating the base address from {:s} and using {:s}.".format(self.instance(), nth.instance()), exc_info=True)
+    return nth.getoffset()
 
 def LocateHeader(self):
     """Return the executable sub-header. This will return the executable main header."""
     try:
         nth = self.getparent(Header)
     except ValueError as msg:
-        items = [item for item in self.backtrace(fn=lambda item: item)]
-        nth = items[-1]
+        api = getattr(self.source, '__api__', None)
+
+        nth = self.getparent(None)
+        logging.warning("Unable to locate the header for the provided".format(self.instance(), nth.instance()), exc_info=True)
     return nth
 
 ## types of relative pointers in the executable
 def CalculateRelativeAddress(self, address):
     """given a va, returns offset relative to the baseaddress"""
-    base = LocateBase(self).getoffset()
+    base = LocateBaseAddress(self)
 
     # file
     if issubclass(self.source.__class__, ptypes.provider.fileobj):
@@ -62,7 +70,7 @@ def CalculateRelativeAddress(self, address):
 
 def CalculateRelativeOffset(self, offset):
     """return an offset relative to the baseaddress"""
-    base = LocateBase(self).getoffset()
+    base = LocateBaseAddress(self)
 
     # file
     if issubclass(self.source.__class__, ptypes.provider.fileobj):
@@ -77,18 +85,18 @@ def CalculateRelativeOffset(self, offset):
 def CalculateRealAddress(self, address):
     """given an rva, return offset relative to the baseaddress"""
     header = LocateHeader(self)
-    base = LocateBase(header)
-    address -= header['OptionalHeader']['ImageBase'].int()
-    base = base.getoffset()
+    offset = address - header['OptionalHeader']['ImageBase'].int()
+
+    base = LocateBaseAddress(header)
 
     # file
     if issubclass(self.source.__class__, ptypes.provider.fileobj):
         pe = LocateHeader(self)
-        section = pe['Sections'].getsectionbyaddress(address)
-        return base + section.getoffsetbyaddress(address)
+        section = pe['Sections'].getsectionbyaddress(offset)
+        return base + section.getoffsetbyaddress(offset)
 
     # memory
-    return base + address
+    return base + offset
 
 ## ptypes closures
 def realaddress(target, **kwds):

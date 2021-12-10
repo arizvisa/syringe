@@ -1067,32 +1067,48 @@ try:
             elif hasattr(module, 'get_bytes'):
                 get_bytes = staticmethod(module.get_bytes)
             else:
-                raise ImportError('get_many_bytes')
+                raise ImportError('get_bytes')
 
-            get_nlist_ea = staticmethod(module.get_nlist_ea)
-            get_nlist_size = staticmethod(module.get_nlist_size)
-            getseg = staticmethod(module.getseg)
+            if hasattr(module, 'get_nlist_ea'):
+                get_nlist_ea = staticmethod(module.get_nlist_ea)
+            else:
+                raise ImportError('get_nlist_ea')
+
+            if hasattr(module, 'get_nlist_size'):
+                get_nlist_size = staticmethod(module.get_nlist_size)
+            else:
+                raise ImportError('get_nlist_size')
+
+            if hasattr(module, 'getseg'):
+                getseg = staticmethod(module.getseg)
+            else:
+                raise ImportError('getseg')
 
             if hasattr(module, 'patch_many_bytes'):
                 patch_bytes = staticmethod(module.patch_many_bytes)
             elif hasattr(module, 'patch_bytes'):
                 patch_bytes = staticmethod(module.patch_bytes)
             else:
-                raise ImportError('patch_many_bytes')
+                raise ImportError('patch_bytes')
 
             if hasattr(module, 'put_many_bytes'):
                 put_bytes = staticmethod(module.put_many_bytes)
             elif hasattr(module, 'put_bytes'):
                 put_bytes = staticmethod(module.put_bytes)
             else:
-                raise ImportError('put_many_bytes')
+                raise ImportError('put_bytes')
 
             if hasattr(module, 'isEnabled'):
                 is_mapped = staticmethod(module.isEnabled)
             elif hasattr(module, 'is_mapped'):
                 is_mapped = staticmethod(module.is_mapped)
             else:
-                raise ImportError('isEnabled')
+                raise ImportError('is_mapped')
+
+            if hasattr(module, 'get_imagebase'):
+                get_imagebase = staticmethod(module.get_imagebase)
+            else:
+                raise ImportError('get_imagebase')
 
         offset = __api__.BADADDR
         def __new__(cls):
