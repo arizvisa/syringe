@@ -1,5 +1,5 @@
 import sys, ptypes
-from ptypes import pstruct,parray,ptype,dyn,pstr,utils,pbinary,pint
+from ptypes import pstruct, parray, ptype, dyn, pstr, utils, pbinary, pint
 
 from ..headers import *
 
@@ -380,6 +380,7 @@ class IMAGE_RUNTIME_FUNCTION_ENTRY(pstruct.type):
         (P32(ptype.block), 'EndAddress'),
         (P32(UNWIND_INFO), 'UnwindData'),
     ]
+RUNTIME_FUNCTION = IMAGE_RUNTIME_FUNCTION_ENTRY
 
 class IMAGE_EXCEPTION_DIRECTORY(parray.block):
     _object_ = IMAGE_RUNTIME_FUNCTION_ENTRY

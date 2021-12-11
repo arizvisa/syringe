@@ -384,7 +384,7 @@ class IMAGE_RUNTIME_FUNCTION_ENTRY(pstruct.type):
         (P32(ptype.block), 'EndAddress'),
         (P32(UNWIND_INFO), 'UnwindInfoAddress'),
     ]
-class RUNTIME_FUNCTION(IMAGE_RUNTIME_FUNCTION_ENTRY): pass
+RUNTIME_FUNCTION = IMAGE_RUNTIME_FUNCTION_ENTRY
 
 ### XXX: Everything above this is also defined in pecoff.portable.exceptions
 
