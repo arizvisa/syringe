@@ -11,6 +11,9 @@ class Signature(pint.enum, uint16):
         ('IMAGE_OS2_SIGNATURE', 0x454e),
         ('IMAGE_OS2_SIGNATURE_LE', 0x454c),
         ('IMAGE_NT_SIGNATURE', 0x4550),
+
+        ('OSF_FLAT_SIGNATURE', 0x454c),
+        ('OSF_FLAT_LX_SIGNATURE', 0x584c),
     ]
 
 class IMAGE_DOS_HEADER(pstruct.type):
@@ -384,19 +387,21 @@ class IMAGE_NT_DATA(pstruct.type, Header):
 class DosExtender(pstruct.type, Header):
     type = b'DX'
     _fields_ = [
-        (word, 'MinRModeParams'),
-        (word, 'MaxRModeParams'),
+        (word, 'MinRModeParams'),   # minimum number of real-mode params to leave free at run time
+        (word, 'MaxRModeParams'),   # maximum number of real-mode params to leave free at run time
 
-        (word, 'MinIBuffSize'),
-        (word, 'MaxIBuffSize'),
-        (word, 'NIStacks'),
-        (word, 'IStackSize'),
-        (dword, 'EndRModeOffset'),
-        (word, 'CallBuffSize'),
-        (word, 'Flags'),
-        (word, 'UnprivFlags'),
+        (word, 'MinIBuffSize'),     # minimum number of real-mode params to leave free at run time
+        (word, 'MaxIBuffSize'),     # maximum number of real-mode params to leave free at run time
+        (word, 'NIStacks'),         # number of interrupt stacks
+        (word, 'IStackSize'),       # size in KB of each interrupt stack
+        (dword, 'EndRModeOffset'),  # offset of byte past end of real-mode code and data
+        (word, 'CallBuffSize'),     # offset of byte past end of real-mode code and data
+        (word, 'Flags'),            # flags (0: file is vmm, 1: file is debugger)
+        (word, 'UnprivFlags'),      # unprivileged flag (if nonzero, executes at ring 1, 2, or 3)
         (dyn.block(104), 'Reserv'),
     ]
+
+# https://github.com/open-watcom/open-watcom-v2/blob/master/bld/watcom/h/exephar.h
 
 @NextHeader.define
 class PharLap(pstruct.type, Header):
@@ -482,6 +487,326 @@ class PharLap3(PharLap, Header):
         (dword, 'StackSize'),
         (dyn.block(0x100), 'Reserv'),
     ]
+
+# https://github.com/open-watcom/open-watcom-v2/blob/master/bld/watcom/h/exeflat.h
+# https://faydoc.tripod.com/formats/exe-LE.htm
+# https://www.program-transformation.org/Transform/PcExeFormat
+
+# XXX: none of these have been used yet
+# http://www.edm2.com/0303/rmx-os2.html
+# https://github.com/oshogbo/ghidra-lx-loader
+# https://github.com/oshogbo/ghidra-lx-loader/blob/master/src/main/java/lx/LX.java
+# https://github.com/oshogbo/ghidra-lx-loader/blob/master/src/main/java/lx/LXHeader.java
+# https://github.com/oshogbo/ghidra-lx-loader/blob/master/src/main/java/lx/LXObjectPageTable.java
+# https://github.com/oshogbo/ghidra-lx-loader/blob/master/src/main/java/lx/LXFixupPageTable.java
+
+class unsigned_0(pint.uint_t): pass
+class unsigned_8(byte): pass
+class unsigned_16(word): pass
+class unsigned_32(dword): pass
+
+@NextHeader.define
+class os2_flat_header(pstruct.type, Header):
+    type = b'LE'
+
+    class OSF_CPU_(pint.enum, unsigned_16):
+        _values_ = [
+            ('286', 1),
+            ('386', 2),
+            ('486', 3),
+        ]
+
+    class OSF_(pbinary.flags):
+        '''unsigned_32'''
+        class _OSF_PM_(pbinary.enum):
+            length, _values_ = 4, [
+                ('NOT_COMPATIBLE', 1),
+                ('COMPATIBLE', 2),
+                ('APP', 3),
+            ]
+        _fields_ = [
+            (1, 'unused_1f'),
+            (1, 'OSF_TERM_INSTANCE'),
+            (2+8+2, 'unused_13'),
+            (1, 'OSF_DEVICE_DRIVER'),
+            (1, 'OSF_IS_PROT_DLL'),
+
+            (1, 'OSF_IS_DLL'),
+            (1, 'unused_e'),
+            (1, 'OSF_LINK_ERROR'),
+            (1, 'unused_c'),
+            (_OSF_PM_, 'OSF_PM'),
+            (2, 'unused_6'),
+            (1, 'OSF_EXTERNAL_FIXUPS_DONE'),
+            (1, 'OSF_INTERNAL_FIXUPS_DONE'),
+            (1, 'unused_3'),
+            (1, 'OSF_INIT_INSTANCE'),
+            (1, 'unused_1'),
+            (1, 'OSF_SINGLE_DATA'),
+        ]
+
+    class object_record(pstruct.type):
+        '''LXObjectTable'''
+        class OBJ_(pbinary.flags):
+            '''unsigned_32'''
+            class PERM_(pbinary.enum):
+                length, _values_ = 4, [
+                    ('PERM_LOCKABLE', 4),
+                    ('PERM_RESIDENT', 2),
+                    ('PERM_SWAPPABLE', 1),  # LE
+                ]
+            _fields_ = [
+                (16, 'unused_10'),
+                (1, 'IOPL'),
+                (1, 'CONFORMING'),
+                (1, 'BIG'),
+                (1, 'ALIAS_REQUIRED'),
+                (PERM_, 'PERM_'),
+                (1, 'HAS_INVALID'),
+                (1, 'HAS_PRELOAD'),
+                (1, 'SHARABLE'),
+                (1, 'DISCARDABLE'),
+                (1, 'RESOURCE'),
+                (1, 'EXECUTABLE'),
+                (1, 'WRITEABLE'),
+                (1, 'READABLE'),
+            ]
+        _fields_ = [
+            (unsigned_32, 'size'),      # object virtual size
+            (unsigned_32, 'addr'),      # base virtual address
+            (OBJ_, 'flags'),
+            (unsigned_32, 'mapidx'),    # page map index
+            (unsigned_32, 'mapsize'),   # number of entries in page map
+            (unsigned_32, 'reserved'),
+        ]
+
+    class le_map_entry(pstruct.type):
+        _fields_ = [
+            (dyn.clone(pint.uint_t, length=3), 'page_num'), # 24-bit page number in .exe file
+            (unsigned_8, 'flags'),
+        ]
+    map_entry = le_map_entry    # LXObjectPageTable
+
+    class bundle_types(pint.enum, unsigned_8):
+        _values_ = [
+            ('FLT_BNDL_EMPTY', 0),
+            ('FLT_BNDL_ENTRY16', 1),
+            ('FLT_BNDL_GATE16', 2),
+            ('FLT_BNDL_ENTRY32', 3),
+            ('FLT_BNDL_ENTRYFWD', 4),
+        ]
+
+    class flat_bundle_prefix(pstruct.type):
+        def __b32_type(self):
+            return os2_flat_header.bundle_types
+        _fields_ = [
+            (unsigned_8, 'b32_cnt'),
+            (__b32_type, 'b32_type'),
+            (unsigned_16, 'b32_obj'),
+        ]
+
+    class flat_null_prefix(pstruct.type):
+        def __b32_type(self):
+            return os2_flat_header.bundle_types
+        _fields_ = [
+            (unsigned_8, 'b32_cnt'),
+            (__b32_type, 'b32_type'),
+        ]
+
+    class flat_bundle_gate16(pstruct.type):
+        _fields_ = [
+            (unsigned_8, 'e32_flags'),      # flag bits are same as in OS/2 1.x
+            (unsigned_16, 'offset'),
+            (unsigned_16, 'callgate'),
+        ]
+
+    class flat_bundle_entry16(pstruct.type):
+        _fields_ = [
+            (unsigned_8, 'e32_flags'),      # flag bits are same as in OS/2 1.x
+            (unsigned_16, 'e32_offset'),
+        ]
+
+    class flat_bundle_entry32(pstruct.type):
+        _fields_ = [
+            (unsigned_8, 'e32_flags'),      # flag bits are same as in OS/2 1.x
+            (unsigned_16, 'e32_offset'),
+        ]
+
+    class flat_bundle_entryfwd(pstruct.type):
+        _fields_ = [
+            (unsigned_8, 'e32_flags'),      # flag bits are same as in OS/2 1.x
+            (unsigned_16, 'modord'),
+            (unsigned_32, 'value'),
+        ]
+
+    class flat_res_table(pstruct.type):
+        _fields_ = [
+            (unsigned_16, 'type_id'),
+            (unsigned_16, 'name_id'),
+            (unsigned_32, 'res_size'),
+            (unsigned_16, 'object'),
+            (unsigned_32, 'offset'),
+        ]
+
+    class flat_page(pstruct.type):
+        _fields_ = [
+            (unsigned_32, 'offset'),
+            (unsigned_32, 'size'),
+            (unsigned_32, 'flags'),
+        ]
+
+    class flat_fixup(pstruct.type):
+        class _target(pstruct.type):
+            _fields_ = [
+                (unsigned_8, 'object'),
+                (unsigned_16, 'offset'),
+            ]
+        _fields_ = [
+            (unsigned_8, 'source'),
+            (unsigned_8, 'flags'),
+            (unsigned_16, 'offset'),
+            (lambda self: _target if self['flags'].li.int() else ptype.undefined, 'target'),    # FIXME: check flags properly
+        ]
+
+    class _r(dynamic.union):
+        OSF_FLAT_RESERVED = 20
+        class _vxd(pstruct.type):
+            _fields_ = [
+                (dyn.array(unsigned_8, 8), 'reserved1'),    # +0xB0
+                (unsigned_32, 'winresoff'),                 # +0xB8 Windows VxD version info resource offset
+                (unsigned_32, 'winreslen'),                 # +0xBC Windows VxD version info resource lenght
+                (unsigned_16, 'device_ID'),                 # +0xC0 Windows VxD device ID
+                (unsigned_16, 'DDK_version'),               # +0xC2 Windows VxD DDK version (0x030A)
+            ]
+        _fields_ = [
+            (dyn.array(unsigned_8, OSF_FLAT_RESERVED), 'reserved'),
+            (_vxd, 'vxd'),
+        ]
+
+    def __offset(target, *fields):
+        def pointer(self):
+            p = self.getparent(Header)
+            parameters = [p[fld].li for fld in fields]
+            return target(p, *parameters)
+        def offset(self):
+            try:
+                p = self.getparent(ptype.boundary)
+                result = dyn.rpointer(pointer, p, unsigned_32)
+            except ptypes.error.ItemNotFoundError:
+                result = dyn.pointer(pointer, unsigned_32)
+            return result
+        return offset
+
+    _fields_ = [
+        (unsigned_8, 'byte_order'),             # the byte ordering of the .exe
+        (unsigned_8, 'word_order'),             # the word ordering of the .exe
+
+        # FIXME: this should change according to the orders we just snagged
+        (unsigned_32, 'level'),                 # the exe format level
+        (OSF_CPU_, 'cpu_type'),                 # the cpu type
+        (unsigned_16, 'os_type'),               # the operating system type
+        (unsigned_32, 'version'),               # .exe version
+        (pbinary.littleendian(OSF_), 'flags'),  # .exe flags
+
+        (unsigned_32, 'num_pages'),             # # of pages in .exe
+        (unsigned_32, 'start_obj'),             # starting object number (eip)
+        (unsigned_32, 'eip'),                   # starting value of eip
+        (unsigned_32, 'stack_obj'),             # object # for stack pointer (esp)
+        (unsigned_32, 'esp'),                   # starting value of esp
+
+        (unsigned_32, 'page_size'),             # .exe page size
+        (lambda s: unsigned_32 if s.type == b'LE' else unsigned_0, 'last_page'),    # size of last page - LE
+        (lambda s: unsigned_32 if s.type == b'LX' else unsigned_0, 'page_shift'),   # left shift for page offsets - LX
+
+        (unsigned_32, 'fixup_size'),            # fixup section size
+        (unsigned_32, 'fixup_cksum'),           # fixup section checksum
+        (unsigned_32, 'loader_size'),           # loader section size
+        (unsigned_32, 'loader_cksum'),          # loader section checksum
+
+        # FIXME: these should all be pointers
+        (__offset((lambda ns, number: dyn.array(ns.object_record, number.int())), 'num_objects'), 'objtab_off'),    # object table offset
+        (unsigned_32, 'num_objects'),           # number of objects in .exe
+
+        (unsigned_32, 'objmap_off'),            # object page map offset
+        (unsigned_32, 'idmap_off'),             # iterated data map offset
+
+        (__offset((lambda ns, number: dyn.array(ns.flat_res_table, number.int())), 'num_rsrcs'), 'rsrc_off'),       # offset of resource table
+        (unsigned_32, 'num_rsrcs'),             # number of resource entries
+        (unsigned_32, 'resname_off'),           # offset of resident names table
+        (unsigned_32, 'entry_off'),             # offset of entry table
+        (unsigned_32, 'moddir_off'),            # offset of module directives table
+        (unsigned_32, 'num_moddirs'),           # number of module directives
+
+        (unsigned_32, 'fixpage_off'),           # offset of fixup page table
+        (unsigned_32, 'fixrec_off'),            # offset of fixup record table
+        (unsigned_32, 'impmod_off'),            # offset of import module name table
+        (unsigned_32, 'num_impmods'),           # # of entries in import mod name tbl
+        (unsigned_32, 'impproc_off'),           # offset of import procedure name table
+        (unsigned_32, 'cksum_off'),             # offset of per-page checksum table
+        (unsigned_32, 'page_off'),              # offset of enumerated data pages
+        (unsigned_32, 'num_preload'),           # number of preload pages
+        (unsigned_32, 'nonres_off'),            # offset of non-resident names table
+        (unsigned_32, 'nonres_size'),           # size of non-resident names table
+        (unsigned_32, 'nonres_cksum'),          # non-resident name table checksum
+        (unsigned_32, 'autodata_obj'),          # object # of autodata segment
+
+        (__offset((lambda ns, length: dyn.block(length.int())), 'debug_len'), 'debug_off'), # offset of the debugging information
+        (unsigned_32, 'debug_len'),             # length of the debugging info
+
+        (unsigned_32, 'num_inst_preload'),      # # of instance pages in preload sect
+        (unsigned_32, 'num_inst_demand'),       # # instance pages in demand load sect
+
+        (unsigned_32, 'heapsize'),              # size of heap - for 16-bit apps
+        (unsigned_32, 'stacksize'),             # size of stack OS/2 only
+        (_r, 'r'),
+    ]
+
+@NextHeader.define
+class os2_flat_extended_header(os2_flat_header, Header):
+    type = b'LX'
+
+    class object_record(pstruct.type):
+        class OBJ_(pbinary.flags):
+            '''unsigned_32'''
+            class PERM_(pbinary.enum):
+                length, _values_ = 4, [
+                    ('PERM_LOCKABLE', 4),
+                    ('PERM_CONTIGUOUS', 3), # LX
+                    ('PERM_RESIDENT', 2),
+                    ('HAS_ZERO_FILL', 1),   # LX
+                ]
+            _fields_ = [
+                (16, 'unused_10'),
+                (1, 'IOPL'),
+                (1, 'CONFORMING'),
+                (1, 'BIG'),
+                (1, 'ALIAS_REQUIRED'),
+                (PERM_, 'PERM_'),
+                (1, 'HAS_INVALID'),
+                (1, 'HAS_PRELOAD'),
+                (1, 'SHARABLE'),
+                (1, 'DISCARDABLE'),
+                (1, 'RESOURCE'),
+                (1, 'EXECUTABLE'),
+                (1, 'WRITEABLE'),
+                (1, 'READABLE'),
+            ]
+        _fields_ = [
+            (unsigned_32, 'size'),      # object virtual size
+            (unsigned_32, 'addr'),      # base virtual address
+            (OBJ_, 'flags'),
+            (unsigned_32, 'mapidx'),    # page map index
+            (unsigned_32, 'mapsize'),   # number of entries in page map
+            (unsigned_32, 'reserved'),
+        ]
+
+    class lx_map_entry(pstruct.type):
+        _fields_ = [
+            (unsigned_32, 'page_offset'),   # offset from Preload page start shifted by page_shift in hdr
+            (unsigned_16, 'data_size'),
+            (unsigned_16, 'flags'),
+        ]
+    map_entry = lx_map_entry
 
 @NextHeader.define
 class NeHeader(pstruct.type):
