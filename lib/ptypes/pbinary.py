@@ -135,16 +135,21 @@ Log = Config.log.getChild('pbinary')
 __izip_longest__ = utils.izip_longest
 integer_types, string_types = bitmap.integer_types, utils.string_types
 
-def setbyteorder(endianness):
+def setbyteorder(endianness, **length):
     '''Sets the _global_ byte order for any pbinary.type.
 
     ``endianness`` can be either pbinary.bigendian or pbinary.littleendian
     '''
     global partial
     if endianness in {config.byteorder.bigendian, config.byteorder.littleendian}:
-        result = partial.byteorder
-        partial.byteorder = config.byteorder.bigendian if endianness is config.byteorder.bigendian else config.byteorder.littleendian
-        return result
+        result = partial.length
+        partial.length = 0 if endianness is config.byteorder.bigendian else length.get('length', Config.integer.size)
+        return config.byteorder.littleendian if result > 1 else config.byteorder.bigendian
+
+    # If we were given a word size, then recurse with the parameters in the correct place
+    elif isinstance(endianness, integer_types):
+        order = config.byteorder.littleendian if result > 1 else config.byteorder.bigendian
+        return setbyteorder(order, length=endianness)
 
     elif getattr(endianness, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
@@ -1636,7 +1641,7 @@ class blockarray(terminatedarray):
 class partial(ptype.container):
     value = None
     _object_ = None
-    byteorder = config.byteorder.bigendian
+    length = 1
     initializedQ = lambda self: isinstance(self.value, list) and len(self.value) > 0 and self.value[0].initializedQ()
 
     def __pb_object(self, **attrs):
@@ -1684,7 +1689,7 @@ class partial(ptype.container):
     def copy(self, **attrs):
         result = super(partial, self).copy(**attrs)
         result._object_ = self._object_
-        result.byteorder = self.byteorder
+        result.length = self.length
         return result
 
     @property
@@ -1720,21 +1725,30 @@ class partial(ptype.container):
     def serialize(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'partial.serialize')
+        result = self.object.bitmap()
 
-        res, order = self.object.bitmap(), self.byteorder
-        if order is config.byteorder.bigendian:
-            return bitmap.data(res)
-        elif order is not config.byteorder.littleendian:
-            Log.warning("partial.serialize : {:s} : The specified byteorder ({!s}) is invalid and will be normalized.".format(self.object.instance(), order))
-            if self.__normalize_byteorder() is config.byteorder.bigendian:
-                return bitmap.data(res)
-            return bytes(bytearray(reversed(bitmap.data(res))))
-        return bytes(bytearray(reversed(bitmap.data(res))))
+        # If the word length is larger than a byte, then we're being
+        # asked to flip the byte order making us little-endian.
+        if self.length > 1:
+            return self.__transform_littleendian(bitmap.data(result))
+        return bitmap.data(result)
+
+    def __transform_littleendian(self, data):
+        Ftake = lambda length: lambda iterable: bytearray(map(lambda items: next(*items), zip(length * [iter(iterable)], length * [0])))
+
+        # Grab from our data a block at a time using Config.integer.size for our block size
+        iterable = iter(data)
+        F = Ftake(getattr(self, 'length', Config.integer.size))
+
+        result, iterable = bytearray(), iter(data)
+        while len(result) < len(data):
+            item = F(iterable)[:len(data) - len(result)]
+            result += bytes(reversed(item))
+        return bytes(result[:len(data)])
 
     def __deserialize_block__(self, block):
         self.value = res = [self.__pb_object()]
-        Ftransform = iter if self.byteorder is config.byteorder.bigendian else reversed
-        data = Ftransform(block)
+        data = self.__transform_littleendian(block) if self.length > 1 else block
         res = res[0].__deserialize_consumer__(bitmap.consumer(data))
         if res.parent is not self:
             raise error.AssertionError(self, 'partial.__deserialize_block__', message="parent for binary type {:s} is not {:s}".format(res[0].instance(), self.instance()))
@@ -1744,7 +1758,7 @@ class partial(ptype.container):
         '''Load a pbinary.partial using the current source'''
         try:
             self.value = [self.__pb_object()]
-            result = self.__load_bigendian(**attrs) if self.byteorder is config.byteorder.bigendian else self.__load_littleendian(**attrs)
+            result = self.__load_littleendian(**attrs) if self.length > 1 else self.__load_bigendian(**attrs)
             result.setoffset(result.getoffset())
             return result
 
@@ -1753,7 +1767,7 @@ class partial(ptype.container):
 
     def __load_bigendian(self, **attrs):
         # big-endian. stream-based
-        if self.byteorder is not config.byteorder.bigendian:
+        if self.length > 1:
             raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
 
         with utils.assign(self, **attrs):
@@ -1765,8 +1779,8 @@ class partial(ptype.container):
 
     def __load_littleendian(self, **attrs):
         # little-endian. block-based
-        if self.byteorder is not config.byteorder.littleendian:
-            raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder))
+        if self.length <= 1:
+            raise error.AssertionError(self, 'partial.load', message="The specified byteorder ({!s}) is invalid".format(self.byteorder, self.length))
 
         # XXX: self.new(t) can potentially get called due to this call to self.blocksize().
         #      This can cause a field's closure to get called and raise an InitializationError().
@@ -1777,7 +1791,7 @@ class partial(ptype.container):
         with utils.assign(self, **attrs):
             offset, size = self.getoffset(), self.blocksize()
             self.source.seek(offset)
-            data = bytes(bytearray(reversed(self.source.consume(size))))
+            data = self.__transform_littleendian(self.source.consume(size))
 
             # If we were able to read some data, then use it to deserialize our object
             if len(data):
@@ -1839,8 +1853,7 @@ class partial(ptype.container):
 
         # endianness
         if 'bits' not in result or result['bits'] > 8:
-            order = self.__normalize_byteorder()
-            result['byteorder'] = 'big' if self.byteorder is config.byteorder.bigendian else 'little'
+            result['byteorder'] = 'little' if self.length > 1 else 'big'
         return result
 
     ## methods to passthrough if the object is initialized
@@ -1933,30 +1946,17 @@ class partial(ptype.container):
             return "{!s}".format(item)
         return item.__name__ if item else "{!s}".format(item)
 
-    def __normalize_byteorder(self):
-        order, result = getattr(self, 'byteorder', partial.byteorder), None
-        if order in {config.byteorder.bigendian, config.byteorder.littleendian}:
-            result = order
-        elif getattr(order, '__name__', '').startswith('big'):
-            result = config.byteorder.bigendian
-        elif getattr(order, '__name__', '').startswith('little'):
-            result = config.byteorder.littleendian
-        elif isinstance(order, string_types):
-            result = config.byteorder.bigendian if order.startswith('big') else config.byteorder.littleendian if order.startswith('little') else None
-
-        if result is None:
-            description = self.object.instance() if self.initializedQ() else "{:s}[{:x}:{:+x}]".format(self.__element__(), self.getoffset(), self.blocksize())
-            Log.warning("partial.byteorder : {:s} : Normalizing the invalid byteorder ({!s}) assigned to partial using default order {!s}.".format(description, order, partial.byteorder))
-            return partial.byteorder
-        return result
-
     def classname(self):
         fmt = {
             config.byteorder.littleendian : Config.pbinary.littleendian_name,
             config.byteorder.bigendian : Config.pbinary.bigendian_name,
         }
-        cn, order = self.__element__(), self.__normalize_byteorder()
+        cn, order = self.__element__(), config.byteorder.littleendian if self.length > 1 else config.byteorder.bigendian
         return fmt[order].format(cn, **(utils.attributes(self) if Config.display.mangle_with_attributes else {}))
+
+    @property
+    def byteorder(self):
+        return config.byteorder.littleendian if self.length > 1 else config.byteorder.bigendian
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
@@ -2028,15 +2028,30 @@ def bigendian(p, **attrs):
         return ptype.clone(partial, _object_=p, **attrs)
     return ptype.clone(p, **attrs)
 
-def littleendian(p, **attrs):
-    '''Force binary type /p/ to be ordered in the littleendian integer format'''
-    attrs.setdefault('byteorder', config.byteorder.littleendian)
-    attrs.setdefault('__name__', p._object_.__name__ if issubclass(p, partial) else p.__name__)
+def littleendian(*parameters, **attrs):
+    if len(parameters) > 1:
+        fmt_attrs = ("{:s}={!s}".format(name, value) for name, value in attrs.items())
+        raise AssertionError(u"@{:s}.littleendian({:s}{:s}) : More than {:d} parameter ({:d}) was specified as target for decoration.".format(__name__, ', '.join(map("{!s}".format, parameters)), ", {:s}".format(', '.join(fmt_attrs)) if attrs else '', 1, len(parameters)))
 
-    if not issubclass(p, partial):
-        Log.debug("{:s}.littleendian : Explicitly promoting binary type for `{:s}` to a partial type.".format(__name__, p.typename()))
-        return ptype.clone(partial, _object_=p, **attrs)
-    return ptype.clone(p, **attrs)
+    def littleendian(definition, length):
+        newattrs = {name : value for name, value in attrs.items()}
+        newattrs.setdefault('__name__', definition._object_.__name__ if issubclass(definition, partial) else definition.__name__)
+
+        newattrs.setdefault('byteorder', config.byteorder.littleendian)
+        newattrs.setdefault('length', length)
+
+        if not issubclass(definition, partial):
+            fmt_attrs = ("{:s}={!s}".format(name, value) for name, value in attrs.items())
+            Log.debug(u"@{:s}.littleendian({:s}{:s}) : Explicitly promoting binary type for `{:s}` to a partial type.".format(__name__, ', '.join(map("{!s}".format, parameters)), ", {:s}".format(', '.join(fmt_attrs)) if attrs else '', definition.typename()))
+            return ptype.clone(partial, _object_=definition, **newattrs)
+        return ptype.clone(definition, **newattrs)
+
+    if parameters:
+        parameter, = parameters
+        if bitmap.isinteger(parameter):
+            return functools.partial(littleendian, length=parameter)
+        return littleendian(parameter, length=Config.integer.size)
+    return functools.partial(littleendian, length=Config.integer.size)
 
 def align(bits):
     '''Returns a type that will align fields to the specified bit size'''
@@ -2065,8 +2080,8 @@ if __name__ == '__main__':
                 return True
             except Failure as E:
                 print('%s: %r'% (name, E))
-            #except Exception as E:
-            #    print('%s: %r : %r'% (name, Failure(), E))
+            except Exception as E:
+                print('%s: %r : %r'% (name, Failure(), E))
             return False
         TestCaseList.append(harness)
         return fn
@@ -2681,8 +2696,8 @@ if __name__ == '__main__':
             raise Success
 
     @TestCase
-    def test_pbinary_array_load_global_be_38():
-        pbinary.setbyteorder(config.byteorder.littleendian)
+    def test_pbinary_array_load_global_le_38():
+        pbinary.setbyteorder(config.byteorder.littleendian, length=4)
 
         string = b'ABCDEFGHIJKL'
         src = provider.bytes(string)
@@ -2695,7 +2710,7 @@ if __name__ == '__main__':
 
         a = pbinary.new(argh,source=src)
         a = a.l
-        if len(a.object) == 8 and a.object[-1].bitmap() == (0x241,12):
+        if len(a.object) == 8 and a.object[-1].bitmap() == (0xa49,12):
             raise Success
 
     @TestCase
@@ -3619,6 +3634,63 @@ if __name__ == '__main__':
         x = t().alloc(a=1, b=2, c=3)
         x.alias('a', 'fuck1', 'fuck2')
         if x.unalias('fuck1', 'fuck2') == 2:
+            raise Success
+
+    @TestCase
+    def test_pbinary_littleendian_decorate_0():
+        @pbinary.littleendian(4)
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+                (4, 'd'),
+                (4, 'e'),
+                (4, 'f'),
+                (4, 'g'),
+                (4, 'h'),
+            ]
+        x = pbinary.new(t).a
+        x.set(a=4, b=1, c=4, d=2, e=4, f=3, g=4, h=4)
+        if x.serialize() == b'\x44\x43\x42\x41':
+            raise Success
+
+    @TestCase
+    def test_pbinary_littleendian_decorate_1():
+        @pbinary.littleendian(2)
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+                (4, 'd'),
+                (4, 'e'),
+                (4, 'f'),
+                (4, 'g'),
+                (4, 'h'),
+            ]
+        x = pbinary.new(t).a
+        x.set(a=4, b=1, c=4, d=2, e=4, f=3, g=4, h=4)
+        if x.serialize() == b'\x42\x41\x44\x43':
+            raise Success
+
+    @TestCase
+    def test_pbinary_littleendian_decorate_2():
+        @pbinary.littleendian(1)
+        class t(pbinary.struct):
+            _fields_ = [
+                (4, 'a'),
+                (4, 'b'),
+                (4, 'c'),
+                (4, 'd'),
+                (4, 'e'),
+                (4, 'f'),
+                (4, 'g'),
+                (4, 'h'),
+            ]
+        x = pbinary.new(t).a
+        x.set(a=4, b=1, c=4, d=2, e=4, f=3, g=4, h=4)
+        if x.serialize() == b'\x41\x42\x43\x44':
             raise Success
 
 if __name__ == '__main__':
