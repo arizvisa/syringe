@@ -148,8 +148,9 @@ def setbyteorder(endianness, **length):
 
     # If we were given a word size, then recurse with the parameters in the correct place
     elif isinstance(endianness, integer_types):
+        result = endianness
         order = config.byteorder.littleendian if result > 1 else config.byteorder.bigendian
-        return setbyteorder(order, length=endianness)
+        return setbyteorder(order, length=result)
 
     elif getattr(endianness, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
