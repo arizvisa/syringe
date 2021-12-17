@@ -66,7 +66,87 @@ class WND(pstruct.type):
         (THRDESKHEAD, 'head'),
     ]
 
+class HARDWARE_PTE(pbinary.flags, versioned):
+    def PageFrameNumber(self):
+        return self['PageFrameNumber']
+    def PageFrameAddress(self):
+        return self.PageFrameNumber * 0x1000
+
+    def __init__(self, **attrs):
+        res = super(HARDWARE_PTE, self).__init__(**attrs)
+        major, minor = sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), sdkddkver.NTDDI_MINOR(self.NTDDI_VERSION)
+
+        self._fields_ = f = [
+            ('Valid', 1),
+            ('Write', 1),
+            ('Owner', 1),
+            ('WriteThrough', 1),
+            ('CacheDisable', 1),
+            ('Accessed', 1),
+            ('Dirty', 1),
+            ('LargePage', 1),
+            ('Global', 1),
+            ('CopyOnWrite', 1),
+            ('Prototype', 1),
+            ('reserved0', 1),
+        ]
+
+        if not getattr(self, 'WIN64', False):
+            f.extend([
+                (20, 'PageFrameNumber')
+            ])
+
+        elif getattr(self, 'PAE', False):
+            raise NotImplementedError('PAE not implemented')
+
+            # 5.2 - 6.0
+            if False:
+                f.extend([
+                    (28, 'PageFrameNumber'),
+                    (12, 'Reserved1'),
+                    (11, 'SoftwareWsIndex'),
+                    (1, 'NoExecute'),
+                ])
+
+            # 6.1
+            if False:
+                f.extend([
+                    (36, 'PageFrameNumber'),
+                    (4, 'ReservedForHardware'),
+                    (11, 'SoftwareWsIndex'),
+                    (1, 'NoExecute'),
+                ])
+            return
+
+        # 5.0
+        elif major == 0x05000000:
+            f.extend([
+                (24, 'PageFrameNumber'),
+                (28, 'Reserved1'),
+            ])
+
+        # 5.1
+        elif major >= 0x05010000:
+            f.extend([
+                (26, 'PageFrameNumber'),
+                (26, 'Reserved1'),
+            ])
+
+        # 1703
+        else:
+            f.extend([
+                (24, 'PageFrameNumber'),
+                (25, 'Reserved1'),
+                (1, 'NoExecute'),
+            ])
+        return
+
 class MMPTE_HARDWARE(pbinary.flags, versioned):
+    def PageFrameNumber(self):
+        return self['PageFrameNumber']
+    def PageFrameAddress(self):
+        return self.PageFrameNumber * 0x1000
+
     def __init__(self, **attrs):
         res = super(MMPTE_HARDWARE, self).__init__(**attrs)
         major, minor = sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION), sdkddkver.NTDDI_MINOR(self.NTDDI_VERSION)
@@ -87,7 +167,9 @@ class MMPTE_HARDWARE(pbinary.flags, versioned):
         ]
 
         if not getattr(self, 'WIN64', False):
-            f.append((20, 'PageFrameNumber'),)
+            f.extend([
+                (20, 'PageFrameNumber')
+            ])
 
         elif getattr(self, 'PAE', False):
             raise NotImplementedError('PAE not implemented')
@@ -120,17 +202,18 @@ class MMPTE_HARDWARE(pbinary.flags, versioned):
                     (3, 'WsleProtection'),
                     (1, 'NoExecute'),
                 ])
+            return
 
         # 5.0
         elif major == 0x05000000:
-            f.append([
+            f.extend([
                 (24, 'PageFrameNumber'),
                 (28, 'Reserved1'),
             ])
 
         # 5.1
         elif major >= 0x05010000:
-            f.append([
+            f.extend([
                 (26, 'PageFrameNumber'),
                 (25, 'Reserved1'),
                 (1, 'NoExecute'),
@@ -357,9 +440,11 @@ class MDL(pstruct.type, versioned):
     @pbinary.littleendian
     class _MdlFlags(MDL_):
         '''WORD'''
+
     def __init__(self, **attrs):
         super(MDL, self).__init__(**attrs)
         self._fields_ = F = []
+
         F.extend([
             (P(MDL), 'Next'),
             (WORD, 'Size'),
@@ -377,6 +462,11 @@ class MDL(pstruct.type, versioned):
             (PVOID, 'StartVa'),
             (ULONG, 'ByteCount'),
             (ULONG, 'ByteOffset'),
+        ])
+
+        # FIXME: add extra pages
+        F.extend([
+            (dyn.align(0x1000), 'align(MDL)'),
         ])
 
 class SYSTEM_MODULE_ENTRY(pstruct.type):

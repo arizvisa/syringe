@@ -10,7 +10,7 @@ izip_longest = itertools.izip_longest if sys.version_info.major < 3 else itertoo
 string_types = (str, unicode) if sys.version_info.major < 3 else (str,)
 
 ### versioned base-class
-class versioned(ptype.base):
+class versioned(ptype.generic):
     '''
     This base class, or really a mixin, will propagate all version-related
     attributes to its children instances. This way the user can instantiate
@@ -199,6 +199,185 @@ class fpointer_t(fstar): pass
 class rpointer_t(rstar): pass
 class opointer_t(ostar): pass
 
+class vpointer_t(opointer_t):
+    PAGE_SIZE = 0x1000
+
+    def _process_(self):
+        raise NotImplementedError
+
+    @pbinary.littleendian(4)
+    class linear32(pbinary.struct):
+        _fields_ = [
+            (10, 'pd offset'),
+            (10, 'pt offset'),
+            (12, 'page offset'),
+        ]
+
+    @pbinary.littleendian(4)
+    class pde32(pbinary.flags):
+        _fields_ = [
+            (20, 'Address'),
+            (3, 'AVL'),
+            (1, 'G'),
+            (1, 'PAT'),
+            (1, 'D'),
+            (1, 'A'),
+            (1, 'PCD'),
+            (1, 'PWT'),
+            (1, 'U/S'),
+            (1, 'R/W'),
+            (1, 'P'),
+        ]
+        def Address(self):
+            pfn = self['Address']
+            return pfn * pow(2, 12)
+
+    @pbinary.littleendian(4)
+    class pte32(pde32):
+        def Address(self):
+            pfn = self['Address']
+            return pfn * pow(2, 12)
+
+    def _calculate_32(self, directory_table_base, va):
+        entry_size, page_size = 4, self.PAGE_SIZE
+
+        va_format = pint.uint32_t(va).cast(self.linear32)
+        page_table = dyn.array(self.pde32, page_size // entry_size)
+
+        pd_index = va_format['pd offset']
+        pdt = page_table(offset=directory_table_base).l
+        pde = pdt[pd_index]
+
+        pt_index = va_format['pt offset']
+        pt = page_table(offset=pde.Address(), _object_=self.pte32).l
+        pte = pt[pt_index]
+
+        result = pte.Address()
+        return result + va_format['page offset']
+
+    def _calculate_32_sans_table(self, directory_table_base, va):
+        entry_size, page_size = 4, self.PAGE_SIZE
+        va_format = pint.uint32_t(va).cast(self.linear32)
+
+        pd_index = va_format['pd offset']
+        pde = self.new(self.pde32, offset=directory_table_base + entry_size * pd_index).l
+
+        pt_index = va_format['pt offset']
+        pte = self.new(self.pte32, offset=pde.Address() + entry_size * pt_index).l
+
+        result = pte.Address()
+        return result + va_format['page offset']
+
+    @pbinary.littleendian(8)
+    class linear64(pbinary.struct):
+        _fields_ = [
+            (16, 'sign extend'),
+            (9, 'pml4 offset'),
+            (9, 'pdp offset'),
+            (9, 'pd offset'),
+            (9, 'pt offset'),
+            (12, 'page offset'),
+        ]
+
+    @pbinary.littleendian(8)
+    class pde64(pbinary.flags):
+        _fields_ = [
+            (1, 'NX'),
+            (11, 'Available'),
+            (40, 'Address'),
+            (3, 'AVL'),
+            (1, 'G'),
+            (1, 'PAT'),
+            (1, 'D'),
+            (1, 'A'),
+            (1, 'PCD'),
+            (1, 'PWT'),
+            (1, 'U/S'),
+            (1, 'R/W'),
+            (1, 'P'),
+        ]
+        def Address(self):
+            pfn = self['Address']
+            return pfn * pow(2, 12)
+
+    @pbinary.littleendian(8)
+    class pte64(pbinary.struct):
+        _fields_ = [
+            (1, 'NX'),
+            (4, 'PKE'),
+            (7, 'Available'),
+            (40, 'Address'),
+            (3, 'AVL'),
+            (1, 'G'),
+            (1, 'PAT'),
+            (1, 'D'),
+            (1, 'A'),
+            (1, 'PCD'),
+            (1, 'PWT'),
+            (1, 'U/S'),
+            (1, 'R/W'),
+            (1, 'P'),
+        ]
+        def Address(self):
+            pfn = self['Address']
+            return pfn * pow(2, 12)
+
+    def _calculate_64(self, directory_table_base, va):
+        entry_size, page_size = 8, self.PAGE_SIZE
+
+        va_format = pint.uint64_t().set(va).cast(self.linear64)
+        page_table = dyn.array(self.pde64, page_size // entry_size)
+
+        pml4_index = va_format['pml4 offset']
+        pml4 = page_table(offset=directory_table_base).l
+        pml4e = pml4[pml4_index]
+
+        pdp_index = va_format['pdp offset']
+        pdp = page_table(offset=pml4e.Address()).l
+        pdpe = pdp[pdp_index]
+
+        pd_index = va_format['pd offset']
+        pdt = page_table(offset=pdpe.Address()).l
+        pde = pdt[pd_index]
+
+        pt_index = va_format['pt offset']
+        pt = page_table(offset=pde.Address(), _object_=self.pte64).l
+        pte = pt[pt_index]
+
+        result = pte.Address()
+        return result + va_format['page offset']
+
+    def _calculate_64_sans_table(self, directory_table_base, va):
+        entry_size, page_size = 8, self.PAGE_SIZE
+        va_format = pint.uint64_t().set(va).cast(self.linear64)
+
+        pml4_index = va_format['pml4 offset']
+        pml4e = self.new(self.pde64, offset=directory_table_base + entry_size * pml4_index).l
+
+        pdp_index = va_format['pdp offset']
+        pdpe = self.new(self.pde64, offset=pml4e.Address() + entry_size * pdp_index).l
+
+        pd_index = va_format['pd offset']
+        pde = self.new(self.pde64, offset=pdpe.Address() + entry_size * pd_index).l
+
+        pt_index = va_format['pt offset']
+        pte = self.new(self.pte64, offset=pde.Address() + entry_size * pt_index).l
+
+        result = pte.Address()
+        return result + va_format['page offset']
+
+    def _calculate_(self, va):
+        process = self._process_()
+        directory_table_base = process.DirectoryTableBase()
+
+        if getattr(self, 'WIN64', False):
+            Fcalculate_table = self._calculate_64
+            Fcalculate_sans_table = self._calculate_64_sans_table
+        else:
+            Fcalculate_table = self._calculate_32
+            Fcalculate_sans_table = self._calculate_32_sans_table
+        return Fcalculate_sans_table(directory_table_base, va)
+
 ## pointer utilities
 def pointer(target, **attrs):
     attrs.setdefault('_object_', target)
@@ -211,6 +390,8 @@ def rpointer(target, base, **attrs):
     return dyn.clone(rpointer_t, _baseobject_=base, _object_=target, **attrs)
 def opointer(target, Fcalculate, **attrs):
     return dyn.clone(opointer_t, _calculate_=Fcalculate, _object_=target, **attrs)
+def vpointer(target, Fprocess, **attrs):
+    return dyn.clone(vpointer_t, _process_=Fprocess, _object_=target, **attrs)
 
 P = pointer
 

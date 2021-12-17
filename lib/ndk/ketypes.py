@@ -416,6 +416,9 @@ class KSTACK_COUNT(pstruct.type):
     ]
 
 class KPROCESS(pstruct.type, versioned):
+    def DirectoryTableBase(self):
+        return self['DirectoryTableBase'].int()
+
     def __init__(self, **attrs):
         super(KPROCESS, self).__init__(**attrs)
         self._fields_ = f = []

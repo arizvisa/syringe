@@ -173,6 +173,8 @@ class MMVAD_FLAGS3(pbinary.flags):
         (6, 'PreferredNode'),
     ]
 
+# FIXME: find the definition for MMVAD wherever it is or redefine it
+
 class MMADDRESS_LIST(pstruct.type):
     _fields_ = [
         (ULONG_PTR, 'StartVpn'),
@@ -246,7 +248,7 @@ class SUBSECTION(pstruct.type):
         (MMSUBSECTION_FLAGS, 'SubsectionFlags'),
         (ULONG, 'StartingSector'),
         (ULONG, 'NumberOfFullSectors'),
-        (P(MMPTE), 'SubsectionBase'),
+        (P(MMPTE), 'SubsectionBase'),   # XXX: this should be an ptr to an array
         (ULONG, 'UnusedPtes'),
         (ULONG, 'PtesInSubsection'),
         (lambda self: P(SUBSECTION), 'NextSubsection'),

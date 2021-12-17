@@ -1,7 +1,8 @@
 import ptypes
 from ptypes import *
 
-pbinary.setbyteorder(ptypes.config.byteorder.bigendian)
+pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
+
 class selector(pbinary.struct):
     _fields_ = [(13, 'Index'), (1, 'TI'), (2, 'RPL')]
 class systemtable(pstruct.type):
@@ -11,7 +12,7 @@ class systemsegment(pstruct.type):
 
 class descriptor(pbinary.struct):
     class flags(pbinary.struct):
-        _fields_ = [(1, 'G') (1, 'D/B') (1, 'L'), (1, 'AVL')]
+        _fields_ = [(1, 'G'), (1, 'D/B'), (1, 'L'), (1, 'AVL')]
     class access(pbinary.struct):
         _fields_ = [(1, 'P'), (2, 'DPL'), (1, 'S'), (4, 'Type')]
 
@@ -24,16 +25,19 @@ class descriptor(pbinary.struct):
         (16, 'Base[Low]'),
         (16, 'Limit[Low]'),
     ]
+
 class descriptor64(descriptor):
     _fields_ = [(32, 'Reserved'), (32, 'Base[High]')] + descriptor._fields_
 
 class general(pbinary.struct):
     _fields_ = [(32, regname) for regname in ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi']]
+
 class rex(pbinary.struct):
     _fields_ = [(64, regname) for regname in ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp']]
     _fields_+= [(64, "r{:d}".format(regnum)) for regnum in range(8, 16)]
+
 class segment(pbinary.struct):
-    _fields_ = [(32, regname) for regname in ['cs', 'ds', 'ss', 'es', 'fs', 'gs']]
+    _fields_ = [(16, regname) for regname in ['cs', 'ds', 'ss', 'es', 'fs', 'gs']]
 
 class flags(pbinary.flags):
     _fields_ = [
@@ -132,9 +136,6 @@ class ldt(pbinary.array):
     #length = 8192
     _object_ = descriptor
 
-#a=gdt.entry()
-#print(a)
-
 class cr0(pbinary.flags):
     _fields_ = [
         (1, 'PG'), #Paging
@@ -151,6 +152,15 @@ class cr0(pbinary.flags):
         (1, 'EM'), #Emulation
         (1, 'MP'), #Monitor co-processor
         (1, 'PE'), #Protected Mode Enable
+    ]
+
+class cr3(pbinary.flags):
+    _fields_ = [
+        (20, 'Directory'),
+        (7, 'Ignored'),
+        (1, 'PCD'),
+        (1, 'PWT'),
+        (3, 'Ignored'),
     ]
 
 class cr4(pbinary.flags):
@@ -180,9 +190,6 @@ class cr4(pbinary.flags):
         (1, 'VME'), #Virtual 8086 Mode Extensions
     ]
 
-#x = eflags().a
-#x.set(0xffff8fff)
-
 class tss16(pstruct.type):
     class SPSS(pstruct.type):
         _fields_ = [(pint.uint16_t, 'SP'), (pint.uint16_t, 'SS')]
@@ -205,9 +212,10 @@ class tss16(pstruct.type):
         (pint.uint16_t, 'LDT'),
     ]
 
+class align16(pstruct.type):
+    _fields_ = [(pint.uint16_t, 'reserved'), (pint.uint16_t, 'value')]
+
 class tss32(pstruct.type):
-    class align16(pstruct.type):
-        _fields_ = [(pint.uint16_t, 'reserved'), (pint.uint16_t, 'value')]
     class general(pstruct.type):
         _fields_ = [(pint.uint32_t, regname) for regname in ['EAX', 'ECX', 'EDX', 'EBX', 'ESP', 'EBP', 'ESI', 'EDI']]
     class segment(pstruct.type):
@@ -217,7 +225,7 @@ class tss32(pstruct.type):
 
     _fields_ = [
         (align16, 'Previous Task Link'),
-        (dyn.clone(parray.type, length=3, _object_=SPSS), 'ESPSS'),
+        (dyn.clone(parray.type, length=3, _object_=ESPSS), 'ESPSS'),
         (pint.uint32_t, 'CR3'),
 
         (pint.uint32_t, 'EIP'),
@@ -242,23 +250,124 @@ class tss64(pstruct.type):
         (pint.uint16_t, 'I/O Map Base Address'),
     ]
 
-class HARDWARE_PTE(pbinary.flags):
+class linear32(pbinary.struct):
     _fields_ = [
-        ('Valid', 1),
-        ('Write', 1),
-        ('Owner', 1),
-        ('WriteThrough', 1),
-        ('CacheDisable', 1),
-        ('Accessed', 1),
-        ('Dirty', 1),
-        ('LargePage', 1),
-        ('Global', 1),
-        ('CopyOnWrite', 1),
-        ('Prototype', 1),
-        ('reserved0', 1),
-        ('PageFrameNumber', 36),
-        ('reserved1', 4),
-        ('SoftwareWsIndex', 11),
-        ('NoExecute', 1),
+        (10, 'directory'),
+        (10, 'table'),
+        (12, 'offset'),
     ]
 
+class linear32ps(pbinary.struct):
+    _fields_ = [
+        (10, 'directory'),
+        (22, 'offset'),
+    ]
+
+class linear32pae(pbinary.struct):
+    _fields_ = [
+        (2, 'directory pointer'),
+        (9, 'directory'),
+        (9, 'table'),
+        (12, 'offset'),
+    ]
+
+class linear64(pbinary.struct):
+    _fields_ = [
+        (16, 'reserved'),
+        (9, 'pml4'),
+        (9, 'directory ptr'),
+        (9, 'directory'),
+        (9, 'table'),
+        (12, 'offset'),
+    ]
+
+class linear64ps(pbinary.struct):
+    _fields_ = [
+        (16, 'reserved'),
+        (9, 'pml4'),
+        (9, 'directory ptr'),
+        (9, 'directory'),
+        (21, 'offset'),
+    ]
+
+class linear64pae(pbinary.struct):
+    _fields_ = [
+        (16, 'reserved'),
+        (9, 'pml4'),
+        (9, 'directory ptr'),
+        (30, 'offset'),
+    ]
+
+class pde(pbinary.flags):
+    _fields_ = [
+        (3, 'Ignored'),
+        (1, 'G'),
+        (1, 'PS'),
+        (1, 'D'),
+        (1, 'A'),
+        (1, 'PCD'),
+        (1, 'PWT'),
+        (1, 'U/S'),
+        (1, 'R/W'),
+        (1, 'P'),
+    ]
+
+class pte(pbinary.flags):
+    _fields_ = [
+        (3, 'Ignored'),
+        (1, 'G'),
+        (1, 'PAT'),
+        (1, 'D'),
+        (1, 'A'),
+        (1, 'PCD'),
+        (1, 'PWT'),
+        (1, 'U/S'),
+        (1, 'R/W'),
+        (1, 'P'),
+    ]
+
+class pde32(pbinary.struct):
+    _fields_ = [
+        (20, 'Address'),
+        (pde, 'Flags'),
+    ]
+
+class pde32ps(pbinary.struct):
+    _fields_ = [
+        (10, 'Address(Lo)'),
+        (9, 'Address(Hi)'),
+        (1, 'PAT'),
+        (pde, 'Flags'),
+    ]
+
+class pte32(pbinary.struct):
+    _fields_ = [
+        (20, 'Address'),
+        (pte, 'Flags'),
+    ]
+
+class pde64(pbinary.struct):
+    _fields_ = [
+        (1, 'XD'),
+        (11, 'M'),
+        (40, 'Address'),
+        (pde, 'Flags'),
+    ]
+
+class pde64ps(pbinary.struct):
+    _fields_ = [
+        (1, 'XD'),
+        (4, 'PKE'),
+        (7, 'Ignored'),
+        (40, 'Address'),
+        (pde, 'Flags'),
+    ]
+
+class pte64(pbinary.flags):
+    _fields_ = [
+        (1, 'XD'),
+        (4, 'PKE'),
+        (7, 'Ignored'),
+        (40, 'Address'),
+        (pte, 'Flags'),
+    ]

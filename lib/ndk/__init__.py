@@ -1,5 +1,6 @@
 import ptypes
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
+from . import cpu
 
 from . import umtypes
 from . import pstypes
