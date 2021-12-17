@@ -1744,7 +1744,7 @@ class partial(ptype.container):
         result, iterable = bytearray(), iter(data)
         while len(result) < len(data):
             item = F(iterable)[:len(data) - len(result)]
-            result += bytes(reversed(item))
+            result += bytearray(reversed(item))
         return bytes(result[:len(data)])
 
     def __deserialize_block__(self, block):
