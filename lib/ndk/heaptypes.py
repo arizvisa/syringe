@@ -263,12 +263,12 @@ if 'HeapEntry':
                 (_Type, 'Type'),
             ]
             def FrontEndQ(self):
-                return bool(self['AllocatedByFrontend'])
+                return True if self['AllocatedByFrontend'] else False
             def BackEndQ(self):
                 return not self.FrontEndQ()
 
             def BusyQ(self):
-                return bool(self['Busy'])
+                return True if self['Busy'] else False
             def FreeQ(self):
                 return not self.BusyQ()
 
@@ -328,7 +328,7 @@ if 'HeapEntry':
 
         def BusyQ(self):
             res = self.Flags()
-            return bool(res['Busy'])
+            return True if res['Busy'] else False
         def FreeQ(self):
             return not self.BusyQ()
 
@@ -551,7 +551,7 @@ if 'HeapEntry':
                     (6, 'Busy'),
                 ]
                 def BusyQ(self):
-                    return bool(self['Busy'])
+                    return True if self['Busy'] else False
                 def FreeQ(self):
                     return not self.BusyQ()
                 def Unused(self):
@@ -708,7 +708,7 @@ if 'HeapEntry':
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'EntryOffsetQ', message='Unable to query the entry-offset for a non-frontend type')
             f, res = self.object.Flags(), self.d.li
-            return f.int() == 5 and bool(res['EntryOffset'].int())
+            return f.int() == 5 and True if res['EntryOffset'].int() else False
 
         def EntryOffset(self):
             if not self.FrontEndQ():
@@ -1024,7 +1024,7 @@ if 'Frontend':
 
             def FrontEndQ(self):
                 res = self.object.cast(pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t)
-                return bool(res.int() & 1)
+                return True if res.int() & 1 else False
             def BackEndQ(self):
                 return not self.BackEndQ()
 
@@ -2284,6 +2284,7 @@ if 'Heap':
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),   # FIXME: this is encoded with something somewhere
                     #(P(ptype.undefined), 'CommitRoutine'),
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
+                    (rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA, 'CommitLimitData'),
                     (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
