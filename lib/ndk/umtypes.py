@@ -1,4 +1,4 @@
-import logging
+import logging, builtins
 
 import ptypes
 from ptypes import *
@@ -6,10 +6,10 @@ from ptypes import *
 from . import exception
 from .datatypes import *
 
-NT_SUCCESS = lambda Status: ((int(Status)) >= 0)
-NT_INFORMATION = lambda Status: (((int(Status)) >> 30) == 1)
-NT_WARNING = lambda Status: (((int(Status)) >> 30) == 2)
-NT_ERROR = lambda Status: (((int(Status)) >> 30) == 3)
+NT_SUCCESS = lambda Status: ((builtins.int(Status)) >= 0)
+NT_INFORMATION = lambda Status: (((builtins.int(Status)) >> 30) == 1)
+NT_WARNING = lambda Status: (((builtins.int(Status)) >> 30) == 2)
+NT_ERROR = lambda Status: (((builtins.int(Status)) >> 30) == 3)
 
 MINCHAR = 0x80
 MAXCHAR = 0x7f
@@ -22,8 +22,8 @@ MAXUSHORT = 0xffff
 MAXULONG = 0xffffffff
 
 CSR_MAKE_OPCODE = lambda s, m: ((s) << 16) | (m)
-CSR_API_ID_FROM_OPCODE = lambda n: (int(int(n)))
-CSR_SERVER_ID_FROM_OPCODE = lambda n: int((n) >> 16)
+CSR_API_ID_FROM_OPCODE = lambda n: (builtins.int(builtins.int(n)))
+CSR_SERVER_ID_FROM_OPCODE = lambda n: builtins.int((n) >> 16)
 
 class CINT(pint.uint32_t): pass
 class PCSZ(P(pstr.char_t)): pass

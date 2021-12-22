@@ -751,7 +751,7 @@ class TEB(pstruct.type, versioned):
         return
 
 class THREAD_INFORMATION_CLASS(pint.enum):
-    _values_ = [(n, v) for v, n in (
+    _values_ = [(n, v) for v, n in [
         (0, 'ThreadBasicInformation'),
         (1, 'ThreadTimes'),
         (2, 'ThreadPriority'),
@@ -792,7 +792,7 @@ class THREAD_INFORMATION_CLASS(pint.enum):
         (37, 'ThreadContainerId'),
         (38, 'ThreadNameInformation'),
         (39, 'ThreadProperty'),
-    )]
+    ]]
 
 class THREAD_BASIC_INFORMATION(pstruct.type, versioned):
     type = THREAD_INFORMATION_CLASS.byname('ThreadBasicInformation')
@@ -817,7 +817,7 @@ class THREAD_PROPERTY_INFORMATION(pstruct.type):
     ]
 
 class PROCESS_INFORMATION_CLASS(pint.enum):
-    _values_ = [(n, v) for v, n in (
+    _values_ = [(n, v) for v, n in [
         (0, 'ProcessBasicInformation'),
         (1, 'ProcessQuotaLimits'),
         (2, 'ProcessIoCounters'),
@@ -918,7 +918,7 @@ class PROCESS_INFORMATION_CLASS(pint.enum):
         (97, 'ProcessLeapSecondInformation'),
         (98, 'ProcessFiberShadowStackAllocation'),
         (99, 'ProcessFreeFiberShadowStackAllocation'),
-    )]
+    ]]
 
 class PROCESS_BASIC_INFORMATION(pstruct.type, versioned):
     # XXX: there's 2 versions of this structure on server 2016
@@ -936,9 +936,9 @@ class PROCESS_BASIC_INFORMATION(pstruct.type, versioned):
     ]
 
 class PROCESS_MEMORY_EXHAUSTION_TYPE(pint.enum, ULONG):
-    _values_ = [(n, v) for v, n in (
+    _values_ = [(n, v) for v, n in [
         (0, 'PMETypeFaultFastOnCommitFailure'),
-    )]
+    ]]
 
 class PROCESS_MEMORY_EXHAUSTION_INFO(pstruct.type):
     type = PROCESS_INFORMATION_CLASS.byname('ProcessMemoryExhaustion')
@@ -1286,7 +1286,7 @@ class KUSER_SHARED_DATA(pstruct.type, versioned):
                 (dyn.array(ULONG, 1), 'DataFlagsPad'),
             ])
 
-        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) in (sdkddkver.NTDDI_WINXP, sdkddkver.NTDDI_WIN7):
+        if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) in {sdkddkver.NTDDI_WINXP, sdkddkver.NTDDI_WIN7}:
             f.extend([
                 (ULONGLONG, 'TestRetInstruction'),
                 (ULONG, 'SystemCall'),
