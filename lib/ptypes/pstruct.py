@@ -61,22 +61,22 @@ string_types = utils.string_types
 class __structure_interface__(ptype.container):
     def __init__(self, *args, **kwds):
         super(__structure_interface__, self).__init__(*args, **kwds)
-        self.__fastindex = {}
+        self.__fastindex__ = {}
 
     def alias(self, target, *aliases):
         '''Add any of the specified aliases to point to the target field.'''
         res = self.__getindex__(target)
         for item in aliases:
-            self.__fastindex[item.lower()] = res
+            self.__fastindex__[item.lower()] = res
         return res
     def unalias(self, *aliases):
         '''Remove the specified aliases from the structure.'''
-        fields = {name.lower() for _, name in self._fields_ or []}
-        items = {item.lower() for item in aliases}
-        if fields & items:
-            message = "Unable to remove the specified fields ({:s}) from the available aliases.".format(', '.join(item for item in fields & items))
+        lowerfields = {name.lower() for _, name in self._fields_ or []}
+        loweritems = {item.lower() for item in aliases}
+        if lowerfields & loweritems:
+            message = "Unable to remove the specified fields ({:s}) from the available aliases.".format(', '.join(item for item in lowerfields & loweritems))
             raise error.UserError(self, '__structure_interface__.unalias', message)
-        indices = [self.__fastindex.pop(item) for item in items if item in self.__fastindex]
+        indices = [self.__fastindex__.pop(item) for item in loweritems if item in self.__fastindex__]
         return len(indices)
 
     def append(self, object):
@@ -87,7 +87,7 @@ class __structure_interface__(ptype.container):
         current, name = len(self.value), object.shortname()
         offset = super(__structure_interface__, self).__append__(object)
         self.value[current].setoffset(offset, recurse=True)
-        self.__fastindex[name.lower()] = current
+        self.__fastindex__[name.lower()] = current
         return offset
 
     def __getindex__(self, name):
@@ -96,7 +96,7 @@ class __structure_interface__(ptype.container):
             raise error.UserError(self, '__structure_interface__.__getindex__', message='Element names must be of a str type.')
 
         try:
-            index = self.__fastindex[name.lower()]
+            index = self.__fastindex__[name.lower()]
             if 0 <= index < len(self.value):
                 return index
 
@@ -105,7 +105,7 @@ class __structure_interface__(ptype.container):
 
         for index, (_, fld) in enumerate(self._fields_ or []):
             if fld.lower() == name.lower():
-                return self.__fastindex.setdefault(name.lower(), index)
+                return self.__fastindex__.setdefault(name.lower(), index)
             continue
         raise KeyError(name)
 
@@ -167,7 +167,7 @@ class __structure_interface__(ptype.container):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__contains__', message='Element names must be of a str type.')
-        return name in self.__fastindex
+        return name.lower() in self.__fastindex__
 
     def __iter__(self):
         '''D.__iter__() <==> iter(D)'''
@@ -192,10 +192,10 @@ class __structure_interface__(ptype.container):
         return result
 
     def __getstate__(self):
-        return super(__structure_interface__, self).__getstate__(), self.__fastindex,
+        return super(__structure_interface__, self).__getstate__(), self.__fastindex__,
 
     def __setstate__(self, state):
-        state, self.__fastindex, = state
+        state, self.__fastindex__, = state
         super(__structure_interface__, self).__setstate__(state)
 
 class type(__structure_interface__):
@@ -261,12 +261,16 @@ class type(__structure_interface__):
         return result
 
     def __append_type(self, offset, cons, name, **attrs):
-        if name in self.__fastindex:
-            _, name = name, u"{:s}_{:x}".format(name, (ofs - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+        lowername = name.lower()
+        if lowername in self.__fastindex__ and self.__fastindex__[lowername] < len(self.value):
+            _, name = name, u"{:s}_{:x}".format(name, (offset - self.getoffset()) if Config.pstruct.use_offset_on_duplicate else len(self.value))
+            path = str().join(map("<{:s}>".format, self.backtrace()))
             Log.warning("type.load : {:s} : Duplicate element name {!r}. Using generated name {!r} : {:s}".format(self.instance(), _, name, path))
 
         res = self.new(cons, __name__=name, offset=offset, **attrs)
+        current = len(self.value)
         self.value.append(res)
+        self.__fastindex__[lowername] = current
         if ptype.iscontainer(cons) or ptype.isresolveable(cons):
             return res.load()
         return res
@@ -274,7 +278,6 @@ class type(__structure_interface__):
     def load(self, **attrs):
         with utils.assign(self, **attrs):
             self.value = []
-            self.__fastindex = {}
 
             # check if the user implement a custom blocksize so we can keep track
             # of how far to populate our structure or if we don't even need to do

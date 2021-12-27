@@ -1178,7 +1178,7 @@ class __array_interface__(container):
 class __structure_interface__(container):
     def __init__(self, *args, **kwds):
         super(__structure_interface__, self).__init__(*args, **kwds)
-        self.__fastindex = {}
+        self.__fastindex__ = {}
 
     def alloc(self, **fields):
         result = super(__structure_interface__, self).alloc()
@@ -1223,34 +1223,34 @@ class __structure_interface__(container):
     def __append__(self, object):
         current = len(self.value)
         position = super(__structure_interface__, self).__append__(object)
-        self.__fastindex[object.name().lower()] = current
+        self.__fastindex__[object.name().lower()] = current
         return position
 
     def alias(self, target, *aliases):
         """Add any of the specified aliases to point to the target field."""
         res = self.__getindex__(target)
         for item in aliases:
-            self.__fastindex[item.lower()] = res
+            self.__fastindex__[item.lower()] = res
         return res
     def unalias(self, *aliases):
         '''Remove the specified aliases from the structure.'''
-        fields = {name.lower() for _, name in self._fields_ or []}
-        items = {item.lower() for item in aliases}
-        if fields & items:
-            message = "Unable to remove the specified fields ({:s}) from the available aliases.".format(', '.join(item for item in fields & items))
+        lowerfields = {name.lower() for _, name in self._fields_ or []}
+        loweritems = {item.lower() for item in aliases}
+        if lowerfields & loweritems:
+            message = "Unable to remove the specified fields ({:s}) from the available aliases.".format(', '.join(item for item in lowerfields & loweritems))
             raise error.UserError(self, '__structure_interface__.unalias', message)
-        indices = [self.__fastindex.pop(item) for item in items if item in self.__fastindex]
+        indices = [self.__fastindex__.pop(item) for item in loweritems if item in self.__fastindex__]
         return len(indices)
 
     def __getindex__(self, name):
         if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__getindex__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
         try:
-            return self.__fastindex[name.lower()]
+            return self.__fastindex__[name.lower()]
         except KeyError:
             for index, (_, fld) in enumerate(self._fields_ or []):
                 if fld.lower() == name.lower():
-                    return self.__fastindex.setdefault(name.lower(), index)
+                    return self.__fastindex__.setdefault(name.lower(), index)
                 continue
         raise KeyError(name)
 
@@ -1360,7 +1360,7 @@ class __structure_interface__(container):
         '''D.__contains__(k) -> True if D has a field named k, else False'''
         if not isinstance(name, string_types):
             raise error.UserError(self, '__structure_interface__.__contains__', message="The type of the requested element name ({!s}) must be of a string type".format(name.__class__))
-        return name in self.__fastindex
+        return name.lower() in self.__fastindex__
 
     def __iter__(self):
         '''D.__iter__() <==> iter(D)'''
@@ -1443,10 +1443,10 @@ class __structure_interface__(container):
         return u"[{:s}] {:s} {:s}".format(utils.repr_position(self.getposition(), hex=_hex, precision=_precision), descr, result)
 
     #def __getstate__(self):
-    #    return super(__structure_interface__, self).__getstate__(), self.__fastindex
+    #    return super(__structure_interface__, self).__getstate__(), self.__fastindex__
 
     #def __setstate__(self, state):
-    #    state, self.__fastindex, = state
+    #    state, self.__fastindex__, = state
     #    super(__structure_interface__, self).__setstate__(state)
 
 class array(__array_interface__):
