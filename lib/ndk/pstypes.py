@@ -1198,6 +1198,7 @@ class PF_(parray.type):
     ]
 
 class KUSER_SHARED_DATA(pstruct.type, versioned):
+    # FIXME: https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/ntexapi_x/kuser_shared_data/index.htm
     class TscQpc(pbinary.struct):
         _fields_ = [
             (16, 'Pad'),

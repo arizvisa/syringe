@@ -599,10 +599,45 @@ class SINGLE_LIST_ENTRY(SLIST_ENTRY):
     pass
 
 class SLIST_HEADER(pstruct.type, versioned):
+    # FIXME: this logic is completely fuxed.
+
     def __Next(self):
         path = getattr(self, '_path_', SLIST_ENTRY._path_)
         target = getattr(self, '_object_', SLIST_ENTRY._object_)
         return dyn.clone(SLIST_ENTRY, _path_=path, _object_=target)
+
+    class _Header8(pbinary.struct):
+        _fields_ = [
+            (16, 'Depth'),
+            (9, 'Sequence'),
+            (39, 'NextEntry'),
+
+            (1, 'HeaderType'),
+            (1, 'Init'),
+            (59, 'Reserved'),
+            (3, 'Region'),
+        ]
+
+    class _Header16(pbinary.struct):
+        _fields_ = [
+            (16, 'Depth'),
+            (48, 'Sequence'),
+
+            (1, 'HeaderType'),
+            (1, 'Init'),
+            (2, 'Reserved'),
+            (60, 'NextEntry'),
+        ]
+
+    class _HeaderX64(pbinary.struct):
+        _fields_ = [
+            (16, 'Depth'),
+            (48, 'Sequence'),
+
+            (1, 'HeaderType'),
+            (3, 'Reserved'),
+            (60, 'NextEntry'),
+        ]
 
     def __init__(self, **attrs):
         super(SLIST_HEADER, self).__init__(**attrs)
@@ -610,6 +645,15 @@ class SLIST_HEADER(pstruct.type, versioned):
 
         # HeaderX64
         if getattr(self, 'WIN64', False):
+            '''
+            FIXME:
+            if the byte at +8 is 1, then bxor[64] at +8 with 1 and return
+            if the byte at +8 is 0, then band[64] at +0 with ~0x1FFFFFF and return it or
+            if that was nonzero, then bror[64] the result with 0x15 and then
+            use it read[64] at +0, then bshl[64] the result with 0x15 and then
+            you can shoot yourself in the face
+            '''
+
             f.extend([
                 (pint.uint16_t, 'Depth'),
                 (dyn.clone(pint.uint_t, length=6), 'Sequence'),
