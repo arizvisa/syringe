@@ -381,9 +381,9 @@ if 'HeapEntry':
             if self.FrontEndQ():
                 res = self.serialize()
                 return res.encode('hex') if sys.version_info.major < 3 else res.hex()
-            bs = 0x10 if getattr(self, 'WIN64', False) else 8
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             data, res = self.serialize(), self.d.li
-            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex') if sys.version_info.major < 3 else data.hex(), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex') if sys.version_info.major < 3 else data.hex(), -res['PreviousSize'].int() * blocksize, res['Size'].int() * blocksize, res['Flags'].summary())
 
         def Flags(self):
             '''Unencoded flags grabbed from the original HEAP_ENTRY'''
@@ -458,8 +458,8 @@ if 'HeapEntry':
                 return super(HEAP_ENTRY, self).__init__(**attrs)
 
             def summary(self):
-                bs = 0x10 if getattr(self, 'WIN64', False) else 8
-                return "{:s} PreviousSize={:+#x} Size={:+#x} SegmentOffset={:#x} Checksum={:#x}".format(self['Flags'].summary(), -self['PreviousSize'].int() * bs, self['Size'].int() * bs, self['SegmentOffset'].int(), self['Checksum'].int())
+                blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+                return "{:s} PreviousSize={:+#x} Size={:+#x} SegmentOffset={:#x} Checksum={:#x}".format(self['Flags'].summary(), -self['PreviousSize'].int() * blocksize, self['Size'].int() * blocksize, self['SegmentOffset'].int(), self['Checksum'].int())
 
         class _BE_Encoded(pstruct.type):
             '''
@@ -509,9 +509,9 @@ if 'HeapEntry':
             return super(_HEAP_ENTRY, self).decode(object, **attrs)
 
         def __be_summary(self):
-            bs = 0x10 if getattr(self, 'WIN64', False) else 8
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             data, res = self.serialize(), self.d.li
-            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex') if sys.version_info.major < 3 else data.hex(), -res['PreviousSize'].int() * bs, res['Size'].int() * bs, res['Flags'].summary())
+            return "{:s} : {:-#x} <-> {:+#x} : Flags:{:s}".format(data.encode('hex') if sys.version_info.major < 3 else data.hex(), -res['PreviousSize'].int() * blocksize, res['Size'].int() * blocksize, res['Flags'].summary())
 
         def ChecksumQ(self):
             if not self.BackEndQ():
@@ -531,16 +531,16 @@ if 'HeapEntry':
             if not self.BackEndQ():
                 raise error.InvalidHeapType(self, 'Size')
             self = self.d.li
-            bs = 0x10 if getattr(self, 'WIN64', False) else 8
-            return bs * self['Size'].int()
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return blocksize * self['Size'].int()
 
         def PreviousSize(self):
             '''Return the decoded PreviousSize field'''
             if not self.BackEndQ():
                 raise error.InvalidHeapType(self, 'Size')
             self = self.d.li
-            bs = 0x10 if getattr(self, 'WIN64', False) else 8
-            return bs * self['PreviousSize'].int()
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return blocksize * self['PreviousSize'].int()
 
         ## Frontend
         class __FE_HEAP_ENTRY(HEAP_ENTRY):
@@ -571,7 +571,7 @@ if 'HeapEntry':
 
             _fields_ = [
                 (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
-                (lambda self: dyn.clone(PHEAP_SUBSEGMENT, _value_=PVALUE32), 'SubSegment'),
+                (lambda self: dyn.clone(PHEAP_SUBSEGMENT, _value_=UINT32), 'SubSegment'),
                 (USHORT, 'Unknown'),     # seems to be diff on 32-bit?
                 (UCHAR, 'EntryOffset'),
                 (UnusedBytes, 'Flags'),
@@ -1938,38 +1938,32 @@ if 'LFH':
         # FIXME: Figure out why HEAP_LOCAL_DATA is defined as an array in all
         #        LFH material but only gets referenced as a single-element.
 
-        def SizeIndex(self, size):
-            '''Return the size index when given a ``size``'''
-            heap = self.getparent(HEAP)
-            bucket = heap.Bucket(size)
+        def BlockUnits(self, size):
+            '''Return the block units when given a ``size``'''
+            blocksize, rounding = 0x10 if getattr(self, 'WIN64', False) else 8, 7
+            size_and_header = size + blocksize + rounding
 
-            # If our bucket is a HEAP_BUCKET, then this is an LF bin
-            # that we can use to get the SizeIndex from.
-            if isinstance(bucket, HEAP_BUCKET):
-                return bucket['SizeIndex'].int()
-
-            # XXX: Otherwise we're in a LIST_ENTRY of chunks that we need
-            # to traverse.
-            raise NotImplementedError('SizeIndex')
-        def BucketByIndex(self, index):
-            return self['Buckets'][index]
-        def SegmentInfoByIndex(self, index):
-            return self['LocalData']['SegmentInfo'][index]
+            units = math.floor(size_and_header / (1. * blocksize))
+            return math.trunc(units)
+        def BucketByUnits(self, units):
+            '''Iterate through all of the buckets finding the smallest one that can contain the requested number of units.'''
+            for index, item in enumerate(self['Buckets']):
+                if units <= item['BlockUnits'].int():
+                    return item
+                continue
+            raise error.NotFoundException(self, 'BucketByUnits', message="Unable to find a Bucket for the requested units ({:#x})".format(units))
         def Bucket(self, size):
-            '''Return the LFH bin given a ``size``'''
-            index = self.SizeIndex(size)
-            return self.BucketByIndex(index)
+            '''Return the Bucket given a ``size``'''
+            units = self.BlockUnits(size)
+            return self.BucketByUnits(units)
         def SegmentInfo(self, size):
             '''Return the HEAP_LOCAL_SEGMENT_INFO for a specific ``size``'''
             bucket = self.Bucket(size)
+            index = bucket['SizeIndex'].int()
 
-            # If our bucket is a HEAP_BUCKET, then this is an LF bin to query
-            if isinstance(bucket, HEAP_BUCKET):
-                index = bucket['SizeIndex'].int()
-                return SegmentInfoByIndex(index)
-
-            # Otherwise, it's a LIST_ENTRY that we'll need to traverse
-            raise NotImplementedError('SegmentInfo')
+            localdata = self['LocalData']
+            segmentinfoarray = localdata['SegmentInfo']
+            return segmentinfoarray[index]
 
         def __init__(self, **attrs):
             super(LFH_HEAP, self).__init__(**attrs)
@@ -2191,16 +2185,29 @@ if 'Heap':
                 yield item
             return
 
-        def __HeapList(self, blockindex):
+        def HeapListLookup(self, blockindex):
             '''Return the correct (recent) HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / blocksize)'''
             if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, '__HeapList', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectHeapType(self, 'HeapListLookup', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+
             p = self['BlocksIndex'].d.l
             while blockindex >= p['ArraySize'].int():
                 if p['ExtendedLookup'].int() == 0:
-                    raise error.ListHintException(self, '__HeapList', message='Unable to locate ListHint for blockindex', blockindex=blockindex, index=p['ArraySize'].int()-1, lookup=p)
+                    raise error.ListHintException(self, 'HeapListLookup', message='Unable to locate ListHint for blockindex', blockindex=blockindex, index=p['ArraySize'].int()-1, lookup=p)
                 p = p['ExtendedLookup'].d.l
             return p
+
+        def ListHint(self, size):
+            '''Return the ListHint from the BlockIndex according to the specified ``size``'''
+            if not self['FrontEndHeapType']['LFH']:
+                raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+
+            blocksize, rounding = 0x10 if getattr(self, 'WIN64', False) else 8, 7
+            size_and_header = size + blocksize + rounding
+
+            bi = math.trunc(math.floor(size_and_header / (1. * blocksize)))
+            blocklist = self.HeapListLookup(bi)
+            return blocklist.ListHint(bi)
 
         def Bucket(self, size):
             '''Find the correct Heap Bucket from the ListHint for the given ``size``'''
@@ -2215,20 +2222,6 @@ if 'Heap':
 
             # Otherwise this is a linked-list of heap chunks
             return entry
-
-        def ListHint(self, size):
-            '''Return the ListHint according to the specified ``size``'''
-            if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-
-            # FIXME: not sure if this is being calculated correctly
-
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            size_and_header = size + blocksize
-
-            bi = math.trunc(math.floor(size_and_header / (1. * blocksize)))
-            heaplist = self.__HeapList(bi)
-            return heaplist.ListHint(bi)
 
         class _Encoding(pstruct.type, versioned):
             _fields_ = [
@@ -2478,7 +2471,7 @@ if 'Heap':
             target = dyn.clone(self._ListHints, _object_=element, length=count)
             return P(target)
 
-        def __ListHints_WIN10(self):
+        def __ListHints_WIN8(self):
             count, sentinel = self.ListHintsCount(), self['ListHead'].li
             ptr = fpointer(_HEAP_CHUNK, 'ListEntry')    # XXX: we need to assign the sentinel address for these free chunks
             target = dyn.clone(self._ListHints, _object_=ptr, length=count)
@@ -2505,13 +2498,13 @@ if 'Heap':
                 (self.__ListsInUseUlong, 'ListsInUseUlong'),
             ])
 
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN10:
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
                     (self.__ListHints, 'ListHints'),
                 ])
             else:
                 f.extend([
-                    (self.__ListHints_WIN10, 'ListHints'),
+                    (self.__ListHints_WIN8, 'ListHints'),
                 ])
             return
 
@@ -2524,20 +2517,23 @@ if 'Heap':
             res = blockindex - self['BaseIndex'].int()
             if 0 > res or self.ListHintsCount() < res:
                 raise error.NdkAssertionError(self, 'ListHint', message="Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int()))
+
             freelist = self['ListsInUseUlong'].d.l
-            list = self['ListHints'].d.l
+            hints = self['ListHints'].d.l
             if freelist.check(res):
-                return list[res]
+                return hints[res]
+
             logging.warning("{:s} : Returning ListHint[{:d}] despite ListsInUseUlong[{:d}] being unset".format(self.instance(), res, res))
-            return list[res]
+            return hints[res]
 
         def enumerate(self):
             inuse, hints = (self[fld].d.li for fld in ['ListsInUseUlong', 'ListHints'])
             if inuse.bits() != len(hints):
                 raise error.NdkAssertionError(self, 'ListHint', message="ListsInUseUlong ({:d}) is a different length than ListHints ({:d})".format(inuse.bits(), len(hints)))
-            for i, item in enumerate(hints):
-                if inuse.check(i):
-                    yield i, item
+
+            for index, item in enumerate(hints):
+                if inuse.check(index):
+                    yield index, item
                 continue
             return
 
