@@ -896,7 +896,13 @@ class BitmapBitsArray(parray.type):
         return res.int() & pow(2, offset) and 1
     def run(self):
         return self.bitmap()
-
+    def iterate(self):
+        '''iterate through the bitmap returning all the indices that are true'''
+        for index in range(self.bits()):
+            if self.check(index):
+                yield index
+            continue
+        return
     def repr(self):
         return self.details()
     def summary(self):
@@ -933,7 +939,13 @@ class BitmapBitsBytes(ptype.block):
         return ord(res) & pow(2, offset) and 1
     def run(self):
         return self.bitmap()
-
+    def iterate(self):
+        '''iterate through the bitmap returning all the indices that are true'''
+        for index in range(self.bits()):
+            if self.check(index):
+                yield index
+            continue
+        return
     def repr(self):
         return self.details()
     def summary(self):
