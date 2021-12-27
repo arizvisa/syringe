@@ -622,34 +622,13 @@ if 'HeapEntry':
                 res = self['Encoded'].int()
                 return res & ~0xffffffffff
 
-        def __RtlpLFHKey(self):
-            if not isinstance(self.source, ptypes.provider.debuggerbase):
-
-                # First check for any attributes on our HEAP
-                p = self.getparent(HEAP)
-                if not hasattr(p, 'RtlpLFHKey'):
-                    logging.warning("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
-                    return 0
-
-                # Found one that we can use, so use it.
-                logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', p.RtlpLFHKey, p.instance(), 'RtlpLFHKey'))
-                RtlpLFHKey = p.RtlpLFHKey
-
-            # We can simply use the debugger to evaluate the expression for our key
-            else:
-                RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
-
-            t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-            res = self.new(t, offset=RtlpLFHKey)
-            return res.l.int()
-
         def __fe_encode(self, object, **attrs):
             object = object.cast(self._FE_Encoded)
 
             # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
                 try:
-                    self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=HEAP), self.__RtlpLFHKey()
+                    self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=HEAP), __RtlpLFHKey__(self)
                 except (ptypes.error.ItemNotFoundError, AttributeError):
                     # FIXME: Log that this heap-entry is non-encoded due to inability to determine required keys
                     pass
@@ -686,7 +665,7 @@ if 'HeapEntry':
 
             # Cache some attributes
             if any(not hasattr(self, "_HEAP_ENTRY_{:s}".format(name)) for name in {'Heap', 'LFHKey'}):
-                self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=HEAP), self.__RtlpLFHKey()
+                self._HEAP_ENTRY_Heap, self._HEAP_ENTRY_LFHKey = self.getparent(type=HEAP), __RtlpLFHKey__(self)
 
             # Now we can decode our 64-bit header
             if getattr(self, 'WIN64', False):
@@ -1451,6 +1430,28 @@ if 'SegmentHeap':
         ]
 
 if 'LFH':
+    def __RtlpLFHKey__(self):
+        '''Try and resolve ntdll!RtlpLFHKey using the debugger or an attribute attached to the HEAP.'''
+        if not isinstance(self.source, ptypes.provider.debuggerbase):
+
+            # First check for any attributes on our HEAP
+            p = self.getparent(HEAP)
+            if not hasattr(p, 'RtlpLFHKey'):
+                logging.warning("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
+                return 0
+
+            # Found one that we can use, so use it.
+            logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', p.RtlpLFHKey, p.instance(), 'RtlpLFHKey'))
+            RtlpLFHKey = p.RtlpLFHKeya
+
+        # We can simply use the debugger to evaluate the expression for our key
+        else:
+            RtlpLFHKey = self.source.expr('ntdll!RtlpLFHKey')
+
+        t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
+        res = self.new(t, offset=RtlpLFHKey)
+        return res.l.int()
+
     class INTERLOCK_SEQ(pstruct.type):
         def __init__(self, **attrs):
             super(INTERLOCK_SEQ, self).__init__(**attrs)
