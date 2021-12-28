@@ -297,6 +297,7 @@ if 'HeapEntry':
 
     class HEAP_ENTRY(pstruct.type, versioned):
         class UnusedBytes(pbinary.flags):
+            # FIXME: we need to implement both backend and frontend versions of UnusedBytes
             class _Type(pbinary.enum):
                 length, _values_ = 3, [
                     ('Chunk', 0),
@@ -307,9 +308,9 @@ if 'HeapEntry':
 
             _fields_ = [
                 (1, 'AllocatedByFrontend'),
-                (3, 'Unknown'),
-                (1, 'Busy'),
-                (_Type, 'Type'),
+                (3, 'Unknown'),             # UnusedBytes == 1
+                (1, 'Busy'),                # UnusedBytes
+                (_Type, 'Type'),            # UnusedBytes
             ]
 
             def FrontEndQ(self):
@@ -2324,6 +2325,7 @@ if 'Heap':
             if not self['FrontEndHeapType']['LFH']:
                 raise error.IncorrectHeapType(self, 'HeapListLookup', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
 
+            # FIXME: factor in BlocksIndex.BaseIndex and BlocksIndex.ExtraItem
             p = self['BlocksIndex'].d.l
             while blockindex >= p['ArraySize'].int():
                 if p['ExtendedLookup'].int() == 0:
@@ -2372,6 +2374,9 @@ if 'Heap':
             if isinstance(freelists, self._FreeLists):
                 listhints = self['FreeListsInUseUlong']
                 raise error.InvalidHeapType(self, 'FreeLists', message='Unable to walk all the entries in the lookaside lists')
+
+            # FIXME: properly walk through the BlocksIndex.ListHints to find the next entry
+            #        that has its Flink set so that we can start closer to our goal.
 
             # walk through the freelists until we find one that will fit our requested size
             iterable = (item for item in freelists.walk() if size <= item['Header'].Size())
@@ -2651,7 +2656,7 @@ if 'Heap':
                 (P(HEAP_LIST_LOOKUP), 'ExtendedLookup'),
 
                 (ULONG, 'ArraySize'),
-                (ULONG, 'ExtraItem'),
+                (ULONG, 'ExtraItem'),                           # XXX: is this what causes the different type for ListHints?
                 (ULONG, 'ItemCount'),
                 (ULONG, 'OutOfRangeItems'),
                 (ULONG, 'BaseIndex'),
