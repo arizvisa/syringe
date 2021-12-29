@@ -40,11 +40,11 @@ def fit(integer):
     return 1 + math.trunc(math.log(abs(integer), 2)) + (1 if integer < 0 else 0)
 
 def string(bitmap, **kwargs):
-    '''Returns bitmap as a formatted binary string starting with the least-significant-bits first'''
+    '''Returns bitmap as a formatted binary string starting with the most-significant-bits first'''
     reverse = builtins.next((kwargs[k] for k in ('reverse', 'reversed') if k in kwargs), False)
     integer, size = bitmap
     res = "{:0{:d}b}".format(integer, abs(size))
-    return str().join(reversed(res) if reverse else res)
+    return str().join(reversed(res)) if reverse else res
 
 def hex(bitmap):
     '''Return bitmap as a hex string'''
@@ -58,7 +58,7 @@ def hex(bitmap):
     return "{:#0{:d}x}".format(n & pow(2, size) - 1, length + 2)
 
 def scan(bitmap, value=True, position=0):
-    '''Searches through bitmap for the specified value and returns it's position'''
+    '''Searches through bitmap for the specified value (least to most) and returns its position'''
     integer, size = bitmap
 
     if position < 0 or position > abs(size):
@@ -732,7 +732,7 @@ if __name__ == '__main__':
     def set_bitmap_unsigned_7():
         x = bitmap.new(4, 4)
         y = bitmap.ror(bitmap.ror(bitmap.ror(x)))
-        if bitmap.string(x) == '0001' and bitmap.string(y) == '1000':
+        if bitmap.string(x) == '0100' and bitmap.string(y) == '1000':
             raise Success
 
     ### add
