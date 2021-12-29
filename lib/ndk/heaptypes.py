@@ -1088,9 +1088,15 @@ if 'Frontend':
             repr = details
 
         _fields_ = [
-            (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Flink'),
+            (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Flink'),          # FIXME: we should be able to calculate the sentinel for this list if we're attached to HEAP_LIST_LOOKUP
             (_HeapBucketLink, 'Blink'),
         ]
+
+        def FreeChunk(self):
+            '''Return the first free heap chunk within the bucket.'''
+            if self['Flink'].int():
+                return self['Flink'].d
+            raise error.NotFoundException(self, 'Bucket', message="No available chunks were pointed to by this particular bucket.".format(offset, _HEAP_ENTRY.typename()))
 
         def FrontEndQ(self):
             return self['Blink'].FrontEndQ()
@@ -1588,45 +1594,6 @@ if 'LFH':
             return "{:#x} :({:s})> {:s}".format(self.get(), decoded.classname(), decoded.summary())
 
     class HEAP_USERDATA_HEADER(pstruct.type):
-        def ByOffset(self, entryoffset):
-            '''Return the field at the specified `entryoffset`.'''
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            return self.field(blocksize * entryoffset, recurse=True)
-
-        def HeaderByOffset(self, offset):
-            '''Return the header for the given entry offset.'''
-            res = self.ByOffset(offset)
-            if isinstance(res, _HEAP_ENTRY):
-                return res
-            raise error.NotFoundException(self, 'HeaderByOffset', message="Object at entry offset {:#x} does not point to a header ({:s}). An invalid entry offset was specified.".format(offset, _HEAP_ENTRY.typename()))
-        def BlockByOffset(self, offset):
-            '''Return the block at the given entry offset.'''
-            res = self.HeaderByOffset(offset)
-            return res.getparent(_HEAP_CHUNK)
-        def ChunkByOffset(self, offset):
-            '''Return the chunk (data) for the entry offset.'''
-            res = self.BlockByOffset(offset)
-            return res['Data']
-
-        def NextIndex(self):
-            '''Return the next UserBlock index that will be allocated from this structure's segment'''
-            ss = self['SubSegment'].d.li
-            return ss.FreeEntryBlockIndex()
-        def NextBlock(self):
-            '''Return the next block that will be allocated from this structure's segment'''
-            index = self.NextIndex()
-            return self['Blocks'][index]
-        def NextChunk(self):
-            '''Return a pointer to the next chunk (data) that will be returned from this structure's segment.'''
-            res = self.NextBlock()
-            return res['Data']
-
-        def UsageBitmap(self):
-            '''Return a bitmap showing the busy/free chunks that are available'''
-            iterable = ((1 if item['Header'].BusyQ() else 0) for item in self['Blocks'])
-            iterable = (bitmap.new(item, 1) for item in iterable)
-            return functools.reduce(bitmap.push, iterable, bitmap.zero)
-
         def __Blocks(self):
             pss = self['SubSegment'].li
             ss = pss.d.li
@@ -1677,8 +1644,7 @@ if 'LFH':
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(EncodedOffsets)'),
                     (rtltypes.RTL_BITMAP_EX if getattr(self, 'WIN64', False) else rtltypes.RTL_BITMAP, 'BusyBitmap'),
                     (self.__BitmapData, 'BitmapData'),
-                    # XXX: there's some padding here which we'll need to grab from EncodedOffsets
-                    (self.__align_Blocks, 'align(Blocks)'),
+                    (self.__align_Blocks, 'align(Blocks)'),             # XXX: there's some padding here which we'll need to grab from EncodedOffsets
                     (self.__Blocks, 'Blocks'),
                 ])
 
@@ -1686,6 +1652,45 @@ if 'LFH':
                 # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
             return
+
+        def ByOffset(self, entryoffset):
+            '''Return the field at the specified `entryoffset`.'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return self.field(blocksize * entryoffset, recurse=True)
+
+        def HeaderByOffset(self, offset):
+            '''Return the header for the given entry offset.'''
+            res = self.ByOffset(offset)
+            if isinstance(res, _HEAP_ENTRY):
+                return res
+            raise error.NotFoundException(self, 'HeaderByOffset', message="Object at entry offset {:#x} does not point to a header ({:s}). An invalid entry offset was specified.".format(offset, _HEAP_ENTRY.typename()))
+        def BlockByOffset(self, offset):
+            '''Return the block at the given entry offset.'''
+            res = self.HeaderByOffset(offset)
+            return res.getparent(_HEAP_CHUNK)
+        def ChunkByOffset(self, offset):
+            '''Return the chunk (data) for the entry offset.'''
+            res = self.BlockByOffset(offset)
+            return res['Data']
+
+        def NextIndex(self):
+            '''Return the next UserBlock index that will be allocated from this structure's segment'''
+            ss = self['SubSegment'].d.li
+            return ss.FreeEntryBlockIndex()
+        def NextBlock(self):
+            '''Return the next block that will be allocated from this structure's segment'''
+            index = self.NextIndex()
+            return self['Blocks'][index]
+        def NextChunk(self):
+            '''Return a pointer to the next chunk (data) that will be returned from this structure's segment.'''
+            res = self.NextBlock()
+            return res['Data']
+
+        def UsageBitmap(self):
+            '''Return a bitmap showing the busy/free chunks that are available.'''
+            iterable = ((1 if item['Header'].BusyQ() else 0) for item in self['Blocks'])
+            iterable = (bitmap.new(item, 1) for item in iterable)
+            return functools.reduce(bitmap.push, iterable, bitmap.zero)
 
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
         def __init__(self, **attrs):
@@ -1730,10 +1735,10 @@ if 'LFH':
                 raise error.NdkUnsupportedVersion(self)
 
         def Bucket(self):
-            '''Return the LFH bin associated with the current HEAP_LOCAL_SEGMENT_INFO'''
-            bi = self['BucketIndex'].int()
+            '''Return the frontend bucket associated with the current HEAP_LOCAL_SEGMENT_INFO.'''
+            index = self['BucketIndex'].int()
             lfh = self.getparent(LFH_HEAP)
-            return lfh['Buckets'][bi]
+            return lfh.BucketByIndex(index)
 
         def Segment(self):
             '''
@@ -1873,7 +1878,6 @@ if 'LFH':
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
-                # XXX: win10
                 f.extend([
                     (ULONG, 'CacheShiftThreshold'),
                     (USHORT, 'Allocations'),
@@ -1881,7 +1885,7 @@ if 'LFH':
                     (USHORT, 'CacheHits'),
 
                     # XXX: The following fields have been manually added to deal
-                    #      with padding, but they've got to be some undocumented
+                    #      with padding, but they're probably just some undocumented
                     #      fields or something...
                     (USHORT, 'Unknown'),
                     (ULONG, 'Reserved'),
@@ -1889,9 +1893,54 @@ if 'LFH':
                 ])
 
             else:
+                # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
 
     class HEAP_SUBSEGMENT(pstruct.type):
+        def __init__(self, **attrs):
+            super(HEAP_SUBSEGMENT, self).__init__(**attrs)
+            f = self._fields_ = []
+
+            # FIXME: NTDDI_WIN8 moves the DelayFreeList to a different place
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
+                f.extend([
+                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
+                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
+
+                    (INTERLOCK_SEQ, 'AggregateExchg'),
+                    (USHORT, 'BlockSize'),
+                    (USHORT, 'Flags'),
+                    (USHORT, 'BlockCount'),
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'AffinityIndex'),
+
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: DelayFreeList
+                    (ULONG, 'Lock'),
+                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
+                ])
+
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+                f.extend([
+                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
+                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),
+
+                    (INTERLOCK_SEQ, 'AggregateExchg'),
+                    (USHORT, 'BlockSize'),
+                    (USHORT, 'Flags'),
+                    (USHORT, 'BlockCount'),
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'AffinityIndex'),
+
+                    (ULONG, 'Lock'),
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: DelayFreeList
+                    (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
+                ])
+
+            else:
+                # XXX: win10
+                raise error.NdkUnsupportedVersion(self)
+
         def BlockSize(self):
             '''Returns the size of each block (data + header) within the subsegment'''
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
@@ -1942,50 +1991,6 @@ if 'LFH':
                 res['BusyBlocks'] = self.UsedBlockCount()
             return res
 
-        def __init__(self, **attrs):
-            super(HEAP_SUBSEGMENT, self).__init__(**attrs)
-            f = self._fields_ = []
-
-            # FIXME: NTDDI_WIN8 moves the DelayFreeList to a different place
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
-                f.extend([
-                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
-                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-
-                    (INTERLOCK_SEQ, 'AggregateExchg'),
-                    (USHORT, 'BlockSize'),
-                    (USHORT, 'Flags'),
-                    (USHORT, 'BlockCount'),
-                    (UCHAR, 'SizeIndex'),
-                    (UCHAR, 'AffinityIndex'),
-
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: DelayFreeList
-                    (ULONG, 'Lock'),
-                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
-                ])
-
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
-                # XXX: win10
-                f.extend([
-                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
-                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),
-
-                    (INTERLOCK_SEQ, 'AggregateExchg'),
-                    (USHORT, 'BlockSize'),
-                    (USHORT, 'Flags'),
-                    (USHORT, 'BlockCount'),
-                    (UCHAR, 'SizeIndex'),
-                    (UCHAR, 'AffinityIndex'),
-
-                    (ULONG, 'Lock'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: DelayFreeList
-                    (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
-                ])
-
-            else:
-                raise error.NdkUnsupportedVersion(self)
-
     class PHEAP_SUBSEGMENT(ptype.pointer_t):
         '''
         This points to a HEAP_SUBSEGMENT, but ensures that it uses the same
@@ -2027,7 +2032,6 @@ if 'LFH':
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
-                # XXX: win10
                 f.extend([
                     (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
@@ -2038,6 +2042,7 @@ if 'LFH':
                 ])
 
             else:
+                # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
 
     @FrontEndHeap.define
@@ -2049,56 +2054,6 @@ if 'LFH':
         # FIXME: It seems that the HEAP_LOCAL_DATA is defined as an array due to
         #        processor affinity when it's enabled in the flags. This is why
         #        all of the available LFH material references it as a single-element.
-
-        def BlockUnits(self, size):
-            '''Return the block units when given a ``size``'''
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-
-            # Figure out what the proper size should be when adding the
-            # size of the header and a value for rounding.
-            size_and_header = size + blocksize + 7
-
-            # Now we can divide the total size by the blocksize in order
-            # to get the actual number of units.
-            units = math.floor(size_and_header / (1. * blocksize))
-            return math.trunc(units)
-
-        def BucketByUnits(self, units):
-            '''Iterate through all of the buckets finding the smallest one that can contain the requested number of units.'''
-            for index, item in enumerate(self['Buckets']):
-                if units <= item['BlockUnits'].int():
-                    return item
-                continue
-            raise error.NotFoundException(self, 'BucketByUnits', message="Unable to find a Bucket for the requested units ({:#x})".format(units))
-
-        def Bucket(self, size):
-            '''Return the Bucket given a ``size``'''
-            units = self.BlockUnits(size)
-            return self.BucketByUnits(units)
-
-        def SegmentInfo(self, size):
-            '''Return the HEAP_LOCAL_SEGMENT_INFO for a specific ``size``'''
-            bucket = self.Bucket(size)
-            index = bucket['SizeIndex'].int()
-
-            # If we are using the "SegmentInfoArrays" pointer array, then index into it.
-            if 'SegmentInfoArrays' in self:
-                segmentinfoarray = self['SegmentInfoArrays']
-                segmentinfo = segmentinfoarray[index]
-
-                # If the pointer is defined, then we can dereference it.
-                if segmentinfo.int():
-                    return segmentinfo.d.li
-
-                # Otherwise we'll just return the pointer and warn the user about it.
-                units = bucket['BlockUnits'].int()
-                logging.warning("{:s} : Returning SegmentInfoArrays[{:d}] for BlockUnits {:#x} (size {:#x}) despite it being unset".format(self.instance(), index, units, size))
-                return segmentinfo
-
-            # Otherwise we need to descend into the LocalData before we find our array.
-            localdata = self['LocalData']
-            segmentinfoarray = localdata['SegmentInfo']
-            return segmentinfoarray[index]
 
         def __init__(self, **attrs):
             super(LFH_HEAP, self).__init__(**attrs)
@@ -2156,6 +2111,54 @@ if 'LFH':
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
+        def BucketByUnits(self, units):
+            '''Iterate through all of the buckets finding the smallest one that can contain the requested number of units.'''
+            for index, item in enumerate(self['Buckets']):
+                if units <= item['BlockUnits'].int():
+                    return item
+                continue
+            raise error.NotFoundException(self, 'BucketByUnits', message="Unable to find a Bucket for the requested units ({:#x})".format(units))
+
+        def BucketByIndex(self, index, reload=False):
+            '''Return the Bucket for a given index.'''
+            buckets = self['Buckets'].l if reload else self['Buckets'].li
+            return buckets[index]
+
+        def SegmentInfoByUnits(self, units):
+            '''Return the HEAP_LOCAL_SEGMENT_INFO for a specific number of units.'''
+            bucket = self.BucketByUnits(units)
+            index = bucket['SizeIndex'].int()
+
+            # If we are using the "SegmentInfoArrays" pointer array, then index into it.
+            if 'SegmentInfoArrays' in self:
+                segmentinfoarray = self['SegmentInfoArrays']
+                result = segmentinfoarray[index]
+
+            # Otherwise we need to descend into the LocalData before we find our array.
+            else:
+                localdata = self['LocalData']
+                segmentinfoarray = localdata['SegmentInfo']
+                result = segmentinfoarray[index]
+
+            # ...and that was it.
+            return result
+
+        def Bucket(self, size):
+            '''Return the Bucket for the requested ``size``.'''
+            heap = self['Heap'].d
+
+            # We actually don't need the heap for anything else which is why we don't load it.
+            units = heap.BlockUnits(size)
+            return self.BucketByUnits(units)
+
+        def SegmentInfo(self, size):
+            '''Return the HEAP_LOCAL_SEGMENT_INFO for the given ``size``.'''
+            heap = self['Heap'].d
+
+            # We actually don't need the heap for anything else which is why we don't load it.
+            units = heap.BlockUnits(size)
+            return self.SegmentInfoByUnits(units)
+
 if 'Heap':
     class HEAP_SEGMENT(pstruct.type, versioned):
         def __init__(self, **attrs):
@@ -2187,7 +2190,7 @@ if 'Heap':
                     (_HEAP_ENTRY, 'Entry'),
                     (HEAP_SIGNATURE, 'SegmentSignature'),
                     (ULONG, 'SegmentFlags'),
-                    (lambda s: dyn.clone(LIST_ENTRY, _sentinel_='Blink', _path_=['SegmentListEntry'], _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from HEAP
+                    (lambda self: dyn.clone(LIST_ENTRY, _sentinel_='Blink', _path_=['SegmentListEntry'], _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentListEntry'),   # XXX: entry comes from HEAP
                     (P(HEAP), 'Heap'),
                     (PVOID, 'BaseAddress'),
                     (ULONG, 'NumberOfPages'),
@@ -2308,80 +2311,9 @@ if 'Heap':
         ]
 
     class HEAP(pstruct.type, versioned):
-        def UncommittedRanges(self):
-            '''Iterate through the list of UncommittedRanges(UCRList) for the HEAP'''
-            for item in self['UCRList'].walk():
-                yield item
-            return
-
-        def Segments(self):
-            '''Iterate through the list of Segments(SegmentList) for the HEAP'''
-            for item in self['SegmentList'].walk():
-                yield item
-            return
-
-        def HeapListLookup(self, blockindex):
-            '''Return the correct (recent) HEAP_LIST_LOOKUP structure according to the ``blockindex`` (size / blocksize)'''
-            if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, 'HeapListLookup', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-
-            # FIXME: factor in BlocksIndex.BaseIndex and BlocksIndex.ExtraItem
-            p = self['BlocksIndex'].d.l
-            while blockindex >= p['ArraySize'].int():
-                if p['ExtendedLookup'].int() == 0:
-                    raise error.ListHintException(self, 'HeapListLookup', message='Unable to locate ListHint for blockindex', blockindex=blockindex, index=p['ArraySize'].int()-1, lookup=p)
-                p = p['ExtendedLookup'].d.l
-            return p
-
-        def ListHint(self, size):
-            '''Return the ListHint from the BlockIndex according to the specified ``size``'''
-            if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-
-            # Figure out what the proper size would be if we add
-            # the size of the header and a value for rounding.
-            size_and_header = size + blocksize + 7
-
-            # Now with the total size, we can divide it by the blocksize
-            # in order to get the BlockIndex.
-            bi = math.trunc(math.floor(size_and_header / (1. * blocksize)))
-
-            # Use the BlockIndex with the correct BlockList in order
-            # to get the ListHint for the desired size.
-            blocklist = self.HeapListLookup(bi)
-            return blocklist.ListHint(bi)
-
-        def Bucket(self, size):
-            '''Find the correct Heap Bucket from the ListHint for the given ``size``'''
-            entry = self.ListHint(size)
-
-            # If our list entry is pointing to a FreeListBucket, then we need
-            # to dereference the Blink pointer to get to the actual bucket.
-            if isinstance(entry, FreeListBucket):
-                if entry['Blink'].int() == 0:
-                    raise error.NotFoundException(self, 'Bucket', message="Unable to find a Bucket for the requested size ({:#x})".format(size), entry=entry, size=size)
-                return entry['Blink'].d.li
-
-            # Otherwise this is a linked-list of heap chunks that will need to be walked.
-            return entry
-
         class _FreeLists(parray.type):
             _object_, length = fpointer(_HEAP_CHUNK, 'ListEntry'), 128
-
-        def FreeLists(self, size):
-            freelists = self['FreeLists']
-            if isinstance(freelists, self._FreeLists):
-                listhints = self['FreeListsInUseUlong']
-                raise error.InvalidHeapType(self, 'FreeLists', message='Unable to walk all the entries in the lookaside lists')
-
-            # FIXME: properly walk through the BlocksIndex.ListHints to find the next entry
-            #        that has its Flink set so that we can start closer to our goal.
-
-            # walk through the freelists until we find one that will fit our requested size
-            iterable = (item for item in freelists.walk() if size <= item['Header'].Size())
-            result = next(iterable)
-            return result
+            # FIXME: the ListEntry that this directly points to should have its sentinel value set.
 
         class _Encoding(pstruct.type, versioned):
             _fields_ = [
@@ -2453,7 +2385,7 @@ if 'Heap':
                     (self._FreeLists, 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (PVOID, 'CommitRoutine'),
-                    (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (UCHAR, 'LastSegmentIndex'),
@@ -2500,7 +2432,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
-                    (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
@@ -2549,7 +2481,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
-                    (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
@@ -2606,7 +2538,7 @@ if 'Heap':
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),   # FIXME: this is encoded with something somewhere
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
                     (rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA, 'CommitLimitData'),
-                    (P(lambda s: FrontEndHeap.lookup(s.p['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
@@ -2625,79 +2557,212 @@ if 'Heap':
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
+        def UncommittedRanges(self):
+            '''Iterate through the list of UncommittedRanges(UCRList) for the HEAP'''
+            for item in self['UCRList'].walk():
+                yield item
+            return
+
+        def Segments(self):
+            '''Iterate through the list of Segments(SegmentList) for the HEAP'''
+            for item in self['SegmentList'].walk():
+                yield item
+            return
+
+        def BlockUnits(self, size):
+            '''Return the correct number of units when given a ``size``.'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+
+            # Figure out what the proper size should be when adding the
+            # size of the header and a value for rounding.
+            size_and_header = size + blocksize + 7
+
+            # Now we can divide the total size by the blocksize in order
+            # to get the actual number of units.
+            units = math.floor(size_and_header / (1. * blocksize))
+            return math.trunc(units)
+
+        def BlocksIndex(self, size, reload=False):
+            '''Return the correct HeapList for the given size.'''
+            units = self.BlockUnits(size)
+
+            # Now that we have the units, dereference the BlocksIndex to start
+            # and then use the number of units to figure out the correct one.
+            bi = self['BlocksIndex'].d.l if reload else self['BlocksIndex'].d.li
+            return bi.HeapList(units)
+
+        def FreeList(self, size):
+            '''Iterate through the freelist until we find a chunk that's of the correct size.'''
+            freelists = self['FreeLists']
+            if isinstance(freelists, self._FreeLists):
+                listhints = self['FreeListsInUseUlong']
+                # FIXME: this used to be implemented somewhere before everything was consolidated.
+                raise error.InvalidHeapType(self, 'FreeLists', message='Unable to walk all the entries in the lookaside list')
+
+            # walk through the freelists until we find one that will fit our requested size
+            iterable = (item for item in freelists.walk() if size <= item['Header'].Size())
+            result = next(iterable)
+            return result
+
+        def FreeListByBucket(self, size, reload=False):
+            '''Use the BlocksIndex to find the FreeList for a given size.'''
+            units = self.BlockUnits(size)
+
+            # We start immediately with the BlocksIndex, by finding the correct one.
+            bi = self['BlocksIndex'].d.l if reload else self['BlocksIndex'].d.li
+            blocklist = bi.HeapList(units, reload=reload)
+
+            # Next, we'll check its bitmap to see if the exact slot is available
+            # and return that immediately if so.
+            if blocklist.Check(units, reload=reload):
+                slot = blocklist.ListHint(units, reload=reload)
+
+                # This should give us the correct slot, so the last thing to do
+                # is to dereference it so we can return it to the caller. If the
+                # list has an ExtraItem, then we don't get an immediate pointer
+                # and will need to call a method to get to the list of chunks.
+                if blocklist['ExtraItem'].int():
+                    return slot.FreeChunk()
+                return slot.d
+
+            # If the bitmap didn't have a bit set, then warn the user that we're
+            # going to scan for the next largest chunk that will likely get split.
+            logging.warning("{:s} : An chunk of the exact number of units ({:d}) was not found in the heap list at {:s}. Scanning for the chunk that will be split.".format(self.instance(), units, blocklist.instance()))
+            slot = blocklist.Larger(units, reload=reload)
+
+            # Now we can return the next chunk that should get split calling
+            # on a helper method if the block list has an extra item.
+            if blocklist['ExtraItem'].int():
+                return slot.FreeChunk()
+            return slot.d
+
+        def ListHint(self, size, reload=True):
+            '''Return the ListHint from the BlockIndex according to the specified ``size``'''
+            if not self['FrontEndHeapType']['LFH']:
+                raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            units = self.BlockUnits(size)
+
+            # Use the BlockIndex with the correct BlockList in order
+            # to get the ListHint for the desired number of units.
+            bi = self['BlocksIndex'].d.l if reload else self['BlocksIndex'].d.li
+            blocklist = bi.HeapList(units, reload=reload)
+
+            # Now we can simply use it to return the ListHint that was requested.
+            return blocklist.ListHint(bi)
+
     class HEAP_LIST_LOOKUP(pstruct.type, versioned):
+        def __ExtendedLookup(self):
+            return P(HEAP_LIST_LOOKUP)
+
         def __ListsInUseUlong(self):
-            count = self.ListHintsCount()
-            target = dyn.clone(ListsInUseUlong, length=count >> 5)
+            arraysize, baseindex = (self[fld].li.int() for fld in ['ArraySize', 'BaseIndex'])
+            count = (arraysize - baseindex) * (1. / 32)
+            target = dyn.clone(ListsInUseUlong, length=math.trunc(count))
             return P(target)
 
         class _ListHints(parray.type):
             _object_, length = PVOID, 0
+            # FIXME: we can summarize this by at least showing the number of entries
 
         def __ListHints(self):
-            count, sentinel = self.ListHintsCount(), self['ListHead'].li
-            ptr = fpointer(_HEAP_CHUNK, 'ListEntry')
-            element = dyn.clone(FreeListBucket, _object_=ptr, _path_=['ListEntry'], _sentinel_=sentinel.int())
-            target = dyn.clone(self._ListHints, _object_=element, length=count)
-            return P(target)
+            extra, sentinel, arraysize, baseindex = (self[fld].li for fld in ['ExtraItem', 'ListHead', 'ArraySize', 'BaseIndex'])
 
-        def __ListHints_WIN8(self):
-            count, sentinel = self.ListHintsCount(), self['ListHead'].li
-            ptr = fpointer(_HEAP_CHUNK, 'ListEntry')    # FIXME: we need to assign the sentinel address for these free chunks
-            target = dyn.clone(self._ListHints, _object_=ptr, length=count)
-            return P(target)
+            # If there's no "ExtraItems", then "ListHints" is just a list of pointers to free chunks.
+            ptr, count = fpointer(_HEAP_CHUNK, 'ListEntry'), arraysize.int() - baseindex.int()
+            if extra.int() == 0:
+                result = dyn.clone(self._ListHints, _object_=ptr, length=count)
 
-        def __init__(self, **attrs):
-            super(HEAP_LIST_LOOKUP, self).__init__(**attrs)
-            f = self._fields_ = []
-            aligned = dyn.align(8 if getattr(self, 'WIN64', False) else 4)
+            # Otherwise, "ListHints" is a list of FreeListBucket which also contains information about the number of allocations.
+            elif extra.int() == 1:
+                item = dyn.clone(FreeListBucket, _object_=ptr, _path_=['ListEntry'], _sentinel_=sentinel.int())
+                result = dyn.clone(self._ListHints, _object_=item, length=count)
 
-            f.extend([
-                (P(HEAP_LIST_LOOKUP), 'ExtendedLookup'),
-
-                (ULONG, 'ArraySize'),
-                (ULONG, 'ExtraItem'),                           # XXX: is this what causes the different type for ListHints?
-                (ULONG, 'ItemCount'),
-                (ULONG, 'OutOfRangeItems'),
-                (ULONG, 'BaseIndex'),
-
-                (aligned, 'align(ListHead)'),
-                #(P(dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry'))), 'ListHead'),
-                #(P(dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(HEAP, 'FreeLists'))), 'ListHead'),
-                (fpointer(HEAP, 'FreeLists'), 'ListHead'),      # FIXME: points to HEAP.FreeLists (used as sentinel address)
-                (self.__ListsInUseUlong, 'ListsInUseUlong'),
-            ])
-
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
-                f.extend([
-                    (self.__ListHints, 'ListHints'),
-                ])
+            # We've never seen any other value, so raise an exception so that the user knows what's up.
             else:
-                f.extend([
-                    (self.__ListHints_WIN8, 'ListHints'),
-                ])
-            return
+                raise error.ListHintException(self, 'ListHints', message="Unable to determine format of \"ListHints\" field due to value of \"ExtraItem\" ({:d})".format(extra.int()))
+            return P(result)
 
-        def ListHintsCount(self):
-            '''Return the number of FreeLists entries within this structure'''
-            return self['ArraySize'].li.int() - self['BaseIndex'].li.int()
+        _fields_ = [
+            (__ExtendedLookup, 'ExtendedLookup'),
+            (ULONG, 'ArraySize'),
+            (ULONG, 'ExtraItem'),                           # XXX: is this what causes the different type for ListHints?
+            (ULONG, 'ItemCount'),
+            (ULONG, 'OutOfRangeItems'),
+            (ULONG, 'BaseIndex'),
 
-        def ListHint(self, blockindex):
-            '''Find the correct (recent) ListHint for the specified ``blockindex``'''
-            res = blockindex - self['BaseIndex'].int()
-            if 0 > res or self.ListHintsCount() < res:
-                raise error.NdkAssertionError(self, 'ListHint', message="Requested BlockIndex is out of bounds : {:d} <= {:d} < {:d}".format(self['BaseIndex'].int(), blockindex, self['ArraySize'].int()))
+            (lambda self: dyn.align(8 if getattr(self, 'WIN64', False) else 4), 'align(ListHead)'),
+            #(P(dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry'))), 'ListHead'),
+            #(P(dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(HEAP, 'FreeLists'))), 'ListHead'),
+            (fpointer(HEAP, 'FreeLists'), 'ListHead'),      # FIXME: points to HEAP.FreeLists (used as sentinel address)
+            (__ListsInUseUlong, 'ListsInUseUlong'),
+            (__ListHints, 'ListHints'),
+        ]
 
-            # First we'll check to see if the blockindex that the user gave us
-            # is actually set in our "ListHints".
-            freelist = self['ListsInUseUlong'].d.l
-            hints = self['ListHints'].d.l
-            if freelist.check(res):
-                return hints[res]
+        def HeapList(self, units, reload=False):
+            '''Traverse all of the available HEAP_LIST_LOOKUP to identify the one responsible for a particular number of units.'''
+            index = units
 
-            # Otherwise we'll just warn the user and return it anyways.
-            logging.warning("{:s} : Returning ListHint[{:d}] despite ListsInUseUlong[{:d}] being unset".format(self.instance(), res, res))
-            return hints[res]
+            # This heap list is indexed by the number of block units, so we can
+            # linearly convert it into the slot to lookup.
+            while self['ExtendedLookup'].int():
+                slot = index - self['BaseIndex'].int()
+                if slot < self['ArraySize'].int():
+                    return self
+                self = self['Extendedlookup'].d.l if reload else self['ExtendedLookup'].d.li
+
+            # We ran out of arrays to traverse, so we need to figure out what actually
+            # happened so that we can let the user know.
+            slot = index - self['BaseIndex'].int()
+            if slot < 0:
+                raise error.ListHintException(self, 'HEAP_LIST_LOOKUP', message="Invalid index was requested ({:d}) which is not supported by the current {:s} with a minimum BaseIndex of {:d}.".format(index, self.instance(), self['BaseIndex'].int()), index=index, base=self['BaseIndex'].int(), size=self['ArraySize'].int(), lookup=self)
+
+            elif self['ArraySize'] <= slot:
+                logging.warning("{:s} : The requested index ({:d}) is an OutOfRangeItem and is not within the boundaries ({:d}<>{:d}) of the last {:s}.".format(self.instance(), index, self['BaseIndex'].int(), self['BaseIndex'].int() + self['ArraySize'].int(), self.classname()))
+
+            # Return the HEAP_LIST_LOOKUP that we stopped on.
+            return self
+
+        def ListHint(self, units, reload=False):
+            '''Return the correct "ListHints" entry for the given number of units.'''
+            slot = units - self['BaseIndex'].int()
+            if not (0 <= slot < self['ArraySize'].int()):
+                raise error.ListHintException(self, 'HEAP_LIST_LOOKUP', message="Invalid number of units was requested ({:d}) which is not supported by the current {:s} with a range of {:d}<>{:d}.".format(units, self.instance(), self['BaseIndex'].int(), self['BaseIndex'].int() + self['ArraySize'].int()), index=units, base=self['BaseIndex'].int(), size=self['ArraySize'].int(), lookup=self)
+
+            # Grab the hints and return the slot that the user requested.
+            slots = self['ListHints'].d.l if reload else self['ListHints'].d.li
+            return slots[slot]
+
+        def Larger(self, units, reload=False):
+            '''Return the nearest slot larger than the specified number of units that's in use.'''
+            slot = units - self['BaseIndex'].int()
+            if not (0 <= slot < self['ArraySize'].int()):
+                raise error.ListHintException(self, 'HEAP_LIST_LOOKUP', message="Invalid number of units was requested ({:d}) which is not supported by the current {:s} with a range of {:d}<>{:d}.".format(units, self.instance(), self['BaseIndex'].int(), self['BaseIndex'].int() + self['ArraySize'].int()), index=units, base=self['BaseIndex'].int(), size=self['ArraySize'].int(), lookup=self)
+
+            # Grab the bitmap and scan for the next slot that's in use.
+            hints = self['ListsInUseUlong'].d.l if reload else self['ListsInUseUlong'].d.li
+            nearest = hints.scan(slot + 1)
+            return self.ListHint(nearest, reload=reload)
+
+        def Smaller(self, units, reload=False):
+            '''Return the nearest slot smaller than the specified number of units that's in use.'''
+            slot = units - self['BaseIndex'].int()
+            if not (0 <= slot < self['ArraySize'].int()):
+                raise error.ListHintException(self, 'HEAP_LIST_LOOKUP', message="Invalid number of units was requested ({:d}) which is not supported by the current {:s} with a range of {:d}<>{:d}.".format(units, self.instance(), self['BaseIndex'].int(), self['BaseIndex'].int() + self['ArraySize'].int()), index=units, base=self['BaseIndex'].int(), size=self['ArraySize'].int(), lookup=self)
+
+            # Grab the bitmap and scan for the next slot that's in use.
+            hints = self['ListsInUseUlong'].d.l if reload else self['ListsInUseUlong'].d.li
+            nearest = hints.scanreverse(slot - 1)
+            return self.ListHint(nearest, reload=reload)
+
+        def Check(self, units, reload=False):
+            '''Return whether the specified slot is actually in use according to the bitmap.'''
+            slot = units - self['BaseIndex'].int()
+            if not (0 <= slot < self['ArraySize'].int()):
+                raise error.ListHintException(self, 'HEAP_LIST_LOOKUP', message="Invalid number of units was requested ({:d}) which is not supported by the current {:s} with a range of {:d}<>{:d}.".format(units, self.instance(), self['BaseIndex'].int(), self['BaseIndex'].int() + self['ArraySize'].int()), index=units, base=self['BaseIndex'].int(), size=self['ArraySize'].int(), lookup=self)
+
+            # Grab the bitmap and return whether the request slot is in use.
+            hints = self['ListsInUseUlong'].d.l if reload else self['ListsInUseUlong'].d.li
+            return True if hints.check(slot) else False
 
         def enumerate(self):
             inuse, hints = (self[fld].d.li for fld in ['ListsInUseUlong', 'ListHints'])
