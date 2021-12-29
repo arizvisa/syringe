@@ -606,6 +606,7 @@ class SLIST_HEADER(pstruct.type, versioned):
         target = getattr(self, '_object_', SLIST_ENTRY._object_)
         return dyn.clone(SLIST_ENTRY, _path_=path, _object_=target)
 
+    @pbinary.littleendian
     class _Header8(pbinary.struct):
         _fields_ = [
             (16, 'Depth'),
@@ -618,6 +619,7 @@ class SLIST_HEADER(pstruct.type, versioned):
             (3, 'Region'),
         ]
 
+    @pbinary.littleendian
     class _Header16(pbinary.struct):
         _fields_ = [
             (16, 'Depth'),
@@ -629,6 +631,7 @@ class SLIST_HEADER(pstruct.type, versioned):
             (60, 'NextEntry'),
         ]
 
+    @pbinary.littleendian
     class _HeaderX64(pbinary.struct):
         _fields_ = [
             (16, 'Depth'),
@@ -941,6 +944,9 @@ class BitmapBitsArray(parray.type):
     def scan(self, position):
         res = self.bitmap()
         return bitmap.scan(res, True, position)
+    def scanreverse(self, position):
+        res = self.bitmap()
+        return bitmap.scanreverse(res, True, position)
     def iterate(self):
         '''iterate through the bitmap returning all the indices that are true'''
         for index in range(self.bits()):
@@ -985,6 +991,9 @@ class BitmapBitsBytes(ptype.block):
     def scan(self, position):
         res = self.bitmap()
         return bitmap.scan(res, True, position)
+    def scanreverse(self, position):
+        res = self.bitmap()
+        return bitmap.scanreverse(res, True, position)
     def iterate(self):
         '''iterate through the bitmap returning all the indices that are true'''
         for index in range(self.bits()):
@@ -999,7 +1008,7 @@ class BitmapBitsBytes(ptype.block):
         return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
     def details(self):
         bytes_per_row = 8
-        iterable = iter(bitmap.string(self.bitmap(), reversed=True))
+        iterable = (item for item in bitmap.string(self.bitmap(), reversed=True))
         rows = izip_longest(*[iterable] * 8 * bytes_per_row)
         res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
         items = map(str().join, res)
@@ -1131,6 +1140,7 @@ class XMM_REGISTER_AREA(pstruct.type):
         (M128A, 'Xmm15'),
     ]
 
+@pbinary.littleendian
 class CONTEXT_(pbinary.flags):
     '''DWORD'''
     _fields_ = [

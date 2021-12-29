@@ -1,6 +1,7 @@
 import ptypes
 from ptypes import *
 
+@pbinary.littleendian
 class selector(pbinary.struct):
     _fields_ = [(13, 'Index'), (1, 'TI'), (2, 'RPL')]
 class systemtable(pstruct.type):
@@ -24,16 +25,21 @@ class descriptor(pbinary.struct):
         (16, 'Limit[Low]'),
     ]
 
+@pbinary.littleendian
 class descriptor64(descriptor):
     _fields_ = [(32, 'Reserved'), (32, 'Base[High]')] + descriptor._fields_
+descriptor = pbinary.littleendian(descriptor)
 
+@pbinary.littleendian
 class general(pbinary.struct):
     _fields_ = [(32, regname) for regname in ['eax', 'ecx', 'edx', 'ebx', 'esp', 'ebp', 'esi', 'edi']]
 
+@pbinary.littleendian
 class rex(pbinary.struct):
     _fields_ = [(64, regname) for regname in ['rax', 'rbx', 'rcx', 'rdx', 'rsi', 'rdi', 'rbp', 'rsp']]
     _fields_+= [(64, "r{:d}".format(regnum)) for regnum in range(8, 16)]
 
+@pbinary.littleendian
 class segment(pbinary.struct):
     _fields_ = [(16, regname) for regname in ['cs', 'ds', 'ss', 'es', 'fs', 'gs']]
 
@@ -66,10 +72,14 @@ class eflags(pbinary.flags):
         (1, 'VM'), #V8086 Mode
         (1, 'RF'), #Resume Flag
     ] + flags._fields_
+flags = pbinary.littleendian(flags)
 
+@pbinary.littleendian
 class rflags(pbinary.flags):
-    _fields_ = [(10+32, 'reserved')]+eflags._fields_[1:]
+    _fields_ = [(10+32, 'reserved')] + eflags._fields_[1:]
+eflags = pbinary.littleendian(eflags)
 
+@pbinary.littleendian
 class fpstate(pbinary.struct):
     """
     Intel FPU register-space/region
@@ -93,13 +103,17 @@ class fpstate(pbinary.struct):
         (1, 'IM'),  # Invalid Operand
     ]
 
+@pbinary.littleendian
 class sse(pbinary.array):
     _object_, length = 32 * 8, 8
+@pbinary.littleendian
 class mmx(pbinary.array):
     _object_, length = 16 * 8, 8
+@pbinary.littleendian
 class fpu(pbinary.array):
     _object_, length = 10 * 8, 8
 
+@pbinary.littleendian
 class fpctrl(pbinary.struct):
     _fields_ = [
         (3, 'reserved0'),
@@ -115,6 +129,7 @@ class fpctrl(pbinary.struct):
         (1, 'IM'),  # Invalid Operation mask
     ]
 
+@pbinary.littleendian
 class frstor(pbinary.struct):
     # FIXME: this size should be 108 bytes, not 100
     _fields_ = [
@@ -127,13 +142,14 @@ class frstor(pbinary.struct):
         (fpu, 'ST'),
     ]
 
+@pbinary.littleendian
 class gdt(pbinary.array):
-    #length = 8192
-    _object_ = descriptor
+    _object_, length = descriptor, 8192
+@pbinary.littleendian
 class ldt(pbinary.array):
-    #length = 8192
-    _object_ = descriptor
+    _object_, length = descriptor, 8192
 
+@pbinary.littleendian
 class cr0(pbinary.flags):
     _fields_ = [
         (1, 'PG'), #Paging
@@ -152,6 +168,7 @@ class cr0(pbinary.flags):
         (1, 'PE'), #Protected Mode Enable
     ]
 
+@pbinary.littleendian
 class cr3(pbinary.flags):
     _fields_ = [
         (20, 'Directory'),
@@ -161,6 +178,7 @@ class cr3(pbinary.flags):
         (3, 'Ignored'),
     ]
 
+@pbinary.littleendian
 class cr4(pbinary.flags):
     _fields_ = [
         (10, 'reserved'),
@@ -248,6 +266,7 @@ class tss64(pstruct.type):
         (pint.uint16_t, 'I/O Map Base Address'),
     ]
 
+@pbinary.littleendian
 class linear32(pbinary.struct):
     _fields_ = [
         (10, 'directory'),
@@ -255,12 +274,14 @@ class linear32(pbinary.struct):
         (12, 'offset'),
     ]
 
+@pbinary.littleendian
 class linear32ps(pbinary.struct):
     _fields_ = [
         (10, 'directory'),
         (22, 'offset'),
     ]
 
+@pbinary.littleendian
 class linear32pae(pbinary.struct):
     _fields_ = [
         (2, 'directory pointer'),
@@ -269,6 +290,7 @@ class linear32pae(pbinary.struct):
         (12, 'offset'),
     ]
 
+@pbinary.littleendian
 class linear64(pbinary.struct):
     _fields_ = [
         (16, 'reserved'),
@@ -279,6 +301,7 @@ class linear64(pbinary.struct):
         (12, 'offset'),
     ]
 
+@pbinary.littleendian
 class linear64ps(pbinary.struct):
     _fields_ = [
         (16, 'reserved'),
@@ -288,6 +311,7 @@ class linear64ps(pbinary.struct):
         (21, 'offset'),
     ]
 
+@pbinary.littleendian
 class linear64pae(pbinary.struct):
     _fields_ = [
         (16, 'reserved'),
@@ -296,6 +320,7 @@ class linear64pae(pbinary.struct):
         (30, 'offset'),
     ]
 
+@pbinary.littleendian
 class pde(pbinary.flags):
     _fields_ = [
         (3, 'Ignored'),
@@ -310,6 +335,7 @@ class pde(pbinary.flags):
         (1, 'P'),
     ]
 
+@pbinary.littleendian
 class pte(pbinary.flags):
     _fields_ = [
         (3, 'Ignored'),
@@ -324,12 +350,14 @@ class pte(pbinary.flags):
         (1, 'P'),
     ]
 
+@pbinary.littleendian
 class pde32(pbinary.struct):
     _fields_ = [
         (20, 'Address'),
         (pde, 'Flags'),
     ]
 
+@pbinary.littleendian
 class pde32ps(pbinary.struct):
     _fields_ = [
         (10, 'Address(Lo)'),
@@ -338,12 +366,14 @@ class pde32ps(pbinary.struct):
         (pde, 'Flags'),
     ]
 
+@pbinary.littleendian
 class pte32(pbinary.struct):
     _fields_ = [
         (20, 'Address'),
         (pte, 'Flags'),
     ]
 
+@pbinary.littleendian
 class pde64(pbinary.struct):
     _fields_ = [
         (1, 'XD'),
@@ -352,6 +382,7 @@ class pde64(pbinary.struct):
         (pde, 'Flags'),
     ]
 
+@pbinary.littleendian
 class pde64ps(pbinary.struct):
     _fields_ = [
         (1, 'XD'),
@@ -361,6 +392,7 @@ class pde64ps(pbinary.struct):
         (pde, 'Flags'),
     ]
 
+@pbinary.littleendian
 class pte64(pbinary.flags):
     _fields_ = [
         (1, 'XD'),
