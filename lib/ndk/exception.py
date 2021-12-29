@@ -1,6 +1,5 @@
 import ptypes
 from ptypes import *
-pbinary.setbyteorder(pbinary.littleendian)
 
 from .datatypes import *
 
@@ -388,6 +387,7 @@ RUNTIME_FUNCTION = IMAGE_RUNTIME_FUNCTION_ENTRY
 
 ### XXX: Everything above this is also defined in pecoff.portable.exceptions
 
+@pbinary.littleendian
 class EXCEPTION_FLAGS(pbinary.struct):
     _fields_ = [
         (1,    'NONCONTINUABLE'),
@@ -603,6 +603,7 @@ class ThrowInfo(pstruct.type):
 
 # corrected with http://www.geoffchappell.com/studies/msvc/language/predefined/index.htm?tx=12,14
 
+@pbinary.littleendian
 class CHD_(pbinary.flags):
     '''unsigned_long'''
     _fields_ = [
@@ -623,6 +624,7 @@ class RTTIClassHierarchyDescriptor(pstruct.type):
         (__pBaseClassArray, 'pBaseClassArray'),
     ]
 
+@pbinary.littleendian
 class BCD_(pbinary.flags):
     '''unsigned_long'''
     _fields_ = [

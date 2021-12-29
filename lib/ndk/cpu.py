@@ -1,8 +1,6 @@
 import ptypes
 from ptypes import *
 
-pbinary.setbyteorder(ptypes.config.byteorder.littleendian)
-
 class selector(pbinary.struct):
     _fields_ = [(13, 'Index'), (1, 'TI'), (2, 'RPL')]
 class systemtable(pstruct.type):

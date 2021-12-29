@@ -144,6 +144,8 @@ def setbyteorder(endianness, **length):
     if endianness in {config.byteorder.bigendian, config.byteorder.littleendian}:
         result = partial.length
         partial.length = 0 if endianness is config.byteorder.bigendian else length.get('length', Config.integer.size)
+        if partial.length > 0:
+            Log.warning("pbinary.setbyteorder : the byteorder for the pbinary module has been globally changed to little-endian which can affect any definitions that have a variable size.")
         return config.byteorder.littleendian if result > 1 else config.byteorder.bigendian
 
     # If we were given a word size, then recurse with the parameters in the correct place
