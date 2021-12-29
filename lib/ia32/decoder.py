@@ -37,7 +37,7 @@ def decodeInteger(string, signed=False):
     '''given a string encoded in the native byte-order, will produce an integer'''
     res = bitmap.new(0,0)
     for ch in string:
-        res = bitmap.insert(res, (ord(ch),8))
+        res = bitmap.append(res, (ord(ch),8))
     res,_ = res
     if not signed:
         return res

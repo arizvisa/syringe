@@ -105,7 +105,7 @@ class IMAGE_REL_I386(pint.enum, uint16):
         result = ptypes.bitmap.zero
         generator = ( bitmap.new(ch, 8) for ch in data[relocationva : relocationva + 4] )
         for x in generator:
-            result = bitmap.insert(result, x)
+            result = bitmap.append(result, x)
         result = bitmap.int(result)
 
         currentva = relocationva + 4

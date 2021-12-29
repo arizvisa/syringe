@@ -200,7 +200,7 @@ def shrink(bitmap, count):
 
 ## for treating a bitmap like an integer stream
 def push(bitmap, operand):
-    '''Append bitmap data to the end of the current bitmap
+    '''Push bitmap data into the front of the current bitmap (least significant).
 
     This treats the bitmap as a set of bits and thus ignores the signed bit.
     '''
@@ -215,10 +215,10 @@ def push(bitmap, operand):
     res |= number & nmask
     return res, rbits + (-abs(nbits) if rbits < 0 else +abs(nbits))
 
-def insert(bitmap, operand):
-    '''Insert bitmap data at the beginning of the bitmap
+def append(bitmap, operand):
+    '''Append bitmap data at the end of the bitmap (most significant).
 
-    This treats the bitmap as a set of bits and thus ignores the signed bit.
+    This treats the bitmap as a complete set of bits and thus ignores the signed bit.
     '''
     (result, rbits) = bitmap
     (number, nbits) = operand
@@ -230,9 +230,10 @@ def insert(bitmap, operand):
     res = (number & nmask) * shift
     res |= result & rmask
     return res, rbits + (-abs(nbits) if rbits < 0 else +abs(nbits))
+insert = append     # backwards-compatibility
 
 def consume(bitmap, bits):
-    '''Consume some number of bits off of the end of a bitmap
+    '''Consume some number of bits off of the end of a bitmap (most significant).
 
     If bitmap is signed, then return a signed integer.
     '''
@@ -254,7 +255,7 @@ def consume(bitmap, bits):
     return bitmap, res
 
 def shift(bitmap, bits):
-    '''Shift some number of bits off of the front of a bitmap
+    '''Shift some number of bits off of the front of a bitmap (least significant).
 
     If bitmap is signed, then return a signed integer.
     '''
@@ -705,10 +706,10 @@ if __name__ == '__main__':
     @TestCase
     def set_bitmap_unsigned_3():
         x = bitmap.new(0, 0)
-        x = bitmap.insert(x, (0x1, 4) )
-        x = bitmap.insert(x, (0x2, 4) )
-        x = bitmap.insert(x, (0x3, 4) )
-        x = bitmap.insert(x, (0x4, 4) )
+        x = bitmap.append(x, (0x1, 4) )
+        x = bitmap.append(x, (0x2, 4) )
+        x = bitmap.append(x, (0x3, 4) )
+        x = bitmap.append(x, (0x4, 4) )
         if bitmap.int(x) == 0x4321:
             raise Success
 
