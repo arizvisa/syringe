@@ -61,80 +61,97 @@ def scan(bitmap, value=True, position=0):
     '''Searches through bitmap for the specified value (least to most) and returns its position'''
     integer, size = bitmap
 
-    if not(0 <= position < abs(size)):
-        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
+    if not(1 - abs(size) <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, -abs(size), abs(size)))
+    index = position % abs(size) if size else 0
 
-    bitmask = pow(2, position)
-    for i in range(abs(size) - position):
+    bitmask = pow(2, index)
+    for i in range(abs(size) - index):
         if bool(integer & bitmask) == value:
-            return position + i
+            return index + i
         bitmask *= 2
-    raise ValueError("Unable to find a {:d} bit at position {:d} within the bitmap ({:s})".format(value, position, string(bitmap)))
+    raise ValueError("Unable to find a {:d} bit at position {:d} within the bitmap ({:s})".format(value, index, string(bitmap)))
+
+def scanreverse(bitmap, value=True, position=-1):
+    '''Searches through bitmap for the specified value (most to least) and returns its position'''
+    integer, size = bitmap
+
+    if not(1 - abs(size) <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d} <> {:d}".format(position, -abs(size), abs(size)))
+    index = position % abs(size) if size else 0
+
+    bitmask = pow(2, index)
+    for i in range(index):
+        if bool(integer & bitmask) == value:
+            return index - i
+        bitmask //= 2
+    raise ValueError("Unable to find a {:d} bit from position {:d} within the bitmap ({:s})".format(value, index, string(bitmap)))
 
 def runscan(bitmap, value, length, position=0):
     '''Will return the position of a run fulfilling the parameters in bitmap'''
     integer, size = bitmap
 
-    if not(0 <= position < abs(size)):
-        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
+    if not(1 - abs(size) <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d} <> {:d}".format(position, -abs(size), abs(size)))
+    index = position % abs(size) if size else 0
 
-    for run_integer, run_length in run(bitmap, position=position):
+    for run_integer, run_length in run(bitmap, position=index):
         # snag a run that best fits user's reqs
         if bool(run_integer & 1) == value and length <= run_length:
-            return position
-        position += run_length
+            return index
+        index += run_length
     raise ValueError("Unable to find a {:d} bit run of {:d} at position {:d} within the bitmap ({:s})".format(length, value, position, string(bitmap)))
 
 def runlength(bitmap, value, position=0):
     '''Returns the count of bits, starting at position'''
     integer, size = bitmap
-    if not(0 <= position < abs(size)):
-        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
+    if not(1 - abs(size) <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d} <> {:d}".format(position, -abs(size), abs(size)))
+    index = position % abs(size) if size else 0
     try:
-        result = scan(bitmap, not value, position) - position
+        result = scan(bitmap, not value, index) - index
     except ValueError:
-        result = abs(size) - position
+        result = abs(size) - index
     return result
 
 def run(bitmap, position=0):
     '''Iterates through all the runs in a given bitmap'''
     integer, size = bitmap
-    if not(0 <= position < abs(size)):
-        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
+    if not(1 - abs(size) <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d} <> {:d}".format(position, -abs(size), abs(size)))
+    index = position % abs(size) if size else 0
 
-    value, count = integer & pow(2, position), abs(size)
-    while position < count:
-        length = runlength((integer, size), value, position)
-        yield get(bitmap, position, length)
-        position = position + length
+    value, count = integer & pow(2, index), abs(size)
+    while index < count:
+        length = runlength((integer, size), value, index)
+        yield get(bitmap, index, length)
+        index = index + length
         value = not value
     return
 
 def set(bitmap, position, value=True, count=1):
     '''Store value into bitmap starting at position'''
     integer, size = bitmap
+    index = position % abs(size) if size else 0
 
-    if count < 0 or position < 0:
-        raise AssertionError("Invalid count or position : {:d} : {:d}".format(count, position))
-    if position + count > abs(size):
-        raise AssertionError("Attempted to set bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
+    if count < 0:
+        raise AssertionError("A negative count ({:d}) was specified".format(count))
 
-    mask, size = functools.reduce(lambda r, v: pow(2, v) | r, range(position, position + count), 0), abs(size)
+    mask, sizemask = functools.reduce(lambda aggregate, bit: pow(2, bit) | aggregate, range(index, index + count), 0), pow(2, abs(size)) - 1
     if value:
-        return integer | mask, size
-    return integer & ~mask, size
+        return integer | mask & sizemask, size
+    return integer & ~mask & sizemask, size
 
 def get(bitmap, position, count):
     '''Fetch count number of bits from bitmap starting at position'''
     integer, size = bitmap
+    index = position % abs(size) if size else 0
 
-    if count < 0 or position < 0:
-        raise AssertionError("Invalid count or position : {:d} : {:d}".format(count, position))
-    if position + count > abs(size):
-        raise AssertionError("Attempted to fetch bits outside bitmap : {:d} + {:d} > {:d}".format(position, count, size))
+    if count < 0:
+        raise AssertionError("A negative count ({:d}) was specified".format(count))
 
-    mask, size = functools.reduce(lambda r, v: pow(2, v) | r, range(position, position + count), 0), abs(size)
-    return (integer & mask) >> position, count
+    mask, size = functools.reduce(lambda aggregate, bit: pow(2, bit) | aggregate, range(index, index + count), 0), abs(size)
+    return (integer & mask) >> index, count
 
 def add(bitmap, integer):
     '''Adds an integer to the specified bitmap whilst preserving signedness'''
