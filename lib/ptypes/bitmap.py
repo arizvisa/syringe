@@ -41,67 +41,72 @@ def fit(integer):
 
 def string(bitmap, **kwargs):
     '''Returns bitmap as a formatted binary string starting with the most-significant-bits first'''
-    reverse = builtins.next((kwargs[k] for k in ('reverse', 'reversed') if k in kwargs), False)
+    reverse = builtins.next((kwargs[k] for k in ['reverse', 'reversed'] if k in kwargs), False)
     integer, size = bitmap
     res = "{:0{:d}b}".format(integer, abs(size))
     return str().join(reversed(res)) if reverse else res
 
 def hex(bitmap):
     '''Return bitmap as a hex string'''
-    n, s = bitmap
-    size = abs(s)
+    integer, size = bitmap
+    size = abs(size)
     length = math.trunc(math.ceil(size / 4.0))
-    if s < 0:
+    if size < 0:
         max, sign = pow(2, size), math.trunc(pow(2, size - 1))
-        res = n & (max - 1)
+        res = integer & (max - 1)
         return "{:+#0{:d}x}".format((res - max) if res & sign else res & (sign - 1), length + 3)
-    return "{:#0{:d}x}".format(n & pow(2, size) - 1, length + 2)
+    return "{:#0{:d}x}".format(integer & pow(2, size) - 1, length + 2)
 
 def scan(bitmap, value=True, position=0):
     '''Searches through bitmap for the specified value (least to most) and returns its position'''
     integer, size = bitmap
 
-    if position < 0 or position > abs(size):
-        raise AssertionError("Invalid position : {:d}".format(position))
+    if not(0 <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
 
-    size, bitmask = abs(size), pow(2, position)
-    for i in range(size):
-        if bool(integer & bitmask) == value or position >= size:
-            return position
+    bitmask = pow(2, position)
+    for i in range(abs(size) - position):
+        if bool(integer & bitmask) == value:
+            return position + i
         bitmask *= 2
-        position += 1
-    return position
+    raise ValueError("Unable to find a {:d} bit at position {:d} within the bitmap ({:s})".format(value, position, string(bitmap)))
 
 def runscan(bitmap, value, length, position=0):
     '''Will return the position of a run fulfilling the parameters in bitmap'''
+    integer, size = bitmap
 
-    if length >= 0 and position >= 0:
-        for run_integer, run_length in run(bitmap, position=position):
-            # snag a run that best fits user's reqs
-            if bool(run_integer & 1) == bool(value) and length <= run_length:
-                return position
-            position += run_length
-    raise ValueError("Unable to find a {:s} bit run of {:d} in bitmap".format(length, value))
+    if not(0 <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
+
+    for run_integer, run_length in run(bitmap, position=position):
+        # snag a run that best fits user's reqs
+        if bool(run_integer & 1) == value and length <= run_length:
+            return position
+        position += run_length
+    raise ValueError("Unable to find a {:d} bit run of {:d} at position {:d} within the bitmap ({:s})".format(length, value, position, string(bitmap)))
 
 def runlength(bitmap, value, position=0):
     '''Returns the count of bits, starting at position'''
     integer, size = bitmap
-    if position < 0 or position > abs(size):
-        raise AssertionError("Invalid position : {:d}".format(position))
-    return scan(bitmap, not value, position) - position
+    if not(0 <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
+    try:
+        result = scan(bitmap, not value, position) - position
+    except ValueError:
+        result = abs(size) - position
+    return result
 
 def run(bitmap, position=0):
     '''Iterates through all the runs in a given bitmap'''
     integer, size = bitmap
-    if position < 0 or position > abs(size):
-        raise AssertionError("Invalid position : {:d}".format(position))
+    if not(0 <= position < abs(size)):
+        raise AssertionError("Invalid position {:d} : {:d}<>{:d}".format(position, 0, abs(size)))
 
-    value, size = integer & 1, abs(size)
-    while size > 0:
-        length = runlength( (integer, size), value, position)
+    value, count = integer & pow(2, position), abs(size)
+    while position < count:
+        length = runlength((integer, size), value, position)
         yield get(bitmap, position, length)
-        size -= length
-        position += length
+        position = position + length
         value = not value
     return
 
@@ -337,12 +342,14 @@ class consumer(object):
         return "{!s} {!r} {:s}".format(cls, self.cache, string(self.cache))
 
 def repr(object):
-    integer, size = object
-    return "<type 'bitmap'> ({:#x}, {:d})".format(integer, size)
+    integer, length = value(object), size(object)
+    if signed(object):
+        return "<type 'bitmap'> ({:+#0{:d}x}, {:d})".format(integer, 3 + math.ceil(length / 4.), length)
+    return "<type 'bitmap'> ({:#0{:d}x}, {:d})".format(integer, 2 + math.ceil(length / 4.), length)
 
 def data(bitmap, **kwargs):
     '''Convert a bitmap to a string left-aligned to 8-bits. Defaults to big-endian.'''
-    reverse = builtins.next((kwargs[k] for k in ('reverse', 'reversed') if k in kwargs), False)
+    reverse = builtins.next((kwargs[k] for k in ['reverse', 'reversed'] if k in kwargs), False)
     integer, size = bitmap
 
     # align to 8-bits
@@ -353,8 +360,8 @@ def data(bitmap, **kwargs):
     # convert to an array of octets
     remove, res = consume if reverse else shift, []
     while bitmap[1] != 0:
-        bitmap, n = remove(bitmap, 8)
-        res.append(n)
+        bitmap, item = remove(bitmap, 8)
+        res.append(item)
 
     # convert it to a bytes
     return bytes(bytearray(res))
@@ -384,7 +391,7 @@ def value(bitmap):
         if integer & signmask:
             return (signmask - res) * -1
         return res & (signmask - 1)
-    return integer
+    return integer & pow(2, size) - 1
 int = num = number = value
 
 def hamming(bitmap):
