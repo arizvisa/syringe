@@ -933,13 +933,14 @@ class BitmapBitsArray(parray.type):
         return self.size() << 3
     def bitmap(self):
         iterable = (bitmap.new(item.int(), 8 * item.size()) for item in self)
-        return functools.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        return functools.reduce(bitmap.append, iterable, bitmap.zero)
     def check(self, index):
         bits = 8 * self.new(self._object_).a.size()
         res, offset = self[index // bits], index % bits
         return res.int() & pow(2, offset) and 1
-    def run(self):
-        return self.bitmap()
+    def scan(self, position):
+        res = self.bitmap()
+        return bitmap.scan(res, True, position)
     def iterate(self):
         '''iterate through the bitmap returning all the indices that are true'''
         for index in range(self.bits()):
@@ -958,10 +959,10 @@ class BitmapBitsArray(parray.type):
         bytes_per_row = bytes_per_item * (1 if self.bits() < 0x200 else 2)
         bits_per_row = bits_per_item * (1 if self.bits() < 0x200 else 2)
 
-        items = bitmap.split(self.bitmap(), bits_per_row)
+        items = reversed(bitmap.split(self.bitmap(), bits_per_row))
 
         width = len("{:x}".format(self.bits()))
-        return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, min(self.bits(), i * bits_per_row + bits_per_row) - 1, width, bitmap.string(item)) for i, item in enumerate(items)))
+        return '\n'.join(("[{:x}] {{{:0{:d}x}:{:0{:d}x}}} {:s}".format(self.getoffset() + i * bytes_per_row, i * bits_per_row, width, min(self.bits(), i * bits_per_row + bits_per_row) - 1, width, bitmap.string(item, reversed=True)) for i, item in enumerate(items)))
 
 class BitmapBitsUlong(BitmapBitsArray):
     _object_, length = ULONG, 0
@@ -977,12 +978,13 @@ class BitmapBitsBytes(ptype.block):
         return self.size() << 3
     def bitmap(self):
         iterable = (bitmap.new(item, 8) for item in bytearray(self.serialize()))
-        return functools.reduce(bitmap.push, map(bitmap.reverse, iterable), bitmap.zero)
+        return functools.reduce(bitmap.append, iterable, bitmap.zero)
     def check(self, index):
         res, offset = self[index >> 3], index & 7
         return ord(res) & pow(2, offset) and 1
-    def run(self):
-        return self.bitmap()
+    def scan(self, position):
+        res = self.bitmap()
+        return bitmap.scan(res, True, position)
     def iterate(self):
         '''iterate through the bitmap returning all the indices that are true'''
         for index in range(self.bits()):
@@ -997,7 +999,7 @@ class BitmapBitsBytes(ptype.block):
         return "{:s} ({:s}, {:d})".format(self.__element__(), bitmap.hex(res), bitmap.size(res))
     def details(self):
         bytes_per_row = 8
-        iterable = iter(bitmap.string(self.bitmap()))
+        iterable = iter(bitmap.string(self.bitmap(), reversed=True))
         rows = izip_longest(*[iterable] * 8 * bytes_per_row)
         res = map(lambda columns: (' ' if column is None else column for column in columns), rows)
         items = map(str().join, res)
