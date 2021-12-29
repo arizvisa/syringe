@@ -115,7 +115,7 @@ class backed(bounded):
         if amount < 0:
             raise error.UserError(self, 'consume', message="tried to consume a negative number of bytes ({:x}:{:+x}) from {!s}".format(self.offset, amount, self))
         if amount == 0:
-            return b''
+            return self.backing[0:0]
 
         # Check if the desired number of bytes are available in the backing.
         offset, size = self.__offset, self.size()
@@ -363,9 +363,10 @@ class array(backed):
 
 class bytes(memoryview):
     '''This is an alias for the memoryview provider.'''
-
-class string(memoryview):
-    '''This is an alias for the memoryview provider.'''
+    @property
+    def value(self):
+        return builtins.bytes(self.backing)
+string = bytes
 
 class fileobj(bounded):
     '''Base provider class for reading/writing from a fileobj. Intended to be inherited from.'''
