@@ -511,9 +511,12 @@ if 'HeapEntry':
             return res.details()
 
         def Type(self):
-            '''Unencoded type grabbed from the original HEAP_ENTRY'''
-            res = self.object
-            return res.Type()
+            '''Return the type of the chunk that was decoded.'''
+            if self.FrontEndQ():
+                return 'FE'
+            backend = self.d.li
+            result = backend.Type()
+            return result.str()
 
         def BusyQ(self):
             '''Returns whether the chunk (decoded) is in use or not'''
@@ -993,11 +996,7 @@ if 'HeapChunk':
             if self.initializedQ():
                 header = self['Header']
                 res['Busy'] = header.BusyQ()
-                if header.FrontEndQ():
-                    res['Type'] = 'FE'
-                    return res
-                t = header.Type()
-                res['Type'] = t.str()
+                res['Type'] = header.Type()
             return res
 
         def next(self):
