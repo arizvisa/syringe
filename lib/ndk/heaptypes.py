@@ -1709,13 +1709,12 @@ if 'LFH':
             f = self._fields_ = []
             integral = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
 
-            # FIXME NTDDI_WIN8 changes the order of these
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
                     (P(HEAP_SUBSEGMENT), 'Hint'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),
-                    (SLIST_HEADER, 'SListHeader'),
+                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
+                    (SLIST_HEADER, 'SListHeader'),                              # This is where HEAP_USERDATA_HEADER are taken from?
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (ULONG, 'LastOpSequence'),
@@ -1729,8 +1728,8 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),
-                    (SLIST_HEADER, 'SListHeader'),
+                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
+                    (SLIST_HEADER, 'SListHeader'),                              # This is where HEAP_USERDATA_HEADER are taken from?
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (ULONG, 'LastOpSequence'),
                     (USHORT, 'BucketIndex'),
@@ -1822,6 +1821,7 @@ if 'LFH':
                     (P(HEAP_SUBSEGMENT), 'FreePointer'),         # Points to the next HEAP_SUBSEGMENT to use
                     (P(_HEAP_CHUNK), 'Limit'),                   # End of HEAP_SUBSEGMENTs
 
+                    # These are not officially part of the structure, but are always located after the prior defined fields.
                     (self.__SubSegments, 'SubSegments'),
                     (self.__Available, 'Available'),
                 ])
@@ -1836,6 +1836,8 @@ if 'LFH':
             else:
                 # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
+
+        # FIXME: implement a method that will iterate through all of the subsegments that will be returned in the future.
 
         def iterate(self):
             '''Iterate through all the used subsegments in this particular zone.'''
@@ -1852,7 +1854,6 @@ if 'LFH':
             return "Bucket:{:#x} RunLength:{:#x}".format(self['Bucket'].int(), self['RunLength'].int())
 
     class USER_MEMORY_CACHE_ENTRY(pstruct.type, versioned):
-        # FIXME: Figure out which SizeIndex is used for a specific cache entry
         class _UserBlocks(pstruct.type):
             # FIXME: Is this the correct structure for USER_MEMORY_CACHE_ENTRY's
             #        SLIST_HEADER?
@@ -1907,6 +1908,10 @@ if 'LFH':
                 # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
 
+        def UserBlocks(self):
+            '''Return the UserBlocks that can be returned by this cache.'''
+            raise NotImplementedError
+
     class HEAP_SUBSEGMENT(pstruct.type):
         def __init__(self, **attrs):
             super(HEAP_SUBSEGMENT, self).__init__(**attrs)
@@ -1925,7 +1930,7 @@ if 'LFH':
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'AffinityIndex'),
 
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: DelayFreeList
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
                     (ULONG, 'Lock'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
                 ])
@@ -1934,7 +1939,7 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
                     (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to the very first deleted subsegment
 
                     (INTERLOCK_SEQ, 'AggregateExchg'),
                     (USHORT, 'BlockSize'),
@@ -1944,7 +1949,7 @@ if 'LFH':
                     (UCHAR, 'AffinityIndex'),
 
                     (ULONG, 'Lock'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: DelayFreeList
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
                     (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
                 ])
 
@@ -2057,15 +2062,28 @@ if 'LFH':
                 # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
 
+        def DeletedSubSegments(self):
+            '''Iterate through the available DeletedSubSegments that will be returned first.'''
+            raise NotImplementedError
+
+        def AvailableSubSegments(self):
+            '''Iterate hrough the available SubSegments that will be returned from the CrtZone.'''
+            raise NotImplementedError
+
     @FrontEndHeap.define
     class LFH_HEAP(pstruct.type, versioned):
         type = 2
 
-        # FIXME: Figure out how the "UserBlockCache" actually works
-
         # FIXME: It seems that the HEAP_LOCAL_DATA is defined as an array due to
         #        processor affinity when it's enabled in the flags. This is why
         #        all of the available LFH material references it as a single-element.
+
+        class _UserBlockCache(parray.type):
+            _object_, length = USER_MEMORY_CACHE_ENTRY, 12
+
+            def BySize(self, size):
+                '''Return the correct element for the given bucket size.'''
+                raise NotImplementedError
 
         def __init__(self, **attrs):
             super(LFH_HEAP, self).__init__(**attrs)
@@ -2087,7 +2105,7 @@ if 'LFH':
                     (integral, 'SizeInCache'),
                     (dyn.block(0 if getattr(self, 'WIN64', False) else 4), 'padding(SizeInCache)'),
                     (HEAP_BUCKET_RUN_INFO, 'RunInfo'),
-                    (dyn.array(USER_MEMORY_CACHE_ENTRY, 12), 'UserBlockCache'), # FIXME: Not sure what this cache is used for
+                    (self._UserBlockCache, 'UserBlockCache'),
                     (dyn.array(HEAP_BUCKET, 128), 'Buckets'),
                     (HEAP_LOCAL_DATA, 'LocalData'),
                 ])
@@ -2109,7 +2127,7 @@ if 'LFH':
                     (integral, 'SizeInCache'),
                     (HEAP_BUCKET_RUN_INFO, 'RunInfo'),
                     (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(RunInfo)'),
-                    (dyn.array(USER_MEMORY_CACHE_ENTRY, 12), 'UserBlockCache'), # FIXME: Not sure what this cache is used for
+                    (self._UserBlockCache, 'UserBlockCache'),
                     (HEAP_LFH_MEM_POLICIES, 'MemoryPolicies'),
                     (dyn.array(HEAP_BUCKET, 129), 'Buckets'),
                     (dyn.array(P(HEAP_LOCAL_SEGMENT_INFO), 129), 'SegmentInfoArrays'),
