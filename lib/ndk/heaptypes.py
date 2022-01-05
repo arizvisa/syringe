@@ -2873,8 +2873,8 @@ if 'Heap':
             result = next(iterable)
             return result
 
-        def FreeListByBucket(self, size, reload=False):
-            '''Use the BlocksIndex to find the FreeList for a given size.'''
+        def ListHintByBucket(self, size, reload=False):
+            '''Use the BlocksIndex to find the ListHint for a given size.'''
             units = self.BlockUnits(size)
 
             # We start immediately with the BlocksIndex, by finding the correct one.
@@ -2884,25 +2884,29 @@ if 'Heap':
             # Next, we'll check its bitmap to see if the exact slot is available
             # and return that immediately if so.
             if blocklist.Check(units, reload=reload):
-                slot = blocklist.ListHint(units, reload=reload)
-
-                # This should give us the correct slot, so the last thing to do
-                # is to dereference it so we can return it to the caller. If the
-                # list has an ExtraItem, then we don't get an immediate pointer
-                # and will need to call a method to get to the list of chunks.
-                if blocklist['ExtraItem'].int():
-                    return slot.FreeChunk()
-                return slot.d
+                return blocklist.ListHint(units, reload=reload)
 
             # If the bitmap didn't have a bit set, then warn the user that we're
             # going to scan for the next largest chunk that will likely get split.
             logging.warning("{:s} : An chunk of the exact number of units ({:d}) was not found in the heap list at {:s}. Scanning for the chunk that will be split.".format(self.instance(), units, blocklist.instance()))
-            slot = blocklist.Larger(units, reload=reload)
 
-            # Now we can return the next chunk that should get split calling
-            # on a helper method if the block list has an extra item.
+            # Now we can return the next largest slot for the requested size.
+            return blocklist.Larger(units)
+
+        def FreeListByBucket(self, size, reload=False):
+            '''Use the BlocksIndex to find the freelist for a given size.'''
+            slot = self.ListHintByBucket(size, reload=reload)
+
+            # Now that we should have the correct slot, the last thing to do
+            # is to grab the blocklist that owns it. This way we can tell
+            # that if the blocklist has an ExtraItem, then we need to call
+            # a method to get the list of chunks that should get split.
+            blocklist = self.getparent(HEAP_LIST_LOOKUP)
             if blocklist['ExtraItem'].int():
                 return slot.FreeChunk()
+
+            # Otherwise, it's already pointing to the list and we can just
+            # dereference the pointer to get to get the next chunk.
             return slot.d
 
         def ListHint(self, size, reload=True):
@@ -2917,7 +2921,7 @@ if 'Heap':
             blocklist = bi.HeapList(units, reload=reload)
 
             # Now we can simply use it to return the ListHint that was requested.
-            return blocklist.ListHint(bi)
+            return blocklist.ListHint(units)
 
     class HEAP_LIST_LOOKUP(pstruct.type, versioned):
         def __ExtendedLookup(self):
