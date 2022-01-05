@@ -305,12 +305,17 @@ if 'HeapEntry':
                         ('Segment', 1),
                         ('LargeChunk', 4),
                         ('Linked', 5),
+                        ('Special', 0x3f)   # set if >= 0x3f
                     ]
                 _fields_ = [
                     (3, 'Unknown'),
                     (1, 'Busy'),
                     (_Type, 'Type'),
                 ]
+                def Type(self):
+                    return self.item('Type')
+                def BusyQ(self):
+                    return True if self['Busy'] else False
                 def summary(self):
                     type, available = self.item('Type'), 'BUSY' if self['Busy'] else 'FREE'
                     if self['Unknown']:
@@ -354,10 +359,34 @@ if 'HeapEntry':
             def BackEnd(self):
                 return self.item('Backend')
 
+            def LargeChunkQ(self):
+                if self.BackEndQ():
+                    backend = self.BackEnd()
+                    if backend['Unknown'] or backend['Busy']:
+                        return False
+
+                    # Check the type is set to LargeChunk...
+                    res = backend.item('Type')
+                    return True if res['LargeChunk'] else False
+                return False
+
+            def LinkedQ(self):
+                if self.BackEndQ():
+                    backend = self.BackEnd()
+                    if backend['Unknown'] or backend['Busy']:
+                        return False
+
+                    # Check the type is set to Linked...
+                    res = backend.item('Type')
+                    return True if res['Linked'] else False
+                return False
+
             def summary(self):
                 if self.FrontEndQ():
                     frontend = self.FrontEnd()
                     return "(FE) {:s}".format(frontend.summary())
+
+                # FIXME: add support for LinkedQ and LargeChunkQ
                 backend = self.BackEnd()
                 return "(BE) {:s}".format(backend.summary())
 
@@ -383,7 +412,7 @@ if 'HeapEntry':
                     (HEAP_ENTRY_, 'Flags'),
                     (UCHAR, 'SmallTagIndex'),
                     (USHORT, 'Code2'),
-                    (UCHAR, 'Code3'),
+                    (UCHAR, 'SegmentOffset'),
                     (HEAP_ENTRY._Code4, 'Code4'),
                 ])
 
@@ -397,10 +426,10 @@ if 'HeapEntry':
             return self['Flags']
 
         def BackEndQ(self):
-            return False if self['Code4']['AllocatedByFrontend'] else True
+            return self['Code4'].BackEndQ()
 
         def FrontEndQ(self):
-            return True if self['Code4']['AllocatedByFrontend'] else False
+            return self['Code4'].FrontEndQ()
 
         def BackEnd(self):
             '''Return the backend version of the "Code4" field.'''
@@ -419,7 +448,7 @@ if 'HeapEntry':
             # If we're using a backend header then we can just check its flag.
             backend = self.BackEnd()
             type = backend.Type()
-            return type['Chunk'] and backend.FreeQ()
+            return type['Chunk'] and not backend.BusyQ()
 
         def FreeEntryOffsetQ(self):
             if self.BackEndQ():
@@ -427,26 +456,91 @@ if 'HeapEntry':
 
             # Dereference the frontend header and return whether there's any unused bytes.
             frontend = self.FrontEnd()
-            return not frontend.UnusedBytes()
+            return not frontend['UnusedBytes']
 
-        #def summary(self):
-        #    if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WS03):
-        #        res = "Size={:x} SegmentIndex={:x} PreviousSize={:x} TagIndex={:x}"
-        #        res = [res.format(self['Size'].int(), self['SegmentIndex'].int(), self['PreviousSize'].int(), self['TagIndex'].int())]
+        def summary(self):
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WS03):
+                res = "Size={:x} SegmentIndex={:x} PreviousSize={:x} SmallTagIndex={:x}"
+                res = [res.format(self['Size'].int(), self['SegmentIndex'].int(), self['PreviousSize'].int(), self['SmallTagIndex'].int())]
 
-        #        res+= ["UnusedBytes=({:s})".format(self['UnusedBytes'].summary())]
-        #        res+= ["Flags=({:s})".format(self['Flags'].summary())]
-        #        return ' '.join(res)
+                res+= ["UnusedBytes=({:s})".format(self['UnusedBytes'].summary())]
+                res+= ["Flags=({:s})".format(self['Flags'].summary())]
+                return ' '.join(res)
 
-        #    # Display only the relevant fields for the LF heap that's part of NTDDI_WIN7
-        #    elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
-        #        res = "Size={:x} SmallTagIndex={:x} PreviousSize={:x} SegmentOffset={:x}"
-        #        res = [res.format(self['Size'].int(), self['SmallTagIndex'].int(), self['PreviousSize'].int(), self['SegmentOffset'].int())]
+            # Display only the relevant fields for the LF heap that's part of NTDDI_WIN7
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
+                res = "Size={:x} SmallTagIndex={:x} Code2={:x} SegmentOffset={:x}"
+                res = [res.format(self['Size'].int(), self['SmallTagIndex'].int(), self['Code2'].int(), self['SegmentOffset'].int())]
 
-        #        res+= ["UnusedBytes=({:s})".format(self['UnusedBytes'].summary())]
-        #        res+= ["Flags=({:s})".format(self['Flags'].summary())]
-        #        return ' '.join(res)
-        #    return super(HEAP_ENTRY, self).summary()
+                res+= ["Code4=({:s})".format(self['Code4'].summary())]
+                res+= ["Flags=({:s})".format(self['Flags'].summary())]
+                return ' '.join(res)
+            return super(HEAP_ENTRY, self).summary()
+
+    class HEAP_UNPACKED_ENTRY(pstruct.type):
+        class _UnusedBytes(pbinary.struct):
+            class _Unused(HEAP_ENTRY._Code4._Backend._Type):
+                length = 6
+            _fields_ = [
+                (1, 'AllocatedByFrontend'),
+                (1, 'Unknown'),             # this bit can be set if Unused['Special']
+                (_Unused, 'Unused'),
+            ]
+            def FrontEndQ(self):
+                return True if self['AllocatedByFrontend'] else False
+
+            def BackEndQ(self):
+                return not self.FrontEndQ()
+
+        _fields_ = [
+            (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
+            (USHORT, 'Size'),           # SubSegmentCode: checksum'd
+            (HEAP_ENTRY_, 'Flags'),     # SubSegmentCode: checksum'd
+            (UCHAR, 'SmallTagIndex'),   # SubSegmentCode: checksum'd
+
+            (USHORT, 'PrevousSize'),
+            (UCHAR, 'SegmentOffset'),
+            (_UnusedBytes, 'UnusedBytes'),
+        ]
+
+        def UnusedBytes(self):
+            res = self['UnusedBytes']
+            return res['Unused']
+
+        def FrontEnd(self):
+            # FIXME: this should vary based on the frontend or backend
+            return self
+
+        def BackEnd(self):
+            # FIXME: this should vary based on the frontend or backend
+            return self
+
+        def FrontEndQ(self):
+            return self['UnusedBytes'].FrontEndQ()
+
+        def BackEndQ(self):
+            return self['UnusedBytes'].BackEndQ()
+
+        def Type(self):
+            unused = self['UnusedBytes']
+            return unused.item('Unused')
+
+        def BusyQ(self):
+            flags = self['Flags']
+            return True if flags['BUSY'] else False
+
+        def FreeQ(self):
+            return not self.BusyQ()
+
+    class HEAP_EXTENDED_ENTRY(pstruct.type):
+        _fields_ = [
+            (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'Reserved'),
+            (USHORT, 'FunctionIndex'),
+            (USHORT, 'ContextValue'),
+            (USHORT, 'UnusedBytesLength'),
+            (UCHAR, 'EntryOffset'),
+            (UCHAR, 'ExtendedBlockSignature'),
+        ]
 
     class _HEAP_ENTRY(ptype.encoded_t):
         '''
@@ -470,30 +564,43 @@ if 'HeapEntry':
 
         def _object_(self):
             header = self.object
-            return self.__FRONTEND_ENTRY__ if header.FrontEndQ() else self.__BACKEND_ENTRY__
+            if header.FrontEndQ():
+                if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+                    return self.__FRONTEND_ENTRY8__
+                return self.__FRONTEND_ENTRY__
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+                return HEAP_UNPACKED_ENTRY
+            return self.__BACKEND_ENTRY__
 
         def encode(self, object, **attrs):
             header = self.object
-            #if res['UnusedBytes'].int() == 5:
-            #    # FIXME: figure out what to do with the new chunk header
-            #    offset = self.getoffset() - res['SegmentOffset'] * res.size()
-            #    raise error.InvalidHeapType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
+            if header['Code4'].int() == 5:
+                # FIXME: figure out what to do with the new chunk header
+                offset = self.getoffset() - header['SegmentOffset'] * header.size()
+                raise error.InvalidHeapType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
 
             # If this is a front-end chunk then use the front-end encoder.
             if header.FrontEndQ():
+                if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+                    return self.__frontend_encode8(object, **attrs)
                 return self.__frontend_encode(object, **attrs)
             return self.__backend_encode(object, **attrs)
 
         def decode(self, object, **attrs):
             header = self.object
-            #if res.UnusedBytes() == 5:
-            #    # FIXME: we shouldn't need to decode anything since our chunk
-            #    #        header is elsewhere.
-            #    offset = self.getoffset() - res['SegmentOffset'] * res.size()
-            #    raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
+            if header['Code4'].LinkedQ():
+                # FIXME: we shouldn't need to decode anything since our chunk
+                #        header is elsewhere.
+                offset = self.getoffset() - header['SegmentOffset'] * header.size()
+                raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
+
+            elif header['Code4'].LargeChunkQ():
+                raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 4 is currently unimplemented.', HEAP_ENTRY=self.object)
 
             # If this is a front-end chunk, then use the front-end decoder.
             if header.FrontEndQ():
+                if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+                    return self.__frontend_decode8(object, **attrs)
                 return self.__frontend_decode(object, **attrs)
             return self.__backend_decode(object, **attrs)
 
@@ -526,14 +633,6 @@ if 'HeapEntry':
         def details(self):
             res = self.d.li.copy(offset=self.getoffset())
             return res.details()
-
-        def Type(self):
-            '''Return the type of the chunk that was decoded.'''
-            if self.FrontEndQ():
-                return 'FE'
-            backend = self.d.li
-            result = backend.Type()
-            return result.str()
 
         def BusyQ(self):
             '''Returns whether the chunk (decoded) is in use or not'''
@@ -627,8 +726,9 @@ if 'HeapEntry':
             # Now determine if we're encoded, and decode it if so.
             if object['Encoded'][0].int() & EncodeFlagMask:
                 iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], Encoding))
-                data = object['Unencoded'].serialize() + functools.reduce(operator.add, iterable)
-                decoded = ptype.block().set(data)
+                for item, encoder in zip(object['Encoded'], Encoding):
+                    item.set(item.int() ^ encoder)
+                decoded = ptype.block().set(object.serialize())
                 return super(_HEAP_ENTRY, self).decode(decoded)
 
             # Otherwise, we're not encoded. So, just pass-through...
@@ -770,6 +870,7 @@ if 'HeapEntry':
                 dn ^= self.getoffset() >> 3
                 dn ^= LFHKey
                 dn ^= OwnerHeap.getoffset()
+                dn |= object.EncodedUntouchedValue()
 
             res = object.copy().set(Encoded=dn)
             return super(_HEAP_ENTRY, self).decode(res)
@@ -784,6 +885,111 @@ if 'HeapEntry':
             if res.initializedQ():
                 return res.l.summary()
             return super(_HEAP_ENTRY, self).summary()
+
+        class __FRONTEND_ENTRY8__(pstruct.type):
+            '''HEAP_ENTRY after decoding on win8'''
+            _fields_ = [
+                (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
+                (UINT32, 'SubSegment'),
+                (USHORT, 'PreviousSize'),
+                (UCHAR, 'EntryOffset'),
+                (HEAP_ENTRY._Code4, 'Flags'),
+            ]
+
+            def BusyQ(self):
+                flags = self['Flags']
+                frontend = flags.FrontEnd()
+                return frontend['UnusedBytes'] > 0
+
+            def FreeQ(self):
+                flags = self['Flags']
+                frontend = flags.FrontEnd()
+                return frontend['UnusedBytes'] == 0
+
+            def UnusedBytes(self):
+                flags = self['Flags']
+                frontend = flags.FrontEnd()
+                return frontend['UnusedBytes']
+
+        class __FRONTEND_VIEW8__(pstruct.type):
+            '''
+            This type is used strictly for encoding/decoding and is used when
+            casting the backing type.
+            '''
+            def __init__(self, **attrs):
+                super(_HEAP_ENTRY.__FRONTEND_VIEW8__, self).__init__(**attrs)
+                f = self._fields_ = []
+
+                if getattr(self, 'WIN64', False):
+                    f.extend([
+                        (pint.uint64_t, 'Unencoded'),
+                        (pint.uint64_t, 'Encoded'),
+                    ])
+
+                # 32-bit seems to swap the Encoded/Decoded fields.
+                else:
+                    f.extend([
+                        (pint.uint32_t, 'Encoded'),
+                        (pint.uint32_t, 'Unencoded'),
+                    ])
+                return
+
+            def EncodedValue(self):
+                res = self['Encoded'].int()
+                return res & 0xffffffff
+
+            def EncodedUntouchedValue(self):
+                res = self['Encoded'].int()
+                return res & ~0xffffffff
+
+        def __frontend_encode8(self, object, **attrs):
+            object = object.cast(self.__FRONTEND_VIEW__)
+
+            # Fetch some cached attributes.
+            OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
+
+            # Now to encode our 64-bit header
+            if getattr(self, 'WIN64', False):
+                dn = self.getoffset()
+                dn >>= 4
+                dn ^= object.EncodedValue()
+                dn ^= OwnerHeap.getoffset() & 0xffffffff
+                dn ^= LFHKey & 0xffffffff
+
+            # Encode the 32-bit header
+            else:
+                dn = self.getoffset()
+                dn >>= 3
+                dn ^= OwnerHeap.getoffset()
+                dn ^= object['Encoded'].int()
+                dn ^= LFHKey
+
+            result = object.copy().set(Encoded=dn | object.EncodedUntouchedValue())
+            return super(_HEAP_ENTRY, self).encode(result)
+
+        def __frontend_decode8(self, object, **attrs):
+            object = object.cast(self.__FRONTEND_VIEW8__)
+
+            # Fetch some cached attributes.
+            OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
+
+            # FIXME: verify this decoding...it might work.
+            if getattr(self, 'WIN64', False):
+                dn = self.getoffset()
+                dn >>= 4
+                dn ^= object.EncodedValue()
+                dn ^= OwnerHeap.getoffset() & 0xffffffff
+                dn ^= LFHKey & 0xffffffff
+
+            else:
+                dn = self.getoffset()
+                dn >>= 3
+                dn ^= OwnerHeap.getoffset()
+                dn ^= object['Encoded'].int()
+                dn ^= LFHKey
+
+            res = object.copy().set(Encoded=dn | object.EncodedUntouchedValue())
+            return super(_HEAP_ENTRY, self).decode(res)
 
         ### Utility functions
         def ChecksumQ(self):
@@ -816,6 +1022,8 @@ if 'HeapEntry':
                 raise error.InvalidHeapType(self, 'Size')
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
 
+            # FIXME: this method might not be valid anymore.
+
             # Use the "PreviousSize" from our decoded value and combine it with the blocksize.
             self = self.d.li
             return blocksize * self['PreviousSize'].int()
@@ -830,15 +1038,17 @@ if 'HeapEntry':
 
         def EntryOffsetQ(self):
             if not self.FrontEndQ():
-                raise error.InvalidHeapType(self, 'EntryOffsetQ', message='Unable to query the entry-offset for a non-frontend type')
+                return False
             res = self.d.li
 
             # We have an EntryOffset if the "EntryOffset" field is
             # set and our unencoded Flags is set to 5.
             if res['EntryOffset'].int():
-                logging.warning("{:s} : This type of frontend header is currently unimplemented (EntryOffset={:#x}).".format(self.instance(), res['EntryOffset'].int()))
                 header = self.object
-                return header.int() == 5
+                if header['Code4'].int() == 5:
+                    logging.warning("{:s} : This type of frontend header is currently unimplemented (EntryOffset={:#x}).".format(self.instance(), res['EntryOffset'].int()))
+                    return True
+                return False
             return False
 
         def EntryOffset(self):
@@ -1002,22 +1212,29 @@ if 'HeapChunk':
             if self.initializedQ():
                 header = self['Header']
                 res['Busy'] = header.BusyQ()
-                res['Type'] = header.Type()
+                res['Type'] = 'FE' if header.FrontEndQ() else header.d.Type().str()
             return res
 
         def next(self):
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            parent = self.getparent(HEAP)
-            return parent.new(cls, offset=self.getoffset() + self['Header'].Size())
+
+            # Grab the owner HEAP and use to to create the next chunk.
+            owner = self.getparent(HEAP)
+            return owner.new(cls, offset=self.getoffset() + header.Size())
 
         def previous(self):
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'previous', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            parent = self.getparent(HEAP)
-            return parent.new(cls, offset=self.getoffset() - header.PreviousSize())
+
+            # FIXME: this method might not be valid anymore due to PreviousSize being deprecated.
+
+            # Grab the owner HEAP and use to to create the previous chunk.
+            owner = self.getparent(HEAP)
+            return owner.new(cls, offset=self.getoffset() - header.PreviousSize())
+            # Get the Owner HEAP and calculate the offset of the previous chunk.
         prev = previous
 
         def nextfree(self):
@@ -1025,9 +1242,9 @@ if 'HeapChunk':
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            t = header.Type()
+            t = header.d.li.Type()
             if not t['Chunk']:
-                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.d.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Flink'].d.l
 
@@ -1036,9 +1253,9 @@ if 'HeapChunk':
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            t = header.Type()
+            t = header.d.li.Type()
             if not t['Chunk']:
-                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.d.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             link = self['ListEntry']
             return link['Blink'].d.l
         prevfree = previousfree
@@ -1608,7 +1825,7 @@ if 'LFH':
 
         def summary(self):
             decoded = self.d.l
-            return "{:#x} :({:s})> {:s}".format(self.get(), decoded.classname(), decoded.summary())
+            return "{:#x} -> {:s}".format(self.get(), decoded.summary())
 
     class HEAP_USERDATA_HEADER(pstruct.type):
         def __Blocks(self):
@@ -2022,7 +2239,7 @@ if 'LFH':
         _object_ = HEAP_SUBSEGMENT
         def dereference(self, **attrs):
             if isinstance(self.source, ptypes.provider.proxy) and self.parent is not None:
-                p = self.parent.getparent(ptype.encoded_t)
+                p = self.getparent(_HEAP_ENTRY)
                 attrs.setdefault('source', p.source)
             return super(PHEAP_SUBSEGMENT, self).dereference(**attrs)
 
@@ -2168,7 +2385,7 @@ if 'LFH':
             # If we are using the "SegmentInfoArrays" pointer array, then index into it.
             if 'SegmentInfoArrays' in self:
                 segmentinfoarray = self['SegmentInfoArrays']
-                result = segmentinfoarray[index]
+                result = segmentinfoarray[index].d.li
 
             # Otherwise we need to descend into the LocalData before we find our array.
             else:
@@ -2355,6 +2572,23 @@ if 'Heap':
             _fields_ = [
                 (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
                 (dyn.array(pint.uint32_t, 2), 'Keys')
+            ]
+            def Windows8(self):
+                return self.cast(HEAP._Encoding8)
+            def SubSegmentCode(self):
+                res = self.Windows8()
+                return res['SubSegmentCode']
+            def PreviousSize(self):
+                res = self.Windows8()
+                return res['PreviousSize']
+
+        class _Encoding8(pstruct.type, versioned):
+            _fields_ = [
+                (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'Reserved'),
+                (ULONG, 'SubSegmentCode'),
+                (USHORT, 'PreviousSize'),
+                (UCHAR, 'SegmentOffset'),
+                (UCHAR, 'ExtendedBlockSignature'),
             ]
 
         def __PointerKeyEncoding(self):
