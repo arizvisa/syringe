@@ -412,6 +412,23 @@ if 'HeapEntry':
             res = self['Code4']
             return res.item('Frontend')
 
+        def FreeListQ(self):
+            if self.FrontEndQ():
+                return False
+
+            # If we're using a backend header then we can just check its flag.
+            backend = self.BackEnd()
+            type = backend.Type()
+            return type['Chunk'] and backend.FreeQ()
+
+        def FreeEntryOffsetQ(self):
+            if self.BackEndQ():
+                return False
+
+            # Dereference the frontend header and return whether there's any unused bytes.
+            frontend = self.FrontEnd()
+            return not frontend.UnusedBytes()
+
         #def summary(self):
         #    if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WS03):
         #        res = "Size={:x} SegmentIndex={:x} PreviousSize={:x} TagIndex={:x}"
@@ -443,32 +460,32 @@ if 'HeapEntry':
         ### version of the HEAP_ENTRY.
 
         def FrontEndQ(self):
-            res = self.object
-            return res.FrontEndQ()
+            header = self.object
+            return header.FrontEndQ()
 
         def BackEndQ(self):
             # Back-to-Front(242)
-            res = self.object
-            return res.BackEndQ()
+            header = self.object
+            return header.BackEndQ()
 
         def _object_(self):
-            object = self.object
-            return self.__FRONTEND_ENTRY__ if object.FrontEndQ() else self.__BACKEND_ENTRY__
+            header = self.object
+            return self.__FRONTEND_ENTRY__ if header.FrontEndQ() else self.__BACKEND_ENTRY__
 
         def encode(self, object, **attrs):
-            res = self.object
+            header = self.object
             #if res['UnusedBytes'].int() == 5:
             #    # FIXME: figure out what to do with the new chunk header
             #    offset = self.getoffset() - res['SegmentOffset'] * res.size()
             #    raise error.InvalidHeapType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
 
             # If this is a front-end chunk then use the front-end encoder.
-            if res.FrontEndQ():
+            if header.FrontEndQ():
                 return self.__frontend_encode(object, **attrs)
             return self.__backend_encode(object, **attrs)
 
         def decode(self, object, **attrs):
-            res = self.object
+            header = self.object
             #if res.UnusedBytes() == 5:
             #    # FIXME: we shouldn't need to decode anything since our chunk
             #    #        header is elsewhere.
@@ -476,13 +493,13 @@ if 'HeapEntry':
             #    raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
 
             # If this is a front-end chunk, then use the front-end decoder.
-            if res.FrontEndQ():
+            if header.FrontEndQ():
                 return self.__frontend_decode(object, **attrs)
             return self.__backend_decode(object, **attrs)
 
         def summary(self):
-            res = self.object
-            if res.FrontEndQ():
+            header = self.object
+            if header.FrontEndQ():
                 return self.__frontend_summary()
             return self.__backend_summary()
 
@@ -805,22 +822,11 @@ if 'HeapEntry':
 
         def FreeListQ(self):
             header = self.object
-            if header.FrontEndQ():
-                return False
-
-            # If we're using a backend header then we can just check its flag.
-            backend = self.d.l
-            type = backend.Type()
-            return type['Chunk'] and backend.FreeQ()
+            return header.FreeListQ()
 
         def FreeEntryOffsetQ(self):
             header = self.object
-            if header.BackEndQ():
-                return False
-
-            # Dereference the frontend header and return whether there's any unused bytes.
-            frontend = self.d.l
-            return not frontend.UnusedBytes()
+            return header.FreeEntryOffsetQ()
 
         def EntryOffsetQ(self):
             if not self.FrontEndQ():
