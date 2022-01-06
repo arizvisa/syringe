@@ -1926,7 +1926,130 @@ if 'LFH':
             iterable = (bitmap.new(item, 1) for item in iterable)
             return functools.reduce(bitmap.push, iterable, bitmap.zero)
 
+    class HEAP_SUBSEGMENT(pstruct.type):
+        def __init__(self, **attrs):
+            super(HEAP_SUBSEGMENT, self).__init__(**attrs)
+            f = self._fields_ = []
+
+            # FIXME: NTDDI_WIN8 moves the DelayFreeList to a different place
+            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
+                f.extend([
+                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
+                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
+
+                    (INTERLOCK_SEQ, 'AggregateExchg'),
+                    (USHORT, 'BlockSize'),
+                    (USHORT, 'Flags'),
+                    (USHORT, 'BlockCount'),
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'AffinityIndex'),
+
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
+                    (ULONG, 'Lock'),
+                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
+                ])
+
+            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
+                f.extend([
+                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
+                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to the very first deleted subsegment
+
+                    (INTERLOCK_SEQ, 'AggregateExchg'),
+                    (USHORT, 'BlockSize'),
+                    (USHORT, 'Flags'),
+                    (USHORT, 'BlockCount'),
+                    (UCHAR, 'SizeIndex'),
+                    (UCHAR, 'AffinityIndex'),
+
+                    (ULONG, 'Lock'),
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
+                    (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
+                ])
+
+            else:
+                # XXX: win10
+                raise error.NdkUnsupportedVersion(self)
+
+        def BlockSize(self):
+            '''Returns the size of each block (data + header) within the subsegment'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return self['BlockSize'].int() * blocksize
+        def ChunkSize(self):
+            '''Return the size of the chunks (data) that this HEAP_SUBSEGMENT is responsible for providing'''
+            res = self.new(_HEAP_ENTRY).a
+            return self.BlockSize() - res.size()
+
+        def BlockIndexByOffset(self, offset):
+            '''Return the expected block index for the given offset.'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            fo = offset * blocksize
+            shift = self.new(HEAP_USERDATA_HEADER).a.size()
+            return (fo - shift) // self.BlockSize()
+
+        def FreeEntryBlockIndex(self):
+            '''Returns the index into UserBlocks of the next block to allocate given the `FreeEntryOffset` of the current HEAP_SUBSEGMENT'''
+            res = self['AggregateExchg']['FreeEntryOffset']
+            return self.BlockIndexByOffset(res.int())
+
+        def NextFreeBlock(self):
+            '''Return the next block HeapAllocate will return for the current segment.'''
+            index = self.FreeEntryBlockIndex()
+            ub = self['UserBlocks'].d.li
+            return ub['Blocks'][index]
+
+        def UsedBlockCount(self):
+            '''Return the total number of UserBlocks that have been allocated'''
+            return self['BlockCount'].int() - self['AggregateExchg']['Depth'].int()
+        def UnusedBlockCount(self):
+            '''Return the number of UserBlocks that have been either freed or unallocated'''
+            return self['AggregateExchg']['Depth'].int()
+        def Usage(self):
+            '''Return a bitmap showing the busy/free chunks that are available within `UserBlocks`'''
+            ub = self['UserBlocks'].d.li
+            return ub.UsageBitmap()
+        def UsageString(self):
+            '''Return a binary string showing the busy/free chunks that are available within `UserBlocks`'''
+            res = self.Usage()
+            return bitmap.string(res)
+
+        def properties(self):
+            res = super(HEAP_SUBSEGMENT, self).properties()
+            if self.initializedQ():
+                res['SegmentIsFull'] = self['AggregateExchg']['Depth'].int() == 0
+                res['AvailableBlocks'] = self.UnusedBlockCount()
+                res['BusyBlocks'] = self.UsedBlockCount()
+            return res
+
+    class PHEAP_SUBSEGMENT(ptype.pointer_t):
+        '''
+        This points to a HEAP_SUBSEGMENT, but ensures that it uses the same
+        source of any ptype.encoded_t that parented it. This is intended to
+        be used by the _HEAP_ENTRY definition that was defined earlier.
+        '''
+        _object_ = HEAP_SUBSEGMENT
+        def dereference(self, **attrs):
+            if isinstance(self.source, ptypes.provider.proxy) and self.parent is not None:
+                p = self.getparent(_HEAP_ENTRY)
+                attrs.setdefault('source', p.source)
+            return super(PHEAP_SUBSEGMENT, self).dereference(**attrs)
+
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
+        class _CachedItems(parray.type):
+            _object_, length = P(HEAP_SUBSEGMENT), 16
+
+            def enumerate(self):
+                for index, item in enumerate(self):
+                    if item.int():
+                        yield index, item.d
+                    continue
+                return
+
+            def iterate(self):
+                for _, item in self.enumerate():
+                    yield item.d
+                return
+
         def __init__(self, **attrs):
             super(HEAP_LOCAL_SEGMENT_INFO, self).__init__(**attrs)
             f = self._fields_ = []
@@ -1936,14 +2059,14 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_SUBSEGMENT), 'Hint'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
-                    (SLIST_HEADER, 'SListHeader'),                              # This is where HEAP_USERDATA_HEADER are taken from?
+                    (self._CachedItems, 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
+                    (SLIST_HEADER, 'SListHeader'),              # This is where HEAP_USERDATA_HEADER are taken from?
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (ULONG, 'LastOpSequence'),
                     (USHORT, 'BucketIndex'),
                     (USHORT, 'LastUsed'),
-                    (integral, 'Reserved'),         # FIXME: Is this right?
+                    (integral, 'Reserved'),                     # FIXME: Is this right?
                 ])
 
             # FIXME: this is where our lfh segment comes from
@@ -1951,15 +2074,15 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (dyn.array(P(HEAP_SUBSEGMENT), 16), 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
-                    (SLIST_HEADER, 'SListHeader'),                              # This is where HEAP_USERDATA_HEADER are taken from?
+                    (self._CachedItems, 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
+                    (SLIST_HEADER, 'SListHeader'),              # This is where HEAP_USERDATA_HEADER are taken from?
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (ULONG, 'LastOpSequence'),
                     (USHORT, 'BucketIndex'),
                     (USHORT, 'LastUsed'),
                     (USHORT, 'NoThrashCount'),
 
-                    (USHORT, 'Reserved'),           # XXX: added manually
+                    (USHORT, 'Reserved'),                       # XXX: added manually
                     (dyn.block(0xc if getattr(self, 'WIN64', False) else 4), 'unknown'), # XXX: there's got to be another field here
                 ])
 
@@ -1993,8 +2116,8 @@ if 'LFH':
             '''
             Return the last-used HEAP_SUBSEGMENT from the cache.
             '''
-            res = self['LastUsed']
-            return self['CachedItems'][res.int()].d
+            index = self['LastUsed']
+            return self['CachedItems'][index.int()].d
 
     class LFH_BLOCK_ZONE(pstruct.type):
         def __SubSegments(self):
@@ -2134,114 +2257,6 @@ if 'LFH':
         def UserBlocks(self):
             '''Return the UserBlocks that can be returned by this cache.'''
             raise NotImplementedError
-
-    class HEAP_SUBSEGMENT(pstruct.type):
-        def __init__(self, **attrs):
-            super(HEAP_SUBSEGMENT, self).__init__(**attrs)
-            f = self._fields_ = []
-
-            # FIXME: NTDDI_WIN8 moves the DelayFreeList to a different place
-            if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
-                f.extend([
-                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
-                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-
-                    (INTERLOCK_SEQ, 'AggregateExchg'),
-                    (USHORT, 'BlockSize'),
-                    (USHORT, 'Flags'),
-                    (USHORT, 'BlockCount'),
-                    (UCHAR, 'SizeIndex'),
-                    (UCHAR, 'AffinityIndex'),
-
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
-                    (ULONG, 'Lock'),
-                    (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
-                ])
-
-            elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
-                f.extend([
-                    (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
-                    (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to the very first deleted subsegment
-
-                    (INTERLOCK_SEQ, 'AggregateExchg'),
-                    (USHORT, 'BlockSize'),
-                    (USHORT, 'Flags'),
-                    (USHORT, 'BlockCount'),
-                    (UCHAR, 'SizeIndex'),
-                    (UCHAR, 'AffinityIndex'),
-
-                    (ULONG, 'Lock'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
-                    (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
-                ])
-
-            else:
-                # XXX: win10
-                raise error.NdkUnsupportedVersion(self)
-
-        def BlockSize(self):
-            '''Returns the size of each block (data + header) within the subsegment'''
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            return self['BlockSize'].int() * blocksize
-        def ChunkSize(self):
-            '''Return the size of the chunks (data) that this HEAP_SUBSEGMENT is responsible for providing'''
-            res = self.new(_HEAP_ENTRY).a
-            return self.BlockSize() - res.size()
-
-        def BlockIndexByOffset(self, offset):
-            '''Return the expected block index for the given offset.'''
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            fo = offset * blocksize
-            shift = self.new(HEAP_USERDATA_HEADER).a.size()
-            return (fo - shift) // self.BlockSize()
-
-        def FreeEntryBlockIndex(self):
-            '''Returns the index into UserBlocks of the next block to allocate given the `FreeEntryOffset` of the current HEAP_SUBSEGMENT'''
-            res = self['AggregateExchg']['FreeEntryOffset']
-            return self.BlockIndexByOffset(res.int())
-
-        def NextFreeBlock(self):
-            '''Return the next block HeapAllocate will return for the current segment.'''
-            index = self.FreeEntryBlockIndex()
-            ub = self['UserBlocks'].d.li
-            return ub['Blocks'][index]
-
-        def UsedBlockCount(self):
-            '''Return the total number of UserBlocks that have been allocated'''
-            return self['BlockCount'].int() - self['AggregateExchg']['Depth'].int()
-        def UnusedBlockCount(self):
-            '''Return the number of UserBlocks that have been either freed or unallocated'''
-            return self['AggregateExchg']['Depth'].int()
-        def Usage(self):
-            '''Return a bitmap showing the busy/free chunks that are available within `UserBlocks`'''
-            ub = self['UserBlocks'].d.li
-            return ub.UsageBitmap()
-        def UsageString(self):
-            '''Return a binary string showing the busy/free chunks that are available within `UserBlocks`'''
-            res = self.Usage()
-            return bitmap.string(res)
-
-        def properties(self):
-            res = super(HEAP_SUBSEGMENT, self).properties()
-            if self.initializedQ():
-                res['SegmentIsFull'] = self['AggregateExchg']['Depth'].int() == 0
-                res['AvailableBlocks'] = self.UnusedBlockCount()
-                res['BusyBlocks'] = self.UsedBlockCount()
-            return res
-
-    class PHEAP_SUBSEGMENT(ptype.pointer_t):
-        '''
-        This points to a HEAP_SUBSEGMENT, but ensures that it uses the same
-        source of any ptype.encoded_t that parented it. This is intended to
-        be used by the _HEAP_ENTRY definition that was defined earlier.
-        '''
-        _object_ = HEAP_SUBSEGMENT
-        def dereference(self, **attrs):
-            if isinstance(self.source, ptypes.provider.proxy) and self.parent is not None:
-                p = self.getparent(_HEAP_ENTRY)
-                attrs.setdefault('source', p.source)
-            return super(PHEAP_SUBSEGMENT, self).dereference(**attrs)
 
     class HEAP_LOCAL_DATA(pstruct.type):
         def CrtZone(self):
