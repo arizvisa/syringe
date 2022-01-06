@@ -270,6 +270,25 @@ if 'HeapEntry':
         def AllocationCount(self):
             return self['BlockUnits'].li.int() >> 1
 
+    class HEAP_BUCKET_ARRAY(parray.type):
+        '''This is a synthetic array type used for providing utility methods to any child definitions.'''
+        _object_, length = HEAP_BUCKET, 0
+
+        def enumerate(self):
+            '''Iterate through all of the buckets yielding the number of units and the bucket that contains it.'''
+            for item in self:
+                units = item['BlockUnits']
+                yield units.int(), item
+            return
+
+        def ByUnits(self, units):
+            '''Iterate through all of the buckets finding the smallest one that can contain the requested number of units.'''
+            for item in self:
+                if units <= item['BlockUnits'].int():
+                    return item
+                continue
+            raise error.NotFoundException(self, 'ByUnits', message="Unable to find a Bucket for the requested number of units ({:#x})".format(units))
+
     class HEAP_ENTRY_EXTRA(pstruct.type):
         def __padding(self):
             size = 8 if getattr(self, 'WIN64', False) else 4
@@ -2119,6 +2138,39 @@ if 'LFH':
             index = self['LastUsed']
             return self['CachedItems'][index.int()].d
 
+    class HEAP_LOCAL_SEGMENT_INFO_ARRAY(parray.type):
+        '''This is a synthetic array type used for providing utility methods to any child definitions.'''
+        _object_, length = HEAP_LOCAL_SEGMENT_INFO or P(HEAP_LOCAL_SEGMENT_INFO), 0
+
+        def enumerate(self, reload=False):
+            '''Iterate through the array yielding the item's "BucketIndex" along with the item itself.'''
+            for index, item in enumerate(self):
+
+                # If our element is a pointer, then we need to determine whether
+                # we should automatically load it or ignore it.
+                if isinstance(item, ptype.pointer_t):
+                    if item.int() and (True if reload else item.d.initializedQ()):
+                        item = item.d.l if reload else item.d.li
+                        yield item['BucketIndex'].int(), item
+
+                    # If we received a valid pointer, but were explicitly told
+                    # that we're not allowed to load it, then issue a warning.
+                    elif item.int():
+                        logging.warning("{:s} : Ignoring pointer element {:s} -> {:s} at the current index ({:d}) due to its value not having yet been dereferenced.".format(self.instance(), item.instance(), item.summary(), index))
+                    continue
+
+                # Otherwise we can just yield the field that we care about.
+                yield item['BucketIndex'].int(), item
+            return
+
+        def ByBucketIndex(self, index, reload=False):
+            '''Slowly iterate through all of the items in the array looking for the element that is responsible for the provided bucket index.'''
+            for bucketindex, item in self.enumerate(reload=reload):
+                if index == bucketindex:
+                    yield item
+                continue
+            raise error.NotFoundException(self, 'ByBucketIndex', message="Unable to find the element for the requested bucket index ({:d}).".format(index))
+
     class LFH_BLOCK_ZONE(pstruct.type):
         def __SubSegments(self):
             try:
@@ -2283,7 +2335,7 @@ if 'LFH':
                     (ULONG, 'Sequence'),
                     (ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'DeleteRateThreshold'),
                     (aligned, 'align(SegmentInfo)'),
-                    (dyn.array(HEAP_LOCAL_SEGMENT_INFO, 128), 'SegmentInfo'),
+                    (dyn.clone(HEAP_LOCAL_SEGMENT_INFO_ARRAY, _object_=HEAP_LOCAL_SEGMENT_INFO, length=128), 'SegmentInfo'),
                 ])
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
@@ -2344,7 +2396,7 @@ if 'LFH':
                     (dyn.block(0 if getattr(self, 'WIN64', False) else 4), 'padding(SizeInCache)'),
                     (HEAP_BUCKET_RUN_INFO, 'RunInfo'),
                     (self._UserBlockCache, 'UserBlockCache'),
-                    (dyn.array(HEAP_BUCKET, 128), 'Buckets'),
+                    (dyn.clone(HEAP_BUCKET_ARRAY, length=128), 'Buckets'),
                     (HEAP_LOCAL_DATA, 'LocalData'),
                 ])
 
@@ -2367,9 +2419,9 @@ if 'LFH':
                     (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(RunInfo)'),
                     (self._UserBlockCache, 'UserBlockCache'),
                     (HEAP_LFH_MEM_POLICIES, 'MemoryPolicies'),
-                    (dyn.array(HEAP_BUCKET, 129), 'Buckets'),
-                    (dyn.array(P(HEAP_LOCAL_SEGMENT_INFO), 129), 'SegmentInfoArrays'),
-                    (dyn.array(P(HEAP_LOCAL_SEGMENT_INFO), 129), 'AffinitizedInfoArrays'),
+                    (dyn.clone(HEAP_BUCKET_ARRAY, length=129), 'Buckets'),
+                    (dyn.clone(HEAP_LOCAL_SEGMENT_INFO_ARRAY, _object_=P(HEAP_LOCAL_SEGMENT_INFO), length=129), 'SegmentInfoArrays'),
+                    (dyn.clone(HEAP_LOCAL_SEGMENT_INFO_ARRAY, _object_=P(HEAP_LOCAL_SEGMENT_INFO), length=129), 'AffinitizedInfoArrays'),
                     (P(SEGMENT_HEAP), 'SegmentAllocator'),
                     (dyn.align(8), 'align(LocalData)'),
                     (HEAP_LOCAL_DATA, 'LocalData'),
@@ -2379,22 +2431,18 @@ if 'LFH':
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
-        def BucketByUnits(self, units):
-            '''Iterate through all of the buckets finding the smallest one that can contain the requested number of units.'''
-            for index, item in enumerate(self['Buckets']):
-                if units <= item['BlockUnits'].int():
-                    return item
-                continue
-            raise error.NotFoundException(self, 'BucketByUnits', message="Unable to find a Bucket for the requested units ({:#x})".format(units))
+        def BucketByUnits(self, units, reload=False):
+            buckets = self['Buckets'].l if reload else self['Buckets'].li
+            return buckets.ByUnits(units)
 
         def BucketByIndex(self, index, reload=False):
             '''Return the Bucket for a given index.'''
             buckets = self['Buckets'].l if reload else self['Buckets'].li
             return buckets[index]
 
-        def SegmentInfoByUnits(self, units):
+        def SegmentInfoByUnits(self, units, reload=False):
             '''Return the HEAP_LOCAL_SEGMENT_INFO for a specific number of units.'''
-            bucket = self.BucketByUnits(units)
+            bucket = self.BucketByUnits(units, reload=reload)
             index = bucket['SizeIndex'].int()
 
             # If we are using the "SegmentInfoArrays" pointer array, then index into it.
