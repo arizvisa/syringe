@@ -378,7 +378,9 @@ class terminated(type):
     length = None
     def isTerminator(self, value):
         '''intended to be overloaded. should return True if element /value/ represents the end of the array.'''
-        raise error.ImplementationError(self, 'terminated.isTerminator')
+        if self.length is None:
+            raise error.ImplementationError(self, 'terminated.isTerminator')
+        return False
 
     def __len__(self):
         '''x.__len__() <==> len(x)'''
@@ -388,10 +390,12 @@ class terminated(type):
             return len(self.value)
         return super(terminated, self).__len__()
 
-    def alloc(self, fields=(), **attrs):
-        attrs.setdefault('length', len(fields))
-        attrs.setdefault('isTerminator', lambda value: False)
-        return super(terminated, self).alloc(fields, **attrs)
+    def alloc(self, *fields, **attrs):
+        if not fields:
+            return super(terminated, self).alloc(**attrs)
+        items, = fields
+        attrs.setdefault('length', len(items))
+        return super(terminated, self).alloc(items, **attrs)
 
     def load(self, **attrs):
         try:
@@ -445,6 +449,9 @@ class uninitialized(terminated):
         if self.value is not None:
             return sum(item.size() for item in self.value if item.value is not None)
         raise error.InitializationError(self, 'uninitialized.size')
+
+    def alloc(self, fields=(), **attrs):
+        return super(uninitialized, self).alloc(fields, **attrs)
 
     def __properties__(self):
         res = super(uninitialized, self).__properties__()
