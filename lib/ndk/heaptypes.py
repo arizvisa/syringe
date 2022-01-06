@@ -2901,7 +2901,7 @@ if 'Heap':
             # is to grab the blocklist that owns it. This way we can tell
             # that if the blocklist has an ExtraItem, then we need to call
             # a method to get the list of chunks that should get split.
-            blocklist = self.getparent(HEAP_LIST_LOOKUP)
+            blocklist = slot.getparent(HEAP_LIST_LOOKUP)
             if blocklist['ExtraItem'].int():
                 return slot.FreeChunk()
 
@@ -2989,7 +2989,7 @@ if 'Heap':
             if slot < 0:
                 raise error.ListHintException(self, 'HEAP_LIST_LOOKUP', message="Invalid index was requested ({:d}) which is not supported by the current {:s} with a minimum BaseIndex of {:d}.".format(index, self.instance(), self['BaseIndex'].int()), index=index, base=self['BaseIndex'].int(), size=self['ArraySize'].int(), lookup=self)
 
-            elif self['ArraySize'] <= slot:
+            elif self['ArraySize'].int() <= slot:
                 logging.warning("{:s} : The requested index ({:d}) is an OutOfRangeItem and is not within the boundaries ({:d}<>{:d}) of the last {:s}.".format(self.instance(), index, self['BaseIndex'].int(), self['BaseIndex'].int() + self['ArraySize'].int(), self.classname()))
 
             # Return the HEAP_LIST_LOOKUP that we stopped on.
@@ -3014,7 +3014,7 @@ if 'Heap':
             # Grab the bitmap and scan for the next slot that's in use.
             hints = self['ListsInUseUlong'].d.l if reload else self['ListsInUseUlong'].d.li
             nearest = hints.scan(slot + 1)
-            return self.ListHint(nearest, reload=reload)
+            return self.ListHint(self['BaseIndex'].int() + nearest, reload=reload)
 
         def Smaller(self, units, reload=False):
             '''Return the nearest slot smaller than the specified number of units that's in use.'''
@@ -3025,7 +3025,7 @@ if 'Heap':
             # Grab the bitmap and scan for the next slot that's in use.
             hints = self['ListsInUseUlong'].d.l if reload else self['ListsInUseUlong'].d.li
             nearest = hints.scanreverse(slot - 1)
-            return self.ListHint(nearest, reload=reload)
+            return self.ListHint(self['BaseIndex'].int() + nearest, reload=reload)
 
         def Check(self, units, reload=False):
             '''Return whether the specified slot is actually in use according to the bitmap.'''
