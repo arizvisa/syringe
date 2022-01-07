@@ -2696,13 +2696,42 @@ if 'Heap':
                 self.attributes['_HEAP_ENTRY_Encoding'] = self['EncodeFlagMask'].li.int(), tuple(item.int() for item in self['Encoding'].li['Keys'])
             return ULONGLONG if getattr(self, 'WIN64', False) else ULONG
 
-        class _FrontEndHeapUsageData(parray.type):
-            _object_, length = USHORT, 0
+        class _FrontEndHeapUsageData(pbinary.array):
+            class _HeapBucketCounter(pbinary.struct):
+                _fields_ = [
+                    (11, 'high'),
+                    (5, 'low'),
+                ]
+                def FrontEndQ(self):
+                    '''Return whether the counters will result in the frontend heap being used.'''
+
+                    # First check the low counter.
+                    if self['low'] > 0x10:
+                        return True
+
+                    # Next check the high counter.
+                    return self['high'] > 0x7f8
+
+                def BackEndQ(self):
+                    return not self.FrontEndQ()
+
+                def Count(self):
+                    return self['low']
+
+                def summary(self):
+                    return "{:#04x} :> low={:d} high={:#x}".format(self.int(), self['low'], self['high'])
+            _object_, length = _HeapBucketCounter, 0
+
+            def BySize(self, size):
+                owner = self.getparent(HEAP)
+                units = owner.BlockUnits(size)
+                return self[units]
 
         def __FrontEndHeapUsageData(self):
             def FrontEndHeapUsageDataArray(this):
                 index = self['FrontEndHeapMaximumIndex'].li
-                return dyn.clone(self._FrontEndHeapUsageData, length=index.int())
+                t = dyn.clone(self._FrontEndHeapUsageData, length=index.int())
+                return pbinary.littleendian(t, 2)
             return P(FrontEndHeapUsageDataArray)
 
         def __init__(self, **attrs):
@@ -3040,7 +3069,7 @@ if 'Heap':
 
             # Now we know that the index points to an allocation count.
             usage = self['FrontEndHeapUsageData'].d.l if reload else self['FrontEndHeapUsageData'].d.li
-            return usage[units].int()
+            return usage[units].Count()
 
         def Buckets(self, reload=False):
             '''Iterate through each bucket that will use the frontend allocator.'''
