@@ -2138,7 +2138,7 @@ if 'LFH':
             index = self['LastUsed']
             return self['CachedItems'][index.int()].d
 
-    class HEAP_LOCAL_SEGMENT_INFO_ARRAY(parray.type):
+    class HEAP_LOCAL_SEGMENT_INFO_ARRAY(parray.terminated):
         '''This is a synthetic array type used for providing utility methods to any child definitions.'''
         _object_, length = HEAP_LOCAL_SEGMENT_INFO or P(HEAP_LOCAL_SEGMENT_INFO), 0
 
@@ -2375,6 +2375,12 @@ if 'LFH':
                 '''Return the correct element for the given bucket size.'''
                 raise NotImplementedError
 
+        class _NextSegmentInfoArrayAddress(HEAP_LOCAL_SEGMENT_INFO_ARRAY):
+            length = None
+            def isTerminator(self, item):
+                parent, guard = self.getparent(LFH_HEAP), item.blocksize() * 2 // 3
+                return parent['FirstUncommittedAddress'].int() <= item.getoffset() + item.blocksize() + guard
+
         def __init__(self, **attrs):
             super(LFH_HEAP, self).__init__(**attrs)
             integral = ULONGLONG if getattr(self, 'WIN64', False) else ULONG
@@ -2407,9 +2413,9 @@ if 'LFH':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(LFH_BLOCK_ZONE)), 'SubSegmentZones'),
                     (P(HEAP), 'Heap'),
 
-                    (P(ptype.undefined), 'NextSegmentInfoArrayAddress'),        # XXX: this might be an array that terminates at self['FirstUncommittedAddress']
-                    (P(ptype.undefined), 'FirstUncommittedAddress'),
-                    (P(ptype.undefined), 'ReservedAddressLimit'),
+                    (P(self._NextSegmentInfoArrayAddress), 'NextSegmentInfoArrayAddress'),
+                    (PVOID, 'FirstUncommittedAddress'),
+                    (PVOID, 'ReservedAddressLimit'),
                     (ULONG, 'SegmentCreate'),
                     (ULONG, 'SegmentDelete'),
                     (ULONG, 'MinimumCacheDepth'),
@@ -2717,7 +2723,7 @@ if 'Heap':
                     (self._FreeLists, 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (PVOID, 'CommitRoutine'),
-                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (UCHAR, 'LastSegmentIndex'),
@@ -2764,7 +2770,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
-                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (aligned, 'align(Counters)'),   # FIXME: used to be a byte
@@ -2813,7 +2819,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=fpointer(_HEAP_CHUNK, 'ListEntry')), 'FreeLists'),
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),
-                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
@@ -2869,8 +2875,8 @@ if 'Heap':
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),   # FIXME: this is encoded with something somewhere
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
-                    (rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA, 'CommitLimitData'),
-                    (P(lambda _: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
+                    #(rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA, 'CommitLimitData'),
+                    (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
                     (FrontEndHeap.Type, 'RequestedFrontEndHeapType'),
