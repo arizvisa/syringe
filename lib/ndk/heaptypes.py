@@ -1360,6 +1360,11 @@ if 'Frontend':
             (_HeapBucketLink, 'Blink'),
         ]
 
+        def Bucket(self):
+            if self['Blink'].FrontEndQ():
+                return self['Blink'].d
+            raise error.IncorrectChunkType(self, 'Bucket', message="Unable to return bucket due to entry not having yet been promoted to a frontend allocator ({:d} allocations).".format(self['Blink'].Count()))
+
         def FreeChunk(self):
             '''Return the first free heap chunk within the bucket.'''
             if self['Flink'].int():
@@ -3036,6 +3041,41 @@ if 'Heap':
             # Now we know that the index points to an allocation count.
             usage = self['FrontEndHeapUsageData'].d.l if reload else self['FrontEndHeapUsageData'].d.li
             return usage[units].int()
+
+        def Buckets(self, reload=False):
+            '''Iterate through each bucket that will use the frontend allocator.'''
+            blocklist = self['BlocksIndex'].d.l if reload else self['BlocksIndex'].d.li
+
+            # If the BlocksIndex has an extra-item, then we need to just iterate
+            # through their ListHints in order to enumerate their buckets.
+            if blocklist['ExtraItem'].int():
+                while blocklist.getoffset():
+                    blocklist = blocklist.l if reload else blocklist.li
+                    listhints = blocklist['ListHints'].d.l if reload else blocklist['ListHints'].d.li
+
+                    # Iterate through each item while verifying that it's a
+                    # frontend chunk, and then dereferencing its bucket if so.
+                    for item in listhints:
+                        if item.FrontEndQ():
+                            yield item.Bucket()
+                        continue
+
+                    # Traverse to the next one.
+                    blocklist = blocklist['ExtendedLookup'].d
+                return
+
+            # Otherwise, we need to combine the "FrontEndHeapStatusBitmap" with
+            # the "FrontEndHeapUsageData", and use it with the "FrontEndHeap" to
+            # identify the buckets that are being used.
+            status, usage, fheap = (self[fld] for fld in ['FrontEndHeapStatusBitmap', 'FrontEndHeapUsageData', 'FrontEndHeap'])
+            usage, fheap = (usage.d.l, fheap.d.l) if reload else (usage.d.li, fheap.d.li)
+
+            # Now we can iterate through the bits in our bitmap
+            usage = usage.l if reload else usage
+            for units in status.iterate():
+                index = usage[units].int()
+                yield fheap.BucketByIndex(index)
+            return
 
     class HEAP_LIST_LOOKUP(pstruct.type, versioned):
         def __ExtendedLookup(self):
