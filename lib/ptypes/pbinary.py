@@ -2032,12 +2032,11 @@ def bigendian(p, **attrs):
     return ptype.clone(p, **attrs)
 
 def littleendian(*parameters, **attrs):
-    if len(parameters) > 1:
+    if len(parameters) > 2:
         fmt_attrs = ("{:s}={!s}".format(name, value) for name, value in attrs.items())
-        raise AssertionError(u"@{:s}.littleendian({:s}{:s}) : More than {:d} parameter ({:d}) was specified as target for decoration.".format(__name__, ', '.join(map("{!s}".format, parameters)), ", {:s}".format(', '.join(fmt_attrs)) if attrs else '', 1, len(parameters)))
+        raise AssertionError(u"@{:s}.littleendian({:s}{:s}) : More than {:d} parameters ({:d}) were specified.".format(__name__, ', '.join(map("{!s}".format, parameters)), ", {:s}".format(', '.join(fmt_attrs)) if attrs else '', 2, len(parameters)))
 
-    def littleendian(definition, length):
-        newattrs = {name : value for name, value in attrs.items()}
+    def littleendian(definition, length, **newattrs):
         newattrs.setdefault('__name__', definition._object_.__name__ if issubclass(definition, partial) else definition.__name__)
 
         newattrs.setdefault('byteorder', config.byteorder.littleendian)
@@ -2049,12 +2048,12 @@ def littleendian(*parameters, **attrs):
             return ptype.clone(partial, _object_=definition, **newattrs)
         return ptype.clone(definition, **newattrs)
 
-    if parameters:
-        parameter, = parameters
-        if bitmap.isinteger(parameter):
-            return functools.partial(littleendian, length=parameter)
-        return littleendian(parameter, length=Config.integer.size)
-    return functools.partial(littleendian, length=Config.integer.size)
+    if len(parameters) > 1:
+        return littleendian(*parameters, **attrs)
+    parameter, = parameters
+    if bitmap.isinteger(parameter):
+        return functools.partial(littleendian, length=parameter)
+    return littleendian(parameter, length=Config.integer.size)
 
 def align(bits):
     '''Returns a type that will align fields to the specified bit size'''
