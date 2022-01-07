@@ -267,9 +267,6 @@ if 'HeapEntry':
             (_BucketFlags, 'BucketFlags'),
         ]
 
-        def AllocationCount(self):
-            return self['BlockUnits'].li.int() >> 1
-
     class HEAP_BUCKET_ARRAY(parray.type):
         '''This is a synthetic array type used for providing utility methods to any child definitions.'''
         _object_, length = HEAP_BUCKET, 0
@@ -497,7 +494,7 @@ if 'HeapEntry':
             return super(HEAP_ENTRY, self).summary()
 
     class HEAP_UNPACKED_ENTRY(pstruct.type):
-        class _UnusedBytes(pbinary.struct):
+        class _UnusedBytes(pbinary.flags):
             class _Unused(HEAP_ENTRY._Code4._Backend._Type):
                 length = 6
             _fields_ = [
@@ -1294,50 +1291,68 @@ if 'Frontend':
         class _HeapBucketLink(ptype.pointer_t):
             class _HeapBucketCounter(pstruct.type):
                 _fields_ = [
-                    (USHORT, 'UnknownEvenCount'),
-                    (USHORT, 'AllocationCount'),
+                    (USHORT, 'DoubleCount'),
+                    (USHORT, 'Increment'),
                     (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'Padding'),
                 ]
-
                 def get(self):
-                    t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-                    res = self.cast(t)
-                    return res.int()
+                    integer = self.cast(pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t)
+                    return integer.int()
+
+                def FrontEndQ(self):
+                    '''Return whether the counters will result in the frontend heap being used.'''
+
+                    # First check if the DoubleCount has its lowest bit set.
+                    if self['DoubleCount'].int() & 1:
+                        return True
+
+                    # Otherwise check if the Increment counter is larger than 0x1000.
+                    return self['Increment'].int() >= 0x1000 and self['DoubleCount'].int()
 
             _value_ = _HeapBucketCounter
             _object_ = HEAP_BUCKET
 
             def decode(self, object, **attrs):
-                t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-                res = object.cast(t)
-                if res.int() & 1:
-                    res.set(res.int() & ~1)
+                result = object.cast(pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t)
 
-                else:
-                    res.set(res.int() & ~0)
-                    raise error.InvalidHeapType(self, 'decode', message="Address {:#x} is not a valid HEAP_BUCKET".format(res.int()))
-                return super(FreeListBucket._HeapBucketLink, self).decode(res, **attrs)
+                # If the low-bit is set, then we just need to mask it away before decoding.
+                if result.int() & 1:
+                    result.set(result.int() & ~1)
+                    return super(FreeListBucket._HeapBucketLink, self).decode(result, **attrs)
+
+                # Otherwise this is not a pointer that can be decoded.
+                result.set(result.int() & ~0)
+                raise error.InvalidHeapType(self, 'decode', message="Address {:#x} is not a valid HEAP_BUCKET".format(result.int()))
 
             def FrontEndQ(self):
-                res = self.object.cast(pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t)
-                return True if res.int() & 1 else False
+                object = self.object
+                return object.FrontEndQ()
 
             def BackEndQ(self):
-                return not self.BackEndQ()
+                return not self.FrontEndQ()
+
+            def Count(self):
+                if self.BackEndQ():
+                    res = self.object['DoubleCount'].int()
+                    return res // 2
+                return None
 
             def summary(self):
-                t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-                res = self.object
-                if res.cast(t).int() & 1:
-                    return "(FRONTEND) {:s}".format(super(FreeListBucket._HeapBucketLink, self).summary())
-                return "(BACKEND) AllocationCount={:#x} UnknownEvenCount={:#x}".format(res['AllocationCount'].int(), res['UnknownEvenCount'].int())
+                object = self.object
+                if object.FrontEndQ():
+                    integer = object.get()
+                    return "(FRONTEND) {:#x} -> *{:#x}".format(integer, integer & ~1)
+
+                # Otherwise it's the backend and we need to display the counters.
+                return "(BACKEND) Increment={:#x} DoubleCount={:#x}".format(object['Increment'].int(), object['DoubleCount'].int())
 
             def details(self):
-                t = pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint32_t
-                res = self.object.cast(t)
-                if res.int() & 1:
-                    return super(FreeListBucket._HeapBucketLink, self).summary()
-                return self.object.details()
+                if self.FrontEndQ():
+                    return self.summary()
+
+                # Otherwise this is a structure and we need to place it at the right address.
+                result = self.object.copy(offset=self.getoffset())
+                return result.details()
             repr = details
 
         _fields_ = [
@@ -1351,6 +1366,9 @@ if 'Frontend':
                 return self['Flink'].d
             raise error.NotFoundException(self, 'Bucket', message="No available chunks were pointed to by this particular bucket.".format(offset, _HEAP_ENTRY.typename()))
 
+        def Count(self):
+            '''Return the number of backend allocations that were found in the FreeListBucket or None if it's pointing to a HEAP_BUCKET.'''
+            return self['Blink'].Count()
         def FrontEndQ(self):
             return self['Blink'].FrontEndQ()
         def BackEndQ(self):
@@ -1377,6 +1395,9 @@ if 'Frontend':
 
     class ListsInUseBytes(BitmapBitsBytes):
         _object_, length = UCHAR, 0
+        def summary(self):
+            result = self.bitmap()
+            return "({:#x}, {:d}) ...{:d} bits set...".format(*(F(result) for F in [bitmap.int, bitmap.size, bitmap.hamming]))
 
 if 'LookasideList':
     class HEAP_LOOKASIDE(pstruct.type):
@@ -2978,10 +2999,8 @@ if 'Heap':
             # dereference the pointer to get to get the next chunk.
             return slot.d
 
-        def ListHint(self, size, reload=True):
+        def ListHint(self, size, reload=False):
             '''Return the ListHint from the BlockIndex according to the specified ``size``'''
-            if not self['FrontEndHeapType']['LFH']:
-                raise error.IncorrectHeapType(self, 'ListHint', message="Invalid value for FrontEndHeapType ({:s})".format(self['FrontEndHeapType'].summary()), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             units = self.BlockUnits(size)
 
             # Use the BlockIndex with the correct BlockList in order
@@ -2992,19 +3011,45 @@ if 'Heap':
             # Now we can simply use it to return the ListHint that was requested.
             return blocklist.ListHint(units)
 
+        def BackendCount(self, size, reload=False):
+            '''Return the number of backend allocation counts for a given size or None if the frontend heap will be used.'''
+            units = self.BlockUnits(size)
+
+            # Use the BlockIndex with the correct BlockList in order
+            # to get the ListHint for the desired number of units.
+            bi = self['BlocksIndex'].d.l if reload else self['BlocksIndex'].d.li
+            blocklist = bi.HeapList(units, reload=reload)
+
+            # If there's an "ExtraItem" field in the blocklist, then we return
+            # the count from the ListHint.
+            if blocklist['ExtraItem'].int():
+                item = blocklist.ListHint(units)
+                return item.Count()
+
+            # Otherwise, we need to fetch two fields. The first will be
+            # the "FrontEndHeapStatusBitmap" which will be used with
+            # the second, the "FrontEndHeapUsageData", to determine whether
+            # we're getting an allocation count or a bucket index.
+            if self['FrontEndHeapStatusBitmap'].check(units):
+                return None
+
+            # Now we know that the index points to an allocation count.
+            usage = self['FrontEndHeapUsageData'].d.l if reload else self['FrontEndHeapUsageData'].d.li
+            return usage[units].int()
+
     class HEAP_LIST_LOOKUP(pstruct.type, versioned):
         def __ExtendedLookup(self):
             return P(HEAP_LIST_LOOKUP)
 
         def __ListsInUseUlong(self):
             arraysize, baseindex = (self[fld].li.int() for fld in ['ArraySize', 'BaseIndex'])
-            count = (arraysize - baseindex) * (1. / 32)
-            target = dyn.clone(ListsInUseUlong, length=math.trunc(count))
+            bits = arraysize - baseindex
+            target = dyn.clone(ListsInUseUlong, length=bits // 32)
             return P(target)
 
         class _ListHints(parray.type):
             _object_, length = PVOID, 0
-            # FIXME: we can summarize this by at least showing the number of entries
+            # FIXME: we can summarize this by showing the entries that are backend or frontend
 
         def __ListHints(self):
             extra, sentinel, arraysize, baseindex = (self[fld].li for fld in ['ExtraItem', 'ListHead', 'ArraySize', 'BaseIndex'])
