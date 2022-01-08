@@ -298,14 +298,14 @@ class MemorySegmentEntry(SegmentEntry):
     the OptionalHeader when padding the segment's data.
     '''
     noncontiguous = True
-    def __Padding(self):
+    def __Alignment(self):
         p = self.getparent(Next)
         header = p.Header()
         optionalheader = header['OptionalHeader'].li
         return dyn.align(optionalheader['SectionAlignment'].int(), undefined=True)
 
     _fields_ = [
-        (__Padding, 'Padding'),
+        (__Alignment, 'Alignment'),
         (lambda self: dyn.block(self.Section.getloadedsize()), 'Data'),
     ]
 
@@ -315,14 +315,14 @@ class FileSegmentEntry(SegmentEntry):
     disk and hasn't been mapped into memory. This honors the FileAlignment
     field from the OptionalHeader when padding the segment's data.
     '''
-    def __Padding(self):
+    def __Alignment(self):
         p = self.getparent(Next)
         header = p.Header()
         optionalheader = header['OptionalHeader'].li
-        return dyn.align(optionalheader['FileAlignment'].int(), undefined=True)
+        return dyn.align(optionalheader['FileAlignment'].int(), undefined=False)
 
     _fields_ = [
-        (__Padding, 'Padding'),
+        (__Alignment, 'Alignment'),
         (lambda self: dyn.block(self.Section.getreadsize()), 'Data'),
     ]
 
@@ -343,6 +343,13 @@ class SegmentTableArray(parray.type):
 @NextData.define
 class IMAGE_NT_DATA(pstruct.type, Header):
     type = b'PE'
+
+    def __Padding(self):
+        if isinstance(self.source, ptypes.provider.memorybase):
+            alignment = 0x1000
+            res = (alignment - self.getoffset() % alignment) & (alignment - 1)
+            return dyn.block(res)
+        return dyn.block(0)
 
     def __Segments(self):
         header = self.p.Header()
@@ -388,6 +395,7 @@ class IMAGE_NT_DATA(pstruct.type, Header):
         return ptype.undefined
 
     _fields_ = [
+        (__Padding, 'Padding'),
         (__Segments, 'Segments'),
         (__CertificatePadding, 'CertificatePadding'),
         (__Certificate, 'Certificate'),

@@ -22,7 +22,7 @@ class IMAGE_DATA_DIRECTORY(pstruct.type):
     def __Address(self):
         t = self._object_
         if ptypes.iscontainer(t):
-            return self.addressing(dyn.clone(t, blocksize=lambda s: s.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int()), type=uint32)
+            return self.addressing(dyn.clone(t, blocksize=lambda self: self.getparent(IMAGE_DATA_DIRECTORY)['Size'].li.int()), type=uint32)
         return self.addressing(t, type=uint32)
 
     _fields_ = [
@@ -89,11 +89,11 @@ class IMAGE_SECTION_HEADER(pstruct.type):
     _fields_ = [
         (dyn.clone(pstr.string, length=8), 'Name'),
         (uint32, 'VirtualSize'),
-        (virtualaddress(lambda s:dyn.block(s.parent.getloadedsize()), type=uint32), 'VirtualAddress'),
+        (virtualaddress(lambda target: dyn.block(target.parent.getloadedsize()), type=uint32), 'VirtualAddress'),
         (uint32, 'SizeOfRawData'),
-        (fileoffset(lambda s:dyn.block(s.parent.getreadsize()), type=uint32), 'PointerToRawData'),
-        (fileoffset(lambda s:dyn.clone(relocations.RelocationTable, length=s.parent['NumberOfRelocations'].li.int()), type=uint32), 'PointerToRelocations'),
-        (fileoffset(lambda s:dyn.clone(linenumbers.LineNumberTable, length=s.parent['NumberOfLinenumbers'].li.int()), type=uint32), 'PointerToLinenumbers'),
+        (fileoffset(lambda target: dyn.block(target.parent.getreadsize()), type=uint32), 'PointerToRawData'),
+        (fileoffset(lambda target: dyn.clone(relocations.RelocationTable, length=target.parent['NumberOfRelocations'].li.int()), type=uint32), 'PointerToRelocations'),
+        (fileoffset(lambda target: dyn.clone(linenumbers.LineNumberTable, length=target.parent['NumberOfLinenumbers'].li.int()), type=uint32), 'PointerToLinenumbers'),
         (uint16, 'NumberOfRelocations'),
         (uint16, 'NumberOfLinenumbers'),
         (pbinary.littleendian(IMAGE_SCN), 'Characteristics'),
@@ -115,14 +115,7 @@ class IMAGE_SECTION_HEADER(pstruct.type):
         return self['SizeOfRawData'].int() + res
 
     def getloadedsize(self):
-
-        nt = self.getparent(Header)
-        alignment = max(nt['OptionalHeader']['SectionAlignment'].int(), 0x1000)
-
-        # XXX: even though the loadedsize is aligned to SectionAlignment,
-        #      the loader doesn't actually map data there and thus the
-        #      actual mapped size is usually rounded to pagesize
-
+        alignment = 0x1000
         res = (alignment - self['VirtualSize'].int() % alignment) & (alignment - 1)
         return self['VirtualSize'].int() + res
 
@@ -263,9 +256,9 @@ class IMAGE_OPTIONAL_HEADER(pstruct.type):
         ( uint32, 'SizeOfUninitializedData' ),
         ( virtualaddress(ptype.undefined, type=uint32), 'AddressOfEntryPoint' ),
         ( uint32, 'BaseOfCode' ),
-        ( lambda s: pint.uint_t if s.is64() else uint32, 'BaseOfData' ),
+        ( lambda self: pint.uint_t if self.is64() else uint32, 'BaseOfData' ),
 
-        ( lambda s: uint64 if s.is64() else uint32, 'ImageBase' ),
+        ( lambda self: uint64 if self.is64() else uint32, 'ImageBase' ),
         ( uint32, 'SectionAlignment' ),
         ( uint32, 'FileAlignment' ),
         ( uint16, 'MajorOperatingSystemVersion' ),
@@ -280,10 +273,10 @@ class IMAGE_OPTIONAL_HEADER(pstruct.type):
         ( uint32, 'CheckSum' ),
         ( IMAGE_SUBSYSTEM_, 'Subsystem' ),
         ( pbinary.littleendian(IMAGE_DLLCHARACTERISTICS), 'DllCharacteristics' ),
-        ( lambda s: uint64 if s.is64() else uint32, 'SizeOfStackReserve' ),
-        ( lambda s: uint64 if s.is64() else uint32, 'SizeOfStackCommit' ),
-        ( lambda s: uint64 if s.is64() else uint32, 'SizeOfHeapReserve' ),
-        ( lambda s: uint64 if s.is64() else uint32, 'SizeOfHeapCommit' ),
+        ( lambda self: uint64 if self.is64() else uint32, 'SizeOfStackReserve' ),
+        ( lambda self: uint64 if self.is64() else uint32, 'SizeOfStackCommit' ),
+        ( lambda self: uint64 if self.is64() else uint32, 'SizeOfHeapReserve' ),
+        ( lambda self: uint64 if self.is64() else uint32, 'SizeOfHeapCommit' ),
         ( uint32, 'LoaderFlags' ),
         ( uint32, 'NumberOfRvaAndSizes' ),
     ]
@@ -333,7 +326,7 @@ class Certificate(pstruct.type):
         (uint32, 'dwLength'),
         (wRevision, 'wRevision'),
         (wCertificateType, 'wCertificateType'),
-        (lambda s: dyn.block(s['dwLength'].li.int() - 8), 'bCertificate'),
+        (lambda self: dyn.block(self['dwLength'].li.int() - 8), 'bCertificate'),
     ]
 
 # https://support.microsoft.com/en-us/help/287547/object-ids-associated-with-microsoft-cryptography
