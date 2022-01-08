@@ -319,8 +319,8 @@ if 'HeapEntry':
                     length, _values_ = 3, [
                         ('Chunk', 0),
                         ('Segment', 1),
-                        ('LargeChunk', 4),
-                        ('Linked', 5),
+                        ('LargeChunk', 4),  # regular chunk
+                        ('Linked', 5),      # linked to subsegment (PreviousSize ^ Encoding.PreviousSize)
                         ('Special', 0x3f)   # set if >= 0x3f
                     ]
                 _fields_ = [
@@ -340,7 +340,7 @@ if 'HeapEntry':
 
             class _Frontend(pbinary.struct):
                 _fields_ = [
-                    (1, 'Unknown'),         # unused actually
+                    (1, 'Unknown'),         # used on w10
                     (6, 'UnusedBytes'),     # this is 5 bits on older implementations
                 ]
                 def summary(self):
@@ -893,7 +893,8 @@ if 'HeapEntry':
 
         def __frontend_properties(self):
             res = super(_HEAP_ENTRY, self).properties()
-            res['EntryOffsetQ'] = self.EntryOffsetQ()
+            # FIXME: this should be deprecated
+            #res['EntryOffsetQ'] = self.EntryOffsetQ()
             return res
 
         def __frontend_summary(self):
@@ -906,10 +907,11 @@ if 'HeapEntry':
             '''HEAP_ENTRY after decoding on win8'''
             _fields_ = [
                 (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
-                (UINT32, 'SubSegment'),
-                (USHORT, 'PreviousSize'),
-                (UCHAR, 'EntryOffset'),
-                (HEAP_ENTRY._Code4, 'Flags'),
+                (ULONG, 'EntryOffset'),         # distance from userdataheader
+
+                (UCHAR, 'PreviousSize'),        # FF
+                (USHORT, 'SmallTagIndex'),      # block index
+                (HEAP_ENTRY._Code4, 'Flags'),   # FF
             ]
 
             def BusyQ(self):
@@ -942,7 +944,7 @@ if 'HeapEntry':
                         (pint.uint64_t, 'Encoded'),
                     ])
 
-                # 32-bit seems to swap the Encoded/Decoded fields.
+                # 32-bit appears to swap the Encoded/Decoded fields.
                 else:
                     f.extend([
                         (pint.uint32_t, 'Encoded'),
@@ -951,12 +953,10 @@ if 'HeapEntry':
                 return
 
             def EncodedValue(self):
-                res = self['Encoded'].int()
-                return res & 0xffffffff
+                return self['Encoded'].int() & 0xffffffff
 
             def EncodedUntouchedValue(self):
-                res = self['Encoded'].int()
-                return res & ~0xffffffff
+                return self['Encoded'].int() & ~0xffffffff
 
         def __frontend_encode8(self, object, **attrs):
             object = object.cast(self.__FRONTEND_VIEW__)
@@ -964,21 +964,18 @@ if 'HeapEntry':
             # Fetch some cached attributes.
             OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
 
-            # Now to encode our 64-bit header
+            # Now to encode our first 32-bits.
             if getattr(self, 'WIN64', False):
-                dn = self.getoffset()
-                dn >>= 4
-                dn ^= object.EncodedValue()
-                dn ^= OwnerHeap.getoffset() & 0xffffffff
-                dn ^= LFHKey & 0xffffffff
+                dn = OwnerHeap.getoffset() ^ LFHKey
+                dn ^= self.getoffset() >> 4
+                dn &= 0xffffffff
+                dn ^= object.EncodedValue() << 0xc
 
-            # Encode the 32-bit header
+            # Encode the 32-bit entry offset.
             else:
-                dn = self.getoffset()
-                dn >>= 3
-                dn ^= OwnerHeap.getoffset()
-                dn ^= object['Encoded'].int()
-                dn ^= LFHKey
+                dn = OwnerHeap.getoffset() ^ LFHKey
+                dn ^= self.getoffset() >> 3
+                dn ^= object.EncodedValue() << 0xd
 
             result = object.copy().set(Encoded=dn | object.EncodedUntouchedValue())
             return super(_HEAP_ENTRY, self).encode(result)
@@ -989,20 +986,20 @@ if 'HeapEntry':
             # Fetch some cached attributes.
             OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
 
-            # FIXME: verify this decoding...it might work.
+            # Decode the 32-bit dword from the entry.
             if getattr(self, 'WIN64', False):
-                dn = self.getoffset()
-                dn >>= 4
+                dn = OwnerHeap.getoffset() ^ LFHKey
+                dn ^= self.getoffset() >> 4
+                dn &= 0xffffffff
                 dn ^= object.EncodedValue()
-                dn ^= OwnerHeap.getoffset() & 0xffffffff
-                dn ^= LFHKey & 0xffffffff
+                dn >>= 0xc
 
+            # Decode the 32-bit header from the entry.
             else:
-                dn = self.getoffset()
-                dn >>= 3
-                dn ^= OwnerHeap.getoffset()
-                dn ^= object['Encoded'].int()
-                dn ^= LFHKey
+                dn = OwnerHeap.getoffset() ^ LFHKey
+                dn ^= self.getoffset() >> 3
+                dn ^= object.EncodedValue()
+                dn >>= 0xd
 
             res = object.copy().set(Encoded=dn | object.EncodedUntouchedValue())
             return super(_HEAP_ENTRY, self).decode(res)
@@ -1032,13 +1029,12 @@ if 'HeapEntry':
             self = self.d.li
             return blocksize * self['Size'].int()
 
+        # FIXME: this method might not be valid anymore.
         def PreviousSize(self):
             '''Return the decoded PreviousSize field'''
             if not self.BackEndQ():
                 raise error.InvalidHeapType(self, 'Size')
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-
-            # FIXME: this method might not be valid anymore.
 
             # Use the "PreviousSize" from our decoded value and combine it with the blocksize.
             self = self.d.li
@@ -1052,10 +1048,12 @@ if 'HeapEntry':
             header = self.object
             return header.FreeEntryOffsetQ()
 
+        # FIXME: this should be deprecated or corrected
         def EntryOffsetQ(self):
             if not self.FrontEndQ():
                 return False
             res = self.d.li
+
 
             # We have an EntryOffset if the "EntryOffset" field is
             # set and our unencoded Flags is set to 5.
@@ -1067,6 +1065,7 @@ if 'HeapEntry':
                 return False
             return False
 
+        # FIXME: this should be deprecated or corrected
         def EntryOffset(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'EntryOffset', message='Unable to fetch the entry-offset for a non-frontend type')
@@ -1075,6 +1074,7 @@ if 'HeapEntry':
             res = self.d.li
             return res['EntryOffset'].int() * res.size()
 
+        # FIXME: this should be deprecated or corrected
         def SubSegment(self):
             if not self.FrontEndQ():
                 raise error.InvalidHeapType(self, 'SubSegment', message='Unable to dereference the subsegment for a non-frontend type')
@@ -1913,7 +1913,7 @@ if 'LFH':
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
+                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),    # This is actually a union to an SLIST_ENTRY
                     (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'GuardPagePresent'),
@@ -1989,7 +1989,7 @@ if 'LFH':
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'AffinityIndex'),
 
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: HEAP_LOCAL_DATA.DeletedSubSegments
                     (ULONG, 'Lock'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
                 ])
@@ -1998,7 +1998,7 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
                     (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to the very first deleted subsegment
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to the very first deleted subsegment???
 
                     (INTERLOCK_SEQ, 'AggregateExchg'),
                     (USHORT, 'BlockSize'),
@@ -2008,7 +2008,7 @@ if 'LFH':
                     (UCHAR, 'AffinityIndex'),
 
                     (ULONG, 'Lock'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: when the subsegment is deleted, points to the next one
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: from HEAP_LOCAL_DATA.DeletedSubSegments
                     (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
                 ])
 
@@ -2105,7 +2105,7 @@ if 'LFH':
                     (P(HEAP_SUBSEGMENT), 'Hint'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
                     (self._CachedItems, 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
-                    (SLIST_HEADER, 'SListHeader'),              # This is where HEAP_USERDATA_HEADER are taken from?
+                    (SLIST_HEADER, 'SListHeader'),              # XXX: This pops HEAP_SUBSEGMENT.SFreeListEntry
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (ULONG, 'LastOpSequence'),
@@ -2119,8 +2119,8 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
-                    (self._CachedItems, 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
-                    (SLIST_HEADER, 'SListHeader'),              # This is where HEAP_USERDATA_HEADER are taken from?
+                    (self._CachedItems, 'CachedItems'),         # This is where cached HEAP_SUBSEGMENTs are taken from or put into
+                    (SLIST_HEADER, 'SListHeader'),              # XXX: This pops HEAP_SUBSEGMENT.SFreeListEntry
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (ULONG, 'LastOpSequence'),
                     (USHORT, 'BucketIndex'),
@@ -2303,7 +2303,7 @@ if 'LFH':
             f = self._fields_ = []
             f.extend([
                 #(dyn.clone(SLIST_HEADER, _object_=_UserBlocks), 'UserBlocks'),
-                (SLIST_HEADER, 'UserBlocks'),   # XXX: check this offset
+                (SLIST_HEADER, 'UserBlocks'),   # XXX: points to somewhere in HEAP_USERDATA_HEADER (Reserved?)
                 (ULONG, 'AvailableBlocks'),     # AvailableBlocks * 8 seems to be the actual size
                 (ULONG, 'MinimumDepth'),
             ])
@@ -2355,7 +2355,7 @@ if 'LFH':
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),   # XXX: HEAP_SUBSEGMENT.SFreeListEntry?
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
@@ -2366,7 +2366,7 @@ if 'LFH':
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),   # XXX: HEAP_SUBSEGMENT.SFreeListEntry?
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
@@ -2930,7 +2930,7 @@ if 'Heap':
                     (P(HEAP_LOCK), 'LockVariable'),
                     (dyn.clone(ENCODED_POINTER, _object_=ptype.undefined), 'CommitRoutine'),   # FIXME: this is encoded with something somewhere
                     (rtltypes.RTL_RUN_ONCE, 'StackTraceInitVar'),
-                    #(rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA, 'CommitLimitData'),
+                    (rtltypes.RTL_HEAP_MEMORY_LIMIT_DATA if getattr(self, 'WIN64', False) else ptype.undefined, 'CommitLimitData'),
                     (P(lambda target: FrontEndHeap.lookup(self['FrontEndHeapType'].li.int())), 'FrontEndHeap'),
                     (USHORT, 'FrontHeapLockCount'),
                     (FrontEndHeap.Type, 'FrontEndHeapType'),
