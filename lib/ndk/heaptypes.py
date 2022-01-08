@@ -260,26 +260,31 @@ if 'HeapEntry':
                 (2, 'DebugFlags'),
                 (1, 'UseAffinity'),
             ]
-
         _fields_ = [
             (WORD, 'BlockUnits'),
             (UCHAR, 'SizeIndex'),
             (_BucketFlags, 'BucketFlags'),
         ]
+        def AffinityQ(self):
+            flags = self['BucketFlags']
+            return True if flags['UseAffinity'] else False
+        def DebugQ(self):
+            flags = self['BucketFlags']
+            return True if flags['DebugFlags'] else False
 
     class HEAP_BUCKET_ARRAY(parray.type):
         '''This is a synthetic array type used for providing utility methods to any child definitions.'''
         _object_, length = HEAP_BUCKET, 0
 
         def enumerate(self):
-            '''Iterate through all of the buckets yielding the number of units and the bucket that contains it.'''
+            '''Yield the number of units and the bucket that contains it for each bucket in the array.'''
             for item in self:
                 units = item['BlockUnits']
                 yield units.int(), item
             return
 
         def ByUnits(self, units):
-            '''Iterate through all of the buckets finding the smallest one that can contain the requested number of units.'''
+            '''Search through all of the buckets for the smallest one that can contain the requested number of units.'''
             for item in self:
                 if units <= item['BlockUnits'].int():
                     return item
@@ -319,9 +324,9 @@ if 'HeapEntry':
                     length, _values_ = 3, [
                         ('Chunk', 0),
                         ('Segment', 1),
-                        ('LargeChunk', 4),  # regular chunk
+                        ('LargeChunk', 4),  # VirtualBlocks
                         ('Linked', 5),      # linked to subsegment (PreviousSize ^ Encoding.PreviousSize)
-                        ('Special', 0x3f)   # set if >= 0x3f
+                        ('Special', 0x3f)   # if >= 0x3f, then PreviousBlockPrivateData (64-bit) or EntryOffset (32-bit) contains the unusedBytes (BlockSize - size) length
                     ]
                 _fields_ = [
                     (3, 'Unknown'),
@@ -425,7 +430,7 @@ if 'HeapEntry':
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
                 self._fields_.extend([
                     (USHORT, 'Size'),
-                    (HEAP_ENTRY_, 'Flags'),
+                    (HEAP_ENTRY_, 'Flags'),             # XXX: this can be encoded in win10 if tracing is enabled
                     (UCHAR, 'SmallTagIndex'),
                     (USHORT, 'Code2'),
                     (UCHAR, 'SegmentOffset'),
@@ -667,8 +672,8 @@ if 'HeapEntry':
             '''HEAP_ENTRY after decoding'''
             _fields_ = [
                 (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
-                (USHORT, 'Size'),
-                (USHORT, 'Checksum'),
+                (USHORT, 'Size'),               # FIXME
+                (USHORT, 'Checksum'),           # "SmallTagIndex" (checksum) there seems to be some flags here at +2
                 (USHORT, 'PreviousSize'),
                 (UCHAR, 'SegmentOffset'),
                 (HEAP_ENTRY._Code4, 'Flags'),
@@ -907,7 +912,8 @@ if 'HeapEntry':
             '''HEAP_ENTRY after decoding on win8'''
             _fields_ = [
                 (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
-                (ULONG, 'EntryOffset'),         # distance from userdataheader
+                (ULONG, 'EntryOffset'),         # distance from userdataheader (checksum?)
+                # if this is free'd, this seems to get xor'd?
 
                 (UCHAR, 'PreviousSize'),        # FF
                 (USHORT, 'SmallTagIndex'),      # block index
@@ -1008,6 +1014,8 @@ if 'HeapEntry':
         def ChecksumQ(self):
             if not self.BackEndQ():
                 raise error.InvalidHeapType(self, 'ChecksumQ', message='Unable to calculate the checksum for a non-backend type')
+
+            # FIXME: this should be implemented by the actual backing type.
 
             # No checksum is used for anything earlier than NTDDI_WIN7
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_MAJOR(sdkddkver.NTDDI_WIN7):
@@ -1836,7 +1844,7 @@ if 'LFH':
             return "FirstAllocationOffset={:#0{:d}x} BlockStride={:#0{:d}x}".format(*itertools.chain(*iterable))
 
     class HEAP_USERDATA_ENCODED_OFFSETS(ptype.encoded_t):
-        _value_, _object_ = ULONG,  HEAP_USERDATA_OFFSETS
+        _value_, _object_ = ULONG, HEAP_USERDATA_OFFSETS
 
         def __cache_lfheap(self):
             if hasattr(self, '_LFH_HEAP'):
@@ -1901,9 +1909,13 @@ if 'LFH':
             super(HEAP_USERDATA_HEADER, self).__init__(**attrs)
             f = self._fields_ = []
 
+            # XXX: the allocation size of this is pow(2, SizeIndex) with a max of
+            #      0xf0000 which is then resized to +PaddingBytes if the byte at
+            #      "GuardPagePresent" is set.
+
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),
+                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),    # this is actually a union to an SLIST_ENTRY
                     (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
                     (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Signature)'),
@@ -1913,7 +1925,7 @@ if 'LFH':
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),    # This is actually a union to an SLIST_ENTRY
+                    (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),    # this is actually a union to an SLIST_ENTRY
                     (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'GuardPagePresent'),
@@ -1989,7 +2001,7 @@ if 'LFH':
                     (UCHAR, 'SizeIndex'),
                     (UCHAR, 'AffinityIndex'),
 
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: HEAP_LOCAL_DATA.DeletedSubSegments
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: connected to HEAP_LOCAL_SEGMENT_INFO.SListHeader
                     (ULONG, 'Lock'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Lock)'),
                 ])
@@ -1998,7 +2010,7 @@ if 'LFH':
                 f.extend([
                     (P(HEAP_LOCAL_SEGMENT_INFO), 'LocalInfo'),
                     (P(HEAP_USERDATA_HEADER), 'UserBlocks'),
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to the very first deleted subsegment???
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DelayFreeList'),    # XXX: points to a subsegment that will be added to the deleted subsegments???
 
                     (INTERLOCK_SEQ, 'AggregateExchg'),
                     (USHORT, 'BlockSize'),
@@ -2008,7 +2020,7 @@ if 'LFH':
                     (UCHAR, 'AffinityIndex'),
 
                     (ULONG, 'Lock'),
-                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: from HEAP_LOCAL_DATA.DeletedSubSegments
+                    (dyn.clone(SLIST_ENTRY, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'SFreeListEntry'),    # XXX: connected to HEAP_LOCAL_SEGMENT_INFO.SListHeader
                     (dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'padding(SFreeListEntry)'),
                 ])
 
@@ -2081,7 +2093,18 @@ if 'LFH':
 
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
         class _CachedItems(parray.type):
-            _object_, length = P(HEAP_SUBSEGMENT), 16
+            _object_, length = P(HEAP_SUBSEGMENT), 0x10
+
+            def available(self):
+                '''Return the first cached item that is available.'''
+                # FIXME: check if segment reuse threshold is exceeded by
+                #        using Counters.TotalBlocks. If it isn't, then
+                #        it can be used. Otherwise a HEAP_SUBSEGMENT is
+                #        popped from the "SListHeader" field belonging
+                #        to the parent HEAP_LOCAL_SEGMENT_INFO, and this
+                #        entry is added to the "DeletedSubSegments" in
+                #        the "LocalData" from the LFH_HEAP.
+                return next(item.d for item in self if item.int())
 
             def enumerate(self):
                 for index, item in enumerate(self):
@@ -2105,7 +2128,7 @@ if 'LFH':
                     (P(HEAP_SUBSEGMENT), 'Hint'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
                     (self._CachedItems, 'CachedItems'),         # This is where HEAP_SUBSEGMENTs are taken from or put into
-                    (SLIST_HEADER, 'SListHeader'),              # XXX: This pops HEAP_SUBSEGMENT.SFreeListEntry
+                    (SLIST_HEADER, 'SListHeader'),              # XXX: Connected to HEAP_SUBSEGMENT.SFreeListEntry
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (ULONG, 'LastOpSequence'),
@@ -2120,7 +2143,7 @@ if 'LFH':
                     (P(HEAP_LOCAL_DATA), 'LocalData'),
                     (P(HEAP_SUBSEGMENT), 'ActiveSubSegment'),
                     (self._CachedItems, 'CachedItems'),         # This is where cached HEAP_SUBSEGMENTs are taken from or put into
-                    (SLIST_HEADER, 'SListHeader'),              # XXX: This pops HEAP_SUBSEGMENT.SFreeListEntry
+                    (SLIST_HEADER, 'SListHeader'),              # XXX: Connected to HEAP_SUBSEGMENT.SFreeListEntry
                     (HEAP_BUCKET_COUNTERS, 'Counters'),
                     (ULONG, 'LastOpSequence'),
                     (USHORT, 'BucketIndex'),
@@ -2169,7 +2192,7 @@ if 'LFH':
         _object_, length = HEAP_LOCAL_SEGMENT_INFO or P(HEAP_LOCAL_SEGMENT_INFO), 0
 
         def enumerate(self, reload=False):
-            '''Iterate through the array yielding the item's "BucketIndex" along with the item itself.'''
+            '''Yield each item's "BucketIndex" along with the item within the array.'''
             for index, item in enumerate(self):
 
                 # If our element is a pointer, then we need to determine whether
@@ -2255,6 +2278,9 @@ if 'LFH':
                     (dyn.clone(LIST_ENTRY, _object_=P(LFH_BLOCK_ZONE), _path_=['ListEntry']), 'ListEntry'),
                     (ULONG, 'NextIndex'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(NextIndex)'),
+
+                    # FIXME: I'm pretty sure that similar to the older definition of this structure
+                    #        that list of subsegments follow these fields.
                 ])
 
             else:
@@ -2264,7 +2290,7 @@ if 'LFH':
         # FIXME: implement a method that will iterate through all of the subsegments that will be returned in the future.
 
         def iterate(self):
-            '''Iterate through all the used subsegments in this particular zone.'''
+            '''Yield each of the subsegments used by this particular zone.'''
             for item in self['SubSegments']:
                 yield item
             return
@@ -2288,9 +2314,9 @@ if 'LFH':
                 idx = res.index(entry.getoffset()) + 1
 
                 blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-                rees = idx * blocksize + blocksize
+                res = idx * blocksize + blocksize
 
-                block = dyn.clone(_HEAP_CHUNK, blocksize=lambda s, sz=res: sz)
+                block = dyn.clone(_HEAP_CHUNK, blocksize=lambda self, size=res: size)
                 return dyn.array(block, entry['AvailableBlocks'].int() * 8)
 
             _fields_ = [
@@ -2302,8 +2328,8 @@ if 'LFH':
             super(USER_MEMORY_CACHE_ENTRY, self).__init__(**attrs)
             f = self._fields_ = []
             f.extend([
-                #(dyn.clone(SLIST_HEADER, _object_=_UserBlocks), 'UserBlocks'),
-                (SLIST_HEADER, 'UserBlocks'),   # XXX: points to somewhere in HEAP_USERDATA_HEADER (Reserved?)
+                #(dyn.clone(SLIST_HEADER, _object_=_UserBlocks), 'UserBlocks'), # XXX: connected to "SubSegment" from HEAP_USERDATA_HEADER which is actually a union for SLIST_ENTRY
+                (SLIST_HEADER, 'UserBlocks'),   # XXX: connected to HEAP_USERDATA_HEADER (Reserved?).
                 (ULONG, 'AvailableBlocks'),     # AvailableBlocks * 8 seems to be the actual size
                 (ULONG, 'MinimumDepth'),
             ])
@@ -2333,7 +2359,7 @@ if 'LFH':
                 raise error.NdkUnsupportedVersion(self)
 
         def UserBlocks(self):
-            '''Return the UserBlocks that can be returned by this cache.'''
+            '''Yield the _HEAP_USERDATA_HEADER entries that have been freed and pushed into "UserBlocks".'''
             raise NotImplementedError
 
     class HEAP_LOCAL_DATA(pstruct.type):
@@ -2355,7 +2381,7 @@ if 'LFH':
 
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),   # XXX: HEAP_SUBSEGMENT.SFreeListEntry?
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),   # XXX: connected to HEAP_SUBSEGMENT.SFreeListEntry?
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
@@ -2366,7 +2392,7 @@ if 'LFH':
 
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) >= sdkddkver.NTDDI_WIN8:
                 f.extend([
-                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),   # XXX: HEAP_SUBSEGMENT.SFreeListEntry?
+                    (dyn.clone(SLIST_HEADER, _object_=fpointer(HEAP_SUBSEGMENT, 'SFreeListEntry'), _path_=['SFreeListEntry']), 'DeletedSubSegments'),   # XXX: connected to HEAP_SUBSEGMENT.SFreeListEntry?
                     (P(LFH_BLOCK_ZONE), 'CrtZone'),
                     (P(LFH_HEAP), 'LowFragHeap'),
                     (ULONG, 'Sequence'),
@@ -2379,11 +2405,20 @@ if 'LFH':
                 raise error.NdkUnsupportedVersion(self)
 
         def DeletedSubSegments(self):
-            '''Iterate through the available DeletedSubSegments that will be returned first.'''
+            '''Yield each of the available DeletedSubSegments that will be used first.'''
+            # These are reused when a new HEAP_SUBSEGMENT is needed to be
+            # allocated. They can get pushed to this list coming from the
+            # HEAP_LOCAL_SEGMENT_INFO.CachedItems field.
             raise NotImplementedError
 
         def AvailableSubSegments(self):
-            '''Iterate hrough the available SubSegments that will be returned from the CrtZone.'''
+            '''Yield each of the available SubSegments that will be returned from the CrtZone.'''
+            raise NotImplementedError
+
+        def NextSubSegment(self):
+            '''Return the next HEAP_SUBSEGMENT that will be allocated.'''
+            # FIXME: If there are no DeletedSubSegments, then the next available
+            #        HEAP_SUBSEGMENT will be taken from the "CrtZone".
             raise NotImplementedError
 
     @FrontEndHeap.define
@@ -2397,12 +2432,20 @@ if 'LFH':
         class _UserBlockCache(parray.type):
             _object_, length = USER_MEMORY_CACHE_ENTRY, 12
 
+            # XXX: this array is used to grab HEAP_USERDATA_HEADER or "UserBlocks"
+            #      that have been previously allocated. the first member of the
+            #      HEAP_USERDATA_HEADER is actually a union that points to an
+            #      SLIST_ENTRY when not in use and a P(HEAP_SUBSEGMENT) when it is.
+
+            # XXX: if the "DebugFlags" are set on the HEAP_BUCKET, then the last
+            #      USER_MEMORY_CACHE_ENTRY is the only one that get's used.
+
             def BySize(self, size):
                 '''Return the correct element for the given bucket size.'''
                 raise NotImplementedError
 
         class _NextSegmentInfoArrayAddress(HEAP_LOCAL_SEGMENT_INFO_ARRAY):
-            length = None
+            _object_, length = HEAP_LOCAL_SEGMENT_INFO, None
             def isTerminator(self, item):
                 parent, guard = self.getparent(LFH_HEAP), item.blocksize() * 2 // 3
                 return parent['FirstUncommittedAddress'].int() <= item.getoffset() + item.blocksize() + guard
@@ -2476,6 +2519,9 @@ if 'LFH':
             '''Return the HEAP_LOCAL_SEGMENT_INFO for a specific number of units.'''
             bucket = self.BucketByUnits(units, reload=reload)
             index = bucket['SizeIndex'].int()
+
+            # FIXME: check HEAP_BUCKET.AffinityQ() to determine whether we use the
+            #        "SegmentInfoArrays" or the "AffinitizedInfoArrays"
 
             # If we are using the "SegmentInfoArrays" pointer array, then index into it.
             if 'SegmentInfoArrays' in self:
@@ -2574,7 +2620,7 @@ if 'Heap':
             raise error.InvalidChunkAddress(self, 'Chunk', message="The requested address ({:#x}) is not within the boundaries of the current {:s} ({:#x}<>{:#x}).".format(address, cls.typename(), start, end), Segment=self)
 
         def iterate(self):
-            '''Iterate through all the chunks in the current segment.'''
+            '''Yield each of the chunks in the current segment.'''
             start, end = self.Bounds()
             res = self['FirstEntry'].d
             while res.getoffset() < end:
@@ -2951,13 +2997,13 @@ if 'Heap':
             self._fields_ = f
 
         def UncommittedRanges(self):
-            '''Iterate through the list of UncommittedRanges(UCRList) for the HEAP'''
+            '''Yield each of the UncommittedRanges (UCRList) for the HEAP'''
             for item in self['UCRList'].walk():
                 yield item
             return
 
         def Segments(self):
-            '''Iterate through the list of Segments(SegmentList) for the HEAP'''
+            '''Yield each of the Segments (SegmentList) for the HEAP'''
             for item in self['SegmentList'].walk():
                 yield item
             return
@@ -2985,7 +3031,7 @@ if 'Heap':
             return bi.HeapList(units)
 
         def FreeList(self, size):
-            '''Iterate through the freelist until we find a chunk that's of the correct size.'''
+            '''Search the freelist for a chunk that is of the requested size.'''
             freelists = self['FreeLists']
             if isinstance(freelists, self._FreeLists):
                 listhints = self['FreeListsInUseUlong']
@@ -3072,7 +3118,7 @@ if 'Heap':
             return usage[units].Count()
 
         def Buckets(self, reload=False):
-            '''Iterate through each bucket that will use the frontend allocator.'''
+            '''Yield each available bucket that will use the frontend allocator.'''
             blocklist = self['BlocksIndex'].d.l if reload else self['BlocksIndex'].d.li
 
             # If the BlocksIndex has an extra-item, then we need to just iterate
