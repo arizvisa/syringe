@@ -70,18 +70,28 @@ class IMAGE_DOS_HEADER(pstruct.type):
         if 0x10 * paragraphs.int() == relocations.int() == sum(self[fld].li.size() for fld in fields) + 4:
             return dyn.rpointer(Next, self, pint.uint32_t)
 
-        # otherwise, there isn't anything here.
+        # XXX: otherwise if paragraphs are less than the relocation pointer, then assume the e_lfanew pointer is still here.
+        elif 0x10 * paragraphs.int() < relocations.int() and relocations.int() == sum(self[fld].li.size() for fld in fields) + 4:
+            cls = self.__class__
+            logging.warning("{:s} : IMAGE_DOS_HEADER.e_cparhdr specified an unexpected number of paragraphs ({:d}). Assuming that there's at least {:d}.".format('.'.join([cls.__module__, cls.__name__]), paragraphs.int(), 4))
+            return dyn.rpointer(Next, self, pint.uint32_t)
+
+        # any other condition means that there isn't anything here.
         return pint.uint_t
 
     def __e_rlc(self):
-        res = self['e_crlc'].li
-        return dyn.array(IMAGE_DOS_HEADER.Relocation, res.int())
+        fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno', 'e_oem', 'e_lfanew']
+        header, count = (self[fld].li.int() for fld in ['e_lfanew', 'e_crlc'])
+
+        if header < sum(self[fld].li.size() for fld in fields) + 4 * count:
+            count = 0
+        return dyn.array(IMAGE_DOS_HEADER.Relocation, count)
 
     def __e_parhdr(self):
-        res = 0x10 * self['e_cparhdr'].li.int()
+        fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno', 'e_oem', 'e_rlc', 'e_lfanew']
 
-        fields = ['e_magic', 'e_cblp', 'e_cp', 'e_crlc', 'e_cparhdr', 'e_minalloc', 'e_maxalloc', 'e_ss', 'e_sp', 'e_csum', 'e_ip', 'e_cs', 'e_lfarlc', 'e_ovno']
-        fields+= ['e_oem', 'e_rlc', 'e_lfanew']
+        # Pad the number of paragraphs that compose the header, ensuring that we clamp it to a minimum count of 4.
+        res = 0x10 * max(4, self['e_cparhdr'].li.int())
         return dyn.block(res - sum(self[fld].li.size() for fld in fields))
 
     def filesize(self):
@@ -433,7 +443,7 @@ class PharLap(pstruct.type, Header):
     class RepeatBlock(pstruct.type):
         _fields_ = [
             (word, 'Count'),
-            (lambda s: dyn.block(s['Count'].li.int()), 'String'),
+            (lambda self: dyn.block(self['Count'].li.int()), 'String'),
         ]
 
 @NextHeader.define
@@ -715,8 +725,8 @@ class os2_flat_header(pstruct.type, Header):
         (unsigned_32, 'esp'),                   # starting value of esp
 
         (unsigned_32, 'page_size'),             # .exe page size
-        (lambda s: unsigned_32 if s.type == b'LE' else unsigned_0, 'last_page'),    # size of last page - LE
-        (lambda s: unsigned_32 if s.type == b'LX' else unsigned_0, 'page_shift'),   # left shift for page offsets - LX
+        (lambda self: unsigned_32 if self.type == b'LE' else unsigned_0, 'last_page'),  # size of last page - LE
+        (lambda self: unsigned_32 if self.type == b'LX' else unsigned_0, 'page_shift'), # left shift for page offsets - LX
 
         (unsigned_32, 'fixup_size'),            # fixup section size
         (unsigned_32, 'fixup_cksum'),           # fixup section checksum
