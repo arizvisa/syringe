@@ -305,6 +305,37 @@ class RTL_SRWLOCK(dynamic.union, versioned):
         (PVOID, 'Ptr'),
     ]
 
+@pbinary.littleendian
+class HEAP_(pbinary.flags):
+    '''ULONG'''
+    _fields_ = [
+        (1, 'LOCK_USER_ALLOCATED'),
+        (1, 'VALIDATE_PARAMETERS_ENABLED'),
+        (1, 'VALIDATE_ALL_ENABLED'),
+        (1, 'SKIP_VALIDATION_CHECKS'),
+        (1, 'CAPTURE_STACK_BACKTRACES'),
+        (1, 'BREAK_WHEN_OUT_OF_VM'),
+        (1, 'PROTECTION_ENABLED'),
+        (1, 'FLAG_PAGE_ALLOCS'),
+        (5, 'RESERVED'),
+        (1, 'CREATE_ENABLE_EXECUTE'),
+        (1, 'CREATE_ENABLE_TRACING'),
+        (1, 'CREATE_ALIGN_16'),
+        (4, 'CLASS'),
+        (1, 'SETTABLE_USER_FLAG3'),
+        (1, 'SETTABLE_USER_FLAG2'),
+        (1, 'SETTABLE_USER_FLAG1'),
+        (1, 'SETTABLE_USER_VALUE'),
+        (1, 'DISABLE_COALESCE_ON_FREE'),
+        (1, 'FREE_CHECKING_ENABLED'),
+        (1, 'TAIL_CHECKING_ENABLED'),
+        (1, 'REALLOC_IN_PLACE_ONLY'),
+        (1, 'ZERO_MEMORY'),
+        (1, 'GENERATE_EXCEPTIONS'),
+        (1, 'GROWABLE'),
+        (1, 'NO_SERIALIZE'),
+    ]
+
 class RTL_HP_SEG_ALLOC_POLICY(pstruct.type, versioned):
     def __ULONG3264(self):
         return ULONGLONG if getattr(self, 'WIN64', False) else ULONG

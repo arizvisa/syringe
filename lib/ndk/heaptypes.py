@@ -2845,8 +2845,8 @@ if 'Heap':
                     (HEAP_ENTRY, 'Entry'),
 
                     (HEAP_SIGNATURE, 'Signature'),
-                    (ULONG, 'Flags'),
-                    (ULONG, 'ForceFlags'),
+                    (rtltypes.HEAP_, 'Flags'),
+                    (rtltypes.HEAP_, 'ForceFlags'),
                     (ULONG, 'VirtualMemoryThreshold'),
                     (integral, 'SegmentReserve'),
                     (integral, 'SegmentCommit'),
@@ -2886,8 +2886,8 @@ if 'Heap':
             elif sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
                 f.extend([
                     (HEAP_SEGMENT, 'Segment'),
-                    (ULONG, 'Flags'),
-                    (ULONG, 'ForceFlags'),
+                    (rtltypes.HEAP_, 'Flags'),
+                    (rtltypes.HEAP_, 'ForceFlags'),
                     (ULONG, 'CompatibilityFlags'),
                     (ULONG, 'EncodeFlagMask'),
                     (HEAP._Encoding, 'Encoding'),
@@ -2936,8 +2936,8 @@ if 'Heap':
                 # http://illmatics.com/Windows%208%20Heap%20Internals.pdf
                 f.extend([
                     (HEAP_SEGMENT, 'Segment'),
-                    (ULONG, 'Flags'),
-                    (ULONG, 'ForceFlags'),
+                    (rtltypes.HEAP_, 'Flags'),
+                    (rtltypes.HEAP_, 'ForceFlags'),
                     (ULONG, 'CompatibilityFlags'),
                     (ULONG, 'EncodeFlagMask'),
                     (HEAP._Encoding, 'Encoding'),
@@ -2992,8 +2992,8 @@ if 'Heap':
                 # XXX: win10
                 f.extend([
                     (HEAP_SEGMENT, 'Segment'),
-                    (ULONG, 'Flags'),
-                    (ULONG, 'ForceFlags'),
+                    (rtltypes.HEAP_, 'Flags'),
+                    (rtltypes.HEAP_, 'ForceFlags'),
                     (ULONG, 'CompatibilityFlags'),
                     (ULONG, 'EncodeFlagMask'),
                     (HEAP._Encoding, 'Encoding'),
