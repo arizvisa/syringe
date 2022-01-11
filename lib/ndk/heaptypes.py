@@ -292,16 +292,11 @@ if 'HeapEntry':
             raise error.NotFoundException(self, 'ByUnits', message="Unable to find a Bucket for the requested number of units ({:#x})".format(units))
 
     class HEAP_ENTRY_EXTRA(pstruct.type):
-        def __padding(self):
-            size = 8 if getattr(self, 'WIN64', False) else 4
-            res = sum(self[fld].li.size() for fld in ['AllocatorBacktraceIndex', 'TagIndex'])
-            return dyn.block(size - res)
-
         _fields_ = [
             (USHORT, 'AllocatorBacktraceIndex'),
             (USHORT, 'TagIndex'),
-            (__padding, 'padding(AllocatorBacktraceIndex,TagIndex)'),
-            (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'Settable'),
+            (lambda self: dyn.padding(8 if getattr(self, 'WIN64', False) else 4), 'padding(Settable)'),
+            (lambda self: SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T, 'Settable'),
         ]
 
     class HEAP_ENTRY_(pbinary.flags):
@@ -324,37 +319,64 @@ if 'HeapEntry':
                     length, _values_ = 3, [
                         ('Chunk', 0),
                         ('Segment', 1),
+                        ('Uncommitted', 3), # Uncommitted?
                         ('LargeChunk', 4),  # VirtualBlocks
                         ('Linked', 5),      # linked to subsegment (PreviousSize ^ Encoding.PreviousSize)
-                        ('Special', 0x3f)   # if >= 0x3f, then PreviousBlockPrivateData (64-bit) or EntryOffset (32-bit) contains the unusedBytes (BlockSize - size) length
+                        ('Special', 0x3f)   # if >= 0x3f, then PreviousBlockPrivateData (64-bit) or EntryOffset (32-bi
                     ]
                 _fields_ = [
                     (3, 'Unknown'),
                     (1, 'Busy'),
                     (_Type, 'Type'),
                 ]
-                def Type(self):
-                    return self.item('Type')
+
+                def Type(self, *args):
+                    result = self.item('Type')
+                    if not args:
+                        return result
+
+                    # If we were given an arg, then check the type ahead of time.
+                    key, = args
+                    return True if result[key] else False
+
                 def BusyQ(self):
                     return True if self['Busy'] else False
+
                 def summary(self):
                     type, available = self.item('Type'), 'BUSY' if self['Busy'] else 'FREE'
                     if self['Unknown']:
                         return "{:s} Type={:s}({:d}) Unknown={:03b}".format(available, type.str(), type.int(), self['Unknown'])
                     return "{:s} Type={:s}({:d})".format(available, type.str(), type.int())
 
+                def properties(self):
+                    result = super(HEAP_ENTRY._Code4._Backend, self).properties()
+                    if self.initializedQ():
+                        result['Busy'] = self.BusyQ()
+                        result['Type'] = self.item('Type').str()
+                    return result
+
             class _Frontend(pbinary.struct):
                 _fields_ = [
                     (1, 'Unknown'),         # used on w10
                     (6, 'UnusedBytes'),     # this is 5 bits on older implementations
                 ]
+                def BusyQ(self):
+                    return True if self['UnusedBytes'] > 0 else False
+
                 def summary(self):
-                    items = ['BUSY' if self['UnusedBytes'] > 0 else 'FREE']
+                    items = ['BUSY' if self.BusyQ() else 'FREE']
                     if self['UnusedBytes']:
                         items.append("UnusedBytes={:#x}".format(self['UnusedBytes']))
                     if self['Unknown']:
                         items.append("Unknown={:d}".format(self['Unknown']))
                     return ' '.join(items)
+
+                def properties(self):
+                    result = super(HEAP_ENTRY._Code4._Frontend, self).properties()
+                    if self.initializedQ():
+                        result['Busy'] = self.BusyQ()
+                    result['Type'] = 'FE'
+                    return result
 
             def __Backend(self):
                 return 0 if self['AllocatedByFrontend'] else self._Backend
@@ -380,27 +402,28 @@ if 'HeapEntry':
             def BackEnd(self):
                 return self.item('Backend')
 
-            def LargeChunkQ(self):
-                if self.BackEndQ():
-                    backend = self.BackEnd()
-                    if backend['Unknown'] or backend['Busy']:
-                        return False
+            def BusyQ(self):
+                result = self.FrontEnd() if self.FrontEndQ() else self.BackEnd()
+                return result.BusyQ()
 
-                    # Check the type is set to LargeChunk...
-                    res = backend.item('Type')
-                    return True if res['LargeChunk'] else False
-                return False
+            def FreeQ(self):
+                return not self.BusyQ()
+
+            def LargeChunkQ(self):
+                if self.FrontEndQ():
+                    return False
+
+                # Check the type is set to LargeChunk...
+                res = self.item('Type')
+                return True if res['LargeChunk'] else False
 
             def LinkedQ(self):
-                if self.BackEndQ():
-                    backend = self.BackEnd()
-                    if backend['Unknown'] or backend['Busy']:
-                        return False
+                if self.FrontEndQ():
+                    return False
 
-                    # Check the type is set to Linked...
-                    res = backend.item('Type')
-                    return True if res['Linked'] else False
-                return False
+                # Check the type is set to LargeChunk...
+                res = self.item('Type')
+                return True if res['Linked'] else False
 
             def summary(self):
                 if self.FrontEndQ():
@@ -410,6 +433,12 @@ if 'HeapEntry':
                 # FIXME: add support for LinkedQ and LargeChunkQ
                 backend = self.BackEnd()
                 return "(BE) {:s}".format(backend.summary())
+
+            def properties(self):
+                item = self.FrontEnd() if self['AllocatedByFrontEnd'] else self.BackEnd()
+                result = super(_HEAP_ENTRY._Code4).properties()
+                result.update(item.properties())
+                return result
 
         def __init__(self, **attrs):
             super(HEAP_ENTRY, self).__init__(**attrs)
@@ -432,7 +461,7 @@ if 'HeapEntry':
                     (USHORT, 'Size'),
                     (HEAP_ENTRY_, 'Flags'),             # XXX: this can be encoded in win10 if tracing is enabled
                     (UCHAR, 'SmallTagIndex'),
-                    (USHORT, 'Code2'),
+                    (USHORT, 'PreviousSize'),           # XXX: is this the right name for this field? it can also store the backtrace index...
                     (UCHAR, 'SegmentOffset'),
                     (HEAP_ENTRY._Code4, 'Code4'),
                 ])
@@ -452,6 +481,12 @@ if 'HeapEntry':
         def FrontEndQ(self):
             return self['Code4'].FrontEndQ()
 
+        def BusyQ(self):
+            return True if self['Code4'].BusyQ() else False
+
+        def FreeQ(self):
+            return not self.BusyQ()
+
         def BackEnd(self):
             '''Return the backend version of the "Code4" field.'''
             res = self['Code4']
@@ -468,8 +503,7 @@ if 'HeapEntry':
 
             # If we're using a backend header then we can just check its flag.
             backend = self.BackEnd()
-            type = backend.Type()
-            return type['Chunk'] and not backend.BusyQ()
+            return backend.Type('Chunk') and not backend.BusyQ()
 
         def FreeEntryOffsetQ(self):
             if self.BackEndQ():
@@ -497,6 +531,11 @@ if 'HeapEntry':
                 res+= ["Flags=({:s})".format(self['Flags'].summary())]
                 return ' '.join(res)
             return super(HEAP_ENTRY, self).summary()
+
+        def properties(self):
+            result = super(HEAP_ENTRY, self).properties()
+            result.update(self['Code4'].properties())
+            return result
 
     class HEAP_UNPACKED_ENTRY(pstruct.type):
         class _UnusedBytes(pbinary.flags):
@@ -627,9 +666,9 @@ if 'HeapEntry':
 
         def summary(self):
             header = self.object
-            if header.FrontEndQ():
-                return self.__frontend_summary()
-            return self.__backend_summary()
+            if header.initializedQ():
+                return self.__frontend_summary() if header.FrontEndQ() else self.__backend_summary()
+            return super(_HEAP_ENTRY, self).summary()
 
         ## Forward everything to the decoded object underneath our unencoded header.
         def __getitem__(self, name):
@@ -658,23 +697,26 @@ if 'HeapEntry':
         def BusyQ(self):
             '''Returns whether the chunk (decoded) is in use or not'''
             # XXX: this can be optimized by checking FrontEndQ which requires decoding
-            res = self.d.li
-            return res.BusyQ()
+            decoded = self.d.li
+            return decoded.BusyQ()
 
         def FreeQ(self):
             '''Returns whether the chunk (decoded) is free or not'''
-            # FIXME: this can be optimized by checking FrontEndQ which requires decoding
-            res = self.d.li
-            return res.FreeQ()
+            # XXX: this can be optimized by checking FrontEndQ which requires decoding
+            decoded = self.d.li
+            return decoded.FreeQ()
 
         ### HEAP_ENTRY that's used for a backend chunk
         class __BACKEND_ENTRY__(pstruct.type):
             '''HEAP_ENTRY after decoding'''
             _fields_ = [
                 (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'ReservedForAlignment'),
-                (USHORT, 'Size'),               # FIXME
-                (USHORT, 'Checksum'),           # "SmallTagIndex" (checksum) there seems to be some flags here at +2
-                (USHORT, 'PreviousSize'),
+
+                (USHORT, 'Size'),
+                (HEAP_ENTRY_, 'Flags'),
+                (UCHAR, 'SmallTagIndex'),
+
+                (USHORT, 'Code2'),
                 (UCHAR, 'SegmentOffset'),
                 (HEAP_ENTRY._Code4, 'Flags'),
             ]
@@ -685,16 +727,16 @@ if 'HeapEntry':
                 return backend.item('Type')
 
             def BusyQ(self):
-                backend = self['Flags'].BackEnd()
-                return True if backend['Busy'] else False
+                return self['Flags'].BusyQ()
 
             def FreeQ(self):
-                return not self.BusyQ()
+                return not self['Flags'].BusyQ()
 
             def summary(self):
                 blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-                backend = self['Flags']
-                return "{:s} : PreviousSize={:+#x} Size={:+#x} SegmentOffset={:#x} Checksum={:#x}".format(backend.summary(), -self['PreviousSize'].int() * blocksize, self['Size'].int() * blocksize, self['SegmentOffset'].int(), self['Checksum'].int())
+                flags = self['Flags']
+                return "{:s} : Size={:+#x} SegmentOffset={:#x} SmallTagIndex={:#x}".format(backend.summary(), self['Size'].int() * blocksize, self['SegmentOffset'].int(), self['SmallTagIndex'].int())
+                return "{:s} : PreviousSize={:+#x} Size={:+#x} SegmentOffset={:#x} Checksum={:#x}".format(flags.summary(), -self['PreviousSize'].int() * blocksize, self['Size'].int() * blocksize, self['SegmentOffset'].int(), self['Checksum'].int())
 
         class __BACKEND_VIEW__(pstruct.type):
             '''
@@ -726,13 +768,21 @@ if 'HeapEntry':
             object = object.cast(self.__BACKEND_VIEW__)
 
             # Fetch some cached attributes...
+            OwnerHeap = self.__backend_cache_HEAP()
             EncodeFlagMask, Encoding = self.__backend_cache_Encoding()
 
-            # If HEAP.EncodeFlagMask has been set to something, then we'll just use it
-            if EncodeFlagMask:
-                iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], Encoding))
-                data = object['Unencoded'].serialize() + functools.reduce(operator.add, iterable)
-                encoded = ptype.block().set(data)
+            # If the 8th bit of HEAP.Flags is cleared, then we need to use the full encoding.
+            if OwnerHeap['Flags'].int() & 0x80 == 0:
+                values = [item.int() ^ key for item, key in zip(object['Encoded'], Encoding)]
+                [ item.set(value) for item, value in zip(object['Encoded'], values) ]
+                encoded = ptype.block().set(object.serialize())
+                return super(_HEAP_ENTRY, self).encode(encoded)
+
+            # If HEAP.EncodeFlagMask has been set to something, then we'll just use it.
+            elif EncodeFlagMask:
+                result = object['Encoded'][0].int() ^ Encoding[0]
+                object['Encoded'][0].set(result)
+                encoded = ptype.block().set(object.serialize())
                 return super(_HEAP_ENTRY, self).encode(encoded)
 
             # Otherwise there's nothing else to do.
@@ -742,13 +792,20 @@ if 'HeapEntry':
             object = object.cast(self.__BACKEND_VIEW__)
 
             # Fetch the attributes that were cached...
+            OwnerHeap = self.__backend_cache_HEAP()
             EncodeFlagMask, Encoding = self.__backend_cache_Encoding()
 
-            # Now determine if we're encoded, and decode it if so.
-            if object['Encoded'][0].int() & EncodeFlagMask:
-                iterable = (bitmap.data((encoder ^ item.int(), 32), reversed=True) for item, encoder in zip(object['Encoded'], Encoding))
-                for item, encoder in zip(object['Encoded'], Encoding):
-                    item.set(item.int() ^ encoder)
+            # If the 8th bit of HEAP.Flags is cleared, then we need to use both keys when decoding.
+            if OwnerHeap['Flags'].int() & 0x80 == 0:
+                values = [item.int() ^ key for item, key in zip(object['Encoded'], Encoding)]
+                [ item.set(value) for item, value in zip(object['Encoded'], values) ]
+                decoded = ptype.block().set(object.serialize())
+                return super(_HEAP_ENTRY, self).decode(decoded)
+
+            # Check the EncodeFlagMask to see if we're supposed to decode things.
+            elif EncodeFlagMask:
+                result = object['Encoded'][0].int() ^ Encoding[0]
+                object['Encoded'][0].set(result)
                 decoded = ptype.block().set(object.serialize())
                 return super(_HEAP_ENTRY, self).decode(decoded)
 
@@ -761,10 +818,8 @@ if 'HeapEntry':
             return res
 
         def __backend_summary(self):
-            res = self.d
-            if res.initializedQ():
-                return res.l.summary()
-            return super(_HEAP_ENTRY, self).summary()
+            decoded = self.d
+            return decoded.summary() if decoded.initializedQ() else decoded.l.summary()
 
         ### HEAP_ENTRY that's used for a frontend chunk
         class __FRONTEND_ENTRY__(pstruct.type):
@@ -778,14 +833,10 @@ if 'HeapEntry':
             ]
 
             def BusyQ(self):
-                flags = self['Flags']
-                frontend = flags.FrontEnd()
-                return frontend['UnusedBytes'] > 0
+                return self['Flags'].BusyQ()
 
             def FreeQ(self):
-                flags = self['Flags']
-                frontend = flags.FrontEnd()
-                return frontend['UnusedBytes'] == 0
+                return not self['Flags'].BusyQ()
 
             def UnusedBytes(self):
                 flags = self['Flags']
@@ -903,10 +954,8 @@ if 'HeapEntry':
             return res
 
         def __frontend_summary(self):
-            res = self.d
-            if res.initializedQ():
-                return res.l.summary()
-            return super(_HEAP_ENTRY, self).summary()
+            decoded = self.d
+            return decoded.summary() if decoded.initializedQ() else decoded.l.summary()
 
         class __FRONTEND_ENTRY8__(pstruct.type):
             '''HEAP_ENTRY after decoding on win8'''
@@ -921,14 +970,10 @@ if 'HeapEntry':
             ]
 
             def BusyQ(self):
-                flags = self['Flags']
-                frontend = flags.FrontEnd()
-                return frontend['UnusedBytes'] > 0
+                return self['Flags'].BusyQ()
 
             def FreeQ(self):
-                flags = self['Flags']
-                frontend = flags.FrontEnd()
-                return frontend['UnusedBytes'] == 0
+                return not self['Flags'].BusyQ()
 
             def UnusedBytes(self):
                 flags = self['Flags']
@@ -1147,20 +1192,13 @@ if 'HeapChunk':
     class HEAP_BLOCK_UNCOMMITTED(HEAP_UNCOMMITTED_DATA):
         pass
 
-    class HEAP_CHUNK_LARGE(pstruct.type):
+    class _HEAP_CHUNK_LARGE(ptype.block):
+        '''
+        This is an internal definition that isn't defined by Microsoft, but is
+        intended to distinguish extremely large chunks such as those that are
+        allocated with HEAP_ENTRY_VIRTUAL_ALLOC.
+        '''
         length = 0
-        def __Data(self):
-            res = self['Header'].li.size()
-            return dyn.clone(HEAP_UNCOMMITTED_DATA, length=max(0, self.length - res))
-
-        _fields_ = [
-            (HEAP_ENTRY, 'Header'),
-            (__Data, 'Data'),
-        ]
-
-        def summary(self):
-            res = map("\\x{:02x}".format, bytearray(self['Header'].serialize()))
-            return "Header=\"{:s}\" Data=...{:d} bytes...".format(str().join(res), self['Data'].length)
 
     class _HEAP_CHUNK(pstruct.type):
         '''
@@ -1232,12 +1270,11 @@ if 'HeapChunk':
             return self['Header'].FreeQ()
 
         def properties(self):
-            res = super(_HEAP_CHUNK, self).properties()
+            result = super(_HEAP_CHUNK, self).properties()
             if self.initializedQ():
                 header = self['Header']
-                res['Busy'] = header.BusyQ()
-                res['Type'] = 'FE' if header.FrontEndQ() else header.d.Type().str()
-            return res
+                result.update(header.properties())
+            return result
 
         def next(self):
             cls, header = self.__class__, self['Header']
@@ -1266,9 +1303,14 @@ if 'HeapChunk':
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            t = header.d.li.Type()
-            if not t['Chunk']:
-                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.d.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            decoded = header.d.li
+
+            # Ensure that we're just a normal chunk.
+            backend = decoded.BackEnd()
+            if not backend.Type('Chunk'):
+                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=backend.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+
+            # If so then we can just follow the Flink entry of our ListEntry.
             link = self['ListEntry']
             return link['Flink'].d.l
 
@@ -1277,9 +1319,14 @@ if 'HeapChunk':
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-            t = header.d.li.Type()
-            if not t['Chunk']:
-                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=header.d.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            decoded = header.d.li
+
+            # Ensure that we're just a normal chunk.
+            backend = decoded.BackEnd()
+            if not backend.Type('Chunk'):
+                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), Type=backend.Type(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+
+            # If so then we can just follow the Blink entry of our ListEntry.
             link = self['ListEntry']
             return link['Blink'].d.l
         prevfree = previousfree
@@ -2687,21 +2734,27 @@ if 'Heap':
         ]
 
     class HEAP_VIRTUAL_ALLOC_ENTRY(pstruct.type):
-        def __ListEntry(self):
-            res = P(HEAP_VIRTUAL_ALLOC_ENTRY)
-            return dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=res)
+        def __Entry(self):
+            owner = self.getparent(HEAP)
+            res, sentinel = P(HEAP_VIRTUAL_ALLOC_ENTRY), owner['VirtualAllocatedBlocks']
+            return dyn.clone(LIST_ENTRY, _path_=['Entry'], _object_=res, _sentinel_=sentinel.getoffset())
 
-        def __BusyBlock(self):
-            cb = self['CommitSize'].li
-            res = sum(self[fld].li.size() for fld in ['ListEntry', 'ExtraStuff', 'CommitSize', 'ReserveSize'])
-            return dyn.clone(HEAP_CHUNK_LARGE, length=max(0, cb.int() - res))
+        def __Commit(self):
+            res = sum(self[fld].li.size() for fld in ['Entry', 'ExtraStuff', 'CommitSize', 'ReserveSize', 'Header'])
+            return dyn.clone(_HEAP_CHUNK_LARGE, length=max(0, self['CommitSize'].int() - res))
+
+        def __Reserve(self):
+            res = self['ReserveSize'].int() - self['CommitSize'].int()
+            return dyn.clone(HEAP_BLOCK_UNCOMMITTED, length=max(0, res))
 
         _fields_ = [
-            (__ListEntry, 'ListEntry'),
+            (__Entry, 'Entry'),
             (HEAP_ENTRY_EXTRA, 'ExtraStuff'),
             (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'CommitSize'),
             (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'ReserveSize'),
-            (__BusyBlock, 'BusyBlock'),
+            (_HEAP_ENTRY, 'Header'),
+            (__Commit, 'Commit'),
+            (__Reserve, 'Reserve'),
         ]
 
     class HEAP(pstruct.type, versioned):
@@ -2813,7 +2866,7 @@ if 'Heap':
                     (P(HEAP_UNCOMMMTTED_RANGE), 'UnusedUnCommittedRanges'),
                     (ULONG_PTR, 'AlignRound'),
                     (ULONG_PTR, 'AlignMask'),
-                    (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocdBlocks'),
+                    (dyn.clone(LIST_ENTRY, _path_=['Entry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocatedBlocks'),
                     (dyn.array(P(HEAP_SEGMENT), 64), 'Segments'),
                     (dyn.clone(ListsInUseUlong, length=4), 'FreeListsInUseUlong'),
                     (USHORT, 'FreeListsInUseTerminate'),
@@ -2860,7 +2913,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_UCR_DESCRIPTOR)), 'UCRList'),
                     (ULONG_PTR, 'AlignRound'),
                     (ULONG_PTR, 'AlignMask'),
-                    (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
+                    (dyn.clone(LIST_ENTRY, _path_=['Entry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocatedBlocks'),
                     (dyn.clone(LIST_ENTRY, _path_=['SegmentListEntry'], _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
                     (USHORT, 'AllocatorBackTraceIndex'),
                     (USHORT, 'FreeListInUseTerminate'),  # XXX: Is this for real?
@@ -2909,7 +2962,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_UCR_DESCRIPTOR)), 'UCRList'),
                     (ULONG_PTR, 'AlignRound'),
                     (ULONG_PTR, 'AlignMask'),
-                    (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocdBlocks'),
+                    (dyn.clone(LIST_ENTRY, _path_=['Entry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocatedBlocks'),
                     (dyn.clone(LIST_ENTRY, _path_=['SegmentListEntry'], _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
                     (USHORT, 'AllocatorBackTraceIndex'),
                     (dyn.block(2), 'padding(AllocatorBackTraceIndex)'), # XXX
@@ -2965,7 +3018,7 @@ if 'Heap':
                     (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_UCR_DESCRIPTOR)), 'UCRList'),
                     (size_t, 'AlignRound'),
                     (size_t, 'AlignMask'),
-                    (dyn.clone(LIST_ENTRY, _path_=['ListEntry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocedBlocks'),
+                    (dyn.clone(LIST_ENTRY, _path_=['Entry'], _object_=P(HEAP_VIRTUAL_ALLOC_ENTRY)), 'VirtualAllocatedBlocks'),
                     (dyn.clone(LIST_ENTRY, _path_=['SegmentListEntry'], _object_=fpointer(HEAP_SEGMENT, 'SegmentListEntry')), 'SegmentList'),
                     (ULONG, 'AllocatorBackTraceIndex'),
                     (ULONG, 'NonDedicatedListLength'),
