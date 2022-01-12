@@ -859,17 +859,24 @@ if 'HeapEntry':
 
         def Size(self):
             '''Return the size of the chunk according to the _HEAP_ENTRY.'''
-            decoded = self.d.li
 
             # If our header is pointing to a frontend chunk, then first check
-            # if we've cached the HEAP_SUBSEGMENT. If we haven't, then that's
-            # okay because we can decode it from the header.
+            # if we've cached the HEAP_SUBSEGMENT.
             if self.FrontEndQ():
-                segment = self.__SubSegment__ if hasattr(self, '__SubSegment__') else decoded.Segment()
+                if hasattr(self, '__SubSegment__'):
+                    segment = self.__SubSegment__
+
+                # If we haven't, then that's okay because we can decode it from the header.
+                else:
+                    decoded = self.d.li
+                    segment = decoded.Segment()
+
+                # Load the segment and then calculate the blocksize.
                 loaded = segment.li
                 return loaded['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
 
             # Otherwise it's a backend chunk and we can decode it out of the header.
+            decoded = self.d.li
             return decoded.Size()
 
         def FreeListQ(self):
@@ -1688,8 +1695,10 @@ if 'LFH':
 
             # Copy the SubSegment as a hidden attribute so that the
             # chunk can quickly lookup any associated information.
-            chunk = dyn.clone(_HEAP_CHUNK, __SubSegment__=ss)
-            return dyn.array(chunk, ss['BlockCount'].int())
+            self.attributes['__SubSegment__'] = ss
+
+            # Now we can construct our UserBlocks.
+            return dyn.array(_HEAP_CHUNK, ss['BlockCount'].int())
 
         def __BitmapData(self):
             res = self['BusyBitmap'].li
@@ -1806,6 +1815,9 @@ if 'LFH':
         def __init__(self, **attrs):
             super(HEAP_SUBSEGMENT, self).__init__(**attrs)
             f = self._fields_ = []
+
+            # Cache a hidden __SubSegment__ attribute for any and all children.
+            self.attributes['__SubSegment__'] = self
 
             # FIXME: NTDDI_WIN8 moves the DelayFreeList to a different place
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) < sdkddkver.NTDDI_WIN8:
@@ -2497,7 +2509,8 @@ if 'Heap':
 
             # Raise an exception if the chunk is out of bounds.
             cls = self.__class__
-            raise error.InvalidChunkAddress(self, 'Chunk', message="The requested address ({:#x}) is not within the boundaries of the current {:s} ({:#x}<>{:#x}).".format(address, cls.typename(), start, end), Segment=self)
+            start, stop = (self[fld] for fld in ['FirstEntry', 'LastValidEntry'])
+            raise error.InvalidChunkAddress(self, 'Chunk', message="The requested address ({:#x}) is not within the boundaries of the current {:s} ({:#x}<>{:#x}).".format(address, cls.typename(), start.int(), end.int()), Segment=self)
 
         def Chunk(self, address):
             '''Create a _HEAP_CHUNK that references the specified address.'''
