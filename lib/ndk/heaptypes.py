@@ -521,6 +521,12 @@ if 'HeapEntry':
                 return self.d.li.summary()
             return super(_HEAP_ENTRY, self).summary()
 
+        def properties(self):
+            result = super(_HEAP_ENTRY, self).properties()
+            if self.BackEndQ():
+                result['CheckSumOk'] = self.CheckSumQ()
+            return result
+
         ## Forward everything to the decoded object underneath our unencoded header.
         def __getitem__(self, name):
             res = self.d.li
@@ -546,20 +552,7 @@ if 'HeapEntry':
             return result
 
         ### Decoding for a chunk used by the backend.
-        class __VIEW__(pstruct.type):
-            def CheckSum(self):
-                '''Calculate checksum (a^9^8 == b)'''
-                encoded = self['Encoded']
-                data = bytearray(encoded.serialize())
-                return functools.reduce(operator.xor, data[:3], 0)
-            def CheckSumQ(self):
-                '''Return if the checksum passes or not.'''
-                encoded = self['Encoded']
-                data = bytearray(encoded.serialize())
-                chk = functools.reduce(operator.xor, data[:3], 0)
-                return chk == data[3]
-
-        class __BACKEND_VIEW__(__VIEW__):
+        class __BACKEND_VIEW__(pstruct.type):
             '''
             This type is used strictly for encoding/decoding and is used when
             casting the backing type.
@@ -568,6 +561,18 @@ if 'HeapEntry':
                 (lambda self: pint.uint64_t if getattr(self, 'WIN64', False) else pint.uint_t, 'Unencoded'),
                 (dyn.array(pint.uint32_t, 2), 'Encoded'),
             ]
+            def CheckSum(self):
+                '''Calculate checksum (a^9^8 == b)'''
+                encoded = self['Encoded']
+                data = bytearray(encoded.serialize())
+                return functools.reduce(operator.xor, data[:3], 0)
+
+            def CheckSumQ(self):
+                '''Return if the checksum passes or not.'''
+                encoded = self['Encoded']
+                data = bytearray(encoded.serialize())
+                chk = functools.reduce(operator.xor, data[:3], 0)
+                return chk == data[3]
 
         def __backend_cache_Encoding(self):
             OwnerHeap = self.__OwnerHeap()
@@ -660,7 +665,7 @@ if 'HeapEntry':
                     items.append(' '.join("{:s}={:#0{:d}x}".format(fld, self[fld].int(), 2 + 2 * self[fld].size()) for fld in ['EntryOffset', 'Unknown']))
                 return ' : '.join(items)
 
-        class __FRONTEND_VIEW__(__VIEW__):
+        class __FRONTEND_VIEW__(pstruct.type):
             '''
             This type is used strictly for encoding/decoding and is used when
             casting the backing type.
@@ -791,7 +796,7 @@ if 'HeapEntry':
                 return self['Encoded'].int() & ~0xffffffff
 
         def __frontend_encode8(self, object, **attrs):
-            view = object.cast(self.__FRONTEND_VIEW__)
+            view = object.cast(self.__FRONTEND_VIEW8__)
 
             # Fetch some cached attributes.
             OwnerHeap, LFHKey = self.__OwnerHeap(), self.__frontend_cache_LFHKey()
@@ -857,6 +862,24 @@ if 'HeapEntry':
             '''Returns whether the chunk (decoded) is free or not'''
             return not self.BusyQ()
 
+        def CheckSum(self):
+            '''Return the CheckSum for the current header.'''
+            header = self.object
+            if not header.FrontEndQ():
+                decoded = self.d.li
+                view = decoded.cast(self.__BACKEND_VIEW__)
+                return view.CheckSum()
+            raise error.IncorrectChunkType(self, 'CheckSum', message='Unable to calculate the checksum for a chunk belonging to the frontend allocator.')
+
+        def CheckSumQ(self):
+            '''Return whether the checksum for the chunk is valid.'''
+            header = self.object
+            if not self.FrontEndQ():
+                decoded = self.d.li
+                view = decoded.cast(self.__BACKEND_VIEW__)
+                return view.CheckSumQ()
+            return False
+
         def Size(self):
             '''Return the size of the chunk according to the _HEAP_ENTRY.'''
 
@@ -878,6 +901,15 @@ if 'HeapEntry':
             # Otherwise it's a backend chunk and we can decode it out of the header.
             decoded = self.d.li
             return decoded.Size()
+
+        def PreviousSize(self):
+            '''Return the previous size of the chunk according to the _HEAP_ENTRY.'''
+            if self.FrontEndQ():
+                raise error.IncorrectChunkType(self, 'CheckSum', message='Unable to return the previous size for a chunk belonging to the frontend allocator.')
+
+            # Decode the header and extract the "PreviousSize" field.
+            decoded = self.d.li
+            return decoded.PreviousSize()
 
         def FreeListQ(self):
             '''Return whether this heapentry contains a freelist entry in its contents.'''
@@ -1033,13 +1065,6 @@ if 'HeapChunk':
 
         def FreeQ(self):
             return self['Header'].FreeQ()
-
-        def properties(self):
-            result = super(_HEAP_CHUNK, self).properties()
-            if self.initializedQ():
-                header = self['Header']
-                result.update(header.properties())
-            return result
 
         def nextfree(self):
             '''Walk to the next entry in the free-list (recent)'''
