@@ -15,9 +15,11 @@ class SIZE_T64(ULONGLONG): pass
 
 class HEAP_LOCK(pint.uint32_t): pass
 class HEAP_SIGNATURE(pint.enum, ULONG):
-    _fields_ = [
-        ('SegmentHeap', 0xddeeddee),
+    _values_ = [
+        ('Segment', 0xffeeffee),
         ('Heap', 0xeeffeeff),
+        ('SegmentHeap', 0xddeeddee),
+        ('UserBlocks', 0xf0e0d0c0),
     ]
 
 if 'HeapMeta':
@@ -1965,8 +1967,8 @@ if 'LFH':
                     (lambda self: P(HEAP_SUBSEGMENT), 'SubSegment'),    # this is actually a union to an SLIST_ENTRY
                     (fpointer(_HEAP_CHUNK, 'ListEntry'), 'Reserved'),   # FIXME: figure out what this actually points to
                     (lambda self: ULONGLONG if getattr(self, 'WIN64', False) else ULONG, 'SizeIndex'),
-                    (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Signature)'),
                     (HEAP_SIGNATURE, 'Signature'),
+                    (lambda self: dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(Signature)'),
                     (self.__Blocks, 'Blocks'),
                 ])
 
