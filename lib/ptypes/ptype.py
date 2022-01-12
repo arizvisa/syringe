@@ -2439,7 +2439,8 @@ class rpointer_t(pointer_t):
         root = force(self._baseobject_, self)
         base = root.getoffset() if isinstance(root) else root().getoffset()
         res = self.decode(self.object)
-        return super(rpointer_t, self).dereference(offset=base + res.get())
+        attrs.setdefault('offset', base + res.get())
+        return super(rpointer_t, self).dereference(**attrs)
 
     def __getstate__(self):
         return super(rpointer_t, self).__getstate__(), self._baseobject_
@@ -2461,7 +2462,8 @@ class opointer_t(pointer_t):
 
     def dereference(self, **attrs):
         res = self.decode(self.object)
-        return super(opointer_t, self).dereference(offset=self._calculate_(res.get()))
+        attrs.setdefault('offset', self._calculate_(res.get()))
+        return super(opointer_t, self).dereference(**attrs)
 
 class boundary(base):
     """Used to mark a boundary in a ptype tree. Can be used to make .getparent() stop."""
