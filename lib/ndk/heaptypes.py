@@ -491,7 +491,7 @@ if 'HeapEntry':
                 # FIXME: we wouldn't be able to encode anything since our chunk
                 #        header is elsewhere.
                 offset = self.getoffset() - header['SegmentOffset'] * header.size()
-                raise error.InvalidHeapType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
+                raise error.IncorrectChunkType(self, 'encode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
 
             # If this is a front-end chunk then use the front-end encoder.
             if header.FrontEndQ():
@@ -506,7 +506,7 @@ if 'HeapEntry':
                 # FIXME: we shouldn't need to decode anything since our chunk
                 #        header is elsewhere.
                 offset = self.getoffset() - header['SegmentOffset'] * header.size()
-                raise error.InvalidHeapType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
+                raise error.IncorrectChunkType(self, 'decode', message='_HEAP_ENTRY.UnusedBytes == 5 is currently unimplemented.', HEAP_ENTRY=self.object)
 
             # If this is a front-end chunk, then use the front-end decoder.
             if header.FrontEndQ():
@@ -909,7 +909,7 @@ if 'HeapEntry':
             '''Return the HEAP_SUBSEGMENT that is encoded within the _HEAP_ENTRY.'''
             header = self.object
             if not header.FrontEndQ():
-                raise error.InvalidHeapType(self, 'Segment', message='Unable to decode the HEAP_SUBSEGMENT from a non-frontend chunk.', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'Segment', message='Unable to decode the HEAP_SUBSEGMENT from a non-frontend chunk.', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             decoded = self.d.l if reload else self.d.li
             return decoded.Segment(reload=reload)
 
@@ -917,7 +917,7 @@ if 'HeapEntry':
             '''Return the HEAP_USERDATA_HEADER that is encoded within the _HEAP_ENTRY.'''
             header = self.object
             if not header.FrontEndQ():
-                raise error.InvalidHeapType(self, 'UserBlocks', message='Unable to decode the HEAP_USERDATA_HEADER from a non-frontend chunk.', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'UserBlocks', message='Unable to decode the HEAP_USERDATA_HEADER from a non-frontend chunk.', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             decoded = self.d.l if reload else self.d.li
             return decoded.UserBlocks(reload=reload)
 
@@ -1045,7 +1045,7 @@ if 'HeapChunk':
             '''Walk to the next entry in the free-list (recent)'''
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
-                raise error.InvalidHeapType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'nextfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
 
             # If we have a free list entry, then follow its "Flink" to the next one.
             if header.FreeListQ():
@@ -1059,7 +1059,7 @@ if 'HeapChunk':
             '''Moonwalk to the previous entry in the free-list (recent)'''
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
-                raise error.InvalidHeapType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+                raise error.IncorrectChunkType(self, 'previousfree', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
             decoded = header.d.li
 
             # If we have a free list entry, then follow its "Blink" to the next one.
