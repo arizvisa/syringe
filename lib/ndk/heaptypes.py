@@ -409,12 +409,6 @@ if 'HeapEntry':
         def LinkedQ(self):
             return self.Type('Linked')
 
-        def FreeEntryOffsetQ(self):
-            '''Return whether this frontend heapentry contains a chunk offset in its contents.'''
-            if self.FrontEndQ():
-                return not self['UnusedBytes'].BusyQ()
-            return False
-
         def summary(self):
             unused = self['UnusedBytes']
             if self.FrontEndQ():
@@ -861,7 +855,17 @@ if 'HeapEntry':
         def FreeEntryOffsetQ(self):
             '''Return whether this chunk contains a free-entry offset in its contents.'''
             header = self.object
-            return header.FreeEntryOffsetQ()
+
+            # The "FreeEntryOffset" only exists on versions prior to Windows 8, so
+            # verify the version and return if it doesn't correspond.
+            if sdkddkver.NTDDI_WIN7 < sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION):
+                return False
+
+            # All we need to do here is check that we're using the frontend header
+            # and that the "UnusedBytes" field says that the chunk is busy.
+            if header.FrontEndQ():
+                return not header['UnusedBytes'].BusyQ()
+            return False
 
         # FIXME: this should be deprecated or corrected
         def SubSegment(self):
@@ -944,37 +948,21 @@ if 'HeapChunk':
         '''
         def __ListEntry(self):
             '''Return the "ListEntry" field if the chunk is free and in the backend.'''
+            header = self['Header'].li
 
-            # If we have a .__SubSegment__ attribute, then this is a frontend
-            # chunk and this there's no linked-list for any free'd chunks.
-            if hasattr(self, '__SubSegment__'):
-                return ptype.undefined
-
-            # Use the backing object here to check the busy flag since there's
-            # really no need to decode anything when loading
-            if self['Header'].li.FreeListQ():
+            # If the _HEAP_ENTRY tells us that this chunk includes a ListEntry
+            # meaning it's a backend chunk and free then return one.
+            if header.FreeListQ():
                 return dyn.clone(LIST_ENTRY, _object_=fpointer(self.__class__, 'ListEntry'), _path_=['ListEntry'])
-
-            # No linked-list as the chunk is busy or not a chunk
             return ptype.undefined
 
         def __ChunkFreeEntryOffset(self):
             '''Return the "ChunkFreeEntryOffset" field if the chunk is supposed to contain it.'''
+            header = self['Header'].li
 
-            # If we have a .__SubSegment__ attribute, then this should
-            # definitely be a front-end chunk and so we need to check
-            # if it's in-use or not.
-            if hasattr(self, '__SubSegment__'):
-
-                # Use the backing object here to grab the UnusedBytes field
-                # since it doesn't need to be decoded in order to determine
-                # whether the frontend is actually using the chunk or not.
-                header = self['Header'].li
-                return pint.uint16_t if header.FreeEntryOffsetQ() else pint.uint_t
-
-            # Backend heap doesn't use a chunk offset, so just return an
-            # unsized integer.
-            return pint.uint_t
+            # If the _HEAP_ENTRY tells us that this chunk includes a
+            # 16-bit FreeEntryOffset then include it within our fields.
+            return pint.uint16_t if header.FreeEntryOffsetQ() else pint.uint_t
 
         def __Data(self):
             header = self['Header'].li
@@ -1731,8 +1719,21 @@ if 'LFH':
 
         def ByOffset(self, entryoffset):
             '''Return the field at the specified `entryoffset`.'''
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-            return self.field(blocksize * entryoffset, recurse=True)
+
+            # If our offsets are encoded, then we need to grab our boundaries
+            # and chunk sizes from it to use it for our calculations.
+            if 'EncodedOffsets' in self:
+                offsets = self['EncodedOffsets'].d.li
+                offset, stride = (offsets[fld].int() for fld in ['FirstAllocationOffset', 'BlockStride'])
+                result = offset + stride * entryoffset
+
+            # Otherwise we can simply multiply the request by the blocksize.
+            else:
+                blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+                result = blocksize * entryoffset
+
+            # ...and then we can return the correct element.
+            return self.field(result, recurse=True)
 
         def HeaderByOffset(self, offset):
             '''Return the header for the given entry offset.'''
@@ -1751,6 +1752,7 @@ if 'LFH':
 
         def NextIndex(self):
             '''Return the next UserBlock index that will be allocated from this structure's segment'''
+            # FIXME: raise an exception if NTDDI_WIN8 is being used due to randomization.
             ss = self['SubSegment'].d.li
             return ss.FreeEntryBlockIndex()
         def NextBlock(self):
@@ -1824,6 +1826,18 @@ if 'LFH':
 
         def BlockIndexByOffset(self, offset):
             '''Return the expected block index for the given offset.'''
+
+            # If our userblocks have some encoded offsets, then this
+            # is easy because our offset is literally the index. So,
+            # what we'll try to do instead is to validate it.
+            ub = self['UserBlocks'].d.li
+            if 'EncodedOffsets' in ub:
+                index = offset
+                if not (0 <= index < self['BlockCount'].int()):
+                    raise IndexError(index)
+                return index
+
+            # Otherwise we'll just use an empty HEAP_USERDATA_HEADER.
             blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
             fo = offset * blocksize
             shift = self.new(HEAP_USERDATA_HEADER).a.size()
@@ -1836,6 +1850,7 @@ if 'LFH':
 
         def NextFreeBlock(self):
             '''Return the next block HeapAllocate will return for the current segment.'''
+            # FIXME: raise an exception if NTDDI_WIN8 is being used due to randomization.
             index = self.FreeEntryBlockIndex()
             ub = self['UserBlocks'].d.li
             return ub['Blocks'][index]
@@ -1961,9 +1976,9 @@ if 'LFH':
             #        current segment to honor for allocations is 'ActiveSubSegment'.
 
             if operator.contains(self, 'Hint') and self['Hint'].int():
-                return self['Hint'].d
+                return self['Hint'].d.li
             elif self['ActiveSubSegment'].int():
-                return self['ActiveSubSegment'].d
+                return self['ActiveSubSegment'].d.li
 
             # If we couldn't find the segment, then raise an exception.
             OwnerHeap = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
