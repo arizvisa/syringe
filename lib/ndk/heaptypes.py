@@ -409,6 +409,16 @@ if 'HeapEntry':
         def LinkedQ(self):
             return self.Type('Linked')
 
+        def Size(self):
+            '''Return the number of units within the "Size" field.'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return blocksize * self['Size'].int()
+
+        def PreviousSize(self):
+            '''Return the number of units within the "PreviousSize" field.'''
+            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
+            return blocksize * self['PreviousSize'].int()
+
         def summary(self):
             unused = self['UnusedBytes']
             if self.FrontEndQ():
@@ -580,9 +590,9 @@ if 'HeapEntry':
             if not EncodeFlagMask:
                 return super(_HEAP_ENTRY, self).encode(view)
 
-            # If the type in "UnusedBytes" is "Segment", "Chunk", or UnusedBytes is
-            # larger than 5 then we need to use both keys when encoding the entry.
-            if any(unused.Type(name) for name in ['Segment', 'Chunk']) or unused.int() > 5:
+            # If the type in "UnusedBytes" is "Segment", "Chunk", "Uncommitted", or
+            # UnusedBytes is larger than 5 then we need to use both keys when encoding:
+            if any(unused.Type(name) for name in ['Segment', 'Chunk', 'Uncommitted']) or unused.int() > 5:
                 values = [item.int() ^ key for item, key in zip(view['Encoded'], Encoding)]
                 [ item.set(value) for item, value in zip(view['Encoded'], values) ]
 
@@ -607,9 +617,9 @@ if 'HeapEntry':
             if not EncodeFlagMask:
                 return super(_HEAP_ENTRY, self).encode(view)
 
-            # If the type in "UnusedBytes" is "Segment", "Chunk", or it has an
-            # UnusedBytes larger than 5 then use both keys for decoding the entry.
-            if any(unused.Type(name) for name in ['Segment', 'Chunk']) or unused.int() > 5:
+            # If the type in "UnusedBytes" is "Segment", "Chunk", "Uncommitted", or it
+            # has an UnusedBytes larger than 5 then use both keys for decoding the entry.
+            if any(unused.Type(name) for name in ['Segment', 'Chunk', 'Uncommitted']) or unused.int() > 5:
                 values = [item.int() ^ key for item, key in zip(view['Encoded'], Encoding)]
                 [ item.set(value) for item, value in zip(view['Encoded'], values) ]
 
@@ -848,14 +858,19 @@ if 'HeapEntry':
             return not self.BusyQ()
 
         def Size(self):
-            '''Return the decoded Size field'''
-            if self.FrontEndQ():
-                raise error.InvalidHeapType(self, 'Size')
-            blocksize = 0x10 if getattr(self, 'WIN64', False) else 8
-
-            # Use the "Size" from our decoded value and combine it with the blocksize.
+            '''Return the size of the chunk according to the _HEAP_ENTRY.'''
             decoded = self.d.li
-            return blocksize * decoded['Size'].int()
+
+            # If our header is pointing to a frontend chunk, then first check
+            # if we've cached the HEAP_SUBSEGMENT. If we haven't, then that's
+            # okay because we can decode it from the header.
+            if self.FrontEndQ():
+                segment = self.__SubSegment__ if hasattr(self, '__SubSegment__') else decoded.Segment()
+                loaded = segment.li
+                return loaded['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
+
+            # Otherwise it's a backend chunk and we can decode it out of the header.
+            return decoded.Size()
 
         def FreeListQ(self):
             '''Return whether this heapentry contains a freelist entry in its contents.'''
@@ -989,18 +1004,7 @@ if 'HeapChunk':
 
         def __Data(self):
             header = self['Header'].li
-
-            # If our header is pointing to a frontend chunk, then first check
-            # if we've cached the HEAP_SUBSEGMENT. If we haven't, then that's
-            # okay because we can decode it from the header.
-            if header.FrontEndQ():
-                segment = self.__SubSegment__ if hasattr(self, '__SubSegment__') else header.Segment()
-                loaded = segment.li
-                size = loaded['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
-
-            # If it's a backend chunk, then we can ask the header for the size.
-            else:
-                size = header.Size()
+            size = header.Size()
 
             # If the chunk is uncommitted then use a chunk that doesn't load
             # its contents unless it's explicitly decoded. Otherwise a regular
@@ -1029,29 +1033,6 @@ if 'HeapChunk':
                 header = self['Header']
                 result.update(header.properties())
             return result
-
-        def next(self):
-            # FIXME: this method shouldn't really be defined here
-            cls, header = self.__class__, self['Header']
-            if not header.BackEndQ():
-                raise error.InvalidHeapType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-
-            # Grab the owner HEAP and use to to create the next chunk.
-            owner = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
-            return owner.new(cls, offset=self.getoffset() + header.Size())
-
-        def previous(self):
-            cls, header = self.__class__, self['Header']
-            if not header.BackEndQ():
-                raise error.InvalidHeapType(self, 'previous', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
-
-            # FIXME: this method might not be valid anymore due to PreviousSize being deprecated.
-
-            # Grab the owner HEAP and use to to create the previous chunk.
-            owner = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
-            return owner.new(cls, offset=self.getoffset() - header.PreviousSize())
-            # Get the Owner HEAP and calculate the offset of the previous chunk.
-        prev = previous
 
         def nextfree(self):
             '''Walk to the next entry in the free-list (recent)'''
@@ -2494,17 +2475,24 @@ if 'Heap':
                 raise error.NdkUnsupportedVersion(self)
             self._fields_ = f
 
-        def Bounds(self):
-            PAGE_SIZE = 0x1000
-            ucr = self['NumberOfUncommittedPages'].int() * PAGE_SIZE
-            start, end = (self[fld].li for fld in ['FirstEntry', 'LastValidEntry'])
-            return start.int(), end.int() - ucr
+        def Contains(self, address):
+            '''Returns whether the current HEAP_SEGMENT contains the specified address.'''
+            PAGE_SIZE, count = 0x1000, self['NumberOfPages'].int()
+            return self.getoffset() <= address < self.getoffset() + PAGE_SIZE * count
+
+        def Committed(self, address):
+            '''Returns whether the given address is within the current HEAP_SEGMENT's committed memory.'''
+            PAGE_SIZE, count = 0x1000, self['NumberOfPages'].int() - self['NumberOfUncommittedPages'].int()
+            return self.getoffset() <= address < self.getoffset() + PAGE_SIZE * count
+
+        def Owns(self, address):
+            '''Returns whether the given address is owned by a chunk within the current HEAP_SEGMENT.'''
+            start, stop = (self[fld] for fld in ['FirstEntry', 'LastValidEntry'])
+            return start.int() <= address < stop.int()
 
         def Block(self, address):
             '''Create a _HEAP_CHUNK at the specified address.'''
-            start, end = self.Bounds()
-            if start <= address < end:
-                # FIXME: this chunk should be created using a recursive __HEAP__ attribute.
+            if self.Owns(address):
                 return self.new(_HEAP_CHUNK, offset=address)
 
             # Raise an exception if the chunk is out of bounds.
@@ -2517,17 +2505,23 @@ if 'Heap':
             return self.Block(address - header.blocksize())
 
         def iterate(self):
-            '''Yield each of the chunks in the current segment.'''
-            start, end = self.Bounds()
+            '''Yield each of the committed chunks in the current segment.'''
             res = self['FirstEntry'].d
             yield res.li
 
             # After yielding the first entry, walk through the entire segment
-            # constructing each chunk and then yielding it.
-            while res.getoffset() + res['Header'].Size() < end:
+            # constructing each chunk individually and then yielding it. If we
+            # encounter an "Uncommitted" type, then we can just terminate here.
+            while not res['Header'].o.Type('Uncommitted') and res.getoffset() + res['Header'].Size() < self['LastValidEntry'].int():
                 ea = res.getoffset() + res['Header'].Size()
                 res = self.Block(ea)
                 yield res.li
+            return
+
+        def enumerate(self):
+            '''Enumerate all of the committed chunks within the current segment.'''
+            for item in enumerate(self.iterate()):
+                yield item
             return
 
         def walk(self):
