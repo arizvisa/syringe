@@ -213,15 +213,15 @@ if 'EncodingKeys':
         '''Try and resolve ntdll!RtlpHeapKey using the debugger or an attribute attached to the HEAP.'''
         if not isinstance(self.source, ptypes.provider.debuggerbase):
 
-            # First check for any attributes on our HEAP
-            p = self.getparent(HEAP)
-            if not hasattr(p, 'RtlpHeapKey'):
+            # First check for any attributes on our owner HEAP
+            owner = self.getparent(HEAP)
+            if not hasattr(owner, 'RtlpHeapKey'):
                 logging.warning("Failure while attempting to determine address of {:s}".format('ntdll!RtlpHeapKey'))
                 return 0
 
             # Found one that we can use, so use it.
-            logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpHeapKey', p.RtlpHeapKey, p.instance(), 'RtlpHeapKey'))
-            RtlpHeapKey = p.RtlpHeapKey
+            logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpHeapKey', owner.RtlpHeapKey, owner.instance(), 'RtlpHeapKey'))
+            RtlpHeapKey = owner.RtlpHeapKey
 
         # We can simply use the debugger to evaluate the expression for our key
         else:
@@ -235,15 +235,15 @@ if 'EncodingKeys':
         '''Try and resolve ntdll!RtlpLFHKey using the debugger or an attribute attached to the HEAP.'''
         if not isinstance(self.source, ptypes.provider.debuggerbase):
 
-            # First check for any attributes on our HEAP
-            p = self.getparent(HEAP)
-            if not hasattr(p, 'RtlpLFHKey'):
+            # First check for any attributes on our owner HEAP
+            owner = self.getparent(HEAP)
+            if not hasattr(owner, 'RtlpLFHKey'):
                 logging.warning("Failure while attempting to determine address of {:s}".format('ntdll!RtlpLFHKey'))
                 return 0
 
             # Found one that we can use, so use it.
-            logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', p.RtlpLFHKey, p.instance(), 'RtlpLFHKey'))
-            RtlpLFHKey = p.RtlpLFHKey
+            logging.info("Using address of {:s} ({:#x}) from attribute {:s}.{:s}".format('ntdll!RtlpLFHKey', owner.RtlpLFHKey, owner.instance(), 'RtlpLFHKey'))
+            RtlpLFHKey = owner.RtlpLFHKey
 
         # We can simply use the debugger to evaluate the expression for our key
         else:
@@ -535,6 +535,14 @@ if 'HeapEntry':
             res = self.d.li.copy(offset=self.getoffset())
             return res.details()
 
+        def __OwnerHeap(self):
+            '''Return and cache the HEAP that this HEAP_ENTRY belongs to.'''
+            if hasattr(self, '__HEAP__'):
+                result = self.__HEAP__
+            else:
+                result = self.__HEAP__ = self.getparent(type=HEAP)
+            return result
+
         ### Decoding for a chunk used by the backend.
         class __VIEW__(pstruct.type):
             def CheckSum(self):
@@ -559,15 +567,8 @@ if 'HeapEntry':
                 (dyn.array(pint.uint32_t, 2), 'Encoded'),
             ]
 
-        def __backend_cache_HEAP(self):
-            if hasattr(self, '_HEAP_ENTRY_OwnerHeap'):
-                result = self._HEAP_ENTRY_OwnerHeap
-            else:
-                result = self._HEAP_ENTRY_OwnerHeap = self.getparent(type=HEAP)
-            return result
-
         def __backend_cache_Encoding(self):
-            OwnerHeap = self.__backend_cache_HEAP()
+            OwnerHeap = self.__OwnerHeap()
             if hasattr(self, '_HEAP_ENTRY_Encoding'):
                 result = self._HEAP_ENTRY_Encoding
             else:
@@ -580,7 +581,7 @@ if 'HeapEntry':
             unused = object['UnusedBytes']
 
             # Fetch some cached attributes...
-            OwnerHeap = self.__backend_cache_HEAP()
+            OwnerHeap = self.__OwnerHeap()
             EncodeFlagMask, Encoding = self.__backend_cache_Encoding()
 
             # If there's no EncodeFlagMask, then we can just pass-it-through.
@@ -607,7 +608,7 @@ if 'HeapEntry':
             unused = object['UnusedBytes']
 
             # Fetch the attributes that were cached...
-            OwnerHeap = self.__backend_cache_HEAP()
+            OwnerHeap = self.__OwnerHeap()
             EncodeFlagMask, Encoding = self.__backend_cache_Encoding()
 
             # Without an EncodeFlagMask, there is no decoding necssary.
@@ -679,13 +680,6 @@ if 'HeapEntry':
                 res = self['Encoded'].int()
                 return res & ~0xffffffffff
 
-        def __frontend_cache_HEAP(self):
-            if hasattr(self, '_HEAP_ENTRY_OwnerHeap'):
-                result = self._HEAP_ENTRY_OwnerHeap
-            else:
-                result = self._HEAP_ENTRY_OwnerHeap = self.getparent(type=HEAP)
-            return result
-
         def __frontend_cache_LFHKey(self):
             if hasattr(self, '_HEAP_ENTRY_LFHKey'):
                 result = self._HEAP_ENTRY_LFHKey
@@ -697,7 +691,7 @@ if 'HeapEntry':
             view = object.cast(self.__FRONTEND_VIEW__)
 
             # Fetch some cached attributes.
-            OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
+            OwnerHeap, LFHKey = self.__OwnerHeap(), self.__frontend_cache_LFHKey()
 
             # Now to encode our 64-bit header
             if getattr(self, 'WIN64', False):
@@ -723,7 +717,7 @@ if 'HeapEntry':
             view = object.cast(self.__FRONTEND_VIEW__)
 
             # Fetch some cached attributes.
-            OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
+            OwnerHeap, LFHKey = self.__OwnerHeap(), self.__frontend_cache_LFHKey()
 
             # Now we can decode our 64-bit header
             if getattr(self, 'WIN64', False):
@@ -780,7 +774,7 @@ if 'HeapEntry':
             view = object.cast(self.__FRONTEND_VIEW__)
 
             # Fetch some cached attributes.
-            OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
+            OwnerHeap, LFHKey = self.__OwnerHeap(), self.__frontend_cache_LFHKey()
 
             # Now to encode our first 32-bits.
             if getattr(self, 'WIN64', False):
@@ -802,7 +796,7 @@ if 'HeapEntry':
             view = object.cast(self.__FRONTEND_VIEW8__)
 
             # Fetch some cached attributes.
-            OwnerHeap, LFHKey = self.__frontend_cache_HEAP(), self.__frontend_cache_LFHKey()
+            OwnerHeap, LFHKey = self.__OwnerHeap(), self.__frontend_cache_LFHKey()
 
             # Decode the 32-bit dword from the entry.
             if getattr(self, 'WIN64', False):
@@ -884,7 +878,7 @@ if 'HeapEntry':
         such can be used to dereference/reference things with a tweaked pointer.
         '''
         def __HeapPointerKey(self):
-            heap = self.getparent(HEAP)
+            heap = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
             return heap['PointerKey'].int()
 
         def __GetPointerKey(self):
@@ -1029,7 +1023,7 @@ if 'HeapChunk':
                 raise error.InvalidHeapType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
 
             # Grab the owner HEAP and use to to create the next chunk.
-            owner = self.getparent(HEAP)
+            owner = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
             return owner.new(cls, offset=self.getoffset() + header.Size())
 
         def previous(self):
@@ -1040,7 +1034,7 @@ if 'HeapChunk':
             # FIXME: this method might not be valid anymore due to PreviousSize being deprecated.
 
             # Grab the owner HEAP and use to to create the previous chunk.
-            owner = self.getparent(HEAP)
+            owner = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
             return owner.new(cls, offset=self.getoffset() - header.PreviousSize())
             # Get the Owner HEAP and calculate the offset of the previous chunk.
         prev = previous
@@ -1970,7 +1964,10 @@ if 'LFH':
                 return self['Hint'].d
             elif self['ActiveSubSegment'].int():
                 return self['ActiveSubSegment'].d
-            raise error.MissingSegmentException(self, 'Segment', heap=self.getparent(HEAP), localdata=self.getparent(HEAP_LOCAL_DATA))
+
+            # If we couldn't find the segment, then raise an exception.
+            OwnerHeap = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
+            raise error.MissingSegmentException(self, 'Segment', heap=OwnerHeap, localdata=self.getparent(HEAP_LOCAL_DATA))
 
         def LastSegment(self):
             '''
@@ -2489,7 +2486,7 @@ if 'Heap':
 
     class HEAP_VIRTUAL_ALLOC_ENTRY(pstruct.type):
         def __Entry(self):
-            owner = self.getparent(HEAP)
+            owner = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
             res, sentinel = P(HEAP_VIRTUAL_ALLOC_ENTRY), owner['VirtualAllocatedBlocks']
             return dyn.clone(LIST_ENTRY, _path_=['Entry'], _object_=res, _sentinel_=sentinel.getoffset())
 
@@ -2559,7 +2556,7 @@ if 'Heap':
             _object_, length = _HeapBucketCounter, 0
 
             def BySize(self, size):
-                owner = self.getparent(HEAP)
+                owner = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
                 units = owner.BlockUnits(size)
                 return self[units]
 
@@ -2576,9 +2573,11 @@ if 'Heap':
             integral = ULONGLONG if getattr(self, 'WIN64', False) else ULONG
             size_t = SIZE_T64 if getattr(self, 'WIN64', False) else SIZE_T
 
-            # FIXME: We can assign a recursive __HEAP__ attribute here.
-            f = self._fields_ = []
+            # Cache a hidden __HEAP__ attribute amongst all children.
+            self.attributes['__HEAP__'] = self
 
+            # Define all of the necessary fields for the structure.
+            f = self._fields_ = []
             if sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION) <= sdkddkver.NTDDI_WS03:
                 f.extend([
                     (HEAP_ENTRY, 'Entry'),                              # XXX: needs to be corrected since refactor
