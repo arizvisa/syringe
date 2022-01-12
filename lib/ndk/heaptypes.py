@@ -531,10 +531,8 @@ if 'HeapEntry':
 
         def __OwnerHeap(self):
             '''Return and cache the HEAP that this HEAP_ENTRY belongs to.'''
-            if hasattr(self, '__HEAP__'):
-                result = self.__HEAP__
-            else:
-                result = self.__HEAP__ = self.getparent(type=HEAP)
+            result = self.__HEAP__ if hasattr(self, '__HEAP__') else self.getparent(HEAP)
+            self.__HEAP__ = result
             return result
 
         ### Decoding for a chunk used by the backend.
@@ -992,13 +990,15 @@ if 'HeapChunk':
         def __Data(self):
             header = self['Header'].li
 
-            # Grab the heap type from the header's backing type since it's only
-            # a single unencoded bit that distinguishes between how the sizes
-            # are calculated
-            if hasattr(self, '__SubSegment__'):
-                ss = self.__SubSegment__
-                size = ss['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
+            # If our header is pointing to a frontend chunk, then first check
+            # if we've cached the HEAP_SUBSEGMENT. If we haven't, then that's
+            # okay because we can decode it from the header.
+            if header.FrontEndQ():
+                segment = self.__SubSegment__ if hasattr(self, '__SubSegment__') else header.Segment()
+                loaded = segment.li
+                size = loaded['BlockSize'].int() * (0x10 if getattr(self, 'WIN64', False) else 8)
 
+            # If it's a backend chunk, then we can ask the header for the size.
             else:
                 size = header.Size()
 
@@ -1031,6 +1031,7 @@ if 'HeapChunk':
             return result
 
         def next(self):
+            # FIXME: this method shouldn't really be defined here
             cls, header = self.__class__, self['Header']
             if not header.BackEndQ():
                 raise error.InvalidHeapType(self, 'next', BackEndQ=header.BackEndQ(), BusyQ=header.BusyQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
@@ -1647,13 +1648,34 @@ if 'LFH':
         def __cache_lfheap(self):
             if hasattr(self, '_LFH_HEAP'):
                 return self._LFH_HEAP
-            result = self.getparent(LFH_HEAP)
+
+            # First try looking for the LFH_HEAP in our parents.
+            try:
+                result = self.getparent(LFH_HEAP)
+
+            # If we couldn't find it in our parents, then we'll start
+            # by grabbing the HEAP_SUBSEGMENT from our parent type.
+            except ptypes.error.ItemNotFoundError:
+                result = self.getparent(HEAP_USERDATA_HEADER)
+                ss = result['SubSegment'].d.li
+
+                # Now from this we can grab the HEAP_LOCAL_SEGMENT_INFO and
+                # then from that dereference the HEAP_LOCAL_DATA. Afterwards,
+                # the LFH_HEAP is just another dereference away.
+                si = ss['LocalInfo'].d.li
+                local = si['LocalData'].d.li
+                result = local['LowFragHeap'].d.li
+
+            # Now we can cache it to avoid having to do that again.
             self._LFH_HEAP = result
             return result
 
         def __cache_lfhkey(self):
             if hasattr(self, '_LFH_KEY'):
                 return self._RtlpLFHKey
+
+            # If there was no _LFH_KEY attribute that was assigned, then we
+            # need to cheat and use a debugger or something to resolve it.
             result = __RtlpLFHKey__(self)
             self._RtlpLFHKey = result
             return result
@@ -1742,12 +1764,16 @@ if 'LFH':
                 raise error.NdkUnsupportedVersion(self)
             return
 
+        def Segment(self, reload=False):
+            '''Return the HEAP_SUBSEGMENT that this object is associated with.'''
+            return self['SubSegment'].d
+
         def ByOffset(self, entryoffset):
             '''Return the field at the specified `entryoffset`.'''
 
             # If our offsets are encoded, then we need to grab our boundaries
             # and chunk sizes from it to use it for our calculations.
-            if 'EncodedOffsets' in self:
+            if operator.contains(self, 'EncodedOffsets'):
                 offsets = self['EncodedOffsets'].d.li
                 offset, stride = (offsets[fld].int() for fld in ['FirstAllocationOffset', 'BlockStride'])
                 result = offset + stride * entryoffset
@@ -1856,7 +1882,7 @@ if 'LFH':
             # is easy because our offset is literally the index. So,
             # what we'll try to do instead is to validate it.
             ub = self['UserBlocks'].d.li
-            if 'EncodedOffsets' in ub:
+            if operator.contains(ub, 'EncodedOffsets'):
                 index = offset
                 if not (0 <= index < self['BlockCount'].int()):
                     raise IndexError(index)
@@ -2004,7 +2030,17 @@ if 'LFH':
         def Bucket(self):
             '''Return the frontend bucket associated with the current HEAP_LOCAL_SEGMENT_INFO.'''
             index = self['BucketIndex'].int()
-            lfh = self.getparent(LFH_HEAP)
+
+            # First check to see if an LFH_HEAP is available in our parents.
+            try:
+                lfh = self.getparent(LFH_HEAP)
+
+            # Otherwise we'll need to do some dereferencing to get there.
+            except ptypes.error.ItemNotFoundError:
+                local = self['LocalData'].d.li
+                lfh = local['LowFragHeap'].d.li
+
+            # Now we can grab the bucket by its index.
             return lfh.BucketByIndex(index)
 
         def Segment(self):
@@ -2125,8 +2161,8 @@ if 'LFH':
                     (ULONG, 'NextIndex'),
                     (dyn.block(4 if getattr(self, 'WIN64', False) else 0), 'padding(NextIndex)'),
 
-                    # FIXME: I'm pretty sure that similar to the older definition of this structure
-                    #        that list of subsegments follow these fields.
+                    # FIXME: I'm pretty certain that the list of subsegments will follow these
+                    #        fields..similarly to the older definition of this structure.
                 ])
 
             else:
@@ -2209,17 +2245,6 @@ if 'LFH':
             raise NotImplementedError
 
     class HEAP_LOCAL_DATA(pstruct.type):
-        def CrtZone(self):
-            '''Return the SubSegmentZone that's correctly associated with the value of the CrtZone field'''
-            fe = self.getparent(LFH_HEAP)
-            zone = self['CrtZone'].int()
-            zoneiterator = (z for z in fe['SubSegmentZones'].walk() if z.getoffset() == zone)
-            try:
-                res = next(zoneiterator)
-            except StopIteration:
-                raise error.CrtZoneNotFoundError(self, 'CrtZone', zone=zone, frontendheap=fe.getoffset(), heap=fe.p.p.getoffset())
-            return res
-
         def __init__(self, **attrs):
             super(HEAP_LOCAL_DATA, self).__init__(**attrs)
             f = self._fields_ = []
@@ -2249,6 +2274,24 @@ if 'LFH':
             else:
                 # XXX: win10
                 raise error.NdkUnsupportedVersion(self)
+
+        def CrtZone(self):
+            '''Return the SubSegmentZone that's correctly associated with the value of the CrtZone field'''
+            try:
+                fe = self.getparent(LFH_HEAP)
+
+            # If we couldn't find the frontend heap in our parents,
+            # then just dereference it from ourselves.
+            except ptypes.error.NotFoundError:
+                fe = self['LowFragHeap'].d.li
+
+            zone = self['CrtZone'].int()
+            zoneiterator = (z for z in fe['SubSegmentZones'].walk() if z.getoffset() == zone)
+            try:
+                res = next(zoneiterator)
+            except StopIteration:
+                raise error.CrtZoneNotFoundError(self, 'CrtZone', zone=zone, frontendheap=fe.getoffset(), heap=fe.p.p.getoffset())
+            return res
 
         def DeletedSubSegments(self):
             '''Yield each of the available DeletedSubSegments that will be used first.'''
@@ -2370,7 +2413,7 @@ if 'LFH':
             #        "SegmentInfoArrays" or the "AffinitizedInfoArrays"
 
             # If we are using the "SegmentInfoArrays" pointer array, then index into it.
-            if 'SegmentInfoArrays' in self:
+            if operator.contains(self, 'SegmentInfoArrays'):
                 segmentinfoarray = self['SegmentInfoArrays']
                 result = segmentinfoarray[index].d.li
 
@@ -2457,7 +2500,7 @@ if 'Heap':
             start, end = (self[fld].li for fld in ['FirstEntry', 'LastValidEntry'])
             return start.int(), end.int() - ucr
 
-        def Chunk(self, address):
+        def Block(self, address):
             '''Create a _HEAP_CHUNK at the specified address.'''
             start, end = self.Bounds()
             if start <= address < end:
@@ -2467,6 +2510,11 @@ if 'Heap':
             # Raise an exception if the chunk is out of bounds.
             cls = self.__class__
             raise error.InvalidChunkAddress(self, 'Chunk', message="The requested address ({:#x}) is not within the boundaries of the current {:s} ({:#x}<>{:#x}).".format(address, cls.typename(), start, end), Segment=self)
+
+        def Chunk(self, address):
+            '''Create a _HEAP_CHUNK that references the specified address.'''
+            header = self.new(HEAP_ENTRY).a
+            return self.Block(address - header.blocksize())
 
         def iterate(self):
             '''Yield each of the chunks in the current segment.'''
@@ -2478,7 +2526,7 @@ if 'Heap':
             # constructing each chunk and then yielding it.
             while res.getoffset() + res['Header'].Size() < end:
                 ea = res.getoffset() + res['Header'].Size()
-                res = self.Chunk(ea)
+                res = self.Block(ea)
                 yield res.li
             return
 
