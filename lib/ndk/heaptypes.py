@@ -635,6 +635,15 @@ if 'HeapEntry':
                 (HEAP_ENTRY._UnusedBytes, 'UnusedBytes'),
             ]
 
+            def Segment(self, reload=False):
+                '''Dereference the HEAP_SUBSEGMENT that is encoded within the header.'''
+                return self['SubSegment'].d
+
+            def UserBlocks(self, reload=False):
+                '''Instantiate a HEAP_USERDATA_HEADER using the "EntryOffset" that is encoded within the header.'''
+                segment = self['SubSegment'].d.l if reload else self['SubSegment'].d.li
+                return segment['UserBlocks'].d
+
             def summary(self):
                 items, unused = [], self['UnusedBytes']
                 items.append("(FE) {:s} UnusedBytes={:+#x}".format('BUSY', unused.UnusedBytes()) if unused.BusyQ() else "(FE) {:s}".format('FREE'))
@@ -738,13 +747,22 @@ if 'HeapEntry':
             '''HEAP_ENTRY after decoding on win8'''
             _fields_ = [
                 (lambda self: dyn.block(8 if getattr(self, 'WIN64', False) else 0), 'PreviousBlockPrivateData'),
-                (ULONG, 'EntryOffset'),         # distance from userdataheader (checksum?)
-                # if this is free'd, this seems to get xor'd?
-
-                (UCHAR, 'PreviousSize'),                    # FF
-                (USHORT, 'SmallTagIndex'),                  # block index
-                (HEAP_ENTRY._UnusedBytes, 'UnusedBytes'),   # FF
+                (lambda self: dyn.clone(PENTRY_OFFSET, _value_=ULONG), 'EntryOffset'),  # distance from userdataheader (checksum?)
+                                                                                        # if this is free'd, this seems to get xor'd?
+                (UCHAR, 'PreviousSize'),                                                # FF
+                (USHORT, 'SmallTagIndex'),                                              # block index
+                (HEAP_ENTRY._UnusedBytes, 'UnusedBytes'),                               # FF
             ]
+
+            def UserBlocks(self, reload=False):
+                '''Instantiate a HEAP_USERDATA_HEADER using the "EntryOffset" that is encoded within the header.'''
+                return self['EntryOffset'].d
+
+            def Segment(self, reload=False):
+                '''Dereference the HEAP_SUBSEGMENT from the HEAP_USERDATA_HEADER that is encoded within the header.'''
+                ub = self['EntryOffset'].d.l if reload else self['EntryOffset'].d.li
+                return ub['SubSegment'].d
+
             def summary(self):
                 items, unused = [], self['UnusedBytes']
                 items.append("(FE) {:s} UnusedBytes={:+#x}".format('BUSY', unused.UnusedBytes()) if unused.BusyQ() else "(FE) {:s}".format('FREE'))
@@ -867,14 +885,21 @@ if 'HeapEntry':
                 return not header['UnusedBytes'].BusyQ()
             return False
 
-        # FIXME: this should be deprecated or corrected
-        def SubSegment(self):
-            if not self.FrontEndQ():
-                raise error.InvalidHeapType(self, 'SubSegment', message='Unable to dereference the subsegment for a non-frontend type')
+        def Segment(self, reload=False):
+            '''Return the HEAP_SUBSEGMENT that is encoded within the _HEAP_ENTRY.'''
+            header = self.object
+            if not header.FrontEndQ():
+                raise error.InvalidHeapType(self, 'Segment', message='Unable to decode the HEAP_SUBSEGMENT from a non-frontend chunk.', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            decoded = self.d.l if reload else self.d.li
+            return decoded.Segment(reload=reload)
 
-            # Decode the header, and return the "SubSegment" from it.
-            header = self.d.li
-            return header['SubSegment'].d
+        def UserBlocks(self, reload=False):
+            '''Return the HEAP_USERDATA_HEADER that is encoded within the _HEAP_ENTRY.'''
+            header = self.object
+            if not header.FrontEndQ():
+                raise error.InvalidHeapType(self, 'UserBlocks', message='Unable to decode the HEAP_USERDATA_HEADER from a non-frontend chunk.', FrontEndQ=header.FrontEndQ(), version=sdkddkver.NTDDI_MAJOR(self.NTDDI_VERSION))
+            decoded = self.d.l if reload else self.d.li
+            return decoded.UserBlocks(reload=reload)
 
     class ENCODED_POINTER(PVOID):
         '''
@@ -1891,6 +1916,23 @@ if 'LFH':
                 p = self.getparent(_HEAP_ENTRY)
                 attrs.setdefault('source', p.source)
             return super(PHEAP_SUBSEGMENT, self).dereference(**attrs)
+
+    class PENTRY_OFFSET(opointer_t):
+        '''
+        This points to a HEAP_USERDATA_HEADER, but ensures that it will use
+        the source of any ptype.encoded_t that parented it. This is intended to
+        be used by the _HEAP_ENTRY definition that was defined earlier.
+        '''
+        _object_ = HEAP_USERDATA_HEADER
+        def dereference(self, **attrs):
+            if isinstance(self.source, ptypes.provider.proxy) and self.parent is not None:
+                p = self.getparent(_HEAP_ENTRY)
+                attrs.setdefault('source', p.source)
+            return super(PENTRY_OFFSET, self).dereference(**attrs)
+
+        def _calculate_(self, offset):
+            p = self.getparent(_HEAP_ENTRY)
+            return p.getoffset() - offset
 
     class HEAP_LOCAL_SEGMENT_INFO(pstruct.type):
         class _CachedItems(parray.type):
