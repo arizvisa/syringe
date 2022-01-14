@@ -1,4 +1,4 @@
-import ptypes
+import ptypes, builtins
 from ptypes import ptype, parray, pstruct, pint, pstr, dyn, pbinary
 ptypes.setbyteorder(ptypes.config.byteorder.littleendian)
 
@@ -206,7 +206,7 @@ class stringinteger(padstring):
 
     def int(self):
         res = super(padstring, self).str()
-        return int(res.rstrip())
+        return builtins.int(res.rstrip())
 
 class octalinteger(padstring):
     def set(self, integer):
@@ -215,4 +215,4 @@ class octalinteger(padstring):
 
     def int(self):
         res = super(padstring, self).str()
-        return int(res.rstrip(), 8)
+        return builtins.int(res.rstrip(), 8)
