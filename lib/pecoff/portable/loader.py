@@ -261,7 +261,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY32(IMAGE_LOAD_CONFIG_DIRECTORY):
 
         (DWORD, 'ProcessHeapFlags'),   # FIXME: where are these flags at?
         (WORD, 'CSDVersion'),
-        (LOAD_LIBRARY_SEARCH_, 'DependentLoadFlags'),
+        (pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
 
         (realaddress(VOID, type=DWORD), 'EditList'),    # XXX: also probably a NULL-terminated list of VAs
         (realaddress(DWORD, type=DWORD), 'SecurityCookie'),
@@ -322,7 +322,7 @@ class IMAGE_LOAD_CONFIG_DIRECTORY64(IMAGE_LOAD_CONFIG_DIRECTORY):
 
         (DWORD, 'ProcessHeapFlags'),
         (WORD, 'CSDVersion'),
-        (LOAD_LIBRARY_SEARCH_, 'DependentLoadFlags'),
+        (pbinary.littleendian(LOAD_LIBRARY_SEARCH_), 'DependentLoadFlags'),
 
         (realaddress(VOID, type=ULONGLONG), 'EditList'),
         (realaddress(ULONGLONG, type=ULONGLONG), 'SecurityCookie'),
