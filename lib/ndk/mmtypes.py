@@ -4,6 +4,29 @@ from ptypes import *
 from . import iotypes
 from .datatypes import *
 
+class _MI_SYSTEM_VA_TYPE(pint.enum):
+    _values_ = [
+        ('MiVaUnused',  0),
+        ('MiVaSessionSpace',  1),
+        ('MiVaProcessSpace',  2),
+        ('MiVaBootLoaded',  3),
+        ('MiVaPfnDatabase',  4),
+        ('MiVaNonPagedPool',  5),
+        ('MiVaPagedPool',  6),
+        ('MiVaSpecialPoolPaged',  7),
+        ('MiVaSystemCache',  8),
+        ('MiVaSystemPtes',  9),
+        ('MiVaHal',  10),
+        ('MiVaFormerlySessionGlobalSpace',  11),
+        ('MiVaDriverImages',  12),
+        ('MiVaSystemPtesLarge',  13),
+        ('MiVaKernelStacks',  14),
+        ('MiVaSecureNonPagedPool',  15),
+        ('MiVaKernelShadowStacks',  16),
+        ('MiVaKasan',  17),
+        ('MiVaMaximumType',  18),
+    ]
+
 class _POOL_TYPE_PagedPool(pbinary.enum):
     _values_ = [
         ('NonPagedPool', 0x0000),
