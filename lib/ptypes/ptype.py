@@ -927,11 +927,11 @@ class base(generic):
 
         # try and load the contents using the correct blocksize
         try:
-            result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size)
+            result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size) if result.copy().a.blocksize() > size else result.load(offset=0, source=provider.proxy(self))
             result.setoffset(result.getoffset(), recurse=True)
 
         except error.ProviderError as E:
-            Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), E), exc_info=False)
+            Log.warning("base.cast : {:s} : {:s} : Cast has resulted in a partially initialized instance ({:d} < {:d}) : {!r}".format(self.classname(), t.typename(), result.size(), size, E), exc_info=False)
 
         except Exception as E:
             Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), E), exc_info=True)
