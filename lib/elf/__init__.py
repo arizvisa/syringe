@@ -1,4 +1,4 @@
-import logging, bisect, itertools, ptypes
+import logging, bisect, functools, itertools, operator, ptypes
 from ptypes import ptype, pint, pstruct, parray
 
 from . import base, segment, section, dynamic
@@ -105,51 +105,115 @@ class File(pstruct.type, base.ElfXX_File):
         ei_data = e_ident['EI_DATA']
         return ptype.clone(t, recurse={'byteorder': ei_data.order()})
 
+    def __segment_tables(self, data):
+        '''Return the segment list and a lookup table that can be used to identify the segment associated with a boundary.'''
+        segments = data['e_phoff'].d
+        list = [phdr for _, phdr in segments.li.sorted()]
+
+        # Iterate through the list and create a table for all of
+        # the segments which use the segment boundaries as the key.
+        table = {phdr['p_offset'].int() : phdr for phdr in list}
+        table.update({phdr['p_offset'].int() + phdr.getreadsize() : phdr for phdr in list if phdr.getreadsize() > 0})
+
+        # Simple as that, now to return them to the caller.
+        return list, table
+
+    def __section_tables(self, data):
+        '''Return the section list and a lookup table that can be used to identify the section associated with a boundary.'''
+        sections = data['e_shoff'].d
+        list = [shdr for _, shdr in sections.li.sorted()]
+
+        # Go through the list of sections and create a table for
+        # them that uses the section's boundaries as its key.
+        table = {shdr['sh_offset'].int() : shdr for shdr in list}
+        table.update({shdr['sh_offset'].int() + shdr.getreadsize() : shdr for shdr in list if shdr.getreadsize() > 0})
+
+        # Return both of them back to the caller.
+        return list, table
+
+    def __gather_lists(self, segments, sections):
+        '''Iterate through each of the segments and sections in order to insert them into a sorted list.'''
+        items = []
+
+        # First we'll do the boundaries for the segments.
+        for phdr in segments:
+            offset = phdr['p_offset'].int()
+            bisect.insort(items, offset)
+            bisect.insort(items, offset + phdr.getreadsize())
+
+        # Next we'll do the boundaries for the sections.
+        for shdr in sections:
+            offset = shdr['sh_offset'].int()
+            bisect.insort(items, offset)
+            bisect.insort(items, offset + shdr.getreadsize())
+
+        # This list should be sorted, so now we can return it.
+        return items
+
     def __e_dataentries(self):
         data = self['e_data'].li
         if isinstance(self.source, ptypes.provider.memorybase):
             return ptype.clone(parray.type, _object_=segment.MemorySegmentData, length=0)
 
-        # If we're using a file source, then we'll need to include both sections
-        # _and_ segments. We'll also create some lookup dicts so that we can
-        # identify which type is at a particular offset. This way we can give
-        # the sections priority since we're dealing with files.
-        sections, segments = data['e_shoff'].d, data['e_phoff'].d
-        segmentlist = [phdr for _, phdr in segments.li.sorted()]
-        sectionlist = [shdr for _, shdr in sections.li.sorted()]
+        # Gather both the segments and the sections into a list, and colllect
+        # their boundaries into a lookup table so that we can find the specific
+        # instance that is found at a particular location.
+        segmentlist, segmenttable = self.__segment_tables(data)
+        sectionlist, sectiontable = self.__section_tables(data)
 
-        segmentlookup = {phdr['p_offset'].int() : phdr for phdr in segmentlist}
-        segmentlookup.update({phdr['p_offset'].int() + phdr.getreadsize() : phdr for phdr in segmentlist if phdr.getreadsize() > 0})
-
-        sectionlookup = {shdr['sh_offset'].int() : shdr for shdr in sectionlist}
-        sectionlookup.update({shdr['sh_offset'].int() + shdr.getreadsize() : shdr for shdr in sectionlist if shdr.getreadsize() > 0})
-
-        # Now we need to sort both of them into a single list so we can figure
-        # out the layout of this executable. To do this, we're just going to
-        # create a list of the offset of each boundary. This way we can use
-        # our lookup tables to figure out which type is the right one.
-        layout = []
-        for phdr in segmentlist:
-            offset = phdr['p_offset'].int()
-            bisect.insort(layout, offset)
-            bisect.insort(layout, offset + phdr.getreadsize())
-
-        for shdr in sectionlist:
-            offset = shdr['sh_offset'].int()
-            bisect.insort(layout, offset)
-            bisect.insort(layout, offset + shdr.getreadsize())
+        # Finally, we need to create a sorted list of all of the available
+        # boundaries. This way we can filter out bounds that have already been
+        # included in the header, and more importantly we can convert them
+        # into an iterator that we'll use to do our final processing.
+        items, offset = self.__gather_lists(segmentlist, sectionlist), sum(self[fld].li.size() for fld in ['e_ident', 'e_data'])
+        ilayout = itertools.dropwhile(functools.partial(operator.lt, offset), iter(items))
+        ilayout = (ea for ea in ilayout if (segmenttable[ea]['p_offset'].int() if ea in segmenttable else offset) >= offset)
+        ilayout = (ea for ea in ilayout if (sectiontable[ea]['sh_offset'].int() if ea in sectiontable else offset) >= offset)
+        layout = [ea for ea in ilayout]
 
         # Our layout contains the boundaries of all of our sections, so now
         # we need to walk our layout and determine whether there's a section
-        # or a segment at that particular address.
-
-        # FIXME: we need to filter out segments here if we found a section that
-        #        is contained within it.
-        sorted, used = [], {item for item in []}
+        # or a segment at that particular address. We keep track of the last
+        # position in order to identify if there's an empty slot in between.
+        position, sorted, used = offset, [], {item for item in []}
         for boundary, _ in itertools.groupby(layout):
-            item = sectionlookup.get(boundary, segmentlookup.get(boundary, None))
-            if item is None or item in used:
+
+            # If our boundary is in the sectiontable, then use sections.
+            if boundary in sectiontable:
+                item = sectiontable[boundary]
+
+                # If the current boundary is not the section's offset, then
+                # we know it's the tail and we need to track its position.
+                if item['sh_offset'].int() not in {boundary}:
+                    position = boundary
+
+            # If it was found in the segmenttable, then use segments.
+            elif boundary in segmenttable:
+                item = segmenttable[boundary]
+
+                # If the boundary is not in the segment's offset, then we
+                # know it's the tail and we need to track the position.
+                if item['p_offset'].int() not in {boundary}:
+                    position = boundary
+
+            # It should be either a segment or a section, and anything else
+            # should be an error.
+            else:
+                raise ValueError(boundary)
+
+            # If our resulting segment or section was already used, then we
+            # don't need to use it again.
+            if item in used:
                 continue
+
+            # However if our position is smaller then the current boundary, then
+            # we know there's some space between us and the section or segment.
+            if boundary > position:
+                sorted.append(boundary - position)
+                position = boundary
+
+            # Append the determined item to our sorted list, and add it so
+            # that we don't have any duplicates.
             sorted.append(item)
             used.add(item)
 
@@ -165,7 +229,9 @@ class File(pstruct.type, base.ElfXX_File):
             item = items[len(self.value)]
             if isinstance(item, segment.ElfXX_Phdr):
                 return ptype.clone(segment_t, __segment__=item)
-            return ptype.clone(section_t, __section__=item)
+            elif isinstance(item, section.ElfXX_Shdr):
+                return ptype.clone(section_t, __section__=item)
+            return ptype.clone(ptype.block, length=item)
 
         # Finally we can construct our array composed of the proper types
         return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
