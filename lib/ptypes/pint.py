@@ -146,23 +146,39 @@ Log = Config.log.getChild('pint')
 integer_types, string_types = bitmap.integer_types, utils.string_types
 
 __state__ = {}
-def setbyteorder(endianness):
-    if endianness in {config.byteorder.bigendian, config.byteorder.littleendian}:
-        transform = {config.byteorder.bigendian : bigendian, config.byteorder.littleendian : littleendian}[endianness]
+def setbyteorder(order):
+    if order in {config.byteorder.bigendian, config.byteorder.littleendian}:
+        transform = {config.byteorder.bigendian : bigendian, config.byteorder.littleendian : littleendian}[order]
+
+        # Iterate through all of the types defined within our module, and
+        # filter them to only get actual class definitions.
         for name, definition in globals().items():
             if definition in [type] or getattr(definition, '__base__', type) is type:
                 continue
+
+            # Now we need to prove they're a type and that they're an integer
+            # definition. If so, then we can transform it with our decorator.
             if isinstance(definition, builtins.type) and issubclass(definition, type):
-                if getattr(definition, 'byteorder', config.defaults.integer.order) != endianness:
+                if getattr(definition, 'byteorder', config.defaults.integer.order) != order:
                     globals()[name] = transform(definition)
                 pass
             continue
         return
-    elif getattr(endianness, '__name__', '').startswith('big'):
+
+    # If we were given a string as the byteorder, then check the prefix to use.
+    elif isinstance(order, string_types):
+        if order.startswith('big'):
+            return setbyteorder(config.byteorder.bigendian)
+        elif order.startswith('little'):
+            return setbyteorder(config.byteorder.littleendian)
+        raise ValueError("An unknown byteorder was specified ({:s}) for integral types.".format(order))
+
+    # Otherwise try to figure it out by checking the order's name.
+    elif getattr(order, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
-    elif getattr(endianness, '__name__', '').startswith('little'):
+    elif getattr(order, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness {!r}".format(endianness))
+    raise TypeError("An unknown type ({!s}) with the value ({!r}) was specified as the byteorder for integral types.".format(order.__class__, order))
 
 def bigendian(integral, **attrs):
     '''Will convert an integer_t to bigendian form'''
@@ -219,47 +235,69 @@ class type(ptype.type):
     """
     byteorder = config.defaults.integer.order
 
+    def __generalize_byteorder(self):
+        order = self.byteorder
+
+        # First we need to figure out the byteorder which we do by
+        # explicitly checking for the types.
+        if order in {config.byteorder.bigendian, config.byteorder.littleendian}:
+            return order
+
+        # If we were assigned a string, though, then check which
+        # prefix is said string using.
+        elif isinstance(order, string_types):
+
+            if order.startswith('big'):
+                return config.byteorder.bigendian
+            elif order.startswith('little'):
+                return config.byteorder.littleendian
+            raise error.TypeError(self, 'integer_t.byteorder', message="An unknown byteorder ({:s}) was assigned to the object.".format(order))
+
+        # Anything else is an incorrect type, which we do not understand.
+        cls = order.__class__
+        raise error.SyntaxError(self, 'integer_t.byteorder', message="An unknown type ({!s}) with the value ({!r}) was assigned as the object byteorder.".format(cls.__name__, order))
+
     def classname(self):
         typename = self.typename()
-        if self.byteorder is config.byteorder.bigendian:
-            return config.defaults.pint.bigendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
-        elif self.byteorder is config.byteorder.littleendian:
-            return config.defaults.pint.littleendian_name.format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
+        try:
+            order = self.__generalize_byteorder()
+        except Exception:
+            #Log.warning("{:s}.classname : {:s} : Using the default typename as the byteorder attribute is using an unknown value {!r}.".format(__name__, typename, self.byteorder))
+            return typename
         else:
-            raise error.SyntaxError(self, 'type.classname', message="Unknown byteorder ({!s}) was specified".format(self.byteorder))
-        return typename
+            format = config.defaults.pint.littleendian_name.format if order is config.byteorder.bigendian else config.defaults.pint.littleendian_name.format
+        return format(typename, **(utils.attributes(self) if config.defaults.display.mangle_with_attributes else {}))
 
     def flip(self):
         '''Returns an integer with the endianness flipped'''
-        if self.byteorder is config.byteorder.bigendian:
-            return self.cast(littleendian(self.__class__))
-        elif self.byteorder is config.byteorder.littleendian:
-            return self.cast(bigendian(self.__class__))
-        raise error.UserError(self, 'type.flip', message="Unknown byte order ({!s}) was specified".format(self.byteorder))
+        try:
+            order = self.__generalize_byteorder()
+        except Exception:
+            raise error.UserError(self, 'type.flip', message="An unknown byteorder ({!s}) is currently assigned to the current type.".format(self.byteorder))
+        if order is config.byteorder.bigendian:
+            Finvert = littleendian
+        elif order is config.byteorder.littleendian:
+            Finvert = bigendian
+        return self.cast(F(self.__class__))
 
     def __getvalue__(self):
         if not self.initializedQ():
             raise error.InitializationError(self, 'int')
-        data = bytearray(self.serialize())
-        if self.byteorder is config.byteorder.bigendian:
-            return functools.reduce(lambda agg, item: agg << 8 | item, iter(data), 0)
-        elif self.byteorder is config.byteorder.littleendian:
-            return functools.reduce(lambda agg, item: agg << 8 | item, reversed(data), 0)
-        raise error.SyntaxError(self, 'integer_t.int', message="Unknown byteorder {!s} was specified".format(self.byteorder))
+
+        data, order = bytearray(self.serialize()), self.__generalize_byteorder()
+        Ftransform = reversed if order is config.byteorder.littleendian else iter
+        return functools.reduce(lambda agg, item: agg << 8 | item, Ftransform(data), 0)
 
     def __setvalue__(self, *values, **attrs):
         if not values:
             return super(type, self).__setvalue__(*values, **attrs)
 
         integer, = values
-        if self.byteorder is config.byteorder.bigendian:
-            transform = reversed
-        elif self.byteorder is config.byteorder.littleendian:
-            transform = iter
-        else:
-            raise error.SyntaxError(self, 'integer_t.set', message="Unknown byteorder ({!s}) was specified".format(self.byteorder))
+        Ftransform = iter if self.__generalize_byteorder() is config.byteorder.littleendian else reversed
 
-        # If we received some bytes, than just toss the value up the chain.
+        # First we need to get the values that we were passed within our
+        # parameters. If we were given bytes instead of an integer, then
+        # just toss them up the chain for someone else to decode it.
         if isinstance(integer, (bytes, bytearray)):
             return super(type, self).__setvalue__(bytes(integer) if isinstance(integer, bytearray) else integer, **attrs)
 
@@ -272,7 +310,7 @@ class type(ptype.type):
             bc, x = bitmap.consume(bc, 8)
             res.append(x)
         res = res + [0] * (self.blocksize() - len(res))   # FIXME: use padding
-        return super(type, self).__setvalue__(bytes(bytearray(transform(res))), **attrs)
+        return super(type, self).__setvalue__(bytes(bytearray(Ftransform(res))), **attrs)
 
     def int(self):
         return self.__getvalue__()

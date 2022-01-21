@@ -135,31 +135,45 @@ Log = Config.log.getChild('pbinary')
 __izip_longest__ = utils.izip_longest
 integer_types, string_types = bitmap.integer_types, utils.string_types
 
-def setbyteorder(endianness, **length):
+def setbyteorder(order, **length):
     '''Sets the _global_ byte order for any pbinary.type.
 
-    ``endianness`` can be either pbinary.bigendian or pbinary.littleendian
+    ``order`` can be either pbinary.bigendian or pbinary.littleendian
     '''
     global partial
-    if endianness in {config.byteorder.bigendian, config.byteorder.littleendian}:
+
+    # If we were given one of the configuration types, then we need to
+    # determine which length they actually mean.
+    if order in {config.byteorder.bigendian, config.byteorder.littleendian}:
         result = partial.length
-        partial.length = 0 if endianness is config.byteorder.bigendian else length.get('length', Config.integer.size)
+        partial.length = 0 if order is config.byteorder.bigendian else length.get('length', Config.integer.size)
         if partial.length > 0:
             Log.warning("pbinary.setbyteorder : the byteorder for the pbinary module has been globally changed to little-endian which can affect any definitions that have a variable size.")
         return config.byteorder.littleendian if result > 1 else config.byteorder.bigendian
 
     # If we were given a word size, then recurse with the parameters in the correct place
-    elif isinstance(endianness, integer_types):
-        result = endianness
+    elif isinstance(order, integer_types):
+        result = order
         order = config.byteorder.littleendian if result > 1 else config.byteorder.bigendian
         return setbyteorder(order, length=result)
 
-    elif getattr(endianness, '__name__', '').startswith('big'):
+    # If we were given a string, then check which prefix it starts with.
+    elif isinstance(order, string_types):
+
+        if order.startswith('big'):
+            return setbyteorder(config.byteorder.bigendian)
+        elif order.startswith('little'):
+            return setbyteorder(config.byteorder.littleendian)
+        raise ValueError("An unknown byteorder was specified ({:s}) for new partial types.".format(order))
+
+    # Otherwise we have no idea what type it is, but we can still
+    # attempt to figure it out by checking its name.
+    elif getattr(order, '__name__', '').startswith('big'):
         return setbyteorder(config.byteorder.bigendian)
 
-    elif getattr(endianness, '__name__', '').startswith('little'):
+    elif getattr(order, '__name__', '').startswith('little'):
         return setbyteorder(config.byteorder.littleendian)
-    raise ValueError("Unknown integer endianness {!r}".format(endianness))
+    raise TypeError("An unknown type ({!s}) with the value ({!r}) was specified as the byteorder for new partial types.".format(order.__class__, order))
 
 ## instance tests
 if sys.version_info.major < 3:
@@ -1959,7 +1973,44 @@ class partial(ptype.container):
 
     @property
     def byteorder(self):
+        '''Return the byteorder (endianness) for the instance.'''
         return config.byteorder.littleendian if self.length > 1 else config.byteorder.bigendian
+    @byteorder.setter
+    def byteorder(self, order):
+        '''Modify the byteorder (endianness) for the instance to the one specified.'''
+
+        # If given one of the correct types, then we need to translate them
+        # into a length that actually has meaning to us.
+        if order in {config.byteorder.bigendian, config.byteorder.littleendian}:
+            length = 0 if order is config.byteorder.bigendian else Config.integer.size
+
+        # If we were given a string, then we can figure that out too.
+        elif isinstance(order, string_types):
+
+            # Check the prefix of the "order" to determine what to set the length to.
+            if order.startswith('big'):
+                res = 0
+            elif order.startswith('little'):
+                res = Config.integer.size
+
+            # Otherwise, raise an exception for the invalid value.
+            else:
+                raise TypeError("partial.byteorder : {:s} : An unknown integer endianness was assigned ({:s}) to the byteorder for the current object.".format(self.instance(), order))
+
+            length = res
+
+        # If we were given an integer then we can use it, but we still need to warn about it.
+        elif isinstance(order, integer_types):
+            Log.warning("partial.byteorder : {:s} : An integer ({:d}) while explicitly assigned to the byteorder.".format(self.instance(), order))
+            length = order
+
+        # Otherwise we got an incorrect type and we have no idea how to process it.
+        else:
+            raise TypeError("partial.byteorder : {:s} : An unknown type ({!s}) with the value ({!r}) was assigned to the byteorder for the current object.".format(self.instance(), order.__class__, order))
+
+        # Now we can assign the length we determined for the byteorder, and leave.
+        self.length = length
+        return
 
     def contains(self, offset):
         """True if the specified ``offset`` is contained within"""
