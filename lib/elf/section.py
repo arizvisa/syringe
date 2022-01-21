@@ -508,7 +508,7 @@ class Elf32_Verneed(pstruct.type):
 
 class Elf32_Vernaux(pstruct.type):
     def __padding_vna_next(self):
-        res, fields = self['vna_next'].li, ['vna_hash', 'vna_flags', 'vna_other', 'vna_name']
+        res, fields = self['vna_next'].li, ['vna_hash', 'vna_flags', 'vna_other', 'vna_name', 'vna_next']
         return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
     _fields_ = [
         (Elf32_Word, 'vna_hash'),
@@ -582,7 +582,7 @@ class Elf64_Verneed(pstruct.type):
 
 class Elf64_Vernaux(pstruct.type):
     def __padding_vna_next(self):
-        res, fields = self['vna_next'].li, ['vna_hash', 'vna_flags', 'vna_other', 'vna_name']
+        res, fields = self['vna_next'].li, ['vna_hash', 'vna_flags', 'vna_other', 'vna_name', 'vna_next']
         return dyn.block(max(0, res.int() - sum(self[fld].li.size() for fld in fields)))
     _fields_ = [
         (Elf64_Word, 'vna_hash'),
