@@ -310,9 +310,23 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_BIND_NOW(d_ign): type = 24
     @DT_.define
-    class DT_INIT_ARRAY(d_vaptr): type = 25
+    class DT_INIT_ARRAY(d_vaptr):
+        type = 25
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_init_arraysz = p.by_tag('DT_INIT_ARRAYSZ')
+            return dyn.blockarray(Elf32_VAddr, dt_init_arraysz.int())
     @DT_.define
-    class DT_FINI_ARRAY(d_vaptr): type = 26
+    class DT_FINI_ARRAY(d_vaptr):
+        type = 26
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_fini_arraysz = p.by_tag('DT_FINI_ARRAYSZ')
+            return dyn.blockarray(Elf32_VAddr, dt_fini_arraysz.int())
     @DT_.define
     class DT_INIT_ARRAYSZ(d_val): type = 27
     @DT_.define
@@ -322,7 +336,14 @@ class ELFCLASS32(object):
     @DT_.define
     class DT_FLAGS(DF_): type = 30
     @DT_.define
-    class DT_PREINIT_ARRAY(d_vaptr): type = 32
+    class DT_PREINIT_ARRAY(d_vaptr):
+        type = 32
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_preinit_arraysz = p.by_tag('DT_PREINIT_ARRAYSZ')
+            return dyn.blockarray(Elf32_VAddr, dt_preinit_arraysz.int())
     @DT_.define
     class DT_PREINIT_ARRAYSZ(d_val): type = 33
     @DT_.define
@@ -606,9 +627,23 @@ class ELFCLASS64(object):
     @DT_.define
     class DT_BIND_NOW(d_ign): type = 24
     @DT_.define
-    class DT_INIT_ARRAY(d_vaptr): type = 25
+    class DT_INIT_ARRAY(d_vaptr):
+        type = 25
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_init_arraysz = p.by_tag('DT_INIT_ARRAYSZ')
+            return dyn.blockarray(Elf64_VAddr, dt_init_arraysz.int())
     @DT_.define
-    class DT_FINI_ARRAY(d_vaptr): type = 26
+    class DT_FINI_ARRAY(d_vaptr):
+        type = 26
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_fini_arraysz = p.by_tag('DT_FINI_ARRAYSZ')
+            return dyn.blockarray(Elf64_VAddr, dt_fini_arraysz.int())
     @DT_.define
     class DT_INIT_ARRAYSZ(d_val): type = 27
     @DT_.define
@@ -619,7 +654,14 @@ class ELFCLASS64(object):
     class DT_FLAGS(DF_):
         type, _fields_ = 30, [(32, 'alignment')] + DF_._fields_
     @DT_.define
-    class DT_PREINIT_ARRAY(d_vaptr): type = 32
+    class DT_PREINIT_ARRAY(d_vaptr):
+        type = 32
+        def _object_(self):
+            from .segment import ELFCLASSXX
+            p = self.getparent(ELFCLASSXX.PT_DYNAMIC)
+
+            dt_preinit_arraysz = p.by_tag('DT_PREINIT_ARRAYSZ')
+            return dyn.blockarray(Elf64_VAddr, dt_preinit_arraysz.int())
     @DT_.define
     class DT_PREINIT_ARRAYSZ(d_val): type = 33
     @DT_.define
