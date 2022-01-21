@@ -922,18 +922,38 @@ class base(generic):
         attrs.setdefault('offset', self.getoffset())
         attrs.setdefault('parent', self.parent)
 
-        # create the new type with the attributes from our parameters
+        # create the new type with the attributes from our parameters,
+        # and extract the blocksize so we can check it if necessary.
         result = self.new(t, **attrs)
 
         # try and load the contents using the correct blocksize
         try:
-            result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size) if result.copy().a.blocksize() > size else result.load(offset=0, source=provider.proxy(self))
+            result = result.load(offset=0, source=provider.proxy(self), blocksize=lambda: size)
             result.setoffset(result.getoffset(), recurse=True)
 
+        # this exception occurs when the object we're casting to is
+        # larger than the object we're casting from. we actually know
+        # this is going to happen as a number of partially initialized
+        # types are within our container, but there's no data available
+        # to fill them. just in case that this is surprising to the user,
+        # tho, we issue a warning.
         except error.ProviderError as E:
             Log.warning("base.cast : {:s} : {:s} : Cast has resulted in a partially initialized instance ({:d} < {:d}) : {!r}".format(self.classname(), t.typename(), result.size(), size, E), exc_info=False)
 
-        except Exception as E:
+        # if we get another exception, then it should be a LoadError.
+        # this will only happen if the type that we're loading with
+        # is actually smaller than what we're loading from. we get
+        # a LoadError because there's no way to consume the rest of
+        # the data that's available because there's no place to put
+        # it. we verify this is the case by checking that the blocksize,
+        # of the result is smaller than the size of our source object.
+        # if this is the case, then we raise an exception because this
+        # scenario should've been caught by ProviderError. If we're in
+        # LoadError and the result load size is smaller than what was
+        # supposed to have been loaded, then this is an error.
+        except error.LoadError as E:
+            if result.blocksize() < size:
+                raise
             Log.warning("base.cast : {:s} : {:s} : Error during cast resulted in a partially initialized instance : {!r}".format(self.classname(), t.typename(), E), exc_info=True)
 
         # force partial or overcommited initializations
@@ -2238,6 +2258,8 @@ class encoded_t(wrapper_t):
             delattr(object, fmt('commit'))
 
         def commit(**attrs):
+            expected = self.blocksize()
+
             # now turn it into the type that the encoded_t should expect
             res = object.cast(self._object_) if self._object_ else object
 
@@ -2260,6 +2282,7 @@ class encoded_t(wrapper_t):
             delattr(object, fmt('load'))
 
         def load(**attrs):
+            expected = self.size()
 
             # first cast into our backing type, or use what we have
             res = self.cast(self._value_) if self._value_ else self.object

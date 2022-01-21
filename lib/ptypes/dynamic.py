@@ -190,7 +190,7 @@ def align(size, **kwds):
     def blocksize(self, denomination=size if size > 0 else 0):
         offset = self.getoffset()
         if denomination:
-            res = abs((offset % denomination) - denomination) if denomination else 0
+            res = abs((offset % denomination) - denomination)
             return res % denomination
         return 0
     getinitargs = lambda self: (type, kwds)
