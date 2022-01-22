@@ -78,7 +78,7 @@ class ElfXX_Phdr(ElfXX_Header):
         res = self['p_filesz'].li
         return res.int()
 
-    def getloadedsize(self):
+    def getloadsize(self):
         size, alignment = (self[fld].li for fld in ['p_memsz', 'p_align'])
         if alignment.int() > 0:
             count = (size.int() + alignment.int() - 1) // alignment.int()
@@ -87,7 +87,7 @@ class ElfXX_Phdr(ElfXX_Header):
 
     def containsaddress(self, va):
         res = self['p_vaddr']
-        return res.int() <= va < res.int() + self.getloadedsize()
+        return res.int() <= va < res.int() + self.getloadsize()
 
     def containsoffset(self, ofs):
         res = self['p_offset']

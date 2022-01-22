@@ -215,7 +215,7 @@ class ElfXX_Shdr(ElfXX_Header):
         res = self['sh_size'].li
         return res.int()
 
-    def getloadedsize(self):
+    def getloadsize(self):
         size, alignment = (self[fld].li for fld in ['sh_size', 'sh_addralign'])
         if alignment.int() > 0:
             count = (size.int() + alignment.int() - 1) // alignment.int()
@@ -224,7 +224,7 @@ class ElfXX_Shdr(ElfXX_Header):
 
     def containsaddress(self, va):
         res = self['sh_addr']
-        return res.int() <= va < res.int() + self.getloadedsize()
+        return res.int() <= va < res.int() + self.getloadsize()
 
     def containsoffset(self, ofs):
         res = self['sh_offset']
@@ -239,7 +239,7 @@ class ElfXX_Chdr(ElfXX_Header):
         res = self['ch_size'].li
         return res.int()
 
-    def getloadedsize(self):
+    def getloadsize(self):
         size, alignment = (self[fld].li for fld in ['ch_size', 'ch_addralign'])
         if alignment.int() > 0:
             count = (size.int() + alignment.int() - 1) // alignment.int()
