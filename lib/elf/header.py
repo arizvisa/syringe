@@ -1,4 +1,4 @@
-import ptypes, time, datetime
+import ptypes, time, datetime, functools, operator, bisect
 from . import EV_, E_IDENT, section, segment
 from .base import *
 
@@ -326,17 +326,32 @@ class XhdrEntries(parray.type):
             yield index, item
         return
 
-    def sorted(self, fld):
-        items = {}
-        for index, item in enumerate(self):
-            offset = item[fld].int()
-            items[offset] = (index, item)
+    def sorted(self, field, *fields):
+        Fgetfields = operator.itemgetter(field, *fields) if fields else operator.itemgetter(field)
+        Finteger = functools.partial(map, operator.methodcaller('int'))
 
-        # Now that we've aggregated all of the entries, sort everything
-        # and yield them back to the user.
-        for offset in sorted(items):
-            index, item = items[offset]
-            yield index, item
+        # Start by building an index of the entire collection of elements
+        # by extracting the requested keys from each element.
+        collection = {}
+        for index, item in enumerate(self):
+            key = Fgetfields(item) if len(fields) else [Fgetfields(item)]
+
+            # Now that we have each field, convert it into a key and
+            # insert the array index of the item into our collection.
+            items = collection.setdefault(tuple(Finteger(key)), [])
+            bisect.insort(items, index)
+
+        # Now we can sort our collection of indices by the suggested
+        # fields, and fetch the index for a specific key.
+        for key in sorted(collection):
+            indices = collection[key]
+
+            # Lastly, we just need to iterate each index since they
+            # were inserted into the collection already sorted. With
+            # the index, we can then yield the item it references.
+            for index in indices:
+                yield index, self[index]
+            continue
         return
 
 class ShdrEntries(XhdrEntries):
@@ -357,7 +372,7 @@ class ShdrEntries(XhdrEntries):
         return result
 
     def sorted(self):
-        for index, item in super(ShdrEntries, self).sorted('sh_offset'):
+        for index, item in super(ShdrEntries, self).sorted('sh_offset', 'sh_size'):
             yield index, item
         return
 
@@ -405,8 +420,8 @@ class PhdrEntries(XhdrEntries):
         return
 
     def sorted(self):
-        fld = 'p_vaddr' if isinstance(self.source, ptypes.provider.memorybase) else 'p_offset'
-        for index, item in super(PhdrEntries, self).sorted(fld):
+        fields = ('p_vaddr', 'p_memsz') if isinstance(self.source, ptypes.provider.memorybase) else ('p_offset', 'p_filesz')
+        for index, item in super(PhdrEntries, self).sorted(*fields):
 
             # If we are actually dealing with a source that's backed by
             # actual memory, then only yield a phdr if it's actually loaded.
