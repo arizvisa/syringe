@@ -371,10 +371,13 @@ class MemorySegmentData(SegmentData):
 
     def __data(self):
         item = self.__segment__
-        res = item.getreadsize()
+        res = item.getloadsize()
         return dyn.block(res)
 
     _fields_ = [
         (__alignment, 'alignment'),
         (__data, 'data'),
     ]
+
+class MixedSegmentData(ptype.block):
+    pass

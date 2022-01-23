@@ -1130,3 +1130,6 @@ class SectionData(pstruct.type):
         (__alignment, 'alignment'),
         (__data, 'data'),
     ]
+
+class MixedSectionData(ptype.block):
+    pass

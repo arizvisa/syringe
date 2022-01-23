@@ -105,145 +105,389 @@ class File(pstruct.type, base.ElfXX_File):
         ei_data = e_ident['EI_DATA']
         return ptype.clone(t, recurse={'byteorder': ei_data.order()})
 
-    def __segment_tables(self, data):
+    def __segment_list__(self, data):
         '''Return the segment list and a lookup table that can be used to identify the segment associated with a boundary.'''
         segments = data['e_phoff'].d
         list = [phdr for _, phdr in segments.li.sorted()]
 
-        # Iterate through the list and create a table for all of
-        # the segments which use the segment boundaries as the key.
-        table = {phdr['p_offset'].int() : phdr for phdr in list}
-        table.update({phdr['p_offset'].int() + phdr.getreadsize() : phdr for phdr in list if phdr.getreadsize() > 0})
+        # If we're using a memory-based backing, then we need to
+        # only interact with all of the loadable segments.
+        if isinstance(self.source, ptypes.provider.memorybase):
+            return [phdr for phdr in list if phdr.loadableQ()]
+        return list
 
-        # Simple as that, now to return them to the caller.
-        return list, table
-
-    def __section_tables(self, data):
+    def __section_list__(self, data):
         '''Return the section list and a lookup table that can be used to identify the section associated with a boundary.'''
         sections = data['e_shoff'].d
-        list = [shdr for _, shdr in sections.li.sorted()]
 
-        # Go through the list of sections and create a table for
-        # them that uses the section's boundaries as its key.
-        table = {shdr['sh_offset'].int() : shdr for shdr in list}
-        table.update({shdr['sh_offset'].int() + shdr.getreadsize() : shdr for shdr in list if shdr.getreadsize() > 0})
-
-        # Return both of them back to the caller.
-        return list, table
-
-    def __gather_lists(self, segments, sections):
-        '''Iterate through each of the segments and sections in order to insert them into a sorted list.'''
-        items = []
-
-        # First we'll do the boundaries for the segments.
-        for phdr in segments:
-            offset = phdr['p_offset'].int()
-            bisect.insort(items, offset)
-            bisect.insort(items, offset + phdr.getreadsize())
-
-        # Next we'll do the boundaries for the sections.
-        for shdr in sections:
-            offset = shdr['sh_offset'].int()
-            bisect.insort(items, offset)
-            bisect.insort(items, offset + shdr.getreadsize())
-
-        # This list should be sorted, so now we can return it.
-        return items
-
-    def __e_dataentries(self):
-        data = self['e_data'].li
+        # If we're using a memory-based backing, then it's likely
+        # that our table is actually unmapped. So, we return an
+        # empty list and table just to be safe.
         if isinstance(self.source, ptypes.provider.memorybase):
-            return ptype.clone(parray.type, _object_=segment.MemorySegmentData, length=0)
+            return []
+        return [shdr for _, shdr in sections.li.sorted() if not shdr['sh_type']['NOBITS']]
+
+    def __gather_sections__(self, sections):
+        '''Iterate through each of the sections in order to group their duplicates.'''
+
+        # If we're using a memory-based backing, then we need
+        # to use different methods to access the boundaries.
+        if isinstance(self.source, ptypes.provider.memorybase):
+            Fsize = operator.methodcaller('getloadsize')
+            fields = ['p_vaddr', 'sh_addr']
+
+        # Anything else is using a file-based backing.
+        else:
+            Fsize = operator.methodcaller('getreadsize')
+            fields = ['p_offset', 'sh_offset']
+
+        # Now we can assign our attribute getters.
+        Fsegment_offset, Fsection_offset = map(operator.itemgetter, fields)
+
+        # We need to combine our lists into a single collection.
+        # The only issue is that our header types are mutable,
+        # and thus they're not comparable. So to accomplish this,
+        # we key them into a table at the same time we collect them.
+        table, collection = {}, {}
+        for index, shdr in enumerate(sections):
+            offset, size = Fsection_offset(shdr).int(), Fsize(shdr)
+            table[0, index] = shdr
+
+            if size > 0:
+                items = collection.setdefault(offset + size, [])
+                bisect.insort_left(items, (size, (0, index)))
+
+            # Now find the collection, and insort into it.
+            items = collection.setdefault(offset, [])
+            bisect.insort_left(items, (size, (0, index)))
+
+        # Next we'll do the same for the segments, except we
+        # give more priority since generally they're larger.
+        for index, phdr in enumerate(segments):
+            offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
+            table[1, index] = phdr
+
+            # Find our collection, and insort our item into it.
+            items = collection.setdefault(offset + size, [])
+            bisect.insort_right(items, (size, (1, index)))
+
+        # Before we return our collection, we need to restore them
+        # using our index table.
+        return {offset : [(size, table[key]) for size, key in items] for offset, items in collection.items()}
+
+    def __gather_segments__(self, segments, sections):
+
+        # If we're using a memory-based backing, then we need
+        # to use different methods to access the boundaries.
+        if isinstance(self.source, ptypes.provider.memorybase):
+            Fsize = operator.methodcaller('getloadsize')
+            fields, Floadable = ['p_vaddr', 'sh_addr'], operator.methodcaller('loadableQ')
+
+        # Anything else is using a file-based backing.
+        else:
+            Fsize = operator.methodcaller('getreadsize')
+            fields, Floadable = ['p_offset', 'sh_offset'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
+
+        # Now we can assign our attribute getters, as we're going
+        # to preapare to gather our list of items to sort. The only
+        # issue is that our headers that we're gaterhing will be
+        # mutable and thus not comparable. So to handle this, we
+        # key each of them into a table at the same time we collect.
+        table, (Fsegment_offset, Fsection_offset) = {}, map(operator.itemgetter, fields)
+
+        # We need to gather all our sections into a single sorted
+        # list. To sort them, we use their tail boundary and their
+        # to append them after any duplicate entries. As they've
+        # already been sorted by size, this guarantees that if
+        # they're _exact_ duplicates, they retain their file order.
+        items = []
+        for index, shdr in enumerate(sections):
+            offset, size = Fsection_offset(shdr).int(), Fsize(shdr)
+            table[0, index] = shdr
+            bisect.insort_right(items, (offset + size, size, (0, index)))
+
+        # Next we'll do the same for the segments, except we
+        # give more priority and insert them in front of our
+        # sections since generally they're unique.
+        for index, phdr in enumerate(segments):
+            offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
+            table[1, index] = phdr
+            bisect.insort_left(items, (offset, size, (1, index)))
+
+        # Now that our list of entries have been sorted, we need to
+        # replace the immutable keys with their actual entry. We preserve
+        # the offset in our entries so we don't have to decode it again.
+        headers = [(offset, table[key]) for offset, size, key in items]
+
+        # We can now prepare to collect all the entries and group them
+        # according to the segment they're loaded under. We use the
+        # segment offsets as the key, and so we need to build up a lookup
+        # table for the segments that will contain our keys.
+        item, table = segments[-1], {Fsegment_offset(item).int() : item for item in segments if Floadable(item)}
+        segment_key = Fsegment_offset(item).int()
+
+        # Take our loaded segments table, and build an index for them
+        # that we'll use to maintain the boundaries of the headers that
+        # we're grouping them underneath.
+        segment_index, results = [item for item in sorted(table)], {offset : [item] for offset, item in table.items()}
+        for offset, item in headers:
+
+            # If the current header is a segment and it's in our table,
+            # then switch to it as our segment key. Insert it into our
+            # index of segments.
+            if isinstance(item, segment.ElfXX_Phdr) and offset in table:
+                bounds = [F(item) for F in [Fsegment_offset, Fsize]]
+                segment_key = Fsegment_offset(item).int()
+                bisect.insort_right(segment_index, segment_key)
+
+            # If the current header comes after our segment key (offset),
+            # then append it to our results for the current segment.
+            elif segment_key <= offset:
+                results[segment_key].append(item)
+
+            # If the current header did not come after our segment key,
+            # then we need to find one that does. We traverse (bisect)
+            # to find the offset in our segment index, and sanity check
+            # that our traversal didn't result in a segment that doesn't
+            # come before the current header that we're processing.
+            else:
+                index = bisect.bisect_left(segment_index, offset)
+                key = segment_index[index]
+                if key > offset:
+                    raise NotImplementedError
+                    segment_index.insert(index, key)
+
+                # Now that we have a segment for the current header,
+                # change our segment key, add the header to our results,
+                # and continue chugging along.
+                segment_key = segment_index[index]
+                results[segment_key].append(item)
+            continue
+
+        # We got our results, we just need to transform their keys (offsets) back
+        # into the real segment using our table.
+        Fsortable = lambda item: Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
+        return {table[offset] : sorted(items, key=Fsortable) for offset, items in results.items()}
+
+    def __e_padding(self):
+        data = self['e_data'].li
+        segments, sections = (Flist(data) for Flist in [self.__segment_list__, self.__section_list__])
+        offset = sum(self[fld].li.size() for fld in ['e_ident', 'e_data'])
+
+        # If we're using a memory-backed source, then we only need to calculate
+        # the empty space between our offset and the first egment.
+        if isinstance(self.source, ptypes.provider.memorybase):
+            iterable = (item['p_vaddr'].int() for item in segments)
+            return ptype.clone(ptype.undefined, length=max(0, next(iterable, offset) - offset))
+
+        # Otherwise we're file-backed and sections need to be included.
+        iterable = (item['p_offset'].int() for item in segments)
+        filtered = itertools.dropwhile(functools.partial(operator.gt, offset), iterable)
+        iterable = (item['sh_offset'].int() for item in sections)
+        length = min(next(itertools.dropwhile(functools.partial(operator.gt, offset), iterable), offset), next(filtered, offset))
+
+        # Now that we have the closest boundary, we can calculate the length.
+        return ptype.clone(ptype.block, length=length - offset)
+
+    def __e_entries(self):
+        data = self['e_data'].li
 
         # Gather both the segments and the sections into a list, and colllect
         # their boundaries into a lookup table so that we can find the specific
         # instance that is found at a particular location.
-        segmentlist, segmenttable = self.__segment_tables(data)
-        sectionlist, sectiontable = self.__section_tables(data)
+        segmentlist, sectionlist = (F(data) for F in [self.__segment_list__, self.__section_list__])
 
-        # Finally, we need to create a sorted list of all of the available
-        # boundaries. This way we can filter out bounds that have already been
-        # included in the header, and more importantly we can convert them
-        # into an iterator that we'll use to do our final processing.
-        items, offset = self.__gather_lists(segmentlist, sectionlist), sum(self[fld].li.size() for fld in ['e_ident', 'e_data'])
-        ilayout = itertools.dropwhile(functools.partial(operator.lt, offset), iter(items))
-        ilayout = (ea for ea in ilayout if (segmenttable[ea]['p_offset'].int() if ea in segmenttable else offset) >= offset)
-        ilayout = (ea for ea in ilayout if (sectiontable[ea]['sh_offset'].int() if ea in sectiontable else offset) >= offset)
-        layout = [ea for ea in ilayout]
+        # FIXME: If we don't have any segments, then this is an object file and
+        #        it's currently not implemented.
+        if not segmentlist:
+            return ptype.clone(parray.type, length=0)
 
-        # Our layout contains the boundaries of all of our sections, so now
-        # we need to walk our layout and determine whether there's a section
-        # or a segment at that particular address. We keep track of the last
-        # position in order to identify if there's an empty slot in between.
-        position, sorted, used = offset, [], {item for item in []}
-        for boundary, _ in itertools.groupby(layout):
+        # Finally, we can build our index of the segments that we'll later
+        # use to determine the boundaries of our entries. We also calculate
+        # the minimum address so we can discard entries that have already
+        # been loaded.
+        table, minimum = self.__gather_segments__(segmentlist, sectionlist), sum(self[fld].li.size() for fld in ['e_ident', 'e_data', 'e_padding'])
 
-            # If our boundary is in the sectiontable, then use sections.
-            if boundary in sectiontable:
-                item = sectiontable[boundary]
+        # Now we need to figure out which types and fields to use when figuring
+        # out our layout. If it's a memory-based backing, we use the memory-related
+        # types, undefined blocks, and the address-related fields.
+        if isinstance(self.source, ptypes.provider.memorybase):
+            section_t, segment_t, block_t, fields = section.SectionData, segment.MixedSegmentData, ptype.block, ['sh_addr', 'p_vaddr']
+            Fsize = operator.methodcaller('getloadsize')
+        else:
+            section_t, segment_t, block_t, fields = section.MixedSectionData, segment.MixedSegmentData, ptype.block, ['sh_offset', 'p_offset']
+            Fsize = operator.methodcaller('getreadsize')
+        Fsection_offset, Fsegment_offset = map(operator.itemgetter, fields)
 
-                # If the current boundary is not the section's offset, then
-                # we know it's the tail and we need to track its position.
-                if item['sh_offset'].int() not in {boundary}:
-                    position = boundary
+        # Build a index of segments that we can sort by their offset using
+        # our segment list. We only care about the ones that're in our table
+        # because our table uses a segment as its key.
+        items = {Fsegment_offset(item).int() : item for item in segmentlist if item in table}
+        index = [(position, items[position]) for position in sorted(items)]
 
-            # If it was found in the segmenttable, then use segments.
-            elif boundary in segmenttable:
-                item = segmenttable[boundary]
+        # With our index, we can now access the tables individually and
+        # collect each of the entries for each loaded segment. This is
+        # because we're going to iterate through as many segments as necessary
+        # to remove entries that were loaded before the minimum offset.
+        for _, header in index:
+            entries = table[header]
 
-                # If the boundary is not in the segment's offset, then we
-                # know it's the tail and we need to track the position.
-                if item['p_offset'].int() not in {boundary}:
-                    position = boundary
+            # Take our entries and convert them into an iterator of
+            # offsets. This way we can drop anything that comes before
+            # the minimum offset. We'll be using the number of elements
+            # we cull when modifying the entries in our table.
+            iterable = ((Fsection_offset(entry).int() if isinstance(entry, section.ElfXX_Shdr) else Fsegment_offset(entry).int()) for entry in entries)
+            filtered = itertools.dropwhile(functools.partial(operator.gt, minimum), iterable)
 
-            # It should be either a segment or a section, and anything else
-            # should be an error.
-            else:
-                raise ValueError(boundary)
+            # Figure out how many elements were filtered, and use it to
+            # determine the count to slice our our entries. We always
+            # ensure that the segment header is the first entry.
+            count = sum(1 for item in filtered)
+            entries[:] = [header] + entries[-count:]
 
-            # If our resulting segment or section was already used, then we
-            # don't need to use it again.
-            if item in used:
-                continue
+            # If there are still some entries left, then we're done. Otherwise,
+            # there's likely still some entries below our minimum. So we'll
+            # need to continue if the entries are empty.
+            if entries:
+                break
+            continue
 
-            # However if our position is smaller then the current boundary, then
-            # we know there's some space between us and the section or segment.
-            if boundary > position:
-                sorted.append(boundary - position)
+        # Finally we can iterate through index table and calculate the boundaries
+        # between each member for each loaded segment.
+        result, position = [], minimum
+        for boundary, header in index:
+            entries, size, items = table[header], Fsize(header), []
+
+            # If we're memory-backed, then we need to align our segment. This is unmapped,
+            # so we'll use an undefined type.
+            if isinstance(self.source, ptypes.provider.memorybase) and position < boundary:
+                alignment = header['p_align'].int()
+                padding = abs((position % alignment) - alignment) if alignment else 0
+
+                res = -1, padding, ptype.undefined
+                result.append(res)
+                position += padding
+
+            # Pad things up to the current segment boundary ensuring that we're
+            # at the right place in case that we're behind.
+            if position < boundary:
+                res = -1, boundary - position, block_t
+                result.append(res)
                 position = boundary
 
-            # Append the determined item to our sorted list, and add it so
-            # that we don't have any duplicates.
-            sorted.append(item)
-            used.add(item)
+            # Iterate through all of our entries while keeping track of the
+            # maximum size for the loaded segment. This way we can track when
+            # an entry goes out of bounds be able to trim it down if so.
+            for i, item in enumerate(entries):
+                entrysize, offset = Fsize(item), Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
 
-        # Figure out which types we need to use depending on the source
-        if isinstance(self.source, ptypes.provider.memorybase):
-            section_t, segment_t = section.SectionData, segment.MemorySegmentData
-        else:
-            section_t, segment_t = section.SectionData, segment.FileSegmentData
+                # If this is the very first segment and we have some entries,
+                # then we ignore the entrysize and clamp it down towards
+                # whatever size we need for the next element.
+                if not items:
+                    res = 0, entrysize, item
+                    items.append(res), result.append(res)
+                    position = offset + entrysize
+                    continue
+
+                # If we're below the minimum offset which should only really
+                # happen if we're memory-backed, then adjust the previous
+                # result so that it has a size that doesn't overlap anything.
+                elif offset < minimum:
+                    delta = minimum - offset
+                    _, previous, t = result[-1]
+                    result[-1] = -1, previous - delta, t
+
+                # If our position does not point at our entry's offset,
+                # then we need to add a block to pad us all the way there.
+                elif position < offset:
+                    delta = offset - position
+                    res = 2, delta, block_t
+                    items.append(res), result.append(res)
+                    position = offset
+
+                # If our projected position pushes us all the way to
+                # our segment and we didn't terminate the loop, then
+                # we need to backtrack and try it out again.
+                elif position > offset:
+                    delta = position - offset
+                    cls, previous, t = result[-1]
+                    result[-1] = -3, max(0, delta - previous), t
+                    position = offset
+
+                # If our next position is actually outside the bounds of
+                # the segment, then we need to exit our loop only if the
+                # size of the entry holds something. We have to explicitly
+                # check for this because we didn't constrain our entries
+                # when we built our segment index. Since we're terminating
+                # early, subtract one from the counter since we're not
+                # going to be processing the next element.
+                if position >= boundary + size and size > 0:
+                    break
+
+                # If we're where we expect, but it pushes us outside the
+                # boundaries of the segment, the clamp it to a size that
+                # lays us at the very end of the segment.
+                elif position == offset and offset + entrysize > boundary + size:
+                    res = 4, (boundary + size) - offset, item
+                    items.append(res), result.append(res)
+                    position = boundary + size
+
+                # If our position is where we expect it, then we can simply
+                # append our element with its entrysize.
+                elif position == offset and offset + entrysize <= boundary + size:
+                    res = 5, entrysize, item
+                    items.append(res), result.append(res)
+                    position = offset + entrysize
+
+                # Otherwise if our position doesn't correspond, then we need to
+                # adjust it directly to the offset that we should be at.
+                elif position == offset:
+                    raise NotImplementedError
+                    res = 6, entrysize, item
+                    items.append(res), result.append(res)
+                    position = offset + entrysize
+
+                # This is a case that we haven't discovered yet.
+                elif position + entrysize > offset:
+                    raise NotImplementedError
+                    _, previous, t = result[-1]
+                    result[-1] = -7, position - previous, t
+
+                    res = 7, entrysize, item
+                    items.append(res), result.append(res)
+                    position = offset + entrysize
+
+                elif position > offset:
+                    raise NotImplementedError
+                    delta = position - offset
+                    _, previous, t = result[-1]
+                    result[-1] = 8, previous - delta, t
+
+                    res = 8, entrysize, item
+                    items.append(res), result.append(res)
+                    position = offset + entrysize
+
+                continue
+
+            # Increment by one if we completed process the entries to
+            # so that slicing doesn't include any of our entries.
+            else:
+                i += 1
+            continue
 
         # Everything has been sorted, so now we can construct our array and
         # align it properly to load as many contiguous pieces as possible.
-        def _object_(self, items=sorted):
-            item = items[len(self.value)]
+        def _object_(self, items=result):
+            _, size, item = items[len(self.value)]
             if isinstance(item, segment.ElfXX_Phdr):
-                return ptype.clone(segment_t, __segment__=item)
+                return ptype.clone(segment_t, length=size, __segment__=item)
             elif isinstance(item, section.ElfXX_Shdr):
-                return ptype.clone(section_t, __section__=item)
-            return ptype.clone(ptype.block, length=item)
+                return ptype.clone(section_t, length=size, __section__=item)
+            return ptype.clone(item, length=size)
 
         # Finally we can construct our array composed of the proper types
-        return ptype.clone(parray.type, _object_=_object_, length=len(sorted))
-
-    def __padding(self):
-        data = self['e_data'].li
-        sections, segments = data['e_shoff'], data['e_phoff']
-
-        position = sum(self[fld].li.size() for fld in ['e_ident', 'e_data', 'e_dataentries'])
-        entry = min([item for item in [sections.int(), sections.int()] if item > position])
-
-        return ptype.clone(ptype.block, length=max(0, entry - position))
+        return ptype.clone(parray.type, _object_=_object_, length=len(result))
 
     def __e_programhdrentries(self):
         data = self['e_data'].li
@@ -290,10 +534,9 @@ class File(pstruct.type, base.ElfXX_File):
     _fields_ = [
         (E_IDENT, 'e_ident'),
         (__e_data, 'e_data'),
-        (__e_dataentries, 'e_dataentries'),
-        #(__padding, 'padding'),
-        #(__e_programhdrentries, 'e_programhdrentries'),
-        #(__e_sectionhdrentries, 'e_sectionhdrentries'),
+        #(__e_hdrentries, 'e_hdrentries'),
+        (__e_padding, 'e_padding'),
+        (__e_entries, 'e_entries'),
     ]
 
 ### recursion for python2
