@@ -99,6 +99,13 @@ class ElfXX_Phdr(ElfXX_Header):
     def getaddressbyoffset(self, va):
         return va - self['p_offset'].int() + self['p_vaddr'].int()
 
+    def align(self, va):
+        denomination = self['p_align'].int()
+        if denomination:
+            res = va % denomination
+            return va - res
+        return va
+
 ### Program Headers
 class Elf32_Phdr(pstruct.type, ElfXX_Phdr):
     class p_type(PT_, Elf32_Word): pass
