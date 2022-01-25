@@ -125,7 +125,7 @@ class File(pstruct.type, base.ElfXX_File):
         # empty list and table just to be safe.
         if isinstance(self.source, ptypes.provider.memorybase):
             return []
-        return [shdr for _, shdr in sections.li.sorted() if not shdr['sh_type']['NOBITS']]
+        return [shdr for _, shdr in sections.li.sorted()]
 
     def __gather_sections__(self, sections):
         '''Iterate through each of the sections in order to group their duplicates.'''
@@ -167,7 +167,9 @@ class File(pstruct.type, base.ElfXX_File):
             offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
             table[1, index] = phdr
 
-            # Find our collection, and insort our item into it.
+            # Find our collection, and insort our item into it. We
+            # use bisect right in case there are any duplicates so
+            # that segments that come first get priority.
             items = collection.setdefault(offset + size, [])
             bisect.insort_right(items, (size, (1, index)))
 
@@ -181,9 +183,11 @@ class File(pstruct.type, base.ElfXX_File):
         # to use different methods to access the boundaries.
         if isinstance(self.source, ptypes.provider.memorybase):
             Fsize = operator.methodcaller('getloadsize')
-            fields, Floadable = ['p_vaddr', 'sh_addr'], operator.methodcaller('loadableQ')
+            fields, Floadable = ['p_vaddr', 'sh_addr'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
 
-        # Anything else is using a file-based backing.
+        # Anything else is using a file-based backing which
+        # we'll sort by the LOAD type so we don't include
+        # any of the other types that users won't care about.
         else:
             Fsize = operator.methodcaller('getreadsize')
             fields, Floadable = ['p_offset', 'sh_offset'], functools.partial(functools.reduce, operator.getitem, ['p_type', 'LOAD'])
@@ -195,79 +199,155 @@ class File(pstruct.type, base.ElfXX_File):
         # key each of them into a table at the same time we collect.
         table, (Fsegment_offset, Fsection_offset) = {}, map(operator.itemgetter, fields)
 
-        # We need to gather all our sections into a single sorted
-        # list. To sort them, we use their tail boundary and their
-        # to append them after any duplicate entries. As they've
-        # already been sorted by size, this guarantees that if
-        # they're _exact_ duplicates, they retain their file order.
+        # First we'll gather the segments. We need to do two things
+        # here. We need to build an index to recognize them which
+        # we store in the third element of our tuple. We'll also
+        # need to identify their boundaries (1st tuple element),
+        # and we'll also need another element to ensure that
+        # duplicate boundaries are prioritized using the second
+        # tuple element.
         items = []
-        for index, shdr in enumerate(sections):
-            offset, size = Fsection_offset(shdr).int(), Fsize(shdr)
-            table[0, index] = shdr
-            bisect.insort_right(items, (offset + size, size, (0, index)))
-
-        # Next we'll do the same for the segments, except we
-        # give more priority and insert them in front of our
-        # sections since generally they're unique.
         for index, phdr in enumerate(segments):
+            table[0, index] = phdr
             offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
-            table[1, index] = phdr
-            bisect.insort_left(items, (offset, size, (1, index)))
+            items.append(((offset, offset + size), (0, phdr['p_type'].str()), (0, index)))
 
-        # Now that our list of entries have been sorted, we need to
-        # replace the immutable keys with their actual entry. We preserve
-        # the offset in our entries so we don't have to decode it again.
-        headers = [(offset, table[key]) for offset, size, key in items]
+        # Next we'll do something similar for the sections in
+        # that we'll sort by the boundaries and the name in
+        # the second element. Then we'll use the third element
+        # to find the sections inside our header index.
+        for index, shdr in enumerate(sections):
+            table[1, index] = shdr
+            offset, size = Fsection_offset(shdr).int(), Fsize(shdr)
+            items.append(((offset, offset + size), (1, shdr['sh_name'].str()), (1, index)))
 
-        # We can now prepare to collect all the entries and group them
-        # according to the segment they're loaded under. We use the
-        # segment offsets as the key, and so we need to build up a lookup
-        # table for the segments that will contain our keys.
-        item, table = segments[-1], {Fsegment_offset(item).int() : item for item in segments if Floadable(item)}
-        segment_key = Fsegment_offset(item).int()
+        # Now that our list of entries have been made, we need to replace
+        # the immutable last element with the actual entry. We sort all
+        # of them using the first two entries and use the third entry
+        # to build our index. We save the bounds in the first element
+        # so we don't have to calculate them again.
+        headers = [(bounds, table[key]) for bounds, _, key in sorted(items, key=operator.itemgetter(0, 1))]
+        headers_index = {item : index for index, (bounds, item) in enumerate(headers)}
+        assert(len(headers) == len(headers_index))
 
-        # Take our loaded segments table, and build an index for them
-        # that we'll use to maintain the boundaries of the headers that
-        # we're grouping them underneath.
-        segment_index, results = [item for item in sorted(table)], {offset : [item] for offset, item in table.items()}
-        for offset, item in headers:
+        # Next thing to do is to build a segment tree for all of the
+        # loadable segments. We do this in order to determine the
+        # segments that a header overlaps with. We need to gather
+        # an index for the segment tree so that we can identify the
+        # segment header that a point on the tree is describing.
+        tree, tree_index = [], {}
+        for phdr in filter(Floadable, segments):
+            offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
+            start, stop = bounds = offset, offset + size
+            tree_index.setdefault(start, []), tree_index.setdefault(stop, [])
 
-            # If the current header is a segment and it's in our table,
-            # then switch to it as our segment key. Insert it into our
-            # index of segments.
-            if isinstance(item, segment.ElfXX_Phdr) and offset in table:
-                bounds = [F(item) for F in [Fsegment_offset, Fsize]]
-                segment_key = Fsegment_offset(item).int()
-                bisect.insort_right(segment_index, segment_key)
+            # Get the indices into the tree to figure out where our segment
+            # belongs. We can do this in order to identify if a loadable
+            # segments overlaps with another.
+            start_index, stop_index = bisect.bisect_left(tree, start), bisect.bisect_right(tree, stop)
 
-            # If the current header comes after our segment key (offset),
-            # then append it to our results for the current segment.
-            elif segment_key <= offset:
-                results[segment_key].append(item)
+            # If any of our indices are odd-numbered or the same, then our
+            # segment is overlapping because we're always inserting the
+            # boundaries of the segment into the tree in pairs.
+            if start_index % 2 or stop_index % 2 or start_index != stop_index:
+                offset = tree[stop_index - 1]
+                items = tree_index.setdefault(offset, [])
 
-            # If the current header did not come after our segment key,
-            # then we need to find one that does. We traverse (bisect)
-            # to find the offset in our segment index, and sanity check
-            # that our traversal didn't result in a segment that doesn't
-            # come before the current header that we're processing.
-            else:
-                index = bisect.bisect_left(segment_index, offset)
-                key = segment_index[index]
-                if key > offset:
-                    raise NotImplementedError
-                    segment_index.insert(index, key)
+                # As the current segment is overlapping, we gather it into a
+                # list for this segment because we'll sort this out later.
+                index = bisect.bisect_left(items, (bounds, headers_index[phdr]))
+                items.insert(index, (bounds, headers_index[phdr]))
 
-                # Now that we have a segment for the current header,
-                # change our segment key, add the header to our results,
-                # and continue chugging along.
-                segment_key = segment_index[index]
-                results[segment_key].append(item)
+                # Log which side of the tree we're overlapping.
+                logging.debug("(overlap) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('<' if start_index % 2 else '>', index, len(items), start, stop, phdr.summary()))
+
+            # Otherwise we figure out what slice of the tree to modify when
+            # we're inserting the segment's boundaries into it.
+            elif not(start_index % 2 and stop_index % 2):
+                tree[start_index : stop_index] = [start, stop]
+                tree_index[start].append((bounds, headers_index[phdr]))
+                tree_index[stop].append((bounds, headers_index[phdr]))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('><', 0, 1, start, stop, phdr.summary()))
+            elif start_index % 2:
+                tree[start_index : stop_index] = [stop]
+                tree_index[start].append((bounds, headers_index[phdr]))
+                tree_index[stop].append((bounds, headers_index[phdr]))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('<', 0, 1, start, stop, phdr.summary()))
+            elif stop_index % 2:
+                tree[start_index : stop_index] = [start]
+                tree_index[start].append((bounds, headers_index[phdr]))
+                tree_index[stop].append((bounds, headers_index[phdr]))
+                logging.debug("(insert) {:s} ({:d}/{:d}) {:#010x}<>{:#010x} {:s}".format('>', 0, 1, start, stop, phdr.summary()))
             continue
 
-        # We got our results, we just need to transform their keys (offsets) back
-        # into the real segment using our table.
-        Fsortable = lambda item: Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
-        return {table[offset] : sorted(items, key=Fsortable) for offset, items in results.items()}
+        # Define a closure that will walk the tree returning the segment
+        # header for any offset that gets sent to it. We'll use a set to
+        # keep track of the segments that have been used because we use
+        # it as part of a small trick to figure out the boundary to check.
+        def flatten(tree, index, headers):
+            offset, used = 0, {item for item in []}
+            for point in tree:
+                items = index[point]
+
+                # The way we walk our tree containing duplicates is that
+                # when there's more than one entry for the same segment,
+                # we check the starting address of the entire list first.
+                # Then we check the stopping address on the second round.
+                # These duplicates were only inserted into the tree once,
+                # so we double it up because if the header has already
+                # been used it will end up being discarded anyways.
+                for bounds, key in items + items:
+                    _, header = headers[key]
+                    if header not in used:
+                        logging.debug("(flatten) segm {:s} {:s}".format(header.typename(), header.summary()))
+
+                    # If the header has been used once before, then compare
+                    # the offset we get against the end of the segment.
+                    start, stop = bounds
+                    if header in used:
+                        while offset < stop:
+                            offset = (yield header)
+                        continue
+
+                    # If we haven't used the header yet, then compare the
+                    # offset we consume against the start of the segment.
+                    while offset < start:
+                        offset = (yield header)
+
+                    # Add the segment to our list of already used segments.
+                    used.add(header)
+                continue
+
+            # We hit all the elements in our tree, but we still might receive
+            # headers that we need to process, so take the bounds we got and
+            # keep returning the last header we snagged.
+            while True:
+                yield header
+            return
+
+        # Now we can pass the prior closure the segment tree, its index, and
+        # the list of headers and then use it to produce a table of the
+        # segments and the headers each of them actually contains.
+        results, flattener = {}, flatten(tree, tree_index, headers); next(flattener)
+        for bounds, item in headers:
+            offset, _ = bounds
+
+            # Send our offset, get our segment. Simple as that. We first
+            # need to update our results with it since it will always be
+            # the first member for each segment in our results.
+            segment = flattener.send(offset)
+            items = results.setdefault(segment, [segment])
+
+            # We need to double check that the segment is not the header
+            # we're processing. because it always prefixes our results.
+            if segment == item:
+                logging.debug("(flatten)     skip {:s} {:s}".format(item.typename(), item.summary()))
+                continue
+
+            # We got an entry that we're keeping. So, add it to our results.
+            logging.debug("(flatten)     keep {:s} {:s}".format(item.typename(), item.summary()))
+            items.append(item)
+        return results
 
     def __e_padding(self):
         data = self['e_data'].li
@@ -354,39 +434,43 @@ class File(pstruct.type, base.ElfXX_File):
 
         # Finally we can iterate through index table and calculate the boundaries
         # between each member for each loaded segment.
-        result, position = [], minimum
+        result, position, base = [], minimum, self.getparent(None).getoffset()
         for boundary, header in index:
             entries, size, items = table[header], Fsize(header), []
+            logging.debug("(decode) {:s}".format(header.summary()))
 
-            # If we're memory-backed, then we need to align our segment. This is unmapped,
-            # so we'll use an undefined type.
+            # If we're memory-backed, then we need to align our segment. This is
+            # unmapped, so we'll need to make sure we don't decode from its address.
             if isinstance(self.source, ptypes.provider.memorybase) and position < boundary:
-                alignment = header['p_align'].int()
-                padding = abs((position % alignment) - alignment) if alignment else 0
+                delta = header.align(boundary) - boundary
 
-                res = -1, padding, ptype.undefined
+                # We got the size of our alignment so pad our results with a block.
+                res = boundary - position + delta, ptype.undefined
                 result.append(res)
-                position += padding
+                logging.debug("(align)  {:#010x}<>{:#010x} goal:{:#010x} {:#x}{:+#x}{:+#x} : {:s}".format(base + position, base + boundary, base + header.align(boundary), base + position, boundary - position, delta, ptype.undefined.typename()))
+                position = header.align(boundary)
 
-            # Pad things up to the current segment boundary ensuring that we're
-            # at the right place in case that we're behind.
+            # Very first thing we need to do is to pad things up to the current
+            # segment ensuring that we begin at the right place.
             if position < boundary:
-                res = -1, boundary - position, block_t
+                res = boundary - position, block_t
                 result.append(res)
+                logging.debug("(pad)    {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + boundary, base + position, boundary - position, block_t.typename()))
                 position = boundary
 
             # Iterate through all of our entries while keeping track of the
             # maximum size for the loaded segment. This way we can track when
             # an entry goes out of bounds be able to trim it down if so.
-            for i, item in enumerate(entries):
+            for count, item in enumerate(entries):
                 entrysize, offset = Fsize(item), Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
 
                 # If this is the very first segment and we have some entries,
                 # then we ignore the entrysize and clamp it down towards
                 # whatever size we need for the next element.
                 if not items:
-                    res = 0, entrysize, item
+                    res = entrysize, item
                     items.append(res), result.append(res)
+                    logging.debug("(header) {:#010x}<>{:#010x} {:#x}{:+#x} : {:s}".format(base + offset, base + offset + entrysize, base + offset, entrysize, item.summary()))
                     position = offset + entrysize
                     continue
 
@@ -395,14 +479,16 @@ class File(pstruct.type, base.ElfXX_File):
                 # result so that it has a size that doesn't overlap anything.
                 elif offset < minimum:
                     delta = minimum - offset
-                    _, previous, t = result[-1]
-                    result[-1] = -1, previous - delta, t
+                    previous, t = result[-1]
+                    result[-1] = previous - delta, t
+                    logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} ({:#x}) : {:s}".format(base + offset, base + minimum, base + previous, -delta, base + boundary + previous - delta, item.summary()))
 
                 # If our position does not point at our entry's offset,
                 # then we need to add a block to pad us all the way there.
                 elif position < offset:
                     delta = offset - position
-                    res = 2, delta, block_t
+                    res = delta, block_t
+                    logging.debug("(+pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, -position, item.summary()))
                     items.append(res), result.append(res)
                     position = offset
 
@@ -411,9 +497,13 @@ class File(pstruct.type, base.ElfXX_File):
                 # we need to backtrack and try it out again.
                 elif position > offset:
                     delta = position - offset
-                    cls, previous, t = result[-1]
-                    result[-1] = -3, max(0, delta - previous), t
+                    previous, t = result[-1]
+                    result[-1] = max(0, delta - previous), t
+                    logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, -offset, item.summary()))
                     position = offset
+
+                # If the next item has its address aligned, then we need
+                # to ensure
 
                 # If our next position is actually outside the bounds of
                 # the segment, then we need to exit our loop only if the
@@ -423,63 +513,68 @@ class File(pstruct.type, base.ElfXX_File):
                 # early, subtract one from the counter since we're not
                 # going to be processing the next element.
                 if position >= boundary + size and size > 0:
+                    logging.debug("(break)  {:#010x} >= {:#010x} {:+#x} : {:s}".format(base + position, base + boundary + size, size, item.summary()))
                     break
 
                 # If we're where we expect, but it pushes us outside the
                 # boundaries of the segment, the clamp it to a size that
                 # lays us at the very end of the segment.
                 elif position == offset and offset + entrysize > boundary + size:
-                    res = 4, (boundary + size) - offset, item
+                    res = (boundary + size) - offset, item
                     items.append(res), result.append(res)
+                    logging.debug("(clamp)  {:#010x} goal:{:#010x} {:+#x} : {:s}".format(base + offset, base + boundary + size, size, item.summary()))
                     position = boundary + size
 
                 # If our position is where we expect it, then we can simply
                 # append our element with its entrysize.
                 elif position == offset and offset + entrysize <= boundary + size:
-                    res = 5, entrysize, item
+                    res = entrysize, item
                     items.append(res), result.append(res)
+                    logging.debug("(append) {:#010x} goal:{:#010x} {:+#x} : {:s}".format(base + offset, base + offset + entrysize, entrysize, item.summary()))
                     position = offset + entrysize
 
-                # Otherwise if our position doesn't correspond, then we need to
-                # adjust it directly to the offset that we should be at.
-                elif position == offset:
-                    raise NotImplementedError
-                    res = 6, entrysize, item
-                    items.append(res), result.append(res)
-                    position = offset + entrysize
-
-                # This is a case that we haven't discovered yet.
-                elif position + entrysize > offset:
-                    raise NotImplementedError
-                    _, previous, t = result[-1]
-                    result[-1] = -7, position - previous, t
-
-                    res = 7, entrysize, item
-                    items.append(res), result.append(res)
-                    position = offset + entrysize
-
-                elif position > offset:
-                    raise NotImplementedError
-                    delta = position - offset
-                    _, previous, t = result[-1]
-                    result[-1] = 8, previous - delta, t
-
-                    res = 8, entrysize, item
-                    items.append(res), result.append(res)
-                    position = offset + entrysize
-
+                # Raise an exception because this shouldn't happen at all.
+                else:
+                    raise AssertionError
                 continue
 
             # Increment by one if we completed process the entries to
             # so that slicing doesn't include any of our entries.
             else:
-                i += 1
+                count += 1
+
+            # If there's no leftover entries, then we can simply move
+            # onto the next segment to process.
+            if count == len(entries):
+                continue
+
+            # Otherwise we have some leftover entries and we need to
+            # continue to add them to our list of results.
+            logging.debug("(leftover) {:#010x}<>{:#010x} {:d}/{:d} (need {:+d} more)".format(base + position, base + position + size, count, len(entries), len(entries) - count))
+
+            # If we have any leftover entries, then continue to process
+            # those, getting their size, and adding them to our results.
+            for index, item in enumerate(entries[count:]):
+                entrysize, offset = Fsize(item), Fsegment_offset(item).int() if isinstance(item, segment.ElfXX_Phdr) else Fsection_offset(item).int()
+
+                # However, we still need to track our offset because we
+                # actually might need to pad our way there.
+                if position < offset:
+                    res = offset - position, block_t
+                    result.append(res)
+                    logging.debug("(pad) {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, offset - position, block_t.typename()))
+                    position = offset
+
+                # We should be good, so we just need to add it.
+                logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#x} : {:s}".format(1 + count + index, len(entries), base + offset, base + offset + entrysize, entrysize, item.summary()))
+                result.append((entrysize, item))
+                position += entrysize
             continue
 
         # Everything has been sorted, so now we can construct our array and
         # align it properly to load as many contiguous pieces as possible.
         def _object_(self, items=result):
-            _, size, item = items[len(self.value)]
+            size, item = items[len(self.value)]
             if isinstance(item, segment.ElfXX_Phdr):
                 return ptype.clone(segment_t, length=size, __segment__=item)
             elif isinstance(item, section.ElfXX_Shdr):
