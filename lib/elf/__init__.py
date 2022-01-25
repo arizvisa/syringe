@@ -210,7 +210,7 @@ class File(pstruct.type, base.ElfXX_File):
         for index, phdr in enumerate(segments):
             table[0, index] = phdr
             offset, size = Fsegment_offset(phdr).int(), Fsize(phdr)
-            items.append(((offset, offset + size), (0, phdr['p_type'].str()), (0, index)))
+            items.append(((offset, offset + (size if phdr['p_type']['LOAD'] else 0)), (0, phdr['p_type'].str()), (0, index)))
 
         # Next we'll do something similar for the sections in
         # that we'll sort by the boundaries and the name in
@@ -481,7 +481,7 @@ class File(pstruct.type, base.ElfXX_File):
                     delta = minimum - offset
                     previous, t = result[-1]
                     result[-1] = previous - delta, t
-                    logging.debug("(-pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} ({:#x}) : {:s}".format(base + offset, base + minimum, base + previous, -delta, base + boundary + previous - delta, item.summary()))
+                    logging.debug("(-min)   {:#010x} goal:{:#010x} {:#x}{:+#x} ({:#x}) : {:s}".format(base + offset, base + minimum, base + previous, -delta, base + boundary + previous - delta, item.summary()))
 
                 # If our position does not point at our entry's offset,
                 # then we need to add a block to pad us all the way there.
@@ -562,13 +562,24 @@ class File(pstruct.type, base.ElfXX_File):
                 if position < offset:
                     res = offset - position, block_t
                     result.append(res)
-                    logging.debug("(pad) {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, offset - position, block_t.typename()))
+                    logging.debug("(pad)   {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + position, base + offset, base + position, offset - position, block_t.typename()))
                     position = offset
 
+                # If we're not at the correct position, then we need to
+                # adjust the size of our item so the sections line up.
+                elif position > offset:
+                    delta = position - offset
+                    #result[-1] = max(0, delta - previous), t
+                    logging.debug("(clamp) {:#010x} goal:{:#010x} {:#x}{:+#x} : {:s}".format(base + offset, base + position, base + position, delta, block_t.typename()))
+                    result.append((entrysize - delta, item))
+                    position += entrysize - delta
+
                 # We should be good, so we just need to add it.
-                logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#x} : {:s}".format(1 + count + index, len(entries), base + offset, base + offset + entrysize, entrysize, item.summary()))
-                result.append((entrysize, item))
-                position += entrysize
+                else:
+                    result.append((entrysize, item))
+                    logging.debug("(append) {:d}/{:d} {:#010x} goal:{:#010x} {:+#x} : {:s}".format(1 + count + index, len(entries), base + offset, base + offset + entrysize, entrysize, item.summary()))
+                    position += entrysize
+                continue
             continue
 
         # Everything has been sorted, so now we can construct our array and
