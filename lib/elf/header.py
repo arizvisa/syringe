@@ -355,29 +355,47 @@ class XhdrEntries(parray.type):
         return
 
 class ShdrEntries(XhdrEntries):
-    def byoffset(self, ofs):
+    def by_offset(self, ofs):
         iterable = (item for item in self if item.containsoffset(ofs))
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified offset ({:#x})".format(ofs))
+            raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.by_offset', "Unable to locate Shdr with the specified offset ({:#x})".format(ofs))
         return result
+    byoffset = by_offset
 
-    def byaddress(self, va):
+    def by_address(self, va):
         iterable = (item for item in self if item.containsaddress(va))
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.byoffset', "Unable to locate Shdr with the specified virtual address ({:#x})".format(va))
+            raise ptypes.error.ItemNotFoundError(self, 'ShdrEntries.by_address', "Unable to locate Shdr with the specified virtual address ({:#x})".format(va))
         return result
+    byaddress = by_address
 
     def sorted(self):
         for index, item in super(ShdrEntries, self).sorted('sh_offset', 'sh_size'):
             yield index, item
         return
 
+    def filter(self, predicate):
+        iterable = (item for item in self if predicate(item))
+        return iterable
+
+    def by_field(self, field, predicate):
+        iterable = (item for item in self if predicate(item[field]))
+        return next(iterable)
+
+    def by_name(self, name):
+        Fpredicate = functools.partial(operator.eq, name)
+        return self.by_field('sh_name', Fpredicate)
+
+    def by_type(self, type):
+        Fpredicate = operator.itemgetter(type)
+        return self.by_field('sh_type', Fpredicate)
+
 class PhdrEntries(XhdrEntries):
-    def byoffset(self, ofs):
+    def by_offset(self, ofs):
         if isinstance(self.source, ptypes.provider.memorybase):
             iterable = (item for item in self if item.loadableQ() and item.containsoffset(ofs))
         else:
@@ -387,10 +405,11 @@ class PhdrEntries(XhdrEntries):
         try:
             result = next(iterable)
         except StopIteration:
-            raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified offset ({:#x})".format(ofs))
+            raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.by_offset', "Unable to locate Phdr with the specified offset ({:#x})".format(ofs))
         return result
+    byoffset = by_offset
 
-    def byaddress(self, va):
+    def by_address(self, va):
         iterable = (item for item in self if item.loadableQ() and item.containsaddress(va))
 
         # Now that we have an iterable, return the first result we find.
@@ -400,8 +419,9 @@ class PhdrEntries(XhdrEntries):
         # If our iterator has no items, then we weren't able to find a match
         # and we'll need to raise an exception.
         except StopIteration:
-            raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.byoffset', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
+            raise ptypes.error.ItemNotFoundError(self, 'PhdrEntries.by_address', "Unable to locate Phdr with the specified virtual address ({:#x})".format(va))
         return result
+    byaddress = by_address
 
     def enumerate(self):
         for index, item in super(PhdrEntries, self).enumerate():
@@ -433,6 +453,14 @@ class PhdrEntries(XhdrEntries):
             # Otherwise, we can just yield everything without having to filter.
             yield index, item
         return
+
+    def by_field(self, field, predicate):
+        iterable = (item for item in self if predicate(item[field]))
+        return next(iterable)
+
+    def by_type(self, type):
+        Fpredicate = operator.itemgetter(type)
+        return self.by_field('p_type', Fpredicate)
 
 ### 32-bit
 class Elf32_Ehdr(pstruct.type, ElfXX_Ehdr):

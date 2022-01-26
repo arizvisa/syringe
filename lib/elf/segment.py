@@ -164,8 +164,10 @@ class ELFCLASSXX(object):
             elif hasattr(entry, '__iter__'):
                 fmatch = lambda tag, m: (tag.int() == m) if isinstance(m, integer_types) else tag[m] if isinstance(m, string_types) else (tag.int() == m.type) if ptype.istype(m) else False
                 iterable = (item['d_un'] for item in self if any(fmatch(item['d_tag'], m) for m in entry))
-            elif ptype.istype(item) or isinstance(entry, ptype.type):
-                return self.by_tag(item.type)
+            elif hasattr(entry, 'type') and any([ptype.istype(entry), isinstance(entry, ptype.type)]):
+                return self.filter_tag(entry.type)
+            elif callable(entry):
+                iterable = (item['d_un'] for item in self if entry(item))
             else:
                 raise TypeError(entry)
             return iterable
@@ -173,6 +175,7 @@ class ELFCLASSXX(object):
         def by_tag(self, entry):
             iterable = self.filter_tag(entry)
             return next(iterable)
+        bytag = by_tag
 
     class PT_INTERP(pstr.szstring):
         type = 3

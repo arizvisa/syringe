@@ -93,7 +93,7 @@ class ElfXX_Off(ElfXX_BaseAddr):
             if isinstance(self.source, ptypes.provider.memorybase):
                 p = self.getparent(ElfXX_Ehdr)
                 phentries = p['e_phoff'].d.li
-                ph = phentries.byoffset(offset)
+                ph = phentries.by_offset(offset)
                 return base.getoffset() + ph.getaddressbyoffset(offset)
 
         except ptypes.error.ItemNotFoundError:
@@ -110,7 +110,7 @@ class ElfXX_VAddr(ElfXX_BaseAddr):
             if isinstance(self.source, ptypes.provider.fileobj):
                 p = self.getparent(ElfXX_Ehdr)
                 phentries = p['e_phoff'].d.li
-                ph = phentries.byaddress(address)
+                ph = phentries.by_address(address)
                 return base.getoffset() + ph.getoffsetbyaddress(address)
 
         except ptypes.error.ItemNotFoundError:
