@@ -138,14 +138,59 @@ class _st_name(pint.type):
             return super(_st_name, self).summary()
         return "{:s} : {!r}".format(super(_st_name, self).summary(), res)
 
-    def str(self):
-        index = self.getparent(ElfXX_Shdr)['sh_link'].int()
-        res = self.getparent(ElfXX_Ehdr)['e_shoff'].d.li
-        if index >= len(res):
+    def __section_index__(self, section):
+        index = section['sh_link'].int()
+
+        # Backtrack to the header, to grab the list of sections.
+        header = section.getparent(ElfXX_Ehdr)
+        sections = header['e_shoff'].d.li
+
+        # If the section index fits within our list, then we can
+        # snag the string table right out of it.
+        if index >= len(sections):
             raise ptypes.error.ItemNotFoundError(self, 'str')
-        table = res[index]['sh_offset'].d.li
+        return sections[index]
+
+    def __symbol_index__(self):
+        symbol = self.getparent(ElfXX_Sym)
+        if not isinstance(symbol.parent, (ELFCLASSXX.SHT_DYNSYM, ELFCLASSXX.SHT_SYMTAB)):
+            raise ptypes.error.ItemNotFoundError(self, '__dynamic_index___')
+
+        # Backtrack to the pointer for our symbol so that we can
+        # get to its array. The parent of that is likely a section.
+        pointer = symbol.getparent(parray.type).parent
+        if isinstance(pointer.parent, ElfXX_Shdr):
+            section = self.__section_index__(pointer.parent)
+            return section['sh_offset']
+
+        # Otherwise, it's a dynamic segment and we need to query
+        # the DT_STRTAB straight out of it.
+        from . import segment
+        dynamic = pointer.getparent(segment.ELFCLASSXX.PT_DYNAMIC)
+        return dynamic.by_tag('DT_STRTAB')
+
+    def __header_index__(self):
+        header = self.getparent(ElfXX_Ehdr)
+        segments = header['e_phoff'].d.li
+        dynamic = segments.by_type('DYNAMIC')
+        return dynamic.by_tag('DT_STRTAB')
+
+    def str(self):
+        if isinstance(self.parent, ElfXX_Shdr):
+            section = self.__section_index__(self.parent)
+            table = section['sh_offset'].d.li
+
+        # If our parent wasn't a section, then we need to get
+        # the name out of a symbol table of some sort.
+        else:
+            ptr = self.__symbol_index__()
+            table = ptr.d.li
+
+        # Verify the type of table we got is a string table.
         if isinstance(table, ELFCLASSXX.SHT_STRTAB):
             return table.read(self.int()).str()
+
+        # Anything else is an unresolveable error.
         raise ptypes.error.TypeError(self, 'str')
 
 class STT_(pbinary.enum):
@@ -254,6 +299,7 @@ class ELFCOMPRESS_(pint.enum):
     _values_ = [
         ('ZLIB', 1),
     ]
+
 class ElfXX_Chdr(ElfXX_Header):
     def getreadsize(self):
         res = self['ch_size'].li
@@ -265,6 +311,9 @@ class ElfXX_Chdr(ElfXX_Header):
             count = (size.int() + alignment.int() - 1) // alignment.int()
             return count * alignment.int()
         return size.int()
+
+class ElfXX_Sym(pstruct.type):
+    pass
 
 ### Section Headers
 class Elf32_Shdr(pstruct.type, ElfXX_Shdr):
@@ -328,7 +377,7 @@ class Elf64_Chdr(pstruct.type, ElfXX_Chdr):
 
 ### section types
 class Elf32_Section(SHN_, pint.uint16_t): pass
-class Elf32_Sym(pstruct.type):
+class Elf32_Sym(ElfXX_Sym):
     class st_name(_st_name, Elf32_Word): pass
     _fields_ = [
         (st_name, 'st_name'),
@@ -339,7 +388,7 @@ class Elf32_Sym(pstruct.type):
         (Elf32_Section, 'st_shndx'),
     ]
 class Elf64_Section(SHN_, pint.uint16_t): pass
-class Elf64_Sym(pstruct.type):
+class Elf64_Sym(ElfXX_Sym):
     class st_name(_st_name, Elf64_Word): pass
     _fields_ = [
         (st_name, 'st_name'),
